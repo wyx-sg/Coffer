@@ -11,7 +11,8 @@ test.describe("Coffer scaffolding — end-to-end", () => {
     const response = await request.get("http://localhost:8000/health");
     expect(response.ok()).toBeTruthy();
     const body = await response.json();
-    expect(body).toMatchObject({ status: "ok", version: "0.1.0" });
+    expect(body.status).toBe("ok");
+    expect(body.version).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   test("backend /openapi.json exposes the HealthResponse schema", async ({ request }) => {

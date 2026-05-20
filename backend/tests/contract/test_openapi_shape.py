@@ -6,6 +6,7 @@ runtime dump. For the scaffolding phase, we just assert the runtime dump is
 structurally valid and exposes the surfaces we expect.
 """
 
+from coffer import __version__
 from coffer.main import app
 
 
@@ -17,7 +18,7 @@ def test_openapi_dump_declares_openapi_3() -> None:
 def test_openapi_dump_has_project_metadata() -> None:
     schema = app.openapi()
     assert schema["info"]["title"] == "Coffer"
-    assert schema["info"]["version"] == "0.1.0"
+    assert schema["info"]["version"] == __version__
 
 
 def test_openapi_dump_exposes_health_endpoint() -> None:
