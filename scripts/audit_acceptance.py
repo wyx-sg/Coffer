@@ -140,6 +140,17 @@ def main() -> int:
             print("audit_acceptance: no specs/<id>/spec.md found — nothing to audit.")
         return 0
 
+    # A spec.md with zero scenarios is almost certainly a malformed spec
+    # (missing the `## Acceptance Scenarios` section, or all `###` subsections
+    # deleted). Without this guard the audit silently passes as "0 missing
+    # coverage", giving false confidence.
+    empty_specs = sorted(spec_id for spec_id, scenarios in specs.items() if not scenarios)
+    if empty_specs:
+        print("audit_acceptance: FAIL — spec.md(s) with no acceptance scenarios:", file=sys.stderr)
+        for spec_id in empty_specs:
+            print(f"    - {spec_id} (add `## Acceptance Scenarios` with `### <title>` items)", file=sys.stderr)
+        return 1
+
     all_markers = collect_python_markers(BACKEND_TESTS) | collect_ts_markers(FRONTEND_TS_ROOTS)
 
     markers_by_spec: dict[str, set[str]] = defaultdict(set)

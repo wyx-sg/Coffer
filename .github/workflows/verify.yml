@@ -96,6 +96,21 @@ jobs:
       - name: audit_acceptance
         run: python3 scripts/audit_acceptance.py
 
+  secrets:
+    name: secrets-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Note: gitleaks-action is free for personal repos (wyx-sg/Coffer).
+      # If this repo ever moves under a GitHub organization, switch to the
+      # curl-install pattern or supply a GITLEAKS_LICENSE secret.
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   contract:
     name: test-contract
     runs-on: ubuntu-latest

@@ -6,6 +6,8 @@ FRONTEND := frontend
 .PHONY: help install install-e2e-browsers \
 	verify verify-all \
 	verify-unit verify-integration verify-contract verify-e2e verify-acceptance \
+	coverage lock \
+	desktop-dev desktop-build \
 	lint format dev clean
 
 help:
@@ -20,8 +22,14 @@ help:
 	@echo "  make verify-contract       contract tier only"
 	@echo "  make verify-e2e            e2e tier only (currently: Playwright web only)"
 	@echo "  make verify-acceptance     audit spec.md scenarios vs test markers"
-	@echo "  make lint                  ruff + mypy + eslint + tsc"
+	@echo "  make lint                  ruff + mypy + eslint + tsc + import-linter + file/response_model checks"
 	@echo "  make format                ruff format + prettier"
+	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
+	@echo "  make lock                  regenerate backend/requirements-dev.lock from pyproject.toml"
+	@echo ""
+	@echo "  Desktop (Tauri; needs Rust toolchain, see CONTRIBUTING.md):"
+	@echo "  make desktop-dev           run frontend + backend + Tauri window in dev mode"
+	@echo "  make desktop-build         build the desktop bundle (release)"
 	@echo ""
 	@echo "  Dev:"
 	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
@@ -59,6 +67,7 @@ verify-acceptance:
 
 lint:
 	$(PY) scripts/check_file_sizes.py
+	$(PY) scripts/check_response_models.py
 	$(PY) -m ruff check $(BACKEND)
 	$(PY) -m ruff format --check $(BACKEND)
 	$(PY) -m mypy $(BACKEND)/coffer
@@ -125,6 +134,29 @@ format:
 	$(PY) -m ruff check --fix $(BACKEND)
 	@if [ -d $(FRONTEND)/node_modules ]; then cd $(FRONTEND) && npm run format; fi
 
+# Coverage on demand. No threshold gates are wired yet — thresholds need
+# empirical data from real feature code. When ready, add `--cov-fail-under=N`
+# here (and `--coverage.thresholds.lines=N` on the vitest side) via a
+# constitutional amendment.
+coverage:
+	@if [ -d $(BACKEND)/tests ]; then \
+		$(PY) -m pytest $(BACKEND)/tests --cov=coffer --cov-report=term-missing --cov-report=xml; \
+	fi
+	@if [ -d $(FRONTEND)/node_modules ]; then \
+		cd $(FRONTEND) && npx vitest run --coverage; \
+	fi
+
+# Regenerate the snapshot lockfile from pyproject.toml's dev extras.
+# The lockfile is not enforced at install time (see CONTRIBUTING.md);
+# it's a snapshot of "what versions worked when these tests last passed."
+# --no-emit-index-url / --no-emit-trusted-host keep developer-local pip
+# configs (corporate mirrors, etc.) out of the committed lockfile.
+lock:
+	$(PY) -m piptools compile --extra dev --quiet --strip-extras \
+		--no-emit-index-url --no-emit-trusted-host \
+		--output-file $(BACKEND)/requirements-dev.lock \
+		$(BACKEND)/pyproject.toml
+
 dev:
 	@echo "Starting backend (:8000) and frontend (:5173). Ctrl-C to stop both."
 	@trap 'kill 0' EXIT; \
@@ -132,8 +164,26 @@ dev:
 	(cd $(FRONTEND) && npm run dev) & \
 	wait
 
+# Tauri desktop shell. Requires Rust toolchain (rustup) and the frontend
+# npm deps installed via `make install`. Tauri itself spawns the Vite dev
+# server via `beforeDevCommand` in src-tauri/tauri.conf.json.
+desktop-dev:
+	@command -v cargo >/dev/null 2>&1 || { \
+		echo "desktop-dev: Rust toolchain missing. Install via https://rustup.rs."; \
+		exit 1; \
+	}
+	cd $(FRONTEND) && npm run tauri:dev
+
+desktop-build:
+	@command -v cargo >/dev/null 2>&1 || { \
+		echo "desktop-build: Rust toolchain missing. Install via https://rustup.rs."; \
+		exit 1; \
+	}
+	cd $(FRONTEND) && npm run tauri:build
+
 clean:
 	rm -rf .venv \
 		$(FRONTEND)/node_modules $(FRONTEND)/dist \
 		$(BACKEND)/.pytest_cache $(BACKEND)/.mypy_cache $(BACKEND)/.ruff_cache \
-		.mypy_cache .ruff_cache .pytest_cache
+		.mypy_cache .ruff_cache .pytest_cache \
+		src-tauri/target src-tauri/gen

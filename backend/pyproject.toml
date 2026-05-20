@@ -30,6 +30,8 @@ dev = [
     "import-linter>=1.10,<1.11",
     "grimp>=2.5,<3",
     "pre-commit>=3.8",
+    "pytest-cov>=5.0",
+    "pip-tools>=7.4",
 ]
 
 [tool.setuptools]
@@ -101,3 +103,16 @@ forbidden_modules = [
     "keyring",
     "anyio",
 ]
+
+# Contract 4: keyring is confined to infrastructure. Only the (future)
+# infrastructure keyring adapter may import it; surfaces and application
+# must use credential refs and ask infrastructure to resolve them.
+# (Domain already cannot import keyring via Contract 3.)
+[[tool.importlinter.contracts]]
+name = "keyring confined to infrastructure"
+type = "forbidden"
+source_modules = [
+    "coffer.surfaces",
+    "coffer.application",
+]
+forbidden_modules = ["keyring"]

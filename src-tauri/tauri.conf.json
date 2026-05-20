@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Coffer",
+  "version": "0.1.0",
+  "identifier": "io.coffer.desktop",
+  "build": {
+    "beforeBuildCommand": "npm run build --prefix ../frontend",
+    "beforeDevCommand": "npm run dev --prefix ../frontend",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../frontend/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Coffer",
+        "width": 1200,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "category": "DeveloperTool",
+    "shortDescription": "Local-first AI agent vault",
+    "longDescription": "Coffer is a local-first vault for a developer's AI assets — MCP servers, CLIs, Skills, and Memorys — accessible to any agent through one safe interface."
+  }
+}

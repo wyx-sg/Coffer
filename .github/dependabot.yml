@@ -1,0 +1,73 @@
+version: 2
+
+# Weekly batch updates across the three package ecosystems Coffer uses.
+# Conventional Commits prefixes match `.commitlintrc.yaml` type-enum so the
+# PRs commitlint passes out of the box.
+
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      python-runtime:
+        patterns:
+          - "fastapi*"
+          - "uvicorn*"
+          - "pydantic*"
+      python-dev:
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "import-linter"
+          - "grimp"
+          - "pre-commit"
+          - "pip-tools"
+          - "httpx"
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+      tooling:
+        patterns:
+          - "vite*"
+          - "vitest*"
+          - "@vitejs/*"
+          - "@vitest/*"
+          - "eslint*"
+          - "typescript*"
+          - "prettier"
+
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: ci
+      include: scope

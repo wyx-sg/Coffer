@@ -119,3 +119,38 @@ make dev                           # backend + frontend in parallel
 cd frontend && npm run dev         # frontend only (Vite on :5173)
 cd frontend && npm run lint / npm run typecheck / npm run test / npm run format
 ```
+
+## Desktop Shell — Tauri 2 / Rust
+
+Coffer's desktop distribution is a thin Tauri shell wrapping the same React app the browser dev server runs.
+
+### Languages & Versions
+
+- **Tauri 2.x** (Rust shell)
+- **Rust** stable (managed via `rustup`)
+- Frontend bindings via `@tauri-apps/api` (JS) and `@tauri-apps/cli` (build CLI)
+
+### Architecture
+
+```
+src-tauri/
+├── Cargo.toml                — Rust crate manifest
+├── build.rs                  — invokes tauri-build during cargo build
+├── tauri.conf.json           — app metadata, window config, dev/build wiring
+├── src/
+│   ├── main.rs               — binary entry; calls into lib.rs
+│   └── lib.rs                — Tauri builder; one place to register commands
+└── capabilities/
+    └── default.json          — permission manifest per window
+```
+
+**Tauri commands** (Rust functions invokable from JS via `@tauri-apps/api/core` `invoke()`) live in `src-tauri/src/lib.rs` for now; split into modules when more than ~3 commands accumulate. Each command is `read` / `write` / `destructive` and goes through the same approval coordinator as HTTP / MCP / CLI surfaces (when those land).
+
+### Local Dev
+
+```bash
+make desktop-dev                   # frontend + Tauri window (Vite is started by tauri.conf.json beforeDevCommand)
+make desktop-build                 # release bundle (skipped in CI; manual on-demand)
+```
+
+`bundle.active` is `false` in `tauri.conf.json` until a release pipeline is added — `make desktop-build` will compile the binary but not produce installers (`.dmg` / `.msi` / `.AppImage`).

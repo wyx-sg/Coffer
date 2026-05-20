@@ -13,6 +13,16 @@ pre-commit install --hook-type pre-commit --hook-type commit-msg
 make dev                           # backend (:8000) + frontend (:5173)
 ```
 
+For the desktop shell (optional; only if you're touching the Tauri wrapper):
+
+```bash
+# 1. install Rust stable (https://rustup.rs)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 2. then
+make desktop-dev                   # Tauri window + frontend + backend
+```
+
 ## Project Anchors
 
 - **[`.specify/memory/constitution.md`](./.specify/memory/constitution.md)** — what Coffer is and what it must never become.
