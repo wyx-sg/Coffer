@@ -161,7 +161,7 @@ jobs:
           file "$bin"
           ls -la desktop/target/release/bundle/deb/
       - name: Upload .deb bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coffer-desktop-linux-deb
           path: desktop/target/release/bundle/deb/*.deb
