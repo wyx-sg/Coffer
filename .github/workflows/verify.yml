@@ -117,13 +117,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             desktop/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('desktop/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('desktop/Cargo.toml', 'desktop/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
       # Tauri 2 Linux webview backend.
@@ -136,22 +141,30 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf
-      # cargo build (not just check) — proves the binary actually links.
-      # Skips bundle to keep runtime under ~10 min; `tauri build` is run by
-      # contributors locally via `make desktop-build`.
-      - name: cargo build
+      # The Tauri CLI binary is a frontend dev-dep; tauri build's
+      # beforeBuildCommand also calls into the frontend (vite build), so we
+      # need frontend node_modules.
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+      # Full tauri build catches more than cargo build alone: frontend
+      # tsc -b + vite build, bundle creation, icon references, and the
+      # whole crate-to-installer pipeline. Limited to `.deb` to keep
+      # Linux CI under ~10 min (appimage adds AppImageTool + 5+ min).
+      - name: tauri build (Linux .deb + binary)
         working-directory: desktop
-        run: cargo build --locked || cargo build
-      - name: Verify binary exists
+        run: ../frontend/node_modules/.bin/tauri build --bundles deb
+      - name: Verify outputs
         run: |
-          bin=desktop/target/debug/coffer-desktop
-          test -x "$bin" || { echo "::error::expected binary $bin missing"; exit 1; }
+          bin=desktop/target/release/coffer-desktop
+          test -x "$bin" || { echo "::error::release binary missing"; exit 1; }
           file "$bin"
-      - name: Upload debug binary
+          ls -la desktop/target/release/bundle/deb/
+      - name: Upload .deb bundle
         uses: actions/upload-artifact@v4
         with:
-          name: coffer-desktop-linux-debug
-          path: desktop/target/debug/coffer-desktop
+          name: coffer-desktop-linux-deb
+          path: desktop/target/release/bundle/deb/*.deb
           retention-days: 7
           if-no-files-found: error
 

@@ -178,26 +178,31 @@ dev:
 # npm deps installed via `make install`. Tauri itself spawns the Vite dev
 # server via `beforeDevCommand` in desktop/tauri.conf.json.
 #
-# We run the @tauri-apps/cli binary from desktop/ rather than via an npm
-# script in frontend/: Tauri CLI 2.x discovers the project by walking
-# subdirs for tauri.conf.json, so cwd must be the crate dir. The CLI
-# binary itself is installed in frontend/node_modules/ as a frontend dev
-# dependency; we invoke it by its relative path.
-TAURI_BIN := ../$(FRONTEND)/node_modules/.bin/tauri
+# We run @tauri-apps/cli from inside desktop/ rather than via an npm script
+# in frontend/: Tauri CLI 2.x discovers the project by walking subdirs for
+# tauri.conf.json, so cwd must be the crate dir. The CLI binary itself is
+# installed under frontend/node_modules/ as a frontend dev-dep, and we
+# invoke it through the relative path `../frontend/node_modules/.bin/tauri`
+# from desktop/.
 
 desktop-dev:
 	@command -v cargo >/dev/null 2>&1 || { \
 		echo "desktop-dev: Rust toolchain missing. Install via https://rustup.rs."; \
 		exit 1; \
 	}
-	cd desktop && $(TAURI_BIN) dev
+	cd desktop && ../$(FRONTEND)/node_modules/.bin/tauri dev
 
+# Clean any leftover bundle/ from a prior aborted build before running
+# `tauri build`. Tauri's bundle_dmg.sh leaves rw.<pid>.*.dmg intermediates
+# on failure, which then break the next DMG creation. The bundle dir is
+# fully regenerated each run, so deleting it is safe.
 desktop-build:
 	@command -v cargo >/dev/null 2>&1 || { \
 		echo "desktop-build: Rust toolchain missing. Install via https://rustup.rs."; \
 		exit 1; \
 	}
-	cd desktop && $(TAURI_BIN) build
+	rm -rf desktop/target/release/bundle
+	cd desktop && ../$(FRONTEND)/node_modules/.bin/tauri build
 
 clean:
 	rm -rf .venv \
