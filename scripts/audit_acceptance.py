@@ -38,8 +38,11 @@ TS_SKIP_DIRS = {"node_modules", "dist", "build", ".next", "test-results"}
 ACCEPTANCE_HEADER_RE = re.compile(r"^##\s+Acceptance\s+Scenarios\s*$", re.IGNORECASE)
 NEXT_H2_RE = re.compile(r"^##\s+(?!Acceptance\s+Scenarios)", re.IGNORECASE)
 SCENARIO_HEADING_RE = re.compile(r"^###\s+(?:Scenario:\s*)?(.+?)\s*$", re.IGNORECASE)
+# Matches both the standalone `acceptance("...", "...", ...)` helper
+# (current convention from frontend/src/test/acceptance.ts) and the
+# legacy `test.acceptance("...", "...", ...)` form, in case any survives.
 TS_ACCEPTANCE_RE = re.compile(
-    r"\btest\.acceptance\s*\(\s*[\"'](?P<spec>[^\"']+)[\"']\s*,"
+    r"\b(?:test\.)?acceptance\s*\(\s*[\"'](?P<spec>[^\"']+)[\"']\s*,"
     r"\s*[\"'](?P<scenario>[^\"']+)[\"']"
 )
 

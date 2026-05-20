@@ -177,19 +177,27 @@ dev:
 # Tauri desktop shell. Requires Rust toolchain (rustup) and the frontend
 # npm deps installed via `make install`. Tauri itself spawns the Vite dev
 # server via `beforeDevCommand` in desktop/tauri.conf.json.
+#
+# We run the @tauri-apps/cli binary from desktop/ rather than via an npm
+# script in frontend/: Tauri CLI 2.x discovers the project by walking
+# subdirs for tauri.conf.json, so cwd must be the crate dir. The CLI
+# binary itself is installed in frontend/node_modules/ as a frontend dev
+# dependency; we invoke it by its relative path.
+TAURI_BIN := ../$(FRONTEND)/node_modules/.bin/tauri
+
 desktop-dev:
 	@command -v cargo >/dev/null 2>&1 || { \
 		echo "desktop-dev: Rust toolchain missing. Install via https://rustup.rs."; \
 		exit 1; \
 	}
-	cd $(FRONTEND) && npm run tauri:dev
+	cd desktop && $(TAURI_BIN) dev
 
 desktop-build:
 	@command -v cargo >/dev/null 2>&1 || { \
 		echo "desktop-build: Rust toolchain missing. Install via https://rustup.rs."; \
 		exit 1; \
 	}
-	cd $(FRONTEND) && npm run tauri:build
+	cd desktop && $(TAURI_BIN) build
 
 clean:
 	rm -rf .venv \

@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "dev.coffer.desktop",
   "build": {
-    "beforeBuildCommand": "npm run build --prefix ../frontend",
-    "beforeDevCommand": "npm run dev --prefix ../frontend",
+    "beforeBuildCommand": "npm run build --prefix frontend",
+    "beforeDevCommand": "npm run dev --prefix frontend",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../frontend/dist"
   },
@@ -25,7 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app", "deb", "appimage", "msi", "nsis"],
     "category": "DeveloperTool",
     "shortDescription": "Local-first AI agent vault",
     "longDescription": "Coffer is a local-first vault for a developer's AI assets, accessible to any agent through one safe interface.",

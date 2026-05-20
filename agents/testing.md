@@ -99,12 +99,14 @@ Marker is registered in `backend/pyproject.toml` under `[tool.pytest.ini_options
 **TypeScript (vitest / Playwright):**
 
 ```ts
-test.acceptance("001-foo", "register and list", async () => {
+import { acceptance } from "@/test/acceptance";
+
+acceptance("001-foo", "register and list", async () => {
   // ...
 });
 ```
 
-(Implement `test.acceptance` as a thin wrapper around `test` that records spec + scenario in metadata. The wrapper lands when the first acceptance test is written; the audit script already detects calls of this shape regardless.)
+The helper is a thin wrapper that records spec + scenario in the test name. Implementation lives in `frontend/src/test/acceptance.ts`; smoke tests in `frontend/src/test/acceptance.test.ts` lock the wiring. The audit regex matches both `acceptance(...)` and the legacy `test.acceptance(...)` form.
 
 **Coverage audit** — `scripts/audit_acceptance.py` (run via `make verify-acceptance`) scans every `specs/*/spec.md` and every test file, then fails on:
 
