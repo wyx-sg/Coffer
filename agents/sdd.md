@@ -28,7 +28,7 @@ specs/<NNN>-<short-name>/
     release.md
 ```
 
-**One spec per behavior, not per layer.** A spec covers the entire vertical slice — backend services, frontend pages, CLI commands, MCP tools — whatever surfaces are needed to deliver that user-visible behavior. Do not split a single behavior into "frontend spec" and "backend spec"; that creates drift between two halves of the same contract.
+**One spec per behavior, not per layer.** A spec covers the entire vertical slice — backend services, frontend pages, and whatever surfaces are needed to deliver that user-visible behavior. Do not split a single behavior into "frontend spec" and "backend spec"; that creates drift between two halves of the same contract.
 
 **Skeleton-first phase**: When seeding a new spec, write `spec.md` first. Other files (`plan.md`, `tasks.md`, `contracts/`, etc.) are added when the spec moves toward implementation, via `/speckit-plan` and `/speckit-tasks`.
 
@@ -58,6 +58,6 @@ A spec is "shipped" only when the end-to-end deliverable works AND every accepta
 ## Markdown Style for spec.md
 
 - `spec.md` is for the user-visible contract; ≤ 300 lines preferred.
-- Don't restate architecture in `spec.md`; reference `.specify/memory/constitution.md` and `.specify/memory/architecture.md`.
+- Don't restate architecture in `spec.md`; reference `.specify/memory/constitution.md`.
 - Use plain English. Avoid jargon.
 - No time annotations (`Day N`, `Last updated`, etc.) in spec / plan / research / data-model / quickstart.

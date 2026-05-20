@@ -1,6 +1,6 @@
 # Stack — Python Backend / TypeScript Frontend
 
-Coffer is Python 3.12+ on the backend, TypeScript 5.x on the frontend. See `.specify/memory/architecture.md` for the bird's-eye view of how the pieces fit together.
+Coffer is Python 3.12+ on the backend, TypeScript 5.x on the frontend.
 
 ## Backend — Python / FastAPI / SQLite
 
@@ -10,20 +10,21 @@ Coffer is Python 3.12+ on the backend, TypeScript 5.x on the frontend. See `.spe
 - **FastAPI** for HTTP surface
 - **Pydantic v2** for models + validation
 - **SQLite** via standard library `sqlite3` or SQLAlchemy
-- **`mcp`** (official Anthropic MCP Python SDK) for MCP server/client
 - **`keyring`** for OS keychain (credentials only)
 - **`anyio`** + `asyncio` for async + subprocess management
+
+Feature-specific libraries (e.g. an MCP SDK) are added by the spec that first
+needs them, not pre-installed here.
 
 ### Architecture
 
 Layered DDD (under `backend/coffer/`):
 
 ```
-surfaces/      — HTTP (FastAPI routes), MCP (stdio + HTTP), CLI
+surfaces/      — entry points; one subdir per surface, defined per spec
 application/   — commands, queries, ports (interfaces), shared services
-                 (risk classifier, approval coordinator, executor dispatcher)
 domain/        — entities, value objects, domain services (PURE)
-infrastructure/— SQLite adapters, keyring adapter, subprocess adapter, HTTP client
+infrastructure/— adapters for SQLite, keyring, and outbound I/O
 ```
 
 **Import direction is one-way**: `surfaces → application → domain`; `infrastructure` adapts to ports defined in `application`. `domain/` is pure.
@@ -33,7 +34,7 @@ infrastructure/— SQLite adapters, keyring adapter, subprocess adapter, HTTP cl
 - `domain/` may NOT import `infrastructure/`, `surfaces/`, or any external SDK (FastAPI, SQLAlchemy, httpx, etc.). Pure Python + Pydantic only.
 - `application/` may NOT import `surfaces/` or `infrastructure/` directly. It defines ports; infrastructure adapts to them.
 - Only the credential module may import `keyring`. Everywhere else uses credential refs.
-- Cross-cutting mechanisms (audit log, credential vault, event bus, job queue, memory storage, session storage) live as shared modules under `application/` or `infrastructure/`. Don't pre-extract; wait for the second feature to need them.
+- Cross-cutting modules under `application/` or `infrastructure/` are extracted only after the second feature needs them. Don't pre-allocate.
 
 ### Code Style
 

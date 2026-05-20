@@ -18,15 +18,13 @@ Operating manual for AI agents (Claude Code, Codex, Cursor, future ones) enterin
 In order:
 
 1. **`.specify/memory/constitution.md`** — lasting principles + invariants.
-2. **`.specify/memory/roadmap.md`** — features in flight, near-term order.
-3. **`.specify/memory/architecture.md`** — how the pieces fit together.
-4. **`AGENTS.md`** (this file).
-5. The relevant **`agents/<topic>.md`** for today's scope:
+2. **`AGENTS.md`** (this file).
+3. The relevant **`agents/<topic>.md`** for today's scope:
    - [`agents/sdd.md`](./agents/sdd.md) — spec folder layout, acceptance scenarios, end-to-end deliverable rule.
    - [`agents/workflow.md`](./agents/workflow.md) — branches, Conventional Commits, AI signatures, PR flow, merge policy.
    - [`agents/stack.md`](./agents/stack.md) — backend (Python / FastAPI / SQLite) + frontend (TS / React / Vite / Tailwind / shadcn). Includes file-size limits, layered-architecture import rules, wire-contract rule.
    - [`agents/testing.md`](./agents/testing.md) — 4 test tiers (unit / integration / contract / e2e), acceptance markers, mocking philosophy.
-6. The relevant **`specs/<NNN>-<short-name>/spec.md`** — for any spec-touching work.
+4. The relevant **`specs/<NNN>-<short-name>/spec.md`** — for any spec-touching work.
 
 If sources disagree: **constitution wins.** Flag inconsistency to the user.
 
