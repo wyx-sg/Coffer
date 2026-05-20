@@ -35,7 +35,7 @@ export default defineConfig({
     watch: {
       // Ignore the Tauri Rust source tree so vite HMR doesn't thrash on
       // cargo writes to target/.
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/desktop/**"],
     },
   },
   test: {

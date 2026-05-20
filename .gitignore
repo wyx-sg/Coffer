@@ -170,8 +170,8 @@ temp/
 .agents/
 
 # --- Tauri desktop shell (Rust build artifacts) ---
-src-tauri/target/
-src-tauri/gen/
-src-tauri/.cargo/
-# NOTE: src-tauri/Cargo.lock IS committed (binary crate convention). It will
-# be generated on the first `cargo build` in src-tauri/ — commit it after.
+desktop/target/
+desktop/gen/
+desktop/.cargo/
+# NOTE: desktop/Cargo.lock IS committed (binary crate convention). It will
+# be generated on the first `cargo build` in desktop/ — commit it after.

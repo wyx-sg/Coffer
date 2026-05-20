@@ -122,8 +122,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
+            desktop/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('desktop/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
       # Tauri 2 Linux webview backend.
@@ -140,18 +140,18 @@ jobs:
       # Skips bundle to keep runtime under ~10 min; `tauri build` is run by
       # contributors locally via `make desktop-build`.
       - name: cargo build
-        working-directory: src-tauri
+        working-directory: desktop
         run: cargo build --locked || cargo build
       - name: Verify binary exists
         run: |
-          bin=src-tauri/target/debug/coffer-desktop
+          bin=desktop/target/debug/coffer-desktop
           test -x "$bin" || { echo "::error::expected binary $bin missing"; exit 1; }
           file "$bin"
       - name: Upload debug binary
         uses: actions/upload-artifact@v4
         with:
           name: coffer-desktop-linux-debug
-          path: src-tauri/target/debug/coffer-desktop
+          path: desktop/target/debug/coffer-desktop
           retention-days: 7
           if-no-files-found: error
 

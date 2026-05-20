@@ -176,7 +176,7 @@ dev:
 
 # Tauri desktop shell. Requires Rust toolchain (rustup) and the frontend
 # npm deps installed via `make install`. Tauri itself spawns the Vite dev
-# server via `beforeDevCommand` in src-tauri/tauri.conf.json.
+# server via `beforeDevCommand` in desktop/tauri.conf.json.
 desktop-dev:
 	@command -v cargo >/dev/null 2>&1 || { \
 		echo "desktop-dev: Rust toolchain missing. Install via https://rustup.rs."; \
@@ -196,4 +196,4 @@ clean:
 		$(FRONTEND)/node_modules $(FRONTEND)/dist \
 		$(BACKEND)/.pytest_cache $(BACKEND)/.mypy_cache $(BACKEND)/.ruff_cache \
 		.mypy_cache .ruff_cache .pytest_cache \
-		src-tauri/target src-tauri/gen
+		desktop/target desktop/gen

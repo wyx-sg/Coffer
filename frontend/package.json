@@ -11,9 +11,9 @@
     "test": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri": "tauri --config ../desktop/tauri.conf.json",
+    "tauri:dev": "tauri dev --config ../desktop/tauri.conf.json",
+    "tauri:build": "tauri build --config ../desktop/tauri.conf.json"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
