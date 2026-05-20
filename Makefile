@@ -58,9 +58,11 @@ verify-acceptance:
 	$(PY) scripts/audit_acceptance.py
 
 lint:
+	$(PY) scripts/check_file_sizes.py
 	$(PY) -m ruff check $(BACKEND)
 	$(PY) -m ruff format --check $(BACKEND)
 	$(PY) -m mypy $(BACKEND)/coffer
+	.venv/bin/lint-imports --config $(BACKEND)/pyproject.toml
 	@if [ -d $(FRONTEND)/node_modules ]; then \
 		cd $(FRONTEND) && npm run lint && npm run typecheck; \
 	else \

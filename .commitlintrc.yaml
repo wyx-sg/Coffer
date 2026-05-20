@@ -1,0 +1,25 @@
+# Conventional Commits enforcement. Mirrors agents/workflow.md "Commits".
+#
+# Activated locally via `pre-commit install --hook-type commit-msg`.
+# See .pre-commit-config.yaml for the hook wiring.
+
+extends:
+  - "@commitlint/config-conventional"
+
+rules:
+  subject-case: [2, "always", "lower-case"]
+  subject-max-length: [2, "always", 72]
+  body-max-line-length: [2, "always", 100]
+  type-enum:
+    - 2
+    - always
+    - - feat
+      - fix
+      - docs
+      - refactor
+      - perf
+      - test
+      - build
+      - ci
+      - chore
+      - revert

@@ -22,6 +22,14 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.6",
     "mypy>=1.11",
+    # Pinned to 1.10.x + grimp <3 because import-linter >=1.11 (and the
+    # default grimp resolution on 1.10.x) pulls grimp 3.x, a Rust extension
+    # whose source build fails on Python 3.14 macOS x86_64 (no prebuilt
+    # wheel). The 1.10 + grimp 2.5 pair is pure-Python and sufficient for
+    # the contracts in [tool.importlinter] below.
+    "import-linter>=1.10,<1.11",
+    "grimp>=2.5,<3",
+    "pre-commit>=3.8",
 ]
 
 [tool.setuptools]
@@ -51,4 +59,45 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 markers = [
     "acceptance(spec, scenario): tags a test as covering a spec.md acceptance scenario",
+]
+
+[tool.importlinter]
+root_packages = ["coffer"]
+include_external_packages = true
+
+# Contract 1: surfaces > application > domain — imports flow inward only.
+[[tool.importlinter.contracts]]
+name = "Layered architecture: surfaces > application > domain"
+type = "layers"
+layers = [
+    "coffer.surfaces",
+    "coffer.application",
+    "coffer.domain",
+]
+
+# Contract 2: infrastructure adapts ports defined in application; it must not
+# reach back into surfaces.
+[[tool.importlinter.contracts]]
+name = "Infrastructure does not import surfaces"
+type = "forbidden"
+source_modules = ["coffer.infrastructure"]
+forbidden_modules = ["coffer.surfaces"]
+
+# Contract 3: domain is pure — no imports from any other project layer, no
+# external SDKs that imply I/O. The list of forbidden externals is the smell
+# set; add more here when a new I/O dependency joins the project.
+[[tool.importlinter.contracts]]
+name = "Domain is pure"
+type = "forbidden"
+source_modules = ["coffer.domain"]
+forbidden_modules = [
+    "coffer.application",
+    "coffer.infrastructure",
+    "coffer.surfaces",
+    "fastapi",
+    "sqlalchemy",
+    "sqlite3",
+    "httpx",
+    "keyring",
+    "anyio",
 ]
