@@ -156,8 +156,9 @@ Two different bases — gotcha:
 |---|---|---|
 | `build.beforeBuildCommand` / `beforeDevCommand` | parent of the crate dir (`<repo>/`) | Tauri runs these from the project root, which it defines as the parent of `desktop/` |
 | `build.frontendDist` / `build.devUrl` (URL: n/a) | the config file itself (`desktop/`) | standard Tauri config path resolution |
+| `bundle.icon` / `bundle.resources` / `bundle.externalBin` | the config file itself (`desktop/`) | same rule as `frontendDist`; the bundler reads paths relative to `tauri.conf.json` |
 
-That's why `beforeBuildCommand: "npm run build --prefix frontend"` has no `../` while `frontendDist: "../frontend/dist"` does.
+That's why `beforeBuildCommand: "npm run build --prefix frontend"` has no `../` while `frontendDist: "../frontend/dist"` does. Bundle paths like `"icons/32x32.png"` (no `../`) work because the icons live inside `desktop/`.
 
 ### Local Dev
 

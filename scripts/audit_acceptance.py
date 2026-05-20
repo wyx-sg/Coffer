@@ -40,8 +40,13 @@ NEXT_H2_RE = re.compile(r"^##\s+(?!Acceptance\s+Scenarios)", re.IGNORECASE)
 SCENARIO_HEADING_RE = re.compile(r"^###\s+(?:Scenario:\s*)?(.+?)\s*$", re.IGNORECASE)
 # Matches the standalone `acceptance("...", "...", ...)` helper exported
 # from frontend/src/test/acceptance.ts. See agents/testing.md.
+#
+# The lookbehind `(?<![.\w])` ensures we don't false-match method calls
+# like `client.acceptance("...", ...)` or identifiers like
+# `myAcceptance(...)` — only the bare `acceptance(...)` call from an
+# import counts.
 TS_ACCEPTANCE_RE = re.compile(
-    r"\bacceptance\s*\(\s*[\"'](?P<spec>[^\"']+)[\"']\s*,"
+    r"(?<![.\w])acceptance\s*\(\s*[\"'](?P<spec>[^\"']+)[\"']\s*,"
     r"\s*[\"'](?P<scenario>[^\"']+)[\"']"
 )
 
