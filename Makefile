@@ -3,7 +3,7 @@ PY := $(or $(and $(wildcard $(_VENV_PY)),$(_VENV_PY)),python3)
 BACKEND := backend
 FRONTEND := frontend
 
-.PHONY: help install install-e2e-browsers \
+.PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
 	verify-unit verify-integration verify-contract verify-e2e verify-acceptance \
 	coverage lock \
@@ -13,6 +13,7 @@ FRONTEND := frontend
 help:
 	@echo "Coffer Makefile targets:"
 	@echo "  make install               create venv + install backend + frontend deps"
+	@echo "  make hooks                 install pre-commit + commit-msg git hooks"
 	@echo ""
 	@echo "  Verification (4 test tiers + lint, see agents/testing.md):"
 	@echo "  make verify                fast path: lint + unit + integration + contract + acceptance audit"
@@ -57,6 +58,15 @@ install-e2e-browsers:
 		cd e2e && npx playwright install chromium; \
 	else \
 		echo "install-e2e-browsers: run 'make install' first"; exit 1; \
+	fi
+
+# Wire pre-commit + commit-msg hooks into .git/hooks/. Requires `make install`
+# (pre-commit is a dev dep). Per-developer; not run by CI.
+hooks:
+	@if [ -x .venv/bin/pre-commit ]; then \
+		.venv/bin/pre-commit install --hook-type pre-commit --hook-type commit-msg; \
+	else \
+		echo "hooks: .venv/bin/pre-commit missing — run 'make install' first"; exit 1; \
 	fi
 
 verify: lint verify-unit verify-integration verify-contract verify-acceptance

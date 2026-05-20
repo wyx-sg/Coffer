@@ -1,9 +1,9 @@
 name: pr-title
 
-# Mirror .commitlintrc.yaml against the PR title because the PR title becomes
-# the squash-merge commit subject (per agents/workflow.md squash-merge policy).
-# The local pre-commit commitlint hook covers individual commits during
-# development; this workflow covers the title at PR open/edit/synchronize.
+# The PR title becomes the squash-merge commit subject (per
+# agents/workflow.md). We lint it with the same commitlint config that the
+# local pre-commit commit-msg hook uses (.commitlintrc.yaml), so PR title
+# rules and per-commit rules can never drift.
 
 on:
   pull_request:
@@ -13,43 +13,20 @@ permissions:
   pull-requests: read
 
 jobs:
-  semantic:
+  conventional-title:
     name: conventional-title
     runs-on: ubuntu-latest
     steps:
-      - uses: amannn/action-semantic-pull-request@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          types: |
-            feat
-            fix
-            docs
-            refactor
-            perf
-            test
-            build
-            ci
-            chore
-            revert
-          requireScope: false
-          subjectPattern: ^(?![A-Z]).+$
-          subjectPatternError: |
-            PR title subject must start with lowercase.
-            See agents/workflow.md "Commits" and .commitlintrc.yaml.
-
-  length:
-    name: title-length
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check PR title length (<= 72 chars)
+          node-version: "20"
+      - name: Install commitlint
+        run: |
+          npm install --no-save \
+            @commitlint/cli@19 \
+            @commitlint/config-conventional@19
+      - name: Lint PR title against .commitlintrc.yaml
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          len=${#PR_TITLE}
-          if [ "$len" -gt 72 ]; then
-            echo "::error::PR title is $len chars; commitlint cap is 72."
-            echo "Title: $PR_TITLE"
-            exit 1
-          fi
-          echo "PR title length OK: $len chars."
+        run: echo "$PR_TITLE" | npx commitlint --config .commitlintrc.yaml

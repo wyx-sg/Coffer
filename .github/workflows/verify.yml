@@ -111,6 +111,50 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  desktop:
+    name: desktop-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      # Tauri 2 Linux webview backend.
+      - name: Install Tauri system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+      # cargo build (not just check) — proves the binary actually links.
+      # Skips bundle to keep runtime under ~10 min; `tauri build` is run by
+      # contributors locally via `make desktop-build`.
+      - name: cargo build
+        working-directory: src-tauri
+        run: cargo build --locked || cargo build
+      - name: Verify binary exists
+        run: |
+          bin=src-tauri/target/debug/coffer-desktop
+          test -x "$bin" || { echo "::error::expected binary $bin missing"; exit 1; }
+          file "$bin"
+      - name: Upload debug binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: coffer-desktop-linux-debug
+          path: src-tauri/target/debug/coffer-desktop
+          retention-days: 7
+          if-no-files-found: error
+
   contract:
     name: test-contract
     runs-on: ubuntu-latest

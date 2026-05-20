@@ -9,7 +9,7 @@ git clone https://github.com/wyx-sg/Coffer.git
 cd Coffer
 make install                       # venv + backend + frontend + e2e deps
 make install-e2e-browsers          # Playwright chromium (one-time, heavy)
-pre-commit install --hook-type pre-commit --hook-type commit-msg
+make hooks                         # wire pre-commit + commit-msg hooks
 make dev                           # backend (:8000) + frontend (:5173)
 ```
 

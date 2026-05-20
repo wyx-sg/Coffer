@@ -144,13 +144,24 @@ src-tauri/
     └── default.json          — permission manifest per window
 ```
 
-**Tauri commands** (Rust functions invokable from JS via `@tauri-apps/api/core` `invoke()`) live in `src-tauri/src/lib.rs` for now; split into modules when more than ~3 commands accumulate. Each command is `read` / `write` / `destructive` and goes through the same approval coordinator as HTTP / MCP / CLI surfaces (when those land).
+**Tauri commands** (Rust functions invokable from JS via `@tauri-apps/api/core` `invoke()`) live in `src-tauri/src/lib.rs` for now; split into modules when more than ~3 commands accumulate.
 
 ### Local Dev
 
 ```bash
 make desktop-dev                   # frontend + Tauri window (Vite is started by tauri.conf.json beforeDevCommand)
-make desktop-build                 # release bundle (skipped in CI; manual on-demand)
+make desktop-build                 # release bundle (.dmg / .msi / .AppImage / .deb depending on host)
 ```
 
-`bundle.active` is `false` in `tauri.conf.json` until a release pipeline is added — `make desktop-build` will compile the binary but not produce installers (`.dmg` / `.msi` / `.AppImage`).
+### Testing
+
+| Tier | Today | When |
+|---|---|---|
+| `cargo check` (type/compile) | CI `desktop-check` job | always |
+| `cargo build` (binary builds) | CI `desktop-check` job | always |
+| `cargo test` (Rust unit) | none yet | added with first Tauri command |
+| Tauri E2E (webdriver / app smoke) | none | added with first desktop-only product spec |
+
+### Security note (CSP)
+
+`tauri.conf.json` currently sets `"app.security.csp": null` (Tauri's dev default). Before the first public release, a strict CSP must be defined; see Tauri 2 docs on [Content Security Policy](https://v2.tauri.app/security/csp/).

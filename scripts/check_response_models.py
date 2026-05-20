@@ -55,7 +55,7 @@ def scan_file(path: Path) -> list[tuple[int, str, str]]:
 
     violations: list[tuple[int, str, str]] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for dec in node.decorator_list:
             if is_route_decorator(dec) and not declares_response_shape(dec):
