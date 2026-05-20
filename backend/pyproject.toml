@@ -1,0 +1,121 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coffer"
+version = "0.1.0"
+description = "Local-first AI agent vault — backend"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Coffer contributors" }]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    # import-linter + grimp: most platforms get the latest (grimp 3.x is a
+    # Rust extension, but wheels exist for typical CI + dev targets).
+    # On Python 3.14 macOS x86_64 there is no prebuilt grimp 3.x wheel and
+    # source builds fail on Apple's linker — pin to the last pure-Python pair
+    # (import-linter 1.10 + grimp 2.5) only on that combination. PEP 508
+    # has no `not` operator, so the "everywhere else" branch is expressed
+    # via De Morgan's law as an `or` chain.
+    "import-linter>=1.10,<1.11; python_version == '3.14' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "grimp<3; python_version == '3.14' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "import-linter>=2.0; python_version != '3.14' or sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "pre-commit>=3.8",
+    "pytest-cov>=5.0",
+    "pip-tools>=7.4",
+]
+
+[tool.setuptools]
+packages = ["coffer"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "C4", "SIM", "RUF"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+show_error_codes = true
+pretty = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "acceptance(spec, scenario): tags a test as covering a spec.md acceptance scenario",
+]
+
+[tool.importlinter]
+root_packages = ["coffer"]
+include_external_packages = true
+
+# Contract 1: surfaces > application > domain — imports flow inward only.
+[[tool.importlinter.contracts]]
+name = "Layered architecture: surfaces > application > domain"
+type = "layers"
+layers = [
+    "coffer.surfaces",
+    "coffer.application",
+    "coffer.domain",
+]
+
+# Contract 2: infrastructure adapts ports defined in application; it must not
+# reach back into surfaces.
+[[tool.importlinter.contracts]]
+name = "Infrastructure does not import surfaces"
+type = "forbidden"
+source_modules = ["coffer.infrastructure"]
+forbidden_modules = ["coffer.surfaces"]
+
+# Contract 3: domain is pure — no imports from any other project layer, no
+# external SDKs that imply I/O. The list of forbidden externals is the smell
+# set; add more here when a new I/O dependency joins the project.
+[[tool.importlinter.contracts]]
+name = "Domain is pure"
+type = "forbidden"
+source_modules = ["coffer.domain"]
+forbidden_modules = [
+    "coffer.application",
+    "coffer.infrastructure",
+    "coffer.surfaces",
+    "fastapi",
+    "sqlalchemy",
+    "sqlite3",
+    "httpx",
+    "keyring",
+    "anyio",
+]
+
+# Contract 4: keyring is confined to infrastructure. Only the (future)
+# infrastructure keyring adapter may import it; surfaces and application
+# must use credential refs and ask infrastructure to resolve them.
+# (Domain already cannot import keyring via Contract 3.)
+[[tool.importlinter.contracts]]
+name = "keyring confined to infrastructure"
+type = "forbidden"
+source_modules = [
+    "coffer.surfaces",
+    "coffer.application",
+]
+forbidden_modules = ["keyring"]

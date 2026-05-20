@@ -1,0 +1,177 @@
+# --- mkdocs build output ---
+docs/_site/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+# `lib/` matches Python build artifacts; the negation below restores
+# the frontend's `src/lib/` source folder which would otherwise be
+# silently ignored (and missed by `git add` — exactly the trap that
+# produced the round-1 "112 typescript-eslint errors in CI for
+# unresolvable @/lib/types imports" failure).
+lib/
+!frontend/src/lib/
+!frontend/src/lib/**
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# mypy / ruff / type-checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pyright/
+.pyre/
+
+# --- Node / Frontend ---
+node_modules/
+.npm/
+.yarn/
+yarn-error.log
+package-lock.json.bak
+dist/
+.vite/
+.parcel-cache/
+
+# Build output
+build/
+out/
+.next/
+.nuxt/
+.svelte-kit/
+.tsbuildinfo
+*.tsbuildinfo
+
+# --- Electron ---
+release/
+release-builds/
+app-builds/
+
+# --- macOS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# --- Linux ---
+*~
+.directory
+.Trash-*
+
+# --- Windows ---
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- IDE / Editors ---
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.shared
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Local data / runtime ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+.coffer/
+local/
+
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+.envrc
+secrets/
+*.pem
+*.key
+!*.pub.key
+
+# --- SBOM / build artifacts ---
+sbom/
+*.sbom.json
+*.cdx.json
+
+# --- Coverage / reports ---
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# --- Q01 perf gate generated artifacts ---
+# Per-run NDJSON / JSON results are gitignored; the .gitkeep keeps the
+# directory shape so the runner can write into it on a fresh clone.
+backend/tests/perf/results/*
+!backend/tests/perf/results/.gitkeep
+
+# --- Misc ---
+.cache/
+tmp/
+temp/
+
+# --- /next-task autonomous loop (local-only; not shared across clones) ---
+.claude/commands/
+.claude/loop-state.json
+.claude/loop-history.md
+.claude/scheduled_tasks.lock
+
+# --- speckit duplicate skills folder (mirror of .claude/skills/) ---
+.agents/
+
+# --- Tauri desktop shell (Rust build artifacts) ---
+desktop/target/
+desktop/gen/
+desktop/.cargo/
+# NOTE: desktop/Cargo.lock IS committed (binary crate convention). It will
+# be generated on the first `cargo build` in desktop/ — commit it after.

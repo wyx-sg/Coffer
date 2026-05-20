@@ -1,0 +1,229 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e backend[dev]
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: make lint
+        run: make lint
+
+  unit:
+    name: test-unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e backend[dev]
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: make verify-unit
+        run: make verify-unit
+
+  integration:
+    name: test-integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e backend[dev]
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: make verify-integration
+        run: make verify-integration
+
+  acceptance:
+    name: audit-acceptance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: audit_acceptance
+        run: python3 scripts/audit_acceptance.py
+
+  secrets:
+    name: secrets-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Note: gitleaks-action is free for personal repos (wyx-sg/Coffer).
+      # If this repo ever moves under a GitHub organization, switch to the
+      # curl-install pattern or supply a GITLEAKS_LICENSE secret.
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  desktop:
+    name: desktop-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('desktop/Cargo.toml', 'desktop/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      # Tauri 2 Linux webview backend.
+      - name: Install Tauri system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+      # The Tauri CLI binary is a frontend dev-dep; tauri build's
+      # beforeBuildCommand also calls into the frontend (vite build), so we
+      # need frontend node_modules.
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+      # Full tauri build catches more than cargo build alone: frontend
+      # tsc -b + vite build, bundle creation, icon references, and the
+      # whole crate-to-installer pipeline. Limited to `.deb` to keep
+      # Linux CI under ~10 min (appimage adds AppImageTool + 5+ min).
+      - name: tauri build (Linux .deb + binary)
+        working-directory: desktop
+        run: ../frontend/node_modules/.bin/tauri build --bundles deb
+      - name: Verify outputs
+        run: |
+          bin=desktop/target/release/coffer-desktop
+          test -x "$bin" || { echo "::error::release binary missing"; exit 1; }
+          file "$bin"
+          ls -la desktop/target/release/bundle/deb/
+      - name: Upload .deb bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: coffer-desktop-linux-deb
+          path: desktop/target/release/bundle/deb/*.deb
+          retention-days: 7
+          if-no-files-found: error
+
+  contract:
+    name: test-contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e backend[dev]
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: make verify-contract
+        run: make verify-contract
+
+  e2e:
+    name: test-e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - name: Install backend
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e backend[dev]
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: Install e2e
+        working-directory: e2e
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+      - name: make verify-e2e
+        run: make verify-e2e

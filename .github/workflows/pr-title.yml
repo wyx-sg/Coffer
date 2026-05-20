@@ -1,0 +1,32 @@
+name: pr-title
+
+# The PR title becomes the squash-merge commit subject (per
+# agents/workflow.md). We lint it with the same commitlint config that the
+# local pre-commit commit-msg hook uses (.commitlintrc.yaml), so PR title
+# rules and per-commit rules can never drift.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  conventional-title:
+    name: conventional-title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install commitlint
+        run: |
+          npm install --no-save \
+            @commitlint/cli@19 \
+            @commitlint/config-conventional@19
+      - name: Lint PR title against .commitlintrc.yaml
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: echo "$PR_TITLE" | npx commitlint --config .commitlintrc.yaml
