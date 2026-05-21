@@ -1,6 +1,10 @@
 version: 2
 
-# Weekly batch updates across the three package ecosystems Coffer uses.
+# Monthly minor/patch updates across the four package ecosystems Coffer uses.
+# Major bumps are intentionally ignored — they require manual review against
+# changelogs, so we handle them by hand on demand instead of letting Dependabot
+# open noisy PRs that pile up.
+#
 # Conventional Commits prefixes match `.commitlintrc.yaml` type-enum so the
 # PRs commitlint passes out of the box.
 
@@ -8,11 +12,14 @@ updates:
   - package-ecosystem: pip
     directory: /backend
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       python-runtime:
         patterns:
@@ -33,11 +40,14 @@ updates:
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       react:
         patterns:
@@ -57,17 +67,23 @@ updates:
   - package-ecosystem: npm
     directory: /e2e
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 3
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 3
     commit-message:
       prefix: ci
       include: scope
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
