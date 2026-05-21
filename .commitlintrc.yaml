@@ -7,7 +7,16 @@ extends:
   - "@commitlint/config-conventional"
 
 rules:
-  subject-case: [2, "always", "lower-case"]
+  # subject-case is intentionally NOT enforced:
+  #   1. Conventional Commits doesn't mandate any subject case.
+  #   2. Acronyms (MCP, REST, HTTP, ...) and product names are routine.
+  #   3. Dependabot generates titles like "Bump X from Y to Z" — Sentence-case,
+  #      not user-configurable. A strict lower-case rule would block every
+  #      Dependabot PR.
+  # The structural rules below (type-enum + scope-empty + length caps) provide
+  # the discipline we actually want.
+  subject-case: [0]
+  subject-empty: [2, "never"]
   subject-max-length: [2, "always", 72]
   body-max-line-length: [2, "always", 100]
   type-enum:
