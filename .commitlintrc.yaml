@@ -17,7 +17,13 @@ rules:
   # the discipline we actually want.
   subject-case: [0]
   subject-empty: [2, "never"]
-  subject-max-length: [2, "always", 72]
+  # Length caps are deliberately generous: dependabot grouped-update titles
+  # routinely run 85-100 chars (e.g. "Bump <pkg> from X to Y in /<dir> in the
+  # <name> group"), and PR #16's 87-char subject / 104-char header is a real
+  # observation, not a hypothetical. We still cap to keep titles from turning
+  # into novellas, just at a height that fits how dependabot actually writes.
+  subject-max-length: [2, "always", 120]
+  header-max-length: [2, "always", 150]
   body-max-line-length: [2, "always", 100]
   type-enum:
     - 2
