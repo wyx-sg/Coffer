@@ -10,9 +10,9 @@ requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Coffer contributors" }]
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
-    "pydantic>=2.7",
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.47.0",
+    "pydantic>=2.13.4",
 ]
 
 [project.optional-dependencies]
