@@ -51,6 +51,11 @@ _STATUS: dict[str, int] = {
     "DOCUMENT_NOT_FOUND": 404,
     "INGEST_REJECTED": 400,  # `_status_for` refines this by reason
     "ENGINE_UNAVAILABLE": 503,
+    # memory kind (spec 007)
+    "MEMORY_STORE_NOT_FOUND": 404,
+    "MEMORY_NOT_FOUND": 404,
+    "MEMORY_REJECTED": 400,
+    "LLM_NOT_CONFIGURED": 503,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a

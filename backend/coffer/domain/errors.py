@@ -183,3 +183,42 @@ class EngineUnavailable(CofferError):  # noqa: N818
         super().__init__(f"{engine} engine unavailable: {detail}")
         self.engine = engine
         self.detail = detail
+
+
+# --- memory kind (spec 007) -------------------------------------------------
+
+
+class MemoryStoreNotFound(CofferError):  # noqa: N818
+    code = "MEMORY_STORE_NOT_FOUND"
+
+    def __init__(self, store_name: str) -> None:
+        super().__init__(f"memory store not found: {store_name!r}")
+        self.store_name = store_name
+
+
+class MemoryNotFound(CofferError):  # noqa: N818
+    code = "MEMORY_NOT_FOUND"
+
+    def __init__(self, store_name: str, memory_id: str) -> None:
+        super().__init__(f"memory not found: {store_name}:{memory_id}")
+        self.store_name = store_name
+        self.memory_id = memory_id
+
+
+class MemoryRejected(CofferError):  # noqa: N818
+    code = "MEMORY_REJECTED"
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+class LLMNotConfigured(CofferError):  # noqa: N818
+    code = "LLM_NOT_CONFIGURED"
+
+    def __init__(self, store_name: str) -> None:
+        super().__init__(
+            f"memory store {store_name!r} has llm_provider='none'; "
+            "configure a provider before adding memories"
+        )
+        self.store_name = store_name

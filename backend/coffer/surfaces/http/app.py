@@ -75,10 +75,11 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
+from coffer.surfaces.http.memory import router as memory_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.skill_routes import router as skill_router
-from coffer.surfaces.http.wiring import wire_kb_kind
+from coffer.surfaces.http.wiring import wire_kb_kind, wire_memory_kind
 
 
 def _db_url() -> str:
@@ -177,6 +178,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tool
     # (search_knowledge_base) into `builtin_tools` so the gateway can expose it.
     kb_store = wire_kb_kind(app, resource_svc, audit, sm, builtin_tools)
+    # Wire up Memory plumbing.
+    memory_store = wire_memory_kind(app, resource_svc, audit, sm, builtin_tools)
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
@@ -251,9 +254,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Close per-/mcp/-session state in the protocol routes
         with contextlib.suppress(Exception):
             await shutdown_all_sessions()
-        # Dispose KB store (best-effort)
+        # Dispose KB / Memory stores (best-effort)
         with contextlib.suppress(Exception):
             await kb_store.close()
+        with contextlib.suppress(Exception):
+            await memory_store.close()
         await engine.dispose()
         set_active_token(None)
 
@@ -293,4 +298,6 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(mcp_protocol_router)
     app.include_router(mcp_capability_router)
     app.include_router(mcp_invocation_router)
+    # Memory router (spec 007-memory)
+    app.include_router(memory_router)
     return app

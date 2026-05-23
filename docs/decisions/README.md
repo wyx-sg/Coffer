@@ -82,3 +82,6 @@ section that future readers most often want — don't skip it.>
 | [007](ADR-007-distribution-pyinstaller-tauri-sidecar.md) | Distribution: PyInstaller-bundled daemon + shim as Tauri sidecars        | Accepted |
 | [008](ADR-008-everything-is-a-resource-kind.md)          | Information architecture: everything is a resource kind                  | Accepted |
 | [009](ADR-009-cross-platform-skill-delivery.md)          | Cross-platform skill delivery: symlink / junction / copy-fallback        | Accepted |
+| [010](ADR-010-llamaindex-rag-engine.md)                  | RAG engine: LlamaIndex behind an application port                        | Accepted |
+| [011](ADR-011-observability-tracer-port.md)              | Observability: Tracer port at `application/observability/`               | Accepted |
+| [012](ADR-012-mem0-memory-engine.md)                     | Memory engine: mem0 behind an application port                           | Accepted |

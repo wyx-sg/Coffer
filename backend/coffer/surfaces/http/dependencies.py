@@ -254,3 +254,19 @@ def get_kb_service() -> Any:
     if _kb_service is None:
         raise RuntimeError("knowledge base service not initialised")
     return _kb_service
+
+
+# --- memory kind dependency providers (spec 007) ---
+
+_memory_service: Any | None = None
+
+
+def set_memory_service(svc: Any) -> None:
+    global _memory_service
+    _memory_service = svc
+
+
+def get_memory_service() -> Any:
+    if _memory_service is None:
+        raise RuntimeError("memory service not initialised")
+    return _memory_service

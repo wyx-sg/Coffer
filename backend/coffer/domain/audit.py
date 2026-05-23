@@ -41,6 +41,16 @@ class AuditEventType(StrEnum):
     # spec 006-knowledge-base
     KB_DOCUMENT_INGESTED = "kb_document_ingested"
     KB_DOCUMENT_DELETED = "kb_document_deleted"
+    # memory kind (spec 007)
+    MEMORY_ADDED = "memory_added"
+    MEMORY_UPDATED = "memory_updated"
+    MEMORY_DELETED = "memory_deleted"
+    MEMORY_CLEARED = "memory_cleared"
+    # Emitted when mem0 decides a candidate text duplicates an existing
+    # memory and stores nothing. The add() call still raises
+    # MemoryRejected (no new id was minted), but the audit row records the
+    # merge decision so operators can correlate it later (CODE26-015).
+    MEMORY_MERGED = "memory_merged"
 
 
 @dataclass

@@ -63,19 +63,29 @@ def _audit_safe_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _extract_credential_refs(config: dict[str, Any]) -> dict[str, str]:
-    """Pull `transport.credential_refs` out of a validated config dict.
+    """Pull credential references out of a validated config dict.
 
-    Kind-agnostic by shape: any config whose validated form has a
-    `transport.credential_refs` mapping participates in register-time
-    credential probing. Returns {} otherwise.
+    Kind-agnostic by shape. Two recognised carriers:
+
+    1. ``transport.credential_refs`` — mapping form used by the MCP kind for
+       header/env injection.
+    2. Top-level ``llm_credential_ref`` — flat string used by the memory
+       kind (and any future LLM-using kind) to name a single LLM API key
+       stored in the keychain. Without this branch the register-time probe
+       would miss missing credentials and only fail at first ``add()``
+       (CODE26-002).
     """
+    out: dict[str, str] = {}
     transport = config.get("transport")
-    if not isinstance(transport, dict):
-        return {}
-    refs = transport.get("credential_refs")
-    if not isinstance(refs, dict):
-        return {}
-    return {str(k): str(v) for k, v in refs.items()}
+    if isinstance(transport, dict):
+        refs = transport.get("credential_refs")
+        if isinstance(refs, dict):
+            for k, v in refs.items():
+                out[str(k)] = str(v)
+    llm_ref = config.get("llm_credential_ref")
+    if isinstance(llm_ref, str) and llm_ref:
+        out["llm_credential_ref"] = llm_ref
+    return out
 
 
 class ResourceService:

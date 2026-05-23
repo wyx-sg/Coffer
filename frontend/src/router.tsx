@@ -4,6 +4,8 @@ import { AgentsPage } from "./pages/AgentsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
 import { KnowledgeBaseAddPage } from "./pages/KnowledgeBaseAddPage";
+import { MemoryPage } from "./pages/MemoryPage";
+import { MemoryStoreAddPage } from "./pages/MemoryStoreAddPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ResourceDetailPage } from "./pages/ResourceDetailPage";
 import { ObservabilityPage } from "./pages/observability/ObservabilityPage";
@@ -25,6 +27,8 @@ export const router = createBrowserRouter([
       { path: "skills", element: <SkillsPage /> },
       { path: "knowledge-bases", element: <KnowledgeBasesPage /> },
       { path: "knowledge-bases/new", element: <KnowledgeBaseAddPage /> },
+      { path: "memory", element: <MemoryPage /> },
+      { path: "memory/new", element: <MemoryStoreAddPage /> },
       { path: "observability", element: <ObservabilityPage /> },
       // Legacy route — the audit log lived at /audit before it became the
       // Observability page. Keep the URL working so bookmarks resolve.

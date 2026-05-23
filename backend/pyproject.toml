@@ -29,6 +29,8 @@ dependencies = [
     "llama-index-embeddings-huggingface>=0.3",
     "sentence-transformers>=3.0",
     "pypdf>=4.0",
+    # spec 007 — memory kind
+    "mem0ai>=0.1.40",
 ]
 
 [project.optional-dependencies]
@@ -193,6 +195,11 @@ forbidden_modules = [
     "coffer.infrastructure.knowledge_base",
     "coffer.surfaces.http.knowledge_base",
     "coffer.surfaces.cli.knowledge_base_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
 ]
 
 # Contract 5b: agent kind may not reach into mcp or skill. Symmetric with 5.
@@ -222,6 +229,11 @@ forbidden_modules = [
     "coffer.infrastructure.knowledge_base",
     "coffer.surfaces.http.knowledge_base",
     "coffer.surfaces.cli.knowledge_base_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
 ]
 
 # Contract 5c: skill kind may not reach into mcp or agent. Symmetric with 5/5b.
@@ -253,6 +265,11 @@ forbidden_modules = [
     "coffer.infrastructure.knowledge_base",
     "coffer.surfaces.http.knowledge_base",
     "coffer.surfaces.cli.knowledge_base_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
 ]
 
 # Contract 5d: knowledge_base kind may not reach into mcp/agent/skill. Symmetric.
@@ -282,6 +299,45 @@ forbidden_modules = [
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
     "coffer.surfaces.cli.skill_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+]
+
+# Contract 5e: memory kind may not reach into mcp/agent/skill/knowledge_base.
+[[tool.importlinter.contracts]]
+name = "Cross-kind imports forbidden (memory)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+]
+forbidden_modules = [
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+    "coffer.domain.agent",
+    "coffer.application.agent",
+    "coffer.infrastructure.agent",
+    "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.cli.agent_cmd",
+    "coffer.domain.skill",
+    "coffer.application.skill",
+    "coffer.infrastructure.skill",
+    "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.cli.skill_cmd",
+    "coffer.domain.knowledge_base",
+    "coffer.application.knowledge_base",
+    "coffer.infrastructure.knowledge_base",
+    "coffer.surfaces.http.knowledge_base",
+    "coffer.surfaces.cli.knowledge_base_cmd",
 ]
 
 # Contract 6: kind-agnostic core does not import kind-specific modules.
@@ -321,6 +377,10 @@ forbidden_modules = [
     "coffer.application.knowledge_base",
     "coffer.infrastructure.knowledge_base",
     "coffer.surfaces.http.knowledge_base",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
 ]
 
 # Contract 7: LlamaIndex confined to infrastructure/knowledge_base/.
@@ -338,6 +398,7 @@ source_modules = [
     "coffer.infrastructure.mcp",
     "coffer.infrastructure.agent",
     "coffer.infrastructure.skill",
+    "coffer.infrastructure.memory",
     "coffer.infrastructure.persistence",
     "coffer.infrastructure.credentials",
     "coffer.infrastructure.daemon",
@@ -346,4 +407,26 @@ source_modules = [
 ]
 forbidden_modules = [
     "llama_index",
+]
+
+# Contract 8: mem0 confined to infrastructure/memory/. Same composition-root
+# carve-out as contract 7.
+[[tool.importlinter.contracts]]
+name = "mem0 confined to infrastructure/memory"
+type = "forbidden"
+source_modules = [
+    "coffer.domain",
+    "coffer.application",
+    "coffer.infrastructure.mcp",
+    "coffer.infrastructure.agent",
+    "coffer.infrastructure.skill",
+    "coffer.infrastructure.knowledge_base",
+    "coffer.infrastructure.persistence",
+    "coffer.infrastructure.credentials",
+    "coffer.infrastructure.daemon",
+    "coffer.infrastructure.logging",
+    "coffer.infrastructure.observability",
+]
+forbidden_modules = [
+    "mem0",
 ]

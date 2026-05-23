@@ -7,6 +7,7 @@
 import { registerKindUI } from "@/lib/components/kindRegistry";
 import { MCP_KIND_UI } from "@/kinds/mcp";
 import { KNOWLEDGE_BASE_KIND_UI } from "@/kinds/knowledge_base";
+import { MEMORY_KIND_UI } from "@/kinds/memory";
 
 let _registered = false;
 
@@ -14,5 +15,6 @@ export function registerFrontendKinds(): void {
   if (_registered) return;
   registerKindUI(MCP_KIND_UI);
   registerKindUI(KNOWLEDGE_BASE_KIND_UI);
+  registerKindUI(MEMORY_KIND_UI);
   _registered = true;
 }
