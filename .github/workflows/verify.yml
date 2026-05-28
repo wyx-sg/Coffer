@@ -160,6 +160,13 @@ jobs:
           printf '#!/bin/sh\nexit 0\n' > desktop/binaries/coffer-mcp-shim-x86_64-unknown-linux-gnu
           chmod +x desktop/binaries/coffer-daemon-x86_64-unknown-linux-gnu
           chmod +x desktop/binaries/coffer-mcp-shim-x86_64-unknown-linux-gnu
+      # Rust unit tests live in desktop/src/lib.rs under `#[cfg(test)] mod
+      # tests`. They cover the close-to-tray decision logic that's hard to
+      # exercise from a Tauri runtime test. Without this step the unit
+      # tests are never executed in CI.
+      - name: cargo test (desktop)
+        working-directory: desktop
+        run: cargo test --lib
       # Full tauri build catches more than cargo build alone: frontend
       # tsc -b + vite build, bundle creation, icon references, and the
       # whole crate-to-installer pipeline. Limited to `.deb` to keep
