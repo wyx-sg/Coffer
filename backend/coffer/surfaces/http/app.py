@@ -29,12 +29,16 @@ from alembic import command
 from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 
+from coffer.application.agent.auto_detect import AutoDetectService
+from coffer.application.agent.kind import make_agent_kind
+from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
+from coffer.infrastructure.agent.persistence import SuppressedAgentTypeRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
@@ -50,6 +54,7 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.surfaces.http import cors, daemon_routes
 from coffer.surfaces.http import errors as err_handlers
+from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.app_mcp_composition import (
     build_prunable_registry,
     reaper_kwargs_from_env,
@@ -58,7 +63,9 @@ from coffer.surfaces.http.app_mcp_composition import (
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import (
+    set_agent_service,
     set_audit_service,
+    set_auto_detect_service,
     set_resource_service,
     set_retention_service,
 )
@@ -158,6 +165,28 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     set_audit_service(audit)
     set_retention_service(retention_svc)
 
+    # Wire up agent kind (spec 004-agent-registry). on_delete left None for now;
+    # spec 005-skill-manager will supply the cleanup_bindings_for_agent callback.
+    suppression_repo = SuppressedAgentTypeRepo(sm)
+    agent_svc = AgentService(
+        resource_service=resource_svc,
+        audit=audit,
+        suppression_repo=suppression_repo,
+    )
+    auto_detect_svc = AutoDetectService(
+        agent_service=agent_svc,
+        audit=audit,
+        suppression_repo=suppression_repo,
+    )
+    set_agent_service(agent_svc)
+    set_auto_detect_service(auto_detect_svc)
+
+    # Best-effort auto-detect on startup.
+    try:
+        await auto_detect_svc.run_once(actor="system")
+    except Exception:
+        _logger.exception("agent.auto_detect.failed")
+
     # Wire up MCP-specific plumbing
     process_supervisor, session_supervisors = wire_mcp_kind(app, resource_svc, audit, sm)
 
@@ -246,6 +275,9 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
         lifespan=_lifespan,
     )
     app.state.kinds = kinds or {}
+    # Register the agent Kind unconditionally (skill-binding cleanup hook is
+    # supplied by spec 005-skill-manager at a later composition point).
+    app.state.kinds.setdefault("agent", make_agent_kind(on_delete=None))
     cors.install(app)
     err_handlers.register(app)
     app.include_router(daemon_routes.router)
@@ -253,6 +285,8 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(audit_router)
     app.include_router(retention_router)
     app.include_router(keychain_router)
+    # Agent kind routes (spec 004-agent-registry)
+    app.include_router(agent_router)
     # MCP-specific routers
     app.include_router(mcp_protocol_router)
     app.include_router(mcp_capability_router)

@@ -186,3 +186,35 @@ def get_health_repo() -> Any:
 def get_keyring() -> KeyringAdapter:
     """FastAPI Depends() target — the keychain bridge is stateless."""
     return KeyringAdapter()
+
+
+# --- Agent kind-specific dependency providers (spec 004-agent-registry) ---
+
+_agent_service: Any | None = None
+_auto_detect_service: Any | None = None
+
+
+def set_agent_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_service
+    _agent_service = svc
+
+
+def get_agent_service() -> Any:
+    """FastAPI Depends() target — actual type is AgentService."""
+    if _agent_service is None:
+        raise RuntimeError("agent service not initialised")
+    return _agent_service
+
+
+def set_auto_detect_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _auto_detect_service
+    _auto_detect_service = svc
+
+
+def get_auto_detect_service() -> Any:
+    """FastAPI Depends() target — actual type is AutoDetectService."""
+    if _auto_detect_service is None:
+        raise RuntimeError("auto-detect service not initialised")
+    return _auto_detect_service

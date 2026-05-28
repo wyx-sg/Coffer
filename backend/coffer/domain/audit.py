@@ -26,6 +26,8 @@ class AuditEventType(StrEnum):
     BACKUP_CREATED = "backup_created"
     KEYCHAIN_SET = "keychain_set"
     KEYCHAIN_DELETED = "keychain_deleted"
+    AGENT_AUTO_REGISTERED = "agent_auto_registered"
+    AGENT_TYPE_SUPPRESSED = "agent_type_suppressed"
 
 
 @dataclass
