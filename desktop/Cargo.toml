@@ -17,6 +17,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-# serde / serde_json / specific tauri features will be added by the first
-# spec that introduces a Tauri command. The current shell has no commands.
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+serde = { version = "1", features = ["derive"] }
+log = "0.4"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
