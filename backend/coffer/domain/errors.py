@@ -68,3 +68,25 @@ class ToolDisabled(CofferError):  # noqa: N818
 
 class InvalidPrefix(CofferError):  # noqa: N818
     code = "INVALID_PREFIX"
+
+
+class SkillDirNotWritable(CofferError):  # noqa: N818
+    code = "SKILL_DIR_NOT_WRITABLE"
+
+    def __init__(self, path: str, reason: str = "") -> None:
+        msg = (
+            f"skill_dir not writable: {path} ({reason})"
+            if reason
+            else f"skill_dir not writable: {path}"
+        )
+        super().__init__(msg)
+        self.path = path
+        self.reason = reason
+
+
+class PrivilegedPath(CofferError):  # noqa: N818
+    code = "PRIVILEGED_PATH"
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"path is privileged: {path}")
+        self.path = path

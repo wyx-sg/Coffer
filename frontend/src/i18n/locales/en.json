@@ -344,5 +344,27 @@
   "resourceDetail": {
     "unknownKind": "Unknown kind",
     "unknownKindBody": "No frontend module registered for kind: {{kind}}"
+  },
+  "agents": {
+    "title": "Agents",
+    "subtitle": "Locally-installed AI agents Coffer knows about.",
+    "add": "Add agent",
+    "addTitle": "Add agent",
+    "register": "Register",
+    "detect": "Detect installed",
+    "empty": "No agents registered yet.",
+    "loadFailed": "Failed to load agents.",
+    "removeConfirm": "Remove agent {{name}}?",
+    "name": "Name",
+    "type": "Type",
+    "skillDir": "Skill directory",
+    "skillDirOverride": "Override (optional)",
+    "skillDirPlaceholder": "Leave blank to use default",
+    "auto": "Auto-detected",
+    "edit": "Edit",
+    "editTitle": "Edit agent",
+    "save": "Save",
+    "description": "Description",
+    "descriptionPlaceholder": "Optional notes"
   }
 }

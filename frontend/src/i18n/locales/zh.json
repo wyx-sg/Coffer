@@ -344,5 +344,27 @@
   "resourceDetail": {
     "unknownKind": "未知类型",
     "unknownKindBody": "没有为类型 {{kind}} 注册前端模块。"
+  },
+  "agents": {
+    "title": "Agent",
+    "subtitle": "Coffer 已识别的本地 AI Agent。",
+    "add": "添加 Agent",
+    "addTitle": "添加 Agent",
+    "register": "注册",
+    "detect": "检测已安装",
+    "empty": "尚未注册任何 Agent。",
+    "loadFailed": "加载 Agent 失败。",
+    "removeConfirm": "确认移除 Agent {{name}} 吗？",
+    "name": "名称",
+    "type": "类型",
+    "skillDir": "Skill 目录",
+    "skillDirOverride": "自定义路径（可选）",
+    "skillDirPlaceholder": "留空使用默认路径",
+    "auto": "自动检测",
+    "edit": "编辑",
+    "editTitle": "编辑 Agent",
+    "save": "保存",
+    "description": "描述",
+    "descriptionPlaceholder": "可选备注"
   }
 }

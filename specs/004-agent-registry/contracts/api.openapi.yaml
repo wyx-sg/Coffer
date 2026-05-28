@@ -1,0 +1,221 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Agent Registry API
+  version: "0.1.0"
+  description: |
+    Agent registry endpoints. Merged into the main Coffer Management API at
+    runtime; this document scopes only the agent-specific routes added by
+    spec 004.
+
+    All routes use the same `X-Coffer-Token` authentication from
+    `specs/001-mcp-gateway/contracts/api.openapi.yaml`.
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "8000"
+
+security:
+  - cofferToken: []
+
+tags:
+  - name: agents
+    description: Local AI agent registry
+
+paths:
+  /agents:
+    get:
+      tags: [agents]
+      operationId: listAgents
+      summary: List registered agents
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [agents]
+      operationId: registerAgent
+      summary: Register a new agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: getAgent
+      summary: Get one agent
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateAgent
+      summary: Update an agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: deleteAgent
+      summary: Remove an agent
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/detect:
+    post:
+      tags: [agents]
+      operationId: detectAgents
+      summary: Re-run auto-detection scan
+      description: |
+        Scans known install markers for each supported agent type and
+        registers any newly-detected agent that is not on the suppression
+        list. Idempotent — returns the newly-registered agents only.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [registered]
+                properties:
+                  registered:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  schemas:
+    AgentType:
+      type: string
+      enum: [claude_code, claude_desktop, cursor, codex_cli]
+      description: Supported agent product identifiers (v1).
+
+    AgentCreate:
+      type: object
+      required: [type, name]
+      additionalProperties: false
+      properties:
+        type: { $ref: "#/components/schemas/AgentType" }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-zA-Z0-9_-]+$"
+        skill_dir:
+          type: string
+          description: Optional absolute path overriding the default for the type.
+        description:
+          type: string
+          nullable: true
+
+    AgentPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        skill_dir: { type: string }
+        description: { type: string, nullable: true }
+        enabled: { type: boolean }
+
+    AgentOut:
+      type: object
+      required:
+        [name, type, skill_dir, auto_detected, enabled, created_at, updated_at]
+      properties:
+        name: { type: string }
+        type: { $ref: "#/components/schemas/AgentType" }
+        skill_dir:
+          {
+            type: string,
+            description: "Resolved absolute path (default if not overridden).",
+          }
+        skill_dir_override:
+          type: string
+          nullable: true
+          description: "Set when the user provided an explicit override."
+        auto_detected: { type: boolean }
+        enabled: { type: boolean }
+        description: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid X-Coffer-Token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    NotFound:
+      description: Agent not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    Conflict:
+      description: Duplicate name within the agent kind
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    UnprocessableEntity:
+      description: Validation failure (skill_dir not writable, privileged path, unknown type, ...)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
