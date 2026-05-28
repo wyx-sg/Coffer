@@ -1,0 +1,56 @@
+// frontend/src/lib/hooks/useMcpCapabilityMutations.ts
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { getApiClient } from "@/lib/api/client";
+import { throwApiError } from "@/lib/api/errors";
+
+type CapabilityType = "tool" | "resource" | "prompt";
+
+interface ToggleInput {
+  serverName: string;
+  capabilityType: CapabilityType;
+  capabilityKey: string;
+}
+
+export function useEnableCapability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ serverName, capabilityType, capabilityKey }: ToggleInput) => {
+      const client = getApiClient();
+      const { error } = await client.POST(
+        "/resources/mcp_server/{name}/capabilities/{capability_type}/enable",
+        {
+          params: {
+            path: { name: serverName, capability_type: capabilityType },
+          },
+          body: { capability_key: capabilityKey },
+        },
+      );
+      if (error) throwApiError(error, "INTERNAL_ERROR", "enable capability failed");
+    },
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ["mcp", "capabilities", vars.serverName] });
+    },
+  });
+}
+
+export function useDisableCapability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ serverName, capabilityType, capabilityKey }: ToggleInput) => {
+      const client = getApiClient();
+      const { error } = await client.POST(
+        "/resources/mcp_server/{name}/capabilities/{capability_type}/disable",
+        {
+          params: {
+            path: { name: serverName, capability_type: capabilityType },
+          },
+          body: { capability_key: capabilityKey },
+        },
+      );
+      if (error) throwApiError(error, "INTERNAL_ERROR", "disable capability failed");
+    },
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ["mcp", "capabilities", vars.serverName] });
+    },
+  });
+}

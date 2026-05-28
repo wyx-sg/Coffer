@@ -1,12 +1,6 @@
-function App() {
-  return (
-    <main className="container mx-auto py-12">
-      <h1 className="text-4xl font-bold tracking-tight">Coffer</h1>
-      <p className="mt-4 text-muted-foreground">
-        Local-first AI agent vault. Under construction.
-      </p>
-    </main>
-  );
-}
+import { RouterProvider } from "react-router-dom";
+import { router } from "./router";
 
-export default App;
+export default function App() {
+  return <RouterProvider router={router} />;
+}

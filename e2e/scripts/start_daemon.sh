@@ -9,6 +9,11 @@ export HOME="${COFFER_E2E_HOME}"
 export COFFER_DB_URL="sqlite+aiosqlite:///${COFFER_E2E_HOME}/coffer.db"
 export COFFER_PORT_RANGE_START=18000
 export COFFER_PORT_RANGE_END=18009
+# The browser-driven `web` suite loads the app from the Vite dev server on
+# localhost:5173 and calls the daemon cross-origin; without dev CORS the
+# daemon only allows the Tauri origins and every browser fetch fails with
+# "Failed to fetch". COFFER_DEV_CORS=1 adds localhost/127.0.0.1:5173.
+export COFFER_DEV_CORS=1
 
 # Make sure the .coffer dir exists so daemon bootstrap can write daemon.json
 mkdir -p "${COFFER_E2E_HOME}/.coffer"

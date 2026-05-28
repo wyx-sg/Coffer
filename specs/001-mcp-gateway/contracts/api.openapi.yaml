@@ -903,7 +903,8 @@ components:
           type: integer
           nullable: true
           minimum: 1
-          description: "Set to null to keep forever; positive integer for a day count."
+          maximum: 3650
+          description: "Set to null to keep forever; 1..3650 days otherwise."
 
     PruneResultOut:
       type: object

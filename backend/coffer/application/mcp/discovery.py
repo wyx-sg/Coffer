@@ -129,7 +129,9 @@ class CapabilityDiscovery:
             setattr(cache, attr, None)
             setattr(cache, ts_attr, 0.0)
 
-    async def list_tools(self, server_name: str) -> list[DiscoveredTool]:
+    async def list_tools(
+        self, server_name: str, *, include_disabled: bool = False
+    ) -> list[DiscoveredTool]:
         cache = self._cache_for(server_name)
         # CODE-036: fetch the resource row at most once per call and thread it
         # through reconcile + pref-map, instead of each helper independently
@@ -161,10 +163,12 @@ class CapabilityDiscovery:
                 enabled=prefs.get(t.name, True),
             )
             for t in cache.tools
-            if prefs.get(t.name, True)
+            if include_disabled or prefs.get(t.name, True)
         ]
 
-    async def list_resources(self, server_name: str) -> list[DiscoveredResource]:
+    async def list_resources(
+        self, server_name: str, *, include_disabled: bool = False
+    ) -> list[DiscoveredResource]:
         cache = self._cache_for(server_name)
         resource = None
         async with self._lock_for(server_name, "resource"):
@@ -197,10 +201,12 @@ class CapabilityDiscovery:
                 enabled=prefs.get(r.uri, True),
             )
             for r in cache.resources
-            if prefs.get(r.uri, True)
+            if include_disabled or prefs.get(r.uri, True)
         ]
 
-    async def list_prompts(self, server_name: str) -> list[DiscoveredPrompt]:
+    async def list_prompts(
+        self, server_name: str, *, include_disabled: bool = False
+    ) -> list[DiscoveredPrompt]:
         cache = self._cache_for(server_name)
         resource = None
         async with self._lock_for(server_name, "prompt"):
@@ -238,7 +244,7 @@ class CapabilityDiscovery:
                 enabled=prefs.get(p.name, True),
             )
             for p in cache.prompts
-            if prefs.get(p.name, True)
+            if include_disabled or prefs.get(p.name, True)
         ]
 
     async def _build_pref_map(
