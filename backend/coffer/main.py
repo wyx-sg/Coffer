@@ -1,20 +1,10 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+"""ASGI entry point.
 
-from coffer import __version__
+`uvicorn coffer.main:app` loads the composition root.
+"""
 
-app = FastAPI(
-    title="Coffer",
-    version=__version__,
-    description="Local-first AI agent vault.",
-)
+from __future__ import annotations
 
+from coffer.surfaces.http.app import create_app
 
-class HealthResponse(BaseModel):
-    status: str
-    version: str
-
-
-@app.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
-    return HealthResponse(status="ok", version=__version__)
+app = create_app()

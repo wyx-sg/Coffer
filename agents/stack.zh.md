@@ -1,0 +1,181 @@
+# Stack — Python 后端 / TypeScript 前端
+
+> English: [stack.md](./stack.md)
+
+Coffer 后端用 Python 3.12+，前端用 TypeScript 5.x。
+
+## 后端 — Python / FastAPI / SQLite
+
+### 语言与版本
+
+- **Python 3.12+**
+- **FastAPI** 提供 HTTP surface
+- **Pydantic v2** 用于模型与校验
+- **SQLite** 通过标准库 `sqlite3` 或 SQLAlchemy
+- **`keyring`** 接 OS keychain（仅用于凭据）
+- **`anyio`** + `asyncio` 用于异步与子进程管理
+
+功能相关的库（如 MCP SDK）由第一个需要它的 spec 引入，不在此预装。
+
+### 架构
+
+分层 DDD（位于 `backend/coffer/` 下）：
+
+```
+surfaces/      — entry points; one subdir per surface, defined per spec
+application/   — commands, queries, ports (interfaces), shared services
+domain/        — entities, value objects, domain services (PURE)
+infrastructure/— adapters for SQLite, keyring, and outbound I/O
+```
+
+**依赖方向单向**：`surfaces → application → domain`；`infrastructure` 适配 `application` 中定义的 port。`domain/` 保持纯粹。
+
+**规则：**
+
+- `domain/` 不得 import `infrastructure/`、`surfaces/`、或任何外部 SDK（FastAPI、SQLAlchemy、httpx 等）。仅允许纯 Python + Pydantic。
+- `application/` 不得直接 import `surfaces/` 或 `infrastructure/`。它定义 port，由 infrastructure 适配。
+- 只有 credential 模块允许 import `keyring`。其他地方一律通过 credential 引用使用。
+- `application/` 或 `infrastructure/` 下的跨切面模块，只在第二个功能需要时才抽取。不预分配。
+
+### 代码风格
+
+- **Ruff** 做 lint + format。配置在 `backend/pyproject.toml`。
+- 整个包跑 **mypy --strict**。
+- 文件大小：每个 Python 文件 **≤ 400 行**。
+- 每个函数签名都加类型注解。
+- 任何跨越边界（HTTP、MCP、SQLite I/O）的数据都用 Pydantic v2 `BaseModel`。
+
+### HTTP 契约（线格式）
+
+任何功能的权威线格式契约都是 `specs/<NNN>-<short-name>/contracts/*.openapi.yaml`（手写、PR 审查）。后端 Pydantic `BaseModel` 手写以匹配该 yaml。每个 HTTP 路由都用 `response_model=<Foo>Response` 声明一个 Pydantic `BaseModel`——绝不用 `dict[str, Any]`。
+
+CI 卡口（第一个功能 spec 落地时同步加入）：`make verify-contract` 在运行时 OpenAPI dump 与任意 spec yaml 结构不一致时驳回 PR。
+
+### 本地开发
+
+```bash
+make install                       # one-time setup
+make dev                           # backend (:8000) + frontend (:5173) in parallel
+.venv/bin/uvicorn coffer.main:app --reload --port 8000   # backend only
+make lint / make test / make format / make verify
+```
+
+## 前端 — TypeScript / React / Vite / Tailwind / shadcn
+
+### 语言与版本
+
+- **TypeScript 5.x**（strict 模式）
+- **React 18**
+- **Vite 5+** 提供开发服务器与构建
+- **Tailwind CSS 3** 做样式
+- **shadcn/ui** 组件（复制粘贴，非运行时依赖）
+- **TanStack Query** 管理服务端状态
+- **react-hook-form** + **zod** 做表单
+- **TanStack Router** 或 **React Router** 做路由
+- **Vitest** + **@testing-library/react** 做测试
+- **Playwright** 做 E2E（在第一个 e2e 测试落地时引入）
+
+### 架构
+
+```
+frontend/src/
+├── main.tsx              — entry point
+├── App.tsx               — root component / router setup
+├── pages/                — route-level components (one per route)
+├── components/           — reusable components
+│   └── ui/               — shadcn/ui copies (style: default, slate base)
+├── hooks/                — custom React hooks (use*)
+├── lib/                  — utilities (cn, fetch wrappers, zod schemas)
+├── api/                  — TanStack Query hooks + fetch functions, one file per feature
+├── types/                — TS types (hand-written or generated later from OpenAPI)
+└── index.css             — Tailwind directives + CSS variables
+```
+
+### 代码风格
+
+- **ESLint 9** flat config 做 lint，**Prettier** 做 format。
+- **tsc** 做类型检查 (`tsc --noEmit`)。
+- 文件大小：
+  - 前端页面：**≤ 200 行**
+  - 前端组件：**≤ 250 行**
+  - 前端 hook：**≤ 300 行**
+- 命名：组件 PascalCase，hook 用 `useXxx`，工具函数 camelCase。
+
+### 组件模式
+
+- **shadcn/ui** 组件复制到 `src/components/ui/` 后自行改造。不作为运行时依赖。
+- 表单：`react-hook-form` + `zod` resolver。schema 放在表单旁边。
+- 服务端状态用 `TanStack Query`；本地 UI 状态用 `useState`；跨组件状态尽量上提，或用一个小的 `useContext` provider——除非 spec 需要，否则不引入 Zustand/Redux。
+- API 调用：在 `fetch` 外面包一层薄薄的封装，非 2xx 抛出。重试与缓存交给 TanStack Query。
+
+### 线契约
+
+后端暴露的 Pydantic 模型与 `specs/<NNN>-<short-name>/contracts/*.openapi.yaml` 对齐。前端消费这些路由；在类型代码生成接入前，先在 `src/types/` 手写与后端 Pydantic 模型对齐的 TS 类型，并靠 PR review 保持同步。
+
+### 本地开发
+
+```bash
+make install                       # also installs frontend deps
+make dev                           # backend + frontend in parallel
+cd frontend && npm run dev         # frontend only (Vite on :5173)
+cd frontend && npm run lint / npm run typecheck / npm run test / npm run format
+```
+
+## 桌面壳 — Tauri 2 / Rust
+
+Coffer 的桌面发行版是一个薄薄的 Tauri 壳，包住浏览器开发服务器跑的同一份 React 应用。
+
+### 语言与版本
+
+- **Tauri 2.x**（Rust 壳）
+- **Rust** stable（用 `rustup` 管理）
+- 前端绑定通过 `@tauri-apps/api`（JS）和 `@tauri-apps/cli`（构建 CLI）
+
+### 架构
+
+```
+desktop/                      ← Tauri 2 crate; deviates from the `src-tauri/`
+├── Cargo.toml                  default to match Coffer's role-named layout
+├── Cargo.lock                  (backend / frontend / e2e / desktop). The
+├── build.rs                    Makefile (desktop-dev / desktop-build) runs
+├── tauri.conf.json             the CLI from desktop/ via the relative path
+├── src/                        ../frontend/node_modules/.bin/tauri, because
+│   ├── main.rs                 Tauri 2 CLI discovers the project via cwd
+│   └── lib.rs                  rather than the --config flag.
+├── icons/                    — generated by `tauri icon`; bundle artifacts
+└── capabilities/
+    └── default.json          — permission manifest per window
+```
+
+**Tauri 命令**（JS 通过 `@tauri-apps/api/core` 的 `invoke()` 调用的 Rust 函数）暂时都放在 `desktop/src/lib.rs`；累积超过约 3 个命令后拆成模块。
+
+### `tauri.conf.json` 中的路径解析规则
+
+两套不同的 base——一个坑：
+
+| Field                                                     | Base                                | Reason                                                                               |
+| --------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------ |
+| `build.beforeBuildCommand` / `beforeDevCommand`           | parent of the crate dir (`<repo>/`) | Tauri runs these from the project root, which it defines as the parent of `desktop/` |
+| `build.frontendDist` / `build.devUrl` (URL: n/a)          | the config file itself (`desktop/`) | standard Tauri config path resolution                                                |
+| `bundle.icon` / `bundle.resources` / `bundle.externalBin` | the config file itself (`desktop/`) | same rule as `frontendDist`; the bundler reads paths relative to `tauri.conf.json`   |
+
+所以 `beforeBuildCommand: "npm run build --prefix frontend"` 没有 `../`，而 `frontendDist: "../frontend/dist"` 有。bundle 路径如 `"icons/32x32.png"`（无 `../`）能跑通，是因为 icons 就在 `desktop/` 内。
+
+### 本地开发
+
+```bash
+make desktop-dev                   # frontend + Tauri window (Vite is started by tauri.conf.json beforeDevCommand)
+make desktop-build                 # release bundle (.dmg / .msi / .AppImage / .deb depending on host)
+```
+
+### 测试
+
+| Tier                              | Today                                      | When                                       |
+| --------------------------------- | ------------------------------------------ | ------------------------------------------ |
+| `tauri build` (frontend + bundle) | CI `desktop-build` job (Linux `.deb` only) | always                                     |
+| `cargo test` (Rust unit)          | none yet                                   | added with first Tauri command             |
+| Tauri E2E (webdriver / app smoke) | none                                       | added with first desktop-only product spec |
+
+### 安全提示（CSP）
+
+`tauri.conf.json` 目前是 `"app.security.csp": null`（Tauri 的开发默认）。首次公开发布前必须定义严格的 CSP；参见 Tauri 2 的 [Content Security Policy](https://v2.tauri.app/security/csp/) 文档。

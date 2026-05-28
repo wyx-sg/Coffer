@@ -1,0 +1,232 @@
+"""Pydantic API schemas (kind-agnostic).
+
+Wire-compatible with specs/001-mcp-gateway/contracts/api.openapi.yaml.
+MCP-kind-specific schemas live in surfaces/http/mcp/schemas.py (Phase 3).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+# --- Error envelope ---
+
+
+class ErrorDetail(BaseModel):
+    code: str = Field(examples=["RESOURCE_NOT_FOUND"])
+    message: str = Field(examples=["resource not found: mcp_server:filesystem"])
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorDetail
+
+
+# --- Resources (kind-agnostic) ---
+
+
+class ResourceOut(BaseModel):
+    ref: str = Field(examples=["mcp_server:filesystem"])
+    kind: str
+    name: str
+    description: str | None = None
+    config: dict[str, Any]
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResourceCreate(BaseModel):
+    kind: str
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$")
+    description: str | None = None
+    config: dict[str, Any]
+
+
+class ResourceUpdate(BaseModel):
+    description: str | None = None
+    config: dict[str, Any] | None = None
+
+
+class ResourceListOut(BaseModel):
+    resources: list[ResourceOut]
+
+
+# --- Audit ---
+
+
+class AuditEntryOut(BaseModel):
+    id: int
+    timestamp: datetime
+    event_type: str
+    resource_kind: str | None = None
+    resource_name: str | None = None
+    actor: str
+    details: dict[str, Any] | None = None
+
+
+class AuditListOut(BaseModel):
+    entries: list[AuditEntryOut]
+
+
+# --- Retention ---
+
+
+class RetentionPolicyOut(BaseModel):
+    table_name: str
+    display_name: str
+    description: str
+    default_retention_days: int | None
+    retention_days: int | None
+    last_pruned_at: datetime | None = None
+    last_pruned_rows: int
+
+
+class RetentionPolicyListOut(BaseModel):
+    policies: list[RetentionPolicyOut]
+
+
+class RetentionPolicyUpdate(BaseModel):
+    retention_days: int | None = Field(
+        default=None,
+        ge=1,
+        description="Null = keep forever; positive integer = day count.",
+    )
+
+
+class PruneResultOut(BaseModel):
+    tables: dict[str, int]
+
+
+# --- Daemon ---
+
+
+class UpstreamSummary(BaseModel):
+    registered: int
+    enabled: int
+    healthy: int
+    unhealthy: int
+
+
+class DaemonStatusOut(BaseModel):
+    status: Literal["starting", "ready", "draining"]
+    version: str
+    started_at: datetime
+    port: int
+    upstream_summary: UpstreamSummary | None = None
+
+
+class BackupResultOut(BaseModel):
+    path: str
+    size_bytes: int
+
+
+class TokenRotationOut(BaseModel):
+    token: str = Field(description="New token; clients must re-read daemon.json")
+
+
+# --- MCP capability views ---
+
+
+class MCPToolView(BaseModel):
+    prefixed_name: str = Field(examples=["filesystem__read_file"])
+    original_name: str = Field(examples=["read_file"])
+    description: str | None = None
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool
+
+
+class MCPResourceView(BaseModel):
+    prefixed_uri: str
+    original_uri: str
+    name: str | None = None
+    description: str | None = None
+    mime_type: str | None = None
+    enabled: bool
+
+
+class _MCPPromptArgument(BaseModel):
+    name: str
+    description: str | None = None
+    required: bool = False
+
+
+class MCPPromptView(BaseModel):
+    prefixed_name: str
+    original_name: str
+    description: str | None = None
+    arguments: list[_MCPPromptArgument] = Field(default_factory=list)
+    enabled: bool
+
+
+class CapabilityListOut(BaseModel):
+    server_name: str
+    tools: list[MCPToolView]
+    resources: list[MCPResourceView]
+    prompts: list[MCPPromptView]
+    fetched_at: datetime
+    from_cache: bool = False
+
+
+class McpTestResultOut(BaseModel):
+    ok: bool
+    latency_ms: int
+    protocol_version: str | None = None
+    server_capabilities: dict[str, Any] | None = None
+    error_message: str | None = None
+
+
+class InvocationOut(BaseModel):
+    timestamp: datetime
+    capability_type: str = Field(pattern="^(tool|resource|prompt)$")
+    capability_key: str
+    duration_ms: int
+    status: str
+    error_message: str | None = None
+    session_id: str | None = None
+
+
+class InvocationListOut(BaseModel):
+    invocations: list[InvocationOut]
+
+
+# --- Keychain ---
+
+
+class KeychainSetIn(BaseModel):
+    """Request body for storing a secret in the OS keychain."""
+
+    ref: str = Field(
+        min_length=1,
+        pattern=r"^[A-Za-z0-9_.-]+$",
+        description="Reference key the secret is stored under.",
+    )
+    value: str = Field(
+        max_length=8192,
+        description="The secret value.",
+    )
+
+
+# --- MCP capability enable/disable body ---
+
+
+class CapabilityKeyBody(BaseModel):
+    """Request body for capability enable/disable routes.
+
+    Carries the capability_key (tool name, resource URI, or prompt name) in
+    the body rather than the URL path so that keys containing '/' (e.g.
+    resource URIs like ``file:///path/to/x``) are routed correctly.
+    """
+
+    capability_key: str = Field(min_length=1, max_length=2048)
+
+
+# --- MCP server status ---
+
+
+class McpServerStatusOut(BaseModel):
+    """Cheap per-server status, derived from persisted state (no spawn)."""
+
+    status: Literal["healthy", "failing", "unknown"]

@@ -13,15 +13,27 @@ dependencies = [
     "fastapi>=0.136.1",
     "uvicorn[standard]>=0.47.0",
     "pydantic>=2.13.4",
+    "sqlalchemy[asyncio]>=2.0,<3.0",
+    "aiosqlite>=0.20",
+    "alembic>=1.13",
+    "keyring>=25.0",
+    "httpx>=0.27",
+    "typer>=0.12",
+    "rich>=13.7",
+    "structlog>=24.1",
+    "mcp>=1.0",
+    "psutil>=5.9",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
+    "pytest-timeout>=2.4",
     "httpx>=0.28.1",
     "ruff>=0.15.14",
     "mypy>=2.1.0",
+    "types-psutil>=5.9",
     # import-linter + grimp: most platforms get the latest (grimp 3.x is a
     # Rust extension, but wheels exist for typical CI + dev targets).
     # On Python 3.14 macOS x86_64 there is no prebuilt grimp 3.x wheel and
@@ -35,7 +47,13 @@ dev = [
     "pre-commit>=4.6.0",
     "pytest-cov>=7.1.0",
     "pip-tools>=7.5.3",
+    "asgi-lifespan>=2.1",
+    "pyinstaller>=6.0",
 ]
+
+[project.scripts]
+coffer = "coffer.surfaces.cli.main:run"
+coffer-mcp-shim = "coffer.surfaces.shim.main:run"
 
 [tool.setuptools]
 packages = ["coffer"]
@@ -64,6 +82,8 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 markers = [
     "acceptance(spec, scenario): tags a test as covering a spec.md acceptance scenario",
+    "benchmark: performance benchmark; only runs when COFFER_RUN_BENCHMARKS=1",
+    "timeout(seconds): per-test wall-clock cap enforced by pytest-timeout",
 ]
 
 [tool.importlinter]
@@ -87,6 +107,15 @@ name = "Infrastructure does not import surfaces"
 type = "forbidden"
 source_modules = ["coffer.infrastructure"]
 forbidden_modules = ["coffer.surfaces"]
+
+# Contract 2b (CODE-005): application code depends only on ports it defines
+# (Protocols in application/*); it must not import infrastructure directly.
+# Concrete infrastructure adapters are wired at composition root.
+[[tool.importlinter.contracts]]
+name = "Application does not import infrastructure"
+type = "forbidden"
+source_modules = ["coffer.application"]
+forbidden_modules = ["coffer.infrastructure"]
 
 # Contract 3: domain is pure — no imports from any other project layer, no
 # external SDKs that imply I/O. The list of forbidden externals is the smell
@@ -119,3 +148,45 @@ source_modules = [
     "coffer.application",
 ]
 forbidden_modules = ["keyring"]
+# Application may use infrastructure adapters that wrap keyring; only
+# *direct* imports of keyring from surfaces/application are forbidden.
+allow_indirect_imports = "True"
+
+# Contract 5: cross-kind imports forbidden. As more kinds land, append to each
+# layer's source_modules. With only `mcp` registered, this is vacuously true
+# but the rule is in place from day one.
+[[tool.importlinter.contracts]]
+name = "Cross-kind imports forbidden (mcp)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+]
+forbidden_modules = []   # populated when a second kind ships
+
+# Contract 6: kind-agnostic core does not import kind-specific modules.
+[[tool.importlinter.contracts]]
+name = "Kind-agnostic core does not import kind-specific code"
+type = "forbidden"
+source_modules = [
+    "coffer.application.resource_service",
+    "coffer.application.audit_service",
+    "coffer.application.retention_service",
+    "coffer.application.retention_worker",
+    "coffer.domain.resource",
+    "coffer.domain.audit",
+    "coffer.domain.retention",
+    "coffer.infrastructure.persistence.models",
+    "coffer.surfaces.http.resource_routes",
+    "coffer.surfaces.http.audit_routes",
+    "coffer.surfaces.http.retention_routes",
+]
+forbidden_modules = [
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+]
