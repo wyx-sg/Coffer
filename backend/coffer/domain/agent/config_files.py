@@ -13,6 +13,7 @@ any filesystem access.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import tomllib
 from dataclasses import dataclass
@@ -21,6 +22,11 @@ from enum import StrEnum
 
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import ConfigFileFormatInvalid, ConfigFileNotAllowed
+
+
+def _home() -> pathlib.Path:
+    """Home dir, same source as ``agent.types`` so the two stay consistent."""
+    return pathlib.Path(os.environ.get("HOME", os.path.expanduser("~")))
 
 
 class ConfigFileFormat(StrEnum):
@@ -50,20 +56,17 @@ class FileStat:
     modified_at: datetime
 
 
-def _home() -> pathlib.Path:
-    import os
-
-    return pathlib.Path(os.environ.get("HOME", os.path.expanduser("~")))
-
-
-def config_files_for(agent_type: AgentType) -> tuple[ConfigFileSpec, ...]:
+def config_files_for(
+    agent_type: AgentType, config_dir: pathlib.Path | None = None
+) -> tuple[ConfigFileSpec, ...]:
     """Curated, ordered allowlist of config files for the given agent type.
 
-    Paths are resolved per host. Files need not exist — `exists` is reported
-    at read/list time by the application layer.
+    Paths resolve against ``config_dir`` (the agent's effective config dir).
+    When omitted, the type's standard location is used. Files need not exist —
+    `exists` is reported at read/list time by the application layer.
     """
+    cfg = config_dir or agent_type.config_dir()
     if agent_type is AgentType.CLAUDE_CODE:
-        cfg = agent_type.config_dir()  # ~/.claude
         return (
             ConfigFileSpec(
                 "settings", "User settings", cfg / "settings.json", ConfigFileFormat.JSON
@@ -74,8 +77,12 @@ def config_files_for(agent_type: AgentType) -> tuple[ConfigFileSpec, ...]:
                 cfg / "settings.local.json",
                 ConfigFileFormat.JSON,
             ),
-            # The global state/config file lives at the home root, not under
-            # ~/.claude. It also holds the user-scope MCP servers.
+            # Claude Code's global state/config file always lives at the home
+            # root (``~/.claude.json``), regardless of where the config dir
+            # itself points — it also holds user-scope MCP servers. Anchoring
+            # it to ``cfg.parent`` was only coincidentally correct for the
+            # default ~/.claude and resolved to the wrong file for a custom
+            # config_dir, so we anchor it to $HOME directly.
             ConfigFileSpec(
                 "global", "Global config", _home() / ".claude.json", ConfigFileFormat.JSON
             ),
@@ -84,7 +91,6 @@ def config_files_for(agent_type: AgentType) -> tuple[ConfigFileSpec, ...]:
             ),
         )
     if agent_type is AgentType.CODEX:
-        cfg = agent_type.config_dir()  # ~/.codex
         return (
             ConfigFileSpec(
                 "config", "Config (config.toml)", cfg / "config.toml", ConfigFileFormat.TOML
@@ -99,13 +105,15 @@ def config_files_for(agent_type: AgentType) -> tuple[ConfigFileSpec, ...]:
     raise AssertionError(f"unhandled AgentType: {agent_type!r}")  # pragma: no cover
 
 
-def spec_for(agent_type: AgentType, key: str) -> ConfigFileSpec:
+def spec_for(
+    agent_type: AgentType, key: str, config_dir: pathlib.Path | None = None
+) -> ConfigFileSpec:
     """Return the spec for `key`, or raise `ConfigFileNotAllowed`.
 
     Callers MUST go through this before any filesystem access so an unknown
     key never touches disk.
     """
-    for spec in config_files_for(agent_type):
+    for spec in config_files_for(agent_type, config_dir):
         if spec.key == key:
             return spec
     raise ConfigFileNotAllowed(agent_type.value, key)

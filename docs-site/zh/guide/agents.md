@@ -11,13 +11,13 @@ Coffer 绝不会自动注册 agent。它可以**检测**你机器上已安装的
 ```bash
 coffer agent detect            # → claude_code（已检测）、codex（已检测）
 coffer agent add claude_code   # 注册；--name 默认为 claude-code
-coffer agent add codex --name my-codex --description "工作笔记本"
+coffer agent add codex --name my-codex --config-dir ~/.codex --description "工作笔记本"
 
 coffer agent list              # → claude-code | claude_code | registered
 ```
 
 - `coffer agent detect` 扫描已安装的 agent 并报告检测结果。此步骤不会注册任何东西 —— 仅做发现。
-- `coffer agent add <type>` 注册一个 agent。`<type>` 为 `claude_code` 或 `codex`。`--name` 可选，默认为按类型生成的名称（例如 `claude_code` → `claude-code`）。可选标志：`--skill-dir PATH` 和 `--description TEXT`。
+- `coffer agent add <type>` 注册一个 agent。`<type>` 为 `claude_code` 或 `codex`。`--name` 可选，默认为按类型生成的名称（例如 `claude_code` → `claude-code`）。可选标志：`--config-dir PATH`（agent 的配置目录 —— 默认为该类型的标准位置，例如 `~/.claude`；Coffer 会把技能交付到该目录的 `skills/` 子文件夹中）和 `--description TEXT`。
 - `coffer agent list` 显示所有已注册的 agent，及其类型和状态。
 - `coffer agent show <name>` 打印某个已注册 agent 的详情；`coffer agent rm <name>` 移除它。
 
@@ -66,8 +66,9 @@ coffer agent mcp uninstall claude-code   # 移除它
 [Web UI](/zh/guide/web-ui) 中的 **Agents** 页面无需终端即可完成同样的流程：
 
 1. 打开 **Agents** 并点击 **Detect** 扫描已安装的 agent。检测对话框列出找到的结果；确认某个 agent 即可注册它。
-2. 在某个 agent 的详情页，在编辑器中打开任意策展的配置文件。编辑器在保存时校验格式、以原子方式写入并保留 `.bak` 备份，还内置一个**查找/替换**框，可滚动到匹配项。
-3. 使用 **Install Coffer MCP** 开关添加或移除 `coffer` 条目，并配有实时状态指示。
-4. 用文件夹选择器设置 agent 的 skill 目录。
+2. agent 详情页有四个标签 —— **Overview**、**Skills**、**MCP servers** 和 **Config files**。
+3. 在 **Config files** 标签中，在编辑器中打开任意策展的配置文件。编辑器在保存时校验格式、以原子方式写入并保留 `.bak` 备份，还内置一个**查找/替换**框，可滚动到匹配项。
+4. 使用头部的 **Install Coffer MCP** 开关添加或移除 `coffer` 条目，并配有实时状态指示。
+5. 在 **Skills** 标签中，为此 agent 逐个启用或禁用技能，或用 **Install skills** 绑定更多技能。**MCP servers** 标签显示 Coffer 向该 agent 暴露的服务器（目前为只读）。
 
 [接入客户端 →](/zh/guide/connect-client)

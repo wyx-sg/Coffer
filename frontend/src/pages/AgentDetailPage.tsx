@@ -5,11 +5,13 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
 import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEditor";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
 import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
+import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
+import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,20 +75,31 @@ export function AgentDetailPage() {
         <ArrowLeft className="mr-1.5 size-4" /> {t("agents.detail.back")}
       </Button>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <h1 className="font-serif text-3xl tracking-tight">{agent.name}</h1>
-          <Badge variant="secondary">{agent.type}</Badge>
+      <div className="space-y-2">
+        {/* Title + actions on one row; the description sits below the title. */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <h1 className="font-serif text-3xl tracking-tight">{agent.name}</h1>
+            <Badge variant="secondary">{agent.type}</Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <AgentMcpButton name={name} />
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <Pencil className="mr-1.5 size-3.5" /> {t("agents.edit")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <AgentMcpButton name={name} />
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-            {t("agents.edit")}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)}>
-            {t("common.delete")}
-          </Button>
-        </div>
+        {agent.description ? (
+          <p className="max-w-prose text-sm text-muted-foreground">{agent.description}</p>
+        ) : null}
       </div>
 
       {editing ? (
@@ -103,6 +116,8 @@ export function AgentDetailPage() {
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">{t("agents.workspace.overview")}</TabsTrigger>
+          <TabsTrigger value="skills">{t("agents.workspace.skills")}</TabsTrigger>
+          <TabsTrigger value="mcpServers">{t("agents.workspace.mcpServers")}</TabsTrigger>
           <TabsTrigger value="config">{t("agents.workspace.config")}</TabsTrigger>
         </TabsList>
 
@@ -114,11 +129,17 @@ export function AgentDetailPage() {
                 <dd>{agent.type}</dd>
                 <dt className="text-muted-foreground">{t("agents.configDir")}</dt>
                 <dd className="font-mono text-xs">{agent.config_dir}</dd>
-                <dt className="text-muted-foreground">{t("agents.description")}</dt>
-                <dd>{agent.description || "—"}</dd>
               </dl>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="skills" className="pt-6">
+          <AgentSkillsTab agent={agent} />
+        </TabsContent>
+
+        <TabsContent value="mcpServers" className="pt-6">
+          <AgentMcpServersTab agentName={name} />
         </TabsContent>
 
         <TabsContent value="config" className="pt-6">

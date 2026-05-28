@@ -18,23 +18,6 @@ Coffer is a daemon + CLI that aggregates upstream MCP servers and re-exposes the
 
 📖 **Documentation site:** https://wyx-sg.github.io/Coffer/
 
-## Screenshots
-
-<p align="center">
-  <img src="docs-site/public/screenshots/resources.png" alt="Coffer — manage all your MCP servers from one place" width="820">
-</p>
-
-<p align="center">
-  <img src="docs-site/public/screenshots/server-detail.png" alt="Per-server detail — health, transport, and discovered capabilities" width="405">
-  <img src="docs-site/public/screenshots/observability.png" alt="Audit log — every lifecycle change to any resource or capability" width="405">
-</p>
-
-<p align="center">
-  <sub>One vault for every MCP server · live health & capabilities · a full audit trail — all local.</sub>
-</p>
-
----
-
 ## Download & install
 
 ### One-line CLI install (macOS / Linux)

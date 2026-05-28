@@ -45,9 +45,7 @@ describe("useAgents", () => {
           {
             name: "cur",
             type: "codex",
-            skill_dir: "/tmp/skills",
-            skill_dir_override: null,
-            enabled: true,
+            config_dir: "/home/u/.codex",
             description: null,
             created_at: "2026-05-22T00:00:00Z",
             updated_at: "2026-05-22T00:00:00Z",
@@ -88,9 +86,7 @@ describe("useRegisterAgent", () => {
       jsonResponse(201, {
         name: "cur",
         type: "codex",
-        skill_dir: "/tmp/skills",
-        skill_dir_override: "/tmp/skills",
-        enabled: true,
+        config_dir: "/home/u/.codex",
         description: null,
         created_at: "2026-05-22T00:00:00Z",
         updated_at: "2026-05-22T00:00:00Z",
@@ -103,7 +99,7 @@ describe("useRegisterAgent", () => {
     await result.current.mutateAsync({
       type: "codex",
       name: "cur",
-      skill_dir: "/tmp/skills",
+      config_dir: "/home/u/.codex",
       description: null,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);

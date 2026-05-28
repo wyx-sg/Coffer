@@ -34,14 +34,13 @@ def list_cmd(
         typer.echo(_json.dumps(items, indent=2))
         return
     table = Table(title="Agents")
-    for col in ("Name", "Type", "Config Dir", "Skill Dir"):
+    for col in ("Name", "Type", "Config Dir"):
         table.add_column(col)
     for it in items:
         table.add_row(
             it["name"],
             it["type"],
             it["config_dir"],
-            it["skill_dir"],
         )
     _console.print(table)
 
@@ -53,7 +52,9 @@ def add(
     name: str | None = typer.Option(
         None, "--name", "-n", help="Resource name (defaults to a per-type name, e.g. claude-code)."
     ),
-    skill_dir: str | None = typer.Option(None, "--skill-dir", help="Override default path."),
+    config_dir: str | None = typer.Option(
+        None, "--config-dir", help="Override config directory (default: ~/.claude etc.)."
+    ),
     description: str | None = typer.Option(None, "--description"),
 ) -> None:
     """Register an agent.
@@ -64,7 +65,11 @@ def add(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     # Only send `name` when provided so the server applies its per-type default.
-    body: dict[str, Any] = {"type": agent_type, "skill_dir": skill_dir, "description": description}
+    body: dict[str, Any] = {
+        "type": agent_type,
+        "config_dir": config_dir,
+        "description": description,
+    }
     if name is not None:
         body["name"] = name
     with c:
@@ -93,7 +98,7 @@ def show(
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
     else:
-        for k in ("name", "type", "config_dir", "skill_dir"):
+        for k in ("name", "type", "config_dir"):
             typer.echo(f"{k}: {data[k]}")
 
 
@@ -101,17 +106,17 @@ def show(
 def edit(
     ctx: typer.Context,
     name: str = typer.Argument(...),
-    skill_dir: str | None = typer.Option(None, "--skill-dir"),
+    config_dir: str | None = typer.Option(None, "--config-dir"),
     description: str | None = typer.Option(None, "--description"),
 ) -> None:
     """Update an agent's fields."""
-    if skill_dir is None and description is None:
+    if config_dir is None and description is None:
         typer.echo("nothing to update", err=True)
         raise typer.Exit(1)
     verbose = (ctx.obj or {}).get("verbose", False)
     body: dict[str, object] = {}
-    if skill_dir is not None:
-        body["skill_dir"] = skill_dir
+    if config_dir is not None:
+        body["config_dir"] = config_dir
     if description is not None:
         body["description"] = description
     c, _info = _cli_client.client_or_exit()

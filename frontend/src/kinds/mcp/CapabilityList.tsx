@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import type { components } from "@/lib/api/types";
 import { useDisableCapability, useEnableCapability } from "@/lib/hooks/useMcpCapabilityMutations";
+import { CapabilityBulkActions } from "./CapabilityBulkActions";
 
 type ToolView = components["schemas"]["MCPToolView"];
 type ResourceView = components["schemas"]["MCPResourceView"];
@@ -143,6 +144,24 @@ export function CapabilityList(props: Props) {
         placeholder: t("mcp.capabilities.searchPlaceholder"),
       }}
       filters={filters}
+      // Row multi-select with bulk Enable/Disable. The checkbox column coexists
+      // with getRowDetail (DataTable renders it before the expand chevron) and
+      // with the per-row ToggleSwitch; select-all spans the current
+      // search/status-filtered set across pages.
+      selection={{
+        ariaSelectAll: t("common.bulk.selectAll"),
+        ariaSelectRow: (row) => `${t("common.bulk.selectRow")}: ${row.key}`,
+        bulkLabel: (count) => t("common.bulk.selected", { count }),
+        clearLabel: t("common.clear"),
+        renderBulkActions: ({ selectedRows, clear }) => (
+          <CapabilityBulkActions
+            serverName={serverName}
+            kind={kind}
+            rows={selectedRows}
+            onDone={clear}
+          />
+        ),
+      }}
       // Only tools carry an input_schema; expose it as an expandable detail so
       // a row toggles open to its pretty-printed JSON. Resources/prompts have
       // no schema, so the table stays flat for those kinds.

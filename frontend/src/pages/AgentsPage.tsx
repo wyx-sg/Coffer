@@ -1,7 +1,7 @@
 // frontend/src/pages/AgentsPage.tsx — spec 004-agent-registry surface.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot } from "lucide-react";
+import { Bot, Plus } from "lucide-react";
 
 import { AgentAddDialog } from "@/components/agents/AgentAddDialog";
 import { AgentTable } from "@/components/agents/AgentTable";
@@ -27,7 +27,11 @@ export function AgentsPage() {
         title={t("agents.title")}
         subtitle={t("agents.subtitle")}
         actions={
-          hasAgents ? <Button onClick={() => setShowAdd(true)}>{t("agents.add")}</Button> : null
+          hasAgents ? (
+            <Button onClick={() => setShowAdd(true)}>
+              <Plus className="mr-1 size-4" /> {t("agents.add")}
+            </Button>
+          ) : null
         }
       />
 

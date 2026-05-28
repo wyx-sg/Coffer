@@ -2,6 +2,8 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
+import { SkillsPage } from "./pages/SkillsPage";
+import { SkillDetailPage } from "./pages/SkillDetailPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ResourceDetailPage } from "./pages/ResourceDetailPage";
 import { AuditLogPage } from "./pages/audit/AuditLogPage";
@@ -25,6 +27,8 @@ export const router = createBrowserRouter([
       { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
       { path: "agents", element: <AgentsPage /> },
       { path: "agents/:name", element: <AgentDetailPage /> },
+      { path: "skills", element: <SkillsPage /> },
+      { path: "skills/:name", element: <SkillDetailPage /> },
       { path: "audit", element: <AuditLogPage /> },
       // Legacy route — this surface briefly lived at /observability. Keep the
       // URL working so old bookmarks resolve.

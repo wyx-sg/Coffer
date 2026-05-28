@@ -11,7 +11,22 @@
     "retry": "Retry",
     "clear": "Clear",
     "rawLog": "Raw log",
-    "done": "Done"
+    "done": "Done",
+    "bulk": {
+      "selected": "{{count}} selected",
+      "selectAll": "Select all",
+      "selectRow": "Select row",
+      "enable": "Enable",
+      "disable": "Disable",
+      "delete": "Delete",
+      "install": "Install",
+      "summary": {
+        "allOk": "{{count}} succeeded",
+        "partial": "{{ok}} succeeded, {{failed}} failed",
+        "allFailed": "{{count}} failed"
+      }
+    },
+    "backTo": "Back to {{label}}"
   },
   "nav": {
     "aria": {
@@ -23,6 +38,7 @@
       "agents": "Agents"
     },
     "mcpServers": "MCP servers",
+    "skills": "Skills",
     "settings": "Settings",
     "language": "Language",
     "collapse": "Collapse sidebar",
@@ -59,7 +75,14 @@
       "enabled": "Enabled",
       "disabled": "Disabled"
     },
-    "noMatches": "No servers match your search."
+    "noMatches": "No servers match your search.",
+    "cols": {
+      "name": "Name",
+      "transport": "Transport",
+      "health": "Health",
+      "description": "Description",
+      "status": "Status"
+    }
   },
   "mcp": {
     "table": {
@@ -412,13 +435,15 @@
     },
     "workspace": {
       "overview": "Overview",
-      "config": "Config files"
+      "config": "Config files",
+      "skills": "Skills",
+      "mcpServers": "MCP servers"
     },
-    "skillDirOverride": "Override (optional)",
-    "skillDirPlaceholder": "Leave blank to use default",
+    "configDirOverride": "Config directory (optional)",
+    "configDirPlaceholder": "Leave blank for the default (~/.claude)",
     "edit": "Edit",
     "editTitle": "Edit agent",
-    "editSubtitle": "Update this agent's skill directory and description.",
+    "editSubtitle": "Update this agent's config directory and description.",
     "save": "Save",
     "description": "Description",
     "descriptionPlaceholder": "Optional notes",
@@ -447,7 +472,8 @@
       "installed": "Installed",
       "notInstalled": "Not installed",
       "install": "Install Coffer MCP",
-      "uninstall": "Uninstall Coffer MCP"
+      "uninstall": "Uninstall Coffer MCP",
+      "installedStatus": "Coffer MCP installed"
     },
     "welcome": {
       "title": "Manage your local AI agents",
@@ -463,6 +489,110 @@
       "featureMcp": {
         "title": "One-click MCP",
         "body": "Install Coffer's MCP server into an agent with a single click."
+      }
+    },
+    "cofferSkills": "Coffer skills",
+    "bulkInstallMcp": "Install Coffer MCP",
+    "bulkInstallSkills": "Install skills",
+    "installSkillsDialog": {
+      "title": "Install skills to {{count}} agent(s)",
+      "subtitle": "Checked skills are installed (bound) to every selected agent.",
+      "empty": "No skills available to install.",
+      "install": "Install ({{count}})"
+    },
+    "cofferManaged": "Managed by Coffer",
+    "agentOwn": "Agent's own (not via Coffer)",
+    "skillsTab": {
+      "empty": "No Coffer-managed skills on this agent yet — use Install skills to add some.",
+      "toggleAria": "Toggle skill {{name}} on this agent"
+    },
+    "mcpTab": {
+      "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to expose Coffer's MCP servers here.",
+      "empty": "No enabled MCP servers in Coffer to expose."
+    }
+  },
+  "skills": {
+    "title": "Skills",
+    "subtitle": "AgentSkills-standard folders Coffer manages and delivers to your registered agents.",
+    "empty": "No skills yet. Import a local folder or fetch one from a public Git URL.",
+    "loadFailed": "Failed to load skills",
+    "add": "Add skill",
+    "addSubtitle": "Import a local folder or fetch one from a public Git URL.",
+    "import": "Import",
+    "fetch": "Fetch from Git",
+    "path": "Local path",
+    "gitUrl": "Git URL",
+    "gitRef": "Ref (branch / tag / commit)",
+    "gitSubpath": "Subpath inside repo",
+    "verify": "Verify",
+    "update": "Update",
+    "name": "Name",
+    "source": "Source",
+    "description": "Description",
+    "allSources": "All sources",
+    "searchPlaceholder": "Search skills…",
+    "noMatches": "No skills match your search.",
+    "deleteAria": "Delete {{name}}",
+    "removeConfirmTitle": "Remove skill {{name}}?",
+    "removeConfirmBody": "This deletes the master folder and all per-agent links.",
+    "add.tabs": {
+      "local": "Local folder",
+      "git": "From Git"
+    },
+    "verify.title": "Verify skill links",
+    "verify.subtitle": "Check whether each enabled binding still matches its on-disk link.",
+    "verify.checking": "Checking for drift…",
+    "verify.ok": "No drift detected.",
+    "verify.found": "{{count}} drift entries:",
+    "card": {
+      "noBindings": "No agents bound"
+    },
+    "detail": {
+      "back": "Back to skills",
+      "enabled": "Enabled",
+      "versionHash": "Version hash",
+      "masterPath": "Master path",
+      "lastSynced": "Last synced",
+      "created": "Created",
+      "updated": "Updated",
+      "tabs": {
+        "overview": "Overview",
+        "bindings": "Bindings",
+        "files": "Files"
+      }
+    },
+    "bindings": {
+      "noAgents": "No agents registered yet. Add an agent first to bind this skill.",
+      "toggleAria": "Toggle {{agent}}",
+      "searchPlaceholder": "Search agents…",
+      "noMatches": "No agents match your filters.",
+      "allStatuses": "All statuses",
+      "cols": {
+        "agent": "Agent",
+        "link": "Link",
+        "status": "Status"
+      }
+    },
+    "files": {
+      "tree": "Files",
+      "selectFile": "Select a file to view.",
+      "binary": "Binary file ({{size}} bytes)",
+      "truncated": "Content truncated — showing the start of the file."
+    },
+    "welcome": {
+      "title": "Manage your skills",
+      "body": "Import AgentSkills-standard folders from disk or fetch them from a public Git URL. Coffer keeps a master copy and delivers them into your registered agents.",
+      "featureImport": {
+        "title": "Import or fetch",
+        "body": "Bring in a local skill folder, or fetch one from a public Git repository."
+      },
+      "featureDeliver": {
+        "title": "Delivered to your agents",
+        "body": "Enable a skill per agent — Coffer links it into each agent's skills directory."
+      },
+      "featureDrift": {
+        "title": "Drift detection",
+        "body": "Verify that every enabled binding still matches its on-disk link."
       }
     }
   }

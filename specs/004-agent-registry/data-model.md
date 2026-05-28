@@ -12,10 +12,10 @@ A string-valued enum (`StrEnum`). v1 supports exactly two products; each value
 covers both the CLI and the app/IDE form of that product, which share one
 config directory.
 
-| Value         | Display name | Config dir  | Default `skill_dir` (POSIX expansion) |
-| ------------- | ------------ | ----------- | ------------------------------------- |
-| `claude_code` | Claude Code  | `~/.claude` | `~/.claude/skills`                    |
-| `codex`       | OpenAI Codex | `~/.codex`  | `~/.codex/skills`                     |
+| Value         | Display name | Default `config_dir` (POSIX expansion) | Skills delivered to |
+| ------------- | ------------ | -------------------------------------- | ------------------- |
+| `claude_code` | Claude Code  | `~/.claude`                            | `~/.claude/skills`  |
+| `codex`       | OpenAI Codex | `~/.codex`                             | `~/.codex/skills`   |
 
 `claude_desktop` and `cursor` are intentionally **not** present in v1 (see
 spec.md "Note on agent types"). Adding either later means a new enum value, a
@@ -25,23 +25,26 @@ Each enum value carries:
 
 - `display_name: str`
 - `default_name() -> str` (stable per-type default resource name — underscores become hyphens, e.g. `claude_code` → `claude-code`; used when the user registers without an explicit name)
-- `default_skill_dir() -> Path` (computed per host platform)
-- `detect_marker() -> Path` (the path checked during discovery; usually the parent of `default_skill_dir`)
-- `config_dir() -> Path` (the root the config-file allowlist resolves against — `~/.claude` / `~/.codex`)
+- `default_config_dir() -> Path` (the type's standard config directory, computed per host platform — `~/.claude` / `~/.codex`; used when the user registers without an explicit `config_dir`)
+- `detect_marker() -> Path` (the path checked during discovery; usually the `default_config_dir` itself)
+
+The config-file allowlist and the skills-delivery target (`<config_dir>/skills`) both resolve against the agent's resolved `config_dir`.
 
 ### `AgentConfig` (`domain/agent/config.py`)
 
 Pydantic v2 `BaseModel`. The kind-specific config schema registered with `ResourceService`.
 
-| Field       | Type           | Notes                                                                  |
-| ----------- | -------------- | ---------------------------------------------------------------------- |
-| `type`      | `AgentType`    | required; enum value                                                   |
-| `skill_dir` | `Path \| None` | optional override; defaults to `type.default_skill_dir()` at read time |
+| Field        | Type           | Notes                                                                                 |
+| ------------ | -------------- | ------------------------------------------------------------------------------------- |
+| `type`       | `AgentType`    | required; enum value                                                                  |
+| `config_dir` | `Path \| None` | optional absolute-path override; defaults to `type.default_config_dir()` at read time |
+
+Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`.
 
 Validators:
 
-- `skill_dir` (when set) must resolve to an existing, writable directory.
-- `skill_dir` must not point inside `/etc`, `/usr`, `/bin`, `/sbin`, `/System` (POSIX) or `C:\Windows`, `C:\Program Files` (Windows).
+- `config_dir` (when set) must be an absolute path; at registration the `<config_dir>/skills` subdirectory is auto-created, then the resolved `config_dir` must be an existing, writable directory.
+- `config_dir` must not point inside `/etc`, `/usr`, `/bin`, `/sbin`, `/System` (POSIX) or `C:\Windows`, `C:\Program Files` (Windows).
 - `model_config = ConfigDict(extra="forbid")` so unknown fields are rejected.
 - A `model_validator(mode="before")` drops a legacy `auto_detected` key from dict input so older rows that persisted the now-removed flag still load under `extra="forbid"`.
 
@@ -140,12 +143,12 @@ The lifecycle steps required by FR-011 — registration, update, and removal —
 
 ### `AgentService`
 
-| Method                                                                           | Purpose                                                                                                                                                                     |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `register(type, name=None, skill_dir=None, description=None, actor) -> Resource` | Validate + delegate to `ResourceService.register(kind='agent', ...)`. `name` is optional — when omitted, derive `type.default_name()` (e.g. `claude_code` → `claude-code`). |
-| `update_skill_dir(ref, new_path, actor) -> Resource`                             | Delegate to `ResourceService.update_config`.                                                                                                                                |
-| `list() -> list[Resource]`                                                       | Delegate to `ResourceService.list(kind='agent')`.                                                                                                                           |
-| `remove(ref, actor) -> None`                                                     | Delete via `ResourceService.delete`. Removal is not permanent — there is no suppression list, so the agent re-appears as a discovery candidate on the next scan.            |
+| Method                                                                            | Purpose                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `register(type, name=None, config_dir=None, description=None, actor) -> Resource` | Auto-create `<config_dir>/skills`, validate the resolved `config_dir`, then delegate to `ResourceService.register(kind='agent', ...)`. `name` is optional — when omitted, derive `type.default_name()` (e.g. `claude_code` → `claude-code`). |
+| `update_config_dir(ref, new_path, actor) -> Resource`                             | Delegate to `ResourceService.update_config`.                                                                                                                                                                                                 |
+| `list() -> list[Resource]`                                                        | Delegate to `ResourceService.list(kind='agent')`.                                                                                                                                                                                            |
+| `remove(ref, actor) -> None`                                                      | Delete via `ResourceService.delete`. Removal is not permanent — there is no suppression list, so the agent re-appears as a discovery candidate on the next scan.                                                                             |
 
 ### `AutoDetectService`
 
@@ -155,13 +158,13 @@ The lifecycle steps required by FR-011 — registration, update, and removal —
 
 `AgentCandidate` is a derived value object (not a SQLite entity, never stored):
 an installed-but-unregistered agent the user can confirm to register. Fields:
-`type` (`AgentType`), `display_name`, `config_dir`, `default_skill_dir`, and
+`type` (`AgentType`), `display_name`, `default_config_dir`, and
 `suggested_name` (the type's `default_name()`). A removed agent re-appears as a
 candidate on the next scan — there is no suppression list.
 
 ### `BrowseService` (`application/fs/browse_service.py`)
 
-Backs the web folder picker for choosing a custom `skill_dir` (FR-023/FR-024).
+Backs the web folder picker for choosing a custom `config_dir` (FR-023/FR-024).
 Read-only: given a directory path (defaulting to the user's home), it lists the
 directory's immediate subdirectories — never file contents.
 
@@ -230,7 +233,7 @@ Discovery is read-only and is **not** run on startup — no agent is ever
 auto-registered. The user runs discovery on demand and confirms which
 candidates to add.
 
-The `on_delete_hook` is bound to a callable supplied by the skill module (spec 005), so that removing an agent triggers `SkillService.cleanup_bindings_for_agent(...)` synchronously before the resource row is deleted — once spec 005 wires the callback. Spec 004 only exposes the hook seam.
+The `on_delete_hook` is bound to a callable supplied by the skill module (the 005-skill-manager spec), so that removing an agent triggers `SkillService.cleanup_bindings_for_agent(...)` synchronously before the resource row is deleted — once the 005-skill-manager spec wires the callback. Spec 004 only exposes the hook seam.
 
 ## Constraints summary
 

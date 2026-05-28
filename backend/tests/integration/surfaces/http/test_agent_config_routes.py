@@ -32,11 +32,13 @@ def _client(app) -> TestClient:
 
 
 def _register_claude(c: TestClient, tmp_path: pathlib.Path) -> None:
-    skills = tmp_path / "skills"
-    skills.mkdir(exist_ok=True)
+    # config_dir defaults to <HOME>/.claude (HOME is monkeypatched to tmp_path).
+    # Registration requires that config dir to already exist (it auto-creates
+    # only the skills/ leaf), so create it up front.
+    (tmp_path / ".claude").mkdir(exist_ok=True)
     r = c.post(
         "/api/v1/agents",
-        json={"type": "claude_code", "name": "cc", "skill_dir": str(skills)},
+        json={"type": "claude_code", "name": "cc"},
     )
     assert r.status_code == 201, r.text
 

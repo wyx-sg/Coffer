@@ -27,44 +27,44 @@ When a developer opens the Agents page (or runs `coffer agent detect`), Coffer s
 
 ### User Story 2 — Manually register an agent with a custom path (Priority: P1)
 
-Some users install agents in non-default locations or have multiple installs (work vs personal). They need to add an agent by type, optionally overriding the skill directory. The name is optional — when omitted Coffer derives a stable per-type default. When choosing a custom path, the desktop app offers a folder picker (the OS-native dialog in the packaged app; a daemon-backed folder browser on the web) so the user picks a real directory instead of typing it.
+Some users install agents in non-default locations or have multiple installs (work vs personal). They need to add an agent by type, optionally overriding the config directory. The name is optional — when omitted Coffer derives a stable per-type default. When choosing a custom path, the desktop app offers a folder picker (the OS-native dialog in the packaged app; a daemon-backed folder browser on the web) so the user picks a real directory instead of typing it.
 
 **Why this priority**: Discovery covers the common case; manual register covers the long tail. Without it the registry is incomplete.
 
-**Independent Test**: From the command line, register a `codex` agent named `codex-work` with `--skill-dir /custom/path`; list agents; observe the manually-registered entry. From the desktop form, add an agent with no name and observe it registered under the per-type default name.
+**Independent Test**: From the command line, register a `codex` agent named `codex-work` with `--config-dir /custom/path`; list agents; observe the manually-registered entry. From the desktop form, add an agent with no name and observe it registered under the per-type default name.
 
 **Covering scenarios**:
 
-- register an agent with a custom skill_dir
+- register an agent with a custom config dir
 - register an agent without an explicit name
-- reject registration when skill_dir is missing or not writable
+- reject registration when the config dir is missing or not writable
 - reject duplicate agent names
-- browse local folders to choose a skill directory
+- browse local folders to choose a config dir
 
 ---
 
 ### User Story 3 — Edit or remove an agent (Priority: P1)
 
-The user's installed agents change over time. They need to update the skill_dir path or description, or fully delete the agent. (Agents have no enable/disable concept — a registered agent is simply present.)
+The user's installed agents change over time. They need to update the config_dir path or description, or fully delete the agent. (Agents have no enable/disable concept — a registered agent is simply present.)
 
 **Why this priority**: An immutable registry would be useless within a week.
 
-**Independent Test**: Register an agent, update its skill_dir, then remove it; verify each state is persisted and audited.
+**Independent Test**: Register an agent, update its config_dir, then remove it; verify each state is persisted and audited.
 
 **Covering scenarios**:
 
-- update skill_dir for an existing agent
+- update config_dir for an existing agent
 - remove an agent and observe audit entry
 
 ---
 
 ### User Story 4 — Manage agents through the desktop app (Priority: P2)
 
-The user opens Coffer's desktop app, sees an "Agents" page listing every registered agent with type, name, and skill_dir, and can add or edit from a form.
+The user opens Coffer's desktop app, sees an "Agents" page listing every registered agent with type, name, and config_dir, and can add or edit from a form.
 
 **Why this priority**: Non-CLI users need a visual surface to make sense of the registry.
 
-**Independent Test**: Open desktop app → Agents → add Codex with default path → observe in list → click into it → change skill_dir → save → list updates.
+**Independent Test**: Open desktop app → Agents → add Codex with default path → observe in list → click into it → change config_dir → save → list updates.
 
 **Covering scenarios**:
 
@@ -147,8 +147,8 @@ The user wants their agent (Claude Code, Codex) to actually use Coffer. From the
 - **Discovery on a second scan**: Already-registered types are not offered as candidates; discovery never duplicates existing entries.
 - **User deletes an agent**: A removal is not permanent. The next scan re-surfaces that agent as a candidate (the deletion may have been accidental); Coffer keeps no suppression list. The user re-adds with one confirm.
 - **Agent type not in the supported list**: Registration rejected with a clear message and the supported-type list (`claude_code`, `codex`).
-- **`skill_dir` path doesn't exist or isn't writable**: Registration rejected; no partial state.
-- **`skill_dir` points to a privileged path** (`/etc`, `/usr`, etc.): Registration rejected.
+- **`config_dir` path doesn't exist or isn't writable**: Registration rejected; no partial state.
+- **`config_dir` points to a privileged path** (`/etc`, `/usr`, etc.): Registration rejected.
 - **Duplicate name within `agent` kind**: Rejected by the kind-agnostic Resource framework.
 - **Config-file key not in the type's allowlist**: Read rejected with `not_found` (404); no filesystem access for an unknown key.
 - **Config file does not exist yet**: Listed and readable as `exists=false` with empty content; the read never creates the file.
@@ -165,7 +165,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 - **Given** a Coffer install with `~/.codex/` present and no agent registered,
 - **When** the user runs discovery,
-- **Then** Coffer reports a `codex` candidate (type, display name, config dir, default `skill_dir`, suggested name) and registers nothing — discovery is read-only.
+- **Then** Coffer reports a `codex` candidate (type, display name, default config dir, suggested name) and registers nothing — discovery is read-only.
 
 ### Scenario: skip already-registered types on subsequent scan
 
@@ -179,16 +179,16 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user runs discovery again,
 - **Then** that agent is offered as a candidate again (removal is not permanent; no suppression list).
 
-### Scenario: register an agent with custom skill_dir
+### Scenario: register an agent with a custom config dir
 
 - **Given** the daemon is running,
-- **When** the user registers an agent of supported type with an explicit, writable `skill_dir`,
-- **Then** the agent is persisted with that path and appears in `coffer agent list`.
+- **When** the user registers an agent of supported type with an explicit, writable `config_dir`,
+- **Then** the agent is persisted with that path (and its `<config_dir>/skills` subdirectory auto-created) and appears in `coffer agent list`.
 
-### Scenario: reject registration with invalid skill_dir
+### Scenario: reject registration with an invalid config dir
 
 - **Given** the daemon is running,
-- **When** the user registers an agent whose `skill_dir` does not exist, is not a directory, or is not writable,
+- **When** the user registers an agent whose `config_dir` does not exist, is not a directory, or is not writable,
 - **Then** registration is rejected with a message naming the path, and nothing is persisted.
 
 ### Scenario: reject duplicate agent name
@@ -200,7 +200,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 ### Scenario: reject a second agent for an already-registered config dir
 
 - **Given** a `codex` agent is already registered (whose config dir is `~/.codex`),
-- **When** the user attempts to register another `codex` agent (which resolves to the same config dir), even with a different name and skill_dir,
+- **When** the user attempts to register another `codex` agent (which resolves to the same config dir), even with a different name and config_dir,
 - **Then** registration is rejected with a clear error and nothing is persisted — only one agent may exist per config directory.
 
 ### Scenario: register an agent without an explicit name
@@ -209,7 +209,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user registers an agent of supported type without supplying a name,
 - **Then** the agent is registered under a stable per-type default name (underscores become hyphens, e.g. `claude_code` → `claude-code`).
 
-### Scenario: browse local folders to choose a skill directory
+### Scenario: browse local folders to choose a config dir
 
 - **Given** the daemon is running,
 - **When** the web folder browser requests the subdirectories of a readable directory,
@@ -218,12 +218,12 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 ### Scenario: update an existing agent
 
 - **Given** a registered agent,
-- **When** the user updates its `skill_dir` to a new writable path,
+- **When** the user updates its `config_dir` to a new writable path,
 - **Then** the change persists, an audit entry is recorded, and subsequent operations see the new path.
 
 ### Scenario: remove an agent
 
-- **Given** a registered agent (any binding cleanup is handled by spec 005),
+- **Given** a registered agent (any binding cleanup is handled by the 005-skill-manager spec),
 - **When** the user removes it,
 - **Then** the agent is deleted, an audit entry is recorded, and `coffer agent list` no longer shows it.
 
@@ -231,7 +231,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 - **Given** Coffer's desktop app is launched and one or more agents are registered,
 - **When** the user opens the Agents page,
-- **Then** every registered agent appears with type, name, and `skill_dir`.
+- **Then** every registered agent appears with type, name, and `config_dir`.
 
 > Story 4 add/edit/remove flows from the desktop form are exercised at the e2e tier; see `e2e/web/specs/shell_agents.spec.ts` for the bundled acceptance coverage.
 
@@ -244,7 +244,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 ### Scenario: reject registration into privileged system path
 
 - **Given** the daemon is running,
-- **When** the user attempts to register an agent whose `skill_dir` resolves under a privileged location (`/etc`, `/usr`, `/bin`, `/sbin`, `/System`, `C:\Windows`, or `C:\Program Files`),
+- **When** the user attempts to register an agent whose `config_dir` resolves under a privileged location (`/etc`, `/usr`, `/bin`, `/sbin`, `/System`, `C:\Windows`, or `C:\Program Files`),
 - **Then** registration is rejected with `unprocessable_entity` (422) and no resource row, audit event, or filesystem write occurs.
 
 ### Scenario: audit lifecycle events
@@ -332,18 +332,18 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 **Resource model**
 
 - **FR-001**: System MUST register each known local agent as a Resource of kind `agent`, identified by `agent:<name>` per spec 001-mcp-gateway's `<kind>:<name>` convention.
-- **FR-002**: System MUST validate agent configuration against a kind-specific schema with fields `type` (enum) and `skill_dir` (path, optional override).
+- **FR-002**: System MUST validate agent configuration against a kind-specific schema with fields `type` (enum) and `config_dir` (path, optional absolute-path override; when omitted it defaults to the type's standard location — `~/.claude` for `claude_code`, `~/.codex` for `codex`). Skills are delivered to `<config_dir>/skills`.
 - **FR-003**: System MUST support the agent types `claude_code` and `codex` in v1; registering any other type (including `claude_desktop`, `cursor`) is rejected with `unprocessable_entity` (422). Each supported type covers both the CLI and the app/IDE form of that product, which share one config directory.
 
 **Discovery (detection = discovery + confirm)**
 
-- **FR-004**: System MUST provide a read-only discovery operation that scans well-known install markers for each supported agent type and reports installed types that are not already registered as **candidates** (each carrying type, display name, config dir, default `skill_dir`, and a suggested name). Discovery MUST NOT register anything automatically — the user reviews candidates and confirms which to add. The daemon MUST NOT auto-register agents on startup.
+- **FR-004**: System MUST provide a read-only discovery operation that scans well-known install markers for each supported agent type and reports installed types that are not already registered as **candidates** (each carrying type, display name, default `config_dir`, and a suggested name). Discovery MUST NOT register anything automatically — the user reviews candidates and confirms which to add. The daemon MUST NOT auto-register agents on startup.
 - **FR-005**: A removed agent MUST re-appear as a discovery candidate on subsequent scans while its install marker is present — a removal is not permanent (it may be accidental). System MUST NOT keep a "suppressed types" list.
 
 **Lifecycle**
 
-- **FR-006**: Users MUST be able to register, list, view, update (skill_dir, description), and remove agents. Agents have **no enable/disable concept** — a registered agent is simply present; there is no enabled/disabled state on the agent surface. The agent name is optional at registration — when omitted, System MUST derive a stable per-type default (underscores become hyphens, e.g. `claude_code` → `claude-code`).
-- **FR-007**: System MUST validate that any provided `skill_dir` exists, is a directory, is writable, and is not a privileged system path before accepting the value.
+- **FR-006**: Users MUST be able to register, list, view, update (config_dir, description), and remove agents. Agents have **no enable/disable concept** — a registered agent is simply present; there is no enabled/disabled state on the agent surface. The agent name is optional at registration — when omitted, System MUST derive a stable per-type default (underscores become hyphens, e.g. `claude_code` → `claude-code`).
+- **FR-007**: At registration System MUST auto-create the `<config_dir>/skills` subdirectory, then validate that the resolved `config_dir` exists, is a directory, is writable, and is not a privileged system path before accepting the value. Skills are delivered to `<config_dir>/skills`.
 - **FR-008**: System MUST reject registration that would create a duplicate `agent:<name>`, and MUST reject registering more than one agent for the same config directory. `config_dir` is derived from the agent type, so each supported type — and thus each on-disk config directory — may be registered at most once; a second attempt is rejected with `conflict` (409) and nothing is persisted.
 
 **Config files**
@@ -372,16 +372,16 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **FR-011**: System MUST record an audit entry for every lifecycle event: agent created, updated, removed; config file written (`agent_config_file_written`); Coffer MCP installed/uninstalled. (Agents have no enable/disable concept; discovery is read-only — neither emits an audit event.)
 - **FR-012**: System MUST expose a read-only discovery operation listing installed-but-unregistered agents as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer agent detect` CLI, and the desktop Agents page.
 
-**Skill-directory picker**
+**Config-directory picker**
 
-- **FR-023**: When choosing a custom `skill_dir`, the desktop app MUST offer a folder picker rather than requiring the user to type a path. In the packaged desktop app it MUST use the OS-native directory dialog; on the web it MUST use the daemon-backed folder browser (FR-024). Both yield an absolute path that is then validated per FR-007 before registration.
+- **FR-023**: When choosing a custom `config_dir`, the desktop app MUST offer a folder picker rather than requiring the user to type a path. In the packaged desktop app it MUST use the OS-native directory dialog; on the web it MUST use the daemon-backed folder browser (FR-024). Both yield an absolute path that is then validated per FR-007 before registration.
 - **FR-024**: System MUST expose a read-only filesystem-browse operation (`GET /api/v1/fs/browse`) that, given a directory path (defaulting to the user's home), returns that path, its parent, and its immediate subdirectories. It MUST NOT return file contents and MUST be guarded by the same loopback + token auth as all other daemon routes.
 
 ### Key Entities
 
-- **Agent**: A Resource of kind `agent`. Represents one locally-installed AI agent. Config: `type` (supported enum), `skill_dir` (path or default-by-type). Identified by `agent:<name>`.
-- **Agent Type**: An enum value identifying a known agent product (`claude_code`, `codex`). Each type has a default `skill_dir`, a display name, an install-marker scanner used for discovery, and a curated **config-file allowlist**.
-- **Agent Candidate**: A discovered installed-but-unregistered agent — type, display name, config dir, default `skill_dir`, and suggested name. Derived at scan time, never stored; the user confirms a candidate to register it.
+- **Agent**: A Resource of kind `agent`. Represents one locally-installed AI agent. Config: `type` (supported enum), `config_dir` (optional absolute-path override; defaults to the type's standard location). Skills are delivered to `<config_dir>/skills`. Identified by `agent:<name>`.
+- **Agent Type**: An enum value identifying a known agent product (`claude_code`, `codex`). Each type has a default `config_dir` (`~/.claude` / `~/.codex`), a display name, an install-marker scanner used for discovery, and a curated **config-file allowlist**.
+- **Agent Candidate**: A discovered installed-but-unregistered agent — type, display name, default `config_dir`, and suggested name. Derived at scan time, never stored; the user confirms a candidate to register it.
 - **Config File**: A curated, allowlisted file belonging to an agent type, identified by a stable `key`. Carries a display name, a resolved absolute path, a `format` (`json` / `toml` / `markdown` / `text`), and (when present) size and modified time. Read/written by key, never by arbitrary path. Not persisted in SQLite — the file on disk is the source of truth.
 - **Coffer MCP Install Status**: Derived (not stored) state for an agent: whether a `coffer` MCP-server entry is present in that agent's MCP config file.
 
@@ -390,10 +390,10 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 ### Measurable Outcomes
 
 - **SC-001**: On a machine with at least two supported agent install paths present, running discovery surfaces exactly those agents as candidates, and the user adds them with a single confirm each — no typing of type identifiers or paths.
-- **SC-002**: From a fresh install, a user can register an additional agent with a custom `skill_dir` and see it in `coffer agent list --json` within 60 seconds, without consulting documentation more than once.
+- **SC-002**: From a fresh install, a user can register an additional agent with a custom `config_dir` and see it in `coffer agent list --json` within 60 seconds, without consulting documentation more than once.
 - **SC-003**: Every Acceptance Scenario in this spec is covered by at least one test marked `acceptance(spec="004-agent-registry", scenario="…")`, and `make verify-acceptance` reports zero uncovered scenarios.
 - **SC-004**: The full `make verify` suite passes locally and in CI; `make verify-all` (adding e2e) passes on macOS and Linux.
-- **SC-005**: No `skill_dir` value ever permits writing outside the directory itself (path-traversal check); validated by a dedicated security test.
+- **SC-005**: No `config_dir` value ever permits writing outside the directory itself (path-traversal check); validated by a dedicated security test.
 - **SC-006**: A user can open, edit, and save an agent's `settings.json` (Claude Code) or `config.toml` (Codex) from both the desktop app and the CLI; a malformed save is rejected with the file left unchanged, and a `.bak` of the prior version is kept on a successful save.
 - **SC-007**: A user can install Coffer's MCP into a freshly-registered agent in one click and, after restarting that agent, the agent lists Coffer's aggregated tools; re-installing never duplicates the entry, and uninstall removes it.
 
@@ -403,7 +403,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - v1's two supported agent types (`claude_code`, `codex`) cover the user's installed agents; adding a new type (e.g. the Claude Desktop chat app, Cursor, Gemini CLI) is a future-spec change that adds another enum value, install-marker scanner, and config-file allowlist.
 - Each supported agent's CLI and app/IDE form read one shared config directory (`~/.claude/` for Claude Code, `~/.codex/` for Codex), so Coffer manages one config set per agent.
 - Config files are surfaced as raw text the user can edit and save (with a `.bak` safety net); an in-editor find / replace is a UI convenience. Structured per-field editing and managing the MCP-server list inside `~/.claude.json` beyond the one-click Coffer entry are out of scope for v1. The credential/state file `~/.codex/auth.json` is intentionally excluded from the allowlist.
-- Agents store their skill libraries on the local filesystem in a discoverable directory. Web-only agents (e.g., claude.ai) are out of scope for v1 and require a future spec to add API-based sync.
+- Agents store their skill libraries on the local filesystem under `<config_dir>/skills`. Web-only agents (e.g., claude.ai) are out of scope for v1 and require a future spec to add API-based sync.
 - The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec 001-mcp-gateway are in place.
 - The application shell from spec 002-ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place. The desktop Agents page renders within that shell at `/agents` as a **dedicated top-level nav entry** (a sibling of the Resources and System groups, **not** nested under Resources — agents are consumers of vault assets, not assets themselves). Agent resources do not appear in the kind-agnostic resources/MCP browser, which lists only kinds that register a resource-card UI.
 - Skill bindings (i.e., the relationship between an agent and a particular skill) are introduced and managed by spec 005-skill-manager; spec 004 does not define skill operations beyond exposing an `on_delete` hook for cascade cleanup.

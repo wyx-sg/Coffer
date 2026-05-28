@@ -11,9 +11,11 @@ It is the primary visual surface for day-to-day MCP gateway work. The sidebar is
 into two groups:
 
 ```
+AGENTS
+  Agents           manage your registered AI coding agents
 RESOURCES
   MCP servers      manage your registered servers
-  Agents           manage your registered AI coding agents
+  Skills           manage the skills Coffer can deliver to agents
 SYSTEM
   Observability    audit and invocation log
   Settings
@@ -87,15 +89,41 @@ On the server detail page, switch between tabs:
 ### Agents
 
 Open **Agents** to manage your registered AI coding agents (`claude_code` and `codex`).
-Click **Detect** to scan for installed agents; the detect dialog lists what was found and
-you confirm each one before it is registered — nothing is registered automatically.
+The list is a table with a search box, a status filter, pagination, and row multi-select
+for bulk actions. Click **Detect** to scan for installed agents; the detect dialog lists
+what was found and you confirm each one before it is registered — nothing is registered
+automatically. Each agent is registered against a single **config directory** (for example
+`~/.claude` or `~/.codex`); Coffer delivers skills into that directory's `skills/` subfolder.
 
-The agent detail page lets you open any of the agent's curated config files in an editor.
-Saving validates the file's format (malformed JSON/TOML is rejected and the file left
-unchanged), writes atomically with a `.bak` backup, and offers a find/replace box that
-scrolls to the match. An **Install Coffer MCP** toggle writes (or removes) Coffer's own
-`coffer` MCP-server entry into the agent's config, with a live status indicator. A folder
-picker sets the agent's skill directory.
+The agent detail page has four tabs:
+
+- **Overview** — the agent's type and config directory.
+- **Skills** — the skills Coffer manages for this agent, each with an enable/disable toggle.
+  An **Install skills** button opens a picker dialog (search, filter, pagination,
+  multi-select) to bind more skills to the agent.
+- **MCP servers** — the MCP servers Coffer currently exposes to the agent, as a read-only
+  table (per-agent MCP grants are a planned feature).
+- **Config files** — open any of the agent's curated config files in an editor. Saving
+  validates the file's format (malformed JSON/TOML is rejected and the file left unchanged),
+  writes atomically with a `.bak` backup, and offers a find/replace box that scrolls to the
+  match.
+
+An **Install Coffer MCP** toggle in the agent header writes (or removes) Coffer's own
+`coffer` MCP-server entry into the agent's config, with a live status indicator.
+
+### Skills
+
+Open **Skills** to manage the skills Coffer can deliver to agents. The list is a table with
+a search box, a filter, pagination, and row multi-select for bulk actions (such as bulk
+verify or bulk remove). Import a skill from a local folder or fetch one from a public Git
+URL; verify a skill (which runs a drift check) per row or in bulk; refresh a Git-sourced
+skill; or remove one. Enabling or disabling a skill for a specific agent happens on that
+**agent's** detail page, not here.
+
+On the skill detail page, switch between tabs:
+
+- **Overview** — metadata: source, version hash, master path, and timestamps.
+- **Files** — a read-only file tree and content viewer of the skill's master folder.
 
 ### Observability
 

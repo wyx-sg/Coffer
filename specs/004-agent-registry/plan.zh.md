@@ -16,7 +16,7 @@
 1. **配置文件查看 + 编辑** —— 每个 agent 类型暴露一份精选的自有配置文件 allowlist（Claude Code：`settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`；Codex：`config.toml`、`AGENTS.md`）。用户以原始文本读取并保存它们；保存会按格式校验、原子写入并保留 `.bak`。同一套原子写入 + `.bak` 机制也支撑 Coffer-MCP 的安装/卸载。
 2. **一键安装 Coffer-MCP** —— 把一个 `coffer` stdio MCP-server 条目（指向 `coffer-mcp-shim`）写入/移除到 agent 的 MCP 配置，带状态查询与幂等性。
 
-该 kind 暴露一个 `on_delete` 钩子，由 spec 005 接入用于 skill binding 的级联清理。同时交付 REST 路由、CLI 子命令与桌面 Agents 页面。
+该 kind 暴露一个 `on_delete` 钩子，由 the 005-skill-manager spec 接入用于 skill binding 的级联清理。同时交付 REST 路由、CLI 子命令与桌面 Agents 页面。
 
 本 spec 是 spec 001 中引入的 kind-agnostic Resource 框架的第二个消费者，用以验证该框架的可复用性。
 
@@ -64,7 +64,7 @@ specs/004-agent-registry/
 ```
 backend/coffer/domain/agent/
   __init__.py
-  types.py             # AgentType StrEnum (claude_code, codex) + 默认路径 + 检测标记 + config_dir
+  types.py             # AgentType StrEnum (claude_code, codex) + default_config_dir + 检测标记
   config.py            # AgentConfig (Pydantic)
   config_files.py      # ConfigFileFormat, ConfigFileSpec, config_files_for(), validate_content, spec_for
   mcp_install.py       # apply_install / apply_uninstall / is_installed（纯文本变换，TOML 用 tomlkit）
@@ -97,7 +97,7 @@ backend/coffer/surfaces/cli/agent_cmd.py             # coffer agent {add, list, 
 frontend/src/pages/AgentsPage.tsx                 # 现有列表页
 frontend/src/components/agents/
   AgentAddForm.tsx / AgentEditForm.tsx / AgentTable.tsx   # 现有
-  FolderPicker.tsx         # skill-dir 文件夹选择器（桌面用 OS 原生对话框；Web 用 GET /fs/browse 文件夹浏览器）
+  FolderPicker.tsx         # config-dir 文件夹选择器（桌面用 OS 原生对话框；Web 用 GET /fs/browse 文件夹浏览器）
   AgentConfigPanel.tsx     # 单 agent 的配置文件列表 + 编辑器（文件列表 + 可编辑内容视图，带保存、查找/替换、格式标签）
   AgentMcpInstall.tsx      # 一键安装/卸载开关 + 状态徽标
 frontend/src/lib/api/agents.ts                     # 扩展配置文件 + MCP 安装调用
@@ -114,8 +114,8 @@ agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files
 ### Phase 0 —— Research（已在对话中关闭）
 
 - 备选方案：在 Resource 框架之外另设独立 `agents` 表 → 否决（丧失 audit/CRUD/UI 统一性；agent-as-peer 也没有未来扩展空间）。
-- 备选方案：把 agent 合入 spec 005 → 重新评估后否决（按 spec 体量切分更清晰；一份 PR 同时交付两者）。
-- 发现（discovery）启发式：已知标记目录（即 `default_skill_dir` 的父目录）存在即把该类型作为候选项呈现。后续 spec 可能加入「PATH 上有命令」类型的检测。
+- 备选方案：把 agent 合入 the 005-skill-manager spec → 重新评估后否决（按 spec 体量切分更清晰；一份 PR 同时交付两者）。
+- 发现（discovery）启发式：已知标记目录（即该类型的 `default_config_dir`）存在即把该类型作为候选项呈现。后续 spec 可能加入「PATH 上有命令」类型的检测。
 
 > 基础 registry（类型/config/service/发现（discovery），REST/CLI/桌面 CRUD）已在本分支
 > 交付。以下阶段覆盖 v2 增量：收窄到两个类型、配置文件查看 + 编辑、一键安装
@@ -123,12 +123,12 @@ agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files
 
 ### Phase 1 —— 类型收窄 + contracts
 
-- 从 `AgentType`（enum、`_DISPLAY`、`_default_skill_dir`）移除 `claude_desktop` 与 `cursor`；把 `codex_cli` 重命名为 `codex`（显示名「OpenAI Codex」）。更新 OpenAPI enum、data-model、quickstart、前端类型下拉框，以及所有引用被移除/重命名类型的测试。
+- 从 `AgentType`（enum、`_DISPLAY`、`_default_config_dir`）移除 `claude_desktop` 与 `cursor`；把 `codex_cli` 重命名为 `codex`（显示名「OpenAI Codex」）。更新 OpenAPI enum、data-model、quickstart、前端类型下拉框，以及所有引用被移除/重命名类型的测试。
 - 向后端运行时依赖加入 `tomlkit`。
 
 ### Phase 2 —— 配置文件 domain + 后端（TDD）
 
-1. Domain：`agent/config_files.py` —— `ConfigFileFormat`、`ConfigFileSpec`、`config_files_for`、`spec_for`、`validate_content`；为 `AgentType` 加 `config_dir()`。新错误 `ConfigFileNotAllowed`、`ConfigFileFormatInvalid`。新 audit 事件 `agent_config_file_written`。先写单元测试。
+1. Domain：`agent/config_files.py` —— `ConfigFileFormat`、`ConfigFileSpec`、`config_files_for`、`spec_for`、`validate_content`；allowlist 基于 agent 的 `config_dir` 解析。新错误 `ConfigFileNotAllowed`、`ConfigFileFormatInvalid`。新 audit 事件 `agent_config_file_written`。先写单元测试。
 2. Infrastructure：`config_file_store.py` —— 读取、stat；原子写入 + `.bak` 用于配置文件保存与 Coffer-MCP 安装。用临时目录写集成测试。
 3. Application：`AgentConfigFileService`（`list/read`）over `ConfigFileStorePort`。集成测试：list/read/缺失/未知 key。
 4. Surfaces：`agent_config_routes.py`（HTTP GET）、`coffer agent config ls|cat`（CLI）、composition 接线。Contract + CLI 测试。
@@ -143,7 +143,7 @@ agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files
 
 - `AgentConfigPanel` —— 列出配置文件、在可编辑内容视图里打开某个文件，带保存控件、内联校验错误与一个编辑器内查找/替换（带格式标签）。`AgentMcpInstall` —— 状态徽标 + 安装/卸载开关。
 - agent 详情页是一个简单的 Overview + Config files 详情页。
-- `FolderPicker` —— 无需输入路径即可选择自定义 `skill_dir`：打包桌面应用用 OS 原生目录对话框，Web 用 daemon 支撑的 `GET /fs/browse` 文件夹浏览器。add/edit 表单把 agent 名称设为可选（省略时由服务端按类型派生默认名）。
+- `FolderPicker` —— 无需输入路径即可选择自定义 `config_dir`：打包桌面应用用 OS 原生目录对话框，Web 用 daemon 支撑的 `GET /fs/browse` 文件夹浏览器。add/edit 表单把 agent 名称设为可选（省略时由服务端按类型派生默认名）。
 - 用 TanStack Query + openapi-fetch 接 hooks；英文 + 简体中文 i18n 字符串（`agents.config.*`、`agents.mcp.*`）。
 - e2e（`e2e/web/specs/shell_agents.spec.ts`）：查看一个配置文件；安装 Coffer MCP 并观察状态翻转。
 

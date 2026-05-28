@@ -22,8 +22,6 @@ const AGENT = {
   name: "cur",
   type: "codex" as const,
   config_dir: "/home/u/.codex",
-  skill_dir: "/home/u/.codex/skills",
-  skill_dir_override: null,
   description: null,
   created_at: "2026-05-22T00:00:00Z",
   updated_at: "2026-05-22T00:00:00Z",
@@ -55,18 +53,19 @@ function renderAt() {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentDetailPage", () => {
-  test("renders the header, the Overview + Config files tabs, and the overview by default", () => {
+  test("renders the header, the Overview/Skills/MCP/Config tabs, and the overview by default", () => {
     mockAgentLoaded();
 
     renderAt();
 
     expect(screen.getByRole("heading", { name: "cur" })).toBeInTheDocument();
 
-    // Only the Overview and Config files tabs exist — no asset-category tabs.
+    // Overview, Skills, MCP servers, and Config files tabs exist; the
+    // not-yet-built asset categories (Subagents/Memory) do not.
     expect(screen.getByRole("tab", { name: /overview/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^skills$/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /mcp servers/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /config files/i })).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /skills/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /mcp servers/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /subagents & commands/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /memory & rules/i })).not.toBeInTheDocument();
 

@@ -29,44 +29,44 @@
 
 ### User Story 2 —— 用自定义路径手工注册一个 agent（优先级 P1）
 
-部分用户把 agent 装在非默认位置，或者同时有多个安装（工作、个人）。他们需要按类型添加一个 agent，并可选地覆盖 skill 目录。名称是可选的——省略时 Coffer 会派生一个稳定的按类型默认名。选择自定义路径时，桌面应用提供一个文件夹选择器（打包应用用 OS 原生对话框；Web 用 daemon 支撑的文件夹浏览器），使用户挑选一个真实目录，而不是手动输入。
+部分用户把 agent 装在非默认位置，或者同时有多个安装（工作、个人）。他们需要按类型添加一个 agent，并可选地覆盖配置目录。名称是可选的——省略时 Coffer 会派生一个稳定的按类型默认名。选择自定义路径时，桌面应用提供一个文件夹选择器（打包应用用 OS 原生对话框；Web 用 daemon 支撑的文件夹浏览器），使用户挑选一个真实目录，而不是手动输入。
 
 **为什么是这个优先级**：发现覆盖常见情况，手工注册覆盖长尾。没有它，registry 就不完整。
 
-**独立可测**：从命令行用 `--skill-dir /custom/path` 注册一个名为 `codex-work` 的 `codex` agent；列出 agent，观察该手工注册条目。从桌面表单添加一个不带名称的 agent，观察它以按类型默认名注册。
+**独立可测**：从命令行用 `--config-dir /custom/path` 注册一个名为 `codex-work` 的 `codex` agent；列出 agent，观察该手工注册条目。从桌面表单添加一个不带名称的 agent，观察它以按类型默认名注册。
 
 **代表性场景**：
 
-- 用自定义 skill_dir 注册一个 agent
+- register an agent with a custom config dir
 - 不带显式名称注册一个 agent
-- skill_dir 缺失或不可写时拒绝注册
+- config_dir 缺失或不可写时拒绝注册
 - 拒绝重复的 agent 名
-- 浏览本地文件夹以选择一个 skill 目录
+- browse local folders to choose a config dir
 
 ---
 
 ### User Story 3 —— 编辑或移除一个 agent（优先级 P1）
 
-用户的本地 agent 安装情况会随时间变化。他们需要更新 skill_dir 路径或描述，或彻底删除。（agent 没有启用/禁用的概念——已注册的 agent 就是存在的。）
+用户的本地 agent 安装情况会随时间变化。他们需要更新 config_dir 路径或描述，或彻底删除。（agent 没有启用/禁用的概念——已注册的 agent 就是存在的。）
 
 **为什么是这个优先级**：一个不可变的 registry 一周内就会失去用处。
 
-**独立可测**：注册一个 agent，更新其 skill_dir，最后移除；验证每一步状态都被持久化并写入 audit。
+**独立可测**：注册一个 agent，更新其 config_dir，最后移除；验证每一步状态都被持久化并写入 audit。
 
 **代表性场景**：
 
-- 更新已存在 agent 的 skill_dir
+- 更新已存在 agent 的 config_dir
 - 移除一个 agent 并观察 audit 条目
 
 ---
 
 ### User Story 4 —— 在桌面应用中管理 agent（优先级 P2）
 
-用户打开 Coffer 桌面应用，看到一个「Agents」页面，列出每个已注册 agent 的类型、名称与 skill_dir，并能在表单里添加或编辑。
+用户打开 Coffer 桌面应用，看到一个「Agents」页面，列出每个已注册 agent 的类型、名称与 config_dir，并能在表单里添加或编辑。
 
 **为什么是这个优先级**：非 CLI 用户需要一个可视化界面来理解 registry。
 
-**独立可测**：打开桌面应用 → Agents → 用默认路径添加 Codex → 在列表里观察 → 点进去 → 修改 skill_dir → 保存 → 列表更新。
+**独立可测**：打开桌面应用 → Agents → 用默认路径添加 Codex → 在列表里观察 → 点进去 → 修改 config_dir → 保存 → 列表更新。
 
 **代表性场景**：
 
@@ -149,8 +149,8 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 - **第二次扫描时的发现**：已注册的类型不会作为候选项被提供；发现绝不重复已有条目。
 - **用户删除一个 agent**：移除并非永久。下次扫描会把该 agent 重新作为候选项呈现（删除可能是误操作）；Coffer 不保留任何抑制列表。用户再确认一次即可重新添加。
 - **agent 类型不在受支持列表中**：注册拒绝，给出清晰错误信息与受支持类型列表（`claude_code`、`codex`）。
-- **`skill_dir` 路径不存在或不可写**：注册拒绝；不留下任何中间状态。
-- **`skill_dir` 指向特权路径**（`/etc`、`/usr` 等）：注册拒绝。
+- **`config_dir` 路径不存在或不可写**：注册拒绝；不留下任何中间状态。
+- **`config_dir` 指向特权路径**（`/etc`、`/usr` 等）：注册拒绝。
 - **在 `agent` kind 内出现重名**：被 kind-agnostic Resource 框架拒绝。
 - **配置文件 key 不在该类型 allowlist 内**：读取以 `not_found`（404）拒绝；对未知 key 不做任何文件系统访问。
 - **配置文件尚不存在**：以 `exists=false` 与空内容列出并可读；读取绝不创建该文件。
@@ -167,7 +167,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 - **Given** 一份存在 `~/.codex/` 且尚未注册任何 agent 的 Coffer 安装，
 - **When** 用户运行发现，
-- **Then** Coffer 报告一个 `codex` 候选项（类型、显示名、配置目录、默认 `skill_dir`、建议名称）且不注册任何内容——发现是只读的。
+- **Then** Coffer 报告一个 `codex` 候选项（类型、显示名、默认配置目录、建议名称）且不注册任何内容——发现是只读的。
 
 ### Scenario: skip already-registered types on subsequent scan
 
@@ -181,16 +181,16 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 - **When** 用户再次运行发现，
 - **Then** 该 agent 再次作为候选项被提供（移除并非永久；没有抑制列表）。
 
-### Scenario: register an agent with custom skill_dir
+### Scenario: register an agent with a custom config dir
 
 - **Given** daemon 正在运行，
-- **When** 用户以一个明确、可写的 `skill_dir` 注册一个受支持类型的 agent，
-- **Then** 该 agent 以该路径被持久化，并出现在 `coffer agent list` 中。
+- **When** 用户以一个明确、可写的 `config_dir` 注册一个受支持类型的 agent，
+- **Then** 该 agent 以该路径被持久化（并自动创建其 `<config_dir>/skills` 子目录），并出现在 `coffer agent list` 中。
 
-### Scenario: reject registration with invalid skill_dir
+### Scenario: reject registration with an invalid config dir
 
 - **Given** daemon 正在运行，
-- **When** 用户注册的 agent 的 `skill_dir` 不存在、不是目录或不可写，
+- **When** 用户注册的 agent 的 `config_dir` 不存在、不是目录或不可写，
 - **Then** 注册被拒绝并给出指向该路径的错误信息，且不留下任何持久化数据。
 
 ### Scenario: reject duplicate agent name
@@ -202,7 +202,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 ### Scenario: reject a second agent for an already-registered config dir
 
 - **Given** 已注册一个 `codex` agent（其配置目录为 `~/.codex`），
-- **When** 用户尝试再注册一个 `codex` agent（解析到同一个配置目录），即便名称与 skill_dir 不同，
+- **When** 用户尝试再注册一个 `codex` agent（解析到同一个配置目录），即便名称与 config_dir 不同，
 - **Then** 注册被拒绝并给出清晰错误，且不持久化任何内容——同一个配置目录至多只能注册一个 agent。
 
 ### Scenario: register an agent without an explicit name
@@ -211,7 +211,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 - **When** 用户注册一个受支持类型的 agent 但不提供名称，
 - **Then** 该 agent 以一个稳定的按类型默认名注册（下划线变连字符，如 `claude_code` → `claude-code`）。
 
-### Scenario: browse local folders to choose a skill directory
+### Scenario: browse local folders to choose a config dir
 
 - **Given** daemon 正在运行，
 - **When** Web 文件夹浏览器请求某个可读目录的子目录，
@@ -220,12 +220,12 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 ### Scenario: update an existing agent
 
 - **Given** 一个已注册的 agent，
-- **When** 用户把它的 `skill_dir` 更新到一个新的可写路径，
+- **When** 用户把它的 `config_dir` 更新到一个新的可写路径，
 - **Then** 变更被持久化，写入 audit 条目，后续操作看到新路径。
 
 ### Scenario: remove an agent
 
-- **Given** 一个已注册的 agent（任何 binding 清理由 spec 005 处理），
+- **Given** 一个已注册的 agent（任何 binding 清理由 the 005-skill-manager spec 处理），
 - **When** 用户移除它，
 - **Then** 该 agent 被删除，写入 audit 条目，`coffer agent list` 不再显示它。
 
@@ -233,7 +233,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 - **Given** Coffer 桌面应用已启动，且至少有一个已注册 agent，
 - **When** 用户打开 Agents 页面，
-- **Then** 每个已注册 agent 都带有类型、名称与 `skill_dir` 出现在列表中。
+- **Then** 每个已注册 agent 都带有类型、名称与 `config_dir` 出现在列表中。
 
 > Story 4 的桌面表单 add/edit/remove 流程在 e2e 层覆盖；打包的 acceptance 标记见 `e2e/web/specs/shell_agents.spec.ts`。
 
@@ -246,7 +246,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 ### Scenario: reject registration into privileged system path
 
 - **Given** daemon 正在运行，
-- **When** 用户尝试注册的 agent，其 `skill_dir` 落在特权位置（`/etc`、`/usr`、`/bin`、`/sbin`、`/System`、`C:\Windows` 或 `C:\Program Files`）之下，
+- **When** 用户尝试注册的 agent，其 `config_dir` 落在特权位置（`/etc`、`/usr`、`/bin`、`/sbin`、`/System`、`C:\Windows` 或 `C:\Program Files`）之下，
 - **Then** 注册以 `unprocessable_entity`（422）被拒绝，且不产生任何 resource 行、audit 事件或文件系统写入。
 
 ### Scenario: audit lifecycle events
@@ -334,18 +334,18 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 **Resource 模型**
 
 - **FR-001**: 系统 MUST 将每个已知的本地 agent 注册为 kind 为 `agent` 的 Resource，按 spec 001-mcp-gateway 的 `<kind>:<name>` 约定，标识为 `agent:<name>`。
-- **FR-002**: 系统 MUST 用一个 kind 专属 schema 校验 agent 配置，字段包括 `type`（enum）与 `skill_dir`（path，可选覆盖）。
+- **FR-002**: 系统 MUST 用一个 kind 专属 schema 校验 agent 配置，字段包括 `type`（enum）与 `config_dir`（path，可选的绝对路径覆盖；省略时回退到该类型的标准位置——`claude_code` 用 `~/.claude`，`codex` 用 `~/.codex`）。skill 投递到 `<config_dir>/skills`。
 - **FR-003**: 系统 MUST 在 v1 中支持 `claude_code` 与 `codex` 两个 agent 类型；注册任何其它类型（包括 `claude_desktop`、`cursor`）以 `unprocessable_entity`（422）被拒绝。每个受支持类型都同时覆盖该产品的 CLI 与 app/IDE 形态，二者共享同一个配置目录。
 
 **发现（检测 = 发现 + 确认）**
 
-- **FR-004**: 系统 MUST 提供一个只读的发现操作，扫描每种受支持 agent 类型的常见安装标记，并把已安装但尚未注册的类型作为**候选项（candidate）**报告（每个携带类型、显示名、配置目录、默认 `skill_dir` 与一个建议名称）。发现 MUST NOT 自动注册任何内容——由用户审阅候选项并确认要添加哪些。daemon MUST NOT 在启动时自动注册 agent。
+- **FR-004**: 系统 MUST 提供一个只读的发现操作，扫描每种受支持 agent 类型的常见安装标记，并把已安装但尚未注册的类型作为**候选项（candidate）**报告（每个携带类型、显示名、默认 `config_dir` 与一个建议名称）。发现 MUST NOT 自动注册任何内容——由用户审阅候选项并确认要添加哪些。daemon MUST NOT 在启动时自动注册 agent。
 - **FR-005**: 只要安装标记仍存在，被移除的 agent MUST 在后续扫描中重新作为发现候选项出现——移除并非永久（可能是误操作）。系统 MUST NOT 保留任何「已抑制类型」列表。
 
 **生命周期**
 
-- **FR-006**: 用户 MUST 能注册、列出、查看、更新（skill_dir、description）与移除 agent。agent **没有启用/禁用的概念**——已注册的 agent 就是存在的，agent 层面不存在启用/禁用状态。注册时 agent 名称是可选的——省略时系统 MUST 派生一个稳定的按类型默认名（下划线变连字符，如 `claude_code` → `claude-code`）。
-- **FR-007**: 系统 MUST 在接受 `skill_dir` 值之前验证其存在、是目录、可写且不是特权系统路径。
+- **FR-006**: 用户 MUST 能注册、列出、查看、更新（config_dir、description）与移除 agent。agent **没有启用/禁用的概念**——已注册的 agent 就是存在的，agent 层面不存在启用/禁用状态。注册时 agent 名称是可选的——省略时系统 MUST 派生一个稳定的按类型默认名（下划线变连字符，如 `claude_code` → `claude-code`）。
+- **FR-007**: 注册时系统 MUST 自动创建 `<config_dir>/skills` 子目录，再验证解析后的 `config_dir` 存在、是目录、可写且不是特权系统路径，方可接受该值。skill 投递到 `<config_dir>/skills`。
 - **FR-008**: 系统 MUST 拒绝任何会造成重复 `agent:<name>` 的注册，并 MUST 拒绝为同一个配置目录注册多于一个 agent。`config_dir` 由 agent 类型派生，因此每个受支持类型——也即每个磁盘上的配置目录——至多只能注册一次；第二次尝试以 `conflict`（409）拒绝且不持久化任何内容。
 
 **配置文件**
@@ -374,16 +374,16 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 - **FR-011**: 系统 MUST 为每一个生命周期事件写入一条 audit 条目：agent 创建、更新、移除；配置文件写入（`agent_config_file_written`）；Coffer MCP 安装/卸载。（agent 没有启用/禁用的概念；发现是只读的——二者都不发出任何 audit 事件。）
 - **FR-012**: 系统 MUST 暴露一个只读的发现操作，把已安装但未注册的 agent 列为候选项，可通过 REST API（`GET /api/v1/agents/candidates`）、`coffer agent detect` CLI 与桌面 Agents 页面访问。
 
-**Skill 目录选择器**
+**配置目录选择器**
 
-- **FR-023**: 选择自定义 `skill_dir` 时，桌面应用 MUST 提供一个文件夹选择器，而非要求用户手动输入路径。在打包桌面应用中，它 MUST 使用 OS 原生目录对话框；在 Web 上，它 MUST 使用 daemon 支撑的文件夹浏览器（FR-024）。两者都产出一个绝对路径，随后在注册前按 FR-007 校验。
+- **FR-023**: 选择自定义 `config_dir` 时，桌面应用 MUST 提供一个文件夹选择器，而非要求用户手动输入路径。在打包桌面应用中，它 MUST 使用 OS 原生目录对话框；在 Web 上，它 MUST 使用 daemon 支撑的文件夹浏览器（FR-024）。两者都产出一个绝对路径，随后在注册前按 FR-007 校验。
 - **FR-024**: 系统 MUST 暴露一个只读的文件系统浏览操作（`GET /api/v1/fs/browse`），给定一个目录路径（默认用户主目录），返回该路径、其父目录与其直接子目录。它 MUST NOT 返回文件内容，且 MUST 与所有其它 daemon 路由一样受同样的 loopback + token 鉴权保护。
 
 ### Key Entities
 
-- **Agent**：一个 kind 为 `agent` 的 Resource。代表一份本地安装的 AI agent。Config: `type`（受支持的 enum）、`skill_dir`（path 或按类型默认）。标识为 `agent:<name>`。
-- **Agent Type**：一个 enum 值，标识一个已知 agent 产品（`claude_code`、`codex`）。每个类型有一个默认 `skill_dir`、一个显示名、一个用于发现的安装标记扫描器，以及一份精选的**配置文件 allowlist**。
-- **Agent Candidate（候选项）**：一个被发现的、已安装但尚未注册的 agent——类型、显示名、配置目录、默认 `skill_dir` 与建议名称。在扫描时派生，从不存储；用户确认某个候选项即可注册它。
+- **Agent**：一个 kind 为 `agent` 的 Resource。代表一份本地安装的 AI agent。Config: `type`（受支持的 enum）、`config_dir`（可选的绝对路径覆盖；默认回退到该类型的标准位置）。skill 投递到 `<config_dir>/skills`。标识为 `agent:<name>`。
+- **Agent Type**：一个 enum 值，标识一个已知 agent 产品（`claude_code`、`codex`）。每个类型有一个默认 `config_dir`（`~/.claude` / `~/.codex`）、一个显示名、一个用于发现的安装标记扫描器，以及一份精选的**配置文件 allowlist**。
+- **Agent Candidate（候选项）**：一个被发现的、已安装但尚未注册的 agent——类型、显示名、默认 `config_dir` 与建议名称。在扫描时派生，从不存储；用户确认某个候选项即可注册它。
 - **Config File（配置文件）**：属于某个 agent 类型、在 allowlist 内的精选文件，以稳定的 `key` 标识。携带显示名、解析后的绝对路径、`format`（`json` / `toml` / `markdown` / `text`），以及（存在时）大小与修改时间。按 key 读写，绝不按任意路径。不持久化到 SQLite——磁盘上的文件即为事实来源。
 - **Coffer MCP Install Status（安装状态）**：某个 agent 的派生（非存储）状态：其 MCP 配置文件中是否存在 `coffer` MCP-server 条目。
 
@@ -392,10 +392,10 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 ### Measurable Outcomes
 
 - **SC-001**：在一台至少存在两种受支持 agent 安装路径的机器上，运行发现恰好把这些 agent 作为候选项呈现，用户对每个只需一次确认即可添加——无需手动输入类型标识或路径。
-- **SC-002**：从一份全新安装开始，用户能在 60 秒内用自定义 `skill_dir` 注册一个额外 agent，并在 `coffer agent list --json` 中看到它，期间最多查阅一次文档。
+- **SC-002**：从一份全新安装开始，用户能在 60 秒内用自定义 `config_dir` 注册一个额外 agent，并在 `coffer agent list --json` 中看到它，期间最多查阅一次文档。
 - **SC-003**：本 spec 中每一个 Acceptance Scenario 至少被一个带 `acceptance(spec="004-agent-registry", scenario="…")` 标记的测试覆盖；`make verify-acceptance` 报告零未覆盖 scenario。
 - **SC-004**：完整 `make verify` 套件在本地与 CI 中通过；`make verify-all`（额外包含 e2e）在 macOS 与 Linux 上通过。
-- **SC-005**：任何 `skill_dir` 值都不允许写到该目录之外（path-traversal 检查），由一个专门的安全测试验证。
+- **SC-005**：任何 `config_dir` 值都不允许写到该目录之外（path-traversal 检查），由一个专门的安全测试验证。
 - **SC-006**：用户能从桌面应用与 CLI 两端打开、编辑并保存 agent 的 `settings.json`（Claude Code）或 `config.toml`（Codex）；畸形的保存会被拒绝且文件保持不变，成功保存时会保留上一版本的 `.bak`。
 - **SC-007**：用户能一键把 Coffer 的 MCP 安装到一个新注册的 agent，重启该 agent 后它能列出 Coffer 聚合的工具；重复安装绝不产生重复条目，卸载将其移除。
 
@@ -405,7 +405,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 - v1 支持的两种 agent 类型（`claude_code`、`codex`）足以覆盖用户已安装的 agent；增加新类型（例如 Claude Desktop 聊天应用、Cursor、Gemini CLI）属于后续 spec 的改动，新增一个 enum 值、一个安装标记扫描器与一份配置文件 allowlist。
 - 每个受支持 agent 的 CLI 与 app/IDE 形态读取同一个共享配置目录（Claude Code 用 `~/.claude/`，Codex 用 `~/.codex/`），因此 Coffer 对每个 agent 管理一份配置集合。
 - 配置文件以可编辑、可保存的原始文本方式呈现（带 `.bak` 兜底）；编辑器内的查找/替换是一项 UI 便利功能。结构化的逐字段编辑、以及对 `~/.claude.json` 内 MCP-server 列表的管理（超出一键写入的 Coffer 条目之外）不在 v1 范围内。凭据/状态文件 `~/.codex/auth.json` 被有意排除在 allowlist 之外。
-- agent 把自己的 skill 库存放在本地文件系统中一个可被发现的目录里。仅 Web 形态的 agent（例如 claude.ai）超出 v1 范围，需要后续 spec 通过 API 同步加入。
+- agent 把自己的 skill 库存放在本地文件系统的 `<config_dir>/skills` 之下。仅 Web 形态的 agent（例如 claude.ai）超出 v1 范围，需要后续 spec 通过 API 同步加入。
 - 由 spec 001-mcp-gateway 定义的 kind-agnostic Resource 框架、audit 日志与 `<kind>:<name>` 标识方案已就绪。
 - 来自 spec 002-ui-shell 的应用外壳——侧栏 IA、布局、路由骨架与设计系统——已就绪。桌面 Agents 页面渲染在该外壳内的 `/agents`，作为一个**独立的顶级导航项**（与 Resources、System 分组平级，**不**嵌套在 Resources 之下——agent 是 vault 资产的消费者，而非资产本身）。agent 资源不出现在 kind-agnostic 的资源/MCP 浏览页中，该页只列出注册了资源卡片 UI 的 kind。
 - Skill bindings（agent 与某个 skill 之间的关系）由 spec 005-skill-manager 引入和管理；spec 004 不定义 skill 操作，只暴露一个用于级联清理的 `on_delete` 钩子。

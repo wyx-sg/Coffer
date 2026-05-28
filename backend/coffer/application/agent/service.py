@@ -11,9 +11,11 @@ is never permanent, since it might have been accidental.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import pathlib
 import sys
+from collections.abc import Awaitable, Callable
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
@@ -119,42 +121,48 @@ class AgentService:
         *,
         resource_service: ResourceService,
         audit: AuditService,
+        on_config_dir_changed: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._rs = resource_service
         self._audit = audit
+        # Cross-kind hook (wired at the composition root): re-deliver an
+        # agent's skills after its config dir moves, so the old links aren't
+        # orphaned and the new dir isn't left empty. None in contexts that
+        # don't manage skills.
+        self._on_config_dir_changed = on_config_dir_changed
 
     async def register(
         self,
         *,
         agent_type: AgentType,
         name: str,
-        skill_dir: str | None = None,
+        config_dir: str | None = None,
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
-        # Build + validate config
+        # Build + validate config (config_dir=None → the type's standard dir).
         try:
             cfg = AgentConfig(
                 type=agent_type,
-                skill_dir=skill_dir,
+                config_dir=config_dir,
             )
         except Exception as e:  # pydantic ValidationError
             raise ConfigValidationError(str(e)) from e
 
-        # I/O check on the resolved skill_dir
-        assert_skill_dir_usable(cfg.resolved_skill_dir())
+        # Skills are delivered to <config_dir>/skills. Auto-create the skills/
+        # leaf under an EXISTING config dir, then assert it's usable. We refuse
+        # to create a missing config dir (a typo'd path must fail, not be
+        # silently materialised).
+        self._ensure_skill_dir(cfg.resolved_skill_dir())
 
-        # Dedup by config dir. config_dir is derived from the agent type, so
-        # only one agent may exist per config directory — there is a single
-        # Claude Code / Codex install per machine. Reject a second one (this
-        # also blocks creating multiple agents of the same type).
-        new_config_dir = str(agent_type.config_dir())
+        # Dedup by the resolved config dir — one agent per config directory.
+        new_config_dir = str(cfg.resolved_config_dir())
         for existing in await self._rs.list(kind="agent"):
             try:
-                existing_type = AgentType(existing.config["type"])
-            except (KeyError, ValueError):
+                existing_cfg = AgentConfig.model_validate(existing.config)
+            except Exception:
                 continue
-            if str(existing_type.config_dir()) == new_config_dir:
+            if str(existing_cfg.resolved_config_dir()) == new_config_dir:
                 raise AgentConfigDirRegistered(new_config_dir, existing.name)
 
         return await self._rs.register(
@@ -165,17 +173,36 @@ class AgentService:
             actor=actor,
         )
 
+    @staticmethod
+    def _ensure_skill_dir(skill_dir: pathlib.Path) -> None:
+        """Create the ``skills/`` leaf under an EXISTING config dir, then assert
+        it's usable.
+
+        The agent's config dir (``skill_dir.parent``) must already exist — we
+        refuse to ``mkdir -p`` a mistyped config location (e.g.
+        ``/Usrs/me/.claude``) into being, which would silently deliver skills to
+        a directory the agent never reads. Only the ``skills/`` subfolder is
+        auto-created. ``mkdir`` failures are swallowed — ``assert_skill_dir_usable``
+        surfaces the precise reason (privileged / not-writable / not-a-directory).
+        """
+        config_dir = skill_dir.parent
+        if not config_dir.is_dir():
+            raise SkillDirNotWritable(str(config_dir), "directory_missing")
+        with contextlib.suppress(OSError):
+            skill_dir.mkdir(exist_ok=True)
+        assert_skill_dir_usable(skill_dir)
+
     async def list(self) -> list[Resource]:
         return await self._rs.list(kind="agent")
 
     async def get(self, name: str) -> Resource:
         return await self._rs.get(ResourceRef("agent", name))
 
-    async def update_skill_dir(
+    async def update_config_dir(
         self,
         *,
         name: str,
-        new_skill_dir: str | None,
+        new_config_dir: str | None,
         actor: str = "api",
         description: str | None = None,
     ) -> Resource:
@@ -188,21 +215,29 @@ class AgentService:
         try:
             new_cfg = AgentConfig(
                 type=cfg.type,
-                skill_dir=new_skill_dir,
+                config_dir=new_config_dir,
             )
         except Exception as e:  # pydantic ValidationError
             raise ConfigValidationError(str(e)) from e
-        # Only run the I/O check when the effective path actually changes —
-        # a description-only PATCH must not fail because the existing
-        # skill_dir has become non-writable since registration.
-        if new_cfg.resolved_skill_dir() != cfg.resolved_skill_dir():
-            assert_skill_dir_usable(new_cfg.resolved_skill_dir())
-        return await self._rs.update_config(
+        # Only run the I/O check (and create the skills subdir) when the
+        # effective dir actually changes — a description-only PATCH must not
+        # fail because the existing dir has become non-writable since register.
+        dir_changed = new_cfg.resolved_config_dir() != cfg.resolved_config_dir()
+        if dir_changed:
+            self._ensure_skill_dir(new_cfg.resolved_skill_dir())
+        updated = await self._rs.update_config(
             ResourceRef("agent", name),
             new_config=new_cfg.model_dump(mode="json"),
             actor=actor,
             description=description,
         )
+        # Re-deliver skills to the new location (remove old links, recreate at
+        # <new_config_dir>/skills). Runs AFTER the row is updated so the hook
+        # resolves the new dir. Without this the old links orphan and verify
+        # falsely reports no drift.
+        if dir_changed and self._on_config_dir_changed is not None:
+            await self._on_config_dir_changed(name)
+        return updated
 
     async def remove(self, *, name: str, actor: str = "api") -> None:
         # A removal is never permanent: detection is discovery-only, so the

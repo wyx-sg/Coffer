@@ -13,8 +13,9 @@ import { translateApiError } from "@/lib/api/errors";
 
 /**
  * The MCP servers surface (nav: "MCP servers"; route /mcp-servers). Empty →
- * a welcome card; otherwise the shared DataTable (search / filter /
- * pagination), with a row click opening the server's detail page.
+ * a welcome card; otherwise the shared DataTable (search / filter / pagination
+ * + row multi-select bulk actions), with a row click opening the server's
+ * detail page.
  */
 export function ResourcesPage() {
   const { t } = useTranslation();

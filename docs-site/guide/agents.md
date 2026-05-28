@@ -11,13 +11,13 @@ Run detection to discover installed agents, then register the ones you want:
 ```bash
 coffer agent detect            # → claude_code (detected), codex (detected)
 coffer agent add claude_code   # register; --name defaults to claude-code
-coffer agent add codex --name my-codex --description "work laptop"
+coffer agent add codex --name my-codex --config-dir ~/.codex --description "work laptop"
 
 coffer agent list              # → claude-code | claude_code | registered
 ```
 
 - `coffer agent detect` scans for installed agents and reports what it finds. Nothing is registered by this step — it is discovery only.
-- `coffer agent add <type>` registers an agent. `<type>` is `claude_code` or `codex`. `--name` is optional and defaults to a per-type name (for example, `claude_code` → `claude-code`). Optional flags: `--skill-dir PATH` and `--description TEXT`.
+- `coffer agent add <type>` registers an agent. `<type>` is `claude_code` or `codex`. `--name` is optional and defaults to a per-type name (for example, `claude_code` → `claude-code`). Optional flags: `--config-dir PATH` (the agent's config directory — defaults to the type's standard location, e.g. `~/.claude`; Coffer delivers skills into that directory's `skills/` subfolder) and `--description TEXT`.
 - `coffer agent list` shows all registered agents with their type and status.
 - `coffer agent show <name>` prints a registered agent's details; `coffer agent rm <name>` removes it.
 
@@ -66,8 +66,9 @@ Install is idempotent: running it again updates the existing entry in place rath
 The **Agents** page in the [Web UI](/guide/web-ui) covers the same flow without the terminal:
 
 1. Open **Agents** and click **Detect** to scan for installed agents. The detect dialog lists what was found; confirm an agent to register it.
-2. On an agent's detail page, open any curated config file in the editor. The editor validates format on save, writes atomically with a `.bak` backup, and includes a **find/replace** box that scrolls to the match.
-3. Use the **Install Coffer MCP** toggle to add or remove the `coffer` entry, with a live status indicator.
-4. Set the agent's skill directory with the folder picker.
+2. The agent detail page has four tabs — **Overview**, **Skills**, **MCP servers**, and **Config files**.
+3. On the **Config files** tab, open any curated config file in the editor. The editor validates format on save, writes atomically with a `.bak` backup, and includes a **find/replace** box that scrolls to the match.
+4. Use the **Install Coffer MCP** toggle in the header to add or remove the `coffer` entry, with a live status indicator.
+5. On the **Skills** tab, toggle each skill on or off for this agent, or use **Install skills** to bind more. The **MCP servers** tab shows the servers Coffer exposes to the agent (read-only for now).
 
 [Connect a client →](/guide/connect-client)

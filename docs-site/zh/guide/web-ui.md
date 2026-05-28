@@ -9,9 +9,11 @@ Web UI 是一个建立在守护进程 REST API 之上的 React/Vite 单页应用
 管理工作的主要可视化界面。侧边栏分为两组：
 
 ```
+AGENTS
+  Agents           管理已注册的 AI 编码助手
 RESOURCES
   MCP servers      管理已注册的服务器
-  Agents           管理已注册的 AI 编码助手
+  Skills           管理 Coffer 可交付给 agent 的技能
 SYSTEM
   Observability    审计日志与调用日志
   Settings
@@ -80,15 +82,38 @@ resource 配置中。
 
 ### Agents
 
-打开 **Agents** 管理已注册的 AI 编码助手（`claude_code` 和 `codex`）。点击 **Detect**
-扫描已安装的 agent；检测对话框列出找到的结果，每一个都需要你确认后才会被注册 ——
-不会自动注册任何东西。
+打开 **Agents** 管理已注册的 AI 编码助手（`claude_code` 和 `codex`）。列表是一个表格，
+带搜索框、状态过滤器、分页，以及用于批量操作的行多选。点击 **Detect** 扫描已安装的
+agent；检测对话框列出找到的结果，每一个都需要你确认后才会被注册 —— 不会自动注册任何
+东西。每个 agent 都注册到单个**配置目录 (config directory)**（例如 `~/.claude` 或
+`~/.codex`）；Coffer 会把技能交付到该目录的 `skills/` 子文件夹中。
 
-agent 详情页让你在编辑器中打开该 agent 任意经过策展的配置文件。保存时会校验文件格式
-（格式错误的 JSON/TOML 会被拒绝，文件保持不变），以原子方式写入并保留 `.bak` 备份，
-并提供一个可滚动到匹配项的查找/替换框。**Install Coffer MCP** 开关会将 Coffer 自身的
-`coffer` MCP 服务器条目写入（或从中移除）该 agent 的配置，并配有实时状态指示。文件夹
-选择器用于设置 agent 的 skill 目录。
+agent 详情页有四个标签：
+
+- **Overview** —— 该 agent 的类型与配置目录。
+- **Skills** —— Coffer 为此 agent 管理的技能，每个都带启用/禁用开关。**Install skills**
+  按钮会打开一个选择对话框（搜索、过滤、分页、多选），用于为该 agent 绑定更多技能。
+- **MCP servers** —— Coffer 当前向该 agent 暴露的 MCP 服务器，以只读表格呈现（按 agent
+  的 MCP 授权是计划中的功能）。
+- **Config files** —— 在编辑器中打开该 agent 任意经过策展的配置文件。保存时会校验文件
+  格式（格式错误的 JSON/TOML 会被拒绝，文件保持不变），以原子方式写入并保留 `.bak`
+  备份，并提供一个可滚动到匹配项的查找/替换框。
+
+agent 头部的 **Install Coffer MCP** 开关会将 Coffer 自身的 `coffer` MCP 服务器条目
+写入（或从中移除）该 agent 的配置，并配有实时状态指示。
+
+### Skills
+
+打开 **Skills** 管理 Coffer 可交付给 agent 的技能。列表是一个表格，带搜索框、过滤器、
+分页，以及用于批量操作的行多选（例如批量校验或批量移除）。你可以从本地文件夹导入技能，
+或从公开 Git URL 拉取技能；对技能进行校验（会运行 drift 检查），按行或批量执行；刷新
+来自 Git 的技能；或移除某个技能。为某个具体 agent 启用或禁用技能是在那个 **agent** 的
+详情页完成的，而不是在这里。
+
+在技能详情页可切换以下标签：
+
+- **Overview** —— 元数据：来源、版本哈希、master 路径以及时间戳。
+- **Files** —— 该技能 master 文件夹的只读文件树与内容查看器。
 
 ### Observability
 

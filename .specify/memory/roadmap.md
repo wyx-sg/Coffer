@@ -12,6 +12,7 @@
 | 002 | **UI Shell & Visual Language** ([spec](../../specs/002-ui-shell/spec.md))     | Accepted — code merged in PR #23                   |
 | 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | Accepted — code in review (PR #28)                 |
 | 004 | **Agent Registry** ([spec](../../specs/004-agent-registry/spec.md))           | Accepted — in development (feature/agent-registry) |
+| 005 | **Skill Manager** ([spec](../../specs/005-skill-manager/spec.md))             | Accepted — in development (feature/skill-manager)  |
 
 ## Explicit non-goals (current spec)
 

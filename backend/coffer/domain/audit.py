@@ -26,9 +26,21 @@ class AuditEventType(StrEnum):
     BACKUP_CREATED = "backup_created"
     KEYCHAIN_SET = "keychain_set"
     KEYCHAIN_DELETED = "keychain_deleted"
+    # spec 004-agent-registry
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"
     AGENT_MCP_UNINSTALLED = "agent_mcp_uninstalled"
+    # spec 005-skill-manager
+    SKILL_IMPORTED = "skill_imported"
+    SKILL_FETCHED = "skill_fetched"
+    SKILL_UPDATED = "skill_updated"
+    SKILL_UPDATE_NOOP = "skill_update_noop"
+    SKILL_RENAMED = "skill_renamed"
+    SKILL_BOUND = "skill_bound"
+    SKILL_UNBOUND = "skill_unbound"
+    SKILL_AUTOBIND_SKIPPED = "skill_autobind_skipped"
+    SKILL_RELINKED = "skill_relinked"
+    SKILL_DRIFT_DETECTED = "skill_drift_detected"
 
 
 @dataclass

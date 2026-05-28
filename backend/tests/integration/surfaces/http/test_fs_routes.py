@@ -27,7 +27,7 @@ def _client(app) -> TestClient:
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="browse local folders to choose a skill directory"
+    spec="004-agent-registry", scenario="browse local folders to choose a config dir"
 )
 def test_fs_browse_lists_subdirectories(tmp_path, monkeypatch):
     """GET /fs/browse returns a directory's path, parent, and immediate subdirs."""
