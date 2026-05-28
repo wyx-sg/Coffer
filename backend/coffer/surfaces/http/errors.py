@@ -39,6 +39,13 @@ _STATUS: dict[str, int] = {
     "BAD_REQUEST": 400,
     "NOT_FOUND": 404,
     "FORBIDDEN": 403,
+    # spec 005-skill-manager
+    "SKILL_INVALID": 422,
+    "SOURCE_FETCH_FAILED": 502,
+    "SSRF_BLOCKED": 422,
+    "TARGET_CONFLICT": 409,
+    "SKILL_NAME_MISMATCH": 409,
+    "UPDATE_NOT_SUPPORTED": 400,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a

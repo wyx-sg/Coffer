@@ -366,5 +366,26 @@
     "save": "Save",
     "description": "Description",
     "descriptionPlaceholder": "Optional notes"
+  },
+  "skills": {
+    "title": "Skills",
+    "subtitle": "AgentSkills-standard folders Coffer manages and delivers to your registered agents.",
+    "empty": "No skills yet. Import a local folder or fetch one from a public Git URL.",
+    "loadFailed": "Failed to load skills",
+    "import": "Import",
+    "importTitle": "Import a local skill folder",
+    "fetch": "Fetch from Git",
+    "fetchTitle": "Fetch a skill from a public Git URL",
+    "path": "Local path",
+    "gitUrl": "Git URL",
+    "gitRef": "Ref (branch / tag / commit)",
+    "gitSubpath": "Subpath inside repo",
+    "verify": "Verify",
+    "verifyOk": "No drift detected.",
+    "verifyDrift": "{{count}} drift entries — see CLI for details.",
+    "name": "Name",
+    "source": "Source",
+    "bindings": "Bindings (agent+enabled / -disabled)",
+    "removeConfirm": "Really remove skill:{{name}}? This deletes the master folder and all per-agent links."
   }
 }

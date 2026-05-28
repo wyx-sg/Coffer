@@ -1,0 +1,384 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Skill Manager API
+  version: "0.1.0"
+  description: |
+    Skill manager endpoints. Merged into the main Coffer Management API at
+    runtime; this document scopes only the skill-specific routes added by
+    spec 005. Depends on the agent kind from spec 004.
+
+    All routes use the same `X-Coffer-Token` authentication from
+    `specs/001-mcp-gateway/contracts/api.openapi.yaml`.
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "8000"
+
+security:
+  - cofferToken: []
+
+tags:
+  - name: skills
+    description: Managed AgentSkills folders
+
+paths:
+  /skills:
+    get:
+      tags: [skills]
+      operationId: listSkills
+      summary: List managed skills
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/SkillOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /skills/import:
+    post:
+      tags: [skills]
+      operationId: importSkill
+      summary: Import a skill from a local filesystem path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillImportRequest" }
+      responses:
+        "201":
+          description: Imported
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /skills/fetch:
+    post:
+      tags: [skills]
+      operationId: fetchSkill
+      summary: Fetch a skill from a public Git URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillFetchRequest" }
+      responses:
+        "201":
+          description: Fetched
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /skills/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [skills]
+      operationId: getSkill
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [skills]
+      operationId: deleteSkill
+      summary: Remove a skill and all its bindings
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /skills/{name}/update:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: updateSkill
+      summary: Refresh a Git-sourced skill from upstream
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillUpdateRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillUpdateResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /skills/{name}/enable:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: enableSkillForAgent
+      summary: Enable a skill for one agent (creates a directory symlink)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillEnableRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillBindingOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Target path already exists and is not a Coffer-managed link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+
+  /skills/{name}/disable:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: disableSkillForAgent
+      summary: Disable a skill for one agent (removes the symlink)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillDisableRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillBindingOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /skills/verify:
+    post:
+      tags: [skills]
+      operationId: verifySkillDrift
+      summary: Report drift between bindings and on-disk symlinks
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DriftReport" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  schemas:
+    SkillSourceType:
+      type: string
+      enum: [local_import, git]
+
+    SkillImportRequest:
+      type: object
+      required: [path]
+      additionalProperties: false
+      properties:
+        path:
+          {
+            type: string,
+            description: "Path to the existing skill folder; supports `~` expansion.",
+          }
+
+    SkillFetchRequest:
+      type: object
+      required: [git_url, git_ref]
+      additionalProperties: false
+      properties:
+        git_url: { type: string, format: uri }
+        git_ref: { type: string, description: "branch / tag / commit." }
+        git_subpath: { type: string, default: "" }
+
+    SkillUpdateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        allow_rename: { type: boolean, default: false }
+
+    SkillUpdateResult:
+      type: object
+      required: [skill, changed]
+      properties:
+        skill: { $ref: "#/components/schemas/SkillOut" }
+        changed: { type: boolean }
+        renamed_from: { type: string, nullable: true }
+
+    SkillEnableRequest:
+      type: object
+      required: [agent_name]
+      additionalProperties: false
+      properties:
+        agent_name: { type: string }
+        force: { type: boolean, default: false }
+
+    SkillDisableRequest:
+      type: object
+      required: [agent_name]
+      additionalProperties: false
+      properties:
+        agent_name: { type: string }
+
+    SkillSource:
+      oneOf:
+        - $ref: "#/components/schemas/LocalImportSource"
+        - $ref: "#/components/schemas/GitSource"
+      discriminator:
+        propertyName: type
+
+    LocalImportSource:
+      type: object
+      required: [type, original_path]
+      properties:
+        type: { type: string, enum: [local_import] }
+        original_path: { type: string }
+
+    GitSource:
+      type: object
+      required: [type, git_url, git_ref]
+      properties:
+        type: { type: string, enum: [git] }
+        git_url: { type: string, format: uri }
+        git_ref: { type: string }
+        git_subpath: { type: string }
+
+    SkillOut:
+      type: object
+      required:
+        [
+          name,
+          description,
+          source,
+          enabled,
+          version_hash,
+          master_path,
+          created_at,
+          updated_at,
+          bindings,
+        ]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        source: { $ref: "#/components/schemas/SkillSource" }
+        enabled: { type: boolean }
+        version_hash: { type: string }
+        master_path: { type: string }
+        last_synced_from_source_at:
+          { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        bindings:
+          type: array
+          items: { $ref: "#/components/schemas/SkillBindingOut" }
+
+    SkillBindingOut:
+      type: object
+      required: [agent_name, enabled]
+      properties:
+        agent_name: { type: string }
+        enabled: { type: boolean }
+        last_linked_at: { type: string, format: date-time, nullable: true }
+        last_link_path: { type: string, nullable: true }
+        link_mode:
+          type: string
+          enum: [symlink, junction, copy_fallback]
+          nullable: true
+
+    DriftEntry:
+      type: object
+      required: [skill_name, agent_name, kind, suggested_remedy]
+      properties:
+        skill_name: { type: string }
+        agent_name: { type: string }
+        kind:
+          type: string
+          enum:
+            [
+              missing_link,
+              tampered_link,
+              replaced_with_regular,
+              missing_master,
+              orphan_master,
+            ]
+        target_path: { type: string }
+        suggested_remedy: { type: string }
+
+    DriftReport:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/DriftEntry" }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid X-Coffer-Token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    NotFound:
+      description: Skill or agent not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    Conflict:
+      description: Duplicate skill name
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    UnprocessableEntity:
+      description: Validation failure (invalid SKILL.md, SSRF, size limit, path-escape, ...)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }

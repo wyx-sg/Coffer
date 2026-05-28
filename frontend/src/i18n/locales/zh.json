@@ -366,5 +366,26 @@
     "save": "保存",
     "description": "描述",
     "descriptionPlaceholder": "可选备注"
+  },
+  "skills": {
+    "title": "Skill",
+    "subtitle": "Coffer 管理的 AgentSkills 标准目录，会下发到所有已注册的 Agent。",
+    "empty": "尚无 Skill。导入本地文件夹或从公开 Git URL 拉取。",
+    "loadFailed": "加载 Skill 失败",
+    "import": "导入",
+    "importTitle": "导入本地 Skill 文件夹",
+    "fetch": "从 Git 拉取",
+    "fetchTitle": "从公开 Git URL 拉取 Skill",
+    "path": "本地路径",
+    "gitUrl": "Git URL",
+    "gitRef": "Ref（分支 / 标签 / commit）",
+    "gitSubpath": "仓库内子路径",
+    "verify": "校验",
+    "verifyOk": "未检测到漂移。",
+    "verifyDrift": "检测到 {{count}} 处漂移，请通过 CLI 查看详情。",
+    "name": "名称",
+    "source": "来源",
+    "bindings": "绑定（agent+ 已启用 / - 已禁用）",
+    "removeConfirm": "确定删除 skill:{{name}}？会清除主存储和所有 agent 端链接。"
   }
 }

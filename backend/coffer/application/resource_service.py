@@ -8,6 +8,7 @@ BEFORE persistence; a hook that raises aborts the deletion.
 
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -204,7 +205,14 @@ class ResourceService:
         kind_def = self._require_kind(ref.kind)
         snapshot = await self.get(ref)  # raises ResourceNotFound if missing
         if kind_def.on_delete is not None:
-            kind_def.on_delete(ref)  # hook abort propagates as the caller's exception
+            # Hook abort propagates as the caller's exception. If the hook
+            # returns an Awaitable (async cleanup), we await it so on-disk
+            # teardown completes BEFORE the row is removed — otherwise a
+            # follow-up read inside the hook hits ResourceNotFound and the
+            # cleanup is silently dropped.
+            result = kind_def.on_delete(ref)
+            if inspect.isawaitable(result):
+                await result
         await self._repo.delete(ref)
         await self._audit.record(
             AuditEventType.RESOURCE_DELETED.value,

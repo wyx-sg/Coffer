@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -80,4 +80,8 @@ class Kind:
     name: str
     display_name: str
     config_schema: type[BaseModel]
-    on_delete: Callable[[ResourceRef], None] | None = None
+    # The hook may return ``None`` (purely synchronous) or an ``Awaitable``;
+    # the kind-agnostic ResourceService awaits the result when present so
+    # cleanup completes BEFORE the row is removed (a fire-and-forget task
+    # would race the delete and find a ResourceNotFound on follow-up reads).
+    on_delete: Callable[[ResourceRef], Awaitable[None] | None] | None = None

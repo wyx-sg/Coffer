@@ -218,3 +218,21 @@ def get_auto_detect_service() -> Any:
     if _auto_detect_service is None:
         raise RuntimeError("auto-detect service not initialised")
     return _auto_detect_service
+
+
+# --- Skill kind (spec 005-skill-manager) ---
+
+_skill_service: Any | None = None
+
+
+def set_skill_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _skill_service
+    _skill_service = svc
+
+
+def get_skill_service() -> Any:
+    """FastAPI Depends() target — actual type is SkillService."""
+    if _skill_service is None:
+        raise RuntimeError("skill service not initialised")
+    return _skill_service

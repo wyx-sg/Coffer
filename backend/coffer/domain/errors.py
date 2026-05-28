@@ -90,3 +90,59 @@ class PrivilegedPath(CofferError):  # noqa: N818
     def __init__(self, path: str) -> None:
         super().__init__(f"path is privileged: {path}")
         self.path = path
+
+
+# === spec 005 — skill manager ===
+
+
+class SkillValidationError(CofferError):
+    code = "SKILL_INVALID"
+
+    def __init__(self, reason: str, details: dict[str, object] | None = None) -> None:
+        super().__init__(f"skill folder invalid: {reason}")
+        self.reason = reason
+        self.details = details or {}
+
+
+class SourceFetchError(CofferError):
+    code = "SOURCE_FETCH_FAILED"
+
+    def __init__(self, reason: str, details: dict[str, object] | None = None) -> None:
+        super().__init__(f"source fetch failed: {reason}")
+        self.reason = reason
+        self.details = details or {}
+
+
+class SSRFBlocked(CofferError):  # noqa: N818
+    code = "SSRF_BLOCKED"
+
+    def __init__(self, host: str) -> None:
+        super().__init__(f"SSRF guard blocked outbound to: {host}")
+        self.host = host
+
+
+class TargetConflict(CofferError):  # noqa: N818
+    code = "TARGET_CONFLICT"
+
+    def __init__(self, path: str, reason: str) -> None:
+        super().__init__(f"refusing to overwrite target ({reason}): {path}")
+        self.path = path
+        self.reason = reason
+
+
+class SkillNameMismatch(CofferError):  # noqa: N818
+    code = "SKILL_NAME_MISMATCH"
+
+    def __init__(self, current: str, incoming: str) -> None:
+        super().__init__(
+            f"SKILL.md frontmatter name change: {current!r} -> {incoming!r}; "
+            f"pass allow_rename=True to rename"
+        )
+        self.current = current
+        self.incoming = incoming
+
+
+class UpdateNotSupported(CofferError):  # noqa: N818
+    """Raised when attempting to update a non-updatable source (e.g., local_import)."""
+
+    code = "UPDATE_NOT_SUPPORTED"

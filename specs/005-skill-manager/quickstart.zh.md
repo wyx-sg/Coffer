@@ -1,0 +1,111 @@
+# Quickstart —— Coffer Skill Manager
+
+> English: [quickstart.md](./quickstart.md)
+
+在 Coffer 中集中管理符合 AgentSkills 标准的 skill 文件夹，然后投递到一个或多个已注册的 AI agent（spec 004）。
+
+## 前置条件
+
+- Coffer 的 daemon 正在运行（启动桌面 App 或运行 `coffer daemon`）。
+- 至少有一个 agent 已注册（自动检测或 `coffer agent add` —— 参考 spec 004 的 quickstart）。
+- 如需 Git 拉取：`git` 已安装并在 `PATH` 中。
+
+## 导入已有的 skill 文件夹
+
+如果你已经在 `~/.claude/skills/my-skill/` 里有一个 skill，把它纳入 Coffer 管理：
+
+```bash
+coffer skill import ~/.claude/skills/my-skill
+```
+
+Coffer 会：
+
+1. 读取 `SKILL.md`，校验 frontmatter（`name`、`description` 必填）。
+2. 把文件夹拷到 `~/.coffer/skills/my-skill/`（规范 master）。
+3. 注册一个 kind 为 `skill` 的 Resource。
+4. 为每个已注册的 agent 自动启用该 skill（trust 模式）。
+5. 在每个 agent 的 skill 目录下创建一个指向 master 的目录 symlink（POSIX）或 junction（Windows）。
+
+之后，**所有 agent** 都能在它们自己的 skill 目录下看到这个 skill。
+
+## 从 Git 仓库拉取一个 skill
+
+```bash
+coffer skill fetch https://github.com/owner/skills-repo \
+  --ref main \
+  --subpath skills/my-skill
+```
+
+Coffer 做 shallow clone、校验 subpath，并把内容拷到 `~/.coffer/skills/<name>/`。v1 不支持私有仓库。
+
+## 按 agent 启用 / 禁用
+
+import 或 fetch 之后，所有已注册的 agent 默认都被启用。若想把某个 skill 限制到只对一个 agent 可见：
+
+```bash
+coffer skill disable my-skill --agent cursor
+coffer skill list --json | jq '.items[] | select(.name=="my-skill") | .bindings'
+```
+
+重新启用：
+
+```bash
+coffer skill enable my-skill --agent cursor
+```
+
+如果目标位置已经有别的东西（普通文件或非 Coffer 的 symlink），操作会被拒绝，除非加 `--force`。`--force` 会先把既有目标备份到 `<path>.coffer-backup-<timestamp>`，再创建 link。
+
+## 更新 Git 源 skill
+
+```bash
+coffer skill update my-skill
+```
+
+Coffer 会重新拉源、在内容变化时原子替换 master，并在审计日志中记录更新前后的内容哈希。若 SKILL.md 中 frontmatter 的 `name` 发生变化，update 会被拒绝，除非加 `--allow-rename`。
+
+本地导入的 skill 不能通过这种方式更新 —— 用新的文件夹路径再跑一次 `import`。
+
+## 校验 drift
+
+如果你（或别的工具）在某个 agent 的 skill 目录里动过文件，让 Coffer 报告它：
+
+```bash
+coffer skill verify
+```
+
+报告会按 drift 类别列出条目并附建议处置方式。Coffer **不**会自动修复 drift —— 由你决定是重新启用、禁用还是更新。
+
+## 移除 skill
+
+```bash
+coffer skill rm my-skill
+```
+
+Coffer 先移除每个 agent 的 symlink，再删除 binding，最后删除 master 文件夹。审计日志中会记录这次移除及对应 config 快照。
+
+## 磁盘布局长这样
+
+```
+~/.coffer/skills/
+  my-skill/
+    SKILL.md
+    scripts/...
+    references/...
+    .coffer.meta.json     # 源 provenance（仅供取证）
+
+~/.claude/skills/my-skill        → symlink 指向 ~/.coffer/skills/my-skill
+~/.cursor/skills/my-skill        → symlink 指向 ~/.coffer/skills/my-skill
+~/.codex/skills/my-skill         → symlink 指向 ~/.coffer/skills/my-skill
+```
+
+对上述任一路径下的编辑都会落在 master 上（symlink 是透明的），不存在拷贝 drift。
+
+## 排错
+
+**"SKILL.md missing required frontmatter field"** —— 打开你要导入的文件夹，确认顶部 YAML 中 `name` 与 `description` 均非空。
+
+**"Refusing to overwrite existing target"** —— 目标 link 位置存在非 Coffer 的文件或目录。要么自己清掉，要么加 `--force` 让 Coffer 先备份再替换。
+
+**"Symlink creation failed; falling back to copy"** —— 你的文件系统不支持目录 junction（Windows + FAT32 或某些网络共享）。Coffer 已把 skill 内容拷到目标位置，并在审计中记录这次降级；UI 会在该 binding 上显示警告标记。
+
+**在 `~/.coffer/skills/<name>/` 内手工编辑后看到 drift** —— 这是正常的：master 是可编辑的事实来源；其他 agent 通过自己的 symlink 在下一次读取时即可看到改动。

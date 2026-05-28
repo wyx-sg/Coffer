@@ -7,21 +7,23 @@ module — and per Contract 5, this module must not import any skill code.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.resource import Kind, ResourceRef
 
-OnDeleteHook = Callable[[ResourceRef], None]
+# Sync or async — ResourceService awaits the result if it's an Awaitable.
+OnDeleteHook = Callable[[ResourceRef], Awaitable[None] | None]
 
 
 def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
     """Construct the `agent` Kind.
 
-    `on_delete` (if provided) is invoked synchronously by ResourceService
-    BEFORE the persistence delete; raising aborts the deletion. It is the
-    place where skill bindings are cleaned up (the skill module supplies
-    the callback at the composition root).
+    `on_delete` (if provided) is invoked by ResourceService BEFORE the
+    persistence delete; raising aborts the deletion. Async hooks are
+    awaited (so symlink + binding-row cleanup completes before the agent
+    row vanishes); sync hooks run inline. The skill module supplies the
+    callback at the composition root.
     """
     return Kind(
         name="agent",

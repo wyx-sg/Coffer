@@ -80,3 +80,5 @@ section that future readers most often want — don't skip it.>
 | [005](ADR-005-session-subprocess-model.md)               | One upstream subprocess set per downstream client session                | Accepted |
 | [006](ADR-006-daemon-detect-or-spawn.md)                 | Daemon detect-or-spawn pattern; daemon outlives any single client        | Accepted |
 | [007](ADR-007-distribution-pyinstaller-tauri-sidecar.md) | Distribution: PyInstaller-bundled daemon + shim as Tauri sidecars        | Accepted |
+| [008](ADR-008-everything-is-a-resource-kind.md)          | Information architecture: everything is a resource kind                  | Accepted |
+| [009](ADR-009-cross-platform-skill-delivery.md)          | Cross-platform skill delivery: symlink / junction / copy-fallback        | Accepted |
