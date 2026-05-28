@@ -1,0 +1,348 @@
+{
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "loading": "加载中…",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "saving": "保存中…",
+    "deleting": "删除中…",
+    "retry": "重试",
+    "clear": "清除"
+  },
+  "nav": {
+    "aria": {
+      "primary": "主导航"
+    },
+    "group": {
+      "resources": "资源",
+      "system": "系统"
+    },
+    "mcpServers": "MCP 服务器",
+    "observability": "审计日志",
+    "settings": "设置",
+    "language": "语言",
+    "collapse": "折叠侧边栏",
+    "expand": "展开侧边栏"
+  },
+  "resources": {
+    "title": "MCP 服务器",
+    "subtitle": "Coffer 聚合并通过单一 shim 重新暴露的上游 MCP 服务器。",
+    "addServer": "添加 MCP 服务器",
+    "all": "全部",
+    "loadFailed": "加载资源失败",
+    "welcome": {
+      "title": "本地优先的 AI 资产仓库，供你的编辑器共享",
+      "body": "在下方注册第一个 MCP 服务器 —— Coffer 会在本机管理它的生命周期，并把它的工具透过单一命名空间暴露给所有已连接的客户端（Claude Code / Claude Desktop / Cursor）。",
+      "featureAggregate": {
+        "title": "聚合，不再碎片化",
+        "body": "一次客户端连接，覆盖你注册的全部上游 MCP 服务器。"
+      },
+      "featureCurate": {
+        "title": "策展，不再泛滥",
+        "body": "逐能力开关；偏好在守护进程重启与上游升级后均保留。"
+      },
+      "featureLocal": {
+        "title": "本地优先",
+        "body": "仓库仅绑定 127.0.0.1，没有任何对接面无法穿透。"
+      }
+    },
+    "search": "搜索名称",
+    "statusFilter": "状态",
+    "status": {
+      "all": "全部",
+      "enabled": "已启用",
+      "disabled": "已停用"
+    },
+    "noMatches": "没有服务器匹配你的搜索。"
+  },
+  "mcp": {
+    "server": {
+      "addTitle": "添加 MCP 服务器",
+      "addSubtitle": "注册一个上游 MCP 服务器 —— Coffer 会在首次使用时启动它,并重新暴露它的工具。",
+      "deleteConfirmTitle": "删除 mcp_server:{{name}}？",
+      "deleteConfirmBody": "这将删除服务器注册及所有关联的功能偏好设置。审计和调用日志条目将被保留。",
+      "deleteServer": "删除服务器",
+      "testConnection": "测试连接",
+      "testing": "测试中…",
+      "testFailure": "失败 ({{latency}} ms)：{{error}}",
+      "refresh": "刷新功能列表",
+      "backToResources": "返回资源列表",
+      "tabs": {
+        "overview": "概览",
+        "tools": "工具",
+        "resources": "资源",
+        "prompts": "提示词",
+        "invocations": "调用记录"
+      },
+      "overview": {
+        "config": "配置",
+        "transport": "传输方式",
+        "command": "命令",
+        "url": "URL",
+        "tools": "工具",
+        "resources": "资源",
+        "prompts": "提示词",
+        "lastInvocation": "最近调用",
+        "rawConfig": "原始配置 JSON"
+      },
+      "edit": "编辑"
+    },
+    "capabilities": {
+      "emptyTool": "尚未从此上游发现任何工具。",
+      "emptyResource": "尚未从此上游发现任何资源。",
+      "emptyPrompt": "尚未从此上游发现任何提示词。",
+      "noMatches": "没有能力匹配你的搜索。",
+      "searchPlaceholder": "搜索名称",
+      "statusFilter": "状态",
+      "toggleAria": "切换 {{kind}} {{key}}",
+      "expandSchema": "展开结构",
+      "collapseSchema": "收起结构"
+    },
+    "invocations": {
+      "filter": "全部状态",
+      "empty": "暂无调用记录。",
+      "noMatches": "没有调用记录匹配当前筛选条件。",
+      "emptyHint": "已对接 MCP 客户端发起的能力调用将出现在此处。",
+      "loading": "加载调用记录中…",
+      "loadFailed": "加载调用记录失败",
+      "searchPlaceholder": "搜索调用记录",
+      "filterSearch": "搜索",
+      "filterTime": "时间范围",
+      "filterStatus": "状态",
+      "header": {
+        "time": "时间",
+        "type": "类型",
+        "key": "键名",
+        "duration": "耗时",
+        "status": "状态"
+      },
+      "status": {
+        "ok": "成功",
+        "error": "失败",
+        "timeout": "超时",
+        "denied": "已拒绝"
+      }
+    },
+    "health": {
+      "healthy": "正常",
+      "unknown": "未知",
+      "failing": "异常"
+    },
+    "import": {
+      "jsonLabel": "MCP 服务器 JSON",
+      "jsonHelp": "粘贴 MCP server README 里的那段 JSON —— 标准的 {\"mcpServers\": {…}} 格式。可一次粘贴多个。",
+      "jsonPlaceholder": "{\n  \"mcpServers\": {\n    \"filesystem\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/tmp\"]\n    }\n  }\n}",
+      "parse": "继续",
+      "back": "返回",
+      "import": "导入 {{count}} 个",
+      "review": "确认将要导入的内容",
+      "transport": "传输方式",
+      "env": "环境变量",
+      "noEnv": "无环境变量",
+      "secret": "密钥",
+      "secretHint": "标记为「密钥」的值会存进系统钥匙串,其余留在配置里。",
+      "errInvalidJson": "这不是合法的 JSON。",
+      "errNoServers": "没找到 MCP 服务器。需要 {\"mcpServers\": {…}} 格式。",
+      "errBadServer": "服务器「{{name}}」需要 \"command\"(stdio)或 \"url\"(http)。",
+      "errBadEnvValue": "服务器「{{name}}」的环境变量「{{key}}」必须为字符串。"
+    },
+    "edit": {
+      "title": "编辑 MCP 服务器",
+      "subtitle": "修改该服务器的描述、配置和凭证。",
+      "description": "描述",
+      "descriptionPlaceholder": "这个服务器是做什么的",
+      "config": "配置(JSON)",
+      "configHint": "凭证在下方单独管理,不写在这段 JSON 里。",
+      "credentials": "凭证",
+      "noCredentials": "无凭证。",
+      "addCredential": "添加凭证",
+      "removeCredential": "删除凭证",
+      "credentialKeep": "留空 = 保持不变",
+      "credentialNew": "密钥值",
+      "credentialHint": "凭证值会存进系统钥匙串。移除某个凭证会同时删除它的钥匙串条目。"
+    }
+  },
+  "audit": {
+    "filter": {
+      "time": "时间范围",
+      "actor": "操作者",
+      "all": "全部",
+      "from": "起始",
+      "to": "结束",
+      "search": "搜索",
+      "searchPlaceholder": "搜索活动"
+    },
+    "table": {
+      "time": "时间",
+      "activity": "活动",
+      "actor": "操作者",
+      "sortByTime": "按时间排序"
+    },
+    "emptyState": "没有匹配的审计条目。",
+    "activity": {
+      "resource_created": "注册了 {{resource}}",
+      "resource_updated": "重新配置了 {{resource}}",
+      "resource_enabled": "启用了 {{resource}}",
+      "resource_disabled": "停用了 {{resource}}",
+      "resource_deleted": "删除了 {{resource}}",
+      "capability_first_seen": "发现了{{capType}} {{key}}（{{resource}}）",
+      "capability_enabled": "启用了{{capType}} {{key}}（{{resource}}）",
+      "capability_disabled": "停用了{{capType}} {{key}}（{{resource}}）",
+      "daemon_started": "守护进程已启动",
+      "daemon_stopped": "守护进程已停止",
+      "token_rotated": "已轮换访问令牌",
+      "retention_updated": "更新了数据保留策略",
+      "backup_created": "创建了备份"
+    },
+    "eventLabel": {
+      "resource_created": "注册服务器",
+      "resource_updated": "重配服务器",
+      "resource_enabled": "启用服务器",
+      "resource_disabled": "停用服务器",
+      "resource_deleted": "删除服务器",
+      "capability_first_seen": "发现能力",
+      "capability_enabled": "启用能力",
+      "capability_disabled": "停用能力",
+      "daemon_started": "守护进程启动",
+      "daemon_stopped": "守护进程停止",
+      "token_rotated": "轮换令牌",
+      "retention_updated": "保留策略变更",
+      "backup_created": "创建备份"
+    },
+    "capType": {
+      "tool": "工具",
+      "resource": "资源",
+      "prompt": "提示词"
+    },
+    "actor": {
+      "ui": "用户",
+      "cli": "命令行",
+      "api": "API",
+      "system": "Coffer"
+    },
+    "timeRange": {
+      "1h": "最近 1 小时",
+      "6h": "最近 6 小时",
+      "24h": "最近 24 小时",
+      "7d": "最近 7 天",
+      "30d": "最近 30 天",
+      "all": "全部时间",
+      "custom": "自定义范围…"
+    },
+    "detail": {
+      "time": "记录于",
+      "event": "事件",
+      "resource": "资源",
+      "actor": "操作者",
+      "payload": "详情",
+      "empty": "无额外详情。"
+    },
+    "applyRange": "应用"
+  },
+  "observability": {
+    "title": "审计日志",
+    "subtitle": "记录所有资源和功能的生命周期变更。"
+  },
+  "settings": {
+    "title": "设置",
+    "subtitle": "你的数据、备份与应用设置。",
+    "tabs": {
+      "data": "数据",
+      "app": "应用",
+      "about": "关于"
+    },
+    "retention": {
+      "title": "数据保留",
+      "keepForever": "永久保留",
+      "days": "保留天数",
+      "lastPruned": "上次清理：{{when}}（{{rows}} 行）",
+      "never": "从未",
+      "pruneAll": "立即清理过期数据",
+      "pruning": "清理中…",
+      "pruneDescription": "立即应用当前保留策略。",
+      "pruneResult": "已清理 {{summary}}",
+      "policy": {
+        "audit_log": {
+          "name": "审计日志",
+          "description": "资源生命周期事件。"
+        },
+        "mcp_invocations": {
+          "name": "MCP 调用记录",
+          "description": "MCP 工具 / 资源 / 提示词的调用日志。"
+        }
+      }
+    },
+    "backup": {
+      "title": "数据备份",
+      "description": "把你的全部数据完整保存为一个文件,存放在 ~/.coffer/backups/ 下。",
+      "create": "创建备份",
+      "creating": "备份中…",
+      "saved": "已保存至 {{path}}"
+    },
+    "app": {
+      "autostart": {
+        "title": "开机自启",
+        "label": "登录时自动启动 Coffer"
+      }
+    },
+    "about": {
+      "title": "关于 Coffer",
+      "fields": {
+        "name": "名称",
+        "version": "版本",
+        "license": "许可证",
+        "source": "源代码"
+      }
+    }
+  },
+  "daemon": {
+    "offline": {
+      "title": "守护进程离线",
+      "body": "Coffer 守护进程停止响应。能力列表、工具调用和注册操作将一直失败，直到它重新启动。",
+      "notReadyTitle": "守护进程未启动",
+      "notReadyBody": "Coffer 读不到守护进程的 token，API 暂时不可达。请启动守护进程后刷新页面。",
+      "restart": "重启守护进程",
+      "restarting": "重启中…",
+      "devHint": "coffer daemon start",
+      "reload": "重新加载"
+    }
+  },
+  "notFound": {
+    "title": "页面不存在",
+    "subtitle": "没有路由匹配 {{path}}。",
+    "bodyTitle": "你可能跟着一个过期链接到了这里",
+    "body": "如果是手动输入的 URL，请检查拼写；否则回到资源列表 —— 所有页面都能从侧边栏到达。",
+    "cta": "返回资源列表"
+  },
+  "errors": {
+    "RESOURCE_NOT_FOUND": "资源未找到",
+    "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
+    "UNKNOWN_KIND": "未知资源类型",
+    "CONFIG_INVALID": "配置无效",
+    "TOOL_DISABLED": "该功能已被禁用",
+    "CREDENTIAL_MISSING": "密钥环中缺少所需凭证",
+    "CREDENTIAL_LOCKED": "操作系统密钥环已锁定",
+    "UPSTREAM_UNAVAILABLE": "上游服务器不可达",
+    "UPSTREAM_TIMEOUT": "上游服务器响应超时",
+    "UNKNOWN_PRUNABLE_TABLE": "未知的保留表",
+    "INVALID_PREFIX": "无效的前缀",
+    "INTERNAL_ERROR": "发生意外错误",
+    "UNAUTHENTICATED": "需要认证 —— Coffer 读不到守护进程 token。请运行 `coffer daemon start` 后刷新，或打开桌面应用。",
+    "DAEMON_NOT_READY": "Coffer 守护进程仍在启动，请稍后重试。",
+    "BAD_REQUEST": "请求格式有误，已被拒绝。",
+    "NOT_FOUND": "未找到。",
+    "FORBIDDEN": "无权限执行此操作。"
+  },
+  "pagination": {
+    "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
+    "perPage": "每页",
+    "prev": "上一页",
+    "next": "下一页"
+  },
+  "resourceDetail": {
+    "unknownKind": "未知类型",
+    "unknownKindBody": "没有为类型 {{kind}} 注册前端模块。"
+  }
+}

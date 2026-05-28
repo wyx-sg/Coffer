@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cn } from "./utils";
+import { cn, formatDateTime } from "./utils";
 
 describe("cn", () => {
   it("joins multiple class names with spaces", () => {
@@ -16,5 +16,22 @@ describe("cn", () => {
 
   it("flattens nested arrays via clsx", () => {
     expect(cn(["foo", "bar"], ["baz"])).toBe("foo bar baz");
+  });
+});
+
+describe("formatDateTime", () => {
+  it("formats a valid ISO timestamp as YYYY-MM-DD HH:mm:ss in local time", () => {
+    const result = formatDateTime("2026-05-28T09:30:45Z");
+    // Local-time padded — exact value depends on TZ, but should be 19 chars
+    // matching the YYYY-MM-DD HH:mm:ss shape.
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  });
+
+  it("returns the raw input on an invalid ISO instead of NaN-NaN-NaN NaN:NaN:NaN", () => {
+    expect(formatDateTime("not a date")).toBe("not a date");
+  });
+
+  it("returns the raw input on an empty string", () => {
+    expect(formatDateTime("")).toBe("");
   });
 });

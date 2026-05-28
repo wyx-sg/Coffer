@@ -8,9 +8,10 @@
 
 ## 进行中 (Active)
 
-| #   | Spec                                                          | 状态                          |
-| --- | ------------------------------------------------------------- | ----------------------------- |
-| 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md)) | 已采纳 — 代码已随 PR #14 合并 |
+| #   | Spec                                                               | 状态                          |
+| --- | ------------------------------------------------------------------ | ----------------------------- |
+| 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md))      | 已采纳 — 代码已随 PR #14 合并 |
+| 002 | **UI Shell 与视觉语言** ([spec](../../specs/002-ui-shell/spec.md)) | 已采纳 — 代码已随 PR #23 合并 |
 
 ## 明确不做的事 (当前规范范围内)
 
@@ -31,6 +32,10 @@
   [ADR-001 / ADR-002 中的备选方案讨论](../../docs/decisions/ADR-001-resource-framework-upfront.md)。
 - **工具调用参数或结果的持久化** — 调用日志仅记录「谁 / 何时 / 耗时多久 /
   结果如何」；参数与返回值的内容视为敏感数据，不进数据库。
+
+## 跨规范决策 (Cross-cutting decisions)
+
+- [ADR-008：一切皆 resource kind](../../docs/decisions/ADR-008-everything-is-a-resource-kind.md) — 各 UI 规范共享的侧栏 / IA 架构决策。
 
 ## 本文件如何生长
 

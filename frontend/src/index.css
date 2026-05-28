@@ -2,58 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+   Design tokens for the spec 002 "Coffer warm" visual language.
+
+   Palette is built around a cream paper background (#FAF9F5) and a clay
+   accent (#C96442) — both chosen for an Anthropic / Claude.ai-adjacent feel
+   that signals "calm, considered, local-first" rather than the bright
+   default Tailwind palette. All values are in HSL so tailwind's
+   hsl(var(--token)) consumers work without changes.
+--------------------------------------------------------------------------- */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* warm paper background + near-black ink */
+    --background: 41 36% 96%; /* #FAF9F5 */
+    --foreground: 32 14% 11%; /* #1F1B17 */
+
+    /* white cards float gently above the cream background */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 32 14% 11%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --popover-foreground: 32 14% 11%;
+
+    /* primary = clay accent (#C96442). Used sparingly: primary buttons,
+       active nav, focus rings. Not for body text. */
+    --primary: 14 56% 53%;
+    --primary-foreground: 41 36% 96%;
+
+    /* secondary = warm beige fill (#F0EBE0) for chips / muted buttons */
+    --secondary: 36 28% 91%;
+    --secondary-foreground: 32 14% 11%;
+
+    /* muted = warm grey for sub-text + table rules */
+    --muted: 36 22% 93%;
+    --muted-foreground: 32 8% 39%; /* #6B645A */
+
+    /* accent = clay hover wash, slightly lighter than primary */
+    --accent: 14 56% 95%;
+    --accent-foreground: 14 56% 32%;
+
+    --destructive: 8 49% 47%; /* #A14D3F */
+    --destructive-foreground: 41 36% 96%;
+
+    --border: 36 18% 85%; /* #E8E4DA */
+    --input: 36 18% 85%;
+    --ring: 14 56% 53%; /* clay focus ring */
+
+    /* status hues used by health badges / invocation rows */
+    --status-ok: 130 18% 42%; /* #5B7C5C warm green */
+    --status-warn: 33 60% 43%; /* #B07A2D amber */
+    --status-err: 8 49% 47%; /* #A14D3F */
+
+    --radius: 0.625rem; /* slightly chunkier than shadcn default */
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-  }
+  /* Dark mode is intentionally omitted — see spec 002 §Out of Scope. */
 }
 
 @layer base {
   * {
     @apply border-border;
   }
+  html {
+    /* prevent jump when modal opens */
+    scrollbar-gutter: stable;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-serif tracking-tight;
+    font-feature-settings: "kern", "liga", "calt";
+  }
+}
+
+@layer components {
+  /* Sidebar small-caps group label */
+  .nav-group-label {
+    @apply px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70;
+  }
+
+  /* Subtle paper card with warm shadow */
+  .paper-card {
+    @apply rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(31,27,23,0.04),0_0_0_0.5px_rgba(31,27,23,0.02)];
+  }
+
+  /* Inline code in body copy and connect-a-client snippets */
+  .code-chip {
+    @apply rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-foreground/80;
   }
 }
