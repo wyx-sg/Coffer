@@ -135,6 +135,24 @@ cd desktop && cargo tauri dev
 
 ---
 
+## 7. (Optional) Knowledge base in 30 seconds
+
+Coffer's `knowledge_base` kind turns local files into a searchable RAG corpus your coding agent can hit through the same MCP gateway:
+
+```bash
+coffer kb create design-notes
+coffer kb ingest design-notes ~/work/notes/architecture.md
+coffer kb search design-notes "how does our retry policy work?"
+```
+
+Through any connected MCP client, three built-in tools appear: `coffer__list_knowledge_bases`, `coffer__search_knowledge_base`, `coffer__get_document`. No extra MCP server install.
+
+The default embedding model `BAAI/bge-small-en-v1.5` is downloaded from HuggingFace Hub on first `coffer kb ingest` (~130 MB, cached under `~/.cache/huggingface/`). Run `coffer kb warmup` ahead of time if you want the download to happen during installer setup rather than on the first ingest.
+
+Full walkthrough: [`specs/006-knowledge-base/quickstart.md`](../specs/006-knowledge-base/quickstart.md).
+
+---
+
 ## Troubleshooting
 
 **Daemon won't start**

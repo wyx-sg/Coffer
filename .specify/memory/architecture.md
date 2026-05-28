@@ -37,9 +37,12 @@ described, and curated.
 
 Currently registered kinds:
 
-| Kind         | Spec                                                   | Description                                                                                                                              |
-| ------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `mcp_server` | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md) | A registered upstream MCP server. Carries transport configuration, credential references, and the per-server policies the gateway needs. |
+| Kind             | Spec                                                         | Description                                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp_server`     | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md)       | A registered upstream MCP server. Carries transport configuration, credential references, and the per-server policies the gateway needs.                              |
+| `agent`          | [004-agent-registry](../../specs/004-agent-registry/spec.md) | A registered coding agent (Claude Code, Cursor, Codex CLI, …). Carries the on-disk skill directory and the agent-specific config Coffer needs to drive sync.          |
+| `skill`          | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | A managed AgentSkills-format skill. Canonical copy lives under `~/.coffer/skills/<name>/`; per-agent visibility is delivered through `SyncEngine` link/copy bindings. |
+| `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | A local RAG corpus. Documents under `~/.coffer/kb/<name>/raw/`, index under `index/`; LlamaIndex confined to the infrastructure adapter.                              |
 
 ## Code layout
 
@@ -105,13 +108,14 @@ token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or
 
 ## Cross-cutting concerns
 
-| Concern     | Location                                                                         | Notes                                                                                                        |
-| ----------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Credentials | `infrastructure/credentials/keyring_adapter.py`                                  | Only file allowed to import `keyring`. Refs in config; materialized at upstream-spawn time; never persisted. |
-| Audit       | `domain/audit.py` + `application/audit_service.py` + `audit_log` table           | Every resource lifecycle change. Actor (cli / api / ui / system) required.                                   |
-| Retention   | `application/retention_service.py` + `retention_policies` table + asyncio worker | Each log-style table registers as a `PrunableTable`; central registry enforces SQL allowlist.                |
-| Errors      | `domain/errors.py` + FastAPI global handlers                                     | Uniform `{error: {code, message, details}}` envelope; `X-Coffer-Trace` header for correlation.               |
-| Logging     | `structlog` JSON-per-line to `~/.coffer/logs/`                                   | Per-request trace IDs via contextvar.                                                                        |
+| Concern       | Location                                                                                         | Notes                                                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Credentials   | `infrastructure/credentials/keyring_adapter.py`                                                  | Only file allowed to import `keyring`. Refs in config; materialized at upstream-spawn time; never persisted.                                                       |
+| Audit         | `domain/audit.py` + `application/audit_service.py` + `audit_log` table                           | Every resource lifecycle change. Actor (cli / api / ui / system) required.                                                                                         |
+| Retention     | `application/retention_service.py` + `retention_policies` table + asyncio worker                 | Each log-style table registers as a `PrunableTable`; central registry enforces SQL allowlist.                                                                      |
+| Errors        | `domain/errors.py` + FastAPI global handlers                                                     | Uniform `{error: {code, message, details}}` envelope; `X-Coffer-Trace` header for correlation.                                                                     |
+| Logging       | `structlog` JSON-per-line to `~/.coffer/logs/`                                                   | Per-request trace IDs via contextvar.                                                                                                                              |
+| Observability | `application/observability/` (`Tracer` port) + `infrastructure/observability/langfuse_tracer.py` | Default tracer is a no-op; LangFuse adapter activates lazily when `LANGFUSE_PUBLIC_KEY` is set. Extracted in spec 006; second consumer is anticipated in spec 007. |
 
 ## Distribution
 

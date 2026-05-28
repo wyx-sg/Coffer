@@ -27,12 +27,17 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from coffer.application.builtin_tools import (
+    COFFER_TOOL_PREFIX,
+    BuiltinToolRegistry,
+)
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway_aggregate_lists import (
     list_prompts_across,
     list_resources_across,
     list_tools_across,
 )
+from coffer.application.mcp.gateway_builtin import dispatch_builtin_tool
 from coffer.application.mcp.gateway_handlers import (
     handle_prompts_get,
     handle_resources_read,
@@ -82,6 +87,7 @@ class MCPGatewaySession:
         downstream_sink: NotificationSink | None = None,
         *,
         clock: Callable[[], datetime] | None = None,
+        builtin_tools: BuiltinToolRegistry | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._resources = resource_service
@@ -91,6 +97,7 @@ class MCPGatewaySession:
         self._invocations = invocations
         self._downstream_sink = downstream_sink
         self._clock = clock or (lambda: datetime.now(tz=UTC))
+        self._builtin = builtin_tools or BuiltinToolRegistry()
         self._initialized = False
         # Track which servers we've subscribed to notifications on so we
         # only attach the handler once per (session, server) pair.
@@ -191,9 +198,19 @@ class MCPGatewaySession:
     # module's header for the per-server budget + parallelism rationale.
 
     async def _handle_tools_list(self) -> dict[str, Any]:
-        return await list_tools_across(
+        result = await list_tools_across(
             self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
         )
+        # Append Coffer's own built-in tools (spec 006: search_knowledge_base, ...).
+        for bt in self._builtin.list():
+            result["tools"].append(
+                {
+                    "name": f"{COFFER_TOOL_PREFIX}{bt.name}",
+                    "description": bt.description,
+                    "inputSchema": bt.input_schema,
+                }
+            )
+        return result
 
     async def _handle_resources_list(self) -> dict[str, Any]:
         return await list_resources_across(
@@ -216,6 +233,16 @@ class MCPGatewaySession:
         self._notification_subscriptions.discard(server_name)
 
     async def _handle_tools_call(self, params: dict[str, Any]) -> Any:
+        name = str(params.get("name") or "")
+        if self._builtin.is_builtin(name):
+            return await dispatch_builtin_tool(
+                prefixed_name=name,
+                params=params,
+                builtin=self._builtin,
+                invocations=self._invocations,
+                session_id=self.id,
+                clock=self._clock,
+            )
         return await handle_tools_call(
             params,
             resources=self._resources,

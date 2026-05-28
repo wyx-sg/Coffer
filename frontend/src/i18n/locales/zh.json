@@ -387,5 +387,11 @@
     "source": "来源",
     "bindings": "绑定（agent+ 已启用 / - 已禁用）",
     "removeConfirm": "确定删除 skill:{{name}}？会清除主存储和所有 agent 端链接。"
+  },
+  "knowledgeBases": {
+    "title": "知识库",
+    "subtitle": "本地文档集合，你的 agent 可通过 MCP 网关检索。",
+    "add": "新建知识库",
+    "empty": "还没有知识库。先创建一个，再上传文档供 agent 检索。"
   }
 }

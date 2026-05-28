@@ -38,6 +38,9 @@ class AuditEventType(StrEnum):
     SKILL_BOUND = "skill_bound"
     SKILL_UNBOUND = "skill_unbound"
     SKILL_DRIFT_DETECTED = "skill_drift_detected"
+    # spec 006-knowledge-base
+    KB_DOCUMENT_INGESTED = "kb_document_ingested"
+    KB_DOCUMENT_DELETED = "kb_document_deleted"
 
 
 @dataclass

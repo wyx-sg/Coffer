@@ -40,9 +40,12 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 
 当前已注册的 kind：
 
-| Kind         | Spec                                                   | 描述                                                                                                  |
-| ------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `mcp_server` | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md) | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。 |
+| Kind             | Spec                                                         | 描述                                                                                                                                          |
+| ---------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp_server`     | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md)       | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。                                         |
+| `agent`          | [004-agent-registry](../../specs/004-agent-registry/spec.md) | 一个已注册的编码 agent（Claude Code、Cursor、Codex CLI …）。承载该 agent 的本地 skill 目录及 Coffer 驱动同步所需的 agent 专属配置。           |
+| `skill`          | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | 一个被管理的 AgentSkills 格式 skill。规范副本放在 `~/.coffer/skills/<name>/`；各 agent 的可见性通过 `SyncEngine` 的链接 / 拷贝 binding 投递。 |
+| `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | 一个本地 RAG 语料库。文档落在 `~/.coffer/kb/<name>/raw/`、索引落在 `index/`；LlamaIndex 仅出现在 infrastructure adapter 中。                  |
 
 ## 代码布局 (Code layout)
 
@@ -107,13 +110,14 @@ import 副作用。
 
 ## 跨层关注点 (Cross-cutting concerns)
 
-| 关注点   | 位置                                                                          | 备注                                                                                 |
-| -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| 凭据     | `infrastructure/credentials/keyring_adapter.py`                               | 唯一可 import `keyring` 的文件。配置里只放 ref；在上游进程拉起时按需物化；永不落盘。 |
-| 审计     | `domain/audit.py` + `application/audit_service.py` + `audit_log` 表           | 覆盖每一次资源生命周期变更。必须带 actor (cli / api / ui / system)。                 |
-| 保留策略 | `application/retention_service.py` + `retention_policies` 表 + asyncio worker | 每个日志类表注册为 `PrunableTable`；中央注册表强制执行 SQL allowlist。               |
-| 错误     | `domain/errors.py` + FastAPI 全局处理器                                       | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。   |
-| 日志     | `structlog` 以 JSON-per-line 写入 `~/.coffer/logs/`                           | 通过 contextvar 实现按请求级别的 trace ID。                                          |
+| 关注点   | 位置                                                                                             | 备注                                                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 凭据     | `infrastructure/credentials/keyring_adapter.py`                                                  | 唯一可 import `keyring` 的文件。配置里只放 ref；在上游进程拉起时按需物化；永不落盘。                                               |
+| 审计     | `domain/audit.py` + `application/audit_service.py` + `audit_log` 表                              | 覆盖每一次资源生命周期变更。必须带 actor (cli / api / ui / system)。                                                               |
+| 保留策略 | `application/retention_service.py` + `retention_policies` 表 + asyncio worker                    | 每个日志类表注册为 `PrunableTable`；中央注册表强制执行 SQL allowlist。                                                             |
+| 错误     | `domain/errors.py` + FastAPI 全局处理器                                                          | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。                                                 |
+| 日志     | `structlog` 以 JSON-per-line 写入 `~/.coffer/logs/`                                              | 通过 contextvar 实现按请求级别的 trace ID。                                                                                        |
+| 可观测性 | `application/observability/`（`Tracer` 端口）+ `infrastructure/observability/langfuse_tracer.py` | 默认 tracer 为 no-op；设置 `LANGFUSE_PUBLIC_KEY` 时按需懒加载 LangFuse adapter。在 spec 006 中抽取；预期 spec 007 是第二个消费者。 |
 
 ## 分发 (Distribution)
 

@@ -387,5 +387,11 @@
     "source": "Source",
     "bindings": "Bindings (agent+enabled / -disabled)",
     "removeConfirm": "Really remove skill:{{name}}? This deletes the master folder and all per-agent links."
+  },
+  "knowledgeBases": {
+    "title": "Knowledge bases",
+    "subtitle": "Local document collections your agents can search through the MCP gateway.",
+    "add": "New knowledge base",
+    "empty": "No knowledge bases yet. Create one, then upload documents your agents can search."
   }
 }

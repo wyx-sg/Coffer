@@ -146,3 +146,40 @@ class UpdateNotSupported(CofferError):  # noqa: N818
     """Raised when attempting to update a non-updatable source (e.g., local_import)."""
 
     code = "UPDATE_NOT_SUPPORTED"
+
+
+# --- knowledge_base kind (spec 006) -----------------------------------------
+
+
+class KBNotFound(CofferError):  # noqa: N818
+    code = "KB_NOT_FOUND"
+
+    def __init__(self, kb_name: str) -> None:
+        super().__init__(f"knowledge base not found: {kb_name!r}")
+        self.kb_name = kb_name
+
+
+class DocumentNotFound(CofferError):  # noqa: N818
+    code = "DOCUMENT_NOT_FOUND"
+
+    def __init__(self, kb_name: str, document_id: str) -> None:
+        super().__init__(f"document not found: {kb_name}:{document_id}")
+        self.kb_name = kb_name
+        self.document_id = document_id
+
+
+class IngestRejected(CofferError):  # noqa: N818
+    code = "INGEST_REJECTED"
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+class EngineUnavailable(CofferError):  # noqa: N818
+    code = "ENGINE_UNAVAILABLE"
+
+    def __init__(self, engine: str, detail: str) -> None:
+        super().__init__(f"{engine} engine unavailable: {detail}")
+        self.engine = engine
+        self.detail = detail

@@ -137,6 +137,24 @@ cd desktop && cargo tauri dev
 
 ---
 
+## 7.（可选）30 秒上手知识库
+
+Coffer 的 `knowledge_base` kind 把本地文件变成一个可检索的 RAG 语料库，编码 agent 可通过同一个 MCP 网关使用：
+
+```bash
+coffer kb create design-notes
+coffer kb ingest design-notes ~/work/notes/architecture.md
+coffer kb search design-notes "how does our retry policy work?"
+```
+
+任何已接入的 MCP 客户端都会自动获得三个内置工具：`coffer__list_knowledge_bases`、`coffer__search_knowledge_base`、`coffer__get_document`，无需额外安装 MCP 服务器。
+
+默认 embedding 模型 `BAAI/bge-small-en-v1.5` 会在首次 `coffer kb ingest` 时从 HuggingFace Hub 下载（约 130 MB，缓存到 `~/.cache/huggingface/`）。希望把下载提前到安装器步骤里完成，可以先跑 `coffer kb warmup` 触发离线预热。
+
+完整流程见：[`specs/006-knowledge-base/quickstart.md`](../specs/006-knowledge-base/quickstart.md)。
+
+---
+
 ## 故障排查
 
 **守护进程起不来**

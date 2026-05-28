@@ -1,0 +1,394 @@
+openapi: 3.0.3
+info:
+  title: Coffer — Knowledge Base API
+  version: 0.1.0
+  description: |
+    REST surface for the `knowledge_base` resource kind. Spec 006.
+    All routes are loopback-only and require the daemon's auth token
+    (`Authorization: Bearer <token>` from `~/.coffer/daemon.json`).
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Local daemon (default port; actual port read from daemon.json)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/knowledge_bases:
+    post:
+      summary: Create a new knowledge base
+      description: |
+        Convenience endpoint equivalent to `POST /api/v1/resources` with kind="knowledge_base".
+        Returns the created Resource as a `KnowledgeBaseOut`.
+      operationId: createKnowledgeBase
+      tags: [knowledge_bases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeBaseCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeBaseOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/AlreadyExists"
+
+    get:
+      summary: List knowledge bases
+      operationId: listKnowledgeBases
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeBaseListOut"
+
+  /api/v1/knowledge_bases/{name}:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+    get:
+      summary: Get one knowledge base
+      operationId: getKnowledgeBase
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeBaseOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge_bases/{name}/documents:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+
+    post:
+      summary: Upload and ingest a document
+      operationId: ingestDocument
+      tags: [knowledge_bases]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                replace:
+                  type: boolean
+                  default: false
+                  description: If true, an existing document with the same content hash is replaced.
+      responses:
+        "201":
+          description: Document ingested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Duplicate document hash without replace=true
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorOut"
+        "413":
+          description: Document exceeds size limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorOut"
+        "503":
+          description: KB engine unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorOut"
+
+    get:
+      summary: List documents in a knowledge base
+      operationId: listDocuments
+      tags: [knowledge_bases]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentListOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge_bases/{name}/documents/{document_id}:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+      - in: path
+        name: document_id
+        required: true
+        schema: { type: string }
+
+    get:
+      summary: Get a document's metadata and extracted text
+      operationId: getDocument
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentDetailOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      summary: Delete a document
+      operationId: deleteDocument
+      tags: [knowledge_bases]
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge_bases/{name}/search:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+    post:
+      summary: Search a knowledge base
+      operationId: searchKnowledgeBase
+      tags: [knowledge_bases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: KB engine unavailable
+
+  /api/v1/knowledge_bases/{name}/metrics:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+    get:
+      summary: KB on-disk and document-count metrics
+      operationId: getKnowledgeBaseMetrics
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeBaseMetrics"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    KBName:
+      in: path
+      name: name
+      required: true
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorOut"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorOut"
+    AlreadyExists:
+      description: Resource with the same name already exists
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorOut"
+
+  schemas:
+    KnowledgeBaseCreate:
+      type: object
+      required: [name, config]
+      properties:
+        name: { type: string }
+        description: { type: string, nullable: true }
+        config:
+          $ref: "#/components/schemas/KnowledgeBaseConfig"
+
+    KnowledgeBaseConfig:
+      type: object
+      required: [embedding_model]
+      properties:
+        embedding_model:
+          type: string
+          example: BAAI/bge-small-en-v1.5
+        chunk_size:
+          type: integer
+          minimum: 64
+          maximum: 2048
+          default: 512
+        chunk_overlap:
+          type: integer
+          minimum: 0
+          maximum: 1024
+          default: 64
+        max_document_bytes:
+          type: integer
+          minimum: 1024
+          maximum: 104857600
+          default: 26214400
+
+    KnowledgeBaseOut:
+      type: object
+      required: [ref, name, kind, config, enabled, created_at, updated_at]
+      properties:
+        ref: { type: string, example: "knowledge_base:design-notes" }
+        kind: { type: string, example: knowledge_base }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        config:
+          $ref: "#/components/schemas/KnowledgeBaseConfig"
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    KnowledgeBaseListOut:
+      type: object
+      required: [knowledge_bases]
+      properties:
+        knowledge_bases:
+          type: array
+          items:
+            $ref: "#/components/schemas/KnowledgeBaseOut"
+
+    DocumentOut:
+      type: object
+      required:
+        [
+          id,
+          kb_name,
+          filename,
+          extension,
+          size_bytes,
+          sha256,
+          chunk_count,
+          ingested_at,
+        ]
+      properties:
+        id: { type: string }
+        kb_name: { type: string }
+        filename: { type: string }
+        extension: { type: string, example: ".md" }
+        size_bytes: { type: integer }
+        sha256: { type: string }
+        chunk_count: { type: integer }
+        ingested_at: { type: string, format: date-time }
+
+    DocumentListOut:
+      type: object
+      required: [documents, total]
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentOut"
+        total: { type: integer }
+
+    DocumentDetailOut:
+      allOf:
+        - $ref: "#/components/schemas/DocumentOut"
+        - type: object
+          required: [text]
+          properties:
+            text: { type: string }
+
+    SearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string, minLength: 1, maxLength: 4096 }
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+
+    SearchHit:
+      type: object
+      required: [text, document_id, filename, score, position]
+      properties:
+        text: { type: string }
+        document_id: { type: string }
+        filename: { type: string }
+        score: { type: number, format: float }
+        position: { type: integer }
+
+    SearchResponse:
+      type: object
+      required: [hits]
+      properties:
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchHit"
+
+    KnowledgeBaseMetrics:
+      type: object
+      required: [document_count, disk_bytes]
+      properties:
+        document_count: { type: integer }
+        disk_bytes: { type: integer }
+
+    ErrorOut:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
+        detail: { type: object, additionalProperties: true }

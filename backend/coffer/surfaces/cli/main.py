@@ -9,6 +9,7 @@ from coffer.surfaces.cli import (
     audit_cmd,
     daemon_cmd,
     keychain_cmd,
+    knowledge_base_cmd,
     resource_cmd,
     retention_cmd,
     skill_cmd,
@@ -41,6 +42,7 @@ app.add_typer(mcp_cmd.app, name="mcp")
 app.add_typer(keychain_cmd.app, name="keychain")
 app.add_typer(agent_cmd.app, name="agent")
 app.add_typer(skill_cmd.app, name="skill")
+app.add_typer(knowledge_base_cmd.app, name="kb")
 
 
 def run() -> None:
