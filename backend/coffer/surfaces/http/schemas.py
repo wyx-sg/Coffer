@@ -92,7 +92,8 @@ class RetentionPolicyUpdate(BaseModel):
     retention_days: int | None = Field(
         default=None,
         ge=1,
-        description="Null = keep forever; positive integer = day count.",
+        le=3650,
+        description="Null = keep forever; 1..3650 days otherwise.",
     )
 
 

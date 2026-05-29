@@ -84,7 +84,7 @@ class _StubDiscovery:
     def invalidate(self, server_name: str) -> None:
         self._invalidated.add(server_name)
 
-    async def list_tools(self, server_name: str) -> list[Any]:
+    async def list_tools(self, server_name: str, *, include_disabled: bool = False) -> list[Any]:
         from coffer.application.mcp.discovery import DiscoveredTool
 
         return [
@@ -97,7 +97,9 @@ class _StubDiscovery:
             )
         ]
 
-    async def list_resources(self, server_name: str) -> list[Any]:
+    async def list_resources(
+        self, server_name: str, *, include_disabled: bool = False
+    ) -> list[Any]:
         from coffer.application.mcp.discovery import DiscoveredResource
 
         return [
@@ -111,7 +113,7 @@ class _StubDiscovery:
             )
         ]
 
-    async def list_prompts(self, server_name: str) -> list[Any]:
+    async def list_prompts(self, server_name: str, *, include_disabled: bool = False) -> list[Any]:
         return []
 
 

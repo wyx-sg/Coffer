@@ -284,12 +284,15 @@ async def test_enable_disable_capability_flips_preference(
             )
             assert r.status_code == 204, r.text
 
-            # List again — write_file should be gone (discovery filters disabled)
+            # List again — write_file is still present but marked disabled.
+            # The management endpoint returns every capability with its
+            # enabled flag so the UI can show and re-enable disabled ones;
+            # only the gateway's client-facing list hides disabled tools.
             r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
             assert r.status_code == 200
-            tool_names = {t["prefixed_name"] for t in r.json()["tools"]}
-            assert "fs__write_file" not in tool_names
-            assert "fs__read_file" in tool_names
+            tools_by_name = {t["prefixed_name"]: t for t in r.json()["tools"]}
+            assert tools_by_name["fs__write_file"]["enabled"] is False
+            assert tools_by_name["fs__read_file"]["enabled"] is True
 
             # Re-enable write_file
             r = await client.post(
@@ -297,11 +300,11 @@ async def test_enable_disable_capability_flips_preference(
             )
             assert r.status_code == 204, r.text
 
-            # Invalidate cache and re-list
+            # Invalidate cache and re-list — write_file is enabled again
             r = await client.post("/api/v1/resources/mcp_server/fs/refresh")
             assert r.status_code == 200
-            tool_names = {t["prefixed_name"] for t in r.json()["tools"]}
-            assert "fs__write_file" in tool_names
+            tools_by_name = {t["prefixed_name"]: t for t in r.json()["tools"]}
+            assert tools_by_name["fs__write_file"]["enabled"] is True
     finally:
         await supervisor.dispose()
         await engine.dispose()
@@ -383,13 +386,14 @@ async def test_refresh_invalidates_cache_and_returns_fresh_list(
                 "/api/v1/resources/mcp_server/fs/capabilities/tool/write_file/disable"
             )
 
-            # Refresh: invalidates cache, re-queries, re-applies preferences
+            # Refresh: invalidates cache, re-queries, re-applies preferences.
+            # Both tools come back; the disabled preference persists through
+            # the refresh and surfaces as enabled=false (not filtered out).
             r = await client.post("/api/v1/resources/mcp_server/fs/refresh")
             assert r.status_code == 200
-            # write_file disabled → still filtered out
-            tool_names = {t["prefixed_name"] for t in r.json()["tools"]}
-            assert "fs__write_file" not in tool_names
-            assert "fs__read_file" in tool_names
+            tools_by_name = {t["prefixed_name"]: t for t in r.json()["tools"]}
+            assert tools_by_name["fs__write_file"]["enabled"] is False
+            assert tools_by_name["fs__read_file"]["enabled"] is True
     finally:
         await supervisor.dispose()
         await engine.dispose()

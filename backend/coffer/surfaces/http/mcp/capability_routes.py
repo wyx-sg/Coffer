@@ -61,13 +61,20 @@ async def list_capabilities(
     name: str,
     discovery: CapabilityDiscovery = Depends(get_capability_discovery),  # noqa: B008
 ) -> CapabilityListOut:
-    """Return the live (cache-aware) capability list for one MCP server."""
-    try:
-        tools = await discovery.list_tools(name)
-        resources = await discovery.list_resources(name)
-        prompts = await discovery.list_prompts(name)
-    except UpstreamUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
+    """Return the live (cache-aware) capability list for one MCP server.
+
+    This is the management surface: it returns every discovered capability
+    with its ``enabled`` flag (including disabled ones) so the UI can show
+    and re-enable them. The gateway's client-facing ``tools/list`` uses the
+    default ``include_disabled=False`` path to hide disabled capabilities.
+
+    ``UpstreamUnavailable`` propagates to the domain error handler, which
+    surfaces the ``UPSTREAM_UNAVAILABLE`` envelope code (one dead upstream),
+    rather than the misleading ``DAEMON_NOT_READY`` a bare 503 would yield.
+    """
+    tools = await discovery.list_tools(name, include_disabled=True)
+    resources = await discovery.list_resources(name, include_disabled=True)
+    prompts = await discovery.list_prompts(name, include_disabled=True)
     return CapabilityListOut(
         server_name=name,
         tools=[

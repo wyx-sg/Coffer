@@ -1,10 +1,12 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // ESM-compatible equivalents of __dirname / __filename
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const ROOT = path.resolve(__dirname, "..");
 
 export default defineConfig({
   fullyParallel: false, // sequential — all tests share the same daemon instance
@@ -27,9 +29,39 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       cwd: __dirname,
     },
+    {
+      // Vite dev server pointed at the e2e daemon.
+      // IMPORTANT: reuseExistingServer is intentionally false (even in local
+      // dev) for the Vite entry.  A reused `make dev` Vite instance lacks
+      // VITE_COFFER_BASE_URL, so the app silently falls back to port 8000
+      // (no daemon there) and all API calls fail with "Failed to fetch".
+      // The daemon entry above still reuses to avoid TCP TIME_WAIT delays;
+      // Vite starts quickly enough that a fresh start per run is fine.
+      command: "npm run dev -- --port 5173",
+      url: "http://localhost:5173",
+      timeout: 60_000,
+      reuseExistingServer: false,
+      cwd: path.join(ROOT, "frontend"),
+      env: {
+        VITE_COFFER_BASE_URL: "http://127.0.0.1:18000/api/v1",
+      },
+    },
   ],
 
   projects: [
+    // -----------------------------------------------------------------------
+    // web — browser-driven acceptance tests for the Coffer frontend UI
+    // -----------------------------------------------------------------------
+    {
+      name: "web",
+      testDir: "./web/specs",
+      use: {
+        baseURL: "http://localhost:5173",
+        trace: "retain-on-failure",
+        screenshot: "only-on-failure",
+        ...devices["Desktop Chrome"],
+      },
+    },
     // -----------------------------------------------------------------------
     // mcp — cross-process acceptance tests for the MCP gateway
     // No browser needed: tests spawn OS subprocesses (daemon + shim) directly.
@@ -39,10 +71,5 @@ export default defineConfig({
       testDir: "./mcp/specs",
       // No browser; `page` fixture is unavailable in these tests.
     },
-    // NOTE: the browser-driven `web` project + its Vite webServer were removed
-    // (CODE-044). The frontend UI is a separate follow-up spec; the old
-    // `web` project pointed at a testDir that no longer exists and silently
-    // collected zero tests, giving false green. Re-add both together with the
-    // web-UI spec.
   ],
 });

@@ -1,0 +1,354 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "loading": "Loading…",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "saving": "Saving…",
+    "deleting": "Deleting…",
+    "retry": "Retry",
+    "clear": "Clear"
+  },
+  "nav": {
+    "aria": {
+      "primary": "Primary navigation"
+    },
+    "group": {
+      "resources": "Resources",
+      "system": "System"
+    },
+    "mcpServers": "MCP servers",
+    "observability": "Audit log",
+    "settings": "Settings",
+    "language": "Language",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
+  },
+  "resources": {
+    "title": "MCP servers",
+    "subtitle": "Upstream MCP servers Coffer aggregates and re-exposes through a single shim.",
+    "addServer": "Add MCP server",
+    "all": "All",
+    "loadFailed": "Failed to load resources",
+    "welcome": {
+      "title": "A local-first vault for the AI assets your editors share",
+      "body": "Register your first MCP server below — Coffer keeps it running locally and re-exposes its tools to every connected client (Claude Code, Claude Desktop, Cursor) under one namespace.",
+      "featureAggregate": {
+        "title": "Aggregate, don't fragment",
+        "body": "One client connection covers every upstream MCP server you register."
+      },
+      "featureCurate": {
+        "title": "Curate, don't dump",
+        "body": "Per-capability toggles persist across daemon restarts and upstream upgrades."
+      },
+      "featureLocal": {
+        "title": "Local-first",
+        "body": "The vault binds 127.0.0.1; nothing leaves your machine without an explicit surface."
+      }
+    },
+    "search": "Search name",
+    "statusFilter": "Status",
+    "status": {
+      "all": "All",
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    },
+    "noMatches": "No servers match your search."
+  },
+  "mcp": {
+    "server": {
+      "addTitle": "Add MCP server",
+      "addSubtitle": "Register an upstream MCP server — Coffer starts it on first use and re-exposes its tools.",
+      "deleteConfirmTitle": "Delete mcp_server:{{name}}?",
+      "deleteConfirmBody": "This removes the server registration and all associated capability preferences. The audit + invocation log entries are preserved.",
+      "deleteServer": "Delete server",
+      "testConnection": "Test connection",
+      "testing": "Testing…",
+      "testFailure": "FAIL ({{latency}} ms): {{error}}",
+      "refresh": "Refresh capabilities",
+      "backToResources": "Back to resources",
+      "tabs": {
+        "overview": "Overview",
+        "tools": "Tools",
+        "resources": "Resources",
+        "prompts": "Prompts",
+        "invocations": "Invocations"
+      },
+      "overview": {
+        "config": "Configuration",
+        "transport": "Transport",
+        "command": "Command",
+        "url": "URL",
+        "tools": "Tools",
+        "resources": "Resources",
+        "prompts": "Prompts",
+        "lastInvocation": "Last invocation",
+        "rawConfig": "Raw config JSON"
+      },
+      "edit": "Edit"
+    },
+    "capabilities": {
+      "emptyTool": "No tools discovered from this upstream yet.",
+      "emptyResource": "No resources discovered from this upstream yet.",
+      "emptyPrompt": "No prompts discovered from this upstream yet.",
+      "noMatches": "No capabilities match your search.",
+      "searchPlaceholder": "Search by name",
+      "statusFilter": "Status",
+      "toggleAria": "Toggle {{kind}} {{key}}",
+      "expandSchema": "Expand schema",
+      "collapseSchema": "Collapse schema"
+    },
+    "invocations": {
+      "filter": "All statuses",
+      "empty": "No invocations yet.",
+      "noMatches": "No invocations match your filters.",
+      "emptyHint": "Capabilities called by any connected MCP client will appear here.",
+      "loading": "Loading invocations…",
+      "loadFailed": "Failed to load invocations",
+      "searchPlaceholder": "Search invocations",
+      "filterSearch": "Search",
+      "filterTime": "Time range",
+      "filterStatus": "Status",
+      "header": {
+        "time": "Time",
+        "type": "Type",
+        "key": "Key",
+        "duration": "Duration",
+        "status": "Status"
+      },
+      "status": {
+        "ok": "OK",
+        "error": "Error",
+        "timeout": "Timeout",
+        "denied": "Denied"
+      }
+    },
+    "health": {
+      "healthy": "healthy",
+      "unknown": "unknown",
+      "failing": "failing"
+    },
+    "import": {
+      "jsonLabel": "MCP server JSON",
+      "jsonHelp": "Paste the JSON from an MCP server's README — the standard {\"mcpServers\": {…}} format. Multiple servers are imported at once.",
+      "jsonPlaceholder": "{\n  \"mcpServers\": {\n    \"filesystem\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/tmp\"]\n    }\n  }\n}",
+      "parse": "Continue",
+      "back": "Back",
+      "import": "Import {{count}}",
+      "review": "Review what will be imported",
+      "transport": "Transport",
+      "env": "Environment variables",
+      "noEnv": "No environment variables",
+      "secret": "Secret",
+      "secretHint": "Values marked Secret go to the OS keychain; the rest stay in the config.",
+      "errInvalidJson": "That's not valid JSON.",
+      "errNoServers": "Couldn't find an MCP server. Expected the {\"mcpServers\": {…}} format.",
+      "errBadServer": "Server \"{{name}}\" needs a \"command\" (stdio) or a \"url\" (http).",
+      "errBadEnvValue": "Server \"{{name}}\" env variable \"{{key}}\" must be a string.",
+      "errEnvNotObject": "Server \"{{name}}\" env must be an object of string values."
+    },
+    "edit": {
+      "title": "Edit MCP server",
+      "subtitle": "Update this server's description, configuration, and credentials.",
+      "description": "Description",
+      "descriptionPlaceholder": "What is this server for?",
+      "config": "Configuration (JSON)",
+      "configHint": "Credentials are managed below, not in this JSON.",
+      "credentials": "Credentials",
+      "noCredentials": "No credentials.",
+      "addCredential": "Add credential",
+      "removeCredential": "Remove credential",
+      "credentialKeep": "Leave blank to keep",
+      "credentialNew": "Secret value",
+      "credentialHint": "Credential values go to the OS keychain. Removing a credential deletes its keychain entry.",
+      "errRenameNeedsValue": "Re-enter the secret value for \"{{name}}\" to rename it."
+    }
+  },
+  "audit": {
+    "filter": {
+      "time": "Time range",
+      "actor": "Actor",
+      "all": "All",
+      "from": "From",
+      "to": "To",
+      "search": "Search",
+      "searchPlaceholder": "Search activity"
+    },
+    "table": {
+      "time": "Time",
+      "activity": "Activity",
+      "actor": "Actor",
+      "sortByTime": "Sort by time"
+    },
+    "emptyState": "No matching audit entries.",
+    "activity": {
+      "resource_created": "Registered {{resource}}",
+      "resource_updated": "Reconfigured {{resource}}",
+      "resource_enabled": "Enabled {{resource}}",
+      "resource_disabled": "Disabled {{resource}}",
+      "resource_deleted": "Removed {{resource}}",
+      "capability_first_seen": "Discovered {{capType}} {{key}} on {{resource}}",
+      "capability_enabled": "Enabled {{capType}} {{key}} on {{resource}}",
+      "capability_disabled": "Disabled {{capType}} {{key}} on {{resource}}",
+      "daemon_started": "Daemon started",
+      "daemon_stopped": "Daemon stopped",
+      "token_rotated": "Access token rotated",
+      "retention_updated": "Updated a data-retention policy",
+      "backup_created": "Created a backup",
+      "keychain_set": "Stored a credential",
+      "keychain_deleted": "Removed a credential"
+    },
+    "eventLabel": {
+      "resource_created": "Server registered",
+      "resource_updated": "Server reconfigured",
+      "resource_enabled": "Server enabled",
+      "resource_disabled": "Server disabled",
+      "resource_deleted": "Server removed",
+      "capability_first_seen": "Capability discovered",
+      "capability_enabled": "Capability enabled",
+      "capability_disabled": "Capability disabled",
+      "daemon_started": "Daemon started",
+      "daemon_stopped": "Daemon stopped",
+      "token_rotated": "Token rotated",
+      "retention_updated": "Retention changed",
+      "backup_created": "Backup created",
+      "keychain_set": "Credential stored",
+      "keychain_deleted": "Credential removed"
+    },
+    "capType": {
+      "tool": "tool",
+      "resource": "resource",
+      "prompt": "prompt"
+    },
+    "actor": {
+      "ui": "User",
+      "cli": "CLI",
+      "api": "API",
+      "system": "Coffer"
+    },
+    "timeRange": {
+      "1h": "Last 1 hour",
+      "6h": "Last 6 hours",
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "all": "All time",
+      "custom": "Custom range…"
+    },
+    "detail": {
+      "time": "Recorded",
+      "event": "Event",
+      "resource": "Resource",
+      "actor": "Actor",
+      "payload": "Details",
+      "empty": "No additional details."
+    },
+    "applyRange": "Apply"
+  },
+  "observability": {
+    "title": "Audit log",
+    "subtitle": "Every lifecycle change to any resource or capability."
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Your data, backups, and app preferences.",
+    "tabs": {
+      "data": "Data",
+      "app": "App",
+      "about": "About"
+    },
+    "retention": {
+      "title": "Data retention",
+      "keepForever": "Keep forever",
+      "days": "Retention (days)",
+      "lastPruned": "Last pruned: {{when}} ({{rows}} rows)",
+      "never": "never",
+      "pruneAll": "Clear expired data now",
+      "pruning": "Pruning…",
+      "pruneDescription": "Apply the current retention policies immediately.",
+      "pruneResult": "Pruned {{summary}}",
+      "policy": {
+        "audit_log": {
+          "name": "Audit log",
+          "description": "Resource lifecycle events."
+        },
+        "mcp_invocations": {
+          "name": "MCP invocations",
+          "description": "MCP tool/resource/prompt invocation log."
+        }
+      }
+    },
+    "backup": {
+      "title": "Data backup",
+      "description": "Save a complete copy of your data to a single file under ~/.coffer/backups/.",
+      "create": "Create backup",
+      "creating": "Backing up…",
+      "saved": "Saved to {{path}}"
+    },
+    "app": {
+      "autostart": {
+        "title": "Launch at Login",
+        "label": "Start Coffer automatically when you log in"
+      }
+    },
+    "about": {
+      "title": "About Coffer",
+      "fields": {
+        "name": "Name",
+        "version": "Version",
+        "license": "License",
+        "source": "Source"
+      }
+    }
+  },
+  "daemon": {
+    "offline": {
+      "title": "Daemon offline",
+      "body": "The coffer daemon stopped responding. Capability lists, tool calls, and registrations will fail until it restarts.",
+      "notReadyTitle": "Daemon not running",
+      "notReadyBody": "Coffer can't read its daemon token, so the API isn't reachable. Start the daemon and reload this page.",
+      "restart": "Restart daemon",
+      "restarting": "Restarting…",
+      "devHint": "coffer daemon start",
+      "reload": "Reload"
+    }
+  },
+  "notFound": {
+    "title": "Page not found",
+    "subtitle": "No route matches {{path}}.",
+    "bodyTitle": "You might have followed a stale link",
+    "body": "If you typed the URL by hand, double-check it. Otherwise jump back to the resources list — every Coffer page is reachable from the sidebar.",
+    "cta": "Back to resources"
+  },
+  "errors": {
+    "RESOURCE_NOT_FOUND": "Resource not found",
+    "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
+    "UNKNOWN_KIND": "Unknown resource kind",
+    "CONFIG_INVALID": "Configuration is invalid",
+    "TOOL_DISABLED": "This capability is disabled",
+    "CREDENTIAL_MISSING": "Required credential is missing from the keychain",
+    "CREDENTIAL_LOCKED": "The OS keychain is locked",
+    "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable",
+    "UPSTREAM_TIMEOUT": "Upstream server did not respond in time",
+    "UNKNOWN_PRUNABLE_TABLE": "Unknown retention table",
+    "INVALID_PREFIX": "Invalid prefix",
+    "INTERNAL_ERROR": "An unexpected error occurred",
+    "UNAUTHENTICATED": "Authentication required — Coffer can't read its daemon token. Run `coffer daemon start` and reload, or open the desktop app.",
+    "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
+    "BAD_REQUEST": "The request was rejected as malformed.",
+    "NOT_FOUND": "Not found.",
+    "FORBIDDEN": "This action is not permitted."
+  },
+  "pagination": {
+    "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
+    "perPage": "Per page",
+    "prev": "Previous",
+    "next": "Next"
+  },
+  "resourceDetail": {
+    "unknownKind": "Unknown kind",
+    "unknownKindBody": "No frontend module registered for kind: {{kind}}"
+  }
+}
