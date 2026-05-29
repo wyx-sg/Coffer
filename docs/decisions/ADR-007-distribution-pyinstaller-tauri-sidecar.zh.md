@@ -174,7 +174,7 @@ Coffer 有三个可运行入口：长生命周期的 `coffer-daemon`、按 MCP �
 - **2026-05-20** —— 初版决定（spec 001 时期）：PyInstaller + Tauri
   sidecar、计划做 universal macOS binary、macOS 上 shim 路径在
   `~/Library/Application Support/Coffer/bin/`。
-- **2026-05-28** (PR #24) —— 按 spec 003 的实现现实修订：
+- **2026-05-28** (PR #28) —— 按 spec 003 的实现现实修订：
   (a) macOS 改为两份独立的按架构 DMG，不再做 universal binary（release
   流水线没跑 `lipo`）；(b) macOS / Linux 上 shim 路径移到 `~/.coffer/bin/`
   与 ADR-006 的 `~/.coffer/daemon.json` 共处一处；(c) 明确写出每次发布

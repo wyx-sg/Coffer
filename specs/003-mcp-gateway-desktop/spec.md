@@ -2,13 +2,13 @@
 
 **Feature Branch**: `feature/003-mcp-gateway-desktop` (on top of `feature/002-mcp-gateway-web`)
 **Status**: Draft
-**Input**: 002-ui-shell delivered the web UI and explicitly deferred two acceptance scenarios from User Story 5 (desktop shell): launch-at-login and close-to-tray. This spec owns those scenarios and the Tauri desktop wrapper + distribution pipeline that makes them work.
+**Input**: 002-ui-shell delivered the web UI and explicitly deferred two acceptance scenarios from spec 002's User Story 5 (desktop shell): launch-at-login and close-to-tray. This spec owns those scenarios and the Tauri desktop wrapper + distribution pipeline that makes them work.
 
 **Scope note**: Coffer's user-facing UI lives in 002-ui-shell (web shell, visual language, information architecture). This spec adds the **desktop wrapper** — Tauri 2 shell, daemon supervision, tray icon, autostart plugin, PyInstaller sidecar packaging, and the macOS notarization release pipeline. It introduces no new resource kinds and no new UI screens; the web UI from 002 renders inside the Tauri window with the desktop-only `AppSettings` component activating behind the `isTauri()` guard that 002 already wired up.
 
 ## User Scenarios & Testing
 
-### User Story 5 — Desktop shell: always-on and out of the way (Priority: P3)
+### User Story 1 — Desktop shell: always-on and out of the way (Priority: P3)
 
 After initial setup, the developer expects Coffer to be present whenever any MCP client starts — no manual launch — and to stay out of the way when they are not actively managing it. The Tauri desktop app supervises the local daemon (starting it and reconnecting transparently), runs in the system tray, restores its window from the tray on click, and offers optional launch-at-login.
 
@@ -23,11 +23,11 @@ After initial setup, the developer expects Coffer to be present whenever any MCP
 
 ---
 
-### User Story 6 — Single-bundle install (Priority: P3)
+### User Story 2 — Single-bundle install (Priority: P3)
 
 A developer downloads one installer from the GitHub Releases page for their platform and ends up with a working Coffer — no system Python, no separate daemon install, no manual PATH editing for the shim. The Tauri bundle carries both `coffer-daemon` and `coffer-mcp-shim` as PyInstaller-built sidecars; first launch deploys the shim to a stable user-writable PATH location and the daemon comes up on its own.
 
-**Why this priority**: P3 — distribution is the gate that turns the local-dev product into something a teammate or open-source contributor can try without cloning the repo. Without single-bundle install, the desktop shell from US5 has no audience.
+**Why this priority**: P3 — distribution is the gate that turns the local-dev product into something a teammate or open-source contributor can try without cloning the repo. Without single-bundle install, the desktop shell from US1 has no audience.
 
 **Independent Test**: on a clean machine (no Python, no Coffer checkout), download the platform installer from a draft release, install it, launch it once; verify the daemon reaches `status: ready` and `coffer-mcp-shim` resolves from a fresh shell.
 
@@ -38,7 +38,7 @@ A developer downloads one installer from the GitHub Releases page for their plat
 
 ---
 
-### User Story 7 — Daemon auto-supervision (Priority: P3)
+### User Story 3 — Daemon auto-supervision (Priority: P3)
 
 The user opens the desktop app and expects "the daemon is running" to be true without thinking about it. If the daemon is already running (because another entry point — CLI or shim — started it), the desktop shell connects to it. If it is not, the shell spawns it as a detached process that survives the desktop window closing. The user can also explicitly restart the daemon from the desktop UI if something has gone wrong.
 
@@ -54,7 +54,7 @@ The user opens the desktop app and expects "the daemon is running" to be true wi
 
 ---
 
-### User Story 8 — Shim auto-deploy to PATH (Priority: P3)
+### User Story 4 — Shim auto-deploy to PATH (Priority: P3)
 
 The user pastes a vendor's MCP-client config snippet (`"command": "coffer-mcp-shim"`) and it resolves without telling them what path to use. Every desktop launch idempotently deploys the bundled `coffer-mcp-shim` binary to a stable user-writable directory on `PATH` (macOS / Linux: `~/.coffer/bin/`; Windows: `%LOCALAPPDATA%\Coffer\bin\`); a size-mismatch heuristic re-copies the binary when the bundle has been upgraded, and a no-op when nothing changed.
 
@@ -70,7 +70,7 @@ The user pastes a vendor's MCP-client config snippet (`"command": "coffer-mcp-sh
 
 ---
 
-### User Story 9 — Tray menu actions (Priority: P3)
+### User Story 5 — Tray menu actions (Priority: P3)
 
 The user clicks the tray icon and expects a small, obvious menu — open the main window, restart the daemon, quit. "Quit" actually quits (does not hide-to-tray a second time); restart bounces the daemon cleanly; open restores the hidden window.
 
@@ -95,7 +95,7 @@ The user clicks the tray icon and expects a small, obvious menu — open the mai
 
 ## Acceptance Scenarios
 
-The scenarios below cover this spec's user stories. Scenarios `launch at login` and `close to tray, not exit` are imported verbatim from `specs/002-ui-shell/spec.md` per the audit-traceability annotation there. They cover the deferred US5 (desktop shell — launch-at-login, close-to-tray). The desktop spec's acceptance audit owns them from here on. Build-pipeline scenarios cover US6 (single-bundle install).
+The scenarios below cover this spec's user stories. Scenarios `launch at login` and `close to tray, not exit` are imported verbatim from `specs/002-ui-shell/spec.md` per the audit-traceability annotation there. They cover US1 (desktop shell — launch-at-login, close-to-tray). The desktop spec's acceptance audit owns them from here on. Build-pipeline scenarios cover US2 (single-bundle install).
 
 ### Scenario: launch at login
 
@@ -147,9 +147,3 @@ The scenarios below cover this spec's user stories. Scenarios `launch at login` 
 The desktop app ships as a Tauri 2 bundle that wraps the headless daemon as a PyInstaller-built sidecar binary. See [`docs/decisions/ADR-007-distribution-pyinstaller-tauri-sidecar.md`](../../docs/decisions/ADR-007-distribution-pyinstaller-tauri-sidecar.md) for the architectural decision and [`docs/distribution/macos-notarization.md`](../../docs/distribution/macos-notarization.md) for the macOS notarization runbook.
 
 The release pipeline (`.github/workflows/release.yml`) runs PyInstaller per target architecture, drops the binary into `desktop/binaries/`, builds the Tauri bundle, notarizes (macOS, once a paid Apple Developer ID is in place), and uploads the artifact with its SHA-256 checksum.
-
-## Out of Scope
-
-- Windows code-signing + WinGet store deferred — MSI/NSIS artifacts ship unsigned.
-- Auto-update channel — no in-app update notification UI ships; users discover new releases via the GitHub Releases page.
-- Any new UI screen beyond the `AppSettings` desktop tab already wired up in 002 behind `isTauri()`.

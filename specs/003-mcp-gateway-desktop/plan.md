@@ -45,7 +45,7 @@ for the distribution-architecture decision.
 
 | Constitutional clause                     | Compliance | Notes                                                                                                                                                                                              |
 | ----------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **I. Local-First (NON-NEGOTIABLE)**       | OK         | Daemon stays loopback-only; the desktop shell never reaches the public internet. Auto-update is explicitly out of scope so no telemetry / update-server call ships.                                |
+| **I. Local-First (NON-NEGOTIABLE)**       | OK         | Daemon stays loopback-only; the desktop shell never reaches the public internet; no telemetry or update-server call ships.                                                                         |
 | **II. Spec-as-Truth**                     | OK         | Spec committed before code; every acceptance scenario has a covering test (acceptance audit).                                                                                                      |
 | **III. Open-Source-Readiness**            | OK         | Tauri 2 (MIT/Apache-2.0) and `tauri-plugin-autostart` (MIT) are permissive-licensed; PyInstaller is GPL with a runtime-only exception that does not contaminate bundled binaries.                  |
 | **Languages**                             | OK         | Rust is allowed for the desktop shell per the constitution Languages clause; the daemon and shim remain Python 3.12.                                                                               |
@@ -81,14 +81,14 @@ desktop/
 ├── src/
 │   ├── main.rs                       # entry — tauri::Builder
 │   ├── lib.rs                        # app setup, tray menu wiring, window-close interceptor
-│   ├── daemon_supervisor.rs          # detect-or-spawn helper (POSIX setsid / Windows DETACHED_PROCESS)
-│   ├── shim_deploy.rs                # idempotent shim copy with size-mismatch heuristic
+│   ├── daemon.rs                     # detect-or-spawn helper (POSIX setsid / Windows DETACHED_PROCESS)
+│   ├── shim.rs                       # idempotent shim copy with size-mismatch heuristic
 │   └── tray.rs                       # tray menu (Open / Restart daemon / Quit)
 └── tests/                            # rust unit tests for the above modules
 
 scripts/
-├── build_binaries.sh                 # drives PyInstaller specs in backend/ (already exists from 001)
-└── smoke_test_bundle.sh              # CI post-build smoke test (already exists)
+├── build_binaries.sh                 # drives PyInstaller specs in backend/ (added in this PR)
+└── smoke_test_bundle.sh              # CI post-build smoke test (added in this PR)
 
 .github/workflows/
 └── release.yml                       # cross-platform release matrix + per-artifact SHA-256
@@ -96,7 +96,7 @@ scripts/
 
 ### Extension point: the daemon-supervisor module
 
-`desktop/src/daemon_supervisor.rs` is the Rust-side mirror of the Python
+`desktop/src/daemon.rs` is the Rust-side mirror of the Python
 `detect-or-spawn` helper used by the CLI and shim. It reads
 `~/.coffer/daemon.json`, probes the recorded PID, and spawns
 `coffer-daemon` as a detached process when no live daemon is found.
@@ -106,7 +106,7 @@ desktop window's close-to-tray.
 
 ### Shim deploy strategy
 
-`desktop/src/shim_deploy.rs` runs on every desktop launch:
+`desktop/src/shim.rs` runs on every desktop launch:
 
 1. Resolve the target directory (`~/.coffer/bin/` on macOS/Linux,
    `%LOCALAPPDATA%\Coffer\bin\` on Windows, falling back to
@@ -156,19 +156,19 @@ window; the `isTauri()` guard is true on first render.
 
 ### Phase 2 — Daemon supervisor
 
-`daemon_supervisor.rs` — detect-or-spawn against `~/.coffer/daemon.json`,
+`daemon.rs` — detect-or-spawn against `~/.coffer/daemon.json`,
 detached spawn (`setsid` / `DETACHED_PROCESS`).
 
 **Done when:** the shell connects to an already-running daemon without
 duplicating, spawns one when none is running, and the spawned daemon
-survives desktop-app close (US7 scenarios).
+survives desktop-app close (US3 scenarios).
 
 ### Phase 3 — Tray menu + close-to-tray
 
 `tray.rs` (Open / Restart daemon / Quit), window-close interceptor in
 `lib.rs`.
 
-**Done when:** US9's tray scenarios pass and US5's "close to tray, not exit"
+**Done when:** US5's tray scenarios pass and US1's "close to tray, not exit"
 scenario passes.
 
 ### Phase 4 — Autostart + AppSettings wiring
@@ -176,14 +176,14 @@ scenario passes.
 `tauri-plugin-autostart` integration with set/get exposed to the JS bridge;
 002's `AppSettings` component picks up the toggle.
 
-**Done when:** US5's "launch at login" scenario passes.
+**Done when:** US1's "launch at login" scenario passes.
 
 ### Phase 5 — Shim auto-deploy
 
-`shim_deploy.rs` — idempotent copy with size-mismatch heuristic, parent-dir
+`shim.rs` — idempotent copy with size-mismatch heuristic, parent-dir
 probing, Windows PATH fallback.
 
-**Done when:** US8's three scenarios pass.
+**Done when:** US4's three scenarios pass.
 
 ### Phase 6 — Release pipeline + smoke test
 
@@ -191,7 +191,7 @@ probing, Windows PATH fallback.
 accompanied by a SHA-256; `scripts/smoke_test_bundle.sh` runs against each
 bundle.
 
-**Done when:** US6's two build-pipeline scenarios pass and a draft release
+**Done when:** US2's two build-pipeline scenarios pass and a draft release
 on a `v*-rc` tag produces all four installers green.
 
 ## Complexity Tracking

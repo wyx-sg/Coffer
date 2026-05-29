@@ -125,6 +125,6 @@ MCP 客户端继续工作。
 - **daemon 拉不起来** —— 打开 `~/.coffer/logs/daemon.log` 搜
   `ERROR`。最常见的原因是 8000–8009 段每个端口都已被其他进程占用；
   退掉那些进程或等它们释放端口。
-- **更新** —— 本版本不带应用内更新提示。新版本请查看
+- **更新** —— 新版本请查看
   [GitHub Releases 页面](https://github.com/coffer/coffer/releases)；
   在已有应用上安装新 bundle 即可（你 `~/.coffer/` 下的数据会被保留）。

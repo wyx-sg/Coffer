@@ -4,13 +4,13 @@
 
 **Feature Branch**: `feature/003-mcp-gateway-desktop`（在 `feature/002-mcp-gateway-web` 之上）
 **Status**: Draft
-**Input**：002-ui-shell 交付了 Web UI，但明确把 User Story 5（桌面外壳）的两个验收场景 —— 登录时启动（launch-at-login）与关闭到托盘（close-to-tray）—— 延期到本规范。本规范承接这两个场景，并交付让它们工作的 Tauri 桌面包装与分发流水线。
+**Input**：002-ui-shell 交付了 Web UI，但明确把 spec 002 的 User Story 5（桌面外壳）的两个验收场景 —— 登录时启动（launch-at-login）与关闭到托盘（close-to-tray）—— 延期到本规范。本规范承接这两个场景，并交付让它们工作的 Tauri 桌面包装与分发流水线。
 
 **范围说明**：Coffer 的用户可见 UI 由 002-ui-shell 拥有（Web 外壳、视觉语言、信息架构）。本规范新增的是**桌面包装层** —— Tauri 2 外壳、daemon 监管、托盘图标、autostart 插件、PyInstaller sidecar 打包、以及 macOS 公证发布流水线。它不引入任何新的 resource kind，也不引入任何新的 UI 屏幕；来自 002 的 Web UI 在 Tauri 窗口中渲染，桌面专用的 `AppSettings` 组件透过 002 已经接好的 `isTauri()` 守卫激活。
 
 ## 用户场景与测试
 
-### User Story 5 —— 桌面外壳：常驻且不碍事（优先级 P3）
+### User Story 1 —— 桌面外壳：常驻且不碍事（优先级 P3）
 
 完成初次设置之后，开发者期望 Coffer 在任意 MCP 客户端启动时已经在线 —— 无需手工拉起 —— 并且在他们不主动管理时尽量隐身。Tauri 桌面应用监管本地 daemon（启动 daemon 并透明重连）、常驻系统托盘、点击托盘可恢复主窗口、并提供可选的「登录时启动」。
 
@@ -25,11 +25,11 @@
 
 ---
 
-### User Story 6 —— 单包安装（优先级 P3）
+### User Story 2 —— 单包安装（优先级 P3）
 
 开发者从 GitHub Releases 页面下载一份本平台的安装包，得到一份可用的 Coffer —— 不需要系统 Python、不需要单独安装 daemon、也不需要手工把 shim 加入 PATH。Tauri bundle 把 `coffer-daemon` 与 `coffer-mcp-shim` 作为 PyInstaller 构建的 sidecar 一并携带；首次启动把 shim 部署到稳定的用户级 PATH 目录，daemon 自动就绪。
 
-**为什么是这个优先级**：P3 —— 分发是把本地开发产物变成同事 / 开源贡献者可以「不 clone 仓库就试用」的产品的关键。没有单包安装，US5 的桌面外壳就没有目标人群。
+**为什么是这个优先级**：P3 —— 分发是把本地开发产物变成同事 / 开源贡献者可以「不 clone 仓库就试用」的产品的关键。没有单包安装，US1 的桌面外壳就没有目标人群。
 
 **独立可测**：在干净机器（无 Python、无 Coffer checkout）上下载平台安装包，安装，启动一次；验证 daemon 到达 `status: ready` 且新开终端中 `coffer-mcp-shim` 可被解析。
 
@@ -40,7 +40,7 @@
 
 ---
 
-### User Story 7 —— Daemon 自动监管（优先级 P3）
+### User Story 3 —— Daemon 自动监管（优先级 P3）
 
 用户打开桌面应用，期望「daemon 在运行」是开箱即真。若 daemon 已经在跑（由 CLI 或 shim 等其他入口拉起），桌面外壳直接连接；若没在跑，外壳把 daemon 作为脱离父进程的独立进程拉起，并让 daemon 在桌面窗口关闭之后继续存活。用户也可以从桌面 UI 显式重启 daemon。
 
@@ -56,7 +56,7 @@
 
 ---
 
-### User Story 8 —— Shim 自动部署到 PATH（优先级 P3）
+### User Story 4 —— Shim 自动部署到 PATH（优先级 P3）
 
 用户复制粘贴厂商的 MCP 客户端配置片段（`"command": "coffer-mcp-shim"`），它无须告诉用户具体路径就能解析。桌面应用每次启动都幂等地把 bundle 自带的 `coffer-mcp-shim` 二进制部署到稳定的用户可写目录（macOS / Linux：`~/.coffer/bin/`；Windows：`%LOCALAPPDATA%\Coffer\bin\`）；通过 size-mismatch 启发式判断 bundle 升级则重新拷贝，否则保持 no-op。
 
@@ -72,7 +72,7 @@
 
 ---
 
-### User Story 9 —— 托盘菜单动作（优先级 P3）
+### User Story 5 —— 托盘菜单动作（优先级 P3）
 
 用户点击托盘图标，期望看到一个小而明确的菜单 —— 打开主窗口、重启 daemon、退出。"退出" 真的退出（不会再次 hide-to-tray）；"重启" 干净地拉起 daemon；"打开" 恢复被隐藏的窗口。
 
@@ -97,7 +97,7 @@
 
 ## Acceptance Scenarios
 
-下方场景覆盖本规范的用户故事。`launch at login` 与 `close to tray, not exit` 两个场景按 `specs/002-ui-shell/spec.md` 的 audit-traceability 注释逐字导入，对应 US5 中延期的桌面外壳验收。本规范的 acceptance audit 从此承担它们。build-pipeline 场景覆盖 US6（单包安装）。
+下方场景覆盖本规范的用户故事。`launch at login` 与 `close to tray, not exit` 两个场景按 `specs/002-ui-shell/spec.md` 的 audit-traceability 注释逐字导入，对应 US1 的桌面外壳验收。本规范的 acceptance audit 从此承担它们。build-pipeline 场景覆盖 US2（单包安装）。
 
 ### Scenario: launch at login
 
@@ -149,9 +149,3 @@
 桌面应用以 Tauri 2 bundle 形式分发，把无头 daemon 作为 PyInstaller 构建的 sidecar 二进制包入。架构决策见 [`docs/decisions/ADR-007-distribution-pyinstaller-tauri-sidecar.md`](../../docs/decisions/ADR-007-distribution-pyinstaller-tauri-sidecar.md)；macOS 公证 runbook 见 [`docs/distribution/macos-notarization.md`](../../docs/distribution/macos-notarization.md)。
 
 release 流水线（`.github/workflows/release.yml`）按目标架构运行 PyInstaller，把二进制放入 `desktop/binaries/`，构建 Tauri bundle，公证（macOS，等 Apple Developer ID 就位后启用），并上传制品 + SHA-256 校验文件。
-
-## Out of Scope
-
-- Windows 代码签名 + WinGet 商店延期 —— MSI/NSIS 制品当前以未签名形式分发。
-- 自动更新通道 —— 不会有应用内更新通知 UI；用户通过 GitHub Releases 页面发现新版本。
-- 任何超出 002 已在 `isTauri()` 守卫后接好的 `AppSettings` 桌面 tab 的新 UI 屏幕。

@@ -135,7 +135,7 @@ you opening anything.
 - **Daemon does not start** — open `~/.coffer/logs/daemon.log` and search
   for `ERROR`. The most common cause is another process already bound to
   every port in 8000–8009; quit that process or wait for it to free up.
-- **Updates** — no in-app update notifier ships in this release. Check the
+- **Updates** — check the
   [GitHub Releases page](https://github.com/coffer/coffer/releases) for
   new versions; install the new bundle over the existing app (your data
   in `~/.coffer/` is preserved).

@@ -46,7 +46,7 @@ PyInstaller 构建的 daemon + shim 二进制以
 
 | 章程条款                            | 合规 | 备注                                                                                                                                         |
 | ----------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **I. Local-First (NON-NEGOTIABLE)** | OK   | daemon 仍仅 loopback；桌面外壳不访问公共互联网。auto-update 明确划出范围，因此不会出现遥测 / 更新服务器调用。                                |
+| **I. Local-First (NON-NEGOTIABLE)** | OK   | daemon 仍仅 loopback；桌面外壳不访问公共互联网；不会出现遥测 / 更新服务器调用。                                                             |
 | **II. Spec-as-Truth**               | OK   | spec 在代码之前提交；每个验收场景都有覆盖测试（acceptance audit）。                                                                          |
 | **III. Open-Source-Readiness**      | OK   | Tauri 2（MIT/Apache-2.0）与 `tauri-plugin-autostart`（MIT）均为宽松许可证；PyInstaller 是 GPL 但带运行时例外，不污染 bundle 出来的二进制。   |
 | **语言**                            | OK   | 章程 Languages 条款允许桌面外壳用 Rust；daemon 与 shim 仍是 Python 3.12。                                                                    |
@@ -81,14 +81,14 @@ desktop/
 ├── src/
 │   ├── main.rs                       # 入口 —— tauri::Builder
 │   ├── lib.rs                        # app 启动、托盘菜单接线、窗口关闭拦截
-│   ├── daemon_supervisor.rs          # detect-or-spawn helper（POSIX setsid / Windows DETACHED_PROCESS）
-│   ├── shim_deploy.rs                # 幂等 shim 拷贝 + size-mismatch 启发式
+│   ├── daemon.rs                     # detect-or-spawn helper（POSIX setsid / Windows DETACHED_PROCESS）
+│   ├── shim.rs                       # 幂等 shim 拷贝 + size-mismatch 启发式
 │   └── tray.rs                       # 托盘菜单（Open / Restart daemon / Quit）
 └── tests/                            # 上述模块的 Rust 单元测试
 
 scripts/
-├── build_binaries.sh                 # 驱动 backend/ 下的 PyInstaller spec（来自 001）
-└── smoke_test_bundle.sh              # CI post-build smoke test（已存在）
+├── build_binaries.sh                 # 驱动 backend/ 下的 PyInstaller spec（本 PR 新增）
+└── smoke_test_bundle.sh              # CI post-build smoke test（本 PR 新增）
 
 .github/workflows/
 └── release.yml                       # 跨平台 release 矩阵 + 逐制品 SHA-256
@@ -96,7 +96,7 @@ scripts/
 
 ### 扩展点：daemon-supervisor 模块
 
-`desktop/src/daemon_supervisor.rs` 是 CLI / shim 所用 Python
+`desktop/src/daemon.rs` 是 CLI / shim 所用 Python
 `detect-or-spawn` helper 的 Rust 镜像。它读 `~/.coffer/daemon.json`、
 探测记录的 PID、在找不到存活 daemon 时把 `coffer-daemon` 作为脱离父进程
 的独立进程拉起。"脱离" 在 POSIX 上是 `setsid`，在 Windows 上是
@@ -105,7 +105,7 @@ close-to-tray 之后仍然存活的关键。
 
 ### Shim 部署策略
 
-`desktop/src/shim_deploy.rs` 在每次桌面启动时运行：
+`desktop/src/shim.rs` 在每次桌面启动时运行：
 
 1. 解析目标目录（macOS/Linux：`~/.coffer/bin/`；Windows：
    `%LOCALAPPDATA%\Coffer\bin\`；`%LOCALAPPDATA%` 未设时退回
@@ -153,38 +153,38 @@ Vite 前端挂载。
 
 ### Phase 2 —— Daemon supervisor
 
-`daemon_supervisor.rs` —— 对 `~/.coffer/daemon.json` 执行 detect-or-spawn；
+`daemon.rs` —— 对 `~/.coffer/daemon.json` 执行 detect-or-spawn；
 detached spawn（`setsid` / `DETACHED_PROCESS`）。
 
 **完成标志**：外壳能连接到已在跑的 daemon 而不重复拉起；没在跑时能拉起一个；
-被拉起的 daemon 在桌面应用关闭后仍存活（US7 场景）。
+被拉起的 daemon 在桌面应用关闭后仍存活（US3 场景）。
 
 ### Phase 3 —— 托盘菜单 + close-to-tray
 
 `tray.rs`（Open / Restart daemon / Quit），`lib.rs` 中的窗口关闭拦截。
 
-**完成标志**：US9 的托盘场景通过；US5 的 "close to tray, not exit" 通过。
+**完成标志**：US5 的托盘场景通过；US1 的 "close to tray, not exit" 通过。
 
 ### Phase 4 —— Autostart + AppSettings 接线
 
 集成 `tauri-plugin-autostart`，把 set/get 暴露到 JS 桥；002 的
 `AppSettings` 组件拾取该开关。
 
-**完成标志**：US5 的 "launch at login" 通过。
+**完成标志**：US1 的 "launch at login" 通过。
 
 ### Phase 5 —— Shim 自动部署
 
-`shim_deploy.rs` —— 幂等拷贝 + size-mismatch 启发式、父目录探测、
+`shim.rs` —— 幂等拷贝 + size-mismatch 启发式、父目录探测、
 Windows PATH 兜底。
 
-**完成标志**：US8 的三个场景通过。
+**完成标志**：US4 的三个场景通过。
 
 ### Phase 6 —— Release 流水线 + smoke test
 
 `.github/workflows/release.yml` 跑构建矩阵；每份制品伴随 SHA-256；
 对每份 bundle 运行 `scripts/smoke_test_bundle.sh`。
 
-**完成标志**：US6 的两个 build-pipeline 场景通过；在某个 `v*-rc` tag 上
+**完成标志**：US2 的两个 build-pipeline 场景通过；在某个 `v*-rc` tag 上
 打 draft release 时四份安装包全绿。
 
 ## 复杂度记录

@@ -202,7 +202,7 @@ at the main-UX layer but implicitly accepted for the CLI-only path.
 - **2026-05-20** — Initial decision (spec 001 era): PyInstaller + Tauri
   sidecar, universal macOS binary planned, shim path under
   `~/Library/Application Support/Coffer/bin/` on macOS.
-- **2026-05-28** (PR #24) — Revised for spec 003 implementation reality:
+- **2026-05-28** (PR #28) — Revised for spec 003 implementation reality:
   (a) two separate per-arch macOS DMGs instead of a universal binary
   (release pipeline does not run `lipo`); (b) shim path on macOS / Linux
   moved to `~/.coffer/bin/` to co-locate with `~/.coffer/daemon.json`
