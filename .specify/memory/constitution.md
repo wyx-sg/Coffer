@@ -42,7 +42,8 @@ plan.
 - **Architecture.** Layered: `surfaces → application → domain → infrastructure`.
   `domain/` may not import `infrastructure/`, `surfaces/`, or external SDKs.
   `application/` may not import `surfaces/`. Cross-cutting modules are
-  extracted only after the second feature needs them.
+  extracted only after the second feature needs them. (Exception: the
+  Resource framework — see [ADR-001](../../docs/decisions/ADR-001-resource-framework-upfront.md).)
 - **Persistence.** SQLite is the system of record for control-plane state.
   Bulk user content (when introduced per spec) is stored as files on the
   local file system; indexed on demand.

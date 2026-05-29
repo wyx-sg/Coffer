@@ -4,12 +4,12 @@ Coffer uses four test tiers running in parallel CI jobs. Acceptance scenarios fr
 
 ## Tiers at a Glance
 
-| Tier | Tests what | Speed budget (per file) | Tools | Runs in `make verify`? |
-|---|---|---|---|---|
-| **Unit** | Pure functions, single class, domain logic, value objects. No I/O. Fake ports / no real infrastructure. Enforced by `scripts/check_unit_purity.py`. | < 100 ms | `pytest` (backend), `vitest` (frontend) | yes |
-| **Integration** | Multiple modules + real local infrastructure: real SQLite, real subprocess, real filesystem, `keyring` test backend. No network. | < 2 s | `pytest` + `httpx.AsyncClient` / `fastapi.TestClient` (backend), `vitest` + jsdom + React Testing Library across multiple components (frontend) | yes |
-| **Contract** | Wire-format conformance: hand-written `*.openapi.yaml` ↔ Pydantic models ↔ TS types. Blocks PR on drift. | < 1 s | Currently: `pytest` + `TestClient` manual assertions on `/openapi.json`. **Future** (add when contract surface grows): `schemathesis` for backend fuzzing, `openapi-typescript` round-trip for TS types. | yes |
-| **E2E** | Full stack via real surfaces: browser → frontend → backend → SQLite. | < 30 s | `Playwright` (web). | NO (separate `make verify-e2e`) |
+| Tier            | Tests what                                                                                                                                          | Speed budget (per file) | Tools                                                                                                                                                                                                    | Runs in `make verify`?          |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| **Unit**        | Pure functions, single class, domain logic, value objects. No I/O. Fake ports / no real infrastructure. Enforced by `scripts/check_unit_purity.py`. | < 100 ms                | `pytest`                                                                                                                                                                                                 | yes                             |
+| **Integration** | Multiple modules + real local infrastructure: real SQLite, real subprocess, real filesystem, `keyring` test backend. No network.                    | < 2 s                   | `pytest` + `httpx.AsyncClient` / `fastapi.TestClient`                                                                                                                                                    | yes                             |
+| **Contract**    | Wire-format conformance: hand-written `*.openapi.yaml` ↔ Pydantic models. Blocks PR on drift.                                                       | < 1 s                   | Currently: `pytest` + `TestClient` manual assertions on `/openapi.json`. **Future** (add when contract surface grows): `schemathesis` for backend fuzzing.                                                | yes                             |
+| **E2E**         | Full stack via real surfaces: a real MCP client → `coffer-mcp-shim` (stdio) → daemon (`/mcp` HTTP) → upstream MCP servers → SQLite.                  | < 30 s                  | `Playwright` (`@playwright/test`) + TypeScript 5.x. Specs spawn the real shim + daemon as OS subprocesses and drive JSON-RPC across them end-to-end.                                                       | NO (separate `make verify-e2e`) |
 
 **Pyramid shape**: unit ≫ integration > contract > e2e (in counts of tests).
 
@@ -29,41 +29,27 @@ backend/tests/
     └── test_*.py
 ```
 
-**Frontend** — unit co-located, higher tiers in `tests/<tier>/`:
-
-```
-frontend/src/
-├── App.tsx
-├── App.test.tsx               # unit (co-located, *.test.tsx pattern)
-├── components/Button.tsx
-└── components/Button.test.tsx # unit (co-located)
-
-frontend/tests/
-└── integration/               # multi-component + provider + hook scenarios
-    └── *.test.tsx
-```
-
-(`frontend/tests/contract/` lands when the first frontend ↔ backend type-conformance test is written.)
-
-**E2E** — top-level, crosses backend + frontend boundaries:
+**E2E** — top-level, crosses the daemon ↔ shim ↔ MCP-client boundary:
 
 ```
 e2e/
-├── playwright.config.ts
-├── package.json               # own npm package — separate node_modules
-└── web.spec.ts                # Playwright browser tests
+├── playwright.config.ts       # Playwright runner config (mcp project)
+├── package.json               # @playwright/test + TypeScript
+└── mcp/
+    └── specs/                 # real MCP client → shim → daemon
+        └── *.spec.ts
 ```
+
+Run with `cd e2e && npm test` (`playwright test`).
 
 ## Layout Rationale
 
-- **Why `e2e/` is top-level (not under `frontend/` or `backend/`)**: e2e is the seam *between* stacks — a Playwright test exercises browser → frontend → backend → SQLite. Putting it under either stack would misrepresent ownership. It's also a separate npm package (own `playwright.config.ts`, own `node_modules`, separate Playwright browser install) so it can't share frontend's Vite/Vitest workspace.
-- **Why frontend co-locates unit tests, backend uses `tests/<tier>/`**: each follows its ecosystem's idiom. Vitest discovers `*.test.tsx` next to source; pytest expects a `tests/` tree. We don't fight either.
-- **When to split inside a directory**: when a tier accumulates two clearly-different test families (e.g. once `e2e/` has both browser tests and a Python MCP-shim suite), split into subdirs (`e2e/web/`, `e2e/mcp/`) and split the corresponding CI job. Don't pre-split for tests that don't exist yet.
+- **Why `e2e/` is top-level (not under `backend/`)**: e2e is the seam exercised through real surfaces — an MCP client talks to `coffer-mcp-shim` over stdio, which talks to the daemon over `/mcp`, which fans out to upstream MCP servers and SQLite. Putting it under `backend/` would misrepresent ownership; it drives the assembled product, not one package's internals.
+- **When to split inside a directory**: when a tier accumulates two clearly-different test families, split into subdirs and split the corresponding CI job. Don't pre-split for tests that don't exist yet.
 
 ## Naming
 
 - Backend pytest files: `test_<thing>.py`. Test functions: `test_<scenario>` (snake_case).
-- Frontend vitest files: `<Source>.test.tsx` for component tests; `<Source>.test.ts` for util tests.
 - Test names describe behavior, not implementation: `test_health_returns_ok_with_version` ✓, `test_handler_calls_method` ✗.
 
 ## Acceptance Scenarios — Cross-Tier Markers
@@ -76,9 +62,11 @@ Every `spec.md` scenario in `## Acceptance Scenarios` must be covered by at leas
 ## Acceptance Scenarios
 
 ### register and list
+
 **Given** ..., **When** ..., **Then** ...
 
 ### Scenario: re-register existing
+
 ...
 ```
 
@@ -95,18 +83,6 @@ def test_register_then_appears_in_list(...):
 ```
 
 Marker is registered in `backend/pyproject.toml` under `[tool.pytest.ini_options]` with `--strict-markers` enabled — typos fail collection.
-
-**TypeScript (vitest / Playwright):**
-
-```ts
-import { acceptance } from "@/test/acceptance";
-
-acceptance("001-foo", "register and list", async () => {
-  // ...
-});
-```
-
-The helper is a thin wrapper that records spec + scenario in the test name. Implementation lives in `frontend/src/test/acceptance.ts`; smoke tests in `frontend/src/test/acceptance.test.ts` lock the wiring. The audit regex matches both `acceptance(...)` and the legacy `test.acceptance(...)` form.
 
 **Coverage audit** — `scripts/audit_acceptance.py` (run via `make verify-acceptance`) scans every `specs/*/spec.md` and every test file, then fails on:
 
@@ -145,28 +121,38 @@ make verify-all          # verify + e2e (full suite)
 make verify-unit         # unit-purity guardrail + unit tier
 make verify-integration  # integration tier only
 make verify-contract     # contract tier only
-make verify-e2e          # e2e tier only (Playwright)
+make verify-e2e          # e2e tier only (Playwright MCP e2e: shim + daemon)
 make verify-acceptance   # audit spec.md scenarios vs test markers
 
-make lint                # ruff + mypy + eslint + tsc
-make format              # ruff format + prettier
+make lint                # ruff + mypy
+make format              # ruff format
 ```
+
+### Verification targets — what each one runs
+
+| Target                    | What it runs                                                                                                                                                                                | When to use                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `make verify`             | `lint` → `verify-unit` → `verify-integration` → `verify-contract` → `verify-acceptance`. The "pre-PR" gate.                                                                                 | Before every push and PR. CI runs the same tiers in parallel.               |
+| `make verify-all`         | `verify` plus `verify-e2e`.                                                                                                                                                                  | Before merging anything that touches a surface (HTTP, CLI, shim).           |
+| `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports) then `pytest backend/tests/unit`.                                                                                       | Tight TDD loop on pure domain code.                                         |
+| `make verify-integration` | `pytest backend/tests/integration`.                                                                                                                                                          | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
+| `make verify-contract`    | `pytest backend/tests/contract`.                                                                                                                                                             | After editing `specs/*/contracts/api.openapi.yaml` or Pydantic API schemas. |
+| `make verify-e2e`         | `cd e2e && playwright test` — the Playwright/TypeScript MCP e2e suite (`e2e/mcp/specs/*.spec.ts`) drives a real MCP client through the shim to the daemon and upstream servers.               | After touching the daemon ↔ shim ↔ MCP-client boundary.                   |
+| `make verify-acceptance`  | `scripts/audit_acceptance.py`: parses every `specs/*/spec.md` `## Acceptance Scenarios` block and every `@acceptance(spec=…, scenario=…)` marker; fails on uncovered or orphan scenarios.   | Every spec.md edit. Cheap; runs without dependencies.                       |
 
 ## CI Jobs
 
 `.github/workflows/verify.yml` runs these jobs in parallel; all must pass to merge:
 
-| Job | What |
-|---|---|
-| `lint` | ruff + mypy + eslint + tsc |
-| `unit` | `make verify-unit` (purity check + backend + frontend) |
-| `integration` | `make verify-integration` |
-| `contract` | `make verify-contract` |
-| `acceptance` | `python3 scripts/audit_acceptance.py` (no install needed) |
-| `e2e` | `make verify-e2e` (Playwright) |
-
-Each tier job runs both backend and frontend portions inside it (so the bottleneck is the slowest stack inside a tier, not cross-tier).
+| Job           | What                                                      |
+| ------------- | --------------------------------------------------------- |
+| `lint`        | ruff + mypy                                               |
+| `unit`        | `make verify-unit` (purity check + backend)               |
+| `integration` | `make verify-integration`                                 |
+| `contract`    | `make verify-contract`                                    |
+| `acceptance`  | `python3 scripts/audit_acceptance.py` (no install needed) |
+| `e2e`         | `make verify-e2e` (Playwright MCP e2e: shim + daemon)     |
 
 ## When a Tier is Empty
 
-A tier with no tests yet runs trivially green (pytest collects 0 tests; vitest collects 0 tests). The Makefile checks for tier directories and skips silently if absent — don't gate `make verify` on tiers that don't exist.
+A tier with no tests yet runs trivially green (pytest collects 0 tests). The Makefile checks for tier directories and skips silently if absent — don't gate `make verify` on tiers that don't exist.

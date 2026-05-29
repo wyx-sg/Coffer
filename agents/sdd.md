@@ -6,7 +6,7 @@ Coffer uses [Speckit](https://github.com/github/spec-kit) for spec-driven develo
 
 All specs live flat under `specs/<NNN>-<short-name>/`, where `NNN` is a zero-padded three-digit ordinal (001, 002, …). There is one kind of spec — no foundation / capability / quality split.
 
-Cross-cutting mechanisms (audit, credentials, events, jobs, storage, session) are extracted as shared modules under `application/` or `infrastructure/` **after** the second feature needs them — not pre-allocated as their own specs.
+Cross-cutting mechanisms (audit, credentials, events, jobs, storage, session) get shared modules rather than their own specs; the "extract only after the second feature needs them" rule is the invariant in [`.specify/memory/constitution.md`](../.specify/memory/constitution.md).
 
 ```
 specs/<NNN>-<short-name>/
@@ -28,7 +28,7 @@ specs/<NNN>-<short-name>/
     release.md
 ```
 
-**One spec per behavior, not per layer.** A spec covers the entire vertical slice — backend services, frontend pages, and whatever surfaces are needed to deliver that user-visible behavior. Do not split a single behavior into "frontend spec" and "backend spec"; that creates drift between two halves of the same contract.
+**One spec per behavior, not per layer.** A spec covers the entire vertical slice — backend services plus whatever surfaces are needed to deliver that user-visible behavior (CLI, MCP / shim, REST). Do not split a single behavior into separate per-surface specs; that creates drift between two halves of the same contract.
 
 **Skeleton-first phase**: When seeding a new spec, write `spec.md` first. Other files (`plan.md`, `tasks.md`, `contracts/`, etc.) are added when the spec moves toward implementation, via `/speckit-plan` and `/speckit-tasks`.
 
@@ -51,7 +51,7 @@ Tests cover each scenario via the `acceptance(spec, scenario)` marker — see [t
 
 ## End-to-End Deliverable Rule
 
-Every feature, on completion, must deliver a usable end-to-end product: frontend UI + backend persistence + (where applicable) MCP / CLI / Skill surface — all wired so the user can really operate the feature.
+Every feature, on completion, must deliver a usable end-to-end product: backend persistence + the surfaces that expose it (CLI, MCP / `coffer-mcp-shim`, REST) — all wired so the user can really operate the feature.
 
 A spec is "shipped" only when the end-to-end deliverable works AND every acceptance scenario has at least one covering test.
 

@@ -21,15 +21,36 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Order matters: a file is classified by the first rule it matches.
-# Hooks come before components, components before pages, only so that a
-# more-specific path wins if the directory naming ever overlaps.
+# More-specific paths must appear before catch-all patterns for the same tree.
+#
+# lib/ sub-structure:
+#   lib/hooks/**   → hook tier (300)
+#   lib/components/**  → component tier (250)
+#   lib/**         → utility catch-all (300)
+#
+# kinds/ sub-structure:
+#   kinds/**/*Page.tsx → page tier (200) — detail/list pages live under kinds/
+#   kinds/**/*.{ts,tsx} → component tier (250) — everything else is a component
 RULES: list[tuple[str, int, str]] = [
+    # --- frontend/src/lib --- (specific first, catch-all last)
+    ("frontend/src/lib/hooks/**/*.ts", 300, "frontend hook"),
+    ("frontend/src/lib/hooks/**/*.tsx", 300, "frontend hook"),
+    ("frontend/src/lib/components/**/*.tsx", 250, "frontend component"),
+    ("frontend/src/lib/components/**/*.ts", 250, "frontend component"),
+    ("frontend/src/lib/**/*.ts", 300, "frontend utility"),
+    ("frontend/src/lib/**/*.tsx", 300, "frontend utility"),
+    # --- frontend/src/kinds ---
+    ("frontend/src/kinds/**/*Page.tsx", 200, "frontend page"),
+    ("frontend/src/kinds/**/*.tsx", 250, "frontend component"),
+    ("frontend/src/kinds/**/*.ts", 250, "frontend component"),
+    # --- legacy frontend/src/{hooks,components,pages} ---
     ("frontend/src/hooks/**/*.ts", 300, "frontend hook"),
     ("frontend/src/hooks/**/*.tsx", 300, "frontend hook"),
     ("frontend/src/components/**/*.tsx", 250, "frontend component"),
     ("frontend/src/components/**/*.ts", 250, "frontend component"),
     ("frontend/src/pages/**/*.tsx", 200, "frontend page"),
     ("frontend/src/pages/**/*.ts", 200, "frontend page"),
+    # --- backend ---
     ("backend/coffer/**/*.py", 400, "backend Python"),
 ]
 
@@ -47,9 +68,33 @@ EXCLUDED_DIR_PARTS = {
     ".next",
 }
 
+# Marker present in the first 5 lines of openapi-typescript generated files.
+_GENERATED_MARKER = "Do not make direct changes"
+
+
+def _is_generated(path: Path) -> bool:
+    """Return True if the file is auto-generated (should not be size-checked)."""
+    try:
+        with path.open(encoding="utf-8") as fh:
+            for _ in range(5):
+                line = fh.readline()
+                if not line:
+                    break
+                if _GENERATED_MARKER in line:
+                    return True
+    except (OSError, UnicodeDecodeError):
+        pass
+    return False
+
 
 def is_excluded(path: Path) -> bool:
-    return any(part in EXCLUDED_DIR_PARTS for part in path.parts)
+    # Never size-check test files — they grow with the breadth of coverage,
+    # not with the complexity of a single production module.
+    if ".test." in path.name or path.name.endswith(".test.ts") or path.name.endswith(".test.tsx"):
+        return True
+    if any(part in EXCLUDED_DIR_PARTS for part in path.parts):
+        return True
+    return _is_generated(path)
 
 
 def count_lines(path: Path) -> int:

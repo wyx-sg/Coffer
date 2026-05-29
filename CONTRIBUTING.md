@@ -7,20 +7,9 @@ Thanks for the interest in Coffer. This file is the **human contributor** entry 
 ```bash
 git clone https://github.com/wyx-sg/Coffer.git
 cd Coffer
-make install                       # venv + backend + frontend + e2e deps
-make install-e2e-browsers          # Playwright chromium (one-time, heavy)
+make install                       # venv + backend deps
 make hooks                         # wire pre-commit + commit-msg hooks
-make dev                           # backend (:8000) + frontend (:5173)
-```
-
-For the desktop shell (optional; only if you're touching the Tauri wrapper):
-
-```bash
-# 1. install Rust stable (https://rustup.rs)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# 2. then
-make desktop-dev                   # Tauri window + frontend + backend
+make dev                           # backend daemon (:8000)
 ```
 
 ## Project Anchors
@@ -45,7 +34,7 @@ Four tiers, see [`agents/testing.md`](./agents/testing.md):
 make verify-unit          # < 5s
 make verify-integration   # < 30s
 make verify-contract      # < 5s
-make verify-e2e           # < 2min (Playwright)
+make verify-e2e           # MCP shim + daemon round-trip
 
 make verify               # unit + integration + contract (skip e2e)
 make verify-all           # everything

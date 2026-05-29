@@ -1,0 +1,948 @@
+openapi: 3.1.0
+info:
+  title: Coffer Management API
+  version: "0.1.0"
+  description: |
+    The management plane of Coffer's local daemon. Backs the CLI and
+    any other client that talks to the daemon.
+
+    Authentication: every request must carry `X-Coffer-Token` (a per-daemon
+    random token written to `~/.coffer/daemon.json`).
+
+    The MCP protocol surface (`/mcp`) is a JSON-RPC endpoint and is **not**
+    covered by this OpenAPI document — see `specs/001-mcp-gateway/research.md`.
+  contact:
+    name: Coffer
+    url: https://github.com/wyx-sg/Coffer
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    description: Local daemon
+    variables:
+      port:
+        default: "8000"
+        description: Port from `~/.coffer/daemon.json` (default 8000, 8001..8009 on fallback)
+
+security:
+  - cofferToken: []
+
+# Every mutating endpoint accepts an optional `X-Coffer-Actor` request header
+# (values: cli, api, ui, system). The audit log records the supplied value so
+# downstream tooling can attribute actions back to the originating surface.
+# Absent header defaults to "api". Documented once here rather than repeated
+# on every operation.
+
+tags:
+  - name: resources
+    description: Kind-agnostic resource lifecycle
+  - name: mcp
+    description: MCP-server-specific operations
+  - name: audit
+    description: Audit log query
+  - name: retention
+    description: Retention policy management
+  - name: daemon
+    description: Daemon lifecycle and metadata
+  - name: keychain
+    description: OS keychain credential storage
+
+paths:
+  /resources:
+    get:
+      tags: [resources]
+      operationId: listResources
+      summary: List resources
+      parameters:
+        - in: query
+          name: kind
+          required: false
+          schema: { type: string, example: mcp_server }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [resources]
+      operationId: registerResource
+      summary: Register a new resource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /resources/{kind}/{name}:
+    parameters:
+      - in: path
+        name: kind
+        required: true
+        schema: { type: string }
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [resources]
+      operationId: getResource
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [resources]
+      operationId: updateResource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [resources]
+      operationId: deleteResource
+      responses:
+        "204": { description: No Content }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /resources/{kind}/{name}/enable:
+    parameters:
+      - in: path
+        name: kind
+        required: true
+        schema: { type: string }
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [resources]
+      operationId: enableResource
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /resources/{kind}/{name}/disable:
+    parameters:
+      - in: path
+        name: kind
+        required: true
+        schema: { type: string }
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [resources]
+      operationId: disableResource
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /resources/mcp_server/{name}/capabilities:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [mcp]
+      operationId: listMcpCapabilities
+      summary: List tools/resources/prompts (live + preference-filtered)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CapabilityListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/UpstreamUnavailable" }
+
+  /resources/mcp_server/{name}/capabilities/{capability_type}/enable:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: capability_type
+        required: true
+        schema:
+          type: string
+          enum: [tool, resource, prompt]
+    post:
+      tags: [mcp]
+      operationId: enableMcpCapability
+      summary: |
+        Enable a capability for the named MCP server. The capability_key is
+        carried in the request body (not the URL) so that keys containing '/'
+        (resource URIs such as `file:///path`) route correctly.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CapabilityKeyBody" }
+      responses:
+        "204": { description: No Content }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /resources/mcp_server/{name}/capabilities/{capability_type}/disable:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: capability_type
+        required: true
+        schema:
+          type: string
+          enum: [tool, resource, prompt]
+    post:
+      tags: [mcp]
+      operationId: disableMcpCapability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CapabilityKeyBody" }
+      responses:
+        "204": { description: No Content }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /resources/mcp_server/{name}/refresh:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [mcp]
+      operationId: refreshMcpCapabilities
+      summary: Invalidate the in-memory capability cache and re-query upstream
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CapabilityListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/UpstreamUnavailable" }
+
+  /resources/mcp_server/{name}/test:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [mcp]
+      operationId: testMcpServer
+      summary: Open a transient upstream session and run initialize
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpTestResultOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /resources/mcp_server/{name}/invocations:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: query
+        name: since
+        required: false
+        schema: { type: string, format: date-time }
+      - in: query
+        name: limit
+        required: false
+        schema: { type: integer, default: 50, maximum: 500 }
+      - in: query
+        name: status
+        required: false
+        schema:
+          type: string
+          enum: [ok, error, timeout, denied]
+    get:
+      tags: [mcp]
+      operationId: listMcpInvocations
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvocationListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /resources/mcp_server/{name}/status:
+    get:
+      tags: [mcp]
+      operationId: getMcpServerStatus
+      summary: Cheap per-server status from persisted state — no spawn.
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpServerStatusOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /audit:
+    get:
+      tags: [audit]
+      operationId: listAuditEntries
+      parameters:
+        - in: query
+          name: kind
+          schema: { type: string }
+        - in: query
+          name: name
+          schema: { type: string }
+        - in: query
+          name: event_type
+          schema: { type: string }
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50, maximum: 500 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /retention/policies:
+    get:
+      tags: [retention]
+      operationId: listRetentionPolicies
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetentionPolicyListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /retention/policies/{table_name}:
+    parameters:
+      - in: path
+        name: table_name
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [retention]
+      operationId: updateRetentionPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RetentionPolicyUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetentionPolicyOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /retention/prune:
+    post:
+      tags: [retention]
+      operationId: pruneRetention
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                table_name:
+                  type: string
+                  description: When omitted, prunes every registered table.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PruneResultOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /daemon/status:
+    get:
+      tags: [daemon]
+      operationId: getDaemonStatus
+      security: [] # status endpoint is unauthenticated (used as a daemon readiness probe)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonStatusOut" }
+
+  /daemon/backup:
+    post:
+      tags: [daemon]
+      operationId: backupDaemon
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                  description: Optional output path; default `~/.coffer/backups/coffer.db.YYYYMMDDTHHMMSS.bak`
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BackupResultOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /daemon/shutdown:
+    post:
+      tags: [daemon]
+      operationId: shutdownDaemon
+      responses:
+        "204": { description: No Content }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /daemon/rotate-token:
+    post:
+      tags: [daemon]
+      operationId: rotateDaemonToken
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenRotationOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /keychain:
+    post:
+      tags: [keychain]
+      operationId: setKeychainSecret
+      summary: Store a secret in the OS keychain under a reference key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KeychainSetIn" }
+      responses:
+        "204":
+          description: Secret stored.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /keychain/{ref}:
+    delete:
+      tags: [keychain]
+      operationId: deleteKeychainSecret
+      summary: Remove a secret from the OS keychain. Idempotent.
+      parameters:
+        - name: ref
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[A-Za-z0-9_.-]+$" }
+      responses:
+        "204":
+          description: Secret removed (or already absent).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Conflict:
+      description: Duplicate resource
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    UnprocessableEntity:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    UpstreamUnavailable:
+      description: Upstream MCP server unreachable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    KeychainSetIn:
+      type: object
+      required: [ref, value]
+      properties:
+        ref:
+          type: string
+          minLength: 1
+          pattern: "^[A-Za-z0-9_.-]+$"
+          description: Reference key the secret is stored under.
+        value:
+          type: string
+          maxLength: 8192
+          description: The secret value.
+
+    CapabilityKeyBody:
+      type: object
+      required: [capability_key]
+      properties:
+        capability_key:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: |
+            The tool name, resource URI, or prompt name. Sent in the body so
+            keys containing '/' (e.g. resource URIs) are routed correctly.
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: RESOURCE_NOT_FOUND
+            message:
+              type: string
+              example: "resource not found: mcp_server:filesystem"
+            details:
+              type: object
+              additionalProperties: true
+
+    ResourceRef:
+      type: string
+      description: "<kind>:<name>"
+      pattern: "^[a-z][a-z0-9_]*:[a-zA-Z0-9_.-]+$"
+      example: mcp_server:filesystem
+
+    ResourceOut:
+      type: object
+      required: [ref, kind, name, config, enabled, created_at, updated_at]
+      properties:
+        ref: { $ref: "#/components/schemas/ResourceRef" }
+        kind: { type: string }
+        name: { type: string }
+        description:
+          type: string
+          nullable: true
+        config:
+          type: object
+          additionalProperties: true
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ResourceListOut:
+      type: object
+      required: [resources]
+      properties:
+        resources:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceOut" }
+
+    ResourceCreate:
+      type: object
+      required: [kind, name, config]
+      properties:
+        kind: { type: string }
+        name:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 64,
+            pattern: "^[a-zA-Z0-9_.-]+$",
+          }
+        description:
+          type: string
+          nullable: true
+        config:
+          type: object
+          additionalProperties: true
+
+    ResourceUpdate:
+      type: object
+      properties:
+        description:
+          type: string
+          nullable: true
+        config:
+          type: object
+          additionalProperties: true
+
+    StdioTransport:
+      type: object
+      required: [type, command]
+      properties:
+        type: { type: string, enum: [stdio] }
+        command: { type: string }
+        args:
+          type: array
+          items: { type: string }
+          default: []
+        env:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+        credential_refs:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+        cwd:
+          type: string
+          nullable: true
+
+    HttpTransport:
+      type: object
+      required: [type, url]
+      properties:
+        type: { type: string, enum: [http] }
+        url: { type: string, format: uri }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+        credential_refs:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+
+    MCPServerConfig:
+      type: object
+      required: [transport]
+      properties:
+        transport:
+          oneOf:
+            - $ref: "#/components/schemas/StdioTransport"
+            - $ref: "#/components/schemas/HttpTransport"
+          discriminator:
+            propertyName: type
+        auto_enable_new_capabilities:
+          type: boolean
+          default: true
+        spawn_timeout_seconds:
+          { type: integer, default: 30, minimum: 5, maximum: 120 }
+        request_timeout_seconds:
+          { type: integer, default: 120, minimum: 5, maximum: 1800 }
+        idle_timeout_seconds:
+          { type: integer, default: 600, minimum: 60, maximum: 86400 }
+
+    MCPToolView:
+      type: object
+      required: [prefixed_name, original_name, enabled]
+      properties:
+        prefixed_name: { type: string, example: filesystem__read_file }
+        original_name: { type: string, example: read_file }
+        description:
+          type: string
+          nullable: true
+        input_schema:
+          type: object
+          additionalProperties: true
+        enabled: { type: boolean }
+
+    MCPResourceView:
+      type: object
+      required: [prefixed_uri, original_uri, enabled]
+      properties:
+        prefixed_uri: { type: string }
+        original_uri: { type: string }
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        mime_type:
+          type: string
+          nullable: true
+        enabled: { type: boolean }
+
+    MCPPromptView:
+      type: object
+      required: [prefixed_name, original_name, enabled]
+      properties:
+        prefixed_name: { type: string }
+        original_name: { type: string }
+        description:
+          type: string
+          nullable: true
+        arguments:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              description: { type: string, nullable: true }
+              required: { type: boolean }
+        enabled: { type: boolean }
+
+    CapabilityListOut:
+      type: object
+      required: [server_name, tools, resources, prompts, fetched_at]
+      properties:
+        server_name: { type: string }
+        tools:
+          type: array
+          items: { $ref: "#/components/schemas/MCPToolView" }
+        resources:
+          type: array
+          items: { $ref: "#/components/schemas/MCPResourceView" }
+        prompts:
+          type: array
+          items: { $ref: "#/components/schemas/MCPPromptView" }
+        fetched_at: { type: string, format: date-time }
+        from_cache: { type: boolean }
+
+    McpTestResultOut:
+      type: object
+      required: [ok, latency_ms]
+      properties:
+        ok: { type: boolean }
+        latency_ms: { type: integer }
+        protocol_version:
+          type: string
+          nullable: true
+        server_capabilities:
+          type: object
+          additionalProperties: true
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+
+    InvocationOut:
+      type: object
+      required:
+        [timestamp, capability_type, capability_key, duration_ms, status]
+      properties:
+        timestamp: { type: string, format: date-time }
+        capability_type:
+          type: string
+          enum: [tool, resource, prompt]
+        capability_key: { type: string }
+        duration_ms: { type: integer }
+        status:
+          type: string
+          enum: [ok, error, timeout, denied]
+        error_message:
+          type: string
+          nullable: true
+        session_id:
+          type: string
+          nullable: true
+
+    InvocationListOut:
+      type: object
+      required: [invocations]
+      properties:
+        invocations:
+          type: array
+          items: { $ref: "#/components/schemas/InvocationOut" }
+
+    McpServerStatusOut:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [healthy, failing, unknown]
+
+    AuditEntryOut:
+      type: object
+      required: [id, timestamp, event_type, actor]
+      properties:
+        id: { type: integer }
+        timestamp: { type: string, format: date-time }
+        event_type: { type: string }
+        resource_kind:
+          type: string
+          nullable: true
+        resource_name:
+          type: string
+          nullable: true
+        actor: { type: string, enum: [cli, api, ui, system] }
+        details:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    AuditListOut:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/AuditEntryOut" }
+
+    RetentionPolicyOut:
+      type: object
+      required:
+        [
+          table_name,
+          display_name,
+          description,
+          default_retention_days,
+          retention_days,
+          last_pruned_rows,
+        ]
+      properties:
+        table_name: { type: string }
+        display_name: { type: string }
+        description: { type: string }
+        default_retention_days:
+          type: integer
+          nullable: true
+        retention_days:
+          type: integer
+          nullable: true
+          description: "Null means keep forever; positive integer is the day count."
+        last_pruned_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_pruned_rows: { type: integer }
+
+    RetentionPolicyListOut:
+      type: object
+      required: [policies]
+      properties:
+        policies:
+          type: array
+          items: { $ref: "#/components/schemas/RetentionPolicyOut" }
+
+    RetentionPolicyUpdate:
+      type: object
+      properties:
+        retention_days:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: "Set to null to keep forever; positive integer for a day count."
+
+    PruneResultOut:
+      type: object
+      required: [tables]
+      properties:
+        tables:
+          type: object
+          additionalProperties: { type: integer }
+          example: { audit_log: 0, mcp_invocations: 1247 }
+
+    DaemonStatusOut:
+      type: object
+      required: [status, version, started_at, port]
+      properties:
+        status: { type: string, enum: [starting, ready, draining] }
+        version: { type: string }
+        started_at: { type: string, format: date-time }
+        port: { type: integer }
+        upstream_summary:
+          type: object
+          properties:
+            registered: { type: integer }
+            enabled: { type: integer }
+            healthy: { type: integer }
+            unhealthy: { type: integer }
+
+    BackupResultOut:
+      type: object
+      required: [path, size_bytes]
+      properties:
+        path: { type: string }
+        size_bytes: { type: integer }
+
+    TokenRotationOut:
+      type: object
+      required: [token]
+      properties:
+        token:
+          {
+            type: string,
+            description: "New token; clients must re-read daemon.json",
+          }
