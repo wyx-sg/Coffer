@@ -9,7 +9,8 @@
     "saving": "保存中…",
     "deleting": "删除中…",
     "retry": "重试",
-    "clear": "清除"
+    "clear": "清除",
+    "rawLog": "原始日志"
   },
   "nav": {
     "aria": {
@@ -34,7 +35,7 @@
     "loadFailed": "加载资源失败",
     "welcome": {
       "title": "本地优先的 AI 资产仓库，供你的编辑器共享",
-      "body": "在下方注册第一个 MCP 服务器 —— Coffer 会在本机管理它的生命周期，并把它的工具透过单一命名空间暴露给所有已连接的客户端（Claude Code / Claude Desktop / Cursor）。",
+      "body": "在下方注册第一个 MCP 服务器 —— Coffer 会在本机管理它的生命周期，并把它的工具透过单一命名空间暴露给所有已连接的客户端。",
       "featureAggregate": {
         "title": "聚合，不再碎片化",
         "body": "一次客户端连接，覆盖你注册的全部上游 MCP 服务器。"
@@ -236,14 +237,6 @@
       "30d": "最近 30 天",
       "all": "全部时间",
       "custom": "自定义范围…"
-    },
-    "detail": {
-      "time": "记录于",
-      "event": "事件",
-      "resource": "资源",
-      "actor": "操作者",
-      "payload": "详情",
-      "empty": "无额外详情。"
     },
     "applyRange": "应用"
   },

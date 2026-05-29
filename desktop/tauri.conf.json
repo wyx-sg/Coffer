@@ -15,12 +15,15 @@
         "title": "Coffer",
         "width": 1200,
         "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "visible": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* ipc: http://ipc.localhost; img-src 'self' data: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:"
     }
   },
   "bundle": {
@@ -29,6 +32,7 @@
     "category": "DeveloperTool",
     "shortDescription": "Local-first AI agent vault",
     "longDescription": "Coffer is a local-first vault for a developer's AI assets, accessible to any agent through one safe interface.",
+    "externalBin": ["binaries/coffer-daemon", "binaries/coffer-mcp-shim"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

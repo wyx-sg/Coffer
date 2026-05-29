@@ -164,8 +164,9 @@ cold-start authenticated render via the dev token plugin.
 `AddMcpServerDialog` (JSON-import, secret-env review step,
 register-first-then-keychain ordering — see spec scenario), the redesigned
 server list (search / status filter / pager), the server detail page
-(Overview / Tools / Resources / Prompts / Invocations tabs), capability
-toggles, the redesigned empty / error / loading states.
+(Overview / Tools / Resources / Prompts / Invocations tabs, where an
+invocation row expands to its raw log JSON), capability toggles, the
+redesigned empty / error / loading states.
 
 **Done when:** US2's representative scenarios pass and `make verify-e2e`
 green for the MCP flows.
@@ -173,7 +174,8 @@ green for the MCP flows.
 ### Phase 4 — US3: Observability
 
 `/observability` route with the audit-log view (filter bar, paged table,
-row-expand detail panel), legacy `/audit` → `/observability` redirect.
+a row that expands to its raw log JSON — the shared `RawLog` view also used
+by the invocation log), legacy `/audit` → `/observability` redirect.
 
 **Done when:** US3's representative scenarios pass.
 

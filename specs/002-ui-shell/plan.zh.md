@@ -121,13 +121,13 @@ Tailwind 配置 (`frontend/tailwind.config.js`)、shadcn primitives、`AppShell`
 
 ### Phase 3 — US2：MCP 日常流
 
-`AddMcpServerDialog`（JSON 导入、secret env review 步骤、register-first-then-keychain 顺序——见 spec scenario）、重设计的服务器列表（搜索 / 状态过滤 / 分页）、服务器详情页（Overview / Tools / Resources / Prompts / Invocations tabs）、能力开关，以及重设计的空 / 错误 / 加载态。
+`AddMcpServerDialog`（JSON 导入、secret env review 步骤、register-first-then-keychain 顺序——见 spec scenario）、重设计的服务器列表（搜索 / 状态过滤 / 分页）、服务器详情页（Overview / Tools / Resources / Prompts / Invocations tabs，其中 invocation 行可展开为它的原始日志 JSON）、能力开关，以及重设计的空 / 错误 / 加载态。
 
 **Done when:** US2 的 representative scenarios 通过，MCP 流程的 `make verify-e2e` 绿。
 
 ### Phase 4 — US3：Observability
 
-`/observability` 路由 + 审计日志视图（filter bar、分页表格、行展开详情面板），legacy `/audit` → `/observability` 重定向。
+`/observability` 路由 + 审计日志视图（filter bar、分页表格、行展开为它的原始日志 JSON——与 invocation 日志共用的 `RawLog` 视图），legacy `/audit` → `/observability` 重定向。
 
 **Done when:** US3 的 representative scenarios 通过。
 

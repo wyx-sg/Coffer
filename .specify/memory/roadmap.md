@@ -6,10 +6,11 @@
 
 ## Active
 
-| #   | Spec                                                                      | Status                           |
-| --- | ------------------------------------------------------------------------- | -------------------------------- |
-| 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md))             | Accepted — code merged in PR #14 |
-| 002 | **UI Shell & Visual Language** ([spec](../../specs/002-ui-shell/spec.md)) | Accepted — code merged in PR #23 |
+| #   | Spec                                                                          | Status                           |
+| --- | ----------------------------------------------------------------------------- | -------------------------------- |
+| 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md))                 | Accepted — code merged in PR #14 |
+| 002 | **UI Shell & Visual Language** ([spec](../../specs/002-ui-shell/spec.md))     | Accepted — code merged in PR #23 |
+| 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | Accepted — code in review (PR #28) |
 
 ## Explicit non-goals (current spec)
 

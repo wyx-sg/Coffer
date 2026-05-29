@@ -80,3 +80,4 @@ section that future readers most often want — don't skip it.>
 | [005](ADR-005-session-subprocess-model.md)               | 每个下游客户端会话一套独立的上游子进程                    | Accepted |
 | [006](ADR-006-daemon-detect-or-spawn.md)                 | Daemon 探测或拉起模式；daemon 生命周期长于任何单个客户端  | Accepted |
 | [007](ADR-007-everything-is-a-resource-kind.md)          | 信息架构：每个被管理的实体都是一种 resource kind          | Accepted |
+| [008](ADR-008-distribution-pyinstaller-tauri-sidecar.md) | 分发：用 PyInstaller 打包 daemon + shim，作为 Tauri sidecar | Accepted |

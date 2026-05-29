@@ -68,13 +68,13 @@ make dev
 
 - **Overview** — 健康、最近一次见到、传输方式、命名空间。
 - **Tools / Resources / Prompts** — 每个能力一行，行内带启用 / 禁用开关。搜索框过滤；切换立即生效并重拉列表。
-- **Invocations** — 分页表格：时间、类型、能力、状态、时延。可按状态过滤。在客户端通过 coffer 调任意工具之前，这里是 "No invocations yet" 空态，提示如何触发。
+- **Invocations** — 分页表格：时间、类型、能力、状态、时延。可按状态过滤。点任意行展开它的原始日志——该次 invocation 完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。在客户端通过 coffer 调任意工具之前，这里是 "No invocations yet" 空态，提示如何触发。
 
 要看到 invocation 落库，按 [`specs/001-mcp-gateway/quickstart.zh.md`](../001-mcp-gateway/quickstart.zh.md) 中 "Wire Coffer into your MCP client" 一节把 MCP 客户端接到 coffer，触发一次工具调用（比如让 Claude Code 读个文件），然后刷新 **Invocations** tab。
 
 ## 5. Observability 与 Settings
 
-- `/observability` — Observability section 下的审计日志视图。按时间范围与 actor 过滤；点任意行展开它的原始详情（绝对时间、事件类型、payload）。legacy `/audit` URL 仍能解析并重定向到这里。
+- `/observability` — Observability section 下的审计日志视图。按时间范围与 actor 过滤；点任意行展开它的原始日志——该条目完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。legacy `/audit` URL 仍能解析并重定向到这里。
 - `/settings` — tabs 侧栏分 **Data**（retention 策略、手动清理、备份）和 **About**（版本 / 许可证 / 源代码）。
 
 相比 v0 壳，刻意删掉的三处地方：

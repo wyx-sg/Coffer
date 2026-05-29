@@ -84,6 +84,7 @@ These cases are tracked by integration tests, not by the acceptance audit, excep
 - **Credential missing or keychain locked**: Registration fails with a message naming the missing credential and pointing the user at the credential setup path. No partial state is persisted.
 - **Duplicate registration**: Registering a server with an existing name in the same kind is rejected with a clear error; partial-write is impossible.
 - **Tool-name collision across servers**: Prevented by the `<server>__<tool>` namespace; never visible to clients.
+- **Tools-only upstream**: An upstream that implements only `tools` and replies with JSON-RPC `-32601` (METHOD_NOT_FOUND) for `resources/list` or `prompts/list` is treated as having no resources / no prompts. The per-server capability view and the aggregate lists return that server's tools with an empty resources/prompts set (HTTP 200), not an error — so the management / Web-UI capability view works for tools-only servers.
 - **Daemon port conflict**: The daemon's default port is taken — it picks the next free one in a small range and writes the chosen port to its discovery file; clients (shim, desktop, CLI) all read that file.
 - **Daemon crash**: running shim sessions return a clean error to their MCP clients rather than hanging; a supervising surface can detect the crash and restart the daemon.
 - **Concurrent clients**: Multiple MCP clients (e.g., Claude Code + Codex at the same time) connect simultaneously without one disturbing the other; each gets an independent upstream subprocess set.

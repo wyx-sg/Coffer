@@ -12,6 +12,11 @@ CLI flags shape its behaviour:
     --crash-after-calls N                    Exit after Nth tools/call (scenario=crash)
     --init-delay-ms N                        Sleep before initialize (scenario=slow)
     --notify-list-changed-after N            Emit tools/list_changed after Nth call
+    --no-resources                           Do NOT register a resources/list handler,
+                                             so the SDK replies -32601 METHOD_NOT_FOUND
+                                             (models a tools-only upstream)
+    --no-prompts                             Do NOT register a prompts/list handler,
+                                             so the SDK replies -32601 METHOD_NOT_FOUND
     --transport {stdio,http}                 Transport mode (default: stdio)
     --port PORT                              HTTP port (only used with --transport http)
 
@@ -120,44 +125,55 @@ def _build_server(args: argparse.Namespace) -> tuple[Server[Any, Any], dict[str,
             ]
         return [mcp_types.TextContent(type="text", text=f"echo:{name}:{arguments or {}}")]
 
-    @server.list_resources()  # type: ignore[no-untyped-call, untyped-decorator]
-    async def list_resources() -> list[mcp_types.Resource]:
-        return [
-            mcp_types.Resource(
-                uri=AnyUrl(uri),
-                name=f"resource {uri}",
-                description=f"fake resource {uri}",
-                mimeType="text/plain",
-            )
-            for uri in state["resources"]
-        ]
+    # When --no-resources / --no-prompts are given, the corresponding handlers
+    # are NOT registered. The MCP SDK then has no handler for resources/list or
+    # prompts/list and replies with JSON-RPC -32601 METHOD_NOT_FOUND, exactly as
+    # a real tools-only upstream does. This is the only way to drive a genuine
+    # method-not-found: a registered handler returning [] would reply 200/empty.
+    if not args.no_resources:
 
-    @server.read_resource()  # type: ignore[no-untyped-call, untyped-decorator]
-    async def read_resource(uri: Any) -> list[ReadResourceContents]:
-        return [ReadResourceContents(content=f"content of {uri}", mime_type="text/plain")]
-
-    @server.list_prompts()  # type: ignore[no-untyped-call, untyped-decorator]
-    async def list_prompts() -> list[mcp_types.Prompt]:
-        return [
-            mcp_types.Prompt(
-                name=name,
-                description=f"fake prompt {name}",
-                arguments=[],
-            )
-            for name in state["prompts"]
-        ]
-
-    @server.get_prompt()  # type: ignore[no-untyped-call, untyped-decorator]
-    async def get_prompt(name: str, arguments: dict[str, str] | None) -> mcp_types.GetPromptResult:
-        return mcp_types.GetPromptResult(
-            description=f"fake prompt {name}",
-            messages=[
-                mcp_types.PromptMessage(
-                    role="user",
-                    content=mcp_types.TextContent(type="text", text=f"prompt-text:{name}"),
+        @server.list_resources()  # type: ignore[no-untyped-call, untyped-decorator]
+        async def list_resources() -> list[mcp_types.Resource]:
+            return [
+                mcp_types.Resource(
+                    uri=AnyUrl(uri),
+                    name=f"resource {uri}",
+                    description=f"fake resource {uri}",
+                    mimeType="text/plain",
                 )
-            ],
-        )
+                for uri in state["resources"]
+            ]
+
+        @server.read_resource()  # type: ignore[no-untyped-call, untyped-decorator]
+        async def read_resource(uri: Any) -> list[ReadResourceContents]:
+            return [ReadResourceContents(content=f"content of {uri}", mime_type="text/plain")]
+
+    if not args.no_prompts:
+
+        @server.list_prompts()  # type: ignore[no-untyped-call, untyped-decorator]
+        async def list_prompts() -> list[mcp_types.Prompt]:
+            return [
+                mcp_types.Prompt(
+                    name=name,
+                    description=f"fake prompt {name}",
+                    arguments=[],
+                )
+                for name in state["prompts"]
+            ]
+
+        @server.get_prompt()  # type: ignore[no-untyped-call, untyped-decorator]
+        async def get_prompt(
+            name: str, arguments: dict[str, str] | None
+        ) -> mcp_types.GetPromptResult:
+            return mcp_types.GetPromptResult(
+                description=f"fake prompt {name}",
+                messages=[
+                    mcp_types.PromptMessage(
+                        role="user",
+                        content=mcp_types.TextContent(type="text", text=f"prompt-text:{name}"),
+                    )
+                ],
+            )
 
     return server, state
 
@@ -261,6 +277,16 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--crash-after-calls", type=int, default=None)
     p.add_argument("--init-delay-ms", type=int, default=0)
     p.add_argument("--notify-list-changed-after", type=int, default=None)
+    p.add_argument(
+        "--no-resources",
+        action="store_true",
+        help="Skip registering the resources/list handler (SDK replies -32601)",
+    )
+    p.add_argument(
+        "--no-prompts",
+        action="store_true",
+        help="Skip registering the prompts/list handler (SDK replies -32601)",
+    )
     p.add_argument(
         "--progress-steps",
         type=int,
