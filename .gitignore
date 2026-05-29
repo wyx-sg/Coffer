@@ -33,6 +33,7 @@ share/python-wheels/
 MANIFEST
 
 # Virtual environments
+.venv
 .venv/
 venv/
 env/
@@ -175,3 +176,14 @@ desktop/gen/
 desktop/.cargo/
 # NOTE: desktop/Cargo.lock IS committed (binary crate convention). It will
 # be generated on the first `cargo build` in desktop/ — commit it after.
+
+# Superpowers / AI planning artifacts — never committed to the repo
+docs/superpowers/
+
+# Bundled sidecar binaries (built by `make bundle-binaries`)
+desktop/binaries/coffer-daemon-*
+desktop/binaries/coffer-mcp-shim-*
+# PyInstaller build artefacts
+build/
+dist/
+*.spec.lock
