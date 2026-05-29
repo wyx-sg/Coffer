@@ -200,7 +200,7 @@ dev:
 	@echo "Starting backend (:8000) and frontend (:5173). Ctrl-C to stop both."
 	@trap 'kill 0' EXIT; \
 	DAEMON_JSON="$$HOME/.coffer/daemon.json"; \
-	(cd $(BACKEND) && PYTHONPATH=. ../.venv/bin/python3 -m coffer.infrastructure.daemon.entry) & \
+	(cd $(BACKEND) && COFFER_DEV_CORS=1 PYTHONPATH=. ../.venv/bin/python3 -m coffer.infrastructure.daemon.entry) & \
 	echo "Waiting for daemon to become ready (up to 30 s)…"; \
 	_elapsed=0; \
 	until [ -f "$$DAEMON_JSON" ]; do \
