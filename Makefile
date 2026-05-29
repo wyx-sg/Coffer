@@ -8,6 +8,8 @@ FRONTEND := frontend
 	verify-unit verify-integration verify-contract verify-e2e verify-acceptance \
 	coverage lock \
 	desktop-dev desktop-build \
+	bundle-binaries \
+	frontend-codegen \
 	lint format dev clean
 
 help:
@@ -36,10 +38,17 @@ help:
 	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
 	@echo "  make clean                 remove venv + node_modules + caches"
 
+# Use `./.venv/bin/python3` directly in the install recipe instead of $(PY).
+# $(PY) is evaluated at parse time: when .venv doesn't yet exist, it expands
+# to the system `python3`, which on Homebrew macOS is PEP-668-protected and
+# rejects `pip install --upgrade pip` with "externally-managed-environment".
+# By creating the venv inside the recipe and then calling its python directly,
+# the install path works on a fresh checkout regardless of the host OS's pip
+# policy.
 install:
 	@if [ ! -d .venv ]; then python3 -m venv .venv; fi
-	$(PY) -m pip install --upgrade pip
-	$(PY) -m pip install -e $(BACKEND)[dev]
+	./.venv/bin/python3 -m pip install --upgrade pip
+	./.venv/bin/python3 -m pip install -e '$(BACKEND)[dev]'
 	@if [ -d $(FRONTEND) ] && command -v npm >/dev/null 2>&1; then \
 		cd $(FRONTEND) && npm install; \
 	else \
@@ -80,7 +89,7 @@ lint:
 	$(PY) scripts/check_response_models.py
 	$(PY) -m ruff check $(BACKEND)
 	$(PY) -m ruff format --check $(BACKEND)
-	$(PY) -m mypy $(BACKEND)/coffer
+	$(PY) -m mypy --config-file $(BACKEND)/pyproject.toml $(BACKEND)/coffer
 	.venv/bin/lint-imports --config $(BACKEND)/pyproject.toml
 	@if [ -d $(FRONTEND)/node_modules ]; then \
 		cd $(FRONTEND) && npm run lint && npm run typecheck; \
@@ -167,10 +176,51 @@ lock:
 		--output-file $(BACKEND)/requirements-dev.lock \
 		$(BACKEND)/pyproject.toml
 
+# Run backend (:8000) + frontend (:5173) in parallel for browser dev.
+#
+# The backend MUST go through `coffer.infrastructure.daemon.entry` rather
+# than `uvicorn coffer.main:app` directly: entry.py is what allocates the
+# port, generates the auth token, and writes ~/.coffer/daemon.json. The
+# Vite dev plugin (frontend/vite.config.ts) then reads that file to inject
+# window.__COFFER_TOKEN__ so the FE is authenticated without manual setup.
+# A bare `uvicorn coffer.main:app` leaves the active token unset and every
+# token-gated endpoint 503s — the FE is unusable.
+#
+# Foreground (no --reload) so Ctrl-C cleanly tears down both children via
+# the trap. Backend code changes need a manual restart; that's the
+# tradeoff for an end-to-end working dev mode.
+#
+# Vite only starts AFTER the daemon is genuinely reachable: we spawn the
+# backend in the background, then poll until ~/.coffer/daemon.json exists
+# AND GET /api/v1/daemon/status returns HTTP 200 (up to 30 s). This
+# eliminates the race where Vite starts first, the browser fetches /,
+# cofferDevTokenInjection finds no daemon.json, and injects no token — so
+# the page bakes in the wrong base URL and shows "Failed to fetch" forever.
 dev:
 	@echo "Starting backend (:8000) and frontend (:5173). Ctrl-C to stop both."
 	@trap 'kill 0' EXIT; \
-	(cd $(BACKEND) && ../.venv/bin/uvicorn coffer.main:app --reload --port 8000) & \
+	DAEMON_JSON="$$HOME/.coffer/daemon.json"; \
+	(cd $(BACKEND) && PYTHONPATH=. ../.venv/bin/python3 -m coffer.infrastructure.daemon.entry) & \
+	echo "Waiting for daemon to become ready (up to 30 s)…"; \
+	_elapsed=0; \
+	until [ -f "$$DAEMON_JSON" ]; do \
+		if [ $$_elapsed -ge 30 ]; then \
+			echo "dev: daemon did not write $$DAEMON_JSON within 30 s — aborting."; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+		_elapsed=$$(($$_elapsed + 1)); \
+	done; \
+	_port=$$($(PY) -c "import json,sys; d=json.load(open('$$DAEMON_JSON')); print(d.get('port',8000))" 2>/dev/null || echo 8000); \
+	until curl -sf "http://127.0.0.1:$$_port/api/v1/daemon/status" >/dev/null 2>&1; do \
+		if [ $$_elapsed -ge 30 ]; then \
+			echo "dev: daemon HTTP not ready on port $$_port within 30 s — aborting."; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+		_elapsed=$$(($$_elapsed + 1)); \
+	done; \
+	echo "Daemon ready on port $$_port. Starting Vite…"; \
 	(cd $(FRONTEND) && npm run dev) & \
 	wait
 
@@ -203,6 +253,15 @@ desktop-build:
 	}
 	rm -rf desktop/target/release/bundle
 	cd desktop && ../$(FRONTEND)/node_modules/.bin/tauri build
+
+frontend-codegen:
+	@if [ -d $(FRONTEND) ]; then \
+		cd $(FRONTEND) && npm run codegen; \
+	fi
+
+.PHONY: bundle-binaries
+bundle-binaries:
+	bash ./scripts/build_binaries.sh
 
 clean:
 	rm -rf .venv \

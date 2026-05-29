@@ -38,17 +38,29 @@ TS_SKIP_DIRS = {"node_modules", "dist", "build", ".next", "test-results"}
 ACCEPTANCE_HEADER_RE = re.compile(r"^##\s+Acceptance\s+Scenarios\s*$", re.IGNORECASE)
 NEXT_H2_RE = re.compile(r"^##\s+(?!Acceptance\s+Scenarios)", re.IGNORECASE)
 SCENARIO_HEADING_RE = re.compile(r"^###\s+(?:Scenario:\s*)?(.+?)\s*$", re.IGNORECASE)
-# Matches the standalone `acceptance("...", "...", ...)` helper exported
-# from frontend/src/test/acceptance.ts. See agents/testing.md.
+# Matches the standalone acceptance helper exported from
+# frontend/src/test/acceptance.ts. See agents/testing.md.
 #
-# The lookbehind `(?<![.\w])` ensures we don't false-match method calls
-# like `client.acceptance("...", ...)` or identifiers like
-# `myAcceptance(...)` — only the bare `acceptance(...)` call from an
-# import counts.
+# The lookbehind (?<![.\w]) ensures we don't false-match method calls or
+# identifiers — only the bare acceptance() call counts.
 TS_ACCEPTANCE_RE = re.compile(
     r"(?<![.\w])acceptance\s*\(\s*[\"'](?P<spec>[^\"']+)[\"']\s*,"
     r"\s*[\"'](?P<scenario>[^\"']+)[\"']"
 )
+
+# Strip JS/TS comments before regex matching. Without this, a quoted
+# example inside a // or /* */ comment would be miscounted as a real
+# test marker. Approximate (doesn't track string-vs-comment state across
+# lines), but good enough for an audit-only pass — markers in real code
+# always live in plain top-level statements.
+TS_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+TS_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
+
+
+def _strip_ts_comments(text: str) -> str:
+    text = TS_BLOCK_COMMENT_RE.sub("", text)
+    text = TS_LINE_COMMENT_RE.sub("", text)
+    return text
 
 
 def parse_spec_scenarios(spec_md: Path) -> list[str]:
@@ -131,7 +143,8 @@ def collect_ts_markers(roots: list[Path]) -> set[tuple[str, str]]:
                     text = src.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):
                     continue
-                for m in TS_ACCEPTANCE_RE.finditer(text):
+                stripped = _strip_ts_comments(text)
+                for m in TS_ACCEPTANCE_RE.finditer(stripped):
                     markers.add((m.group("spec"), m.group("scenario")))
     return markers
 
