@@ -34,7 +34,7 @@
     "loadFailed": "加载资源失败",
     "welcome": {
       "title": "本地优先的 AI 资产仓库，供你的编辑器共享",
-      "body": "在下方注册第一个 MCP 服务器 —— Coffer 会在本机管理它的生命周期，并把它的工具透过单一命名空间暴露给所有已连接的客户端（Claude Code / Claude Desktop / Cursor）。",
+      "body": "在下方注册第一个 MCP 服务器 —— Coffer 会在本机管理它的生命周期，并把它的工具透过单一命名空间暴露给所有已连接的客户端。",
       "featureAggregate": {
         "title": "聚合，不再碎片化",
         "body": "一次客户端连接，覆盖你注册的全部上游 MCP 服务器。"

@@ -34,7 +34,7 @@
     "loadFailed": "Failed to load resources",
     "welcome": {
       "title": "A local-first vault for the AI assets your editors share",
-      "body": "Register your first MCP server below — Coffer keeps it running locally and re-exposes its tools to every connected client (Claude Code, Claude Desktop, Cursor) under one namespace.",
+      "body": "Register your first MCP server below — Coffer keeps it running locally and re-exposes its tools to every connected client under one namespace.",
       "featureAggregate": {
         "title": "Aggregate, don't fragment",
         "body": "One client connection covers every upstream MCP server you register."
