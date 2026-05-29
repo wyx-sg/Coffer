@@ -96,7 +96,7 @@ describe("ObservabilityPage", () => {
     expect(await screen.findByText("not authorized")).toBeInTheDocument();
   });
 
-  test("clicking a row expands it and reveals the detail payload panel", async () => {
+  test("clicking a row expands it and reveals the raw log JSON", async () => {
     getApiClientMock.mockReturnValue({
       GET: vi.fn().mockResolvedValue({
         data: {
@@ -123,9 +123,11 @@ describe("ObservabilityPage", () => {
     // Click the row to expand it
     fireEvent.click(activityCell.closest("tr")!);
 
-    // The detail panel should now show the payload key
-    expect(await screen.findByText("some_key")).toBeInTheDocument();
-    expect(screen.getByText("some_value")).toBeInTheDocument();
+    // The raw log panel shows the entry's full underlying JSON record.
+    const raw = await screen.findByText((_, el) => el?.tagName === "PRE");
+    expect(raw.textContent).toContain('"some_key": "some_value"');
+    expect(raw.textContent).toContain('"event_type": "resource_created"');
+    expect(raw.textContent).toContain('"id": 42');
   });
 
   test("clicking the expanded row again collapses it", async () => {
@@ -155,11 +157,12 @@ describe("ObservabilityPage", () => {
 
     // Expand
     fireEvent.click(row);
-    expect(await screen.findByText("hello")).toBeInTheDocument();
+    const findRaw = () => screen.queryByText((_, el) => el?.tagName === "PRE");
+    await waitFor(() => expect(findRaw()?.textContent).toContain('"note": "hello"'));
 
     // Collapse — click the same row again
     fireEvent.click(row);
-    await waitFor(() => expect(screen.queryByText("hello")).not.toBeInTheDocument());
+    await waitFor(() => expect(findRaw()).not.toBeInTheDocument());
   });
 
   test("free-text search filter narrows the visible rows", async () => {

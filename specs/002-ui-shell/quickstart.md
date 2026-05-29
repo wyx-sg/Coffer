@@ -105,9 +105,11 @@ On the server detail page, switch between the tabs:
   per-capability enabled / disabled toggle. The search box narrows the
   list; toggling persists immediately and re-fetches the list.
 - **Invocations** — a paged table showing per-call timestamp, type,
-  capability, status, latency. Filter by status to drill down. Until any
-  client calls a tool through Coffer, this tab shows a "No invocations
-  yet" empty state with a hint about how to trigger one.
+  capability, status, latency. Filter by status to drill down. Click any
+  row to expand its raw log — the invocation's full underlying JSON record,
+  pretty-printed in a monospace, scrollable block. Until any client calls a
+  tool through Coffer, this tab shows a "No invocations yet" empty state
+  with a hint about how to trigger one.
 
 To watch an invocation land, point an MCP client at Coffer per
 [`specs/001-mcp-gateway/quickstart.md`](../001-mcp-gateway/quickstart.md)
@@ -117,9 +119,10 @@ Code to read a file), then refresh the **Invocations** tab.
 ## 5. Observability and settings
 
 - `/observability` — the audit-log view inside the Observability section.
-  Filter by time range and actor; click any row to expand its exact
-  recorded detail (absolute time, event code, payload). The legacy
-  `/audit` URL still resolves and redirects here.
+  Filter by time range and actor; click any row to expand its raw log —
+  the entry's full underlying JSON record, pretty-printed in a monospace,
+  scrollable block. The legacy `/audit` URL still resolves and redirects
+  here.
 - `/settings` — tabs sidebar with **Data** (retention policy, manual
   prune, backups) and **About** (version / license / source).
 

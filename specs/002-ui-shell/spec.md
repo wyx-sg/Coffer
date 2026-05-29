@@ -48,7 +48,7 @@ A developer opens the web UI for the first time. They have never registered a se
 
 ### User Story 2 — Day-to-day MCP work feels polished, not bare (Priority: P1)
 
-A developer who already uses Coffer for MCP gateway aggregation wants the routine flows — registering a server, watching its health, browsing tools, toggling capabilities, viewing invocations — to look and feel like a real product, not a scaffold. Headings are typographically distinct; spacing is consistent; per-server pages have a primary "what is this server doing?" view before the per-tool toggles; empty / error / loading states are first-class. The server list carries a search box, a status filter, and a client-side pager so a large vault stays navigable.
+A developer who already uses Coffer for MCP gateway aggregation wants the routine flows — registering a server, watching its health, browsing tools, toggling capabilities, viewing invocations — to look and feel like a real product, not a scaffold. Headings are typographically distinct; spacing is consistent; per-server pages have a primary "what is this server doing?" view before the per-tool toggles; empty / error / loading states are first-class. The server list carries a search box, a status filter, and a client-side pager so a large vault stays navigable. The Invocations tab lists each call; expanding a row reveals its raw log — the invocation's full underlying JSON record, pretty-printed in a monospace, scrollable block — mirroring the audit log's expand behavior.
 
 "Add MCP server" is a modal where the user pastes the standard `mcpServers` JSON (one or many servers at once) — the same block every MCP server's README provides. A review step lets them confirm which `env` values are secrets; those are lifted into the OS keychain rather than stored in the config.
 
@@ -61,17 +61,18 @@ A developer who already uses Coffer for MCP gateway aggregation wants the routin
 - MCP server registration round-trip via JSON import
 - capability toggle uses the redesigned tab layout
 - invocations table renders the redesigned empty + populated states
+- invocation log row expands to its raw log JSON
 - language switcher round-trips correctly
 
 ---
 
 ### User Story 3 — Observability: the audit log has a home (Priority: P2)
 
-A developer wants to see what changed in their Coffer vault — which resources and capabilities were added, enabled, disabled, or removed, by whom, and when. The **Observability** entry gives them that: an audit log of every lifecycle event where each row is a plain-language activity line ("Enabled demo-fs", "Discovered tool write_file on demo-fs") rather than a raw `event_type` code. It filters by time range and actor, pages client-side, and expands any row to its exact recorded detail.
+A developer wants to see what changed in their Coffer vault — which resources and capabilities were added, enabled, disabled, or removed, by whom, and when. The **Observability** entry gives them that: an audit log of every lifecycle event where each row is a plain-language activity line ("Enabled demo-fs", "Discovered tool write_file on demo-fs") rather than a raw `event_type` code. It filters by time range and actor, pages client-side, and expands any row to its raw log — the entry's full underlying JSON record, pretty-printed in a monospace, scrollable block.
 
 **Why this priority**: P2 — the audit log already shipped in spec 001; this story is the redesigned filter + table and the `Observability` home.
 
-**Independent Test**: open `/observability` — the Observability section's audit-log view renders with the "Audit log" heading, a filter bar (time range / actor), and a paged table where each row is a readable activity line; clicking a row expands its exact detail. Navigate to the legacy `/audit` URL — the app redirects to `/observability`.
+**Independent Test**: open `/observability` — the Observability section's audit-log view renders with the "Audit log" heading, a filter bar (time range / actor), and a paged table where each row is a readable activity line; clicking a row expands it to the entry's raw log JSON. Navigate to the legacy `/audit` URL — the app redirects to `/observability`.
 
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
@@ -179,6 +180,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **When** the Invocations tab loads
 - **Then** the table renders timestamp / type / capability / status / latency columns
 - **And** the status filter dropdown is operable
+- **And** clicking (or pressing Enter/Space on) a row expands it to that invocation's raw log — its full underlying JSON record, pretty-printed in a monospace, scrollable block
 
 ### Scenario: invocation status filter dropdown exposes selectable options
 
@@ -192,14 +194,14 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **When** the user opens `/observability`
 - **Then** the Observability section's audit-log view renders with the "Audit log" heading
 - **And** it renders a filter bar (time range, actor) and a paged table where each row is a plain-language activity line, not a raw event code
-- **And** clicking a row expands its exact detail (absolute time, event code, payload)
+- **And** clicking a row expands it to the entry's raw log JSON
 - **And** the filters narrow the visible rows live
 
-### Scenario: audit log row expand shows detail panel
+### Scenario: audit log row expand shows raw log
 
 - **Given** the audit log has at least one row
-- **When** the user clicks a row on the Observability page
-- **Then** an expanded detail panel renders the event label for that row
+- **When** the user clicks (or presses Enter/Space on) a row on the Observability page
+- **Then** an expanded region renders that entry's raw log — its full underlying JSON record, pretty-printed in a monospace, scrollable block
 
 ### Scenario: audit log free-text filter narrows rows
 
@@ -271,6 +273,6 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - Every scenario above has at least one covering test (unit, integration, or e2e) and the `audit_acceptance` script passes 002 alongside 001.
 - A first-time user can register an MCP server and reach a working gateway in-app; pointing an MCP client at the shim is documented in the project README.
 - The sidebar shows only operational surfaces (MCP servers, Observability, Settings); no feature appears as a dead "soon" entry.
-- Observability provides the redesigned audit log filter + table; the legacy `/audit` URL still resolves.
+- Observability provides the redesigned audit log filter + table; the legacy `/audit` URL still resolves. Audit log and MCP invocation log rows each expand to the row's raw log JSON.
 - Settings groups data controls (retention, prune, backup) under a Data tab; the daemon is never surfaced as a user-facing concept, and no tab exposes a shutdown or token-rotation control.
 - `make verify` + `make verify-e2e` are green.

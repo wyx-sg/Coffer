@@ -5,7 +5,7 @@ FRONTEND := frontend
 
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
-	verify-unit verify-integration verify-contract verify-e2e verify-acceptance \
+	verify-unit verify-integration verify-contract verify-e2e verify-acceptance verify-desktop \
 	coverage lock \
 	desktop-dev desktop-build \
 	bundle-binaries \
@@ -25,6 +25,7 @@ help:
 	@echo "  make verify-contract       contract tier only"
 	@echo "  make verify-e2e            e2e tier only (currently: Playwright web only)"
 	@echo "  make verify-acceptance     audit spec.md scenarios vs test markers"
+	@echo "  make verify-desktop        cargo test --lib for the Tauri crate (skipped if rust missing)"
 	@echo "  make lint                  ruff + mypy + eslint + tsc + import-linter + file/response_model checks"
 	@echo "  make format                ruff format + prettier"
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
@@ -83,6 +84,24 @@ verify-all: verify verify-e2e
 
 verify-acceptance:
 	$(PY) scripts/audit_acceptance.py
+
+# Run the Rust unit tests in the Tauri crate (desktop/src/lib.rs). We don't
+# require cargo locally — contributors without the Rust toolchain still need
+# `make verify` to succeed for backend/frontend changes — so this step
+# skips gracefully when cargo is absent. CI installs rust unconditionally
+# (see .github/workflows/verify.yml :: desktop-build) and runs `cargo test
+# --lib` directly there, so coverage is enforced at the PR layer.
+verify-desktop:
+	@if ! command -v cargo >/dev/null 2>&1; then \
+		echo "verify-desktop: cargo not found — skipping (install via https://rustup.rs to enable)"; \
+		exit 0; \
+	fi; \
+	if [ "$$(uname -s)" = "Linux" ] && command -v pkg-config >/dev/null 2>&1 && ! pkg-config --exists gdk-3.0 2>/dev/null; then \
+		echo "verify-desktop: gdk-3.0 not installed — skipping (apt install libgtk-3-dev to enable)"; \
+		exit 0; \
+	fi; \
+	echo "verify-desktop: cargo test --lib (desktop crate)"; \
+	cd desktop && cargo test --lib
 
 lint:
 	$(PY) scripts/check_file_sizes.py
@@ -200,7 +219,7 @@ dev:
 	@echo "Starting backend (:8000) and frontend (:5173). Ctrl-C to stop both."
 	@trap 'kill 0' EXIT; \
 	DAEMON_JSON="$$HOME/.coffer/daemon.json"; \
-	(cd $(BACKEND) && PYTHONPATH=. ../.venv/bin/python3 -m coffer.infrastructure.daemon.entry) & \
+	(cd $(BACKEND) && COFFER_DEV_CORS=1 PYTHONPATH=. ../.venv/bin/python3 -m coffer.infrastructure.daemon.entry) & \
 	echo "Waiting for daemon to become ready (up to 30 s)…"; \
 	_elapsed=0; \
 	until [ -f "$$DAEMON_JSON" ]; do \

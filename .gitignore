@@ -166,6 +166,10 @@ temp/
 .claude/loop-state.json
 .claude/loop-history.md
 .claude/scheduled_tasks.lock
+.claude/worktrees/
+
+# stray worktree dir created by tooling typo (.claire, not .claude)
+.claire/
 
 # --- speckit duplicate skills folder (mirror of .claude/skills/) ---
 .agents/

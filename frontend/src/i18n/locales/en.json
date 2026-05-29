@@ -9,7 +9,8 @@
     "saving": "Saving…",
     "deleting": "Deleting…",
     "retry": "Retry",
-    "clear": "Clear"
+    "clear": "Clear",
+    "rawLog": "Raw log"
   },
   "nav": {
     "aria": {
@@ -34,7 +35,7 @@
     "loadFailed": "Failed to load resources",
     "welcome": {
       "title": "A local-first vault for the AI assets your editors share",
-      "body": "Register your first MCP server below — Coffer keeps it running locally and re-exposes its tools to every connected client (Claude Code, Claude Desktop, Cursor) under one namespace.",
+      "body": "Register your first MCP server below — Coffer keeps it running locally and re-exposes its tools to every connected client under one namespace.",
       "featureAggregate": {
         "title": "Aggregate, don't fragment",
         "body": "One client connection covers every upstream MCP server you register."
@@ -236,14 +237,6 @@
       "30d": "Last 30 days",
       "all": "All time",
       "custom": "Custom range…"
-    },
-    "detail": {
-      "time": "Recorded",
-      "event": "Event",
-      "resource": "Resource",
-      "actor": "Actor",
-      "payload": "Details",
-      "empty": "No additional details."
     },
     "applyRange": "Apply"
   },

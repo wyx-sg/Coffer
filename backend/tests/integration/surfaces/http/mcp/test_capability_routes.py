@@ -220,6 +220,103 @@ async def test_list_capabilities_returns_tools_resources_prompts(
 
 
 @pytest.mark.asyncio
+async def test_list_capabilities_tools_only_upstream_method_not_found(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tools-only upstream that replies -32601 METHOD_NOT_FOUND for
+    resources/list and prompts/list must NOT fail the capability view.
+
+    The fake server is launched with --no-resources --no-prompts so it does
+    not register those handlers; the MCP SDK then replies with a genuine
+    JSON-RPC -32601, exactly like a real tools-only upstream. The endpoint
+    must return 200 with tools populated and resources == prompts == [],
+    instead of the previous 500 INTERNAL_ERROR.
+    """
+    _with_in_memory(monkeypatch)
+
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+
+    audit = AuditService(SqlAlchemyAuditRepo(sm))
+    rsvc = ResourceService(
+        kinds={
+            "mcp_server": Kind(
+                name="mcp_server",
+                display_name="MCP Server",
+                config_schema=MCPServerConfig,
+            )
+        },
+        repo=SqlAlchemyResourceRepo(sm),
+        audit=audit,
+    )
+    await rsvc.register(
+        kind="mcp_server",
+        name="toolsonly",
+        config={
+            "transport": {
+                "type": "stdio",
+                "command": sys.executable,
+                "args": [
+                    str(_FAKE),
+                    "--scenario",
+                    "basic",
+                    "--tools",
+                    "read_file",
+                    "write_file",
+                    "--no-resources",
+                    "--no-prompts",
+                ],
+            }
+        },
+        actor="test",
+    )
+
+    prefs_repo = MCPCapabilityPreferenceRepo(sm)
+    supervisor = SubprocessSupervisor(
+        resource_service=rsvc,
+        credential_resolver=CredentialResolver(KeyringAdapter()),
+    )
+    discovery = CapabilityDiscovery(
+        resource_service=rsvc,
+        supervisor=supervisor,
+        preferences=prefs_repo,
+        audit=audit,
+    )
+
+    set_active_token("test-token")
+    app = FastAPI()
+    err_handlers.register(app)
+    app.include_router(capability_router)
+    app.dependency_overrides[get_resource_service] = lambda: rsvc
+    app.dependency_overrides[get_audit_service] = lambda: audit
+    app.dependency_overrides[get_capability_discovery] = lambda: discovery
+    app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
+    app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
+    app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(sm)
+
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"X-Coffer-Token": "test-token"},
+        ) as client:
+            r = await client.get("/api/v1/resources/mcp_server/toolsonly/capabilities")
+            assert r.status_code == 200, r.text
+            body = r.json()
+            tool_names = {t["prefixed_name"] for t in body["tools"]}
+            assert tool_names == {"toolsonly__read_file", "toolsonly__write_file"}
+            assert body["resources"] == []
+            assert body["prompts"] == []
+    finally:
+        await supervisor.dispose()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_list_capabilities_returns_404_for_unknown_server(
     client_and_ctx: tuple,
 ) -> None:

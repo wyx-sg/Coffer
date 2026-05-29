@@ -13,6 +13,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+import mcp.types as mcp_types
+from mcp import McpError
+
 from coffer.application.audit_service import AuditService
 from coffer.application.mcp.ports import MCPCapabilityPreferenceRepoPort
 from coffer.application.mcp.supervisor import SubprocessSupervisor
@@ -174,7 +177,19 @@ class CapabilityDiscovery:
         async with self._lock_for(server_name, "resource"):
             if cache.resources is None or not self._is_fresh(cache.resources_fetched_at):
                 conn = await self._supervisor.get_or_spawn(server_name)
-                result = await conn.request("resources/list", {})
+                try:
+                    result = await conn.request("resources/list", {})
+                except McpError as exc:
+                    # An upstream that implements only tools replies with JSON-RPC
+                    # -32601 (METHOD_NOT_FOUND) for resources/list. Treat that as
+                    # "this upstream has no resources" — cache an empty list and
+                    # return [], without affecting tools. Any other McpError (and
+                    # real UpstreamUnavailable/UpstreamTimeout) propagates.
+                    if exc.error.code != mcp_types.METHOD_NOT_FOUND:
+                        raise
+                    cache.resources = []
+                    cache.resources_fetched_at = self._clock()
+                    return []
                 cache.resources = [
                     MCPResource(
                         uri=str(getattr(r, "uri", "")),
@@ -212,7 +227,19 @@ class CapabilityDiscovery:
         async with self._lock_for(server_name, "prompt"):
             if cache.prompts is None or not self._is_fresh(cache.prompts_fetched_at):
                 conn = await self._supervisor.get_or_spawn(server_name)
-                result = await conn.request("prompts/list", {})
+                try:
+                    result = await conn.request("prompts/list", {})
+                except McpError as exc:
+                    # A tools-only upstream replies with JSON-RPC -32601
+                    # (METHOD_NOT_FOUND) for prompts/list. Treat that as "this
+                    # upstream has no prompts" — cache an empty list and return
+                    # [], without affecting tools. Any other McpError (and real
+                    # UpstreamUnavailable/UpstreamTimeout) propagates.
+                    if exc.error.code != mcp_types.METHOD_NOT_FOUND:
+                        raise
+                    cache.prompts = []
+                    cache.prompts_fetched_at = self._clock()
+                    return []
                 cache.prompts = [
                     MCPPrompt(
                         name=p.name,

@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { RawLog } from "@/components/RawLog";
 import type { components } from "@/lib/api/types";
 import { formatDateTime } from "@/lib/utils";
 import { describeActivity } from "./auditText";
@@ -80,12 +81,22 @@ export function AuditTable({ entries, sortDir, onToggleSort }: Props) {
           </TableHeader>
           <TableBody>
             {entries.map((entry) => {
-              const details = (entry.details ?? {}) as Record<string, unknown>;
               const activity = describeActivity(t, entry);
               const isOpen = expanded.has(entry.id);
               return (
                 <Fragment key={entry.id}>
-                  <TableRow className="cursor-pointer" onClick={() => toggle(entry.id)}>
+                  <TableRow
+                    className="cursor-pointer"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onClick={() => toggle(entry.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggle(entry.id);
+                      }
+                    }}
+                  >
                     <TableCell className="text-muted-foreground">
                       {isOpen ? (
                         <ChevronDown className="size-4" />
@@ -107,7 +118,7 @@ export function AuditTable({ entries, sortDir, onToggleSort }: Props) {
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableCell />
                       <TableCell colSpan={3} className="py-3">
-                        <DetailPanel entry={entry} details={details} />
+                        <RawLog record={entry} />
                       </TableCell>
                     </TableRow>
                   ) : null}
@@ -118,57 +129,5 @@ export function AuditTable({ entries, sortDir, onToggleSort }: Props) {
         </Table>
       </CardContent>
     </Card>
-  );
-}
-
-function DetailPanel({ entry, details }: { entry: AuditEntry; details: Record<string, unknown> }) {
-  const { t } = useTranslation();
-  const payload = Object.entries(details);
-  return (
-    <div className="space-y-1.5 text-xs">
-      <Field label={t("audit.detail.time")} value={formatDateTime(entry.timestamp)} />
-      <Field
-        label={t("audit.detail.event")}
-        value={t(`audit.eventLabel.${entry.event_type}`, {
-          defaultValue: entry.event_type,
-        })}
-      />
-      {entry.resource_kind && entry.resource_name ? (
-        <Field
-          label={t("audit.detail.resource")}
-          value={`${entry.resource_kind}:${entry.resource_name}`}
-        />
-      ) : null}
-      <Field
-        label={t("audit.detail.actor")}
-        value={t(`audit.actor.${entry.actor}`, { defaultValue: entry.actor })}
-      />
-      <div className="pt-1">
-        <div className="mb-1 font-medium text-muted-foreground">{t("audit.detail.payload")}</div>
-        {payload.length === 0 ? (
-          <div className="text-muted-foreground">{t("audit.detail.empty")}</div>
-        ) : (
-          <div className="space-y-1">
-            {payload.map(([k, v]) => (
-              <div key={k} className="flex gap-2">
-                <span className="shrink-0 font-mono text-muted-foreground">{k}</span>
-                <span className="break-all font-mono">
-                  {typeof v === "object" ? JSON.stringify(v) : String(v)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex gap-2">
-      <span className="w-20 shrink-0 text-muted-foreground">{label}</span>
-      <span>{value}</span>
-    </div>
   );
 }

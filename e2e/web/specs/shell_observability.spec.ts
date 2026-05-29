@@ -108,7 +108,7 @@ acceptance(
 
 acceptance(
   "002-ui-shell",
-  "audit log row expand shows detail panel",
+  "audit log row expand shows raw log",
   async ({ page }) => {
     const name = generateUniqueName("e2e002rowex");
     try {
@@ -118,18 +118,19 @@ acceptance(
       const row = page.getByRole("row").filter({ hasText: name }).first();
       await expect(row).toBeVisible({ timeout: 10_000 });
 
-      // Before clicking: the detail panel must not exist in the DOM at all
+      // Before clicking: the raw-log panel must not exist in the DOM at all
       // (not.toBeVisible() is vacuous when the element is absent; toHaveCount(0)
       // genuinely fails if the panel is already open).
-      await expect(page.getByText("Server registered")).toHaveCount(0);
+      await expect(page.getByText(/"event_type"/)).toHaveCount(0);
 
       // Click the row to expand it
       await row.click();
 
-      // After clicking: the detail panel renders the event label
-      await expect(page.getByText("Server registered")).toBeVisible({
+      // After clicking: the expanded row renders the entry's raw log JSON
+      await expect(page.getByText(/"event_type"/).first()).toBeVisible({
         timeout: 5_000,
       });
+      await expect(page.getByText(/resource_created/).first()).toBeVisible();
     } finally {
       await deregisterMcpServer(name);
     }

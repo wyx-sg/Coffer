@@ -86,6 +86,7 @@
 - **Credential missing or keychain locked**: 注册失败，错误消息会指出缺失的凭据 (credential) 并指引用户去配置凭据的位置。不会留下任何部分写入的状态。
 - **Duplicate registration**: 同一 kind 下注册重名的服务器会被拒绝并给出明确错误；不可能产生部分写入。
 - **Tool-name collision across servers**: 通过 `<server>__<tool>` 命名空间阻止；客户端永远看不到冲突。
+- **Tools-only upstream**: 只实现 `tools`、对 `resources/list` 或 `prompts/list` 返回 JSON-RPC `-32601`（METHOD_NOT_FOUND）的上游，被视为没有 resources / 没有 prompts。单服务器能力视图与聚合列表会返回该服务器的 tools，并将 resources/prompts 置为空集（HTTP 200），而不是报错——因此对于仅支持 tools 的服务器，管理端 / Web-UI 的能力视图依然可用。
 - **Daemon port conflict**: daemon 默认端口被占用时，会在一小段范围内挑选下一个空闲端口，把所选端口写入它的 discovery 文件；shim、桌面端、CLI 都会读这个文件。
 - **Daemon crash**: 正在运行的 shim 会话会给它们的 MCP 客户端返回干净的错误而不是挂起；监管者 (supervisor) 可以检测崩溃并重启 daemon。
 - **Concurrent clients**: 多个 MCP 客户端（例如 Claude Code 和 Codex 同时）可同时连接而互不干扰；每个客户端都拿到独立的上游子进程集合。

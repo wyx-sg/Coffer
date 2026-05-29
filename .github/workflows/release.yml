@@ -1,0 +1,270 @@
+name: Release bundles
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to attach artifacts to a GitHub Release
+
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            triple: aarch64-apple-darwin
+            artifact_suffix: macos-arm64
+          - os: macos-13
+            triple: x86_64-apple-darwin
+            artifact_suffix: macos-x64
+          - os: ubuntu-22.04
+            triple: x86_64-unknown-linux-gnu
+            artifact_suffix: linux-x64
+          - os: windows-latest
+            triple: x86_64-pc-windows-msvc
+            artifact_suffix: windows-x64
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: ${{ matrix.triple }}
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+            desktop/target
+          key: ${{ runner.os }}-${{ matrix.triple }}-cargo-${{ hashFiles('desktop/Cargo.toml', 'desktop/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.triple }}-cargo-
+
+      # Tauri 2 on Linux requires extra system libraries for WebKit + AppIndicator
+      - name: install Linux system deps
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            patchelf
+
+      - name: install backend (includes pyinstaller via dev extras)
+        shell: bash
+        run: |
+          python -m venv .venv
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            .venv/Scripts/pip install --upgrade pip
+            .venv/Scripts/pip install -e ./backend[dev]
+          else
+            .venv/bin/pip install --upgrade pip
+            .venv/bin/pip install -e ./backend[dev]
+          fi
+
+      - name: install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      # Only run codegen here. The frontend production build is performed once
+      # by Tauri's beforeBuildCommand (see desktop/tauri.conf.json) during
+      # `cargo tauri build`; a second explicit `npm run build` would be wasted
+      # work. e2e deps are not used by this job and are intentionally not
+      # installed.
+      - name: codegen frontend
+        working-directory: frontend
+        run: npm run codegen
+
+      - name: bundle sidecar binaries
+        shell: bash
+        run: bash scripts/build_binaries.sh
+
+      - name: install Tauri CLI
+        # Pin to an exact 2.x release. Bump deliberately in a follow-up PR.
+        run: cargo install --locked tauri-cli --version "=2.11.2"
+
+      # macOS code-signing + notarization is intentionally NOT wired here.
+      # When the Apple Developer ID is provisioned, set the certificate
+      # + identity repo secrets and add a dedicated workflow (e.g.
+      # release-macos-signed.yml) gated on the secret being non-empty.
+      # We deliberately do NOT reference those secrets from this file:
+      # a disabled step that names them still surfaces in repo-secret
+      # audits and security tooling. See
+      # docs/distribution/macos-notarization.md for the full setup guide.
+      # Until then, macOS artifacts are renamed `-unsigned` in the
+      # collect step above so downloaders are not misled.
+
+      - name: cargo tauri build
+        working-directory: desktop
+        run: cargo tauri build --target ${{ matrix.triple }}
+
+      # Acceptance scenario: "post-build smoke test boots shim and gets a
+      # JSON-RPC reply". Run the smoke test against the freshly staged sidecar
+      # binaries (the same binaries Tauri just bundled). The script starts the
+      # bundled coffer-daemon, runs the shim, and asserts a JSON-RPC round-trip.
+      - name: post-build smoke test
+        # smoke_test_bundle.sh is Unix-only (python3, timeout, POSIX
+        # kill/kill -0/kill -9) and is not portable to Git-Bash, so it runs
+        # only on the macOS + Linux legs. The Windows bundle is still built and
+        # uploaded; it just isn't smoke-tested in CI.
+        if: ${{ !startsWith(matrix.os, 'windows') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # build_binaries.sh stages the sidecars with triple suffixes
+          # (coffer-daemon-<triple>[.exe]); the smoke script probes the
+          # un-suffixed basenames, so copy them into a temp dir under those
+          # names first.
+          smokedir="$(mktemp -d)"
+          ext=""
+          case "${{ matrix.triple }}" in *windows*) ext=".exe" ;; esac
+          cp "desktop/binaries/coffer-daemon-${{ matrix.triple }}${ext}" \
+             "$smokedir/coffer-daemon${ext}"
+          cp "desktop/binaries/coffer-mcp-shim-${{ matrix.triple }}${ext}" \
+             "$smokedir/coffer-mcp-shim${ext}"
+          bash scripts/smoke_test_bundle.sh "$smokedir"
+
+      # NOTE: cp failures here are signal, not noise — if the bundle dir is
+      # missing or empty we want the workflow to red, not silently upload a
+      # tarball with one DMG missing. `shopt -s nullglob` lets the glob
+      # expand to nothing without error, but if the glob DOES match anything
+      # we let cp's exit status propagate.
+      - name: collect artifacts (macOS)
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p artifacts
+          dmgs=(desktop/target/${{ matrix.triple }}/release/bundle/dmg/*.dmg)
+          apps=(desktop/target/${{ matrix.triple }}/release/bundle/macos/Coffer.app)
+          if (( ${#dmgs[@]} )); then cp -R "${dmgs[@]}" artifacts/; fi
+          if (( ${#apps[@]} )); then cp -R "${apps[@]}" artifacts/; fi
+          # macOS bundle is unsigned until APPLE_* secrets are wired (see
+          # CODE24-020). The .app is a DIRECTORY — zip it into a single file so
+          # it can be checksummed (sha256sum/shasum on a directory exits
+          # non-zero under `set -euo pipefail` and would fail the whole job)
+          # and rename to make the unsigned status visible in download UIs.
+          for app in artifacts/Coffer.app; do
+            [ -d "$app" ] || continue
+            ditto -c -k --sequesterRsrc --keepParent \
+              "$app" "artifacts/Coffer-unsigned-${{ matrix.triple }}.app.zip"
+            rm -rf "$app"
+          done
+          for dmg in artifacts/*.dmg; do
+            [ -f "$dmg" ] || continue
+            base="$(basename "$dmg" .dmg)"
+            case "$base" in
+              *-unsigned) ;;  # already tagged
+              *) mv "$dmg" "artifacts/${base}-unsigned.dmg" ;;
+            esac
+          done
+
+      - name: collect artifacts (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p artifacts
+          ai=(desktop/target/${{ matrix.triple }}/release/bundle/appimage/*.AppImage)
+          deb=(desktop/target/${{ matrix.triple }}/release/bundle/deb/*.deb)
+          if (( ${#ai[@]} )); then cp "${ai[@]}" artifacts/; fi
+          if (( ${#deb[@]} )); then cp "${deb[@]}" artifacts/; fi
+
+      - name: collect artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p artifacts
+          msi=(desktop/target/${{ matrix.triple }}/release/bundle/msi/*.msi)
+          nsis=(desktop/target/${{ matrix.triple }}/release/bundle/nsis/*.exe)
+          if (( ${#msi[@]} )); then cp "${msi[@]}" artifacts/; fi
+          if (( ${#nsis[@]} )); then cp "${nsis[@]}" artifacts/; fi
+
+      # CLI-only download tier: package just the two PyInstaller sidecars
+      # (coffer-daemon + coffer-mcp-shim, already staged with triple suffixes
+      # by build_binaries.sh) into one archive per platform — a tar.gz on
+      # macOS/Linux and a zip on Windows — so users who don't want the desktop
+      # installer can grab the daemon + shim directly. Shipped alongside the
+      # desktop installers and checksummed by the SHA256SUMS step below.
+      - name: package CLI-only archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          triple="${{ matrix.triple }}"
+          ext=""
+          case "$triple" in *windows*) ext=".exe" ;; esac
+          daemon="coffer-daemon-${triple}${ext}"
+          shim="coffer-mcp-shim-${triple}${ext}"
+          if [ ! -f "desktop/binaries/$daemon" ] || [ ! -f "desktop/binaries/$shim" ]; then
+            echo "error: CLI sidecars missing in desktop/binaries/" >&2
+            ls -la desktop/binaries/ >&2 || true
+            exit 1
+          fi
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            archive="coffer-cli-${triple}.zip"
+            ( cd desktop/binaries && 7z a -tzip "$OLDPWD/artifacts/$archive" "$daemon" "$shim" )
+          else
+            archive="coffer-cli-${triple}.tar.gz"
+            tar -czf "artifacts/$archive" -C desktop/binaries "$daemon" "$shim"
+          fi
+          echo "packaged CLI tier: artifacts/$archive"
+
+      # Generate SHA-256 checksums so downloaders can verify bundle integrity
+      # without trusting the GitHub Release UI alone. Cross-platform shim:
+      # sha256sum on Linux/Windows-bash, shasum -a 256 on macOS. We hash FILES
+      # only (the macOS .app is already zipped above) — hashing a directory
+      # exits non-zero under `set -euo pipefail` and would fail the job.
+      - name: compute SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd artifacts
+          if command -v sha256sum >/dev/null 2>&1; then
+            HASH=(sha256sum)
+          else
+            HASH=(shasum -a 256)
+          fi
+          : > SHA256SUMS
+          while IFS= read -r f; do
+            f="${f#./}"
+            [ "$f" = "SHA256SUMS" ] && continue
+            "${HASH[@]}" "$f" >> SHA256SUMS
+          done < <(find . -maxdepth 1 -type f ! -name SHA256SUMS | sort)
+          cat SHA256SUMS
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coffer-${{ matrix.artifact_suffix }}
+          path: artifacts/
+          # Fail the workflow if zero files matched — silent empty uploads
+          # have masked broken bundle steps in the past.
+          if-no-files-found: error
+          retention-days: 30

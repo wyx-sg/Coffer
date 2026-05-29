@@ -1,6 +1,7 @@
 // frontend/src/kinds/mcp/InvocationsTable.tsx
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { RawLog } from "@/components/RawLog";
 import { useMcpInvocations } from "@/lib/hooks/useMcpInvocations";
 import { translateApiError } from "@/lib/api/errors";
 import { formatDateTime } from "@/lib/utils";
@@ -34,6 +36,15 @@ const DEFAULT_FILTERS: InvocationsFiltersState = {
 export function InvocationsTable({ serverName }: Props) {
   const { t } = useTranslation();
   const [filters, setFilters] = useState<InvocationsFiltersState>(DEFAULT_FILTERS);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   // Memoise the window so a rolling preset's Date.now()-based `since`
   // (which is part of the useMcpInvocations queryKey) is stable across
@@ -126,6 +137,7 @@ export function InvocationsTable({ serverName }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8"></TableHead>
                   <TableHead>{t("mcp.invocations.header.time")}</TableHead>
                   <TableHead>{t("mcp.invocations.header.type")}</TableHead>
                   <TableHead>{t("mcp.invocations.header.key")}</TableHead>
@@ -136,28 +148,60 @@ export function InvocationsTable({ serverName }: Props) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((inv, i) => (
-                  <TableRow key={`${inv.timestamp}-${i}`}>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDateTime(inv.timestamp)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{inv.capability_type}</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{inv.capability_key}</TableCell>
-                    <TableCell className="text-right text-xs">{inv.duration_ms} ms</TableCell>
-                    <TableCell>
-                      <Badge className={invocationStatusClass(inv.status)} variant="outline">
-                        {inv.status}
-                      </Badge>
-                      {inv.error_message ? (
-                        <div className="mt-0.5 text-xs text-muted-foreground">
-                          {inv.error_message}
-                        </div>
+                {rows.map((inv, i) => {
+                  const id = `${inv.timestamp}-${i}`;
+                  const isOpen = expanded.has(id);
+                  return (
+                    <Fragment key={id}>
+                      <TableRow
+                        className="cursor-pointer"
+                        tabIndex={0}
+                        aria-expanded={isOpen}
+                        onClick={() => toggle(id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggle(id);
+                          }
+                        }}
+                      >
+                        <TableCell className="text-muted-foreground">
+                          {isOpen ? (
+                            <ChevronDown className="size-4" />
+                          ) : (
+                            <ChevronRight className="size-4" />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDateTime(inv.timestamp)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{inv.capability_type}</Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{inv.capability_key}</TableCell>
+                        <TableCell className="text-right text-xs">{inv.duration_ms} ms</TableCell>
+                        <TableCell>
+                          <Badge className={invocationStatusClass(inv.status)} variant="outline">
+                            {inv.status}
+                          </Badge>
+                          {inv.error_message ? (
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              {inv.error_message}
+                            </div>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                      {isOpen ? (
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          <TableCell />
+                          <TableCell colSpan={5} className="py-3">
+                            <RawLog record={inv} />
+                          </TableCell>
+                        </TableRow>
                       ) : null}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                    </Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>

@@ -67,6 +67,34 @@ describe("InvocationsTable", () => {
     expect(screen.getByText("connection refused")).toBeInTheDocument();
   });
 
+  test("clicking a row expands it to the invocation's raw log JSON", async () => {
+    getApiClientMock.mockReturnValue({
+      GET: vi.fn().mockResolvedValue({
+        data: { invocations: sampleInvocations },
+        error: undefined,
+      }),
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap(<InvocationsTable serverName="fs" />));
+
+    const keyCell = await screen.findByText("read_file");
+    const findRaw = () => screen.queryByText((_, el) => el?.tagName === "PRE");
+
+    // Collapsed by default.
+    expect(findRaw()).not.toBeInTheDocument();
+
+    // Expand → the row's full underlying JSON record is shown.
+    fireEvent.click(keyCell.closest("tr")!);
+    await waitFor(() => {
+      expect(findRaw()?.textContent).toContain('"capability_key": "read_file"');
+    });
+    expect(findRaw()?.textContent).toContain('"status": "ok"');
+
+    // Collapse again.
+    fireEvent.click(keyCell.closest("tr")!);
+    await waitFor(() => expect(findRaw()).not.toBeInTheDocument());
+  });
+
   test("renders empty state when no invocations", async () => {
     getApiClientMock.mockReturnValue({
       GET: vi.fn().mockResolvedValue({

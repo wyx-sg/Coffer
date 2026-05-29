@@ -50,7 +50,7 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 
 ### User Story 2 — 日常 MCP 操作有产品质感，不再像脚手架 (Priority: P1)
 
-已经在用 Coffer 做 MCP gateway 聚合的开发者希望日常流程——注册服务器、看健康、浏览工具、切换能力、看 invocation——看起来、用起来像一个真正的产品，而不是一坨脚手架。标题在字体上有区分；间距统一；每台服务器页面在 per-tool 开关之前先有一个"这台服务器在干嘛"的总览视图；空 / 错 / 加载态都是一等公民。服务器列表带搜索框、状态过滤、客户端分页，让一个大 vault 也能浏览。
+已经在用 Coffer 做 MCP gateway 聚合的开发者希望日常流程——注册服务器、看健康、浏览工具、切换能力、看 invocation——看起来、用起来像一个真正的产品，而不是一坨脚手架。标题在字体上有区分；间距统一；每台服务器页面在 per-tool 开关之前先有一个"这台服务器在干嘛"的总览视图；空 / 错 / 加载态都是一等公民。服务器列表带搜索框、状态过滤、客户端分页，让一个大 vault 也能浏览。Invocations tab 列出每一次调用；展开一行可看它的原始日志——该次 invocation 完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现——与审计日志的展开行为一致。
 
 "Add MCP server" 是一个对话框，用户把标准的 `mcpServers` JSON 块粘进去（一次一台或多台都行）——就是每台 MCP server README 给的那块。Review 一步让他们确认哪些 `env` 是 secret；这些值会被提到 OS keychain，而不是写在 config 里。
 
@@ -63,17 +63,18 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 - MCP server registration round-trip via JSON import
 - capability toggle uses the redesigned tab layout
 - invocations table renders the redesigned empty + populated states
+- invocation log row expands to its raw log JSON
 - language switcher round-trips correctly
 
 ---
 
 ### User Story 3 — Observability：审计日志有自己的家 (Priority: P2)
 
-开发者想知道自己的 Coffer vault 里发生了什么——哪些 resource 和能力被加、启用、禁用、删除了，谁干的，什么时候。**Observability** 入口给他这个：一份审计日志，记录每一次生命周期事件，每一行都是一句口语化的活动描述（"Enabled demo-fs"、"Discovered tool write_file on demo-fs"）而不是裸的 `event_type` 代码。它按时间范围与 actor 过滤、客户端分页，展开任意一行可看它的原始记录详情。
+开发者想知道自己的 Coffer vault 里发生了什么——哪些 resource 和能力被加、启用、禁用、删除了，谁干的，什么时候。**Observability** 入口给他这个：一份审计日志，记录每一次生命周期事件，每一行都是一句口语化的活动描述（"Enabled demo-fs"、"Discovered tool write_file on demo-fs"）而不是裸的 `event_type` 代码。它按时间范围与 actor 过滤、客户端分页，展开任意一行可看它的原始日志——该条目完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。
 
 **Why this priority**: P2——审计日志在 spec 001 已经交付；本故事是它的重设计过滤 + 表格以及 `Observability` 这个家。
 
-**Independent Test**: 开 `/observability`——Observability section 内的审计日志视图以 "Audit log" 标题渲染，带 filter bar (时间范围 / actor) 与分页表格，每一行是一条可读的活动行；点任意一行展开它的原始详情。访问 legacy `/audit` URL——app 重定向到 `/observability`。
+**Independent Test**: 开 `/observability`——Observability section 内的审计日志视图以 "Audit log" 标题渲染，带 filter bar (时间范围 / actor) 与分页表格，每一行是一条可读的活动行；点任意一行展开成该条目的原始日志 JSON。访问 legacy `/audit` URL——app 重定向到 `/observability`。
 
 **Representative scenarios** (完整 Given/When/Then 见 `## Acceptance Scenarios`):
 
@@ -181,6 +182,7 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 - **When** Invocations tab 加载
 - **Then** 表格渲染 timestamp / type / capability / status / latency 列
 - **And** 状态过滤下拉可操作
+- **And** 点任意一行（或在其上按 Enter/Space）展开它的原始日志——该次 invocation 完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现
 
 ### Scenario: invocation status filter dropdown exposes selectable options
 
@@ -194,14 +196,14 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 - **When** 用户打开 `/observability`
 - **Then** Observability section 的审计日志视图以 "Audit log" 标题渲染
 - **And** 它渲染 filter bar（时间范围、actor）与一个分页表格，每一行是口语化的活动行，不是裸 event 代码
-- **And** 点任意一行展开它的原始详情（绝对时间、event 代码、payload）
+- **And** 点任意一行展开成该条目的原始日志 JSON
 - **And** filters 实时收窄可见行
 
-### Scenario: audit log row expand shows detail panel
+### Scenario: audit log row expand shows raw log
 
 - **Given** 审计日志至少有一行
-- **When** 用户在 Observability 页点击一行
-- **Then** 展开的详情面板渲染出该行的 event label
+- **When** 用户在 Observability 页点击一行（或在其上按 Enter/Space）
+- **Then** 展开区渲染出该条目的原始日志——它完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现
 
 ### Scenario: audit log free-text filter narrows rows
 
@@ -273,6 +275,6 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 - 上面每一条 scenario 至少有一条覆盖测试（unit / integration / e2e），并且 `audit_acceptance` 同时通过 001 与 002。
 - 首次用户能在 app 内注册一台 MCP 服务器并到达一个能工作的 gateway；把 MCP 客户端指向 shim 这一步在项目 README 中记录。
 - 侧栏只展示运营界面（MCP servers、Observability、Settings）；没有任何功能以"敬请期待"的死占位项出现。
-- Observability 提供重设计后的审计日志过滤 + 表格；legacy `/audit` URL 仍能解析。
+- Observability 提供重设计后的审计日志过滤 + 表格；legacy `/audit` URL 仍能解析。审计日志与 MCP invocation 日志的每一行都能展开为该行的原始日志 JSON。
 - Settings 把数据控件（retention、prune、backup）归到 Data tab；daemon 永不作为用户可见概念出现，任何 tab 都不暴露 shutdown 或 token-rotation。
 - `make verify` + `make verify-e2e` 绿。
