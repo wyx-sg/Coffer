@@ -17,9 +17,12 @@ export const router = createBrowserRouter([
     path: "/",
     element: <Layout />,
     children: [
-      { index: true, element: <Navigate to="/resources" replace /> },
-      { path: "resources", element: <ResourcesPage /> },
-      { path: "resources/:kind/:name", element: <ResourceDetailPage /> },
+      { index: true, element: <Navigate to="/agents" replace /> },
+      { path: "mcp-servers", element: <ResourcesPage /> },
+      { path: "mcp-servers/:kind/:name", element: <ResourceDetailPage /> },
+      // Legacy route — this surface used to live at /resources. Keep old
+      // bookmarks and links working by redirecting to the renamed path.
+      { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
       { path: "agents", element: <AgentsPage /> },
       { path: "agents/:name", element: <AgentDetailPage /> },
       { path: "audit", element: <AuditLogPage /> },

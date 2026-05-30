@@ -125,7 +125,7 @@ export function McpServersTable({ resources }: { resources: ResourceOut[] }) {
           placeholder: t("mcp.table.search"),
         }}
         filters={filters}
-        onRowClick={(r) => navigate(`/resources/mcp_server/${r.name}`)}
+        onRowClick={(r) => navigate(`/mcp-servers/mcp_server/${r.name}`)}
         emptyMessage={t("resources.noMatches")}
       />
       <McpServerDeleteDialog

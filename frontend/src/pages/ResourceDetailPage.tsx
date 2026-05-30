@@ -23,7 +23,7 @@ export function ResourceDetailPage() {
   }
 
   if (kindUI.DetailPage === undefined) {
-    return <Navigate to="/resources" replace />;
+    return <Navigate to="/mcp-servers" replace />;
   }
 
   const DetailPage = kindUI.DetailPage;

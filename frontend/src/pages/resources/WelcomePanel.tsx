@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AddMcpServerDialog } from "@/kinds/mcp/AddMcpServerDialog";
 
 /**
- * First-run welcome card — shown on `/resources` when no resource is
+ * First-run welcome card — shown on `/mcp-servers` when no resource is
  * registered yet. Explains Coffer in one sentence and offers the single
  * obvious next step (spec 002-ui-shell §User Story 1).
  */

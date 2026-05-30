@@ -318,7 +318,7 @@
       "title": "Daemon offline",
       "body": "The coffer daemon stopped responding. Capability lists, tool calls, and registrations will fail until it restarts.",
       "notReadyTitle": "Daemon not running",
-      "notReadyBody": "Coffer can't read its daemon token, so the API isn't reachable. Start the daemon and reload this page.",
+      "notReadyBody": "Coffer's background service isn't reachable yet. It usually starts on its own — reload this page, and if the problem continues, restart Coffer.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
       "reload": "Reload"
@@ -346,7 +346,7 @@
     "INVALID_PREFIX": "Invalid prefix",
     "SHIM_NOT_FOUND": "Couldn't find the coffer-mcp-shim binary. Install Coffer so the shim is on PATH, or set COFFER_MCP_SHIM_PATH.",
     "INTERNAL_ERROR": "An unexpected error occurred",
-    "UNAUTHENTICATED": "Authentication required — Coffer can't read its daemon token. Run `coffer daemon start` and reload, or open the desktop app.",
+    "UNAUTHENTICATED": "Coffer's background service isn't reachable yet. It usually starts on its own — reload the page, and if the problem continues, restart Coffer.",
     "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
     "BAD_REQUEST": "The request was rejected as malformed.",
     "NOT_FOUND": "Not found.",

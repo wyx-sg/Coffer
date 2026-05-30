@@ -12,7 +12,7 @@ import { useResources } from "@/lib/hooks/useResources";
 import { translateApiError } from "@/lib/api/errors";
 
 /**
- * The MCP servers surface (nav: "MCP servers"; route /resources). Empty →
+ * The MCP servers surface (nav: "MCP servers"; route /mcp-servers). Empty →
  * a welcome card; otherwise the shared DataTable (search / filter /
  * pagination), with a row click opening the server's detail page.
  */

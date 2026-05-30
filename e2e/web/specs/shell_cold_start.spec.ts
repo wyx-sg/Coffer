@@ -141,7 +141,7 @@ acceptance(
       }
     }
 
-    await page.goto("/resources");
+    await page.goto("/mcp-servers");
 
     // Welcome card content
     await expect(

@@ -23,7 +23,7 @@ const stdioResource = {
   updated_at: "2026-05-21T00:00:00Z",
 };
 
-function wrap(ui: React.ReactNode, route = "/resources/mcp_server/fs") {
+function wrap(ui: React.ReactNode, route = "/mcp-servers/mcp_server/fs") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -31,8 +31,8 @@ function wrap(ui: React.ReactNode, route = "/resources/mcp_server/fs") {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[route]}>
         <Routes>
-          <Route path="/resources/mcp_server/:name" element={ui} />
-          <Route path="/resources" element={<div data-testid="resources-page">resources</div>} />
+          <Route path="/mcp-servers/mcp_server/:name" element={ui} />
+          <Route path="/mcp-servers" element={<div data-testid="resources-page">resources</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>

@@ -21,8 +21,8 @@ describe("NotFoundPage", () => {
     expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
     // The current path is interpolated into the subtitle copy.
     expect(screen.getByText(/\/bogus/)).toBeInTheDocument();
-    // The "back to resources" CTA must be a link to /resources.
+    // The "back to resources" CTA must be a link to /mcp-servers.
     const back = screen.getByRole("link");
-    expect(back).toHaveAttribute("href", "/resources");
+    expect(back).toHaveAttribute("href", "/mcp-servers");
   });
 });

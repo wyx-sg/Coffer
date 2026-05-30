@@ -74,7 +74,7 @@ export function McpServerDetailPage() {
       {
         onSuccess: () => {
           void qc.invalidateQueries({ queryKey: ["resources"] });
-          navigate("/resources");
+          navigate("/mcp-servers");
         },
       },
     );
@@ -101,7 +101,7 @@ export function McpServerDetailPage() {
           <p className="text-sm text-foreground/80">
             {error instanceof Error ? error.message : t("errors.RESOURCE_NOT_FOUND")}
           </p>
-          <Button variant="link" onClick={() => navigate("/resources")}>
+          <Button variant="link" onClick={() => navigate("/mcp-servers")}>
             <ArrowLeft className="mr-1 size-4" />
             {t("mcp.server.backToResources")}
           </Button>
@@ -115,7 +115,7 @@ export function McpServerDetailPage() {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => navigate("/resources")}
+        onClick={() => navigate("/mcp-servers")}
         className="-ml-2 text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="mr-1.5 size-4" /> {t("mcp.server.backToResources")}

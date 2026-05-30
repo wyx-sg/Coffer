@@ -146,7 +146,7 @@ export function AddMcpServerDialog() {
     onSuccess: (created) => {
       setOpen(false);
       if (created.length === 1) {
-        navigate(`/resources/mcp_server/${created[0]}`);
+        navigate(`/mcp-servers/mcp_server/${created[0]}`);
       }
     },
     onError: (err: unknown) => {

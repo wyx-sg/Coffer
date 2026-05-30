@@ -142,7 +142,7 @@ acceptance(
   "002-ui-shell",
   "language switcher round-trips correctly",
   async ({ page }) => {
-    await page.goto("/resources");
+    await page.goto("/mcp-servers");
     // Sidebar starts in English.
     await expect(
       page.getByRole("link", { name: /MCP servers/i }).first(),

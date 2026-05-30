@@ -53,6 +53,7 @@ pub fn run() {
             set_autostart_enabled,
             get_autostart_enabled,
             daemon::restart_daemon,
+            daemon::get_daemon_info,
         ])
         .setup(|app| {
             tray::build_tray(&app.handle())?;

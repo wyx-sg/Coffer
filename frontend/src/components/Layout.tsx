@@ -55,7 +55,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     labelKey: "nav.group.resources",
-    items: [{ to: "/resources", labelKey: "nav.mcpServers", icon: Server, end: true }],
+    items: [{ to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server, end: true }],
   },
   {
     labelKey: "nav.group.system",

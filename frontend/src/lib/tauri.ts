@@ -11,6 +11,27 @@ export function isTauri(): boolean {
   return typeof window !== "undefined" && window.__TAURI_INTERNALS__ !== undefined;
 }
 
+export interface DaemonInfo {
+  /** `http://127.0.0.1:<port>/api/v1` */
+  baseUrl: string;
+  token: string;
+}
+
+/**
+ * Ask the Tauri shell for the running daemon's base URL + token. The desktop
+ * app loads the frontend as bundled static assets, so the frontend can't read
+ * ~/.coffer/daemon.json itself — the shell ensures the bundled daemon is
+ * running (detect-or-spawn) and returns its connection info. Throws outside
+ * Tauri (browser dev), where the token comes from Vite env / localStorage.
+ */
+export async function getDaemonInfo(): Promise<DaemonInfo> {
+  if (!isTauri()) {
+    throw new Error("get_daemon_info is only available inside the Tauri app");
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<DaemonInfo>("get_daemon_info");
+}
+
 export async function setAutostartEnabled(enabled: boolean): Promise<boolean> {
   if (!isTauri()) {
     // Dev fallback — pretend success but mark the toggle as a no-op

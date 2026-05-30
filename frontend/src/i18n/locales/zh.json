@@ -318,7 +318,7 @@
       "title": "守护进程离线",
       "body": "Coffer 守护进程停止响应。能力列表、工具调用和注册操作将一直失败，直到它重新启动。",
       "notReadyTitle": "守护进程未启动",
-      "notReadyBody": "Coffer 读不到守护进程的 token，API 暂时不可达。请启动守护进程后刷新页面。",
+      "notReadyBody": "Coffer 的后台服务暂时还连不上。它通常会自动启动——请刷新页面；若问题仍未解决，请重启 Coffer。",
       "restart": "重启守护进程",
       "restarting": "重启中…",
       "reload": "重新加载"
@@ -346,7 +346,7 @@
     "INVALID_PREFIX": "无效的前缀",
     "SHIM_NOT_FOUND": "找不到 coffer-mcp-shim 二进制。请安装 Coffer 使 shim 位于 PATH 上，或设置 COFFER_MCP_SHIM_PATH。",
     "INTERNAL_ERROR": "发生意外错误",
-    "UNAUTHENTICATED": "需要认证 —— Coffer 读不到守护进程 token。请运行 `coffer daemon start` 后刷新，或打开桌面应用。",
+    "UNAUTHENTICATED": "Coffer 的后台服务暂时还连不上。它通常会自动启动——请刷新页面；若问题仍未解决，请重启 Coffer。",
     "DAEMON_NOT_READY": "Coffer 守护进程仍在启动，请稍后重试。",
     "BAD_REQUEST": "请求格式有误，已被拒绝。",
     "NOT_FOUND": "未找到。",
