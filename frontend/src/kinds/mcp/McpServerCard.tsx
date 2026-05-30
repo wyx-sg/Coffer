@@ -50,7 +50,7 @@ export function McpServerCard({ resource }: Props) {
   const del = useDeleteResource();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const detailPath = `/resources/mcp_server/${resource.name}`;
+  const detailPath = `/mcp-servers/mcp_server/${resource.name}`;
   const transport = transportType(resource);
   // Persisted health: the last /test probe result, else the most recent
   // invocation outcome; null until either has happened.

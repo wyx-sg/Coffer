@@ -34,11 +34,11 @@ function renderRouted(resource: ResourceOut) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/resources"]}>
+      <MemoryRouter initialEntries={["/mcp-servers"]}>
         <Routes>
-          <Route path="/resources" element={<McpServerCard resource={resource} />} />
+          <Route path="/mcp-servers" element={<McpServerCard resource={resource} />} />
           <Route
-            path="/resources/mcp_server/:name"
+            path="/mcp-servers/mcp_server/:name"
             element={<div data-testid="detail-page">detail</div>}
           />
         </Routes>

@@ -80,7 +80,7 @@ acceptance(
   async ({ page }) => {
     const name = generateUniqueName("e2e002reg");
     try {
-      await page.goto("/resources");
+      await page.goto("/mcp-servers");
       // "Add MCP server" opens a modal — no navigation away from the list.
       await page
         .getByRole("button", { name: /Add MCP server/i })
@@ -97,7 +97,7 @@ acceptance(
       await page.getByRole("button", { name: /import/i }).click();
 
       await expect(page).toHaveURL(
-        new RegExp(`/resources/mcp_server/${name}`),
+        new RegExp(`/mcp-servers/mcp_server/${name}`),
         { timeout: 15_000 },
       );
       // The redesigned detail page surfaces the server name as a level-1
@@ -126,7 +126,7 @@ acceptance(
     const name = generateUniqueName("e2e002tog");
     try {
       await registerFakeServer(name);
-      await page.goto(`/resources/mcp_server/${name}`);
+      await page.goto(`/mcp-servers/mcp_server/${name}`);
       // Tabs row uses the new design tokens but the role + tab names are
       // unchanged (spec 002 explicitly requires backwards-compatible
       // selectors here).
@@ -163,7 +163,7 @@ acceptance(
     const name = generateUniqueName("e2e002inv");
     try {
       await registerFakeServer(name);
-      await page.goto(`/resources/mcp_server/${name}`);
+      await page.goto(`/mcp-servers/mcp_server/${name}`);
       await page.getByRole("tab", { name: "Invocations" }).click();
       // Empty state — the server is registered but never invoked, so the
       // table renders the literal "No invocations yet" copy. We bind to
@@ -200,7 +200,7 @@ acceptance(
       // Discovery must run before the UI can toggle
       await refreshCapabilities(name);
 
-      await page.goto(`/resources/mcp_server/${name}`);
+      await page.goto(`/mcp-servers/mcp_server/${name}`);
       await page.getByRole("tab", { name: "Resources" }).click();
 
       // The resource row appears with its URI and is enabled by default
@@ -247,7 +247,7 @@ acceptance(
       // Discovery must run before the UI can toggle
       await refreshCapabilities(name);
 
-      await page.goto(`/resources/mcp_server/${name}`);
+      await page.goto(`/mcp-servers/mcp_server/${name}`);
       await page.getByRole("tab", { name: "Prompts" }).click();
 
       // The prompt row appears and is enabled by default
@@ -282,7 +282,7 @@ acceptance(
   async ({ page }) => {
     const name = generateUniqueName("e2e002back");
     try {
-      await page.goto("/resources");
+      await page.goto("/mcp-servers");
       await page
         .getByRole("button", { name: /Add MCP server/i })
         .first()
@@ -298,12 +298,12 @@ acceptance(
 
       // Import navigates to the detail page
       await expect(page).toHaveURL(
-        new RegExp(`/resources/mcp_server/${name}`),
+        new RegExp(`/mcp-servers/mcp_server/${name}`),
         { timeout: 15_000 },
       );
 
       // Navigate back to the list — the server card must appear there
-      await page.goto("/resources");
+      await page.goto("/mcp-servers");
       await expect(
         page
           .getByRole("link", { name: new RegExp(name) })
@@ -323,7 +323,7 @@ acceptance(
     const name = generateUniqueName("e2e002flt");
     try {
       await registerFakeServer(name);
-      await page.goto(`/resources/mcp_server/${name}`);
+      await page.goto(`/mcp-servers/mcp_server/${name}`);
       await page.getByRole("tab", { name: "Invocations" }).click();
 
       // The status filter combobox is visible
@@ -352,7 +352,7 @@ acceptance(
     // MCP server dialog must surface a parse-error message in-dialog
     // without firing a /resources request and without leaking the
     // generic "INTERNAL_ERROR" / "unexpected error" copy.
-    await page.goto("/resources");
+    await page.goto("/mcp-servers");
     await page
       .getByRole("button", { name: /Add MCP server/i })
       .first()
@@ -413,7 +413,7 @@ acceptance(
       // Two distinct tools so the search can filter one out
       await registerFakeServer(name, ["--tools", "alpha_tool", "beta_tool"]);
 
-      await page.goto(`/resources/mcp_server/${name}`);
+      await page.goto(`/mcp-servers/mcp_server/${name}`);
       await page.getByRole("tab", { name: "Tools" }).click();
 
       // Both tools visible initially

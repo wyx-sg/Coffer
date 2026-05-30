@@ -5,16 +5,40 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import App from "./App";
 import { queryClient } from "./lib/queryClient";
 import { registerFrontendKinds } from "./kinds";
+import { isTauri, getDaemonInfo } from "./lib/tauri";
 import "./i18n"; // Side-effect import; initialises i18next before render
 import "./index.css";
 
-registerFrontendKinds();
+// In the desktop app the daemon's port + token aren't known at build time, and
+// the bundled frontend can't read ~/.coffer/daemon.json itself. Ask the Tauri
+// shell (which detect-or-spawns the bundled daemon) and expose the result on
+// `window` BEFORE the first render, so every API call carries the token. In a
+// browser (dev / daemon-served) this is skipped — the token comes from the
+// Vite env / localStorage as before. Failure is non-fatal: the app still
+// mounts and shows its normal "service unreachable" state.
+async function injectDaemonInfo(): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const info = await getDaemonInfo();
+    const w = window as unknown as Record<string, unknown>;
+    w.__COFFER_BASE_URL__ = info.baseUrl;
+    w.__COFFER_TOKEN__ = info.token;
+  } catch (e) {
+    console.error("Coffer: could not get daemon info from the desktop shell", e);
+  }
+}
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
-    </QueryClientProvider>
-  </React.StrictMode>,
-);
+async function bootstrap(): Promise<void> {
+  await injectDaemonInfo();
+  registerFrontendKinds();
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+      </QueryClientProvider>
+    </React.StrictMode>,
+  );
+}
+
+void bootstrap();

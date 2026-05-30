@@ -22,7 +22,7 @@ export function NotFoundPage() {
         <CardContent className="space-y-4 text-sm text-foreground/80">
           <p>{t("notFound.body")}</p>
           <Button asChild variant="outline" size="sm">
-            <Link to="/resources">
+            <Link to="/mcp-servers">
               <ArrowLeft className="mr-1 size-4" />
               {t("notFound.cta")}
             </Link>

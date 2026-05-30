@@ -88,6 +88,30 @@ fn parse_daemon_port(raw: &str) -> Option<u16> {
     digits.parse::<u16>().ok()
 }
 
+/// Extract the `"token"` string value from the daemon discovery JSON via the
+/// same dependency-light scan as `parse_daemon_port`. The token is a
+/// URL-safe base64 string (`[A-Za-z0-9_-]`, no embedded quotes/escapes), so a
+/// plain "first quote after the colon → next quote" read is sufficient.
+fn parse_daemon_token(raw: &str) -> Option<String> {
+    let key = "\"token\"";
+    let idx = raw.find(key)?;
+    let after = &raw[idx + key.len()..];
+    let colon = after.find(':')?;
+    let open = after[colon + 1..].find('"')?;
+    let rest = &after[colon + 1 + open + 1..];
+    let close = rest.find('"')?;
+    Some(rest[..close].to_string())
+}
+
+/// Read both the port and token from `~/.coffer/daemon.json`. Returns `None`
+/// if the file is absent/unreadable or either field is missing.
+pub fn read_daemon_info() -> Option<(u16, String)> {
+    let home = env::var("HOME").ok().or_else(|| env::var("USERPROFILE").ok())?;
+    let path = PathBuf::from(home).join(".coffer").join("daemon.json");
+    let raw = fs::read_to_string(&path).ok()?;
+    Some((parse_daemon_port(&raw)?, parse_daemon_token(&raw)?))
+}
+
 /// Best-effort check: is a daemon already listening on `127.0.0.1:<port>`?
 pub fn daemon_is_listening(port: u16) -> bool {
     use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
@@ -111,7 +135,6 @@ pub fn daemon_is_listening(port: u16) -> bool {
 /// shell plugin tears down child processes on app shutdown).
 #[tauri::command]
 pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
-    use std::process::{Command, Stdio};
     use std::time::{Duration, Instant};
 
     // Hold the rate-limit mutex across the ENTIRE operation (check +
@@ -154,14 +177,29 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     }
 
     // (3) Spawn detached.
-    let binary = bundled_daemon_path(&app)?;
+    let pid = spawn_daemon_detached(&app)?;
 
+    // Record the rate-limit timestamp ONLY now — after a successful spawn —
+    // so the window is never consumed by a no-op or a failed spawn. We still
+    // hold the guard acquired at the top of the function.
+    *guard = Some(Instant::now());
+
+    log::info!("daemon restarted (pid {})", pid);
+    Ok(RestartResult { pid, started: true })
+}
+
+/// Spawn the bundled `coffer-daemon` detached from the app (so it survives
+/// app exit) and return its PID. Shared by `restart_daemon` and
+/// `get_daemon_info`; the caller owns detect-or-spawn / rate-limit policy.
+fn spawn_daemon_detached(app: &AppHandle) -> Result<u32, String> {
+    use std::process::{Command, Stdio};
+
+    let binary = bundled_daemon_path(app)?;
     let mut cmd = Command::new(&binary);
     cmd.stdout(Stdio::null())
         .stderr(Stdio::null())
         .stdin(Stdio::null());
 
-    // Detach so the daemon outlives the app process.
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -188,19 +226,56 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
         .map_err(|e| format!("failed to spawn {}: {e}", binary.display()))?;
     let pid = child.id();
     // Don't `wait` on the handle — the daemon now lives independently.
-    // `std::mem::forget` releases the Child struct without joining or
-    // killing the OS process. The daemon's own SIGCHLD / lifecycle is
-    // unaffected because we already redirected its stdio to null and
-    // detached the controlling terminal above.
+    // `std::mem::forget` releases the Child struct without joining or killing
+    // the OS process (stdio is already redirected to null + detached above).
     std::mem::forget(child);
+    Ok(pid)
+}
 
-    // Record the rate-limit timestamp ONLY now — after a successful spawn —
-    // so the window is never consumed by a no-op or a failed spawn. We still
-    // hold the guard acquired at the top of the function.
-    *guard = Some(Instant::now());
+/// Daemon connection info handed to the web UI inside the desktop app.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DaemonInfo {
+    /// `http://127.0.0.1:<port>/api/v1`
+    pub base_url: String,
+    pub token: String,
+}
 
-    log::info!("daemon restarted (pid {})", pid);
-    Ok(RestartResult { pid, started: true })
+/// Return the running daemon's base URL + token for the webview to authenticate
+/// with. The desktop app loads the frontend as bundled static assets, so the
+/// frontend can't read `~/.coffer/daemon.json` itself — it calls this on
+/// startup and sets `window.__COFFER_TOKEN__` / `__COFFER_BASE_URL__` before
+/// any API request. Detect-or-spawn: reuse a live daemon, else spawn the
+/// bundled one and wait (up to ~15s) for it to publish daemon.json + listen.
+#[tauri::command]
+pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
+    use std::thread::sleep;
+    use std::time::{Duration, Instant};
+
+    let ready = |port: u16, token: String| DaemonInfo {
+        base_url: format!("http://127.0.0.1:{port}/api/v1"),
+        token,
+    };
+
+    // Fast path: a daemon is already running and reachable.
+    if let Some((port, token)) = read_daemon_info() {
+        if daemon_is_listening(port) {
+            return Ok(ready(port, token));
+        }
+    }
+
+    // Cold start: spawn the bundled daemon, then poll until it's listening.
+    spawn_daemon_detached(&app)?;
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while Instant::now() < deadline {
+        if let Some((port, token)) = read_daemon_info() {
+            if daemon_is_listening(port) {
+                return Ok(ready(port, token));
+            }
+        }
+        sleep(Duration::from_millis(250));
+    }
+    Err("coffer-daemon did not become ready within 15s".to_string())
 }
 
 #[cfg(test)]
@@ -233,6 +308,24 @@ mod tests {
     #[test]
     fn parse_daemon_port_non_numeric_value_is_none() {
         assert_eq!(parse_daemon_port(r#"{"port": "abc"}"#), None);
+    }
+
+    #[test]
+    fn parse_daemon_token_reads_urlsafe_value() {
+        // Obviously-fake fixture (URL-safe `-`/`_` chars, low entropy) so the
+        // secrets scanner doesn't flag it as a real token.
+        let raw = r#"{"port": 8000, "token": "EXAMPLE-url_safe-token_value", "pid": 1}"#;
+        assert_eq!(parse_daemon_token(raw).as_deref(), Some("EXAMPLE-url_safe-token_value"));
+    }
+
+    #[test]
+    fn parse_daemon_token_missing_key_is_none() {
+        assert_eq!(parse_daemon_token(r#"{"port": 8000}"#), None);
+    }
+
+    #[test]
+    fn parse_daemon_token_tolerates_spacing() {
+        assert_eq!(parse_daemon_token(r#"{ "token" :   "abc123" }"#).as_deref(), Some("abc123"));
     }
 
     #[test]

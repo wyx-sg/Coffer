@@ -16,11 +16,11 @@ function wrap() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/resources"]}>
+      <MemoryRouter initialEntries={["/mcp-servers"]}>
         <Routes>
-          <Route path="/resources" element={<AddMcpServerDialog />} />
+          <Route path="/mcp-servers" element={<AddMcpServerDialog />} />
           <Route
-            path="/resources/mcp_server/:name"
+            path="/mcp-servers/mcp_server/:name"
             element={<div data-testid="detail-page">detail</div>}
           />
         </Routes>
