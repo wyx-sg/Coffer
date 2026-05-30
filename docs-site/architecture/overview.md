@@ -1,0 +1,101 @@
+# System Overview
+
+::: tip Mental model
+Coffer is a long-lived local daemon that aggregates N upstream MCP servers into one namespaced surface. Register a server once; every MCP client (Claude Code, Codex, Cursor) connects to the same daemon and sees the same set of tools, with names like `filesystem__read_file`. All state lives locally in SQLite and the OS keychain. The daemon binds to `127.0.0.1` only — nothing is reachable from outside your machine.
+:::
+
+## System topology
+
+The diagram below shows how the pieces fit together. MCP clients do not connect to upstream servers directly — they connect to the Coffer daemon, which manages upstream connections on their behalf.
+
+```mermaid
+flowchart TD
+    subgraph clients["MCP Clients"]
+        CC["Claude Code"]
+        CX["Codex"]
+        OT["Other clients…"]
+    end
+
+    subgraph coffer["Coffer (local, 127.0.0.1)"]
+        CLI["coffer CLI\n(short-lived)"]
+        SHIM["coffer-mcp-shim\n(per-client session)"]
+        WEBUI["Web UI\n(browser)"]
+        DESKTOP["Desktop app\n(Tauri 2 / Rust + WebView)"]
+        DAEMON["coffer-daemon\nFastAPI · auto-port\n/api/v1  /mcp"]
+        DB[("SQLite\n~/.coffer/coffer.db")]
+        KC[("OS Keychain\ncredential refs")]
+    end
+
+    subgraph upstream["Upstream MCP Servers"]
+        S1["filesystem server"]
+        S2["database server"]
+        SN["…other servers"]
+    end
+
+    CC -->|"stdio → shim"| SHIM
+    CX -->|"stdio → shim"| SHIM
+    OT -->|"stdio → shim"| SHIM
+    SHIM -->|"HTTP/SSE\nX-Coffer-Token"| DAEMON
+    CLI -->|"loopback HTTP\nX-Coffer-Token"| DAEMON
+    WEBUI -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
+    DESKTOP -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
+    DAEMON --- DB
+    DAEMON --- KC
+    DAEMON -->|"stdio subprocess\nper session"| S1
+    DAEMON -->|"stdio subprocess\nper session"| S2
+    DAEMON -->|"stdio subprocess\nper session"| SN
+```
+
+## Named components and interfaces
+
+| Component                      | Type                                             | Role                                                                                                                                                                |
+| ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `coffer-daemon`                | Long-lived process                               | FastAPI service on `127.0.0.1:<auto-port>`. Owns all state. Single SQLite writer.                                                                                   |
+| `coffer-mcp-shim`              | Short-lived process (one per MCP client session) | Bridges MCP client stdio ↔ daemon HTTP/SSE. Detects a running daemon or spawns one.                                                                                |
+| `coffer` CLI                   | Short-lived child process                        | User-facing management commands. Calls the daemon over loopback HTTP.                                                                                               |
+| Web UI                         | Browser process                                  | Management interface. In development, served by the Vite dev server at `http://localhost:5173`; in production, embedded by the Tauri desktop shell. Calls REST API. |
+| Desktop app                    | Native process (Tauri 2, Rust + WebView)         | Embeds the Web UI in a native desktop window. Communicates with the daemon via REST.                                                                                |
+| REST API (`/api/v1`)           | HTTP surface on daemon                           | Management plane: CRUD for resources, audit log, settings. Token + CORS authenticated.                                                                              |
+| MCP endpoint (`/mcp`)          | HTTP/SSE surface on daemon                       | MCP JSON-RPC endpoint. This is what the shim connects to. Forwards namespaced tool calls to upstream subprocesses.                                                  |
+| SQLite (`~/.coffer/coffer.db`) | Persistent store                                 | Control-plane state: resource registrations, capability preferences, audit log, retention policies. WAL mode, single writer.                                        |
+| OS Keychain                    | Credential store                                 | Actual secrets. The daemon holds only credential refs in the DB; secrets are materialized from the keychain at upstream spawn time.                                 |
+| `~/.coffer/daemon.json`        | Discovery file (mode 0600)                       | PID + port + token. Written by the daemon on startup; read by shim and CLI to locate a running daemon.                                                              |
+
+## Authentication model
+
+All surfaces that communicate with the daemon carry an `X-Coffer-Token` header. The token is generated when the daemon starts and written to `~/.coffer/daemon.json` (mode `0600`). Because the file is owner-readable only and the daemon binds to loopback, the effective trust boundary is the local user account.
+
+## All state under `~/.coffer/`
+
+Every persistent artifact lives in one directory:
+
+```
+~/.coffer/
+├── daemon.json          # discovery: PID + port + token (0600)
+├── coffer.db            # SQLite: all control-plane state
+├── logs/
+│   └── daemon.log       # structured JSON logs from the daemon
+└── upstream-pids/       # PID files for upstream subprocesses (swept on restart)
+```
+
+This single-directory layout means a complete backup of your Coffer state is one `cp -r ~/.coffer/ backup/` away.
+
+## Reading map
+
+The pages that follow each explore one slice of the system in depth:
+
+| Page                                                   | Topic                                                                     |
+| ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| [Daemon & processes](/architecture/processes)          | Process model, detect-or-spawn, upstream subprocess lifecycle             |
+| [Resource framework](/architecture/resource-framework) | The kind-agnostic abstraction that unifies identity, lifecycle, and audit |
+| [Layering & boundaries](/architecture/layering)        | Import rules, layer responsibilities, enforcement                         |
+| [Surfaces](/architecture/surfaces)                     | REST API, MCP endpoint, CLI, Web UI, Desktop                              |
+| [Request lifecycle](/architecture/request-lifecycle)   | End-to-end trace of a tool call from client to upstream                   |
+| [Persistence](/architecture/persistence)               | SQLite schema, WAL, Alembic, JSON field handling                          |
+| [Security](/architecture/security)                     | Token auth, keychain isolation, SSRF guard, loopback enforcement          |
+| [Observability](/architecture/observability)           | Structured logging, trace IDs, audit log, retention                       |
+| [Distribution](/architecture/distribution)             | Package layout, install, platform support                                 |
+
+---
+
+**See also:** [Architecture reference](/reference/project/architecture)

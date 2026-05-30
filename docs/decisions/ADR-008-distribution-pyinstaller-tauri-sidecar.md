@@ -231,8 +231,13 @@ Rejected.
   (d) cross-links to [`scripts/build_binaries.sh`](../../scripts/build_binaries.sh),
   [`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh),
   and the macOS notarization runbook restored.
-- **2026-05-30** — Added the **CLI-only** download tier: the release now
-  publishes a `coffer-cli-<triple>` archive (`.tar.gz` on macOS / Linux,
-  `.zip` on Windows) containing just `coffer-daemon` + `coffer-mcp-shim`,
-  alongside the existing CLI+desktop Tauri bundle, both built from the same
-  PyInstaller binaries. Targets headless / no-GUI installs.
+- **2026-05-30** — CLI-only tier expanded: the release now ships **three**
+  PyInstaller binaries — `coffer` (management CLI) added alongside
+  `coffer-daemon` + `coffer-mcp-shim`. The `coffer` management CLI, previously
+  only available via `pip install -e ./backend`, is now a first-class part of
+  the CLI tier. The CLI-only archive (`coffer-cli-<triple>.tar.gz` on macOS /
+  Linux, `.zip` on Windows) is installed via a one-line script
+  (`install.sh` / `install.ps1`, served from
+  `https://wyx-sg.github.io/Coffer/`) into `~/.coffer/bin`; the script also
+  adds `~/.coffer/bin` to `PATH` automatically. Env overrides available:
+  `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.

@@ -34,6 +34,17 @@ def _install_signal_handlers() -> None:
 
 def main() -> None:
     _install_signal_handlers()
+    # ADR-006: refuse to start a duplicate. If a daemon is already reachable,
+    # exit cleanly so the auto-spawn caller (CLI/shim) discovers it instead of
+    # us binding a second port and clobbering daemon.json (orphaning it).
+    existing = bootstrap.live_daemon()
+    if existing is not None:
+        _logger.info(
+            "daemon already running (pid=%s, port=%s); exiting",
+            existing.pid,
+            existing.port,
+        )
+        return
     # CODE-041: acquire() binds the port and hands us the live socket; passing
     # its fd to uvicorn means there is no close-then-rebind window in which the
     # port (already published in daemon.json with the token) could be stolen.

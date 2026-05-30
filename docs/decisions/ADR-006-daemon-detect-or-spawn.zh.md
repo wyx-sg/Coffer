@@ -3,7 +3,7 @@
 > English: [ADR-006-daemon-detect-or-spawn.md](./ADR-006-daemon-detect-or-spawn.md)
 
 **Status**: 已采纳 (Accepted)
-**Date**: 2026-05-20
+**Date**: 2026-05-20（2026-05-30 修订，见「修订历史」）
 **Deciders**: Yuxing Wu
 **Related**: spec `001-mcp-gateway` (FR-017, FR-018), [ADR-005](ADR-005-session-subprocess-model.md)
 
@@ -77,3 +77,15 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
 **不用发现文件 —— 固定端口 + 环境共享 token**。被否决。开发机上的端口冲突
 （8000 被大量使用）以及共享密钥轮换都需要某种配置或发现文件。
 将所有信息放进一个文件比把状态拆分到多处更简洁。
+
+## 修订历史
+
+- **2026-05-20** —— 初版决定：detect-or-spawn 模式，daemon 作为独立进程；shim
+  和 CLI 共用同一个辅助函数；daemon 启动时写出 `~/.coffer/daemon.json`。
+- **2026-05-30** —— 实现更新：`coffer` CLI 现已全面实现 detect-or-spawn。此前
+  CLI 会报错并提示用户手动执行 `coffer daemon start` —— 这是对本 ADR 所述设计
+  意图的一个偏差，现已纠正。此外，spawn 现在具备 **frozen 感知**：当以
+  PyInstaller 二进制方式运行时（即 `sys.frozen is True`），shim 和 CLI 会通过
+  `coffer.infrastructure.daemon.spawn.daemon_spawn_command()` 拉起同目录下的
+  `coffer-daemon` 二进制，而不是退回到 `python -m coffer_daemon`。这确保了无论
+  Coffer 是从预构建的发布归档还是从源码检出安装的，都能使用正确的二进制。

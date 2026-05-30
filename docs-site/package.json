@@ -1,0 +1,20 @@
+{
+  "name": "coffer-docs-site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-reference.mjs",
+    "predev": "npm run sync",
+    "dev": "vitepress dev",
+    "prebuild": "npm run sync",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3",
+    "vitepress-plugin-mermaid": "^2.0.17",
+    "mermaid": "^11.4.1"
+  }
+}

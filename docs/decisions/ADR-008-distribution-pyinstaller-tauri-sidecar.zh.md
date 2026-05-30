@@ -199,8 +199,12 @@ Coffer 有三个可运行入口：长生命周期的 `coffer-daemon`、按 MCP �
   (d) 恢复对 [`scripts/build_binaries.sh`](../../scripts/build_binaries.sh)、
   [`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh)
   与 macOS 公证 runbook 的交叉引用。
-- **2026-05-30** —— 新增 **CLI-only** 下载层级：release 现在在原有
-  CLI+desktop Tauri bundle 之外，再发布一份 `coffer-cli-<triple>` 归档
-  （macOS / Linux 为 `.tar.gz`，Windows 为 `.zip`），仅含 `coffer-daemon`
-  + `coffer-mcp-shim`，二者都基于同一对 PyInstaller 二进制构建。面向
-  headless / 无 GUI 安装。
+- **2026-05-30** —— CLI-only 层级扩展：release 现在发布**三份** PyInstaller
+  二进制 —— 在原有 `coffer-daemon` + `coffer-mcp-shim` 之外新增 `coffer`
+  管理 CLI。`coffer` 管理 CLI 此前仅可通过 `pip install -e ./backend` 获取，
+  现已作为 CLI 层级的一等成员正式发布。CLI-only 归档
+  （macOS / Linux 为 `coffer-cli-<triple>.tar.gz`，Windows 为 `.zip`）通过
+  一行脚本（`install.sh` / `install.ps1`，从
+  `https://wyx-sg.github.io/Coffer/` 提供）安装到 `~/.coffer/bin`；脚本同时
+  自动将 `~/.coffer/bin` 添加到 `PATH`。支持的环境变量覆盖：
+  `COFFER_INSTALL_DIR`、`COFFER_VERSION`、`COFFER_NO_MODIFY_PATH`。

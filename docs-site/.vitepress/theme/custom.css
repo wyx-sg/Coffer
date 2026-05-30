@@ -1,0 +1,72 @@
+/* "Coffer warm" — palette + type from spec 002 (frontend/src/index.css).
+   Light-only by design (no dark-mode block). */
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&display=swap");
+
+:root {
+  /* brand = clay accent #C96442 */
+  --vp-c-brand-1: #b9512f;
+  --vp-c-brand-2: #c96442;
+  --vp-c-brand-3: #d4795b;
+  --vp-c-brand-soft: #f7e9e2;
+
+  /* warm paper surfaces */
+  --vp-c-bg: #faf9f5;
+  --vp-c-bg-alt: #f4f1e9;
+  --vp-c-bg-soft: #f0ebe0;
+  --vp-c-bg-elv: #ffffff;
+
+  /* ink + warm-grey text */
+  --vp-c-text-1: #1f1b17;
+  --vp-c-text-2: #6b645a;
+  --vp-c-text-3: #9a9389;
+
+  /* borders */
+  --vp-c-border: #e8e4da;
+  --vp-c-divider: #e8e4da;
+  --vp-c-gutter: #e8e4da;
+
+  /* fonts */
+  --vp-font-family-base: "Inter", ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
+  --vp-font-family-mono: "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* primary button = clay */
+  --vp-button-brand-bg: #c96442;
+  --vp-button-brand-hover-bg: #b9512f;
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: #faf9f5;
+
+  /* home hero (Direction A) */
+  --vp-home-hero-name-color: #1f1b17;
+}
+
+/* serif headings, matching the product */
+:root {
+  --vp-font-family-heading: "Source Serif 4", Georgia, serif;
+}
+.VPDoc h1,
+.VPDoc h2,
+.VPDoc h3,
+.VPHero .name,
+.VPHero .text {
+  font-family: var(--vp-font-family-heading);
+  letter-spacing: -0.02em;
+}
+
+/* Direction A: restrained, editorial hero */
+.VPHero .name {
+  font-weight: 700;
+}
+.VPHero .tagline {
+  color: var(--vp-c-text-2);
+}
+
+/* Use more of the window on large screens. VitePress defaults cap the layout at
+   1440px and the doc prose column at 688px, so a maximised window leaves wide
+   empty margins and the content stops growing — widen both. */
+:root {
+  --vp-layout-max-width: 1600px;
+}
+.VPDoc.has-aside .content-container {
+  max-width: 1120px;
+}

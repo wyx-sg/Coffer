@@ -426,8 +426,15 @@ async def test_setup_shim_log_swallows_oserror(monkeypatch: pytest.MonkeyPatch) 
 
 @pytest.mark.asyncio
 async def test_spawn_daemon_invokes_popen(monkeypatch: pytest.MonkeyPatch) -> None:
-    """_spawn_daemon runs subprocess.Popen with start_new_session on POSIX
-    (or CREATE_NO_WINDOW|DETACHED_PROCESS on Windows). Covers lines 74-90."""
+    """_spawn_daemon uses daemon_spawn_command() (ADR-006) and passes the
+    resulting command to subprocess.Popen with start_new_session on POSIX
+    (or CREATE_NO_WINDOW|DETACHED_PROCESS on Windows).
+
+    In non-frozen mode daemon_spawn_command() returns
+    [sys.executable, '-m', 'coffer.infrastructure.daemon.entry'];
+    _spawn_daemon must forward that command verbatim to Popen.
+    """
+    from coffer.infrastructure.daemon.spawn import daemon_spawn_command
     from coffer.surfaces.shim import main as shim_main
 
     invoked: list[dict[str, Any]] = []
@@ -441,17 +448,53 @@ async def test_spawn_daemon_invokes_popen(monkeypatch: pytest.MonkeyPatch) -> No
         return _P()
 
     monkeypatch.setattr(shim_main.subprocess, "Popen", _fake_popen)
+    # Ensure we're testing the non-frozen path (the test runner is never frozen).
+    monkeypatch.delattr(sys, "frozen", raising=False)
     shim_main._spawn_daemon()
 
     assert len(invoked) == 1
-    assert invoked[0]["cmd"][1:] == [
-        "-m",
-        "coffer.surfaces.cli.main",
-        "daemon",
-        "start",
-    ]
+    expected_cmd = daemon_spawn_command()
+    assert invoked[0]["cmd"] == expected_cmd, (
+        f"shim must pass daemon_spawn_command() to Popen; "
+        f"got {invoked[0]['cmd']!r}, expected {expected_cmd!r}"
+    )
     if sys.platform != "win32":
         assert invoked[0]["kwargs"].get("start_new_session") is True
+
+
+@pytest.mark.asyncio
+async def test_spawn_daemon_frozen_uses_sibling_binary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """When sys.frozen=True (PyInstaller), _spawn_daemon must pass the sibling
+    coffer-daemon binary path (not sys.executable + -m ...) to Popen."""
+    from coffer.surfaces.shim import main as shim_main
+
+    fake_exe = tmp_path / "coffer-mcp-shim"
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(fake_exe))
+    monkeypatch.setattr(sys, "platform", "linux")
+
+    invoked: list[dict[str, Any]] = []
+
+    def _fake_popen(cmd: list[str], **kwargs: Any) -> object:
+        invoked.append({"cmd": cmd})
+
+        class _P:
+            pid = 99999
+
+        return _P()
+
+    monkeypatch.setattr(shim_main.subprocess, "Popen", _fake_popen)
+    shim_main._spawn_daemon()
+
+    assert len(invoked) == 1
+    # In frozen mode the command is a single-element list pointing to the
+    # sibling coffer-daemon binary in the same directory as the shim exe.
+    expected = str((tmp_path / "coffer-daemon").resolve())
+    assert invoked[0]["cmd"] == [expected], (
+        f"frozen shim must spawn sibling coffer-daemon; got {invoked[0]['cmd']!r}"
+    )
 
 
 @pytest.mark.asyncio

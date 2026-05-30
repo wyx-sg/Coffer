@@ -144,6 +144,8 @@ jobs:
              "$smokedir/coffer-daemon${ext}"
           cp "desktop/binaries/coffer-mcp-shim-${{ matrix.triple }}${ext}" \
              "$smokedir/coffer-mcp-shim${ext}"
+          cp "desktop/binaries/coffer-${{ matrix.triple }}${ext}" \
+             "$smokedir/coffer${ext}"
           bash scripts/smoke_test_bundle.sh "$smokedir"
 
       # NOTE: cp failures here are signal, not noise — if the bundle dir is
@@ -206,12 +208,13 @@ jobs:
           if (( ${#msi[@]} )); then cp "${msi[@]}" artifacts/; fi
           if (( ${#nsis[@]} )); then cp "${nsis[@]}" artifacts/; fi
 
-      # CLI-only download tier: package just the two PyInstaller sidecars
-      # (coffer-daemon + coffer-mcp-shim, already staged with triple suffixes
-      # by build_binaries.sh) into one archive per platform — a tar.gz on
-      # macOS/Linux and a zip on Windows — so users who don't want the desktop
-      # installer can grab the daemon + shim directly. Shipped alongside the
-      # desktop installers and checksummed by the SHA256SUMS step below.
+      # CLI-only download tier: package the three CLI binaries (coffer,
+      # coffer-daemon, coffer-mcp-shim) into one archive per platform — a
+      # tar.gz on macOS/Linux and a zip on Windows. The archive contains
+      # PLAIN binary names (no triple suffix) so that both the one-line
+      # installer and manual extraction yield co-located plain-named binaries,
+      # which is required by the frozen detect-or-spawn logic (ADR-006):
+      # `coffer` looks for `coffer-daemon` next to itself at runtime.
       - name: package CLI-only archive
         shell: bash
         run: |
@@ -220,20 +223,34 @@ jobs:
           triple="${{ matrix.triple }}"
           ext=""
           case "$triple" in *windows*) ext=".exe" ;; esac
-          daemon="coffer-daemon-${triple}${ext}"
-          shim="coffer-mcp-shim-${triple}${ext}"
-          if [ ! -f "desktop/binaries/$daemon" ] || [ ! -f "desktop/binaries/$shim" ]; then
+          # Source paths: triple-suffixed names produced by build_binaries.sh
+          src_daemon="desktop/binaries/coffer-daemon-${triple}${ext}"
+          src_shim="desktop/binaries/coffer-mcp-shim-${triple}${ext}"
+          src_cli="desktop/binaries/coffer-${triple}${ext}"
+          if [ ! -f "$src_daemon" ] || \
+             [ ! -f "$src_shim" ] || \
+             [ ! -f "$src_cli" ]; then
             echo "error: CLI sidecars missing in desktop/binaries/" >&2
             ls -la desktop/binaries/ >&2 || true
             exit 1
           fi
+          # Stage under plain names into a temp dir so the archive contents
+          # are clean (no triple suffix). All three must be co-located so
+          # detect-or-spawn can find coffer-daemon next to coffer at runtime.
+          stagedir="$(mktemp -d)"
+          cp "$src_daemon" "$stagedir/coffer-daemon${ext}"
+          cp "$src_shim"   "$stagedir/coffer-mcp-shim${ext}"
+          cp "$src_cli"    "$stagedir/coffer${ext}"
           if [ "$RUNNER_OS" = "Windows" ]; then
             archive="coffer-cli-${triple}.zip"
-            ( cd desktop/binaries && 7z a -tzip "$OLDPWD/artifacts/$archive" "$daemon" "$shim" )
+            ( cd "$stagedir" && 7z a -tzip "$OLDPWD/artifacts/$archive" \
+                "coffer${ext}" "coffer-daemon${ext}" "coffer-mcp-shim${ext}" )
           else
             archive="coffer-cli-${triple}.tar.gz"
-            tar -czf "artifacts/$archive" -C desktop/binaries "$daemon" "$shim"
+            tar -czf "artifacts/$archive" -C "$stagedir" \
+                "coffer" "coffer-daemon" "coffer-mcp-shim"
           fi
+          rm -rf "$stagedir"
           echo "packaged CLI tier: artifacts/$archive"
 
       # Generate SHA-256 checksums so downloaders can verify bundle integrity
@@ -268,3 +285,82 @@ jobs:
           # have masked broken bundle steps in the past.
           if-no-files-found: error
           retention-days: 30
+
+  # Publish a GitHub Release with every platform's artifacts attached, so users
+  # can download both tiers (desktop installers + coffer-cli archives) from the
+  # Releases page. Runs once, only on a tag push, after all `bundle` matrix legs
+  # succeed. Uses the preinstalled gh CLI — no third-party actions to pin.
+  release:
+    needs: bundle
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the Release + attach assets
+      actions: read # gh run download reads this run's artifacts
+    steps:
+      - name: download all run artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${GITHUB_RUN_ID}" --dir dist-artifacts --repo "${GITHUB_REPOSITORY}"
+
+      - name: stage release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          # Each matrix leg shipped its own SHA256SUMS; concatenate them into one
+          # (a flat copy would otherwise collide on the shared filename).
+          find dist-artifacts -name SHA256SUMS -print0 | sort -z | xargs -0 cat > release/SHA256SUMS
+          # Copy every other artifact (desktop installers + coffer-cli archives) flat.
+          find dist-artifacts -type f ! -name SHA256SUMS -exec cp {} release/ \;
+          echo "release assets:"
+          ls -la release/
+
+      - name: write release notes
+        shell: bash
+        run: |
+          cat > release-notes.md <<'NOTES'
+          Coffer ships in two download tiers, built from the same binaries:
+
+          ### Desktop app (most users)
+
+          Download the installer for your platform — macOS `.dmg`, Windows `.msi`
+          or NSIS `-setup.exe`, Linux `.AppImage` or `.deb`. The daemon, shim, and
+          web UI are bundled; install and launch.
+
+          ### CLI-only (headless / servers)
+
+          Download `coffer-cli-<platform>.tar.gz` (`.zip` on Windows); it contains
+          `coffer` (management CLI), `coffer-daemon`, and `coffer-mcp-shim`.
+          Run the daemon and point your MCP clients at the shim.
+
+          Verify downloads against `SHA256SUMS`.
+
+          > **macOS builds are unsigned** (notarisation pending). On first launch:
+          > `xattr -d com.apple.quarantine /Applications/Coffer.app`
+
+          Full install & usage guide: https://wyx-sg.github.io/Coffer/guide/install
+          NOTES
+
+      - name: publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          # Idempotent: create the release if it does not exist yet, otherwise
+          # (re-run / workflow_dispatch on an existing tag) just (re-)upload the
+          # assets with --clobber so the job stays green instead of failing on
+          # "release already exists".
+          if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber
+          else
+            gh release create "$TAG" release/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "Coffer ${TAG}" \
+              --notes-file release-notes.md \
+              --verify-tag
+          fi

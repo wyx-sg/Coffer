@@ -12,6 +12,7 @@ from pathlib import Path
 
 import typer
 
+from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.surfaces.cli import _client as _cli_client
 
 app = typer.Typer(help="Daemon lifecycle")
@@ -45,11 +46,7 @@ def start() -> None:
         typer.echo("daemon already running (daemon.json exists)")
         raise typer.Exit(0)
 
-    cmd = [
-        sys.executable,
-        "-m",
-        "coffer.infrastructure.daemon.entry",
-    ]
+    cmd = daemon_spawn_command()
 
     log_dir = home / ".coffer" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)

@@ -29,7 +29,7 @@ datas = (
     # against a fresh DB on first launch.
     + [
         (
-            "backend/coffer/infrastructure/persistence/migrations",
+            "coffer/infrastructure/persistence/migrations",
             "coffer/infrastructure/persistence/migrations",
         ),
     ]
@@ -37,8 +37,8 @@ datas = (
 )
 
 a = Analysis(
-    ["backend/coffer/infrastructure/daemon/entry.py"],
-    pathex=["backend"],
+    ["coffer/infrastructure/daemon/entry.py"],
+    pathex=["."],
     binaries=[],
     datas=datas,
     hiddenimports=hidden,
