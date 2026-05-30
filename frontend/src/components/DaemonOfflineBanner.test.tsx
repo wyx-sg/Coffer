@@ -40,13 +40,16 @@ describe("DaemonOfflineBanner", () => {
     expect(screen.getByText(/ECONNREFUSED/)).toBeInTheDocument();
   });
 
-  test("shows the dev hint when isTauri() is false", () => {
+  test("in browser mode the recovery affordance is Reload, not a raw CLI command", () => {
     useDaemonStatusMock.mockReturnValue({
       isError: true,
       error: new Error("nope"),
     } as never);
     render(wrap(<DaemonOfflineBanner />));
-    expect(screen.getByText("coffer daemon start")).toBeInTheDocument();
+    // The `coffer daemon start` snippet was removed — the Reload control is
+    // the only recovery affordance now.
+    expect(screen.queryByText("coffer daemon start")).not.toBeInTheDocument();
+    expect(screen.getByTestId("daemon-banner-reload")).toBeInTheDocument();
   });
 
   test("shows the Reload button in browser mode and clicking it calls window.location.reload", () => {

@@ -10,7 +10,8 @@
     "deleting": "Deleting…",
     "retry": "Retry",
     "clear": "Clear",
-    "rawLog": "Raw log"
+    "rawLog": "Raw log",
+    "done": "Done"
   },
   "nav": {
     "aria": {
@@ -18,14 +19,16 @@
     },
     "group": {
       "resources": "Resources",
-      "system": "System"
+      "system": "System",
+      "agents": "Agents"
     },
     "mcpServers": "MCP servers",
-    "observability": "Audit log",
     "settings": "Settings",
     "language": "Language",
     "collapse": "Collapse sidebar",
-    "expand": "Expand sidebar"
+    "expand": "Expand sidebar",
+    "agents": "Agents",
+    "audit": "Audit log"
   },
   "resources": {
     "title": "MCP servers",
@@ -59,6 +62,12 @@
     "noMatches": "No servers match your search."
   },
   "mcp": {
+    "table": {
+      "transport": "Transport",
+      "health": "Health",
+      "search": "Search servers…",
+      "deleteAria": "Delete {{name}}"
+    },
     "server": {
       "addTitle": "Add MCP server",
       "addSubtitle": "Register an upstream MCP server — Coffer starts it on first use and re-exposes its tools.",
@@ -69,7 +78,7 @@
       "testing": "Testing…",
       "testFailure": "FAIL ({{latency}} ms): {{error}}",
       "refresh": "Refresh capabilities",
-      "backToResources": "Back to resources",
+      "backToResources": "Back to MCP servers",
       "tabs": {
         "overview": "Overview",
         "tools": "Tools",
@@ -98,8 +107,11 @@
       "searchPlaceholder": "Search by name",
       "statusFilter": "Status",
       "toggleAria": "Toggle {{kind}} {{key}}",
-      "expandSchema": "Expand schema",
-      "collapseSchema": "Collapse schema"
+      "noSchema": "No input schema.",
+      "header": {
+        "name": "Name",
+        "enabled": "Enabled"
+      }
     },
     "invocations": {
       "filter": "All statuses",
@@ -110,7 +122,6 @@
       "loadFailed": "Failed to load invocations",
       "searchPlaceholder": "Search invocations",
       "filterSearch": "Search",
-      "filterTime": "Time range",
       "filterStatus": "Status",
       "header": {
         "time": "Time",
@@ -169,7 +180,6 @@
   },
   "audit": {
     "filter": {
-      "time": "Time range",
       "actor": "Actor",
       "all": "All",
       "from": "From",
@@ -199,7 +209,10 @@
       "retention_updated": "Updated a data-retention policy",
       "backup_created": "Created a backup",
       "keychain_set": "Stored a credential",
-      "keychain_deleted": "Removed a credential"
+      "keychain_deleted": "Removed a credential",
+      "agent_config_file_written": "Edited {{resource}} config ({{key}})",
+      "agent_mcp_installed": "Installed Coffer MCP into {{resource}}",
+      "agent_mcp_uninstalled": "Removed Coffer MCP from {{resource}}"
     },
     "eventLabel": {
       "resource_created": "Server registered",
@@ -238,9 +251,7 @@
       "all": "All time",
       "custom": "Custom range…"
     },
-    "applyRange": "Apply"
-  },
-  "observability": {
+    "applyRange": "Apply",
     "title": "Audit log",
     "subtitle": "Every lifecycle change to any resource or capability."
   },
@@ -248,9 +259,15 @@
     "title": "Settings",
     "subtitle": "Your data, backups, and app preferences.",
     "tabs": {
+      "general": "General",
       "data": "Data",
       "app": "App",
       "about": "About"
+    },
+    "general": {
+      "title": "Display",
+      "pageSize": "Default rows per page",
+      "pageSizeHelp": "The initial page size for every table."
     },
     "retention": {
       "title": "Data retention",
@@ -304,7 +321,6 @@
       "notReadyBody": "Coffer can't read its daemon token, so the API isn't reachable. Start the daemon and reload this page.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
-      "devHint": "coffer daemon start",
       "reload": "Reload"
     }
   },
@@ -320,6 +336,7 @@
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
     "UNKNOWN_KIND": "Unknown resource kind",
     "CONFIG_INVALID": "Configuration is invalid",
+    "CONFIG_FILE_FORMAT_INVALID": "The content isn't valid for this file's format. The file was left unchanged.",
     "TOOL_DISABLED": "This capability is disabled",
     "CREDENTIAL_MISSING": "Required credential is missing from the keychain",
     "CREDENTIAL_LOCKED": "The OS keychain is locked",
@@ -327,12 +344,14 @@
     "UPSTREAM_TIMEOUT": "Upstream server did not respond in time",
     "UNKNOWN_PRUNABLE_TABLE": "Unknown retention table",
     "INVALID_PREFIX": "Invalid prefix",
+    "SHIM_NOT_FOUND": "Couldn't find the coffer-mcp-shim binary. Install Coffer so the shim is on PATH, or set COFFER_MCP_SHIM_PATH.",
     "INTERNAL_ERROR": "An unexpected error occurred",
     "UNAUTHENTICATED": "Authentication required — Coffer can't read its daemon token. Run `coffer daemon start` and reload, or open the desktop app.",
     "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
     "BAD_REQUEST": "The request was rejected as malformed.",
     "NOT_FOUND": "Not found.",
-    "FORBIDDEN": "This action is not permitted."
+    "FORBIDDEN": "This action is not permitted.",
+    "AGENT_CONFIG_DIR_REGISTERED": "An agent for this config directory is already registered."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -343,5 +362,108 @@
   "resourceDetail": {
     "unknownKind": "Unknown kind",
     "unknownKindBody": "No frontend module registered for kind: {{kind}}"
+  },
+  "agents": {
+    "title": "Agents",
+    "subtitle": "Locally-installed AI agents Coffer knows about.",
+    "add": "Add agent",
+    "addTitle": "Add agent",
+    "addSubtitle": "Register a locally-installed AI agent.",
+    "register": "Register",
+    "addManual": "Add manually",
+    "detectedHeading": "Detected agents",
+    "namePlaceholder": "Leave blank to use the default for this type",
+    "folderPicker": {
+      "browse": "Browse…",
+      "title": "Choose a folder",
+      "subtitle": "Pick the directory for this agent's skills.",
+      "select": "Select this folder",
+      "up": "Up one level",
+      "emptyDir": "No subfolders here."
+    },
+    "detectDialog": {
+      "title": "Detect agents",
+      "subtitle": "Looking for AI agents in the usual install locations.",
+      "scanning": "Scanning…",
+      "found": "Found these agents — choose which to add:",
+      "addSelected": "Add selected ({{n}})",
+      "complete": "Added:",
+      "empty": "No new agents found — they may already be added."
+    },
+    "empty": "No agents registered yet.",
+    "loadFailed": "Failed to load agents.",
+    "removeConfirm": "Remove agent {{name}}?",
+    "removeConfirmBody": "It stays installed on your machine — you can detect and add it again anytime.",
+    "name": "Name",
+    "type": "Type",
+    "configDir": "Config directory",
+    "status": "Status",
+    "searchPlaceholder": "Search agents…",
+    "allTypes": "All types",
+    "noMatches": "No agents match your search.",
+    "deleteAria": "Delete {{name}}",
+    "detail": {
+      "back": "Back to agents",
+      "tabs": {
+        "overview": "Overview",
+        "config": "Config files",
+        "mcp": "Coffer MCP"
+      }
+    },
+    "workspace": {
+      "overview": "Overview",
+      "config": "Config files"
+    },
+    "skillDirOverride": "Override (optional)",
+    "skillDirPlaceholder": "Leave blank to use default",
+    "edit": "Edit",
+    "editTitle": "Edit agent",
+    "editSubtitle": "Update this agent's skill directory and description.",
+    "save": "Save",
+    "description": "Description",
+    "descriptionPlaceholder": "Optional notes",
+    "manage": "Manage",
+    "config": {
+      "title": "Manage {{name}}",
+      "files": "Config files",
+      "none": "No config files found.",
+      "notCreated": "not created",
+      "editorLabel": "Contents of {{key}}",
+      "selectFile": "Select a file to view.",
+      "save": "Save",
+      "savedWithBackup": "Saved (a .bak of the previous version was kept).",
+      "find": {
+        "toggle": "Find / Replace",
+        "find": "Find",
+        "replace": "Replace",
+        "replaceAll": "Replace all",
+        "findNext": "Find next",
+        "matches": "{{n}} matches",
+        "caseSensitive": "Case sensitive"
+      }
+    },
+    "mcp": {
+      "title": "Coffer MCP",
+      "installed": "Installed",
+      "notInstalled": "Not installed",
+      "install": "Install Coffer MCP",
+      "uninstall": "Uninstall Coffer MCP"
+    },
+    "welcome": {
+      "title": "Manage your local AI agents",
+      "body": "Register the AI agents installed on your machine. View their config files, and install Coffer's MCP server into them in one click.",
+      "featureDetect": {
+        "title": "Auto-detect",
+        "body": "Coffer scans common install paths and shows the agents it finds — you choose which to add."
+      },
+      "featureConfig": {
+        "title": "Config files",
+        "body": "View each agent's config files in Coffer, read-only."
+      },
+      "featureMcp": {
+        "title": "One-click MCP",
+        "body": "Install Coffer's MCP server into an agent with a single click."
+      }
+    }
   }
 }

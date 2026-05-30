@@ -1,9 +1,12 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { AgentsPage } from "./pages/AgentsPage";
+import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ResourceDetailPage } from "./pages/ResourceDetailPage";
-import { ObservabilityPage } from "./pages/observability/ObservabilityPage";
+import { AuditLogPage } from "./pages/audit/AuditLogPage";
 import { SettingsLayout } from "./pages/settings/SettingsLayout";
+import { GeneralSettings } from "./pages/settings/GeneralSettings";
 import { DataSettings } from "./pages/settings/DataSettings";
 import { AppSettings } from "./pages/settings/AppSettings";
 import { AboutPage } from "./pages/settings/AboutPage";
@@ -17,12 +20,14 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/resources" replace /> },
       { path: "resources", element: <ResourcesPage /> },
       { path: "resources/:kind/:name", element: <ResourceDetailPage /> },
-      { path: "observability", element: <ObservabilityPage /> },
-      // Legacy route — the audit log lived at /audit before it became the
-      // Observability page. Keep the URL working so bookmarks resolve.
+      { path: "agents", element: <AgentsPage /> },
+      { path: "agents/:name", element: <AgentDetailPage /> },
+      { path: "audit", element: <AuditLogPage /> },
+      // Legacy route — this surface briefly lived at /observability. Keep the
+      // URL working so old bookmarks resolve.
       {
-        path: "audit",
-        element: <Navigate to="/observability" replace />,
+        path: "observability",
+        element: <Navigate to="/audit" replace />,
       },
       {
         path: "settings",
@@ -30,8 +35,9 @@ export const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: <Navigate to="/settings/data" replace />,
+            element: <Navigate to="/settings/general" replace />,
           },
+          { path: "general", element: <GeneralSettings /> },
           { path: "data", element: <DataSettings /> },
           { path: "app", element: <AppSettings /> },
           { path: "about", element: <AboutPage /> },

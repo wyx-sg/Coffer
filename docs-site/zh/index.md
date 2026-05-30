@@ -18,6 +18,8 @@ features:
     details: 聚合上游 MCP 服务器,以 &lt;server&gt;__&lt;tool&gt; 带命名空间重新暴露。
   - title: 配置一次,处处可用
     details: Claude Code、Codex 及其他 MCP 客户端看到的工具完全一致。
+  - title: Agent 注册表
+    details: 检测并注册你的本地 AI 编码助手,编辑它们的配置文件,一键将 Coffer 安装进 Claude Code 或 Codex。
   - title: 自动发现 shim
     details: coffer-mcp-shim 自动发现(必要时拉起)守护进程,无需配置端口或 token。
   - title: CLI · Web · 桌面端

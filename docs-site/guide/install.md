@@ -33,14 +33,8 @@ into `~/.coffer/bin`:
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
-### Windows (PowerShell)
-
-```powershell
-irm https://wyx-sg.github.io/Coffer/install.ps1 | iex
-```
-
-The script adds `~/.coffer/bin` to your `PATH` automatically (shell profile on POSIX;
-`User` environment on Windows). Open a new terminal — all three binaries are available.
+The script adds `~/.coffer/bin` to your `PATH` automatically (shell profile). Open a new
+terminal — all three binaries are available.
 
 ### Environment overrides
 
@@ -61,9 +55,6 @@ shasum -a 256 -c SHA256SUMS
 
 # Linux
 sha256sum -c SHA256SUMS
-
-# Windows PowerShell
-Get-FileHash coffer-cli-*.zip -Algorithm SHA256
 ```
 
 ### Post-install: connect an MCP client
@@ -104,13 +95,12 @@ required. Recommended for workstation use.
 Go to the [GitHub Releases page](https://github.com/wyx-sg/Coffer/releases/latest) and pick
 the file for your platform:
 
-| Platform                          | File                                                                 |
-| --------------------------------- | -------------------------------------------------------------------- |
-| macOS Apple silicon (M-series)    | `Coffer_<version>_aarch64.dmg`                                       |
-| macOS Intel                       | `Coffer_<version>_x64.dmg`                                           |
-| Linux x64 (AppImage, recommended) | `Coffer_<version>_amd64.AppImage`                                    |
-| Linux x64 (deb)                   | `coffer_<version>_amd64.deb`                                         |
-| Windows 10+ x64                   | `Coffer_<version>_x64_en-US.msi` or `Coffer_<version>_x64-setup.exe` |
+| Platform                          | File                              |
+| --------------------------------- | --------------------------------- |
+| macOS Apple silicon (M-series)    | `Coffer_<version>_aarch64.dmg`    |
+| macOS Intel                       | `Coffer_<version>_x64.dmg`        |
+| Linux x64 (AppImage, recommended) | `Coffer_<version>_amd64.AppImage` |
+| Linux x64 (deb)                   | `coffer_<version>_amd64.deb`      |
 
 Each file has a `.sha256` sibling. Verify before running:
 
@@ -124,7 +114,6 @@ shasum -a 256 -c SHA256SUMS   # or sha256sum -c SHA256SUMS on Linux
 - **macOS**: Open the DMG, drag **Coffer.app** to `/Applications`.
 - **Linux (AppImage)**: `chmod +x Coffer_<version>_amd64.AppImage`, then run it.
 - **Linux (deb)**: `sudo apt install ./coffer_<version>_amd64.deb`.
-- **Windows**: Double-click the MSI (or NSIS `-setup.exe`) and follow the wizard.
 
 ### macOS Gatekeeper (unsigned — notarisation pending)
 
@@ -142,8 +131,7 @@ Or right-click the app and pick **Open** for a one-time bypass.
 On first launch, the Desktop app:
 
 1. Starts the daemon on a free port (default 8000) and writes `~/.coffer/daemon.json`.
-2. Deploys `coffer-mcp-shim` to `~/.coffer/bin/` (macOS/Linux) or
-   `%LOCALAPPDATA%\Coffer\bin\` (Windows) so MCP clients can find it.
+2. Deploys `coffer-mcp-shim` to `~/.coffer/bin/` so MCP clients can find it.
 3. Opens the Web UI in the main window.
 
 Connect your MCP client:

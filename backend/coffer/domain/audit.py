@@ -26,6 +26,9 @@ class AuditEventType(StrEnum):
     BACKUP_CREATED = "backup_created"
     KEYCHAIN_SET = "keychain_set"
     KEYCHAIN_DELETED = "keychain_deleted"
+    AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
+    AGENT_MCP_INSTALLED = "agent_mcp_installed"
+    AGENT_MCP_UNINSTALLED = "agent_mcp_uninstalled"
 
 
 @dataclass

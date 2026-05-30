@@ -8,25 +8,37 @@
 
 ## Information Architecture
 
-Coffer manages **resources** — named, configured, lifecycle-managed entities — through a kind-agnostic framework. `mcp_server` is the resource kind that ships today, surfaced through a per-kind registry so the navigation and the resources page carry no kind-specific branches.
+The sidebar is grouped **by role**, not on a single axis. Two concepts sit
+side by side: **agents** are the _consumers_ (the agents you use), and
+**resources** are the _assets_ those agents draw on — named, configured,
+lifecycle-managed entities behind a kind-agnostic framework. `mcp_server` is
+the resource kind that ships today, surfaced through a per-kind registry so the
+navigation and the resources page carry no kind-specific branches. Agents are
+NOT a resource kind, so they live in their own group, not under Resources.
 
 **The sidebar shows only what Coffer can do today.** It does not list dead "not yet implemented" placeholders: a sidebar full of "soon" entries reads as an unfinished scaffold, not a product.
 
-Today the sidebar is:
+Today the sidebar's four shipped surfaces are:
 
 ```
+ AGENTS
+  Agents           /agents      — the consumers (Bot icon)
  RESOURCES
-  MCP servers      operational
+  MCP servers      /resources   — resource kinds with a list UI (today: mcp_server)
  SYSTEM
-  Observability    the audit log
-  Settings
+  Audit log        /audit       — who did what, when
+  Settings         /settings
 ```
 
-It is grouped into **Resources** (resource kinds) and **System** (cross-cutting tooling: Observability, Settings) so the navigation stays stable as Coffer grows.
+It is grouped into **Agents** (the consumers), **Resources** (resource kinds), and **System** (cross-cutting tooling: the Audit log and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/resources` kind browser. The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
+
+All list surfaces (agents, MCP servers, the audit log) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are compact icons. Cards are reserved for welcome / empty states only.
+
+Future groups and items — Chat, Channels, Skills, Knowledge, Memory, and **Observability** (system health / metrics, a surface distinct from the audit log) — are planned but not shown today; they appear in the sidebar only as each feature ships.
 
 The sidebar collapses to an icon-only rail and back; the choice persists across sessions (localStorage).
 
-See [`ADR-007: everything is a resource kind`](../../docs/decisions/ADR-007-everything-is-a-resource-kind.md) for the architectural decision behind this single-axis information architecture (rejected alternative: a separate "surface" concept; sidebar policy: no "soon" placeholders).
+See [`ADR-007: everything is a resource kind`](../../docs/decisions/ADR-007-everything-is-a-resource-kind.md) (Amended 2026-05-30) for the architectural decision behind this role-based information architecture (agents as a separate consumer axis; rejected alternative: a separate "surface" concept; sidebar policy: no "soon" placeholders).
 
 ## User Scenarios & Testing
 
@@ -48,7 +60,7 @@ A developer opens the web UI for the first time. They have never registered a se
 
 ### User Story 2 — Day-to-day MCP work feels polished, not bare (Priority: P1)
 
-A developer who already uses Coffer for MCP gateway aggregation wants the routine flows — registering a server, watching its health, browsing tools, toggling capabilities, viewing invocations — to look and feel like a real product, not a scaffold. Headings are typographically distinct; spacing is consistent; per-server pages have a primary "what is this server doing?" view before the per-tool toggles; empty / error / loading states are first-class. The server list carries a search box, a status filter, and a client-side pager so a large vault stays navigable. The Invocations tab lists each call; expanding a row reveals its raw log — the invocation's full underlying JSON record, pretty-printed in a monospace, scrollable block — mirroring the audit log's expand behavior.
+A developer who already uses Coffer for MCP gateway aggregation wants the routine flows — registering a server, watching its health, browsing tools, toggling capabilities, viewing invocations — to look and feel like a real product, not a scaffold. Headings are typographically distinct; spacing is consistent; per-server pages have a primary "what is this server doing?" view before the per-tool toggles; empty / error / loading states are first-class. The Tools, Resources, and Prompts tabs are uniform — each carries the same search box, status filter, and per-row enable toggle, and keeps that chrome even when the upstream exposes none of that kind (the empty state renders inside the table, not as a bare card). The server list carries a search box, a status filter, and a client-side pager so a large vault stays navigable. The Invocations tab lists each call; expanding a row reveals its raw log — the invocation's full underlying JSON record, pretty-printed in a monospace, scrollable block — mirroring the audit log's expand behavior.
 
 "Add MCP server" is a modal where the user pastes the standard `mcpServers` JSON (one or many servers at once) — the same block every MCP server's README provides. A review step lets them confirm which `env` values are secrets; those are lifted into the OS keychain rather than stored in the config.
 
@@ -66,18 +78,20 @@ A developer who already uses Coffer for MCP gateway aggregation wants the routin
 
 ---
 
-### User Story 3 — Observability: the audit log has a home (Priority: P2)
+### User Story 3 — The audit log has a home (Priority: P2)
 
-A developer wants to see what changed in their Coffer vault — which resources and capabilities were added, enabled, disabled, or removed, by whom, and when. The **Observability** entry gives them that: an audit log of every lifecycle event where each row is a plain-language activity line ("Enabled demo-fs", "Discovered tool write_file on demo-fs") rather than a raw `event_type` code. It filters by time range and actor, pages client-side, and expands any row to its raw log — the entry's full underlying JSON record, pretty-printed in a monospace, scrollable block.
+A developer wants to see what changed in their Coffer vault — which resources and capabilities were added, enabled, disabled, or removed, by whom, and when. The **Audit log** entry (under System, at `/audit`) gives them that: an audit log of every lifecycle event where each row is a plain-language activity line ("Enabled demo-fs", "Discovered tool write_file on demo-fs") rather than a raw `event_type` code. It filters by time range and actor, pages client-side, and expands any row to its raw log — the entry's full underlying JSON record, pretty-printed in a monospace, scrollable block.
 
-**Why this priority**: P2 — the audit log already shipped in spec 001; this story is the redesigned filter + table and the `Observability` home.
+The audit log is NOT **Observability** — system health / metrics is a distinct surface, reserved for the future and not in the nav today.
 
-**Independent Test**: open `/observability` — the Observability section's audit-log view renders with the "Audit log" heading, a filter bar (time range / actor), and a paged table where each row is a readable activity line; clicking a row expands it to the entry's raw log JSON. Navigate to the legacy `/audit` URL — the app redirects to `/observability`.
+**Why this priority**: P2 — the audit log already shipped in spec 001; this story is the redesigned filter + table and its `/audit` home.
+
+**Independent Test**: open `/audit` — the audit-log view renders with the "Audit log" heading, a filter bar (time range / actor), and a paged table where each row is a readable activity line; clicking a row expands it to the entry's raw log JSON. Navigate to the legacy `/observability` URL — the app redirects to `/audit`.
 
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
-- observability route renders the audit log
-- legacy /audit redirects to Observability
+- audit route renders the audit log
+- legacy /observability redirects to the audit log
 
 ---
 
@@ -114,13 +128,13 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **When** they navigate to `http://localhost:5173/` in a real browser
 - **Then** the page renders the sidebar + main content area within 2 seconds
 - **And** the main content shows the resources welcome view (no generic error card)
-- **And** the sidebar lists Coffer's operational surfaces — MCP servers, Observability, Settings — grouped under "Resources" and "System" headings
+- **And** the sidebar lists Coffer's operational surfaces — Agents, MCP servers, Audit log, Settings — grouped under "Agents", "Resources", and "System" headings
 
 ### Scenario: token-missing renders an actionable empty state
 
 - **Given** `~/.coffer/daemon.json` does not exist (daemon is not running)
 - **When** the user navigates to `http://localhost:5173/`
-- **Then** the page shows a "Daemon not running" view with one obvious next step (the exact `coffer daemon start` command, copyable)
+- **Then** the page shows a "Daemon not running" view with one obvious recovery affordance (a Reload control on the web; the desktop app offers Restart)
 - **And** the sidebar is still visible so the user can orient themselves
 - **And** no view shows the literal text "unexpected error" or `INTERNAL_ERROR`
 
@@ -188,11 +202,11 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **When** the user opens the Invocations tab and clicks the status filter combobox
 - **Then** at least the "All" option renders inside the dropdown portal
 
-### Scenario: observability route renders the audit log
+### Scenario: audit route renders the audit log
 
 - **Given** at least one audit event exists
-- **When** the user opens `/observability`
-- **Then** the Observability section's audit-log view renders with the "Audit log" heading
+- **When** the user opens `/audit`
+- **Then** the audit-log view renders with the "Audit log" heading
 - **And** it renders a filter bar (time range, actor) and a paged table where each row is a plain-language activity line, not a raw event code
 - **And** clicking a row expands it to the entry's raw log JSON
 - **And** the filters narrow the visible rows live
@@ -200,7 +214,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 ### Scenario: audit log row expand shows raw log
 
 - **Given** the audit log has at least one row
-- **When** the user clicks (or presses Enter/Space on) a row on the Observability page
+- **When** the user clicks (or presses Enter/Space on) a row on the audit-log page
 - **Then** an expanded region renders that entry's raw log — its full underlying JSON record, pretty-printed in a monospace, scrollable block
 
 ### Scenario: audit log free-text filter narrows rows
@@ -212,14 +226,14 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 ### Scenario: audit log pagination controls appear and advance page
 
 - **Given** the audit log contains more entries than the default page size
-- **When** the user opens the Observability page and clicks the Next button
+- **When** the user opens the audit-log page and clicks the Next button
 - **Then** the page indicator advances to "Page 2 of …" and the Previous button becomes enabled
 
-### Scenario: legacy /audit redirects to Observability
+### Scenario: legacy /observability redirects to the audit log
 
-- **Given** a user follows an old bookmark to `/audit`
+- **Given** a user follows an old bookmark to `/observability`
 - **When** the route resolves
-- **Then** the app redirects to `/observability`
+- **Then** the app redirects to `/audit`
 - **And** no "page not found" view is shown
 
 ### Scenario: settings layout uses the redesigned tabbed sidebar
@@ -255,7 +269,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 - **Given** the daemon is not running (no reachable `127.0.0.1:<port>` from `~/.coffer/daemon.json`, or the file is absent)
 - **When** the user has the app open and any authenticated request to the daemon fails to connect
-- **Then** a daemon-offline banner renders at the top of the workspace with the literal `coffer daemon start` command as a copyable affordance
+- **Then** a daemon-offline banner renders at the top of the workspace with a clear recovery affordance — a Restart control in the desktop app, a Reload control on the web
 - **And** the banner disappears automatically once the daemon becomes reachable again, without a manual page reload
 
 ### Scenario: JSON import shows readable error for malformed JSON
@@ -272,7 +286,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 - Every scenario above has at least one covering test (unit, integration, or e2e) and the `audit_acceptance` script passes 002 alongside 001.
 - A first-time user can register an MCP server and reach a working gateway in-app; pointing an MCP client at the shim is documented in the project README.
-- The sidebar shows only operational surfaces (MCP servers, Observability, Settings); no feature appears as a dead "soon" entry.
-- Observability provides the redesigned audit log filter + table; the legacy `/audit` URL still resolves. Audit log and MCP invocation log rows each expand to the row's raw log JSON.
+- The sidebar shows only operational surfaces (Agents, MCP servers, Audit log, Settings), grouped by role; no feature appears as a dead "soon" entry.
+- The audit log lives at `/audit` with the redesigned filter + table; the legacy `/observability` URL still resolves (redirects to `/audit`). Audit log and MCP invocation log rows each expand to the row's raw log JSON. Observability (system health / metrics) is a reserved future surface, not the audit log.
 - Settings groups data controls (retention, prune, backup) under a Data tab; the daemon is never surfaced as a user-facing concept, and no tab exposes a shutdown or token-rotation control.
 - `make verify` + `make verify-e2e` are green.

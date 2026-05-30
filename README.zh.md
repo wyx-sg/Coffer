@@ -9,12 +9,12 @@
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Python ≥3.12" src="https://img.shields.io/badge/python-%E2%89%A53.12-3776AB?logo=python&logoColor=white">
   <img alt="Claude Code 兼容" src="https://img.shields.io/badge/Claude%20Code-%E5%85%BC%E5%AE%B9-C96442">
-  <img alt="平台" src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-555">
+  <img alt="平台" src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-macOS%20%C2%B7%20Linux-555">
 </p>
 
 > 本地优先 (local-first) 的 AI agent 保险库。一个地方统一管理你的 MCP 服务器。
 
-Coffer 是一个守护进程 (daemon) + CLI，它把上游 (upstream) MCP 服务器聚合起来，再通过一个统一、带命名空间的接口重新暴露给各类 MCP 客户端（Claude Code、Codex）。配置一次，所有客户端看到的工具完全一致。所有状态都保存在你自己的机器上 —— 没有云账号，没有厂商锁定。
+Coffer 是一个守护进程 (daemon) + CLI，它把上游 (upstream) MCP 服务器聚合起来，再通过一个统一、带命名空间的接口重新暴露给各类 MCP 客户端（Claude Code、Codex）。配置一次，所有客户端看到的工具完全一致。它还内置一个 **agent 注册表 (agent registry)** —— 检测并注册你本地的 AI 编码 agent、在应用内编辑它们的配置文件，并一键把 Coffer 自己的 MCP 服务器安装到任意 agent 中。所有状态都保存在你自己的机器上 —— 没有云账号，没有厂商锁定。
 
 📖 **文档站点：** https://wyx-sg.github.io/Coffer/
 
@@ -37,18 +37,10 @@ Coffer 是一个守护进程 (daemon) + CLI，它把上游 (upstream) MCP 服务
 
 ## 下载与安装
 
-### 一行命令安装（macOS / Linux / Windows）
-
-**macOS / Linux：**
+### 一行命令安装（macOS / Linux）
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
-```
-
-**Windows PowerShell：**
-
-```powershell
-irm https://wyx-sg.github.io/Coffer/install.ps1 | iex
 ```
 
 安装三个二进制文件 —— `coffer`（管理 CLI）、`coffer-daemon`、`coffer-mcp-shim` —— 到
@@ -59,13 +51,12 @@ irm https://wyx-sg.github.io/Coffer/install.ps1 | iex
 
 从 [Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载安装包：
 
-| 平台                  | 文件                                                                |
-| --------------------- | ------------------------------------------------------------------- |
-| macOS Apple silicon   | `Coffer_<version>_aarch64.dmg`                                      |
-| macOS Intel           | `Coffer_<version>_x64.dmg`                                          |
-| Linux x64（AppImage） | `Coffer_<version>_amd64.AppImage`                                   |
-| Linux x64（deb）      | `coffer_<version>_amd64.deb`                                        |
-| Windows 10+ x64       | `Coffer_<version>_x64_en-US.msi` / `Coffer_<version>_x64-setup.exe` |
+| 平台                  | 文件                              |
+| --------------------- | --------------------------------- |
+| macOS Apple silicon   | `Coffer_<version>_aarch64.dmg`    |
+| macOS Intel           | `Coffer_<version>_x64.dmg`        |
+| Linux x64（AppImage） | `Coffer_<version>_amd64.AppImage` |
+| Linux x64（deb）      | `coffer_<version>_amd64.deb`      |
 
 每份文件都有一个 `.sha256` 邻居文件可供校验。
 
@@ -107,6 +98,21 @@ coffer mcp tool list filesystem   # → read_file, write_file, list_directory, �
 ```
 
 然后把你的 MCP 客户端指向 shim —— 见下方 **接入 MCP 客户端**。
+
+### Agents
+
+**agent** 是一个已注册的本地 AI 编码 agent（支持的类型：`claude_code`、`codex`）。
+Coffer 可以自动检测已安装的 agent（它会列出候选项并请你确认 —— 不会自动注册任何东西）、
+在应用内编辑每个 agent 精选 (curated) 的配置文件（带格式校验、原子写入并生成 `.bak` 备份，
+以及一个会滚动到匹配处的编辑器内查找/替换），并一键把 Coffer 自己的 MCP 服务器安装到 agent 或从中卸载。
+桌面/Web UI 提供一个 **Agents** 页面（列表 + 详情）、一个检测对话框、配置文件编辑器，以及 MCP 安装开关。
+
+```bash
+coffer agent detect               # 发现已安装的 agent（注册前需确认）
+coffer agent add claude_code      # 注册一个（--name 可选；默认 claude-code）
+coffer agent config edit <name> <key>  # 在 $EDITOR 中编辑某个精选配置文件
+coffer agent mcp install <name>   # 把 Coffer 的 MCP 服务器安装到该 agent
+```
 
 ---
 

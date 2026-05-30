@@ -24,7 +24,6 @@ On every launch the Desktop app:
 2. **Deploys the shim** — idempotently copies the bundled `coffer-mcp-shim` to a stable
    user-writable PATH location:
    - macOS / Linux: `~/.coffer/bin/coffer-mcp-shim`
-   - Windows: `%LOCALAPPDATA%\Coffer\bin\coffer-mcp-shim.exe`
 3. **Shows a system-tray icon** — always present while the app is running.
 
 Closing the main window **hides** it to the tray; the daemon stays alive and your MCP
@@ -45,7 +44,6 @@ with your OS autostart mechanism:
 
 - macOS: a LaunchAgent under `~/Library/LaunchAgents/`.
 - Linux: a `.desktop` file under `~/.config/autostart/`.
-- Windows: a Run key under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 
 ## Installation
 
@@ -54,13 +52,12 @@ with your OS autostart mechanism:
 Go to the [GitHub Releases page](https://github.com/wyx-sg/Coffer/releases) and download
 the file for your platform:
 
-| Platform                          | File                                                                 |
-| --------------------------------- | -------------------------------------------------------------------- |
-| macOS, Apple silicon (M-series)   | `Coffer_<version>_aarch64.dmg`                                       |
-| macOS, Intel                      | `Coffer_<version>_x64.dmg`                                           |
-| Linux x64 (AppImage, recommended) | `Coffer_<version>_amd64.AppImage`                                    |
-| Linux x64 (deb)                   | `coffer_<version>_amd64.deb`                                         |
-| Windows 10+ x64                   | `Coffer_<version>_x64_en-US.msi` or `Coffer_<version>_x64-setup.exe` |
+| Platform                          | File                              |
+| --------------------------------- | --------------------------------- |
+| macOS, Apple silicon (M-series)   | `Coffer_<version>_aarch64.dmg`    |
+| macOS, Intel                      | `Coffer_<version>_x64.dmg`        |
+| Linux x64 (AppImage, recommended) | `Coffer_<version>_amd64.AppImage` |
+| Linux x64 (deb)                   | `coffer_<version>_amd64.deb`      |
 
 Each download has a `.sha256` sibling for verification.
 
@@ -69,7 +66,6 @@ Each download has a `.sha256` sibling for verification.
 - **macOS**: open the DMG and drag **Coffer.app** to `/Applications`.
 - **Linux (AppImage)**: `chmod +x Coffer_<version>_amd64.AppImage`, then run it.
 - **Linux (deb)**: `sudo apt install ./coffer_<version>_amd64.deb`.
-- **Windows**: double-click the MSI (or NSIS setup.exe) and follow the installer.
 
 ### macOS Gatekeeper
 
@@ -101,9 +97,9 @@ If the shim's target directory is not yet on `PATH`, Coffer shows a one-time pro
 ## CLI-only alternative
 
 For headless servers or machines where you do not want the Desktop app, download the
-**CLI-only** archive (`coffer-cli-<triple>.tar.gz` on macOS/Linux,
-`coffer-cli-<triple>.zip` on Windows) from the same Releases page. It contains just
-`coffer-daemon` and `coffer-mcp-shim` — extract, run the daemon, put the shim on `PATH`,
+**CLI-only** archive (`coffer-cli-<triple>.tar.gz`) from the same Releases page. It
+contains just `coffer-daemon` and `coffer-mcp-shim` — extract, run the daemon, put the
+shim on `PATH`,
 and point your MCP clients at it.
 
 ## Next steps

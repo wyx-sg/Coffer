@@ -18,6 +18,8 @@ features:
     details: Aggregate upstream MCP servers and re-expose them namespaced as &lt;server&gt;__&lt;tool&gt;.
   - title: Configure once
     details: Claude Code, Codex, and every other MCP client see exactly the same tools.
+  - title: Agent registry
+    details: Detect and register your local AI coding agents, edit their config files, and one-click install Coffer into Claude Code or Codex.
   - title: Auto-discovering shim
     details: coffer-mcp-shim finds (or spawns) the daemon — no port or token wiring.
   - title: CLI · Web · Desktop

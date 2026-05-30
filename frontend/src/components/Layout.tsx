@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
+  Bot,
   Boxes,
   PanelLeftClose,
   PanelLeftOpen,
@@ -30,17 +31,28 @@ interface NavGroup {
 }
 
 /**
- * Sidebar navigation. Coffer's UI ships only its operational surfaces — the
- * MCP gateway, observability, and settings. Planned resource kinds (skills,
- * knowledge bases, memory, channels, agents) and the Chat surface are not
- * shown until their feature lands.
+ * Sidebar navigation — a role-based information architecture (see ADR-007):
  *
- * The two groups — **Resources** and **System** — exist from the start so
- * future kinds slot into Resources without re-doing the navigation. The
- * sidebar collapses to an icon-only rail; the choice persists in
- * localStorage. See spec 002-ui-shell §Information Architecture.
+ * - **Agents** — the consumers: the agents you use (Claude Code, Codex, the
+ *   built-in agent), Chat with them, and the Channels they communicate over.
+ *   Agents are NOT vault assets, so they are not under Resources.
+ * - **Resources** — the assets agents draw on, modelled as kind-agnostic
+ *   resource kinds (MCP servers today; skills / knowledge / memory as they
+ *   land), surfaced through the kind registry.
+ * - **System** — cross-cutting tooling: the Audit log (who did what, when),
+ *   Observability (system health/metrics — a distinct future surface), and
+ *   Settings.
+ *
+ * Sidebar policy (ADR-007): show only what ships today — no "soon"
+ * placeholders. Chat, Channels, the extra resource kinds, and Observability
+ * appear as each feature lands. The sidebar collapses to an icon-only rail;
+ * the choice persists in localStorage.
  */
 const NAV_GROUPS: NavGroup[] = [
+  {
+    labelKey: "nav.group.agents",
+    items: [{ to: "/agents", labelKey: "nav.agents", icon: Bot, end: true }],
+  },
   {
     labelKey: "nav.group.resources",
     items: [{ to: "/resources", labelKey: "nav.mcpServers", icon: Server, end: true }],
@@ -48,7 +60,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.system",
     items: [
-      { to: "/observability", labelKey: "nav.observability", icon: ScrollText },
+      { to: "/audit", labelKey: "nav.audit", icon: ScrollText },
       { to: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
     ],
   },
@@ -135,14 +147,14 @@ export function Layout() {
 
         <nav className="flex-1 overflow-y-auto px-3 py-3 text-sm">
           {NAV_GROUPS.map((group, i) => (
-            <div key={group.labelKey} className="mb-1">
+            <div key={group.labelKey || group.items[0]?.to} className="mb-1">
               {collapsed ? (
                 i > 0 ? (
                   <div className="mx-1 my-2 border-t border-border" />
                 ) : null
-              ) : (
+              ) : group.labelKey ? (
                 <div className="nav-group-label">{t(group.labelKey)}</div>
-              )}
+              ) : null}
               {group.items.map((item) => (
                 <NavRow key={item.to} item={item} collapsed={collapsed} />
               ))}

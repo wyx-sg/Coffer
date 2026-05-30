@@ -183,9 +183,9 @@ describe("McpServerDetailPage", () => {
 
     render(wrap(<McpServerDetailPage />));
     // The error branch renders a destructive card with the server's
-    // error message + a "back to resources" link.
+    // error message + a "back to MCP servers" link.
     expect(await screen.findByText(/no such server/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /back to resources/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /back to mcp servers/i })).toBeInTheDocument();
   });
 
   test("clicking Refresh invalidates the capabilities query", async () => {

@@ -18,6 +18,7 @@ from pathlib import Path
 import httpx
 import typer
 
+from coffer.infrastructure.daemon.bootstrap import live_daemon
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo, read
 from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.surfaces.cli._options import ExitCode
@@ -37,6 +38,12 @@ def _daemon_json_path() -> Path:
 
 
 def discover() -> DaemonInfo | None:
+    """Read daemon.json without probing liveness (file presence only).
+
+    Used by ``coffer daemon status`` and the shim, which do their own liveness
+    handling. ``client_or_exit`` instead uses ``live_daemon`` so a stale file
+    from a crashed daemon triggers a respawn rather than a dead connection.
+    """
     path = _daemon_json_path()
     if not path.exists():
         return None
@@ -46,11 +53,16 @@ def discover() -> DaemonInfo | None:
         return None
 
 
-def _wait_for_daemon_json(timeout: float = _DAEMON_BOOT_TIMEOUT) -> DaemonInfo | None:
-    """Poll until daemon.json appears; return DaemonInfo or None on timeout."""
+def _wait_for_daemon(timeout: float = _DAEMON_BOOT_TIMEOUT) -> DaemonInfo | None:
+    """Poll until a *live* daemon answers on its published port (or timeout).
+
+    Probes ``live_daemon`` rather than mere daemon.json presence: the spawned
+    daemon writes daemon.json a moment before uvicorn starts serving, so we
+    wait for the status endpoint to actually answer before handing back a client.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        info = discover()
+        info = live_daemon()
         if info is not None:
             return info
         time.sleep(0.1)
@@ -101,17 +113,21 @@ def _spawn_daemon() -> subprocess.Popen[bytes] | None:
 def client_or_exit() -> tuple[httpx.Client, DaemonInfo]:
     """Return an authenticated httpx.Client + DaemonInfo for the running daemon.
 
-    Implements ADR-006 detect-or-spawn: if daemon.json is absent (or the
-    daemon is not reachable), spawn it automatically and wait up to
-    ``_DAEMON_BOOT_TIMEOUT`` seconds for it to write daemon.json.
+    Implements ADR-006 detect-or-spawn: if no daemon is *reachable* — daemon.json
+    absent, OR present but stale (a crashed daemon left it behind and nothing is
+    serving its port) — spawn one automatically and wait up to
+    ``_DAEMON_BOOT_TIMEOUT`` seconds for it to start serving.
 
     Raises DaemonNotRunning (exit 3) only if the spawn fails or times out.
     """
-    info = discover()
+    # live_daemon() (not discover()) so a stale daemon.json from a crashed
+    # daemon is treated as "no daemon" and respawned, instead of returning a
+    # client pointed at a dead port that every command would then fail against.
+    info = live_daemon()
     if info is None:
         # ADR-006: auto-spawn the daemon rather than asking the user.
         proc = _spawn_daemon()
-        info = _wait_for_daemon_json(timeout=_DAEMON_BOOT_TIMEOUT)
+        info = _wait_for_daemon(timeout=_DAEMON_BOOT_TIMEOUT)
         if info is None:
             # Kill the half-started daemon so it can't finish booting *after*
             # we gave up and leave a daemon.json the user was told failed.

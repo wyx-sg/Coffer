@@ -1,18 +1,16 @@
 // frontend/src/kinds/mcp/InvocationsTable.tsx
-import { Fragment, useMemo, useState } from "react";
+//
+// A server's MCP invocation log rendered through the shared DataTable (unified
+// with the audit log and the other resource surfaces): the InvocationsFilters
+// control bar drives the fetch (status + time window are query params), while
+// free-text search narrows client-side. DataTable owns pagination and the
+// per-row expand chevron whose detail is the invocation's raw JSON record.
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable, type Column } from "@/components/DataTable";
 import { RawLog } from "@/components/RawLog";
 import { useMcpInvocations } from "@/lib/hooks/useMcpInvocations";
 import { translateApiError } from "@/lib/api/errors";
@@ -20,6 +18,9 @@ import { formatDateTime } from "@/lib/utils";
 import { resolveTimeWindow } from "@/lib/timeRange";
 import { invocationStatusClass } from "@/lib/statusColors";
 import { InvocationsFilters, type InvocationsFiltersState } from "./InvocationsFilters";
+import type { components } from "@/lib/api/types";
+
+type InvocationOut = components["schemas"]["InvocationOut"];
 
 interface Props {
   serverName: string;
@@ -33,18 +34,21 @@ const DEFAULT_FILTERS: InvocationsFiltersState = {
   status: "all",
 };
 
+// Stable per-row identity: the daemon returns no id, so pair the timestamp with
+// the row's position in the *full fetched* list — assigned before client-side
+// search/time filtering so narrowing the view doesn't reshuffle _id and
+// collapse an expanded row (DataTable tracks expansion by this key).
+type InvocationRow = InvocationOut & { _id: string };
+
+/** Drop the synthetic _id so the raw log shows the daemon's record verbatim. */
+function stripId({ _id, ...record }: InvocationRow): InvocationOut {
+  void _id;
+  return record;
+}
+
 export function InvocationsTable({ serverName }: Props) {
   const { t } = useTranslation();
   const [filters, setFilters] = useState<InvocationsFiltersState>(DEFAULT_FILTERS);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
-  const toggle = (id: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
 
   // Memoise the window so a rolling preset's Date.now()-based `since`
   // (which is part of the useMcpInvocations queryKey) is stable across
@@ -70,8 +74,10 @@ export function InvocationsTable({ serverName }: Props) {
   // Hooks run before any early return.
   const q = filters.search.trim().toLowerCase();
   const invocations = data?.invocations;
-  const rows = useMemo(() => {
-    let r = invocations ?? [];
+  const rows = useMemo<InvocationRow[]>(() => {
+    // Stamp _id from the position in the full fetched list first, so the
+    // identity survives the client-side filters applied afterwards.
+    let r = (invocations ?? []).map((inv, i) => ({ ...inv, _id: `${inv.timestamp}-${i}` }));
     if (until) r = r.filter((inv) => inv.timestamp <= until);
     if (q) r = r.filter((inv) => inv.capability_key.toLowerCase().includes(q));
     return r;
@@ -99,114 +105,67 @@ export function InvocationsTable({ serverName }: Props) {
     );
   }
 
-  // No invocations at all (before filtering)
-  if (allRows.length === 0) {
-    return (
-      <div className="space-y-3">
-        <Card>
-          <CardContent className="py-4">
-            <InvocationsFilters state={filters} onChange={setFilters} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("mcp.invocations.empty")}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const columns: Column<InvocationRow>[] = [
+    {
+      key: "time",
+      header: t("mcp.invocations.header.time"),
+      className: "text-xs text-muted-foreground",
+      cell: (inv) => formatDateTime(inv.timestamp),
+    },
+    {
+      key: "type",
+      header: t("mcp.invocations.header.type"),
+      cell: (inv) => <Badge variant="outline">{inv.capability_type}</Badge>,
+    },
+    {
+      key: "key",
+      header: t("mcp.invocations.header.key"),
+      className: "font-mono text-xs",
+      cell: (inv) => inv.capability_key,
+    },
+    {
+      key: "duration",
+      header: t("mcp.invocations.header.duration"),
+      className: "text-right text-xs",
+      cell: (inv) => `${inv.duration_ms} ms`,
+    },
+    {
+      key: "status",
+      header: t("mcp.invocations.header.status"),
+      cell: (inv) => (
+        <>
+          <Badge className={invocationStatusClass(inv.status)} variant="outline">
+            {inv.status}
+          </Badge>
+          {inv.error_message ? (
+            <div className="mt-0.5 text-xs text-muted-foreground">{inv.error_message}</div>
+          ) : null}
+        </>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-3">
-      <Card>
-        <CardContent className="py-4">
-          <InvocationsFilters state={filters} onChange={setFilters} />
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      <InvocationsFilters state={filters} onChange={setFilters} />
 
-      {rows.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("mcp.invocations.noMatches")}
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead>{t("mcp.invocations.header.time")}</TableHead>
-                  <TableHead>{t("mcp.invocations.header.type")}</TableHead>
-                  <TableHead>{t("mcp.invocations.header.key")}</TableHead>
-                  <TableHead className="text-right">
-                    {t("mcp.invocations.header.duration")}
-                  </TableHead>
-                  <TableHead>{t("mcp.invocations.header.status")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((inv, i) => {
-                  const id = `${inv.timestamp}-${i}`;
-                  const isOpen = expanded.has(id);
-                  return (
-                    <Fragment key={id}>
-                      <TableRow
-                        className="cursor-pointer"
-                        tabIndex={0}
-                        aria-expanded={isOpen}
-                        onClick={() => toggle(id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            toggle(id);
-                          }
-                        }}
-                      >
-                        <TableCell className="text-muted-foreground">
-                          {isOpen ? (
-                            <ChevronDown className="size-4" />
-                          ) : (
-                            <ChevronRight className="size-4" />
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {formatDateTime(inv.timestamp)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{inv.capability_type}</Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">{inv.capability_key}</TableCell>
-                        <TableCell className="text-right text-xs">{inv.duration_ms} ms</TableCell>
-                        <TableCell>
-                          <Badge className={invocationStatusClass(inv.status)} variant="outline">
-                            {inv.status}
-                          </Badge>
-                          {inv.error_message ? (
-                            <div className="mt-0.5 text-xs text-muted-foreground">
-                              {inv.error_message}
-                            </div>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                      {isOpen ? (
-                        <TableRow className="bg-muted/30 hover:bg-muted/30">
-                          <TableCell />
-                          <TableCell colSpan={5} className="py-3">
-                            <RawLog record={inv} />
-                          </TableCell>
-                        </TableRow>
-                      ) : null}
-                    </Fragment>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+      <DataTable
+        rows={rows}
+        columns={columns}
+        rowKey={(inv) => inv._id}
+        getRowDetail={(inv) => (
+          <div className="px-4 py-3">
+            {/* Strip the synthetic _id so the raw log shows the daemon's record verbatim. */}
+            <RawLog record={stripId(inv)} />
+          </div>
+        )}
+        // `allRows.length === 0` = nothing recorded yet; any rows present but
+        // filtered out = a no-matches state. DataTable renders one emptyMessage,
+        // so pick the right one based on whether the fetch returned anything.
+        emptyMessage={
+          allRows.length === 0 ? t("mcp.invocations.empty") : t("mcp.invocations.noMatches")
+        }
+      />
     </div>
   );
 }

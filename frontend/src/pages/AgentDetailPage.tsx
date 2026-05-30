@@ -1,0 +1,158 @@
+// frontend/src/pages/AgentDetailPage.tsx — spec 004-agent-registry.
+// Per-agent detail page: a back link, a header with the Coffer-MCP install
+// button + edit + delete, and two tabs — Overview and Config files. Editing
+// opens a modal dialog (AgentEditForm). Agents have no enable/disable concept.
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { ArrowLeft } from "lucide-react";
+
+import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEditor";
+import { AgentEditForm } from "@/components/agents/AgentEditForm";
+import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { translateApiError } from "@/lib/api/errors";
+import { useAgent, useRemoveAgent } from "@/lib/hooks/useAgents";
+
+export function AgentDetailPage() {
+  const { t } = useTranslation();
+  const { name = "" } = useParams<{ name: string }>();
+  const navigate = useNavigate();
+  const { data: agent, isPending, error, refetch } = useAgent(name);
+  const remove = useRemoveAgent();
+  const [editing, setEditing] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  if (isPending) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          {t("common.loading")}
+        </CardContent>
+      </Card>
+    );
+  }
+  if (error || !agent) {
+    return (
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="text-destructive">{t("agents.loadFailed")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {error ? translateApiError(t, error) : t("agents.loadFailed")}
+          </p>
+          <Button variant="link" onClick={() => navigate("/agents")} className="-ml-2">
+            <ArrowLeft className="mr-1 size-4" />
+            {t("agents.detail.back")}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => navigate("/agents")}
+        className="-ml-2 text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="mr-1.5 size-4" /> {t("agents.detail.back")}
+      </Button>
+
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <h1 className="font-serif text-3xl tracking-tight">{agent.name}</h1>
+          <Badge variant="secondary">{agent.type}</Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <AgentMcpButton name={name} />
+          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+            {t("agents.edit")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)}>
+            {t("common.delete")}
+          </Button>
+        </div>
+      </div>
+
+      {editing ? (
+        <AgentEditForm
+          agent={agent}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            void refetch();
+            setEditing(false);
+          }}
+        />
+      ) : null}
+
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">{t("agents.workspace.overview")}</TabsTrigger>
+          <TabsTrigger value="config">{t("agents.workspace.config")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="pt-6">
+          <Card>
+            <CardContent className="py-6">
+              <dl className="grid grid-cols-[10rem_1fr] gap-y-3 text-sm">
+                <dt className="text-muted-foreground">{t("agents.type")}</dt>
+                <dd>{agent.type}</dd>
+                <dt className="text-muted-foreground">{t("agents.configDir")}</dt>
+                <dd className="font-mono text-xs">{agent.config_dir}</dd>
+                <dt className="text-muted-foreground">{t("agents.description")}</dt>
+                <dd>{agent.description || "—"}</dd>
+              </dl>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="config" className="pt-6">
+          <AgentConfigFilesEditor name={name} />
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("agents.removeConfirm", { name })}</DialogTitle>
+            <DialogDescription>{t("agents.removeConfirmBody")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={remove.isPending}
+              onClick={() =>
+                remove.mutate(name, {
+                  onSuccess: () => {
+                    setDeleteOpen(false);
+                    navigate("/agents");
+                  },
+                })
+              }
+            >
+              {remove.isPending ? t("common.deleting") : t("common.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

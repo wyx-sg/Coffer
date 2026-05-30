@@ -34,6 +34,17 @@ specs/<NNN>-<short-name>/
 
 **骨架优先阶段**：新建 spec 时先写 `spec.md`。其他文件（`plan.md`、`tasks.md`、`contracts/` 等）在 spec 进入实现阶段时，通过 `/speckit-plan` 和 `/speckit-tasks` 补齐。
 
+## 让文档与代码保持同步
+
+当改动会改变行为时，要在**同一个 PR 里更新 spec 及其所有相关文档**——在写代码之前或同时，绝不留作后续补做。spec 优先：spec 是事实来源，代码向它看齐。「相关文档」是整套，而不只是 `spec.md`：
+
+- `specs/<NNN>/spec.md`（及其 `spec.zh.md` 对照）——用户可见的契约与验收场景。
+- `specs/<NNN>/contracts/api.openapi.yaml`——线上契约；增删/重命名端点与 schema 以匹配代码。
+- `specs/<NNN>/data-model.md`、`plan.md`、`quickstart.md`（及各自的 `.zh.md` 对照）——实体、计划与用法说明。
+- 改动触及的跨切面文档：相关的 `docs/decisions/` ADR、`.specify/memory/architecture.md`，以及受影响的 `agents/*` 约定或 `agents/ui-shell/` 规格。
+
+每个 prose `.md` 都有 `.zh.md` 对照，必须在同一个 commit 中一并更新（仅 `tasks.md` 与 OpenAPI YAML 例外）。验收审计（`backend/scripts/audit_acceptance.py`，由 `make verify` 运行）把每个 `spec.md` 场景名绑定到测试标记，所以重命名/新增/删除场景时，也要同步更新其 `@pytest.mark.acceptance(... scenario=...)` / `acceptance(...)` 标记。纯重构、或没有契约影响的纯前端改动无需改 spec——但只要行为、端点、schema 或 IA 变了，文档就要随之改动。
+
 ## 验收场景 (Acceptance Scenarios) —— 写在 `spec.md` 里，Gherkin 风格
 
 在 `spec.md` 的 `## Acceptance Scenarios` 一节内用 Gherkin 风格表达。每个场景对应一个或多个测试（见 [testing.md](./testing.md)）。

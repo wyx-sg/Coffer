@@ -9,7 +9,7 @@
 
 ## Summary
 
-把 `001-mcp-gateway` 交付时那个仅"能跑"的功能骨架，升级为一个真正的产品壳：一套统一的视觉语言、基于 [ADR-007](../../docs/decisions/ADR-007-everything-is-a-resource-kind.md)（"一切皆 resource kind"）单一概念的信息架构，以及让首次来访者就能用上的端到端流程。
+把 `001-mcp-gateway` 交付时那个仅"能跑"的功能骨架，升级为一个真正的产品壳：一套统一的视觉语言、由 [ADR-007](../../docs/decisions/ADR-007-everything-is-a-resource-kind.md)（资产是 resource kind；agent 是独立的消费者轴）决定的基于角色的信息架构（Agents / Resources / System），以及让首次来访者就能用上的端到端流程。
 
 这是一份**完全建立在 001 之上的纯 UI 重设计**：不新增任何后端接口。每个界面都跑在 `001-mcp-gateway` 已经暴露的同一份 REST API 与 CLI 上；数据模型 (`Resource`、`Kind`、`Capability`、`AuditEvent`、`Invocation`、`RetentionPolicy`) 不变，落在 [`specs/001-mcp-gateway/data-model.md`](../001-mcp-gateway/data-model.md)。同理，本目录没有单独的 `tasks.md`——工作以 [spec.md](./spec.md) `## User Scenarios & Testing` 中的 user story 为单位，并在 PR 层面跟踪。
 
@@ -24,7 +24,7 @@
 | **Backend dependency**   | 纯消费方，使用 [`specs/001-mcp-gateway/contracts/api.openapi.yaml`](../001-mcp-gateway/contracts/api.openapi.yaml) 中的 REST 契约。不新增端点、不改 schema。                                                                                              |
 | **Storage**              | 仅浏览器 localStorage——存放侧栏收起状态与所选语言。客户端不持久化任何用户数据。                                                                                                                                                                           |
 | **Testing**              | `vitest` 跑单元 / 组件测试；`Playwright` 跑 `e2e/` 下的 e2e。Acceptance markers (`acceptance("002-ui-shell", "…", …)`) 把测试与 [spec.md](./spec.md) 中的 scenario 绑定；覆盖率由 `scripts/audit_acceptance.py` 审计。                                    |
-| **Target Platforms**     | 主流常青浏览器（Chromium / Firefox / Safari 当前-2）。                                                                                                                                                                                  |
+| **Target Platforms**     | 主流常青浏览器（Chromium / Firefox / Safari 当前-2）。                                                                                                                                                                                                    |
 | **Project Type**         | SPA，由 Vite 打包；生产环境由 daemon 的静态文件路由托管，开发环境由 `vite dev` 直连本地 daemon。                                                                                                                                                          |
 | **Performance Goals**    | 冷启动针对本地 daemon 时首屏 2 秒内出内容 (spec 中 `cold-start renders authenticated content` scenario)。语言切换在下一次渲染内完成——不整页刷新。                                                                                                         |
 | **Constraints**          | 本地优先（唯一的 HTTP origin 是 `127.0.0.1:<port>` 上的 daemon）；不调公网；不接入第三方分析；不引用字体 CDN。前端组件文件大小 ≤ 250 LOC（由 `scripts/check_file_sizes.py` 强制）。                                                                       |
@@ -78,7 +78,9 @@ frontend/src/
 │       └── routes.tsx                     # /resources/mcp_server/* 子路由
 ├── pages/
 │   ├── ResourcesPage.tsx                  # /resources — kind-agnostic 分派
-│   ├── ObservabilityPage.tsx              # /observability — 审计日志视图
+│   ├── AgentsPage.tsx                      # /agents — agent 列表（消费者，不是 resource kind）
+│   ├── AgentDetailPage.tsx                 # /agents/:name — agent 详情
+│   ├── audit/AuditLogPage.tsx             # /audit — 审计日志视图（/observability 重定向到这里）
 │   ├── SettingsLayout.tsx                 # /settings 布局 (tab 侧栏)
 │   └── settings/{DataSettings,AboutSettings,AppSettings}
 └── locales/{en,zh}/*.json                 # i18n 词条
@@ -115,7 +117,7 @@ Tailwind 配置 (`frontend/tailwind.config.js`)、shadcn primitives、`AppShell`
 
 ### Phase 2 — US1：首次访问流
 
-`/resources` 在没有资源时的欢迎视图、含"`coffer daemon start`"可复制命令的"Daemon not running"视图，以及通过 dev token 插件实现的冷启动自动鉴权渲染。
+`/resources` 在没有资源时的欢迎视图、带「重新加载」恢复操作（桌面应用为「重启」）的"Daemon not running"视图，以及通过 dev token 插件实现的冷启动自动鉴权渲染。
 
 **Done when:** US1 的三个 representative scenarios 通过。
 
@@ -125,9 +127,9 @@ Tailwind 配置 (`frontend/tailwind.config.js`)、shadcn primitives、`AppShell`
 
 **Done when:** US2 的 representative scenarios 通过，MCP 流程的 `make verify-e2e` 绿。
 
-### Phase 4 — US3：Observability
+### Phase 4 — US3：审计日志
 
-`/observability` 路由 + 审计日志视图（filter bar、分页表格、行展开为它的原始日志 JSON——与 invocation 日志共用的 `RawLog` 视图），legacy `/audit` → `/observability` 重定向。
+`/audit` 路由 + 审计日志视图（filter bar、分页表格、行展开为它的原始日志 JSON——与 invocation 日志共用的 `RawLog` 视图），legacy `/observability` → `/audit` 重定向。（Observability——系统健康 / 指标——是一个独立的未来界面，不是这个审计日志视图。）
 
 **Done when:** US3 的 representative scenarios 通过。
 

@@ -172,8 +172,10 @@ acceptance(
       await expect(page.getByText(/no invocations yet/i)).toBeVisible({
         timeout: 10_000,
       });
-      // Status filter is operable.
-      const filter = page.getByRole("combobox");
+      // Status filter is operable. Scope to the status combobox by its
+      // accessible name — the redesigned DataTable also renders a "Per page"
+      // page-size combobox, so a bare getByRole("combobox") is ambiguous.
+      const filter = page.getByRole("combobox", { name: /status/i });
       await expect(filter).toBeVisible();
     } finally {
       await deregisterMcpServer(name);

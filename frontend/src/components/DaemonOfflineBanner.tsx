@@ -12,14 +12,15 @@ import { isTauri, restartDaemon } from "@/lib/tauri";
  *
  *   - UNAUTHENTICATED / DAEMON_NOT_READY (envelope codes from
  *     surfaces/http/errors.py): the daemon is reachable but the token is
- *     missing — surface a concrete "run `coffer daemon start`" CTA
- *     instead of a generic error, because the user's next action is
- *     usually "start the daemon".
+ *     missing — surface the "daemon not ready" copy instead of a generic
+ *     error, because the user's next action is usually "start the daemon".
  *   - Other errors: original "daemon offline" treatment.
  *
- * Keeping this opinionated avoids the "generic unexpected error on every
- * page" symptom we hit pre-redesign whenever ~/.coffer/daemon.json was
- * absent.
+ * Recovery affordance: the desktop app offers a Restart button (Tauri can
+ * relaunch the daemon); on the web it's a Reload button that re-checks status
+ * once the user has brought the daemon back up. Keeping this opinionated
+ * avoids the "generic unexpected error on every page" symptom we hit
+ * pre-redesign whenever ~/.coffer/daemon.json was absent.
  */
 export function DaemonOfflineBanner() {
   const { t } = useTranslation();
@@ -80,22 +81,14 @@ export function DaemonOfflineBanner() {
             {restartError ? <p className="text-xs text-destructive">{restartError}</p> : null}
           </div>
         ) : (
-          <div className="space-y-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => window.location.reload()}
-              data-testid="daemon-banner-reload"
-            >
-              {t("daemon.offline.reload")}
-            </Button>
-            <code
-              className="block rounded bg-background/60 px-2 py-1 font-mono text-xs"
-              data-testid="daemon-banner-cmd"
-            >
-              {t("daemon.offline.devHint")}
-            </code>
-          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => window.location.reload()}
+            data-testid="daemon-banner-reload"
+          >
+            {t("daemon.offline.reload")}
+          </Button>
         )}
       </AlertDescription>
     </Alert>

@@ -1,0 +1,170 @@
+"""Unit tests for the pure Coffer-MCP entry text transforms (JSON + TOML)."""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+import tomlkit
+
+from coffer.domain.agent.config_files import ConfigFileFormat
+from coffer.domain.agent.mcp_install import (
+    COFFER_SERVER_KEY,
+    apply_install,
+    apply_uninstall,
+    installed_command,
+    is_installed,
+)
+from coffer.domain.errors import ConfigFileFormatInvalid
+
+SHIM = "/usr/local/bin/coffer-mcp-shim"
+
+# --- JSON (Claude Code ~/.claude.json) ---
+
+
+def test_json_install_into_empty():
+    out = apply_install(ConfigFileFormat.JSON, "", SHIM)
+    data = json.loads(out)
+    assert data["mcpServers"][COFFER_SERVER_KEY] == {"command": SHIM}
+    assert is_installed(ConfigFileFormat.JSON, out)
+    assert installed_command(ConfigFileFormat.JSON, out) == SHIM
+
+
+def test_json_install_preserves_existing_keys_and_servers():
+    existing = json.dumps({"oauthAccount": {"id": "x"}, "mcpServers": {"other": {"command": "y"}}})
+    out = apply_install(ConfigFileFormat.JSON, existing, SHIM)
+    data = json.loads(out)
+    assert data["oauthAccount"] == {"id": "x"}
+    assert data["mcpServers"]["other"] == {"command": "y"}
+    assert data["mcpServers"][COFFER_SERVER_KEY] == {"command": SHIM}
+
+
+def test_json_install_idempotent():
+    once = apply_install(ConfigFileFormat.JSON, "", SHIM)
+    twice = apply_install(ConfigFileFormat.JSON, once, SHIM)
+    data = json.loads(twice)
+    # Exactly one coffer entry, command updated in place.
+    assert list(data["mcpServers"]).count(COFFER_SERVER_KEY) == 1
+
+
+def test_json_uninstall_removes_only_coffer():
+    installed = apply_install(
+        ConfigFileFormat.JSON,
+        json.dumps({"mcpServers": {"other": {"command": "y"}}}),
+        SHIM,
+    )
+    out = apply_uninstall(ConfigFileFormat.JSON, installed)
+    data = json.loads(out)
+    assert COFFER_SERVER_KEY not in data["mcpServers"]
+    assert data["mcpServers"]["other"] == {"command": "y"}
+    assert not is_installed(ConfigFileFormat.JSON, out)
+
+
+def test_json_status_false_for_empty_and_absent():
+    assert is_installed(ConfigFileFormat.JSON, "") is False
+    assert is_installed(ConfigFileFormat.JSON, "{}") is False
+    assert installed_command(ConfigFileFormat.JSON, "{}") is None
+
+
+def test_json_malformed_raises():
+    with pytest.raises(ConfigFileFormatInvalid):
+        apply_install(ConfigFileFormat.JSON, "{not json", SHIM)
+
+
+# --- TOML (Codex config.toml) ---
+
+
+def test_toml_install_into_empty():
+    out = apply_install(ConfigFileFormat.TOML, "", SHIM)
+    doc = tomlkit.parse(out)
+    assert doc["mcp_servers"][COFFER_SERVER_KEY]["command"] == SHIM
+    assert is_installed(ConfigFileFormat.TOML, out)
+    assert installed_command(ConfigFileFormat.TOML, out) == SHIM
+
+
+def test_toml_install_preserves_comments_and_other_tables():
+    existing = '# my config\nmodel = "o1"\n\n[mcp_servers.other]\ncommand = "y"\n'
+    out = apply_install(ConfigFileFormat.TOML, existing, SHIM)
+    assert "# my config" in out
+    assert 'model = "o1"' in out
+    doc = tomlkit.parse(out)
+    assert doc["mcp_servers"]["other"]["command"] == "y"
+    assert doc["mcp_servers"][COFFER_SERVER_KEY]["command"] == SHIM
+
+
+def test_toml_install_idempotent():
+    once = apply_install(ConfigFileFormat.TOML, "", SHIM)
+    twice = apply_install(ConfigFileFormat.TOML, once, SHIM)
+    doc = tomlkit.parse(twice)
+    assert is_installed(ConfigFileFormat.TOML, twice)
+    # Only one coffer subtable.
+    assert len([k for k in doc["mcp_servers"] if k == COFFER_SERVER_KEY]) == 1
+
+
+def test_toml_uninstall_removes_only_coffer():
+    installed = apply_install(ConfigFileFormat.TOML, '[mcp_servers.other]\ncommand = "y"\n', SHIM)
+    out = apply_uninstall(ConfigFileFormat.TOML, installed)
+    doc = tomlkit.parse(out)
+    assert COFFER_SERVER_KEY not in doc.get("mcp_servers", {})
+    assert doc["mcp_servers"]["other"]["command"] == "y"
+    assert not is_installed(ConfigFileFormat.TOML, out)
+
+
+def test_toml_status_false_for_empty():
+    assert is_installed(ConfigFileFormat.TOML, "") is False
+    assert is_installed(ConfigFileFormat.TOML, 'model = "o1"\n') is False
+
+
+def test_toml_malformed_raises():
+    with pytest.raises(ConfigFileFormatInvalid):
+        apply_install(ConfigFileFormat.TOML, "a = = 1", SHIM)
+
+
+def test_uninstall_absent_is_noop():
+    # No coffer entry present -> uninstall leaves a parseable, coffer-free doc.
+    out_json = apply_uninstall(ConfigFileFormat.JSON, "{}")
+    assert not is_installed(ConfigFileFormat.JSON, out_json)
+    out_toml = apply_uninstall(ConfigFileFormat.TOML, 'model = "o1"\n')
+    assert not is_installed(ConfigFileFormat.TOML, out_toml)
+
+
+# --- hand-edited / hostile configs must not crash (non-table mcp_servers) ---
+
+
+def test_toml_install_recreates_non_table_mcp_servers():
+    """A hand-edited `mcp_servers = "x"` scalar must not crash install."""
+    out = apply_install(ConfigFileFormat.TOML, 'mcp_servers = "oops"\n', SHIM)
+    doc = tomlkit.parse(out)
+    assert doc["mcp_servers"][COFFER_SERVER_KEY]["command"] == SHIM
+    assert is_installed(ConfigFileFormat.TOML, out)
+
+
+def test_toml_status_false_for_scalar_mcp_servers():
+    """A scalar `mcp_servers` containing the substring 'coffer' must not
+    false-positive via `in`, and installed_command must not raise."""
+    text = 'mcp_servers = "coffer-ish"\n'
+    assert is_installed(ConfigFileFormat.TOML, text) is False
+    assert installed_command(ConfigFileFormat.TOML, text) is None
+
+
+def test_toml_installed_command_none_for_scalar_coffer_entry():
+    """`coffer` mapped to a scalar (not a table) must not raise in
+    installed_command — is_installed is True but there is no `.command`."""
+    text = '[mcp_servers]\ncoffer = "x"\n'
+    assert is_installed(ConfigFileFormat.TOML, text) is True
+    assert installed_command(ConfigFileFormat.TOML, text) is None
+
+
+def test_toml_uninstall_noop_for_scalar_mcp_servers():
+    """Uninstall against a scalar `mcp_servers` must be a parseable no-op."""
+    out = apply_uninstall(ConfigFileFormat.TOML, 'mcp_servers = "coffer-ish"\n')
+    assert tomlkit.parse(out)["mcp_servers"] == "coffer-ish"
+
+
+def test_json_install_preserves_non_ascii():
+    """ensure_ascii=False keeps unicode in ~/.claude.json intact rather than
+    rewriting it to \\uXXXX escapes."""
+    existing = json.dumps({"project": "/Users/张三/code"}, ensure_ascii=False)
+    out = apply_install(ConfigFileFormat.JSON, existing, SHIM)
+    assert "/Users/张三/code" in out
+    assert "\\u" not in out

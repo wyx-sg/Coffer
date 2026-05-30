@@ -14,7 +14,8 @@ export function useResources(kind?: string) {
       const { data, error } = await client.GET("/resources", {
         params: { query: kind ? { kind } : {} },
       });
-      if (error) throwApiError(error, "INTERNAL_ERROR", `failed to list resources: ${kind ?? "all"}`);
+      if (error)
+        throwApiError(error, "INTERNAL_ERROR", `failed to list resources: ${kind ?? "all"}`);
       return data?.resources ?? [];
     },
   });

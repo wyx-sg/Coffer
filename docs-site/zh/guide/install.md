@@ -30,14 +30,8 @@
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
-### Windows（PowerShell）
-
-```powershell
-irm https://wyx-sg.github.io/Coffer/install.ps1 | iex
-```
-
-脚本会自动将 `~/.coffer/bin` 添加到 `PATH`（POSIX 上修改 shell profile；Windows 上修改
-`User` 环境变量）。打开新终端后，三个二进制文件均可直接使用。
+脚本会自动将 `~/.coffer/bin` 添加到 `PATH`（修改 shell profile）。打开新终端后，
+三个二进制文件均可直接使用。
 
 ### 环境变量覆盖
 
@@ -57,9 +51,6 @@ shasum -a 256 -c SHA256SUMS
 
 # Linux
 sha256sum -c SHA256SUMS
-
-# Windows PowerShell
-Get-FileHash coffer-cli-*.zip -Algorithm SHA256
 ```
 
 ### 安装后：接入 MCP 客户端
@@ -98,13 +89,12 @@ coffer mcp list
 
 前往 [GitHub Releases 页面](https://github.com/wyx-sg/Coffer/releases/latest)，选择适合你平台的文件：
 
-| 平台                          | 文件                                                                 |
-| ----------------------------- | -------------------------------------------------------------------- |
-| macOS Apple silicon（M 系列） | `Coffer_<version>_aarch64.dmg`                                       |
-| macOS Intel                   | `Coffer_<version>_x64.dmg`                                           |
-| Linux x64（AppImage，推荐）   | `Coffer_<version>_amd64.AppImage`                                    |
-| Linux x64（deb）              | `coffer_<version>_amd64.deb`                                         |
-| Windows 10+ x64               | `Coffer_<version>_x64_en-US.msi` 或 `Coffer_<version>_x64-setup.exe` |
+| 平台                          | 文件                              |
+| ----------------------------- | --------------------------------- |
+| macOS Apple silicon（M 系列） | `Coffer_<version>_aarch64.dmg`    |
+| macOS Intel                   | `Coffer_<version>_x64.dmg`        |
+| Linux x64（AppImage，推荐）   | `Coffer_<version>_amd64.AppImage` |
+| Linux x64（deb）              | `coffer_<version>_amd64.deb`      |
 
 每份文件都有一个 `.sha256` 邻居文件，运行前请先校验：
 
@@ -118,7 +108,6 @@ shasum -a 256 -c SHA256SUMS   # Linux 上改用 sha256sum -c SHA256SUMS
 - **macOS**：打开 DMG，把 **Coffer.app** 拖进 `/Applications`。
 - **Linux（AppImage）**：`chmod +x Coffer_<version>_amd64.AppImage`，然后运行。
 - **Linux（deb）**：`sudo apt install ./coffer_<version>_amd64.deb`。
-- **Windows**：双击 MSI（或 NSIS 的 `-setup.exe`），按引导完成。
 
 ### macOS Gatekeeper（未签名 —— 公证待完成）
 
@@ -135,8 +124,7 @@ xattr -d com.apple.quarantine /Applications/Coffer.app
 首次启动时，桌面应用会：
 
 1. 在空闲端口（默认 8000）启动守护进程，并写出 `~/.coffer/daemon.json`。
-2. 将 `coffer-mcp-shim` 部署到 `~/.coffer/bin/`（macOS/Linux）或
-   `%LOCALAPPDATA%\Coffer\bin\`（Windows），使 MCP 客户端能找到它。
+2. 将 `coffer-mcp-shim` 部署到 `~/.coffer/bin/`，使 MCP 客户端能找到它。
 3. 在主窗口中打开 Web UI。
 
 接入 MCP 客户端：

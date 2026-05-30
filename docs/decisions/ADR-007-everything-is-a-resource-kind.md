@@ -1,6 +1,6 @@
 # ADR-007: Information Architecture — Everything Is a Resource Kind
 
-**Status**: Accepted
+**Status**: Amended (2026-05-30) — see [Amendment](#amendment-2026-05-30)
 **Date**: 2026-05-28
 **Deciders**: Yuxing Wu
 **Related**: [ADR-001](ADR-001-resource-framework-upfront.md), spec `002-ui-shell`
@@ -84,3 +84,51 @@ Rejected.
 
 - Works for one kind, but degrades into a flat, ungrouped list as kinds are
   added. The Resources / System split keeps the sidebar readable.
+
+## Amendment (2026-05-30)
+
+The original decision modelled **every** user-facing managed entity as a
+resource kind on a single axis. Implementation surfaced a concept that does
+not fit that mould: **agents** (the Claude Code / Codex / built-in agents you
+use). An agent is a _consumer_ of vault assets, not an asset the vault
+manages — so collapsing it onto the resource-kind axis mislabels it. The
+shipped IA therefore keeps the kind-agnostic Resource framework but adds a
+second axis for consumers, and groups the sidebar by **role** rather than by
+"is this a kind?".
+
+What changed:
+
+- **Agents are a separate axis, not a resource kind.** They are surfaced at
+  `/agents` (list) and `/agents/:name` (detail) under their own **Agents**
+  sidebar group. They are NOT shown in the `/resources` kind browser, because
+  they are not vault assets.
+- **The sidebar is grouped by role**, not on a single resource-kind axis:
+  - **Agents** — the consumers (`/agents`).
+  - **Resources** — the assets agents draw on, modelled as kind-agnostic
+    resource kinds and surfaced through the kind registry. The nav entry is
+    labelled **"MCP servers"** and lists only the kinds that register a
+    list/card UI (today just `mcp_server`); the route stays `/resources`.
+  - **System** — cross-cutting tooling: the **Audit log** (`/audit`) and
+    **Settings** (`/settings`).
+- **The audit log lives at `/audit`, not `/observability`.** The shipped
+  router maps `/audit` → the audit-log page and keeps `/observability` as a
+  legacy redirect to `/audit`. **Observability** (system health / metrics) is
+  a DISTINCT, reserved _future_ surface — it is not the audit log and is not
+  in the sidebar yet.
+- **List surfaces converge on one shared, searchable, paginated table.** All
+  list views use a single `DataTable` component (built-in search / filter /
+  pagination) where a row click opens that item's detail page and row actions
+  are compact icons. Cards are reserved for welcome / empty states only. This
+  supersedes the earlier card-grid description of resource lists.
+- **Future groups/items** (Chat, Channels, Skills, Knowledge, Memory,
+  Observability) are planned but not shown today. The "no soon placeholders"
+  policy from the original decision still holds: the sidebar documents the
+  role-based structure but adds no dead nav entries.
+
+What survives unchanged from the original decision: the kind-agnostic
+Resource framework is still the only abstraction for _assets_; new resource
+kinds still plug into the Resources group with a single nav entry; and the
+sidebar still shows only what ships today. The amendment narrows "everything
+is a resource kind" to "every **asset** is a resource kind, surfaced under
+Resources; consumers (agents) and cross-cutting tooling (System) are their
+own role-based groups."

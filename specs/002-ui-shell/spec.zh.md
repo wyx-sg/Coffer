@@ -10,25 +10,31 @@
 
 ## Information Architecture
 
-Coffer 管理的东西只有一种：**resource**——一个有名字、有配置、有生命周期的被管理实体。`mcp_server` 是今天交付的 resource kind，通过 per-kind registry 暴露，使导航与 resources 页面不带任何 kind 专属分支。
+侧栏按**角色 (role)** 分组，而不是单一一条轴。两个概念并列：**agent** 是*消费者*（你使用的 agent），**resource** 是这些 agent 所依赖的*资产*——一个有名字、有配置、有生命周期的被管理实体，背后是一个 kind-agnostic 框架。`mcp_server` 是今天交付的 resource kind，通过 per-kind registry 暴露，使导航与 resources 页面不带任何 kind 专属分支。agent **不是**一种 resource kind，所以它独占一组，不归在 Resources 下。
 
 **侧栏只展示 Coffer 当下能做什么。** 它不列出"尚未实现"的占位项：一个写满"敬请期待"的侧栏读起来是未完成的脚手架，不是产品。
 
-当下的侧栏是：
+当下侧栏交付的四个界面是：
 
 ```
+ AGENTS
+  Agents           /agents      — 消费者（Bot 图标）
  RESOURCES
-  MCP servers      operational
+  MCP servers      /resources   — 带列表 UI 的 resource kind（今天：mcp_server）
  SYSTEM
-  Observability    the audit log
-  Settings
+  Audit log        /audit       — 谁在什么时候做了什么
+  Settings         /settings
 ```
 
-它分组为 **Resources**（resource kind）与 **System**（横切工具：Observability、Settings），这样导航在 Coffer 成长时保持稳定。
+它分组为 **Agents**（消费者）、**Resources**（resource kind）与 **System**（横切工具：Audit log 与 Settings），这样导航在 Coffer 成长时保持稳定。agent 住在 `/agents`（列表）与 `/agents/:name`（详情），不出现在 `/resources` 的 kind 浏览器里。agent 详情页是一个简单的 **Overview + Config files** 详情页：一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 只读地呈现其已知配置文件，没有创建 / 编辑 / 删除 / 启用。
+
+所有列表界面（agents、MCP servers、审计日志）共用同一个可搜索、可过滤、可分页的表格：点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。
+
+未来的分组与入口——Chat、Channels、Skills、Knowledge、Memory 以及 **Observability**（系统健康 / 指标，一个与审计日志不同的界面）——已规划但今天不展示；它们只在各自功能上线时才进入侧栏。
 
 侧栏可折叠到只剩图标的轨道再展开；选择跨会话持久化（localStorage）。
 
-详见 [`ADR-007：一切皆 resource kind`](../../docs/decisions/ADR-007-everything-is-a-resource-kind.md)，记录了这种单轴 IA 背后的架构决策（被拒绝的备选：独立的"surface"概念；侧栏策略：不放"敬请期待"占位项）。
+详见 [`ADR-007：一切皆 resource kind`](../../docs/decisions/ADR-007-everything-is-a-resource-kind.md)（2026-05-30 已修订），记录了这种基于角色的 IA 背后的架构决策（agent 作为独立的消费者轴；被拒绝的备选：独立的"surface"概念；侧栏策略：不放"敬请期待"占位项）。
 
 ## User Scenarios & Testing
 
@@ -50,7 +56,7 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 
 ### User Story 2 — 日常 MCP 操作有产品质感，不再像脚手架 (Priority: P1)
 
-已经在用 Coffer 做 MCP gateway 聚合的开发者希望日常流程——注册服务器、看健康、浏览工具、切换能力、看 invocation——看起来、用起来像一个真正的产品，而不是一坨脚手架。标题在字体上有区分；间距统一；每台服务器页面在 per-tool 开关之前先有一个"这台服务器在干嘛"的总览视图；空 / 错 / 加载态都是一等公民。服务器列表带搜索框、状态过滤、客户端分页，让一个大 vault 也能浏览。Invocations tab 列出每一次调用；展开一行可看它的原始日志——该次 invocation 完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现——与审计日志的展开行为一致。
+已经在用 Coffer 做 MCP gateway 聚合的开发者希望日常流程——注册服务器、看健康、浏览工具、切换能力、看 invocation——看起来、用起来像一个真正的产品，而不是一坨脚手架。标题在字体上有区分；间距统一；每台服务器页面在 per-tool 开关之前先有一个"这台服务器在干嘛"的总览视图；空 / 错 / 加载态都是一等公民。Tools、Resources、Prompts 三个 tab 保持统一——各自带相同的搜索框、状态过滤和逐行启用开关，即使上游没有该类型的任何条目也保留这套外壳（空态渲染在表格内部，而不是一张光秃秃的卡片）。服务器列表带搜索框、状态过滤、客户端分页，让一个大 vault 也能浏览。Invocations tab 列出每一次调用；展开一行可看它的原始日志——该次 invocation 完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现——与审计日志的展开行为一致。
 
 "Add MCP server" 是一个对话框，用户把标准的 `mcpServers` JSON 块粘进去（一次一台或多台都行）——就是每台 MCP server README 给的那块。Review 一步让他们确认哪些 `env` 是 secret；这些值会被提到 OS keychain，而不是写在 config 里。
 
@@ -68,18 +74,20 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 
 ---
 
-### User Story 3 — Observability：审计日志有自己的家 (Priority: P2)
+### User Story 3 — 审计日志有自己的家 (Priority: P2)
 
-开发者想知道自己的 Coffer vault 里发生了什么——哪些 resource 和能力被加、启用、禁用、删除了，谁干的，什么时候。**Observability** 入口给他这个：一份审计日志，记录每一次生命周期事件，每一行都是一句口语化的活动描述（"Enabled demo-fs"、"Discovered tool write_file on demo-fs"）而不是裸的 `event_type` 代码。它按时间范围与 actor 过滤、客户端分页，展开任意一行可看它的原始日志——该条目完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。
+开发者想知道自己的 Coffer vault 里发生了什么——哪些 resource 和能力被加、启用、禁用、删除了，谁干的，什么时候。**Audit log** 入口（在 System 下，位于 `/audit`）给他这个：一份审计日志，记录每一次生命周期事件，每一行都是一句口语化的活动描述（"Enabled demo-fs"、"Discovered tool write_file on demo-fs"）而不是裸的 `event_type` 代码。它按时间范围与 actor 过滤、客户端分页，展开任意一行可看它的原始日志——该条目完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。
 
-**Why this priority**: P2——审计日志在 spec 001 已经交付；本故事是它的重设计过滤 + 表格以及 `Observability` 这个家。
+审计日志**不是** **Observability**——系统健康 / 指标是另一个独立界面，预留给未来，今天不在导航里。
 
-**Independent Test**: 开 `/observability`——Observability section 内的审计日志视图以 "Audit log" 标题渲染，带 filter bar (时间范围 / actor) 与分页表格，每一行是一条可读的活动行；点任意一行展开成该条目的原始日志 JSON。访问 legacy `/audit` URL——app 重定向到 `/observability`。
+**Why this priority**: P2——审计日志在 spec 001 已经交付；本故事是它的重设计过滤 + 表格以及 `/audit` 这个家。
+
+**Independent Test**: 开 `/audit`——审计日志视图以 "Audit log" 标题渲染，带 filter bar (时间范围 / actor) 与分页表格，每一行是一条可读的活动行；点任意一行展开成该条目的原始日志 JSON。访问 legacy `/observability` URL——app 重定向到 `/audit`。
 
 **Representative scenarios** (完整 Given/When/Then 见 `## Acceptance Scenarios`):
 
-- observability route renders the audit log
-- legacy /audit redirects to Observability
+- audit route renders the audit log
+- legacy /observability redirects to the audit log
 
 ---
 
@@ -116,13 +124,13 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 - **When** 他们在真实浏览器里访问 `http://localhost:5173/`
 - **Then** 页面在 2 秒内渲染出侧栏 + 主内容区
 - **And** 主内容显示 resources 欢迎视图（不出现 generic error 卡片）
-- **And** 侧栏列出 Coffer 的运营界面——MCP servers、Observability、Settings——分组在 "Resources" 与 "System" 标题下
+- **And** 侧栏列出 Coffer 的运营界面——Agents、MCP servers、Audit log、Settings——分组在 "Agents"、"Resources"、"System" 标题下
 
 ### Scenario: token-missing renders an actionable empty state
 
 - **Given** `~/.coffer/daemon.json` 不存在 (daemon 没在跑)
 - **When** 用户访问 `http://localhost:5173/`
-- **Then** 页面显示一个 "Daemon not running" 视图，给出一个清晰的下一步（可复制的 `coffer daemon start` 命令）
+- **Then** 页面显示一个 "Daemon not running" 视图，给出一个清晰的恢复操作（Web 上是「重新加载」按钮；桌面应用提供「重启」）
 - **And** 侧栏仍然可见，让用户能定位自己
 - **And** 任何视图都不会出现字面 "unexpected error" 或 `INTERNAL_ERROR`
 
@@ -190,11 +198,11 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 - **When** 用户在 Invocations tab 点开状态过滤 combobox
 - **Then** 下拉 portal 中至少渲染出 "All" 选项
 
-### Scenario: observability route renders the audit log
+### Scenario: audit route renders the audit log
 
 - **Given** 至少存在一条审计事件
-- **When** 用户打开 `/observability`
-- **Then** Observability section 的审计日志视图以 "Audit log" 标题渲染
+- **When** 用户打开 `/audit`
+- **Then** 审计日志视图以 "Audit log" 标题渲染
 - **And** 它渲染 filter bar（时间范围、actor）与一个分页表格，每一行是口语化的活动行，不是裸 event 代码
 - **And** 点任意一行展开成该条目的原始日志 JSON
 - **And** filters 实时收窄可见行
@@ -202,7 +210,7 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 ### Scenario: audit log row expand shows raw log
 
 - **Given** 审计日志至少有一行
-- **When** 用户在 Observability 页点击一行（或在其上按 Enter/Space）
+- **When** 用户在审计日志页点击一行（或在其上按 Enter/Space）
 - **Then** 展开区渲染出该条目的原始日志——它完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现
 
 ### Scenario: audit log free-text filter narrows rows
@@ -214,14 +222,14 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 ### Scenario: audit log pagination controls appear and advance page
 
 - **Given** 审计日志的条数多于默认 page size
-- **When** 用户打开 Observability 页并点 Next
+- **When** 用户打开审计日志页并点 Next
 - **Then** 页码指示前进到 "Page 2 of …"，Previous 按钮变为可用
 
-### Scenario: legacy /audit redirects to Observability
+### Scenario: legacy /observability redirects to the audit log
 
-- **Given** 用户走老书签访问 `/audit`
+- **Given** 用户走老书签访问 `/observability`
 - **When** 路由解析
-- **Then** app 重定向到 `/observability`
+- **Then** app 重定向到 `/audit`
 - **And** 不出现 "page not found" 视图
 
 ### Scenario: settings layout uses the redesigned tabbed sidebar
@@ -257,7 +265,7 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 
 - **Given** daemon 没在跑（`~/.coffer/daemon.json` 上的 `127.0.0.1:<port>` 不可达，或该文件不存在）
 - **When** 用户保持 app 打开，且任意一次到 daemon 的鉴权请求连不上
-- **Then** 工作区顶部渲染出 daemon-offline banner，里面带可复制的 `coffer daemon start` 命令
+- **Then** 工作区顶部渲染出 daemon-offline banner，带一个清晰的恢复操作——桌面应用是「重启」按钮，Web 是「重新加载」按钮
 - **And** daemon 重新可达后 banner 自动消失，不需要手动刷页
 
 ### Scenario: JSON import shows readable error for malformed JSON
@@ -274,7 +282,7 @@ Coffer 管理的东西只有一种：**resource**——一个有名字、有配�
 
 - 上面每一条 scenario 至少有一条覆盖测试（unit / integration / e2e），并且 `audit_acceptance` 同时通过 001 与 002。
 - 首次用户能在 app 内注册一台 MCP 服务器并到达一个能工作的 gateway；把 MCP 客户端指向 shim 这一步在项目 README 中记录。
-- 侧栏只展示运营界面（MCP servers、Observability、Settings）；没有任何功能以"敬请期待"的死占位项出现。
-- Observability 提供重设计后的审计日志过滤 + 表格；legacy `/audit` URL 仍能解析。审计日志与 MCP invocation 日志的每一行都能展开为该行的原始日志 JSON。
+- 侧栏只展示运营界面（Agents、MCP servers、Audit log、Settings），按角色分组；没有任何功能以"敬请期待"的死占位项出现。
+- 审计日志住在 `/audit`，带重设计后的过滤 + 表格；legacy `/observability` URL 仍能解析（重定向到 `/audit`）。审计日志与 MCP invocation 日志的每一行都能展开为该行的原始日志 JSON。Observability（系统健康 / 指标）是预留的未来界面，不是审计日志。
 - Settings 把数据控件（retention、prune、backup）归到 Data tab；daemon 永不作为用户可见概念出现，任何 tab 都不暴露 shutdown 或 token-rotation。
 - `make verify` + `make verify-e2e` 绿。

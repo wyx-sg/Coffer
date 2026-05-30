@@ -29,10 +29,10 @@ make dev
 
 首次访问时 URL 解析到 `/resources`，你会看到：
 
-- 重设计后的侧栏——两个分组：**Resources** 与 **System**（MCP servers / Observability / Settings）。当前路由高亮。点击收起手柄在完整与图标态之间切换；选择跨刷新持久化。
+- 重设计后的侧栏——基于角色的分组：**Agents**（`/agents`——你使用的 agent）、**Resources**（**MCP servers**，位于 `/resources`）、**System**（**Audit log** 位于 `/audit`、**Settings**）。当前路由高亮。点击收起手柄在完整与图标态之间切换；选择跨刷新持久化。
 - 一张欢迎卡片，介绍 Coffer 是什么，并给出一个主行动：**Add MCP server**。
 
-如果 daemon 没在跑（你跳过了 `make dev`，或它崩了），你会看到一个 "Daemon not running" 视图，附带一条可复制的 `coffer daemon start` 命令。把 daemon 拉起来，视图会在下一次渲染就自动恢复——不需要手动刷页（见 `daemon-offline banner` acceptance scenario）。
+如果 daemon 没在跑（你跳过了 `make dev`，或它崩了），你会看到一个 "Daemon not running" 视图，带一个「重新加载」恢复操作（桌面应用提供「重启」）。把 daemon 拉起来，视图会在下一次渲染就自动恢复——不需要手动刷页（见 `daemon-offline banner` acceptance scenario）。
 
 侧栏底部的语言切换器可在 English 与 中文 之间切换。切换在下一次渲染内生效，并以 `coffer.language` 为 key 存进 `localStorage`。
 
@@ -72,9 +72,9 @@ make dev
 
 要看到 invocation 落库，按 [`specs/001-mcp-gateway/quickstart.zh.md`](../001-mcp-gateway/quickstart.zh.md) 中 "Wire Coffer into your MCP client" 一节把 MCP 客户端接到 coffer，触发一次工具调用（比如让 Claude Code 读个文件），然后刷新 **Invocations** tab。
 
-## 5. Observability 与 Settings
+## 5. 审计日志与 Settings
 
-- `/observability` — Observability section 下的审计日志视图。按时间范围与 actor 过滤；点任意行展开它的原始日志——该条目完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。legacy `/audit` URL 仍能解析并重定向到这里。
+- `/audit` — 审计日志视图（在 **System** 分组下）。按时间范围与 actor 过滤；点任意行展开它的原始日志——该条目完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。legacy `/observability` URL 仍能解析并重定向到这里。（Observability——系统健康 / 指标——是另一个预留给未来的独立界面，不是这个审计日志。）
 - `/settings` — tabs 侧栏分 **Data**（retention 策略、手动清理、备份）和 **About**（版本 / 许可证 / 源代码）。
 
 相比 v0 壳，刻意删掉的三处地方：

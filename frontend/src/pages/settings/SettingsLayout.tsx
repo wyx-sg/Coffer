@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Database, Info, Laptop, type LucideIcon } from "lucide-react";
+import { Database, Info, Laptop, Settings, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { isTauri } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +11,11 @@ interface Item {
   icon: LucideIcon;
 }
 
+const GENERAL_ITEM: Item = {
+  to: "/settings/general",
+  labelKey: "settings.tabs.general",
+  icon: SlidersHorizontal,
+};
 const DATA_ITEM: Item = {
   to: "/settings/data",
   labelKey: "settings.tabs.data",
@@ -30,14 +36,13 @@ export function SettingsLayout() {
   const { t } = useTranslation();
   // The App tab (launch-at-login) is desktop-only — it is hidden in the
   // browser, where those Tauri capabilities don't exist.
-  const items: Item[] = isTauri() ? [DATA_ITEM, APP_ITEM, ABOUT_ITEM] : [DATA_ITEM, ABOUT_ITEM];
+  const items: Item[] = isTauri()
+    ? [GENERAL_ITEM, DATA_ITEM, APP_ITEM, ABOUT_ITEM]
+    : [GENERAL_ITEM, DATA_ITEM, ABOUT_ITEM];
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-3xl tracking-tight">{t("settings.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("settings.subtitle")}</p>
-      </header>
+      <PageHeader icon={Settings} title={t("settings.title")} subtitle={t("settings.subtitle")} />
       <div className="flex flex-col gap-6 md:flex-row">
         <nav className="md:w-52 md:shrink-0" aria-label={t("settings.title")}>
           <div className="flex gap-1 overflow-x-auto md:flex-col md:gap-0.5">

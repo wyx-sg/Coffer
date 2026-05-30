@@ -1,8 +1,9 @@
 // e2e/web/specs/shell_observability.spec.ts
 //
-// Spec 002 §User Story 3 — Observability is currently the audit log: a
-// filterable table of every resource/capability lifecycle event. The
-// legacy /audit URL redirects in.
+// Spec 002 §User Story 3 — the audit log lives at /audit: a filterable table
+// of every resource/capability lifecycle event. The legacy /observability URL
+// redirects in. (Observability — system health/metrics — is a distinct future
+// surface, not this audit log.)
 
 import { expect } from "@playwright/test";
 import * as path from "node:path";
@@ -73,18 +74,23 @@ async function refreshServer(name: string): Promise<void> {
 
 acceptance(
   "002-ui-shell",
-  "observability route renders the audit log",
+  "audit route renders the audit log",
   async ({ page }) => {
     const name = generateUniqueName("e2e002obs");
     try {
       await registerFakeServer(name);
-      await page.goto("/observability");
+      await page.goto("/audit");
       await expect(
         page.getByRole("heading", { name: /^Audit log$/ }),
       ).toBeVisible();
-      // The time + actor filter bar renders, and the table picks up the
-      // new row as a plain-language activity line mentioning the server.
-      await expect(page.getByText("Time range")).toBeVisible();
+      // The redesigned filter bar renders: the free-text search box and the
+      // actor filter combobox (the time range lives in its own popover
+      // trigger). The table then picks up the new row as a plain-language
+      // activity line mentioning the server.
+      await expect(page.getByPlaceholder("Search activity")).toBeVisible();
+      await expect(
+        page.getByRole("combobox", { name: /actor/i }),
+      ).toBeVisible();
       await expect(page.getByText(new RegExp(name))).toBeVisible({
         timeout: 10_000,
       });
@@ -96,10 +102,10 @@ acceptance(
 
 acceptance(
   "002-ui-shell",
-  "legacy /audit redirects to Observability",
+  "legacy /observability redirects to the audit log",
   async ({ page }) => {
-    await page.goto("/audit");
-    await expect(page).toHaveURL(/\/observability$/);
+    await page.goto("/observability");
+    await expect(page).toHaveURL(/\/audit$/);
     await expect(
       page.getByRole("heading", { name: /^Audit log$/ }),
     ).toBeVisible();
@@ -113,7 +119,7 @@ acceptance(
     const name = generateUniqueName("e2e002rowex");
     try {
       await registerFakeServer(name);
-      await page.goto("/observability");
+      await page.goto("/audit");
       // Wait for the row mentioning the server to appear
       const row = page.getByRole("row").filter({ hasText: name }).first();
       await expect(row).toBeVisible({ timeout: 10_000 });
@@ -147,7 +153,7 @@ acceptance(
     try {
       await registerFakeServer(nameA);
       await registerFakeServer(nameB);
-      await page.goto("/observability");
+      await page.goto("/audit");
 
       // Both servers appear initially
       await expect(page.getByText(new RegExp(nameA))).toBeVisible({
@@ -183,7 +189,7 @@ acceptance(
     //
     // Because the audit log is shared across all tests in the run, we must
     // assert the DELTA caused by THIS test rather than assuming the page
-    // starts empty.  Strategy: load /observability BEFORE registering the new
+    // starts empty.  Strategy: load /audit BEFORE registering the new
     // server, record whether Next is currently enabled, then register+refresh,
     // reload, and assert that Next became (or stayed) enabled AND that a new
     // page boundary appeared that is attributable to this server's events.
@@ -212,7 +218,7 @@ acceptance(
     ];
     try {
       // ── Step 1: capture baseline page count BEFORE this test's writes ──
-      await page.goto("/observability");
+      await page.goto("/audit");
       // Wait for the audit table to be ready (heading is always present)
       await expect(
         page.getByRole("heading", { name: /^Audit log$/ }),

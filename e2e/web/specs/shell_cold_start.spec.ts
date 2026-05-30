@@ -58,9 +58,8 @@ acceptance(
   async ({ page }) => {
     // Same setup as the token-missing scenario below — pointing at a
     // dead port models "daemon not running" from the FE's perspective.
-    // We assert the new spec-002 scenario name explicitly: the banner
-    // renders at the top of the workspace with the literal command
-    // hint, even when no token has been minted yet.
+    // The banner renders at the top of the workspace with a clear recovery
+    // affordance (Reload), even when no token has been minted yet.
     await page.addInitScript(() => {
       (
         window as unknown as { __COFFER_BASE_URL__: string }
@@ -72,11 +71,8 @@ acceptance(
 
     const banner = page.getByTestId("daemon-banner");
     await expect(banner).toBeVisible({ timeout: 10_000 });
-    // The literal copyable command appears inside the banner (not just
-    // a generic error message).
-    await expect(page.getByTestId("daemon-banner-cmd")).toHaveText(
-      /coffer daemon start/,
-    );
+    // The recovery affordance is the Reload control (no raw CLI command).
+    await expect(banner.getByTestId("daemon-banner-reload")).toBeVisible();
   },
 );
 
@@ -85,9 +81,9 @@ acceptance(
   "token-missing renders an actionable empty state",
   async ({ page }) => {
     // Point the FE at a base URL that won't resolve to a daemon. That
-    // mirrors what a real user sees when `coffer daemon start` hasn't
-    // been run yet: the status query errors out and DaemonOfflineBanner
-    // shows its "daemon not running" panel with the exact command.
+    // mirrors what a real user sees when the daemon hasn't been started
+    // yet: the status query errors out and DaemonOfflineBanner shows its
+    // "daemon not running" panel with a Reload recovery affordance.
     await page.addInitScript(() => {
       (
         window as unknown as { __COFFER_BASE_URL__: string }
@@ -99,10 +95,8 @@ acceptance(
 
     const banner = page.getByTestId("daemon-banner");
     await expect(banner).toBeVisible({ timeout: 10_000 });
-    // The exact runnable command must appear (not a generic "error").
-    await expect(page.getByTestId("daemon-banner-cmd")).toHaveText(
-      /coffer daemon start/,
-    );
+    // A concrete recovery affordance (Reload) appears (not a generic "error").
+    await expect(banner.getByTestId("daemon-banner-reload")).toBeVisible();
     // Sidebar must still be reachable so the user can orient.
     await expect(
       page.getByRole("link", { name: /MCP servers/i }).first(),

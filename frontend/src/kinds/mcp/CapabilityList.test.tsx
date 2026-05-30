@@ -1,6 +1,6 @@
 // frontend/src/kinds/mcp/CapabilityList.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CapabilityList } from "./CapabilityList";
 import type { components } from "@/lib/api/types";
@@ -20,6 +20,17 @@ function wrap(ui: React.ReactNode) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
+}
+
+// Open the status filter dropdown and click an option by its label. DataTable
+// renders the filter combobox in its toolbar (first in DOM order) and the
+// pagination page-size combobox after the table, so the status filter is the
+// first combobox.
+function selectStatus(optionName: string) {
+  const trigger = screen.getAllByRole("combobox")[0];
+  fireEvent.click(trigger);
+  const option = screen.getByRole("option", { name: optionName });
+  fireEvent.click(option);
 }
 
 const sampleTools = [
@@ -63,11 +74,11 @@ describe("CapabilityList", () => {
     expect(screen.getByText(/No tools discovered/)).toBeInTheDocument();
   });
 
-  test("expands schema JSON when expand button is clicked on a tool with schema", async () => {
+  test("expands schema JSON when a tool row is clicked", async () => {
     render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
 
-    const expandBtn = screen.getByRole("button", { name: "Expand schema" });
-    fireEvent.click(expandBtn);
+    const row = screen.getByText("read_file").closest("tr")!;
+    fireEvent.click(row);
 
     await waitFor(() => {
       expect(screen.getByText(/"type": "object"/)).toBeInTheDocument();
@@ -172,14 +183,18 @@ describe("CapabilityList", () => {
     });
   });
 
-  test("Resource tab: shows empty state when no resources", () => {
+  test("Resource tab: empty state keeps the search/filter chrome (consistent with Tools)", () => {
     render(wrap(<CapabilityList serverName="fs" kind="resource" resources={[]} />));
+    // The empty copy renders inside the table, and the search box is still
+    // present so an empty Resources tab looks like the Tools tab.
     expect(screen.getByText(/No resources discovered/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Search by name")).toBeInTheDocument();
   });
 
-  test("Prompt tab: shows empty state when no prompts", () => {
+  test("Prompt tab: empty state keeps the search/filter chrome (consistent with Tools)", () => {
     render(wrap(<CapabilityList serverName="fs" kind="prompt" prompts={[]} />));
     expect(screen.getByText(/No prompts discovered/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Search by name")).toBeInTheDocument();
   });
 
   // ── Search + filter tests ────────────────────────────────────────────────
@@ -194,27 +209,20 @@ describe("CapabilityList", () => {
     expect(screen.queryByText("write_file")).not.toBeInTheDocument();
   });
 
-  test("enabled filter set to 'disabled' shows only disabled capabilities", () => {
+  test("status filter set to 'disabled' shows only disabled capabilities", () => {
     render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
 
-    // Open the status select and pick "Disabled"
-    const trigger = screen.getByRole("combobox", { name: /status/i });
-    fireEvent.click(trigger);
-    const disabledOption = screen.getByRole("option", { name: "Disabled" });
-    fireEvent.click(disabledOption);
+    selectStatus("Disabled");
 
     // Only the disabled tool should remain
     expect(screen.queryByText("read_file")).not.toBeInTheDocument();
     expect(screen.getByText("write_file")).toBeInTheDocument();
   });
 
-  test("enabled filter set to 'enabled' shows only enabled capabilities", () => {
+  test("status filter set to 'enabled' shows only enabled capabilities", () => {
     render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
 
-    const trigger = screen.getByRole("combobox", { name: /status/i });
-    fireEvent.click(trigger);
-    const enabledOption = screen.getByRole("option", { name: "Enabled" });
-    fireEvent.click(enabledOption);
+    selectStatus("Enabled");
 
     expect(screen.getByText("read_file")).toBeInTheDocument();
     expect(screen.queryByText("write_file")).not.toBeInTheDocument();
@@ -236,12 +244,20 @@ describe("CapabilityList", () => {
     const allEnabledTools = sampleTools.map((t) => ({ ...t, enabled: true }));
     render(wrap(<CapabilityList serverName="fs" kind="tool" tools={allEnabledTools} />));
 
-    const trigger = screen.getByRole("combobox", { name: /status/i });
-    fireEvent.click(trigger);
-    const disabledOption = screen.getByRole("option", { name: "Disabled" });
-    fireEvent.click(disabledOption);
+    selectStatus("Disabled");
 
     expect(screen.getByText(/No capabilities match/i)).toBeInTheDocument();
     expect(screen.queryByText(/No tools discovered/)).not.toBeInTheDocument();
+  });
+
+  test("toggling a switch does not expand the row's schema detail", async () => {
+    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
+
+    const row = screen.getByText("read_file").closest("tr")!;
+    const toggle = within(row).getByRole("switch");
+    fireEvent.click(toggle);
+
+    // The switch stops propagation, so the row detail must NOT open.
+    expect(screen.queryByText(/"type": "object"/)).not.toBeInTheDocument();
   });
 });

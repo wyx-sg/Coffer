@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -31,49 +30,42 @@ interface Props {
 }
 
 /**
- * Audit log filters: a free-text search, a time range (presets + a custom
- * calendar/typed window), and an actor. Renders bare controls — the
- * caller wraps them in a card.
+ * Audit log filters — a free-text search, a time range (presets + a custom
+ * window), and an actor. Laid out as the same inline toolbar the shared
+ * DataTable renders (SearchInput + h-9 selects, no labels, no card) so the
+ * audit log matches every other list surface.
  */
 export function AuditFilters({ state, onChange }: Props) {
   const { t } = useTranslation();
 
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <div>
-        <Label htmlFor="filter-search">{t("audit.filter.search")}</Label>
-        <SearchInput
-          id="filter-search"
-          value={state.search}
-          onChange={(v) => onChange({ ...state, search: v })}
-          placeholder={t("audit.filter.searchPlaceholder")}
-        />
-      </div>
-      <div>
-        <Label>{t("audit.filter.time")}</Label>
-        <TimeRangePicker
-          timeRange={state.timeRange}
-          from={state.from}
-          to={state.to}
-          onChange={(v) => onChange({ ...state, ...v })}
-        />
-      </div>
-      <div>
-        <Label htmlFor="filter-actor">{t("audit.filter.actor")}</Label>
-        <Select value={state.actor} onValueChange={(v) => onChange({ ...state, actor: v })}>
-          <SelectTrigger id="filter-actor">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("audit.filter.all")}</SelectItem>
-            {ACTORS.map((a) => (
-              <SelectItem key={a} value={a}>
-                {t(`audit.actor.${a}`, { defaultValue: a })}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+    <div className="flex flex-wrap items-center gap-3">
+      <SearchInput
+        value={state.search}
+        onChange={(v) => onChange({ ...state, search: v })}
+        placeholder={t("audit.filter.searchPlaceholder")}
+        ariaLabel={t("audit.filter.search")}
+        className="w-full sm:max-w-xs"
+      />
+      <TimeRangePicker
+        timeRange={state.timeRange}
+        from={state.from}
+        to={state.to}
+        onChange={(v) => onChange({ ...state, ...v })}
+      />
+      <Select value={state.actor} onValueChange={(v) => onChange({ ...state, actor: v })}>
+        <SelectTrigger aria-label={t("audit.filter.actor")} className="h-9 w-auto min-w-[8rem]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{t("audit.filter.all")}</SelectItem>
+          {ACTORS.map((a) => (
+            <SelectItem key={a} value={a}>
+              {t(`audit.actor.${a}`, { defaultValue: a })}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

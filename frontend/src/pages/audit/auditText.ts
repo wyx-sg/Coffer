@@ -5,8 +5,8 @@ type AuditEntry = components["schemas"]["AuditEntryOut"];
 
 /**
  * Render one audit entry as a plain-language activity sentence — the same
- * text the table row shows. Shared by AuditTable (display) and the
- * Observability search box (the haystack to match a query against), so
+ * text the table row shows. Shared by the audit DataTable column (display)
+ * and the audit-log search box (the haystack to match a query against), so
  * the two never drift apart.
  */
 export function describeActivity(t: TFunction, entry: AuditEntry): string {

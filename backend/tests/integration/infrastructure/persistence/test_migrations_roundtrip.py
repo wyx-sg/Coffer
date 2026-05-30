@@ -18,7 +18,11 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
+HEAD_REVISION = "0004"
+
 # Tables that should exist once the full migration chain has been applied.
+# The agent kind (spec 004-agent-registry) needs no table of its own — agents
+# live in the generic `resources` table — so 0004 is the head revision.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -79,10 +83,10 @@ def test_migration_roundtrip_is_reversible_and_idempotent(tmp_path, monkeypatch)
 
     cfg = _alembic_config()
 
-    # 1. upgrade head -> full schema present, stamped at head (0004).
+    # 1. upgrade head -> full schema present, stamped at head.
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
-    assert _alembic_version(db_path) == "0004"
+    assert _alembic_version(db_path) == HEAD_REVISION
 
     # 2. downgrade base -> every downgrade() runs, all tables removed.
     command.downgrade(cfg, "base")
@@ -92,7 +96,7 @@ def test_migration_roundtrip_is_reversible_and_idempotent(tmp_path, monkeypatch)
     # 3. upgrade head again -> round-trip is idempotent, schema restored.
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
-    assert _alembic_version(db_path) == "0004"
+    assert _alembic_version(db_path) == HEAD_REVISION
 
 
 def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkeypatch):

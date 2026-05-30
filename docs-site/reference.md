@@ -13,6 +13,7 @@ Browse everything in the left sidebar or use the search box at the top.
 | 001 — MCP Gateway                | Accepted — code merged (PR #14)    | [spec](/reference/specs/001-mcp-gateway/spec)         |
 | 002 — UI Shell & Visual Language | Accepted — code merged (PR #23)    | [spec](/reference/specs/002-ui-shell/spec)            |
 | 003 — MCP Gateway Desktop        | Accepted — code in review (PR #28) | [spec](/reference/specs/003-mcp-gateway-desktop/spec) |
+| 004 — Agent Registry             | Accepted — in development          | [spec](/reference/specs/004-agent-registry/spec)      |
 
 Each spec folder also contains supplementary documents — plan, data model, quickstart,
 and research — where applicable; they are visible in the sidebar under each spec entry.
