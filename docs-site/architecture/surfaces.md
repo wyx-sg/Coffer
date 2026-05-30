@@ -95,13 +95,13 @@ The six surfaces are described below using a consistent template: **What it is �
 
 **Transport.** Internally: the WebView talks to `127.0.0.1:<port>/api/v1/` for REST and `/mcp` for MCP (same as the browser-based Web UI). The Rust shell also communicates with the daemon's REST API for supervision tasks (health checks, restart).
 
-**Lifecycle.** The desktop app applies the detect-or-spawn pattern: on launch, it reads `daemon.json`; if the daemon is already running, it connects; if not, it spawns `coffer-daemon` as a detached process (`setsid` on POSIX, `DETACHED_PROCESS` on Windows) and waits for `daemon.json` to appear. Closing the main window hides it to the system tray — the daemon keeps running. Selecting "Quit" from the tray exits the desktop process. The daemon's fate on desktop-app quit depends on whether any other entry points (shim, CLI) are still using it; a detached daemon survives the desktop app.
+**Lifecycle.** The desktop app applies the detect-or-spawn pattern: on launch, it reads `daemon.json`; if the daemon is already running, it connects; if not, it spawns `coffer-daemon` as a detached process (`setsid` on POSIX) and waits for `daemon.json` to appear. Closing the main window hides it to the system tray — the daemon keeps running. Selecting "Quit" from the tray exits the desktop process. The daemon's fate on desktop-app quit depends on whether any other entry points (shim, CLI) are still using it; a detached daemon survives the desktop app.
 
-The desktop app also idempotently deploys the bundled `coffer-mcp-shim` binary to a stable user-writable PATH directory (`~/.coffer/bin/` on macOS/Linux; `%LOCALAPPDATA%\Coffer\bin\` on Windows) on every launch, using a size-mismatch heuristic to detect upgrades. This ensures that `coffer-mcp-shim` is always on PATH after the first desktop launch, without requiring the user to manually edit their shell profile.
+The desktop app also idempotently deploys the bundled `coffer-mcp-shim` binary to a stable user-writable PATH directory (`~/.coffer/bin/` on macOS and Linux) on every launch, using a size-mismatch heuristic to detect upgrades. This ensures that `coffer-mcp-shim` is always on PATH after the first desktop launch, without requiring the user to manually edit their shell profile.
 
 **Security boundary.** Same as the Web UI: `X-Coffer-Token` on every API call, loopback-only daemon, local user account trust boundary. The desktop app bundles `coffer-daemon` and `coffer-mcp-shim` as PyInstaller sidecars — no system Python dependency at runtime.
 
-**Distribution tiers.** The desktop app is the CLI+desktop tier of the release. A separate CLI-only tier (`coffer-cli-<triple>.tar.gz` / `.zip`) packages just the two binaries without the Tauri wrapper, for headless or server installs.
+**Distribution tiers.** The desktop app is the CLI+desktop tier of the release. A separate CLI-only tier (`coffer-cli-<triple>.tar.gz`) packages just the binaries without the Tauri wrapper, for headless or server installs.
 
 ---
 

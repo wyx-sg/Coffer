@@ -10,7 +10,8 @@
     "deleting": "删除中…",
     "retry": "重试",
     "clear": "清除",
-    "rawLog": "原始日志"
+    "rawLog": "原始日志",
+    "done": "完成"
   },
   "nav": {
     "aria": {
@@ -18,14 +19,16 @@
     },
     "group": {
       "resources": "资源",
-      "system": "系统"
+      "system": "系统",
+      "agents": "Agent"
     },
     "mcpServers": "MCP 服务器",
-    "observability": "审计日志",
     "settings": "设置",
     "language": "语言",
     "collapse": "折叠侧边栏",
-    "expand": "展开侧边栏"
+    "expand": "展开侧边栏",
+    "agents": "Agent",
+    "audit": "审计日志"
   },
   "resources": {
     "title": "MCP 服务器",
@@ -59,6 +62,12 @@
     "noMatches": "没有服务器匹配你的搜索。"
   },
   "mcp": {
+    "table": {
+      "transport": "传输方式",
+      "health": "健康",
+      "search": "搜索服务器…",
+      "deleteAria": "删除 {{name}}"
+    },
     "server": {
       "addTitle": "添加 MCP 服务器",
       "addSubtitle": "注册一个上游 MCP 服务器 —— Coffer 会在首次使用时启动它,并重新暴露它的工具。",
@@ -69,7 +78,7 @@
       "testing": "测试中…",
       "testFailure": "失败 ({{latency}} ms)：{{error}}",
       "refresh": "刷新功能列表",
-      "backToResources": "返回资源列表",
+      "backToResources": "返回 MCP 服务器列表",
       "tabs": {
         "overview": "概览",
         "tools": "工具",
@@ -98,8 +107,11 @@
       "searchPlaceholder": "搜索名称",
       "statusFilter": "状态",
       "toggleAria": "切换 {{kind}} {{key}}",
-      "expandSchema": "展开结构",
-      "collapseSchema": "收起结构"
+      "noSchema": "无输入结构。",
+      "header": {
+        "name": "名称",
+        "enabled": "已启用"
+      }
     },
     "invocations": {
       "filter": "全部状态",
@@ -110,7 +122,6 @@
       "loadFailed": "加载调用记录失败",
       "searchPlaceholder": "搜索调用记录",
       "filterSearch": "搜索",
-      "filterTime": "时间范围",
       "filterStatus": "状态",
       "header": {
         "time": "时间",
@@ -169,7 +180,6 @@
   },
   "audit": {
     "filter": {
-      "time": "时间范围",
       "actor": "操作者",
       "all": "全部",
       "from": "起始",
@@ -199,7 +209,10 @@
       "retention_updated": "更新了数据保留策略",
       "backup_created": "创建了备份",
       "keychain_set": "保存了一个凭证",
-      "keychain_deleted": "删除了一个凭证"
+      "keychain_deleted": "删除了一个凭证",
+      "agent_config_file_written": "编辑了 {{resource}} 配置（{{key}}）",
+      "agent_mcp_installed": "已把 Coffer MCP 安装到 {{resource}}",
+      "agent_mcp_uninstalled": "已从 {{resource}} 移除 Coffer MCP"
     },
     "eventLabel": {
       "resource_created": "注册服务器",
@@ -238,9 +251,7 @@
       "all": "全部时间",
       "custom": "自定义范围…"
     },
-    "applyRange": "应用"
-  },
-  "observability": {
+    "applyRange": "应用",
     "title": "审计日志",
     "subtitle": "记录所有资源和功能的生命周期变更。"
   },
@@ -248,9 +259,15 @@
     "title": "设置",
     "subtitle": "你的数据、备份与应用设置。",
     "tabs": {
+      "general": "通用",
       "data": "数据",
       "app": "应用",
       "about": "关于"
+    },
+    "general": {
+      "title": "显示",
+      "pageSize": "每页默认行数",
+      "pageSizeHelp": "所有表格的初始每页行数。"
     },
     "retention": {
       "title": "数据保留",
@@ -304,7 +321,6 @@
       "notReadyBody": "Coffer 读不到守护进程的 token，API 暂时不可达。请启动守护进程后刷新页面。",
       "restart": "重启守护进程",
       "restarting": "重启中…",
-      "devHint": "coffer daemon start",
       "reload": "重新加载"
     }
   },
@@ -320,6 +336,7 @@
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
     "UNKNOWN_KIND": "未知资源类型",
     "CONFIG_INVALID": "配置无效",
+    "CONFIG_FILE_FORMAT_INVALID": "内容不符合该文件的格式，文件未做更改。",
     "TOOL_DISABLED": "该功能已被禁用",
     "CREDENTIAL_MISSING": "密钥环中缺少所需凭证",
     "CREDENTIAL_LOCKED": "操作系统密钥环已锁定",
@@ -327,12 +344,14 @@
     "UPSTREAM_TIMEOUT": "上游服务器响应超时",
     "UNKNOWN_PRUNABLE_TABLE": "未知的保留表",
     "INVALID_PREFIX": "无效的前缀",
+    "SHIM_NOT_FOUND": "找不到 coffer-mcp-shim 二进制。请安装 Coffer 使 shim 位于 PATH 上，或设置 COFFER_MCP_SHIM_PATH。",
     "INTERNAL_ERROR": "发生意外错误",
     "UNAUTHENTICATED": "需要认证 —— Coffer 读不到守护进程 token。请运行 `coffer daemon start` 后刷新，或打开桌面应用。",
     "DAEMON_NOT_READY": "Coffer 守护进程仍在启动，请稍后重试。",
     "BAD_REQUEST": "请求格式有误，已被拒绝。",
     "NOT_FOUND": "未找到。",
-    "FORBIDDEN": "无权限执行此操作。"
+    "FORBIDDEN": "无权限执行此操作。",
+    "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经注册过一个 agent 了。"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -343,5 +362,108 @@
   "resourceDetail": {
     "unknownKind": "未知类型",
     "unknownKindBody": "没有为类型 {{kind}} 注册前端模块。"
+  },
+  "agents": {
+    "title": "Agent",
+    "subtitle": "Coffer 已识别的本地 AI Agent。",
+    "add": "添加 Agent",
+    "addTitle": "添加 Agent",
+    "addSubtitle": "注册一个本地安装的 AI agent。",
+    "register": "注册",
+    "addManual": "手动添加",
+    "detectedHeading": "检测到的 agent",
+    "namePlaceholder": "留空则按类型使用默认名称",
+    "folderPicker": {
+      "browse": "浏览…",
+      "title": "选择文件夹",
+      "subtitle": "为该 agent 选择 skill 目录。",
+      "select": "选择此文件夹",
+      "up": "上一级",
+      "emptyDir": "此处没有子文件夹。"
+    },
+    "detectDialog": {
+      "title": "检测 Agent",
+      "subtitle": "在常见安装路径中查找 AI agent。",
+      "scanning": "扫描中…",
+      "found": "发现以下 agent——选择要添加的：",
+      "addSelected": "添加所选（{{n}}）",
+      "complete": "已添加：",
+      "empty": "未发现新的 agent——可能已经添加过了。"
+    },
+    "empty": "尚未注册任何 Agent。",
+    "loadFailed": "加载 Agent 失败。",
+    "removeConfirm": "确认移除 Agent {{name}} 吗？",
+    "removeConfirmBody": "它仍保留在你的机器上——随时可以重新检测并添加。",
+    "name": "名称",
+    "type": "类型",
+    "configDir": "配置目录",
+    "status": "状态",
+    "searchPlaceholder": "搜索 Agent…",
+    "allTypes": "全部类型",
+    "noMatches": "没有匹配的 Agent。",
+    "deleteAria": "删除 {{name}}",
+    "detail": {
+      "back": "返回 Agent 列表",
+      "tabs": {
+        "overview": "概览",
+        "config": "配置文件",
+        "mcp": "Coffer MCP"
+      }
+    },
+    "workspace": {
+      "overview": "概览",
+      "config": "配置文件"
+    },
+    "skillDirOverride": "自定义路径（可选）",
+    "skillDirPlaceholder": "留空使用默认路径",
+    "edit": "编辑",
+    "editTitle": "编辑 Agent",
+    "editSubtitle": "更新该 agent 的 skill 目录与描述。",
+    "save": "保存",
+    "description": "描述",
+    "descriptionPlaceholder": "可选备注",
+    "manage": "管理",
+    "config": {
+      "title": "管理 {{name}}",
+      "files": "配置文件",
+      "none": "未找到配置文件。",
+      "notCreated": "未创建",
+      "editorLabel": "{{key}} 的内容",
+      "selectFile": "选择一个文件查看。",
+      "save": "保存",
+      "savedWithBackup": "已保存（已保留上一版本的 .bak 备份）。",
+      "find": {
+        "toggle": "查找/替换",
+        "find": "查找",
+        "replace": "替换",
+        "replaceAll": "全部替换",
+        "findNext": "查找下一个",
+        "matches": "{{n}} 处匹配",
+        "caseSensitive": "区分大小写"
+      }
+    },
+    "mcp": {
+      "title": "Coffer MCP",
+      "installed": "已安装",
+      "notInstalled": "未安装",
+      "install": "安装 Coffer MCP",
+      "uninstall": "卸载 Coffer MCP"
+    },
+    "welcome": {
+      "title": "管理你的本地 AI Agent",
+      "body": "把你机器上安装的 AI agent 注册到 Coffer。在这里查看它们的配置文件，并一键把 Coffer 的 MCP server 装进去。",
+      "featureDetect": {
+        "title": "自动检测",
+        "body": "Coffer 扫描常见安装路径，列出找到的 agent——由你选择要添加哪些。"
+      },
+      "featureConfig": {
+        "title": "配置文件",
+        "body": "在 Coffer 里只读地查看每个 agent 的配置文件。"
+      },
+      "featureMcp": {
+        "title": "一键 MCP",
+        "body": "一键把 Coffer 的 MCP server 安装到某个 agent。"
+      }
+    }
   }
 }

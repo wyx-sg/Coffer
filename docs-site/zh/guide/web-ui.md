@@ -11,6 +11,7 @@ Web UI 是一个建立在守护进程 REST API 之上的 React/Vite 单页应用
 ```
 RESOURCES
   MCP servers      管理已注册的服务器
+  Agents           管理已注册的 AI 编码助手
 SYSTEM
   Observability    审计日志与调用日志
   Settings
@@ -76,6 +77,18 @@ resource 配置中。
 - **Tools / Resources / Prompts** — 每个能力一行，带启用/禁用开关和搜索框。
 - **Invocations** — 分页表格，展示每次调用的时间戳、类型、能力、状态和延迟。
   点击任意行可展开其原始调用 JSON。
+
+### Agents
+
+打开 **Agents** 管理已注册的 AI 编码助手（`claude_code` 和 `codex`）。点击 **Detect**
+扫描已安装的 agent；检测对话框列出找到的结果，每一个都需要你确认后才会被注册 ——
+不会自动注册任何东西。
+
+agent 详情页让你在编辑器中打开该 agent 任意经过策展的配置文件。保存时会校验文件格式
+（格式错误的 JSON/TOML 会被拒绝，文件保持不变），以原子方式写入并保留 `.bak` 备份，
+并提供一个可滚动到匹配项的查找/替换框。**Install Coffer MCP** 开关会将 Coffer 自身的
+`coffer` MCP 服务器条目写入（或从中移除）该 agent 的配置，并配有实时状态指示。文件夹
+选择器用于设置 agent 的 skill 目录。
 
 ### Observability
 

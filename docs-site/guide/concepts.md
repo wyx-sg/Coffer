@@ -6,7 +6,12 @@ Four core concepts underpin how Coffer works. Understanding them helps you reaso
 
 Every user-managed entity in Coffer is a **Resource** identified by `<kind>:<name>`. The resource framework unifies identity, lifecycle (register / update / enable / disable / delete), audit, and schema validation across all kinds.
 
-The only kind shipping today is `mcp_server` — a registered upstream MCP server that carries its transport configuration, credential references, and per-server policies. The framework is kind-agnostic: adding a new kind in the future requires no changes to the core resource machinery.
+Two kinds ship today:
+
+- `mcp_server` — a registered upstream MCP server that carries its transport configuration, credential references, and per-server policies.
+- `agent` — a registered local AI coding agent (`claude_code` or `codex`) whose curated config files Coffer can view and edit, and into which Coffer can install its own MCP server.
+
+The framework is kind-agnostic: adding a new kind in the future requires no changes to the core resource machinery.
 
 ## Gateway (daemon)
 

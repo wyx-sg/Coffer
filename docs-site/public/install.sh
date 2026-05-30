@@ -10,8 +10,7 @@
 #   COFFER_VERSION       Release tag to install, e.g. v0.1.0 (default: latest)
 #   COFFER_NO_MODIFY_PATH  Set to 1 to skip adding install dir to shell profile
 #
-# Windows users: use the PowerShell one-liner instead:
-#   irm https://wyx-sg.github.io/Coffer/install.ps1 | iex
+# Supported platforms: macOS and Linux x86_64.
 #
 # Full install guide: https://wyx-sg.github.io/Coffer/guide/install
 
@@ -77,13 +76,9 @@ Linux ARM / aarch64 builds are not yet published. See https://wyx-sg.github.io/C
             esac
             archive_ext="tar.gz"
             ;;
-        MINGW*|MSYS*|CYGWIN*|Windows*)
-            err "Windows detected — use the PowerShell one-liner instead:
-  irm https://wyx-sg.github.io/Coffer/install.ps1 | iex"
-            ;;
         *)
             err "unsupported OS: $_os
-Only macOS and Linux x86_64 are supported by this script.
+Only macOS and Linux x86_64 are supported.
 See https://wyx-sg.github.io/Coffer/guide/install for alternatives."
             ;;
     esac

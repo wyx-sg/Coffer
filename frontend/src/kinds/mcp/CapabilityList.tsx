@@ -1,19 +1,16 @@
 // frontend/src/kinds/mcp/CapabilityList.tsx
+//
+// A server's tools / resources / prompts rendered through the shared DataTable
+// (unified with the MCP-servers, Agents, and audit surfaces): a search box, a
+// status filter (all/enabled/disabled), pagination, and a per-row enable
+// switch. Tools additionally expose their input_schema as an expandable row
+// detail. The enable/disable mutations keep per-row in-flight state so toggling
+// one capability never disables the switches on the others.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { SearchInput } from "@/components/SearchInput";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import type { components } from "@/lib/api/types";
 import { useDisableCapability, useEnableCapability } from "@/lib/hooks/useMcpCapabilityMutations";
 
@@ -38,105 +35,133 @@ interface RowDescriptor {
   schema?: Record<string, unknown>;
 }
 
+function ToggleSwitch({
+  serverName,
+  kind,
+  row,
+}: {
+  serverName: string;
+  kind: CapabilityKind;
+  row: RowDescriptor;
+}) {
+  const { t } = useTranslation();
+  const enable = useEnableCapability();
+  const disable = useDisableCapability();
+  // Per-row in-flight state: this switch is the only one toggling, so a single
+  // boolean suffices (the per-row scope is naturally enforced by component
+  // instance rather than a shared key set).
+  const [pending, setPending] = useState(false);
+
+  return (
+    <Switch
+      checked={row.enabled}
+      disabled={pending}
+      aria-label={t("mcp.capabilities.toggleAria", { kind, key: row.key })}
+      onClick={(e) => e.stopPropagation()}
+      onCheckedChange={(checked) => {
+        const m = checked ? enable : disable;
+        setPending(true);
+        m.mutate(
+          {
+            serverName,
+            capabilityType: kind,
+            capabilityKey: row.key,
+          },
+          { onSettled: () => setPending(false) },
+        );
+      }}
+    />
+  );
+}
+
 export function CapabilityList(props: Props) {
   const { t } = useTranslation();
   const { serverName, kind } = props;
-  const enable = useEnableCapability();
-  const disable = useDisableCapability();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  // Per-row in-flight state — toggling one capability must not disable the
-  // switches on every other row in the list.
-  const [pendingKeys, setPendingKeys] = useState<Set<string>>(() => new Set());
   const rows = toRows(props);
 
-  if (rows.length === 0) {
-    const emptyKey =
-      kind === "tool"
-        ? "mcp.capabilities.emptyTool"
-        : kind === "resource"
-          ? "mcp.capabilities.emptyResource"
-          : "mcp.capabilities.emptyPrompt";
-    return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">{t(emptyKey)}</CardContent>
-      </Card>
-    );
-  }
+  // Render the same DataTable (search + status filter + per-row enable) for
+  // every kind, even when empty, so the Resources/Prompts tabs stay visually
+  // consistent with Tools. A truly empty upstream shows the kind-specific
+  // "nothing discovered" copy; a non-empty list filtered to zero shows the
+  // generic "no matches" message instead.
+  const emptyKey =
+    kind === "tool"
+      ? "mcp.capabilities.emptyTool"
+      : kind === "resource"
+        ? "mcp.capabilities.emptyResource"
+        : "mcp.capabilities.emptyPrompt";
+  const emptyMessage = rows.length === 0 ? t(emptyKey) : t("mcp.capabilities.noMatches");
 
-  const q = search.trim().toLowerCase();
-  const filtered = rows.filter((row) => {
-    if (q && !row.key.toLowerCase().includes(q)) return false;
-    if (statusFilter === "enabled" && !row.enabled) return false;
-    if (statusFilter === "disabled" && row.enabled) return false;
-    return true;
-  });
+  const hasSchema = rows.some((r) => r.schema);
+
+  const columns: Column<RowDescriptor>[] = [
+    {
+      key: "name",
+      header: t("mcp.capabilities.header.name"),
+      cell: (row) => (
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-2">
+            <code className="text-sm font-semibold">{row.key}</code>
+            <Badge variant="outline" className="font-mono text-xs">
+              {row.prefixed}
+            </Badge>
+          </div>
+          {row.description ? (
+            <p className="mt-1 text-sm text-muted-foreground">{row.description}</p>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: "enabled",
+      header: t("mcp.capabilities.header.enabled"),
+      className: "w-24 text-right",
+      cell: (row) => <ToggleSwitch serverName={serverName} kind={kind} row={row} />,
+    },
+  ];
+
+  const filters: FilterDef<RowDescriptor>[] = [
+    {
+      key: "status",
+      label: t("mcp.capabilities.statusFilter"),
+      allLabel: t("resources.status.all"),
+      accessor: (row) => (row.enabled ? "enabled" : "disabled"),
+      options: [
+        { value: "enabled", label: t("common.enabled") },
+        { value: "disabled", label: t("common.disabled") },
+      ],
+    },
+  ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <SearchInput
-          className="w-full sm:w-80"
-          value={search}
-          onChange={(v) => setSearch(v)}
-          placeholder={t("mcp.capabilities.searchPlaceholder")}
-          ariaLabel={t("mcp.capabilities.searchPlaceholder")}
-        />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40" aria-label={t("mcp.capabilities.statusFilter")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("resources.status.all")}</SelectItem>
-            <SelectItem value="enabled">{t("resources.status.enabled")}</SelectItem>
-            <SelectItem value="disabled">{t("resources.status.disabled")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("mcp.capabilities.noMatches")}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((row) => (
-            <CapabilityRow
-              key={row.key}
-              serverName={serverName}
-              kind={kind}
-              row={row}
-              onToggle={(checked) => {
-                const m = checked ? enable : disable;
-                setPendingKeys((prev) => {
-                  const next = new Set(prev);
-                  next.add(row.key);
-                  return next;
-                });
-                m.mutate(
-                  {
-                    serverName,
-                    capabilityType: kind,
-                    capabilityKey: row.key,
-                  },
-                  {
-                    onSettled: () =>
-                      setPendingKeys((prev) => {
-                        const next = new Set(prev);
-                        next.delete(row.key);
-                        return next;
-                      }),
-                  },
-                );
-              }}
-              mutating={pendingKeys.has(row.key)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    <DataTable
+      rows={rows}
+      columns={columns}
+      rowKey={(row) => row.key}
+      search={{
+        accessor: (row) => row.key,
+        placeholder: t("mcp.capabilities.searchPlaceholder"),
+      }}
+      filters={filters}
+      // Only tools carry an input_schema; expose it as an expandable detail so
+      // a row toggles open to its pretty-printed JSON. Resources/prompts have
+      // no schema, so the table stays flat for those kinds.
+      getRowDetail={
+        hasSchema
+          ? (row) =>
+              row.schema ? (
+                <pre className="overflow-auto px-4 py-3 text-xs">
+                  {JSON.stringify(row.schema, null, 2)}
+                </pre>
+              ) : (
+                <div className="px-4 py-3 text-xs text-muted-foreground">
+                  {t("mcp.capabilities.noSchema")}
+                </div>
+              )
+          : undefined
+      }
+      emptyMessage={emptyMessage}
+    />
   );
 }
 
@@ -167,63 +192,4 @@ function toRows(props: Props): RowDescriptor[] {
     }));
   }
   return [];
-}
-
-interface RowProps {
-  serverName: string;
-  kind: CapabilityKind;
-  row: RowDescriptor;
-  onToggle: (checked: boolean) => void;
-  mutating: boolean;
-}
-
-function CapabilityRow({ row, kind, onToggle, mutating }: RowProps) {
-  const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <Card>
-      <CardContent className="flex items-start gap-4 py-3">
-        {row.schema ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="mt-0.5 size-7"
-            onClick={() => setExpanded((v) => !v)}
-            aria-label={
-              expanded ? t("mcp.capabilities.collapseSchema") : t("mcp.capabilities.expandSchema")
-            }
-          >
-            {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-          </Button>
-        ) : (
-          <div className="w-7" aria-hidden="true" />
-        )}
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <code className="text-sm font-semibold">{row.key}</code>
-            <Badge variant="outline" className="font-mono text-xs">
-              {row.prefixed}
-            </Badge>
-          </div>
-          {row.description ? (
-            <p className="mt-1 text-sm text-muted-foreground">{row.description}</p>
-          ) : null}
-          {expanded && row.schema ? (
-            <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs">
-              {JSON.stringify(row.schema, null, 2)}
-            </pre>
-          ) : null}
-        </div>
-
-        <Switch
-          checked={row.enabled}
-          onCheckedChange={onToggle}
-          disabled={mutating}
-          aria-label={t("mcp.capabilities.toggleAria", { kind, key: row.key })}
-        />
-      </CardContent>
-    </Card>
-  );
 }

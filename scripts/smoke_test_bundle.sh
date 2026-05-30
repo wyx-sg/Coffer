@@ -121,9 +121,14 @@ SMOKE_HOME="$(mktemp -d -t coffer-smoke-XXXXXX)"
 # tempts symlink games on shared CI runners.
 SMOKE_STDERR="$(mktemp -t coffer-smoke-stderr-XXXXXX)"
 DAEMON_STDERR="$(mktemp -t coffer-smoke-daemon-XXXXXX)"
+SHIM_OUT="$(mktemp -t coffer-smoke-out-XXXXXX)"
 DAEMON_PID=""
+SHIM_PID=""
 
 cleanup() {
+    if [ -n "$SHIM_PID" ] && kill -0 "$SHIM_PID" 2>/dev/null; then
+        kill "$SHIM_PID" 2>/dev/null || true
+    fi
     if [ -n "$DAEMON_PID" ] && kill -0 "$DAEMON_PID" 2>/dev/null; then
         kill "$DAEMON_PID" 2>/dev/null || true
         # Give it a moment, then force.
@@ -133,7 +138,7 @@ cleanup() {
         done
         kill -9 "$DAEMON_PID" 2>/dev/null || true
     fi
-    rm -rf "$SMOKE_HOME" "$SMOKE_STDERR" "$DAEMON_STDERR"
+    rm -rf "$SMOKE_HOME" "$SMOKE_STDERR" "$DAEMON_STDERR" "$SHIM_OUT"
 }
 trap cleanup EXIT
 
@@ -200,15 +205,35 @@ INPUT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
 
 echo "==> sending: $INPUT"
 
-# Run the shim under a 15-second timeout to guard against hangs.
-# We feed the JSON-RPC request via heredoc (process-substitution would also
-# work) rather than embedding it in a single-quoted `bash -c` string — the
-# old form broke any time the payload contained a literal single quote.
-REPLY=$(
-    HOME="$SMOKE_HOME" timeout 15 "$SHIM" 2>"$SMOKE_STDERR" <<EOF | head -1 || true
-$INPUT
-EOF
-)
+# Run the shim with a 15-second watchdog to guard against hangs. Two macOS
+# pitfalls drove this design:
+#   1. No `timeout`: it's GNU coreutils, absent on macOS by default (and named
+#      `gtimeout` when brew-installed), so a `timeout`-based guard fails the
+#      macOS release leg. We background the shim and poll instead.
+#   2. The shim's stdin MUST be a pipe, not a regular file: its asyncio
+#      `_pump_stdin` calls `connect_read_pipe`, which raises "Pipe transport is
+#      for pipes/sockets only" on a regular file. A bash here-doc is delivered
+#      as a temp *file* on macOS (bash 3.2) but as a *pipe* on Linux (bash 5.x)
+#      — which is exactly why the heredoc form passed on Linux yet failed on
+#      macOS. Process substitution `< <(...)` is a real pipe on both. (Real MCP
+#      clients always pipe the shim's stdin, so this only bit the test harness.)
+# printf exits after one line, EOF-ing the pipe so the shim replies and exits.
+HOME="$SMOKE_HOME" "$SHIM" >"$SHIM_OUT" 2>"$SMOKE_STDERR" < <(printf '%s\n' "$INPUT") &
+SHIM_PID=$!
+
+_w=0
+while [ "$_w" -lt 15 ]; do
+    [ -s "$SHIM_OUT" ] && break
+    kill -0 "$SHIM_PID" 2>/dev/null || break  # shim exited (output already flushed)
+    sleep 1
+    _w=$((_w + 1))
+done
+if kill -0 "$SHIM_PID" 2>/dev/null; then
+    kill "$SHIM_PID" 2>/dev/null || true
+fi
+wait "$SHIM_PID" 2>/dev/null || true
+SHIM_PID=""
+REPLY="$(head -1 "$SHIM_OUT" 2>/dev/null || true)"
 
 # Show any stderr output for diagnostics (don't fail on empty).
 if [ -s "$SMOKE_STDERR" ]; then

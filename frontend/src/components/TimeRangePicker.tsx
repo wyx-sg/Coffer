@@ -98,7 +98,7 @@ export function TimeRangePicker({ timeRange, from, to, onChange }: Props) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          className="flex h-9 w-auto min-w-[10rem] items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           <span className="flex items-center gap-2 truncate">
             <CalendarDays className="size-4 shrink-0 opacity-60" />

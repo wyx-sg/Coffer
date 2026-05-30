@@ -23,9 +23,7 @@ jobs:
           - os: ubuntu-22.04
             triple: x86_64-unknown-linux-gnu
             artifact_suffix: linux-x64
-          - os: windows-latest
-            triple: x86_64-pc-windows-msvc
-            artifact_suffix: windows-x64
+          # Windows is intentionally not built: Coffer ships macOS + Linux only.
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -76,13 +74,10 @@ jobs:
         shell: bash
         run: |
           python -m venv .venv
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            .venv/Scripts/pip install --upgrade pip
-            .venv/Scripts/pip install -e ./backend[dev]
-          else
-            .venv/bin/pip install --upgrade pip
-            .venv/bin/pip install -e ./backend[dev]
-          fi
+          # Invoke pip as `python -m pip` (the recommended form). Quote the
+          # extras so bash doesn't glob `[dev]`.
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -e './backend[dev]'
 
       - name: install frontend deps
         working-directory: frontend
@@ -125,27 +120,19 @@ jobs:
       # binaries (the same binaries Tauri just bundled). The script starts the
       # bundled coffer-daemon, runs the shim, and asserts a JSON-RPC round-trip.
       - name: post-build smoke test
-        # smoke_test_bundle.sh is Unix-only (python3, timeout, POSIX
-        # kill/kill -0/kill -9) and is not portable to Git-Bash, so it runs
-        # only on the macOS + Linux legs. The Windows bundle is still built and
-        # uploaded; it just isn't smoke-tested in CI.
-        if: ${{ !startsWith(matrix.os, 'windows') }}
         shell: bash
         run: |
           set -euo pipefail
           # build_binaries.sh stages the sidecars with triple suffixes
-          # (coffer-daemon-<triple>[.exe]); the smoke script probes the
-          # un-suffixed basenames, so copy them into a temp dir under those
-          # names first.
+          # (coffer-daemon-<triple>); the smoke script probes the un-suffixed
+          # basenames, so copy them into a temp dir under those names first.
           smokedir="$(mktemp -d)"
-          ext=""
-          case "${{ matrix.triple }}" in *windows*) ext=".exe" ;; esac
-          cp "desktop/binaries/coffer-daemon-${{ matrix.triple }}${ext}" \
-             "$smokedir/coffer-daemon${ext}"
-          cp "desktop/binaries/coffer-mcp-shim-${{ matrix.triple }}${ext}" \
-             "$smokedir/coffer-mcp-shim${ext}"
-          cp "desktop/binaries/coffer-${{ matrix.triple }}${ext}" \
-             "$smokedir/coffer${ext}"
+          cp "desktop/binaries/coffer-daemon-${{ matrix.triple }}" \
+             "$smokedir/coffer-daemon"
+          cp "desktop/binaries/coffer-mcp-shim-${{ matrix.triple }}" \
+             "$smokedir/coffer-mcp-shim"
+          cp "desktop/binaries/coffer-${{ matrix.triple }}" \
+             "$smokedir/coffer"
           bash scripts/smoke_test_bundle.sh "$smokedir"
 
       # NOTE: cp failures here are signal, not noise — if the bundle dir is
@@ -196,21 +183,9 @@ jobs:
           if (( ${#ai[@]} )); then cp "${ai[@]}" artifacts/; fi
           if (( ${#deb[@]} )); then cp "${deb[@]}" artifacts/; fi
 
-      - name: collect artifacts (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          mkdir -p artifacts
-          msi=(desktop/target/${{ matrix.triple }}/release/bundle/msi/*.msi)
-          nsis=(desktop/target/${{ matrix.triple }}/release/bundle/nsis/*.exe)
-          if (( ${#msi[@]} )); then cp "${msi[@]}" artifacts/; fi
-          if (( ${#nsis[@]} )); then cp "${nsis[@]}" artifacts/; fi
-
       # CLI-only download tier: package the three CLI binaries (coffer,
-      # coffer-daemon, coffer-mcp-shim) into one archive per platform — a
-      # tar.gz on macOS/Linux and a zip on Windows. The archive contains
+      # coffer-daemon, coffer-mcp-shim) into one tar.gz per platform (macOS +
+      # Linux). The archive contains
       # PLAIN binary names (no triple suffix) so that both the one-line
       # installer and manual extraction yield co-located plain-named binaries,
       # which is required by the frozen detect-or-spawn logic (ADR-006):
@@ -221,12 +196,10 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts
           triple="${{ matrix.triple }}"
-          ext=""
-          case "$triple" in *windows*) ext=".exe" ;; esac
           # Source paths: triple-suffixed names produced by build_binaries.sh
-          src_daemon="desktop/binaries/coffer-daemon-${triple}${ext}"
-          src_shim="desktop/binaries/coffer-mcp-shim-${triple}${ext}"
-          src_cli="desktop/binaries/coffer-${triple}${ext}"
+          src_daemon="desktop/binaries/coffer-daemon-${triple}"
+          src_shim="desktop/binaries/coffer-mcp-shim-${triple}"
+          src_cli="desktop/binaries/coffer-${triple}"
           if [ ! -f "$src_daemon" ] || \
              [ ! -f "$src_shim" ] || \
              [ ! -f "$src_cli" ]; then
@@ -238,24 +211,18 @@ jobs:
           # are clean (no triple suffix). All three must be co-located so
           # detect-or-spawn can find coffer-daemon next to coffer at runtime.
           stagedir="$(mktemp -d)"
-          cp "$src_daemon" "$stagedir/coffer-daemon${ext}"
-          cp "$src_shim"   "$stagedir/coffer-mcp-shim${ext}"
-          cp "$src_cli"    "$stagedir/coffer${ext}"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            archive="coffer-cli-${triple}.zip"
-            ( cd "$stagedir" && 7z a -tzip "$OLDPWD/artifacts/$archive" \
-                "coffer${ext}" "coffer-daemon${ext}" "coffer-mcp-shim${ext}" )
-          else
-            archive="coffer-cli-${triple}.tar.gz"
-            tar -czf "artifacts/$archive" -C "$stagedir" \
-                "coffer" "coffer-daemon" "coffer-mcp-shim"
-          fi
+          cp "$src_daemon" "$stagedir/coffer-daemon"
+          cp "$src_shim"   "$stagedir/coffer-mcp-shim"
+          cp "$src_cli"    "$stagedir/coffer"
+          archive="coffer-cli-${triple}.tar.gz"
+          tar -czf "artifacts/$archive" -C "$stagedir" \
+              "coffer" "coffer-daemon" "coffer-mcp-shim"
           rm -rf "$stagedir"
           echo "packaged CLI tier: artifacts/$archive"
 
       # Generate SHA-256 checksums so downloaders can verify bundle integrity
       # without trusting the GitHub Release UI alone. Cross-platform shim:
-      # sha256sum on Linux/Windows-bash, shasum -a 256 on macOS. We hash FILES
+      # sha256sum on Linux, shasum -a 256 on macOS. We hash FILES
       # only (the macOS .app is already zipped above) — hashing a directory
       # exits non-zero under `set -euo pipefail` and would fail the job.
       - name: compute SHA256SUMS
@@ -324,14 +291,14 @@ jobs:
 
           ### Desktop app (most users)
 
-          Download the installer for your platform — macOS `.dmg`, Windows `.msi`
-          or NSIS `-setup.exe`, Linux `.AppImage` or `.deb`. The daemon, shim, and
-          web UI are bundled; install and launch.
+          Download the installer for your platform — macOS `.dmg`, Linux
+          `.AppImage` or `.deb`. The daemon, shim, and web UI are bundled;
+          install and launch. (Coffer ships macOS + Linux only.)
 
           ### CLI-only (headless / servers)
 
-          Download `coffer-cli-<platform>.tar.gz` (`.zip` on Windows); it contains
-          `coffer` (management CLI), `coffer-daemon`, and `coffer-mcp-shim`.
+          Download `coffer-cli-<platform>.tar.gz`; it contains `coffer`
+          (management CLI), `coffer-daemon`, and `coffer-mcp-shim`.
           Run the daemon and point your MCP clients at the shim.
 
           Verify downloads against `SHA256SUMS`.

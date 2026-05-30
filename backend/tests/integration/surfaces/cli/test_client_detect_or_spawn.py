@@ -40,14 +40,26 @@ def _write_daemon_json(home: Path, port: int = 9876, pid: int = 9999) -> None:
 # --------------------------------------------------------------------------- #
 
 
+def _live_from_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make liveness mirror daemon.json presence for these unit tests.
+
+    client_or_exit() probes ``live_daemon`` (an HTTP /daemon/status check)
+    rather than mere file presence. There is no real server here, so we stub
+    the probe to treat any readable daemon.json as a live daemon — which keeps
+    these tests focused on the spawn/wait control flow.
+    """
+    monkeypatch.setattr(cli_client, "live_daemon", cli_client.discover)
+
+
 def test_client_or_exit_spawns_when_daemon_absent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When daemon.json does not exist, client_or_exit() must call spawn_daemon()
-    and wait for daemon.json to appear — NOT raise DaemonNotRunning."""
+    """When no daemon is reachable, client_or_exit() must call spawn_daemon()
+    and wait for it to come up — NOT raise DaemonNotRunning."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    _live_from_file(monkeypatch)
 
     spawn_called: list[bool] = []
 
@@ -63,24 +75,61 @@ def test_client_or_exit_spawns_when_daemon_absent(
     client, info = cli_client.client_or_exit()
     client.close()
 
-    assert spawn_called, "spawn_daemon() must be called when daemon.json is absent"
+    assert spawn_called, "spawn_daemon() must be called when no daemon is reachable"
     assert info.port == 9876
+
+
+def test_client_or_exit_respawns_when_daemon_json_is_stale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A crashed daemon can leave daemon.json behind. When the recorded daemon
+    is not reachable, client_or_exit() must respawn (ADR-006 auto-recovery)
+    rather than hand back a client pointed at a dead port."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    # Stale file present from a crashed daemon — nothing is serving port 5555.
+    _write_daemon_json(home, port=5555)
+
+    spawn_called: list[bool] = []
+
+    def _fake_spawn_daemon() -> None:
+        spawn_called.append(True)
+        _write_daemon_json(home, port=6789)
+
+    monkeypatch.setattr(cli_client, "_spawn_daemon", _fake_spawn_daemon)
+    monkeypatch.setattr(cli_client, "_DAEMON_BOOT_TIMEOUT", 2.0)
+
+    # Liveness: only the freshly-spawned daemon (port 6789) answers; the stale
+    # 5555 entry does not.
+    def _fake_live() -> object | None:
+        info = cli_client.discover()
+        return info if info is not None and info.port == 6789 else None
+
+    monkeypatch.setattr(cli_client, "live_daemon", _fake_live)
+
+    client, info = cli_client.client_or_exit()
+    client.close()
+
+    assert spawn_called, "a stale daemon.json must trigger a respawn"
+    assert info.port == 6789
 
 
 def test_client_or_exit_does_not_spawn_when_daemon_present(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When daemon.json already exists, client_or_exit() must NOT call spawn."""
+    """When a reachable daemon already exists, client_or_exit() must NOT spawn."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     _write_daemon_json(home, port=7777)
+    _live_from_file(monkeypatch)  # the existing daemon answers its status probe
 
     spawn_called: list[bool] = []
 
     def _bad_spawn() -> None:
         spawn_called.append(True)
-        raise AssertionError("spawn must not be called when daemon.json is present")
+        raise AssertionError("spawn must not be called when a daemon is reachable")
 
     monkeypatch.setattr(cli_client, "_spawn_daemon", _bad_spawn)
 
@@ -122,6 +171,7 @@ def test_client_or_exit_does_not_print_old_start_message(
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    _live_from_file(monkeypatch)
 
     # Spawn writes daemon.json so we get a successful path.
     monkeypatch.setattr(

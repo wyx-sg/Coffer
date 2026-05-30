@@ -1,8 +1,8 @@
-// frontend/src/pages/observability/ObservabilityPage.test.tsx
+// frontend/src/pages/audit/AuditLogPage.test.tsx
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ObservabilityPage } from "./ObservabilityPage";
+import { AuditLogPage } from "./AuditLogPage";
 
 vi.mock("@/lib/api/client", () => ({
   getApiClient: vi.fn(),
@@ -16,7 +16,7 @@ function wrap(ui: React.ReactNode) {
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
 }
 
-describe("ObservabilityPage", () => {
+describe("AuditLogPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Pin "now" so any relative-time formatting (e.g. "30 seconds ago")
@@ -38,11 +38,14 @@ describe("ObservabilityPage", () => {
       GET: vi.fn().mockResolvedValue({ data: { entries: [] }, error: undefined }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<ObservabilityPage />));
+    render(wrap(<AuditLogPage />));
 
     expect(screen.getByRole("heading", { name: "Audit log" })).toBeInTheDocument();
-    expect(screen.getByText("Time range")).toBeInTheDocument();
-    expect(screen.getByText("Actor")).toBeInTheDocument();
+    // Inline toolbar (no field labels, matching the other tables): the
+    // time-range trigger shows its current preset, and the actor select is a
+    // labelled combobox.
+    expect(screen.getByRole("button", { name: /all time/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /actor/i })).toBeInTheDocument();
   });
 
   test("shows empty state when the audit log returns no entries", async () => {
@@ -50,7 +53,7 @@ describe("ObservabilityPage", () => {
       GET: vi.fn().mockResolvedValue({ data: { entries: [] }, error: undefined }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<ObservabilityPage />));
+    render(wrap(<AuditLogPage />));
 
     expect(await screen.findByText("No matching audit entries.")).toBeInTheDocument();
   });
@@ -75,7 +78,7 @@ describe("ObservabilityPage", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<ObservabilityPage />));
+    render(wrap(<AuditLogPage />));
 
     // The raw event_type code is translated into a human sentence.
     expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
@@ -91,7 +94,7 @@ describe("ObservabilityPage", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<ObservabilityPage />));
+    render(wrap(<AuditLogPage />));
 
     expect(await screen.findByText("not authorized")).toBeInTheDocument();
   });
@@ -116,7 +119,7 @@ describe("ObservabilityPage", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<ObservabilityPage />));
+    render(wrap(<AuditLogPage />));
 
     // Wait for the row to render
     const activityCell = await screen.findByText("Registered github");
@@ -150,7 +153,7 @@ describe("ObservabilityPage", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<ObservabilityPage />));
+    render(wrap(<AuditLogPage />));
 
     const activityCell = await screen.findByText("Daemon started");
     const row = activityCell.closest("tr")!;
@@ -194,7 +197,7 @@ describe("ObservabilityPage", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<ObservabilityPage />));
+    render(wrap(<AuditLogPage />));
 
     // Both rows visible initially
     expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
@@ -227,7 +230,7 @@ describe("ObservabilityPage", () => {
       GET: vi.fn().mockResolvedValue({ data: { entries }, error: undefined }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<ObservabilityPage />));
+    render(wrap(<AuditLogPage />));
 
     // Page 1: first entry visible (most recent first)
     expect(await screen.findByText("Registered server-1")).toBeInTheDocument();

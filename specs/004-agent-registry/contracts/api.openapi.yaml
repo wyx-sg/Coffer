@@ -1,0 +1,493 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Agent Registry API
+  version: "0.1.0"
+  description: |
+    Agent registry endpoints. Merged into the main Coffer Management API at
+    runtime; this document scopes only the agent-specific routes added by
+    spec 004.
+
+    All routes use the same `X-Coffer-Token` authentication from
+    `specs/001-mcp-gateway/contracts/api.openapi.yaml`.
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "8000"
+
+security:
+  - cofferToken: []
+
+tags:
+  - name: agents
+    description: Local AI agent registry
+
+paths:
+  /agents:
+    get:
+      tags: [agents]
+      operationId: listAgents
+      summary: List registered agents
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [agents]
+      operationId: registerAgent
+      summary: Register a new agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: getAgent
+      summary: Get one agent
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateAgent
+      summary: Update an agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: deleteAgent
+      summary: Remove an agent
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/candidates:
+    get:
+      tags: [agents]
+      operationId: listAgentCandidates
+      summary: Discover installed-but-unregistered agents
+      description: |
+        Read-only discovery: scans known install markers for each supported
+        agent type and returns the ones that are installed but not yet
+        registered, as candidates. Registers nothing — the user reviews the
+        candidates and chooses which to add (discovery + confirm). A removed
+        agent re-appears here on the next scan; there is no suppression list.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentCandidatesOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /agents/{name}/config-files:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentConfigFiles
+      summary: List an agent's curated config files
+      description: |
+        Returns the curated config-file allowlist for the agent's type, each
+        with its key, display name, resolved path, format, and existence
+        metadata. The set is fixed per agent type; files that do not exist yet
+        are listed with `exists=false`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ConfigFileInfo" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/config-files/{key}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: key
+        required: true
+        schema: { type: string }
+        description: Allowlisted config-file key (e.g. settings, global, memory, config).
+    get:
+      tags: [agents]
+      operationId: readAgentConfigFile
+      summary: Read one config file's content
+      description: |
+        Returns the file's text content, format, and existence. A file that
+        does not exist returns empty content with `exists=false` and is not
+        created. A key outside the agent type's allowlist returns 404.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigFileContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [agents]
+      operationId: writeAgentConfigFile
+      summary: Save one config file's content
+      description: |
+        Validates the content against the file's format, then writes it
+        atomically (temp file + rename), keeping a `.bak` of the prior content.
+        Malformed `json`/`toml` content returns 422 and leaves the on-disk file
+        unchanged. A key outside the agent type's allowlist returns 404 and
+        performs no filesystem access. Records an `agent_config_file_written`
+        audit entry on success. Returns the refreshed metadata view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfigFileWrite" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigFileInfo" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{name}/mcp-install:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: getAgentMcpInstallStatus
+      summary: Whether Coffer's MCP is installed in this agent
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpInstallStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [agents]
+      operationId: installAgentMcp
+      summary: Install Coffer's MCP server into this agent
+      description: |
+        Writes a `coffer` stdio MCP-server entry (command = absolute path to
+        coffer-mcp-shim) into the agent's MCP config file, atomically and with
+        a `.bak` backup. Idempotent — re-installing updates the entry in place.
+        Returns 422 if the coffer-mcp-shim binary cannot be resolved.
+      responses:
+        "200":
+          description: Installed (or already installed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpInstallStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: uninstallAgentMcp
+      summary: Remove Coffer's MCP server entry from this agent
+      description: Removes the `coffer` entry. No-op success when not installed.
+      responses:
+        "200":
+          description: Uninstalled (or was not installed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpInstallStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /fs/browse:
+    get:
+      tags: [fs]
+      operationId: browseFilesystem
+      summary: List the subdirectories of a local directory
+      description: |
+        Read-only filesystem browse backing the web folder picker for choosing
+        an agent's skill directory (a browser can't read absolute paths, but
+        the loopback daemon can). Returns a directory's path, its parent, and
+        its immediate subdirectories only — never file contents.
+      parameters:
+        - in: query
+          name: path
+          required: false
+          schema: { type: string }
+          description: Directory to list. Defaults to the user's home directory.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FsBrowseOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  schemas:
+    AgentType:
+      type: string
+      enum: [claude_code, codex]
+      description: >
+        Supported agent product identifiers (v1). Each value covers both the
+        CLI and the app/IDE form of that product (shared config directory).
+
+    AgentCreate:
+      type: object
+      required: [type]
+      additionalProperties: false
+      properties:
+        type: { $ref: "#/components/schemas/AgentType" }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-zA-Z0-9_-]+$"
+          description: >-
+            Optional. When omitted the server derives a stable default from the
+            type (underscores become hyphens, e.g. claude_code -> claude-code).
+        skill_dir:
+          type: string
+          description: Optional absolute path overriding the default for the type.
+        description:
+          type: string
+          nullable: true
+
+    AgentPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        skill_dir: { type: string }
+        description: { type: string, nullable: true }
+
+    AgentOut:
+      type: object
+      required: [name, type, config_dir, skill_dir, created_at, updated_at]
+      properties:
+        name: { type: string }
+        type: { $ref: "#/components/schemas/AgentType" }
+        config_dir:
+          {
+            type: string,
+            description: "Root config directory for the type (~/.claude, ~/.codex) — where the agent's config files live.",
+          }
+        skill_dir:
+          {
+            type: string,
+            description: "Resolved absolute path (default if not overridden).",
+          }
+        skill_dir_override:
+          type: string
+          nullable: true
+          description: "Set when the user provided an explicit override."
+        description: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AgentCandidate:
+      type: object
+      required:
+        [type, display_name, config_dir, default_skill_dir, suggested_name]
+      description: >-
+        An installed-but-unregistered agent surfaced by discovery. Derived at
+        scan time, never stored; the user confirms it to register.
+      properties:
+        type: { $ref: "#/components/schemas/AgentType" }
+        display_name: { type: string }
+        config_dir:
+          { type: string, description: "Resolved config directory on disk." }
+        default_skill_dir:
+          { type: string, description: "Default skill dir for the type." }
+        suggested_name:
+          {
+            type: string,
+            description: "Default resource name (e.g. claude-code).",
+          }
+
+    AgentCandidatesOut:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/AgentCandidate" }
+
+    ConfigFileFormat:
+      type: string
+      enum: [json, toml, markdown, text]
+      description: Validation/format of a config file.
+
+    ConfigFileInfo:
+      type: object
+      required: [key, display_name, path, format, exists]
+      properties:
+        key:
+          {
+            type: string,
+            description: "Stable allowlist key (e.g. settings, global, memory, config).",
+          }
+        display_name: { type: string }
+        path: { type: string, description: "Resolved absolute path." }
+        format: { $ref: "#/components/schemas/ConfigFileFormat" }
+        exists: { type: boolean }
+        size:
+          type: integer
+          nullable: true
+          description: "Byte size when the file exists; null otherwise."
+        modified_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Last-modified time when the file exists; null otherwise."
+
+    ConfigFileContent:
+      type: object
+      required: [key, format, exists, content]
+      properties:
+        key: { type: string }
+        format: { $ref: "#/components/schemas/ConfigFileFormat" }
+        exists: { type: boolean }
+        content:
+          type: string
+          description: "File text; empty string when the file does not exist."
+
+    ConfigFileWrite:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: "New file text. Validated against the file's format before writing."
+
+    McpInstallStatus:
+      type: object
+      required: [installed]
+      properties:
+        installed:
+          type: boolean
+          description: "Whether a `coffer` MCP-server entry is present in the agent's MCP config."
+        command:
+          type: string
+          nullable: true
+          description: "The resolved coffer-mcp-shim command written/found, when installed."
+
+    FsEntry:
+      type: object
+      required: [name, path]
+      properties:
+        name: { type: string, description: "Directory name." }
+        path: { type: string, description: "Resolved absolute path." }
+
+    FsBrowseOut:
+      type: object
+      required: [path, parent, entries]
+      properties:
+        path:
+          {
+            type: string,
+            description: "The resolved directory that was listed.",
+          }
+        parent:
+          type: string
+          nullable: true
+          description: "Parent directory, or null at the filesystem root."
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/FsEntry" }
+          description: "Immediate subdirectories (no files)."
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid X-Coffer-Token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    NotFound:
+      description: Agent not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    Conflict:
+      description: Duplicate name within the agent kind
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    UnprocessableEntity:
+      description: Validation failure (skill_dir not writable, privileged path, unknown type, ...)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }

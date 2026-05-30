@@ -4,18 +4,21 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { Pagination } from "./Pagination";
 
 describe("Pagination", () => {
-  test("renders nothing when total is 0", () => {
-    const { container } = render(
+  test("stays visible when total is 0, with both arrows disabled", () => {
+    // An empty table still shows its pager (consistent with populated tables);
+    // DataTable always passes pageCount >= 1.
+    render(
       <Pagination
         page={1}
-        pageCount={0}
+        pageCount={1}
         total={0}
         pageSize={20}
         onPageChange={vi.fn()}
         onPageSizeChange={vi.fn()}
       />,
     );
-    expect(container.firstChild).toBeNull();
+    expect(screen.getByRole("button", { name: /prev/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /next/i })).toBeDisabled();
   });
 
   test("prev button is disabled on the first page", () => {

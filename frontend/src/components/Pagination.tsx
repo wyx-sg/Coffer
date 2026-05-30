@@ -22,8 +22,10 @@ interface Props {
 
 /**
  * Shared client-side pager — page summary, per-page selector, prev/next.
- * Used by the Observability audit log and the MCP servers list, both of
- * which fetch a capped batch and page through it in the browser.
+ * Rendered by every DataTable surface. It stays visible even when the table
+ * is empty (total === 0 → "1 / 1 · 0 items", prev/next disabled) so an empty
+ * Resources/Prompts/Invocations tab looks consistent with a populated Tools
+ * tab rather than silently dropping its pager.
  */
 export function Pagination({
   page,
@@ -35,7 +37,6 @@ export function Pagination({
   onPageSizeChange,
 }: Props) {
   const { t } = useTranslation();
-  if (total === 0) return null;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
@@ -43,7 +44,7 @@ export function Pagination({
       <div className="flex items-center gap-2">
         <span>{t("pagination.perPage")}</span>
         <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-          <SelectTrigger className="h-8 w-[4.5rem]">
+          <SelectTrigger aria-label={t("pagination.perPage")} className="h-8 w-[4.5rem]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

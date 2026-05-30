@@ -186,3 +186,76 @@ def get_health_repo() -> Any:
 def get_keyring() -> KeyringAdapter:
     """FastAPI Depends() target — the keychain bridge is stateless."""
     return KeyringAdapter()
+
+
+# --- Agent kind-specific dependency providers (spec 004-agent-registry) ---
+
+_agent_service: Any | None = None
+_auto_detect_service: Any | None = None
+
+
+def set_agent_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_service
+    _agent_service = svc
+
+
+def get_agent_service() -> Any:
+    """FastAPI Depends() target — actual type is AgentService."""
+    if _agent_service is None:
+        raise RuntimeError("agent service not initialised")
+    return _agent_service
+
+
+def set_auto_detect_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _auto_detect_service
+    _auto_detect_service = svc
+
+
+def get_auto_detect_service() -> Any:
+    """FastAPI Depends() target — actual type is AutoDetectService."""
+    if _auto_detect_service is None:
+        raise RuntimeError("auto-detect service not initialised")
+    return _auto_detect_service
+
+
+_agent_config_file_service: Any | None = None
+_agent_mcp_service: Any | None = None
+
+
+def set_agent_config_file_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_config_file_service
+    _agent_config_file_service = svc
+
+
+def get_agent_config_file_service() -> Any:
+    """FastAPI Depends() target — actual type is AgentConfigFileService."""
+    if _agent_config_file_service is None:
+        raise RuntimeError("agent config-file service not initialised")
+    return _agent_config_file_service
+
+
+def set_agent_mcp_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_mcp_service
+    _agent_mcp_service = svc
+
+
+def get_agent_mcp_service() -> Any:
+    """FastAPI Depends() target — actual type is AgentMcpService."""
+    if _agent_mcp_service is None:
+        raise RuntimeError("agent MCP service not initialised")
+    return _agent_mcp_service
+
+
+def get_fs_browse_service() -> Any:
+    """FastAPI Depends() target — actual type is FsBrowseService.
+
+    Stateless (no I/O at construction), so it's built per-request rather than
+    held as a composition-root singleton.
+    """
+    from coffer.application.fs.browse_service import FsBrowseService
+
+    return FsBrowseService()

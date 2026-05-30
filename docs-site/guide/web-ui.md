@@ -13,6 +13,7 @@ into two groups:
 ```
 RESOURCES
   MCP servers      manage your registered servers
+  Agents           manage your registered AI coding agents
 SYSTEM
   Observability    audit and invocation log
   Settings
@@ -82,6 +83,19 @@ On the server detail page, switch between tabs:
   and a search box to narrow the list.
 - **Invocations** — a paged table of per-call timestamp, type, capability, status, and
   latency. Click any row to expand its raw invocation JSON.
+
+### Agents
+
+Open **Agents** to manage your registered AI coding agents (`claude_code` and `codex`).
+Click **Detect** to scan for installed agents; the detect dialog lists what was found and
+you confirm each one before it is registered — nothing is registered automatically.
+
+The agent detail page lets you open any of the agent's curated config files in an editor.
+Saving validates the file's format (malformed JSON/TOML is rejected and the file left
+unchanged), writes atomically with a `.bak` backup, and offers a find/replace box that
+scrolls to the match. An **Install Coffer MCP** toggle writes (or removes) Coffer's own
+`coffer` MCP-server entry into the agent's config, with a live status indicator. A folder
+picker sets the agent's skill directory.
 
 ### Observability
 

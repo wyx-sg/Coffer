@@ -4,7 +4,7 @@ The Resource framework is Coffer's core abstraction. Understanding it is the key
 
 ## Everything is a resource kind
 
-Every user-managed entity in Coffer is a **Resource**, identified by a stable string of the form `<kind>:<name>`. Today, the only registered kind is `mcp_server`. Future kinds — AI agents, prompt libraries, tool policies, credential sets — will plug into the same framework without modifying it.
+Every user-managed entity in Coffer is a **Resource**, identified by a stable string of the form `<kind>:<name>`. Today, two kinds are registered: `mcp_server` and `agent` (a registered local AI coding agent). Future kinds — prompt libraries, tool policies, credential sets — will plug into the same framework without modifying it.
 
 The framework provides four things, and only four things:
 

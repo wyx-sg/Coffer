@@ -16,11 +16,12 @@ acceptance(
   "settings layout uses the redesigned tabbed sidebar",
   async ({ page }) => {
     await page.goto("/settings");
-    // /settings index redirects to the first tab — Data.
-    await expect(page).toHaveURL(/\/settings\/data/);
+    // /settings index redirects to the first tab — General.
+    await expect(page).toHaveURL(/\/settings\/general/);
 
-    // The browser shows Data and About (the App tab is desktop-only).
-    // The daemon is never a tab.
+    // The browser shows General, Data, and About (the App tab is
+    // desktop-only). The daemon is never a tab.
+    await expect(page.getByRole("link", { name: /^General$/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Data$/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /^About$/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Daemon$/ })).toHaveCount(0);

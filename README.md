@@ -9,12 +9,12 @@
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Python ≥3.12" src="https://img.shields.io/badge/python-%E2%89%A53.12-3776AB?logo=python&logoColor=white">
   <img alt="Claude Code compatible" src="https://img.shields.io/badge/Claude%20Code-compatible-C96442">
-  <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-555">
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux-555">
 </p>
 
 > Local-first AI agent vault. Manage all your MCP servers from one place.
 
-Coffer is a daemon + CLI that aggregates upstream MCP servers and re-exposes them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools. All state lives on your machine — no cloud accounts, no vendor lock-in.
+Coffer is a daemon + CLI that aggregates upstream MCP servers and re-exposes them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools. It also keeps an **agent registry** — detect and register your local AI coding agents, edit their config files in-app, and one-click install Coffer's own MCP server into any of them. All state lives on your machine — no cloud accounts, no vendor lock-in.
 
 📖 **Documentation site:** https://wyx-sg.github.io/Coffer/
 
@@ -37,18 +37,10 @@ Coffer is a daemon + CLI that aggregates upstream MCP servers and re-exposes the
 
 ## Download & install
 
-### One-line CLI install (macOS / Linux / Windows)
-
-**macOS / Linux:**
+### One-line CLI install (macOS / Linux)
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
-```
-
-**Windows PowerShell:**
-
-```powershell
-irm https://wyx-sg.github.io/Coffer/install.ps1 | iex
 ```
 
 Installs three binaries — `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim` — to
@@ -59,13 +51,12 @@ overrides: `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
 
 Download the installer from [Releases](https://github.com/wyx-sg/Coffer/releases/latest):
 
-| Platform             | File                                                                |
-| -------------------- | ------------------------------------------------------------------- |
-| macOS Apple silicon  | `Coffer_<version>_aarch64.dmg`                                      |
-| macOS Intel          | `Coffer_<version>_x64.dmg`                                          |
-| Linux x64 (AppImage) | `Coffer_<version>_amd64.AppImage`                                   |
-| Linux x64 (deb)      | `coffer_<version>_amd64.deb`                                        |
-| Windows 10+ x64      | `Coffer_<version>_x64_en-US.msi` / `Coffer_<version>_x64-setup.exe` |
+| Platform             | File                              |
+| -------------------- | --------------------------------- |
+| macOS Apple silicon  | `Coffer_<version>_aarch64.dmg`    |
+| macOS Intel          | `Coffer_<version>_x64.dmg`        |
+| Linux x64 (AppImage) | `Coffer_<version>_amd64.AppImage` |
+| Linux x64 (deb)      | `coffer_<version>_amd64.deb`      |
 
 Each file has a `.sha256` sibling for verification.
 
@@ -108,6 +99,22 @@ coffer mcp tool list filesystem   # → read_file, write_file, list_directory, �
 ```
 
 Then point your MCP client at the shim — see **Connect to an MCP client** below.
+
+### Agents
+
+An **agent** is a registered local AI coding agent (supported types: `claude_code`, `codex`).
+Coffer can auto-detect installed agents (it lists candidates and asks you to confirm — nothing is
+registered automatically), edit each agent's curated config files in-app (format-validated,
+atomic write with a `.bak` backup, plus an in-editor find/replace that scrolls to the match), and
+one-click install or uninstall Coffer's own MCP server into an agent. The desktop/web UI has an
+**Agents** page (list + detail), a detect dialog, the config-file editor, and an MCP-install toggle.
+
+```bash
+coffer agent detect               # discover installed agents (confirm before registering)
+coffer agent add claude_code      # register one (--name optional; defaults to claude-code)
+coffer agent config edit <name> <key>  # edit a curated config file in your $EDITOR
+coffer agent mcp install <name>   # install Coffer's MCP server into the agent
+```
 
 ---
 

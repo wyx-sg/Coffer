@@ -40,17 +40,18 @@ Open `http://localhost:5173/` in any modern browser.
 
 The first time you visit, the URL resolves to `/resources` and you see:
 
-- The redesigned sidebar — two groups, **Resources** and **System**
-  (MCP servers / Observability / Settings). The active route is
+- The redesigned sidebar — role-based groups: **Agents** (`/agents` — the
+  agents you use), **Resources** (**MCP servers**, at `/resources`), and
+  **System** (**Audit log** at `/audit`, **Settings**). The active route is
   highlighted. Click the collapse handle to switch between full and
   icon-only modes; your choice persists across reloads.
 - A welcome card explaining what Coffer is, with one primary action:
   **Add MCP server**.
 
 If the daemon is not running (you skipped `make dev` or it crashed), you
-see a "Daemon not running" view instead, with a copyable
-`coffer daemon start` command. Restart the daemon and the view recovers
-on the very next render — no manual reload needed (see the
+see a "Daemon not running" view instead, with a Reload recovery control
+(the desktop app offers Restart). Once the daemon is reachable again the
+view recovers on the very next render — no manual reload needed (see the
 `daemon-offline banner` acceptance scenario).
 
 Switch the language between English and 中文 from the language switcher at
@@ -116,13 +117,14 @@ To watch an invocation land, point an MCP client at Coffer per
 ("Wire Coffer into your MCP client"), trigger a tool call (e.g. ask Claude
 Code to read a file), then refresh the **Invocations** tab.
 
-## 5. Observability and settings
+## 5. Audit log and settings
 
-- `/observability` — the audit-log view inside the Observability section.
+- `/audit` — the audit-log view (under the **System** group).
   Filter by time range and actor; click any row to expand its raw log —
   the entry's full underlying JSON record, pretty-printed in a monospace,
-  scrollable block. The legacy `/audit` URL still resolves and redirects
-  here.
+  scrollable block. The legacy `/observability` URL still resolves and
+  redirects here. (Observability — system health / metrics — is a distinct
+  surface reserved for the future, not this audit log.)
 - `/settings` — tabs sidebar with **Data** (retention policy, manual
   prune, backups) and **About** (version / license / source).
 

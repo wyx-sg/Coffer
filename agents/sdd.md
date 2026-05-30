@@ -32,6 +32,17 @@ specs/<NNN>-<short-name>/
 
 **Skeleton-first phase**: When seeding a new spec, write `spec.md` first. Other files (`plan.md`, `tasks.md`, `contracts/`, etc.) are added when the spec moves toward implementation, via `/speckit-plan` and `/speckit-tasks`.
 
+## Keep the Docs in Sync With the Code
+
+When a change alters behavior, update the spec **and every related doc in the same PR** — before or alongside the code, never as a follow-up. Spec-first: the spec is the source of truth and the code conforms to it. "Related docs" is the whole set, not just `spec.md`:
+
+- `specs/<NNN>/spec.md` (+ its `spec.zh.md` companion) — the user-visible contract and its acceptance scenarios.
+- `specs/<NNN>/contracts/api.openapi.yaml` — the wire contract; add/rename/remove endpoints and schemas to match the code.
+- `specs/<NNN>/data-model.md`, `plan.md`, `quickstart.md` (+ each `.zh.md` companion) — entities, plan, and usage prose.
+- Cross-cutting docs the change touches: the relevant `docs/decisions/` ADR, `.specify/memory/architecture.md`, and any affected `agents/*` convention or `agents/ui-shell/` spec.
+
+Every prose `.md` has a `.zh.md` companion that must be updated in the same commit (the only exemptions are `tasks.md` and the OpenAPI YAML). The acceptance audit (`backend/scripts/audit_acceptance.py`, run by `make verify`) ties each `spec.md` scenario name to a test marker, so renaming/adding/removing a scenario means updating its `@pytest.mark.acceptance(... scenario=...)` / `acceptance(...)` marker too. A pure refactor or a frontend-only change with no contract impact needs no spec edit — but if behavior, an endpoint, a schema, or the IA changes, the docs change with it.
+
 ## Acceptance Scenarios — In `spec.md`, Gherkin-Style
 
 Use Gherkin-style language inside the `## Acceptance Scenarios` section of `spec.md`. Each scenario maps to one or more tests (see [testing.md](./testing.md)).

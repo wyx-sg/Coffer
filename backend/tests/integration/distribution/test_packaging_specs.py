@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -287,12 +288,12 @@ def test_shim_spec_includes_anyio_backend_hidden_import() -> None:
     scenario="release tag produces both the CLI-only archives and the desktop installers",
 )
 def test_release_workflow_produces_platform_artifact_matrix() -> None:
-    """The release workflow must define a matrix that produces the platforms
-    declared in the spec's acceptance scenario: macOS arm64, macOS x64,
-    Linux x64, Windows x64 — and ship a SHA-256 checksum alongside each
-    installer. The actual cross-platform build runs in CI on tag push;
-    this test asserts the workflow file declares the right shape so a
-    drift between spec wording and pipeline is caught at PR time."""
+    """The release workflow must define a matrix that produces the supported
+    platforms: macOS arm64, macOS x64, and Linux x64 — and ship a SHA-256
+    checksum alongside each installer. Windows is intentionally NOT built
+    (Coffer ships macOS + Linux only). The actual cross-platform build runs in
+    CI on tag push; this test asserts the workflow file declares the right
+    shape so a drift between spec wording and pipeline is caught at PR time."""
     release_yml = _REPO / ".github" / "workflows" / "release.yml"
     assert release_yml.exists(), ".github/workflows/release.yml is required by the release scenario"
     text = release_yml.read_text()
@@ -307,9 +308,9 @@ def test_release_workflow_produces_platform_artifact_matrix() -> None:
     assert "x86_64-unknown-linux-gnu" in text or "ubuntu-latest" in text, (
         "release.yml must build for Linux x64"
     )
-    # Windows x64
-    assert "x86_64-pc-windows-msvc" in text or "windows-latest" in text, (
-        "release.yml must build for Windows x64"
+    # Windows is intentionally excluded — the matrix must NOT add it back.
+    assert "x86_64-pc-windows-msvc" not in text and "windows-latest" not in text, (
+        "release.yml must not build for Windows (macOS + Linux only)"
     )
     # SHA-256 checksums next to each artifact
     assert "sha256" in text.lower() or "shasum" in text.lower(), (
@@ -329,8 +330,8 @@ def _release_yml_text() -> str:
 def test_release_workflow_packages_cli_only_archive() -> None:
     """The release workflow must produce a CLI-only download tier: an archive
     bundling just the coffer-daemon + coffer-mcp-shim sidecars, named
-    coffer-cli-<triple>.tar.gz on macOS/Linux and coffer-cli-<triple>.zip on
-    Windows. This is the standalone alternative to the desktop installers."""
+    coffer-cli-<triple>.tar.gz (macOS + Linux only — no Windows .zip). This is
+    the standalone alternative to the desktop installers."""
     text = _release_yml_text()
     assert "coffer-cli-" in text, (
         "release.yml must package a CLI-only archive named coffer-cli-<triple>.*"
@@ -338,9 +339,6 @@ def test_release_workflow_packages_cli_only_archive() -> None:
     assert (
         "coffer-cli-${triple}.tar.gz" in text or "coffer-cli-${{ matrix.triple }}.tar.gz" in text
     ), "release.yml must produce a coffer-cli tar.gz on macOS/Linux"
-    assert "coffer-cli-${triple}.zip" in text or "coffer-cli-${{ matrix.triple }}.zip" in text, (
-        "release.yml must produce a coffer-cli zip on Windows"
-    )
     # Both sidecars must go into the CLI archive.
     assert "coffer-daemon-${triple}" in text, "CLI archive must include coffer-daemon"
     assert "coffer-mcp-shim-${triple}" in text, "CLI archive must include coffer-mcp-shim"
@@ -404,19 +402,20 @@ def test_release_workflow_marks_macos_artifacts_unsigned() -> None:
 
 def test_release_workflow_runs_smoke_test() -> None:
     """The post-build smoke-test acceptance scenario must actually execute in
-    CI: a step must invoke scripts/smoke_test_bundle.sh on the non-Windows
-    matrix legs (the script is Unix-only)."""
+    CI: a step must invoke scripts/smoke_test_bundle.sh on the (macOS + Linux)
+    matrix legs."""
     text = _release_yml_text()
     assert "scripts/smoke_test_bundle.sh" in text, (
         "release.yml must invoke scripts/smoke_test_bundle.sh after the bundle is built"
     )
 
 
-def test_release_workflow_guards_smoke_test_to_non_windows() -> None:
-    """smoke_test_bundle.sh is Unix-only (python3, timeout, POSIX kill) and is
-    not portable to Git-Bash, so the smoke-test step must be guarded to skip
-    the Windows leg. Without the guard the step fails on windows-latest even
-    for a healthy bundle. The Windows bundle is still built + uploaded."""
+def test_release_workflow_smoke_test_runs_on_all_legs() -> None:
+    """With Windows dropped, the matrix is macOS + Linux only, so the smoke
+    test runs on every leg and needs no Windows guard. It must also stay
+    portable: `timeout` is GNU coreutils (absent on macOS), so neither the
+    smoke-test step nor the script may depend on it — a regression that
+    previously failed the macOS leg outright."""
     import yaml
 
     workflow = yaml.safe_load(_release_yml_text())
@@ -427,12 +426,19 @@ def test_release_workflow_guards_smoke_test_to_non_windows() -> None:
         if isinstance(s.get("run"), str) and "scripts/smoke_test_bundle.sh" in s["run"]
     ]
     assert smoke_steps, "release.yml must have a step that runs scripts/smoke_test_bundle.sh"
+    # No Windows leg remains, so the smoke step needs no windows `if:` guard.
     for step in smoke_steps:
-        guard = str(step.get("if", ""))
-        assert "windows" in guard.lower(), (
-            "the smoke-test step must carry an `if:` guard excluding the Windows "
-            f"matrix leg (the script is Unix-only); got if={guard!r}"
+        guard = str(step.get("if", "")).lower()
+        assert "windows" not in guard, (
+            "the matrix no longer includes Windows; the smoke-test step should "
+            f"not carry a windows `if:` guard. got if={guard!r}"
         )
+    # Portability regression guard: the smoke script must not call `timeout`.
+    smoke_script = (_REPO / "scripts" / "smoke_test_bundle.sh").read_text()
+    assert not re.search(r"(?<![\w-])timeout\s+\d", smoke_script), (
+        "smoke_test_bundle.sh must not use the GNU `timeout` command "
+        "(absent on macOS); use a backgrounded watchdog instead"
+    )
 
 
 @pytest.mark.acceptance(

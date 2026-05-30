@@ -8,9 +8,9 @@
 ## Summary
 
 Turn the bare functional skeleton that shipped with `001-mcp-gateway` into a
-real product shell: a coherent visual language, an information architecture
-built on the single unifying concept introduced in
-[ADR-007](../../docs/decisions/ADR-007-everything-is-a-resource-kind.md) ("everything is a resource kind"),
+real product shell: a coherent visual language, a role-based information
+architecture (Agents / Resources / System) decided in
+[ADR-007](../../docs/decisions/ADR-007-everything-is-a-resource-kind.md) (assets are resource kinds; agents are a separate consumer axis),
 and end-to-end flows that make the gateway usable for a first-time visitor.
 
 This is a **pure UI redesign on top of 001**: it adds no new backend
@@ -36,7 +36,7 @@ See [./spec.md](./spec.md) for the user-visible contract,
 | **Backend dependency**   | Pure consumer of the REST contract in [`specs/001-mcp-gateway/contracts/api.openapi.yaml`](../001-mcp-gateway/contracts/api.openapi.yaml). No new endpoints; no schema changes.                                                                                                      |
 | **Storage**              | Browser localStorage only — sidebar collapsed state, selected language. No client-side persistence of user data.                                                                                                                                                                     |
 | **Testing**              | `vitest` for unit/component tests; `Playwright` for e2e in `e2e/`. Acceptance markers (`acceptance("002-ui-shell", "…", …)`) bind tests to scenarios in [spec.md](./spec.md); coverage audited by `scripts/audit_acceptance.py`.                                                     |
-| **Target Platforms**     | Modern evergreen browsers (Chromium / Firefox / Safari current-2).                                                                                                                                                                                |
+| **Target Platforms**     | Modern evergreen browsers (Chromium / Firefox / Safari current-2).                                                                                                                                                                                                                   |
 | **Project Type**         | SPA bundled by Vite; served by the daemon's static file route in production, served by `vite dev` against the daemon in development.                                                                                                                                                 |
 | **Performance Goals**    | First content paint within 2 s on a cold load against a local daemon (spec's `cold-start renders authenticated content` scenario). Language switch on the very next render — no full page reload.                                                                                    |
 | **Constraints**          | Local-first (the only HTTP origin is the daemon on `127.0.0.1:<port>`); no public-internet calls; no third-party analytics; no font CDN. Frontend component file size ≤ 250 LOC (enforced by `scripts/check_file_sizes.py`).                                                         |
@@ -93,7 +93,9 @@ frontend/src/
 │       └── routes.tsx                     # /resources/mcp_server/* route children
 ├── pages/
 │   ├── ResourcesPage.tsx                  # /resources — kind-agnostic dispatcher
-│   ├── ObservabilityPage.tsx              # /observability — audit-log view
+│   ├── AgentsPage.tsx                      # /agents — agents list (consumers, not a resource kind)
+│   ├── AgentDetailPage.tsx                 # /agents/:name — agent detail
+│   ├── audit/AuditLogPage.tsx             # /audit — audit-log view (/observability redirects here)
 │   ├── SettingsLayout.tsx                 # /settings layout (tabs sidebar)
 │   └── settings/{DataSettings,AboutSettings,AppSettings}
 └── locales/{en,zh}/*.json                 # i18n catalogues
@@ -154,8 +156,8 @@ unreachable.
 ### Phase 2 — US1: First-time-visitor flow
 
 Welcome view on `/resources` when no resources are registered, the "Daemon
-not running" view with copyable `coffer daemon start` command, the
-cold-start authenticated render via the dev token plugin.
+not running" view with a Reload recovery affordance (Restart in the desktop
+app), the cold-start authenticated render via the dev token plugin.
 
 **Done when:** US1's three representative scenarios pass.
 
@@ -171,11 +173,13 @@ redesigned empty / error / loading states.
 **Done when:** US2's representative scenarios pass and `make verify-e2e`
 green for the MCP flows.
 
-### Phase 4 — US3: Observability
+### Phase 4 — US3: Audit log
 
-`/observability` route with the audit-log view (filter bar, paged table,
+`/audit` route with the audit-log view (filter bar, paged table,
 a row that expands to its raw log JSON — the shared `RawLog` view also used
-by the invocation log), legacy `/audit` → `/observability` redirect.
+by the invocation log), legacy `/observability` → `/audit` redirect.
+(Observability — system health / metrics — is a distinct future surface, not
+this audit-log view.)
 
 **Done when:** US3's representative scenarios pass.
 

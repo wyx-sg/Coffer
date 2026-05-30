@@ -95,6 +95,34 @@ describe("InvocationsTable", () => {
     await waitFor(() => expect(findRaw()).not.toBeInTheDocument());
   });
 
+  test("an expanded row stays expanded when a client-side filter reorders the list", async () => {
+    getApiClientMock.mockReturnValue({
+      GET: vi.fn().mockResolvedValue({
+        data: { invocations: sampleInvocations },
+        error: undefined,
+      }),
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap(<InvocationsTable serverName="fs" />));
+
+    const keyCell = await screen.findByText("file://foo.txt");
+    const findRaw = () => screen.queryByText((_, el) => el?.tagName === "PRE");
+
+    // Expand the SECOND row (index 1 in the full fetched list).
+    fireEvent.click(keyCell.closest("tr")!);
+    await waitFor(() => {
+      expect(findRaw()?.textContent).toContain('"capability_key": "file://foo.txt"');
+    });
+
+    // Narrow the search so that row becomes index 0 of the filtered view. Its
+    // identity (and thus its expanded state) must survive the reorder.
+    const searchInput = screen.getByPlaceholderText("Search invocations");
+    fireEvent.change(searchInput, { target: { value: "foo" } });
+
+    expect(screen.queryByText("read_file")).not.toBeInTheDocument();
+    expect(findRaw()?.textContent).toContain('"capability_key": "file://foo.txt"');
+  });
+
   test("renders empty state when no invocations", async () => {
     getApiClientMock.mockReturnValue({
       GET: vi.fn().mockResolvedValue({

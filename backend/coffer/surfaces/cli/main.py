@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import typer
 
-from coffer.surfaces.cli import audit_cmd, daemon_cmd, keychain_cmd, resource_cmd, retention_cmd
+from coffer.surfaces.cli import (
+    agent_cmd,
+    audit_cmd,
+    daemon_cmd,
+    keychain_cmd,
+    resource_cmd,
+    retention_cmd,
+)
 from coffer.surfaces.cli import mcp as mcp_cmd
 
 app = typer.Typer(help="Coffer CLI", no_args_is_help=True)
@@ -31,6 +38,7 @@ app.add_typer(audit_cmd.app, name="audit")
 app.add_typer(retention_cmd.app, name="retention")
 app.add_typer(mcp_cmd.app, name="mcp")
 app.add_typer(keychain_cmd.app, name="keychain")
+app.add_typer(agent_cmd.app, name="agent")
 
 
 def run() -> None:

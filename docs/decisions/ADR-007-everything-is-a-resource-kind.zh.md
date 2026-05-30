@@ -2,7 +2,7 @@
 
 > English: [ADR-007-everything-is-a-resource-kind.md](./ADR-007-everything-is-a-resource-kind.md)
 
-**Status**: Accepted
+**Status**: Amended (2026-05-30) — 见 [Amendment](#amendment-2026-05-30)
 **Date**: 2026-05-28
 **Deciders**: Yuxing Wu
 **Related**: [ADR-001](ADR-001-resource-framework-upfront.md)，spec `002-ui-shell`
@@ -53,3 +53,20 @@ Spec `002-ui-shell` 需要决定 resource kind——以及一些并非领域意�
 **按 kind 各自独立顶层导航（不设 Resources 组）。** 拒绝。
 
 - 在只有一个 kind 时尚可，但随着 kind 增加，侧栏就退化成没有分组的扁平清单。Resources / System 的分组让侧栏保持可读。
+
+## Amendment (2026-05-30)
+
+原决策把**所有**用户可见的受管理实体都放在单轴上建模为一种 resource kind。实现过程中冒出一个不适配这个模型的概念：**agent**（你使用的 Claude Code / Codex / 内置 agent）。agent 是 vault 资产的*消费者*，而不是 vault 管理的资产——把它压到 resource-kind 轴上就贴错了标签。因此交付的 IA 保留了 kind-agnostic 的 Resource 框架，但为消费者新增了第二条轴，并把侧栏按**角色 (role)** 而不是按"它是不是一种 kind？"来分组。
+
+变更内容：
+
+- **Agent 是独立的一条轴，不是 resource kind。** 它们呈现在 `/agents`（列表）与 `/agents/:name`（详情），归入自己的 **Agents** 侧栏分组。它们**不**出现在 `/resources` 的 kind 浏览器里，因为它们不是 vault 资产。
+- **侧栏按角色分组**，不再是单一的 resource-kind 轴：
+  - **Agents** — 消费者 (`/agents`)。
+  - **Resources** — agent 所依赖的资产，建模为 kind-agnostic 的 resource kind，通过 kind registry 暴露。该导航入口标签为 **"MCP servers"**，只列出注册了列表/卡片 UI 的 kind（今天只有 `mcp_server`）；路由仍是 `/resources`。
+  - **System** — 横切工具：**Audit log** (`/audit`) 与 **Settings** (`/settings`)。
+- **审计日志住在 `/audit`，不是 `/observability`。** 交付的路由把 `/audit` 映射到审计日志页面，并把 `/observability` 保留为指向 `/audit` 的 legacy 重定向。**Observability**（系统健康 / 指标）是一个**独立、预留的未来**界面——它不是审计日志，也尚未进入侧栏。
+- **列表界面收敛到同一个可搜索、可分页的共享表格。** 所有列表视图共用同一个 `DataTable` 组件（内建搜索 / 过滤 / 分页），点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。这取代了早先对 resource 列表的卡片网格描述。
+- **未来的分组/入口**（Chat、Channels、Skills、Knowledge、Memory、Observability）已规划但今天不展示。原决策"不放敬请期待占位项"的策略依然成立：侧栏记录角色分组结构，但不添加任何死的导航入口。
+
+从原决策中原样保留的部分：kind-agnostic 的 Resource 框架仍是*资产*的唯一抽象；新的 resource kind 仍以单个导航入口接入 Resources 组；侧栏仍只展示当下已交付的部分。本次修订把"一切皆 resource kind"收窄为"每个**资产**都是一种 resource kind，归在 Resources 下；消费者 (agent) 与横切工具 (System) 各成一个基于角色的分组。"

@@ -8,11 +8,12 @@
 
 ## 进行中 (Active)
 
-| #   | Spec                                                                          | 状态                          |
-| --- | ----------------------------------------------------------------------------- | ----------------------------- |
-| 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md))                 | 已采纳 — 代码已随 PR #14 合并 |
-| 002 | **UI Shell 与视觉语言** ([spec](../../specs/002-ui-shell/spec.md))            | 已采纳 — 代码已随 PR #23 合并 |
-| 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | 已采纳 — 代码评审中 (PR #28)  |
+| #   | Spec                                                                          | 状态                                     |
+| --- | ----------------------------------------------------------------------------- | ---------------------------------------- |
+| 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md))                 | 已采纳 — 代码已随 PR #14 合并            |
+| 002 | **UI Shell 与视觉语言** ([spec](../../specs/002-ui-shell/spec.md))            | 已采纳 — 代码已随 PR #23 合并            |
+| 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | 已采纳 — 代码评审中 (PR #28)             |
+| 004 | **Agent Registry** ([spec](../../specs/004-agent-registry/spec.md))           | 已采纳 — 开发中 (feature/agent-registry) |
 
 ## 明确不做的事 (当前规范范围内)
 

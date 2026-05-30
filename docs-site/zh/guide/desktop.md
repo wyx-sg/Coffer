@@ -21,7 +21,6 @@ Tauri 窗口内渲染。
    若不可达，则以脱离父进程的方式拉起 `coffer-daemon`，使其在桌面窗口关闭后继续存活。
 2. **部署 shim** —— 幂等地把内嵌的 `coffer-mcp-shim` 复制到稳定的用户可写 PATH 目录：
    - macOS / Linux：`~/.coffer/bin/coffer-mcp-shim`
-   - Windows：`%LOCALAPPDATA%\Coffer\bin\coffer-mcp-shim.exe`
 3. **显示系统托盘图标** —— 应用运行期间始终存在。
 
 用 OS 关闭键关掉主窗口只会把窗口**隐藏**到托盘；守护进程仍存活，MCP 客户端继续
@@ -42,7 +41,6 @@ Tauri 窗口内渲染。
 
 - macOS：`~/Library/LaunchAgents/` 下的 LaunchAgent。
 - Linux：`~/.config/autostart/` 下的 `.desktop` 文件。
-- Windows：`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的 Run key。
 
 ## 安装
 
@@ -51,13 +49,12 @@ Tauri 窗口内渲染。
 前往 [GitHub Releases 页面](https://github.com/wyx-sg/Coffer/releases)，下载与你
 平台匹配的文件：
 
-| 平台                          | 文件                                                                 |
-| ----------------------------- | -------------------------------------------------------------------- |
-| macOS Apple silicon（M 系列） | `Coffer_<version>_aarch64.dmg`                                       |
-| macOS Intel                   | `Coffer_<version>_x64.dmg`                                           |
-| Linux x64（AppImage，推荐）   | `Coffer_<version>_amd64.AppImage`                                    |
-| Linux x64（deb）              | `coffer_<version>_amd64.deb`                                         |
-| Windows 10+ x64               | `Coffer_<version>_x64_en-US.msi` 或 `Coffer_<version>_x64-setup.exe` |
+| 平台                          | 文件                              |
+| ----------------------------- | --------------------------------- |
+| macOS Apple silicon（M 系列） | `Coffer_<version>_aarch64.dmg`    |
+| macOS Intel                   | `Coffer_<version>_x64.dmg`        |
+| Linux x64（AppImage，推荐）   | `Coffer_<version>_amd64.AppImage` |
+| Linux x64（deb）              | `coffer_<version>_amd64.deb`      |
 
 每份下载都有一份 `.sha256` 邻居文件供校验。
 
@@ -66,7 +63,6 @@ Tauri 窗口内渲染。
 - **macOS**：打开 DMG，把 **Coffer.app** 拖进 `/Applications`。
 - **Linux (AppImage)**：`chmod +x Coffer_<version>_amd64.AppImage`，然后运行。
 - **Linux (deb)**：`sudo apt install ./coffer_<version>_amd64.deb`。
-- **Windows**：双击 MSI（或 NSIS 的 setup.exe），按引导完成。
 
 ### macOS Gatekeeper
 
@@ -96,9 +92,9 @@ xattr -d com.apple.quarantine /Applications/Coffer.app
 ## CLI-only 替代方案
 
 对于 headless 服务器或不想要桌面应用的机器，在同一 Releases 页面下载
-**CLI-only** 归档（macOS/Linux 为 `coffer-cli-<triple>.tar.gz`，Windows 为
-`coffer-cli-<triple>.zip`）。归档中仅含 `coffer-daemon` 和 `coffer-mcp-shim` ——
-解压、运行守护进程、把 shim 放上 `PATH`，再让你的 MCP 客户端指向它即可。
+**CLI-only** 归档（`coffer-cli-<triple>.tar.gz`）。归档中仅含 `coffer-daemon` 和
+`coffer-mcp-shim` —— 解压、运行守护进程、把 shim 放上 `PATH`，再让你的 MCP 客户端
+指向它即可。
 
 ## 下一步
 
