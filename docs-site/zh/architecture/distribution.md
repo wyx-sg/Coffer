@@ -95,20 +95,20 @@ Tauri 边车机制（`desktop/tauri.conf.json` 中的 `bundle.externalBin`）是
 
 ## 发布流水线
 
-CI 发布矩阵（`.github/workflows/release.yml`）在每个 `v*` 标签上跨三个目标平台（macOS arm64、macOS x64、Linux x64）运行，生成：
+CI 发布矩阵（`.github/workflows/release.yml`）在每个 `v*` 标签上跨两个目标平台（macOS arm64、Linux x64）运行，生成：
 
 **桌面安装程序（CLI+桌面层级）**：
 
 - macOS arm64 DMG
-- macOS x64 DMG（两个独立的按架构 DMG；目前没有通用 `lipo` 二进制文件）
 - Linux x64 AppImage
 - Linux x64 `.deb`
 
 **纯 CLI 压缩包（纯 CLI 层级）**：
 
 - `coffer-cli-darwin-arm64.tar.gz`
-- `coffer-cli-darwin-x86_64.tar.gz`
 - `coffer-cli-linux-x86_64.tar.gz`
+
+不构建 macOS x64（Intel）和 Windows：GitHub 的 Intel macOS runner 池正在被弃用，会让 `macos-13` 任务一直「等待 runner」而饿死，且 PyInstaller 无法在 arm64 runner 上交叉编译 x86_64 sidecar。
 
 每个工件都附带在 CI 中生成的 `<artifact>.sha256` 校验和文件。
 

@@ -289,28 +289,24 @@ def test_shim_spec_includes_anyio_backend_hidden_import() -> None:
 )
 def test_release_workflow_produces_platform_artifact_matrix() -> None:
     """The release workflow must define a matrix that produces the supported
-    platforms: macOS arm64, macOS x64, and Linux x64 — and ship a SHA-256
-    checksum alongside each installer. Windows is intentionally NOT built
-    (Coffer ships macOS + Linux only). The actual cross-platform build runs in
-    CI on tag push; this test asserts the workflow file declares the right
-    shape so a drift between spec wording and pipeline is caught at PR time."""
+    platforms — macOS arm64 (Apple Silicon) and Linux x64 — and ship a SHA-256
+    checksum alongside each installer. macOS x64 (Intel, macos-13) and Windows
+    are intentionally NOT built (Intel runners are deprecated/starved and
+    PyInstaller can't cross-compile them). The actual build runs in CI on tag
+    push; this asserts the workflow declares the right shape, parsing the
+    matrix rather than substring-matching so explanatory comments don't sway
+    it."""
+    import yaml
+
     release_yml = _REPO / ".github" / "workflows" / "release.yml"
     assert release_yml.exists(), ".github/workflows/release.yml is required by the release scenario"
     text = release_yml.read_text()
-    # macOS arm64 + x64
-    assert "aarch64-apple-darwin" in text or "macos-14" in text, (
-        "release.yml must build for macOS arm64 (aarch64-apple-darwin or macos-14 runner)"
-    )
-    assert "x86_64-apple-darwin" in text or "macos-13" in text, (
-        "release.yml must build for macOS x64 (x86_64-apple-darwin or macos-13 runner)"
-    )
-    # Linux x64
-    assert "x86_64-unknown-linux-gnu" in text or "ubuntu-latest" in text, (
-        "release.yml must build for Linux x64"
-    )
-    # Windows is intentionally excluded — the matrix must NOT add it back.
-    assert "x86_64-pc-windows-msvc" not in text and "windows-latest" not in text, (
-        "release.yml must not build for Windows (macOS + Linux only)"
+    workflow = yaml.safe_load(text)
+    legs = workflow["jobs"]["bundle"]["strategy"]["matrix"]["include"]
+    triples = {leg["triple"] for leg in legs}
+    assert triples == {"aarch64-apple-darwin", "x86_64-unknown-linux-gnu"}, (
+        "release.yml matrix must build exactly macOS arm64 + Linux x64 "
+        f"(no Intel macOS, no Windows); got {sorted(triples)}"
     )
     # SHA-256 checksums next to each artifact
     assert "sha256" in text.lower() or "shasum" in text.lower(), (
