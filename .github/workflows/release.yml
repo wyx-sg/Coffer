@@ -98,7 +98,18 @@ jobs:
 
       - name: install Tauri CLI
         # Pin to an exact 2.x release. Bump deliberately in a follow-up PR.
-        run: cargo install --locked tauri-cli --version "=2.11.2"
+        # Idempotent across warm caches: the cache above restores ~/.cargo/bin,
+        # so cargo-tauri may already be present from a prior run — a plain
+        # `cargo install` then aborts with "binary `cargo-tauri` already exists
+        # in destination". Skip when the pinned version is already installed;
+        # otherwise (re)install with --force.
+        shell: bash
+        run: |
+          if cargo tauri --version 2>/dev/null | grep -q "2.11.2"; then
+            echo "cargo-tauri 2.11.2 already present (cache hit) — skipping install"
+          else
+            cargo install --locked --force tauri-cli --version "=2.11.2"
+          fi
 
       # macOS code-signing + notarization is intentionally NOT wired here.
       # When the Apple Developer ID is provisioned, set the certificate
