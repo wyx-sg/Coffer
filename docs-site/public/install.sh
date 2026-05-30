@@ -10,7 +10,7 @@
 #   COFFER_VERSION       Release tag to install, e.g. v0.1.0 (default: latest)
 #   COFFER_NO_MODIFY_PATH  Set to 1 to skip adding install dir to shell profile
 #
-# Supported platforms: macOS and Linux x86_64.
+# Supported platforms: macOS (Apple Silicon) and Linux x86_64.
 #
 # Full install guide: https://wyx-sg.github.io/Coffer/guide/install
 
@@ -61,7 +61,12 @@ main() {
         Darwin)
             case "$_arch" in
                 arm64)   triple="aarch64-apple-darwin" ;;
-                x86_64)  triple="x86_64-apple-darwin" ;;
+                x86_64)
+                    err "unsupported macOS architecture: x86_64 (Intel)
+Intel macOS builds are not published (GitHub's Intel runner pool is being
+retired). Apple Silicon (arm64) and Linux x86_64 are supported.
+See https://wyx-sg.github.io/Coffer/guide/install for alternatives."
+                    ;;
                 *)       err "unsupported macOS architecture: $_arch" ;;
             esac
             archive_ext="tar.gz"

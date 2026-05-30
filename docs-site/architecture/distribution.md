@@ -95,20 +95,20 @@ A size-comparison heuristic handles upgrades: if the on-disk binary has the same
 
 ## Release pipeline
 
-The CI release matrix (`.github/workflows/release.yml`) runs on every `v*` tag across three target platforms (macOS arm64, macOS x64, Linux x64) and produces:
+The CI release matrix (`.github/workflows/release.yml`) runs on every `v*` tag across two target platforms (macOS arm64, Linux x64) and produces:
 
 **Desktop installers (CLI+desktop tier)**:
 
 - macOS arm64 DMG
-- macOS x64 DMG (two separate per-architecture DMGs; no universal `lipo` binary at present)
 - Linux x64 AppImage
 - Linux x64 `.deb`
 
 **CLI-only archives (CLI-only tier)**:
 
 - `coffer-cli-darwin-arm64.tar.gz`
-- `coffer-cli-darwin-x86_64.tar.gz`
 - `coffer-cli-linux-x86_64.tar.gz`
+
+macOS x64 (Intel) and Windows are not built: GitHub's Intel macOS runner pool is being deprecated and reliably starves the `macos-13` job (it sits "waiting for a runner" indefinitely), and PyInstaller cannot cross-compile the x86_64 sidecars from the arm64 runner.
 
 Every artifact ships with a `<artifact>.sha256` checksum file generated in CI.
 

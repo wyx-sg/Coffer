@@ -98,7 +98,6 @@ the file for your platform:
 | Platform                          | File                              |
 | --------------------------------- | --------------------------------- |
 | macOS Apple silicon (M-series)    | `Coffer_<version>_aarch64.dmg`    |
-| macOS Intel                       | `Coffer_<version>_x64.dmg`        |
 | Linux x64 (AppImage, recommended) | `Coffer_<version>_amd64.AppImage` |
 | Linux x64 (deb)                   | `coffer_<version>_amd64.deb`      |
 

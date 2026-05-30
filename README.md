@@ -54,7 +54,6 @@ Download the installer from [Releases](https://github.com/wyx-sg/Coffer/releases
 | Platform             | File                              |
 | -------------------- | --------------------------------- |
 | macOS Apple silicon  | `Coffer_<version>_aarch64.dmg`    |
-| macOS Intel          | `Coffer_<version>_x64.dmg`        |
 | Linux x64 (AppImage) | `Coffer_<version>_amd64.AppImage` |
 | Linux x64 (deb)      | `coffer_<version>_amd64.deb`      |
 

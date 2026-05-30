@@ -54,7 +54,6 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 | 平台                  | 文件                              |
 | --------------------- | --------------------------------- |
 | macOS Apple silicon   | `Coffer_<version>_aarch64.dmg`    |
-| macOS Intel           | `Coffer_<version>_x64.dmg`        |
 | Linux x64（AppImage） | `Coffer_<version>_amd64.AppImage` |
 | Linux x64（deb）      | `coffer_<version>_amd64.deb`      |
 
