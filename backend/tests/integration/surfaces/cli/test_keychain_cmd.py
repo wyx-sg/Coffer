@@ -241,12 +241,24 @@ def test_list_json(in_memory_keyring, monkeypatch):
     assert data["refs"] == ["ref_a", "ref_b"]
 
 
-def test_list_daemon_unreachable(in_memory_keyring, tmp_path, monkeypatch):
-    """list when daemon is unreachable returns empty refs gracefully."""
+def test_list_daemon_spawn_timeout(in_memory_keyring, tmp_path, monkeypatch):
+    """list when daemon spawn times out exits 0 with a graceful daemon message.
+
+    keychain list catches DaemonNotRunning and degrades gracefully (it can still
+    tell the user there are no known refs). ADR-006: client_or_exit() auto-spawns;
+    we simulate a spawn timeout to exercise the graceful-degradation path.
+    """
+    from coffer.surfaces.cli import _client as cli_client
+
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(cli_client, "_spawn_daemon", lambda: None)
+    monkeypatch.setattr(cli_client, "_DAEMON_BOOT_TIMEOUT", 0.05)
+
     result = runner.invoke(app, ["keychain", "list"])
+    # keychain list is intentionally graceful when the daemon is unreachable.
     assert result.exit_code == 0
-    assert "daemon" in result.output.lower() or "no known" in result.output.lower()
+    combined = result.output + (result.stderr or "")
+    assert "daemon" in combined.lower() or "no known" in combined.lower()
 
 
 # ---------------------------------------------------------------------------

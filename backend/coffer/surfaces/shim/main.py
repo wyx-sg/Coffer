@@ -29,6 +29,7 @@ from typing import Any
 import httpx
 
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.surfaces.cli._client import discover
 
 _logger = logging.getLogger("coffer.shim")
@@ -70,8 +71,13 @@ async def _wait_for_daemon(timeout: float) -> DaemonInfo | None:
 
 
 def _spawn_daemon() -> None:
-    """Best-effort detached spawn of `coffer daemon start`."""
-    cmd = [sys.executable, "-m", "coffer.surfaces.cli.main", "daemon", "start"]
+    """Best-effort detached spawn of the coffer-daemon binary.
+
+    Uses ``daemon_spawn_command()`` (ADR-006) so the correct binary is chosen
+    whether the shim is running from source (dev/pip) or as a frozen
+    PyInstaller bundle co-located with ``coffer-daemon``.
+    """
+    cmd = daemon_spawn_command()
     try:
         kwargs: dict[str, object] = {
             "stdout": subprocess.DEVNULL,

@@ -60,10 +60,22 @@ case "$OS-$ARCH" in
         ;;
 esac
 
+# Spec files live in backend/ and use paths relative to that directory.
+# Run PyInstaller from backend/ so SPECPATH is correct, but redirect the
+# output artefacts (dist/, build/) back to the repo root so the staging
+# logic below can find them at dist/<name>[.exe].
+DIST_DIR="$REPO_ROOT/dist"
+BUILD_DIR="$REPO_ROOT/build"
+
 echo ">>> Building coffer-daemon for $TRIPLE"
-"${PYINSTALLER[@]}" --clean --noconfirm backend/coffer-daemon.spec
+( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
+    --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer-daemon.spec )
 echo ">>> Building coffer-mcp-shim for $TRIPLE"
-"${PYINSTALLER[@]}" --clean --noconfirm backend/coffer-mcp-shim.spec
+( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
+    --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer-mcp-shim.spec )
+echo ">>> Building coffer (management CLI) for $TRIPLE"
+( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
+    --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer.spec )
 
 mkdir -p desktop/binaries
 
@@ -76,8 +88,10 @@ fi
 
 cp "dist/coffer-daemon${EXT}" "desktop/binaries/coffer-daemon-${TRIPLE}${EXT}"
 cp "dist/coffer-mcp-shim${EXT}" "desktop/binaries/coffer-mcp-shim-${TRIPLE}${EXT}"
+cp "dist/coffer${EXT}" "desktop/binaries/coffer-${TRIPLE}${EXT}"
 chmod +x "desktop/binaries/coffer-daemon-${TRIPLE}${EXT}" \
-         "desktop/binaries/coffer-mcp-shim-${TRIPLE}${EXT}"
+         "desktop/binaries/coffer-mcp-shim-${TRIPLE}${EXT}" \
+         "desktop/binaries/coffer-${TRIPLE}${EXT}"
 
 echo ""
 echo ">>> Built:"

@@ -71,20 +71,28 @@ def test_cli_covers_every_visual_operation():
 def test_cli_surfaces_same_errors(tmp_path, monkeypatch):
     """The CLI's error output matches the UI's user-facing message.
 
-    Drive a representative failure scenario (resource not found / daemon
+    Drive a representative failure scenario (spawn timeout / daemon
     unreachable) through the CLI and verify:
     - No raw Python traceback leaks to the user.
     - The exit code is within the documented range (1-8).
     - A human-readable message is present on stderr or stdout.
+
+    ADR-006: client_or_exit() now auto-spawns on missing daemon.json. We
+    simulate a spawn-that-times-out so the DaemonNotRunning (exit 3) path
+    is exercised.
     """
-    # Without a running daemon, `coffer mcp show nope` should exit
-    # with code 3 (daemon unreachable) and print a clear message.
+    import coffer.surfaces.cli._client as cli_client
+
     monkeypatch.setenv("HOME", str(tmp_path))
+    # Prevent real daemon spawn; simulate timeout.
+    monkeypatch.setattr(cli_client, "_spawn_daemon", lambda: None)
+    monkeypatch.setattr(cli_client, "_DAEMON_BOOT_TIMEOUT", 0.05)
+
     result = runner.invoke(app, ["mcp", "show", "nope"])
 
     combined = result.output + (result.stderr or "")
 
-    # No daemon.json in tmp_path → daemon unreachable → exit 3
+    # spawn timeout → daemon boot failed → exit 3
     assert result.exit_code == 3, f"unexpected exit code {result.exit_code}:\n{combined}"
     # The CLI must not expose a raw Python traceback to the user.
     assert "Traceback" not in combined, f"raw traceback leaked to user output:\n{combined}"

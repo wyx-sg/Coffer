@@ -74,3 +74,40 @@ def test_no_host_override_path_exists(tmp_path: Path, monkeypatch: pytest.Monkey
 
     assert "host" not in captured
     assert isinstance(captured.get("fd"), int)
+
+
+def test_main_refuses_to_start_when_a_daemon_is_already_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-006: if a daemon is already reachable, entry.main() must exit
+    cleanly WITHOUT binding a second port or running uvicorn — so a racing
+    auto-spawn can't clobber daemon.json and orphan the running daemon."""
+    from datetime import UTC, datetime
+
+    from coffer.infrastructure.daemon import bootstrap
+    from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+
+    _setup_home(tmp_path, monkeypatch)
+
+    existing = DaemonInfo(
+        version=1,
+        pid=4242,
+        port=59750,
+        token="live-tok",
+        started_at=datetime.now(tz=UTC),
+        binary_path="/fake/coffer-daemon",
+    )
+    monkeypatch.setattr(bootstrap, "live_daemon", lambda: existing)
+
+    ran: list[bool] = []
+    monkeypatch.setattr(entry.uvicorn, "run", lambda *a, **k: ran.append(True))
+    monkeypatch.setattr(
+        bootstrap,
+        "acquire",
+        lambda: (_ for _ in ()).throw(AssertionError("acquire must not run")),
+    )
+    monkeypatch.setattr(entry, "_install_signal_handlers", lambda: None)
+
+    entry.main()  # must return cleanly
+
+    assert ran == [], "uvicorn.run must NOT be called when a daemon is already live"

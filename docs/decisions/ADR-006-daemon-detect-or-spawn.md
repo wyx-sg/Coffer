@@ -1,7 +1,7 @@
 # ADR-006: Daemon Detect-or-Spawn Pattern
 
 **Status**: Accepted
-**Date**: 2026-05-20
+**Date**: 2026-05-20 (revised 2026-05-30; see Revision history)
 **Deciders**: Yuxing Wu
 **Related**: spec `001-mcp-gateway` (FR-017, FR-018), [ADR-005](ADR-005-session-subprocess-model.md)
 
@@ -87,3 +87,19 @@ independent surface over the same long-lived state.
 on developer machines (8000 is heavily used) and shared-secret rotation would
 both require either a configuration file or a discovery file. Choosing one
 file with everything in it is simpler than splitting state.
+
+## Revision history
+
+- **2026-05-20** — Initial decision: detect-or-spawn pattern with daemon as
+  independent process; shim and CLI both use the same helper; daemon writes
+  `~/.coffer/daemon.json` on startup.
+- **2026-05-30** — Implementation update: the `coffer` CLI now implements
+  detect-or-spawn end-to-end. Previously the CLI would error and instruct the
+  user to run `coffer daemon start` manually — a deviation from this ADR's
+  stated intent that has now been corrected. Additionally, spawn is
+  **frozen-aware**: when running as a PyInstaller binary (i.e.
+  `sys.frozen is True`), the shim and CLI spawn the co-located `coffer-daemon`
+  binary via `coffer.infrastructure.daemon.spawn.daemon_spawn_command()` rather
+  than falling back to `python -m coffer_daemon`. This ensures the correct
+  binary is used regardless of whether Coffer was installed from a prebuilt
+  release archive or from a source checkout.

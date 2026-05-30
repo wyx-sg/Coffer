@@ -1,12 +1,84 @@
 # Coffer
 
+<p align="center">
+  <b>English</b> · <a href="./README.zh.md">简体中文</a>
+</p>
+
+<p align="center">
+  <a href="https://wyx-sg.github.io/Coffer/"><img alt="Docs" src="https://img.shields.io/badge/docs-coffer-C96442"></a>
+  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <img alt="Python ≥3.12" src="https://img.shields.io/badge/python-%E2%89%A53.12-3776AB?logo=python&logoColor=white">
+  <img alt="Claude Code compatible" src="https://img.shields.io/badge/Claude%20Code-compatible-C96442">
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-555">
+</p>
+
 > Local-first AI agent vault. Manage all your MCP servers from one place.
 
 Coffer is a daemon + CLI that aggregates upstream MCP servers and re-exposes them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools. All state lives on your machine — no cloud accounts, no vendor lock-in.
 
+📖 **Documentation site:** https://wyx-sg.github.io/Coffer/
+
+## Screenshots
+
+<p align="center">
+  <img src="docs-site/public/screenshots/resources.png" alt="Coffer — manage all your MCP servers from one place" width="820">
+</p>
+
+<p align="center">
+  <img src="docs-site/public/screenshots/server-detail.png" alt="Per-server detail — health, transport, and discovered capabilities" width="405">
+  <img src="docs-site/public/screenshots/observability.png" alt="Audit log — every lifecycle change to any resource or capability" width="405">
+</p>
+
+<p align="center">
+  <sub>One vault for every MCP server · live health & capabilities · a full audit trail — all local.</sub>
+</p>
+
 ---
 
-## Install
+## Download & install
+
+### One-line CLI install (macOS / Linux / Windows)
+
+**macOS / Linux:**
+
+```sh
+curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
+```
+
+**Windows PowerShell:**
+
+```powershell
+irm https://wyx-sg.github.io/Coffer/install.ps1 | iex
+```
+
+Installs three binaries — `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim` — to
+`~/.coffer/bin`. **The daemon auto-starts on first use — no manual start step.** Environment
+overrides: `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
+
+### Desktop app (most users)
+
+Download the installer from [Releases](https://github.com/wyx-sg/Coffer/releases/latest):
+
+| Platform             | File                                                                |
+| -------------------- | ------------------------------------------------------------------- |
+| macOS Apple silicon  | `Coffer_<version>_aarch64.dmg`                                      |
+| macOS Intel          | `Coffer_<version>_x64.dmg`                                          |
+| Linux x64 (AppImage) | `Coffer_<version>_amd64.AppImage`                                   |
+| Linux x64 (deb)      | `coffer_<version>_amd64.deb`                                        |
+| Windows 10+ x64      | `Coffer_<version>_x64_en-US.msi` / `Coffer_<version>_x64-setup.exe` |
+
+Each file has a `.sha256` sibling for verification.
+
+> **macOS Gatekeeper:** the DMG ships unsigned (notarisation pending). On first open run:
+> `xattr -d com.apple.quarantine /Applications/Coffer.app`
+
+### From source (developers)
+
+See [Install from source (developers)](#install-from-source-developers) below.
+
+---
+
+## Install from source (developers)
 
 ```bash
 git clone https://github.com/wyx-sg/Coffer.git
@@ -14,10 +86,12 @@ cd Coffer
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ./backend[dev]
 make verify          # sanity-check the install
-coffer daemon start  # boots the daemon on http://127.0.0.1:<auto-port>
 ```
 
-`pip install` puts both the CLI (`coffer`) and the stdio shim (`coffer-mcp-shim`) on your `PATH` as console-script entry points — no separate deploy step.
+`pip install` puts both the CLI (`coffer`) and the stdio shim (`coffer-mcp-shim`) on your `PATH`
+as console-script entry points — no separate deploy step. The daemon **auto-starts** the first
+time you run any `coffer` command or connect an MCP client — `coffer daemon start` exists for
+explicit control but is not a required setup step.
 
 ---
 
@@ -81,10 +155,10 @@ ADRs: [docs/decisions/](docs/decisions/).
 
 ## Developer commands
 
-| Command | What it does |
-|---|---|
-| `make verify` | Full check: lint, type, unit, integration, contract, acceptance audit |
-| `make install` | Install backend deps into the project venv |
+| Command        | What it does                                                          |
+| -------------- | --------------------------------------------------------------------- |
+| `make verify`  | Full check: lint, type, unit, integration, contract, acceptance audit |
+| `make install` | Install backend deps into the project venv                            |
 
 ---
 

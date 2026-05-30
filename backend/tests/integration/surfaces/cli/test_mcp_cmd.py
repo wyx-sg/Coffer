@@ -389,9 +389,18 @@ def test_mcp_add_no_auto_enable(mcp_daemon: Any) -> None:
 def test_mcp_list_exits_3_when_daemon_unreachable(
     tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No daemon.json + no running daemon => `coffer mcp list` exits with code 3
-    and prints a daemon-unreachable hint to stderr/stdout."""
+    """No daemon.json + spawn timeout => `coffer mcp list` exits with code 3
+    and prints a daemon-unreachable hint to stderr/stdout.
+
+    ADR-006: client_or_exit() now auto-spawns; we prevent the real spawn and
+    simulate a timeout so the error path (exit 3) is exercised.
+    """
+    from coffer.surfaces.cli import _client as cli_client
+
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(cli_client, "_spawn_daemon", lambda: None)
+    monkeypatch.setattr(cli_client, "_DAEMON_BOOT_TIMEOUT", 0.05)
+
     result = _runner.invoke(app, ["mcp", "list"])
     assert result.exit_code == 3, result.output
     combined = result.output + (result.stderr or "")

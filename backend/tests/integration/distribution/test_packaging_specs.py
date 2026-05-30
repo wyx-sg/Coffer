@@ -242,7 +242,10 @@ def test_daemon_spec_ships_migrations_directory() -> None:
     out, brand-new installs fail with `KeyError: 'no such revision'`."""
     tree = _parse_spec(_REPO / "backend" / "coffer-daemon.spec")
 
-    migrations_src = "backend/coffer/infrastructure/persistence/migrations"
+    # The build runs pyinstaller from backend/ (ADR-008 build_binaries.sh), so
+    # the data-file source path is relative to backend/ — "coffer/…", not
+    # "backend/coffer/…". Both src and dst are the package-relative path.
+    migrations_src = "coffer/infrastructure/persistence/migrations"
     migrations_dst = "coffer/infrastructure/persistence/migrations"
 
     # Look for a tuple literal carrying the two paths anywhere in datas.

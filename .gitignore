@@ -183,10 +183,12 @@ desktop/.cargo/
 
 # Superpowers / AI planning artifacts — never committed to the repo
 docs/superpowers/
+.superpowers/
 
 # Bundled sidecar binaries (built by `make bundle-binaries`)
 desktop/binaries/coffer-daemon-*
 desktop/binaries/coffer-mcp-shim-*
+desktop/binaries/coffer-*
 # PyInstaller build artefacts
 build/
 dist/

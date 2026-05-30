@@ -19,8 +19,8 @@ hidden = (
 
 
 a = Analysis(
-    ["backend/coffer/surfaces/shim/main.py"],
-    pathex=["backend"],
+    ["coffer/surfaces/shim/main.py"],
+    pathex=["."],
     binaries=[],
     datas=[],
     hiddenimports=hidden,
