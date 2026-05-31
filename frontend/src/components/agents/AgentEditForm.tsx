@@ -1,5 +1,5 @@
 // frontend/src/components/agents/AgentEditForm.tsx — spec 004-agent-registry
-// User Story 4 / FR-006: edit an existing agent's skill_dir override and
+// User Story 4 / FR-006: edit an existing agent's config_dir override and
 // description. Rendered as a modal dialog (mirrors AgentAddDialog); the agent
 // name and type are immutable post-registration so they show read-only.
 import { useState } from "react";
@@ -27,8 +27,8 @@ export function AgentEditForm(props: {
   const { t } = useTranslation();
   const patch = usePatchAgent();
   // Initialise inputs from the existing record so the user sees what is
-  // currently set; null override is rendered as an empty string.
-  const [skillDir, setSkillDir] = useState<string>(props.agent.skill_dir_override ?? "");
+  // currently set; the folder the user picks IS the config dir.
+  const [configDir, setConfigDir] = useState<string>(props.agent.config_dir ?? "");
   const [description, setDescription] = useState<string>(props.agent.description ?? "");
 
   const submit = async (e: React.FormEvent) => {
@@ -37,9 +37,9 @@ export function AgentEditForm(props: {
     // actually changed; this lets the server preserve unrelated fields
     // (and exercises the description-only PATCH fix in CODE25-008).
     const body: AgentPatch = {};
-    const newSkillDir = skillDir.trim() === "" ? null : skillDir;
-    if (newSkillDir !== (props.agent.skill_dir_override ?? null)) {
-      body.skill_dir = newSkillDir;
+    const newConfigDir = configDir.trim() === "" ? null : configDir;
+    if (newConfigDir !== (props.agent.config_dir ?? null)) {
+      body.config_dir = newConfigDir;
     }
     const newDescription = description.trim() === "" ? null : description;
     if (newDescription !== (props.agent.description ?? null)) {
@@ -89,16 +89,16 @@ export function AgentEditForm(props: {
             />
           </label>
           <div className="block text-sm">
-            <span>{t("agents.skillDirOverride")}</span>
+            <span>{t("agents.configDirOverride")}</span>
             <div className="mt-1 flex gap-2">
               <input
-                aria-label={t("agents.skillDirOverride")}
+                aria-label={t("agents.configDirOverride")}
                 className="block w-full rounded border bg-background px-2 py-1 font-mono text-xs"
-                placeholder={t("agents.skillDirPlaceholder")}
-                value={skillDir}
-                onChange={(e) => setSkillDir(e.target.value)}
+                placeholder={t("agents.configDirPlaceholder")}
+                value={configDir}
+                onChange={(e) => setConfigDir(e.target.value)}
               />
-              <FolderPicker value={skillDir || null} onChange={(p) => setSkillDir(p ?? "")} />
+              <FolderPicker value={configDir || null} onChange={(p) => setConfigDir(p ?? "")} />
             </div>
           </div>
           <label className="block text-sm">

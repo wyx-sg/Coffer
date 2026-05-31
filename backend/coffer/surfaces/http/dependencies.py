@@ -259,3 +259,21 @@ def get_fs_browse_service() -> Any:
     from coffer.application.fs.browse_service import FsBrowseService
 
     return FsBrowseService()
+
+
+# --- Skill kind (spec 005-skill-manager) ---
+
+_skill_service: Any | None = None
+
+
+def set_skill_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _skill_service
+    _skill_service = svc
+
+
+def get_skill_service() -> Any:
+    """FastAPI Depends() target — actual type is SkillService."""
+    if _skill_service is None:
+        raise RuntimeError("skill service not initialised")
+    return _skill_service

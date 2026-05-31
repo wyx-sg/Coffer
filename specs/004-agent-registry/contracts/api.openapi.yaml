@@ -268,7 +268,7 @@ paths:
       summary: List the subdirectories of a local directory
       description: |
         Read-only filesystem browse backing the web folder picker for choosing
-        an agent's skill directory (a browser can't read absolute paths, but
+        an agent's config directory (a browser can't read absolute paths, but
         the loopback daemon can). Returns a directory's path, its parent, and
         its immediate subdirectories only — never file contents.
       parameters:
@@ -315,9 +315,12 @@ components:
           description: >-
             Optional. When omitted the server derives a stable default from the
             type (underscores become hyphens, e.g. claude_code -> claude-code).
-        skill_dir:
+        config_dir:
           type: string
-          description: Optional absolute path overriding the default for the type.
+          description: >-
+            Optional absolute path overriding the type's standard config
+            directory (~/.claude, ~/.codex). Skills are delivered to
+            <config_dir>/skills, which is auto-created at registration.
         description:
           type: string
           nullable: true
@@ -326,29 +329,20 @@ components:
       type: object
       additionalProperties: false
       properties:
-        skill_dir: { type: string }
+        config_dir: { type: string }
         description: { type: string, nullable: true }
 
     AgentOut:
       type: object
-      required: [name, type, config_dir, skill_dir, created_at, updated_at]
+      required: [name, type, config_dir, created_at, updated_at]
       properties:
         name: { type: string }
         type: { $ref: "#/components/schemas/AgentType" }
         config_dir:
           {
             type: string,
-            description: "Root config directory for the type (~/.claude, ~/.codex) — where the agent's config files live.",
+            description: "Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills.",
           }
-        skill_dir:
-          {
-            type: string,
-            description: "Resolved absolute path (default if not overridden).",
-          }
-        skill_dir_override:
-          type: string
-          nullable: true
-          description: "Set when the user provided an explicit override."
         description: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -364,9 +358,15 @@ components:
         type: { $ref: "#/components/schemas/AgentType" }
         display_name: { type: string }
         config_dir:
-          { type: string, description: "Resolved config directory on disk." }
+          {
+            type: string,
+            description: "The type's standard config directory on disk (~/.claude, ~/.codex).",
+          }
         default_skill_dir:
-          { type: string, description: "Default skill dir for the type." }
+          {
+            type: string,
+            description: "Where skills are delivered for this candidate: <config_dir>/skills.",
+          }
         suggested_name:
           {
             type: string,
@@ -487,7 +487,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorOut" }
     UnprocessableEntity:
-      description: Validation failure (skill_dir not writable, privileged path, unknown type, ...)
+      description: Validation failure (config_dir not writable, privileged path, unknown type, ...)
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorOut" }

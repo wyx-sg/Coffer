@@ -12,17 +12,19 @@ monkeypatch and lets ``env.py`` do the async/sync conversion itself.
 
 from __future__ import annotations
 
+import json
 import pathlib
 import sqlite3
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0004"
+HEAD_REVISION = "0005"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
-# live in the generic `resources` table — so 0004 is the head revision.
+# live in the generic `resources` table. The skill kind (spec 005-skill-manager)
+# adds skill_agent_bindings in revision 0005, the current head.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -30,6 +32,7 @@ EXPECTED_TABLES = {
     "mcp_capability_preferences",
     "mcp_invocations",
     "mcp_server_health",
+    "skill_agent_bindings",
 }
 
 _ALEMBIC_INI = (
@@ -109,9 +112,13 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
-    # 0004 -> 0003: index-only revision, table set unchanged.
+    # 0005 -> 0004: drops skill_agent_bindings (spec 005-skill-manager).
+    command.downgrade(cfg, "0004")
+    assert "skill_agent_bindings" not in _user_tables(db_path)
+
+    # 0004 -> 0003: index-only revision, table set otherwise unchanged.
     command.downgrade(cfg, "0003")
-    assert _user_tables(db_path) == EXPECTED_TABLES
+    assert _user_tables(db_path) == EXPECTED_TABLES - {"skill_agent_bindings"}
 
     # 0003 -> 0002: drops mcp_server_health.
     command.downgrade(cfg, "0002")
@@ -127,3 +134,50 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # 0001 -> base: everything gone.
     command.downgrade(cfg, "base")
     assert _user_tables(db_path) == set()
+
+
+def test_migration_0005_maps_legacy_skill_dir_to_config_dir(tmp_path, monkeypatch):
+    """0005 rewrites agent config JSON: a legacy ``skill_dir`` override is
+    mapped onto ``config_dir`` (not silently dropped), preserving where skills
+    are delivered for upgraded installs."""
+    db_path = tmp_path / "data.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    # Schema up to just before the skill migration.
+    command.upgrade(cfg, "0004")
+
+    # Seed a pre-005-skill-manager agent row carrying a legacy skill_dir override
+    # (a `<dir>/skills` path) plus one with a non-standard override.
+    conn = sqlite3.connect(str(db_path))
+    try:
+        for name, skill_dir in (("team", "/data/team/skills"), ("odd", "/data/custom")):
+            conn.execute(
+                "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at)"
+                " VALUES (?, ?, ?, 1, ?, ?)",
+                (
+                    "agent",
+                    name,
+                    json.dumps({"type": "claude_code", "skill_dir": skill_dir}),
+                    "2026-05-20T00:00:00+00:00",
+                    "2026-05-20T00:00:00+00:00",
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Apply 0005 (creates bindings table + rewrites agent config).
+    command.upgrade(cfg, "0005")
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        rows = dict(
+            conn.execute("SELECT name, config_json FROM resources WHERE kind = 'agent'").fetchall()
+        )
+    finally:
+        conn.close()
+    team = json.loads(rows["team"])
+    assert "skill_dir" not in team and team["config_dir"] == "/data/team"
+    odd = json.loads(rows["odd"])
+    assert "skill_dir" not in odd and odd["config_dir"] == "/data/custom"

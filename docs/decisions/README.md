@@ -81,3 +81,4 @@ section that future readers most often want — don't skip it.>
 | [006](ADR-006-daemon-detect-or-spawn.md)                 | Daemon detect-or-spawn pattern; daemon outlives any single client        | Accepted |
 | [007](ADR-007-everything-is-a-resource-kind.md)          | Information architecture: every managed entity is a resource kind        | Accepted |
 | [008](ADR-008-distribution-pyinstaller-tauri-sidecar.md) | Distribution: PyInstaller-bundled daemon + shim as Tauri sidecars        | Accepted |
+| [009](ADR-009-cross-platform-skill-delivery.md)          | Cross-platform skill delivery: symlink / junction / copy-fallback        | Accepted |

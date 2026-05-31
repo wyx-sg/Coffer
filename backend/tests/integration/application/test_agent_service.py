@@ -24,49 +24,74 @@ from coffer.domain.errors import (
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="register an agent with custom skill_dir"
+    spec="004-agent-registry", scenario="register an agent with a custom config dir"
 )
-async def test_register_with_custom_skill_dir(agent_bundle, tmp_path):
-    custom = tmp_path / "skills"
+async def test_register_with_custom_config_dir(agent_bundle, tmp_path):
+    custom = tmp_path / "cfg"
     custom.mkdir()
     r = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX,
         name="codex-work",
-        skill_dir=str(custom),
+        config_dir=str(custom),
         actor="cli",
     )
     assert r.kind == "agent"
     assert r.name == "codex-work"
     assert r.config["type"] == "codex"
+    # Registration auto-creates <config_dir>/skills.
+    assert (custom / "skills").is_dir()
     entries = await agent_bundle.audit.query(event_type=AuditEventType.RESOURCE_CREATED.value)
     assert len(entries) == 1
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="reject registration with invalid skill_dir"
+    spec="004-agent-registry", scenario="reject registration with an invalid config dir"
 )
-async def test_register_rejects_nonexistent_skill_dir(agent_bundle, tmp_path):
-    nonexistent = tmp_path / "no-such-dir" / "nested" / "deep"
+async def test_register_rejects_unhostable_config_dir(agent_bundle, tmp_path):
+    # config_dir points at an existing regular file, so <file>/skills cannot be
+    # created and the resolved skill dir is unusable.
+    bogus_file = tmp_path / "a-file"
+    bogus_file.write_text("not a dir")
     with pytest.raises(SkillDirNotWritable):
         await agent_bundle.svc.register(
             agent_type=AgentType.CODEX,
             name="bad",
-            skill_dir=str(nonexistent),
+            config_dir=str(bogus_file),
             actor="cli",
         )
     assert (await agent_bundle.svc.list()) == []
 
 
+async def test_register_rejects_missing_config_dir(agent_bundle, tmp_path):
+    # A mistyped / non-existent config_dir must be REJECTED, not silently
+    # materialised via mkdir -p (which would deliver skills to a dir the agent
+    # never reads). Only the skills/ leaf is auto-created, under an existing dir.
+    missing = tmp_path / "does-not-exist" / ".codex"
+    with pytest.raises(SkillDirNotWritable):
+        await agent_bundle.svc.register(
+            agent_type=AgentType.CODEX,
+            name="typo",
+            config_dir=str(missing),
+            actor="cli",
+        )
+    assert not missing.exists()
+    assert (await agent_bundle.svc.list()) == []
+
+
 @pytest.mark.acceptance(spec="004-agent-registry", scenario="reject duplicate agent name")
 async def test_register_rejects_duplicate_name(agent_bundle, tmp_path):
-    custom = tmp_path / "skills"
-    custom.mkdir()
+    # Distinct config dirs so the only collision is on the name (not the
+    # one-agent-per-config-dir rule).
+    first = tmp_path / "cfg1"
+    second = tmp_path / "cfg2"
+    first.mkdir()
+    second.mkdir()
     await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="a", skill_dir=str(custom), actor="cli"
+        agent_type=AgentType.CODEX, name="a", config_dir=str(first), actor="cli"
     )
     with pytest.raises(ResourceAlreadyExists):
         await agent_bundle.svc.register(
-            agent_type=AgentType.CLAUDE_CODE, name="a", skill_dir=str(custom), actor="cli"
+            agent_type=AgentType.CLAUDE_CODE, name="a", config_dir=str(second), actor="cli"
         )
 
 
@@ -75,17 +100,16 @@ async def test_register_rejects_duplicate_name(agent_bundle, tmp_path):
     scenario="reject a second agent for an already-registered config dir",
 )
 async def test_register_rejects_duplicate_config_dir(agent_bundle, tmp_path):
-    custom = tmp_path / "skills"
+    custom = tmp_path / "cfg"
     custom.mkdir()
     await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="codex-one", skill_dir=str(custom), actor="cli"
+        agent_type=AgentType.CODEX, name="codex-one", config_dir=str(custom), actor="cli"
     )
-    # A second Codex agent resolves to the same config_dir (~/.codex), so it is
-    # rejected even with a different name and skill_dir — one agent per config
-    # directory.
+    # A second Codex agent that resolves to the same config_dir is rejected even
+    # with a different name — one agent per config directory.
     with pytest.raises(AgentConfigDirRegistered):
         await agent_bundle.svc.register(
-            agent_type=AgentType.CODEX, name="codex-two", skill_dir=str(custom), actor="cli"
+            agent_type=AgentType.CODEX, name="codex-two", config_dir=str(custom), actor="cli"
         )
     assert len(await agent_bundle.svc.list()) == 1
 
@@ -96,42 +120,46 @@ async def test_register_rejects_duplicate_config_dir(agent_bundle, tmp_path):
 
 
 @pytest.mark.acceptance(spec="004-agent-registry", scenario="update an existing agent")
-async def test_update_skill_dir(agent_bundle, tmp_path):
+async def test_update_config_dir(agent_bundle, tmp_path):
     old = tmp_path / "old"
     new = tmp_path / "new"
     old.mkdir()
     new.mkdir()
     await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="a", skill_dir=str(old), actor="cli"
+        agent_type=AgentType.CODEX, name="a", config_dir=str(old), actor="cli"
     )
-    updated = await agent_bundle.svc.update_skill_dir(name="a", new_skill_dir=str(new), actor="cli")
-    assert updated.config["skill_dir"] == str(new)
+    updated = await agent_bundle.svc.update_config_dir(
+        name="a", new_config_dir=str(new), actor="cli"
+    )
+    assert updated.config["config_dir"] == str(new)
+    # The new config dir's skills subdir is auto-created on update.
+    assert (new / "skills").is_dir()
     updates = await agent_bundle.audit.query(event_type=AuditEventType.RESOURCE_UPDATED.value)
     assert len(updates) == 1
 
 
-async def test_update_skill_dir_description_only(agent_bundle, tmp_path):
-    """TEST25-108: a description-only change does not mutate skill_dir.
+async def test_update_config_dir_description_only(agent_bundle, tmp_path):
+    """TEST25-108: a description-only change does not mutate config_dir.
 
-    Calling `update_skill_dir(name, new_skill_dir=current, description=new)` is
-    the service-layer counterpart of the HTTP PATCH-description-only route.
+    Calling `update_config_dir(name, new_config_dir=current, description=new)`
+    is the service-layer counterpart of the HTTP PATCH-description-only route.
     """
     old = tmp_path / "old"
     old.mkdir()
     await agent_bundle.svc.register(
         agent_type=AgentType.CODEX,
         name="a",
-        skill_dir=str(old),
+        config_dir=str(old),
         description="before",
         actor="cli",
     )
-    updated = await agent_bundle.svc.update_skill_dir(
+    updated = await agent_bundle.svc.update_config_dir(
         name="a",
-        new_skill_dir=str(old),  # unchanged
+        new_config_dir=str(old),  # unchanged
         actor="cli",
         description="after",
     )
-    assert updated.config["skill_dir"] == str(old)
+    assert updated.config["config_dir"] == str(old)
     assert updated.description == "after"
 
 
@@ -144,12 +172,12 @@ async def test_update_skill_dir_description_only(agent_bundle, tmp_path):
 async def test_remove_deletes_agent(agent_bundle, tmp_path):
     """Removing an agent deletes it and audits the deletion. A removal is never
     permanent — the next scan re-surfaces it as a candidate (no suppression)."""
-    custom = tmp_path / "skills"
+    custom = tmp_path / "cfg"
     custom.mkdir()
     await agent_bundle.svc.register(
         agent_type=AgentType.CODEX,
         name="cur",
-        skill_dir=str(custom),
+        config_dir=str(custom),
         actor="system",
     )
     await agent_bundle.svc.remove(name="cur", actor="cli")
@@ -193,12 +221,12 @@ async def test_discover_skips_types_without_marker(agent_bundle, tmp_path, monke
     scenario="skip already-registered types on subsequent scan",
 )
 async def test_discover_skips_already_registered(agent_bundle, tmp_path, monkeypatch):
-    custom = tmp_path / "skills"
+    custom = tmp_path / "cfg"
     custom.mkdir()
     await agent_bundle.svc.register(
         agent_type=AgentType.CODEX,
         name="manual-codex",
-        skill_dir=str(custom),
+        config_dir=str(custom),
         actor="cli",
     )
 
@@ -218,12 +246,12 @@ async def test_discover_re_surfaces_removed_agent(agent_bundle, tmp_path, monkey
     again as a candidate (the removal might have been accidental)."""
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
-    custom = tmp_path / "skills"
+    custom = tmp_path / "cfg"
     custom.mkdir()
     await agent_bundle.svc.register(
         agent_type=AgentType.CODEX,
         name="x",
-        skill_dir=str(custom),
+        config_dir=str(custom),
         actor="system",
     )
     await agent_bundle.svc.remove(name="x", actor="cli")
@@ -342,30 +370,30 @@ def test_strip_macos_private_handles_exact_private(monkeypatch):
 
 
 async def test_register_invalid_config_raises_config_validation_error(agent_bundle):
-    """A skill_dir that fails pydantic field validation surfaces as ConfigValidationError."""
+    """A config_dir that fails pydantic field validation surfaces as ConfigValidationError."""
     from coffer.domain.errors import ConfigValidationError
 
     with pytest.raises(ConfigValidationError):
         await agent_bundle.svc.register(
             agent_type=AgentType.CODEX,
             name="bad",
-            skill_dir="   ",  # whitespace-only → rejected by AgentConfig
+            config_dir="   ",  # whitespace-only → rejected by AgentConfig
             actor="cli",
         )
 
 
-async def test_update_skill_dir_invalid_raises_config_validation_error(agent_bundle, tmp_path):
-    """An update with an invalid (relative) skill_dir surfaces as ConfigValidationError."""
+async def test_update_config_dir_invalid_raises_config_validation_error(agent_bundle, tmp_path):
+    """An update with an invalid (relative) config_dir surfaces as ConfigValidationError."""
     from coffer.domain.errors import ConfigValidationError
 
-    custom = tmp_path / "skills"
+    custom = tmp_path / "cfg"
     custom.mkdir()
     await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="a", skill_dir=str(custom), actor="cli"
+        agent_type=AgentType.CODEX, name="a", config_dir=str(custom), actor="cli"
     )
     with pytest.raises(ConfigValidationError):
-        await agent_bundle.svc.update_skill_dir(
-            name="a", new_skill_dir="relative/path", actor="cli"
+        await agent_bundle.svc.update_config_dir(
+            name="a", new_config_dir="relative/path", actor="cli"
         )
 
 
@@ -376,16 +404,16 @@ async def test_update_skill_dir_invalid_raises_config_validation_error(agent_bun
 
 @pytest.mark.acceptance(spec="004-agent-registry", scenario="audit lifecycle events")
 async def test_audit_records_lifecycle_events(agent_bundle, tmp_path):
-    custom = tmp_path / "skills"
+    custom = tmp_path / "cfg"
     custom.mkdir()
-    new = tmp_path / "skills2"
+    new = tmp_path / "cfg2"
     new.mkdir()
     await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="a", skill_dir=str(custom), actor="cli"
+        agent_type=AgentType.CODEX, name="a", config_dir=str(custom), actor="cli"
     )
     # Agents have no enable/disable concept — the lifecycle is create, update,
     # remove (each via the kind-agnostic resource_* events).
-    await agent_bundle.svc.update_skill_dir(name="a", new_skill_dir=str(new), actor="cli")
+    await agent_bundle.svc.update_config_dir(name="a", new_config_dir=str(new), actor="cli")
     await agent_bundle.svc.remove(name="a", actor="cli")
 
     created = await agent_bundle.audit.query(event_type=AuditEventType.RESOURCE_CREATED.value)

@@ -26,11 +26,11 @@ def _client(app) -> TestClient:
     return TestClient(app, headers={"X-Coffer-Token": TOKEN})
 
 
-def _post_codex(c: TestClient, name: str, skill_dir: pathlib.Path):
+def _post_codex(c: TestClient, name: str, config_dir: pathlib.Path):
     """Helper to register one codex agent — keeps line widths reasonable."""
     return c.post(
         "/api/v1/agents",
-        json={"type": "codex", "name": name, "skill_dir": str(skill_dir)},
+        json={"type": "codex", "name": name, "config_dir": str(config_dir)},
     )
 
 
@@ -51,15 +51,15 @@ def test_agent_list_empty(tmp_path, monkeypatch):
 def test_agent_register_post(tmp_path, monkeypatch):
     """POST /agents creates an agent from the request body."""
     app = _app(tmp_path, monkeypatch, 59601)
-    skill_dir = tmp_path / "skills"
-    skill_dir.mkdir()
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
     with _client(app) as c:
         r = c.post(
             "/api/v1/agents",
             json={
                 "type": "codex",
                 "name": "cur",
-                "skill_dir": str(skill_dir),
+                "config_dir": str(config_dir),
                 "description": "manual",
             },
         )
@@ -77,61 +77,63 @@ def test_agent_register_without_name_defaults_to_type(tmp_path, monkeypatch):
     """POST /agents with no name derives a stable default from the type
     (mirrors discovery's suggested name: claude_code -> claude-code)."""
     app = _app(tmp_path, monkeypatch, 59607)
-    skill_dir = tmp_path / "skills"
-    skill_dir.mkdir()
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
     with _client(app) as c:
         r = c.post(
             "/api/v1/agents",
-            json={"type": "claude_code", "skill_dir": str(skill_dir)},
+            json={"type": "claude_code", "config_dir": str(config_dir)},
         )
         assert r.status_code == 201, r.text
         assert r.json()["name"] == "claude-code"
 
 
 def test_agent_get_one(tmp_path, monkeypatch):
-    """GET /agents/{name} returns the persisted skill_dir."""
+    """GET /agents/{name} returns the persisted config_dir."""
     app = _app(tmp_path, monkeypatch, 59602)
-    skill_dir = tmp_path / "skills"
-    skill_dir.mkdir()
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
     with _client(app) as c:
         r = c.post(
             "/api/v1/agents",
-            json={"type": "codex", "name": "cur", "skill_dir": str(skill_dir)},
+            json={"type": "codex", "name": "cur", "config_dir": str(config_dir)},
         )
         assert r.status_code == 201, r.text
         r = c.get("/api/v1/agents/cur")
         assert r.status_code == 200
-        assert r.json()["skill_dir"] == str(skill_dir)
+        assert r.json()["config_dir"] == str(config_dir)
+        assert "skill_dir" not in r.json()
+        assert "skill_dir_override" not in r.json()
 
 
 def test_agent_list_after_register(tmp_path, monkeypatch):
     """A freshly registered agent appears in the list."""
     app = _app(tmp_path, monkeypatch, 59603)
-    skill_dir = tmp_path / "skills"
-    skill_dir.mkdir()
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
     with _client(app) as c:
-        _post_codex(c, "cur", skill_dir)
+        _post_codex(c, "cur", config_dir)
         r = c.get("/api/v1/agents")
         assert r.status_code == 200
         assert any(a["name"] == "cur" for a in r.json()["items"])
 
 
-def test_agent_patch_skill_dir(tmp_path, monkeypatch):
-    """PATCH updates skill_dir (agents have no enable/disable concept)."""
+def test_agent_patch_config_dir(tmp_path, monkeypatch):
+    """PATCH updates config_dir (agents have no enable/disable concept)."""
     app = _app(tmp_path, monkeypatch, 59604)
-    skill_dir = tmp_path / "skills"
-    skill_dir.mkdir()
-    new_dir = tmp_path / "skills2"
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
+    new_dir = tmp_path / "cfg2"
     new_dir.mkdir()
     with _client(app) as c:
-        _post_codex(c, "cur", skill_dir)
+        _post_codex(c, "cur", config_dir)
         r = c.patch(
             "/api/v1/agents/cur",
-            json={"skill_dir": str(new_dir)},
+            json={"config_dir": str(new_dir)},
         )
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body["skill_dir"] == str(new_dir)
+        assert body["config_dir"] == str(new_dir)
         assert "enabled" not in body
 
 
@@ -147,26 +149,26 @@ def test_agent_candidates_get(tmp_path, monkeypatch):
 def test_agent_delete_then_404(tmp_path, monkeypatch):
     """DELETE removes the agent; subsequent GET yields 404."""
     app = _app(tmp_path, monkeypatch, 59606)
-    skill_dir = tmp_path / "skills"
-    skill_dir.mkdir()
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
     with _client(app) as c:
-        _post_codex(c, "cur", skill_dir)
+        _post_codex(c, "cur", config_dir)
         r = c.delete("/api/v1/agents/cur")
         assert r.status_code == 204
         r = c.get("/api/v1/agents/cur")
         assert r.status_code == 404
 
 
-def test_patch_description_only_preserves_skill_dir(tmp_path, monkeypatch):
-    """Regression: a PATCH that omits skill_dir must not wipe the override.
+def test_patch_description_only_preserves_config_dir(tmp_path, monkeypatch):
+    """Regression: a PATCH that omits config_dir must not wipe the override.
 
-    `AgentPatch.skill_dir` defaults to None, so "field absent" and "field
+    `AgentPatch.config_dir` defaults to None, so "field absent" and "field
     set to null" look identical on the model — the route must use
     `model_fields_set` to tell them apart.
     """
     app = _app(tmp_path, monkeypatch, 59610)
-    skill_dir = tmp_path / "custom-skills"
-    skill_dir.mkdir()
+    config_dir = tmp_path / "custom-cfg"
+    config_dir.mkdir()
 
     with _client(app) as c:
         r = c.post(
@@ -174,25 +176,24 @@ def test_patch_description_only_preserves_skill_dir(tmp_path, monkeypatch):
             json={
                 "type": "codex",
                 "name": "cur",
-                "skill_dir": str(skill_dir),
+                "config_dir": str(config_dir),
                 "description": "before",
             },
         )
         assert r.status_code == 201, r.text
-        assert r.json()["skill_dir_override"] == str(skill_dir)
+        assert r.json()["config_dir"] == str(config_dir)
 
-        # PATCH only the description — skill_dir is absent from the body.
+        # PATCH only the description — config_dir is absent from the body.
         r = c.patch("/api/v1/agents/cur", json={"description": "after"})
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["description"] == "after"
-        # The custom skill_dir override must survive a description-only PATCH.
-        assert body["skill_dir_override"] == str(skill_dir)
-        assert body["skill_dir"] == str(skill_dir)
+        # The custom config_dir must survive a description-only PATCH.
+        assert body["config_dir"] == str(config_dir)
 
         # And it must still be persisted on a fresh read.
         r = c.get("/api/v1/agents/cur")
-        assert r.json()["skill_dir_override"] == str(skill_dir)
+        assert r.json()["config_dir"] == str(config_dir)
 
 
 @pytest.mark.acceptance(
@@ -241,30 +242,36 @@ def test_error_404_not_found(tmp_path, monkeypatch):
 def test_error_409_duplicate_name(tmp_path, monkeypatch):
     """Registering the same name twice yields 409 RESOURCE_ALREADY_EXISTS."""
     app = _app(tmp_path, monkeypatch, 59631)
-    skill_dir = tmp_path / "skills"
-    skill_dir.mkdir()
+    # Distinct config dirs so the only collision is the name (not the
+    # one-agent-per-config-dir rule, which has its own error code).
+    first = tmp_path / "cfg1"
+    second = tmp_path / "cfg2"
+    first.mkdir()
+    second.mkdir()
     with _client(app) as c:
         r = c.post(
             "/api/v1/agents",
-            json={"type": "codex", "name": "dup", "skill_dir": str(skill_dir)},
+            json={"type": "codex", "name": "dup", "config_dir": str(first)},
         )
         assert r.status_code == 201, r.text
         r = c.post(
             "/api/v1/agents",
-            json={"type": "claude_code", "name": "dup", "skill_dir": str(skill_dir)},
+            json={"type": "claude_code", "name": "dup", "config_dir": str(second)},
         )
         assert r.status_code == 409, r.text
         assert r.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
 
 
 def test_error_422_skill_dir_not_writable(tmp_path, monkeypatch):
-    """A nonexistent (and uncreatable) skill_dir yields 422 SKILL_DIR_NOT_WRITABLE."""
+    """A config_dir that points at an existing FILE means <config_dir>/skills
+    cannot be created — yielding 422 SKILL_DIR_NOT_WRITABLE."""
     app = _app(tmp_path, monkeypatch, 59632)
-    bogus = tmp_path / "no-such" / "nested" / "deep"
+    bogus_file = tmp_path / "a-file"
+    bogus_file.write_text("not a dir")
     with _client(app) as c:
         r = c.post(
             "/api/v1/agents",
-            json={"type": "codex", "name": "bad", "skill_dir": str(bogus)},
+            json={"type": "codex", "name": "bad", "config_dir": str(bogus_file)},
         )
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "SKILL_DIR_NOT_WRITABLE"
@@ -275,12 +282,12 @@ def test_error_422_unprocessable_body(tmp_path, monkeypatch):
     """Types outside {claude_code, codex} — including the v1-dropped cursor /
     claude_desktop and any garbage value — are rejected with 422."""
     app = _app(tmp_path, monkeypatch, 59633)
-    skill_dir = tmp_path / "skills"
-    skill_dir.mkdir()
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
     with _client(app) as c:
         for bad_type in ("cursor", "claude_desktop", "not_a_real_type"):
             r = c.post(
                 "/api/v1/agents",
-                json={"type": bad_type, "name": "x", "skill_dir": str(skill_dir)},
+                json={"type": bad_type, "name": "x", "config_dir": str(config_dir)},
             )
             assert r.status_code == 422, f"{bad_type}: {r.text}"

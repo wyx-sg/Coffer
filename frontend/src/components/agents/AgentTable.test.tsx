@@ -19,6 +19,11 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
+// The "Coffer skills" column counts enabled bindings from the skills list.
+vi.mock("@/lib/hooks/useSkills", () => ({
+  useSkills: vi.fn(() => ({ data: [], isPending: false })),
+}));
+
 const { useRemoveAgent } = await import("@/lib/hooks/useAgents");
 const useRemoveAgentMock = vi.mocked(useRemoveAgent);
 
@@ -36,8 +41,6 @@ const SAMPLE: AgentOut[] = [
     name: "cur",
     type: "codex",
     config_dir: "/home/u/.codex",
-    skill_dir: "/home/u/.codex/skills",
-    skill_dir_override: null,
     description: null,
     created_at: "2026-05-22T00:00:00Z",
     updated_at: "2026-05-22T00:00:00Z",
@@ -46,8 +49,6 @@ const SAMPLE: AgentOut[] = [
     name: "cc",
     type: "claude_code",
     config_dir: "/home/u/.claude",
-    skill_dir: "/home/u/.claude/skills",
-    skill_dir_override: null,
     description: null,
     created_at: "2026-05-22T00:00:00Z",
     updated_at: "2026-05-22T00:00:00Z",

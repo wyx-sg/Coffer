@@ -1,6 +1,6 @@
 // frontend/src/kinds/mcp/McpServerDetailPage.tsx
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
@@ -31,6 +31,9 @@ export function McpServerDetailPage() {
   const { t } = useTranslation();
   const { name = "" } = useParams<{ name: string }>();
   const navigate = useNavigate();
+  // When navigated here from an agent's MCP servers tab, location.state carries
+  // a return target so we can offer a "back to <agent>" button.
+  const backState = useLocation().state as { backTo?: string; backLabel?: string } | null;
   const qc = useQueryClient();
   const { data: resource, isPending, error } = useResource("mcp_server", name);
   const { isPending: capsPending, data: capabilities } = useMcpCapabilities(
@@ -112,14 +115,27 @@ export function McpServerDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => navigate("/mcp-servers")}
-        className="-ml-2 text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="mr-1.5 size-4" /> {t("mcp.server.backToResources")}
-      </Button>
+      <div className="-ml-2 flex flex-wrap items-center gap-1">
+        {backState?.backTo ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(backState.backTo!)}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="mr-1.5 size-4" />
+            {t("common.backTo", { label: backState.backLabel ?? "" })}
+          </Button>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/mcp-servers")}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="mr-1.5 size-4" /> {t("mcp.server.backToResources")}
+        </Button>
+      </div>
 
       <McpServerDetailHeader
         resource={resource}

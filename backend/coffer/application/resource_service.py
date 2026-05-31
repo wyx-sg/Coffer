@@ -213,9 +213,11 @@ class ResourceService:
         snapshot = await self.get(ref)  # raises ResourceNotFound if missing
         if kind_def.on_delete is not None:
             # CODE-033: await an async on_delete hook so side effects (e.g.
-            # evicting live upstream connections) COMPLETE before the row is
-            # removed. A sync hook still runs synchronously. A hook that raises
-            # aborts the deletion (propagates to the caller).
+            # evicting live upstream connections, tearing down skill symlinks)
+            # COMPLETE before the row is removed. A sync hook still runs
+            # synchronously. A hook that raises aborts the deletion (propagates
+            # to the caller). Otherwise a follow-up read inside the hook would
+            # hit ResourceNotFound and the cleanup would be silently dropped.
             result = kind_def.on_delete(ref)
             if inspect.isawaitable(result):
                 await result

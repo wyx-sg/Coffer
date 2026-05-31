@@ -98,8 +98,8 @@ class AgentMcpService:
     async def _mcp_spec(self, name: str) -> ConfigFileSpec:
         # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
         resource = await self._agents.get(name)
-        agent_type = AgentConfig.model_validate(resource.config).type
-        return spec_for(agent_type, _MCP_CONFIG_KEY[agent_type])
+        cfg = AgentConfig.model_validate(resource.config)
+        return spec_for(cfg.type, _MCP_CONFIG_KEY[cfg.type], cfg.resolved_config_dir())
 
     async def status(self, name: str) -> McpInstallStatus:
         spec = await self._mcp_spec(name)

@@ -1,23 +1,20 @@
 // frontend/src/components/DataTable.tsx
-//
-// The one reusable list table for every resource surface (Agents, MCP
-// servers, and future kinds). It owns the search box, dropdown filter(s),
-// and client-side pagination so each surface only declares columns + data.
-// A row click navigates to that item's detail page; row actions are compact
-// icon buttons that stopPropagation so they don't trigger the row click.
+// The one reusable list table for every resource surface (Agents, MCP servers,
+// Skills, …): search + filters + pagination, optional row click→detail, and an
+// optional `selection` prop (checkbox column + select-all + bulk bar over the
+// filtered rows — see DataTableSelection.tsx).
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-import { Pagination } from "@/components/Pagination";
-import { SearchInput } from "@/components/SearchInput";
-import { useDefaultPageSize } from "@/lib/preferences";
+import { DataTableToolbar } from "@/components/DataTableToolbar";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  BulkBar,
+  RowSelectCell,
+  SelectAllHeadCell,
+  useTableSelection,
+} from "@/components/DataTableSelection";
+import { Pagination } from "@/components/Pagination";
+import { useDefaultPageSize } from "@/lib/preferences";
 import {
   Table,
   TableBody,
@@ -29,10 +26,8 @@ import {
 import { cn } from "@/lib/utils";
 
 export interface Column<T> {
-  /** Stable key (also used for the React key). */
   key: string;
   header: ReactNode;
-  /** Cell renderer for a row. */
   cell: (row: T) => ReactNode;
   /** Classes applied to both <th> and <td> (e.g. text-right for actions). */
   className?: string;
@@ -40,13 +35,21 @@ export interface Column<T> {
 
 export interface FilterDef<T> {
   key: string;
-  /** Placeholder shown on the trigger. */
   label: string;
-  /** Label for the "no filter" option. */
   allLabel: string;
   options: { value: string; label: string }[];
   /** Value extracted from a row to compare against the selected option. */
   accessor: (row: T) => string;
+}
+
+export interface TableSelection<T> {
+  ariaSelectAll: string;
+  ariaSelectRow: (row: T) => string;
+  /** Bar label, e.g. "3 selected". */
+  bulkLabel: (count: number) => string;
+  clearLabel: string;
+  /** Action buttons rendered in the bar while ≥1 row is selected. */
+  renderBulkActions: (args: { selectedRows: T[]; clear: () => void }) => ReactNode;
 }
 
 interface Props<T> {
@@ -57,13 +60,10 @@ interface Props<T> {
   search?: { accessor: (row: T) => string; placeholder: string };
   filters?: FilterDef<T>[];
   onRowClick?: (row: T) => void;
-  /**
-   * When set, rows are expandable: a chevron column is prepended and clicking
-   * a row toggles a full-width detail sub-row. Mutually exclusive with
-   * onRowClick (expand takes precedence).
-   */
+  /** When set, rows expand to a full-width detail sub-row (excludes onRowClick). */
   getRowDetail?: (row: T) => ReactNode;
-  /** Initial rows-per-page. Defaults to the user's configured preference. */
+  /** When set, a leading checkbox column + bulk action bar are rendered. */
+  selection?: TableSelection<T>;
   pageSize?: number;
   emptyMessage: string;
 }
@@ -76,24 +76,20 @@ export function DataTable<T>({
   filters = [],
   onRowClick,
   getRowDetail,
+  selection,
   pageSize,
   emptyMessage,
 }: Props<T>) {
   const [query, setQuery] = useState("");
   const [filterVals, setFilterVals] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
-  // Page size resolution, lowest-to-highest precedence:
-  //   global Settings default → explicit `pageSize` prop → in-table override.
-  // Following the reactive global default (rather than reading it once at
-  // mount) means changing the size in Settings updates already-mounted tables
-  // live; once the user picks a size in THIS table, that override sticks.
+  // Page size: Settings default → `pageSize` prop → in-table override (reactive to Settings).
   const globalDefault = useDefaultPageSize();
   const [override, setOverride] = useState<number | null>(null);
   const size = override ?? pageSize ?? globalDefault;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
   const expandable = Boolean(getRowDetail);
-  const colCount = columns.length + (expandable ? 1 : 0);
+  const colCount = columns.length + (expandable ? 1 : 0) + (selection ? 1 : 0);
   const toggleExpand = (key: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -114,57 +110,61 @@ export function DataTable<T>({
     });
   }, [rows, query, filterVals, filters, search]);
 
+  // Selection derives from the *filtered* set so bulk actions only touch visible rows.
+  const sel = useTableSelection(filtered, rowKey);
+
   const pageCount = Math.max(1, Math.ceil(filtered.length / size));
   const safePage = Math.min(page, pageCount);
   const pageRows = filtered.slice((safePage - 1) * size, safePage * size);
 
+  // Select-all spans the whole filtered set (across pages), not just this page.
+  const filteredKeys = filtered.map(rowKey);
+  const allSelected = filteredKeys.length > 0 && filteredKeys.every((k) => sel.keys.has(k));
+  const someSelected = !allSelected && filteredKeys.some((k) => sel.keys.has(k));
   const hasToolbar = Boolean(search) || filters.length > 0;
+  const showBulkBar = Boolean(selection) && sel.selectedRows.length > 0;
 
   return (
     <div className="space-y-4">
       {hasToolbar ? (
-        <div className="flex flex-wrap items-center gap-3">
-          {search ? (
-            <SearchInput
-              value={query}
-              onChange={(v) => {
-                setQuery(v);
-                setPage(1);
-              }}
-              placeholder={search.placeholder}
-              ariaLabel={search.placeholder}
-              className="w-full sm:max-w-xs"
-            />
-          ) : null}
-          {filters.map((f) => (
-            <Select
-              key={f.key}
-              value={filterVals[f.key] ?? "all"}
-              onValueChange={(v) => {
-                setFilterVals((prev) => ({ ...prev, [f.key]: v }));
-                setPage(1);
-              }}
-            >
-              <SelectTrigger aria-label={f.label} className="h-9 w-auto min-w-[8rem]">
-                <SelectValue placeholder={f.label} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{f.allLabel}</SelectItem>
-                {f.options.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ))}
-        </div>
+        <DataTableToolbar
+          query={query}
+          onQueryChange={(v) => {
+            setQuery(v);
+            setPage(1);
+          }}
+          searchPlaceholder={search?.placeholder}
+          filters={filters}
+          filterVals={filterVals}
+          onFilterChange={(key, v) => {
+            setFilterVals((prev) => ({ ...prev, [key]: v }));
+            setPage(1);
+          }}
+        />
+      ) : null}
+
+      {showBulkBar ? (
+        <BulkBar
+          label={selection!.bulkLabel(sel.selectedRows.length)}
+          clearLabel={selection!.clearLabel}
+          onClear={sel.clear}
+        >
+          {selection!.renderBulkActions({ selectedRows: sel.selectedRows, clear: sel.clear })}
+        </BulkBar>
       ) : null}
 
       <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
+              {selection ? (
+                <SelectAllHeadCell
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  ariaLabel={selection.ariaSelectAll}
+                  onToggle={() => sel.setMany(filteredKeys, !allSelected)}
+                />
+              ) : null}
               {expandable ? <TableHead className="h-10 w-8" /> : null}
               {columns.map((c) => (
                 <TableHead key={c.key} className={cn("h-10", c.className)}>
@@ -197,6 +197,13 @@ export function DataTable<T>({
                             : undefined
                       }
                     >
+                      {selection ? (
+                        <RowSelectCell
+                          checked={sel.keys.has(key)}
+                          ariaLabel={selection.ariaSelectRow(row)}
+                          onToggle={() => sel.toggle(key)}
+                        />
+                      ) : null}
                       {expandable ? (
                         <TableCell className="py-3 pr-0 text-muted-foreground">
                           {isOpen ? (

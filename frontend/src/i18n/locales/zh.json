@@ -11,7 +11,22 @@
     "retry": "重试",
     "clear": "清除",
     "rawLog": "原始日志",
-    "done": "完成"
+    "done": "完成",
+    "bulk": {
+      "selected": "已选 {{count}} 项",
+      "selectAll": "全选",
+      "selectRow": "选择此行",
+      "enable": "启用",
+      "disable": "禁用",
+      "delete": "删除",
+      "install": "安装",
+      "summary": {
+        "allOk": "成功 {{count}} 项",
+        "partial": "成功 {{ok}} 项，失败 {{failed}} 项",
+        "allFailed": "失败 {{count}} 项"
+      }
+    },
+    "backTo": "返回 {{label}}"
   },
   "nav": {
     "aria": {
@@ -23,6 +38,7 @@
       "agents": "Agent"
     },
     "mcpServers": "MCP 服务器",
+    "skills": "Skill",
     "settings": "设置",
     "language": "语言",
     "collapse": "折叠侧边栏",
@@ -59,7 +75,14 @@
       "enabled": "已启用",
       "disabled": "已停用"
     },
-    "noMatches": "没有服务器匹配你的搜索。"
+    "noMatches": "没有服务器匹配你的搜索。",
+    "cols": {
+      "name": "名称",
+      "transport": "传输方式",
+      "health": "健康",
+      "description": "描述",
+      "status": "状态"
+    }
   },
   "mcp": {
     "table": {
@@ -412,13 +435,15 @@
     },
     "workspace": {
       "overview": "概览",
-      "config": "配置文件"
+      "config": "配置文件",
+      "skills": "Skill",
+      "mcpServers": "MCP 服务器"
     },
-    "skillDirOverride": "自定义路径（可选）",
-    "skillDirPlaceholder": "留空使用默认路径",
+    "configDirOverride": "配置目录（可选）",
+    "configDirPlaceholder": "留空则使用默认目录（~/.claude）",
     "edit": "编辑",
     "editTitle": "编辑 Agent",
-    "editSubtitle": "更新该 agent 的 skill 目录与描述。",
+    "editSubtitle": "更新该 agent 的配置目录与描述。",
     "save": "保存",
     "description": "描述",
     "descriptionPlaceholder": "可选备注",
@@ -447,7 +472,8 @@
       "installed": "已安装",
       "notInstalled": "未安装",
       "install": "安装 Coffer MCP",
-      "uninstall": "卸载 Coffer MCP"
+      "uninstall": "卸载 Coffer MCP",
+      "installedStatus": "已安装 Coffer MCP"
     },
     "welcome": {
       "title": "管理你的本地 AI Agent",
@@ -463,6 +489,110 @@
       "featureMcp": {
         "title": "一键 MCP",
         "body": "一键把 Coffer 的 MCP server 安装到某个 agent。"
+      }
+    },
+    "cofferSkills": "Coffer Skill",
+    "bulkInstallMcp": "安装 Coffer MCP",
+    "bulkInstallSkills": "安装 Skill",
+    "installSkillsDialog": {
+      "title": "为 {{count}} 个 Agent 安装 Skill",
+      "subtitle": "勾选的 Skill 会被安装（绑定）到每个选中的 Agent。",
+      "empty": "暂无可安装的 Skill。",
+      "install": "安装（{{count}}）"
+    },
+    "cofferManaged": "由 Coffer 管理",
+    "agentOwn": "Agent 自有（非 Coffer 管理）",
+    "skillsTab": {
+      "empty": "该 Agent 暂无 Coffer 管理的 Skill —— 点击“安装 Skill”来添加。",
+      "toggleAria": "在该 Agent 上启用/停用 Skill {{name}}"
+    },
+    "mcpTab": {
+      "notInstalled": "尚未在该 Agent 上安装 Coffer MCP —— 安装后可在此暴露 Coffer 的 MCP 服务器。",
+      "empty": "Coffer 中没有可暴露的已启用 MCP 服务器。"
+    }
+  },
+  "skills": {
+    "title": "Skill",
+    "subtitle": "Coffer 管理的 AgentSkills 标准目录，会下发到所有已注册的 Agent。",
+    "empty": "尚无 Skill。导入本地文件夹或从公开 Git URL 拉取。",
+    "loadFailed": "加载 Skill 失败",
+    "add": "添加 Skill",
+    "addSubtitle": "导入本地文件夹，或从公开 Git URL 拉取。",
+    "import": "导入",
+    "fetch": "从 Git 拉取",
+    "path": "本地路径",
+    "gitUrl": "Git URL",
+    "gitRef": "Ref（分支 / 标签 / commit）",
+    "gitSubpath": "仓库内子路径",
+    "verify": "校验",
+    "update": "更新",
+    "name": "名称",
+    "source": "来源",
+    "description": "描述",
+    "allSources": "全部来源",
+    "searchPlaceholder": "搜索 Skill…",
+    "noMatches": "没有匹配的 Skill。",
+    "deleteAria": "删除 {{name}}",
+    "removeConfirmTitle": "移除 Skill {{name}}？",
+    "removeConfirmBody": "这会删除主存储文件夹以及所有 agent 端链接。",
+    "add.tabs": {
+      "local": "本地文件夹",
+      "git": "从 Git"
+    },
+    "verify.title": "校验 Skill 链接",
+    "verify.subtitle": "检查每个已启用的绑定是否仍与磁盘上的链接一致。",
+    "verify.checking": "正在检查漂移…",
+    "verify.ok": "未检测到漂移。",
+    "verify.found": "检测到 {{count}} 处漂移：",
+    "card": {
+      "noBindings": "未绑定任何 Agent"
+    },
+    "detail": {
+      "back": "返回 Skill 列表",
+      "enabled": "已启用",
+      "versionHash": "版本哈希",
+      "masterPath": "主存储路径",
+      "lastSynced": "上次同步",
+      "created": "创建时间",
+      "updated": "更新时间",
+      "tabs": {
+        "overview": "概览",
+        "bindings": "绑定",
+        "files": "文件"
+      }
+    },
+    "bindings": {
+      "noAgents": "尚未注册任何 Agent。请先添加 Agent，再绑定此 Skill。",
+      "toggleAria": "切换 {{agent}}",
+      "searchPlaceholder": "搜索 Agent…",
+      "noMatches": "没有 Agent 匹配当前筛选条件。",
+      "allStatuses": "全部状态",
+      "cols": {
+        "agent": "Agent",
+        "link": "链接",
+        "status": "状态"
+      }
+    },
+    "files": {
+      "tree": "文件",
+      "selectFile": "选择一个文件查看。",
+      "binary": "二进制文件（{{size}} 字节）",
+      "truncated": "内容已截断——仅显示文件开头部分。"
+    },
+    "welcome": {
+      "title": "管理你的 Skill",
+      "body": "从磁盘导入 AgentSkills 标准目录，或从公开 Git URL 拉取。Coffer 会保留一份主副本，并下发到你已注册的 Agent。",
+      "featureImport": {
+        "title": "导入或拉取",
+        "body": "导入本地 Skill 文件夹，或从公开 Git 仓库拉取。"
+      },
+      "featureDeliver": {
+        "title": "下发到你的 Agent",
+        "body": "按 Agent 启用某个 Skill——Coffer 会将其链接到每个 Agent 的 skills 目录。"
+      },
+      "featureDrift": {
+        "title": "漂移检测",
+        "body": "校验每个已启用的绑定是否仍与磁盘上的链接一致。"
       }
     }
   }

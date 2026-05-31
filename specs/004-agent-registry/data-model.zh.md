@@ -11,10 +11,10 @@ agent registry 的实体、字段、关系与存储说明。建立在 spec 001 �
 字符串值的 enum（`StrEnum`）。v1 恰好支持两个产品；每个值都同时覆盖该产品的
 CLI 与 app/IDE 形态，二者共享同一个配置目录。
 
-| 值            | 显示名       | 配置目录    | 默认 `skill_dir`（POSIX 展开） |
-| ------------- | ------------ | ----------- | ------------------------------ |
-| `claude_code` | Claude Code  | `~/.claude` | `~/.claude/skills`             |
-| `codex`       | OpenAI Codex | `~/.codex`  | `~/.codex/skills`              |
+| 值            | 显示名       | 默认 `config_dir`（POSIX 展开） | skill 投递到       |
+| ------------- | ------------ | ------------------------------- | ------------------ |
+| `claude_code` | Claude Code  | `~/.claude`                     | `~/.claude/skills` |
+| `codex`       | OpenAI Codex | `~/.codex`                      | `~/.codex/skills`  |
 
 `claude_desktop` 与 `cursor` 在 v1 中被有意排除（见 spec.md「关于 agent 类型的
 说明」）。将来若要加入，需要一个新 enum 值、一个 `detect_marker` 与一份配置文件
@@ -24,23 +24,26 @@ allowlist。
 
 - `display_name: str`
 - `default_name() -> str`（稳定的按类型默认资源名——下划线变连字符，如 `claude_code` → `claude-code`；用户未显式提供名称时使用）
-- `default_skill_dir() -> Path`（按宿主平台计算）
-- `detect_marker() -> Path`（发现（discovery）时检查的路径；通常是 `default_skill_dir` 的父目录）
-- `config_dir() -> Path`（配置文件 allowlist 解析所基于的根目录——`~/.claude` / `~/.codex`）
+- `default_config_dir() -> Path`（该类型的标准配置目录，按宿主平台计算——`~/.claude` / `~/.codex`；用户未显式提供 `config_dir` 时使用）
+- `detect_marker() -> Path`（发现（discovery）时检查的路径；通常就是 `default_config_dir` 本身）
+
+配置文件 allowlist 与 skill 投递目标（`<config_dir>/skills`）都基于 agent 解析后的 `config_dir` 解析。
 
 ### `AgentConfig` (`domain/agent/config.py`)
 
 Pydantic v2 `BaseModel`。注册到 `ResourceService` 的 kind 专属 config schema。
 
-| 字段        | 类型           | 说明                                                  |
-| ----------- | -------------- | ----------------------------------------------------- |
-| `type`      | `AgentType`    | 必填；enum 值                                         |
-| `skill_dir` | `Path \| None` | 可选覆盖；读取时默认回退到 `type.default_skill_dir()` |
+| 字段         | 类型           | 说明                                                             |
+| ------------ | -------------- | ---------------------------------------------------------------- |
+| `type`       | `AgentType`    | 必填；enum 值                                                    |
+| `config_dir` | `Path \| None` | 可选的绝对路径覆盖；读取时默认回退到 `type.default_config_dir()` |
+
+skill 投递到 `<config_dir>/skills`；配置文件 allowlist 基于 `config_dir` 解析。每个解析后的 `config_dir` 至多只能有一个 agent。
 
 校验器：
 
-- `skill_dir`（设置时）必须解析为一个已存在、可写的目录。
-- `skill_dir` 不得位于 `/etc`、`/usr`、`/bin`、`/sbin`、`/System`（POSIX）或 `C:\Windows`、`C:\Program Files`（Windows）之内。
+- `config_dir`（设置时）必须是绝对路径；注册时会自动创建 `<config_dir>/skills` 子目录，随后解析后的 `config_dir` 必须是一个已存在、可写的目录。
+- `config_dir` 不得位于 `/etc`、`/usr`、`/bin`、`/sbin`、`/System`（POSIX）或 `C:\Windows`、`C:\Program Files`（Windows）之内。
 - `model_config = ConfigDict(extra="forbid")`，拒绝未知字段。
 - 一个 `model_validator(mode="before")` 会从 dict 输入中剔除遗留的 `auto_detected` 键，使早期持久化了该（现已移除）标志的旧行在 `extra="forbid"` 下仍能加载。
 
@@ -135,12 +138,12 @@ FR-011 要求的生命周期步骤——注册、更新与移除——通过已�
 
 ### `AgentService`
 
-| 方法                                                                             | 用途                                                                                                                                           |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `register(type, name=None, skill_dir=None, description=None, actor) -> Resource` | 校验 + 委派给 `ResourceService.register(kind='agent', ...)`。`name` 可选——省略时取 `type.default_name()`（如 `claude_code` → `claude-code`）。 |
-| `update_skill_dir(ref, new_path, actor) -> Resource`                             | 委派给 `ResourceService.update_config`。                                                                                                       |
-| `list() -> list[Resource]`                                                       | 委派给 `ResourceService.list(kind='agent')`。                                                                                                  |
-| `remove(ref, actor) -> None`                                                     | 通过 `ResourceService.delete` 删除。移除并非永久——没有抑制列表，因此该 agent 会在下次扫描时重新作为发现候选项出现。                            |
+| 方法                                                                              | 用途                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `register(type, name=None, config_dir=None, description=None, actor) -> Resource` | 自动创建 `<config_dir>/skills`、校验解析后的 `config_dir`，再委派给 `ResourceService.register(kind='agent', ...)`。`name` 可选——省略时取 `type.default_name()`（如 `claude_code` → `claude-code`）。 |
+| `update_config_dir(ref, new_path, actor) -> Resource`                             | 委派给 `ResourceService.update_config`。                                                                                                                                                             |
+| `list() -> list[Resource]`                                                        | 委派给 `ResourceService.list(kind='agent')`。                                                                                                                                                        |
+| `remove(ref, actor) -> None`                                                      | 通过 `ResourceService.delete` 删除。移除并非永久——没有抑制列表，因此该 agent 会在下次扫描时重新作为发现候选项出现。                                                                                  |
 
 ### `AutoDetectService`
 
@@ -150,12 +153,12 @@ FR-011 要求的生命周期步骤——注册、更新与移除——通过已�
 
 `AgentCandidate` 是一个派生的值对象（不是 SQLite 实体，从不存储）：一个已安装但
 未注册、用户可确认以注册的 agent。字段：`type`（`AgentType`）、`display_name`、
-`config_dir`、`default_skill_dir` 与 `suggested_name`（即该类型的 `default_name()`）。
+`default_config_dir` 与 `suggested_name`（即该类型的 `default_name()`）。
 被移除的 agent 会在下次扫描时重新作为候选项出现——没有抑制列表。
 
 ### `BrowseService` (`application/fs/browse_service.py`)
 
-为选择自定义 `skill_dir` 的 Web 文件夹选择器提供支撑（FR-023/FR-024）。只读：给定
+为选择自定义 `config_dir` 的 Web 文件夹选择器提供支撑（FR-023/FR-024）。只读：给定
 一个目录路径（默认用户主目录），列出该目录的直接子目录——绝不返回文件内容。
 
 | 方法                                  | 用途                                                                                                                                          |
@@ -219,7 +222,7 @@ application 层接口；具体实现位于 `infrastructure/agent/config_file_sto
 发现（discovery）是只读的，且**不**在启动时运行——绝不自动注册任何 agent。用户
 按需运行发现，并确认要添加哪些候选项。
 
-`on_delete_hook` 绑定到由 skill 模块（spec 005）提供的可调用对象，使得移除 agent 时——一旦 spec 005 装配该回调——在删除资源行之前同步触发 `SkillService.cleanup_bindings_for_agent(...)`。spec 004 只暴露该钩子接缝。
+`on_delete_hook` 绑定到由 skill 模块（the 005-skill-manager spec）提供的可调用对象，使得移除 agent 时——一旦 the 005-skill-manager spec 装配该回调——在删除资源行之前同步触发 `SkillService.cleanup_bindings_for_agent(...)`。spec 004 只暴露该钩子接缝。
 
 ## 约束小结
 

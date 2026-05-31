@@ -14,7 +14,7 @@ On top of the registry, the feature adds two capabilities:
 1. **Config-file view + edit** — each agent type exposes a curated allowlist of its own config files (Claude Code: `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md`; Codex: `config.toml`, `AGENTS.md`). Users read and save them as raw text; saves are validated per format, atomic, and keep a `.bak`. The same atomic-write + `.bak` machinery also backs the Coffer-MCP install/uninstall.
 2. **One-click Coffer-MCP install** — write/remove a `coffer` stdio MCP-server entry (pointing at `coffer-mcp-shim`) into the agent's MCP config, with status/idempotency.
 
-The kind exposes an `on_delete` hook that spec 005 wires for skill-binding cleanup. Ships with REST routes, CLI subcommands, and a desktop Agents page.
+The kind exposes an `on_delete` hook that the 005-skill-manager spec wires for skill-binding cleanup. Ships with REST routes, CLI subcommands, and a desktop Agents page.
 
 This spec lays the second consumer of the kind-agnostic Resource framework introduced in spec 001, validating the framework's portability.
 
@@ -62,7 +62,7 @@ specs/004-agent-registry/
 ```
 backend/coffer/domain/agent/
   __init__.py
-  types.py             # AgentType StrEnum (claude_code, codex) + default paths + detect markers + config_dir
+  types.py             # AgentType StrEnum (claude_code, codex) + default_config_dir + detect markers
   config.py            # AgentConfig (Pydantic)
   config_files.py      # ConfigFileFormat, ConfigFileSpec, config_files_for(), validate_content, spec_for
   mcp_install.py       # apply_install / apply_uninstall / is_installed (pure text transform, tomlkit for TOML)
@@ -95,7 +95,7 @@ backend/coffer/surfaces/cli/agent_cmd.py             # coffer agent {add, list, 
 frontend/src/pages/AgentsPage.tsx                 # existing list page
 frontend/src/components/agents/
   AgentAddForm.tsx / AgentEditForm.tsx / AgentTable.tsx   # existing
-  FolderPicker.tsx         # skill-dir folder picker (OS-native dialog on desktop; GET /fs/browse folder browser on web)
+  FolderPicker.tsx         # config-dir folder picker (OS-native dialog on desktop; GET /fs/browse folder browser on web)
   AgentConfigPanel.tsx     # per-agent config-file list + editor (file list + editable content view with save, find/replace, format label)
   AgentMcpInstall.tsx      # one-click install/uninstall toggle + status badge
 frontend/src/lib/api/agents.ts                     # extend with config-file + mcp-install calls
@@ -114,7 +114,7 @@ save control and an in-editor find / replace convenience.
 
 - Alternative: separate `agents` table outside the Resource framework → rejected (loses audit/CRUD/UI uniformity; no future-proofing for agent-as-peer).
 - Alternative: bundle agent into 005 spec → rejected after re-evaluation (split for spec-size clarity; one PR delivers both).
-- Discovery heuristic: presence of a known marker directory (parent of `default_skill_dir`) surfaces that type as a candidate. Future spec may add command-on-PATH detection.
+- Discovery heuristic: presence of a known marker directory (the type's `default_config_dir`) surfaces that type as a candidate. Future spec may add command-on-PATH detection.
 
 > The base registry (types/config/service/discovery, REST/CLI/desktop CRUD)
 > already shipped on this branch. The phases below cover the v2 increment:
@@ -122,12 +122,12 @@ save control and an in-editor find / replace convenience.
 
 ### Phase 1 — Type narrowing + contracts
 
-- Remove `claude_desktop` and `cursor` from `AgentType` (enum, `_DISPLAY`, `_default_skill_dir`); rename `codex_cli` → `codex` (display "OpenAI Codex"). Update OpenAPI enum, data-model, quickstart, frontend type dropdown, and all tests referencing the dropped/renamed types.
+- Remove `claude_desktop` and `cursor` from `AgentType` (enum, `_DISPLAY`, `_default_config_dir`); rename `codex_cli` → `codex` (display "OpenAI Codex"). Update OpenAPI enum, data-model, quickstart, frontend type dropdown, and all tests referencing the dropped/renamed types.
 - Add `tomlkit` to backend runtime deps.
 
 ### Phase 2 — Config-file domain + backend (TDD)
 
-1. Domain: `agent/config_files.py` — `ConfigFileFormat`, `ConfigFileSpec`, `config_files_for`, `spec_for`, `validate_content`; add `config_dir()` to `AgentType`. New errors `ConfigFileNotAllowed`, `ConfigFileFormatInvalid`. New audit event `agent_config_file_written`. Unit tests first.
+1. Domain: `agent/config_files.py` — `ConfigFileFormat`, `ConfigFileSpec`, `config_files_for`, `spec_for`, `validate_content`; the allowlist resolves against the agent's `config_dir`. New errors `ConfigFileNotAllowed`, `ConfigFileFormatInvalid`. New audit event `agent_config_file_written`. Unit tests first.
 2. Infrastructure: `config_file_store.py` — read, stat; atomic write + `.bak` for config-file saves and the Coffer-MCP install. Integration tests with a tmp dir.
 3. Application: `AgentConfigFileService` (`list/read`) over `ConfigFileStorePort`. Integration tests: list/read/missing/unknown-key.
 4. Surfaces: `agent_config_routes.py` (HTTP GET), `coffer agent config ls|cat` (CLI), composition wiring. Contract + CLI tests.
@@ -142,7 +142,7 @@ save control and an in-editor find / replace convenience.
 
 - `AgentConfigPanel` — list config files and open one in an editable content view with a save control, inline validation errors, and an in-editor find / replace (with a format label). `AgentMcpInstall` — status badge + install/uninstall toggle.
 - The agent detail page is a simple Overview + Config files detail page.
-- `FolderPicker` — pick a custom `skill_dir` without typing a path: the OS-native directory dialog in the packaged desktop app, the daemon-backed `GET /fs/browse` folder browser on the web. The add/edit forms make the agent name optional (server derives the per-type default when omitted).
+- `FolderPicker` — pick a custom `config_dir` without typing a path: the OS-native directory dialog in the packaged desktop app, the daemon-backed `GET /fs/browse` folder browser on the web. The add/edit forms make the agent name optional (server derives the per-type default when omitted).
 - Hooks via TanStack Query + openapi-fetch; i18n strings in English + Simplified Chinese (`agents.config.*`, `agents.mcp.*`).
 - e2e (`e2e/web/specs/shell_agents.spec.ts`): view a config file; install Coffer MCP and observe the status flip.
 

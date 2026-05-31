@@ -20,7 +20,7 @@ Coffer 绝不静默注册任何 agent。它提供一次只读扫描，把找到�
 （Claude Code 用 `~/.claude/`，Codex 用 `~/.codex/`）。
 
 打开 Agents 页面并运行发现（或运行 `coffer agent detect`）即可看到这些候选项。
-确认某个候选项即可注册它——Coffer 会为你填入该类型的默认 skill 目录与建议名称。
+确认某个候选项即可注册它——Coffer 会为你填入该类型的默认配置目录与建议名称。
 在你确认之前，不注册任何内容，磁盘上也不做任何改动。
 
 ## 列出你的 agent
@@ -37,24 +37,26 @@ coffer agent list --json
 
 ## 手工添加一个 agent（自定义路径）
 
-如果你的 agent 装在非标准位置，用显式 skill 目录把它添加进来：
+如果你的 agent 装在非标准位置，用显式配置目录把它添加进来：
 
 ```bash
-coffer agent add codex --name codex-work --skill-dir /opt/codex-work/skills
+coffer agent add codex --name codex-work --config-dir /opt/codex-work
 ```
 
-Coffer 会校验该路径存在、是目录、当前用户可写，且不是特权系统位置。
-任何失败都会给出具体原因。受支持的类型是 `claude_code` 与 `codex`。
+Coffer 会自动创建 `<config-dir>/skills` 子目录（skill 投递到这里），随后校验解析
+后的路径存在、是目录、当前用户可写，且不是特权系统位置。任何失败都会给出具体
+原因。受支持的类型是 `claude_code` 与 `codex`。
 
 名称是可选的——省略 `--name`，Coffer 会按类型派生一个稳定的默认名（下划线变
-连字符，如 `claude_code` → `claude-code`）。在桌面应用中，add/edit 表单提供一个
-**文件夹选择器**来选择自定义 skill 目录，而无需手动输入路径：打包应用用 OS 原生
-目录对话框，Web 用 daemon 支撑的文件夹浏览器。
+连字符，如 `claude_code` → `claude-code`）。`--config-dir` 同样可选——省略它，
+Coffer 会使用该类型的标准位置（Claude Code 用 `~/.claude`，Codex 用 `~/.codex`）。
+在桌面应用中，add/edit 表单提供一个**文件夹选择器**来选择自定义配置目录，而无需
+手动输入路径：打包应用用 OS 原生目录对话框，Web 用 daemon 支撑的文件夹浏览器。
 
 ## 更新一个 agent
 
 ```bash
-coffer agent edit codex-work --skill-dir /opt/codex-work/skills-v2
+coffer agent edit codex-work --config-dir /opt/codex-work-v2
 ```
 
 ## 移除一个 agent
@@ -138,16 +140,16 @@ coffer agent mcp uninstall claude-code   # 移除它
   中引入）提供 CRUD、校验与 audit。
 - 每一次 add / edit / remove 都会写入 audit 事件，可通过 `coffer audit list`
   查询。
-- agent 的 `skill_dir` 会成为未来 skill 投递（spec 005）使用的目标目录。
+- agent 的 `<config_dir>/skills` 会成为未来 skill 投递（the 005-skill-manager spec）使用的目标目录。
 
 ## 故障排查
 
-**「默认 skill_dir 不可写」** —— 你的安装位于当前用户无法写入的目录。
-要么修复该路径的权限，要么在添加 agent 时传入 `--skill-dir <可写路径>`。
+**「默认 config_dir 不可写」** —— 你的安装位于当前用户无法写入的目录。
+要么修复该路径的权限，要么在添加 agent 时传入 `--config-dir <可写路径>`。
 
 **「注册了我不想要的 agent」** —— `coffer agent rm <name>`。只要它仍处于安装
 状态，它就仍会作为发现候选项出现，但在你再次确认之前不会进入你的 registry。
 
 **「发现漏掉了一个已安装的 agent」** —— 你的安装位于非标准位置，因此其标记
-不在 Coffer 查找的地方。用 `coffer agent add <type> --skill-dir <你的路径>`
+不在 Coffer 查找的地方。用 `coffer agent add <type> --config-dir <你的路径>`
 显式添加。

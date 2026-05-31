@@ -39,8 +39,6 @@ export interface AgentOut {
   name: string;
   type: AgentType;
   config_dir: string;
-  skill_dir: string;
-  skill_dir_override: string | null;
   description: string | null;
   created_at: string;
   updated_at: string;
@@ -54,12 +52,13 @@ export interface AgentCreate {
   type: AgentType;
   // Optional — the server derives a stable default from the type when omitted.
   name?: string | null;
-  skill_dir?: string | null;
+  // Optional override; default is the type's standard config directory.
+  config_dir?: string | null;
   description?: string | null;
 }
 
 export interface AgentPatch {
-  skill_dir?: string | null;
+  config_dir?: string | null;
   description?: string | null;
 }
 

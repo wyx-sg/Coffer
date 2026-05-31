@@ -37,7 +37,6 @@ from coffer.domain.agent.config_files import (
     spec_for,
     validate_content,
 )
-from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource, ResourceRef
 
@@ -103,10 +102,10 @@ class AgentConfigFileService:
         self._audit = audit
         self._store = store
 
-    async def _type_for(self, name: str) -> AgentType:
+    async def _config_for(self, name: str) -> AgentConfig:
         # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
         resource = await self._agents.get(name)
-        return AgentConfig.model_validate(resource.config).type
+        return AgentConfig.model_validate(resource.config)
 
     def _info(self, spec: ConfigFileSpec) -> ConfigFileInfo:
         st = self._store.stat(spec.path)
@@ -121,12 +120,12 @@ class AgentConfigFileService:
         )
 
     async def list_files(self, name: str) -> list[ConfigFileInfo]:
-        agent_type = await self._type_for(name)
-        return [self._info(spec) for spec in config_files_for(agent_type)]
+        cfg = await self._config_for(name)
+        return [self._info(spec) for spec in config_files_for(cfg.type, cfg.resolved_config_dir())]
 
     async def read_file(self, name: str, key: str) -> ConfigFileContent:
-        agent_type = await self._type_for(name)
-        spec = spec_for(agent_type, key)  # raises ConfigFileNotAllowed → 404
+        cfg = await self._config_for(name)
+        spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
         text = self._store.read_text(spec.path)
         return ConfigFileContent(
             key=spec.key,
@@ -147,8 +146,8 @@ class AgentConfigFileService:
         keeping a `.bak` of the prior content, records an audit entry, and returns
         the refreshed metadata view.
         """
-        agent_type = await self._type_for(name)
-        spec = spec_for(agent_type, key)  # raises ConfigFileNotAllowed → 404
+        cfg = await self._config_for(name)
+        spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
         validate_content(spec.format, content)  # raises ConfigFileFormatInvalid → 422
         self._store.write_text_atomic(spec.path, content)  # atomic + <path>.bak
         await self._audit.record(

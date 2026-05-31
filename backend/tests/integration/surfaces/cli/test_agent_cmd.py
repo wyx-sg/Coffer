@@ -130,8 +130,8 @@ def test_agent_list_empty_json(agent_cli_daemon):
 def test_agent_list_table_default(agent_cli_daemon):
     """`agent list` (no --json) renders the rich table without crashing."""
     # First register one so the table has a row to render.
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
     _runner.invoke(
         cli_app,
         [
@@ -140,24 +140,25 @@ def test_agent_list_table_default(agent_cli_daemon):
             "codex",
             "--name",
             "cur",
-            "--skill-dir",
-            str(skill_dir),
+            "--config-dir",
+            str(config_dir),
         ],
     )
     result = _runner.invoke(cli_app, ["agent", "list"])
     assert result.exit_code == 0, result.output
-    # Table title must be present in the rendered output.
+    # Table title and the Config Dir column header must be present.
     assert "Agents" in result.output
+    assert "Config Dir" in result.output
     assert "cur" in result.output
 
 
 def test_agent_list_shows_registered_json(agent_cli_daemon):
     """`agent list --json` includes a previously-registered agent."""
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
     _runner.invoke(
         cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--skill-dir", str(skill_dir)],
+        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
     )
     result = _runner.invoke(cli_app, ["agent", "list", "--json"])
     assert result.exit_code == 0
@@ -165,6 +166,8 @@ def test_agent_list_shows_registered_json(agent_cli_daemon):
     assert len(items) == 1
     assert items[0]["name"] == "cur"
     assert items[0]["type"] == "codex"
+    assert items[0]["config_dir"] == str(config_dir)
+    assert "skill_dir" not in items[0]
 
 
 # ---------------------------------------------------------------------------
@@ -173,8 +176,8 @@ def test_agent_list_shows_registered_json(agent_cli_daemon):
 
 
 def test_agent_add_success(agent_cli_daemon):
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
     result = _runner.invoke(
         cli_app,
         [
@@ -183,8 +186,8 @@ def test_agent_add_success(agent_cli_daemon):
             "codex",
             "--name",
             "cur",
-            "--skill-dir",
-            str(skill_dir),
+            "--config-dir",
+            str(config_dir),
             "--description",
             "manual",
         ],
@@ -196,9 +199,9 @@ def test_agent_add_success(agent_cli_daemon):
 def test_agent_add_without_name_uses_per_type_default(agent_cli_daemon):
     """FR-006: --name is optional; omitting it registers under the type's
     default name (codex -> codex, claude_code -> claude-code)."""
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
-    result = _runner.invoke(cli_app, ["agent", "add", "codex", "--skill-dir", str(skill_dir)])
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
+    result = _runner.invoke(cli_app, ["agent", "add", "codex", "--config-dir", str(config_dir)])
     assert result.exit_code == 0, result.output
     assert "registered: agent:codex" in result.output
     # The agent is listed under the derived name.
@@ -208,11 +211,15 @@ def test_agent_add_without_name_uses_per_type_default(agent_cli_daemon):
 
 
 def test_agent_add_duplicate_fails(agent_cli_daemon):
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
+    # Distinct config dirs so the collision is on the name, not the
+    # one-agent-per-config-dir rule.
+    first = agent_cli_daemon / "cfg1"
+    second = agent_cli_daemon / "cfg2"
+    first.mkdir()
+    second.mkdir()
     _runner.invoke(
         cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--skill-dir", str(skill_dir)],
+        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(first)],
     )
     result = _runner.invoke(
         cli_app,
@@ -222,8 +229,8 @@ def test_agent_add_duplicate_fails(agent_cli_daemon):
             "claude_code",
             "--name",
             "cur",
-            "--skill-dir",
-            str(skill_dir),
+            "--config-dir",
+            str(second),
         ],
     )
     # add() routes 4xx through _cli_client.check, which maps 409 →
@@ -237,31 +244,33 @@ def test_agent_add_duplicate_fails(agent_cli_daemon):
 
 
 def test_agent_show_existing_text(agent_cli_daemon):
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
     _runner.invoke(
         cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--skill-dir", str(skill_dir)],
+        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
     )
     result = _runner.invoke(cli_app, ["agent", "show", "cur"])
     assert result.exit_code == 0, result.output
     assert "name: cur" in result.output
     assert "type: codex" in result.output
+    assert f"config_dir: {config_dir}" in result.output
 
 
 def test_agent_show_existing_json(agent_cli_daemon):
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
     _runner.invoke(
         cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--skill-dir", str(skill_dir)],
+        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
     )
     result = _runner.invoke(cli_app, ["agent", "show", "cur", "--json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["name"] == "cur"
     assert data["type"] == "codex"
-    assert data["skill_dir"] == str(skill_dir)
+    assert data["config_dir"] == str(config_dir)
+    assert "skill_dir" not in data
 
 
 def test_agent_show_not_found(agent_cli_daemon):
@@ -274,31 +283,31 @@ def test_agent_show_not_found(agent_cli_daemon):
 # ---------------------------------------------------------------------------
 
 
-def test_agent_edit_skill_dir(agent_cli_daemon):
-    old = agent_cli_daemon / "skills"
-    new = agent_cli_daemon / "skills2"
+def test_agent_edit_config_dir(agent_cli_daemon):
+    old = agent_cli_daemon / "cfg"
+    new = agent_cli_daemon / "cfg2"
     old.mkdir()
     new.mkdir()
     _runner.invoke(
         cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--skill-dir", str(old)],
+        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(old)],
     )
-    result = _runner.invoke(cli_app, ["agent", "edit", "cur", "--skill-dir", str(new)])
+    result = _runner.invoke(cli_app, ["agent", "edit", "cur", "--config-dir", str(new)])
     assert result.exit_code == 0, result.output
     assert "updated" in result.output
-    # And the new skill_dir was actually persisted.
+    # And the new config_dir was actually persisted.
     show = _runner.invoke(cli_app, ["agent", "show", "cur", "--json"])
     data = json.loads(show.output)
-    assert data["skill_dir"] == str(new)
+    assert data["config_dir"] == str(new)
 
 
 def test_agent_edit_no_fields_exits_1(agent_cli_daemon):
     """`edit` with no flags is a no-op and exits non-zero with a clear message."""
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
     _runner.invoke(
         cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--skill-dir", str(skill_dir)],
+        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
     )
     result = _runner.invoke(cli_app, ["agent", "edit", "cur"])
     assert result.exit_code == 1
@@ -306,11 +315,11 @@ def test_agent_edit_no_fields_exits_1(agent_cli_daemon):
 
 
 def test_agent_edit_description(agent_cli_daemon):
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
     _runner.invoke(
         cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--skill-dir", str(skill_dir)],
+        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
     )
     result = _runner.invoke(cli_app, ["agent", "edit", "cur", "--description", "work box"])
     assert result.exit_code == 0, result.output
@@ -329,11 +338,11 @@ def test_agent_edit_not_found(agent_cli_daemon):
 
 
 def test_agent_rm_force(agent_cli_daemon):
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
     _runner.invoke(
         cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--skill-dir", str(skill_dir)],
+        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
     )
     result = _runner.invoke(cli_app, ["agent", "rm", "cur", "--force"])
     assert result.exit_code == 0, result.output
@@ -350,11 +359,11 @@ def test_agent_rm_not_found(agent_cli_daemon):
 
 def test_agent_rm_without_force_aborts(agent_cli_daemon):
     """Without --force the prompt aborts (empty stdin → typer.confirm returns False)."""
-    skill_dir = agent_cli_daemon / "skills"
-    skill_dir.mkdir()
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
     _runner.invoke(
         cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--skill-dir", str(skill_dir)],
+        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
     )
     result = _runner.invoke(cli_app, ["agent", "rm", "cur"], input="n\n")
     assert result.exit_code == 1

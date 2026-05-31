@@ -9,6 +9,7 @@ import {
   ScrollText,
   Server,
   Settings as SettingsIcon,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -55,7 +56,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     labelKey: "nav.group.resources",
-    items: [{ to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server, end: true }],
+    items: [
+      { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server, end: true },
+      { to: "/skills", labelKey: "nav.skills", icon: Sparkles, end: true },
+    ],
   },
   {
     labelKey: "nav.group.system",

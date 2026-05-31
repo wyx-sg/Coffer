@@ -68,6 +68,14 @@ describe("CapabilityList", () => {
     expect(screen.getByText("fs__write_file")).toBeInTheDocument();
   });
 
+  test("renders selection checkboxes when there are rows", () => {
+    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
+
+    // Select-all header checkbox + one per row — at least one must render so
+    // the bulk Enable/Disable flow is reachable.
+    expect(screen.getAllByRole("checkbox").length).toBeGreaterThanOrEqual(1);
+  });
+
   test("shows empty state when no items", () => {
     render(wrap(<CapabilityList serverName="fs" kind="tool" tools={[]} />));
 

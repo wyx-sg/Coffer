@@ -29,18 +29,13 @@ from alembic import command
 from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 
-from coffer.application.agent.auto_detect import AutoDetectService
-from coffer.application.agent.config_file_service import AgentConfigFileService
 from coffer.application.agent.kind import make_agent_kind
-from coffer.application.agent.mcp_service import AgentMcpService
-from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
-from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
@@ -58,6 +53,7 @@ from coffer.surfaces.http import cors, daemon_routes
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_config_routes import router as agent_config_router
 from coffer.surfaces.http.agent_routes import router as agent_router
+from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_mcp_composition import (
     build_prunable_registry,
     reaper_kwargs_from_env,
@@ -66,11 +62,7 @@ from coffer.surfaces.http.app_mcp_composition import (
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import (
-    set_agent_config_file_service,
-    set_agent_mcp_service,
-    set_agent_service,
     set_audit_service,
-    set_auto_detect_service,
     set_resource_service,
     set_retention_service,
 )
@@ -85,6 +77,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
 )
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
+from coffer.surfaces.http.skill_routes import router as skill_router
 
 
 def _db_url() -> str:
@@ -171,30 +164,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     set_audit_service(audit)
     set_retention_service(retention_svc)
 
-    # Wire up agent kind (spec 004-agent-registry). on_delete left None for now;
-    # spec 005-skill-manager will supply the cleanup_bindings_for_agent callback.
-    agent_svc = AgentService(
-        resource_service=resource_svc,
-        audit=audit,
-    )
-    # Detection is discovery-only (no auto-registration): AutoDetectService
-    # reports installed-but-unregistered agents as candidates the user confirms.
-    auto_detect_svc = AutoDetectService(agent_service=agent_svc)
-    set_agent_service(agent_svc)
-    set_auto_detect_service(auto_detect_svc)
-
-    # Config-file view/edit + one-click Coffer-MCP install (spec 004 v2).
-    config_file_store = ConfigFileStore()
-    set_agent_config_file_service(
-        AgentConfigFileService(agent_service=agent_svc, audit=audit, store=config_file_store)
-    )
-    set_agent_mcp_service(
-        AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
-    )
-
-    # No auto-registration on startup: detection is discovery + confirm. The
-    # user reviews discovered candidates on the Agents page and chooses which
-    # to add (see GET /api/v1/agents/candidates).
+    # Wire up agent + skill kinds (specs 004-agent-registry, 005-skill-manager).
+    # The helper builds both in lockstep so the cross-kind on_delete hook (agent
+    # deletion cascades into skill binding cleanup) can reference both services,
+    # and so app.py stays under the 400-line guideline. Agent detection stays
+    # discovery + confirm (no auto-registration on startup).
+    wire_agent_and_skill_kinds(app, resource_svc, audit, sm)
 
     # Wire up MCP-specific plumbing
     process_supervisor, session_supervisors = wire_mcp_kind(app, resource_svc, audit, sm)
@@ -284,8 +259,10 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
         lifespan=_lifespan,
     )
     app.state.kinds = kinds or {}
-    # Register the agent Kind unconditionally (skill-binding cleanup hook is
-    # supplied by spec 005-skill-manager at a later composition point).
+    # Register the agent Kind eagerly with no on_delete hook so tests that do
+    # not run the lifespan still see it. The lifespan helper
+    # `wire_agent_and_skill_kinds` overwrites this entry with a real cross-kind
+    # hook (agent deletion cascades into skill binding cleanup).
     app.state.kinds.setdefault("agent", make_agent_kind(on_delete=None))
     cors.install(app)
     err_handlers.register(app)
@@ -294,10 +271,11 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(audit_router)
     app.include_router(retention_router)
     app.include_router(keychain_router)
-    # Agent kind routes (spec 004-agent-registry)
+    # Agent + skill kind routes (specs 004-agent-registry, 005-skill-manager)
     app.include_router(agent_router)
     app.include_router(agent_config_router)
     app.include_router(fs_router)
+    app.include_router(skill_router)
     # MCP-specific routers
     app.include_router(mcp_protocol_router)
     app.include_router(mcp_capability_router)

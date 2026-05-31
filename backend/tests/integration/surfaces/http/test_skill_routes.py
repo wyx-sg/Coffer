@@ -1,0 +1,157 @@
+"""End-to-end HTTP coverage for /api/v1/skills/* (spec 004)."""
+
+from __future__ import annotations
+
+import pathlib
+import textwrap
+
+import pytest
+from starlette.testclient import TestClient
+
+from coffer.surfaces.http.app import create_app
+from coffer.surfaces.http.auth import set_active_token
+
+TOKEN = "test-token-003"
+
+
+def _app(tmp_path: pathlib.Path, monkeypatch, port_start: int):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    monkeypatch.setenv("COFFER_PORT_RANGE_START", str(port_start))
+    monkeypatch.setenv("COFFER_PORT_RANGE_END", str(port_start + 9))
+    return create_app()
+
+
+def _client(app) -> TestClient:
+    set_active_token(TOKEN)
+    return TestClient(app, headers={"X-Coffer-Token": TOKEN})
+
+
+def _write_skill_folder(folder: pathlib.Path, *, name: str) -> pathlib.Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "SKILL.md").write_text(
+        textwrap.dedent(
+            f"""\
+            ---
+            name: {name}
+            description: A test skill named {name}.
+            ---
+
+            body
+            """
+        ),
+        encoding="utf-8",
+    )
+    return folder
+
+
+@pytest.mark.acceptance(spec="005-skill-manager", scenario="desktop and CLI cover every operation")
+def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
+    """End-to-end HTTP coverage — the surface both desktop and CLI consume."""
+    app = _app(tmp_path, monkeypatch, 59600)
+
+    # Register an agent so import auto-binds against it.
+    # Registration auto-creates <config_dir>/skills, where skills are delivered.
+    agent_config_dir = tmp_path / "agent-cfg"
+    agent_config_dir.mkdir()
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="hello-world")
+
+    with _client(app) as c:
+        # register an agent
+        r = c.post(
+            "/api/v1/agents",
+            json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
+        )
+        assert r.status_code == 201, r.text
+
+        # list skills — empty
+        r = c.get("/api/v1/skills")
+        assert r.status_code == 200
+        assert r.json()["items"] == []
+
+        # import
+        r = c.post("/api/v1/skills/import", json={"path": str(src)})
+        assert r.status_code == 201, r.text
+        skill = r.json()
+        assert skill["name"] == "hello-world"
+        assert any(b["agent_name"] == "cur" and b["enabled"] for b in skill["bindings"])
+
+        # link exists on disk at <config_dir>/skills/<skill>
+        link = agent_config_dir / "skills" / "hello-world"
+        assert link.exists()
+
+        # get
+        r = c.get("/api/v1/skills/hello-world")
+        assert r.status_code == 200
+
+        # verify — no drift
+        r = c.post("/api/v1/skills/verify")
+        assert r.status_code == 200
+        assert r.json()["entries"] == []
+
+        # disable for the agent
+        r = c.post(
+            "/api/v1/skills/hello-world/disable",
+            json={"agent_name": "cur"},
+        )
+        assert r.status_code == 200
+        assert not link.exists()
+
+        # re-enable
+        r = c.post(
+            "/api/v1/skills/hello-world/enable",
+            json={"agent_name": "cur"},
+        )
+        assert r.status_code == 200
+        assert link.exists()
+
+        # SSRF rejection on fetch
+        r = c.post(
+            "/api/v1/skills/fetch",
+            json={"git_url": "http://127.0.0.1/repo.git", "git_ref": "main"},
+        )
+        assert r.status_code == 422
+        assert r.json()["error"]["code"] == "SSRF_BLOCKED"
+
+        # delete
+        r = c.delete("/api/v1/skills/hello-world")
+        assert r.status_code == 204
+        assert not link.exists()
+        r = c.get("/api/v1/skills/hello-world")
+        assert r.status_code == 404
+
+
+# TEST21-010: error envelope shape for non-SSRF errors. The envelope is
+# `{error: {code, message, details}}` — without this assertion only the
+# SSRF code is pinned, leaving other surfaces free to regress to a bare
+# string body or an alternative shape.
+def test_404_envelope_shape_for_missing_skill(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59610)
+    with _client(app) as c:
+        r = c.get("/api/v1/skills/does-not-exist")
+        assert r.status_code == 404
+        body = r.json()
+        assert "error" in body
+        err = body["error"]
+        assert isinstance(err.get("code"), str) and err["code"]
+        assert isinstance(err.get("message"), str)
+        # `details` is always present (may be {}); never absent.
+        assert "details" in err
+
+
+def test_conflict_envelope_shape_on_duplicate_import(tmp_path, monkeypatch):
+    """Re-importing the same skill name yields a 409 with the standard envelope."""
+    app = _app(tmp_path, monkeypatch, 59612)
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="dup")
+    with _client(app) as c:
+        r = c.post("/api/v1/skills/import", json={"path": str(src)})
+        assert r.status_code == 201
+        # Same source → same name → AlreadyExists.
+        r = c.post("/api/v1/skills/import", json={"path": str(src)})
+        assert r.status_code == 409
+        body = r.json()
+        assert "error" in body
+        assert body["error"].get("code")
+        assert isinstance(body["error"].get("message"), str)

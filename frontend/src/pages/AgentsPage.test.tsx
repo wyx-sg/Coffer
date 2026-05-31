@@ -70,9 +70,7 @@ acceptance("004-agent-registry", "desktop app agents page", async () => {
       {
         name: "cur",
         type: "codex",
-        skill_dir: "/home/u/.codex/skills",
-        skill_dir_override: null,
-        enabled: true,
+        config_dir: "/home/u/.codex",
         description: null,
         created_at: "2026-05-22T00:00:00Z",
         updated_at: "2026-05-22T00:00:00Z",

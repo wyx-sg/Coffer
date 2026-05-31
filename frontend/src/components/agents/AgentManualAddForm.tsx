@@ -1,8 +1,9 @@
 // frontend/src/components/agents/AgentManualAddForm.tsx — spec 004.
 // The "Add manually" disclosure + form inside the Add-agent dialog: agent type
-// + optional name + skill_dir picker. Self-contained — registers via
+// + optional name + config_dir picker. Self-contained — registers via
 // useRegisterAgent, surfaces its own register error inline, and reports the new
-// name up via onAdded so the parent dialog can show its result view.
+// name up via onAdded so the parent dialog can show its result view. The folder
+// the user picks IS the config dir; skills are delivered to `<config_dir>/skills`.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -23,7 +24,7 @@ export function AgentManualAddForm({ onAdded }: { onAdded: (name: string) => voi
   const [form, setForm] = useState<AgentCreate>({
     type: "claude_code",
     name: "",
-    skill_dir: null,
+    config_dir: null,
     description: null,
   });
 
@@ -80,18 +81,18 @@ export function AgentManualAddForm({ onAdded }: { onAdded: (name: string) => voi
             />
           </label>
           <div className="block text-sm">
-            <span>{t("agents.skillDirOverride")}</span>
+            <span>{t("agents.configDirOverride")}</span>
             <div className="mt-1 flex gap-2">
               <input
-                aria-label={t("agents.skillDirOverride")}
+                aria-label={t("agents.configDirOverride")}
                 className="block w-full rounded border bg-background px-2 py-1 font-mono text-xs"
-                placeholder={t("agents.skillDirPlaceholder")}
-                value={form.skill_dir ?? ""}
-                onChange={(e) => setForm({ ...form, skill_dir: e.target.value || null })}
+                placeholder={t("agents.configDirPlaceholder")}
+                value={form.config_dir ?? ""}
+                onChange={(e) => setForm({ ...form, config_dir: e.target.value || null })}
               />
               <FolderPicker
-                value={form.skill_dir ?? null}
-                onChange={(p) => setForm({ ...form, skill_dir: p })}
+                value={form.config_dir ?? null}
+                onChange={(p) => setForm({ ...form, config_dir: p })}
               />
             </div>
           </div>

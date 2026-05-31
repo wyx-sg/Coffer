@@ -26,15 +26,6 @@ features:
     details: 用终端、Web UI 或桌面应用来驱动网关。
 ---
 
-<div style="text-align:center; margin: 2.5rem 0 1rem;">
-  <img src="/screenshots/resources.png" alt="Coffer —— 一个地方统一管理所有 MCP 服务器" style="border-radius:12px; box-shadow:0 10px 40px rgba(31,27,23,.14); max-width:100%; height:auto;" />
-</div>
-
-<div style="display:flex; gap:1rem; flex-wrap:wrap; justify-content:center; margin-bottom:1rem;">
-  <img src="/screenshots/server-detail.png" alt="单个服务器详情 —— 健康状态、传输方式与已发现的能力" style="border-radius:12px; box-shadow:0 10px 40px rgba(31,27,23,.14); flex:1 1 360px; min-width:0; max-width:49%; height:auto;" />
-  <img src="/screenshots/observability.png" alt="审计日志 —— 对任意资源或能力的每一次生命周期变更" style="border-radius:12px; box-shadow:0 10px 40px rgba(31,27,23,.14); flex:1 1 360px; min-width:0; max-width:49%; height:auto;" />
-</div>
-
 ## 工作原理
 
 ```mermaid

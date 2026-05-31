@@ -93,6 +93,80 @@ describe("DataTable", () => {
     expect(screen.queryByText("item-11")).not.toBeInTheDocument();
   });
 
+  test("bulk actions only operate on the currently-filtered rows (selection ∩ filter)", () => {
+    let lastSelected: Row[] = [];
+    const sel = {
+      ariaSelectAll: "all",
+      ariaSelectRow: (r: Row) => `row ${r.name}`,
+      bulkLabel: (n: number) => `${n} selected`,
+      clearLabel: "clear",
+      renderBulkActions: ({ selectedRows }: { selectedRows: Row[]; clear: () => void }) => {
+        lastSelected = selectedRows;
+        return <span>bulk-{selectedRows.length}</span>;
+      },
+    };
+    render(
+      <DataTable
+        rows={ROWS}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        search={{ accessor: (r) => r.name, placeholder: "search" }}
+        selection={sel}
+        emptyMessage="none"
+      />,
+    );
+
+    // Filter to just "alpha", then select-all → bulk must see only alpha.
+    fireEvent.change(screen.getByRole("textbox", { name: "search" }), {
+      target: { value: "alpha" },
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: "all" }));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(lastSelected.map((r) => r.name)).toEqual(["alpha"]);
+
+    // Clearing the filter must NOT pull the still-hidden rows into the batch,
+    // but DOES re-surface selected rows that were filtered out: only "alpha"
+    // was ever selected, so the batch stays exactly ["alpha"].
+    fireEvent.change(screen.getByRole("textbox", { name: "search" }), { target: { value: "" } });
+    expect(lastSelected.map((r) => r.name)).toEqual(["alpha"]);
+  });
+
+  test("a row hidden by the filter drops out of the bulk batch", () => {
+    let lastSelected: Row[] = [];
+    const sel = {
+      ariaSelectAll: "all",
+      ariaSelectRow: (r: Row) => `row ${r.name}`,
+      bulkLabel: (n: number) => `${n} selected`,
+      clearLabel: "clear",
+      renderBulkActions: ({ selectedRows }: { selectedRows: Row[]; clear: () => void }) => {
+        lastSelected = selectedRows;
+        return <span>bulk-{selectedRows.length}</span>;
+      },
+    };
+    render(
+      <DataTable
+        rows={ROWS}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        search={{ accessor: (r) => r.name, placeholder: "search" }}
+        selection={sel}
+        emptyMessage="none"
+      />,
+    );
+
+    // Select alpha + beta while unfiltered, then filter to "beta": alpha is now
+    // hidden, so the bulk batch reflects only the visible "beta".
+    fireEvent.click(screen.getByRole("checkbox", { name: "row alpha" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "row beta" }));
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "search" }), {
+      target: { value: "beta" },
+    });
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(lastSelected.map((r) => r.name)).toEqual(["beta"]);
+  });
+
   test("clicking an expandable row reveals + hides its detail", () => {
     render(
       <DataTable

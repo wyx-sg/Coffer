@@ -17,8 +17,12 @@ import * as fs from "node:fs";
 
 beforeEachInjectToken();
 
-function mkSkillDir(name: string): string {
-  const dir = path.join(os.tmpdir(), `coffer-e2e-skills-${name}-${Date.now()}`);
+// The agent's config dir. Skills are delivered to <config_dir>/skills/, which
+// registration auto-creates. The path must NOT embed the agent name — the
+// /agents table renders the config_dir in its own column, so a name inside the
+// path would make `getByText(name)` ambiguous (strict-mode violation).
+function mkConfigDir(): string {
+  const dir = path.join(os.tmpdir(), `coffer-e2e-agent-cfg-${Date.now()}`);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -41,7 +45,7 @@ acceptance(
   async ({ page }) => {
     const { token, port } = readDaemonToken();
     const name = `e2e-cur-${Date.now().toString(36)}`;
-    const skillDir = mkSkillDir(name);
+    const configDir = mkConfigDir();
 
     try {
       // 1. Cold-start the /agents page. With no agents registered up front
@@ -64,7 +68,7 @@ acceptance(
         body: JSON.stringify({
           type: "codex",
           name,
-          skill_dir: skillDir,
+          config_dir: configDir,
           description: "e2e",
         }),
       });
@@ -89,9 +93,9 @@ acceptance(
       await expect(page.getByText(name)).toHaveCount(0, { timeout: 10_000 });
     } finally {
       await deleteAgentByApi(name);
-      // Best-effort skill_dir cleanup.
+      // Best-effort config-dir cleanup.
       try {
-        fs.rmSync(skillDir, { recursive: true, force: true });
+        fs.rmSync(configDir, { recursive: true, force: true });
       } catch {
         // ignore
       }

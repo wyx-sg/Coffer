@@ -31,25 +31,27 @@ class AgentCreate(BaseModel):
     # of alphanumerics, underscores, and hyphens (no slashes — names appear in
     # URL paths and must not introduce route ambiguity).
     name: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
-    skill_dir: str | None = None
+    # Optional override of the agent's config directory. When omitted the server
+    # uses the type's standard location (~/.claude, ~/.codex). Skills are
+    # delivered to <config_dir>/skills.
+    config_dir: str | None = None
     description: str | None = None
 
 
 class AgentPatch(BaseModel):
-    # FR-006: agents have no enable/disable concept — only skill_dir and
+    # FR-006: agents have no enable/disable concept — only config_dir and
     # description are updatable. (No `enabled` field by design.)
-    skill_dir: str | None = None
+    config_dir: str | None = None
     description: str | None = None
 
 
 class AgentOut(BaseModel):
     name: str
     type: AgentType
-    # Root config directory for the type (~/.claude, ~/.codex) — where the
-    # agent's config files live. Derived from the type, not stored.
+    # The agent's config directory — where its config files live and, under
+    # <config_dir>/skills, where Coffer delivers skills. Either the user's
+    # override or the type's standard location (~/.claude, ~/.codex).
     config_dir: str
-    skill_dir: str
-    skill_dir_override: str | None
     description: str | None
     created_at: datetime
     updated_at: datetime
@@ -78,9 +80,7 @@ def _to_out(r: Resource) -> AgentOut:
     return AgentOut(
         name=r.name,
         type=cfg.type,
-        config_dir=str(cfg.type.config_dir()),
-        skill_dir=str(cfg.resolved_skill_dir()),
-        skill_dir_override=cfg.skill_dir,
+        config_dir=str(cfg.resolved_config_dir()),
         description=r.description,
         created_at=r.created_at,
         updated_at=r.updated_at,
@@ -104,7 +104,7 @@ async def register_agent(
     r = await svc.register(
         agent_type=body.type,
         name=body.name or body.type.default_name(),
-        skill_dir=body.skill_dir,
+        config_dir=body.config_dir,
         description=body.description,
         actor=actor,
     )
@@ -152,15 +152,15 @@ async def update_agent(
     actor: str = Depends(_actor),
 ) -> AgentOut:
     # `model_fields_set` distinguishes "field absent from the PATCH body"
-    # from "field explicitly set to null". A PATCH that omits `skill_dir`
+    # from "field explicitly set to null". A PATCH that omits `config_dir`
     # must preserve any existing override, not reset it to the default.
     sent = body.model_fields_set
     r = await svc.get(name)
-    if "skill_dir" in sent or "description" in sent:
+    if "config_dir" in sent or "description" in sent:
         current = AgentConfig.model_validate(r.config)
-        r = await svc.update_skill_dir(
+        r = await svc.update_config_dir(
             name=name,
-            new_skill_dir=body.skill_dir if "skill_dir" in sent else current.skill_dir,
+            new_config_dir=body.config_dir if "config_dir" in sent else current.config_dir,
             actor=actor,
             description=body.description if "description" in sent else r.description,
         )

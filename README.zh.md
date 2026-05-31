@@ -18,23 +18,6 @@ Coffer 是一个守护进程 (daemon) + CLI，它把上游 (upstream) MCP 服务
 
 📖 **文档站点：** https://wyx-sg.github.io/Coffer/
 
-## 界面截图
-
-<p align="center">
-  <img src="docs-site/public/screenshots/resources.png" alt="Coffer —— 一个地方统一管理所有 MCP 服务器" width="820">
-</p>
-
-<p align="center">
-  <img src="docs-site/public/screenshots/server-detail.png" alt="单个服务器详情 —— 健康状态、传输方式与已发现的能力" width="405">
-  <img src="docs-site/public/screenshots/observability.png" alt="审计日志 —— 对任意资源或能力的每一次生命周期变更" width="405">
-</p>
-
-<p align="center">
-  <sub>一个保险库管理所有 MCP 服务器 · 实时健康与能力 · 完整审计轨迹 —— 全部本地。</sub>
-</p>
-
----
-
 ## 下载与安装
 
 ### 一行命令安装（macOS / Linux）

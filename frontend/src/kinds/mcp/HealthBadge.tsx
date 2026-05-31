@@ -15,7 +15,7 @@ interface Props {
 export function HealthBadge({ state, latencyMs, className }: Props) {
   const { t } = useTranslation();
 
-  const cls = cn(healthStatusClass(state), className);
+  const cls = cn("whitespace-nowrap", healthStatusClass(state), className);
 
   const label = t(`mcp.health.${state}`);
 

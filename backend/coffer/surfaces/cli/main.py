@@ -11,6 +11,7 @@ from coffer.surfaces.cli import (
     keychain_cmd,
     resource_cmd,
     retention_cmd,
+    skill_cmd,
 )
 from coffer.surfaces.cli import mcp as mcp_cmd
 
@@ -39,6 +40,7 @@ app.add_typer(retention_cmd.app, name="retention")
 app.add_typer(mcp_cmd.app, name="mcp")
 app.add_typer(keychain_cmd.app, name="keychain")
 app.add_typer(agent_cmd.app, name="agent")
+app.add_typer(skill_cmd.app, name="skill")
 
 
 def run() -> None:

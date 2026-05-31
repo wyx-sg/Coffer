@@ -20,7 +20,7 @@ one config directory (`~/.claude/` for Claude Code, `~/.codex/` for Codex).
 
 Open the Agents page and run discovery (or run `coffer agent detect`) to see the
 candidates. Confirm a candidate to register it — Coffer fills in the type's
-default skill directory and a suggested name for you. Nothing is registered, and
+default config directory and a suggested name for you. Nothing is registered, and
 nothing is changed on disk, until you confirm.
 
 ## List your agents
@@ -38,26 +38,30 @@ coffer agent list --json
 ## Manually add an agent (custom path)
 
 If your agent is installed somewhere non-standard, add it with an explicit
-skill directory:
+config directory:
 
 ```bash
-coffer agent add codex --name codex-work --skill-dir /opt/codex-work/skills
+coffer agent add codex --name codex-work --config-dir /opt/codex-work
 ```
 
-Coffer validates that the path exists, is a directory, is writable by your
-user, and is not a privileged system location. Failures are reported with the
-specific reason. The supported types are `claude_code` and `codex`.
+Coffer auto-creates the `<config-dir>/skills` subdirectory (where skills are
+delivered), then validates that the resolved path exists, is a directory, is
+writable by your user, and is not a privileged system location. Failures are
+reported with the specific reason. The supported types are `claude_code` and
+`codex`.
 
 The name is optional — omit `--name` and Coffer derives a stable per-type
-default (underscores become hyphens, e.g. `claude_code` → `claude-code`). In the
-desktop app, the add/edit form offers a **folder picker** for choosing a custom
-skill directory instead of typing the path: the OS-native directory dialog in
-the packaged app, and a daemon-backed folder browser on the web.
+default (underscores become hyphens, e.g. `claude_code` → `claude-code`).
+`--config-dir` is optional too — omit it and Coffer uses the type's standard
+location (`~/.claude` for Claude Code, `~/.codex` for Codex). In the desktop
+app, the add/edit form offers a **folder picker** for choosing a custom config
+directory instead of typing the path: the OS-native directory dialog in the
+packaged app, and a daemon-backed folder browser on the web.
 
 ## Update an agent
 
 ```bash
-coffer agent edit codex-work --skill-dir /opt/codex-work/skills-v2
+coffer agent edit codex-work --config-dir /opt/codex-work-v2
 ```
 
 ## Remove an agent
@@ -145,14 +149,14 @@ desktop Agents page. Restart your agent afterward to pick up Coffer's tools.
   (introduced in spec 001) provides CRUD, validation, and audit.
 - Audit events are recorded for every add / edit / remove and queryable from
   `coffer audit list`.
-- The agent's `skill_dir` becomes the target directory used by future skill
-  delivery (spec 005).
+- The agent's `<config_dir>/skills` becomes the target directory used by future
+  skill delivery (the 005-skill-manager spec).
 
 ## Troubleshooting
 
-**"Default skill_dir is not writable"** — your install lives somewhere your
+**"Default config_dir is not writable"** — your install lives somewhere your
 user can't write to. Either fix permissions on the path or pass
-`--skill-dir <writable-path>` when adding the agent.
+`--config-dir <writable-path>` when adding the agent.
 
 **Registered an agent I don't want** — `coffer agent rm <name>`. It will still
 show up as a discovery candidate while it's installed, but it stays out of your
@@ -160,4 +164,4 @@ registry until you confirm it again.
 
 **Discovery missed an installed agent** — your install is in a non-standard
 location, so its marker isn't where Coffer looks. Add it explicitly with
-`coffer agent add <type> --skill-dir <your-path>`.
+`coffer agent add <type> --config-dir <your-path>`.
