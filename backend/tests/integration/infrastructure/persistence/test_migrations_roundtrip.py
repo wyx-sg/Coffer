@@ -19,12 +19,14 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0005"
+HEAD_REVISION = "0007"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
 # live in the generic `resources` table. The skill kind (spec 005-skill-manager)
-# adds skill_agent_bindings in revision 0005, the current head.
+# adds skill_agent_bindings in revision 0005. The knowledge_base kind (spec
+# 006-knowledge-base) adds kb_documents in 0006, and the memory kind (spec
+# 007-memory) adds memory_records in 0007, the current head.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -33,6 +35,8 @@ EXPECTED_TABLES = {
     "mcp_invocations",
     "mcp_server_health",
     "skill_agent_bindings",
+    "kb_documents",
+    "memory_records",
 }
 
 _ALEMBIC_INI = (
@@ -112,13 +116,25 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
+    # 0007 -> 0006: drops memory_records (spec 007-memory).
+    command.downgrade(cfg, "0006")
+    assert "memory_records" not in _user_tables(db_path)
+
+    # 0006 -> 0005: drops kb_documents (spec 006-knowledge-base).
+    command.downgrade(cfg, "0005")
+    assert "kb_documents" not in _user_tables(db_path)
+
     # 0005 -> 0004: drops skill_agent_bindings (spec 005-skill-manager).
     command.downgrade(cfg, "0004")
     assert "skill_agent_bindings" not in _user_tables(db_path)
 
     # 0004 -> 0003: index-only revision, table set otherwise unchanged.
     command.downgrade(cfg, "0003")
-    assert _user_tables(db_path) == EXPECTED_TABLES - {"skill_agent_bindings"}
+    assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "skill_agent_bindings",
+        "kb_documents",
+        "memory_records",
+    }
 
     # 0003 -> 0002: drops mcp_server_health.
     command.downgrade(cfg, "0002")

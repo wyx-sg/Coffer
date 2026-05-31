@@ -82,3 +82,5 @@ section that future readers most often want — don't skip it.>
 | [007](ADR-007-everything-is-a-resource-kind.md)          | 信息架构：每个被管理的实体都是一种 resource kind            | Accepted |
 | [008](ADR-008-distribution-pyinstaller-tauri-sidecar.md) | 分发：用 PyInstaller 打包 daemon + shim，作为 Tauri sidecar | Accepted |
 | [009](ADR-009-cross-platform-skill-delivery.md)          | 跨平台 skill 投递：symlink / junction / copy-fallback       | Accepted |
+| [010](ADR-010-llamaindex-rag-engine.md)                  | RAG 引擎：LlamaIndex 藏在 application 端口背后              | Accepted |
+| [011](ADR-011-mem0-memory-engine.md)                     | Memory 引擎：mem0 藏在 application 端口背后                 | Accepted |

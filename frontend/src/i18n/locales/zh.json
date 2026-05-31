@@ -39,6 +39,8 @@
     },
     "mcpServers": "MCP 服务器",
     "skills": "Skill",
+    "knowledgeBases": "知识库",
+    "memory": "记忆",
     "settings": "设置",
     "language": "语言",
     "collapse": "折叠侧边栏",
@@ -593,6 +595,91 @@
       "featureDrift": {
         "title": "漂移检测",
         "body": "校验每个已启用的绑定是否仍与磁盘上的链接一致。"
+      }
+    }
+  },
+  "knowledgeBases": {
+    "title": "知识库",
+    "subtitle": "本地文档集合，你的 agent 可通过 MCP 网关检索。",
+    "add": "新建知识库",
+    "empty": "还没有知识库。先创建一个，再上传文档供 agent 检索。",
+    "loadFailed": "加载知识库失败",
+    "searchPlaceholder": "搜索知识库…",
+    "noMatches": "没有匹配的知识库。",
+    "cols": {
+      "name": "名称",
+      "mode": "检索",
+      "description": "描述"
+    },
+    "dialog": {
+      "title": "新建知识库",
+      "name": "名称",
+      "description": "描述（可选）",
+      "searchMode": "检索模式",
+      "modeKeyword": "关键词",
+      "modeKeywordHint": "对文档做纯文本检索——无需 embedding 模型，立即可用。",
+      "modeSemantic": "语义",
+      "modeSemanticHint": "基于含义的向量检索。首次摄入时会下载一个 embedding 模型。",
+      "embeddingModel": "Embedding 模型",
+      "embeddingHint": "一个 HuggingFace 模型 id；默认适用于英文文本。"
+    },
+    "welcome": {
+      "title": "管理你的知识库",
+      "body": "收集本地文档，让你的编码 agent 通过 MCP 网关检索——关键词检索开箱即用，语义检索一键开启。",
+      "featureKeyword": {
+        "title": "默认关键词",
+        "body": "即时检索已摄入的文件——无需 embedding 模型，也不下载。"
+      },
+      "featureSemantic": {
+        "title": "需要时再用语义",
+        "body": "按知识库选择启用基于含义的向量检索。"
+      },
+      "featureAgent": {
+        "title": "可被 agent 访问",
+        "body": "agent 通过 Coffer 内置的 MCP 工具检索并获取文档。"
+      }
+    }
+  },
+  "memory": {
+    "title": "记忆",
+    "subtitle": "你的 agent 可通过 MCP 网关读写的本地记忆库。",
+    "add": "新建记忆库",
+    "empty": "还没有记忆库。先创建一个，让你的 agent 跨会话记住关键事实。",
+    "loadFailed": "加载记忆库失败",
+    "searchPlaceholder": "搜索记忆库…",
+    "noMatches": "没有匹配的记忆库。",
+    "cols": {
+      "name": "名称",
+      "provider": "LLM 提供方",
+      "description": "描述"
+    },
+    "dialog": {
+      "title": "新建记忆库",
+      "name": "名称",
+      "description": "描述（可选）",
+      "llmProvider": "LLM 提供方",
+      "providerNone": "none（仅读——禁止写入）",
+      "providerOllama": "ollama（本地）",
+      "providerOpenai": "openai（云端）",
+      "providerHint": "mem0 在写入时需要 LLM 来抽取事实；读取无需 LLM。",
+      "llmModel": "LLM 模型",
+      "llmEndpoint": "Ollama 端点（可选）",
+      "llmCredential": "钥匙串引用"
+    },
+    "welcome": {
+      "title": "管理你的记忆库",
+      "body": "给你的编码 agent 一个跨会话记住关键事实的地方——它们通过 Coffer 内置的 MCP 工具读写。所有数据都留在你的机器上。",
+      "featureRecall": {
+        "title": "记住事实",
+        "body": "agent 通过 mem0 存储并回忆派生出的短事实。"
+      },
+      "featureLocal": {
+        "title": "本地优先",
+        "body": "provider 为 'none' 的新库不产生任何外发调用。"
+      },
+      "featureAgent": {
+        "title": "可被 agent 访问",
+        "body": "通过 Coffer 内置的 MCP 工具增删、检索记忆。"
       }
     }
   }

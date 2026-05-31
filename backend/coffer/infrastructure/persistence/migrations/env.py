@@ -11,8 +11,14 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy.engine import Connection
 
+from coffer.infrastructure.knowledge_base import (
+    persistence as _kb_persistence,  # noqa: F401 — kind-specific models
+)
 from coffer.infrastructure.mcp import (
     persistence as _mcp_persistence,  # noqa: F401 — kind-specific models
+)
+from coffer.infrastructure.memory import (
+    persistence as _memory_persistence,  # noqa: F401 — kind-specific models
 )
 from coffer.infrastructure.persistence import models  # noqa: F401 — kind-agnostic models
 from coffer.infrastructure.persistence.base import Base

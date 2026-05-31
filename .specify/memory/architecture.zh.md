@@ -37,9 +37,12 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 
 当前已注册的 kind：
 
-| Kind         | Spec                                                   | 描述                                                                                                  |
-| ------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `mcp_server` | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md) | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。 |
+| Kind             | Spec                                                         | 描述                                                                                                                                          |
+| ---------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp_server`     | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md)       | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。                                         |
+| `agent`          | [004-agent-registry](../../specs/004-agent-registry/spec.md) | 一个已注册的编码 agent（Claude Code、Cursor、Codex CLI …）。承载该 agent 的本地 skill 目录及 Coffer 驱动同步所需的 agent 专属配置。           |
+| `skill`          | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | 一个被管理的 AgentSkills 格式 skill。规范副本放在 `~/.coffer/skills/<name>/`；各 agent 的可见性通过 `SyncEngine` 的链接 / 拷贝 binding 投递。 |
+| `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | 一个本地 RAG 语料库。文档落在 `~/.coffer/kb/<name>/raw/`、索引落在 `index/`；LlamaIndex 仅出现在 infrastructure adapter 中。                  |
 
 ## 代码布局 (Code layout)
 
@@ -74,12 +77,12 @@ import 副作用。
 
 ## 接口面 (Surfaces)
 
-| Surface                        | 进程                    | 角色                                                                                             |
-| ------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| REST API                       | daemon                  | 管理面 (management plane)：`/api/v1/*`。Token + CORS 鉴权。                                      |
-| MCP protocol                   | daemon                  | `/mcp` HTTP/SSE 端点，承载 MCP JSON-RPC。                                                        |
-| CLI (`coffer …`)               | 短生命周期子进程        | 通过 loopback HTTP 调用 daemon。                                                                 |
-| Stdio shim (`coffer-mcp-shim`) | 每个 MCP 客户端会话一份 | `stdin/stdout ↔ daemon HTTP/SSE` 转发器；检测 daemon，否则拉起。                                |
+| Surface                        | 进程                    | 角色                                                              |
+| ------------------------------ | ----------------------- | ----------------------------------------------------------------- |
+| REST API                       | daemon                  | 管理面 (management plane)：`/api/v1/*`。Token + CORS 鉴权。       |
+| MCP protocol                   | daemon                  | `/mcp` HTTP/SSE 端点，承载 MCP JSON-RPC。                         |
+| CLI (`coffer …`)               | 短生命周期子进程        | 通过 loopback HTTP 调用 daemon。                                  |
+| Stdio shim (`coffer-mcp-shim`) | 每个 MCP 客户端会话一份 | `stdin/stdout ↔ daemon HTTP/SSE` 转发器；检测 daemon，否则拉起。 |
 
 ## 进程 (Processes)
 

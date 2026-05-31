@@ -15,6 +15,8 @@
 | 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | 已采纳 — 代码评审中 (PR #28)             |
 | 004 | **Agent Registry** ([spec](../../specs/004-agent-registry/spec.md))           | 已采纳 — 开发中 (feature/agent-registry) |
 | 005 | **Skill Manager** ([spec](../../specs/005-skill-manager/spec.md))             | 已采纳 — 开发中 (feature/skill-manager)  |
+| 006 | **Knowledge Base** ([spec](../../specs/006-knowledge-base/spec.md))           | 已采纳 — 开发中 (feature/kb-manager)     |
+| 007 | **Memory** ([spec](../../specs/007-memory/spec.md))                           | 已采纳 — 开发中 (feature/kb-manager)     |
 
 ## 明确不做的事 (当前规范范围内)
 

@@ -31,6 +31,7 @@ from fastapi import FastAPI
 
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
+from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
@@ -68,6 +69,7 @@ from coffer.surfaces.http.dependencies import (
 )
 from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.keychain_routes import router as keychain_router
+from coffer.surfaces.http.knowledge_base import router as kb_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
@@ -75,9 +77,11 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
+from coffer.surfaces.http.memory import router as memory_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.skill_routes import router as skill_router
+from coffer.surfaces.http.wiring import wire_kb_kind, wire_memory_kind
 
 
 def _db_url() -> str:
@@ -171,8 +175,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # discovery + confirm (no auto-registration on startup).
     wire_agent_and_skill_kinds(app, resource_svc, audit, sm)
 
-    # Wire up MCP-specific plumbing
-    process_supervisor, session_supervisors = wire_mcp_kind(app, resource_svc, audit, sm)
+    # Build the shared built-in tool registry; each kind contributes its tools.
+    builtin_tools = BuiltinToolRegistry()
+
+    # Wire up knowledge_base kind (spec 006). Registers the KB built-in tool
+    # (search_knowledge_base) into `builtin_tools` so the gateway can expose it.
+    kb_store = wire_kb_kind(app, resource_svc, audit, sm, builtin_tools)
+    # Wire up Memory plumbing.
+    memory_store = wire_memory_kind(app, resource_svc, audit, sm, builtin_tools)
+
+    # Wire up MCP-specific plumbing (after other kinds so the gateway picks
+    # their built-in tools).
+    process_supervisor, session_supervisors = wire_mcp_kind(
+        app, resource_svc, audit, sm, builtin_tools
+    )
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -241,6 +257,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Close per-/mcp/-session state in the protocol routes
         with contextlib.suppress(Exception):
             await shutdown_all_sessions()
+        # Dispose KB / Memory stores (best-effort)
+        with contextlib.suppress(Exception):
+            await kb_store.close()
+        with contextlib.suppress(Exception):
+            await memory_store.close()
         await engine.dispose()
         set_active_token(None)
 
@@ -276,8 +297,12 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(agent_config_router)
     app.include_router(fs_router)
     app.include_router(skill_router)
+    # KB router (spec 006-knowledge-base)
+    app.include_router(kb_router)
     # MCP-specific routers
     app.include_router(mcp_protocol_router)
     app.include_router(mcp_capability_router)
     app.include_router(mcp_invocation_router)
+    # Memory router (spec 007-memory)
+    app.include_router(memory_router)
     return app

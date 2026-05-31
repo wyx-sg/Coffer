@@ -158,6 +158,10 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.acceptance(spec="001-mcp-gateway", scenario="register a stdio MCP server")
+@pytest.mark.acceptance(
+    spec="006-knowledge-base",
+    scenario="built-in tools appear in client tool list",
+)
 async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
     """Drive the /mcp endpoint via the mcp SDK; SDK validation is the oracle.
 
@@ -183,13 +187,32 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
             f"expected serverInfo.name='coffer', got {init.serverInfo.name!r}"
         )
 
-        # 2. tools/list — SDK validates ListToolsResult
+        # 2. tools/list — SDK validates ListToolsResult.
+        # Upstream tools must appear; Coffer's own built-in tools (coffer__*)
+        # also appear in the list — accept any superset that contains the
+        # fake upstream's two tools.
         tools_result = await session.list_tools()
         tool_names = {t.name for t in tools_result.tools}
-        assert tool_names == {
-            "fs__read_file",
-            "fs__write_file",
-        }, f"unexpected tool set: {tool_names}"
+        assert {"fs__read_file", "fs__write_file"}.issubset(tool_names), (
+            f"upstream tools missing from list: {tool_names}"
+        )
+        # TEST22-002: positively assert that Coffer's own built-in tools
+        # (coffer__*) appear in the same listing — this is the acceptance
+        # scenario "built-in tools appear in client tool list". Without
+        # this check the test passed even when the KB tools were missing.
+        assert any(n.startswith("coffer__") for n in tool_names), (
+            f"no coffer__ built-in tools found in tools/list: {tool_names}"
+        )
+        # And the KB tools specifically must be there (spec 006).
+        expected_kb_tools = {
+            "coffer__list_knowledge_bases",
+            "coffer__search_knowledge_base",
+            "coffer__get_document",
+        }
+        assert expected_kb_tools.issubset(tool_names), (
+            f"KB built-in tools missing from tools/list; "
+            f"missing={expected_kb_tools - tool_names}; got={sorted(tool_names)}"
+        )
 
         # 3. tools/call — SDK validates CallToolResult
         call_result = await session.call_tool(

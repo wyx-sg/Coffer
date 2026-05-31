@@ -39,6 +39,8 @@
     },
     "mcpServers": "MCP servers",
     "skills": "Skills",
+    "knowledgeBases": "Knowledge bases",
+    "memory": "Memory",
     "settings": "Settings",
     "language": "Language",
     "collapse": "Collapse sidebar",
@@ -593,6 +595,91 @@
       "featureDrift": {
         "title": "Drift detection",
         "body": "Verify that every enabled binding still matches its on-disk link."
+      }
+    }
+  },
+  "knowledgeBases": {
+    "title": "Knowledge bases",
+    "subtitle": "Local document collections your agents can search through the MCP gateway.",
+    "add": "New knowledge base",
+    "empty": "No knowledge bases yet. Create one, then upload documents your agents can search.",
+    "loadFailed": "Failed to load knowledge bases",
+    "searchPlaceholder": "Search knowledge bases…",
+    "noMatches": "No knowledge bases match your search.",
+    "cols": {
+      "name": "Name",
+      "mode": "Search",
+      "description": "Description"
+    },
+    "dialog": {
+      "title": "New knowledge base",
+      "name": "Name",
+      "description": "Description (optional)",
+      "searchMode": "Search mode",
+      "modeKeyword": "Keyword",
+      "modeKeywordHint": "Plain text search over your documents — no embedding model, works immediately.",
+      "modeSemantic": "Semantic",
+      "modeSemanticHint": "Meaning-based vector search. Downloads an embedding model on first ingest.",
+      "embeddingModel": "Embedding model",
+      "embeddingHint": "A HuggingFace model id; the default suits English text."
+    },
+    "welcome": {
+      "title": "Manage your knowledge bases",
+      "body": "Collect local documents your coding agents can search through the MCP gateway — keyword search works out of the box, semantic search is one toggle away.",
+      "featureKeyword": {
+        "title": "Keyword by default",
+        "body": "Search ingested files instantly — no embedding model or download required."
+      },
+      "featureSemantic": {
+        "title": "Semantic when you want it",
+        "body": "Opt into meaning-based vector search per knowledge base."
+      },
+      "featureAgent": {
+        "title": "Reachable by agents",
+        "body": "Agents search and fetch documents through Coffer's built-in MCP tools."
+      }
+    }
+  },
+  "memory": {
+    "title": "Memory",
+    "subtitle": "Local memory stores your agents read and write through the MCP gateway.",
+    "add": "New memory store",
+    "empty": "No memory stores yet. Create one so your agents can remember facts across sessions.",
+    "loadFailed": "Failed to load memory stores",
+    "searchPlaceholder": "Search memory stores…",
+    "noMatches": "No memory stores match your search.",
+    "cols": {
+      "name": "Name",
+      "provider": "LLM provider",
+      "description": "Description"
+    },
+    "dialog": {
+      "title": "New memory store",
+      "name": "Name",
+      "description": "Description (optional)",
+      "llmProvider": "LLM provider",
+      "providerNone": "none (reads only — writes disabled)",
+      "providerOllama": "ollama (local)",
+      "providerOpenai": "openai (cloud)",
+      "providerHint": "mem0 needs an LLM at write time to extract facts; reads work without one.",
+      "llmModel": "LLM model",
+      "llmEndpoint": "Ollama endpoint (optional)",
+      "llmCredential": "Keychain reference"
+    },
+    "welcome": {
+      "title": "Manage your memory stores",
+      "body": "Give your coding agents a place to remember short facts across sessions — they read and write through Coffer's built-in MCP tools. Everything stays on your machine.",
+      "featureRecall": {
+        "title": "Remembers facts",
+        "body": "Agents store and recall short derived facts via mem0."
+      },
+      "featureLocal": {
+        "title": "Local-first",
+        "body": "A fresh store with provider 'none' makes no outbound calls."
+      },
+      "featureAgent": {
+        "title": "Reachable by agents",
+        "body": "Add, search, and fetch memories through Coffer's built-in MCP tools."
       }
     }
   }

@@ -13,6 +13,8 @@
 | 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | Accepted — code in review (PR #28)                 |
 | 004 | **Agent Registry** ([spec](../../specs/004-agent-registry/spec.md))           | Accepted — in development (feature/agent-registry) |
 | 005 | **Skill Manager** ([spec](../../specs/005-skill-manager/spec.md))             | Accepted — in development (feature/skill-manager)  |
+| 006 | **Knowledge Base** ([spec](../../specs/006-knowledge-base/spec.md))           | Accepted — in development (feature/kb-manager)     |
+| 007 | **Memory** ([spec](../../specs/007-memory/spec.md))                           | Accepted — in development (feature/kb-manager)     |
 
 ## Explicit non-goals (current spec)
 

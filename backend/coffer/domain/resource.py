@@ -89,3 +89,15 @@ class Kind:
     # persistence. Raises to reject the name. Used by `mcp_server` to reserve
     # the `__` tool/prompt namespace separator (CODE-030).
     validate_name: Callable[[str], None] | None = None
+    # Optional pre-write validation hook for ``ResourceService.update_config``.
+    # Receives ``(ref, before_config, after_config)`` (both already shape-validated
+    # against ``config_schema``) and may raise ``ConfigValidationError`` to reject
+    # the update — used by ``knowledge_base`` to make ``embedding_model`` immutable
+    # after creation (TEST22-021). Sync or async; the service awaits an Awaitable.
+    on_update_config: (
+        Callable[
+            [ResourceRef, dict[str, Any], dict[str, Any]],
+            Awaitable[None] | None,
+        ]
+        | None
+    ) = None

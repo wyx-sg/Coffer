@@ -277,3 +277,37 @@ def get_skill_service() -> Any:
     if _skill_service is None:
         raise RuntimeError("skill service not initialised")
     return _skill_service
+
+
+# --- knowledge_base kind (spec 006-knowledge-base) ---
+
+_kb_service: Any | None = None
+
+
+def set_kb_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _kb_service
+    _kb_service = svc
+
+
+def get_kb_service() -> Any:
+    """FastAPI Depends() target — actual type is KnowledgeBaseService."""
+    if _kb_service is None:
+        raise RuntimeError("knowledge base service not initialised")
+    return _kb_service
+
+
+# --- memory kind dependency providers (spec 007) ---
+
+_memory_service: Any | None = None
+
+
+def set_memory_service(svc: Any) -> None:
+    global _memory_service
+    _memory_service = svc
+
+
+def get_memory_service() -> Any:
+    if _memory_service is None:
+        raise RuntimeError("memory service not initialised")
+    return _memory_service

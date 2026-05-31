@@ -51,6 +51,16 @@ _STATUS: dict[str, int] = {
     "TARGET_CONFLICT": 409,
     "SKILL_NAME_MISMATCH": 409,
     "UPDATE_NOT_SUPPORTED": 400,
+    # knowledge_base kind (spec 006)
+    "KB_NOT_FOUND": 404,
+    "DOCUMENT_NOT_FOUND": 404,
+    "INGEST_REJECTED": 400,  # `_status_for` refines this by reason
+    "ENGINE_UNAVAILABLE": 503,
+    # memory kind (spec 007)
+    "MEMORY_STORE_NOT_FOUND": 404,
+    "MEMORY_NOT_FOUND": 404,
+    "MEMORY_REJECTED": 400,
+    "LLM_NOT_CONFIGURED": 503,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a
@@ -69,11 +79,29 @@ def _envelope(code: str, message: str, details: dict[str, Any] | None = None) ->
     return {"error": {"code": code, "message": message, "details": details or {}}}
 
 
+def _status_for(exc: errors.CofferError) -> int:
+    """HTTP status for a domain error.
+
+    Most codes map 1:1 via `_STATUS`. `IngestRejected` is the exception: its
+    status depends on the rejection `reason` (a too-large upload is 413, a
+    duplicate is 409, everything else is a plain 400).
+    """
+    if isinstance(exc, errors.IngestRejected):
+        return {"too_large": 413, "duplicate": 409}.get(exc.reason, 400)
+    return _STATUS.get(exc.code, 500)
+
+
+def _details_for(exc: errors.CofferError) -> dict[str, Any]:
+    """Surface the machine-readable `reason` of a rejection error, if any."""
+    reason = getattr(exc, "reason", None)
+    return {"reason": reason} if reason else {}
+
+
 def register(app: FastAPI) -> None:
     @app.exception_handler(errors.CofferError)
     async def _handle_coffer(request: Request, exc: errors.CofferError) -> JSONResponse:
-        body = _envelope(exc.code, str(exc))
-        resp = JSONResponse(status_code=_STATUS.get(exc.code, 500), content=body)
+        body = _envelope(exc.code, str(exc), _details_for(exc))
+        resp = JSONResponse(status_code=_status_for(exc), content=body)
         resp.headers["X-Coffer-Trace"] = get_trace_id()
         return resp
 

@@ -34,9 +34,12 @@ described, and curated.
 
 Currently registered kinds:
 
-| Kind         | Spec                                                   | Description                                                                                                                              |
-| ------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `mcp_server` | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md) | A registered upstream MCP server. Carries transport configuration, credential references, and the per-server policies the gateway needs. |
+| Kind             | Spec                                                         | Description                                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp_server`     | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md)       | A registered upstream MCP server. Carries transport configuration, credential references, and the per-server policies the gateway needs.                              |
+| `agent`          | [004-agent-registry](../../specs/004-agent-registry/spec.md) | A registered coding agent (Claude Code, Cursor, Codex CLI, …). Carries the on-disk skill directory and the agent-specific config Coffer needs to drive sync.          |
+| `skill`          | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | A managed AgentSkills-format skill. Canonical copy lives under `~/.coffer/skills/<name>/`; per-agent visibility is delivered through `SyncEngine` link/copy bindings. |
+| `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | A local RAG corpus. Documents under `~/.coffer/kb/<name>/raw/`, index under `index/`; LlamaIndex confined to the infrastructure adapter.                              |
 
 ## Code layout
 
@@ -71,12 +74,12 @@ side effects.
 
 ## Surfaces
 
-| Surface                        | Process                | Role                                                                                                                       |
-| ------------------------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| REST API                       | daemon                 | Management plane: `/api/v1/*`. Token + CORS authenticated.                                                                 |
-| MCP protocol                   | daemon                 | `/mcp` HTTP/SSE endpoint speaking MCP JSON-RPC.                                                                            |
-| CLI (`coffer …`)               | short-lived child      | Calls daemon over loopback HTTP.                                                                                           |
-| Stdio shim (`coffer-mcp-shim`) | per MCP-client session | `stdin/stdout ↔ daemon HTTP/SSE` forwarder; detect-or-spawn daemon.                                                       |
+| Surface                        | Process                | Role                                                                 |
+| ------------------------------ | ---------------------- | -------------------------------------------------------------------- |
+| REST API                       | daemon                 | Management plane: `/api/v1/*`. Token + CORS authenticated.           |
+| MCP protocol                   | daemon                 | `/mcp` HTTP/SSE endpoint speaking MCP JSON-RPC.                      |
+| CLI (`coffer …`)               | short-lived child      | Calls daemon over loopback HTTP.                                     |
+| Stdio shim (`coffer-mcp-shim`) | per MCP-client session | `stdin/stdout ↔ daemon HTTP/SSE` forwarder; detect-or-spawn daemon. |
 
 ## Processes
 
