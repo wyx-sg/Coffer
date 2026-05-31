@@ -59,8 +59,10 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 每份文件都有一个 `.sha256` 邻居文件可供校验。
 
-> **macOS Gatekeeper：** DMG 以未签名形式发布（公证待完成）。首次打开时请运行：
-> `xattr -d com.apple.quarantine /Applications/Coffer.app`
+> **macOS（未签名）：** 构建未签名（公证待完成），首次打开时 macOS 可能提示 Coffer「已损坏」
+> （并非真的损坏——此时右键「打开」无效）。清除隔离标记：
+> `xattr -dr com.apple.quarantine /Applications/Coffer.app` —— 如果仍无法打开，重新进行 ad-hoc
+> 签名：`codesign --force --deep --sign - /Applications/Coffer.app`
 
 ### 从源码安装（开发者）
 

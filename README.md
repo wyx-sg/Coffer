@@ -59,8 +59,10 @@ Download the installer from [Releases](https://github.com/wyx-sg/Coffer/releases
 
 Each file has a `.sha256` sibling for verification.
 
-> **macOS Gatekeeper:** the DMG ships unsigned (notarisation pending). On first open run:
-> `xattr -d com.apple.quarantine /Applications/Coffer.app`
+> **macOS (unsigned):** the build ships unsigned (notarisation pending), so macOS may say
+> Coffer is "damaged" on first open (it isn't — right-click → Open won't help here). Clear the
+> quarantine flag: `xattr -dr com.apple.quarantine /Applications/Coffer.app` — and if it still
+> won't open, re-apply an ad-hoc signature: `codesign --force --deep --sign - /Applications/Coffer.app`
 
 ### From source (developers)
 

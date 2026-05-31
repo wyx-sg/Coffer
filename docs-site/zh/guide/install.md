@@ -110,10 +110,17 @@ shasum -a 256 -c SHA256SUMS   # Linux 上改用 sha256sum -c SHA256SUMS
 
 ### macOS Gatekeeper（未签名 —— 公证待完成）
 
-DMG 以未签名形式发布。首次打开时 macOS 会拒绝运行。一次性清除隔离标志：
+DMG 以未签名形式发布，首次打开时 macOS 可能提示 Coffer「已损坏」（并非真的损坏，只是未签名）。
+对于「已损坏」提示，右键「打开」无效；请改为清除隔离标志：
 
 ```sh
-xattr -d com.apple.quarantine /Applications/Coffer.app
+xattr -dr com.apple.quarantine /Applications/Coffer.app
+```
+
+如果仍无法打开，重新进行 ad-hoc 签名：
+
+```sh
+codesign --force --deep --sign - /Applications/Coffer.app
 ```
 
 或右键应用选择**打开**进行一次性绕行。
