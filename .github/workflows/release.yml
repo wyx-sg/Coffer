@@ -315,8 +315,10 @@ jobs:
 
           Verify downloads against `SHA256SUMS`.
 
-          > **macOS builds are unsigned** (notarisation pending). On first launch:
-          > `xattr -d com.apple.quarantine /Applications/Coffer.app`
+          > **macOS builds are unsigned** (notarisation pending) — macOS may say the app is
+          > "damaged" on first open (right-click → Open won't help). Clear the quarantine flag:
+          > `xattr -dr com.apple.quarantine /Applications/Coffer.app`
+          > (if it still won't open: `codesign --force --deep --sign - /Applications/Coffer.app`)
 
           Full install & usage guide: https://wyx-sg.github.io/Coffer/guide/install
           NOTES

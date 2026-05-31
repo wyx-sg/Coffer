@@ -116,11 +116,18 @@ shasum -a 256 -c SHA256SUMS   # or sha256sum -c SHA256SUMS on Linux
 
 ### macOS Gatekeeper (unsigned — notarisation pending)
 
-The DMG ships unsigned. On first open, macOS will refuse to launch it. Clear the quarantine
-flag once:
+The DMG ships unsigned, so on first open macOS may say Coffer is "damaged" (it isn't — it's
+just unsigned). For the "damaged" message, right-click → Open does **not** help; clear the
+quarantine flag instead:
 
 ```sh
-xattr -d com.apple.quarantine /Applications/Coffer.app
+xattr -dr com.apple.quarantine /Applications/Coffer.app
+```
+
+If it still won't open, re-apply an ad-hoc signature:
+
+```sh
+codesign --force --deep --sign - /Applications/Coffer.app
 ```
 
 Or right-click the app and pick **Open** for a one-time bypass.

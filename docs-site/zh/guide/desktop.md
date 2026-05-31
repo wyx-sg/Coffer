@@ -65,11 +65,17 @@ Tauri 窗口内渲染。
 
 ### macOS Gatekeeper
 
-在拿到 Apple Developer ID 之前，DMG 以未签名形式发布。首次打开时 macOS 会拒绝运行。
-要么右键 app 选 **打开** 做一次绕行；要么运行：
+在拿到 Apple Developer ID 之前，DMG 以未签名形式发布，首次打开时 macOS 可能提示 Coffer「已损坏」。
+（对于「已损坏」提示，右键「打开」无效。）请清除隔离标志：
 
 ```bash
-xattr -d com.apple.quarantine /Applications/Coffer.app
+xattr -dr com.apple.quarantine /Applications/Coffer.app
+```
+
+如果仍无法打开，重新进行 ad-hoc 签名：
+
+```bash
+codesign --force --deep --sign - /Applications/Coffer.app
 ```
 
 公证（notarisation）是当前的非目标；等 Developer ID 就位后的启用 runbook 见

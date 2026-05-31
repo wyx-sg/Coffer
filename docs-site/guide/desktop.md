@@ -68,12 +68,18 @@ Each download has a `.sha256` sibling for verification.
 
 ### macOS Gatekeeper
 
-Until Coffer has an Apple Developer ID, the DMG ships unsigned. On first open, macOS will
-refuse to launch it. Either right-click the app and pick **Open** (one-time bypass), or
-run:
+Until Coffer has an Apple Developer ID, the DMG ships unsigned, so on first open macOS may say
+Coffer is "damaged". (For the "damaged" message, right-click → Open does **not** help.) Clear
+the quarantine flag:
 
 ```bash
-xattr -d com.apple.quarantine /Applications/Coffer.app
+xattr -dr com.apple.quarantine /Applications/Coffer.app
+```
+
+If it still won't open, re-apply an ad-hoc signature:
+
+```bash
+codesign --force --deep --sign - /Applications/Coffer.app
 ```
 
 Notarisation is a current non-goal; the runbook for enabling it once a Developer ID is
