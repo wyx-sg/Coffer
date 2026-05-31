@@ -41,6 +41,12 @@ class AuditEventType(StrEnum):
     SKILL_AUTOBIND_SKIPPED = "skill_autobind_skipped"
     SKILL_RELINKED = "skill_relinked"
     SKILL_DRIFT_DETECTED = "skill_drift_detected"
+    # spec 008-builtin-agent-chat
+    CONVERSATION_CREATED = "conversation_created"
+    CONVERSATION_RENAMED = "conversation_renamed"
+    CONVERSATION_ARCHIVED = "conversation_archived"
+    CONVERSATION_RESTORED = "conversation_restored"
+    CONVERSATION_DELETED = "conversation_deleted"
 
 
 @dataclass

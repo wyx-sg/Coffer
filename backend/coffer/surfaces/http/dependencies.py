@@ -277,3 +277,37 @@ def get_skill_service() -> Any:
     if _skill_service is None:
         raise RuntimeError("skill service not initialised")
     return _skill_service
+
+
+# --- Chat + built-in agent (spec 008-builtin-agent-chat) ---
+
+_chat_service: Any | None = None
+# Optional override of the runtime factory the lifespan wires into the chat
+# service. Tests set this BEFORE app startup to inject a fake factory (avoiding
+# any real LLM / subprocess). When None, the lifespan builds the real composite
+# factory (LangGraph built-in runtime + external-agent subprocess runtime).
+_runtime_factory: Any | None = None
+
+
+def set_chat_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _chat_service
+    _chat_service = svc
+
+
+def get_chat_service() -> Any:
+    """FastAPI Depends() target — actual type is ChatService."""
+    if _chat_service is None:
+        raise RuntimeError("chat service not initialised")
+    return _chat_service
+
+
+def set_runtime_factory(factory: Any) -> None:
+    """Override the chat runtime factory (tests inject a fake here)."""
+    global _runtime_factory
+    _runtime_factory = factory
+
+
+def get_runtime_factory() -> Any | None:
+    """Return the overridden runtime factory, or None to use the default."""
+    return _runtime_factory

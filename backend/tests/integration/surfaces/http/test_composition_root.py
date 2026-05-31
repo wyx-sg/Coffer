@@ -30,10 +30,12 @@ def test_app_mounts_all_kind_agnostic_routes(tmp_path, monkeypatch):
         r = c.get("/api/v1/daemon/status")
         assert r.status_code == 200
 
-        # /resources (token required, no resources yet)
+        # /resources (token required) — the default built-in agent is seeded at
+        # startup (spec 008-builtin-agent-chat); nothing else exists yet.
         r = c.get("/api/v1/resources", headers=headers)
         assert r.status_code == 200
-        assert r.json() == {"resources": []}
+        resources = r.json()["resources"]
+        assert [(x["kind"], x["name"]) for x in resources] == [("builtin_agent", "coffer")]
 
         # /audit (token required) — lifespan emits daemon_started so entries may be non-empty
         r = c.get("/api/v1/audit", headers=headers)

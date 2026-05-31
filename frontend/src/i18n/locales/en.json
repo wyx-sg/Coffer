@@ -44,6 +44,7 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "agents": "Agents",
+    "chat": "Chat",
     "audit": "Audit log"
   },
   "resources": {
@@ -594,6 +595,59 @@
         "title": "Drift detection",
         "body": "Verify that every enabled binding still matches its on-disk link."
       }
+    }
+  },
+  "chat": {
+    "title": "Chat",
+    "subtitle": "Talk to the built-in agent or your managed agents.",
+    "untitled": "New conversation",
+    "loadFailed": "Failed to load this conversation.",
+    "emptyConversation": "Send a message to start the conversation.",
+    "thinking": "Thinking…",
+    "canceled": "Stopped.",
+    "toolResult": "Result",
+    "send": "Send",
+    "stop": "Stop",
+    "composerPlaceholder": "Type a message…",
+    "composerDisabled": "This conversation is archived. Restore it to continue.",
+    "welcome": {
+      "title": "Start chatting",
+      "body": "Pick a conversation on the left, or start a new one to talk to an agent."
+    },
+    "filter": {
+      "active": "Active",
+      "archived": "Archived"
+    },
+    "list": {
+      "empty": "No conversations yet.",
+      "emptyArchived": "No archived conversations."
+    },
+    "actions": {
+      "menu": "Conversation actions",
+      "rename": "Rename",
+      "archive": "Archive",
+      "restore": "Restore",
+      "delete": "Delete"
+    },
+    "new": {
+      "button": "New chat",
+      "title": "New conversation",
+      "subtitle": "Choose an agent to chat with.",
+      "empty": "No agents available to chat with yet.",
+      "builtin": "Built-in",
+      "managed": "Managed",
+      "start": "Start chat",
+      "starting": "Starting…"
+    },
+    "rename": {
+      "title": "Rename conversation",
+      "label": "Title"
+    },
+    "confirm": {
+      "title": "Allow {{tool}}?",
+      "body": "The agent wants to run this tool. Approve to continue or deny to skip it.",
+      "approve": "Approve",
+      "deny": "Deny"
     }
   }
 }

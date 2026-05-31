@@ -31,11 +31,21 @@ from fastapi import FastAPI
 
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
+from coffer.application.builtin_agent.kind import (
+    ensure_default_builtin_agent,
+    make_builtin_agent_kind,
+    make_refuse_delete_last_hook,
+)
+from coffer.application.chat.service import ChatService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
+from coffer.infrastructure.chat.persistence import (
+    SqlAlchemyConversationRepo,
+    SqlAlchemyMessageRepo,
+)
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
@@ -61,8 +71,12 @@ from coffer.surfaces.http.app_mcp_composition import (
 )
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.chat.routes import router as chat_router
+from coffer.surfaces.http.chat_composition import build_default_runtime_factory
 from coffer.surfaces.http.dependencies import (
+    get_runtime_factory,
     set_audit_service,
+    set_chat_service,
     set_resource_service,
     set_retention_service,
 )
@@ -171,6 +185,27 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # discovery + confirm (no auto-registration on startup).
     wire_agent_and_skill_kinds(app, resource_svc, audit, sm)
 
+    # Wire the built-in agent kind (refuse-delete-last guard), seed a default
+    # built-in agent if none exists, and build the chat service. The runtime
+    # factory is overridable (tests inject a fake); otherwise the default
+    # composite factory (LangGraph built-in + external-agent subprocess) is
+    # built lazily so a missing LangChain install never blocks startup unless a
+    # built-in turn is actually run. (spec 008-builtin-agent-chat)
+    app.state.kinds["builtin_agent"] = make_builtin_agent_kind(
+        on_delete=make_refuse_delete_last_hook(resource_svc)
+    )
+    await ensure_default_builtin_agent(resource_svc)
+    runtime_factory = get_runtime_factory() or build_default_runtime_factory(KeyringAdapter())
+    set_chat_service(
+        ChatService(
+            conversations=SqlAlchemyConversationRepo(sm),
+            messages=SqlAlchemyMessageRepo(sm),
+            resources=resource_svc,
+            runtime_factory=runtime_factory,
+            audit=audit,
+        )
+    )
+
     # Wire up MCP-specific plumbing
     process_supervisor, session_supervisors = wire_mcp_kind(app, resource_svc, audit, sm)
 
@@ -264,6 +299,7 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     # `wire_agent_and_skill_kinds` overwrites this entry with a real cross-kind
     # hook (agent deletion cascades into skill binding cleanup).
     app.state.kinds.setdefault("agent", make_agent_kind(on_delete=None))
+    app.state.kinds.setdefault("builtin_agent", make_builtin_agent_kind(on_delete=None))
     cors.install(app)
     err_handlers.register(app)
     app.include_router(daemon_routes.router)
@@ -276,6 +312,7 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(agent_config_router)
     app.include_router(fs_router)
     app.include_router(skill_router)
+    app.include_router(chat_router)
     # MCP-specific routers
     app.include_router(mcp_protocol_router)
     app.include_router(mcp_capability_router)

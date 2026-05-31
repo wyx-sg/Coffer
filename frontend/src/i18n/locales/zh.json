@@ -44,6 +44,7 @@
     "collapse": "折叠侧边栏",
     "expand": "展开侧边栏",
     "agents": "Agent",
+    "chat": "对话",
     "audit": "审计日志"
   },
   "resources": {
@@ -594,6 +595,59 @@
         "title": "漂移检测",
         "body": "校验每个已启用的绑定是否仍与磁盘上的链接一致。"
       }
+    }
+  },
+  "chat": {
+    "title": "对话",
+    "subtitle": "与内置 Agent 或你的受管 Agent 交流。",
+    "untitled": "新对话",
+    "loadFailed": "加载此对话失败。",
+    "emptyConversation": "发送一条消息以开始对话。",
+    "thinking": "思考中…",
+    "canceled": "已停止。",
+    "toolResult": "结果",
+    "send": "发送",
+    "stop": "停止",
+    "composerPlaceholder": "输入消息…",
+    "composerDisabled": "此对话已归档。恢复后可继续。",
+    "welcome": {
+      "title": "开始对话",
+      "body": "在左侧选择一个对话，或新建一个以与 Agent 交流。"
+    },
+    "filter": {
+      "active": "进行中",
+      "archived": "已归档"
+    },
+    "list": {
+      "empty": "暂无对话。",
+      "emptyArchived": "暂无已归档的对话。"
+    },
+    "actions": {
+      "menu": "对话操作",
+      "rename": "重命名",
+      "archive": "归档",
+      "restore": "恢复",
+      "delete": "删除"
+    },
+    "new": {
+      "button": "新对话",
+      "title": "新对话",
+      "subtitle": "选择要对话的 Agent。",
+      "empty": "暂无可对话的 Agent。",
+      "builtin": "内置",
+      "managed": "受管",
+      "start": "开始对话",
+      "starting": "正在开始…"
+    },
+    "rename": {
+      "title": "重命名对话",
+      "label": "标题"
+    },
+    "confirm": {
+      "title": "允许 {{tool}}？",
+      "body": "Agent 想要运行此工具。批准以继续，或拒绝以跳过。",
+      "approve": "批准",
+      "deny": "拒绝"
     }
   }
 }

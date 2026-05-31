@@ -215,3 +215,76 @@ class UpdateNotSupported(CofferError):  # noqa: N818
     """Raised when attempting to update a non-updatable source (e.g., local_import)."""
 
     code = "UPDATE_NOT_SUPPORTED"
+
+
+# === built-in agent & chat (spec 008-builtin-agent-chat) ===
+
+
+class LlmNotConfigured(CofferError):  # noqa: N818
+    """A built-in agent turn was requested but its provider has no usable
+    credential/endpoint. Maps to 503. Read paths stay available."""
+
+    code = "LLM_NOT_CONFIGURED"
+
+    def __init__(self, detail: str = "") -> None:
+        msg = "LLM provider not configured for this built-in agent"
+        super().__init__(f"{msg}: {detail}" if detail else msg)
+        self.detail = detail
+
+
+class ConversationNotFound(CofferError):  # noqa: N818
+    code = "CONVERSATION_NOT_FOUND"
+
+    def __init__(self, conversation_id: str) -> None:
+        super().__init__(f"conversation not found: {conversation_id}")
+        self.conversation_id = conversation_id
+
+
+class ConversationBusy(CofferError):  # noqa: N818
+    """A second send arrived while a turn is already streaming. Maps to 409."""
+
+    code = "CONVERSATION_BUSY"
+
+    def __init__(self, conversation_id: str) -> None:
+        super().__init__(f"conversation has an active turn: {conversation_id}")
+        self.conversation_id = conversation_id
+
+
+class MessageRejected(CofferError):  # noqa: N818
+    """Message text failed boundary validation (empty / too long). Maps to 422."""
+
+    code = "MESSAGE_REJECTED"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"message rejected: {reason}")
+        self.reason = reason
+
+
+class TargetAgentMissing(CofferError):  # noqa: N818
+    """A conversation's target agent resource no longer exists. Maps to 404."""
+
+    code = "TARGET_AGENT_MISSING"
+
+    def __init__(self, target_ref: str) -> None:
+        super().__init__(f"conversation target agent no longer exists: {target_ref}")
+        self.target_ref = target_ref
+
+
+class NotAChatTarget(CofferError):  # noqa: N818
+    """A conversation was requested against a resource kind that cannot be
+    chatted with. Maps to 400."""
+
+    code = "NOT_A_CHAT_TARGET"
+
+    def __init__(self, kind: str) -> None:
+        super().__init__(f"resource kind {kind!r} cannot be a chat target")
+        self.kind = kind
+
+
+class LastBuiltinAgent(CofferError):  # noqa: N818
+    """Refuses deletion of the only remaining built-in agent. Maps to 409."""
+
+    code = "CANNOT_DELETE_LAST_BUILTIN_AGENT"
+
+    def __init__(self) -> None:
+        super().__init__("cannot delete the last built-in agent")

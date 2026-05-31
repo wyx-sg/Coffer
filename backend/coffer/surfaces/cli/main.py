@@ -7,6 +7,7 @@ import typer
 from coffer.surfaces.cli import (
     agent_cmd,
     audit_cmd,
+    chat_cmd,
     daemon_cmd,
     keychain_cmd,
     resource_cmd,
@@ -41,6 +42,7 @@ app.add_typer(mcp_cmd.app, name="mcp")
 app.add_typer(keychain_cmd.app, name="keychain")
 app.add_typer(agent_cmd.app, name="agent")
 app.add_typer(skill_cmd.app, name="skill")
+app.add_typer(chat_cmd.app, name="chat")
 
 
 def run() -> None:

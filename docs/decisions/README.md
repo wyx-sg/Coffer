@@ -82,3 +82,4 @@ section that future readers most often want — don't skip it.>
 | [007](ADR-007-everything-is-a-resource-kind.md)          | Information architecture: every managed entity is a resource kind        | Accepted |
 | [008](ADR-008-distribution-pyinstaller-tauri-sidecar.md) | Distribution: PyInstaller-bundled daemon + shim as Tauri sidecars        | Accepted |
 | [009](ADR-009-cross-platform-skill-delivery.md)          | Cross-platform skill delivery: symlink / junction / copy-fallback        | Accepted |
+| [013](ADR-013-langgraph-builtin-agent-engine.md)         | LangGraph as the built-in agent engine, behind the AgentRuntime port     | Accepted |

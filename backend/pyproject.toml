@@ -25,6 +25,17 @@ dependencies = [
     "psutil>=5.9",
     "tomlkit>=0.13",
     "pyyaml>=6.0",
+    # Built-in agent engine (spec 008-builtin-agent-chat). LangGraph + LangChain
+    # give the built-in agent a provider-agnostic LLM loop; langchain-mcp-adapters
+    # lets it consume Coffer's own MCP gateway tools. Confined to
+    # coffer/infrastructure/chat/ (importlinter Contract 7).
+    "langgraph>=0.3",
+    "langchain>=0.3",
+    "langchain-core>=0.3",
+    "langchain-anthropic>=0.3",
+    "langchain-openai>=0.3",
+    "langchain-ollama>=0.3",
+    "langchain-mcp-adapters>=0.1",
 ]
 
 [project.optional-dependencies]
@@ -78,6 +89,24 @@ strict = true
 warn_unused_configs = true
 show_error_codes = true
 pretty = true
+
+# LangChain / LangGraph ship partial or no type stubs; don't fail strict mode on
+# their missing imports. Confined to the built-in agent engine adapter.
+[[tool.mypy.overrides]]
+module = [
+    "langgraph.*",
+    "langchain.*",
+    "langchain_core.*",
+    "langchain_mcp_adapters.*",
+]
+ignore_missing_imports = true
+
+# The engine adapter glues to untyped LangChain APIs; relax the strict
+# untyped-call / any-return rules for this one module only.
+[[tool.mypy.overrides]]
+module = "coffer.infrastructure.chat.builtin_runtime"
+disallow_untyped_calls = false
+warn_return_any = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -231,6 +260,28 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_routes",
     "coffer.surfaces.cli.agent_cmd",
 ]
+
+# Contract 7 (spec 008): the LangChain/LangGraph engine is confined to
+# infrastructure. Domain + application must never import it — the built-in
+# runtime is reached only through the AgentRuntime port, wired at the
+# composition root. (SC-006)
+[[tool.importlinter.contracts]]
+name = "LangChain/LangGraph engine confined to infrastructure"
+type = "forbidden"
+source_modules = [
+    "coffer.domain",
+    "coffer.application",
+]
+forbidden_modules = [
+    "langgraph",
+    "langchain",
+    "langchain_core",
+    "langchain_anthropic",
+    "langchain_openai",
+    "langchain_ollama",
+    "langchain_mcp_adapters",
+]
+
 
 # Contract 6: kind-agnostic core does not import kind-specific modules.
 [[tool.importlinter.contracts]]

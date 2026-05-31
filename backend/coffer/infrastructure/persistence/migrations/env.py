@@ -11,6 +11,9 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy.engine import Connection
 
+from coffer.infrastructure.chat import (
+    persistence as _chat_persistence,  # noqa: F401 — chat models (spec 008)
+)
 from coffer.infrastructure.mcp import (
     persistence as _mcp_persistence,  # noqa: F401 — kind-specific models
 )

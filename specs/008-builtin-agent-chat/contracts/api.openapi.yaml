@@ -1,0 +1,501 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Built-in Agent & Chat API
+  version: "0.1.0"
+  description: |
+    Chat endpoints. Merged into the main Coffer Management API at runtime; this
+    document scopes only the conversation/chat routes added by the
+    008-builtin-agent-chat spec. The built-in agent itself is a Resource of
+    kind `builtin_agent` and is managed through the kind-agnostic resource
+    routes (spec 001); only the conversation routes are specific to this spec.
+
+    All routes use the same `X-Coffer-Token` authentication from
+    `specs/001-mcp-gateway/contracts/api.openapi.yaml`.
+
+    `POST /conversations/{id}/messages` does not return JSON — it returns a
+    Server-Sent Events stream (`text/event-stream`) of runtime events. The
+    event payload shapes are documented under
+    `components.schemas` (`SseEvent` and its variants). Pre-stream validation
+    (404/409/422/503) is performed before the stream body is committed and maps
+    to the normal error envelope.
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "8000"
+
+security:
+  - cofferToken: []
+
+tags:
+  - name: conversations
+    description: Chat conversations with the built-in or a managed agent
+
+paths:
+  /conversations:
+    get:
+      tags: [conversations]
+      operationId: listConversations
+      summary: List conversations
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema: { type: string, enum: [active, archived] }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: offset
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [conversations]
+      operationId: createConversation
+      summary: Create a conversation against a chat target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateConversationIn" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationOut" }
+        "400":
+          description: Target resource kind cannot be a chat target (NOT_A_CHAT_TARGET)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Target agent resource not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /conversations/{conversation_id}:
+    parameters:
+      - in: path
+        name: conversation_id
+        required: true
+        schema: { type: string }
+    get:
+      tags: [conversations]
+      operationId: getConversation
+      summary: Get a conversation with its message history
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationDetailOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [conversations]
+      operationId: renameConversation
+      summary: Rename a conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RenameConversationIn" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [conversations]
+      operationId: deleteConversation
+      summary: Delete a conversation and its messages
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /conversations/{conversation_id}/archive:
+    parameters:
+      - in: path
+        name: conversation_id
+        required: true
+        schema: { type: string }
+    post:
+      tags: [conversations]
+      operationId: archiveConversation
+      summary: Archive a conversation
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /conversations/{conversation_id}/restore:
+    parameters:
+      - in: path
+        name: conversation_id
+        required: true
+        schema: { type: string }
+    post:
+      tags: [conversations]
+      operationId: restoreConversation
+      summary: Restore an archived conversation to active
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /conversations/{conversation_id}/messages:
+    parameters:
+      - in: path
+        name: conversation_id
+        required: true
+        schema: { type: string }
+    post:
+      tags: [conversations]
+      operationId: sendMessage
+      summary: Send a message and stream the agent's turn as SSE
+      description: |
+        Returns a `text/event-stream` of runtime events. Each event is a
+        `data: <json>\n\n` line whose JSON matches one of the `SseEvent`
+        variants. The stream ends with a `done` event (or an `error` event when
+        the turn fails mid-stream). Pre-stream validation errors
+        (404/409/422/503) are returned as the normal JSON error envelope before
+        the stream begins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendMessageIn" }
+      responses:
+        "200":
+          description: SSE stream of runtime events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: "A sequence of `data: <json>` SSE frames (blank-line separated); each JSON is an SseEvent."
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Conversation not found, or its target agent is gone (TARGET_AGENT_MISSING)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+        "409":
+          description: A turn is already streaming for this conversation (CONVERSATION_BUSY)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+        "422":
+          description: Message text empty/whitespace or over the 32768-char bound (MESSAGE_REJECTED)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+        "503":
+          description: The built-in agent's LLM provider is not configured (LLM_NOT_CONFIGURED)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+
+  /conversations/{conversation_id}/confirm:
+    parameters:
+      - in: path
+        name: conversation_id
+        required: true
+        schema: { type: string }
+    post:
+      tags: [conversations]
+      operationId: confirmTool
+      summary: Approve or deny a pending tool confirmation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfirmIn" }
+      responses:
+        "204":
+          description: No Content (decision routed to the active turn)
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: No active turn for this conversation (CONVERSATION_NOT_FOUND)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+
+  /conversations/{conversation_id}/stop:
+    parameters:
+      - in: path
+        name: conversation_id
+        required: true
+        schema: { type: string }
+    post:
+      tags: [conversations]
+      operationId: stopTurn
+      summary: Stop the in-flight turn for a conversation
+      description: |
+        No-op if no turn is active. The in-flight assistant message is finalized
+        as `canceled` with partial content retained; any spawned subprocess is
+        terminated.
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  schemas:
+    CreateConversationIn:
+      type: object
+      required: [target_ref]
+      additionalProperties: false
+      properties:
+        target_ref:
+          type: string
+          minLength: 3
+          maxLength: 130
+          description: "`<kind>:<name>` of the target agent — `builtin_agent:coffer` or `agent:claude-code`."
+
+    RenameConversationIn:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+
+    SendMessageIn:
+      type: object
+      required: [text]
+      additionalProperties: false
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 32768
+          description: User message text. Empty/whitespace-only and over-length inputs are rejected with MESSAGE_REJECTED.
+
+    ConfirmIn:
+      type: object
+      required: [request_id, approve]
+      additionalProperties: false
+      properties:
+        request_id:
+          type: string
+          minLength: 1
+          description: The id from the `confirmation` SSE event.
+        approve:
+          type: boolean
+          description: true to run the tool and resume; false to skip it and inform the agent.
+
+    ConversationStatus:
+      type: string
+      enum: [active, archived]
+
+    MessageRole:
+      type: string
+      enum: [user, assistant, tool]
+
+    MessageStatus:
+      type: string
+      enum: [streaming, complete, failed, canceled]
+
+    ToolCallOut:
+      type: object
+      required: [id, tool, args_summary]
+      properties:
+        id: { type: string }
+        tool: { type: string }
+        args_summary:
+          type: string
+          description: Short JSON-ish summary of the arguments (≤200 chars; never full payloads).
+        result_summary:
+          type: string
+          nullable: true
+          description: Short result summary (≤200 chars); null until the tool ends.
+        confirmed:
+          type: boolean
+          nullable: true
+          description: null = confirmation N/A; true/false = approved/denied.
+
+    MessageOut:
+      type: object
+      required: [id, role, content, status, tool_calls, created_at]
+      properties:
+        id: { type: string }
+        role: { $ref: "#/components/schemas/MessageRole" }
+        content: { type: string }
+        status: { $ref: "#/components/schemas/MessageStatus" }
+        tool_calls:
+          type: array
+          items: { $ref: "#/components/schemas/ToolCallOut" }
+        error:
+          type: object
+          nullable: true
+          description: "{code, message} for a failed turn; null otherwise."
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+
+    ConversationOut:
+      type: object
+      required: [id, target_ref, status, model_snapshot, created_at, updated_at]
+      properties:
+        id: { type: string }
+        target_ref:
+          type: string
+          description: "`builtin_agent:<name>` or `agent:<name>`."
+        title:
+          type: string
+          nullable: true
+          description: Placeholder "New chat" until the auto-title replaces it.
+        status: { $ref: "#/components/schemas/ConversationStatus" }
+        model_snapshot:
+          type: object
+          description: Target-shaped snapshot recorded at creation (e.g. {target, model} or {target, agent_type}).
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ConversationListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ConversationOut" }
+
+    ConversationDetailOut:
+      type: object
+      required: [conversation, messages]
+      properties:
+        conversation: { $ref: "#/components/schemas/ConversationOut" }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/MessageOut" }
+
+    SseEvent:
+      description: |
+        One runtime event streamed over SSE. The `type` field is the
+        discriminator. Variants:
+        - text_delta   { type, text }
+        - tool_call    { type, id, tool, args }
+        - tool_result  { type, id, tool, ok, summary }
+        - confirmation { type, id, tool, args }
+        - error        { type, code, message }
+        - done         { type }
+      oneOf:
+        - $ref: "#/components/schemas/SseTextDelta"
+        - $ref: "#/components/schemas/SseToolCall"
+        - $ref: "#/components/schemas/SseToolResult"
+        - $ref: "#/components/schemas/SseConfirmation"
+        - $ref: "#/components/schemas/SseError"
+        - $ref: "#/components/schemas/SseDone"
+      discriminator:
+        propertyName: type
+
+    SseTextDelta:
+      type: object
+      required: [type, text]
+      properties:
+        type: { type: string, enum: [text_delta] }
+        text: { type: string }
+
+    SseToolCall:
+      type: object
+      required: [type, id, tool, args]
+      properties:
+        type: { type: string, enum: [tool_call] }
+        id: { type: string }
+        tool: { type: string }
+        args: { type: object, additionalProperties: true }
+
+    SseToolResult:
+      type: object
+      required: [type, id, tool, ok, summary]
+      properties:
+        type: { type: string, enum: [tool_result] }
+        id: { type: string }
+        tool: { type: string }
+        ok: { type: boolean }
+        summary: { type: string }
+
+    SseConfirmation:
+      type: object
+      required: [type, id, tool, args]
+      properties:
+        type: { type: string, enum: [confirmation] }
+        id: { type: string }
+        tool: { type: string }
+        args: { type: object, additionalProperties: true }
+
+    SseError:
+      type: object
+      required: [type, code, message]
+      properties:
+        type: { type: string, enum: [error] }
+        code: { type: string }
+        message: { type: string }
+
+    SseDone:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [done] }
+
+    ErrorOut:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: >-
+            Stable error code. Chat-specific: LLM_NOT_CONFIGURED,
+            CONVERSATION_NOT_FOUND, CONVERSATION_BUSY, MESSAGE_REJECTED,
+            TARGET_AGENT_MISSING, NOT_A_CHAT_TARGET,
+            CANNOT_DELETE_LAST_BUILTIN_AGENT.
+        message: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid X-Coffer-Token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    NotFound:
+      description: Conversation not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    UnprocessableEntity:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }

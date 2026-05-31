@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   Bot,
   Boxes,
+  MessagesSquare,
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
@@ -52,7 +53,10 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.agents",
-    items: [{ to: "/agents", labelKey: "nav.agents", icon: Bot, end: true }],
+    items: [
+      { to: "/agents", labelKey: "nav.agents", icon: Bot, end: true },
+      { to: "/chat", labelKey: "nav.chat", icon: MessagesSquare },
+    ],
   },
   {
     labelKey: "nav.group.resources",

@@ -51,6 +51,14 @@ _STATUS: dict[str, int] = {
     "TARGET_CONFLICT": 409,
     "SKILL_NAME_MISMATCH": 409,
     "UPDATE_NOT_SUPPORTED": 400,
+    # spec 008-builtin-agent-chat
+    "LLM_NOT_CONFIGURED": 503,
+    "CONVERSATION_NOT_FOUND": 404,
+    "CONVERSATION_BUSY": 409,
+    "MESSAGE_REJECTED": 422,
+    "TARGET_AGENT_MISSING": 404,
+    "NOT_A_CHAT_TARGET": 400,
+    "CANNOT_DELETE_LAST_BUILTIN_AGENT": 409,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a
