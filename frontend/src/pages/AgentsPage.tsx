@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { translateApiError } from "@/lib/api/errors";
+import { DEFAULT_BUILTIN_AGENT } from "@/lib/aiProviders";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinAgents } from "@/lib/hooks/useBuiltinAgents";
 
@@ -27,6 +28,10 @@ export function AgentsPage() {
   // Either kind being present means we show the table (and the header add menu)
   // rather than the empty-state welcome panel.
   const hasRows = (agents ?? []).length > 0 || (builtin.data ?? []).length > 0;
+  // New built-in agents inherit their global model + provider key from the
+  // default built-in agent (`coffer`), falling back to the first one present.
+  const defaultBuiltin =
+    (builtin.data ?? []).find((a) => a.name === DEFAULT_BUILTIN_AGENT) ?? (builtin.data ?? [])[0];
 
   // A small dropdown: "Add agent" registers an external agent; "Add built-in
   // agent" opens the built-in create form. Keeps a single add control above the
@@ -83,10 +88,12 @@ export function AgentsPage() {
         onCreated={() => void refetch()}
       />
 
-      {/* The built-in agent create form. */}
+      {/* The built-in agent create form. New agents inherit the global model +
+          provider key from the default built-in agent. */}
       {showAddBuiltin ? (
         <BuiltinAgentForm
           agent={null}
+          inheritFrom={defaultBuiltin?.config ?? null}
           onClose={() => setShowAddBuiltin(false)}
           onSaved={() => setShowAddBuiltin(false)}
         />

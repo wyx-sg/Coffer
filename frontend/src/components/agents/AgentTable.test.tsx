@@ -2,14 +2,15 @@
 //
 // The agents list is one shared DataTable holding BOTH external agents (kind
 // `agent`) and Coffer's own built-in agents (kind `builtin_agent`). External
-// rows navigate to a detail page and own the MCP/skills columns; built-in rows
-// show "—" there (no external endpoints), open an edit dialog on click, and
-// delete via the built-in hook with the last-agent 409 surfaced inline.
+// rows navigate to `/agents/{name}` and own the MCP/skills columns; built-in
+// rows show "—" there (no external endpoints), navigate to
+// `/agents/builtin/{name}` on click, and delete via the built-in hook with the
+// last-agent 409 surfaced inline.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { PropsWithChildren } from "react";
 import { AgentTable } from "./AgentTable";
 import type { AgentOut } from "@/lib/api/agents";
@@ -160,13 +161,26 @@ describe("AgentTable", () => {
     expect(screen.getByText("anthropic:claude-sonnet-4-6")).toBeInTheDocument();
   });
 
-  test("clicking a built-in row opens the edit form", () => {
+  test("clicking a built-in row navigates to the built-in detail page", () => {
     stubRemoves();
-    render(<AgentTable agents={[]} builtinAgents={BUILTIN} />, { wrapper: wrap(null) });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/agents"]}>
+          <Routes>
+            <Route path="/agents" element={<AgentTable agents={[]} builtinAgents={BUILTIN} />} />
+            <Route
+              path="/agents/builtin/:name"
+              element={<div data-testid="builtin-detail">builtin detail</div>}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
     fireEvent.click(screen.getByText("coffer"));
-    const dialog = screen.getByRole("dialog");
-    // Edit mode shows the model value in the form.
-    expect(within(dialog).getByDisplayValue("anthropic:claude-sonnet-4-6")).toBeInTheDocument();
+    // Clicking the row routes to the built-in detail page (no edit dialog).
+    expect(screen.getByTestId("builtin-detail")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   test("deleting a built-in agent uses the built-in hook and surfaces its 409", () => {

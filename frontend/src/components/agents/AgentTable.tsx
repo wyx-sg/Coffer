@@ -5,7 +5,6 @@ import { Trash2 } from "lucide-react";
 
 import { AgentBulkActions } from "@/components/agents/AgentBulkActions";
 import { AgentMcpStatusBadge } from "@/components/agents/AgentMcpControls";
-import { BuiltinAgentForm } from "@/components/agents/BuiltinAgentForm";
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,10 +23,10 @@ import { useRemoveAgent } from "@/lib/hooks/useAgents";
 import { useRemoveBuiltinAgent } from "@/lib/hooks/useBuiltinAgents";
 import { useSkills } from "@/lib/hooks/useSkills";
 
-// One table, two kinds of row. External agents (kind `agent`) navigate to a
-// detail page and own MCP/skill columns; built-in agents (kind `builtin_agent`)
-// have no detail page (they open an edit dialog) and intentionally skip the
-// MCP/skills cells — those query external-agent endpoints that would 404.
+// One table, two kinds of row. External agents (kind `agent`) navigate to
+// `/agents/{name}` and own MCP/skill columns; built-in agents (kind
+// `builtin_agent`) navigate to `/agents/builtin/{name}` and intentionally skip
+// the MCP/skills cells — those query external-agent endpoints that would 404.
 type Row =
   | ({ kind: "agent" } & AgentOut)
   | { kind: "builtin_agent"; name: string; builtin: BuiltinAgentOut };
@@ -48,8 +47,6 @@ export function AgentTable({
   const [deleting, setDeleting] = useState<Row | null>(null);
   // Built-in delete may 409 (CANNOT_DELETE_LAST_BUILTIN_AGENT) — shown inline.
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  // Built-in agents have no detail page; clicking a row opens this edit dialog.
-  const [editing, setEditing] = useState<BuiltinAgentOut | null>(null);
 
   // Merge both kinds into one row list: built-ins first, then external agents.
   const rows: Row[] = useMemo(
@@ -202,7 +199,7 @@ export function AgentTable({
         }}
         filters={filters}
         onRowClick={(r) => {
-          if (r.kind === "builtin_agent") setEditing(r.builtin);
+          if (r.kind === "builtin_agent") navigate(`/agents/builtin/${r.name}`);
           else navigate(`/agents/${r.name}`);
         }}
         selection={{
@@ -221,15 +218,6 @@ export function AgentTable({
         }}
         emptyMessage={t("agents.noMatches")}
       />
-
-      {/* Built-in edit dialog (no detail page for built-in agents). */}
-      {editing ? (
-        <BuiltinAgentForm
-          agent={editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => setEditing(null)}
-        />
-      ) : null}
 
       <Dialog
         open={deleting !== null}

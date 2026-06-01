@@ -1,6 +1,14 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Database, Info, Laptop, Settings, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import {
+  Database,
+  Info,
+  Laptop,
+  Settings,
+  SlidersHorizontal,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { isTauri } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -15,6 +23,11 @@ const GENERAL_ITEM: Item = {
   to: "/settings/general",
   labelKey: "settings.tabs.general",
   icon: SlidersHorizontal,
+};
+const AI_ITEM: Item = {
+  to: "/settings/ai",
+  labelKey: "settings.tabs.ai",
+  icon: Sparkles,
 };
 const DATA_ITEM: Item = {
   to: "/settings/data",
@@ -37,8 +50,8 @@ export function SettingsLayout() {
   // The App tab (launch-at-login) is desktop-only — it is hidden in the
   // browser, where those Tauri capabilities don't exist.
   const items: Item[] = isTauri()
-    ? [GENERAL_ITEM, DATA_ITEM, APP_ITEM, ABOUT_ITEM]
-    : [GENERAL_ITEM, DATA_ITEM, ABOUT_ITEM];
+    ? [GENERAL_ITEM, AI_ITEM, DATA_ITEM, APP_ITEM, ABOUT_ITEM]
+    : [GENERAL_ITEM, AI_ITEM, DATA_ITEM, ABOUT_ITEM];
 
   return (
     <div className="space-y-8">

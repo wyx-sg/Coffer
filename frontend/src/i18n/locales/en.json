@@ -284,6 +284,7 @@
     "subtitle": "Your data, backups, and app preferences.",
     "tabs": {
       "general": "General",
+      "ai": "AI",
       "data": "Data",
       "app": "App",
       "about": "About"
@@ -292,6 +293,25 @@
       "title": "Display",
       "pageSize": "Default rows per page",
       "pageSizeHelp": "The initial page size for every table."
+    },
+    "ai": {
+      "providersTitle": "Providers",
+      "providersHelp": "Store an API key per provider. Keys are saved to your OS keychain and never shown again.",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "noKeyNeeded": "No API key needed (runs locally)",
+      "keyLabel": "{{provider}} API key",
+      "keyPlaceholder": "Paste your API key",
+      "keyPlaceholderSet": "Enter a new key to replace the saved one",
+      "saveKey": "Save key",
+      "clearKeyAria": "Clear {{provider}} API key",
+      "keySaved": "{{provider}} API key saved.",
+      "keyCleared": "{{provider}} API key cleared.",
+      "modelTitle": "Model",
+      "modelHelp": "The provider-qualified model the built-in agent uses, e.g. anthropic:claude-sonnet-4-6. Saving applies it to the default built-in agent.",
+      "modelLabel": "Model",
+      "modelPlaceholder": "e.g. anthropic:claude-sonnet-4-6",
+      "modelSaved": "Model saved."
     },
     "retention": {
       "title": "Data retention",
@@ -524,6 +544,7 @@
     "namePlaceholder": "e.g. coffer",
     "model": "Model",
     "modelPlaceholder": "e.g. anthropic:claude-sonnet-4-6",
+    "modelManagedHint": "Model & API key are set in Settings → AI and shared by built-in agents.",
     "systemPrompt": "System prompt",
     "systemPromptPlaceholder": "Optional instructions for the agent",
     "temperature": "Temperature",
@@ -538,6 +559,27 @@
     "save": "Save",
     "removeConfirm": "Delete built-in agent {{name}}?",
     "removeConfirmBody": "This removes the agent and its configuration. Conversations already started keep their history.",
+    "loadFailed": "Failed to load built-in agent.",
+    "detail": {
+      "back": "Back to agents",
+      "tabs": {
+        "config": "Config"
+      },
+      "providerKey": "Provider key",
+      "keyConfigured": "Configured ({{provider}})",
+      "keyNotConfigured": "Not configured — set it in Settings → AI",
+      "created": "Created",
+      "updated": "Updated",
+      "modelManagedPrefix": "",
+      "modelManagedLink": "Model & API key are set in Settings → AI",
+      "modelManagedSuffix": ".",
+      "editBehaviour": "Edit behaviour",
+      "skillsNote": "Available to this agent via Coffer's MCP gateway.",
+      "skillsEmpty": "No skills available yet — import some on the Skills page.",
+      "mcpNote": "Aggregated by Coffer's MCP gateway and exposed to this agent.",
+      "mcpEmpty": "No enabled MCP servers in Coffer to expose.",
+      "gatewayOff": "Coffer's MCP gateway is off for this agent — tools and skills are disabled."
+    },
     "errors": {
       "modelRequired": "A model is required (e.g. anthropic:claude-sonnet-4-6).",
       "nameRequired": "A name is required."

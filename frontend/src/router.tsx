@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
+import { BuiltinAgentDetailPage } from "./pages/BuiltinAgentDetailPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { SkillDetailPage } from "./pages/SkillDetailPage";
 import { ChatPage } from "./pages/ChatPage";
@@ -10,6 +11,7 @@ import { ResourceDetailPage } from "./pages/ResourceDetailPage";
 import { AuditLogPage } from "./pages/audit/AuditLogPage";
 import { SettingsLayout } from "./pages/settings/SettingsLayout";
 import { GeneralSettings } from "./pages/settings/GeneralSettings";
+import { AISettings } from "./pages/settings/AISettings";
 import { DataSettings } from "./pages/settings/DataSettings";
 import { AppSettings } from "./pages/settings/AppSettings";
 import { AboutPage } from "./pages/settings/AboutPage";
@@ -27,6 +29,7 @@ export const router = createBrowserRouter([
       // bookmarks and links working by redirecting to the renamed path.
       { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
       { path: "agents", element: <AgentsPage /> },
+      { path: "agents/builtin/:name", element: <BuiltinAgentDetailPage /> },
       { path: "agents/:name", element: <AgentDetailPage /> },
       { path: "chat", element: <ChatPage /> },
       { path: "chat/:id", element: <ChatPage /> },
@@ -48,6 +51,7 @@ export const router = createBrowserRouter([
             element: <Navigate to="/settings/general" replace />,
           },
           { path: "general", element: <GeneralSettings /> },
+          { path: "ai", element: <AISettings /> },
           { path: "data", element: <DataSettings /> },
           { path: "app", element: <AppSettings /> },
           { path: "about", element: <AboutPage /> },

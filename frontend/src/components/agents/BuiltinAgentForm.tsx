@@ -1,8 +1,11 @@
-// frontend/src/components/agents/BuiltinAgentForm.tsx — spec 008 US8.
+// frontend/src/components/agents/BuiltinAgentForm.tsx — spec 008.
 // One modal form used for both creating and editing a built-in agent (kind
-// `builtin_agent`). On create it POSTs `{ name, config, description }`; on edit
-// it PATCHes the FULL merged config (the server replaces the whole object). The
-// name is immutable post-create, so it shows read-only in edit mode.
+// `builtin_agent`). It edits BEHAVIOUR only — the LLM `model` + provider key
+// (`credential_ref`) are GLOBAL and set in Settings → AI, so they are not
+// fields here. On CREATE, the new agent inherits the default agent's `model` +
+// `credential_ref` (passed in via `inheritFrom`). On edit it PATCHes the FULL
+// merged config (the server replaces the whole object). The name is immutable
+// post-create, so it shows read-only in edit mode.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -22,14 +25,13 @@ import { translateApiError } from "@/lib/api/errors";
 import { useCreateBuiltinAgent, usePatchBuiltinAgent } from "@/lib/hooks/useBuiltinAgents";
 
 // Local editable shape: every field is a string so empty inputs round-trip
-// cleanly; we parse to the typed config only on submit.
+// cleanly; we parse to the typed config only on submit. `model` +
+// `credential_ref` are NOT edited here — they are carried through untouched.
 interface FormState {
   name: string;
-  model: string;
   system_prompt: string;
   temperature: string;
   max_tokens: string;
-  credential_ref: string;
   use_gateway: boolean;
   confirm_tools: string;
 }
@@ -38,25 +40,25 @@ function fromAgent(agent: BuiltinAgentOut | null): FormState {
   const c = agent?.config;
   return {
     name: agent?.name ?? "",
-    model: c?.model ?? "",
     system_prompt: c?.system_prompt ?? "",
     temperature: c?.temperature != null ? String(c.temperature) : "",
     max_tokens: c?.max_tokens != null ? String(c.max_tokens) : "",
-    credential_ref: c?.credential_ref ?? "",
     use_gateway: c?.use_gateway ?? true,
     // confirm_tools globs are edited one-per-line.
     confirm_tools: (c?.confirm_tools ?? []).join("\n"),
   };
 }
 
-// Build the full config object the server expects. Optional fields are omitted
-// when blank so we never send `""`/`NaN` (the schema forbids extras and types).
-function toConfig(form: FormState): BuiltinAgentConfig {
-  const config: BuiltinAgentConfig = { model: form.model.trim() };
+// Build the full config object the server expects. `model` + `credential_ref`
+// come from `base` (the agent being edited, or the inherited default on
+// create). Optional fields are omitted when blank so we never send `""`/`NaN`
+// (the schema forbids extras and types).
+function toConfig(form: FormState, base: BuiltinAgentConfig): BuiltinAgentConfig {
+  const config: BuiltinAgentConfig = { model: base.model };
+  if (base.credential_ref) config.credential_ref = base.credential_ref;
   if (form.system_prompt.trim()) config.system_prompt = form.system_prompt;
   if (form.temperature.trim()) config.temperature = Number(form.temperature);
   if (form.max_tokens.trim()) config.max_tokens = Number(form.max_tokens);
-  if (form.credential_ref.trim()) config.credential_ref = form.credential_ref.trim();
   config.use_gateway = form.use_gateway;
   const tools = form.confirm_tools
     .split(/[\n,]/)
@@ -69,6 +71,10 @@ function toConfig(form: FormState): BuiltinAgentConfig {
 export function BuiltinAgentForm(props: {
   // `null` => create mode; an agent => edit mode.
   agent: BuiltinAgentOut | null;
+  // On create, the new agent inherits this config's `model` + `credential_ref`
+  // (the default built-in agent's global provider config). Required for create;
+  // ignored in edit mode (the edited agent's own config is the base).
+  inheritFrom?: BuiltinAgentConfig | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -87,13 +93,9 @@ export function BuiltinAgentForm(props: {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    if (!form.model.trim()) {
-      setErrorMsg(t("builtinAgents.errors.modelRequired"));
-      return;
-    }
-    const config = toConfig(form);
     try {
       if (isEdit && props.agent) {
+        const config = toConfig(form, props.agent.config);
         await patch.mutateAsync({ name: props.agent.name, config });
       } else {
         const name = form.name.trim();
@@ -101,6 +103,13 @@ export function BuiltinAgentForm(props: {
           setErrorMsg(t("builtinAgents.errors.nameRequired"));
           return;
         }
+        // Inherit the global model + provider key from the default agent.
+        const base = props.inheritFrom;
+        if (!base?.model) {
+          setErrorMsg(t("builtinAgents.errors.modelRequired"));
+          return;
+        }
+        const config = toConfig(form, base);
         await create.mutateAsync({ name, config });
       }
       props.onSaved();
@@ -134,15 +143,8 @@ export function BuiltinAgentForm(props: {
             />
           </label>
 
-          <label className="block text-sm">
-            {t("builtinAgents.model")}
-            <Input
-              className="mt-1 font-mono"
-              value={form.model}
-              placeholder={t("builtinAgents.modelPlaceholder")}
-              onChange={(e) => set("model", e.target.value)}
-            />
-          </label>
+          {/* Model + provider key are global — set in Settings → AI, not here. */}
+          <p className="text-xs text-muted-foreground">{t("builtinAgents.modelManagedHint")}</p>
 
           <label className="block text-sm">
             {t("builtinAgents.systemPrompt")}
@@ -181,16 +183,6 @@ export function BuiltinAgentForm(props: {
               />
             </label>
           </div>
-
-          <label className="block text-sm">
-            {t("builtinAgents.credentialRef")}
-            <Input
-              className="mt-1 font-mono"
-              value={form.credential_ref}
-              placeholder={t("builtinAgents.credentialRefPlaceholder")}
-              onChange={(e) => set("credential_ref", e.target.value)}
-            />
-          </label>
 
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <span className="text-sm">

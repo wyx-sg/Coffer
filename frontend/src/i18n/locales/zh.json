@@ -284,6 +284,7 @@
     "subtitle": "你的数据、备份与应用设置。",
     "tabs": {
       "general": "通用",
+      "ai": "AI 提供方",
       "data": "数据",
       "app": "应用",
       "about": "关于"
@@ -292,6 +293,25 @@
       "title": "显示",
       "pageSize": "每页默认行数",
       "pageSizeHelp": "所有表格的初始每页行数。"
+    },
+    "ai": {
+      "providersTitle": "提供方",
+      "providersHelp": "为每个提供方保存一个 API 密钥。密钥保存在操作系统钥匙串中，且不会再次显示。",
+      "configured": "已配置",
+      "notConfigured": "未配置",
+      "noKeyNeeded": "无需 API 密钥（本地运行）",
+      "keyLabel": "{{provider}} API 密钥",
+      "keyPlaceholder": "粘贴你的 API 密钥",
+      "keyPlaceholderSet": "输入新密钥以替换已保存的密钥",
+      "saveKey": "保存密钥",
+      "clearKeyAria": "清除 {{provider}} API 密钥",
+      "keySaved": "已保存 {{provider}} API 密钥。",
+      "keyCleared": "已清除 {{provider}} API 密钥。",
+      "modelTitle": "模型",
+      "modelHelp": "内置 Agent 使用的带提供方前缀的模型，例如 anthropic:claude-sonnet-4-6。保存后将应用到默认内置 Agent。",
+      "modelLabel": "模型",
+      "modelPlaceholder": "例如 anthropic:claude-sonnet-4-6",
+      "modelSaved": "已保存模型。"
     },
     "retention": {
       "title": "数据保留",
@@ -524,6 +544,7 @@
     "namePlaceholder": "例如 coffer",
     "model": "模型",
     "modelPlaceholder": "例如 anthropic:claude-sonnet-4-6",
+    "modelManagedHint": "模型与 API 密钥在「设置 → AI 提供方」中设置，并由所有内置 Agent 共享。",
     "systemPrompt": "系统提示词",
     "systemPromptPlaceholder": "给 Agent 的可选指令",
     "temperature": "温度",
@@ -538,6 +559,27 @@
     "save": "保存",
     "removeConfirm": "确认删除内置 Agent {{name}} 吗？",
     "removeConfirmBody": "这将删除该 Agent 及其配置。已开始的会话仍保留历史记录。",
+    "loadFailed": "加载内置 Agent 失败。",
+    "detail": {
+      "back": "返回 Agent 列表",
+      "tabs": {
+        "config": "配置"
+      },
+      "providerKey": "提供方密钥",
+      "keyConfigured": "已配置（{{provider}}）",
+      "keyNotConfigured": "未配置——请在「设置 → AI 提供方」中设置",
+      "created": "创建时间",
+      "updated": "更新时间",
+      "modelManagedPrefix": "",
+      "modelManagedLink": "模型与 API 密钥在「设置 → AI 提供方」中设置",
+      "modelManagedSuffix": "。",
+      "editBehaviour": "编辑行为",
+      "skillsNote": "通过 Coffer 的 MCP 网关供该 Agent 使用。",
+      "skillsEmpty": "暂无可用 Skill——请在 Skills 页面导入。",
+      "mcpNote": "由 Coffer 的 MCP 网关聚合并向该 Agent 暴露。",
+      "mcpEmpty": "Coffer 中没有已启用的 MCP 服务器可供暴露。",
+      "gatewayOff": "该 Agent 的 Coffer MCP 网关已关闭——工具与 Skill 均被禁用。"
+    },
     "errors": {
       "modelRequired": "必须填写模型（例如 anthropic:claude-sonnet-4-6）。",
       "nameRequired": "必须填写名称。"
