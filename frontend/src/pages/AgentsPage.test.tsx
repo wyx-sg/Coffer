@@ -87,15 +87,19 @@ acceptance("004-agent-registry", "desktop app agents page", async () => {
     ],
   });
   render(<AgentsPage />, { wrapper: wrap(null) });
-  // Title + table cell render. The page now carries section sub-headings too
-  // ("Built-in agents" / "Managed agents"), so scope to the level-1 page title.
+  // Title + table cell render. There's a single unified agents table now (no
+  // separate built-in section), so scope to the level-1 page title.
   expect(screen.getByRole("heading", { level: 1, name: /agents/i })).toBeInTheDocument();
   expect(screen.getByText("cur")).toBeInTheDocument();
-  // There's a single "Add agent" button (no standalone Detect button).
+  // There's a single "Add" control (no standalone Detect button).
   expect(screen.queryByRole("button", { name: /detect/i })).not.toBeInTheDocument();
-  // Clicking "Add agent" opens the combined dialog; revealing "Add manually"
-  // exposes the registration form.
+  // The header add control is a dropdown; opening it then picking "Add agent"
+  // opens the combined dialog, and revealing "Add manually" shows the form.
+  // The trigger and the menu item share the "Add agent" label, so pick the
+  // menu item (the last match — the portal-rendered popover item).
   fireEvent.click(screen.getByRole("button", { name: /add agent/i }));
+  const addItems = screen.getAllByRole("button", { name: /^add agent$/i });
+  fireEvent.click(addItems[addItems.length - 1]);
   await waitFor(() =>
     expect(screen.getByRole("button", { name: /add manually/i })).toBeInTheDocument(),
   );

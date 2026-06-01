@@ -421,6 +421,7 @@
     "removeConfirmBody": "它仍保留在你的机器上——随时可以重新检测并添加。",
     "name": "名称",
     "type": "类型",
+    "typeBuiltin": "内置",
     "configDir": "配置目录",
     "status": "状态",
     "searchPlaceholder": "搜索 Agent…",
@@ -511,18 +512,14 @@
     "mcpTab": {
       "notInstalled": "尚未在该 Agent 上安装 Coffer MCP —— 安装后可在此暴露 Coffer 的 MCP 服务器。",
       "empty": "Coffer 中没有可暴露的已启用 MCP 服务器。"
-    },
-    "managedHeading": "托管 Agent"
+    }
   },
   "builtinAgents": {
-    "title": "内置 Agent",
-    "subtitle": "Coffer 自带的 LLM Agent——在本地运行，可使用 Coffer 的 MCP 网关。",
     "add": "添加内置 Agent",
     "addTitle": "添加内置 Agent",
     "addSubtitle": "创建一个新的内置 LLM Agent。",
     "editTitle": "编辑内置 Agent",
     "editSubtitle": "更新该内置 Agent 的模型与行为。",
-    "empty": "尚无内置 Agent。",
     "name": "名称",
     "namePlaceholder": "例如 coffer",
     "model": "模型",
@@ -538,16 +535,7 @@
     "confirmTools": "需确认的工具",
     "confirmToolsPlaceholder": "*delete*\n*remove*",
     "confirmToolsHint": "通配模式（每行一个），匹配的工具在执行前需要确认。",
-    "gateway": "网关",
-    "on": "开",
-    "off": "关",
-    "confirm": "需确认的工具",
-    "edit": "编辑",
-    "editAria": "编辑 {{name}}",
-    "deleteAria": "删除 {{name}}",
     "save": "保存",
-    "searchPlaceholder": "搜索内置 Agent…",
-    "noMatches": "没有匹配的内置 Agent。",
     "removeConfirm": "确认删除内置 Agent {{name}} 吗？",
     "removeConfirmBody": "这将删除该 Agent 及其配置。已开始的会话仍保留历史记录。",
     "errors": {

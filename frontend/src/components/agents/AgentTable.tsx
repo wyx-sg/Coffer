@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 
 import { AgentBulkActions } from "@/components/agents/AgentBulkActions";
 import { AgentMcpStatusBadge } from "@/components/agents/AgentMcpControls";
+import { BuiltinAgentForm } from "@/components/agents/BuiltinAgentForm";
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,16 +18,47 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { AgentOut } from "@/lib/api/agents";
+import type { BuiltinAgentOut } from "@/lib/api/builtinAgents";
+import { translateApiError } from "@/lib/api/errors";
 import { useRemoveAgent } from "@/lib/hooks/useAgents";
+import { useRemoveBuiltinAgent } from "@/lib/hooks/useBuiltinAgents";
 import { useSkills } from "@/lib/hooks/useSkills";
 
-export function AgentTable({ agents }: { agents: AgentOut[] }) {
+// One table, two kinds of row. External agents (kind `agent`) navigate to a
+// detail page and own MCP/skill columns; built-in agents (kind `builtin_agent`)
+// have no detail page (they open an edit dialog) and intentionally skip the
+// MCP/skills cells — those query external-agent endpoints that would 404.
+type Row =
+  | ({ kind: "agent" } & AgentOut)
+  | { kind: "builtin_agent"; name: string; builtin: BuiltinAgentOut };
+
+export function AgentTable({
+  agents,
+  builtinAgents = [],
+}: {
+  agents: AgentOut[];
+  builtinAgents?: BuiltinAgentOut[];
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const remove = useRemoveAgent();
+  const removeBuiltin = useRemoveBuiltinAgent();
   const skills = useSkills();
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
-  const [deletingName, setDeletingName] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Row | null>(null);
+  // Built-in delete may 409 (CANNOT_DELETE_LAST_BUILTIN_AGENT) — shown inline.
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Built-in agents have no detail page; clicking a row opens this edit dialog.
+  const [editing, setEditing] = useState<BuiltinAgentOut | null>(null);
+
+  // Merge both kinds into one row list: built-ins first, then external agents.
+  const rows: Row[] = useMemo(
+    () => [
+      ...builtinAgents.map((b): Row => ({ kind: "builtin_agent", name: b.name, builtin: b })),
+      ...agents.map((a): Row => ({ kind: "agent", ...a })),
+    ],
+    [agents, builtinAgents],
+  );
 
   // Coffer-managed skills currently installed (enabled binding) per agent.
   // Build the per-agent counts once (single pass over skills × bindings) rather
@@ -41,56 +73,81 @@ export function AgentTable({ agents }: { agents: AgentOut[] }) {
     return counts;
   }, [skills.data]);
 
-  const columns: Column<AgentOut>[] = [
+  const dash = <span className="text-muted-foreground">—</span>;
+
+  const columns: Column<Row>[] = [
     {
       key: "name",
       header: t("agents.name"),
       className: "whitespace-nowrap",
-      cell: (a) => <span className="font-medium">{a.name}</span>,
+      cell: (r) => <span className="font-medium">{r.name}</span>,
     },
     {
       key: "type",
       header: t("agents.type"),
-      cell: (a) => <span className="text-muted-foreground">{a.type}</span>,
+      cell: (r) =>
+        r.kind === "builtin_agent" ? (
+          <Badge variant="secondary">{t("agents.typeBuiltin")}</Badge>
+        ) : (
+          <span className="text-muted-foreground">{r.type}</span>
+        ),
     },
     {
       key: "config_dir",
       header: t("agents.configDir"),
-      cell: (a) => <span className="font-mono text-xs">{a.config_dir}</span>,
+      cell: (r) =>
+        r.kind === "agent" ? <span className="font-mono text-xs">{r.config_dir}</span> : dash,
     },
     {
       key: "description",
       header: t("agents.description"),
-      cell: (a) => (
-        <span className="line-clamp-1 max-w-xs text-muted-foreground">{a.description || "—"}</span>
-      ),
+      cell: (r) => {
+        const text =
+          r.kind === "agent"
+            ? r.description
+            : (r.builtin.description ?? r.builtin.config.model ?? null);
+        return text ? (
+          <span className="line-clamp-1 max-w-xs text-muted-foreground">{text}</span>
+        ) : (
+          dash
+        );
+      },
     },
     {
       key: "coffer_skills",
       header: t("agents.cofferSkills"),
       className: "whitespace-nowrap",
-      cell: (a) => <Badge variant="secondary">{cofferSkillCounts.get(a.name) ?? 0}</Badge>,
+      // Skills are only meaningful for external agents — built-in rows show "—".
+      cell: (r) =>
+        r.kind === "agent" ? (
+          <Badge variant="secondary">{cofferSkillCounts.get(r.name) ?? 0}</Badge>
+        ) : (
+          dash
+        ),
     },
     {
       key: "mcp",
       header: t("agents.mcp.title"),
       className: "whitespace-nowrap",
-      cell: (a) => <AgentMcpStatusBadge name={a.name} />,
+      // The MCP badge queries /agents/{name}/mcp-install — only valid for
+      // external agents; built-in rows must not render it (it would 404).
+      cell: (r) => (r.kind === "agent" ? <AgentMcpStatusBadge name={r.name} /> : dash),
     },
     {
       key: "actions",
       header: "",
       className: "text-right",
-      cell: (a) => (
+      cell: (r) => (
         <Button
           variant="ghost"
           size="sm"
           className="text-muted-foreground hover:text-destructive"
-          aria-label={t("agents.deleteAria", { name: a.name })}
-          disabled={remove.isPending}
+          aria-label={t("agents.deleteAria", { name: r.name })}
+          disabled={remove.isPending || removeBuiltin.isPending}
           onClick={(e) => {
             e.stopPropagation();
-            setDeletingName(a.name);
+            setDeleteError(null);
+            setDeleting(r);
           }}
         >
           <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
@@ -99,63 +156,120 @@ export function AgentTable({ agents }: { agents: AgentOut[] }) {
     },
   ];
 
-  const filters: FilterDef<AgentOut>[] = [
+  const filters: FilterDef<Row>[] = [
     {
       key: "type",
       label: t("agents.type"),
       allLabel: t("agents.allTypes"),
-      accessor: (a) => a.type,
+      accessor: (r) => (r.kind === "builtin_agent" ? "builtin" : r.type),
       options: [
+        { value: "builtin", label: t("agents.typeBuiltin") },
         { value: "claude_code", label: "claude_code" },
         { value: "codex", label: "codex" },
       ],
     },
   ];
 
+  const deletePending = remove.isPending || removeBuiltin.isPending;
+
+  const confirmDelete = () => {
+    if (!deleting) return;
+    if (deleting.kind === "builtin_agent") {
+      removeBuiltin.mutate(deleting.name, {
+        onSuccess: () => {
+          setDeleting(null);
+          setDeleteError(null);
+        },
+        onError: (err) => setDeleteError(translateApiError(t, err)),
+      });
+    } else {
+      remove.mutate(deleting.name, { onSuccess: () => setDeleting(null) });
+    }
+  };
+
   return (
     <>
       <DataTable
-        rows={agents}
+        rows={rows}
         columns={columns}
-        rowKey={(a) => a.name}
+        rowKey={(r) => `${r.kind}:${r.name}`}
         search={{
-          accessor: (a) => `${a.name} ${a.type} ${a.config_dir}`,
+          accessor: (r) =>
+            r.kind === "agent"
+              ? `${r.name} ${r.type} ${r.config_dir}`
+              : `${r.name} builtin ${r.builtin.config.model}`,
           placeholder: t("agents.searchPlaceholder"),
         }}
         filters={filters}
-        onRowClick={(a) => navigate(`/agents/${a.name}`)}
+        onRowClick={(r) => {
+          if (r.kind === "builtin_agent") setEditing(r.builtin);
+          else navigate(`/agents/${r.name}`);
+        }}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
-          ariaSelectRow: (a) => `${t("common.bulk.selectRow")}: ${a.name}`,
+          ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,
           bulkLabel: (count) => t("common.bulk.selected", { count }),
           clearLabel: t("common.clear"),
+          // Bulk actions only apply to external agents — built-in rows are
+          // filtered out so the install/skills mutations never target them.
           renderBulkActions: ({ selectedRows, clear }) => (
-            <AgentBulkActions agents={selectedRows} onDone={clear} />
+            <AgentBulkActions
+              agents={selectedRows.filter((r) => r.kind === "agent")}
+              onDone={clear}
+            />
           ),
         }}
         emptyMessage={t("agents.noMatches")}
       />
 
-      <Dialog open={deletingName !== null} onOpenChange={(o) => !o && setDeletingName(null)}>
+      {/* Built-in edit dialog (no detail page for built-in agents). */}
+      {editing ? (
+        <BuiltinAgentForm
+          agent={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => setEditing(null)}
+        />
+      ) : null}
+
+      <Dialog
+        open={deleting !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDeleting(null);
+            setDeleteError(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("agents.removeConfirm", { name: deletingName ?? "" })}</DialogTitle>
-            <DialogDescription>{t("agents.removeConfirmBody")}</DialogDescription>
+            <DialogTitle>
+              {deleting?.kind === "builtin_agent"
+                ? t("builtinAgents.removeConfirm", { name: deleting?.name ?? "" })
+                : t("agents.removeConfirm", { name: deleting?.name ?? "" })}
+            </DialogTitle>
+            <DialogDescription>
+              {deleting?.kind === "builtin_agent"
+                ? t("builtinAgents.removeConfirmBody")
+                : t("agents.removeConfirmBody")}
+            </DialogDescription>
           </DialogHeader>
+          {deleteError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {deleteError}
+            </p>
+          ) : null}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeletingName(null)}>
-              {t("common.cancel")}
-            </Button>
             <Button
-              variant="destructive"
-              disabled={remove.isPending}
+              variant="ghost"
               onClick={() => {
-                if (deletingName) {
-                  remove.mutate(deletingName, { onSuccess: () => setDeletingName(null) });
-                }
+                setDeleting(null);
+                setDeleteError(null);
               }}
             >
-              {remove.isPending ? t("common.deleting") : t("common.delete")}
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" disabled={deletePending} onClick={confirmDelete}>
+              {deletePending ? t("common.deleting") : t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>
