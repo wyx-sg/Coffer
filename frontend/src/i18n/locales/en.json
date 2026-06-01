@@ -375,7 +375,8 @@
     "BAD_REQUEST": "The request was rejected as malformed.",
     "NOT_FOUND": "Not found.",
     "FORBIDDEN": "This action is not permitted.",
-    "AGENT_CONFIG_DIR_REGISTERED": "An agent for this config directory is already registered."
+    "AGENT_CONFIG_DIR_REGISTERED": "An agent for this config directory is already registered.",
+    "CANNOT_DELETE_LAST_BUILTIN_AGENT": "Can't delete the last built-in agent — at least one must remain."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -510,6 +511,48 @@
     "mcpTab": {
       "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to expose Coffer's MCP servers here.",
       "empty": "No enabled MCP servers in Coffer to expose."
+    },
+    "managedHeading": "Managed agents"
+  },
+  "builtinAgents": {
+    "title": "Built-in agents",
+    "subtitle": "Coffer's own LLM agent — runs locally and can use Coffer's MCP gateway.",
+    "add": "Add built-in agent",
+    "addTitle": "Add built-in agent",
+    "addSubtitle": "Create a new built-in LLM agent.",
+    "editTitle": "Edit built-in agent",
+    "editSubtitle": "Update this built-in agent's model and behaviour.",
+    "empty": "No built-in agents yet.",
+    "name": "Name",
+    "namePlaceholder": "e.g. coffer",
+    "model": "Model",
+    "modelPlaceholder": "e.g. anthropic:claude-sonnet-4-6",
+    "systemPrompt": "System prompt",
+    "systemPromptPlaceholder": "Optional instructions for the agent",
+    "temperature": "Temperature",
+    "maxTokens": "Max tokens",
+    "credentialRef": "Credential ref",
+    "credentialRefPlaceholder": "Keychain ref for the provider API key (optional)",
+    "useGateway": "Use Coffer MCP gateway",
+    "useGatewayHint": "Give this agent every MCP server, skill, and memory the vault manages.",
+    "confirmTools": "Confirm tools",
+    "confirmToolsPlaceholder": "*delete*\n*remove*",
+    "confirmToolsHint": "Glob patterns (one per line) for tools that require confirmation before running.",
+    "gateway": "Gateway",
+    "on": "On",
+    "off": "Off",
+    "confirm": "Confirm tools",
+    "edit": "Edit",
+    "editAria": "Edit {{name}}",
+    "deleteAria": "Delete {{name}}",
+    "save": "Save",
+    "searchPlaceholder": "Search built-in agents…",
+    "noMatches": "No built-in agents match your search.",
+    "removeConfirm": "Delete built-in agent {{name}}?",
+    "removeConfirmBody": "This removes the agent and its configuration. Conversations already started keep their history.",
+    "errors": {
+      "modelRequired": "A model is required (e.g. anthropic:claude-sonnet-4-6).",
+      "nameRequired": "A name is required."
     }
   },
   "skills": {

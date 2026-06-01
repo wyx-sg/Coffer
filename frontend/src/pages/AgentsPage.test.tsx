@@ -23,6 +23,15 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
   useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
+
+// The page now also renders a built-in agents section; stub its hooks so the
+// page test doesn't reach the network (those hooks hit getApiClient directly).
+vi.mock("@/lib/hooks/useBuiltinAgents", () => ({
+  useBuiltinAgents: vi.fn(() => ({ data: [], isPending: false, error: null })),
+  useCreateBuiltinAgent: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  usePatchBuiltinAgent: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useRemoveBuiltinAgent: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+}));
 const hooks = await import("@/lib/hooks/useAgents");
 const useAgentsMock = vi.mocked(hooks.useAgents);
 const useAgentCandidatesMock = vi.mocked(hooks.useAgentCandidates);
@@ -78,8 +87,9 @@ acceptance("004-agent-registry", "desktop app agents page", async () => {
     ],
   });
   render(<AgentsPage />, { wrapper: wrap(null) });
-  // Title + table cell render.
-  expect(screen.getByRole("heading", { name: /agents/i })).toBeInTheDocument();
+  // Title + table cell render. The page now carries section sub-headings too
+  // ("Built-in agents" / "Managed agents"), so scope to the level-1 page title.
+  expect(screen.getByRole("heading", { level: 1, name: /agents/i })).toBeInTheDocument();
   expect(screen.getByText("cur")).toBeInTheDocument();
   // There's a single "Add agent" button (no standalone Detect button).
   expect(screen.queryByRole("button", { name: /detect/i })).not.toBeInTheDocument();

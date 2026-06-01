@@ -375,7 +375,8 @@
     "BAD_REQUEST": "请求格式有误，已被拒绝。",
     "NOT_FOUND": "未找到。",
     "FORBIDDEN": "无权限执行此操作。",
-    "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经注册过一个 agent 了。"
+    "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经注册过一个 agent 了。",
+    "CANNOT_DELETE_LAST_BUILTIN_AGENT": "无法删除最后一个内置 Agent——至少需保留一个。"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -510,6 +511,48 @@
     "mcpTab": {
       "notInstalled": "尚未在该 Agent 上安装 Coffer MCP —— 安装后可在此暴露 Coffer 的 MCP 服务器。",
       "empty": "Coffer 中没有可暴露的已启用 MCP 服务器。"
+    },
+    "managedHeading": "托管 Agent"
+  },
+  "builtinAgents": {
+    "title": "内置 Agent",
+    "subtitle": "Coffer 自带的 LLM Agent——在本地运行，可使用 Coffer 的 MCP 网关。",
+    "add": "添加内置 Agent",
+    "addTitle": "添加内置 Agent",
+    "addSubtitle": "创建一个新的内置 LLM Agent。",
+    "editTitle": "编辑内置 Agent",
+    "editSubtitle": "更新该内置 Agent 的模型与行为。",
+    "empty": "尚无内置 Agent。",
+    "name": "名称",
+    "namePlaceholder": "例如 coffer",
+    "model": "模型",
+    "modelPlaceholder": "例如 anthropic:claude-sonnet-4-6",
+    "systemPrompt": "系统提示词",
+    "systemPromptPlaceholder": "给 Agent 的可选指令",
+    "temperature": "温度",
+    "maxTokens": "最大 token 数",
+    "credentialRef": "凭据引用",
+    "credentialRefPlaceholder": "供应商 API key 的钥匙串引用（可选）",
+    "useGateway": "使用 Coffer MCP 网关",
+    "useGatewayHint": "让该 Agent 使用 Vault 管理的所有 MCP 服务器、Skill 与记忆。",
+    "confirmTools": "需确认的工具",
+    "confirmToolsPlaceholder": "*delete*\n*remove*",
+    "confirmToolsHint": "通配模式（每行一个），匹配的工具在执行前需要确认。",
+    "gateway": "网关",
+    "on": "开",
+    "off": "关",
+    "confirm": "需确认的工具",
+    "edit": "编辑",
+    "editAria": "编辑 {{name}}",
+    "deleteAria": "删除 {{name}}",
+    "save": "保存",
+    "searchPlaceholder": "搜索内置 Agent…",
+    "noMatches": "没有匹配的内置 Agent。",
+    "removeConfirm": "确认删除内置 Agent {{name}} 吗？",
+    "removeConfirmBody": "这将删除该 Agent 及其配置。已开始的会话仍保留历史记录。",
+    "errors": {
+      "modelRequired": "必须填写模型（例如 anthropic:claude-sonnet-4-6）。",
+      "nameRequired": "必须填写名称。"
     }
   },
   "skills": {

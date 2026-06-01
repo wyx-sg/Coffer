@@ -6,6 +6,7 @@ import { Bot, Plus } from "lucide-react";
 import { AgentAddDialog } from "@/components/agents/AgentAddDialog";
 import { AgentTable } from "@/components/agents/AgentTable";
 import { AgentWelcomePanel } from "@/components/agents/AgentWelcomePanel";
+import { BuiltinAgentsSection } from "@/components/agents/BuiltinAgentsSection";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,9 +36,16 @@ export function AgentsPage() {
         }
       />
 
+      {/* Coffer's own built-in LLM agent(s) — surfaced here so they can be
+          viewed / created / edited / deleted, not just picked in Chat. */}
+      <BuiltinAgentsSection />
+
       {/* One combined Add dialog — it auto-detects installed agents and also
           offers manual registration behind a disclosure. */}
       <AgentAddDialog open={showAdd} onOpenChange={setShowAdd} onCreated={() => void refetch()} />
+
+      {/* Header for the managed external agents that follow below. */}
+      <h2 className="text-lg font-semibold">{t("agents.managedHeading")}</h2>
 
       {isPending ? (
         <Card>
