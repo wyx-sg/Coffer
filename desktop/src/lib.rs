@@ -13,6 +13,10 @@ mod tray;
 
 use tauri::{AppHandle, RunEvent, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+// `Manager` (for `get_webview_window`) is only used by the macOS-only Reopen
+// handler below; gate the import so non-macOS builds don't warn on it.
+#[cfg(target_os = "macos")]
+use tauri::Manager;
 
 // Re-export the close-to-tray decision function so existing integration
 // tests can keep importing it via the crate root.
@@ -92,13 +96,32 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app, event| {
+        // `_app` is referenced only by the macOS-gated Reopen arm; the
+        // underscore keeps non-macOS builds (where that arm is cfg'd out)
+        // from warning about an unused binding.
+        .run(|_app, event| match event {
             // Don't quit when the last window is closed — the app lives in
             // the tray. Explicit `app.exit(0)` (Quit menu) carries code=Some(0).
-            if let RunEvent::ExitRequested { api, code, .. } = event {
+            RunEvent::ExitRequested { api, code, .. } => {
                 if !should_close_app(code) {
                     api.prevent_exit();
                 }
             }
+            // macOS sends Reopen when the user clicks the Dock icon for an
+            // already-running app. Because CloseRequested hides the window
+            // (close-to-tray) instead of destroying it, the window is merely
+            // hidden — re-show + focus it so the Dock icon brings Coffer back.
+            // Without this the app appears "dead" after closing: still running
+            // in the tray, but clicking the Dock icon does nothing.
+            // `RunEvent::Reopen` only exists on macOS (#[cfg(target_os = "macos")]).
+            #[cfg(target_os = "macos")]
+            RunEvent::Reopen { .. } => {
+                if let Some(window) = _app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    let _ = window.unminimize();
+                }
+            }
+            _ => {}
         });
 }

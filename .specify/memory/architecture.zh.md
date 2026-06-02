@@ -95,7 +95,10 @@ import 副作用。
 
 - **SQLite** 落盘于 `~/.coffer/coffer.db`，WAL 模式，单写入者。
 - **SQLAlchemy 2.0 async** 作为 ORM；**Alembic** 统一管理迁移 (所有
-  kind 都把各自的 ORM 模型挂到同一份 metadata 上)。
+  kind 都把各自的 ORM 模型挂到同一份 metadata 上)。迁移在 daemon 启动时执行
+  (`upgrade head`)；若数据库当前 revision 不在运行版本的迁移树里 (由更新/分叉
+  的版本创建)，启动会以 `DB_SCHEMA_TOO_NEW` 明确报错并快速失败，而非抛出晦涩的
+  Alembic 错误。
 - JSON 字段以 `TEXT` 存储，在 application 层边界由 Pydantic 校验。
 - 数据库文件、daemon 发现文件、日志与每个上游的 PID 文件都收纳在
   `~/.coffer/` 下，便于单点备份。
