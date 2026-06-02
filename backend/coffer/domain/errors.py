@@ -215,3 +215,23 @@ class UpdateNotSupported(CofferError):  # noqa: N818
     """Raised when attempting to update a non-updatable source (e.g., local_import)."""
 
     code = "UPDATE_NOT_SUPPORTED"
+
+
+class DatabaseSchemaTooNew(CofferError):  # noqa: N818
+    """The on-disk DB was migrated by a newer/divergent Coffer build.
+
+    Its Alembic revision is unknown to this build's migration tree, so
+    ``upgrade head`` can't proceed. Surfaced at daemon startup with an
+    actionable message instead of Alembic's opaque "Can't locate revision".
+    """
+
+    code = "DB_SCHEMA_TOO_NEW"
+
+    def __init__(self, current: str, db_path: str) -> None:
+        super().__init__(
+            f"database schema revision {current!r} is newer than this Coffer "
+            f"build understands — it was created by a newer or different version. "
+            f"Upgrade Coffer, or back up and remove {db_path} to start fresh."
+        )
+        self.current = current
+        self.db_path = db_path

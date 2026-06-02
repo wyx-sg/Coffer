@@ -17,6 +17,12 @@ hidden = (
     + collect_submodules("structlog")
     + collect_submodules("mcp")
     + collect_submodules("alembic")
+    # Agent config-file editing (TOML/YAML) — used by the agent MCP-install
+    # and config-file services. PyInstaller usually auto-detects these from
+    # `import tomlkit` / `import yaml`, but declare them explicitly so a build
+    # that fails to trace them still ships a working daemon.
+    + collect_submodules("tomlkit")
+    + collect_submodules("yaml")
     + [
         # Anyio sniffio backend
         "anyio._backends._asyncio",

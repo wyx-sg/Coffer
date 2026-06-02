@@ -91,7 +91,10 @@ token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or
 
 - **SQLite** at `~/.coffer/coffer.db`, WAL mode, single writer.
 - **SQLAlchemy 2.0 async** ORM; **Alembic** central migrations (all kinds
-  register their ORM models against one metadata).
+  register their ORM models against one metadata). Migrations run on daemon
+  startup (`upgrade head`); if the DB's current revision is unknown to the
+  running build (created by a newer/divergent version), startup fails fast
+  with `DB_SCHEMA_TOO_NEW` instead of an opaque Alembic error.
 - JSON fields stored as `TEXT` validated by Pydantic at the application
   boundary.
 - The database file plus daemon discovery file, logs, and per-upstream PID
