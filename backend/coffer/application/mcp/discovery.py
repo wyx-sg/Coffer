@@ -319,8 +319,7 @@ class CapabilityDiscovery:
                 if _is_method_not_found(retry_exc):
                     raise
                 raise UpstreamUnavailable(
-                    f"{server_name!r} {method} failed after reconnect: "
-                    f"{type(retry_exc).__name__}"
+                    f"{server_name!r} {method} failed after reconnect: {type(retry_exc).__name__}"
                 ) from retry_exc
 
     async def _build_pref_map(
