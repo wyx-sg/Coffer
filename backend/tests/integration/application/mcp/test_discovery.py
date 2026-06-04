@@ -17,6 +17,7 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
+from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
@@ -381,6 +382,163 @@ async def test_register_http_mcp_server_discovers_capabilities(
     finally:
         proc.terminate()
         proc.wait(timeout=5)
+
+
+# --------------------------------------------------------------------------- #
+# Self-healing on a stale reused connection (regression for the bug where the  #
+# management discovery path reused a dead process-wide supervisor connection,  #
+# had no evict/retry, and surfaced a 500 / empty list while Test connection    #
+# stayed green and Refresh did nothing).                                        #
+# --------------------------------------------------------------------------- #
+
+
+class _Prompt:
+    def __init__(self, name: str, description: str | None = None, arguments: list | None = None):  # type: ignore[type-arg]
+        self.name = name
+        self.description = description
+        self.arguments = arguments or []
+
+
+class _PromptsResult:
+    def __init__(self, prompts: list) -> None:  # type: ignore[type-arg]
+        self.prompts = prompts
+
+
+class _Conn:
+    """Fake upstream connection: returns a fixed result or raises a fixed error."""
+
+    def __init__(self, *, result: object = None, error: Exception | None = None) -> None:
+        self._result = result
+        self._error = error
+        self.request_calls = 0
+        self.closed = False
+
+    async def request(self, method: str, params: dict) -> object:  # type: ignore[type-arg]
+        self.request_calls += 1
+        if self._error is not None:
+            raise self._error
+        return self._result
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class _FakeSupervisor:
+    """Mimics SubprocessSupervisor's reuse/evict contract: hands out a cached
+    connection until evict() clears it, then spawns the next queued one."""
+
+    def __init__(self, conns: list[_Conn]) -> None:
+        self._queue = list(conns)
+        self._current: _Conn | None = None
+        self.spawn_count = 0
+        self.evict_calls: list[str] = []
+
+    async def get_or_spawn(self, name: str) -> _Conn:
+        if self._current is None:
+            self._current = self._queue.pop(0)
+            self.spawn_count += 1
+        return self._current
+
+    async def evict(self, name: str) -> None:
+        self.evict_calls.append(name)
+        self._current = None
+
+
+def _discovery_with_supervisor(
+    rsvc: ResourceService,
+    prefs: MCPCapabilityPreferenceRepo,
+    audit: AuditService,
+    supervisor: object,
+) -> CapabilityDiscovery:
+    return CapabilityDiscovery(
+        resource_service=rsvc,
+        supervisor=supervisor,  # type: ignore[arg-type]
+        preferences=prefs,
+        audit=audit,
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_prompts_self_heals_when_reused_connection_is_stale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _with_in_memory(monkeypatch)
+    _discovery, _sup, rsvc, audit, prefs, engine = await _setup(
+        tmp_path, server_configs={"x": _stdio_config("stub")}
+    )
+    try:
+        stale = _Conn(error=ConnectionError("stale session"))
+        healthy = _Conn(result=_PromptsResult([_Prompt("p1")]))
+        fake_sup = _FakeSupervisor([stale, healthy])
+        discovery = _discovery_with_supervisor(rsvc, prefs, audit, fake_sup)
+
+        prompts = await discovery.list_prompts("x")
+
+        # Recovered transparently from the dead connection.
+        assert {p.original_name for p in prompts} == {"p1"}
+        # The broken connection was evicted exactly once and a fresh one spawned.
+        assert fake_sup.evict_calls == ["x"]
+        assert fake_sup.spawn_count == 2
+        assert stale.request_calls == 1
+        assert healthy.request_calls == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_list_prompts_maps_persistent_failure_to_upstream_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _with_in_memory(monkeypatch)
+    _discovery, _sup, rsvc, audit, prefs, engine = await _setup(
+        tmp_path, server_configs={"x": _stdio_config("stub")}
+    )
+    try:
+        dead1 = _Conn(error=ConnectionError("dead"))
+        dead2 = _Conn(error=ConnectionError("still dead"))
+        fake_sup = _FakeSupervisor([dead1, dead2])
+        discovery = _discovery_with_supervisor(rsvc, prefs, audit, fake_sup)
+
+        with pytest.raises(UpstreamUnavailable):
+            await discovery.list_prompts("x")
+
+        # Tried to self-heal once before giving up.
+        assert fake_sup.evict_calls == ["x"]
+        assert dead1.request_calls == 1
+        assert dead2.request_calls == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_list_prompts_method_not_found_does_not_evict_or_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tools-only upstream replies METHOD_NOT_FOUND for prompts/list. That is
+    a legitimate 'no prompts' answer — it must NOT trigger eviction/retry, just
+    return an empty list."""
+    _with_in_memory(monkeypatch)
+    _discovery, _sup, rsvc, audit, prefs, engine = await _setup(
+        tmp_path, server_configs={"x": _stdio_config("stub")}
+    )
+    try:
+        import mcp.types as mcp_types
+        from mcp import McpError
+
+        not_found = McpError(
+            mcp_types.ErrorData(code=mcp_types.METHOD_NOT_FOUND, message="no prompts")
+        )
+        conn = _Conn(error=not_found)
+        fake_sup = _FakeSupervisor([conn])
+        discovery = _discovery_with_supervisor(rsvc, prefs, audit, fake_sup)
+
+        prompts = await discovery.list_prompts("x")
+
+        assert prompts == []
+        assert fake_sup.evict_calls == []
+        assert conn.request_calls == 1
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.asyncio

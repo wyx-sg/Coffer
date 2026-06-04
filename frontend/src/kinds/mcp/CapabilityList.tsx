@@ -26,6 +26,11 @@ interface Props {
   tools?: ToolView[];
   resources?: ResourceView[];
   prompts?: PromptView[];
+  // Set when the /capabilities fetch failed. An errored fetch yields an
+  // undefined list — the same shape as a genuinely empty upstream — so we must
+  // distinguish them: a failure shows a load-error message, not "nothing
+  // discovered" (which would wrongly imply the upstream has no such capability).
+  error?: unknown;
 }
 
 interface RowDescriptor {
@@ -91,7 +96,11 @@ export function CapabilityList(props: Props) {
       : kind === "resource"
         ? "mcp.capabilities.emptyResource"
         : "mcp.capabilities.emptyPrompt";
-  const emptyMessage = rows.length === 0 ? t(emptyKey) : t("mcp.capabilities.noMatches");
+  const emptyMessage = props.error
+    ? t("mcp.capabilities.loadError")
+    : rows.length === 0
+      ? t(emptyKey)
+      : t("mcp.capabilities.noMatches");
 
   const hasSchema = rows.some((r) => r.schema);
 

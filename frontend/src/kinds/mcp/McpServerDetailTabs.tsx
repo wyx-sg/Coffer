@@ -15,6 +15,7 @@ type CapabilityListOut = components["schemas"]["CapabilityListOut"];
 interface Props {
   serverName: string;
   capabilities: CapabilityListOut | undefined;
+  capsError?: unknown;
   config: unknown;
   isCapsPending: boolean;
   onRefresh: () => void;
@@ -46,6 +47,7 @@ function extractOverview(config: unknown): OverviewFields {
 export function McpServerDetailTabs({
   serverName,
   capabilities,
+  capsError,
   config,
   isCapsPending,
   onRefresh,
@@ -129,17 +131,28 @@ export function McpServerDetailTabs({
       </TabsContent>
 
       <TabsContent value="tools" className="pt-6">
-        <CapabilityList serverName={serverName} kind="tool" tools={capabilities?.tools} />
+        <CapabilityList
+          serverName={serverName}
+          kind="tool"
+          tools={capabilities?.tools}
+          error={capsError}
+        />
       </TabsContent>
       <TabsContent value="resources" className="pt-6">
         <CapabilityList
           serverName={serverName}
           kind="resource"
           resources={capabilities?.resources}
+          error={capsError}
         />
       </TabsContent>
       <TabsContent value="prompts" className="pt-6">
-        <CapabilityList serverName={serverName} kind="prompt" prompts={capabilities?.prompts} />
+        <CapabilityList
+          serverName={serverName}
+          kind="prompt"
+          prompts={capabilities?.prompts}
+          error={capsError}
+        />
       </TabsContent>
       <TabsContent value="invocations" className="pt-6">
         <InvocationsTable serverName={serverName} />
