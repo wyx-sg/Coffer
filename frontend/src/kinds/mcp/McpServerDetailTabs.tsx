@@ -106,13 +106,13 @@ export function McpServerDetailTabs({
               ) : null}
 
               <dt className="text-muted-foreground">{t("mcp.server.overview.tools")}</dt>
-              <dd>{capabilities?.tools?.length ?? 0}</dd>
+              <dd>{capsError ? "—" : (capabilities?.tools?.length ?? 0)}</dd>
 
               <dt className="text-muted-foreground">{t("mcp.server.overview.resources")}</dt>
-              <dd>{capabilities?.resources?.length ?? 0}</dd>
+              <dd>{capsError ? "—" : (capabilities?.resources?.length ?? 0)}</dd>
 
               <dt className="text-muted-foreground">{t("mcp.server.overview.prompts")}</dt>
-              <dd>{capabilities?.prompts?.length ?? 0}</dd>
+              <dd>{capsError ? "—" : (capabilities?.prompts?.length ?? 0)}</dd>
 
               <dt className="text-muted-foreground">{t("mcp.server.overview.lastInvocation")}</dt>
               <dd>{lastInvocationAt ? formatDateTime(lastInvocationAt) : "—"}</dd>

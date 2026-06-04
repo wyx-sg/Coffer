@@ -485,6 +485,43 @@ async def test_list_prompts_self_heals_when_reused_connection_is_stale(
         await engine.dispose()
 
 
+class _ToolsResult:
+    def __init__(self, tools: list) -> None:  # type: ignore[type-arg]
+        self.tools = tools
+
+
+class _Tool:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.description = None
+        self.inputSchema: dict = {}  # type: ignore[type-arg]
+
+
+@pytest.mark.asyncio
+async def test_list_tools_self_heals_when_reused_connection_is_stale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """list_tools shares _request_self_heal with prompts/resources, so it must
+    recover from a stale reused connection the same way."""
+    _with_in_memory(monkeypatch)
+    _discovery, _sup, rsvc, audit, prefs, engine = await _setup(
+        tmp_path, server_configs={"x": _stdio_config("stub")}
+    )
+    try:
+        stale = _Conn(error=ConnectionError("stale session"))
+        healthy = _Conn(result=_ToolsResult([_Tool("t1")]))
+        fake_sup = _FakeSupervisor([stale, healthy])
+        discovery = _discovery_with_supervisor(rsvc, prefs, audit, fake_sup)
+
+        tools = await discovery.list_tools("x")
+
+        assert {t.original_name for t in tools} == {"t1"}
+        assert fake_sup.evict_calls == ["x"]
+        assert fake_sup.spawn_count == 2
+    finally:
+        await engine.dispose()
+
+
 @pytest.mark.asyncio
 async def test_list_prompts_maps_persistent_failure_to_upstream_unavailable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
