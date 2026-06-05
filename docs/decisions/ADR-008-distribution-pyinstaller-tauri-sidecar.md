@@ -241,3 +241,10 @@ Rejected.
   `https://wyx-sg.github.io/Coffer/`) into `~/.coffer/bin`; the script also
   adds `~/.coffer/bin` to `PATH` automatically. Env overrides available:
   `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
+- **2026-06-05** — Shipping scope narrowed to **macOS (Apple Silicon) only**.
+  The Linux and Windows Tauri bundle targets (`deb` / `appimage` / `msi` /
+  `nsis`) and the Linux release matrix leg were never validated end-to-end, so
+  they are dropped from `release.yml` and `desktop/tauri.conf.json` rather than
+  shipped untested. The PyInstaller + Tauri-sidecar mechanism here is unchanged
+  and platform-agnostic; the other targets can be re-enabled once each is
+  actually tested.
