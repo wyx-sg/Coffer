@@ -104,7 +104,7 @@ token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or
 
 | Concern     | Location                                                                         | Notes                                                                                                        |
 | ----------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Credentials | `infrastructure/credentials/keyring_adapter.py`                                  | Only file allowed to import `keyring`. Refs in config; materialized at upstream-spawn time; never persisted. |
+| Credentials | `infrastructure/credentials/keyring_adapter.py`                                  | Only file allowed to import `keyring`. The **daemon is the sole keychain owner**: every surface (desktop, CLI, shim) reaches the keychain through the daemon's `/api/v1/keychain` routes — the CLI never accesses it in-process (spec 006). Refs in config; materialized at upstream-spawn time; never persisted. |
 | Audit       | `domain/audit.py` + `application/audit_service.py` + `audit_log` table           | Every resource lifecycle change. Actor (cli / api / ui / system) required.                                   |
 | Retention   | `application/retention_service.py` + `retention_policies` table + asyncio worker | Each log-style table registers as a `PrunableTable`; central registry enforces SQL allowlist.                |
 | Errors      | `domain/errors.py` + FastAPI global handlers                                     | Uniform `{error: {code, message, details}}` envelope; `X-Coffer-Trace` header for correlation.               |

@@ -25,6 +25,7 @@ class AuditEventType(StrEnum):
     RETENTION_UPDATED = "retention_updated"
     BACKUP_CREATED = "backup_created"
     KEYCHAIN_SET = "keychain_set"
+    KEYCHAIN_READ = "keychain_read"
     KEYCHAIN_DELETED = "keychain_deleted"
     # spec 004-agent-registry
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"

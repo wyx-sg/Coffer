@@ -1,8 +1,9 @@
 """Integration tests for `coffer keychain ...` subcommands.
 
-Uses an in-memory keyring backend to avoid touching the real OS keychain.
-HTTP calls to the daemon (for `list`) are monkeypatched via a lightweight
-stub that returns a canned JSON response.
+Spec 006: every keychain subcommand goes through the daemon HTTP API — the CLI
+no longer touches the OS keychain in-process. These tests drive the CLI against
+a fake daemon client (an in-memory stand-in for the daemon's /api/v1/keychain
+routes) injected via `client_or_exit`.
 """
 
 from __future__ import annotations
@@ -13,8 +14,6 @@ from datetime import datetime as dt
 from typing import Any
 
 import httpx
-import keyring
-import keyring.core
 import pytest
 from typer.testing import CliRunner
 
@@ -26,67 +25,117 @@ runner = CliRunner()
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Fake daemon — an in-memory implementation of the /api/v1/keychain routes so
+# the CLI's HTTP round-trips can be exercised without a real daemon.
 # ---------------------------------------------------------------------------
 
+_KEYCHAIN_PREFIX = "/keychain/"
 
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1  # type: ignore[assignment]
 
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
+class _Resp:
+    def __init__(self, status_code: int, body: Any) -> None:
+        self.status_code = status_code
+        self._body = body
 
-    def get_password(self, service: str, username: str) -> str | None:
-        return self._data.get((service, username))
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            req = httpx.Request("GET", "http://fake")
+            resp = httpx.Response(self.status_code, json=self._body)
+            raise httpx.HTTPStatusError("error", request=req, response=resp)
 
-    def set_password(self, service: str, username: str, password: str) -> None:
-        self._data[(service, username)] = password
+    def json(self) -> Any:
+        return self._body
 
-    def delete_password(self, service: str, username: str) -> None:
-        self._data.pop((service, username), None)
+
+class _FakeDaemon:
+    """In-memory keychain + resource enumeration behind the daemon HTTP shape."""
+
+    def __init__(
+        self, store: dict[str, str] | None = None, resources: list[dict] | None = None
+    ) -> None:
+        self.store: dict[str, str] = dict(store or {})
+        self.resources = resources or []
+
+    def post(self, path: str, json: dict | None = None, **_: Any) -> _Resp:
+        assert path == "/keychain"
+        assert json is not None
+        self.store[json["ref"]] = json["value"]
+        return _Resp(204, None)
+
+    def get(self, path: str, **_: Any) -> _Resp:
+        if path == "/resources":
+            return _Resp(200, {"resources": self.resources})
+        if path.endswith("/exists"):
+            ref = path[len(_KEYCHAIN_PREFIX) : -len("/exists")]
+            return _Resp(200, {"present": ref in self.store})
+        if path.startswith(_KEYCHAIN_PREFIX):
+            ref = path[len(_KEYCHAIN_PREFIX) :]
+            if ref in self.store:
+                return _Resp(200, {"value": self.store[ref]})
+            return _Resp(404, {"error": {"code": "NOT_FOUND", "message": "not found"}})
+        raise AssertionError(f"unexpected GET {path}")
+
+    def delete(self, path: str, **_: Any) -> _Resp:
+        ref = path[len(_KEYCHAIN_PREFIX) :]
+        self.store.pop(ref, None)
+        return _Resp(204, None)
+
+    def __enter__(self) -> _FakeDaemon:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        pass
+
+
+def _use_daemon(monkeypatch, daemon: _FakeDaemon) -> None:
+    info = DaemonInfo(
+        version=1, pid=1, port=9999, token="t", started_at=dt.now(tz=UTC), binary_path="/fake"
+    )
+    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (daemon, info))
 
 
 @pytest.fixture()
-def in_memory_keyring(monkeypatch):
-    backend = _InMemoryKeyring()
-    monkeypatch.setattr(keyring.core, "_keyring_backend", backend)
-    return backend
+def daemon(monkeypatch):
+    d = _FakeDaemon()
+    _use_daemon(monkeypatch, d)
+    return d
 
 
 # ---------------------------------------------------------------------------
-# set / get round-trip
+# set / get round-trip — all via the daemon
 # ---------------------------------------------------------------------------
 
 
-def test_set_and_get_show_round_trip(in_memory_keyring):
-    """set REF then get REF --show returns the stored value."""
+def test_set_writes_through_daemon(daemon):
     result = runner.invoke(app, ["keychain", "set", "my_token", "--value", "supersecret"])
     assert result.exit_code == 0, result.output
     assert "stored: my_token" in result.output
+    # The secret was created by the daemon, not the CLI process.
+    assert daemon.store["my_token"] == "supersecret"
 
+
+def test_get_show_reads_through_daemon(daemon):
+    daemon.store["my_token"] = "supersecret"
     result = runner.invoke(app, ["keychain", "get", "my_token", "--show"])
     assert result.exit_code == 0, result.output
     assert "supersecret" in result.output
 
 
-def test_get_without_show_redacts(in_memory_keyring):
-    """get without --show returns [redacted], not the value."""
-    runner.invoke(app, ["keychain", "set", "tok", "--value", "s3cr3t"])
+def test_get_without_show_redacts(daemon):
+    daemon.store["tok"] = "s3cr3t"
     result = runner.invoke(app, ["keychain", "get", "tok"])
     assert result.exit_code == 0
     assert "[redacted]" in result.output
     assert "s3cr3t" not in result.output
 
 
-def test_get_missing_exits_4(in_memory_keyring):
-    """get on a non-existent ref exits with code 4 (NOT_FOUND)."""
+def test_get_missing_exits_4(daemon):
     result = runner.invoke(app, ["keychain", "get", "no_such_ref"])
     assert result.exit_code == 4
 
 
-def test_get_json(in_memory_keyring):
-    """get --json returns a JSON object with ref + redacted value."""
-    runner.invoke(app, ["keychain", "set", "k", "--value", "v"])
+def test_get_json(daemon):
+    daemon.store["k"] = "v"
     result = runner.invoke(app, ["keychain", "get", "k", "--json"])
     assert result.exit_code == 0
     data = json.loads(result.output)
@@ -94,9 +143,8 @@ def test_get_json(in_memory_keyring):
     assert data["value"] == "[redacted]"
 
 
-def test_get_json_show(in_memory_keyring):
-    """get --json --show includes the real value."""
-    runner.invoke(app, ["keychain", "set", "k2", "--value", "myval"])
+def test_get_json_show(daemon):
+    daemon.store["k2"] = "myval"
     result = runner.invoke(app, ["keychain", "get", "k2", "--json", "--show"])
     assert result.exit_code == 0
     data = json.loads(result.output)
@@ -104,106 +152,49 @@ def test_get_json_show(in_memory_keyring):
 
 
 # ---------------------------------------------------------------------------
-# delete
+# delete — via the daemon
 # ---------------------------------------------------------------------------
 
 
-def test_delete_force_removes_entry(in_memory_keyring):
-    """delete --force removes the entry; subsequent get exits 4."""
-    runner.invoke(app, ["keychain", "set", "to_del", "--value", "x"])
+def test_delete_force_removes_through_daemon(daemon):
+    daemon.store["to_del"] = "x"
     result = runner.invoke(app, ["keychain", "delete", "to_del", "--force"])
     assert result.exit_code == 0
     assert "deleted: to_del" in result.output
-
-    result = runner.invoke(app, ["keychain", "get", "to_del"])
-    assert result.exit_code == 4
+    assert "to_del" not in daemon.store
 
 
-def test_delete_prompts_for_confirmation(in_memory_keyring):
-    """delete without --force prompts; answering 'n' exits non-zero."""
-    runner.invoke(app, ["keychain", "set", "protected", "--value", "val"])
+def test_delete_prompts_for_confirmation(daemon):
+    daemon.store["protected"] = "val"
     result = runner.invoke(app, ["keychain", "delete", "protected"], input="n\n")
     assert result.exit_code != 0
-    # Value should still be retrievable
-    result2 = runner.invoke(app, ["keychain", "get", "protected"])
-    assert result2.exit_code == 0
+    # Declined → still stored.
+    assert daemon.store["protected"] == "val"
 
 
 # ---------------------------------------------------------------------------
-# empty value
+# empty value — rejected client-side before any daemon call
 # ---------------------------------------------------------------------------
 
 
-def test_set_empty_value_exits_6(in_memory_keyring):
-    """set with an empty --value exits with code 6 (INVALID_INPUT)."""
+def test_set_empty_value_exits_6(daemon):
     result = runner.invoke(app, ["keychain", "set", "bad_ref", "--value", ""])
     assert result.exit_code == 6
+    assert "bad_ref" not in daemon.store
 
 
 # ---------------------------------------------------------------------------
-# list (with mocked daemon HTTP client)
+# list — enumerate refs from /resources, presence via the exists endpoint
 # ---------------------------------------------------------------------------
 
 
-class _FakeResponse:
-    def __init__(self, body: dict) -> None:
-        self._body = body
-        self.status_code = 200
-
-    def raise_for_status(self) -> None:
-        pass
-
-    def json(self) -> dict:
-        return self._body
-
-
-class _FakeClient:
-    def __init__(self, resources: list[dict]) -> None:
-        self._resources = resources
-
-    def get(self, path: str, **_kwargs) -> _FakeResponse:
-        return _FakeResponse({"resources": self._resources})
-
-    def __enter__(self) -> _FakeClient:
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        pass
-
-
-def test_list_reports_refs_from_resources(in_memory_keyring, monkeypatch):
-    """list enumerates credential refs from registered MCP server resources."""
+def test_list_reports_refs_from_resources(monkeypatch):
     resources = [
-        {
-            "config": {
-                "transport": {
-                    "type": "http",
-                    "credential_refs": {"Authorization": "gh_pat"},
-                }
-            }
-        },
-        {
-            "config": {
-                "transport": {
-                    "type": "stdio",
-                    "credential_refs": {"API_KEY": "openai_key"},
-                }
-            }
-        },
+        {"config": {"transport": {"credential_refs": {"Authorization": "gh_pat"}}}},
+        {"config": {"transport": {"credential_refs": {"API_KEY": "openai_key"}}}},
     ]
-    fake_info = DaemonInfo(
-        version=1,
-        pid=99,
-        port=9999,
-        token="t",
-        started_at=dt.now(tz=UTC),
-        binary_path="/fake",
-    )
-    fake_client = _FakeClient(resources)
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (fake_client, fake_info))
-
-    # Set one of the refs so presence shows "yes"
-    runner.invoke(app, ["keychain", "set", "gh_pat", "--value", "ghp_test"])
+    d = _FakeDaemon(store={"gh_pat": "ghp_test"}, resources=resources)
+    _use_daemon(monkeypatch, d)
 
     result = runner.invoke(app, ["keychain", "list"])
     assert result.exit_code == 0
@@ -211,29 +202,13 @@ def test_list_reports_refs_from_resources(in_memory_keyring, monkeypatch):
     assert "openai_key" in result.output
 
 
-def test_list_json(in_memory_keyring, monkeypatch):
-    """list --json returns a JSON object with a sorted refs array."""
+def test_list_json(monkeypatch):
     resources = [
-        {
-            "config": {
-                "transport": {
-                    "credential_refs": {"KEY": "ref_b"},
-                }
-            }
-        },
-        {
-            "config": {
-                "transport": {
-                    "credential_refs": {"TOKEN": "ref_a"},
-                }
-            }
-        },
+        {"config": {"transport": {"credential_refs": {"KEY": "ref_b"}}}},
+        {"config": {"transport": {"credential_refs": {"TOKEN": "ref_a"}}}},
     ]
-    fake_info = DaemonInfo(
-        version=1, pid=1, port=9999, token="t", started_at=dt.now(tz=UTC), binary_path="/fake"
-    )
-    fake_client = _FakeClient(resources)
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (fake_client, fake_info))
+    d = _FakeDaemon(resources=resources)
+    _use_daemon(monkeypatch, d)
 
     result = runner.invoke(app, ["keychain", "list", "--json"])
     assert result.exit_code == 0
@@ -241,13 +216,8 @@ def test_list_json(in_memory_keyring, monkeypatch):
     assert data["refs"] == ["ref_a", "ref_b"]
 
 
-def test_list_daemon_spawn_timeout(in_memory_keyring, tmp_path, monkeypatch):
-    """list when daemon spawn times out exits 0 with a graceful daemon message.
-
-    keychain list catches DaemonNotRunning and degrades gracefully (it can still
-    tell the user there are no known refs). ADR-006: client_or_exit() auto-spawns;
-    we simulate a spawn timeout to exercise the graceful-degradation path.
-    """
+def test_list_daemon_spawn_timeout(tmp_path, monkeypatch):
+    """list degrades gracefully (exit 0) when the daemon can't be reached."""
     from coffer.surfaces.cli import _client as cli_client
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -255,44 +225,19 @@ def test_list_daemon_spawn_timeout(in_memory_keyring, tmp_path, monkeypatch):
     monkeypatch.setattr(cli_client, "_DAEMON_BOOT_TIMEOUT", 0.05)
 
     result = runner.invoke(app, ["keychain", "list"])
-    # keychain list is intentionally graceful when the daemon is unreachable.
     assert result.exit_code == 0
     combined = result.output + (result.stderr or "")
     assert "daemon" in combined.lower() or "no known" in combined.lower()
 
 
 # ---------------------------------------------------------------------------
-# T2 — keychain list 5xx is rendered via check(), not bare raise_for_status()
+# list 5xx is rendered via check(), not a bare raise_for_status() traceback
 # ---------------------------------------------------------------------------
 
 
-_ERROR_BODY = (
-    '{"error": {"code": "INTERNAL_ERROR", "message": "internal server error", "details": {}}}'
-)
-
-
-class _HttpErrorResponse:
-    """Fake response that raises HTTPStatusError on raise_for_status()."""
-
-    def __init__(self, status_code: int = 500) -> None:
-        self.status_code = status_code
-        self._real = httpx.Response(status_code, text=_ERROR_BODY)
-
-    def raise_for_status(self) -> None:
-        req = httpx.Request("GET", "http://fake/api/v1/resources")
-        raise httpx.HTTPStatusError(
-            f"Server error '{self.status_code}'",
-            request=req,
-            response=self._real,
-        )
-
-    def json(self) -> Any:
-        return self._real.json()
-
-
 class _HttpErrorClient:
-    def get(self, *_args: Any, **_kwargs: Any) -> _HttpErrorResponse:
-        return _HttpErrorResponse(500)
+    def get(self, *_a: Any, **_k: Any) -> _Resp:
+        return _Resp(500, {"error": {"code": "INTERNAL_ERROR", "message": "boom"}})
 
     def __enter__(self) -> _HttpErrorClient:
         return self
@@ -301,12 +246,11 @@ class _HttpErrorClient:
         pass
 
 
-def test_keychain_list_5xx_renders_message_exits_nonzero(in_memory_keyring, monkeypatch):
-    """keychain list on a 5xx response must NOT raise a Traceback; must exit non-zero."""
-    fake_info = DaemonInfo(
+def test_keychain_list_5xx_renders_message_exits_nonzero(monkeypatch):
+    info = DaemonInfo(
         version=1, pid=99, port=9999, token="t", started_at=dt.now(tz=UTC), binary_path="/fake"
     )
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (_HttpErrorClient(), fake_info))
+    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (_HttpErrorClient(), info))
     result = runner.invoke(app, ["keychain", "list"])
-    assert result.exit_code != 0, "expected non-zero exit on 5xx"
-    assert "Traceback" not in (result.output or ""), "Traceback leaked to output"
+    assert result.exit_code != 0
+    assert "Traceback" not in (result.output or "")
