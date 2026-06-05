@@ -289,13 +289,13 @@ def test_shim_spec_includes_anyio_backend_hidden_import() -> None:
 )
 def test_release_workflow_produces_platform_artifact_matrix() -> None:
     """The release workflow must define a matrix that produces the supported
-    platforms — macOS arm64 (Apple Silicon) and Linux x64 — and ship a SHA-256
-    checksum alongside each installer. macOS x64 (Intel, macos-13) and Windows
-    are intentionally NOT built (Intel runners are deprecated/starved and
-    PyInstaller can't cross-compile them). The actual build runs in CI on tag
-    push; this asserts the workflow declares the right shape, parsing the
-    matrix rather than substring-matching so explanatory comments don't sway
-    it."""
+    platform — macOS arm64 (Apple Silicon) — and ship a SHA-256 checksum
+    alongside each installer. macOS x64 (Intel), Linux, and Windows are
+    intentionally NOT built: Intel runners are deprecated/starved, PyInstaller
+    can't cross-compile, and the Linux/Windows legs were never validated
+    end-to-end. The actual build runs in CI on tag push; this asserts the
+    workflow declares the right shape, parsing the matrix rather than
+    substring-matching so explanatory comments don't sway it."""
     import yaml
 
     release_yml = _REPO / ".github" / "workflows" / "release.yml"
@@ -304,9 +304,9 @@ def test_release_workflow_produces_platform_artifact_matrix() -> None:
     workflow = yaml.safe_load(text)
     legs = workflow["jobs"]["bundle"]["strategy"]["matrix"]["include"]
     triples = {leg["triple"] for leg in legs}
-    assert triples == {"aarch64-apple-darwin", "x86_64-unknown-linux-gnu"}, (
-        "release.yml matrix must build exactly macOS arm64 + Linux x64 "
-        f"(no Intel macOS, no Windows); got {sorted(triples)}"
+    assert triples == {"aarch64-apple-darwin"}, (
+        "release.yml matrix must build exactly macOS arm64 "
+        f"(no Intel macOS, no Linux, no Windows); got {sorted(triples)}"
     )
     # SHA-256 checksums next to each artifact
     assert "sha256" in text.lower() or "shasum" in text.lower(), (
@@ -326,15 +326,15 @@ def _release_yml_text() -> str:
 def test_release_workflow_packages_cli_only_archive() -> None:
     """The release workflow must produce a CLI-only download tier: an archive
     bundling just the coffer-daemon + coffer-mcp-shim sidecars, named
-    coffer-cli-<triple>.tar.gz (macOS + Linux only — no Windows .zip). This is
-    the standalone alternative to the desktop installers."""
+    coffer-cli-<triple>.tar.gz (macOS only). This is the standalone alternative
+    to the desktop installers."""
     text = _release_yml_text()
     assert "coffer-cli-" in text, (
         "release.yml must package a CLI-only archive named coffer-cli-<triple>.*"
     )
     assert (
         "coffer-cli-${triple}.tar.gz" in text or "coffer-cli-${{ matrix.triple }}.tar.gz" in text
-    ), "release.yml must produce a coffer-cli tar.gz on macOS/Linux"
+    ), "release.yml must produce a coffer-cli tar.gz on macOS"
     # Both sidecars must go into the CLI archive.
     assert "coffer-daemon-${triple}" in text, "CLI archive must include coffer-daemon"
     assert "coffer-mcp-shim-${triple}" in text, "CLI archive must include coffer-mcp-shim"
@@ -398,8 +398,8 @@ def test_release_workflow_marks_macos_artifacts_unsigned() -> None:
 
 def test_release_workflow_runs_smoke_test() -> None:
     """The post-build smoke-test acceptance scenario must actually execute in
-    CI: a step must invoke scripts/smoke_test_bundle.sh on the (macOS + Linux)
-    matrix legs."""
+    CI: a step must invoke scripts/smoke_test_bundle.sh on the macOS matrix
+    leg."""
     text = _release_yml_text()
     assert "scripts/smoke_test_bundle.sh" in text, (
         "release.yml must invoke scripts/smoke_test_bundle.sh after the bundle is built"
@@ -407,8 +407,8 @@ def test_release_workflow_runs_smoke_test() -> None:
 
 
 def test_release_workflow_smoke_test_runs_on_all_legs() -> None:
-    """With Windows dropped, the matrix is macOS + Linux only, so the smoke
-    test runs on every leg and needs no Windows guard. It must also stay
+    """With Linux and Windows dropped, the matrix is macOS only, so the smoke
+    test runs on every leg and needs no platform guard. It must also stay
     portable: `timeout` is GNU coreutils (absent on macOS), so neither the
     smoke-test step nor the script may depend on it — a regression that
     previously failed the macOS leg outright."""

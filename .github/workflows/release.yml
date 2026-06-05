@@ -17,14 +17,11 @@ jobs:
           - os: macos-14
             triple: aarch64-apple-darwin
             artifact_suffix: macos-arm64
-          - os: ubuntu-22.04
-            triple: x86_64-unknown-linux-gnu
-            artifact_suffix: linux-x64
-          # macOS x64 (Intel, macos-13) is NOT built: GitHub's Intel runner pool
-          # is being deprecated and reliably starves this job (it sits "waiting
-          # for a runner" indefinitely), and PyInstaller can't cross-compile the
-          # x86_64 sidecars from the arm64 runner. Windows is likewise not built.
-          # Coffer ships macOS (Apple Silicon) + Linux x64.
+          # Coffer ships macOS (Apple Silicon) only. macOS x64 (Intel, macos-13)
+          # is NOT built: GitHub's Intel runner pool is being deprecated and
+          # reliably starves this job, and PyInstaller can't cross-compile the
+          # x86_64 sidecars from the arm64 runner. Linux and Windows bundles are
+          # not shipped — those legs were never validated.
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -57,19 +54,6 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.triple }}-cargo-${{ hashFiles('desktop/Cargo.toml', 'desktop/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.triple }}-cargo-
-
-      # Tauri 2 on Linux requires extra system libraries for WebKit + AppIndicator
-      - name: install Linux system deps
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libssl-dev \
-            patchelf
 
       - name: install backend (includes pyinstaller via dev extras)
         shell: bash
@@ -183,21 +167,9 @@ jobs:
             esac
           done
 
-      - name: collect artifacts (Linux)
-        if: matrix.os == 'ubuntu-22.04'
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          mkdir -p artifacts
-          ai=(desktop/target/${{ matrix.triple }}/release/bundle/appimage/*.AppImage)
-          deb=(desktop/target/${{ matrix.triple }}/release/bundle/deb/*.deb)
-          if (( ${#ai[@]} )); then cp "${ai[@]}" artifacts/; fi
-          if (( ${#deb[@]} )); then cp "${deb[@]}" artifacts/; fi
-
       # CLI-only download tier: package the three CLI binaries (coffer,
-      # coffer-daemon, coffer-mcp-shim) into one tar.gz per platform (macOS +
-      # Linux). The archive contains
+      # coffer-daemon, coffer-mcp-shim) into one tar.gz for macOS. The archive
+      # contains
       # PLAIN binary names (no triple suffix) so that both the one-line
       # installer and manual extraction yield co-located plain-named binaries,
       # which is required by the frozen detect-or-spawn logic (ADR-006):
@@ -303,9 +275,8 @@ jobs:
 
           ### Desktop app (most users)
 
-          Download the installer for your platform — macOS `.dmg`, Linux
-          `.AppImage` or `.deb`. The daemon, shim, and web UI are bundled;
-          install and launch. (Coffer ships macOS + Linux only.)
+          Download the macOS `.dmg` (Apple Silicon). The daemon, shim, and web
+          UI are bundled; install and launch. (Coffer ships macOS only.)
 
           ### CLI-only (headless / servers)
 

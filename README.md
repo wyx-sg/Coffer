@@ -9,7 +9,7 @@
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Python ≥3.12" src="https://img.shields.io/badge/python-%E2%89%A53.12-3776AB?logo=python&logoColor=white">
   <img alt="Claude Code compatible" src="https://img.shields.io/badge/Claude%20Code-compatible-C96442">
-  <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux-555">
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS-555">
 </p>
 
 > Local-first AI agent vault. Manage all your MCP servers from one place.
@@ -20,7 +20,7 @@ Coffer is a daemon + CLI that aggregates upstream MCP servers and re-exposes the
 
 ## Download & install
 
-### One-line CLI install (macOS / Linux)
+### One-line CLI install (macOS)
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
@@ -37,10 +37,9 @@ Download the installer from [Releases](https://github.com/wyx-sg/Coffer/releases
 | Platform             | File                              |
 | -------------------- | --------------------------------- |
 | macOS Apple silicon  | `Coffer_<version>_aarch64.dmg`    |
-| Linux x64 (AppImage) | `Coffer_<version>_amd64.AppImage` |
-| Linux x64 (deb)      | `coffer_<version>_amd64.deb`      |
 
-Each file has a `.sha256` sibling for verification.
+Coffer currently ships macOS (Apple Silicon) only. Each file has a `.sha256`
+sibling for verification.
 
 > **macOS (unsigned):** the build ships unsigned (notarisation pending), so macOS may say
 > Coffer is "damaged" on first open (it isn't — right-click → Open won't help here). Clear the

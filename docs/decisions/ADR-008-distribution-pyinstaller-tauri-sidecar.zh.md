@@ -208,3 +208,8 @@ Coffer 有三个可运行入口：长生命周期的 `coffer-daemon`、按 MCP �
   `https://wyx-sg.github.io/Coffer/` 提供）安装到 `~/.coffer/bin`；脚本同时
   自动将 `~/.coffer/bin` 添加到 `PATH`。支持的环境变量覆盖：
   `COFFER_INSTALL_DIR`、`COFFER_VERSION`、`COFFER_NO_MODIFY_PATH`。
+- **2026-06-05** —— 发布范围收窄为**仅 macOS（Apple Silicon）**。Linux 与
+  Windows 的 Tauri bundle 目标（`deb` / `appimage` / `msi` / `nsis`）以及
+  Linux 的 release matrix leg 从未端到端验证过,因此从 `release.yml` 和
+  `desktop/tauri.conf.json` 中移除,而非未经测试就发布。这里的 PyInstaller +
+  Tauri-sidecar 机制本身不变、与平台无关;待各目标真正测试通过后可再启用。

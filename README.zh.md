@@ -9,7 +9,7 @@
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Python ≥3.12" src="https://img.shields.io/badge/python-%E2%89%A53.12-3776AB?logo=python&logoColor=white">
   <img alt="Claude Code 兼容" src="https://img.shields.io/badge/Claude%20Code-%E5%85%BC%E5%AE%B9-C96442">
-  <img alt="平台" src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-macOS%20%C2%B7%20Linux-555">
+  <img alt="平台" src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-macOS-555">
 </p>
 
 > 本地优先 (local-first) 的 AI agent 保险库。一个地方统一管理你的 MCP 服务器。
@@ -20,7 +20,7 @@ Coffer 是一个守护进程 (daemon) + CLI，它把上游 (upstream) MCP 服务
 
 ## 下载与安装
 
-### 一行命令安装（macOS / Linux）
+### 一行命令安装（macOS）
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
@@ -37,10 +37,9 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 | 平台                  | 文件                              |
 | --------------------- | --------------------------------- |
 | macOS Apple silicon   | `Coffer_<version>_aarch64.dmg`    |
-| Linux x64（AppImage） | `Coffer_<version>_amd64.AppImage` |
-| Linux x64（deb）      | `coffer_<version>_amd64.deb`      |
 
-每份文件都有一个 `.sha256` 邻居文件可供校验。
+Coffer 目前只发布 macOS（Apple Silicon）版本。每份文件都有一个 `.sha256`
+邻居文件可供校验。
 
 > **macOS（未签名）：** 构建未签名（公证待完成），首次打开时 macOS 可能提示 Coffer「已损坏」
 > （并非真的损坏——此时右键「打开」无效）。清除隔离标记：
