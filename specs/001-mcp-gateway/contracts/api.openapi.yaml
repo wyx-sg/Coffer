@@ -497,6 +497,23 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /keychain/{ref}:
+    get:
+      tags: [keychain]
+      operationId: getKeychainSecret
+      summary: Read a secret value from the OS keychain (audited).
+      parameters:
+        - name: ref
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[A-Za-z0-9_.-]+$" }
+      responses:
+        "200":
+          description: The stored secret value.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KeychainGetOut" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     delete:
       tags: [keychain]
       operationId: deleteKeychainSecret
@@ -509,6 +526,24 @@ paths:
       responses:
         "204":
           description: Secret removed (or already absent).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /keychain/{ref}/exists:
+    get:
+      tags: [keychain]
+      operationId: keychainSecretExists
+      summary: Report whether a secret is stored under a ref (no value returned).
+      parameters:
+        - name: ref
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[A-Za-z0-9_.-]+$" }
+      responses:
+        "200":
+          description: Presence flag.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KeychainExistsOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
 components:
@@ -564,6 +599,22 @@ components:
           type: string
           maxLength: 8192
           description: The secret value.
+
+    KeychainGetOut:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: string
+          description: The stored secret value.
+
+    KeychainExistsOut:
+      type: object
+      required: [present]
+      properties:
+        present:
+          type: boolean
+          description: Whether a secret is stored under the ref.
 
     CapabilityKeyBody:
       type: object

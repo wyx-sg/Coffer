@@ -23,6 +23,9 @@ class _FakeKeyring:
     def set(self, ref: str, value: str) -> None:
         self.store[ref] = value
 
+    def get(self, ref: str) -> str | None:
+        return self.store.get(ref)
+
     def delete(self, ref: str) -> None:
         self.store.pop(ref, None)
 
@@ -78,6 +81,81 @@ async def test_set_keychain_secret_stores_value() -> None:
     assert set_entry.event_type == "keychain_set"
     assert set_entry.details == {"ref": "github.GITHUB_TOKEN"}
     assert "ghp_secret" not in str(set_entry.details)
+
+
+@pytest.mark.asyncio
+async def test_exists_reports_presence_without_returning_value() -> None:
+    fake = _FakeKeyring()
+    fake.store["github.GITHUB_TOKEN"] = "ghp_secret"
+    transport = ASGITransport(_build_app(fake))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        present = await c.get("/api/v1/keychain/github.GITHUB_TOKEN/exists")
+        assert present.status_code == 200
+        assert present.json() == {"present": True}
+        # The secret value must never cross the API for a presence check.
+        assert "ghp_secret" not in present.text
+
+        absent = await c.get("/api/v1/keychain/absent.REF/exists")
+        assert absent.status_code == 200
+        assert absent.json() == {"present": False}
+
+
+@pytest.mark.asyncio
+async def test_exists_requires_token() -> None:
+    fake = _FakeKeyring()
+    fake.store["x"] = "y"
+    transport = ASGITransport(_build_app(fake))
+    async with AsyncClient(transport=transport, base_url="http://t") as c:
+        r = await c.get("/api/v1/keychain/x/exists")
+        assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_returns_value_and_audits_the_read() -> None:
+    fake = _FakeKeyring()
+    fake.store["github.GITHUB_TOKEN"] = "ghp_secret"
+    audit_repo = _FakeAuditRepo()
+    transport = ASGITransport(_build_app(fake, audit_repo))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        r = await c.get("/api/v1/keychain/github.GITHUB_TOKEN")
+        assert r.status_code == 200
+        assert r.json() == {"value": "ghp_secret"}
+    # The read is audited (ref only — value never in the audit row).
+    read_events = [e for e in audit_repo.entries if e.event_type == "keychain_read"]
+    assert len(read_events) == 1
+    assert read_events[0].details == {"ref": "github.GITHUB_TOKEN"}
+    assert "ghp_secret" not in str(read_events[0].details)
+
+
+@pytest.mark.asyncio
+async def test_get_missing_ref_returns_404() -> None:
+    fake = _FakeKeyring()
+    transport = ASGITransport(_build_app(fake))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        r = await c.get("/api/v1/keychain/absent.REF")
+        assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_requires_token() -> None:
+    fake = _FakeKeyring()
+    fake.store["x"] = "y"
+    transport = ASGITransport(_build_app(fake))
+    async with AsyncClient(transport=transport, base_url="http://t") as c:
+        r = await c.get("/api/v1/keychain/x")
+        assert r.status_code == 401
 
 
 @pytest.mark.asyncio

@@ -155,6 +155,16 @@ forbidden_modules = ["keyring"]
 # *direct* imports of keyring from surfaces/application are forbidden.
 allow_indirect_imports = "True"
 
+# Spec 006: the daemon is the sole keychain owner. The CLI must reach the
+# keychain only through the daemon's HTTP API, never the KeyringAdapter in
+# process — otherwise CLI-created items are owned by a different code identity
+# than the daemon that reads them, which makes macOS re-prompt.
+[[tool.importlinter.contracts]]
+name = "CLI does not access the keychain directly (spec 006)"
+type = "forbidden"
+source_modules = ["coffer.surfaces.cli"]
+forbidden_modules = ["coffer.infrastructure.credentials"]
+
 # Contract 5: cross-kind imports forbidden. Each kind's modules may not import
 # any other kind's modules; the kind-agnostic core (Resource/Audit/etc.) is the
 # only shared substrate. As more kinds land, append to BOTH source_modules and
