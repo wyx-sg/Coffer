@@ -107,7 +107,7 @@ import 副作用。
 
 | 关注点   | 位置                                                                          | 备注                                                                                 |
 | -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| 凭据     | `infrastructure/credentials/keyring_adapter.py`                               | 唯一可 import `keyring` 的文件。配置里只放 ref；在上游进程拉起时按需物化；永不落盘。 |
+| 凭据     | `infrastructure/credentials/keyring_adapter.py`                               | 唯一可 import `keyring` 的文件。**daemon 是唯一 keychain 所有者**:所有 surface(桌面、CLI、shim)都通过 daemon 的 `/api/v1/keychain` 路由访问 keychain —— CLI 不在进程内直接访问(spec 006)。配置里只放 ref；在上游进程拉起时按需物化；永不落盘。 |
 | 审计     | `domain/audit.py` + `application/audit_service.py` + `audit_log` 表           | 覆盖每一次资源生命周期变更。必须带 actor (cli / api / ui / system)。                 |
 | 保留策略 | `application/retention_service.py` + `retention_policies` 表 + asyncio worker | 每个日志类表注册为 `PrunableTable`；中央注册表强制执行 SQL allowlist。               |
 | 错误     | `domain/errors.py` + FastAPI 全局处理器                                       | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。   |
