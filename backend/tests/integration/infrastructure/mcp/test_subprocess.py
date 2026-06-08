@@ -6,6 +6,8 @@ lifecycle: spawn_and_initialize → request(s) → close.
 
 from __future__ import annotations
 
+import asyncio
+import subprocess
 import sys
 from pathlib import Path
 
@@ -13,6 +15,7 @@ import pytest
 
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import StdioTransport
+from coffer.infrastructure.daemon.orphan_sweep import record_spawn
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
@@ -120,6 +123,47 @@ sys.exit(0)
     await asyncio.sleep(0.1)
     assert out_file.exists(), "subprocess didn't run"
     assert out_file.read_text() == "I_AM_HERE"
+
+
+@pytest.mark.asyncio
+async def test_close_kills_leaked_recorded_process(tmp_path, monkeypatch) -> None:
+    """If aclose() fails to tear down the upstream subprocess (observed when a
+    long upstream write hangs the SDK teardown), close() must still kill every
+    PID it recorded. Otherwise the child leaks and accumulates across reconnects.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    conn = StdioUpstreamConnection(
+        transport=_transport("--tools", "read_file"),
+        env_overlay={},
+    )
+    await conn.spawn_and_initialize()
+
+    # Simulate a child that aclose() left behind: a live, recorded sleeper.
+    # Record the actual psutil cmdline (as production does) so the reap
+    # recycle-guard matches — the venv python3 wrapper execs the framework
+    # interpreter, so a constructed argv would not match.
+    import psutil
+
+    sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        # Let the venv python3 wrapper exec into the real interpreter before
+        # snapshotting its cmdline, so the recorded argv matches what psutil
+        # reports later (mirrors production, which records post-spawn).
+        await asyncio.sleep(0.3)
+        leaked = record_spawn(
+            conn._server_name, sleeper.pid, psutil.Process(sleeper.pid).cmdline()
+        )
+        conn._pid_files.append(leaked)
+
+        await conn.close()
+        await asyncio.sleep(0.5)
+
+        assert sleeper.poll() is not None, "close() did not kill the leaked upstream process"
+        assert not leaked.exists()
+    finally:
+        if sleeper.poll() is None:
+            sleeper.terminate()
+            sleeper.wait(timeout=5)
 
 
 @pytest.mark.asyncio

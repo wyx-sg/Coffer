@@ -8,9 +8,12 @@ import subprocess
 import sys
 import time
 
+import psutil
+
 from coffer.infrastructure.daemon.orphan_sweep import (
     _pid_dir,
     forget_spawn,
+    reap_pidfile,
     record_spawn,
     sweep_orphans,
 )
@@ -69,6 +72,57 @@ def test_sweep_skips_dead_pid(tmp_path, monkeypatch):
     # Dead PIDs aren't "killed" but their files are reaped
     assert killed == 0
     assert list(_pid_dir().glob("*.json")) == []
+
+
+def test_reap_pidfile_kills_process_and_descendants(tmp_path, monkeypatch):
+    """reap_pidfile must kill the recorded process AND its descendants — the
+    real leak is a `uv tool uvx` wrapper whose python grandchild outlives a
+    naive single-PID kill."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    code = (
+        "import subprocess, sys, time; "
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+        "time.sleep(60)"
+    )
+    parent = subprocess.Popen([sys.executable, "-c", code])
+    try:
+        # Wait for the grandchild to appear.
+        kids: list = []
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            kids = psutil.Process(parent.pid).children(recursive=True)
+            if kids:
+                break
+            time.sleep(0.05)
+        assert kids, "grandchild process never spawned"
+        kid_pids = [k.pid for k in kids]
+
+        # Record the *actual* cmdline psutil reports, exactly as production
+        # does (subprocess.py records psutil.Process(pid).cmdline()); the venv
+        # python3 wrapper execs the framework interpreter so the constructed
+        # argv would never match the recycle-guard.
+        actual_cmd = psutil.Process(parent.pid).cmdline()
+        path = record_spawn("test_server", parent.pid, actual_cmd)
+        assert reap_pidfile(path) is True
+        assert not path.exists()
+
+        time.sleep(0.5)
+        assert parent.poll() is not None
+        for kp in kid_pids:
+            assert not psutil.pid_exists(kp)
+    finally:
+        if parent.poll() is None:
+            parent.terminate()
+            parent.wait(timeout=5)
+
+
+def test_reap_pidfile_dead_pid_returns_false_and_removes_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    proc.wait(timeout=5)
+    path = record_spawn("test_server", proc.pid, [sys.executable, "-c", "pass"])
+    assert reap_pidfile(path) is False
+    assert not path.exists()
 
 
 def test_sweep_skips_pid_recycled_with_different_cmdline(tmp_path, monkeypatch):
