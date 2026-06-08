@@ -253,8 +253,13 @@ class StdioUpstreamConnection:
         # the tracking file; it no-ops on already-dead PIDs, so the graceful
         # path is unaffected. (Replaces the old startup-only orphan sweep as the
         # primary guard — that sweep never fired on a long-lived daemon.)
+        #
+        # reap_pidfile blocks (psutil.wait_procs up to ~2s when a wedged child
+        # must be escalated to SIGKILL), so run it off the event loop — this
+        # teardown can fire from evict() inside a live request path.
+        loop = asyncio.get_running_loop()
         for path in self._pid_files:
-            reap_pidfile(path)
+            await loop.run_in_executor(None, reap_pidfile, path)
         self._pid_files = []
 
         self._session = None

@@ -12,14 +12,23 @@ import psutil
 
 from coffer.infrastructure.daemon.orphan_sweep import (
     _pid_dir,
-    forget_spawn,
     reap_pidfile,
     record_spawn,
     sweep_orphans,
 )
 
 
-def test_record_and_forget(tmp_path, monkeypatch):
+def _wait_until(predicate, timeout: float = 5.0) -> bool:
+    """Poll `predicate` until true or `timeout` elapses. Avoids fixed sleeps."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.05)
+    return predicate()
+
+
+def test_record_spawn_writes_pidfile(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     cmd = [sys.executable, "-c", "import time; time.sleep(10)"]
     proc = subprocess.Popen(cmd)
@@ -28,8 +37,7 @@ def test_record_and_forget(tmp_path, monkeypatch):
         assert path.exists()
         payload = json.loads(path.read_text())
         assert payload["pid"] == proc.pid
-        forget_spawn(path)
-        assert not path.exists()
+        assert payload["command_line"] == cmd
     finally:
         proc.terminate()
         proc.wait(timeout=5)
@@ -106,10 +114,9 @@ def test_reap_pidfile_kills_process_and_descendants(tmp_path, monkeypatch):
         assert reap_pidfile(path) is True
         assert not path.exists()
 
-        time.sleep(0.5)
-        assert parent.poll() is not None
+        assert _wait_until(lambda: parent.poll() is not None)
         for kp in kid_pids:
-            assert not psutil.pid_exists(kp)
+            assert _wait_until(lambda kp=kp: not psutil.pid_exists(kp))
     finally:
         if parent.poll() is None:
             parent.terminate()

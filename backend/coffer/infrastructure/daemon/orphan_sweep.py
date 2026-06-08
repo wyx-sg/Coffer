@@ -37,12 +37,6 @@ def record_spawn(server_name: str, pid: int, command_line: list[str]) -> Path:
     return path
 
 
-def forget_spawn(path: Path) -> None:
-    """Called by close() on graceful shutdown."""
-    with contextlib.suppress(OSError):
-        path.unlink(missing_ok=True)
-
-
 def _kill_proc_tree(proc: psutil.Process, *, timeout: float = 2.0) -> None:
     """SIGTERM then SIGKILL ``proc`` and every descendant.
 

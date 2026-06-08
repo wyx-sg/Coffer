@@ -9,8 +9,10 @@ from __future__ import annotations
 import asyncio
 import subprocess
 import sys
+import time
 from pathlib import Path
 
+import psutil
 import pytest
 
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
@@ -142,22 +144,29 @@ async def test_close_kills_leaked_recorded_process(tmp_path, monkeypatch) -> Non
     # Record the actual psutil cmdline (as production does) so the reap
     # recycle-guard matches — the venv python3 wrapper execs the framework
     # interpreter, so a constructed argv would not match.
-    import psutil
-
     sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     try:
         # Let the venv python3 wrapper exec into the real interpreter before
-        # snapshotting its cmdline, so the recorded argv matches what psutil
-        # reports later (mirrors production, which records post-spawn).
-        await asyncio.sleep(0.3)
-        leaked = record_spawn(
-            conn._server_name, sleeper.pid, psutil.Process(sleeper.pid).cmdline()
-        )
+        # snapshotting its cmdline (argv[0] flips from the venv shim to the
+        # framework interpreter), so the recorded argv matches what psutil
+        # reports later. Poll until the cmdline is stable across two reads.
+        deadline = time.time() + 5
+        prev = psutil.Process(sleeper.pid).cmdline()
+        while time.time() < deadline:
+            await asyncio.sleep(0.05)
+            cur = psutil.Process(sleeper.pid).cmdline()
+            if cur and cur == prev:
+                break
+            prev = cur
+        leaked = record_spawn(conn._server_name, sleeper.pid, prev)
         conn._pid_files.append(leaked)
 
         await conn.close()
-        await asyncio.sleep(0.5)
 
+        # Poll instead of a fixed sleep — reap escalates SIGTERM→SIGKILL.
+        deadline = time.time() + 5
+        while time.time() < deadline and sleeper.poll() is None:
+            await asyncio.sleep(0.05)
         assert sleeper.poll() is not None, "close() did not kill the leaked upstream process"
         assert not leaked.exists()
     finally:
