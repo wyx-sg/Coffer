@@ -71,14 +71,18 @@ section that future readers most often want — don't skip it.>
 
 ## 索引
 
-| ADR                                                      | 标题                                                        | 状态     |
-| -------------------------------------------------------- | ----------------------------------------------------------- | -------- |
-| [001](ADR-001-resource-framework-upfront.md)             | 提前设计资源框架，而非等到第二个功能再做                    | Accepted |
-| [002](ADR-002-code-layout-layer-first.md)                | 代码布局：分层优先，按 kind 分子目录                        | Accepted |
-| [003](ADR-003-resource-identifier-format.md)             | 资源标识符格式：`<kind>:<name>`，而非 URN                   | Accepted |
-| [004](ADR-004-capability-state-model.md)                 | MCP 能力状态：偏好持久化于 DB，列表实时查询上游             | Accepted |
-| [005](ADR-005-session-subprocess-model.md)               | 每个下游客户端会话一套独立的上游子进程                      | Accepted |
-| [006](ADR-006-daemon-detect-or-spawn.md)                 | Daemon 探测或拉起模式；daemon 生命周期长于任何单个客户端    | Accepted |
-| [007](ADR-007-everything-is-a-resource-kind.md)          | 信息架构：每个被管理的实体都是一种 resource kind            | Accepted |
-| [008](ADR-008-distribution-pyinstaller-tauri-sidecar.md) | 分发：用 PyInstaller 打包 daemon + shim，作为 Tauri sidecar | Accepted |
-| [009](ADR-009-cross-platform-skill-delivery.md)          | 跨平台 skill 投递：symlink / junction / copy-fallback       | Accepted |
+| ADR                                                      | 标题                                                                      | 状态                                                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [001](ADR-001-resource-framework-upfront.md)             | 提前设计资源框架，而非等到第二个功能再做                                  | Accepted                                                                                                  |
+| [002](ADR-002-code-layout-layer-first.md)                | 代码布局：分层优先，按 kind 分子目录                                      | Accepted                                                                                                  |
+| [003](ADR-003-resource-identifier-format.md)             | 资源标识符格式：`<kind>:<name>`，而非 URN                                 | Accepted                                                                                                  |
+| [004](ADR-004-capability-state-model.md)                 | MCP 能力状态：偏好持久化于 DB，列表实时查询上游                           | Accepted                                                                                                  |
+| [005](ADR-005-session-subprocess-model.md)               | 每个下游客户端会话一套独立的上游子进程                                    | Accepted                                                                                                  |
+| [006](ADR-006-daemon-detect-or-spawn.md)                 | Daemon 探测或拉起模式；daemon 生命周期长于任何单个客户端                  | Accepted                                                                                                  |
+| [007](ADR-007-everything-is-a-resource-kind.md)          | 信息架构：每个被管理的实体都是一种 resource kind                          | Accepted                                                                                                  |
+| [008](ADR-008-distribution-pyinstaller-tauri-sidecar.md) | 分发：用 PyInstaller 打包 daemon + shim，作为 Tauri sidecar               | Accepted                                                                                                  |
+| [009](ADR-009-cross-platform-skill-delivery.md)          | 跨平台 skill 投递：symlink / junction / copy-fallback                     | Accepted                                                                                                  |
+| [010](ADR-010-llamaindex-rag-engine.md)                  | RAG 引擎：LlamaIndex 藏在 application 端口背后                            | 已被 [012](ADR-012-files-as-truth-sqlite-retrieval.md) 取代                                               |
+| [011](ADR-011-mem0-memory-engine.md)                     | Memory 引擎：mem0 藏在 application 端口背后                               | 已被 [012](ADR-012-files-as-truth-sqlite-retrieval.md)、[013](ADR-013-agent-native-shared-memory.md) 取代 |
+| [012](ADR-012-files-as-truth-sqlite-retrieval.md)        | 检索栈：markdown 文件即事实源，SQLite FTS5 + sqlite-vec，可配置 embedding | Accepted                                                                                                  |
+| [013](ADR-013-agent-native-shared-memory.md)             | agent 原生的共享 memory 投影                                              | Accepted                                                                                                  |

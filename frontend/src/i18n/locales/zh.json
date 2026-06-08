@@ -3,6 +3,7 @@
     "save": "保存",
     "cancel": "取消",
     "delete": "删除",
+    "edit": "编辑",
     "loading": "加载中…",
     "enabled": "已启用",
     "disabled": "已禁用",
@@ -39,6 +40,8 @@
     },
     "mcpServers": "MCP 服务器",
     "skills": "Skill",
+    "knowledgeBases": "知识库",
+    "memory": "记忆",
     "settings": "设置",
     "language": "语言",
     "collapse": "折叠侧边栏",
@@ -438,7 +441,18 @@
       "overview": "概览",
       "config": "配置文件",
       "skills": "Skill",
-      "mcpServers": "MCP 服务器"
+      "mcpServers": "MCP 服务器",
+      "memory": "记忆"
+    },
+    "memoryTab": {
+      "title": "记忆投影",
+      "subtitle": "将记忆库投影到该 agent 的原生记忆位置，使其自身的编辑保持为权威来源并共享。",
+      "empty": "还没有记忆库。",
+      "notProjected": "尚未投影到该 agent。",
+      "nativeDisabled": "已禁用原生记忆，以避免产生分叉副本。",
+      "merged": "已先将原有的原生文件合并进记忆库。",
+      "missingProjectRoot": "该项目记忆库尚无已知根目录，无法投影。",
+      "toggleAria": "切换将 {{store}} 投影到该 agent"
     },
     "configDirOverride": "配置目录（可选）",
     "configDirPlaceholder": "留空则使用默认目录（~/.claude）",
@@ -596,6 +610,140 @@
       "featureDrift": {
         "title": "漂移检测",
         "body": "校验每个已启用的绑定是否仍与磁盘上的链接一致。"
+      }
+    }
+  },
+  "knowledgeBases": {
+    "title": "知识库",
+    "subtitle": "本地文档集合，你的 agent 可通过 MCP 网关检索。",
+    "add": "新建知识库",
+    "empty": "还没有知识库。先创建一个，再上传文档供 agent 检索。",
+    "loadFailed": "加载知识库失败",
+    "searchPlaceholder": "搜索知识库…",
+    "noMatches": "没有匹配的知识库。",
+    "modes": {
+      "grep": "Grep",
+      "keyword": "关键词",
+      "vector": "向量"
+    },
+    "sourceMode": {
+      "converted": "已转换",
+      "edited": "已编辑"
+    },
+    "cols": {
+      "name": "名称",
+      "mode": "检索",
+      "description": "描述"
+    },
+    "dialog": {
+      "title": "新建知识库",
+      "name": "名称",
+      "description": "描述（可选）",
+      "vector": "向量检索",
+      "vectorHint": "新增基于含义的向量检索（关键词与 grep 始终开启）。需要配置 embedding 提供方。",
+      "provider": "Embedding 提供方",
+      "embeddingModel": "Embedding 模型",
+      "dimensions": "维度",
+      "baseUrl": "Base URL",
+      "credential": "凭据引用"
+    },
+    "detail": {
+      "metrics": "{{docs}} 个文档 · {{chunks}} 个分块 · {{bytes}}",
+      "reindex": "重建索引",
+      "reindexResult": "已重建：扫描 {{scanned}}，重建 {{reindexed}}，未变更 {{skipped}}。",
+      "search": "检索",
+      "mode": "模式",
+      "searchPlaceholder": "在此知识库中检索…",
+      "fallback": "未配置 embedding——已回退到 {{mode}}。",
+      "score": "得分={{score}}",
+      "noMatches": "没有匹配。",
+      "grep": "Grep",
+      "grepPlaceholder": "在 Markdown 文件上做精确/正则匹配的模式…",
+      "truncated": "结果已截断（达到最大匹配数或超时）。",
+      "documents": "文档",
+      "upload": "上传",
+      "chunks": "{{count}} 个分块",
+      "editAria": "编辑 {{title}} 的 Markdown",
+      "deleteConfirm": "删除文档 {{title}}？此操作不可撤销。",
+      "loadFailed": "加载该知识库失败。",
+      "empty": "还没有文档。上传任意格式的文件以填充该知识库。"
+    },
+    "welcome": {
+      "title": "管理你的知识库",
+      "body": "收集本地文档，让你的编码 agent 通过 MCP 网关检索——关键词与 grep 开箱即用，向量检索一键开启。",
+      "featureKeyword": {
+        "title": "默认关键词 + grep",
+        "body": "即时检索已摄入的文件——无需 embedding 模型，也不下载。"
+      },
+      "featureSemantic": {
+        "title": "需要时再用向量",
+        "body": "通过可配置的 embedding 提供方启用基于含义的向量检索。"
+      },
+      "featureAgent": {
+        "title": "可被 agent 访问",
+        "body": "agent 通过 Coffer 内置的 MCP 工具检索并获取文档。"
+      }
+    }
+  },
+  "memory": {
+    "title": "记忆",
+    "subtitle": "你的 agent 可通过 MCP 网关读写的本地记忆库。记忆库会自动创建。",
+    "empty": "还没有记忆库——随着 agent 工作会自动出现。",
+    "loadFailed": "加载记忆库失败",
+    "searchPlaceholder": "搜索记忆库…",
+    "noMatches": "没有匹配的记忆库。",
+    "modes": {
+      "grep": "Grep",
+      "keyword": "关键词",
+      "vector": "向量"
+    },
+    "cols": {
+      "name": "名称",
+      "scope": "范围",
+      "description": "描述"
+    },
+    "scope": {
+      "global": "全局",
+      "project": "项目",
+      "unknown": "未知"
+    },
+    "detail": {
+      "metrics": "{{facts}} 条事实 · {{bytes}}",
+      "recall": "回忆",
+      "mode": "模式",
+      "recallPlaceholder": "从该记忆库回忆事实…",
+      "fallback": "未配置 embedding——已回退到关键词。",
+      "score": "得分={{score}}",
+      "noMatches": "没有匹配。",
+      "addFact": "添加事实",
+      "factName": "名称（可选）",
+      "factNamePlaceholder": "留空则从正文派生",
+      "factType": "类型（可选）",
+      "factDescription": "描述（可选）",
+      "factBody": "事实",
+      "factBodyPlaceholder": "用 Markdown 写下这条事实…",
+      "facts": "事实",
+      "clearAll": "清空全部",
+      "clearConfirm": "清空 {{store}} 中的全部事实？此操作不可撤销。",
+      "deleteConfirm": "删除事实 {{name}}？此操作不可撤销。",
+      "editAria": "编辑事实 {{name}}",
+      "loadFailed": "加载该记忆库失败。",
+      "empty": "还没有事实。"
+    },
+    "welcome": {
+      "title": "你的共享 agent 记忆",
+      "body": "一个全局库加每个项目一个库，跨所有 agent 共享——事实直接写入（无需 LLM），并通过 Coffer 内置的 MCP 工具回忆。所有数据都留在你的机器上。",
+      "featureRecall": {
+        "title": "记住事实",
+        "body": "agent 跨会话存储并回忆短事实。"
+      },
+      "featureLocal": {
+        "title": "本地优先",
+        "body": "事实是机器上的纯 Markdown 文件；索引从中重建。"
+      },
+      "featureAgent": {
+        "title": "可被 agent 访问",
+        "body": "通过 Coffer 内置的 MCP 工具增改、回忆并整理事实。"
       }
     }
   }

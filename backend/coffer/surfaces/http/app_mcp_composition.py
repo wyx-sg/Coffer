@@ -22,6 +22,7 @@ import os
 from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
+from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.mcp.credential_resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
@@ -54,6 +55,7 @@ def wire_mcp_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: object,
+    builtin_tools: BuiltinToolRegistry | None = None,
 ) -> tuple[SubprocessSupervisor, dict[str, SubprocessSupervisor]]:
     """Build and wire all MCP-specific plumbing into the app.
 
@@ -116,6 +118,7 @@ def wire_mcp_kind(
             preferences=prefs_repo,
             invocations=inv_repo,
             on_dispose=_drop_supervisor,
+            builtin_tools=builtin_tools,
         )
 
     # 6. Set ALL the MCP dependency providers

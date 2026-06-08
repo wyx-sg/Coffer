@@ -1,0 +1,138 @@
+// frontend/src/kinds/knowledge_base/KnowledgeBaseDocumentList.tsx
+//
+// Documents section: the Upload action (any format → Markdown on the server)
+// and the document list with per-doc Markdown edit (inline textarea), a
+// source_mode badge, and delete. All state, mutations, and the hidden file
+// input live in the page; this component is presentational.
+import { useTranslation } from "react-i18next";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { translateApiError } from "@/lib/api/errors";
+import { type DocumentListOut, type DocumentOut } from "./api";
+
+interface Props {
+  docs: DocumentListOut | undefined;
+  ingestError: unknown;
+  isIngestPending: boolean;
+  editingId: string | null;
+  editText: string;
+  isStartEditPending: boolean;
+  isDeletePending: boolean;
+  isEditPending: boolean;
+  onPickFile: () => void;
+  onStartEdit: (id: string) => void;
+  onDelete: (id: string) => void;
+  onEditTextChange: (value: string) => void;
+  onSaveEdit: (id: string) => void;
+  onCancelEdit: () => void;
+}
+
+export function KnowledgeBaseDocumentList({
+  docs,
+  ingestError,
+  isIngestPending,
+  editingId,
+  editText,
+  isStartEditPending,
+  isDeletePending,
+  isEditPending,
+  onPickFile,
+  onStartEdit,
+  onDelete,
+  onEditTextChange,
+  onSaveEdit,
+  onCancelEdit,
+}: Props) {
+  const { t } = useTranslation();
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-medium">{t("knowledgeBases.detail.documents")}</h2>
+        <Button onClick={onPickFile} disabled={isIngestPending}>
+          {isIngestPending ? t("common.saving") : t("knowledgeBases.detail.upload")}
+        </Button>
+      </div>
+      {ingestError ? (
+        <p className="text-sm text-destructive">{translateApiError(t, ingestError)}</p>
+      ) : null}
+      {docs ? (
+        <ul className="divide-y rounded border">
+          {docs.documents.map((d: DocumentOut) => (
+            <li key={d.id} className="space-y-2 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{d.title}</span>
+                    <Badge variant={d.source_mode === "edited" ? "default" : "secondary"}>
+                      {t(`knowledgeBases.sourceMode.${d.source_mode}`)}
+                    </Badge>
+                  </div>
+                  <div className="font-mono text-xs text-muted-foreground">{d.id}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("knowledgeBases.detail.chunks", { count: d.chunk_count ?? 0 })}
+                  </div>
+                </div>
+                {editingId === d.id ? null : (
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onStartEdit(d.id)}
+                      disabled={isStartEditPending}
+                    >
+                      {t("common.edit")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            t("knowledgeBases.detail.deleteConfirm", { title: d.title }),
+                          )
+                        ) {
+                          onDelete(d.id);
+                        }
+                      }}
+                      disabled={isDeletePending}
+                    >
+                      {t("common.delete")}
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {editingId === d.id ? (
+                <div className="space-y-2">
+                  <textarea
+                    aria-label={t("knowledgeBases.detail.editAria", { title: d.title })}
+                    className="min-h-48 w-full rounded-md border border-input bg-background p-2 font-mono text-xs"
+                    value={editText}
+                    onChange={(e) => onEditTextChange(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => onSaveEdit(d.id)}
+                      disabled={!editText.trim() || isEditPending}
+                    >
+                      {isEditPending ? t("common.saving") : t("common.save")}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={onCancelEdit}>
+                      {t("common.cancel")}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </li>
+          ))}
+          {docs.documents.length === 0 ? (
+            <li className="p-3 text-sm text-muted-foreground">
+              {t("knowledgeBases.detail.empty")}
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+    </section>
+  );
+}

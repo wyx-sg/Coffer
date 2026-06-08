@@ -42,6 +42,17 @@ class AuditEventType(StrEnum):
     SKILL_AUTOBIND_SKIPPED = "skill_autobind_skipped"
     SKILL_RELINKED = "skill_relinked"
     SKILL_DRIFT_DETECTED = "skill_drift_detected"
+    # spec 006-knowledge-base
+    KB_DOCUMENT_INGESTED = "kb_document_ingested"
+    KB_DOCUMENT_UPDATED = "kb_document_updated"
+    KB_DOCUMENT_DELETED = "kb_document_deleted"
+    KB_REINDEXED = "kb_reindexed"
+    # memory kind (spec 007)
+    MEMORY_ADDED = "memory_added"
+    MEMORY_UPDATED = "memory_updated"
+    MEMORY_DELETED = "memory_deleted"
+    MEMORY_CLEARED = "memory_cleared"
+    MEMORY_PROJECTED = "memory_projected"
 
 
 @dataclass

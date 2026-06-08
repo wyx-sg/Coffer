@@ -25,7 +25,31 @@ import httpx
 import pytest
 
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-from coffer.surfaces.shim.main import _Bridge
+from coffer.surfaces.shim.main import _Bridge, _inject_cwd
+
+
+def test_inject_cwd_stamps_launch_cwd_into_initialize_meta(monkeypatch):
+    """FR-004: the shim reports its launch cwd at the initialize handshake so
+    the daemon can resolve the per-project memory store."""
+    monkeypatch.setattr("os.getcwd", lambda: "/work/my-repo")
+    envelope: dict[str, Any] = {"method": "initialize", "params": {"protocolVersion": "x"}}
+    _inject_cwd(envelope)
+    assert envelope["params"]["_meta"]["coffer/cwd"] == "/work/my-repo"
+
+
+def test_inject_cwd_creates_params_and_meta_when_absent(monkeypatch):
+    monkeypatch.setattr("os.getcwd", lambda: "/p")
+    envelope: dict[str, Any] = {"method": "initialize"}
+    _inject_cwd(envelope)
+    assert envelope["params"]["_meta"]["coffer/cwd"] == "/p"
+
+
+def test_inject_cwd_preserves_existing_meta(monkeypatch):
+    monkeypatch.setattr("os.getcwd", lambda: "/p")
+    envelope: dict[str, Any] = {"params": {"_meta": {"other": "keep"}}}
+    _inject_cwd(envelope)
+    assert envelope["params"]["_meta"]["other"] == "keep"
+    assert envelope["params"]["_meta"]["coffer/cwd"] == "/p"
 
 
 def _make_bridge(port: int = 18765) -> _Bridge:

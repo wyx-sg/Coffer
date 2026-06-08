@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import {
   Bot,
   Boxes,
+  Brain,
+  Library,
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
@@ -59,6 +61,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server, end: true },
       { to: "/skills", labelKey: "nav.skills", icon: Sparkles, end: true },
+      { to: "/knowledge-bases", labelKey: "nav.knowledgeBases", icon: Library, end: true },
+      { to: "/memory", labelKey: "nav.memory", icon: Brain, end: true },
     ],
   },
   {

@@ -1,0 +1,669 @@
+openapi: 3.0.3
+info:
+  title: Coffer — Knowledge Base API (redesign)
+  version: 0.2.0
+  description: |
+    REST surface for the `knowledge_base` resource kind — the KB face of the
+    shared knowledge substrate (spec 006, redesign). Uploads of ANY format are
+    converted to Markdown on disk (the source of truth); SQLite (documents /
+    chunks / FTS5 / sqlite-vec) is a rebuildable index. Retrieval has three
+    modes: `grep`, `keyword`, `vector`. The KB is user-curated; agents read it
+    read-only over the MCP gateway.
+
+    All routes are loopback-only and require the daemon's auth token
+    (`Authorization: Bearer <token>` from `~/.coffer/daemon.json`). Errors use
+    the app-wide envelope `{ "error": { "code", "message", "details" } }`.
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Local daemon (default port; actual port read from daemon.json)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/knowledge_bases:
+    post:
+      summary: Create a knowledge base
+      description: |
+        Convenience endpoint equivalent to `POST /api/v1/resources` with
+        kind="knowledge_base". Returns the created Resource as a `KnowledgeBaseOut`.
+      operationId: createKnowledgeBase
+      tags: [knowledge_bases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeBaseCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeBaseOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/AlreadyExists"
+
+    get:
+      summary: List knowledge bases
+      operationId: listKnowledgeBases
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeBaseListOut"
+
+  /api/v1/knowledge_bases/{name}:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+    get:
+      summary: Get one knowledge base
+      operationId: getKnowledgeBase
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeBaseOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge_bases/{name}/documents:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+
+    post:
+      summary: Upload and ingest a document (any format → Markdown)
+      description: |
+        Streams the uploaded bytes, detects format, converts to Markdown via the
+        MarkdownConverter registry, cleans, writes `docs/<doc-id>.md` (truth) and
+        `raw/<doc-id>.<ext>` (provenance), and indexes into FTS5 (and sqlite-vec
+        if vector is enabled). `source_mode` is set to `converted`.
+      operationId: ingestDocument
+      tags: [knowledge_bases]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                replace:
+                  type: boolean
+                  default: false
+                  description: If true, an existing document with the same source hash is replaced.
+      responses:
+        "201":
+          description: Document ingested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Duplicate source hash without replace=true
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          description: File exceeds max_document_bytes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "415":
+          description: Unsupported type, or empty after conversion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Converter engine unavailable for this format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+    get:
+      summary: List documents in a knowledge base
+      operationId: listDocuments
+      tags: [knowledge_bases]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentListOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge_bases/{name}/documents/{document_id}:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+      - $ref: "#/components/parameters/DocumentId"
+
+    get:
+      summary: Get a document's Markdown body and frontmatter
+      operationId: getDocument
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentDetailOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      summary: Edit a document's Markdown (sets source_mode=edited, reindexes)
+      description: |
+        Replaces the Markdown body. The document's `source_mode` becomes `edited`,
+        which blocks future re-conversion from the raw original until a new source
+        is uploaded. Runs the single idempotent re-index routine (no-op if the
+        content hash is unchanged).
+      operationId: editDocument
+      tags: [knowledge_bases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentEditRequest"
+      responses:
+        "200":
+          description: Edited and reindexed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Re-embedding engine unavailable (vector enabled)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+    delete:
+      summary: Delete a document
+      operationId: deleteDocument
+      tags: [knowledge_bases]
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge_bases/{name}/documents/{document_id}/reconvert:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+      - $ref: "#/components/parameters/DocumentId"
+    post:
+      summary: Re-run conversion of a document from its stored raw source
+      description: |
+        Re-converts the document from the original raw upload in `raw/`,
+        regenerating the Markdown and reindexing. Refused with
+        `RECONVERSION_BLOCKED` (409) when the document's `source_mode` is
+        `edited`, so hand edits are never clobbered — upload a new source file to
+        reset `source_mode` to `converted` first.
+      operationId: reconvertDocument
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: Re-converted and reindexed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ReconversionBlocked"
+
+  /api/v1/knowledge_bases/{name}/reindex:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+    post:
+      summary: Rescan files and rebuild the index from disk
+      description: |
+        Rescans `docs/` for deltas and runs the single re-index routine per file,
+        reconstructing all SQLite index state from the Markdown files. Re-embeds
+        if vector is enabled.
+      operationId: reindexKnowledgeBase
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: Reindex complete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReindexResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Re-embedding engine unavailable (vector enabled)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/knowledge_bases/{name}/search:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+    post:
+      summary: Search a knowledge base (keyword / vector)
+      description: |
+        Relevance search. `mode` defaults to the KB's `default_mode`. A `vector`
+        request on a KB with no embedding configured falls back to `keyword`,
+        flagged in the response (`fallback`) — never an error.
+      operationId: searchKnowledgeBase
+      tags: [knowledge_bases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge_bases/{name}/grep:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+    post:
+      summary: Grep (ripgrep) over the Markdown files
+      description: |
+        Exact / regex match over `docs/*.md`. No index, no embedding. Bounded by
+        `max_matches` and a server-side timeout.
+      operationId: grepKnowledgeBase
+      tags: [knowledge_bases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrepRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrepResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge_bases/{name}/metrics:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+    get:
+      summary: KB counts, indexed modes, and on-disk size
+      operationId: getKnowledgeBaseMetrics
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeBaseMetrics"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    KBName:
+      in: path
+      name: name
+      required: true
+      schema: { type: string }
+    DocumentId:
+      in: path
+      name: document_id
+      required: true
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: Resource or document not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    AlreadyExists:
+      description: A knowledge base with the same name already exists
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ReconversionBlocked:
+      description: Document source_mode is 'edited'; re-conversion is refused
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    RetrievalMode:
+      type: string
+      enum: [grep, keyword, vector]
+
+    EmbeddingConfig:
+      type: object
+      required: [provider, model, dimensions]
+      properties:
+        provider:
+          type: string
+          description: openai | openrouter | voyage | jina | gemini | azure | dashscope | ollama | lmstudio | local
+          example: local
+        model:
+          type: string
+          example: bge-m3
+        base_url:
+          type: string
+          nullable: true
+          description: OpenAI-compatible endpoint; null for the provider default; ignored for `local`.
+        credential_ref:
+          type: string
+          nullable: true
+          description: Keychain reference (never plaintext); null for `local` / keyless endpoints.
+        dimensions:
+          type: integer
+          minimum: 1
+          example: 1024
+
+    KnowledgeBaseConfig:
+      type: object
+      properties:
+        enabled_modes:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetrievalMode"
+          default: [keyword, grep]
+        default_mode:
+          allOf:
+            - $ref: "#/components/schemas/RetrievalMode"
+          default: keyword
+        chunk_size:
+          type: integer
+          minimum: 64
+          maximum: 2048
+          default: 512
+        chunk_overlap:
+          type: integer
+          minimum: 0
+          maximum: 1024
+          default: 64
+        max_document_bytes:
+          type: integer
+          minimum: 1024
+          maximum: 104857600
+          default: 26214400
+        embedding:
+          allOf:
+            - $ref: "#/components/schemas/EmbeddingConfig"
+          nullable: true
+          description: Required only when `vector` is in enabled_modes.
+
+    KnowledgeBaseCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string, nullable: true }
+        config:
+          $ref: "#/components/schemas/KnowledgeBaseConfig"
+
+    KnowledgeBaseOut:
+      type: object
+      required: [ref, name, kind, config, enabled, created_at, updated_at]
+      properties:
+        ref: { type: string, example: "knowledge_base:design-notes" }
+        kind: { type: string, example: knowledge_base }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        config:
+          $ref: "#/components/schemas/KnowledgeBaseConfig"
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    KnowledgeBaseListOut:
+      type: object
+      required: [knowledge_bases]
+      properties:
+        knowledge_bases:
+          type: array
+          items:
+            $ref: "#/components/schemas/KnowledgeBaseOut"
+
+    DocumentOut:
+      type: object
+      required:
+        [
+          id,
+          kind,
+          resource_name,
+          title,
+          source_mode,
+          content_sha256,
+          metadata,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id:
+          { type: string, description: First 16 hex chars of the source sha256 }
+        kind: { type: string, example: knowledge_base }
+        resource_name: { type: string }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        source_mode:
+          type: string
+          enum: [converted, edited]
+        content_sha256: { type: string }
+        chunk_count: { type: integer }
+        metadata:
+          type: object
+          description: Per-face metadata (KB keys below).
+          properties:
+            original_filename: { type: string }
+            original_format: { type: string, example: docx }
+            source_sha256: { type: string }
+            converted_at: { type: string, format: date-time }
+            conversion_engine: { type: string, example: markitdown }
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    DocumentListOut:
+      type: object
+      required: [documents, total]
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentOut"
+        total: { type: integer }
+
+    DocumentDetailOut:
+      allOf:
+        - $ref: "#/components/schemas/DocumentOut"
+        - type: object
+          required: [markdown]
+          properties:
+            markdown:
+              type: string
+              description: The normalized Markdown body (without frontmatter).
+
+    DocumentEditRequest:
+      type: object
+      required: [markdown]
+      properties:
+        markdown:
+          type: string
+          minLength: 1
+          description: The new Markdown body. Replaces the file; sets source_mode=edited.
+
+    ReindexResult:
+      type: object
+      required: [documents_scanned, documents_reindexed, documents_skipped]
+      properties:
+        documents_scanned: { type: integer }
+        documents_reindexed: { type: integer }
+        documents_skipped:
+          { type: integer, description: Unchanged content (no-op). }
+
+    SearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string, minLength: 1, maxLength: 4096 }
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+        mode:
+          allOf:
+            - $ref: "#/components/schemas/RetrievalMode"
+          description: Overrides the KB default. `grep` is served by the grep endpoint, not here.
+
+    Passage:
+      type: object
+      required: [text, document_id, title, score, position]
+      properties:
+        text: { type: string }
+        document_id: { type: string }
+        title: { type: string }
+        score: { type: number, format: float }
+        position: { type: integer }
+
+    SearchResponse:
+      type: object
+      required: [mode, passages]
+      properties:
+        mode:
+          $ref: "#/components/schemas/RetrievalMode"
+        fallback:
+          allOf:
+            - $ref: "#/components/schemas/RetrievalMode"
+          nullable: true
+          description: Set to "keyword" when a requested vector search degraded (no embedding configured).
+        passages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Passage"
+
+    GrepRequest:
+      type: object
+      required: [pattern]
+      properties:
+        pattern: { type: string, minLength: 1, maxLength: 1024 }
+        max_matches:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 100
+
+    GrepHit:
+      type: object
+      required: [path, line_number, line]
+      properties:
+        path: { type: string, example: "docs/8a3f1c2b....md" }
+        line_number: { type: integer }
+        line: { type: string }
+
+    GrepResponse:
+      type: object
+      required: [hits, truncated]
+      properties:
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/GrepHit"
+        truncated:
+          type: boolean
+          description: True if max_matches or the timeout cap was reached.
+
+    KnowledgeBaseMetrics:
+      type: object
+      required: [document_count, chunk_count, indexed_modes, disk_bytes]
+      properties:
+        document_count: { type: integer }
+        chunk_count: { type: integer }
+        indexed_modes:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetrievalMode"
+        disk_bytes: { type: integer }
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: INGEST_REJECTED
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+              nullable: true

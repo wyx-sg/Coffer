@@ -188,6 +188,13 @@ class ResourceService:
         # ref that does not exist in the keychain, fail before the DB write.
         self._probe_credentials(kind_def, validated)
         before = await self.get(ref)
+        # Per-kind cross-version validation (e.g. ``knowledge_base`` enforces
+        # ``embedding_model`` immutability — TEST22-021). Hook may raise
+        # ``ConfigValidationError`` to reject the update before the DB write.
+        if kind_def.on_update_config is not None:
+            hook_result = kind_def.on_update_config(ref, before.config, validated)
+            if inspect.isawaitable(hook_result):
+                await hook_result
         updated = await self._repo.update_config(ref, validated, description)
         await self._audit.record(
             AuditEventType.RESOURCE_UPDATED.value,

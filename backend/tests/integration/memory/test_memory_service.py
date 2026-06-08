@@ -1,0 +1,344 @@
+"""Integration: the memory application service over the real substrate."""
+
+from __future__ import annotations
+
+import pytest
+
+from coffer.application.memory.scope import GLOBAL_STORE_NAME, project_store_name
+from coffer.domain.errors import MemoryRejected, ScopeUnresolved
+from coffer.domain.knowledge.document import WORKSPACE_GLOBAL_PROJECT_ID
+from coffer.domain.memory.scope import MemoryScope
+from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.memory.scope_fs import project_ulid
+
+pytestmark = pytest.mark.asyncio
+
+
+def _project_store(mem) -> str:
+    from pathlib import Path
+
+    return project_store_name(project_ulid(str(Path(mem.project_cwd).parent)))
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="agent remembers a project fact")
+async def test_remember_project_fact_writes_file_and_index(mem) -> None:
+    fact = await mem.service.add_fact(
+        scope=MemoryScope.PROJECT,
+        cwd=mem.project_cwd,
+        name="deploy-via-make",
+        description="deploys via make release",
+        body="This repo deploys via make release, never git push --tags.",
+        actor="agent",
+        type="project",
+    )
+    store = _project_store(mem)
+    # The per-fact file exists with frontmatter.
+    store_dir = paths.memory_store_dir(project_ulid_from(mem))
+    files = list(store_dir.glob("*.md"))
+    fact_files = [f for f in files if f.name != "MEMORY.md"]
+    assert len(fact_files) == 1
+    text = fact_files[0].read_text()
+    assert "name: deploy-via-make" in text
+    assert "actor: agent" in text
+    # MEMORY.md regenerated.
+    memory_md = (store_dir / "MEMORY.md").read_text()
+    assert "deploy-via-make" in memory_md
+    # Indexed into documents (kind=memory).
+    assert await mem.documents.count_documents("memory", store) == 1
+    assert fact.id
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="agent recalls a project fact")
+async def test_recall_returns_facts(mem) -> None:
+    await mem.service.add_fact(
+        scope=MemoryScope.PROJECT,
+        cwd=mem.project_cwd,
+        name="api-base",
+        description="api base path",
+        body="The service API base path is /api/v2 for this repo.",
+        actor="agent",
+    )
+    hits = await mem.service.recall(cwd=mem.project_cwd, query="api base path", top_k=5)
+    assert len(hits) >= 1
+    assert any("/api/v2" in h.text for h in hits)
+    assert hits[0].id
+    assert hits[0].source
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="remember at global scope")
+async def test_remember_global_scope(mem) -> None:
+    await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="tabs",
+        description="prefers tabs",
+        body="The user prefers tabs over spaces.",
+        actor="user",
+    )
+    assert await mem.documents.count_documents("memory", GLOBAL_STORE_NAME) == 1
+    # Recall from a project still sees the global fact.
+    hits = await mem.service.recall(cwd=mem.project_cwd, query="tabs over spaces", top_k=5)
+    assert any("tabs" in h.text for h in hits)
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="recall spans project and global scope")
+async def test_recall_spans_project_and_global(mem) -> None:
+    await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="g",
+        description="global pref",
+        body="global preference uses spaces indentation",
+        actor="user",
+    )
+    await mem.service.add_fact(
+        scope=MemoryScope.PROJECT,
+        cwd=mem.project_cwd,
+        name="p",
+        description="project fact",
+        body="project fact uses spaces in config files",
+        actor="agent",
+    )
+    hits = await mem.service.recall(cwd=mem.project_cwd, query="spaces", top_k=10)
+    sources = {h.source.split(":")[0] for h in hits}
+    assert "global" in sources
+    assert "project" in sources
+
+
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="project scope resolves from the agent's working directory"
+)
+async def test_project_scope_resolution_provisions_store(mem) -> None:
+    resolved = await mem.service.resolve_scope(scope=MemoryScope.PROJECT, cwd=mem.project_cwd)
+    assert resolved.scope is MemoryScope.PROJECT
+    assert resolved.project_id != WORKSPACE_GLOBAL_PROJECT_ID
+    # The backing Resource was auto-provisioned.
+    listed = [r.name for r in await mem.resources.list(kind="memory")]
+    assert project_store_name(resolved.project_id) in listed
+
+
+async def test_project_scope_unresolved_outside_git(mem) -> None:
+    with pytest.raises(ScopeUnresolved):
+        await mem.service.add_fact(
+            scope=MemoryScope.PROJECT,
+            cwd="/tmp/not-a-repo",
+            name="x",
+            description="x",
+            body="x",
+            actor="agent",
+        )
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="agent updates a fact")
+async def test_update_fact_reflects_in_recall(mem) -> None:
+    fact = await mem.service.add_fact(
+        scope=MemoryScope.PROJECT,
+        cwd=mem.project_cwd,
+        name="f",
+        description="d",
+        body="original aardvark text",
+        actor="agent",
+    )
+    store = _project_store(mem)
+    updated = await mem.service.update_fact(
+        store_name=store, fact_id=fact.id, new_body="replaced zebra text", actor="user"
+    )
+    assert updated.body == "replaced zebra text"
+    hits = await mem.service.recall(cwd=mem.project_cwd, query="zebra", top_k=5)
+    assert any("zebra" in h.text for h in hits)
+    assert (await mem.service.recall(cwd=mem.project_cwd, query="aardvark", top_k=5)) == []
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="agent forgets a fact")
+async def test_forget_removes_fact(mem) -> None:
+    fact = await mem.service.add_fact(
+        scope=MemoryScope.PROJECT,
+        cwd=mem.project_cwd,
+        name="f",
+        description="d",
+        body="ephemeral walrus fact",
+        actor="agent",
+    )
+    store = _project_store(mem)
+    await mem.service.delete_fact(store_name=store, fact_id=fact.id, actor="user")
+    assert await mem.documents.count_documents("memory", store) == 0
+    assert (await mem.service.recall(cwd=mem.project_cwd, query="walrus", top_k=5)) == []
+    store_dir = paths.memory_store_dir(project_ulid_from(mem))
+    assert [f for f in store_dir.glob("*.md") if f.name != "MEMORY.md"] == []
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="user adds a fact")
+async def test_user_add_sets_actor_user(mem) -> None:
+    fact = await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="pref",
+        description="a preference",
+        body="user likes dark mode",
+        actor="user",
+    )
+    got = await mem.service.get_fact(store_name=GLOBAL_STORE_NAME, fact_id=fact.id)
+    assert got.actor == "user"
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="user edits a fact")
+async def test_user_edit_fact(mem) -> None:
+    fact = await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="pref",
+        description="d",
+        body="light mode preferred",
+        actor="user",
+    )
+    await mem.service.update_fact(
+        store_name=GLOBAL_STORE_NAME, fact_id=fact.id, new_body="dark mode preferred", actor="user"
+    )
+    got = await mem.service.get_fact(store_name=GLOBAL_STORE_NAME, fact_id=fact.id)
+    assert got.body == "dark mode preferred"
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="user deletes a fact")
+async def test_user_delete_fact(mem) -> None:
+    fact = await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="x",
+        description="d",
+        body="to be deleted",
+        actor="user",
+    )
+    await mem.service.delete_fact(store_name=GLOBAL_STORE_NAME, fact_id=fact.id, actor="user")
+    facts, total = await mem.service.list_facts(store_name=GLOBAL_STORE_NAME)
+    assert total == 0
+    assert facts == []
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="writing a fact regenerates MEMORY.md")
+async def test_memory_md_regenerated_on_write_and_delete(mem) -> None:
+    f1 = await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="alpha-fact",
+        description="first",
+        body="first body",
+        actor="user",
+    )
+    await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="beta-fact",
+        description="second",
+        body="second body",
+        actor="user",
+    )
+    store_dir = paths.memory_global_dir()
+    md = (store_dir / "MEMORY.md").read_text()
+    assert "- [alpha-fact](" in md
+    assert "- [beta-fact](" in md
+    assert "— first" in md
+    # Delete one → index regenerated without it.
+    await mem.service.delete_fact(store_name=GLOBAL_STORE_NAME, fact_id=f1.id, actor="user")
+    md2 = (store_dir / "MEMORY.md").read_text()
+    assert "alpha-fact" not in md2
+    assert "beta-fact" in md2
+
+
+@pytest.mark.acceptance(spec="007-memory", scenario="clear a memory scope")
+async def test_clear_scope_keeps_resource(mem) -> None:
+    for i in range(3):
+        await mem.service.add_fact(
+            scope=MemoryScope.GLOBAL,
+            cwd=None,
+            name=f"f{i}",
+            description="d",
+            body=f"fact number {i}",
+            actor="user",
+        )
+    cleared = await mem.service.clear(store_name=GLOBAL_STORE_NAME, actor="user")
+    assert cleared == 3
+    _, total = await mem.service.list_facts(store_name=GLOBAL_STORE_NAME)
+    assert total == 0
+    # Store Resource still exists.
+    assert GLOBAL_STORE_NAME in [r.name for r in await mem.resources.list(kind="memory")]
+    md = (paths.memory_global_dir() / "MEMORY.md").read_text()
+    assert "fact number" not in md
+
+
+async def test_metrics(mem) -> None:
+    await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="x",
+        description="d",
+        body="some content",
+        actor="user",
+    )
+    m = await mem.service.metrics(store_name=GLOBAL_STORE_NAME)
+    assert m["fact_count"] == 1
+    assert m["disk_bytes"] > 0
+
+
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="vector recall falls back when embedding is unconfigured"
+)
+async def test_vector_recall_falls_back_when_unconfigured(mem) -> None:
+    """A store with no embedding provider, queried with mode=vector, returns
+    keyword results — never an error."""
+    await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="x",
+        description="d",
+        body="the okapi fact about embeddings",
+        actor="user",
+    )
+    # No embedding configured on the default store → vector degrades to keyword.
+    hits = await mem.service.recall(
+        cwd=None, query="okapi", scope=MemoryScope.GLOBAL, top_k=5, mode="vector"
+    )
+    assert any("okapi" in h.text for h in hits)
+
+
+async def test_fact_too_long_rejected(mem) -> None:
+    with pytest.raises(MemoryRejected) as exc:
+        await mem.service.add_fact(
+            scope=MemoryScope.GLOBAL,
+            cwd=None,
+            name="x",
+            description="d",
+            body="x" * 10_000,  # default max_fact_chars is 8192
+            actor="user",
+        )
+    assert exc.value.reason == "too_long"
+
+
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="edits through the Claude symlink are visible on recall"
+)
+async def test_lazy_reindex_picks_up_out_of_band_edit(mem) -> None:
+    """An out-of-band edit to a fact file (e.g. Claude editing through a
+    symlink) is reflected on the next recall, no watcher running."""
+    fact = await mem.service.add_fact(
+        scope=MemoryScope.PROJECT,
+        cwd=mem.project_cwd,
+        name="f",
+        description="d",
+        body="original narwhal content",
+        actor="agent",
+    )
+    store_dir = paths.memory_store_dir(project_ulid_from(mem))
+    fact_file = next(f for f in store_dir.glob("*.md") if f.name != "MEMORY.md")
+    # Edit the body directly on disk (frontmatter preserved).
+    text = fact_file.read_text()
+    fact_file.write_text(text.replace("original narwhal content", "edited platypus content"))
+    hits = await mem.service.recall(cwd=mem.project_cwd, query="platypus", top_k=5)
+    assert any("platypus" in h.text for h in hits)
+    assert (await mem.service.recall(cwd=mem.project_cwd, query="narwhal", top_k=5)) == []
+    assert fact.id  # the same fact id, re-indexed in place
+
+
+def project_ulid_from(mem) -> str:
+    from pathlib import Path
+
+    return project_ulid(str(Path(mem.project_cwd).parent))

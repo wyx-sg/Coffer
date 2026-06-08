@@ -3,6 +3,7 @@
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
+    "edit": "Edit",
     "loading": "Loading…",
     "enabled": "Enabled",
     "disabled": "Disabled",
@@ -39,6 +40,8 @@
     },
     "mcpServers": "MCP servers",
     "skills": "Skills",
+    "knowledgeBases": "Knowledge bases",
+    "memory": "Memory",
     "settings": "Settings",
     "language": "Language",
     "collapse": "Collapse sidebar",
@@ -438,7 +441,18 @@
       "overview": "Overview",
       "config": "Config files",
       "skills": "Skills",
-      "mcpServers": "MCP servers"
+      "mcpServers": "MCP servers",
+      "memory": "Memory"
+    },
+    "memoryTab": {
+      "title": "Memory projection",
+      "subtitle": "Project a memory store into this agent's native memory location so its own edits stay canonical and shared.",
+      "empty": "No memory stores yet.",
+      "notProjected": "Not projected into this agent.",
+      "nativeDisabled": "Native memory disabled to prevent a divergent copy.",
+      "merged": "Pre-existing native files were merged into the store first.",
+      "missingProjectRoot": "This project store has no known root yet, so it can't be projected.",
+      "toggleAria": "Toggle projection of {{store}} into this agent"
     },
     "configDirOverride": "Config directory (optional)",
     "configDirPlaceholder": "Leave blank for the default (~/.claude)",
@@ -596,6 +610,140 @@
       "featureDrift": {
         "title": "Drift detection",
         "body": "Verify that every enabled binding still matches its on-disk link."
+      }
+    }
+  },
+  "knowledgeBases": {
+    "title": "Knowledge bases",
+    "subtitle": "Local document collections your agents can search through the MCP gateway.",
+    "add": "New knowledge base",
+    "empty": "No knowledge bases yet. Create one, then upload documents your agents can search.",
+    "loadFailed": "Failed to load knowledge bases",
+    "searchPlaceholder": "Search knowledge bases…",
+    "noMatches": "No knowledge bases match your search.",
+    "modes": {
+      "grep": "Grep",
+      "keyword": "Keyword",
+      "vector": "Vector"
+    },
+    "sourceMode": {
+      "converted": "Converted",
+      "edited": "Edited"
+    },
+    "cols": {
+      "name": "Name",
+      "mode": "Retrieval",
+      "description": "Description"
+    },
+    "dialog": {
+      "title": "New knowledge base",
+      "name": "Name",
+      "description": "Description (optional)",
+      "vector": "Vector search",
+      "vectorHint": "Add meaning-based vector retrieval (keyword + grep are always on). Requires an embedding provider.",
+      "provider": "Embedding provider",
+      "embeddingModel": "Embedding model",
+      "dimensions": "Dimensions",
+      "baseUrl": "Base URL",
+      "credential": "Credential reference"
+    },
+    "detail": {
+      "metrics": "{{docs}} documents · {{chunks}} chunks · {{bytes}}",
+      "reindex": "Reindex",
+      "reindexResult": "Reindexed: {{scanned}} scanned, {{reindexed}} reindexed, {{skipped}} unchanged.",
+      "search": "Search",
+      "mode": "Mode",
+      "searchPlaceholder": "Search this knowledge base…",
+      "fallback": "No embedding configured — fell back to {{mode}}.",
+      "score": "score={{score}}",
+      "noMatches": "No matches.",
+      "grep": "Grep",
+      "grepPlaceholder": "Pattern (exact / regex) over the Markdown files…",
+      "truncated": "Results truncated (max matches or timeout reached).",
+      "documents": "Documents",
+      "upload": "Upload",
+      "chunks": "{{count}} chunks",
+      "editAria": "Edit Markdown for {{title}}",
+      "deleteConfirm": "Delete document {{title}}? This cannot be undone.",
+      "loadFailed": "Failed to load this knowledge base.",
+      "empty": "No documents yet. Upload a file of any format to populate this knowledge base."
+    },
+    "welcome": {
+      "title": "Manage your knowledge bases",
+      "body": "Collect local documents your coding agents can search through the MCP gateway — keyword and grep work out of the box, vector search is one toggle away.",
+      "featureKeyword": {
+        "title": "Keyword + grep by default",
+        "body": "Search ingested files instantly — no embedding model or download required."
+      },
+      "featureSemantic": {
+        "title": "Vector when you want it",
+        "body": "Opt into meaning-based vector search with a configurable embedding provider."
+      },
+      "featureAgent": {
+        "title": "Reachable by agents",
+        "body": "Agents search and fetch documents through Coffer's built-in MCP tools."
+      }
+    }
+  },
+  "memory": {
+    "title": "Memory",
+    "subtitle": "Local memory stores your agents read and write through the MCP gateway. Stores are provisioned automatically.",
+    "empty": "No memory stores yet — they appear automatically as your agents work.",
+    "loadFailed": "Failed to load memory stores",
+    "searchPlaceholder": "Search memory stores…",
+    "noMatches": "No memory stores match your search.",
+    "modes": {
+      "grep": "Grep",
+      "keyword": "Keyword",
+      "vector": "Vector"
+    },
+    "cols": {
+      "name": "Name",
+      "scope": "Scope",
+      "description": "Description"
+    },
+    "scope": {
+      "global": "Global",
+      "project": "Project",
+      "unknown": "Unknown"
+    },
+    "detail": {
+      "metrics": "{{facts}} facts · {{bytes}}",
+      "recall": "Recall",
+      "mode": "Mode",
+      "recallPlaceholder": "Recall facts from this store…",
+      "fallback": "No embedding configured — fell back to keyword.",
+      "score": "score={{score}}",
+      "noMatches": "No matches.",
+      "addFact": "Add fact",
+      "factName": "Name (optional)",
+      "factNamePlaceholder": "Derived from the text if left blank",
+      "factType": "Type (optional)",
+      "factDescription": "Description (optional)",
+      "factBody": "Fact",
+      "factBodyPlaceholder": "Write the fact in Markdown…",
+      "facts": "Facts",
+      "clearAll": "Clear all",
+      "clearConfirm": "Clear all facts in {{store}}? This cannot be undone.",
+      "deleteConfirm": "Delete fact {{name}}? This cannot be undone.",
+      "editAria": "Edit fact {{name}}",
+      "loadFailed": "Failed to load this memory store.",
+      "empty": "No facts yet."
+    },
+    "welcome": {
+      "title": "Your shared agent memory",
+      "body": "A global store plus one per project, shared across every agent — facts are written directly (no LLM) and recalled through Coffer's built-in MCP tools. Everything stays on your machine.",
+      "featureRecall": {
+        "title": "Remembers facts",
+        "body": "Agents store and recall short facts across sessions."
+      },
+      "featureLocal": {
+        "title": "Local-first",
+        "body": "Facts are plain Markdown files on your machine; the index rebuilds from them."
+      },
+      "featureAgent": {
+        "title": "Reachable by agents",
+        "body": "Add, recall, and curate facts through Coffer's built-in MCP tools."
       }
     }
   }
