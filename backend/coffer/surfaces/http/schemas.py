@@ -210,6 +210,18 @@ class KeychainSetIn(BaseModel):
     )
 
 
+class KeychainExistsOut(BaseModel):
+    """Presence-only response — never carries the secret value."""
+
+    present: bool = Field(description="Whether a secret is stored under the ref.")
+
+
+class KeychainGetOut(BaseModel):
+    """Secret-value response for an explicit read."""
+
+    value: str = Field(description="The stored secret value.")
+
+
 # --- MCP capability enable/disable body ---
 
 

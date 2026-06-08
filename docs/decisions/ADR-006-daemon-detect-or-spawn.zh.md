@@ -62,8 +62,11 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
 
 **运维后续**
 
-- daemon 崩溃后残留的上游 MCP 子进程在下次 daemon 启动时通过
-  `~/.coffer/upstream-pids/` 清理。
+- 上游 MCP 子进程在其连接关闭或被驱逐 (evict) 时被权威回收：每个记录在案的
+  PID（及其后代——上游通常是 `uv`/`npx` 包装层套着一个解释器孙进程）若在 SDK
+  拆除后仍存活，会被 SIGTERM/SIGKILL。这是防止泄漏在长生命周期 daemon 上累积的
+  首要保障。启动时对 `~/.coffer/upstream-pids/` 的扫描仅作为兜底，处理 daemon
+  *崩溃*（无优雅关闭）后残留的 PID。
 
 ## 备选方案
 

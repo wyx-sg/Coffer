@@ -61,6 +61,8 @@ def openapi_components() -> dict[str, Any]:
         ("TokenRotationOut", "TokenRotationOut", {"token"}),
         # MCP / keychain schemas
         ("KeychainSetIn", "KeychainSetIn", {"ref", "value"}),
+        ("KeychainGetOut", "KeychainGetOut", {"value"}),
+        ("KeychainExistsOut", "KeychainExistsOut", {"present"}),
         ("McpServerStatusOut", "McpServerStatusOut", {"status"}),
         (
             "CapabilityListOut",
