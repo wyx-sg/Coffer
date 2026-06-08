@@ -69,8 +69,13 @@ owns its lifecycle.
 
 **Operational follow-on**
 
-- Orphaned upstream MCP subprocesses on daemon crash are cleaned up at next
-  daemon startup using `~/.coffer/upstream-pids/`.
+- Upstream MCP subprocesses are reaped authoritatively when their connection
+  closes or is evicted: each recorded PID (and its descendants — the upstream
+  is typically a `uv`/`npx` wrapper over an interpreter grandchild) is
+  SIGTERM/SIGKILLed if the SDK teardown left it alive. This is the primary
+  guard against leaks accumulating on a long-lived daemon. The startup sweep
+  over `~/.coffer/upstream-pids/` remains as a backstop for PIDs orphaned by a
+  daemon *crash* (no clean shutdown).
 
 ## Alternatives Considered
 

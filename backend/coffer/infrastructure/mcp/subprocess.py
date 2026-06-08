@@ -22,7 +22,7 @@ from mcp.types import ServerNotification
 
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import StdioTransport
-from coffer.infrastructure.daemon.orphan_sweep import forget_spawn, record_spawn
+from coffer.infrastructure.daemon.orphan_sweep import reap_pidfile, record_spawn
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
 
@@ -245,13 +245,23 @@ class StdioUpstreamConnection:
                 await asyncio.wait_for(self._exit_stack.aclose(), timeout=5.0)
             self._exit_stack = None
 
-        # Remove PID tracking files on graceful shutdown (T-051).
-        # (Note: the previous "belt-and-braces SIGKILL on self._process_pid"
-        # branch was dead — the field was never assigned. Removed in CODE-014.
-        # The orphan-sweep at the next startup remains the authoritative
-        # guard against leaked upstream processes.)
+        # Belt-and-braces against leaked upstream processes (T-051). aclose()
+        # normally tears down the upstream subprocess tree, but when a
+        # long-running upstream write hangs the SDK teardown the child survives
+        # and accumulates across reconnects. reap_pidfile authoritatively kills
+        # each recorded PID *and its descendants* if still alive, then removes
+        # the tracking file; it no-ops on already-dead PIDs, so the graceful
+        # path is unaffected. (Replaces the old startup-only orphan sweep as the
+        # primary guard — that sweep never fired on a long-lived daemon.)
+        #
+        # Called synchronously (not via run_in_executor): _cleanup must add no
+        # await point after aclose(), or dispose()/evict() teardown trips
+        # anyio's "cancel scope exited in a different task" during shutdown.
+        # The only blocking case is a wedged child escalating SIGTERM→SIGKILL
+        # (~2s), on par with the per-upstream 5s aclose dispose() already
+        # tolerates; the happy path returns immediately (PID already gone).
         for path in self._pid_files:
-            forget_spawn(path)
+            reap_pidfile(path)
         self._pid_files = []
 
         self._session = None
