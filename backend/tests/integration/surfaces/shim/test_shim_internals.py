@@ -128,6 +128,63 @@ async def test_pump_stdin_forwards_post_and_captures_session_id(
 
 
 @pytest.mark.asyncio
+async def test_pump_stdin_forwards_envelope_larger_than_64kib(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A JSON-RPC request line exceeding asyncio's default 64 KiB StreamReader
+    limit (e.g. a large confluence_update_page body) must still be read and
+    forwarded intact.
+
+    Regression: ``asyncio.StreamReader()`` defaults to a 65536-byte line limit;
+    ``readline()`` then raised ValueError on any larger request, killing the
+    stdin pump and dropping the write. This drives the REAL reader the pump
+    builds (via a real os.pipe wired into sys.stdin), not a substituted one, so
+    it actually exercises the configured limit.
+    """
+    import os
+
+    bridge = _make_bridge()
+    posted: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode("utf-8"))
+        posted.append(body)
+        return httpx.Response(
+            200, text=json.dumps({"jsonrpc": "2.0", "id": body["id"], "result": {"ok": True}})
+        )
+
+    # One JSON-RPC line well past the old 64 KiB ceiling.
+    big_body = "x" * (256 * 1024)
+    envelope = {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "tools/call",
+        "params": {"name": "confluence_update_page", "arguments": {"body": big_body}},
+    }
+    line = (json.dumps(envelope) + "\n").encode("utf-8")
+    assert len(line) > 64 * 1024
+
+    r_fd, w_fd = os.pipe()
+    stdin_file = os.fdopen(r_fd, "rb", buffering=0)
+    monkeypatch.setattr("coffer.surfaces.shim.main.sys.stdin", stdin_file)
+
+    def _write_and_close() -> None:
+        # >64 KiB exceeds the OS pipe buffer, so this blocks until the pump
+        # drains it — run it off the event loop.
+        os.write(w_fd, line)
+        os.close(w_fd)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:18765") as client:
+        pump = asyncio.create_task(bridge._pump_stdin(client))
+        await asyncio.to_thread(_write_and_close)
+        await asyncio.wait_for(pump, timeout=5.0)
+
+    assert len(posted) == 1, "the >64 KiB request line was dropped instead of forwarded"
+    assert posted[0]["params"]["arguments"]["body"] == big_body
+
+
+@pytest.mark.asyncio
 async def test_pump_stdin_skips_bad_json(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
