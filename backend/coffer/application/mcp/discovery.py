@@ -21,6 +21,7 @@ from coffer.application.mcp.ports import MCPCapabilityPreferenceRepoPort
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
+from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.capability import (
     CapabilityType,
     MCPPrompt,
@@ -33,6 +34,13 @@ from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import ResourceRef
 
 _DEFAULT_CACHE_TTL_SECONDS = 60.0
+
+
+def _is_method_not_found(exc: Exception) -> bool:
+    """True for the JSON-RPC -32601 reply a capability-less upstream sends for
+    an unsupported ``*/list`` (e.g. a tools-only server answering prompts/list).
+    That is a legitimate 'no such capability', not a broken connection."""
+    return isinstance(exc, McpError) and exc.error.code == mcp_types.METHOD_NOT_FOUND
 
 
 @dataclass
@@ -142,8 +150,7 @@ class CapabilityDiscovery:
         resource = None
         async with self._lock_for(server_name, "tool"):
             if cache.tools is None or not self._is_fresh(cache.tools_fetched_at):
-                conn = await self._supervisor.get_or_spawn(server_name)
-                result = await conn.request("tools/list", {})
+                result = await self._request_self_heal(server_name, "tools/list", {})
                 cache.tools = [
                     MCPTool(
                         name=t.name,
@@ -176,9 +183,8 @@ class CapabilityDiscovery:
         resource = None
         async with self._lock_for(server_name, "resource"):
             if cache.resources is None or not self._is_fresh(cache.resources_fetched_at):
-                conn = await self._supervisor.get_or_spawn(server_name)
                 try:
-                    result = await conn.request("resources/list", {})
+                    result = await self._request_self_heal(server_name, "resources/list", {})
                 except McpError as exc:
                     # An upstream that implements only tools replies with JSON-RPC
                     # -32601 (METHOD_NOT_FOUND) for resources/list. Treat that as
@@ -226,9 +232,8 @@ class CapabilityDiscovery:
         resource = None
         async with self._lock_for(server_name, "prompt"):
             if cache.prompts is None or not self._is_fresh(cache.prompts_fetched_at):
-                conn = await self._supervisor.get_or_spawn(server_name)
                 try:
-                    result = await conn.request("prompts/list", {})
+                    result = await self._request_self_heal(server_name, "prompts/list", {})
                 except McpError as exc:
                     # A tools-only upstream replies with JSON-RPC -32601
                     # (METHOD_NOT_FOUND) for prompts/list. Treat that as "this
@@ -273,6 +278,49 @@ class CapabilityDiscovery:
             for p in cache.prompts
             if include_disabled or prefs.get(p.name, True)
         ]
+
+    async def _request_self_heal(
+        self, server_name: str, method: str, params: dict[str, Any]
+    ) -> Any:
+        """Issue an upstream ``*/list`` request, healing a stale reused
+        connection in place.
+
+        The process-wide management supervisor caches one connection per
+        upstream and keeps handing it back as HEALTHY. That connection can go
+        dead under it — the MCP session expires, the upstream restarts, the
+        socket is dropped — and the cached entry never notices. The gateway
+        request path evicts a connection the moment a call on it fails
+        (``gateway_handlers._invoke``); the discovery path had no such healing,
+        so a dead connection produced a bare 500 / empty list until daemon
+        restart, while Test connection (which builds a fresh connection) stayed
+        green and Refresh (which only clears the data cache) did nothing.
+
+        Mirror the gateway here: on any failure other than METHOD_NOT_FOUND (a
+        real 'no such capability') or a timeout, evict the broken connection
+        and retry once on a freshly spawned one. A still-failing retry is
+        normalised to UpstreamUnavailable so the management surface returns
+        503 UPSTREAM_UNAVAILABLE instead of leaking a 500.
+        """
+        conn = await self._supervisor.get_or_spawn(server_name)
+        try:
+            return await conn.request(method, params)
+        except UpstreamTimeout:
+            raise
+        except Exception as first_exc:
+            if _is_method_not_found(first_exc):
+                raise
+            await self._supervisor.evict(server_name)
+            conn = await self._supervisor.get_or_spawn(server_name)
+            try:
+                return await conn.request(method, params)
+            except (UpstreamTimeout, UpstreamUnavailable):
+                raise
+            except Exception as retry_exc:
+                if _is_method_not_found(retry_exc):
+                    raise
+                raise UpstreamUnavailable(
+                    f"{server_name!r} {method} failed after reconnect: {type(retry_exc).__name__}"
+                ) from retry_exc
 
     async def _build_pref_map(
         self,

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CapabilityList } from "./CapabilityList";
+import { ApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
 
 type MCPResourceView = components["schemas"]["MCPResourceView"];
@@ -203,6 +204,18 @@ describe("CapabilityList", () => {
     render(wrap(<CapabilityList serverName="fs" kind="prompt" prompts={[]} />));
     expect(screen.getByText(/No prompts discovered/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Search by name")).toBeInTheDocument();
+  });
+
+  test("shows an upstream-error state instead of the empty copy when the capability fetch failed", () => {
+    // When /capabilities errors (e.g. the upstream connection is down), the
+    // prompts list is undefined — the same shape as a genuinely empty upstream.
+    // The two must read differently: a failed fetch must NOT claim "no prompts
+    // discovered" (which wrongly implies the upstream has none).
+    const err = new ApiError("UPSTREAM_UNAVAILABLE", "upstream down");
+    render(wrap(<CapabilityList serverName="fs" kind="prompt" prompts={undefined} error={err} />));
+
+    expect(screen.getByText(/Couldn't load/i)).toBeInTheDocument();
+    expect(screen.queryByText(/No prompts discovered/)).not.toBeInTheDocument();
   });
 
   // ── Search + filter tests ────────────────────────────────────────────────

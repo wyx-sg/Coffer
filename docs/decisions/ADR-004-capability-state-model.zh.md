@@ -85,3 +85,19 @@ enabled, first_seen_at, last_seen_at)` —— **唯一**持久化的能力状态
 **持久化 schema + 描述，但靠 `notifications/*/list_changed` 维持新鲜度**。
 被否决。许多 MCP 服务器在重启时并不可靠地发出 `list_changed`；这样仍然会
 积累过时 schema。我们决定彻底消除这种歧义。
+
+## 更新 —— 2026-06-04：复用连接失效时自愈
+
+「实时拉取」的列表跑在 supervisor 缓存并复用的连接上。进程级的管理
+supervisor（capabilities / refresh / 详情页）会一直把一条 MCP session 已经
+失效的连接（idle 超时、上游重启、socket 被断开）当作健康的继续复用，毫无察觉。
+gateway 请求路径在首次失败时就会 evict 掉连接；而 discovery 路径没有，于是一条
+死连接会以裸 500 / 空能力列表的形式表现，一直持续到 daemon 重启——与此同时
+**测试连接**（每次新建临时连接）显示正常，**刷新能力**（只清数据缓存、不碰连接）
+也毫无作用。
+
+现在 discovery 的 `list_*` 路径对齐 gateway：请求失败时——除 `METHOD_NOT_FOUND`
+（合法的「无此能力」）和超时以外——会 evict 掉坏连接并在新连接上重试一次；重试
+仍失败则归一为 `UPSTREAM_UNAVAILABLE`（503），不再泄漏成 500。能力页签现在会区分
+「加载失败」（「无法加载——请测试连接 / 刷新」）与「上游确实为空」（「尚未发现任何
+提示词」），这样在连接陈旧时，活动日志（「发现了提示词 …」）与页签不再相互矛盾。

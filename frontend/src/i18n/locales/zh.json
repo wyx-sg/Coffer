@@ -126,6 +126,7 @@
       "emptyTool": "尚未从此上游发现任何工具。",
       "emptyResource": "尚未从此上游发现任何资源。",
       "emptyPrompt": "尚未从此上游发现任何提示词。",
+      "loadError": "无法从此上游加载能力——可能无法连接。请先点「测试连接」，再「刷新能力」。",
       "noMatches": "没有能力匹配你的搜索。",
       "searchPlaceholder": "搜索名称",
       "statusFilter": "状态",
