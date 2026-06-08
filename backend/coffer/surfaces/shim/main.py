@@ -36,6 +36,14 @@ _logger = logging.getLogger("coffer.shim")
 _SHIM_LOG_DIR = Path.home() / ".coffer" / "logs"
 _DAEMON_BOOT_TIMEOUT = 10  # seconds
 
+# asyncio.StreamReader defaults to a 64 KiB (2**16) line limit; readline()
+# then raises ValueError on any longer line, killing the stdin pump and
+# silently dropping the request. MCP tool calls routinely exceed that (e.g. a
+# confluence_update_page with a large page body), so raise the ceiling well
+# past any realistic single JSON-RPC envelope while still bounding memory
+# against a stream that never sends a newline.
+_STDIN_READ_LIMIT = 64 * 1024 * 1024  # 64 MiB
+
 
 def _setup_shim_log() -> None:
     """Send our diagnostic log to a file (NOT stdout — that's the MCP wire)."""
@@ -144,7 +152,7 @@ class _Bridge:
     async def _pump_stdin(self, client: httpx.AsyncClient) -> None:
         """Read JSON-RPC envelopes from stdin, POST to /mcp, write reply to stdout."""
         loop = asyncio.get_event_loop()
-        reader = asyncio.StreamReader()
+        reader = asyncio.StreamReader(limit=_STDIN_READ_LIMIT)
         protocol = asyncio.StreamReaderProtocol(reader)
         await loop.connect_read_pipe(lambda: protocol, sys.stdin)
         _logger.info("shim.stdin_pump_started")

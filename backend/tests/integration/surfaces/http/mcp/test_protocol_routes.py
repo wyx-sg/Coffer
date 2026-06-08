@@ -262,6 +262,46 @@ async def test_post_tools_call_routes_through_gateway(
 
 
 @pytest.mark.asyncio
+async def test_post_tools_call_with_payload_over_64kib_round_trips(
+    http_client: AsyncClient,
+) -> None:
+    """A tools/call whose arguments exceed 64 KiB must round-trip through the
+    daemon → upstream stdio write without breaking the connection.
+
+    Guards against a second size ceiling beyond the shim fix: the daemon writes
+    the request to the upstream's stdin and the upstream reads it back. Neither
+    leg may impose a ~64 KiB line cap.
+    """
+    init = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+    )
+    session_id = init.headers["mcp-session-id"]
+    await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        headers={"Mcp-Session-Id": session_id},
+    )
+    big_arg = "y" * (256 * 1024)  # 256 KiB, well past the 64 KiB ceiling
+    r = await http_client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "fs__read_file", "arguments": {"path": big_arg}},
+        },
+        headers={"Mcp-Session-Id": session_id},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "result" in body, body
+    # The fake upstream echoes its arguments back — confirms the full >64 KiB
+    # payload reached the upstream intact, not just that the call didn't error.
+    assert big_arg in r.text
+
+
+@pytest.mark.asyncio
 async def test_post_malformed_json_returns_400(
     http_client: AsyncClient,
 ) -> None:
