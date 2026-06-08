@@ -98,3 +98,24 @@ explicit preference toggle is the right control surface.
 freshness.** Rejected. Many MCP servers don't reliably emit `list_changed` on
 restart; we'd accumulate stale schemas anyway. The decision was to remove the
 ambiguity entirely.
+
+## Update — 2026-06-04: self-heal a stale reused connection
+
+The "live-queried" list runs over a connection the supervisor caches and
+reuses. The process-wide management supervisor (capabilities / refresh / detail
+page) kept handing back a connection whose MCP session had since died — idle
+expiry, upstream restart, a dropped socket — without noticing. The gateway
+request path already evicts a connection on first failure; the discovery path
+did not, so a dead connection surfaced as a bare 500 / empty capability list
+until daemon restart, while **Test connection** (a fresh transient connection)
+stayed green and **Refresh capabilities** (which only clears the data cache, not
+the connection) did nothing.
+
+The discovery `list_*` path now mirrors the gateway: a failed request — other
+than `METHOD_NOT_FOUND` (a legitimate "no such capability") or a timeout —
+evicts the broken connection and retries once on a freshly spawned one. A
+still-failing retry is normalised to `UPSTREAM_UNAVAILABLE` (503) instead of
+leaking a 500. The capability tabs now distinguish a load failure ("couldn't
+load — try Test connection / Refresh") from a genuinely empty upstream ("no
+prompts discovered"), so the activity log ("discovered prompt …") and the tab no
+longer appear to contradict each other when the upstream connection is stale.

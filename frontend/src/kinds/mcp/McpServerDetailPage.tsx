@@ -36,10 +36,11 @@ export function McpServerDetailPage() {
   const backState = useLocation().state as { backTo?: string; backLabel?: string } | null;
   const qc = useQueryClient();
   const { data: resource, isPending, error } = useResource("mcp_server", name);
-  const { isPending: capsPending, data: capabilities } = useMcpCapabilities(
-    name,
-    !isPending && !error,
-  );
+  const {
+    isPending: capsPending,
+    data: capabilities,
+    error: capsError,
+  } = useMcpCapabilities(name, !isPending && !error);
   const { data: serverStatus } = useMcpServerStatus(name);
   const enable = useEnableResource();
   const disable = useDisableResource();
@@ -164,6 +165,7 @@ export function McpServerDetailPage() {
       <McpServerDetailTabs
         serverName={name}
         capabilities={capabilities}
+        capsError={capsError}
         config={resource.config}
         isCapsPending={capsPending}
         onRefresh={() => {

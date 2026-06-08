@@ -126,6 +126,7 @@
       "emptyTool": "No tools discovered from this upstream yet.",
       "emptyResource": "No resources discovered from this upstream yet.",
       "emptyPrompt": "No prompts discovered from this upstream yet.",
+      "loadError": "Couldn't load capabilities from this upstream — it may be unreachable. Try Test connection, then Refresh capabilities.",
       "noMatches": "No capabilities match your search.",
       "searchPlaceholder": "Search by name",
       "statusFilter": "Status",

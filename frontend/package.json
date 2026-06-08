@@ -34,7 +34,7 @@
     "react-day-picker": "^10.0.1",
     "react-dom": "^18.3.1",
     "react-i18next": "^15.0.0",
-    "react-router-dom": "^6.26.0",
+    "react-router-dom": "^6.30.4",
     "tailwind-merge": "^2.5.3",
     "tailwindcss-animate": "^1.0.7"
   },
