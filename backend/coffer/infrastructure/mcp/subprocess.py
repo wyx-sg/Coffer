@@ -254,12 +254,14 @@ class StdioUpstreamConnection:
         # path is unaffected. (Replaces the old startup-only orphan sweep as the
         # primary guard — that sweep never fired on a long-lived daemon.)
         #
-        # reap_pidfile blocks (psutil.wait_procs up to ~2s when a wedged child
-        # must be escalated to SIGKILL), so run it off the event loop — this
-        # teardown can fire from evict() inside a live request path.
-        loop = asyncio.get_running_loop()
+        # Called synchronously (not via run_in_executor): _cleanup must add no
+        # await point after aclose(), or dispose()/evict() teardown trips
+        # anyio's "cancel scope exited in a different task" during shutdown.
+        # The only blocking case is a wedged child escalating SIGTERM→SIGKILL
+        # (~2s), on par with the per-upstream 5s aclose dispose() already
+        # tolerates; the happy path returns immediately (PID already gone).
         for path in self._pid_files:
-            await loop.run_in_executor(None, reap_pidfile, path)
+            reap_pidfile(path)
         self._pid_files = []
 
         self._session = None
