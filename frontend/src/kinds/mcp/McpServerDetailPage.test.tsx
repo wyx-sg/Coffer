@@ -1,6 +1,6 @@
 // frontend/src/kinds/mcp/McpServerDetailPage.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { McpServerDetailPage } from "./McpServerDetailPage";
@@ -168,6 +168,40 @@ describe("McpServerDetailPage", () => {
 
     // The badge must also not be stuck on "unknown" while capabilities load.
     expect(badge).not.toHaveTextContent("unknown");
+  });
+
+  test("overview counts read — (not 0) when the capabilities fetch errors", async () => {
+    // A failed /capabilities yields undefined lists — the same shape as an
+    // empty upstream. The overview counts must not claim a confident "0" when
+    // the truth is "couldn't load"; they read "—" instead.
+    const getMock = vi.fn().mockImplementation((path: string) => {
+      if (path === "/resources/mcp_server/{name}/status") {
+        return Promise.resolve({ data: { status: "healthy" }, error: undefined });
+      }
+      if (path === "/resources/mcp_server/{name}/capabilities") {
+        return Promise.resolve({
+          data: undefined,
+          error: { error: { code: "UPSTREAM_UNAVAILABLE", message: "down" } },
+        });
+      }
+      return Promise.resolve({ data: stdioResource, error: undefined });
+    });
+    getApiClientMock.mockReturnValue({
+      GET: getMock,
+      POST: vi.fn(),
+      DELETE: vi.fn(),
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap(<McpServerDetailPage />));
+    await waitFor(() => expect(screen.getByText("fs")).toBeInTheDocument());
+
+    // Overview is the default tab. The Tools count cell reads "—", not "0".
+    await waitFor(() => {
+      const panel = screen.getByRole("tabpanel");
+      expect(within(panel).getByText("Tools").nextElementSibling).toHaveTextContent("—");
+    });
+    const panel = screen.getByRole("tabpanel");
+    expect(within(panel).getByText("Tools").nextElementSibling).not.toHaveTextContent("0");
   });
 
   test("renders an error card when the resource fetch fails", async () => {
