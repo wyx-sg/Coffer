@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0009"
+HEAD_REVISION = "0010"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -230,3 +230,39 @@ def test_migration_0005_maps_legacy_skill_dir_to_config_dir(tmp_path, monkeypatc
     assert "skill_dir" not in team and team["config_dir"] == "/data/team"
     odd = json.loads(rows["odd"])
     assert "skill_dir" not in odd and odd["config_dir"] == "/data/custom"
+
+
+def test_db_stamped_by_pre_redesign_branch_is_repaired(tmp_path, monkeypatch):
+    """A DB that applied the PRE-redesign 0006/0007 (which created
+    ``kb_documents``/``memory_records``) is stamped at 0007, so the in-place
+    rewritten 0006 never re-runs and the unified ``documents`` schema is
+    missing — every KB/memory write then 500s with "no such table: documents"
+    (reproduced on a real install). ``upgrade head`` must repair such a DB:
+    create the unified schema and drop the legacy tables."""
+    db_path = tmp_path / "legacy.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    # Build the pre-redesign world: schema as of the OLD 0006/0007 — the 0005
+    # baseline tables plus the legacy per-kind tables — stamped at 0007.
+    command.upgrade(cfg, "0005")
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute("CREATE TABLE kb_documents (id TEXT PRIMARY KEY, kb_name TEXT)")
+        conn.execute("CREATE TABLE memory_records (id TEXT PRIMARY KEY, scope TEXT)")
+        conn.execute("UPDATE alembic_version SET version_num = '0007'")
+        conn.commit()
+    finally:
+        conn.close()
+
+    command.upgrade(cfg, "head")
+
+    tables = _user_tables(db_path)
+    assert {"documents", "chunks", "documents_fts"} <= tables
+    assert "kb_documents" not in tables
+    assert "memory_records" not in tables
+    assert _alembic_version(db_path) == HEAD_REVISION
+
+    # And the repair is idempotent for fresh DBs: a second upgrade is a no-op.
+    command.upgrade(cfg, "head")
+    assert {"documents", "chunks", "documents_fts"} <= _user_tables(db_path)
