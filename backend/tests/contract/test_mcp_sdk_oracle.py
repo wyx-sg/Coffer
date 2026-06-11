@@ -215,3 +215,19 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         )
         # Reaching here means the SDK parsed the response without errors.
         assert call_result.content is not None, "expected non-empty content"
+
+        # 4. tools/call of a coffer__ BUILT-IN end-to-end through the daemon:
+        # remember writes a fact, recall finds it (review gap: builtins were
+        # only ever listed, never called over the wire).
+        remember_result = await session.call_tool(
+            "coffer__remember",
+            arguments={"text": "oracle smoke fact about axolotls", "scope": "global"},
+        )
+        assert not remember_result.isError, remember_result.content
+        recall_result = await session.call_tool(
+            "coffer__recall",
+            arguments={"query": "axolotls", "scope": "global"},
+        )
+        assert not recall_result.isError, recall_result.content
+        recall_text = "".join(getattr(item, "text", "") for item in recall_result.content or [])
+        assert "axolotls" in recall_text, f"recall did not return the fact: {recall_text!r}"

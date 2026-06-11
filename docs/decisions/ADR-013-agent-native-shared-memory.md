@@ -5,7 +5,7 @@
 **Status**: Accepted
 **Date**: 2026-06-09
 **Deciders**: Yuxing Wu
-**Related**: spec `007-memory`, design [`docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md`](../../docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md), [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-008](ADR-008-everything-is-a-resource-kind.md), [ADR-009](ADR-009-cross-platform-skill-delivery.md)
+**Related**: spec `007-memory`, [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-009](ADR-009-cross-platform-skill-delivery.md)
 
 ## Context
 

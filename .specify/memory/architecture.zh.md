@@ -136,9 +136,10 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
   Alembic 错误。
 - JSON 字段以 `TEXT` 存储，在 application 层边界由 Pydantic 校验。
 - **知识基底索引就在同一个 `coffer.db` 里：** SQLite **FTS5**
-  （external-content，`bm25()` 关键词排序）+ **sqlite-vec**（对 chunk embedding
-  做向量 KNN）。没有独立的 chroma / LlamaIndex / mem0 store —— `~/.coffer/knowledge/`
-  与 `~/.coffer/memory/` 下的 markdown 文件才是事实；DB 可据其重建
+  （常规 FTS5 表，chunk 文本在索引内部存一份，`bm25()` 关键词排序）+
+  **sqlite-vec**（对 chunk embedding 做向量 KNN）。没有独立的
+  chroma / LlamaIndex / mem0 store —— `~/.coffer/knowledge/`
+  与 `~/.coffer/memory/` 下的 markdown 文件才是事实；DB（含 FTS 索引）可据其重建
   （[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)）。
 - 数据库文件、daemon 发现文件、日志、knowledge/memory 文件树与每个上游的 PID 文件
   都收纳在 `~/.coffer/` 下，便于单点备份。
@@ -152,5 +153,5 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 | 保留策略    | `application/retention_service.py` + `retention_policies` 表 + asyncio worker | 每个日志类表注册为 `PrunableTable`；中央注册表强制执行 SQL allowlist。                                                                                                                                                                         |
 | 错误        | `domain/errors.py` + FastAPI 全局处理器                                       | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。                                                                                                                                                             |
 | 日志        | `structlog` 以 JSON-per-line 写入 `~/.coffer/logs/`                           | 通过 contextvar 实现按请求级别的 trace ID。                                                                                                                                                                                                    |
-| Converter   | `MarkdownConverter` 端口 + 逐格式 adapter，落在 `infrastructure/`             | 唯一 import converter 库的地方（默认 MarkItDown；Docling / pandoc 可插拔）。any-format → markdown。                                                                                                                                            |
+| Converter   | `MarkdownConverter` 端口 + 逐格式 adapter，落在 `infrastructure/`             | 唯一 import converter 库的地方（文本/源码走 passthrough、csv 走专用转换器、其余走 MarkItDown；新引擎可按格式插拔）。any-format → markdown。                                                                                                                                            |
 | Memory 投影 | `AgentMemoryAdapter`，落在 **agent 层**（随 agent driver）                    | 把那个唯一的规范 memory store 投影进原生位置（`SYMLINK` / `RENDER` / `NONE`）；由它持有 L1 文件改动，使 memory 与 agent 无关（[ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)）。                                        |

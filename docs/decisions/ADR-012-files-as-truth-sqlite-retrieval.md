@@ -6,7 +6,7 @@
 **Date**: 2026-06-09
 **Deciders**: Yuxing Wu
 **Supersedes**: [ADR-010](ADR-010-llamaindex-rag-engine.md) (LlamaIndex RAG engine), [ADR-011](ADR-011-mem0-memory-engine.md) (mem0 memory engine)
-**Related**: spec `006-knowledge-base`, spec `007-memory`, design [`docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md`](../../docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md), [ADR-002](ADR-002-code-layout-layer-first.md), [ADR-008](ADR-008-everything-is-a-resource-kind.md), [ADR-013](ADR-013-agent-native-shared-memory.md)
+**Related**: spec `006-knowledge-base`, spec `007-memory`, [ADR-002](ADR-002-code-layout-layer-first.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-013](ADR-013-agent-native-shared-memory.md)
 
 ## Context
 
@@ -57,8 +57,9 @@ Concrete shape:
   the root.
 - **Three retrieval modes**, all over the same files/index:
   - `grep` — ripgrep over `docs/` (raw files, zero index, language-agnostic).
-  - `keyword` — SQLite FTS5 `MATCH … ORDER BY bm25()` (external-content; text
-    stays in the files).
+  - `keyword` — SQLite FTS5 `MATCH … ORDER BY bm25()`. A regular FTS5 table
+    stores the chunk text once inside its index (still rebuildable from the
+    markdown files, which remain the source of truth).
   - `vector` — sqlite-vec KNN over chunk embeddings.
   - Optional hybrid via reciprocal rank fusion. Default retrieval is
     `keyword`+`grep` (zero config, offline). Vector is opt-in; if vector is

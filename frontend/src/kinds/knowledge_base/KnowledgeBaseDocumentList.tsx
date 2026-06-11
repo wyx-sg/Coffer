@@ -2,8 +2,9 @@
 //
 // Documents section: the Upload action (any format → Markdown on the server)
 // and the document list with per-doc Markdown edit (inline textarea), a
-// source_mode badge, and delete. All state, mutations, and the hidden file
-// input live in the page; this component is presentational.
+// source_mode badge, reconvert (converted docs only), and delete. All state,
+// mutations, and the hidden file input live in the page; this component is
+// presentational.
 import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,12 +16,17 @@ interface Props {
   docs: DocumentListOut | undefined;
   ingestError: unknown;
   isIngestPending: boolean;
+  reconvertError: unknown;
+  isReconvertPending: boolean;
   editingId: string | null;
   editText: string;
   isStartEditPending: boolean;
   isDeletePending: boolean;
   isEditPending: boolean;
   onPickFile: () => void;
+  /** Non-null after a duplicate-rejected upload: retries it with replace=true. */
+  onRetryWithReplace: (() => void) | null;
+  onReconvert: (id: string) => void;
   onStartEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onEditTextChange: (value: string) => void;
@@ -32,12 +38,16 @@ export function KnowledgeBaseDocumentList({
   docs,
   ingestError,
   isIngestPending,
+  reconvertError,
+  isReconvertPending,
   editingId,
   editText,
   isStartEditPending,
   isDeletePending,
   isEditPending,
   onPickFile,
+  onRetryWithReplace,
+  onReconvert,
   onStartEdit,
   onDelete,
   onEditTextChange,
@@ -54,7 +64,22 @@ export function KnowledgeBaseDocumentList({
         </Button>
       </div>
       {ingestError ? (
-        <p className="text-sm text-destructive">{translateApiError(t, ingestError)}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-destructive">{translateApiError(t, ingestError)}</p>
+          {onRetryWithReplace ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onRetryWithReplace}
+              disabled={isIngestPending}
+            >
+              {t("knowledgeBases.detail.replaceExisting")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {reconvertError ? (
+        <p className="text-sm text-destructive">{translateApiError(t, reconvertError)}</p>
       ) : null}
       {docs ? (
         <ul className="divide-y rounded border">
@@ -75,6 +100,16 @@ export function KnowledgeBaseDocumentList({
                 </div>
                 {editingId === d.id ? null : (
                   <div className="flex shrink-0 gap-1">
+                    {d.source_mode === "converted" ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onReconvert(d.id)}
+                        disabled={isReconvertPending}
+                      >
+                        {t("knowledgeBases.detail.reconvert")}
+                      </Button>
+                    ) : null}
                     <Button
                       size="sm"
                       variant="ghost"

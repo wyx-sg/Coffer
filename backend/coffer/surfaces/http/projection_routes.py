@@ -76,6 +76,20 @@ async def establish_projection(
     body: ProjectionEstablishRequest,
     svc: ProjectionService = Depends(get_projection_service),  # noqa: B008
 ) -> ProjectionOut:
+    if body.project_root is not None:
+        # Projection writes/symlinks under this path; never accept a target
+        # that does not already exist as a directory (a typo'd root must not
+        # be mkdir'd, and arbitrary file paths must not be rewritten).
+        from pathlib import Path
+
+        from fastapi import HTTPException
+
+        root = Path(body.project_root)
+        if not root.is_absolute() or not root.is_dir():
+            raise HTTPException(
+                status_code=400,
+                detail="project_root must be an absolute path to an existing directory",
+            )
     result = await svc.establish(
         store_name=name, agent_ref=body.agent_ref, project_root=body.project_root
     )

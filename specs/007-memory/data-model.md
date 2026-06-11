@@ -18,9 +18,12 @@ Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "memory"`. 
 | `embedding_model`          | `str \| None`                              | e.g. `bge-m3` (local) or a cloud model. Required for `vector`.                           |
 | `embedding_base_url`       | `str \| None`                              | Override base URL for OpenAI-compatible providers.                                       |
 | `embedding_credential_ref` | `str \| None`                              | Keychain ref for the embedding API key (never plaintext).                                |
+| `embedding_dimensions`     | `int`                                      | Default `768`; range `1–8192`. Drives the per-store `vec_chunks` table width; carried on the wire. |
 | `max_fact_chars`           | `int`                                      | Default `8192`; range `64–32768`. Mutable.                                               |
 
 The embedding model is **mutable** — changing it re-embeds the store (files are truth). No immutability lock.
+
+The shape difference vs spec 006 is deliberate: 007 keeps the embedding fields **flat** so the memory surface stays a thin form, while 006 nests them in an `EmbeddingConfig` object (`MemoryStoreConfig.to_embedding_config()` projects the flat fields onto the shared object). Likewise the recall response's `fallback` is a **boolean** in 007 — recall spans multiple stores, so a single fallback-mode string is ill-defined — whereas 006's single-store search reports a nullable mode enum (`fallback: "keyword" | null`).
 
 ### `MemoryFact` (`domain/memory/fact.py`)
 
@@ -52,34 +55,25 @@ class ResolvedScope:
     store_dir: Path       # ~/.coffer/memory/global | projects/<ulid>
 ```
 
-### `MemoryHit` (`domain/knowledge/document.py`, shared)
+### `MemoryHit` (`domain/knowledge/retrieval.py`, shared)
 
 Frozen dataclass; recall result.
 
-| Field    | Type       | Notes                                 |
-| -------- | ---------- | ------------------------------------- |
-| `id`     | `str`      | Fact (document) id.                   |
-| `text`   | `str`      | Fact body / matched passage.          |
-| `score`  | `float`    | Relevance score.                      |
-| `source` | `str`      | Scope + path of the source fact file. |
-| `time`   | `datetime` | `updated_at` of the fact.             |
+| Field    | Type       | Notes                                                          |
+| -------- | ---------- | -------------------------------------------------------------- |
+| `id`     | `str`      | Fact (document) id.                                            |
+| `text`   | `str`      | Fact body / matched passage.                                   |
+| `score`  | `float`    | Per-store relevance score (kept on the wire; see RRF below).   |
+| `source` | `str`      | `<scope>:<fact file path>` of the source fact file.            |
+| `time`   | `datetime` | `updated_at` of the fact.                                      |
+
+Cross-store recall merges per-store hit lists by **reciprocal rank fusion** (k=60): raw scores across stores/modes are not comparable (flipped bm25 is unbounded, vector ≤ 1, grep is flat), so RRF ranks by per-store position — each hit keeps its original score, only the merged ORDER comes from the fusion. `grep` recall is served for real: ripgrep over the store's fact files (essential for content FTS5 cannot tokenize, e.g. CJK). Store names are validated (`global` | `project-<26-char ULID>`): a well-formed name lazily provisions its store; anything else 404s.
 
 ### Ports
 
-The retrieval/index engine is the **shared** `RetrievalPort` (`domain/knowledge/retrieval.py`), used by both KB and memory:
+Retrieval is **shared** with the KB face. The value objects (`StoreRef`, `Passage`, `GrepHit`, `GrepResult`, `MemoryHit`, `SearchResult`, `RetrievalMode`) live in `domain/knowledge/retrieval.py`; the protocols (`KnowledgeIndex`, `GrepPort`, `RetrievalPort`) live in `domain/knowledge/index.py`. The concrete facade is `KnowledgeRetrieval` (`application/knowledge/retrieval.py`): it composes the chunk index (`infrastructure/knowledge/sqlite_index.py` + `vec_index.py`), the ripgrep wrapper (`grep.py`), and the embedder clients (`embeddings.py`), and owns the keyword↔vector decision including the flagged vector→keyword fallback — so neither face duplicates it. The lazy reindex-on-read reconcile is the memory-side `MemoryReconciler` (`application/memory/sync.py`) driving the single re-index routine (`application/knowledge/reindex.py`).
 
-```python
-class RetrievalPort(Protocol):
-    async def index_document(self, store: StoreRef, doc: Document) -> None: ...
-    async def remove_document(self, store: StoreRef, doc_id: str) -> None: ...
-    async def reconcile(self, store: StoreRef, on_disk: Sequence[FileDelta]) -> None: ...  # lazy reindex
-    async def search(
-        self, store: StoreRef, query: str, *, mode: RetrievalMode, top_k: int
-    ) -> SearchResult: ...   # carries hits + fallback flag
-    async def grep(self, store: StoreRef, pattern: str, **caps) -> Sequence[GrepHit]: ...
-```
-
-`AgentMemoryAdapter` (`agents/adapters/base.py`) lives with the agent driver, not the memory kind:
+`AgentMemoryAdapter` lives with the agent driver (`application/agent/projection/adapters.py`, with the engine in `application/agent/projection/engine.py`), not the memory kind:
 
 ```python
 class AgentMemoryAdapter(Protocol):
@@ -90,8 +84,9 @@ class AgentMemoryAdapter(Protocol):
     def render(self, facts: Sequence[MemoryFact]) -> bytes: ...  # RENDER mode
 ```
 
-### Domain errors (`domain/knowledge/errors.py`)
+### Domain errors (canonical classes in `domain/errors.py`, re-exported via `domain/knowledge/errors.py`)
 
+- `MemoryStoreNotFound` — code `"MEMORY_STORE_NOT_FOUND"` (HTTP 404); raised for a malformed store name (anything other than `global` / `project-<26-char ULID>`).
 - `MemoryNotFound` — code `"MEMORY_NOT_FOUND"`.
 - `MemoryRejected` — code `"MEMORY_REJECTED"`; reasons: `"empty"`, `"too_long"`.
 - `ScopeUnresolved` — code `"SCOPE_UNRESOLVED"`; raised when `scope=project` but cwd is not in a git project.
@@ -172,11 +167,15 @@ metadata:
   type: project
   actor: agent
 origin_session_id: 01J...
+created_at: 2026-06-09T10:11:12+00:00
+updated_at: 2026-06-09T10:11:12+00:00
 ---
 
 This repo deploys via `make release`. Never run `git push --tags` directly; the
 release target tags and pushes atomically.
 ```
+
+`created_at` / `updated_at` are persisted in the frontmatter (the file is the source of truth); the file mtime is only a fallback when parsing hand-written fact files that omit them.
 
 `infrastructure/memory/paths.py` is the only module that constructs these paths. `infrastructure/memory/files.py` is the only module that reads/writes the per-fact `.md` files, renders `MEMORY.md`, and scans the dir for deltas.
 
@@ -208,7 +207,7 @@ Managed block markers (Next.js / claude-mem precedent):
 | Change embedding model      | Allowed → re-embed the store on next index (files are truth).                                                                     |
 | Change `max_fact_chars`     | Allowed.                                                                                                                          |
 
-## The single re-index routine (shared with KB)
+## The single re-index routine (`application/knowledge/reindex.py`, shared with KB)
 
 ```
 compute content_sha256 of the new markdown

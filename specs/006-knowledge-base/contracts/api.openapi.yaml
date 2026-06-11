@@ -19,7 +19,7 @@ servers:
     description: Local daemon (default port; actual port read from daemon.json)
 
 security:
-  - bearerAuth: []
+  - cofferToken: []
 
 paths:
   /api/v1/knowledge_bases:
@@ -285,7 +285,10 @@ paths:
       description: |
         Relevance search. `mode` defaults to the KB's `default_mode`. A `vector`
         request on a KB with no embedding configured falls back to `keyword`,
-        flagged in the response (`fallback`) — never an error.
+        flagged in the response (`fallback`) — never an error. Any other
+        explicit `mode` the KB cannot serve — `grep` (which has its own
+        endpoint) or a mode not in `enabled_modes` — is rejected with 400
+        `SEARCH_MODE_INVALID`, never silently rewritten.
       operationId: searchKnowledgeBase
       tags: [knowledge_bases]
       requestBody:
@@ -305,6 +308,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          description: Index engine unavailable (`ENGINE_UNAVAILABLE`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/knowledge_bases/{name}/grep:
     parameters:
@@ -333,6 +342,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          description: ripgrep binary unavailable (`ENGINE_UNAVAILABLE`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/knowledge_bases/{name}/metrics:
     parameters:
@@ -353,9 +368,10 @@ paths:
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
 
   parameters:
     KBName:
@@ -579,7 +595,11 @@ components:
         mode:
           allOf:
             - $ref: "#/components/schemas/RetrievalMode"
-          description: Overrides the KB default. `grep` is served by the grep endpoint, not here.
+          description: >
+            Overrides the KB default. `grep` is served by the grep endpoint;
+            requesting it here (or any mode not in `enabled_modes`) is a 400
+            `SEARCH_MODE_INVALID`. `vector` is the exception — it degrades to
+            keyword with a flagged fallback.
 
     Passage:
       type: object
@@ -636,7 +656,10 @@ components:
             $ref: "#/components/schemas/GrepHit"
         truncated:
           type: boolean
-          description: True if max_matches or the timeout cap was reached.
+          description: >
+            True when matches beyond max_matches exist or the server-side
+            timeout cut the scan short (a timed-out grep returns no hits with
+            truncated=true).
 
     KnowledgeBaseMetrics:
       type: object

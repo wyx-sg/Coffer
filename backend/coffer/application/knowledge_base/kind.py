@@ -9,7 +9,6 @@ before the Resource row is removed.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from typing import Any
 
@@ -27,8 +26,16 @@ def make_kb_kind(service: KnowledgeBaseService) -> Kind:
     """Construct the ``knowledge_base`` Kind with lifecycle hooks."""
 
     async def _on_delete(ref: ResourceRef) -> None:
-        with contextlib.suppress(Exception):
+        try:
             await service.cleanup_kb(ref.name)
+        except Exception:
+            # The Resource row deletion proceeds; orphaned files/rows deserve a
+            # signal rather than silent accumulation.
+            _logger.warning(
+                "kb.on_delete.cleanup_failed",
+                extra={"kb": ref.name},
+                exc_info=True,
+            )
 
     async def _on_update_config(
         ref: ResourceRef,

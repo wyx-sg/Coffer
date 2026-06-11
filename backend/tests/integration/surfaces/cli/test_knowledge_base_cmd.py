@@ -150,3 +150,60 @@ def test_delete_kb(kb_cli_daemon):
     assert result.exit_code == 0, result.output
     listed = json.loads(_extract_json(_runner.invoke(cli_app, ["kb", "list", "--json"]).output))
     assert all(k["name"] != "kb" for k in listed["knowledge_bases"])
+
+
+def test_kb_set_embedding_and_read_alias(kb_cli_daemon, tmp_path):
+    """FR-019/FR-014: vector enablement is reachable from the CLI, and ``read``
+    aliases ``get-doc`` (the quickstart's documented verb)."""
+    r = _runner.invoke(cli_app, ["kb", "create", "kb1"])
+    assert r.exit_code == 0, r.output
+    r = _runner.invoke(
+        cli_app,
+        [
+            "kb",
+            "set-embedding",
+            "kb1",
+            "--provider",
+            "local",
+            "--model",
+            "bge-m3",
+            "--dimensions",
+            "32",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    desc = _runner.invoke(cli_app, ["kb", "describe", "kb1", "--json"])
+    cfg = json.loads(_extract_json(desc.output))["knowledge_base"]["config"]
+    assert cfg["embedding"]["provider"] == "local"
+    assert cfg["embedding"]["dimensions"] == 32
+    assert "vector" in cfg["enabled_modes"]
+
+    # read == get-doc
+    doc_file = tmp_path / "alias.md"
+    doc_file.write_text("# Alias\n\nhello from read alias\n", encoding="utf-8")
+    ing = _runner.invoke(cli_app, ["kb", "ingest", "kb1", str(doc_file)])
+    assert ing.exit_code == 0, ing.output
+    doc_id = ing.output.split("id=")[1].split(" ")[0]
+    out = _runner.invoke(cli_app, ["kb", "read", "kb1", doc_id])
+    assert out.exit_code == 0, out.output
+    assert "hello from read alias" in out.output
+
+
+def test_kb_set_chunking_and_reconvert(kb_cli_daemon, tmp_path):
+    """Chunk params are CLI-mutable and reconvert has a CLI verb."""
+    _runner.invoke(cli_app, ["kb", "create", "kb1"])
+    r = _runner.invoke(
+        cli_app, ["kb", "set-chunking", "kb1", "--chunk-size", "128", "--chunk-overlap", "16"]
+    )
+    assert r.exit_code == 0, r.output
+    desc = _runner.invoke(cli_app, ["kb", "describe", "kb1", "--json"])
+    cfg = json.loads(_extract_json(desc.output))["knowledge_base"]["config"]
+    assert cfg["chunk_size"] == 128
+    assert cfg["chunk_overlap"] == 16
+
+    doc_file = tmp_path / "re.md"
+    doc_file.write_text("# Re\n\nreconvertible body\n", encoding="utf-8")
+    ing = _runner.invoke(cli_app, ["kb", "ingest", "kb1", str(doc_file)])
+    doc_id = ing.output.split("id=")[1].split(" ")[0]
+    rc = _runner.invoke(cli_app, ["kb", "reconvert", "kb1", doc_id])
+    assert rc.exit_code == 0, rc.output

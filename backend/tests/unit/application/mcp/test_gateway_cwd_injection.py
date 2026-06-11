@@ -106,3 +106,16 @@ def test_inject_session_cwd_skips_tool_without_cwd_property():
         {"name": "coffer__search_knowledge", "arguments": {"kb": "k", "query": "x"}},
     )
     assert "cwd" not in params["arguments"]
+
+
+def test_inject_session_cwd_without_session_cwd_injects_nothing():
+    """No reported session cwd ⇒ no cwd injection. Falling back to the daemon's
+    own cwd would silently scope agent memory to the DAEMON's project when the
+    daemon happens to run inside a git repo (review M5)."""
+    reg, _ = _registry_with_cwd_tool()
+    session = _session_with(reg)
+    session._session_cwd = None
+    params = session._inject_session_cwd(
+        "coffer__recall", {"name": "coffer__recall", "arguments": {"query": "x"}}
+    )
+    assert "cwd" not in params["arguments"]

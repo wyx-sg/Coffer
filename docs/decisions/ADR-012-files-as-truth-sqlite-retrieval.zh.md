@@ -6,7 +6,7 @@
 **Date**: 2026-06-09
 **Deciders**: Yuxing Wu
 **Supersedes**: [ADR-010](ADR-010-llamaindex-rag-engine.md)（LlamaIndex RAG 引擎）、[ADR-011](ADR-011-mem0-memory-engine.md)（mem0 memory 引擎）
-**Related**: spec `006-knowledge-base`、spec `007-memory`、设计文档 [`docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md`](../../docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md)、[ADR-002](ADR-002-code-layout-layer-first.md)、[ADR-008](ADR-008-everything-is-a-resource-kind.md)、[ADR-013](ADR-013-agent-native-shared-memory.md)
+**Related**: spec `006-knowledge-base`、spec `007-memory`、[ADR-002](ADR-002-code-layout-layer-first.md)、[ADR-007](ADR-007-everything-is-a-resource-kind.md)、[ADR-013](ADR-013-agent-native-shared-memory.md)
 
 ## Context
 
@@ -52,8 +52,8 @@ markdown 文件成为唯一事实源，所有派生的索引/元数据经由 SQL
   `coffer reindex` 从文件重建。这从根上消除了双事实源 bug。
 - **三种检索模式**，全部跑在同一份文件/索引上：
   - `grep` —— ripgrep 扫 `docs/`（直接扫原始文件，零索引，语言无关）。
-  - `keyword` —— SQLite FTS5 `MATCH … ORDER BY bm25()`（external-content；
-    文本仍留在文件里）。
+  - `keyword` —— SQLite FTS5 `MATCH … ORDER BY bm25()`。常规 FTS5 表把 chunk
+    文本存一份在索引内部（仍可由 markdown 文件重建；文件始终是事实源）。
   - `vector` —— sqlite-vec 对 chunk embedding 做 KNN。
   - 可选 hybrid，用 reciprocal rank fusion 融合。默认检索是
     `keyword`+`grep`（零配置、离线）。vector 为 opt-in；若请求了 vector 但

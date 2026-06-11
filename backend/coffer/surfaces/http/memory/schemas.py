@@ -37,6 +37,7 @@ class MemoryStoreConfigOut(BaseModel):
     embedding_model: str | None = None
     embedding_base_url: str | None = None
     embedding_credential_ref: str | None = None
+    embedding_dimensions: int
     max_fact_chars: int
 
     @classmethod
@@ -48,6 +49,7 @@ class MemoryStoreConfigOut(BaseModel):
             embedding_model=c.embedding_model,
             embedding_base_url=c.embedding_base_url,
             embedding_credential_ref=c.embedding_credential_ref,
+            embedding_dimensions=c.embedding_dimensions,
             max_fact_chars=c.max_fact_chars,
         )
 
@@ -64,6 +66,7 @@ class MemoryStoreConfigPatch(BaseModel):
     embedding_model: str | None = None
     embedding_base_url: str | None = None
     embedding_credential_ref: str | None = None
+    embedding_dimensions: int | None = Field(default=None, ge=1, le=8192)
     max_fact_chars: int | None = Field(default=None, ge=64, le=32768)
 
 
@@ -181,10 +184,6 @@ class RecallResponse(BaseModel):
 
 
 ProjectionMode = Literal["SYMLINK", "RENDER", "NONE"]
-
-
-class ProjectionRequest(BaseModel):
-    agent_ref: str
 
 
 class ProjectionOut(BaseModel):

@@ -4,7 +4,7 @@
 
 memory 面的实体、端口、统一 SQLite schema（与 knowledge base 共享）以及落盘规范化布局。
 
-## Domain entities (`backend/coffer/domain/memory/`)
+## Domain 实体 (`backend/coffer/domain/memory/`)
 
 ### `MemoryStoreConfig` (`domain/memory/config.py`)
 
@@ -18,9 +18,12 @@ Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。�
 | `embedding_model`          | `str \| None`                              | 如 `bge-m3`（本地）或某云端模型。`vector` 必填。                           |
 | `embedding_base_url`       | `str \| None`                              | OpenAI 兼容 provider 的 base URL 覆盖。                                    |
 | `embedding_credential_ref` | `str \| None`                              | embedding API key 的 keychain ref（绝不明文）。                            |
+| `embedding_dimensions`     | `int`                                      | 默认 `768`；范围 `1–8192`。决定该 store 的 `vec_chunks` 表宽；随线上契约传输。 |
 | `max_fact_chars`           | `int`                                      | 默认 `8192`；范围 `64–32768`。可变。                                       |
 
 embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。没有不可变锁。
+
+与 spec 006 的形状差异是刻意的：007 把 embedding 字段保持**扁平**，让 memory 表单保持轻薄；006 则把它们嵌套在一个 `EmbeddingConfig` 对象里（`MemoryStoreConfig.to_embedding_config()` 把扁平字段投影到共享对象上）。同理，007 recall 响应里的 `fallback` 是**布尔值** —— recall 跨多个 store，单一的回退模式字符串没有良定义；而 006 的单 store 搜索报告一个可空的模式枚举（`fallback: "keyword" | null`）。
 
 ### `MemoryFact` (`domain/memory/fact.py`)
 
@@ -28,9 +31,9 @@ frozen dataclass；一个每条事实 markdown 文件（frontmatter + 正文）�
 
 | 字段                | 类型                      | 说明                                                                       |
 | ------------------- | ------------------------- | -------------------------------------------------------------------------- |
-| `id`                | `str`                     | 文档 id（ULID）；也是 `<fact-slug>.md` 名字的依据。                        |
+| `id`                | `str`                     | 文档 id（ULID）；也是 `<fact-slug>.md` 文件名的基础。                      |
 | `name`              | `str`                     | frontmatter `name`（短标题；出现在 `MEMORY.md`）。                         |
-| `description`       | `str`                     | frontmatter `description`（单行；出现在 `MEMORY.md`）。                    |
+| `description`       | `str`                     | frontmatter `description`（一行摘要；出现在 `MEMORY.md`）。                |
 | `body`              | `str`                     | markdown 正文 = 事实文本。                                                 |
 | `type`              | `str \| None`             | frontmatter `metadata.type`（`project`/`feedback`/`reference`/`user`/…）。 |
 | `actor`             | `Literal["agent","user"]` | frontmatter `metadata.actor` —— 谁写的。                                   |
@@ -48,106 +51,108 @@ class MemoryScope(StrEnum):
 @dataclass(frozen=True)
 class ResolvedScope:
     scope: MemoryScope
-    project_id: str       # ULID；GLOBAL 用 sentinel
+    project_id: str       # ULID; sentinel for GLOBAL
     store_dir: Path       # ~/.coffer/memory/global | projects/<ulid>
 ```
 
-### `MemoryHit` (`domain/knowledge/document.py`，共享)
+### `MemoryHit`（`domain/knowledge/retrieval.py`，共享）
 
 frozen dataclass；recall 结果。
 
-| 字段     | 类型       | 说明                        |
-| -------- | ---------- | --------------------------- |
-| `id`     | `str`      | 事实（文档）id。            |
-| `text`   | `str`      | 事实正文 / 命中段。         |
-| `score`  | `float`    | 相关性分数。                |
-| `source` | `str`      | 源事实文件的作用域 + 路径。 |
-| `time`   | `datetime` | 事实的 `updated_at`。       |
+| 字段     | 类型       | 说明                                                  |
+| -------- | ---------- | ------------------------------------------------------ |
+| `id`     | `str`      | 事实（document）id。                                  |
+| `text`   | `str`      | 事实正文 / 命中的 passage。                           |
+| `score`  | `float`    | 逐 store 的相关性分数（保留在线上契约里；见下文 RRF）。 |
+| `source` | `str`      | 来源事实文件的 `<scope>:<fact file path>`。           |
+| `time`   | `datetime` | 事实的 `updated_at`。                                 |
 
-### Ports
+跨 store 的 recall 用**倒数排名融合**（reciprocal rank fusion，k=60）合并逐 store 的命中列表：不同 store/模式的原始分数不可比（翻转后的 bm25 无上界、vector ≤ 1、grep 是平坦分数），所以 RRF 按逐 store 的名次排序 —— 每条命中保留原始分数，只有合并后的**顺序**来自融合。`grep` recall 是真实服务的：ripgrep 扫该 store 的事实文件（对 FTS5 无法分词的内容必不可少，如 CJK）。store 名会被校验（`global` | `project-<26 字符 ULID>`）：形状合法的名字会惰性 provision 对应 store；其余一律 404。
 
-检索/索引引擎是 **共享** 的 `RetrievalPort`（`domain/knowledge/retrieval.py`），KB 与 memory 共用：
+### 端口
 
-```python
-class RetrievalPort(Protocol):
-    async def index_document(self, store: StoreRef, doc: Document) -> None: ...
-    async def remove_document(self, store: StoreRef, doc_id: str) -> None: ...
-    async def reconcile(self, store: StoreRef, on_disk: Sequence[FileDelta]) -> None: ...  # 惰性 reindex
-    async def search(
-        self, store: StoreRef, query: str, *, mode: RetrievalMode, top_k: int
-    ) -> SearchResult: ...   # 携带 hits + fallback 标志
-    async def grep(self, store: StoreRef, pattern: str, **caps) -> Sequence[GrepHit]: ...
-```
+检索与 KB 面**共享**。值对象（`StoreRef`、`Passage`、`GrepHit`、`GrepResult`、`MemoryHit`、`SearchResult`、`RetrievalMode`）在 `domain/knowledge/retrieval.py`；协议（`KnowledgeIndex`、`GrepPort`、`RetrievalPort`）在 `domain/knowledge/index.py`。具体门面是 `KnowledgeRetrieval`（`application/knowledge/retrieval.py`）：它组合 chunk 索引（`infrastructure/knowledge/sqlite_index.py` + `vec_index.py`）、ripgrep 包装器（`grep.py`）与 embedder 客户端（`embeddings.py`），并持有 keyword↔vector 的决策（包括带标注的 vector→keyword 回退）—— 两个面都不重复这段逻辑。读时惰性 reindex 的对账由 memory 侧的 `MemoryReconciler`（`application/memory/sync.py`）驱动单一 re-index 例程（`application/knowledge/reindex.py`）完成。
 
-`AgentMemoryAdapter`（`agents/adapters/base.py`）随 agent driver、而非 memory kind：
+`AgentMemoryAdapter` 跟着 agent driver 走（`application/agent/projection/adapters.py`，引擎在 `application/agent/projection/engine.py`），不属于 memory kind：
 
 ```python
 class AgentMemoryAdapter(Protocol):
     def memory_location(self, project: ProjectRef) -> Path | None: ...
     @property
     def projection_mode(self) -> Literal["SYMLINK", "RENDER", "NONE"]: ...
-    def disable_native_memory(self, agent_config) -> None: ...   # 仅当原生记忆会成为另一份副本时
-    def render(self, facts: Sequence[MemoryFact]) -> bytes: ...  # RENDER 模式
+    def disable_native_memory(self, agent_config) -> None: ...   # only when native memory would be a separate copy
+    def render(self, facts: Sequence[MemoryFact]) -> bytes: ...  # RENDER mode
 ```
 
-### Domain errors (`domain/knowledge/errors.py`)
+### Domain 错误（规范类在 `domain/errors.py`，经 `domain/knowledge/errors.py` 再导出）
 
+- `MemoryStoreNotFound` —— code `"MEMORY_STORE_NOT_FOUND"`（HTTP 404）；store 名形状非法时抛出（除 `global` / `project-<26 字符 ULID>` 之外的任何名字）。
 - `MemoryNotFound` —— code `"MEMORY_NOT_FOUND"`。
-- `MemoryRejected` —— code `"MEMORY_REJECTED"`；reasons：`"empty"`、`"too_long"`。
-- `ScopeUnresolved` —— code `"SCOPE_UNRESOLVED"`；当 `scope=project` 但 cwd 不在某个 git 项目里时抛出。
-- `EmbeddingUnavailable` —— 对调用方不是错误：`vector` recall 降级到 `keyword` 并在结果里设 `fallback`（绝不抛给用户）。
+- `MemoryRejected` —— code `"MEMORY_REJECTED"`；reason：`"empty"`、`"too_long"`。
+- `ScopeUnresolved` —— code `"SCOPE_UNRESOLVED"`；当 `scope=project` 但 cwd 不在 git 项目里时抛出。
+- `EmbeddingUnavailable` —— 对调用方不是错误：`vector` recall 降级为 `keyword` 并在结果里设置 `fallback`（绝不抛给用户）。
 
 ## 统一 SQLite schema（Alembic —— 一个重设计 revision）
 
-重设计 revision **删除** `memory_records` 与任何 chroma/LlamaIndex 目录，然后创建与 KB 共享的、基于 `documents` 的统一 schema。没有数据迁移。
+重设计 revision **删除** `memory_records` 与所有 chroma/LlamaIndex 目录，然后创建与 KB 共享的、以 `documents` 为核心的统一 schema。没有数据迁移。
+
+下面的 schema 与 KB 重设计迁移创建的是**同一份统一 schema**（迁移归 spec 006 所有；这里是它的 memory 视角）。重设计 revision **删除** `memory_records` 并创建这些表。
 
 ```sql
--- KB (kind='knowledge_base') 与 memory (kind='memory') 共享。
+-- Shared across KB (kind='knowledge_base') and memory (kind='memory').
 CREATE TABLE documents (
-    id             TEXT PRIMARY KEY,            -- ULID
+    id             TEXT NOT NULL,               -- ULID (memory) | 16-hex (KB)
     kind           TEXT NOT NULL,               -- 'knowledge_base' | 'memory'
-    resource_name  TEXT NOT NULL,               -- store 名（memory：作用域 store）
-    project_id     TEXT NOT NULL,               -- WORKSPACE_GLOBAL sentinel | 项目 ULID
-    path           TEXT NOT NULL,               -- 落盘规范化 .md 路径 = 真相
-    title          TEXT,                        -- memory：frontmatter `name`
-    description    TEXT,                         -- memory：frontmatter `description`
-    metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON；memory：{type, actor, origin_session_id}
-    content_sha256 TEXT NOT NULL,               -- 供 lazy-reindex 增量检测
-    source_mode    TEXT NOT NULL DEFAULT 'native', -- memory：'native'
+    resource_name  TEXT NOT NULL,               -- store name (memory: scope store)
+    project_id     TEXT NOT NULL,               -- WORKSPACE_GLOBAL sentinel | project ULID
+    path           TEXT NOT NULL,               -- canonical .md path on disk = truth
+    title          TEXT NOT NULL,               -- memory: frontmatter `name`
+    description    TEXT,                         -- memory: frontmatter `description`
+    metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {type, actor, origin_session_id}
+    content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
+    source_mode    TEXT NOT NULL DEFAULT 'native', -- memory: 'native'
     created_at     TIMESTAMP NOT NULL,
-    updated_at     TIMESTAMP NOT NULL
+    updated_at     TIMESTAMP NOT NULL,
+    PRIMARY KEY (kind, resource_name, id)        -- composite (memory ULIDs are globally unique too)
 );
-CREATE INDEX idx_documents_store ON documents(kind, resource_name, updated_at DESC);
+CREATE INDEX idx_documents_kind_res_time ON documents(kind, resource_name, updated_at DESC);
 CREATE INDEX idx_documents_project ON documents(project_id);
 
 CREATE TABLE chunks (
-    id           TEXT PRIMARY KEY,
-    document_id  TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    position     INTEGER NOT NULL               -- memory：每条事实一个 chunk
+    id           TEXT PRIMARY KEY,              -- '<doc-id>:<position>'
+    document_id  TEXT NOT NULL,                 -- app-level cascade (not a FK; KB+memory share the table)
+    kind         TEXT NOT NULL,
+    resource_name TEXT NOT NULL,
+    position     INTEGER NOT NULL               -- memory: one chunk per fact
 );
+CREATE INDEX idx_chunks_document ON chunks(document_id);
 
--- FTS5 external-content（文本留在文件里，不复制）。
+-- FTS5 keyword index; the chunk text lives once inside the FTS index (not
+-- duplicated into a base table), with chunk_id mapping a hit back to its row.
 CREATE VIRTUAL TABLE documents_fts USING fts5(
-    text, content='', tokenize='unicode61'
+    text, resource_name UNINDEXED, chunk_id UNINDEXED, tokenize='unicode61'
 );
 
--- sqlite-vec 虚拟表（仅当启用某个 vector 模式时）。
+-- sqlite-vec virtual table (only when a vector mode is enabled); created lazily
+-- per store at the configured width.
 CREATE VIRTUAL TABLE vec_chunks USING vec0(
     chunk_id TEXT PRIMARY KEY, embedding FLOAT[<dim>]
 );
 ```
 
-memory 面的 `documents.metadata` 被 Pydantic 校验为 `{type, actor, origin_session_id}`。按工程约定，metadata JSON 用 `model_dump(mode="json")` 构建，使 `datetime`/`AnyUrl` 能为 SQLite 序列化。
+document 删除时的级联是**应用层的**（索引的 `delete_chunks` + 仓储的 `delete_document`/`delete_resource`），不是 SQL 外键，因为 `documents` 表由两个面共享。
 
-## 落盘规范化布局（真相源）
+memory 面的 `documents.metadata` 经 Pydantic 校验为 `{type, actor, origin_session_id}`。按工程惯例，metadata JSON 用 `model_dump(mode="json")` 构造，使 `datetime`/`AnyUrl` 值能序列化进 SQLite。
+
+## 落盘规范布局（真相源）
 
 ```
 ~/.coffer/
 └── memory/
     ├── global/                        # project_id = WORKSPACE_GLOBAL_PROJECT_ID (00000000000000000000000000)
-    │   ├── MEMORY.md                  # 重新生成的索引：- [name](file.md) — description
-    │   └── <fact-slug>.md             # 每条事实文件 = 真相（frontmatter + 正文）
-    └── projects/<project-ulid>/       # 每项目一个目录
+    │   ├── MEMORY.md                  # regenerated index: - [name](file.md) — description
+    │   └── <fact-slug>.md             # per-fact file = truth (frontmatter + body)
+    └── projects/<project-ulid>/       # one dir per project
         ├── MEMORY.md
         └── <fact-slug>.md
 ```
@@ -162,22 +167,26 @@ metadata:
   type: project
   actor: agent
 origin_session_id: 01J...
+created_at: 2026-06-09T10:11:12+00:00
+updated_at: 2026-06-09T10:11:12+00:00
 ---
 
 This repo deploys via `make release`. Never run `git push --tags` directly; the
 release target tags and pushes atomically.
 ```
 
-`infrastructure/memory/paths.py` 是唯一构造这些路径的模块。`infrastructure/memory/files.py` 是唯一读写每条事实 `.md` 文件、渲染 `MEMORY.md`、扫描目录增量的模块。
+`created_at` / `updated_at` 持久化在 frontmatter 里（文件是真相源）；只有解析省略了它们的手写事实文件时，才回退用文件 mtime。
 
-## 原生投影目标（由 agent adapter 拥有，而非底座）
+`infrastructure/memory/paths.py` 是唯一构造这些路径的模块。`infrastructure/memory/files.py` 是唯一读写每条事实 `.md`、渲染 `MEMORY.md`、扫描目录找增量的模块。
 
-| Agent       | Project 层                                               | Global 层                             |
-| ----------- | -------------------------------------------------------- | ------------------------------------- |
-| Claude Code | SYMLINK 规范化目录 → `~/.claude/projects/<slug>/memory/` | RENDER block 进 `~/.claude/CLAUDE.md` |
-| Codex       | RENDER block 进 `<project>/AGENTS.md`；禁用 `memories`   | RENDER block 进 `~/.codex/AGENTS.md`  |
+## 原生投影目标（归 agent adapter 所有，不属于基底）
 
-managed block 标记（Next.js / claude-mem 先例）：
+| Agent       | Project 层                                                   | Global 层                               |
+| ----------- | ----------------------------------------------------------- | --------------------------------------- |
+| Claude Code | SYMLINK 规范目录 → `~/.claude/projects/<slug>/memory/`       | RENDER 块写进 `~/.claude/CLAUDE.md`     |
+| Codex       | RENDER 块写进 `<project>/AGENTS.md`；禁用 `memories`         | RENDER 块写进 `~/.codex/AGENTS.md`      |
+
+受管块标记（Next.js / claude-mem 先例）：
 
 ```
 <!-- coffer:memory:start (managed, do not edit) -->
@@ -185,20 +194,20 @@ managed block 标记（Next.js / claude-mem 先例）：
 <!-- coffer:memory:end -->
 ```
 
-## Cascade & integrity rules
+## 级联与完整性规则
 
-| 动作                       | 效果                                                                                                         |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `remember` / 用户添加      | 写 `<fact-slug>.md` → 重生 `MEMORY.md` → 索引进 `documents`/`chunks`/FTS5/(vec) → 审计 → 重新投影。          |
-| `update_memory` / 用户编辑 | 重写 `.md` → 单一 re-index 例程（sha256 变 → 重 chunk/embed）→ 重生 `MEMORY.md` → 审计 → 重新投影。          |
-| `forget` / 用户删除        | 删 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 重生 `MEMORY.md` → 审计 → 重新投影。                      |
-| 清空一个作用域             | 删 store 全部 `.md` → 移除全部索引行 → 清空 `MEMORY.md` → 重新投影为空 → 审计。store Resource 保留。         |
-| 删除 store Resource        | 移除 store 的 `documents` 行、`rmtree(store_dir)`、拆除投影（还原 symlink / 剥离 managed block）、审计。     |
-| Recall                     | **Lazy reindex-on-read**：按 `content_sha256` 扫描 `store_dir` 增量 → `reconcile` → 搜索。不写 `MEMORY.md`。 |
-| 改 embedding 模型          | 允许 → 下次索引时重嵌整个 store（文件是真相）。                                                              |
-| 改 `max_fact_chars`        | 允许。                                                                                                       |
+| 动作                        | 效果                                                                                                                              |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `remember` / 用户新增       | 写 `<fact-slug>.md` → 重新生成 `MEMORY.md` → 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计 → 重投影。                            |
+| `update_memory` / 用户编辑  | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 重新生成 `MEMORY.md` → 审计 → 重投影。                          |
+| `forget` / 用户删除         | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 重新生成 `MEMORY.md` → 审计 → 重投影。                                       |
+| 清空一个 scope              | 删除该 store 全部 `.md` → 移除全部索引行 → `MEMORY.md` 置空 → 重投影为空 → 审计。store Resource 保留。                            |
+| 删除 store Resource         | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、拆掉投影（替换 symlink / 剥除受管块）、审计。                                |
+| Recall                      | **读时惰性 reindex**：扫 `store_dir` 找增量（按 `content_sha256`）→ `reconcile` → 搜索。不写 `MEMORY.md`。                        |
+| 修改 embedding 模型         | 允许 → 下次索引时对 store 重新 embedding（文件是真相）。                                                                          |
+| 修改 `max_fact_chars`       | 允许。                                                                                                                            |
 
-## 单一 re-index 例程（与 KB 共享）
+## 单一 re-index 例程（`application/knowledge/reindex.py`，与 KB 共享）
 
 ```
 compute content_sha256 of the new markdown
@@ -207,18 +216,18 @@ compute content_sha256 of the new markdown
               → insert new → update documents row → audit *_UPDATED
 ```
 
-所有 memory 写路径（remember、update、用户编辑、lazy reindex 扫描）都汇入这一个例程。
+memory 的所有写路径（remember、update、用户编辑、惰性 reindex 扫描）都汇入这一个例程。
 
-## Audit events added
+## 新增审计事件
 
-| 值                   | 何时发出                   |
-| -------------------- | -------------------------- |
-| `"memory_added"`     | 成功 `remember`/用户添加后 |
-| `"memory_updated"`   | 成功 `update`/用户编辑后   |
-| `"memory_deleted"`   | 成功 `forget`/用户删除后   |
-| `"memory_cleared"`   | 清空一个作用域后           |
-| `"memory_projected"` | 建立/刷新一次投影后        |
+| 值                   | 何时发出                                   |
+| -------------------- | ------------------------------------------ |
+| `"memory_added"`     | `remember`/用户新增成功后                  |
+| `"memory_updated"`   | `update`/用户编辑成功后                    |
+| `"memory_deleted"`   | `forget`/用户删除成功后                    |
+| `"memory_cleared"`   | 清空一个 scope 后                          |
+| `"memory_projected"` | 建立/刷新一个投影后                        |
 
-## Wire contract (REST)
+## 线上契约（REST）
 
-在 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall）加投影端点（list/establish/remove）。kind-agnostic 的 `/api/v1/resources/...` 对 memory store 继续可用。app-wide 错误信封：`{ "error": { "code", "message", "details" } }`。
+位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall），外加投影端点（list/establish/remove）。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。

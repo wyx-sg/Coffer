@@ -4,8 +4,8 @@
 
 **Feature Branch**: `feature/kb-memory-redesign`
 **Created**: 2026-05-22
-**Status**: Draft (redesign)
-**Input**: Redesign of Coffer's memory feature — the **memory face** of one unified substrate shared with the knowledge base (spec 006). Memory is no longer a mem0 vector store with an LLM at write time; it becomes a **single shared source of truth across agents** (no divergent per-agent copies), agent-native where the format matches. Canonical storage is per-fact markdown files plus a `MEMORY.md` index — Claude Code's auto-memory format — under `~/.coffer/memory/`, with a two-layer scope (global + per-project). Agents read/write through Coffer's MCP gateway; canonical files are also **projected** into each agent's native location (Claude Code via a directory symlink, Codex via a marker-fenced managed block in `AGENTS.md`). The user does full CRUD in the Coffer UI. Retrieval uses the same engine as the knowledge base (grep / keyword FTS5+BM25 / vector sqlite-vec). See [`docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md`](../../docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md).
+**Status**: Accepted (redesign — in development)
+**Input**: Redesign of Coffer's memory feature — the **memory face** of one unified substrate shared with the knowledge base (spec 006). Memory is no longer a mem0 vector store with an LLM at write time; it becomes a **single shared source of truth across agents** (no divergent per-agent copies), agent-native where the format matches. Canonical storage is per-fact markdown files plus a `MEMORY.md` index — Claude Code's auto-memory format — under `~/.coffer/memory/`, with a two-layer scope (global + per-project). Agents read/write through Coffer's MCP gateway; canonical files are also **projected** into each agent's native location (Claude Code via a directory symlink, Codex via a marker-fenced managed block in `AGENTS.md`). The user does full CRUD in the Coffer UI. Retrieval uses the same engine as the knowledge base (grep / keyword FTS5+BM25 / vector sqlite-vec). See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) and [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md) for the full design rationale.
 
 ## User Scenarios & Testing
 
@@ -24,6 +24,8 @@ The developer works on a project with Claude Code in the morning and Codex in th
 - recall spans project and global scope
 - agent updates a fact
 - agent forgets a fact
+- built-in memory tools appear in client tool list
+- vector recall falls back when embedding is unconfigured
 
 ---
 
@@ -89,8 +91,9 @@ The developer wants to know how much memory has accumulated per scope and to cle
 
 **Covering scenarios**:
 
-- per-store metrics
 - clear a memory scope
+
+(The per-store metrics HTTP route is exercised by the independent test but its dedicated acceptance test is deferred — see the note after the scenarios.)
 
 ---
 
@@ -244,8 +247,8 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Retrieval**
 
-- **FR-008**: Recall MUST use the unified retrieval engine shared with the knowledge base: `grep` (raw files), `keyword` (FTS5 BM25, the default), and `vector` (sqlite-vec with a configurable embedding provider). When `vector` is requested but no embedding provider is configured, recall MUST fall back to `keyword` and flag the fallback in the response — never block.
-- **FR-009**: `coffer__recall` MUST default to spanning both the project and global stores; results carry id, text, score, source, and time. Default `top_k` is 5; callers MAY specify 1–20.
+- **FR-008**: Recall MUST use the unified retrieval engine shared with the knowledge base: `grep` (served for real — ripgrep over the store's fact files; essential for content FTS5 cannot tokenize, e.g. CJK), `keyword` (FTS5 BM25, the default), and `vector` (sqlite-vec with a configurable embedding provider). When `vector` is requested but no embedding provider is configured, recall MUST fall back to `keyword` and flag the fallback as a boolean in the response — never block. The MCP `coffer__recall` response includes that `fallback` boolean.
+- **FR-009**: `coffer__recall` MUST default to spanning both the project and global stores; cross-store results are merged by reciprocal rank fusion (per-store scores are not comparable across modes/stores; each hit keeps its per-store score, only the merged order comes from the fusion). Results carry id, text, score, source, and time — `time` is the fact's `updated_at` and `source` is `<scope>:<fact file path>`. Default `top_k` is 5; callers MAY specify 1–20.
 - **FR-010**: Memory MUST use **lazy reindex-on-read**: `recall` first scans the fact directory for deltas (added/changed/removed files by content hash) and reconciles the index before searching, so out-of-band edits (including Claude's symlink edits) are visible immediately with no filesystem watcher.
 
 **Projection & binding**
@@ -262,7 +265,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Surfaces**
 
-- **FR-017**: Users MUST be able to perform full memory CRUD through (a) a REST API under `/api/v1/memory_stores/`, (b) `coffer memory …` subcommands, and (c) a desktop UI. User writes set `metadata.actor = "user"`, write the canonical markdown, regenerate `MEMORY.md`, reindex, and audit.
+- **FR-017**: Users MUST be able to perform full memory CRUD through (a) a REST API under `/api/v1/memory_stores/`, (b) `coffer memory …` subcommands, and (c) a desktop UI. User writes set `metadata.actor = "user"`, write the canonical markdown, regenerate `MEMORY.md`, reindex, and audit. Store names on these surfaces are validated: only `global` or `project-<26-char ULID>` are legal — a well-formed name lazily provisions its store; anything else returns 404 (`MEMORY_STORE_NOT_FOUND`).
 
 **Substrate isolation**
 
@@ -271,6 +274,10 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 **Migration**
 
 - **FR-019**: This branch is unreleased; there is **no data migration**. A single migration MUST drop `memory_records`, delete any chroma/LlamaIndex directories, and create the fresh unified schema. Old mem0/chroma text is not migrated.
+
+**Projection surface**
+
+- **FR-020**: Projections MUST be managed via REST: `GET /api/v1/memory_stores/{name}/projections` lists a store's bindings, `POST /api/v1/memory_stores/{name}/projections` establishes one (merging existing native files into the canonical store first — never overwriting), and `DELETE /api/v1/memory_stores/{name}/projections/{agent_ref}` removes one. Removal MUST undo the native target (remove the symlink / strip the managed block); if the undo fails, the binding row is KEPT (so the native artifact is never orphaned) and the error propagates for retry. Every establish/remove MUST write a `memory_projected` audit event. For Claude Code, the GLOBAL layer projects via a RENDER managed block into `~/.claude/CLAUDE.md` (the project layer is the SYMLINK of FR-012).
 
 ### Key Entities
 

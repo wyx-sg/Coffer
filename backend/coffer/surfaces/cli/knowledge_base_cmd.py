@@ -8,7 +8,9 @@ grep / keyword / vector.
 from __future__ import annotations
 
 import json as _json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -164,6 +166,7 @@ def list_docs(
 
 
 @app.command("get-doc")
+@app.command("read", help="Alias of get-doc.")
 def get_doc(
     ctx: typer.Context,
     name: str = typer.Argument(...),
@@ -180,6 +183,84 @@ def get_doc(
         typer.echo(_json.dumps(data, indent=2))
         return
     typer.echo(data["markdown"])
+
+
+def _patch_kb_config(
+    ctx: typer.Context, name: str, mutate: Callable[[dict[str, Any]], None]
+) -> dict[str, Any]:
+    """GET the KB's current config, apply ``mutate(config)``, PATCH it back."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get(f"/knowledge_bases/{name}")
+        _cli_client.check(r, verbose=_verbose(ctx))
+        config: dict[str, Any] = r.json()["config"]
+        mutate(config)
+        patched = c.patch(f"/resources/knowledge_base/{name}", json={"config": config})
+        _cli_client.check(patched, verbose=_verbose(ctx))
+    return config
+
+
+@app.command("set-embedding")
+def set_embedding(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+    provider: str = typer.Option(..., "--provider", help="openai / openrouter / … / local"),
+    model: str = typer.Option(..., "--model"),
+    dimensions: int = typer.Option(..., "--dimensions"),
+    base_url: str | None = typer.Option(None, "--base-url"),
+    credential_ref: str | None = typer.Option(
+        None, "--credential-ref", help="Keychain credential name (never a raw key)."
+    ),
+) -> None:
+    """Configure embeddings + enable vector mode (re-embeds the corpus)."""
+
+    def mutate(config: dict[str, Any]) -> None:
+        config["embedding"] = {
+            "provider": provider,
+            "model": model,
+            "dimensions": dimensions,
+            "base_url": base_url,
+            "credential_ref": credential_ref,
+        }
+        modes = list(config.get("enabled_modes") or [])
+        if "vector" not in modes:
+            modes.append("vector")
+        config["enabled_modes"] = modes
+
+    _patch_kb_config(ctx, name, mutate)
+    typer.echo(f"embedding set on {name}: {provider}/{model} ({dimensions}d); vector enabled")
+
+
+@app.command("set-chunking")
+def set_chunking(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+    chunk_size: int = typer.Option(..., "--chunk-size"),
+    chunk_overlap: int = typer.Option(..., "--chunk-overlap"),
+) -> None:
+    """Change chunk parameters (re-chunks/re-indexes the corpus)."""
+
+    def mutate(config: dict[str, Any]) -> None:
+        config["chunk_size"] = chunk_size
+        config["chunk_overlap"] = chunk_overlap
+
+    _patch_kb_config(ctx, name, mutate)
+    typer.echo(f"chunking set on {name}: size={chunk_size} overlap={chunk_overlap}")
+
+
+@app.command("reconvert")
+def reconvert(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+    document_id: str = typer.Argument(...),
+) -> None:
+    """Re-run conversion from the raw source (blocked once hand-edited)."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/knowledge_bases/{name}/documents/{document_id}/reconvert")
+        _cli_client.check(r, verbose=_verbose(ctx))
+    out = r.json()
+    typer.echo(f"reconverted document {out['id']} (source_mode={out['source_mode']})")
 
 
 @app.command("edit")

@@ -4,8 +4,8 @@
 
 **Feature Branch**: `feature/kb-memory-redesign`
 **Created**: 2026-06-09
-**Status**: Draft (redesign)
-**Input**: A from-scratch redesign of the `knowledge_base` resource kind. A Knowledge Base is one face of a shared **knowledge substrate**: the user uploads files in **any format**, Coffer cleans and normalizes each to **Markdown on disk** (the source of truth), and serves them back over three retrieval modes (`grep`, `keyword`, `vector`). SQLite is a rebuildable index only. The agent reads the KB through Coffer's MCP gateway; the KB is **user-curated and read-only to agents**. See [`docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md`](../../docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md) for the full design and [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) for architecture.
+**Status**: Accepted (redesign — in development)
+**Input**: A from-scratch redesign of the `knowledge_base` resource kind. A Knowledge Base is one face of a shared **knowledge substrate**: the user uploads files in **any format**, Coffer cleans and normalizes each to **Markdown on disk** (the source of truth), and serves them back over three retrieval modes (`grep`, `keyword`, `vector`). SQLite is a rebuildable index only. The agent reads the KB through Coffer's MCP gateway; the KB is **user-curated and read-only to agents**. See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) for the full design rationale and [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) for architecture.
 
 ## User Scenarios & Testing
 
@@ -208,7 +208,7 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 **Ingestion & conversion**
 
 - **FR-004**: Users MUST be able to upload a file of any supported format; the system MUST detect format, convert to Markdown via a pluggable `MarkdownConverter` port, clean the output, prepend YAML frontmatter, write `docs/`+`raw/`, and index it.
-- **FR-005**: The default converter engine MUST be MarkItDown, pluggable per format (e.g. Docling for high-fidelity PDF, pandoc) and confined to `infrastructure/`. Markdown/text/source files pass through unchanged.
+- **FR-005**: Conversion MUST dispatch through a per-format converter registry confined to `infrastructure/`: Markdown/text/source files pass through unchanged, `csv` has a dedicated converter, and everything else (pdf / docx / pptx / xlsx / html / epub / odt / rtf / …) goes through the default MarkItDown engine. A higher-fidelity engine for a format is a new converter in the registry, not a substrate change.
 - **FR-006**: System MUST reject files over `max_document_bytes` (default 25 MB, configurable), files of unsupported type, and files whose conversion yields empty Markdown.
 - **FR-007**: System MUST compute `source_sha256` of the original and reject re-upload of an existing source unless `replace=true`.
 
@@ -220,7 +220,8 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 **Retrieval**
 
 - **FR-010**: Users MUST be able to search a KB and receive ranked passages (passage text + source doc id + title + score) via the requested or default mode. Default `top_k` is 5; callers MAY set `top_k` in 1–20.
-- **FR-011**: System MUST support three retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), and `vector` (sqlite-vec KNN over embeddings). Default enabled modes are `keyword`+`grep`; `vector` is opt-in.
+- **FR-011**: System MUST support three retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), and `vector` (sqlite-vec KNN over embeddings). Default enabled modes are `keyword`+`grep`; `vector` is opt-in. Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed).
+- **FR-011a**: An EXPLICIT `mode=grep` on the search endpoint — or any explicit mode not in the KB's `enabled_modes` — MUST be rejected with `400 SEARCH_MODE_INVALID` (grep is served by its own endpoint, never silently rewritten). `vector` is the one exception: it always reaches the retrieval facade so the keyword fallback is FLAGGED per FR-012. An implicit search (no `mode`) on a KB whose `default_mode` is `grep` serves `keyword` (grep is not a passage mode).
 - **FR-012**: When `vector` is requested but no embedding provider is configured, the system MUST fall back to `keyword` and flag the fallback in the response — it MUST NOT error or block.
 
 **Embedding configuration**
@@ -246,7 +247,7 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 - **Knowledge Base** (resource of kind `knowledge_base`): config = enabled retrieval modes, chunk size/overlap, embedding provider/model/base_url/credential_ref, max document bytes, description.
 - **Document** (unified `documents` row, `kind="knowledge_base"`): doc id, KB resource name, on-disk path, title, description, `content_sha256`, `source_mode`, per-face `metadata` (`original_filename`, `original_format`, `source_sha256`, `converted_at`, `conversion_engine`), timestamps.
-- **Chunk** (`chunks` row): position within a document; text lives in the files via FTS5 external/contentless content, not duplicated in SQLite.
+- **Chunk** (`chunks` row): position within a document. The chunk text is stored once inside the regular FTS5 index (`documents_fts`), not duplicated into a base SQLite table; it remains rebuildable from the Markdown files, which stay the source of truth.
 - **Passage** (retrieval result, not persisted): passage text, source doc id, title, score, position.
 - **Grep hit** (retrieval result, not persisted): path, line number, line.
 
@@ -254,7 +255,7 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 ### Measurable Outcomes
 
-- **SC-001**: From a fresh install, a user creates a KB and ingests their first non-Markdown file (e.g. a PDF) within 60 seconds, with documentation consulted no more than once.
+- **SC-001**: From a fresh install, a user creates a KB and ingests their first non-Markdown file (e.g. a PDF) within 60 seconds by following the quickstart alone.
 - **SC-002**: With a 50-document KB (≤ 50 MB), keyword search latency for a typical query is ≤ 200 ms and grep ≤ 500 ms wall-clock at the REST surface on a developer laptop.
 - **SC-003**: Deleting a KB removes 100% of its on-disk footprint and 100% of its SQLite rows; verified by a test that walks `~/.coffer/knowledge/` and queries `documents`/`chunks` before and after.
 - **SC-004**: An agent connected through the MCP gateway can list KBs, search, grep, and read a document — all via read-only built-in tools — in one MCP session, with no separate MCP server installed.
@@ -274,4 +275,4 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 - **Shared substrate**: `documents`/`chunks`/FTS5/sqlite-vec and the converter port are shared with spec 007 (memory). This spec owns the KB face (any-format→Markdown, three-mode read, agent-read-only); 007 owns the memory face. Keep the substrate description in sync across both specs; architecture lives in the constitution and the redesign ADR, not restated here.
 - **Embedding default**: vector is opt-in; the zero-config default is `keyword`+`grep` (offline, language-agnostic). For bilingual corpora a local `bge-m3` or a cloud provider is recommended (English-only small models embed Chinese poorly).
-- **Deferred**: reranking / HyDE / multi-query / LLM synthesis on retrieval; agents editing KB documents; image OCR by default; a filesystem watcher on by default. See design §12 (non-goals).
+- **Deferred**: reranking / HyDE / multi-query / LLM synthesis on retrieval; agents editing KB documents; image OCR by default; a filesystem watcher on by default.

@@ -47,6 +47,7 @@ export interface MemoryStoreConfigOut {
   embedding_model?: string | null;
   embedding_base_url?: string | null;
   embedding_credential_ref?: string | null;
+  embedding_dimensions: number;
   max_fact_chars: number;
 }
 

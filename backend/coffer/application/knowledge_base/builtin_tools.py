@@ -75,9 +75,12 @@ def register_kb_builtin_tools(
         kb = str(args["kb"])
         pattern = str(args["pattern"])
         max_matches = max(1, min(_MAX_MATCHES, int(args.get("max_matches", 200))))
-        hits = await kb_service.grep(kb_name=kb, pattern=pattern, max_matches=max_matches)
+        result = await kb_service.grep(kb_name=kb, pattern=pattern, max_matches=max_matches)
         return {
-            "hits": [{"path": h.path, "line_number": h.line_number, "line": h.line} for h in hits]
+            "hits": [
+                {"path": h.path, "line_number": h.line_number, "line": h.line} for h in result.hits
+            ],
+            "truncated": result.truncated,
         }
 
     async def read_document(args: dict[str, Any]) -> dict[str, Any]:

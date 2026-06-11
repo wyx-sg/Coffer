@@ -161,7 +161,8 @@ async def ingest_document(
         actor=actor,
         replace=replace,
     )
-    return DocumentOut.from_domain(doc)
+    counts = await kb_svc.chunk_counts(kb_name=name)
+    return DocumentOut.from_domain(doc, chunk_count=counts.get(doc.id, 0))
 
 
 @router.get("/{name}/documents", response_model=DocumentListOut)
@@ -172,7 +173,11 @@ async def list_documents(
     kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
 ) -> DocumentListOut:
     docs, total = await kb_svc.list_documents(kb_name=name, limit=limit, offset=offset)
-    return DocumentListOut(documents=[DocumentOut.from_domain(d) for d in docs], total=total)
+    counts = await kb_svc.chunk_counts(kb_name=name)
+    return DocumentListOut(
+        documents=[DocumentOut.from_domain(d, chunk_count=counts.get(d.id, 0)) for d in docs],
+        total=total,
+    )
 
 
 @router.get("/{name}/documents/{document_id}", response_model=DocumentDetailOut)
@@ -182,7 +187,8 @@ async def get_document(
     kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
 ) -> DocumentDetailOut:
     doc, markdown = await kb_svc.get_document_text(kb_name=name, document_id=document_id)
-    return DocumentDetailOut.from_domain_with_body(doc, markdown)
+    counts = await kb_svc.chunk_counts(kb_name=name)
+    return DocumentDetailOut.from_domain_with_body(doc, markdown, chunk_count=counts.get(doc.id, 0))
 
 
 @router.put("/{name}/documents/{document_id}", response_model=DocumentOut)
@@ -196,7 +202,8 @@ async def edit_document(
     doc = await kb_svc.edit_document(
         kb_name=name, document_id=document_id, new_markdown=body.markdown, actor=actor
     )
-    return DocumentOut.from_domain(doc)
+    counts = await kb_svc.chunk_counts(kb_name=name)
+    return DocumentOut.from_domain(doc, chunk_count=counts.get(doc.id, 0))
 
 
 @router.post("/{name}/documents/{document_id}/reconvert", response_model=DocumentOut)
@@ -207,7 +214,8 @@ async def reconvert_document(
     actor: str = Depends(_actor),
 ) -> DocumentOut:
     doc = await kb_svc.reconvert_document(kb_name=name, document_id=document_id, actor=actor)
-    return DocumentOut.from_domain(doc)
+    counts = await kb_svc.chunk_counts(kb_name=name)
+    return DocumentOut.from_domain(doc, chunk_count=counts.get(doc.id, 0))
 
 
 @router.delete(
@@ -257,8 +265,8 @@ async def grep_kb(
     body: GrepRequest,
     kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
 ) -> GrepResponse:
-    hits = await kb_svc.grep(kb_name=name, pattern=body.pattern, max_matches=body.max_matches)
-    return GrepResponse.from_hits(list(hits), max_matches=body.max_matches)
+    result = await kb_svc.grep(kb_name=name, pattern=body.pattern, max_matches=body.max_matches)
+    return GrepResponse.from_result(result)
 
 
 @router.get("/{name}/metrics", response_model=KnowledgeBaseMetrics)

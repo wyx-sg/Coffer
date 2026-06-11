@@ -11,12 +11,16 @@ import {
   deleteDocument,
   editDocument,
   getDocument,
+  getKnowledgeBase,
   getKnowledgeBaseMetrics,
   grepKnowledgeBase,
   ingestDocument,
   listDocuments,
+  reconvertDocument,
   reindexKnowledgeBase,
   searchKnowledgeBase,
+  updateKnowledgeBaseConfig,
+  type RetrievalMode,
 } from "./api";
 
 declare global {
@@ -274,6 +278,111 @@ describe("grepKnowledgeBase", () => {
     expect(url).toBe(`${BASE}/knowledge_bases/kb1/grep`);
     expect(init?.method).toBe("POST");
     expect(JSON.parse(init!.body as string)).toEqual({ pattern: "TODO", max_matches: 50 });
+  });
+});
+
+describe("getKnowledgeBase", () => {
+  test("GETs the kind-agnostic resource URL for the KB", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      okJson({
+        ref: "knowledge_base:designs",
+        kind: "knowledge_base",
+        name: "designs",
+        description: null,
+        config: { enabled_modes: ["keyword", "grep"], default_mode: "keyword" },
+        enabled: true,
+        created_at: "2026-05-29T00:00:00Z",
+        updated_at: "2026-05-29T00:00:00Z",
+      }),
+    );
+    const out = await getKnowledgeBase("designs");
+    expect(out.config.enabled_modes).toEqual(["keyword", "grep"]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/resources/knowledge_base/designs`);
+    expect(init?.method).toBeUndefined();
+    const headers = init?.headers as Record<string, string>;
+    expect(headers["X-Coffer-Token"]).toBe("test-token");
+  });
+});
+
+describe("updateKnowledgeBaseConfig", () => {
+  test("PATCHes /resources/knowledge_base/<name> with a {config} body", async () => {
+    const config = {
+      enabled_modes: ["keyword", "grep", "vector"] as RetrievalMode[],
+      default_mode: "keyword" as RetrievalMode,
+      chunk_size: 800,
+      chunk_overlap: 80,
+      max_document_bytes: 1048576,
+      embedding: {
+        provider: "local",
+        model: "bge-m3",
+        base_url: null,
+        credential_ref: null,
+        dimensions: 1024,
+      },
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      okJson({
+        ref: "knowledge_base:designs",
+        kind: "knowledge_base",
+        name: "designs",
+        description: null,
+        config,
+        enabled: true,
+        created_at: "2026-05-29T00:00:00Z",
+        updated_at: "2026-05-29T00:00:00Z",
+      }),
+    );
+
+    const out = await updateKnowledgeBaseConfig("designs", config);
+    expect(out.config.chunk_size).toBe(800);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/resources/knowledge_base/designs`);
+    expect(init?.method).toBe("PATCH");
+    const headers = init?.headers as Record<string, string>;
+    expect(headers["X-Coffer-Token"]).toBe("test-token");
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(init!.body as string)).toEqual({ config });
+  });
+
+  test("throws a typed ApiError with the envelope code on non-2xx", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      notOkJson(422, {
+        error: { code: "CONFIG_VALIDATION_ERROR", message: "embedding model is immutable" },
+      }),
+    );
+    const err = await updateKnowledgeBaseConfig("designs", { chunk_size: 1 }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).code).toBe("CONFIG_VALIDATION_ERROR");
+  });
+});
+
+describe("reconvertDocument", () => {
+  test("POSTs to the per-document reconvert URL", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(okJson({ id: "d1", title: "a.md", source_mode: "converted" }));
+
+    const out = await reconvertDocument("kb1", "d1");
+    expect(out.source_mode).toBe("converted");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/knowledge_bases/kb1/documents/d1/reconvert`);
+    expect(init?.method).toBe("POST");
+    const headers = init?.headers as Record<string, string>;
+    expect(headers["X-Coffer-Token"]).toBe("test-token");
+  });
+
+  test("surfaces RECONVERSION_BLOCKED (409, source_mode=edited) as a typed ApiError", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      notOkJson(409, {
+        error: { code: "RECONVERSION_BLOCKED", message: "document was edited" },
+      }),
+    );
+    const err = await reconvertDocument("kb1", "d1").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).code).toBe("RECONVERSION_BLOCKED");
   });
 });
 

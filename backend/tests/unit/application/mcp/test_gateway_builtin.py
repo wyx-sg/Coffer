@@ -79,3 +79,36 @@ async def test_coffer_error_keeps_its_message() -> None:
     assert row.status == "error"
     assert "MemoryStoreNotFound" in (row.error_message or "")
     assert "project-X" in (row.error_message or "")
+
+
+async def test_success_path_wraps_result_as_mcp_call_tool_result() -> None:
+    """A built-in tool's raw dict must reach the wire as a valid MCP
+    ``CallToolResult`` — ``content`` is REQUIRED; a bare payload dict fails SDK
+    validation on every real client (found by the SDK-oracle e2e call)."""
+
+    async def _handler(_args: dict) -> dict:
+        return {"id": "f1", "status": "created"}
+
+    invocations = _RecordingInvocations()
+    result = await dispatch_builtin_tool(
+        prefixed_name="coffer__recall",
+        params={"name": "coffer__recall", "arguments": {}},
+        builtin=_registry(_handler),
+        invocations=invocations,
+        session_id="s1",
+        clock=_clock,
+    )
+
+    assert isinstance(result.get("content"), list) and result["content"], result
+    assert result["content"][0]["type"] == "text"
+    assert "created" in result["content"][0]["text"]
+    assert result.get("isError") is False
+    # The raw payload stays machine-readable alongside the text rendering.
+    assert result.get("structuredContent") == {"id": "f1", "status": "created"}
+
+    # status=ok invocation row with the bare tool name.
+    assert len(invocations.rows) == 1
+    row = invocations.rows[0]
+    assert row.status == "ok"
+    assert row.capability_key == "recall"
+    assert row.resource_name == "coffer"

@@ -15,6 +15,7 @@ one — first use provisions it.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
@@ -39,6 +40,19 @@ RecordRootFn = Callable[[str, str], Awaitable[None]]
 def project_store_name(project_id: str) -> str:
     """The Resource name for a per-project store."""
     return f"project-{project_id}"
+
+
+#: Valid store names: ``global`` or ``project-<26-char Crockford base32 id>``.
+_PROJECT_STORE_NAME = re.compile(r"^project-[0-9A-HJKMNP-TV-Z]{26}$")
+
+
+def is_valid_store_name(name: str) -> bool:
+    """Whether ``name`` has a shape a memory store can legally carry.
+
+    Surfaces validate with this before touching a store so an arbitrary path
+    segment can neither manufacture a Resource nor reach the ``project-``
+    prefix-stripping helpers with a mangled name."""
+    return name == GLOBAL_STORE_NAME or bool(_PROJECT_STORE_NAME.match(name))
 
 
 class ScopeResolver:

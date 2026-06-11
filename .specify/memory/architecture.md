@@ -137,10 +137,11 @@ token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or
 - JSON fields stored as `TEXT` validated by Pydantic at the application
   boundary.
 - **Knowledge substrate index in the same `coffer.db`:** SQLite **FTS5**
-  (external-content, `bm25()` keyword ranking) + **sqlite-vec** (vector KNN over
-  chunk embeddings). No separate chroma / LlamaIndex / mem0 store — markdown
-  files under `~/.coffer/knowledge/` and `~/.coffer/memory/` are the truth; the
-  DB is rebuildable from them ([ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)).
+  (a regular FTS5 table storing the chunk text once inside its index, `bm25()`
+  keyword ranking) + **sqlite-vec** (vector KNN over chunk embeddings). No
+  separate chroma / LlamaIndex / mem0 store — markdown files under
+  `~/.coffer/knowledge/` and `~/.coffer/memory/` are the truth; the DB
+  (including the FTS index) is rebuildable from them ([ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)).
 - The database file plus daemon discovery file, logs, the knowledge/memory file
   trees, and per-upstream PID files all live under `~/.coffer/` for a single
   backup target.
@@ -154,5 +155,5 @@ token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or
 | Retention         | `application/retention_service.py` + `retention_policies` table + asyncio worker | Each log-style table registers as a `PrunableTable`; central registry enforces SQL allowlist.                                                                                                                                                                                                                     |
 | Errors            | `domain/errors.py` + FastAPI global handlers                                     | Uniform `{error: {code, message, details}}` envelope; `X-Coffer-Trace` header for correlation.                                                                                                                                                                                                                    |
 | Logging           | `structlog` JSON-per-line to `~/.coffer/logs/`                                   | Per-request trace IDs via contextvar.                                                                                                                                                                                                                                                                             |
-| Converters        | `MarkdownConverter` port + per-format adapters in `infrastructure/`              | Only place importing converter libs (MarkItDown default; Docling / pandoc pluggable). any-format → markdown.                                                                                                                                                                                                      |
+| Converters        | `MarkdownConverter` port + per-format adapters in `infrastructure/`              | Only place importing converter libs (passthrough for text/code, csv converter, MarkItDown for the rest; new engines pluggable per format). any-format → markdown.                                                                                                                                                                                                      |
 | Memory projection | `AgentMemoryAdapter` in the **agent layer** (with the agent driver)              | Projects the one canonical memory store into native locations (`SYMLINK` / `RENDER` / `NONE`); owns the L1 file mutations so memory stays agent-agnostic ([ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)).                                                                                 |

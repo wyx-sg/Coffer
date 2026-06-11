@@ -53,7 +53,7 @@ A KB declares `enabled_modes` + `default_mode`; a search call may override `mode
 | pandoc                          | epub/odt/rtf and many formats                                                            | External binary; pluggable                 |
 | readability + custom            | HTML boilerplate stripping                                                               | Used inside the HTML path                  |
 
-**Decision**: A `MarkdownConverter` **port** (`can_handle(format)` + `convert(bytes) -> (markdown, metadata)`) with a per-format **registry**, confined to `infrastructure/knowledge/converters/`. Default engine **MarkItDown**; Docling/pandoc pluggable per format. Markdown / plain text / source code use a passthrough converter (code may be fenced). The open item from the design (MarkItDown vs Docling for PDF, design §6.2 / §14) is resolved _operationally_ by the registry: ship MarkItDown as the default and attach Docling for PDF when it is installed; no spec change is needed to swap.
+**Decision**: A `MarkdownConverter` **port** (`can_handle(format)` + `convert(bytes) -> (markdown, metadata)`) with a per-format **registry**, confined to `infrastructure/knowledge/converters/`. Default engine **MarkItDown**; Markdown / plain text / source code use a passthrough converter and csv a dedicated converter. No Docling/pandoc converter ships today — the open item (MarkItDown vs Docling for PDF) is resolved _structurally_ by the registry: a higher-fidelity engine for a format would be a new converter under `infrastructure/knowledge/converters/`; no spec change is needed to swap.
 
 After conversion the pipeline **cleans** (normalize whitespace, strip control chars, collapse blank lines, fix heading levels, strip HTML boilerplate; reject empty result) and prepends **YAML frontmatter** so the stored `.md` self-describes.
 
@@ -65,7 +65,7 @@ After conversion the pipeline **cleans** (normalize whitespace, strip control ch
 
 - **Default retrieval is `keyword`+`grep`** (zero config, offline). Vector is opt-in — the user is never forced to pick a model or download anything to get a working KB.
 - **The embedding model is mutable.** Changing it re-embeds the corpus (files are the truth, so this is cheap to re-derive). No immutability lock — this fixes the original spec's "recreate the KB to change the model" friction.
-- For **bilingual** content, recommend a local `bge-m3` (fastembed) or a cloud provider; English-only small models embed Chinese poorly. Hard MTEB/CPU benchmarks for local models (design §9 / §14) are an optional pre-finalize step, not a blocker.
+- For **bilingual** content, recommend a local `bge-m3` (fastembed) or a cloud provider; English-only small models embed Chinese poorly. Hard MTEB/CPU benchmarks for local models are an optional pre-finalize step, not a blocker.
 
 Outbound embedding calls go through Coffer's SSRF-guarded HTTP client. Vector mode reaching a third-party API does not violate local-first: only the query/chunk text is embedded; user data stays on disk (constitution Principle I; see the local-first memory note).
 
@@ -107,5 +107,5 @@ No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invo
 - Agents editing KB documents — KB is user-curated; revisit later.
 - Image OCR / audio transcription by default.
 - A filesystem watcher on by default.
-- Final converter library per format (MarkItDown vs Docling) and local-model MTEB/CPU benchmarks — operational tuning behind the converter/embedder ports; no re-modelling needed (design §14 open items 2 & 3).
-- sqlite-vec packaging on macOS arm64 + Linux — guarded by `importorskip`; a load failure degrades vector to keyword, never blocks (design §14 open item 4).
+- Final converter library per format (MarkItDown vs Docling) and local-model MTEB/CPU benchmarks — operational tuning behind the converter/embedder ports; no re-modelling needed.
+- sqlite-vec packaging on macOS arm64 + Linux — guarded by `importorskip`; a load failure degrades vector to keyword, never blocks.

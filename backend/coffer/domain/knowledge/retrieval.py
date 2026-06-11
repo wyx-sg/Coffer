@@ -49,6 +49,18 @@ class GrepHit:
 
 
 @dataclass(frozen=True)
+class GrepResult:
+    """The outcome of a grep.
+
+    ``truncated`` is True when matches beyond ``max_matches`` exist or the
+    wall-clock timeout cut the scan short — never a count heuristic.
+    """
+
+    hits: Sequence[GrepHit] = field(default_factory=tuple)
+    truncated: bool = False
+
+
+@dataclass(frozen=True)
 class MemoryHit:
     """A memory recall result (the memory face's view of a ``Passage``)."""
 

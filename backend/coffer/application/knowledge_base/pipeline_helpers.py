@@ -11,10 +11,15 @@ import contextlib
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
-from coffer.domain.knowledge.document import Document
+from coffer.domain.knowledge.document import (
+    KIND_KNOWLEDGE_BASE,
+    WORKSPACE_GLOBAL_PROJECT_ID,
+    Document,
+)
 from coffer.domain.knowledge_base.config import KnowledgeBaseConfig
 from coffer.infrastructure.knowledge.chunking import chunk_markdown
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
@@ -35,6 +40,7 @@ class DocumentRepoPort(Protocol):
     ) -> list[Document]: ...
     async def count_documents(self, kind: str, resource_name: str) -> int: ...
     async def count_chunks(self, kind: str, resource_name: str) -> int: ...
+    async def chunk_counts(self, kind: str, resource_name: str) -> dict[str, int]: ...
     async def exists_source(self, kind: str, resource_name: str, source_sha256: str) -> bool: ...
     async def delete_document(self, kind: str, resource_name: str, doc_id: str) -> bool: ...
     async def delete_resource(self, kind: str, resource_name: str) -> int: ...
@@ -112,3 +118,35 @@ def du_bytes(path: Path) -> int:
             with contextlib.suppress(OSError):
                 total += p.stat().st_size
     return total
+
+
+def document_from_frontmatter(
+    kb_name: str, doc_id: str, frontmatter: dict[str, object]
+) -> Document:
+    """Rebuild a ``documents`` row from a file's self-describing frontmatter.
+
+    Timestamps are not in the frontmatter; a rebuilt row gets ``now`` (the
+    rebuild time), which is honest — the original ingest time was lost with
+    the database."""
+    now = datetime.now(tz=UTC)
+    source_filename = str(frontmatter.get("source_filename", ""))
+    return Document(
+        id=doc_id,
+        kind=KIND_KNOWLEDGE_BASE,
+        resource_name=kb_name,
+        project_id=WORKSPACE_GLOBAL_PROJECT_ID,
+        path=f"docs/{doc_id}.md",
+        title=str(frontmatter.get("title", "") or doc_id),
+        description=None,
+        content_sha256="",  # set by the reindex routine
+        source_mode=str(frontmatter.get("source_mode", "converted")),
+        created_at=now,
+        updated_at=now,
+        metadata={
+            "original_filename": source_filename,
+            "original_format": str(frontmatter.get("source_format", "")),
+            "source_sha256": str(frontmatter.get("source_sha256", "")),
+            "converted_at": now.isoformat(),
+            "conversion_engine": str(frontmatter.get("converter", "unknown")),
+        },
+    )

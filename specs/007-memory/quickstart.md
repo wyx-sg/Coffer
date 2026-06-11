@@ -51,32 +51,44 @@ Adding a new agent is one `AgentMemoryAdapter`; the memory substrate is untouche
 
 ## CLI
 
+The CLI addresses stores by NAME as a positional argument — `global` or `project-<ulid>` (stores are auto-provisioned; `coffer memory list` shows what exists). There are no `--scope` flags.
+
 ```bash
-# Add a fact at a scope (actor=user). project = the current git project.
-coffer memory add --scope project "API base path is /api/v2."
-coffer memory add --scope global "Prefers tabs over spaces."
+# See the stores (one global + one per project), then inspect one.
+coffer memory list
+coffer memory describe global
 
-# List, recall.
-coffer memory list --scope project
-coffer memory list --scope global --json
-coffer memory recall "deployment" --scope both
-coffer memory recall "deployment" --mode keyword --top-k 3 --json
+# Add a fact to a store (actor=user).
+coffer memory add project-01J… "API base path is /api/v2."
+coffer memory add global "Prefers tabs over spaces."
 
-# Edit, forget, clear a scope (store preserved).
-coffer memory edit <id> "API base path is /api/v3."
-coffer memory forget <id>
-coffer memory clear --scope project --yes
+# List facts / get one.
+coffer memory facts project-01J…
+coffer memory facts global --json
+coffer memory get global <fact-id>
 
-# Per-store metrics.
-coffer memory describe --scope project
+# Recall from a store.
+coffer memory recall project-01J… "deployment"
+coffer memory recall project-01J… "deployment" --mode keyword --top-k 3 --json
+coffer memory recall global "部署流程" --mode grep        # exact/regex over the fact files — great for CJK
+
+# Edit, delete, clear a store (store preserved).
+coffer memory edit global <fact-id> "API base path is /api/v3."
+coffer memory delete global <fact-id>
+coffer memory clear project-01J… --yes
+
+# Projections (establish / list / remove a native binding).
+coffer memory bind project-01J… my-claude --project-root /abs/path/to/repo
+coffer memory projections project-01J…
+coffer memory unbind project-01J… my-claude
 ```
 
-`--json` works on every read command. `--mode` is `grep` | `keyword` | `vector` (default `keyword`); `vector` falls back to `keyword` if no embedding provider is configured.
+`--json` works on every read command. `--mode` is `grep` | `keyword` | `vector` (default `keyword`). `grep` recall is real — ripgrep over the fact files, no index, no tokenizer, so it works where FTS5 cannot (e.g. CJK). `vector` falls back to `keyword` (flagged) if no embedding provider is configured.
 
 ## Desktop
 
-1. Sidebar → **Resources** → open the project (or **Global**) memory store.
-2. Tabs switch between **Global** and **Project** scope.
+1. Sidebar → **Memory**. The page shows a table of all memory stores (the global store plus one per project — auto-provisioned, so there is no "New store" action).
+2. Click a store row to open its per-store detail page.
 3. The fact list is the main view, with a recall box at the top (mode selector defaults to keyword).
 4. Click a fact to expand / edit-in-place / delete; **Add fact** writes a new markdown file (actor=user).
 5. The header shows fact count and on-disk size; a kebab-menu offers "Clear scope".
@@ -88,13 +100,16 @@ Every user write regenerates `MEMORY.md`, reindexes, re-projects to bound agents
 Default retrieval is keyword + grep — zero config, offline, language-agnostic. To enable vector recall, configure an embedding provider on the store:
 
 ```bash
-coffer keychain set embed-key sk-...
-coffer memory configure --scope project \
+coffer keychain set embed-key
+coffer memory configure project-01J… \
     --enable-vector \
-    --embedding-provider openai \
-    --embedding-model text-embedding-3-small \
-    --embedding-credential-ref embed-key
+    --provider openai \
+    --model text-embedding-3-small \
+    --dimensions 1536 \
+    --credential-ref embed-key
 ```
+
+`coffer memory configure <name>` PATCHes the store's config; the other knobs are `--base-url`, `--default-mode`, and `--max-fact-chars`. Enabling vector re-embeds the store's existing facts.
 
 For bilingual content, a local provider (`fastembed` with `bge-m3`) or a cloud model that embeds Chinese well is recommended. The embedding model is mutable — changing it re-embeds the store. If vector is requested but unconfigured, recall returns keyword results and flags the fallback.
 

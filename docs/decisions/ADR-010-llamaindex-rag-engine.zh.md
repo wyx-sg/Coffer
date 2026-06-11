@@ -5,7 +5,7 @@
 **Status**: Superseded by [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)
 **Date**: 2026-05-29
 **Deciders**: Yuxing Wu
-**Related**: spec `006-knowledge-base`（FR-014、SC-006、research.md §1），[ADR-002](ADR-002-code-layout-layer-first.md)，[ADR-008](ADR-008-everything-is-a-resource-kind.md)
+**Related**: spec `006-knowledge-base`（已重设计），[ADR-002](ADR-002-code-layout-layer-first.md)，[ADR-007](ADR-007-everything-is-a-resource-kind.md)
 
 > **已被取代（2026-06-09），取代者为 [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)。**
 > KB/memory 重设计弃用 LlamaIndex，改为 markdown 文件即事实源 + SQLite FTS5 +

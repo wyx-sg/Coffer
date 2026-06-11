@@ -662,11 +662,20 @@
       "truncated": "Results truncated (max matches or timeout reached).",
       "documents": "Documents",
       "upload": "Upload",
+      "replaceExisting": "Upload again and replace",
+      "reconvert": "Reconvert",
+      "settings": "Settings",
       "chunks": "{{count}} chunks",
       "editAria": "Edit Markdown for {{title}}",
       "deleteConfirm": "Delete document {{title}}? This cannot be undone.",
       "loadFailed": "Failed to load this knowledge base.",
       "empty": "No documents yet. Upload a file of any format to populate this knowledge base."
+    },
+    "settings": {
+      "title": "Knowledge base settings",
+      "description": "Update chunking and embedding for this knowledge base. Reindex afterwards to apply chunking changes to existing documents.",
+      "chunkSize": "Chunk size",
+      "chunkOverlap": "Chunk overlap"
     },
     "welcome": {
       "title": "Manage your knowledge bases",

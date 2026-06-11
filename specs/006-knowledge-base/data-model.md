@@ -8,9 +8,9 @@ Entities, ports, the **unified** SQLite schema (shared with the `memory` kind, s
 
 ## Domain entities
 
-The substrate domain (`backend/coffer/domain/knowledge/`) is shared with the memory kind; the KB config lives in the KB application layer.
+The substrate domain (`backend/coffer/domain/knowledge/`) is shared with the memory kind; the KB-specific config and doc-id helper live in `backend/coffer/domain/knowledge_base/`.
 
-### `KnowledgeBaseConfig` (`application/knowledge_base/config.py`)
+### `KnowledgeBaseConfig` (`domain/knowledge_base/config.py`)
 
 Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "knowledge_base"`. All fields are **mutable** post-creation (changing chunk params or the embedding model triggers reindex/re-embed — there is no immutability lock).
 
@@ -60,7 +60,9 @@ Frozen value objects (not persisted):
 
 - `Passage`: `document_id`, `title`, `text`, `score: float`, `position: int`.
 - `GrepHit`: `path`, `line_number: int`, `line`.
+- `GrepResult`: `hits: Sequence[GrepHit]`, `truncated: bool` — `truncated` is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed).
 - `SearchResult`: `mode: RetrievalMode`, `passages: Sequence[Passage]`, `fallback: RetrievalMode | None` (set when a requested `vector` search degraded to `keyword`).
+- `StoreRef`: `kind`, `resource_name`, `project_id`, `docs_dir` — identifies one logical store (one KB or one memory scope) for the shared retrieval facade.
 
 ### Ports (`domain/knowledge/`)
 
@@ -93,6 +95,7 @@ Grep is a separate `infrastructure/knowledge/grep.py` ripgrep wrapper (no index)
 - `IngestRejected` — code `"INGEST_REJECTED"`; reason ∈ `{"empty","too_large","unsupported_type","duplicate"}`.
 - `EngineUnavailable` — code `"ENGINE_UNAVAILABLE"`; raised when a converter library / sqlite-vec / embedding provider needed for the requested operation is unavailable.
 - `ReconversionBlocked` — code `"RECONVERSION_BLOCKED"`; raised when re-converting a document whose `source_mode == "edited"`.
+- `SearchModeInvalid` — code `"SEARCH_MODE_INVALID"` (HTTP 400); raised when a search request names an EXPLICIT `mode=grep` (grep has its own endpoint) or any explicit mode not in the KB's `enabled_modes`. `vector` is the exception — it degrades to keyword with a flagged fallback instead of erroring.
 
 ## SQLite schema (one Alembic migration; **drops** `kb_documents`)
 
@@ -178,7 +181,7 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 - `async keyword_search(resource_name, query, top_k) -> Sequence[Passage]` (bm25)
 - `async vector_search(resource_name, vector, top_k) -> Sequence[Passage]` (sqlite-vec KNN)
 
-`vec_chunks` writes/reads are confined to `infrastructure/knowledge/vec_index.py` (the only importer of `sqlite_vec`); the chunk text deletion + FTS5 lives in `sqlite_index.py`. Note: the application phase composes these two repos plus `grep.py` behind the high-level `RetrievalPort` (which carries the keyword↔vector fallback flag).
+`vec_chunks` writes/reads are confined to `infrastructure/knowledge/vec_index.py` (the only importer of `sqlite_vec`); the chunk text deletion + FTS5 lives in `sqlite_index.py`. The application layer composes these repos plus `grep.py` and the embedder clients (`infrastructure/knowledge/embeddings.py`) behind the shared retrieval facade `KnowledgeRetrieval` (`application/knowledge/retrieval.py`), which owns the keyword↔vector decision including the flagged vector→keyword fallback.
 
 ## On-disk layout
 
@@ -209,15 +212,14 @@ title: Architecture Notes
 source_filename: architecture.docx
 source_format: docx
 source_sha256: 9f8e…
-ingested_at: 2026-06-09T10:11:12Z
 converter: markitdown
 source_mode: converted
 ---
 ```
 
-## The single re-index routine (`application/knowledge_base/reindex.py`)
+## The single re-index routine (`application/knowledge/reindex.py`, shared with memory)
 
-All write paths (ingest, re-upload, edit, reindex scan) funnel through one idempotent routine:
+All write paths (ingest, re-upload, edit, reindex scan) funnel through one idempotent routine (`Reindexer`). Per-store asyncio locks (`application/knowledge/locks.py`, `StoreLocks`) serialize writes to one store so concurrent ingests/edits cannot interleave index updates:
 
 ```
 compute content_sha256 of the new markdown body
@@ -280,6 +282,7 @@ Lives in `contracts/api.openapi.yaml`. Highlights (app-wide error envelope `{err
 - `GET /api/v1/knowledge_bases/{name}/documents` — paginated list
 - `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` — markdown body + frontmatter
 - `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` — edit markdown (sets `source_mode=edited`, reindexes)
+- `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` — re-run conversion from `raw/` (blocked with `RECONVERSION_BLOCKED` once hand-edited)
 - `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` — delete one document
 - `POST /api/v1/knowledge_bases/{name}/reindex` — rescan + rebuild index from files
 - `POST /api/v1/knowledge_bases/{name}/search` — `{query, top_k?, mode?}` → ranked passages (+ `fallback`)

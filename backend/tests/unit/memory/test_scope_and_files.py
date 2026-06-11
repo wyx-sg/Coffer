@@ -85,3 +85,33 @@ def test_render_omits_optional_fields_when_absent() -> None:
     text = render_fact_markdown(fact)
     assert "type:" not in text
     assert "origin_session_id:" not in text
+
+
+def test_fact_timestamps_persist_in_frontmatter(tmp_path) -> None:
+    """created_at/updated_at must live in the frontmatter (the source of
+    truth) — falling back to file mtime silently rewrites history on every
+    copy/restore/out-of-band touch (review M6)."""
+    from datetime import UTC, datetime
+
+    from coffer.domain.memory.fact import MemoryFact
+    from coffer.infrastructure.memory.files import read_fact_file, write_fact_file
+
+    created = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+    updated = datetime(2026, 5, 6, 7, 8, 9, tzinfo=UTC)
+    fact = MemoryFact(
+        id="01HZX5XKQW9YV3T8R2M4N6PABC",
+        name="ts",
+        description="d",
+        body="body",
+        actor="user",
+        type=None,
+        origin_session_id=None,
+        created_at=created,
+        updated_at=updated,
+    )
+    path = tmp_path / "ts-01HZX5XKQW9YV3T8R2M4N6PABC.md"
+    write_fact_file(path, fact)
+
+    parsed = read_fact_file(path).fact
+    assert parsed.created_at == created
+    assert parsed.updated_at == updated

@@ -10,6 +10,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -58,6 +59,7 @@ _STATUS: dict[str, int] = {
     "INGEST_REJECTED": 400,  # `_status_for` refines this by reason
     "ENGINE_UNAVAILABLE": 503,
     "RECONVERSION_BLOCKED": 409,
+    "SEARCH_MODE_INVALID": 400,
     # memory kind (spec 007)
     "MEMORY_STORE_NOT_FOUND": 404,
     "MEMORY_NOT_FOUND": 404,
@@ -120,6 +122,22 @@ def register(app: FastAPI) -> None:
         # Log the structured error server-side and return a generic envelope.
         _logger.warning(
             "http.validation_error",
+            extra={"path": str(request.url.path), "errors": exc.errors()},
+        )
+        body = _envelope("CONFIG_INVALID", "request validation failed")
+        resp = JSONResponse(status_code=422, content=body)
+        resp.headers["X-Coffer-Trace"] = get_trace_id()
+        return resp
+
+    @app.exception_handler(RequestValidationError)
+    async def _handle_request_validation(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        # FastAPI body/query validation raises RequestValidationError (NOT
+        # pydantic.ValidationError), which would otherwise bypass the envelope
+        # with a raw ``{"detail": [...]}``. Same redaction rationale as above.
+        _logger.warning(
+            "http.request_validation_error",
             extra={"path": str(request.url.path), "errors": exc.errors()},
         )
         body = _envelope("CONFIG_INVALID", "request validation failed")

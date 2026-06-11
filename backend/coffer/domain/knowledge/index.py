@@ -12,7 +12,7 @@ from typing import Protocol, runtime_checkable
 
 from coffer.domain.knowledge.document import Document
 from coffer.domain.knowledge.retrieval import (
-    GrepHit,
+    GrepResult,
     Passage,
     RetrievalMode,
     SearchResult,
@@ -56,9 +56,7 @@ class KnowledgeIndex(Protocol):
 class GrepPort(Protocol):
     """Ripgrep over a store's ``docs/`` directory (no index)."""
 
-    async def grep(
-        self, docs_dir: str, pattern: str, *, max_matches: int = 200
-    ) -> Sequence[GrepHit]: ...
+    async def grep(self, docs_dir: str, pattern: str, *, max_matches: int = 200) -> GrepResult: ...
 
 
 @runtime_checkable
@@ -79,4 +77,4 @@ class RetrievalPort(Protocol):
 
     async def grep(
         self, store: StoreRef, pattern: str, *, max_matches: int = 200
-    ) -> Sequence[GrepHit]: ...
+    ) -> GrepResult: ...

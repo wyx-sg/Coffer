@@ -55,6 +55,10 @@ def render_fact_markdown(fact: MemoryFact) -> str:
         "name": fact.name,
         "description": fact.description,
         "metadata": metadata,
+        # Timestamps live in the file (the source of truth) — the mtime
+        # fallback in ``parse_fact_markdown`` is only for hand-written files.
+        "created_at": fact.created_at.isoformat(),
+        "updated_at": fact.updated_at.isoformat(),
     }
     if fact.origin_session_id is not None:
         frontmatter["origin_session_id"] = fact.origin_session_id
@@ -69,8 +73,8 @@ def parse_fact_markdown(text: str, *, fallback_id: str, mtime: datetime) -> Memo
     ``description`` to the first body line, ``actor`` to ``"user"``.
     """
     fm, body = split_frontmatter(text)
-    metadata = fm.get("metadata") if isinstance(fm.get("metadata"), dict) else {}
-    assert isinstance(metadata, dict)
+    raw_metadata = fm.get("metadata")
+    metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
     actor_raw = str(metadata.get("actor", "user"))
     actor: Actor = "agent" if actor_raw == "agent" else "user"
     fact_type = metadata.get("type")

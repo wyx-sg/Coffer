@@ -52,10 +52,17 @@ class VecIndex:
     """Per-store vector index keyed on the sqlite-vec extension.
 
     One instance is bound to a single ``(kind, resource_name)`` store and owns
-    exactly one virtual table at ``dimensions`` width.
+    exactly one virtual table at ``dimensions`` width. ``dimensions=None`` is
+    **maintenance mode**: ``delete``/``drop`` still reach the store's table
+    (its name does not depend on the width), while writes/queries — which do
+    need the width — are refused. Delete paths (document delete, fact forget,
+    store cleanup) run in maintenance mode because they don't know the store's
+    embedding config.
     """
 
-    def __init__(self, db_path: str, dimensions: int, *, kind: str, resource_name: str) -> None:
+    def __init__(
+        self, db_path: str, dimensions: int | None, *, kind: str, resource_name: str
+    ) -> None:
         self._db_path = db_path
         self._dimensions = dimensions
         self._kind = kind
@@ -104,9 +111,23 @@ class VecIndex:
         m = re.search(r"FLOAT\[(\d+)\]", str(row[0]))
         return int(m.group(1)) if m else None
 
+    def _table_exists(self, conn: sqlite3.Connection) -> bool:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (self._table,),
+        ).fetchone()
+        return row is not None
+
     def _ensure(self, conn: sqlite3.Connection) -> None:
         """Create the per-store table at the configured width, rebuilding it if a
-        prior table exists at a DIFFERENT width (a model/config change)."""
+        prior table exists at a DIFFERENT width (a model/config change). Only
+        writes/queries ensure; deletes never do (a delete must not rebuild —
+        i.e. destroy — the table on a stale width)."""
+        if self._dimensions is None:
+            raise RuntimeError(
+                "vector writes/queries need an embedding width; "
+                "this VecIndex was built in maintenance (delete-only) mode"
+            )
         width = self._current_width(conn)
         if width is not None and width != self._dimensions:
             conn.execute(f'DROP TABLE IF EXISTS "{self._table}"')
@@ -147,13 +168,16 @@ class VecIndex:
         await asyncio.to_thread(_run)
 
     async def delete(self, chunk_ids: Sequence[str]) -> None:
-        if not chunk_ids:
+        """Delete rows by chunk id. Works in maintenance mode (no width needed)
+        and never creates/rebuilds the table — a missing table is a no-op."""
+        if not chunk_ids or not self.available():
             return
 
         def _run() -> None:
             conn = self._connect()
             try:
-                self._ensure(conn)
+                if not self._table_exists(conn):
+                    return
                 conn.executemany(
                     f'DELETE FROM "{self._table}" WHERE chunk_id = ?',
                     [(cid,) for cid in chunk_ids],
@@ -165,7 +189,10 @@ class VecIndex:
         await asyncio.to_thread(_run)
 
     async def drop(self) -> None:
-        """Drop this store's entire vector table (store cleanup)."""
+        """Drop this store's entire vector table (store cleanup). Works in
+        maintenance mode (no width needed)."""
+        if not self.available():
+            return
 
         def _run() -> None:
             conn = self._connect()

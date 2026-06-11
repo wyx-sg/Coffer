@@ -47,7 +47,6 @@ from coffer.application.mcp.gateway_handlers import (
     handle_tools_call,
 )
 from coffer.application.mcp.gateway_parsing import (
-    _daemon_cwd,
     _extract_cwd,
     _extract_method,
     _extract_params,
@@ -291,9 +290,11 @@ class MCPGatewaySession:
 
         Generic: a tool opts in by declaring a ``cwd`` property in its input
         schema (the memory tools do). The gateway never special-cases the memory
-        kind (Contract 5/6). A client-supplied ``cwd`` is left untouched; absent
-        it, we fall back to the daemon's own cwd so project-scope resolution
-        degrades gracefully rather than failing."""
+        kind (Contract 5/6). A client-supplied ``cwd`` is left untouched. When
+        the session never reported a cwd, NOTHING is injected — scope resolution
+        then rejects project scope / serves global only, which is correct; the
+        daemon's own cwd would silently scope agent memory to whatever project
+        the daemon happens to run in."""
         tool = self._builtin.get(prefixed_name)
         if tool is None:
             return params
@@ -301,8 +302,8 @@ class MCPGatewaySession:
         if not isinstance(props, dict) or "cwd" not in props:
             return params
         args = dict(params.get("arguments") or {})
-        if not args.get("cwd"):
-            args["cwd"] = self._session_cwd or _daemon_cwd()
+        if not args.get("cwd") and self._session_cwd:
+            args["cwd"] = self._session_cwd
         return {**params, "arguments": args}
 
     async def _handle_resources_read(self, params: dict[str, Any]) -> Any:

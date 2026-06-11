@@ -9,15 +9,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
-from collections.abc import Sequence
 from pathlib import Path
 
 from coffer.domain.errors import EngineUnavailable
-from coffer.domain.knowledge.retrieval import GrepHit
+from coffer.domain.knowledge.retrieval import GrepHit, GrepResult
 
 DEFAULT_MAX_MATCHES = 200
 DEFAULT_TIMEOUT_S = 5.0
+
+_logger = logging.getLogger(__name__)
 
 
 class RipgrepGrep:
@@ -32,19 +34,20 @@ class RipgrepGrep:
         pattern: str,
         *,
         max_matches: int = DEFAULT_MAX_MATCHES,
-    ) -> Sequence[GrepHit]:
+    ) -> GrepResult:
         rg = shutil.which("rg")
         if rg is None:
             raise EngineUnavailable("ripgrep", "the 'rg' binary is not on PATH")
         root = Path(docs_dir)
         if not root.exists():
-            return []
+            return GrepResult()
         cap = max(1, max_matches)
         args = [
             rg,
             "--json",
             "--max-count",
-            str(cap),
+            # One extra per file so a "more matches exist" overflow is visible.
+            str(cap + 1),
             "--no-heading",
             "--",
             pattern,
@@ -56,12 +59,23 @@ class RipgrepGrep:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
-        except TimeoutError:
-            return []
         except OSError as exc:  # pragma: no cover - rg present but unexecutable
             raise EngineUnavailable("ripgrep", f"failed to run rg: {exc}") from exc
-        return _parse(stdout.decode("utf-8", errors="replace"), cap)
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
+        except TimeoutError:
+            # Kill the still-running rg (it would otherwise leak) and report
+            # the truncation — a timeout is not "no matches".
+            proc.kill()
+            await proc.wait()
+            _logger.warning(
+                "knowledge.grep.timeout",
+                extra={"docs_dir": docs_dir, "timeout_s": self._timeout},
+            )
+            return GrepResult(truncated=True)
+        hits = _parse(stdout.decode("utf-8", errors="replace"), cap + 1)
+        truncated = len(hits) > cap
+        return GrepResult(hits=tuple(hits[:cap]), truncated=truncated)
 
 
 def _parse(output: str, cap: int) -> list[GrepHit]:

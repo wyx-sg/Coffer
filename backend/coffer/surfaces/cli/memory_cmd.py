@@ -218,6 +218,57 @@ def clear(
     typer.echo(f"cleared {out['cleared']} fact(s)")
 
 
+@app.command("configure")
+def configure(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+    provider: str | None = typer.Option(None, "--provider"),
+    model: str | None = typer.Option(None, "--model"),
+    dimensions: int | None = typer.Option(None, "--dimensions"),
+    base_url: str | None = typer.Option(None, "--base-url"),
+    credential_ref: str | None = typer.Option(
+        None, "--credential-ref", help="Keychain credential name (never a raw key)."
+    ),
+    enable_vector: bool = typer.Option(
+        False, "--enable-vector", help="Add 'vector' to retrieval_modes."
+    ),
+    default_mode: str | None = typer.Option(None, "--default-mode"),
+    max_fact_chars: int | None = typer.Option(None, "--max-fact-chars"),
+) -> None:
+    """Update a store's config (embedding / modes / limits). PATCHes the store;
+    enabling vector re-embeds existing facts."""
+    patch: dict[str, object] = {}
+    if provider is not None:
+        patch["embedding_provider"] = provider
+    if model is not None:
+        patch["embedding_model"] = model
+    if dimensions is not None:
+        patch["embedding_dimensions"] = dimensions
+    if base_url is not None:
+        patch["embedding_base_url"] = base_url
+    if credential_ref is not None:
+        patch["embedding_credential_ref"] = credential_ref
+    if default_mode is not None:
+        patch["default_mode"] = default_mode
+    if max_fact_chars is not None:
+        patch["max_fact_chars"] = max_fact_chars
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        if enable_vector:
+            current = c.get(f"/memory_stores/{name}")
+            _cli_client.check(current, verbose=_verbose(ctx))
+            modes = list(current.json()["config"]["retrieval_modes"])
+            if "vector" not in modes:
+                modes.append("vector")
+            patch["retrieval_modes"] = modes
+        if not patch:
+            typer.echo("nothing to configure (no options given)", err=True)
+            raise typer.Exit(1)
+        r = c.patch(f"/memory_stores/{name}", json=patch)
+        _cli_client.check(r, verbose=_verbose(ctx))
+    typer.echo(f"configured {name}")
+
+
 @app.command("recall")
 def recall(
     ctx: typer.Context,

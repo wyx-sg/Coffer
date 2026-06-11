@@ -344,3 +344,78 @@ def test_project_store_get_returns_recorded_project_root(tmp_path, monkeypatch):
         listed = c.get("/api/v1/memory_stores", headers=_HEADERS).json()["memory_stores"]
         proj = next(s for s in listed if s["name"] == store)
         assert proj["project_root"] == "/work/my-repo"
+
+
+def test_post_facts_to_unknown_store_is_404_not_autocreate(tmp_path, monkeypatch):
+    """The contract promises 404 for an unknown store; POSTing to an arbitrary
+    name must neither manufacture a Resource nor 500 on the mangled scope
+    (review misalignment #5)."""
+    app = _app(tmp_path, monkeypatch, 59960)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        r = c.post(
+            "/api/v1/memory_stores/typo/facts",
+            json={"text": "should not be stored"},
+            headers=_USER,
+        )
+        assert r.status_code == 404, r.text
+        _assert_envelope(r.json(), "MEMORY_STORE_NOT_FOUND")
+
+        # No orphan store was created.
+        listed = c.get("/api/v1/memory_stores", headers=_HEADERS)
+        assert "typo" not in {s["name"] for s in listed.json()["memory_stores"]}
+
+        # A WELL-FORMED project store name still lazily provisions, with the
+        # scope/project_id derived correctly (no mangled prefix stripping).
+        good = "project-01HZX5XKQW9YV3T8R2M4N6PABC"
+        r2 = c.post(
+            f"/api/v1/memory_stores/{good}/facts",
+            json={"text": "provisions lazily"},
+            headers=_USER,
+        )
+        assert r2.status_code == 201, r2.text
+        store = c.get(f"/api/v1/memory_stores/{good}", headers=_HEADERS).json()
+        assert store["scope"] == "project"
+        assert store["project_id"] == "01HZX5XKQW9YV3T8R2M4N6PABC"
+
+
+def test_body_validation_failure_returns_error_envelope(tmp_path, monkeypatch):
+    """Schema-level body failures (e.g. empty text) must return the standard
+    ``{error:{code,message,details}}`` envelope, not FastAPI's raw ``detail``
+    list (review misalignment: FR-005 error-shape break)."""
+    app = _app(tmp_path, monkeypatch, 59970)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        r = c.post(
+            "/api/v1/memory_stores/global/facts",
+            json={"text": ""},
+            headers=_USER,
+        )
+        assert r.status_code == 422, r.text
+        _assert_envelope(r.json(), "CONFIG_INVALID")
+
+
+def test_fact_list_pagination_boundaries(tmp_path, monkeypatch):
+    """offset past the total returns an empty page (total intact); limit/offset
+    outside the declared ranges are 422 envelopes."""
+    app = _app(tmp_path, monkeypatch, 59980)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        for i in range(3):
+            c.post(
+                "/api/v1/memory_stores/global/facts",
+                json={"text": f"boundary fact {i}"},
+                headers=_USER,
+            )
+        past = c.get(
+            "/api/v1/memory_stores/global/facts",
+            params={"limit": 50, "offset": 99},
+            headers=_HEADERS,
+        ).json()
+        assert past["facts"] == []
+        assert past["total"] == 3
+
+        for params in [{"limit": 0}, {"limit": 201}, {"offset": -1}]:
+            r = c.get("/api/v1/memory_stores/global/facts", params=params, headers=_HEADERS)
+            assert r.status_code == 422, (params, r.text)
+            _assert_envelope(r.json(), "CONFIG_INVALID")

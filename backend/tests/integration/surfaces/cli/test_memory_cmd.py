@@ -182,3 +182,28 @@ def test_bind_and_unbind_projection(memory_cli_daemon, tmp_path):
 
     unbind = _runner.invoke(cli_app, ["memory", "unbind", "global", "claude-x"])
     assert unbind.exit_code == 0, unbind.output
+
+
+def test_memory_configure_enables_vector(memory_cli_daemon):
+    """FR-017/FR-019: store config (incl. vector enablement) is CLI-reachable."""
+    r = _runner.invoke(
+        cli_app,
+        [
+            "memory",
+            "configure",
+            "global",
+            "--provider",
+            "local",
+            "--model",
+            "bge-m3",
+            "--dimensions",
+            "32",
+            "--enable-vector",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    desc = _runner.invoke(cli_app, ["memory", "describe", "global", "--json"])
+    cfg = json.loads(_extract_json(desc.output))["memory_store"]["config"]
+    assert cfg["embedding_provider"] == "local"
+    assert cfg["embedding_dimensions"] == 32
+    assert "vector" in cfg["retrieval_modes"]

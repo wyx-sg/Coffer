@@ -19,6 +19,7 @@ testable with fakes.
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -27,6 +28,8 @@ from coffer.domain.errors import EngineUnavailable
 from coffer.domain.knowledge.document import Document
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge.index import KnowledgeIndex
+
+_logger = logging.getLogger(__name__)
 
 #: Chunk a markdown body into ordered pieces. Matches
 #: ``infrastructure.knowledge.chunking.chunk_markdown``'s signature.
@@ -81,8 +84,13 @@ class Reindexer:
             )
 
         chunks = chunker(markdown)
-        vectors, embedded = await self._maybe_embed(chunks, embedding)
+        vectors, embedded = await self._maybe_embed(chunks, embedding, doc_id=doc_id)
         chunk_count = await index.upsert_chunks(doc_id, chunks, vectors)
+        if embedding is not None and chunks and not embedded:
+            # Embedding was requested but degraded: report an empty sha so the
+            # caller persists a never-matching value and the next reconcile
+            # retries the embed instead of treating the doc as up to date.
+            new_sha = ""
         return ReindexOutcome(
             changed=True,
             chunk_count=chunk_count,
@@ -91,16 +99,22 @@ class Reindexer:
         )
 
     async def _maybe_embed(
-        self, chunks: Sequence[str], embedding: EmbeddingConfig | None
+        self, chunks: Sequence[str], embedding: EmbeddingConfig | None, *, doc_id: str
     ) -> tuple[list[list[float]] | None, bool]:
         if embedding is None or not chunks:
             return None, False
         try:
             embedder = self._embedder_factory(embedding)
             vectors = await embedder.embed(list(chunks))
-        except EngineUnavailable:
+        except EngineUnavailable as exc:
             # Provider library/endpoint missing — index keyword-only. Vector
-            # recall will fall back at read time; the write must not fail.
+            # recall will fall back at read time; the write must not fail. The
+            # caller persists an empty sha so the embed is retried (see
+            # ``reindex``) — but an operator still deserves a signal.
+            _logger.warning(
+                "knowledge.reindex.embed_degraded",
+                extra={"doc_id": doc_id, "provider": embedding.provider, "error": str(exc)},
+            )
             return None, False
         return vectors, True
 

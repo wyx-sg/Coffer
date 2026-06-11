@@ -307,6 +307,23 @@ class ReconversionBlocked(CofferError):  # noqa: N818
         self.document_id = document_id
 
 
+class SearchModeInvalid(CofferError):  # noqa: N818
+    """An explicit search mode the store cannot serve. Maps to 400.
+
+    Raised for ``mode="grep"`` on the passage-search endpoint (grep has its own
+    endpoint) and for an explicit mode the store has not enabled — instead of a
+    silent rewrite. ``vector`` is the one exception: it degrades to keyword with
+    a flagged fallback per the spec.
+    """
+
+    code = "SEARCH_MODE_INVALID"
+
+    def __init__(self, mode: str, reason: str) -> None:
+        super().__init__(f"search mode {mode!r} rejected: {reason}")
+        self.mode = mode
+        self.reason = reason
+
+
 # --- memory kind (spec 007) -------------------------------------------------
 
 

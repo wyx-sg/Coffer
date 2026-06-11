@@ -85,7 +85,7 @@ from coffer.surfaces.http.projection_wiring import wire_projection
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.skill_routes import router as skill_router
-from coffer.surfaces.http.wiring import wire_kb_kind, wire_memory_kind
+from coffer.surfaces.http.wiring import build_substrate, wire_kb_kind, wire_memory_kind
 
 
 def _db_url() -> str:
@@ -212,14 +212,19 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
     # into `builtin_tools` so the gateway can expose them.
-    wire_kb_kind(app, resource_svc, audit, sm, builtin_tools)
+    # One substrate per process: KB + memory share the DocumentRepo,
+    # retrieval facade and reindexer (per KnowledgeRetrieval's contract).
+    substrate = build_substrate(sm)
+    wire_kb_kind(app, resource_svc, audit, sm, builtin_tools, substrate=substrate)
     # Wire up Memory plumbing (spec 007). Registers the memory built-in tools.
-    memory_service = wire_memory_kind(app, resource_svc, audit, sm, builtin_tools)
+    memory_service = wire_memory_kind(
+        app, resource_svc, audit, sm, builtin_tools, substrate=substrate
+    )
 
     # Wire the composition-root projection service (bridges memory + agent so
     # neither kind imports the other — Contract 5e). Re-renders established
     # projections whenever the memory store changes.
-    wire_projection(app, sm, memory_service)
+    wire_projection(app, sm, memory_service, audit=audit)
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).

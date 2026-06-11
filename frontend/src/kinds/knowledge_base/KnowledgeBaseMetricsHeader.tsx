@@ -1,8 +1,8 @@
 // frontend/src/kinds/knowledge_base/KnowledgeBaseMetricsHeader.tsx
 //
-// KB detail header: the store name + metrics line, a Reindex action, and the
-// most recent reindex result. Presentational — all data and the reindex
-// trigger are owned by the page.
+// KB detail header: the store name + metrics line, Settings + Reindex actions,
+// and the most recent reindex result. Presentational — all data and the
+// reindex/settings triggers are owned by the page.
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,9 @@ interface Props {
   reindexResult: ReindexResult | undefined;
   isReindexPending: boolean;
   onReindex: () => void;
+  /** Opens the config settings dialog; disabled until the KB config loads. */
+  canOpenSettings: boolean;
+  onOpenSettings: () => void;
 }
 
 export function KnowledgeBaseMetricsHeader({
@@ -23,6 +26,8 @@ export function KnowledgeBaseMetricsHeader({
   reindexResult,
   isReindexPending,
   onReindex,
+  canOpenSettings,
+  onOpenSettings,
 }: Props) {
   const { t } = useTranslation();
   return (
@@ -41,9 +46,14 @@ export function KnowledgeBaseMetricsHeader({
             </p>
           ) : null}
         </div>
-        <Button variant="outline" size="sm" onClick={onReindex} disabled={isReindexPending}>
-          {isReindexPending ? t("common.saving") : t("knowledgeBases.detail.reindex")}
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="outline" size="sm" onClick={onOpenSettings} disabled={!canOpenSettings}>
+            {t("knowledgeBases.detail.settings")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={onReindex} disabled={isReindexPending}>
+            {isReindexPending ? t("common.saving") : t("knowledgeBases.detail.reindex")}
+          </Button>
+        </div>
       </header>
 
       {reindexResult ? (

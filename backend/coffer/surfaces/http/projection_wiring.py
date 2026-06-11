@@ -10,7 +10,7 @@ established projections re-render on every memory write.
 
 from __future__ import annotations
 
-import contextlib
+import logging
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -24,11 +24,19 @@ from coffer.surfaces.http.projection_service import ProjectionService
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
+    from coffer.application.audit_service import AuditService
     from coffer.application.memory.service import MemoryService
     from coffer.domain.resource import ResourceRef
 
+_logger = logging.getLogger(__name__)
 
-def wire_projection(app: FastAPI, sm: object, memory_service: MemoryService) -> ProjectionService:
+
+def wire_projection(
+    app: FastAPI,
+    sm: object,
+    memory_service: MemoryService,
+    audit: AuditService | None = None,
+) -> ProjectionService:
     """Build + install the projection service and the memory change hook."""
     bindings = ProjectionBindingRepo(sm)  # type: ignore[arg-type]
     engine = ProjectionEngine(ProjectionFsAdapter())
@@ -37,6 +45,7 @@ def wire_projection(app: FastAPI, sm: object, memory_service: MemoryService) -> 
         agents=get_agent_service(),
         engine=engine,
         bindings=bindings,
+        audit=audit,
     )
     set_projection_service(service)
 
@@ -62,8 +71,14 @@ def _chain_store_delete_cleanup(app: FastAPI, service: ProjectionService) -> Non
     async def _on_delete(ref: ResourceRef) -> None:
         # Remove projections first so native symlinks/blocks go before the
         # canonical store dir is rmtree'd by the original cleanup hook.
-        with contextlib.suppress(Exception):
+        try:
             await service.remove_all_for_store(store_name=ref.name)
+        except Exception:
+            _logger.warning(
+                "projection.on_delete.cleanup_failed",
+                extra={"store": ref.name},
+                exc_info=True,
+            )
         if inner is not None:
             result = inner(ref)
             if result is not None:

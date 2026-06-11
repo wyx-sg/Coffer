@@ -14,7 +14,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 from coffer.domain.knowledge.document import Document
-from coffer.domain.knowledge.retrieval import GrepHit, RetrievalMode, SearchResult
+from coffer.domain.knowledge.retrieval import GrepResult, RetrievalMode, SearchResult
 from coffer.domain.knowledge_base.config import KnowledgeBaseConfig
 
 # Names that, while matching ResourceRef's broad ``^[a-zA-Z0-9_.-]+$`` pattern,
@@ -165,9 +165,9 @@ class GrepResponse(BaseModel):
     truncated: bool
 
     @classmethod
-    def from_hits(cls, hits: list[GrepHit], *, max_matches: int) -> GrepResponse:
-        out = [GrepHitOut(path=h.path, line_number=h.line_number, line=h.line) for h in hits]
-        return cls(hits=out, truncated=len(out) >= max_matches)
+    def from_result(cls, result: GrepResult) -> GrepResponse:
+        out = [GrepHitOut(path=h.path, line_number=h.line_number, line=h.line) for h in result.hits]
+        return cls(hits=out, truncated=result.truncated)
 
 
 class KnowledgeBaseMetrics(BaseModel):

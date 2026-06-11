@@ -20,7 +20,6 @@ sqlite-vec / embedding SDKs.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
 
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.reindex import Reindexer
@@ -35,11 +34,16 @@ from coffer.application.knowledge_base.pipeline_helpers import (
 )
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import DocumentNotFound, KBNotFound, ReconversionBlocked
+from coffer.domain.errors import (
+    DocumentNotFound,
+    KBNotFound,
+    ReconversionBlocked,
+    SearchModeInvalid,
+)
 from coffer.domain.knowledge.converter import MarkdownConverter
 from coffer.domain.knowledge.document import KIND_KNOWLEDGE_BASE, Document
 from coffer.domain.knowledge.retrieval import (
-    GrepHit,
+    GrepResult,
     RetrievalMode,
     SearchResult,
     StoreRef,
@@ -216,6 +220,10 @@ class KnowledgeBaseService:
         await self.get_kb_config(kb_name)
         return await self._require_document(kb_name, document_id)
 
+    async def chunk_counts(self, *, kb_name: str) -> dict[str, int]:
+        """Per-document chunk counts for the KB (the wire ``chunk_count``)."""
+        return await self._documents.chunk_counts(KIND_KNOWLEDGE_BASE, kb_name)
+
     async def read_document(self, *, kb_name: str, document_id: str) -> tuple[Document, str]:
         """Return the document row + its full markdown (frontmatter + body)."""
         doc = await self.get_document(kb_name=kb_name, document_id=document_id)
@@ -234,14 +242,16 @@ class KnowledgeBaseService:
         self, *, kb_name: str, query: str, top_k: int = 5, mode: RetrievalMode | None = None
     ) -> SearchResult:
         config = await self.get_kb_config(kb_name)
+        # An explicit mode the store cannot serve is a caller error (400), never
+        # a silent rewrite. ``vector`` is the one exception: it always reaches
+        # the facade so the keyword fallback is FLAGGED per the spec.
+        if mode == "grep":
+            raise SearchModeInvalid("grep", "grep is served by the grep endpoint")
+        if mode is not None and mode != "vector" and mode not in config.enabled_modes:
+            raise SearchModeInvalid(mode, "mode is not enabled for this knowledge base")
         chosen = mode or config.default_mode
-        # An explicit ``vector`` request always reaches the facade so it can flag
-        # the keyword fallback when no embedding provider is configured (the spec
-        # requires a flagged degrade, never a silent rewrite). Other modes that
-        # are not enabled fall back to the configured default.
-        if chosen != "vector" and chosen not in config.enabled_modes:
-            chosen = config.default_mode
-        # The facade only takes passage modes; ``grep`` is a separate surface.
+        # An implicit search on a store whose default_mode is grep serves the
+        # passage engine's keyword mode (grep is not a passage mode).
         if chosen == "grep":
             chosen = "keyword"
         return await self._retrieval.search(
@@ -252,9 +262,7 @@ class KnowledgeBaseService:
             embedding=config.embedding if config.vector_enabled else None,
         )
 
-    async def grep(
-        self, *, kb_name: str, pattern: str, max_matches: int = 200
-    ) -> Sequence[GrepHit]:
+    async def grep(self, *, kb_name: str, pattern: str, max_matches: int = 200) -> GrepResult:
         await self.get_kb_config(kb_name)
         return await self._retrieval.grep(
             self._store_ref(kb_name), pattern, max_matches=max_matches

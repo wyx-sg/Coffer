@@ -47,10 +47,31 @@ class SqliteKnowledgeIndex:
         chunks: Sequence[str],
         vectors: Sequence[Sequence[float]] | None,
     ) -> int:
-        await self.delete_chunks(document_id)
-        if not chunks:
-            return 0
+        # Delete + insert in ONE transaction: a two-commit replace would let a
+        # concurrent upsert interleave between them (PK IntegrityError /
+        # duplicated FTS rows) and let a concurrent search see the document
+        # vanish mid-replace.
         async with self._sm() as session:
+            old_ids = [
+                r[0]
+                for r in (
+                    await session.execute(
+                        text("SELECT id FROM chunks WHERE document_id = :d"),
+                        {"d": document_id},
+                    )
+                ).all()
+            ]
+            if old_ids:
+                await session.execute(
+                    text("DELETE FROM documents_fts WHERE chunk_id IN :ids").bindparams(
+                        bindparam("ids", expanding=True)
+                    ),
+                    {"ids": old_ids},
+                )
+                await session.execute(
+                    text("DELETE FROM chunks WHERE document_id = :d"),
+                    {"d": document_id},
+                )
             for position, chunk in enumerate(chunks):
                 chunk_id = f"{document_id}:{position}"
                 session.add(
@@ -70,6 +91,16 @@ class SqliteKnowledgeIndex:
                     {"text": chunk, "rn": self._resource, "cid": chunk_id},
                 )
             await session.commit()
+        if self._vec is not None and old_ids:
+            if vectors is None:
+                # No fresh vectors for the new text: stale embeddings must not
+                # survive a re-chunk (they'd describe the OLD content).
+                await self._vec.delete(old_ids)
+            else:
+                # The upsert below overwrites surviving ids; only remove extras
+                # (e.g. the chunk count shrank).
+                new_ids = {f"{document_id}:{p}" for p in range(len(chunks))}
+                await self._vec.delete([cid for cid in old_ids if cid not in new_ids])
         if vectors is not None and self._vec is not None and self._vec.available():
             rows = [
                 (f"{document_id}:{position}", vector) for position, vector in enumerate(vectors)

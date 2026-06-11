@@ -51,32 +51,44 @@ coffer__recall("how do we deploy?")
 
 ## CLI
 
+CLI 用**名字**以位置参数寻址 store —— `global` 或 `project-<ulid>`（store 自动置备；`coffer memory list` 显示已有哪些）。没有 `--scope` 这类 flag。
+
 ```bash
-# 在某作用域加一条事实（actor=user）。project = 当前 git 项目。
-coffer memory add --scope project "API base path is /api/v2."
-coffer memory add --scope global "Prefers tabs over spaces."
+# 看有哪些 store（一个 global + 每项目一个），再查看其中一个。
+coffer memory list
+coffer memory describe global
 
-# 列出、召回。
-coffer memory list --scope project
-coffer memory list --scope global --json
-coffer memory recall "deployment" --scope both
-coffer memory recall "deployment" --mode keyword --top-k 3 --json
+# 向某 store 加一条事实（actor=user）。
+coffer memory add project-01J… "API base path is /api/v2."
+coffer memory add global "Prefers tabs over spaces."
 
-# 编辑、遗忘、清空一个作用域（store 保留）。
-coffer memory edit <id> "API base path is /api/v3."
-coffer memory forget <id>
-coffer memory clear --scope project --yes
+# 列出事实 / 取单条。
+coffer memory facts project-01J…
+coffer memory facts global --json
+coffer memory get global <fact-id>
 
-# Per-store 度量。
-coffer memory describe --scope project
+# 从某 store 召回。
+coffer memory recall project-01J… "deployment"
+coffer memory recall project-01J… "deployment" --mode keyword --top-k 3 --json
+coffer memory recall global "部署流程" --mode grep        # 对事实文件做精确/regex 匹配 —— 对 CJK 极好用
+
+# 编辑、删除、清空一个 store（store 保留）。
+coffer memory edit global <fact-id> "API base path is /api/v3."
+coffer memory delete global <fact-id>
+coffer memory clear project-01J… --yes
+
+# 投影（建立 / 列出 / 移除一个原生绑定）。
+coffer memory bind project-01J… my-claude --project-root /abs/path/to/repo
+coffer memory projections project-01J…
+coffer memory unbind project-01J… my-claude
 ```
 
-`--json` 在每个读命令上都可用。`--mode` 是 `grep` | `keyword` | `vector`（默认 `keyword`）；未配置 embedding provider 时 `vector` 回退到 `keyword`。
+`--json` 在每个读命令上都可用。`--mode` 是 `grep` | `keyword` | `vector`（默认 `keyword`）。`grep` recall 是真实服务的 —— ripgrep 扫事实文件，无索引、无分词器，所以在 FTS5 失效的地方（如 CJK）也能用。未配置 embedding provider 时 `vector` 回退到 `keyword`（带标注）。
 
 ## Desktop
 
-1. 侧栏 → **Resources** → 打开项目（或 **Global**）记忆 store。
-2. 标签页在 **Global** 与 **Project** 作用域间切换。
+1. 侧栏 → **Memory**。页面以表格列出所有记忆 store（global store 加每项目一个 —— 自动置备，所以没有「New store」操作）。
+2. 点一行 store 进入它的逐 store 详情页。
 3. 事实列表是主视图，顶部有 recall 框（模式选择器默认 keyword）。
 4. 点一条事实展开 / 就地编辑 / 删除；**Add fact** 写一个新 markdown 文件（actor=user）。
 5. 头部显示事实条数与落盘大小；kebab 菜单提供「Clear scope」。
@@ -88,13 +100,16 @@ coffer memory describe --scope project
 默认检索是 keyword + grep —— 零配置、离线、语言无关。要启用 vector recall，在 store 上配置 embedding provider：
 
 ```bash
-coffer keychain set embed-key sk-...
-coffer memory configure --scope project \
+coffer keychain set embed-key
+coffer memory configure project-01J… \
     --enable-vector \
-    --embedding-provider openai \
-    --embedding-model text-embedding-3-small \
-    --embedding-credential-ref embed-key
+    --provider openai \
+    --model text-embedding-3-small \
+    --dimensions 1536 \
+    --credential-ref embed-key
 ```
+
+`coffer memory configure <name>` 对 store 配置做 PATCH；其余旋钮有 `--base-url`、`--default-mode`、`--max-fact-chars`。启用 vector 会对 store 里已有的事实重新 embedding。
 
 双语内容推荐本地 provider（`fastembed` 配 `bge-m3`）或对中文嵌入好的云端模型。embedding 模型可变 —— 改它会重嵌整个 store。若请求 vector 但未配置，recall 返回 keyword 结果并标注此次回退。
 

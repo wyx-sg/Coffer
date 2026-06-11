@@ -223,9 +223,9 @@ async def update_existing_fact(
     existing: FactFile,
     new_body: str,
     actor: str,
-    new_name: str | None,
-    new_description: str | None,
-    new_type: str | None,
+    new_name: str | None = None,
+    new_description: str | None = None,
+    new_type: str | None = None,
 ) -> MemoryFact:
     """Apply edits to an existing fact, re-persist + reindex, audit, and notify."""
     new_body = new_body.strip()

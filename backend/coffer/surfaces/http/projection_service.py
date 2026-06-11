@@ -15,7 +15,8 @@ re-render and the agent-detail surfaces can list/remove a binding.
 
 from __future__ import annotations
 
-import contextlib
+import asyncio
+import logging
 
 from coffer.application.agent.projection import (
     CanonicalMemory,
@@ -25,13 +26,18 @@ from coffer.application.agent.projection import (
     ProjectionResult,
 )
 from coffer.application.agent.service import AgentService
+from coffer.application.audit_service import AuditService
 from coffer.application.memory.scope import GLOBAL_STORE_NAME
 from coffer.application.memory.service import MemoryService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.audit import AuditEventType
+from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.agent.projection_persistence import (
     ProjectionBinding,
     ProjectionBindingRepo,
 )
+
+_logger = logging.getLogger(__name__)
 
 
 def render_facts_markdown(facts: list[tuple[str, str]]) -> str:
@@ -55,11 +61,23 @@ class ProjectionService:
         agents: AgentService,
         engine: ProjectionEngine,
         bindings: ProjectionBindingRepo,
+        audit: AuditService | None = None,
     ) -> None:
         self._memory = memory
         self._agents = agents
         self._engine = engine
         self._bindings = bindings
+        self._audit = audit
+
+    async def _record(self, event: str, store_name: str, details: dict[str, object]) -> None:
+        if self._audit is None:
+            return
+        await self._audit.record(
+            event,
+            ref=ResourceRef("memory", store_name),
+            actor="user",
+            details=details,
+        )
 
     async def _canonical_memory(self, store_name: str) -> CanonicalMemory:
         resolved = await self._memory.resolved_store(store_name)
@@ -75,7 +93,10 @@ class ProjectionService:
         cfg = AgentConfig.model_validate(agent.config)
         await self._memory.ensure_store(store_name)
         memory = await self._canonical_memory(store_name)
-        result = self._engine.establish(
+        # The engine does synchronous filesystem work (migrate + symlink /
+        # managed-block writes) — keep it off the event loop.
+        result = await asyncio.to_thread(
+            self._engine.establish,
             agent_type=cfg.type,
             agent_ref=agent_ref,
             memory=memory,
@@ -90,6 +111,16 @@ class ProjectionService:
                 native_memory_disabled=result.native_memory_disabled,
             )
         )
+        await self._record(
+            AuditEventType.MEMORY_PROJECTED.value,
+            store_name,
+            {
+                "agent_ref": agent_ref,
+                "projection_mode": result.projection_mode.value,
+                "target_path": result.target_path,
+                "action": "established",
+            },
+        )
         return result
 
     async def list_projections(self, *, store_name: str) -> list[ProjectionBinding]:
@@ -101,21 +132,62 @@ class ProjectionService:
             return False
         # Undo the native projection by the stored target path + mode (the
         # original project root is not retained — only the established target).
-        with contextlib.suppress(ValueError, OSError):
-            self._engine.remove_target(
+        # A failed undo KEEPS the binding row (deleting it would orphan the
+        # symlink/managed block forever) and propagates, so the caller sees the
+        # failure and can retry.
+        try:
+            await asyncio.to_thread(
+                self._engine.remove_target,
                 mode=ProjectionMode(binding.projection_mode),
                 target_path=binding.target_path,
             )
-        return await self._bindings.delete(store_name, agent_ref)
+        except (ValueError, OSError):
+            _logger.warning(
+                "projection.remove.native_undo_failed",
+                extra={"store": store_name, "agent": agent_ref, "target": binding.target_path},
+                exc_info=True,
+            )
+            raise
+        deleted = await self._bindings.delete(store_name, agent_ref)
+        if deleted:
+            await self._record(
+                AuditEventType.MEMORY_PROJECTED.value,
+                store_name,
+                {
+                    "agent_ref": agent_ref,
+                    "projection_mode": binding.projection_mode,
+                    "target_path": binding.target_path,
+                    "action": "removed",
+                },
+            )
+        return deleted
 
     async def remove_all_for_store(self, *, store_name: str) -> None:
         """Remove every projection of a store (native target + binding row).
 
         Wired into the memory kind's ``on_delete`` so deleting a store does not
         leave dangling symlinks / managed blocks + binding rows behind
-        (finding #6)."""
+        (finding #6). Here a failed native undo is logged but the binding row is
+        still deleted — the store itself is going away, so a row pointing at it
+        would dangle."""
         for binding in await self._bindings.list_for_store(store_name):
-            await self.remove(store_name=store_name, agent_ref=binding.agent_ref)
+            try:
+                await asyncio.to_thread(
+                    self._engine.remove_target,
+                    mode=ProjectionMode(binding.projection_mode),
+                    target_path=binding.target_path,
+                )
+            except (ValueError, OSError):
+                _logger.warning(
+                    "projection.remove_all.native_undo_failed",
+                    extra={
+                        "store": store_name,
+                        "agent": binding.agent_ref,
+                        "target": binding.target_path,
+                    },
+                    exc_info=True,
+                )
+            await self._bindings.delete(store_name, binding.agent_ref)
 
     async def rerender_for_store(self, *, store_name: str) -> None:
         """Re-render every projection of a store (called on memory change).
@@ -131,9 +203,21 @@ class ProjectionService:
             return
         memory = await self._canonical_memory(store_name)
         for binding in bindings:
-            with contextlib.suppress(ValueError, OSError):
-                self._engine.rerender_target(
+            try:
+                await asyncio.to_thread(
+                    self._engine.rerender_target,
                     mode=ProjectionMode(binding.projection_mode),
                     target_path=binding.target_path,
                     rendered=memory.rendered,
+                )
+            except (ValueError, OSError):
+                # A stale managed block is agent-visible state; never silent.
+                _logger.warning(
+                    "projection.rerender_failed",
+                    extra={
+                        "store": store_name,
+                        "agent": binding.agent_ref,
+                        "target": binding.target_path,
+                    },
+                    exc_info=True,
                 )

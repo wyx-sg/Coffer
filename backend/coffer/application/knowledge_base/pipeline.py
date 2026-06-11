@@ -23,6 +23,7 @@ import shutil
 from dataclasses import replace as dc_replace
 from datetime import UTC, datetime
 
+from coffer.application.knowledge.locks import StoreLocks
 from coffer.application.knowledge.reindex import Reindexer
 from coffer.application.knowledge.retrieval import KnowledgeRetrieval
 from coffer.application.knowledge_base.pipeline_helpers import (
@@ -30,6 +31,7 @@ from coffer.application.knowledge_base.pipeline_helpers import (
     KBPaths,
     Prepared,
     chunker_for,
+    document_from_frontmatter,
     extension_of,
     mkparent_write,
     title_of,
@@ -43,7 +45,10 @@ from coffer.domain.knowledge.document import (
 )
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.knowledge_base.config import KnowledgeBaseConfig
-from coffer.infrastructure.knowledge.frontmatter import body_of, render_frontmatter
+from coffer.infrastructure.knowledge.frontmatter import (
+    render_frontmatter,
+    split_frontmatter,
+)
 
 
 class KBPipeline:
@@ -63,6 +68,12 @@ class KBPipeline:
         self._retrieval = retrieval
         self._reindexer = reindexer
         self._paths = paths
+        # Serializes write paths per KB: concurrent ingest/edit/reindex on one
+        # store must not interleave their index batches or duplicate embeds.
+        self._locks = StoreLocks()
+
+    def _lock(self, kb_name: str) -> asyncio.Lock:
+        return self._locks.lock(KIND_KNOWLEDGE_BASE, kb_name)
 
     def _store_ref(self, kb_name: str) -> StoreRef:
         return StoreRef(
@@ -85,20 +96,23 @@ class KBPipeline:
     ) -> Document:
         self._check_size(raw_bytes, config)
         prepared = await self._prepare(filename, raw_bytes)
-        await self._dedup_guard(kb_name, prepared.source_sha256, replace)
-        await self._write_files(kb_name, prepared, raw_bytes, filename)
-        now = datetime.now(tz=UTC)
-        doc = self._build_document(
-            kb_name=kb_name,
-            prepared=prepared,
-            filename=filename,
-            source_mode="converted",
-            created_at=now,
-            updated_at=now,
-        )
-        await self._index_and_persist(kb_name, doc, prepared.markdown, config, previous_sha=None)
-        stored = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
-        return stored or doc
+        async with self._lock(kb_name):
+            await self._dedup_guard(kb_name, prepared.source_sha256, replace)
+            await self._write_files(kb_name, prepared, raw_bytes, filename)
+            now = datetime.now(tz=UTC)
+            doc = self._build_document(
+                kb_name=kb_name,
+                prepared=prepared,
+                filename=filename,
+                source_mode="converted",
+                created_at=now,
+                updated_at=now,
+            )
+            await self._index_and_persist(
+                kb_name, doc, prepared.markdown, config, previous_sha=None
+            )
+            stored = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
+            return stored or doc
 
     # ----- edit -----
 
@@ -108,19 +122,20 @@ class KBPipeline:
         body = new_markdown.strip()
         if not body:
             raise IngestRejected("empty", "edited markdown is empty")
-        full = self._render_doc_markdown(doc, body, source_mode="edited")
-        await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
-        edited = dc_replace(
-            doc,
-            source_mode="edited",
-            updated_at=datetime.now(tz=UTC),
-            title=title_of(body, doc.title),
-        )
-        await self._index_and_persist(
-            kb_name, edited, body, config, previous_sha=doc.content_sha256
-        )
-        stored = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
-        return stored or edited
+        async with self._lock(kb_name):
+            full = self._render_doc_markdown(doc, body, source_mode="edited")
+            await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
+            edited = dc_replace(
+                doc,
+                source_mode="edited",
+                updated_at=datetime.now(tz=UTC),
+                title=title_of(body, doc.title),
+            )
+            await self._index_and_persist(
+                kb_name, edited, body, config, previous_sha=doc.content_sha256
+            )
+            stored = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
+            return stored or edited
 
     # ----- reconvert -----
 
@@ -133,19 +148,20 @@ class KBPipeline:
         fmt = raw_ext.lstrip(".") or str(doc.metadata.get("original_format", ""))
         markdown, _meta = await self._converters.convert(raw_bytes, fmt)
         body = markdown.strip()
-        full = self._render_doc_markdown(doc, body, source_mode="converted")
-        await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
-        reconv = dc_replace(
-            doc,
-            source_mode="converted",
-            updated_at=datetime.now(tz=UTC),
-            title=title_of(body, doc.title),
-        )
-        await self._index_and_persist(
-            kb_name, reconv, body, config, previous_sha=doc.content_sha256
-        )
-        stored = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
-        return stored or reconv
+        async with self._lock(kb_name):
+            full = self._render_doc_markdown(doc, body, source_mode="converted")
+            await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
+            reconv = dc_replace(
+                doc,
+                source_mode="converted",
+                updated_at=datetime.now(tz=UTC),
+                title=title_of(body, doc.title),
+            )
+            await self._index_and_persist(
+                kb_name, reconv, body, config, previous_sha=doc.content_sha256
+            )
+            stored = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
+            return stored or reconv
 
     # ----- reindex scan -----
 
@@ -155,38 +171,54 @@ class KBPipeline:
         docs_dir = self._paths.docs_dir(kb_name)
         reindexed = 0
         skipped = 0
-        if docs_dir.exists():
-            for path in sorted(docs_dir.glob("*.md")):
-                doc_id = path.stem
-                doc = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc_id)
-                if doc is None:
-                    continue
-                body = body_of(await asyncio.to_thread(path.read_text, "utf-8"))
-                # ``force`` bypasses the sha no-op gate (chunk params changed).
-                previous = None if force else doc.content_sha256
-                changed = await self._index_and_persist(
-                    kb_name, doc, body, config, previous_sha=previous
-                )
-                if changed:
-                    reindexed += 1
-                else:
-                    skipped += 1
+        async with self._lock(kb_name):
+            if docs_dir.exists():
+                for path in sorted(docs_dir.glob("*.md")):
+                    doc_id = path.stem
+                    doc = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc_id)
+                    frontmatter, body = split_frontmatter(
+                        await asyncio.to_thread(path.read_text, "utf-8")
+                    )
+                    if doc is None:
+                        # No row (DB loss / restore-from-backup): reconstruct it
+                        # from the file's frontmatter — files are the source of
+                        # truth for the documents table too (FR-008/SC-005).
+                        doc = document_from_frontmatter(kb_name, doc_id, frontmatter)
+                    # ``force`` bypasses the sha no-op gate (chunk params changed).
+                    previous = None if force else doc.content_sha256
+                    changed = await self._index_and_persist(
+                        kb_name, doc, body, config, previous_sha=previous
+                    )
+                    if changed:
+                        reindexed += 1
+                    else:
+                        skipped += 1
         return {"reindexed": reindexed, "skipped": skipped}
 
     # ----- delete / cleanup -----
 
     async def delete(self, *, kb_name: str, doc: Document) -> None:
-        index = self._retrieval.index_for(self._store_ref(kb_name), dimensions=None)
-        await index.delete_chunks(doc.id)
-        await self._documents.delete_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
-        raw_ext = extension_of(str(doc.metadata.get("original_filename", "")))
-        with contextlib.suppress(OSError, ValueError):
-            await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).unlink, True)
-        with contextlib.suppress(OSError, ValueError):
-            await asyncio.to_thread(self._paths.raw_path(kb_name, doc.id, raw_ext).unlink, True)
+        async with self._lock(kb_name):
+            index = self._retrieval.index_for(self._store_ref(kb_name), dimensions=None)
+            await index.delete_chunks(doc.id)
+            await self._documents.delete_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
+            raw_ext = extension_of(str(doc.metadata.get("original_filename", "")))
+            with contextlib.suppress(OSError, ValueError):
+                await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).unlink, True)
+            with contextlib.suppress(OSError, ValueError):
+                await asyncio.to_thread(self._paths.raw_path(kb_name, doc.id, raw_ext).unlink, True)
 
     async def cleanup(self, kb_name: str) -> None:
+        async with self._lock(kb_name):
+            await self._cleanup_locked(kb_name)
+
+    async def _cleanup_locked(self, kb_name: str) -> None:
         await self._documents.delete_resource(KIND_KNOWLEDGE_BASE, kb_name)
+        # Drop the per-store sqlite-vec table too: it lives outside the async
+        # session, so it would survive ``delete_resource`` and leak across a
+        # same-name re-create. Maintenance mode — no embedding width needed.
+        with contextlib.suppress(Exception):
+            await self._retrieval.drop_store(self._store_ref(kb_name), dimensions=None)
         kb_dir = self._paths.kb_dir(kb_name)
         if not kb_dir.exists():
             return

@@ -12,9 +12,8 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentConfigFile: vi.fn(),
   useSaveAgentConfigFile: vi.fn(),
 }));
-const { useAgentConfigFiles, useAgentConfigFile, useSaveAgentConfigFile } = await import(
-  "@/lib/hooks/useAgents"
-);
+const { useAgentConfigFiles, useAgentConfigFile, useSaveAgentConfigFile } =
+  await import("@/lib/hooks/useAgents");
 const filesMock = vi.mocked(useAgentConfigFiles);
 const fileMock = vi.mocked(useAgentConfigFile);
 const saveMock = vi.mocked(useSaveAgentConfigFile);

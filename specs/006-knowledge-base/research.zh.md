@@ -53,7 +53,7 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 | pandoc                           | epub/odt/rtf 及多种格式                                                     | 外部二进制；可插拔     |
 | readability + custom             | 剥 HTML 样板                                                                | 用在 HTML 路径里       |
 
-**决策**：一个 `MarkdownConverter` **端口**（`can_handle(format)` + `convert(bytes) -> (markdown, metadata)`）配按格式的**注册表**，限制在 `infrastructure/knowledge/converters/`。默认引擎 **MarkItDown**；Docling/pandoc 按格式可插拔。Markdown / 纯文本 / 源码走 passthrough 转换器（代码可加围栏）。设计里的 open item（PDF 用 MarkItDown vs Docling，设计 §6.2 / §14）由注册表在*运维层面*解决：默认发 MarkItDown，安装了 Docling 时为 PDF 接上；切换无需改规范。
+**决策**：一个 `MarkdownConverter` **端口**（`can_handle(format)` + `convert(bytes) -> (markdown, metadata)`）配按格式的**注册表**，限制在 `infrastructure/knowledge/converters/`。默认引擎 **MarkItDown**；Markdown / 纯文本 / 源码走 passthrough 转换器，csv 走专用转换器。当前不附带 Docling/pandoc 转换器 —— open item(PDF 用 MarkItDown vs Docling)由注册表在*结构层面*解决：某格式要更高保真引擎，就是在 `infrastructure/knowledge/converters/` 下新增一个转换器；切换无需改规范。
 
 转换后 pipeline **清洗**（归一化空白、剥控制字符、合并空行、修标题层级、剥 HTML 样板；空结果拒绝）并预置 **YAML frontmatter** 让存下的 `.md` 自描述。
 
@@ -65,7 +65,7 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 
 - **默认检索是 `keyword`+`grep`**（零配置、离线）。vector 可选 —— 用户无需选模型或下载任何东西就能得到可用的 KB。
 - **embedding 模型可变。** 改它会重新 embedding 语料（文件即真相，重导便宜）。无不可变锁 —— 修掉了原规范「想换模型就重建 KB」的摩擦。
-- 对**双语**内容，推荐本地 `bge-m3`（fastembed）或云 provider；英文小模型 embedding 中文效果差。本地模型的硬 MTEB/CPU 基准（设计 §9 / §14）是可选的定稿前步骤，非阻塞。
+- 对**双语**内容，推荐本地 `bge-m3`（fastembed）或云 provider；英文小模型 embedding 中文效果差。本地模型的硬 MTEB/CPU 基准是可选的定稿前步骤，非阻塞。
 
 出站 embedding 调用走 Coffer 的 SSRF 防护 HTTP 客户端。vector 模式访问第三方 API 不违反 local-first：只有 query/chunk 文本被 embedding；用户数据留在磁盘（宪法原则 I；见 local-first memory 备注）。
 
@@ -107,5 +107,5 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 - agent 编辑 KB 文档 —— KB 由用户策展；后续再议。
 - 默认图像 OCR / 音频转写。
 - 默认开启的文件系统 watcher。
-- 按格式的最终转换库（MarkItDown vs Docling）与本地模型 MTEB/CPU 基准 —— 在 converter/embedder 端口后做运维调优；无需重新建模（设计 §14 open items 2 & 3）。
-- sqlite-vec 在 macOS arm64 + Linux 的打包 —— 由 `importorskip` 守护；加载失败把 vector 降级为 keyword，绝不阻断（设计 §14 open item 4）。
+- 按格式的最终转换库（MarkItDown vs Docling）与本地模型 MTEB/CPU 基准 —— 在 converter/embedder 端口后做运维调优；无需重新建模。
+- sqlite-vec 在 macOS arm64 + Linux 的打包 —— 由 `importorskip` 守护；加载失败把 vector 降级为 keyword，绝不阻断。

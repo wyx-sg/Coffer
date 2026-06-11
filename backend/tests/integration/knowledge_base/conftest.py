@@ -67,6 +67,7 @@ class FakeVecIndex:
 
     def __init__(self) -> None:
         self._rows: dict[str, list[float]] = {}
+        self.dropped = False
 
     def available(self) -> bool:
         return True
@@ -78,6 +79,10 @@ class FakeVecIndex:
     async def delete(self, chunk_ids) -> None:  # type: ignore[no-untyped-def]
         for cid in chunk_ids:
             self._rows.pop(cid, None)
+
+    async def drop(self) -> None:
+        self._rows.clear()
+        self.dropped = True
 
     async def knn(self, vector, top_k):  # type: ignore[no-untyped-def]
         def _dist(v: list[float]) -> float:
@@ -94,6 +99,7 @@ class KBHarness:
     documents: DocumentRepo
     audit: AuditService
     sm: async_sessionmaker  # type: ignore[type-arg]
+    vec_stores: dict[tuple[str, str], FakeVecIndex]
 
     async def create_kb(self, name: str, *, config: dict | None = None) -> None:
         await self.resources.register(
@@ -119,9 +125,9 @@ async def kb(tmp_path: pathlib.Path, monkeypatch):
     vec_stores: dict[tuple[str, str], FakeVecIndex] = {}
 
     def index_factory(kind: str, resource_name: str, *, dimensions):  # type: ignore[no-untyped-def]
-        vec = None
-        if dimensions is not None:
-            vec = vec_stores.setdefault((kind, resource_name), FakeVecIndex())
+        # Mirrors production wiring: the vec index is ALWAYS attached so delete
+        # paths (which know no embedding width) reach the vector rows too.
+        vec = vec_stores.setdefault((kind, resource_name), FakeVecIndex())
         return SqliteKnowledgeIndex(sm, kind=kind, resource_name=resource_name, vec=vec)
 
     retrieval = KnowledgeRetrieval(
@@ -146,7 +152,12 @@ async def kb(tmp_path: pathlib.Path, monkeypatch):
 
     try:
         yield KBHarness(
-            service=service, resources=resources, documents=documents, audit=audit, sm=sm
+            service=service,
+            resources=resources,
+            documents=documents,
+            audit=audit,
+            sm=sm,
+            vec_stores=vec_stores,
         )
     finally:
         await engine.dispose()

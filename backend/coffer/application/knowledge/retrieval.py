@@ -21,7 +21,7 @@ from coffer.domain.errors import EngineUnavailable
 from coffer.domain.knowledge.embedder import Embedder, EmbeddingConfig
 from coffer.domain.knowledge.index import GrepPort, KnowledgeIndex
 from coffer.domain.knowledge.retrieval import (
-    GrepHit,
+    GrepResult,
     Passage,
     RetrievalMode,
     SearchResult,
@@ -154,9 +154,7 @@ class KnowledgeRetrieval:
         # records the degrade — surfaces report both.
         return SearchResult(mode="vector", passages=tuple(passages), fallback="keyword")
 
-    async def grep(
-        self, store: StoreRef, pattern: str, *, max_matches: int = 200
-    ) -> Sequence[GrepHit]:
+    async def grep(self, store: StoreRef, pattern: str, *, max_matches: int = 200) -> GrepResult:
         """Ripgrep over the store's ``docs_dir`` (no index)."""
         return await self._grep.grep(store.docs_dir, pattern, max_matches=max_matches)
 

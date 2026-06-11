@@ -54,6 +54,11 @@ async function checkOk(r: Response): Promise<Response> {
 
 const enc = encodeURIComponent;
 const kbBase = (name: string) => `${getCofferBaseUrl()}/knowledge_bases/${enc(name)}`;
+// Config reads/updates go through the kind-agnostic resource endpoints
+// (PATCH /resources/{kind}/{name} replaces the whole config server-side, so
+// callers must send the merged object — see updateKnowledgeBaseConfig).
+const resourceBase = (name: string) =>
+  `${getCofferBaseUrl()}/resources/knowledge_base/${enc(name)}`;
 
 export async function createKnowledgeBase(payload: {
   name: string;
@@ -64,6 +69,27 @@ export async function createKnowledgeBase(payload: {
     method: "POST",
     headers: { ...headers(), "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+  await checkOk(r);
+  return (await r.json()) as KnowledgeBaseOut;
+}
+
+export async function getKnowledgeBase(name: string): Promise<KnowledgeBaseOut> {
+  const r = await fetch(resourceBase(name), { headers: headers() });
+  await checkOk(r);
+  return (await r.json()) as KnowledgeBaseOut;
+}
+
+export async function updateKnowledgeBaseConfig(
+  name: string,
+  config: Partial<KnowledgeBaseConfigOut>,
+): Promise<KnowledgeBaseOut> {
+  // The backend replaces the stored config with this object (no deep merge),
+  // so `config` must be the full desired config, not a delta (FR-019/FR-014).
+  const r = await fetch(resourceBase(name), {
+    method: "PATCH",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify({ config }),
   });
   await checkOk(r);
   return (await r.json()) as KnowledgeBaseOut;
@@ -126,6 +152,17 @@ export async function deleteDocument(kbName: string, documentId: string): Promis
     headers: headers(),
   });
   await checkOk(r);
+}
+
+export async function reconvertDocument(kbName: string, documentId: string): Promise<DocumentOut> {
+  // 409 RECONVERSION_BLOCKED when the document was hand-edited
+  // (source_mode=edited); surfaced to callers as a typed ApiError.
+  const r = await fetch(`${kbBase(kbName)}/documents/${enc(documentId)}/reconvert`, {
+    method: "POST",
+    headers: headers(),
+  });
+  await checkOk(r);
+  return (await r.json()) as DocumentOut;
 }
 
 export async function reindexKnowledgeBase(kbName: string): Promise<ReindexResult> {

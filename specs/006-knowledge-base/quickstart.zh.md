@@ -10,12 +10,12 @@
 # Create a KB. Default retrieval is keyword + grep — zero config, offline, no model download.
 coffer kb create design-notes --description "Internal design docs and ADRs"
 
-# Ingest files of ANY format — each is converted to Markdown on disk.
+# Ingest files of ANY supported format — each is converted to Markdown on disk.
 coffer kb ingest design-notes ~/work/notes/architecture.md      # passthrough
 coffer kb ingest design-notes ~/papers/raft.pdf                 # MarkItDown → markdown
 coffer kb ingest design-notes ~/work/spec.docx                  # MarkItDown → markdown
-coffer kb ingest design-notes ~/data/metrics.csv               # → markdown table
-coffer kb ingest design-notes ~/page.html                      # → cleaned markdown
+coffer kb ingest design-notes ~/data/metrics.csv               # csv converter → markdown table
+coffer kb ingest design-notes ~/page.html                      # MarkItDown → cleaned markdown
 
 # Ingest a directory (one file at a time).
 for f in ~/work/notes/*; do coffer kb ingest design-notes "$f"; done
@@ -26,8 +26,9 @@ coffer kb describe design-notes             # doc count + chunk count + indexed 
 coffer kb list-docs design-notes            # document rows (id, title, source_mode, original_filename)
 coffer kb list-docs design-notes --json     # for piping
 
-# Read a document's normalized markdown.
+# Read a document's normalized markdown (`read` is an alias of `get-doc`).
 coffer kb read design-notes 8a3f1c2b...
+coffer kb get-doc design-notes 8a3f1c2b... --json
 
 # Retrieve. Default mode = the KB's default_mode (keyword).
 coffer kb search design-notes "how does our retry policy work?"
@@ -38,9 +39,18 @@ coffer kb search design-notes "exponential backoff" --mode keyword
 coffer kb grep design-notes "TODO|FIXME"
 coffer kb grep design-notes "backoff" --max-matches 20 --json
 
-# Curate: edit the markdown directly, then reindex (sets source_mode=edited).
-coffer kb edit design-notes 8a3f1c2b...                  # opens $EDITOR on the markdown
-coffer kb reindex design-notes                           # rescan files → rebuild index from disk
+# Curate: replace a document's markdown body (positional argument; sets
+# source_mode=edited and reindexes immediately).
+coffer kb edit design-notes 8a3f1c2b... "# Architecture Notes (fixed)…"
+
+# Re-run conversion from the raw original (blocked once a doc is hand-edited).
+coffer kb reconvert design-notes 8a3f1c2b...
+
+# Change chunk parameters (re-chunks + re-indexes the corpus).
+coffer kb set-chunking design-notes --chunk-size 768 --chunk-overlap 96
+
+# Rescan files → rebuild index from disk.
+coffer kb reindex design-notes
 
 # Delete a single document, then the whole KB.
 coffer kb delete-doc design-notes 8a3f1c2b...
@@ -53,13 +63,14 @@ coffer kb delete-kb design-notes --yes
 
 ```bash
 # Local, offline embeddings via fastembed (no API key, no server).
-coffer kb set-embedding design-notes --provider local --model bge-m3 --enable-vector
+# set-embedding enables vector mode and re-embeds the corpus.
+coffer kb set-embedding design-notes --provider local --model bge-m3 --dimensions 1024
 
 # Or a cloud / OpenAI-compatible provider; the credential is a keychain ref, never plaintext.
-coffer credential set openai-embed                       # stores the key in the OS keychain
+coffer keychain set openai-embed                         # stores the key in the OS keychain
 coffer kb set-embedding design-notes \
-  --provider openai --model text-embedding-3-small \
-  --credential-ref openai-embed --enable-vector
+  --provider openai --model text-embedding-3-small --dimensions 1536 \
+  --credential-ref openai-embed
 
 # Changing the embedding model re-embeds the corpus (files are the truth).
 coffer kb search design-notes "service backoff strategy" --mode vector
@@ -112,11 +123,11 @@ coffer kb search design-notes "service backoff strategy" --mode vector
             └── a91bcd2e....docx
 ```
 
-Markdown 文件是**真相源**；SQLite 是可重建索引。`coffer kb reindex <name>` 从 `docs/` 文件重建每一行 SQLite。备份一个 KB = 拷贝它的 `knowledge/<name>/` 目录；索引在 reindex 时再生成。
+Markdown 文件是**真相源**；SQLite 是可重建索引。`coffer kb reindex <name>` 纯靠 `docs/` 文件重建每一行 SQLite —— 包括 `documents` 行，它由每个文件的 YAML frontmatter 重建。备份一个 KB 真的就是拷贝它的 `knowledge/<name>/` 目录：还原目录后跑一次 `reindex` 即可再生完整索引。
 
 ## 限制（默认）
 
 - 每文档大小：25 MB（per-KB 可配）。
 - 每 KB 文档数：约 500（软；超过后检索延迟上升）。
-- 支持格式：转换器注册表能处理的一切 —— md / txt / 源码（passthrough），pdf / docx / pptx / xlsx / html / csv / json / yaml / xml（MarkItDown），以及安装了相应引擎时的 epub / odt / rtf（pandoc）与高保真 pdf（Docling）。不支持的类型以 `unsupported_type` 拒绝；已知类型但引擎缺失返回 `ENGINE_UNAVAILABLE` 并指明依赖。
+- 支持格式：转换器注册表能处理的一切 —— md / txt / 源码 / json / yaml 等文本格式（passthrough）、csv（专用 csv 转换器）、以及 pdf / doc / docx / ppt / pptx / xls / xlsx / html / epub / odt / rtf（MarkItDown）。**xml 不支持**，与其他未处理类型一样以 `unsupported_type`（HTTP 415）拒绝；已知类型但引擎缺失返回 `ENGINE_UNAVAILABLE` 并指明依赖。
 - 检索：keyword + grep 零配置离线工作；vector 可选，需要 embedding provider。

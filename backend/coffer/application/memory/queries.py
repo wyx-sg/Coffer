@@ -31,14 +31,23 @@ def read_fact(store_dir: Path, fact_id: str) -> FactFile:
 
 def list_facts_in_dir(store_dir: Path, *, limit: int, offset: int) -> tuple[list[MemoryFact], int]:
     """Facts in a store, newest-updated first, with the total before paging."""
+    files, total = list_fact_files_in_dir(store_dir, limit=limit, offset=offset)
+    return [ff.fact for ff in files], total
+
+
+def list_fact_files_in_dir(
+    store_dir: Path, *, limit: int, offset: int
+) -> tuple[list[FactFile], int]:
+    """Like :func:`list_facts_in_dir` but keeps each fact's on-disk path — one
+    directory scan serves the whole page (no per-fact rescans)."""
     scan = scan_store_dir(store_dir)
-    facts = sorted(
-        (ff.fact for ff in scan.files.values()),
-        key=lambda f: f.updated_at,
+    files = sorted(
+        scan.files.values(),
+        key=lambda ff: ff.fact.updated_at,
         reverse=True,
     )
-    total = len(facts)
-    return facts[offset : offset + limit], total
+    total = len(files)
+    return files[offset : offset + limit], total
 
 
 def find_fact_store(

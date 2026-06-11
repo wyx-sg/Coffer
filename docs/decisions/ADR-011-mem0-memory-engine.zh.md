@@ -5,7 +5,7 @@
 **Status**: Superseded by [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-013](ADR-013-agent-native-shared-memory.md)
 **Date**: 2026-05-29
 **Deciders**: Yuxing Wu
-**Related**: spec `007-memory`（FR-011、FR-012、FR-014、SC-006、research.md §1 §2），[ADR-002](ADR-002-code-layout-layer-first.md)，[ADR-008](ADR-008-everything-is-a-resource-kind.md)，[ADR-010](ADR-010-llamaindex-rag-engine.md)
+**Related**: spec `007-memory`（已重设计），[ADR-002](ADR-002-code-layout-layer-first.md)，[ADR-007](ADR-007-everything-is-a-resource-kind.md)，[ADR-010](ADR-010-llamaindex-rag-engine.md)
 
 > **已被取代（2026-06-09），取代者为 [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)
 > 与 [ADR-013](ADR-013-agent-native-shared-memory.md)。** KB/memory 重设计弃用

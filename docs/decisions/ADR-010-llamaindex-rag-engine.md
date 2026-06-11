@@ -3,7 +3,7 @@
 **Status**: Superseded by [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)
 **Date**: 2026-05-29
 **Deciders**: Yuxing Wu
-**Related**: spec `006-knowledge-base` (FR-014, SC-006, research.md §1), [ADR-002](ADR-002-code-layout-layer-first.md), [ADR-008](ADR-008-everything-is-a-resource-kind.md)
+**Related**: spec `006-knowledge-base` (redesigned), [ADR-002](ADR-002-code-layout-layer-first.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md)
 
 > **Superseded (2026-06-09) by [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md).**
 > The KB/memory redesign drops LlamaIndex in favour of markdown-files-as-truth +

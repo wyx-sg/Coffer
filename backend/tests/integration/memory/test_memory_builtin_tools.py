@@ -71,21 +71,18 @@ async def test_update_and_forget_by_id(mem) -> None:
     assert gone["hits"] == []
 
 
-async def test_recall_grep_mode_maps_to_keyword_and_never_raises(mem) -> None:
-    # ``grep`` is not a passage mode; memory recall maps it to ``keyword`` at the
-    # boundary, so recalling with ``mode="grep"`` returns hits instead of raising
-    # ``ValueError("grep is not a passage mode")`` (finding #1).
+async def test_recall_grep_mode_never_raises(mem) -> None:
+    # ``grep`` is a real recall mode (ripgrep over the fact files, FR-008); a
+    # store whose ``default_mode`` is grep must recall via ripgrep, not crash.
     reg = _registry(mem)
     remember = reg.get(f"{COFFER_TOOL_PREFIX}remember")
     recall = reg.get(f"{COFFER_TOOL_PREFIX}recall")
     assert remember is not None and recall is not None
     await remember.handler({"text": "ships via make release", "cwd": mem.project_cwd})
 
-    # The tool no longer advertises grep, but a grep value must still be safe.
     out = await recall.handler({"query": "make release", "cwd": mem.project_cwd, "mode": "grep"})
     assert any("make release" in h["text"] for h in out["hits"])
 
-    # The deeper bug: a store whose default_mode is grep must recall, not crash.
     from coffer.domain.memory.config import MemoryStoreConfig
     from coffer.domain.resource import ResourceRef
 
@@ -99,16 +96,15 @@ async def test_recall_grep_mode_maps_to_keyword_and_never_raises(mem) -> None:
         store_name="global", query="make release", mode=None
     )
     assert any("make release" in h.text for h in hits)
-    assert eff_mode == "keyword"  # grep degrades to keyword, never surfaces grep
+    assert eff_mode == "grep"  # grep is served for real and reported as such
 
 
-async def test_recall_tool_excludes_grep_from_mode_enum(mem) -> None:
-    # Memory recall serves only passage modes, so the advertised enum must not
-    # include the dead ``grep`` mode (finding #23).
+async def test_recall_tool_advertises_all_three_modes(mem) -> None:
+    # FR-008: recall serves grep, keyword and vector; the enum advertises all.
     reg = _registry(mem)
     recall = reg.get(f"{COFFER_TOOL_PREFIX}recall")
     assert recall is not None
-    assert recall.input_schema["properties"]["mode"]["enum"] == ["keyword", "vector"]
+    assert recall.input_schema["properties"]["mode"]["enum"] == ["grep", "keyword", "vector"]
 
 
 async def test_remember_rejects_empty_text(mem) -> None:
@@ -129,3 +125,34 @@ async def test_list_memory_tool(mem) -> None:
     assert out["scope"] == "project"
     assert out["total"] == 1
     assert out["facts"][0]["actor"] == "agent"
+
+
+@pytest.mark.acceptance(
+    spec="007-memory",
+    scenario="vector recall falls back when embedding is unconfigured",
+)
+async def test_recall_tool_reports_vector_fallback(mem) -> None:
+    """The MCP ``coffer__recall`` must flag a degraded vector request, like the
+    REST recall does (review misalignment #2)."""
+    reg = _registry(mem)
+    remember = reg.get(f"{COFFER_TOOL_PREFIX}remember")
+    recall = reg.get(f"{COFFER_TOOL_PREFIX}recall")
+    await remember.handler({"text": "wombat burrows are deep", "scope": "global"})
+    out = await recall.handler({"query": "wombat", "mode": "vector"})
+    assert out["fallback"] is True
+    assert any("wombat" in h["text"] for h in out["hits"])
+
+    keyword = await recall.handler({"query": "wombat", "mode": "keyword"})
+    assert keyword["fallback"] is False
+
+
+async def test_recall_tool_serves_grep_mode(mem) -> None:
+    """FR-008: recall supports grep for real — ripgrep over the fact files
+    (essential for CJK content FTS5 cannot tokenize)."""
+    reg = _registry(mem)
+    remember = reg.get(f"{COFFER_TOOL_PREFIX}remember")
+    recall = reg.get(f"{COFFER_TOOL_PREFIX}recall")
+    await remember.handler({"text": "we deploy with 蓝绿发布 strategy", "scope": "global"})
+    out = await recall.handler({"query": "蓝绿发布", "mode": "grep"})
+    assert any("蓝绿发布" in h["text"] for h in out["hits"])
+    assert out["fallback"] is False

@@ -134,3 +134,33 @@ async def test_embedding_unavailable_degrades_to_keyword_only() -> None:
     assert outcome.changed is True
     assert outcome.embedded is False
     assert index.upserts[0][2] is None
+
+
+@pytest.mark.asyncio
+async def test_embed_failure_does_not_advance_the_sha_gate() -> None:
+    """A transient embed failure must stay retryable: the outcome carries an
+    empty sha so the persisted row mismatches the file on the next reconcile
+    and the embed is retried (review M1)."""
+    index = RecordingIndex()
+    failing = await _reindexer(FakeEmbedder(fail=True)).reindex(
+        index=index,
+        markdown="alpha\n\nbeta",
+        previous_sha=None,
+        embedding=EmbeddingConfig(provider="local", model="m", dimensions=4),
+        doc_id="d1",
+        chunker=_chunker,
+    )
+    assert failing.embedded is False
+    assert failing.content_sha256 == ""  # caller persists a never-matching sha
+
+    # Next reconcile: previous_sha="" mismatches → retried; embedder now works.
+    retried = await _reindexer().reindex(
+        index=index,
+        markdown="alpha\n\nbeta",
+        previous_sha=failing.content_sha256 or None,
+        embedding=EmbeddingConfig(provider="local", model="m", dimensions=4),
+        doc_id="d1",
+        chunker=_chunker,
+    )
+    assert retried.embedded is True
+    assert retried.content_sha256 == content_sha256("alpha\n\nbeta")

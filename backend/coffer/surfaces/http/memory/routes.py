@@ -176,6 +176,9 @@ async def add_fact(
     actor: Actor = Depends(_actor),  # noqa: B008
 ) -> FactOut:
     scope, _ = _scope_of(name)
+    # ``ensure_store`` provisions well-formed names (``global`` /
+    # ``project-<ulid>``) lazily and 404s anything else — an arbitrary POST
+    # must never manufacture a store under a mangled name.
     await mem_svc.ensure_store(name)
     fact = await mem_svc.add_fact_to_store(
         store_name=name,
@@ -199,11 +202,10 @@ async def list_facts(
     scope, _ = _scope_of(name)
     if name == GLOBAL_STORE_NAME:
         await mem_svc.ensure_store(name)
-    facts, total = await mem_svc.list_facts(store_name=name, limit=limit, offset=offset)
-    out: list[FactOut] = []
-    for f in facts:
-        _, path = await mem_svc.get_fact_with_path(store_name=name, fact_id=f.id)
-        out.append(FactOut.from_fact(f, store_name=name, scope=scope, path=path))
+    files, total = await mem_svc.list_fact_files(store_name=name, limit=limit, offset=offset)
+    out = [
+        FactOut.from_fact(ff.fact, store_name=name, scope=scope, path=str(ff.path)) for ff in files
+    ]
     return FactListOut(facts=out, total=total)
 
 

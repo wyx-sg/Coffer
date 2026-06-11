@@ -35,46 +35,52 @@ Same layer rules as KB (one substrate). The memory kind reuses the shared retrie
 ```text
 backend/coffer/
 ├── domain/
+│   ├── errors.py                        # canonical hierarchy: MemoryStoreNotFound, MemoryNotFound, MemoryRejected, ScopeUnresolved, ...
 │   ├── knowledge/                       # shared substrate (KB + memory) — see spec 006
-│   │   ├── document.py                  # Document, Chunk, Hit value objects
-│   │   ├── retrieval.py                 # RetrievalPort, RetrievalMode (grep|keyword|vector)
-│   │   └── errors.py                    # MemoryNotFound, MemoryRejected, ScopeUnresolved, ...
+│   │   ├── document.py                  # Document entity (kind-discriminated)
+│   │   ├── retrieval.py                 # StoreRef, Passage, GrepHit/GrepResult, MemoryHit, SearchResult, RetrievalMode
+│   │   ├── index.py                     # KnowledgeIndex / GrepPort / RetrievalPort protocols
+│   │   └── errors.py                    # re-exports of the substrate errors (canonical classes in domain/errors.py)
 │   └── memory/
-│       ├── config.py                    # MemoryStoreConfig (retrieval modes, embedding, max_fact_chars)
+│       ├── config.py                    # MemoryStoreConfig (retrieval modes, flat embedding fields, max_fact_chars)
 │       ├── fact.py                      # MemoryFact (frontmatter + body) value object
-│       └── scope.py                     # MemoryScope (GLOBAL | PROJECT) + resolution result
+│       └── scope.py                     # MemoryScope (GLOBAL | PROJECT) + ResolvedScope
 ├── application/
-│   ├── knowledge/                       # shared indexing/retrieval service (spec 006)
-│   └── memory/
-│       ├── kind.py                      # make_memory_kind(...)
-│       ├── service.py                   # remember/recall/update/forget/list/clear + MEMORY.md regen
-│       ├── scope_resolver.py            # cwd → git-root → project ULID → store (lazy provision)
-│       └── projection.py                # projection engine: dispatch on AgentMemoryAdapter.projection_mode
+│   ├── knowledge/                       # shared substrate application layer (spec 006)
+│   │   ├── retrieval.py                 # KnowledgeRetrieval facade (keyword/vector + flagged fallback)
+│   │   ├── reindex.py                   # the single idempotent re-index routine (Reindexer)
+│   │   └── locks.py                     # StoreLocks — per-store write serialization
+│   ├── memory/
+│   │   ├── kind.py                      # make_memory_kind(...)
+│   │   ├── service.py / service_helpers.py  # remember/recall/update/forget/list/clear + MEMORY.md regen
+│   │   ├── writes.py / queries.py       # fact write/read paths
+│   │   ├── recall.py                    # recall orchestration + reciprocal-rank-fusion merge
+│   │   ├── scope.py                     # ScopeResolver: cwd → git-root → project ULID → store (lazy provision); store-name validation
+│   │   ├── stores.py                    # store-name ↔ ResolvedScope helpers
+│   │   ├── sync.py                      # MemoryReconciler — lazy reindex-on-read
+│   │   └── builtin_tools.py             # the five coffer__* memory MCP tools
+│   └── agent/projection/                # projection lives with the agent driver, not the memory kind
+│       ├── adapters.py                  # AgentMemoryAdapter implementations (Claude SYMLINK+CLAUDE.md RENDER; Codex RENDER + disable `memories`)
+│       ├── engine.py                    # dispatch on projection_mode; idempotent managed-block render
+│       └── types.py
 ├── infrastructure/
-│   ├── knowledge/                       # FTS5 + sqlite-vec + embedding providers + converters (spec 006)
-│   │   ├── index.py                     # documents/chunks/FTS5/vec repo (sole index-engine importer)
-│   │   └── embeddings/                  # OpenAI-compatible providers + fastembed local
+│   ├── knowledge/                       # shared substrate infra (spec 006): repository.py, sqlite_index.py,
+│   │   …                                # vec_index.py (sole sqlite_vec importer), embeddings.py, grep.py,
+│   │                                    # chunking.py, cleaning.py, frontmatter.py, paths.py, converters/
 │   └── memory/
 │       ├── files.py                     # per-fact .md read/write, MEMORY.md render, dir scan (deltas)
-│       └── paths.py                     # ~/.coffer/memory/{global,projects/<ulid>}
+│       ├── paths.py                     # ~/.coffer/memory/{global,projects/<ulid>}
+│       ├── scope_fs.py                  # filesystem scope helpers
+│       └── project_root_repo.py         # project-root persistence for projections
 └── surfaces/
-    ├── http/memory/                     # /api/v1/memory_stores/*
+    ├── http/memory/                     # /api/v1/memory_stores/* (facts, recall)
+    ├── http/projection_routes.py        # /api/v1/memory_stores/{name}/projections (+ projection_service.py / projection_wiring.py)
     └── cli/memory_cmd.py                # `coffer memory ...`
-```
-
-Agent-side projection adapters live with the **agent driver** (not the memory kind):
-
-```text
-backend/coffer/.../agents/
-└── adapters/
-    ├── base.py                          # AgentMemoryAdapter protocol
-    ├── claude.py                        # SYMLINK; ~/.claude/projects/<slug>/memory/
-    └── codex.py                         # RENDER managed block; disable native `memories`
 ```
 
 Existing files modified:
 
-- `application/mcp/builtin_tools.py` — add the five memory tools alongside KB tools.
+- `application/mcp/gateway.py` / `gateway_builtin.py` — route the five memory tools (registered by `application/memory/builtin_tools.py`) alongside the KB tools.
 - `surfaces/http/app.py` — `_wire_memory_kind(...)`.
 - `surfaces/cli/main.py` — `app.add_typer(memory_cmd.app, name="memory")`.
 - `infrastructure/persistence/migrations/` — one revision: drop `memory_records`, delete chroma/LlamaIndex dirs, create unified schema.
@@ -84,12 +90,15 @@ Existing files modified:
 ## Frontend
 
 ```text
+frontend/src/pages/MemoryPage.tsx        # stores table (auto-provisioned; no "New store" action)
 frontend/src/kinds/memory/
-├── index.tsx                # MEMORY_KIND_UI
-├── MemoryStoreDetailPage.tsx  # scope tabs (Global | Project)
-├── FactList.tsx             # DataTable (name, description, type, actor, updated)
-├── FactEditor.tsx           # add / edit-in-place (markdown body + name/description/type)
-├── RecallBox.tsx            # search with mode selector (keyword default)
+├── index.tsx                            # MEMORY_KIND_UI
+├── MemoryStoreDetailPage.tsx            # per-store detail page (route /memory/:name)
+├── MemoryFactList.tsx                   # DataTable (name, description, type, actor, updated)
+├── MemoryAddFactForm.tsx                # add / edit (markdown body + name/description/type)
+├── MemoryRecallPanel.tsx                # recall box with mode selector (keyword default)
+├── MemoryMetricsHeader.tsx              # fact count + disk bytes
+├── api.ts / types.ts
 └── schema.ts
 ```
 
@@ -130,7 +139,7 @@ frontend/src/kinds/memory/
 
 | Risk                                                                   | Mitigation                                                                                                                               |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| MCP shim cwd does not propagate on some agent (scope resolution fails) | Open item #1 in the design doc; verify on Claude/Codex during impl. Fall back to `scope=global` with a clear error when unresolved.      |
+| MCP shim cwd does not propagate on some agent (scope resolution fails) | Open item #1 in the design doc; verify on Claude/Codex during impl. An unresolved project scope is REJECTED with `ScopeUnresolved` (clear error; nothing written); `scope=global` still works.      |
 | Claude rewrites `MEMORY.md` or fact files out of band                  | `MEMORY.md` is a derived index regenerated idempotently; lazy reindex-on-read reconciles fact deltas by content hash — no watcher.       |
 | Existing native memory files would be lost on first projection         | Adapter merges existing files into canonical first, then symlinks; never overwrites (FR-012).                                            |
 | sqlite-vec packaging/loading on macOS arm64 / Linux                    | Open item #4; default retrieval is keyword+grep (no native ext needed); vector is opt-in and degrades gracefully when the ext is absent. |

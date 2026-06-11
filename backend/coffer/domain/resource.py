@@ -107,11 +107,12 @@ class Kind:
     # ref at register/update time so a missing credential fails before any DB
     # write — without the core knowing where a kind stores its refs.
     credential_ref_extractor: Callable[[dict[str, Any]], dict[str, str]] | None = None
-    # Optional pre-write validation hook for ``ResourceService.update_config``.
+    # Optional pre-write hook for ``ResourceService.update_config``.
     # Receives ``(ref, before_config, after_config)`` (both already shape-validated
-    # against ``config_schema``) and may raise ``ConfigValidationError`` to reject
-    # the update — used by ``knowledge_base`` to make ``embedding_model`` immutable
-    # after creation (TEST22-021). Sync or async; the service awaits an Awaitable.
+    # against ``config_schema``); may raise ``ConfigValidationError`` to reject the
+    # update, or trigger side effects — ``knowledge_base``/``memory`` force a
+    # re-index/re-embed when chunk or embedding config changed (FR-014). Sync or
+    # async; the service awaits an Awaitable.
     on_update_config: (
         Callable[
             [ResourceRef, dict[str, Any], dict[str, Any]],

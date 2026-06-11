@@ -25,18 +25,6 @@ def _extract_cwd(params: dict[str, Any]) -> str | None:
     return None
 
 
-def _daemon_cwd() -> str | None:
-    """The daemon's own working directory — the cwd fallback when the client
-    did not report one (TODO: a daemon launched outside any project resolves to
-    global-only scope, which is the safe default)."""
-    import os
-
-    try:
-        return os.getcwd()
-    except OSError:  # pragma: no cover
-        return None
-
-
 def _extract_method(notification: Any) -> str | None:
     """Defensive extraction — the SDK wraps notifications in various shapes."""
     m = getattr(notification, "method", None)

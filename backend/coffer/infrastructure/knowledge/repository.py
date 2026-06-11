@@ -135,6 +135,21 @@ class DocumentRepo:
             )
             return int((await session.execute(stmt)).scalar_one())
 
+    async def chunk_counts(self, kind: str, resource_name: str) -> dict[str, int]:
+        """Per-document chunk counts for a store, in one GROUP BY query (the
+        wire ``chunk_count`` field — never an N+1)."""
+        async with self._sm() as session:
+            stmt = (
+                select(ChunkModel.document_id, func.count())
+                .where(
+                    ChunkModel.kind == kind,
+                    ChunkModel.resource_name == resource_name,
+                )
+                .group_by(ChunkModel.document_id)
+            )
+            rows = (await session.execute(stmt)).all()
+            return {str(doc_id): int(n) for doc_id, n in rows}
+
     async def exists_source(self, kind: str, resource_name: str, source_sha256: str) -> bool:
         """KB dedup: is there a row whose ``metadata->>'source_sha256'`` matches?
 
@@ -162,7 +177,24 @@ class DocumentRepo:
             return (result.rowcount or 0) > 0
 
     async def delete_resource(self, kind: str, resource_name: str) -> int:
+        """Delete every row a store owns: ``documents``, ``chunks`` and the
+        matching ``documents_fts`` entries, in one transaction. Orphaned
+        chunk/FTS rows are invisible to search (the JOIN filters them) but
+        would otherwise accumulate forever."""
         async with self._sm() as session:
+            await session.execute(
+                text(
+                    "DELETE FROM documents_fts WHERE chunk_id IN "
+                    "(SELECT id FROM chunks WHERE kind = :kind AND resource_name = :rn)"
+                ),
+                {"kind": kind, "rn": resource_name},
+            )
+            await session.execute(
+                sa_delete(ChunkModel).where(
+                    ChunkModel.kind == kind,
+                    ChunkModel.resource_name == resource_name,
+                )
+            )
             stmt = sa_delete(DocumentModel).where(
                 DocumentModel.kind == kind,
                 DocumentModel.resource_name == resource_name,

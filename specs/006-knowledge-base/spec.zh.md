@@ -4,8 +4,8 @@
 
 **Feature Branch**: `feature/kb-memory-redesign`
 **Created**: 2026-06-09
-**Status**: Draft (redesign)
-**Input**: 对 `knowledge_base` 资源 kind 的彻底重新设计。一个 Knowledge Base 是共享**知识基底（knowledge substrate）**的一张「面」：用户上传**任意格式**的文件，Coffer 清洗并归一化为**磁盘上的 Markdown**（真相源），再以三种检索模式（`grep`、`keyword`、`vector`）提供回检索。SQLite 仅是可重建的索引。agent 通过 Coffer 的 MCP 网关读取 KB；KB **由用户策展、对 agent 只读**。完整设计见 [`docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md`](../../docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md)，架构见 [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md)。
+**Status**: Accepted (redesign — in development)
+**Input**: 对 `knowledge_base` 资源 kind 的彻底重新设计。一个 Knowledge Base 是共享**知识基底（knowledge substrate）**的一张「面」：用户上传**任意格式**的文件，Coffer 清洗并归一化为**磁盘上的 Markdown**（真相源），再以三种检索模式（`grep`、`keyword`、`vector`）提供回检索。SQLite 仅是可重建的索引。agent 通过 Coffer 的 MCP 网关读取 KB；KB **由用户策展、对 agent 只读**。完整设计依据见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md),架构见 [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md)。
 
 ## 用户场景与测试
 
@@ -208,7 +208,7 @@
 **Ingestion & conversion**
 
 - **FR-004**: Users MUST be able to upload a file of any supported format; the system MUST detect format, convert to Markdown via a pluggable `MarkdownConverter` port, clean the output, prepend YAML frontmatter, write `docs/`+`raw/`, and index it.
-- **FR-005**: The default converter engine MUST be MarkItDown, pluggable per format (e.g. Docling for high-fidelity PDF, pandoc) and confined to `infrastructure/`. Markdown/text/source files pass through unchanged.
+- **FR-005**: Conversion MUST dispatch through a per-format converter registry confined to `infrastructure/`: Markdown/text/source files pass through unchanged, `csv` has a dedicated converter, and everything else (pdf / docx / pptx / xlsx / html / epub / odt / rtf / …) goes through the default MarkItDown engine. A higher-fidelity engine for a format is a new converter in the registry, not a substrate change.
 - **FR-006**: System MUST reject files over `max_document_bytes` (default 25 MB, configurable), files of unsupported type, and files whose conversion yields empty Markdown.
 - **FR-007**: System MUST compute `source_sha256` of the original and reject re-upload of an existing source unless `replace=true`.
 
@@ -220,7 +220,8 @@
 **Retrieval**
 
 - **FR-010**: Users MUST be able to search a KB and receive ranked passages (passage text + source doc id + title + score) via the requested or default mode. Default `top_k` is 5; callers MAY set `top_k` in 1–20.
-- **FR-011**: System MUST support three retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), and `vector` (sqlite-vec KNN over embeddings). Default enabled modes are `keyword`+`grep`; `vector` is opt-in.
+- **FR-011**: System MUST support three retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), and `vector` (sqlite-vec KNN over embeddings). Default enabled modes are `keyword`+`grep`; `vector` is opt-in. Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed).
+- **FR-011a**: An EXPLICIT `mode=grep` on the search endpoint — or any explicit mode not in the KB's `enabled_modes` — MUST be rejected with `400 SEARCH_MODE_INVALID` (grep is served by its own endpoint, never silently rewritten). `vector` is the one exception: it always reaches the retrieval facade so the keyword fallback is FLAGGED per FR-012. An implicit search (no `mode`) on a KB whose `default_mode` is `grep` serves `keyword` (grep is not a passage mode).
 - **FR-012**: When `vector` is requested but no embedding provider is configured, the system MUST fall back to `keyword` and flag the fallback in the response — it MUST NOT error or block.
 
 **Embedding configuration**
@@ -246,7 +247,7 @@
 
 - **Knowledge Base**（kind 为 `knowledge_base` 的 resource）：config = 启用的检索模式、chunk size/overlap、embedding provider/model/base_url/credential_ref、max document bytes、description。
 - **Document**（统一 `documents` 行，`kind="knowledge_base"`）：doc id、KB resource 名、磁盘 path、title、description、`content_sha256`、`source_mode`、per-face `metadata`（`original_filename`、`original_format`、`source_sha256`、`converted_at`、`conversion_engine`）、时间戳。
-- **Chunk**（`chunks` 行）：在文档内的 position；文本经 FTS5 external/contentless content 留在文件里，不在 SQLite 里重复。
+- **Chunk**（`chunks` 行）：在文档内的 position。chunk 文本在常规 FTS5 索引（`documents_fts`）内部存一份，不再重复存进基础 SQLite 表；它始终可由 Markdown 文件重建，文件仍是真相源。
 - **Passage**（检索结果，不持久化）：passage 文本、源 doc id、title、score、position。
 - **Grep hit**（检索结果，不持久化）：path、行号、行内容。
 
@@ -254,7 +255,7 @@
 
 ### Measurable Outcomes
 
-- **SC-001**: From a fresh install, a user creates a KB and ingests their first non-Markdown file (e.g. a PDF) within 60 seconds, with documentation consulted no more than once.
+- **SC-001**: From a fresh install, a user creates a KB and ingests their first non-Markdown file (e.g. a PDF) within 60 seconds by following the quickstart alone.
 - **SC-002**: With a 50-document KB (≤ 50 MB), keyword search latency for a typical query is ≤ 200 ms and grep ≤ 500 ms wall-clock at the REST surface on a developer laptop.
 - **SC-003**: Deleting a KB removes 100% of its on-disk footprint and 100% of its SQLite rows; verified by a test that walks `~/.coffer/knowledge/` and queries `documents`/`chunks` before and after.
 - **SC-004**: An agent connected through the MCP gateway can list KBs, search, grep, and read a document — all via read-only built-in tools — in one MCP session, with no separate MCP server installed.
@@ -274,4 +275,4 @@
 
 - **共享基底**：`documents`/`chunks`/FTS5/sqlite-vec 以及转换器端口与 spec 007（memory）共享。本规范拥有 KB 面（任意格式→Markdown、三模式读、agent 只读）；007 拥有 memory 面。两份规范里对基底的描述要保持同步；架构在宪法与重新设计 ADR 里，此处不复述。
 - **embedding 默认值**：vector 是可选项；零配置默认是 `keyword`+`grep`（离线、语言无关）。双语语料推荐本地 `bge-m3` 或云 provider（英文小模型 embedding 中文效果差）。
-- **延后项**：检索时的 reranking / HyDE / multi-query / LLM 综合；agent 编辑 KB 文档；默认图像 OCR；默认开启的文件系统 watcher。见设计 §12（非目标）。
+- **延后项**：检索时的 reranking / HyDE / multi-query / LLM 综合；agent 编辑 KB 文档；默认图像 OCR；默认开启的文件系统 watcher。

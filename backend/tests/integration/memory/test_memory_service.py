@@ -58,7 +58,7 @@ async def test_recall_returns_facts(mem) -> None:
         body="The service API base path is /api/v2 for this repo.",
         actor="agent",
     )
-    hits = await mem.service.recall(cwd=mem.project_cwd, query="api base path", top_k=5)
+    hits, _fb = await mem.service.recall(cwd=mem.project_cwd, query="api base path", top_k=5)
     assert len(hits) >= 1
     assert any("/api/v2" in h.text for h in hits)
     assert hits[0].id
@@ -77,7 +77,7 @@ async def test_remember_global_scope(mem) -> None:
     )
     assert await mem.documents.count_documents("memory", GLOBAL_STORE_NAME) == 1
     # Recall from a project still sees the global fact.
-    hits = await mem.service.recall(cwd=mem.project_cwd, query="tabs over spaces", top_k=5)
+    hits, _fb = await mem.service.recall(cwd=mem.project_cwd, query="tabs over spaces", top_k=5)
     assert any("tabs" in h.text for h in hits)
 
 
@@ -99,7 +99,7 @@ async def test_recall_spans_project_and_global(mem) -> None:
         body="project fact uses spaces in config files",
         actor="agent",
     )
-    hits = await mem.service.recall(cwd=mem.project_cwd, query="spaces", top_k=10)
+    hits, _fb = await mem.service.recall(cwd=mem.project_cwd, query="spaces", top_k=10)
     sources = {h.source.split(":")[0] for h in hits}
     assert "global" in sources
     assert "project" in sources
@@ -144,9 +144,9 @@ async def test_update_fact_reflects_in_recall(mem) -> None:
         store_name=store, fact_id=fact.id, new_body="replaced zebra text", actor="user"
     )
     assert updated.body == "replaced zebra text"
-    hits = await mem.service.recall(cwd=mem.project_cwd, query="zebra", top_k=5)
+    hits, _fb = await mem.service.recall(cwd=mem.project_cwd, query="zebra", top_k=5)
     assert any("zebra" in h.text for h in hits)
-    assert (await mem.service.recall(cwd=mem.project_cwd, query="aardvark", top_k=5)) == []
+    assert (await mem.service.recall(cwd=mem.project_cwd, query="aardvark", top_k=5))[0] == []
 
 
 @pytest.mark.acceptance(spec="007-memory", scenario="agent forgets a fact")
@@ -162,7 +162,7 @@ async def test_forget_removes_fact(mem) -> None:
     store = _project_store(mem)
     await mem.service.delete_fact(store_name=store, fact_id=fact.id, actor="user")
     assert await mem.documents.count_documents("memory", store) == 0
-    assert (await mem.service.recall(cwd=mem.project_cwd, query="walrus", top_k=5)) == []
+    assert (await mem.service.recall(cwd=mem.project_cwd, query="walrus", top_k=5))[0] == []
     store_dir = paths.memory_store_dir(project_ulid_from(mem))
     assert [f for f in store_dir.glob("*.md") if f.name != "MEMORY.md"] == []
 
@@ -294,7 +294,7 @@ async def test_vector_recall_falls_back_when_unconfigured(mem) -> None:
         actor="user",
     )
     # No embedding configured on the default store → vector degrades to keyword.
-    hits = await mem.service.recall(
+    hits, _fb = await mem.service.recall(
         cwd=None, query="okapi", scope=MemoryScope.GLOBAL, top_k=5, mode="vector"
     )
     assert any("okapi" in h.text for h in hits)
@@ -332,9 +332,9 @@ async def test_lazy_reindex_picks_up_out_of_band_edit(mem) -> None:
     # Edit the body directly on disk (frontmatter preserved).
     text = fact_file.read_text()
     fact_file.write_text(text.replace("original narwhal content", "edited platypus content"))
-    hits = await mem.service.recall(cwd=mem.project_cwd, query="platypus", top_k=5)
+    hits, _fb = await mem.service.recall(cwd=mem.project_cwd, query="platypus", top_k=5)
     assert any("platypus" in h.text for h in hits)
-    assert (await mem.service.recall(cwd=mem.project_cwd, query="narwhal", top_k=5)) == []
+    assert (await mem.service.recall(cwd=mem.project_cwd, query="narwhal", top_k=5))[0] == []
     assert fact.id  # the same fact id, re-indexed in place
 
 
@@ -342,3 +342,65 @@ def project_ulid_from(mem) -> str:
     from pathlib import Path
 
     return project_ulid(str(Path(mem.project_cwd).parent))
+
+
+@pytest.mark.acceptance(
+    spec="007-memory",
+    scenario="vector recall falls back when embedding is unconfigured",
+)
+async def test_enabling_vector_backfills_existing_facts(mem) -> None:
+    """Enabling vector on a store with existing facts must re-embed them: the
+    sha no-op gate must not leave the new vec table empty forever (review H2)."""
+    from coffer.domain.resource import ResourceRef
+
+    await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="merge-style",
+        description="merge convention",
+        body="We always use squash-merge for feature branches.",
+        actor="user",
+    )
+
+    await mem.resources.update_config(
+        ResourceRef("memory", GLOBAL_STORE_NAME),
+        new_config={
+            "retrieval_modes": ["grep", "keyword", "vector"],
+            "default_mode": "keyword",
+            "embedding_provider": "local",
+            "embedding_model": "fake-model",
+            "embedding_dimensions": 32,
+        },
+        actor="user",
+    )
+
+    hits, mode, fallback = await mem.service.recall_in_store(
+        store_name=GLOBAL_STORE_NAME,
+        query="squash-merge feature branches",
+        mode="vector",
+        top_k=5,
+    )
+    assert mode == "vector"
+    assert fallback is False
+    assert any("squash-merge" in h.text for h in hits)
+
+
+async def test_recall_hit_time_and_source_carry_fact_metadata(mem) -> None:
+    """MemoryHit.time must be the fact's updated_at (not now()) and source must
+    carry the fact file's path, per the data-model (review misalignment #3)."""
+    await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="platypus",
+        description="d",
+        body="the platypus memo body",
+        actor="user",
+    )
+    hits, fallback = await mem.service.recall(cwd=None, query="platypus", top_k=5)
+    assert fallback is False
+    h = hits[0]
+    doc = await mem.documents.get_document("memory", GLOBAL_STORE_NAME, h.id)
+    assert doc is not None
+    assert doc.path.endswith(".md")
+    assert h.source == f"global:{doc.path}"
+    assert h.time == doc.updated_at

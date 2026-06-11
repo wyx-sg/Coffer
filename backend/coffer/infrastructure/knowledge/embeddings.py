@@ -98,7 +98,12 @@ class OpenAICompatibleEmbedder:
     async def embed(self, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
             return []
-        client = self._ensure_client()
+        import asyncio
+
+        # Client construction resolves the credential from the OS keychain —
+        # on macOS that can pop a blocking Keychain prompt, so keep it off the
+        # event loop. Cached after the first call.
+        client = await asyncio.to_thread(self._ensure_client)
         try:
             resp = await client.embeddings.create(model=self._config.model, input=list(texts))
         except Exception as exc:

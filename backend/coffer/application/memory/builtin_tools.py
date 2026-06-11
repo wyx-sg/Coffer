@@ -26,7 +26,12 @@ def _scope_arg(args: dict[str, Any], *, default: MemoryScope | None) -> MemorySc
     raw = args.get("scope")
     if raw is None:
         return default
-    return MemoryScope.PROJECT if str(raw) == "project" else MemoryScope.GLOBAL
+    if str(raw) == "project":
+        return MemoryScope.PROJECT
+    if str(raw) == "global":
+        return MemoryScope.GLOBAL
+    # A typo'd scope must not silently write to the wrong store.
+    raise ValueError(f"unknown scope {raw!r}; expected 'project' or 'global'")
 
 
 def register_memory_builtin_tools(
@@ -40,18 +45,14 @@ def register_memory_builtin_tools(
         query = str(args["query"])[:_MAX_QUERY_CHARS]
         cwd = _cwd(args)
         scope = _scope_arg(args, default=None)  # None ⇒ span project + global
-        top_k = max(1, min(_MAX_TOP_K, int(args.get("top_k", 5))))
+        top_k = _top_k_arg(args)
         mode = args.get("mode")
-        # Memory recall serves only passage modes; ``grep`` is a KB-only mode
-        # and is intentionally absent from the tool's enum (finding #23). A
-        # ``grep`` configured as a store ``default_mode`` is mapped to keyword at
-        # the recall boundary, never advertised here.
-        hits = await memory_service.recall(
+        hits, fallback = await memory_service.recall(
             cwd=cwd,
             query=query,
             scope=scope,
             top_k=top_k,
-            mode=mode if mode in {"keyword", "vector"} else None,
+            mode=mode if mode in {"grep", "keyword", "vector"} else None,
         )
         return {
             "hits": [
@@ -63,7 +64,10 @@ def register_memory_builtin_tools(
                     "time": h.time.isoformat(),
                 }
                 for h in hits
-            ]
+            ],
+            # True when a vector request degraded to keyword (no embedding
+            # configured) — the acceptance scenario requires the flag here too.
+            "fallback": fallback,
         }
 
     async def remember(args: dict[str, Any]) -> dict[str, Any]:
@@ -135,7 +139,7 @@ def register_memory_builtin_tools(
                     "query": {"type": "string"},
                     "scope": {"type": "string", "enum": ["project", "global"]},
                     "top_k": {"type": "integer", "default": 5, "minimum": 1, "maximum": 20},
-                    "mode": {"type": "string", "enum": ["keyword", "vector"]},
+                    "mode": {"type": "string", "enum": ["grep", "keyword", "vector"]},
                     "cwd": {"type": "string", "description": "Agent launch cwd (session-injected)"},
                 },
                 "required": ["query"],
@@ -208,6 +212,14 @@ def register_memory_builtin_tools(
             handler=list_memory,
         )
     )
+
+
+def _top_k_arg(args: dict[str, Any]) -> int:
+    try:
+        value = int(args.get("top_k", 5))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("'top_k' must be an integer") from exc
+    return max(1, min(_MAX_TOP_K, value))
 
 
 def _cwd(args: dict[str, Any]) -> str | None:

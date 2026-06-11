@@ -104,9 +104,9 @@ describe("MemoryPage", () => {
     } as unknown as ReturnType<typeof hooks.useResources>);
 
     render(<MemoryPage />, { wrapper: wrap(null) });
-    // The KindResourcePage renders translateApiError; the literal message
-    // varies by locale, so assert on the surrounding card title which
-    // always uses the `resources.loadFailed` key.
-    expect(screen.getAllByRole("heading").length).toBeGreaterThan(0);
+    // The error card shows the `memory.loadFailed` title plus the message
+    // produced by translateApiError (a plain Error surfaces its message).
+    expect(screen.getByText("Failed to load memory stores")).toBeInTheDocument();
+    expect(screen.getByText("HTTP 500")).toBeInTheDocument();
   });
 });

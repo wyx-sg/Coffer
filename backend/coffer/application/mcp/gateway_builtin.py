@@ -5,6 +5,7 @@ file under the project's 400-LOC ceiling.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 from datetime import datetime
@@ -53,7 +54,7 @@ async def dispatch_builtin_tool(
             error_message=None,
             session_id=session_id,
         )
-        return result
+        return _to_call_tool_result(result)
     except Exception as exc:
         duration_ms = int((clock() - started).total_seconds() * 1000)
         # Honour SC-010: Coffer-authored errors keep their message; arbitrary
@@ -70,6 +71,22 @@ async def dispatch_builtin_tool(
             session_id=session_id,
         )
         raise
+
+
+def _to_call_tool_result(payload: dict[str, Any]) -> dict[str, Any]:
+    """Wrap a handler's raw payload as a spec-conforming ``CallToolResult``.
+
+    ``content`` is REQUIRED by the MCP schema — returning the bare payload
+    fails SDK validation on every real client. The payload is rendered once as
+    text (the universal floor) and kept verbatim in ``structuredContent`` for
+    clients that read structured results.
+    """
+    text = json.dumps(payload, ensure_ascii=False, default=str)
+    return {
+        "content": [{"type": "text", "text": text}],
+        "structuredContent": payload,
+        "isError": False,
+    }
 
 
 async def _log(

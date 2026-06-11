@@ -12,10 +12,11 @@ read/scan is delegated to ``infrastructure.memory.files``.
 
 from __future__ import annotations
 
-import json
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
+from coffer.application.knowledge.locks import StoreLocks
 from coffer.application.knowledge.reindex import Reindexer
 from coffer.application.knowledge.retrieval import KnowledgeRetrieval
 from coffer.domain.knowledge.document import KIND_MEMORY, Document
@@ -38,9 +39,14 @@ def _one_chunk(markdown: str) -> list[str]:
     return [body] if body else []
 
 
-def fact_to_document(fact: MemoryFact, *, store: StoreRef, content_sha256: str) -> Document:
-    """Project a ``MemoryFact`` onto a unified ``documents`` row (kind=memory)."""
-    metadata = {
+def fact_to_document(
+    fact: MemoryFact, *, store: StoreRef, content_sha256: str, path: str
+) -> Document:
+    """Project a ``MemoryFact`` onto a unified ``documents`` row (kind=memory).
+
+    ``path`` is the fact's canonical ``.md`` file (the source of truth), per the
+    data-model — recall hits surface it as their ``source``."""
+    metadata: dict[str, object] = {
         "type": fact.type,
         "actor": fact.actor,
         "origin_session_id": fact.origin_session_id,
@@ -50,14 +56,14 @@ def fact_to_document(fact: MemoryFact, *, store: StoreRef, content_sha256: str) 
         kind=KIND_MEMORY,
         resource_name=store.resource_name,
         project_id=store.project_id,
-        path=str(store.docs_dir),
+        path=path,
         title=fact.name,
         description=fact.description,
         content_sha256=content_sha256,
         source_mode="native",
         created_at=fact.created_at,
         updated_at=fact.updated_at,
-        metadata=json.loads(json.dumps(metadata)),
+        metadata=metadata,
     )
 
 
@@ -74,11 +80,25 @@ class MemoryReconciler:
         self._documents = documents
         self._retrieval = retrieval
         self._reindexer = reindexer
+        self._locks = StoreLocks()
 
     async def reconcile(
-        self, *, store: StoreRef, embedding: EmbeddingConfig | None
+        self, *, store: StoreRef, embedding: EmbeddingConfig | None, force: bool = False
     ) -> ReconcileStats:
-        scan = scan_store_dir(Path(store.docs_dir))
+        """Reconcile the index with the on-disk fact files.
+
+        ``force`` bypasses the ``content_sha256`` no-op gate so every fact is
+        re-chunked/re-embedded — required when the store's retrieval/embedding
+        config changes (the files are unchanged but the index is stale).
+        """
+        async with self._locks.lock(KIND_MEMORY, store.resource_name):
+            return await self._reconcile_locked(store=store, embedding=embedding, force=force)
+
+    async def _reconcile_locked(
+        self, *, store: StoreRef, embedding: EmbeddingConfig | None, force: bool
+    ) -> ReconcileStats:
+        # The scan reads + parses every fact file — keep it off the event loop.
+        scan = await asyncio.to_thread(scan_store_dir, Path(store.docs_dir))
         on_disk = scan.files
         known = {
             d.id: d
@@ -93,8 +113,8 @@ class MemoryReconciler:
 
         for fact_id, ff in on_disk.items():
             existing = known.get(fact_id)
-            previous = existing.content_sha256 if existing else None
-            if existing is not None and existing.content_sha256 == ff.content_sha256:
+            previous = None if force else (existing.content_sha256 if existing else None)
+            if not force and existing is not None and existing.content_sha256 == ff.content_sha256:
                 unchanged += 1
                 continue
             outcome = await self._reindexer.reindex(
@@ -105,7 +125,12 @@ class MemoryReconciler:
                 doc_id=fact_id,
                 chunker=_one_chunk,
             )
-            doc = fact_to_document(ff.fact, store=store, content_sha256=outcome.content_sha256)
+            doc = fact_to_document(
+                ff.fact,
+                store=store,
+                content_sha256=outcome.content_sha256,
+                path=str(ff.path),
+            )
             await self._documents.upsert_document(doc)
             indexed += 1
 
@@ -120,27 +145,34 @@ class MemoryReconciler:
         self, *, store: StoreRef, fact_file: FactFile, embedding: EmbeddingConfig | None
     ) -> None:
         """Index/refresh a single fact (write paths call this after writing)."""
-        index = self._retrieval.index_for(
-            store, dimensions=embedding.dimensions if embedding else None
-        )
-        existing = await self._documents.get_document(
-            KIND_MEMORY, store.resource_name, fact_file.fact.id
-        )
-        outcome = await self._reindexer.reindex(
-            index=index,
-            markdown=fact_file.fact.body,
-            previous_sha=existing.content_sha256 if existing else None,
-            embedding=embedding,
-            doc_id=fact_file.fact.id,
-            chunker=_one_chunk,
-        )
-        doc = fact_to_document(fact_file.fact, store=store, content_sha256=outcome.content_sha256)
-        await self._documents.upsert_document(doc)
+        async with self._locks.lock(KIND_MEMORY, store.resource_name):
+            index = self._retrieval.index_for(
+                store, dimensions=embedding.dimensions if embedding else None
+            )
+            existing = await self._documents.get_document(
+                KIND_MEMORY, store.resource_name, fact_file.fact.id
+            )
+            outcome = await self._reindexer.reindex(
+                index=index,
+                markdown=fact_file.fact.body,
+                previous_sha=existing.content_sha256 if existing else None,
+                embedding=embedding,
+                doc_id=fact_file.fact.id,
+                chunker=_one_chunk,
+            )
+            doc = fact_to_document(
+                fact_file.fact,
+                store=store,
+                content_sha256=outcome.content_sha256,
+                path=str(fact_file.path),
+            )
+            await self._documents.upsert_document(doc)
 
     async def remove_one(self, *, store: StoreRef, fact_id: str) -> None:
-        index = self._retrieval.index_for(store, dimensions=None)
-        await index.delete_chunks(fact_id)
-        await self._documents.delete_document(KIND_MEMORY, store.resource_name, fact_id)
+        async with self._locks.lock(KIND_MEMORY, store.resource_name):
+            index = self._retrieval.index_for(store, dimensions=None)
+            await index.delete_chunks(fact_id)
+            await self._documents.delete_document(KIND_MEMORY, store.resource_name, fact_id)
 
 
 # The repo port (structurally the substrate ``DocumentRepo``) lives in

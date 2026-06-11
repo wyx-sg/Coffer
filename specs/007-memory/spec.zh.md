@@ -4,8 +4,8 @@
 
 **Feature Branch**: `feature/kb-memory-redesign`
 **Created**: 2026-05-22
-**Status**: Draft (redesign)
-**Input**: Coffer memory feature 的重设计 —— 与 knowledge base（spec 006）共用同一套统一底座（unified substrate）的 **memory 面**。memory 不再是「写入时调 LLM 的 mem0 向量库」；它变成 **跨 agent 的单一真相源**（没有各 agent 间互相漂移的副本），在格式匹配处做到 agent 原生。规范化存储 = 每条事实一个 markdown 文件，加上一个 `MEMORY.md` 索引 —— 即 Claude Code 的 auto-memory 格式 —— 放在 `~/.coffer/memory/` 下，并带两层作用域（global + per-project）。agent 通过 Coffer 的 MCP 网关读写；规范化文件还会 **投影（projection）** 进各 agent 的原生位置（Claude Code 用目录 symlink，Codex 用 `AGENTS.md` 中带标记栅栏的 managed block）。用户在 Coffer UI 里做完整 CRUD。检索复用与 knowledge base 相同的引擎（grep / keyword FTS5+BM25 / vector sqlite-vec）。见 [`docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md`](../../docs/superpowers/specs/2026-06-09-kb-memory-redesign-design.md)。
+**Status**: Accepted (redesign — in development)
+**Input**: Coffer memory feature 的重设计 —— 与 knowledge base（spec 006）共用同一套统一底座（unified substrate）的 **memory 面**。memory 不再是「写入时调 LLM 的 mem0 向量库」；它变成 **跨 agent 的单一真相源**（没有各 agent 间互相漂移的副本），在格式匹配处做到 agent 原生。规范化存储 = 每条事实一个 markdown 文件，加上一个 `MEMORY.md` 索引 —— 即 Claude Code 的 auto-memory 格式 —— 放在 `~/.coffer/memory/` 下，并带两层作用域（global + per-project）。agent 通过 Coffer 的 MCP 网关读写；规范化文件还会 **投影（projection）** 进各 agent 的原生位置（Claude Code 用目录 symlink，Codex 用 `AGENTS.md` 中带标记栅栏的 managed block）。用户在 Coffer UI 里做完整 CRUD。检索复用与 knowledge base 相同的引擎（grep / keyword FTS5+BM25 / vector sqlite-vec）。完整设计依据见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) 与 [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)。
 
 ## 用户场景与测试
 
@@ -24,6 +24,8 @@
 - recall 跨 project 与 global 两个作用域
 - agent 更新一条事实
 - agent 遗忘一条事实
+- 内置记忆工具出现在客户端工具列表
+- embedding 未配置时 vector recall 回退
 
 ---
 
@@ -89,8 +91,9 @@
 
 **代表性场景**：
 
-- per-store 度量
 - 清空一个记忆作用域
+
+（per-store 度量的 HTTP 路由由独立可测覆盖，但其专属 acceptance 测试延后 —— 见场景后的说明。）
 
 ---
 
@@ -244,8 +247,8 @@
 
 **检索**
 
-- **FR-008**：recall MUST 使用与 knowledge base 共享的统一检索引擎：`grep`（原始文件）、`keyword`（FTS5 BM25，默认）、`vector`（sqlite-vec 配可配置的 embedding provider）。当请求 `vector` 但未配置 embedding provider 时，recall MUST 回退到 `keyword` 并在响应里标注此次回退 —— 绝不阻塞。
-- **FR-009**：`coffer__recall` MUST 默认跨 project 与 global 两个 store；结果带 id、text、score、source、time。默认 `top_k` 为 5；调用方 MAY 指定 1–20。
+- **FR-008**：recall MUST 使用与 knowledge base 共享的统一检索引擎：`grep`（真实服务 —— ripgrep 扫该 store 的事实文件；对 FTS5 无法分词的内容必不可少，如 CJK）、`keyword`（FTS5 BM25，默认）、`vector`（sqlite-vec 配可配置的 embedding provider）。当请求 `vector` 但未配置 embedding provider 时，recall MUST 回退到 `keyword` 并以布尔值在响应里标注此次回退 —— 绝不阻塞。MCP `coffer__recall` 的响应包含该 `fallback` 布尔值。
+- **FR-009**：`coffer__recall` MUST 默认跨 project 与 global 两个 store；跨 store 的结果用倒数排名融合（reciprocal rank fusion）合并（逐 store 的分数跨模式/跨 store 不可比；每条命中保留其逐 store 分数，只有合并后的顺序来自融合）。结果带 id、text、score、source、time —— `time` 是事实的 `updated_at`，`source` 是 `<scope>:<fact file path>`。默认 `top_k` 为 5；调用方 MAY 指定 1–20。
 - **FR-010**：memory MUST 用 **lazy reindex-on-read**：`recall` 先按内容哈希扫描事实目录的增量（新增/变更/删除文件）并对账索引，再搜索，使带外编辑（含 Claude 的 symlink 编辑）即时可见，无需文件系统 watcher。
 
 **投影与绑定**
@@ -262,7 +265,7 @@
 
 **Surfaces**
 
-- **FR-017**：用户 MUST 能通过 (a) `/api/v1/memory_stores/` 下的 REST API、(b) `coffer memory …` 子命令、(c) 桌面 UI 完成完整记忆 CRUD。用户写入设 `metadata.actor = "user"`，写规范化 markdown、重新生成 `MEMORY.md`、重建索引并审计。
+- **FR-017**：用户 MUST 能通过 (a) `/api/v1/memory_stores/` 下的 REST API、(b) `coffer memory …` 子命令、(c) 桌面 UI 完成完整记忆 CRUD。用户写入设 `metadata.actor = "user"`，写规范化 markdown、重新生成 `MEMORY.md`、重建索引并审计。这些 surface 上的 store 名会被校验：只有 `global` 或 `project-<26 字符 ULID>` 合法 —— 形状合法的名字会惰性 provision 其 store；其余返回 404（`MEMORY_STORE_NOT_FOUND`）。
 
 **底座隔离**
 
@@ -271,6 +274,10 @@
 **迁移**
 
 - **FR-019**：本分支未发布；**没有数据迁移**。单个迁移 MUST 删除 `memory_records`、删掉任何 chroma/LlamaIndex 目录、创建全新统一 schema。旧的 mem0/chroma 文本不迁移。
+
+**投影 surface**
+
+- **FR-020**：投影 MUST 经 REST 管理：`GET /api/v1/memory_stores/{name}/projections` 列出某 store 的绑定，`POST /api/v1/memory_stores/{name}/projections` 建立绑定（先把已存在的原生文件合并进规范 store —— 绝不覆盖），`DELETE /api/v1/memory_stores/{name}/projections/{agent_ref}` 移除绑定。移除 MUST 撤销原生目标（删 symlink / 剥除受管块）；若撤销失败，绑定行被**保留**（确保原生产物不会被永久遗弃）且错误向上抛出以便重试。每次建立/移除 MUST 写一条 `memory_projected` 审计事件。对 Claude Code，GLOBAL 层经 RENDER 受管块投影进 `~/.claude/CLAUDE.md`（project 层是 FR-012 的 SYMLINK）。
 
 ### Key Entities
 

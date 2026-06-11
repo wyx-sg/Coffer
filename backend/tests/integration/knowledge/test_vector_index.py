@@ -156,6 +156,41 @@ async def test_width_change_rebuilds_only_that_store(substrate) -> None:
 
 @pytest.mark.skipif(not _sqlite_vec_available(), reason="sqlite-vec not installed/loadable")
 @pytest.mark.asyncio
+async def test_maintenance_delete_without_dimensions_removes_vec_rows(substrate) -> None:
+    """Delete paths run without knowing the store's embedding width (document /
+    fact deletion passes ``dimensions=None``); a width-less VecIndex must still
+    delete this store's rows instead of leaking them forever."""
+    await substrate.repo.upsert_document(_doc("d1", "kb1"))
+    idx3 = _index(substrate, "kb1", _vec(substrate, "kb1", 3))
+    await idx3.upsert_chunks("d1", ["near"], [[1.0, 0.0, 0.0]])
+
+    maint = VecIndex(str(substrate.db_path), None, kind=KIND_KNOWLEDGE_BASE, resource_name="kb1")
+    await maint.delete(["d1:0"])
+
+    assert await idx3.vector_search("kb1", [1.0, 0.0, 0.0], top_k=5) == []
+
+
+@pytest.mark.skipif(not _sqlite_vec_available(), reason="sqlite-vec not installed/loadable")
+@pytest.mark.asyncio
+async def test_delete_with_stale_width_does_not_destroy_table(substrate) -> None:
+    """A delete must never drop-and-rebuild the table on width mismatch: deletes
+    can run with a stale/absent width, and a rebuild would silently destroy every
+    OTHER chunk's vectors."""
+    await substrate.repo.upsert_document(_doc("d1", "kb1"))
+    await substrate.repo.upsert_document(_doc("d2", "kb1"))
+    idx3 = _index(substrate, "kb1", _vec(substrate, "kb1", 3))
+    await idx3.upsert_chunks("d1", ["a"], [[1.0, 0.0, 0.0]])
+    await idx3.upsert_chunks("d2", ["b"], [[0.0, 1.0, 0.0]])
+
+    stale = _vec(substrate, "kb1", 8)
+    await stale.delete(["d1:0"])
+
+    hits = await idx3.vector_search("kb1", [0.0, 1.0, 0.0], top_k=5)
+    assert {h.document_id for h in hits} == {"d2"}
+
+
+@pytest.mark.skipif(not _sqlite_vec_available(), reason="sqlite-vec not installed/loadable")
+@pytest.mark.asyncio
 async def test_drop_store_removes_only_that_stores_vectors(substrate) -> None:
     await substrate.repo.upsert_document(_doc("d1", "kbA"))
     await substrate.repo.upsert_document(_doc("d2", "kbB"))

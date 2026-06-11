@@ -88,3 +88,28 @@ async def test_delete_document_and_resource(substrate) -> None:
     removed = await repo.delete_resource(KIND_KNOWLEDGE_BASE, "kb1")
     assert removed == 1
     assert await repo.count_documents(KIND_KNOWLEDGE_BASE, "kb1") == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_resource_purges_chunks_and_fts(substrate) -> None:
+    """Store-level deletion must remove the store's ``chunks`` and
+    ``documents_fts`` rows too, not only its ``documents`` rows — orphans are
+    invisible to search (the JOIN filters them) but accumulate forever."""
+    from sqlalchemy import text
+
+    repo = substrate.repo
+    await repo.upsert_document(_doc("aaaa", KIND_KNOWLEDGE_BASE, "kb1"))
+    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    await idx.upsert_chunks("aaaa", ["alpha beta", "gamma"], None)
+    assert await repo.count_chunks(KIND_KNOWLEDGE_BASE, "kb1") == 2
+
+    await repo.delete_resource(KIND_KNOWLEDGE_BASE, "kb1")
+
+    assert await repo.count_chunks(KIND_KNOWLEDGE_BASE, "kb1") == 0
+    async with substrate.sm() as session:
+        fts_rows = (
+            await session.execute(
+                text("SELECT count(*) FROM documents_fts WHERE resource_name = 'kb1'")
+            )
+        ).scalar_one()
+    assert fts_rows == 0

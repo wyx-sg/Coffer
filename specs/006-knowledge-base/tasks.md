@@ -17,7 +17,7 @@ The substrate (`coffer.{domain,infrastructure}.knowledge`) is **shared with spec
 ## Phase 2 — Migration & dependencies
 
 - [ ] T-0010 `backend/pyproject.toml` — drop `llama-index-*`, `sentence-transformers`, `chromadb`, `mem0`; add `markitdown`, `sqlite-vec`, `openai`, optional `fastembed`; require `ripgrep`
-- [ ] T-0011 Alembic migration — drop `kb_documents` + `memory_records`; create unified `documents`, `chunks`, `documents_fts` (FTS5 contentless), `vec_chunks` (sqlite-vec); delete old per-corpus dirs on upgrade
+- [ ] T-0011 Alembic migration — drop `kb_documents` + `memory_records`; create unified `documents`, `chunks`, and `documents_fts` (a regular FTS5 table that stores the chunk text once inside its index; still rebuildable from the markdown files); delete old per-corpus dirs on upgrade. The per-store sqlite-vec `vec_chunks` tables are NOT created here — `vec_index.py` creates them lazily at the configured width.
 - [ ] T-0012 Update `migrations/env.py` to import the unified `documents`/`chunks` ORM
 - [ ] T-0013 Extend importlinter contracts 5 & 6; replace the LlamaIndex confinement rule with Contract 7 (no `markitdown`/`docling`/`sqlite_vec`/`openai`/`fastembed` in application/domain)
 
@@ -28,41 +28,41 @@ The substrate (`coffer.{domain,infrastructure}.knowledge`) is **shared with spec
 - [ ] T-0022 (shared) `domain/knowledge/converter.py` — `MarkdownConverter` port
 - [ ] T-0023 (shared) `domain/knowledge/embedder.py` — `Embedder` port + `EmbeddingConfig`
 - [ ] T-0024 (shared) `domain/knowledge/index.py` — `KnowledgeIndex` port
-- [ ] T-0025 Extend `domain/errors.py` — `KBNotFound`, `DocumentNotFound`, `IngestRejected`, `EngineUnavailable`, `ReconversionBlocked`
+- [ ] T-0025 Extend `domain/errors.py` — `KBNotFound`, `DocumentNotFound`, `IngestRejected`, `EngineUnavailable`, `ReconversionBlocked`, `SearchModeInvalid` (re-exported via `domain/knowledge/errors.py`)
 - [ ] T-0026 Unit tests for value objects + config validation
 
 ## Phase 4 — Substrate: infrastructure (engine confinement, shared)
 
 - [ ] T-0030 (shared) `infrastructure/knowledge/paths.py` — `~/.coffer/knowledge/<name>/{docs,raw}` (sole path module)
-- [ ] T-0031 (shared) `infrastructure/knowledge/converters/registry.py` + `passthrough_converter.py`
+- [ ] T-0031 (shared) `infrastructure/knowledge/converters/registry.py` + `passthrough_converter.py` + `csv_converter.py`
 - [ ] T-0032 (shared) `infrastructure/knowledge/converters/markitdown_converter.py` — ONLY importer of `markitdown`
 - [ ] T-0033 (shared) `infrastructure/knowledge/cleaning.py` + `frontmatter.py`
 - [ ] T-0034 (shared) `infrastructure/knowledge/chunking.py` — markdown-aware chunker
-- [ ] T-0035 (shared) `infrastructure/knowledge/sqlite_index.py` — `DocumentModel`, `ChunkModel`, `KnowledgeIndexRepo` (FTS5 + bm25)
-- [ ] T-0036 (shared) `infrastructure/knowledge/vec_index.py` — ONLY importer of `sqlite_vec`
-- [ ] T-0037 (shared) `infrastructure/knowledge/embedders.py` — OpenAI-compatible + `local` fastembed; ONLY importer of `openai`/`fastembed`
+- [ ] T-0035 (shared) `infrastructure/knowledge/models.py` + `ddl.py` + `repository.py` + `sqlite_index.py` — `DocumentModel`, `ChunkModel`, `DocumentRepo`, `SqliteKnowledgeIndex` (FTS5 + bm25)
+- [ ] T-0036 (shared) `infrastructure/knowledge/vec_index.py` — `VecIndex`; ONLY importer of `sqlite_vec`; creates the per-store vec tables lazily
+- [ ] T-0037 (shared) `infrastructure/knowledge/embeddings.py` — OpenAI-compatible + `local` fastembed; ONLY importer of `openai`/`fastembed`
 - [ ] T-0038 (shared) `infrastructure/knowledge/grep.py` — bounded ripgrep wrapper
 - [ ] T-0039 Integration tests: `test_markitdown_real.py` (importorskip), FTS5 roundtrip, sqlite-vec roundtrip (importorskip)
 
 ## Phase 5 — KB application layer
 
-- [ ] T-0040 `application/knowledge_base/config.py` — `KnowledgeBaseConfig` (Pydantic v2; mutable fields)
-- [ ] T-0041 `application/knowledge_base/reindex.py` — the single idempotent re-index routine
-- [ ] T-0042 `application/knowledge_base/service.py` — ingest / list / read / edit / re-upload / reindex / search / grep / delete
+- [ ] T-0040 `domain/knowledge_base/config.py` — `KnowledgeBaseConfig` (Pydantic v2; mutable fields)
+- [ ] T-0041 `application/knowledge/reindex.py` — the single idempotent re-index routine (`Reindexer`, shared with memory) + `application/knowledge/locks.py` (per-store write locks) + `application/knowledge/retrieval.py` (`KnowledgeRetrieval` facade)
+- [ ] T-0042 `application/knowledge_base/service.py` + `pipeline.py` — ingest / list / read / edit / reconvert / re-upload / reindex / search / grep / delete
 - [ ] T-0043 `application/knowledge_base/kind.py` — `make_kb_kind(...)` with on_delete cascade
 - [ ] T-0044 Unit test: `test_kb_service_with_fakes.py` (FakeMarkdownConverter + FakeEmbedder)
 
 ## Phase 6 — Surfaces
 
 - [ ] T-0050 `surfaces/http/knowledge_base/schemas.py` (matches OpenAPI)
-- [ ] T-0051 `surfaces/http/knowledge_base/routes.py` — create/list/get/ingest/docs/edit/delete/reindex/search/grep/metrics
-- [ ] T-0052 `surfaces/cli/knowledge_base_cmd.py` — `coffer kb create/ingest/list-docs/read/search/grep/edit/reindex/set-embedding/delete-doc/delete-kb/describe`
+- [ ] T-0051 `surfaces/http/knowledge_base/routes.py` — create/list/get/ingest/docs/edit/reconvert/delete/reindex/search/grep/metrics
+- [ ] T-0052 `surfaces/cli/knowledge_base_cmd.py` — `coffer kb create/ingest/list-docs/get-doc(read)/search/grep/edit/reconvert/reindex/set-embedding/set-chunking/delete-doc/delete-kb/describe`
 - [ ] T-0053 Integration tests: `test_http_routes.py`, `test_retrieval_modes.py` (grep/keyword/vector + fallback — acceptance), `test_reindex_idempotency.py`, `test_kb_lifecycle.py` (acceptance)
 
 ## Phase 7 — MCP built-in tools (read-only)
 
-- [ ] T-0060 `application/mcp/builtin_tools.py` — register `coffer__list_knowledge_bases`, `coffer__search_knowledge`, `coffer__grep_knowledge`, `coffer__read_document`
-- [ ] T-0061 Update `application/mcp/gateway.py` to route the four `coffer__*_knowledge` tools; keep `coffer` server-name reservation
+- [ ] T-0060 `application/knowledge_base/builtin_tools.py` — register `coffer__list_knowledge_bases`, `coffer__search_knowledge`, `coffer__grep_knowledge`, `coffer__read_document`
+- [ ] T-0061 Update `application/mcp/gateway.py` / `gateway_builtin.py` to route the four `coffer__*_knowledge` tools; keep `coffer` server-name reservation
 - [ ] T-0062 Integration test: `test_mcp_builtin_tools.py` — list/search/grep/read via the gateway; assert no KB write tool exists
 
 ## Phase 8 — Composition root + dependencies

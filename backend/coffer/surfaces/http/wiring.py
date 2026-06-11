@@ -1,11 +1,12 @@
 """Per-kind wiring helpers for the FastAPI composition root (specs 006/007).
 
 Extracted from `app.py` so that file stays under the project's 400-LOC ceiling.
-Each `wire_<kind>` function builds the shared knowledge substrate (unified
-``DocumentRepo``, the ``SqliteKnowledgeIndex`` factory, the converter registry,
-the ``make_embedder`` factory bound to the keychain, ripgrep, the retrieval
-facade + reindexer), constructs the kind's service, registers the kind into
-``app.state.kinds`` and its built-in tools into the shared registry.
+``build_substrate`` constructs the shared knowledge substrate ONCE per process
+(unified ``DocumentRepo``, the ``SqliteKnowledgeIndex`` factory, the converter
+registry, the cached ``make_embedder`` factory bound to the keychain, ripgrep,
+the retrieval facade + reindexer); each `wire_<kind>` function takes it,
+constructs the kind's service, registers the kind into ``app.state.kinds`` and
+its built-in tools into the shared registry.
 """
 
 from __future__ import annotations
@@ -62,30 +63,49 @@ def _sqlite_path(sm: async_sessionmaker[AsyncSession]) -> str | None:
     return str(database)
 
 
-def _build_substrate(
+def build_substrate(
     sm: async_sessionmaker[AsyncSession],
 ) -> tuple[DocumentRepo, KnowledgeRetrieval, Reindexer]:
     """Construct the shared knowledge substrate over one session maker.
 
-    The ``index_factory`` attaches a ``VecIndex`` only when a vector width is
-    requested, so keyword/grep stores never touch sqlite-vec. ``make_embedder``
+    The ``index_factory`` always attaches a ``VecIndex`` (maintenance mode when
+    no width is given) so delete paths reach the vector rows; ``make_embedder``
     is bound to the keychain so cloud providers authenticate via stored creds.
+    Call once per process and share across kinds.
     """
     documents = DocumentRepo(sm)
     keyring = KeyringAdapter()
     db_path = _sqlite_path(sm)
 
     def index_factory(kind: str, resource_name: str, *, dimensions: int | None) -> KnowledgeIndex:
+        # Per-store vector table (named by kind+resource_name): isolates stores
+        # so differing widths coexist and a scoped KNN never leaks across
+        # stores. The vec index is ALWAYS attached (maintenance mode when no
+        # width is given) so delete paths — which know no embedding width —
+        # still reach the store's vector rows.
         vec: VecIndex | None = None
-        if dimensions is not None and db_path is not None:
-            # Per-store vector table (named by kind+resource_name): isolates
-            # stores so differing widths coexist and a scoped KNN never leaks
-            # across stores.
+        if db_path is not None:
             vec = VecIndex(db_path, dimensions, kind=kind, resource_name=resource_name)
         return SqliteKnowledgeIndex(sm, kind=kind, resource_name=resource_name, vec=vec)
 
+    # One embedder per config: rebuilding per call leaked an AsyncOpenAI
+    # (httpx pool) every vector query/write. Keyed by the config's fields
+    # (pydantic models are not hashable).
+    embedder_cache: dict[tuple[object, ...], object] = {}
+
     def embedder_factory(config: EmbeddingConfig) -> object:
-        return make_embedder(config, resolve_credential=keyring.get)
+        key = (
+            config.provider,
+            config.model,
+            config.base_url,
+            config.credential_ref,
+            config.dimensions,
+        )
+        embedder = embedder_cache.get(key)
+        if embedder is None:
+            embedder = make_embedder(config, resolve_credential=keyring.get)
+            embedder_cache[key] = embedder
+        return embedder
 
     retrieval = KnowledgeRetrieval(
         index_factory=index_factory,
@@ -102,9 +122,10 @@ def wire_kb_kind(
     audit: AuditService,
     sm: object,
     builtin_tools: BuiltinToolRegistry,
+    substrate: tuple[DocumentRepo, KnowledgeRetrieval, Reindexer] | None = None,
 ) -> KnowledgeBaseService:
     """Wire the ``knowledge_base`` kind (spec 006) into the app."""
-    documents, retrieval, reindexer = _build_substrate(sm)  # type: ignore[arg-type]
+    documents, retrieval, reindexer = substrate or build_substrate(sm)  # type: ignore[arg-type]
     kb_service = KnowledgeBaseService(
         resource_service=resource_svc,
         documents=documents,
@@ -128,9 +149,10 @@ def wire_memory_kind(
     audit: AuditService,
     sm: object,
     builtin_tools: BuiltinToolRegistry,
+    substrate: tuple[DocumentRepo, KnowledgeRetrieval, Reindexer] | None = None,
 ) -> MemoryService:
     """Wire the ``memory`` kind (spec 007) into the app."""
-    documents, retrieval, reindexer = _build_substrate(sm)  # type: ignore[arg-type]
+    documents, retrieval, reindexer = substrate or build_substrate(sm)  # type: ignore[arg-type]
     reconciler = MemoryReconciler(documents=documents, retrieval=retrieval, reindexer=reindexer)
     project_roots = ProjectRootRepo(sm)  # type: ignore[arg-type]
     set_project_root_repo(project_roots)

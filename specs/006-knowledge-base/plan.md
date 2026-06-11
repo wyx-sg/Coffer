@@ -17,7 +17,7 @@ This redesign **drops LlamaIndex** and the per-corpus persist dirs, and shares i
 | Dimension                                        | Value                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Language / Version**                           | Python 3.12+, TypeScript 5.x                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **Primary Dependencies (added by the redesign)** | `markitdown` (default Markdown converter, behind a `MarkdownConverter` port); `sqlite-vec` (vector index in `coffer.db`); FTS5 (bundled with SQLite); `openai` (one `AsyncOpenAI` client, swappable `base_url`, for embeddings); optional `fastembed` (in-process local embeddings); `ripgrep` binary for grep. Optional per-format: `docling`, `pandoc`. **Removed**: `llama-index-*`, `sentence-transformers`, `chromadb`, `mem0`. |
+| **Primary Dependencies (added by the redesign)** | `markitdown` (default Markdown converter, behind a `MarkdownConverter` port); `sqlite-vec` (vector index in `coffer.db`); FTS5 (bundled with SQLite); `openai` (one `AsyncOpenAI` client, swappable `base_url`, for embeddings); optional `fastembed` (in-process local embeddings); `ripgrep` binary for grep. **Removed**: `llama-index-*`, `sentence-transformers`, `chromadb`, `mem0`. |
 | **Storage**                                      | SQLite at `~/.coffer/coffer.db` (resources / documents / chunks / FTS5 / sqlite-vec / audit); Markdown + raw files under `~/.coffer/knowledge/<name>/`.                                                                                                                                                                                                                                                                              |
 | **Testing**                                      | 4-tier. Acceptance markers tie tests to `spec.md` scenarios. Real SQLite (FTS5 + sqlite-vec) in integration; a `FakeMarkdownConverter` + `FakeEmbedder` keep unit tests pure; one integration test exercises real MarkItDown behind `pytest.importorskip`.                                                                                                                                                                           |
 | **Performance Goals**                            | SC-002: keyword ≤ 200 ms, grep ≤ 500 ms wall-clock at REST on a 50-doc KB.                                                                                                                                                                                                                                                                                                                                                           |
@@ -60,47 +60,56 @@ The substrate (`knowledge`) is shared with spec 007; this plan lists the KB-faci
 ```text
 backend/coffer/
 ├── domain/
-│   ├── errors.py                                # add: KBNotFound, DocumentNotFound, IngestRejected, EngineUnavailable
-│   └── knowledge/                               # (shared) substrate domain
-│       ├── document.py                          # Document entity (kind-discriminated)
-│       ├── retrieval.py                         # Passage, GrepHit, RetrievalMode, SearchResult value objects
-│       ├── converter.py                         # MarkdownConverter port (Protocol)
-│       ├── embedder.py                          # Embedder port (Protocol) + EmbeddingConfig
-│       └── index.py                             # KnowledgeIndex port (chunk / fts / vec ops)
+│   ├── errors.py                                # add: KBNotFound, DocumentNotFound, IngestRejected, EngineUnavailable, ReconversionBlocked, SearchModeInvalid
+│   ├── knowledge/                               # (shared) substrate domain
+│   │   ├── document.py                          # Document entity (kind-discriminated)
+│   │   ├── retrieval.py                         # Passage, GrepHit, GrepResult, MemoryHit, RetrievalMode, SearchResult, StoreRef value objects
+│   │   ├── converter.py                         # MarkdownConverter port (Protocol)
+│   │   ├── embedder.py                          # Embedder port (Protocol) + EmbeddingConfig
+│   │   ├── index.py                             # KnowledgeIndex / GrepPort / RetrievalPort protocols
+│   │   └── errors.py                            # re-exports of the substrate errors (canonical classes in domain/errors.py)
+│   └── knowledge_base/
+│       ├── config.py                            # KnowledgeBaseConfig (Pydantic v2)
+│       └── document.py                          # kb_doc_id (16-hex doc-id helper)
 ├── application/
+│   ├── knowledge/                               # (shared) substrate application layer
+│   │   ├── retrieval.py                         # KnowledgeRetrieval facade (keyword/vector + flagged fallback)
+│   │   ├── reindex.py                           # the single idempotent re-index routine (Reindexer)
+│   │   └── locks.py                             # StoreLocks — per-store write serialization
 │   └── knowledge_base/
 │       ├── kind.py                              # make_kb_kind(...): Kind with on_delete
-│       ├── config.py                            # KnowledgeBaseConfig (Pydantic v2)
-│       ├── service.py                           # KnowledgeBaseService: ingest/list/read/edit/reindex/delete
-│       └── reindex.py                           # the single idempotent re-index routine (shared with memory)
+│       ├── service.py                           # KnowledgeBaseService: list/read/search/grep/metrics + mode validation
+│       ├── pipeline.py / pipeline_helpers.py    # ingest / edit / reconvert / reindex write pipeline
+│       └── builtin_tools.py                     # the 4 read-only coffer__*_knowledge MCP tools
 ├── infrastructure/
 │   └── knowledge/                               # (shared) substrate infra — engine confinement boundary
 │       ├── converters/
-│       │   ├── markitdown_converter.py          # default; ONLY importer of markitdown
+│       │   ├── markitdown_converter.py          # default engine; ONLY importer of markitdown
 │       │   ├── passthrough_converter.py         # md / txt / source code
-│       │   └── registry.py                      # format → converter dispatch
+│       │   ├── csv_converter.py                 # csv → markdown table
+│       │   └── registry.py                      # format → converter dispatch (passthrough → csv → markitdown)
 │       ├── cleaning.py                          # whitespace / control-char / heading normalization
 │       ├── frontmatter.py                       # YAML frontmatter prepend/parse
 │       ├── chunking.py                          # markdown-aware chunker
-│       ├── sqlite_index.py                      # documents + chunks + FTS5 (bm25) repo
-│       ├── vec_index.py                         # ONLY importer of sqlite_vec
-│       ├── embedders.py                         # OpenAI-compatible + local fastembed; ONLY importer of openai/fastembed
-│       ├── grep.py                              # ripgrep subprocess wrapper (bounded)
+│       ├── models.py / ddl.py / ids.py          # ORM models, documents_fts DDL hook, id helpers
+│       ├── repository.py                        # DocumentRepo (document-row CRUD)
+│       ├── sqlite_index.py                      # SqliteKnowledgeIndex — chunks + FTS5 (bm25)
+│       ├── vec_index.py                         # VecIndex; ONLY importer of sqlite_vec (lazy per-store vec tables)
+│       ├── embeddings.py                        # OpenAI-compatible + local fastembed; ONLY importer of openai/fastembed
+│       ├── grep.py                              # ripgrep subprocess wrapper (bounded; truncated flag)
 │       └── paths.py                             # ~/.coffer/knowledge/<name>/{docs,raw} layout helpers
-├── application/mcp/
-│   └── builtin_tools.py                         # add 4 read-only coffer__*_knowledge tools
 └── surfaces/
     ├── http/knowledge_base/
-    │   ├── routes.py                            # /api/v1/knowledge_bases/* (create/list/get/ingest/docs/edit/delete/reindex/search/grep/metrics)
+    │   ├── routes.py                            # /api/v1/knowledge_bases/* (create/list/get/ingest/docs/edit/reconvert/delete/reindex/search/grep/metrics)
     │   └── schemas.py
-    └── cli/knowledge_base_cmd.py                # coffer kb create/ingest/list-docs/read/edit/reindex/search/grep/delete-doc/delete-kb/describe
+    └── cli/knowledge_base_cmd.py                # coffer kb create/ingest/list-docs/get-doc(read)/edit/reconvert/reindex/search/grep/set-embedding/set-chunking/delete-doc/delete-kb/describe
 ```
 
 Existing files modified (intersection with spec 007 — land in the same redesign PR):
 
 - `backend/coffer/surfaces/http/app.py` — wire the KB kind + routers in lifespan.
 - `backend/coffer/surfaces/cli/main.py` — `app.add_typer(knowledge_base_cmd.app, name="kb")`.
-- `backend/coffer/application/mcp/gateway.py` — route the four `coffer__*_knowledge` tools to the built-in handler.
+- `backend/coffer/application/mcp/gateway.py` + `gateway_builtin.py` — route the four `coffer__*_knowledge` tools (registered by `application/knowledge_base/builtin_tools.py`) to the built-in handler.
 - `backend/coffer/infrastructure/persistence/migrations/env.py` — import the unified `documents`/`chunks` ORM.
 - `backend/pyproject.toml` — swap deps (drop LlamaIndex/chroma/mem0, add markitdown/sqlite-vec/openai/fastembed) + new importlinter contracts.
 - `frontend/src/kinds.ts` — register `KNOWLEDGE_BASE_KIND_UI`.
@@ -153,7 +162,7 @@ Order: domain value objects + ports → migration (`documents`/`chunks`/FTS5/sql
 
 ## Phase 3 — KB application + surfaces (TDD)
 
-For each acceptance scenario: failing test in the right tier with the acceptance marker → minimal code → small commit. Order: `KnowledgeBaseConfig` → `KnowledgeBaseService` → `make_kb_kind` (on_delete) → HTTP routes → CLI → the four built-in MCP tools → composition-root wiring.
+For each acceptance scenario: failing test in the right tier with the acceptance marker → minimal code → small commit. Order: `KnowledgeBaseConfig` → `KnowledgeBaseService` + the ingest/edit/reconvert pipeline → `make_kb_kind` (on_delete) → HTTP routes (incl. `reconvert`) → CLI → the four built-in MCP tools → composition-root wiring.
 
 ## Phase 4 — Frontend
 
@@ -174,10 +183,10 @@ For each acceptance scenario: failing test in the right tier with the acceptance
 
 | Risk                                                                 | Mitigation                                                                                                                                                                                 |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| MarkItDown vs Docling fidelity for PDFs (design §6.2, §14 open item) | Converter behind a port + per-format registry; a future swap touches `infrastructure/knowledge/converters/` only. Default MarkItDown; Docling pluggable for PDF when present.              |
-| sqlite-vec packaging/loading on macOS arm64 + Linux (design §14)     | `vec_index.py` is the only loader; integration test guards with `pytest.importorskip`; vector mode is opt-in so a load failure degrades to keyword (FR-012), it does not block the daemon. |
+| MarkItDown conversion fidelity for PDFs (open item)                | Converter behind a port + per-format registry; a future swap or a higher-fidelity per-format engine is a new converter under `infrastructure/knowledge/converters/` only.              |
+| sqlite-vec packaging/loading on macOS arm64 + Linux                   | `vec_index.py` is the only loader; integration test guards with `pytest.importorskip`; vector mode is opt-in so a load failure degrades to keyword (FR-012), it does not block the daemon. |
 | Embedding API cost/latency/availability                              | Default is keyword+grep (no embedding). Vector requested without config falls back to keyword, flagged. Outbound calls go through the SSRF-guarded client with a timeout.                  |
-| Local embedding model quality for Chinese (design §9, §14)           | Recommend `bge-m3` (fastembed) or a cloud provider for bilingual corpora; documented in quickstart.                                                                                        |
+| Local embedding model quality for Chinese                             | Recommend `bge-m3` (fastembed) or a cloud provider for bilingual corpora; documented in quickstart.                                                                                        |
 | Converter library missing at runtime                                 | Per-format `EngineUnavailable` naming the missing dep; other formats still ingest; daemon stays up.                                                                                        |
 | Re-chunk/re-embed cost when params change                            | Files are the source of truth, so the single reindex routine re-derives cheaply; `content_sha256` no-op skips unchanged docs.                                                              |
 

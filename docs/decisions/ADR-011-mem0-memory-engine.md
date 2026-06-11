@@ -3,15 +3,14 @@
 **Status**: Superseded by [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-013](ADR-013-agent-native-shared-memory.md)
 **Date**: 2026-05-29
 **Deciders**: Yuxing Wu
-**Related**: spec `007-memory` (FR-011, FR-012, FR-014, SC-006, research.md §1 §2), [ADR-002](ADR-002-code-layout-layer-first.md), [ADR-008](ADR-008-everything-is-a-resource-kind.md), [ADR-010](ADR-010-llamaindex-rag-engine.md)
+**Related**: spec `007-memory` (redesigned), [ADR-002](ADR-002-code-layout-layer-first.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-010](ADR-010-llamaindex-rag-engine.md)
 
-> \*\*Superseded (2026-06-09) by [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)
->
-> - [ADR-013](ADR-013-agent-native-shared-memory.md).\*\* The KB/memory redesign
->   drops mem0 (no LLM at write time; the agent writes clean facts itself) in favour
->   of per-fact markdown as truth indexed by SQLite FTS5 + sqlite-vec (ADR-012), and
->   makes memory a single canonical store shared across agents via MCP + native
->   projection (ADR-013). The content below is retained for historical context only.
+> **Superseded (2026-06-09) by [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)
+> and [ADR-013](ADR-013-agent-native-shared-memory.md).** The KB/memory redesign
+> drops mem0 (no LLM at write time; the agent writes clean facts itself) in favour
+> of per-fact markdown as truth indexed by SQLite FTS5 + sqlite-vec (ADR-012), and
+> makes memory a single canonical store shared across agents via MCP + native
+> projection (ADR-013). The content below is retained for historical context only.
 
 ## Context
 

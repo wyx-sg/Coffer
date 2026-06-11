@@ -15,6 +15,7 @@ export const memoryStoreConfigSchema = z.object({
   embedding_model: z.string().nullable().optional(),
   embedding_base_url: z.string().nullable().optional(),
   embedding_credential_ref: z.string().nullable().optional(),
+  embedding_dimensions: z.number().int().min(1).max(8192).default(768),
   max_fact_chars: z.number().int().min(64).max(32768).default(8192),
 });
 

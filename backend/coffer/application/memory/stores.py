@@ -13,7 +13,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from coffer.application.memory.scope import GLOBAL_STORE_NAME, project_store_name
+from coffer.application.memory.scope import (
+    GLOBAL_STORE_NAME,
+    is_valid_store_name,
+    project_store_name,
+)
+from coffer.domain.errors import MemoryStoreNotFound
 from coffer.domain.knowledge.document import KIND_MEMORY
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.memory.scope import MemoryScope, ResolvedScope
@@ -46,6 +51,10 @@ def project_resolved_for_store(store_name: str, store_dir: StoreDirFn) -> Resolv
     """Recover a project ``ResolvedScope`` from its store name (``project-<ulid>``
     encodes the ULID). The global store is resolved via the ``ScopeResolver``
     instead, because it provisions on first access."""
+    if store_name == GLOBAL_STORE_NAME or not is_valid_store_name(store_name):
+        # Never strip a prefix that is not there — a mangled name would resolve
+        # to a bogus on-disk dir.
+        raise MemoryStoreNotFound(store_name)
     project_id = store_name[len("project-") :]
     return ResolvedScope(
         scope=MemoryScope.PROJECT,

@@ -57,6 +57,36 @@ class FakeEmbedder:
         return out
 
 
+class FakeVecIndex:
+    """In-memory vector index (stands in for sqlite-vec in tests)."""
+
+    def __init__(self) -> None:
+        self._rows: dict[str, list[float]] = {}
+        self.dropped = False
+
+    def available(self) -> bool:
+        return True
+
+    async def upsert(self, rows) -> None:  # type: ignore[no-untyped-def]
+        for chunk_id, vector in rows:
+            self._rows[chunk_id] = list(vector)
+
+    async def delete(self, chunk_ids) -> None:  # type: ignore[no-untyped-def]
+        for cid in chunk_ids:
+            self._rows.pop(cid, None)
+
+    async def drop(self) -> None:
+        self._rows.clear()
+        self.dropped = True
+
+    async def knn(self, vector, top_k):  # type: ignore[no-untyped-def]
+        def _dist(v: list[float]) -> float:
+            return sum((a - b) ** 2 for a, b in zip(vector, v, strict=False))
+
+        ranked = sorted(((cid, _dist(v)) for cid, v in self._rows.items()), key=lambda r: r[1])
+        return ranked[:top_k]
+
+
 def _embedder_factory(config: EmbeddingConfig) -> FakeEmbedder:
     return FakeEmbedder(config.dimensions)
 
@@ -68,6 +98,7 @@ class MemHarness:
     documents: DocumentRepo
     audit: AuditService
     project_cwd: str  # a cwd the fake git-root resolves as a project
+    vec_stores: dict[tuple[str, str], FakeVecIndex] | None = None
 
 
 @pytest_asyncio.fixture
@@ -82,8 +113,13 @@ async def mem(tmp_path: pathlib.Path, monkeypatch):
     documents = DocumentRepo(sm)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
 
+    vec_stores: dict[tuple[str, str], FakeVecIndex] = {}
+
     def index_factory(kind: str, resource_name: str, *, dimensions):  # type: ignore[no-untyped-def]
-        return SqliteKnowledgeIndex(sm, kind=kind, resource_name=resource_name)
+        # Mirrors production wiring: the vec index is ALWAYS attached so delete
+        # paths (which know no embedding width) reach the vector rows too.
+        vec = vec_stores.setdefault((kind, resource_name), FakeVecIndex())
+        return SqliteKnowledgeIndex(sm, kind=kind, resource_name=resource_name, vec=vec)
 
     retrieval = KnowledgeRetrieval(
         index_factory=index_factory,
@@ -129,6 +165,7 @@ async def mem(tmp_path: pathlib.Path, monkeypatch):
             documents=documents,
             audit=audit,
             project_cwd=str(project_root / "src"),
+            vec_stores=vec_stores,
         )
     finally:
         await engine.dispose()

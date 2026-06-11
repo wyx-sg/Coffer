@@ -13,9 +13,14 @@ from dataclasses import dataclass
 from typing import Literal
 
 from coffer.application.knowledge.retrieval import KnowledgeRetrieval
+from coffer.application.memory.ports import MemoryDocumentRepo
 from coffer.application.memory.scope import GLOBAL_STORE_NAME
-from coffer.application.memory.service_helpers import to_memory_hits
+from coffer.application.memory.service_helpers import (
+    grep_hits_to_memory_hits,
+    passages_to_hits,
+)
 from coffer.application.memory.sync import MemoryReconciler
+from coffer.domain.knowledge.document import KIND_MEMORY
 from coffer.domain.knowledge.retrieval import MemoryHit, RetrievalMode, StoreRef
 from coffer.domain.memory.config import MemoryStoreConfig
 from coffer.domain.memory.scope import ResolvedScope
@@ -32,17 +37,26 @@ StoreRefFn = Callable[[str, str], StoreRef]
 #: ``global`` → also fold in the global store.
 RecallScope = Literal["global", "project", "both"]
 
+#: Reciprocal-rank-fusion constant (the standard k=60 from the RRF paper).
+_RRF_K = 60
 
-def _passage_mode(chosen: RetrievalMode) -> RetrievalMode:
-    """Coerce a chosen store mode to one the passage engine can serve.
 
-    Memory recall only ever serves passage modes — ``grep`` is a KB-only
-    line-scanning mode that the passage engine cannot satisfy (it raises
-    ``ValueError("grep is not a passage mode")``). The store config can still
-    list ``grep`` (its default ``retrieval_modes`` is ``["grep", "keyword"]``),
-    so we map it to ``keyword`` at the recall boundary rather than letting a dead
-    mode reach ``retrieval.search`` (finding #1/#23)."""
-    return "keyword" if chosen == "grep" else chosen
+def merge_ranked(groups: list[list[MemoryHit]], top_k: int) -> list[MemoryHit]:
+    """Merge per-store hit lists by reciprocal rank fusion.
+
+    Raw scores across stores are NOT comparable — flipped bm25 keyword scores
+    are unbounded, vector scores are ≤1 and grep hits carry a flat score — so a
+    raw-score sort lets one mode always dominate. RRF ranks by per-store
+    position instead. Each hit keeps its original (per-store) score on the
+    wire; only the merged ORDER comes from the fusion."""
+    fused: dict[str, float] = {}
+    by_id: dict[str, MemoryHit] = {}
+    for group in groups:
+        for rank, hit in enumerate(group):
+            fused[hit.id] = fused.get(hit.id, 0.0) + 1.0 / (_RRF_K + rank + 1)
+            by_id.setdefault(hit.id, hit)
+    ordered = sorted(by_id.values(), key=lambda h: fused[h.id], reverse=True)
+    return ordered[:top_k]
 
 
 @dataclass(frozen=True)
@@ -52,9 +66,33 @@ class RecallDeps:
 
     reconciler: MemoryReconciler
     retrieval: KnowledgeRetrieval
+    documents: MemoryDocumentRepo
     get_config: ConfigFn
     store_name_for: StoreNameFn
     store_ref: StoreRefFn
+
+
+async def recall_spanning(
+    deps: RecallDeps,
+    *,
+    resolver: object,
+    cwd: str | None,
+    query: str,
+    scope: object | None = None,
+    top_k: int = 5,
+    mode: RetrievalMode | None = None,
+) -> tuple[list[MemoryHit], bool]:
+    """Lazy reindex-on-read recall, spanning project + global by default.
+
+    Returns ``(hits, fallback)`` — ``fallback`` is True when any store degraded
+    a vector request to keyword (no embedding configured)."""
+    if scope is None:
+        resolved_scopes = await resolver.resolve_recall_scopes(cwd=cwd)  # type: ignore[attr-defined]
+    else:
+        resolved_scopes = [await resolver.resolve(scope=scope, cwd=cwd)]  # type: ignore[attr-defined]
+    return await recall_across(
+        deps, resolved_scopes=resolved_scopes, query=query, top_k=top_k, mode=mode
+    )
 
 
 async def recall_across(
@@ -64,26 +102,29 @@ async def recall_across(
     query: str,
     top_k: int,
     mode: RetrievalMode | None,
-) -> list[MemoryHit]:
-    """Recall across several resolved scopes (project + global), merging hits."""
-    hits: list[MemoryHit] = []
+) -> tuple[list[MemoryHit], bool]:
+    """Recall across several resolved scopes (project + global), merging hits.
+
+    Returns ``(hits, fallback)`` — ``fallback`` is True when ANY store degraded
+    a vector request to keyword, so the MCP tool can report it like the REST
+    face does."""
+    groups: list[list[MemoryHit]] = []
+    fallback = False
     for resolved in resolved_scopes:
         store_name = deps.store_name_for(resolved)
         config = await deps.get_config(store_name)
-        hits.extend(
-            await recall_one_store(
-                reconciler=deps.reconciler,
-                retrieval=deps.retrieval,
-                store_ref=deps.store_ref(store_name, resolved.project_id),
-                resolved=resolved,
-                config=config,
-                query=query,
-                top_k=top_k,
-                mode=mode,
-            )
+        store_hits, _mode, store_fallback = await recall_store_with_mode(
+            deps,
+            store_ref=deps.store_ref(store_name, resolved.project_id),
+            resolved=resolved,
+            config=config,
+            query=query,
+            top_k=top_k,
+            mode=mode,
         )
-    hits.sort(key=lambda h: h.score, reverse=True)
-    return hits[:top_k]
+        groups.append(store_hits)
+        fallback = fallback or store_fallback
+    return merge_ranked(groups, top_k), fallback
 
 
 #: One extra store to fold into a store-scoped recall (e.g. the global store
@@ -109,8 +150,7 @@ async def recall_single(
     contribute hits that are merged + re-ranked, so the store-scoped REST recall
     honours ``RecallRequest.scope`` (finding #5)."""
     hits, effective_mode, fallback = await recall_store_with_mode(
-        reconciler=deps.reconciler,
-        retrieval=deps.retrieval,
+        deps,
         store_ref=deps.store_ref(store_name, resolved.project_id),
         resolved=resolved,
         config=config,
@@ -118,22 +158,20 @@ async def recall_single(
         top_k=top_k,
         mode=mode,
     )
-    merged = list(hits)
+    groups: list[list[MemoryHit]] = [list(hits)]
     for extra_resolved, extra_name, extra_config in extra_stores or []:
-        merged.extend(
-            await recall_one_store(
-                reconciler=deps.reconciler,
-                retrieval=deps.retrieval,
-                store_ref=deps.store_ref(extra_name, extra_resolved.project_id),
-                resolved=extra_resolved,
-                config=extra_config,
-                query=query,
-                top_k=top_k,
-                mode=mode,
-            )
+        extra_hits, _mode, extra_fallback = await recall_store_with_mode(
+            deps,
+            store_ref=deps.store_ref(extra_name, extra_resolved.project_id),
+            resolved=extra_resolved,
+            config=extra_config,
+            query=query,
+            top_k=top_k,
+            mode=mode,
         )
-    merged.sort(key=lambda h: h.score, reverse=True)
-    return merged[:top_k], effective_mode, fallback
+        groups.append(extra_hits)
+        fallback = fallback or extra_fallback
+    return merge_ranked(groups, top_k), effective_mode, fallback
 
 
 #: ``store_name -> ResolvedScope`` (recovers a store's scope + on-disk dir).
@@ -174,44 +212,9 @@ async def recall_in_store_scoped(
     )
 
 
-async def recall_one_store(
-    *,
-    reconciler: MemoryReconciler,
-    retrieval: KnowledgeRetrieval,
-    store_ref: StoreRef,
-    resolved: ResolvedScope,
-    config: MemoryStoreConfig,
-    query: str,
-    top_k: int,
-    mode: RetrievalMode | None,
-) -> list[MemoryHit]:
-    """Reconcile + search one resolved store, returning its hits.
-
-    Used by the multi-scope ``recall`` path, which fans this out across the
-    project + global stores and merges the results."""
-    # Lazy reindex: pick up out-of-band deltas before searching.
-    embedding = config.to_embedding_config() if config.vector_enabled else None
-    await reconciler.reconcile(store=store_ref, embedding=embedding)
-    chosen = mode or config.default_mode
-    if chosen not in config.retrieval_modes:
-        chosen = config.default_mode
-    # Memory recall serves only passage modes; a configured/requested ``grep``
-    # maps to ``keyword`` so a store whose ``default_mode`` is ``grep`` never
-    # raises ``ValueError("grep is not a passage mode")`` (finding #1).
-    result = await retrieval.search(
-        store_ref,
-        query,
-        mode=_passage_mode(chosen),
-        top_k=top_k,
-        embedding=config.to_embedding_config(),
-    )
-    return to_memory_hits(result.passages, resolved)
-
-
 async def recall_store_with_mode(
+    deps: RecallDeps,
     *,
-    reconciler: MemoryReconciler,
-    retrieval: KnowledgeRetrieval,
     store_ref: StoreRef,
     resolved: ResolvedScope,
     config: MemoryStoreConfig,
@@ -221,11 +224,13 @@ async def recall_store_with_mode(
 ) -> tuple[list[MemoryHit], RetrievalMode, bool]:
     """Reconcile + search one store, reporting the effective mode + fallback.
 
-    Returns ``(hits, effective_mode, fallback)`` so the store-scoped REST face
-    can report the mode actually used and whether a vector request degraded to
-    keyword (no embedding configured) — never raising for the degrade path."""
+    Returns ``(hits, effective_mode, fallback)`` so every face can report the
+    mode actually used and whether a vector request degraded to keyword (no
+    embedding configured) — never raising for the degrade path. ``grep`` is
+    served for real: ripgrep over the store's fact files (FR-008) — essential
+    for content FTS5 cannot tokenize (e.g. CJK)."""
     embedding = config.to_embedding_config() if config.vector_enabled else None
-    await reconciler.reconcile(store=store_ref, embedding=embedding)
+    await deps.reconciler.reconcile(store=store_ref, embedding=embedding)
     chosen = mode or config.default_mode
     # A ``vector`` request the store cannot serve (vector not enabled / no
     # embedding configured) degrades to keyword and is flagged — never an
@@ -234,14 +239,26 @@ async def recall_store_with_mode(
     degraded = mode == "vector" and not config.vector_enabled
     if chosen not in config.retrieval_modes:
         chosen = config.default_mode
-    result = await retrieval.search(
+    if degraded and chosen == "vector":
+        chosen = "keyword"
+
+    if chosen == "grep":
+        grep_result = await deps.retrieval.grep(store_ref, query, max_matches=top_k)
+        grep_hits = grep_hits_to_memory_hits(grep_result.hits, resolved)
+        return grep_hits, "grep", False
+
+    result = await deps.retrieval.search(
         store_ref,
         query,
-        mode=_passage_mode(chosen),
+        mode=chosen,
         top_k=top_k,
         embedding=config.to_embedding_config(),
     )
-    hits = to_memory_hits(result.passages, resolved)
+
+    async def _get_doc(fact_id: str):  # type: ignore[no-untyped-def]
+        return await deps.documents.get_document(KIND_MEMORY, store_ref.resource_name, fact_id)
+
+    hits = await passages_to_hits(result.passages, resolved, _get_doc)
     fallback = degraded or (result.fallback is not None)
     effective_mode: RetrievalMode = "keyword" if degraded else result.mode
     return hits, effective_mode, fallback

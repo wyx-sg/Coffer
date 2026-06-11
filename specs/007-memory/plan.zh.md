@@ -35,46 +35,52 @@ memory 是与 knowledge base（spec 006）共用同一套统一知识底座的 *
 ```text
 backend/coffer/
 ├── domain/
+│   ├── errors.py                        # 规范错误层级：MemoryStoreNotFound、MemoryNotFound、MemoryRejected、ScopeUnresolved、...
 │   ├── knowledge/                       # 共享底座（KB + memory）—— 见 spec 006
-│   │   ├── document.py                  # Document、Chunk、Hit 值对象
-│   │   ├── retrieval.py                 # RetrievalPort、RetrievalMode (grep|keyword|vector)
-│   │   └── errors.py                    # MemoryNotFound、MemoryRejected、ScopeUnresolved、...
+│   │   ├── document.py                  # Document 实体（按 kind 区分）
+│   │   ├── retrieval.py                 # StoreRef、Passage、GrepHit/GrepResult、MemoryHit、SearchResult、RetrievalMode
+│   │   ├── index.py                     # KnowledgeIndex / GrepPort / RetrievalPort 协议
+│   │   └── errors.py                    # 底座错误的再导出（规范类在 domain/errors.py）
 │   └── memory/
-│       ├── config.py                    # MemoryStoreConfig（检索模式、embedding、max_fact_chars）
+│       ├── config.py                    # MemoryStoreConfig（检索模式、扁平 embedding 字段、max_fact_chars）
 │       ├── fact.py                      # MemoryFact（frontmatter + 正文）值对象
-│       └── scope.py                     # MemoryScope (GLOBAL | PROJECT) + 解析结果
+│       └── scope.py                     # MemoryScope (GLOBAL | PROJECT) + ResolvedScope
 ├── application/
-│   ├── knowledge/                       # 共享索引/检索 service（spec 006）
-│   └── memory/
-│       ├── kind.py                      # make_memory_kind(...)
-│       ├── service.py                   # remember/recall/update/forget/list/clear + MEMORY.md 重生
-│       ├── scope_resolver.py            # cwd → git-root → 项目 ULID → store（惰性置备）
-│       └── projection.py                # 投影引擎：按 AgentMemoryAdapter.projection_mode 分派
+│   ├── knowledge/                       # 共享底座 application 层（spec 006）
+│   │   ├── retrieval.py                 # KnowledgeRetrieval 门面（keyword/vector + 带标注回退）
+│   │   ├── reindex.py                   # 单一幂等 re-index 例程（Reindexer）
+│   │   └── locks.py                     # StoreLocks —— 逐 store 写串行化
+│   ├── memory/
+│   │   ├── kind.py                      # make_memory_kind(...)
+│   │   ├── service.py / service_helpers.py  # remember/recall/update/forget/list/clear + MEMORY.md 重生
+│   │   ├── writes.py / queries.py       # 事实写/读路径
+│   │   ├── recall.py                    # recall 编排 + 倒数排名融合（RRF）合并
+│   │   ├── scope.py                     # ScopeResolver：cwd → git-root → 项目 ULID → store（惰性置备）；store 名校验
+│   │   ├── stores.py                    # store 名 ↔ ResolvedScope 辅助
+│   │   ├── sync.py                      # MemoryReconciler —— 读时惰性 reindex
+│   │   └── builtin_tools.py             # 五个 coffer__* memory MCP 工具
+│   └── agent/projection/                # 投影随 agent driver，而非 memory kind
+│       ├── adapters.py                  # AgentMemoryAdapter 实现（Claude SYMLINK + CLAUDE.md RENDER；Codex RENDER + 禁用 `memories`）
+│       ├── engine.py                    # 按 projection_mode 分派；受管块幂等渲染
+│       └── types.py
 ├── infrastructure/
-│   ├── knowledge/                       # FTS5 + sqlite-vec + embedding provider + converter（spec 006）
-│   │   ├── index.py                     # documents/chunks/FTS5/vec 仓储（唯一 import 索引引擎处）
-│   │   └── embeddings/                  # OpenAI 兼容 provider + fastembed 本地
+│   ├── knowledge/                       # 共享底座 infra（spec 006）：repository.py、sqlite_index.py、
+│   │   …                                # vec_index.py（唯一 sqlite_vec importer）、embeddings.py、grep.py、
+│   │                                    # chunking.py、cleaning.py、frontmatter.py、paths.py、converters/
 │   └── memory/
 │       ├── files.py                     # 每条事实 .md 读写、MEMORY.md 渲染、目录扫描（增量）
-│       └── paths.py                     # ~/.coffer/memory/{global,projects/<ulid>}
+│       ├── paths.py                     # ~/.coffer/memory/{global,projects/<ulid>}
+│       ├── scope_fs.py                  # 文件系统作用域辅助
+│       └── project_root_repo.py         # 投影所需的 project-root 持久化
 └── surfaces/
-    ├── http/memory/                     # /api/v1/memory_stores/*
+    ├── http/memory/                     # /api/v1/memory_stores/*（facts、recall）
+    ├── http/projection_routes.py        # /api/v1/memory_stores/{name}/projections（+ projection_service.py / projection_wiring.py）
     └── cli/memory_cmd.py                # `coffer memory ...`
-```
-
-agent 侧投影 adapter 随 **agent driver**（而非 memory kind）：
-
-```text
-backend/coffer/.../agents/
-└── adapters/
-    ├── base.py                          # AgentMemoryAdapter 协议
-    ├── claude.py                        # SYMLINK；~/.claude/projects/<slug>/memory/
-    └── codex.py                         # RENDER managed block；禁用原生 `memories`
 ```
 
 修改的既有文件：
 
-- `application/mcp/builtin_tools.py` —— 在 KB 工具旁加这五个 memory 工具。
+- `application/mcp/gateway.py` / `gateway_builtin.py` —— 把五个 memory 工具（由 `application/memory/builtin_tools.py` 注册）与 KB 工具一起路由。
 - `surfaces/http/app.py` —— `_wire_memory_kind(...)`。
 - `surfaces/cli/main.py` —— `app.add_typer(memory_cmd.app, name="memory")`。
 - `infrastructure/persistence/migrations/` —— 一个 revision：删除 `memory_records`、删掉 chroma/LlamaIndex 目录、创建统一 schema。
@@ -84,12 +90,15 @@ backend/coffer/.../agents/
 ## Frontend
 
 ```text
+frontend/src/pages/MemoryPage.tsx        # store 表格（自动置备；没有「New store」操作）
 frontend/src/kinds/memory/
-├── index.tsx                # MEMORY_KIND_UI
-├── MemoryStoreDetailPage.tsx  # 作用域标签页（Global | Project）
-├── FactList.tsx             # DataTable（name、description、type、actor、updated）
-├── FactEditor.tsx           # 添加 / 就地编辑（markdown 正文 + name/description/type）
-├── RecallBox.tsx            # 带模式选择的搜索（默认 keyword）
+├── index.tsx                            # MEMORY_KIND_UI
+├── MemoryStoreDetailPage.tsx            # 逐 store 详情页（路由 /memory/:name）
+├── MemoryFactList.tsx                   # DataTable（name、description、type、actor、updated）
+├── MemoryAddFactForm.tsx                # 添加 / 编辑（markdown 正文 + name/description/type）
+├── MemoryRecallPanel.tsx                # 带模式选择的 recall 框（默认 keyword）
+├── MemoryMetricsHeader.tsx              # 事实条数 + 磁盘字节
+├── api.ts / types.ts
 └── schema.ts
 ```
 
@@ -130,7 +139,7 @@ frontend/src/kinds/memory/
 
 | 风险                                                 | 缓解                                                                                                |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| MCP shim cwd 在某些 agent 上不传播（作用域解析失败） | 设计文档 open item #1；实现期在 Claude/Codex 上验证。无法解析时回退到 `scope=global` 并给清晰错误。 |
+| MCP shim cwd 在某些 agent 上不传播（作用域解析失败） | 设计文档 open item #1；实现期在 Claude/Codex 上验证。无法解析的 project 作用域被以 `ScopeUnresolved` **拒绝**（清晰错误；不写任何东西）；`scope=global` 仍可用。 |
 | Claude 带外改写 `MEMORY.md` 或事实文件               | `MEMORY.md` 是幂等重生的派生索引；lazy reindex-on-read 按内容哈希对账事实增量 —— 无需 watcher。     |
 | 首次投影会丢失已存在的原生记忆文件                   | adapter 先把已存在文件合并进规范化，再 symlink；绝不覆盖（FR-012）。                                |
 | sqlite-vec 在 macOS arm64 / Linux 上打包/加载        | open item #4；默认检索是 keyword+grep（无需原生扩展）；vector 为可选项，扩展缺失时优雅降级。        |

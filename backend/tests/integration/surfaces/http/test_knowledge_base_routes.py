@@ -1,10 +1,10 @@
 """HTTP-level tests for /api/v1/knowledge_bases/* — error envelope + route logic.
 
-The KB lifecycle is covered against a fake store in test_kb_lifecycle.py.
-This file pins the *route* layer: the standard {error:{code,message,details}}
-envelope, status codes, and the upload size guard. It deliberately avoids
-the ingest/search success paths so the real LlamaIndex engine is never
-loaded — every case here is rejected before the store is touched.
+Pins the *route* layer: the standard {error:{code,message,details}} envelope,
+status codes, the upload size guard, and one full real-substrate document flow
+(ingest → get → edit → reconvert → reindex → grep → delete). Shape-only cases
+use dependency-override fakes so they stay fast; the flow test runs the real
+SQLite/FTS5 + file substrate.
 """
 
 import pytest
@@ -410,3 +410,26 @@ def test_document_flow_ingest_get_edit_reconvert_reindex_grep(tmp_path, monkeypa
         d = c.delete(f"/api/v1/knowledge_bases/kb/documents/{doc_id}", headers=_HEADERS)
         assert d.status_code == 204
         assert c.get("/api/v1/knowledge_bases/kb/documents", headers=_HEADERS).json()["total"] == 0
+
+
+def test_document_chunk_count_is_real(tmp_path, monkeypatch):
+    """``chunk_count`` must carry the document's actual chunk-row count on the
+    ingest, list and detail responses — not a hardwired 0 (review finding)."""
+    app = _app(tmp_path, monkeypatch, 59530)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        _create_kb(c, "kb")
+        ing = c.post(
+            "/api/v1/knowledge_bases/kb/documents",
+            files={"file": ("a.md", b"# A\n\nchunky content body\n", "text/markdown")},
+            headers=_HEADERS,
+        )
+        assert ing.status_code == 201, ing.text
+        assert ing.json()["chunk_count"] >= 1
+        doc_id = ing.json()["id"]
+
+        listed = c.get("/api/v1/knowledge_bases/kb/documents", headers=_HEADERS).json()
+        assert listed["documents"][0]["chunk_count"] >= 1
+
+        detail = c.get(f"/api/v1/knowledge_bases/kb/documents/{doc_id}", headers=_HEADERS).json()
+        assert detail["chunk_count"] >= 1

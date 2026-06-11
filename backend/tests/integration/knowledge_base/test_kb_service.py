@@ -107,10 +107,11 @@ async def test_keyword_search_ranks(kb) -> None:
 async def test_grep_returns_hits(kb) -> None:
     await kb.create_kb("kb1")
     await _ingest(kb, "kb1", "a.md", b"# Make\n\nthe make release target ships it")
-    hits = await kb.service.grep(kb_name="kb1", pattern="make release")
-    assert len(hits) >= 1
-    assert any("make release" in h.line for h in hits)
-    assert all(h.line_number >= 1 for h in hits)
+    result = await kb.service.grep(kb_name="kb1", pattern="make release")
+    assert len(result.hits) >= 1
+    assert any("make release" in h.line for h in result.hits)
+    assert all(h.line_number >= 1 for h in result.hits)
+    assert result.truncated is False
 
 
 @pytest.mark.acceptance(spec="006-knowledge-base", scenario="vector search returns ranked passages")
@@ -234,6 +235,35 @@ async def test_delete_kb_cleans_up(kb) -> None:
 
 
 @pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="delete a knowledge base cleans up files and index"
+)
+async def test_delete_kb_purges_index_rows_and_vec_store(kb, vector_config) -> None:
+    """SC-003: deleting a KB removes 100% of its SQLite rows — chunks and FTS
+    rows too, and the per-store vector table is dropped."""
+    from sqlalchemy import text
+
+    from coffer.domain.resource import ResourceRef
+
+    await kb.create_kb("kb1", config=vector_config)
+    await _ingest(kb, "kb1", "a.md", b"# A\n\nhello vector world")
+    assert await kb.documents.count_chunks("knowledge_base", "kb1") >= 1
+
+    await kb.resources.delete(ResourceRef("knowledge_base", "kb1"), actor="user")
+
+    assert await kb.documents.count_documents("knowledge_base", "kb1") == 0
+    assert await kb.documents.count_chunks("knowledge_base", "kb1") == 0
+    async with kb.sm() as session:
+        fts_rows = (
+            await session.execute(
+                text("SELECT count(*) FROM documents_fts WHERE resource_name = 'kb1'")
+            )
+        ).scalar_one()
+    assert fts_rows == 0
+    vec = kb.vec_stores.get(("knowledge_base", "kb1"))
+    assert vec is not None and vec.dropped
+
+
+@pytest.mark.acceptance(
     spec="006-knowledge-base", scenario="KB metrics report counts and disk usage"
 )
 async def test_metrics(kb) -> None:
@@ -270,3 +300,91 @@ async def test_reindex_rebuilds_from_files_after_index_drop(kb) -> None:
     config = await kb.service.get_kb_config("kb1")
     await kb.service.reindex_with_config(kb_name="kb1", config=config, actor="user")
     assert len((await kb.service.search(kb_name="kb1", query="phoenix", top_k=5)).passages) == 1
+
+
+async def test_concurrent_ingests_do_not_corrupt_index(kb) -> None:
+    """Concurrent uploads into one KB serialize on the per-store lock; all
+    succeed and keyword search sees every document (review finding H3)."""
+    import asyncio
+
+    await kb.create_kb("kb1")
+    results = await asyncio.gather(
+        *[
+            _ingest(kb, "kb1", f"doc{i}.md", f"# Doc {i}\n\nuniqueword{i} shared".encode())
+            for i in range(8)
+        ],
+        return_exceptions=True,
+    )
+    errors = [r for r in results if isinstance(r, Exception)]
+    assert not errors, errors[:3]
+    assert await kb.documents.count_documents("knowledge_base", "kb1") == 8
+    res = await kb.service.search(kb_name="kb1", query="shared", top_k=20)
+    assert len({p.document_id for p in res.passages}) == 8
+
+
+async def test_reindex_reconstructs_documents_rows_after_db_loss(kb) -> None:
+    """FR-008/SC-005: the documents table itself is rebuildable from the files.
+    After total SQLite loss (documents rows included), reindex reconstructs the
+    rows from each file's frontmatter — not just the chunk/FTS state."""
+    from sqlalchemy import text
+
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\nrebuildable banana")
+    original_sha = doc.metadata["source_sha256"]
+
+    async with kb.sm() as session:
+        await session.execute(text("DELETE FROM documents_fts"))
+        await session.execute(text("DELETE FROM chunks"))
+        await session.execute(text("DELETE FROM documents"))
+        await session.commit()
+
+    stats = await kb.service.reindex(kb_name="kb1", actor="user")
+    assert stats["reindexed"] == 1
+
+    restored = await kb.documents.get_document("knowledge_base", "kb1", doc.id)
+    assert restored is not None
+    assert restored.source_mode == "converted"
+    assert restored.title == "A"
+    assert restored.metadata["source_sha256"] == original_sha
+    res = await kb.service.search(kb_name="kb1", query="banana", top_k=5)
+    assert len(res.passages) == 1
+
+
+async def test_search_with_explicit_grep_mode_is_rejected(kb) -> None:
+    """An explicit ``mode="grep"`` on search must 400 (the grep endpoint serves
+    it), not be silently rewritten to keyword (review: unspecced silent rewrite)."""
+    from coffer.domain.errors import SearchModeInvalid
+
+    await kb.create_kb("kb1")
+    await _ingest(kb, "kb1", "a.md", b"# A\n\nsome text")
+    with pytest.raises(SearchModeInvalid):
+        await kb.service.search(kb_name="kb1", query="text", mode="grep")
+
+
+async def test_search_with_disabled_mode_is_rejected(kb) -> None:
+    """An explicit mode the KB has not enabled must 400, not silently fall back
+    to the default (vector is the one flagged-fallback exception)."""
+    from coffer.domain.errors import SearchModeInvalid
+
+    await kb.create_kb("kb1", config={"enabled_modes": ["grep"], "default_mode": "grep"})
+    await _ingest(kb, "kb1", "a.md", b"# A\n\nsome text")
+    with pytest.raises(SearchModeInvalid):
+        await kb.service.search(kb_name="kb1", query="text", mode="keyword")
+
+
+async def test_search_default_grep_mode_serves_keyword(kb) -> None:
+    """A store whose ``default_mode`` is grep still serves implicit searches
+    (mapped to keyword) — only EXPLICIT grep requests are rejected."""
+    await kb.create_kb("kb1", config={"enabled_modes": ["grep", "keyword"], "default_mode": "grep"})
+    await _ingest(kb, "kb1", "a.md", b"# A\n\nsearchable text")
+    result = await kb.service.search(kb_name="kb1", query="searchable")
+    assert result.mode == "keyword"
+    assert len(result.passages) == 1
+
+
+async def test_list_documents_offset_past_total(kb) -> None:
+    await kb.create_kb("kb1")
+    await _ingest(kb, "kb1", "a.md", b"# A\n\nalpha")
+    docs, total = await kb.service.list_documents(kb_name="kb1", limit=50, offset=10)
+    assert docs == []
+    assert total == 1
