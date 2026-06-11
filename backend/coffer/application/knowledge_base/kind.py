@@ -22,6 +22,18 @@ _logger = logging.getLogger(__name__)
 _REINDEX_FIELDS = ("chunk_size", "chunk_overlap", "enabled_modes", "embedding")
 
 
+def _kb_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
+    """The KB's embedding API key ref (nested ``embedding.credential_ref``).
+    Probed at register and config-update time so a missing keychain entry
+    fails before the DB write."""
+    embedding = config.get("embedding")
+    if isinstance(embedding, dict):
+        ref = embedding.get("credential_ref")
+        if isinstance(ref, str) and ref:
+            return {"embedding.credential_ref": ref}
+    return {}
+
+
 def make_kb_kind(service: KnowledgeBaseService) -> Kind:
     """Construct the ``knowledge_base`` Kind with lifecycle hooks."""
 
@@ -63,4 +75,5 @@ def make_kb_kind(service: KnowledgeBaseService) -> Kind:
         config_schema=KnowledgeBaseConfig,
         on_delete=_on_delete,
         on_update_config=_on_update_config,
+        credential_ref_extractor=_kb_credential_ref_extractor,
     )

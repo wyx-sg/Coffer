@@ -28,6 +28,15 @@ _REINDEX_FIELDS = (
 )
 
 
+def _memory_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
+    """The store's embedding API key ref (flat field). Probed at register and
+    config-update time so a missing keychain entry fails before the DB write."""
+    ref = config.get("embedding_credential_ref")
+    if isinstance(ref, str) and ref:
+        return {"embedding_credential_ref": ref}
+    return {}
+
+
 def make_memory_kind(service: MemoryService) -> Kind:
     """Construct the ``memory`` Kind with lifecycle hooks."""
 
@@ -68,4 +77,5 @@ def make_memory_kind(service: MemoryService) -> Kind:
         config_schema=MemoryStoreConfig,
         on_delete=_on_delete,
         on_update_config=_on_update_config,
+        credential_ref_extractor=_memory_credential_ref_extractor,
     )
