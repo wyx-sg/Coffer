@@ -9,6 +9,7 @@ adding a new route via HTTPException can't silently regress that shape.
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -197,6 +198,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
 
     def factory(session_id: str) -> MCPGatewaySession:
         sup = SubprocessSupervisor(
+            upstream_factory=build_upstream,
             resource_service=rsvc,
             credential_resolver=CredentialResolver(KeyringAdapter()),
         )

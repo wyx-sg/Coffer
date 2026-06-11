@@ -2,7 +2,7 @@
 
 > English: [ADR-007-everything-is-a-resource-kind.md](./ADR-007-everything-is-a-resource-kind.md)
 
-**Status**: Amended (2026-05-30) — 见 [Amendment](#amendment-2026-05-30)
+**Status**: Amended (2026-05-30, 2026-06-11) — 见 [Amendment](#amendment-2026-05-30) 与 [Amendment: 前端 kind UI](#amendment-2026-06-11--前端-kind-ui)
 **Date**: 2026-05-28
 **Deciders**: Yuxing Wu
 **Related**: [ADR-001](ADR-001-resource-framework-upfront.md)，spec `002-ui-shell`
@@ -63,10 +63,23 @@ Spec `002-ui-shell` 需要决定 resource kind——以及一些并非领域意�
 - **Agent 是独立的一条轴，不是 resource kind。** 它们呈现在 `/agents`（列表）与 `/agents/:name`（详情），归入自己的 **Agents** 侧栏分组。它们**不**出现在 `/resources` 的 kind 浏览器里，因为它们不是 vault 资产。
 - **侧栏按角色分组**，不再是单一的 resource-kind 轴：
   - **Agents** — 消费者 (`/agents`)。
-  - **Resources** — agent 所依赖的资产，建模为 kind-agnostic 的 resource kind，通过 kind registry 暴露。该导航入口标签为 **"MCP servers"**，只列出注册了列表/卡片 UI 的 kind（今天只有 `mcp_server`）；路由仍是 `/resources`。
+  - **Resources** — agent 所依赖的资产，建模为 kind-agnostic 的 resource kind，通过 kind registry 暴露。该导航入口标签为 **"MCP servers"**，只列出注册了列表/卡片 UI 的 kind（今天只有 `mcp_server`）；路由是 `/mcp-servers`（`/resources` 保留为旧书签的 legacy 重定向）。
   - **System** — 横切工具：**Audit log** (`/audit`) 与 **Settings** (`/settings`)。
 - **审计日志住在 `/audit`，不是 `/observability`。** 交付的路由把 `/audit` 映射到审计日志页面，并把 `/observability` 保留为指向 `/audit` 的 legacy 重定向。**Observability**（系统健康 / 指标）是一个**独立、预留的未来**界面——它不是审计日志，也尚未进入侧栏。
 - **列表界面收敛到同一个可搜索、可分页的共享表格。** 所有列表视图共用同一个 `DataTable` 组件（内建搜索 / 过滤 / 分页），点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。这取代了早先对 resource 列表的卡片网格描述。
 - **未来的分组/入口**（Chat、Channels、Skills、Knowledge、Memory、Observability）已规划但今天不展示。原决策"不放敬请期待占位项"的策略依然成立：侧栏记录角色分组结构，但不添加任何死的导航入口。
 
 从原决策中原样保留的部分：kind-agnostic 的 Resource 框架仍是*资产*的唯一抽象；新的 resource kind 仍以单个导航入口接入 Resources 组；侧栏仍只展示当下已交付的部分。本次修订把"一切皆 resource kind"收窄为"每个**资产**都是一种 resource kind，归在 Resources 下；消费者 (agent) 与横切工具 (System) 各成一个基于角色的分组。"
+
+## Amendment (2026-06-11) — 前端 kind UI
+
+Spec 005 把 **skill** 以后端 resource kind 交付（身份、生命周期、审计、`on_delete` 级联全部走 kind-agnostic 框架），但前端是**专属页面**（`/skills`、`/skills/:name`），没有走前端 kind registry。这让 UI 处在一个未声明的半途状态：registry 承诺"每个 kind 一个通用浏览界面"，而 skill 悄悄绕开了它。
+
+本次修订定案前端模式：
+
+- **后端这条轴不变。** 每个资产都是 resource kind；unify-identity/lifecycle/audit 与 never-unify-invocation 规则（ADR-001）对所有 kind 依然成立。
+- **前端 kind registry 是有边界的，不是普适的。** 它服务于 UI 适合通用浏览模式（卡片/表格 + 以配置为中心的详情页）的 kind —— 今天是 `/mcp-servers` 下的 `mcp_server`。它**不是**"每个 kind 都经由它渲染"的承诺。
+- **交互模型更丰富的资产 kind 交付专属页面组。** Skill（按 agent 的绑定、文件查看器、漂移校验）住在 `/skills`，拥有自己的页面。这是被认可的模式，不是例外。
+- **新 kind 在设计期显式二选一**：注册 kind UI 走通用浏览，或在自己的路由下交付专属页面组。该 kind 的 spec 必须写明选了哪种。
+
+结果："Skills 出现在侧栏 Resources 组"（2026-05-30 修订的未来分组列表中的一项）现已交付 —— Resources 组包含 **MCP servers**（`/mcp-servers`，registry 驱动）与 **Skills**（`/skills`，专属页面）。

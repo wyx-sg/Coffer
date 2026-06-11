@@ -465,6 +465,24 @@ components:
           items: { $ref: "#/components/schemas/FsEntry" }
           description: "Immediate subdirectories (no files)."
 
+    ErrorOut:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: AGENT_NOT_FOUND
+            message:
+              type: string
+              example: "agent not found: agent:claude-code"
+            details:
+              type: object
+              additionalProperties: true
+
   responses:
     Unauthorized:
       description: Missing or invalid X-Coffer-Token

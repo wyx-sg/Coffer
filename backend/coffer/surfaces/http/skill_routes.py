@@ -1,4 +1,4 @@
-"""/api/v1/skills/* — skill manager HTTP routes (spec 004)."""
+"""/api/v1/skills/* — skill manager HTTP routes (spec 005-skill-manager)."""
 
 from __future__ import annotations
 
@@ -104,6 +104,9 @@ class SkillFileNodeOut(BaseModel):
     path: str  # POSIX, relative to the master folder root ("" for the root)
     type: str  # "file" | "dir"
     size: int | None = None
+    # True on a dir whose children were clipped at MAX_TREE_DEPTH, so the
+    # viewer can signal the tree is incomplete (CODE-F8).
+    truncated: bool = False
     children: list[SkillFileNodeOut] = Field(default_factory=list)
 
 
@@ -163,6 +166,7 @@ def _node_to_out(node: file_ops.FileNode) -> SkillFileNodeOut:
         path=node.path,
         type=node.type,
         size=node.size,
+        truncated=node.truncated,
         children=[_node_to_out(c) for c in node.children],
     )
 

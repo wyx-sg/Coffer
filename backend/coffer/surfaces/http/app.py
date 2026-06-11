@@ -63,6 +63,7 @@ from coffer.surfaces.http.app_mcp_composition import (
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import (
+    get_invocation_repo_optional,
     set_audit_service,
     set_resource_service,
     set_retention_service,
@@ -205,8 +206,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
-    from coffer.surfaces.http.dependencies import _invocation_repo as _inv_repo
-
+    _inv_repo = get_invocation_repo_optional()
     if _inv_repo is not None:
         await _inv_repo.start()
 
@@ -253,10 +253,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(asyncio.CancelledError):
             await reaper_task
         # Drain the buffered invocation writer before tearing down sessions.
-        from coffer.surfaces.http.dependencies import (
-            _invocation_repo as _inv_repo,
-        )
-
+        _inv_repo = get_invocation_repo_optional()
         if _inv_repo is not None:
             with contextlib.suppress(Exception):
                 await _inv_repo.stop()

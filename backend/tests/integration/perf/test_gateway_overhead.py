@@ -12,8 +12,6 @@ import sys
 import time
 from pathlib import Path
 
-import keyring
-import keyring.core
 import pytest
 
 from coffer.application.audit_service import AuditService
@@ -25,6 +23,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.server_config import MCPServerConfig, StdioTransport
 from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
@@ -39,26 +38,11 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[2] / "fixtures" / "fake_mcp_server.py"
 _N_RUNS = 30
 _MAX_OVERHEAD_MS = 50
-
-
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1.0  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, s: str, u: str) -> str | None:
-        return self._data.get((s, u))
-
-    def set_password(self, s: str, u: str, p: str) -> None:
-        self._data[(s, u)] = p
-
-    def delete_password(self, s: str, u: str) -> None:
-        self._data.pop((s, u), None)
 
 
 def _should_run() -> bool:
@@ -77,7 +61,7 @@ pytestmark = pytest.mark.benchmark
 async def test_gateway_overhead_under_50ms_median(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(keyring.core, "_keyring_backend", _InMemoryKeyring())
+    install_in_memory_keyring(monkeypatch)
 
     transport = StdioTransport(
         type="stdio",
@@ -141,6 +125,7 @@ async def test_gateway_overhead_under_50ms_median(
     )
 
     supervisor = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=rsvc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )

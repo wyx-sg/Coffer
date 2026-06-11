@@ -140,7 +140,7 @@ backend/coffer/
 │   │   ├── audit_routes.py               # /api/v1/audit
 │   │   ├── retention_routes.py           # /api/v1/retention/*
 │   │   ├── daemon_routes.py              # /api/v1/daemon/*
-│   │   ├── keychain_routes.py            # /api/v1/keychain/* (write + delete only)
+│   │   ├── keychain_routes.py            # /api/v1/keychain/* (write, audited read, exists, delete)
 │   │   └── mcp/
 │   │       ├── capability_routes.py      # capability list / enable / disable / refresh / test
 │   │       ├── invocation_routes.py      # invocation log query
@@ -154,7 +154,7 @@ backend/coffer/
 │   │   ├── resource_cmd.py               # coffer resource ...
 │   │   ├── audit_cmd.py                  # coffer audit ...
 │   │   ├── retention_cmd.py              # coffer retention ...
-│   │   ├── keychain_cmd.py               # coffer keychain set/delete ...
+│   │   ├── keychain_cmd.py               # coffer keychain set/get/list/delete ...
 │   │   └── mcp.py                        # coffer mcp ... (kind subcommand group)
 │   └── shim/
 │       └── main.py                       # coffer-mcp-shim entry
@@ -197,8 +197,9 @@ Register the `mcp_server` kind. Implement `MCPGatewaySession`,
 the `coffer-mcp-shim` binary, and the `coffer mcp …` CLI subcommands. Per-tool
 enable/disable lands here too (US2 is a P1 in the spec; both user stories
 share the same code paths so we implement them together). The keychain
-write/delete management endpoints (FR-011) land in this phase as well, so
-HTTP MCP servers can reference credentials end-to-end.
+management endpoints (FR-011) land in this phase as well — write, audited
+read, exists, and delete — so HTTP MCP servers can reference credentials
+end-to-end.
 
 **Done when:** Acceptance scenarios from User Story 1 and User Story 2 pass
 under `make verify` and `make verify-e2e` (the `e2e/mcp/` subprocess-driven

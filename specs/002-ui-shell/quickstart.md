@@ -38,15 +38,17 @@ make dev
 
 Open `http://localhost:5173/` in any modern browser.
 
-The first time you visit, the URL resolves to `/resources` and you see:
+The first time you visit, the index (`/`) redirects to `/agents` and you see:
 
 - The redesigned sidebar — role-based groups: **Agents** (`/agents` — the
-  agents you use), **Resources** (**MCP servers**, at `/resources`), and
+  agents you use), **Resources** (**MCP servers**, at `/mcp-servers`), and
   **System** (**Audit log** at `/audit`, **Settings**). The active route is
   highlighted. Click the collapse handle to switch between full and
-  icon-only modes; your choice persists across reloads.
-- A welcome card explaining what Coffer is, with one primary action:
-  **Add MCP server**.
+  icon-only modes; your choice persists across reloads. (`/resources` still
+  works — it's a legacy redirect to `/mcp-servers`.)
+- The Agents welcome card explaining what Coffer is, with one primary action:
+  **Add agent**. The matching **Add MCP server** welcome lives one click away
+  on **MCP servers** (`/mcp-servers`).
 
 If the daemon is not running (you skipped `make dev` or it crashed), you
 see a "Daemon not running" view instead, with a Reload recovery control
@@ -88,7 +90,7 @@ walks you through one screen per server so you can:
   the spec scenario).
 
 Click **Add** to finish. On success the dialog closes and (for a single
-server) the app navigates to `/resources/mcp_server/<name>` showing the
+server) the app navigates to `/mcp-servers/mcp_server/<name>` showing the
 Overview tab. The new server appears in the resources list with health
 "unknown", flipping to "healthy" within ~10 seconds.
 
@@ -125,8 +127,10 @@ Code to read a file), then refresh the **Invocations** tab.
   scrollable block. The legacy `/observability` URL still resolves and
   redirects here. (Observability — system health / metrics — is a distinct
   surface reserved for the future, not this audit log.)
-- `/settings` — tabs sidebar with **Data** (retention policy, manual
-  prune, backups) and **About** (version / license / source).
+- `/settings` — tabs sidebar opening on **General** (default rows-per-page
+  preference), plus **Data** (retention policy, manual prune, backups) and
+  **About** (version / license / source). The desktop build adds an **App**
+  tab (launch-at-login).
 
 You will notice three deliberately absent surfaces compared to the v0
 shell:
@@ -143,5 +147,5 @@ shell:
 - Daemon state: `~/.coffer/coffer.db` and `~/.coffer/daemon.json`
   (unchanged from spec 001).
 - UI preferences: `localStorage` only — `coffer.language` (selected
-  language) and `coffer.sidebar.collapsed` (sidebar mode).
+  language) and `coffer.nav.collapsed` (sidebar mode).
 - UI source: `frontend/src/` — see [`plan.md`](./plan.md) for the layout.

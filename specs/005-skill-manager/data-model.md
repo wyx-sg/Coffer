@@ -83,7 +83,7 @@ String-valued enum.
 
 ## SQLite schema additions
 
-Migration `20260526_0006_skill_tables.py` (solo; spec 004 ships its own `20260525_0005_agent_tables.py`) adds:
+Migration `20260526_0005_skill_tables.py` (revision `0005`, down_revision `0004`) adds the skill binding table. Agents themselves live in the shared `resources` tables, so spec 004 needs no dedicated agent-tables migration.
 
 ### `skill_agent_bindings`
 
@@ -115,10 +115,13 @@ Add to `AuditEventType`:
 | `skill_updated`        | Git update changes content (with before/after hashes in details) |
 | `skill_update_noop`    | Update found no change                                           |
 | `skill_renamed`        | Frontmatter rename applied with `--allow-rename`                 |
-| `skill_removed`        | Skill resource deleted (snapshot in details)                     |
 | `skill_bound`          | Per-agent binding enabled (symlink created)                      |
 | `skill_unbound`        | Per-agent binding disabled (symlink removed)                     |
 | `skill_drift_detected` | `verify` op reported drift (count + categories in details)       |
+
+Skill **removal** has no dedicated event — deleting a skill goes through
+`ResourceService.delete`, which emits the generic `resource_deleted` event
+(with a pre-delete snapshot in `details`), the same as any other resource kind.
 
 ## On-disk layout
 
@@ -251,4 +254,4 @@ This closure-based composition keeps both kinds independent at the application l
 - All HTTP loopback-only.
 - Git fetch through SSRF-guarded URL predicate (loopback / RFC1918 / link-local rejected).
 - No keychain entries in v1 (no auth on skill sources).
-- File-size limit (default 50 MB / skill) configurable via `~/.coffer/daemon.json`; v1 ships with the default.
+- File-size limit: 50 MB total per skill folder, enforced by `validate_skill_folder`. The limit is a `SkillService` constructor default (`size_limit_bytes`); it is not yet plumbed to a config file, so v1 always uses the hardcoded 50 MB.

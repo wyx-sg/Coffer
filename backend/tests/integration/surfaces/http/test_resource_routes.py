@@ -92,6 +92,46 @@ async def test_register_duplicate_returns_409(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_generic_register_rejects_lifecycle_kind_returns_409(tmp_path):
+    """CODE-REG: the generic POST /resources endpoint must refuse a kind that
+    declares ``generic_create_allowed=False`` (skill/agent), so it can't create
+    a row with no backing master folder / detected config dir."""
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+    kinds = {
+        "skill": Kind(
+            name="skill",
+            display_name="Skill",
+            config_schema=_FakeConfig,
+            generic_create_allowed=False,
+        ),
+    }
+    svc = ResourceService(
+        kinds=kinds,
+        repo=SqlAlchemyResourceRepo(sm),
+        audit=AuditService(SqlAlchemyAuditRepo(sm)),
+    )
+    app = FastAPI()
+    err_handlers.register(app)
+    app.include_router(resource_router)
+    app.dependency_overrides[get_resource_service] = lambda: svc
+    set_active_token("test-token")
+    transport = ASGITransport(app)
+    async with AsyncClient(
+        transport=transport, base_url="http://t", headers={"X-Coffer-Token": "test-token"}
+    ) as c:
+        r = await c.post(
+            "/api/v1/resources",
+            json={"kind": "skill", "name": "t", "config": {"foo": 1}},
+        )
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "GENERIC_CREATE_NOT_ALLOWED"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_register_unknown_kind_returns_400(tmp_path):
     c, engine = await _client(tmp_path)
     async with c:
@@ -240,20 +280,16 @@ class _StubKeyring:
 async def _client_with_mcp_kind(tmp_path, keyring: _StubKeyring):
     """Like _client(), but registers the real `mcp_server` Kind so we can
     drive register-time credential probing against transport.credential_refs."""
-    from coffer.domain.mcp.server_config import MCPServerConfig
+    from coffer.application.mcp.kind import make_mcp_kind
 
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
 
-    kinds = {
-        "mcp_server": Kind(
-            name="mcp_server",
-            display_name="MCP Server",
-            config_schema=MCPServerConfig,
-        ),
-    }
+    # The production Kind wires the credential-ref extractor + audit redactor
+    # (CODE-006) that drive probing/redaction; build it the real way.
+    kinds = {"mcp_server": make_mcp_kind({})}
     repo = SqlAlchemyResourceRepo(sm)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     svc = ResourceService(kinds=kinds, repo=repo, audit=audit, keyring=keyring)

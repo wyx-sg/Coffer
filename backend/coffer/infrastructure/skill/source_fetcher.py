@@ -96,7 +96,10 @@ class GitSourceFetcher:
         Yields the directory that contains the skill (the resolved subpath).
         """
         try:
-            check_url(git_url)
+            # CODE-M4: check_url performs a blocking socket.getaddrinfo DNS
+            # resolution. Offload it so a slow/unresponsive resolver can't
+            # freeze the daemon event loop (mirrors the keyring CODE-034 fix).
+            await asyncio.to_thread(check_url, git_url)
         except ValueError as e:
             host = git_url.split("//", 1)[-1].split("/", 1)[0]
             raise SSRFBlocked(host) from e
@@ -149,24 +152,28 @@ async def _git_fetch_ref(
 
     await _run_git(["init", "--quiet", "."], cwd=dest, timeout=timeout)
     await _run_git(["remote", "add", "origin", git_url], cwd=dest, timeout=timeout)
+    # Default every transport to denied, then re-enable only http(s) — the
+    # only schemes `check_url` lets through in production. This refuses
+    # ext::, ssh, and any other transport git might otherwise attempt.
+    # The `file`/local transport is enabled ONLY under the test-only knob
+    # (CODE-L5): production never needs it, so shipping it always-on widened
+    # the transport surface solely for the local-repo fixtures.
+    protocol_flags = [
+        "-c",
+        "protocol.allow=never",
+        "-c",
+        "protocol.http.allow=always",
+        "-c",
+        "protocol.https.allow=always",
+    ]
+    if os.environ.get("COFFER_GIT_ALLOW_FILE") == "1":
+        protocol_flags += ["-c", "protocol.file.allow=always"]
     await _run_git(
         [
             *_HARDENING_FLAGS,
             "-c",
             "http.followRedirects=false",
-            # Default every transport to denied, then re-enable only the ones
-            # this fetcher actually uses: http(s) for real public repos (the
-            # only schemes `check_url` lets through) and `file`/local for the
-            # local-repo path used in tests. This refuses ext::, ssh, and any
-            # other transport git might otherwise attempt.
-            "-c",
-            "protocol.allow=never",
-            "-c",
-            "protocol.http.allow=always",
-            "-c",
-            "protocol.https.allow=always",
-            "-c",
-            "protocol.file.allow=always",
+            *protocol_flags,
             "fetch",
             "--depth=1",
             "--no-recurse-submodules",

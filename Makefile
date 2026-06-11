@@ -5,7 +5,7 @@ FRONTEND := frontend
 
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
-	verify-unit verify-integration verify-contract verify-e2e verify-acceptance verify-desktop \
+	verify-unit verify-integration verify-contract verify-e2e verify-acceptance verify-desktop verify-benchmark \
 	coverage lock \
 	desktop-dev desktop-build \
 	bundle-binaries \
@@ -25,6 +25,7 @@ help:
 	@echo "  make verify-contract       contract tier only"
 	@echo "  make verify-e2e            e2e tier only (currently: Playwright web only)"
 	@echo "  make verify-acceptance     audit spec.md scenarios vs test markers"
+	@echo "  make verify-benchmark      SC-003 gateway-overhead benchmark (COFFER_RUN_BENCHMARKS=1)"
 	@echo "  make verify-desktop        cargo test --lib for the Tauri crate (skipped if rust missing)"
 	@echo "  make lint                  ruff + mypy + eslint + tsc + import-linter + file/response_model checks"
 	@echo "  make format                ruff format + prettier"
@@ -140,6 +141,9 @@ verify-integration:
 	else \
 		echo "verify-integration: no $(FRONTEND)/tests/integration/ — skipping frontend"; \
 	fi
+
+verify-benchmark:
+	COFFER_RUN_BENCHMARKS=1 $(PY) -m pytest $(BACKEND)/tests -m benchmark
 
 verify-contract:
 	@if [ -d $(BACKEND)/tests/contract ]; then \

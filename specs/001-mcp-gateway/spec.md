@@ -222,7 +222,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 ### Scenario: store and reference a keychain credential
 
 - **Given** the user has not yet stored an HTTP credential,
-- **When** the user issues `POST /api/v1/keychain/{ref}` (or the equivalent CLI) with a secret value, then registers an HTTP MCP server whose `credential_refs` cites `{ref}`,
+- **When** the user issues `POST /api/v1/keychain` (or the equivalent CLI) with `ref` and the secret `value` in the request body, then registers an HTTP MCP server whose `credential_refs` cites `{ref}`,
 - **Then** the credential value is written only to the OS keychain (never to the SQLite DB or any log), and the server registration succeeds with the credential resolved at upstream-spawn time.
 
 ### Scenario: delete a keychain credential frees the reference
@@ -298,7 +298,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 **Credentials and safety**
 
-- **FR-011**: System MUST store all upstream-server credentials only in the operating system's keychain, referenced from configuration by name; credentials MUST never be written to the database or to any log. The management API MUST expose a keychain-write **and delete** endpoint so a UI can store or remove a secret directly in the keychain without it passing through the database.
+- **FR-011**: System MUST store all upstream-server credentials only in the operating system's keychain, referenced from configuration by name; credentials MUST never be written to the database or to any log. The management API MUST expose keychain endpoints so a UI can manage a secret directly in the keychain without it passing through the database: write (`POST /api/v1/keychain`), delete (`DELETE /api/v1/keychain/{ref}`), an existence check (`GET /api/v1/keychain/{ref}/exists`), and an audited read (`GET /api/v1/keychain/{ref}`). The read endpoint returns the secret value and emits a `keychain_read` audit event so every secret read is recorded.
 - **FR-012**: System MUST bind all HTTP endpoints (management API and MCP protocol endpoint) to the loopback interface only.
 - **FR-013**: System MUST require an authentication token on every management API call; the token is generated locally at daemon startup, stored with user-only file permissions, and rotatable.
 

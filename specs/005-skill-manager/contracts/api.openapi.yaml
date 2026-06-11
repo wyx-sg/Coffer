@@ -415,6 +415,10 @@ components:
           type: integer
           nullable: true
           description: Byte size for files; null for directories.
+        truncated:
+          type: boolean
+          default: false
+          description: True on a directory whose children were clipped at the max tree depth.
         children:
           type: array
           description: Child nodes; empty for files.

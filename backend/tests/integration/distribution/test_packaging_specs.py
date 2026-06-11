@@ -285,7 +285,7 @@ def test_shim_spec_includes_anyio_backend_hidden_import() -> None:
 
 @pytest.mark.acceptance(
     spec="003-mcp-gateway-desktop",
-    scenario="release tag produces both the CLI-only archives and the desktop installers",
+    scenario="release tag produces both the CLI-only archive and the desktop installer",
 )
 def test_release_workflow_produces_platform_artifact_matrix() -> None:
     """The release workflow must define a matrix that produces the supported

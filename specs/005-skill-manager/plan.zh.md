@@ -79,7 +79,7 @@ backend/coffer/infrastructure/skill/
   ssrf_guard.py        # host 谓词（loopback / RFC1918 / link-local 拒绝）
 
 backend/coffer/infrastructure/persistence/migrations/versions/
-  20260526_0006_skill_tables.py   # skill_agent_bindings（独立迁移；spec 004 自带 0005）
+  20260526_0005_skill_tables.py   # skill_agent_bindings（revision 0005，down_revision 0004）
 
 backend/coffer/surfaces/http/skill_routes.py
 backend/coffer/surfaces/http/agent_skill_wiring.py    # 跨 kind 组装（agent on_delete → skill 清理）
@@ -111,7 +111,7 @@ frontend/src/i18n/locales/{en,zh}.json     # skill 文案追加
 ### Phase 1 —— 数据模型 + 契约
 
 - 写 data-model.md（完成）与 contracts/api.openapi.yaml（完成）。
-- 新增 Alembic 迁移 `20260526_0006_skill_tables.py`，创建 `skill_agent_bindings`（独立；spec 004 的 `suppressed_agent_types` 已随 `20260525_0005_agent_tables.py` 上线）。
+- 新增 Alembic 迁移 `20260526_0005_skill_tables.py`（revision `0005`，down_revision `0004`），创建 `skill_agent_bindings`。agent 存在共享的 `resources` 表里，因此 spec 004 不需要 agent-tables 迁移。
 
 ### Phase 2 —— 后端实现
 

@@ -171,6 +171,7 @@ class AgentService:
             config=cfg.model_dump(mode="json"),
             description=description,
             actor=actor,
+            allow_lifecycle_kind=True,  # CODE-REG: config dir detected/validated above
         )
 
     @staticmethod
@@ -230,6 +231,7 @@ class AgentService:
             new_config=new_cfg.model_dump(mode="json"),
             actor=actor,
             description=description,
+            allow_lifecycle_kind=True,  # CODE-REG: config dir validated above
         )
         # Re-deliver skills to the new location (remove old links, recreate at
         # <new_config_dir>/skills). Runs AFTER the row is updated so the hook

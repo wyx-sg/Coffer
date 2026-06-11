@@ -92,6 +92,8 @@ export interface SkillFileNode {
   path: string;
   type: "file" | "dir";
   size: number | null;
+  /** True on a dir whose children were clipped at the max tree depth. */
+  truncated: boolean;
   children: SkillFileNode[] | null;
 }
 

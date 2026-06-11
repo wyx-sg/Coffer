@@ -128,6 +128,114 @@ async def test_pump_stdin_forwards_post_and_captures_session_id(
 
 
 @pytest.mark.asyncio
+async def test_pump_stdin_dispatches_concurrently_no_head_of_line_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CODE-M3: once a session is established, a slow tool call must not block
+    subsequent envelopes (pings, cancellations, other calls) from being issued.
+
+    Regression: the pump awaited each POST inline before reading the next line,
+    so one long ``tools/call`` starved keepalive pings and clients could declare
+    the shim dead. We prove concurrency by making the first POST block until the
+    second POST has started; with serial dispatch this deadlocks.
+    """
+    bridge = _make_bridge()
+    bridge._session_id = "sess-pre"  # already established → concurrent path
+
+    order: list[str] = []
+
+    class _BlockingClient:
+        def __init__(self) -> None:
+            self.release_first = asyncio.Event()
+
+        async def post(self, url: str, *, json: dict[str, Any], headers: dict[str, str]) -> Any:
+            req_id = json["id"]
+            if req_id == 1:
+                order.append("first_start")
+                await self.release_first.wait()  # held until the 2nd POST starts
+                order.append("first_end")
+            else:
+                order.append("second_start")
+                self.release_first.set()
+            return httpx.Response(
+                200, text=__import__("json").dumps({"jsonrpc": "2.0", "id": req_id, "result": {}})
+            )
+
+    reader = asyncio.StreamReader()
+    for i in (1, 2):
+        reader.feed_data(
+            (json.dumps({"jsonrpc": "2.0", "id": i, "method": "tools/call"}) + "\n").encode("utf-8")
+        )
+    reader.feed_eof()
+    _patch_pump_stdin_with_reader(monkeypatch, reader)
+
+    client = _BlockingClient()
+    await asyncio.wait_for(bridge._pump_stdin(client), timeout=2.0)
+
+    # The second POST started before the first finished — no head-of-line block.
+    assert order == ["first_start", "second_start", "first_end"], order
+
+
+@pytest.mark.asyncio
+async def test_run_drains_inflight_replies_on_stdin_eof(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CODE-R1: when stdin closes while requests are in flight, their replies
+    must still reach stdout before the bridge exits.
+
+    Regression: the EOF path set ``_stop`` BEFORE draining; ``run()``'s
+    FIRST_COMPLETED wait woke on the stop event and cancelled the stdin pump
+    mid-drain, aborting the in-flight POSTs — pipelined replies were silently
+    dropped. Must be driven through run() (not _pump_stdin directly) to
+    exercise the cancel race.
+    """
+    bridge = _make_bridge()
+    bridge._session_id = "sess-pre"  # pipelined path from the first envelope
+
+    async def _slow_handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode("utf-8"))
+        await asyncio.sleep(0.15)  # still in flight when EOF arrives
+        return httpx.Response(
+            200, text=json.dumps({"jsonrpc": "2.0", "id": body["id"], "result": {"ok": body["id"]}})
+        )
+
+    reader = asyncio.StreamReader()
+    for i in (1, 2):
+        reader.feed_data(
+            (json.dumps({"jsonrpc": "2.0", "id": i, "method": "tools/call"}) + "\n").encode("utf-8")
+        )
+    reader.feed_eof()  # EOF lands while both POSTs are sleeping
+    _patch_pump_stdin_with_reader(monkeypatch, reader)
+
+    async def _no_sse(client: httpx.AsyncClient) -> None:
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(bridge, "_drain_sse", _no_sse)
+
+    transport = httpx.MockTransport(_slow_handler)
+
+    async def _run_with_client() -> int:
+        # run() builds its own client from bridge._base; substitute the mock
+        # transport by patching httpx.AsyncClient construction.
+        real_async_client = httpx.AsyncClient
+
+        def _mock_client(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+            kwargs["transport"] = transport
+            kwargs["base_url"] = "http://127.0.0.1:18765"
+            return real_async_client(**kwargs)
+
+        monkeypatch.setattr("coffer.surfaces.shim.main.httpx.AsyncClient", _mock_client)
+        return await bridge.run()
+
+    rc = await asyncio.wait_for(_run_with_client(), timeout=5.0)
+    assert rc == 0
+
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line]
+    got_ids = {entry["id"] for entry in lines if "result" in entry}
+    assert got_ids == {1, 2}, f"in-flight replies dropped on EOF: only got {got_ids}"
+
+
+@pytest.mark.asyncio
 async def test_pump_stdin_forwards_envelope_larger_than_64kib(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -13,7 +13,7 @@ Coffer 用四个测试层，在 CI 中并行运行。`spec.md` 里的验收场�
 | **Contract**    | Wire-format conformance: hand-written `*.openapi.yaml` ↔ Pydantic models. Blocks PR on drift.                                                       | < 1 s                   | Currently: `pytest` + `TestClient` manual assertions on `/openapi.json`. **Future** (add when contract surface grows): `schemathesis` for backend fuzzing.   | yes                             |
 | **E2E**         | Full stack via real surfaces: a real MCP client → `coffer-mcp-shim` (stdio) → daemon (`/mcp` HTTP) → upstream MCP servers → SQLite.                  | < 30 s                  | `Playwright` (`@playwright/test`) + TypeScript 5.x。spec 把真实 shim + daemon 作为 OS 子进程拉起，端到端跨它们驱动 JSON-RPC。                                  | NO (separate `make verify-e2e`) |
 
-**金字塔形状**：unit ≫ integration > contract > e2e（按测试数量计）。
+**套件形状**：integration ≫ unit > contract > e2e（按测试数量计）。这有意不是经典的 unit 为主的金字塔：integration 层跑真实 SQLite 文件与真实子进程但保持快速（后端全量约 100 秒），所以大多数行为钉在真实接线所在的层。unit 层只留给纯逻辑（由 `scripts/check_unit_purity.py` 机械强制）。
 
 每条测试的预算只是参考，不是卡口——单条慢测试不算 CI 失败。它们的作用是：一旦某条测试比所在层的预算慢一个数量级，就提示「层级是不是放错了？」。不强制总套件预算；套件会随项目成长。
 

@@ -37,9 +37,11 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 
 当前已注册的 kind：
 
-| Kind         | Spec                                                   | 描述                                                                                                  |
-| ------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `mcp_server` | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md) | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。 |
+| Kind         | Spec                                                         | 描述                                                                                                  |
+| ------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `mcp_server` | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md)       | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。 |
+| `agent`      | [004-agent-registry](../../specs/004-agent-registry/spec.md) | 一个已注册的编码 agent（如 Claude Code）。承载其配置目录以及 Coffer-MCP 的安装状态。                  |
+| `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。                                  |
 
 ## 代码布局 (Code layout)
 
@@ -49,28 +51,49 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 ```
 backend/coffer/
 ├── domain/                       # 与 kind 无关的实体 + kind 协议
-│   ├── resource.py
+│   ├── resource.py               # Resource、Kind、ResourceRef
+│   ├── kind_module.py            # KindModule 组装入口数据载体
 │   ├── audit.py
-│   └── mcp/                      # MCP 特定的值对象
+│   ├── mcp/                      # MCP 特定的值对象
+│   ├── agent/                   # agent 特定的值对象 (config 等)
+│   └── skill/                   # skill 特定的值对象
 ├── application/
 │   ├── resource_service.py       # 与 kind 无关的 CRUD；接受 kinds 字典
 │   ├── audit_service.py
 │   ├── retention_service.py
-│   └── mcp/                      # MCP 特定的应用层服务
+│   ├── mcp/                      # MCP 特定的应用层服务
+│   ├── agent/                   # agent 服务 + make_agent_kind
+│   ├── skill/                   # skill 服务 + make_skill_kind
+│   └── fs/                      # 文件系统浏览服务
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (统一元数据)
 │   ├── credentials/              # 钥匙串适配器——唯一被允许 import `keyring` 的位置
 │   ├── daemon/                   # pid_lock、端口分配
-│   └── mcp/                      # 子进程、HTTP 上游客户端
+│   ├── mcp/                      # 子进程、HTTP 上游客户端
+│   ├── agent/                   # agent 配置文件存储
+│   └── skill/                   # 主存储、源拉取器、同步引擎
 └── surfaces/
-    ├── http/                     # FastAPI app + 每个 kind 的子路由
+    ├── http/                     # FastAPI app + 每个 kind 的子路由 (含 agent/skill/fs 路由)
     ├── cli/                      # Typer app + 每个 kind 的子命令组
     └── shim/                     # coffer-mcp-shim 入口
 ```
 
-组装入口 (`surfaces/http/app.py`、`surfaces/cli/main.py`) 显式地通过一
-个 `KindModule` dataclass 装配每个 kind——没有全局注册表，也不依赖
-import 副作用。
+组装入口 (`surfaces/http/app.py`、`surfaces/cli/main.py`) 显式地装配每个
+kind——没有全局注册表，也不依赖 import 副作用。每个 kind 的
+`make_*_kind()` 工厂 (如 `make_mcp_kind`、`make_agent_kind`、
+`make_skill_kind`) 返回一个 frozen `Kind` (`domain/resource.py`)，组装入口
+直接把它填入每个 app 的 `app.state.kinds` 字典 (`kind_name → Kind`)：
+`app_mcp_composition.py` 设置 `"mcp_server"`，`agent_skill_wiring.py` 设置
+`"agent"` 与 `"skill"`。`ResourceService` 读取该字典做与 kind 无关的分发。
+一个 kind 贡献的 surface 层制品 (HTTP 路由、Typer 组) 由 `KindModule`
+dataclass (`domain/kind_module.py`) 承载，它通过 `Any` 类型字段引用它们，
+使 domain 层永不 import 它们。
+
+FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块级全局
+单例的 `set_*` / `get_*` 函数对——组装入口在启动时对每个 `set_*` 调用一
+次；对应的 `get_*` 是 `Depends()` 目标，若在初始化前访问会报错。其中 kind
+特定的服务被标注为 `Any`，以避免与 kind 无关的内核 import kind 模块
+(Contract 6)。
 
 ## 接口面 (Surfaces)
 

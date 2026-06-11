@@ -163,11 +163,23 @@ def set_invocation_repo(repo: Any) -> None:
     _invocation_repo = repo
 
 
+def get_invocation_repo_optional() -> Any | None:
+    """Lifecycle accessor: return the buffered invocation repo or None.
+
+    The app lifespan calls ``start()``/``stop()`` on the buffered writer but
+    runs before/after the routes that would have set it. This public accessor
+    lets the lifespan reach it without importing the private ``_invocation_repo``
+    module global (CODE-DI). Returns None when no MCP kind was wired.
+    """
+    return _invocation_repo
+
+
 def get_invocation_repo() -> Any:
     """FastAPI Depends() target — actual type is MCPInvocationRepo."""
-    if _invocation_repo is None:
+    repo = get_invocation_repo_optional()
+    if repo is None:
         raise RuntimeError("invocation repo not initialised")
-    return _invocation_repo
+    return repo
 
 
 def set_health_repo(repo: Any) -> None:

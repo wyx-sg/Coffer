@@ -686,7 +686,7 @@ async def test_tools_call_falls_back_when_read_timeout_kwarg_unsupported() -> No
         def __init__(self) -> None:
             self.call_count = 0
 
-        async def call_tool(self, name, arguments=None, read_timeout_seconds=None):
+        async def call_tool(self, name, arguments=None, read_timeout_seconds=None, **kwargs):
             self.call_count += 1
             if read_timeout_seconds is not None:
                 raise TypeError("unexpected keyword argument 'read_timeout_seconds'")

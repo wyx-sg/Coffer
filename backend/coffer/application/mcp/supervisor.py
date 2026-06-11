@@ -48,44 +48,6 @@ UpstreamFactory = Callable[
 _logger = logging.getLogger(__name__)
 
 
-def _default_upstream_factory(
-    transport: HttpTransport | StdioTransport,
-    overlay: dict[str, str],
-    spawn_timeout: int,
-    request_timeout: int,
-    server_name: str,
-) -> UpstreamConnectionPort:
-    """Lazy-resolve the infrastructure adapters as a constructor fallback.
-
-    Uses :func:`importlib.import_module` so the dependency is invisible to
-    importlinter's static analysis — composition root SHOULD inject the
-    factory explicitly (see ``surfaces/http/app.py::_build_upstream``); this
-    fallback exists only so legacy in-tree tests/fixtures keep compiling.
-    """
-    import importlib
-
-    if isinstance(transport, StdioTransport):
-        mod = importlib.import_module("coffer.infrastructure.mcp.subprocess")
-        cls = mod.StdioUpstreamConnection
-        conn: UpstreamConnectionPort = cls(
-            transport=transport,
-            env_overlay=overlay,
-            spawn_timeout_seconds=spawn_timeout,
-            request_timeout_seconds=request_timeout,
-            server_name=server_name,
-        )
-        return conn
-    mod = importlib.import_module("coffer.infrastructure.mcp.http_client")
-    cls = mod.HttpUpstreamConnection
-    http_conn: UpstreamConnectionPort = cls(
-        transport=transport,
-        header_overlay=overlay,
-        spawn_timeout_seconds=spawn_timeout,
-        request_timeout_seconds=request_timeout,
-    )
-    return http_conn
-
-
 class UpstreamHealth(StrEnum):
     HEALTHY = "healthy"
     STARTING = "starting"
@@ -120,7 +82,7 @@ class SubprocessSupervisor:
         self,
         resource_service: ResourceService,
         credential_resolver: CredentialResolver,
-        upstream_factory: UpstreamFactory | None = None,
+        upstream_factory: UpstreamFactory,
         *,
         retry_delays: tuple[float, ...] = _RETRY_DELAYS_SECONDS,
         cooldown_seconds: int = _COOLDOWN_SECONDS,
@@ -128,13 +90,12 @@ class SubprocessSupervisor:
     ) -> None:
         self._resources = resource_service
         self._credentials = credential_resolver
-        # CODE-005: the composition root injects the upstream factory so we
-        # don't import infrastructure adapters from application code. The
-        # ``None`` fallback uses a dynamic import (``importlib.import_module``)
-        # purely so this constructor keeps working in tests/fixtures that
-        # predate the explicit-factory plumbing; the lazy import is hidden
-        # from importlinter by construction.
-        self._upstream_factory = upstream_factory or _default_upstream_factory
+        # CODE-005: the caller injects the upstream factory so application
+        # code never imports infrastructure adapters. The composition root and
+        # tests both inject ``coffer.infrastructure.mcp.factory.build_upstream``
+        # (the importlib-hidden fallback that used to live here was deleted —
+        # CODE-L3 — so the dependency is visible to importlinter again).
+        self._upstream_factory = upstream_factory
         self._retry_delays = retry_delays
         self._cooldown_seconds = cooldown_seconds
         self._entries: dict[str, _UpstreamEntry] = {}
@@ -147,16 +108,17 @@ class SubprocessSupervisor:
         entry = self._entries.get(server_name)
         return entry.state if entry else UpstreamHealth.UNHEALTHY
 
-    async def get_or_spawn(self, server_name: str) -> UpstreamConnection:
-        """Return a live connection for `server_name`, lazily spawning if needed.
+    def _enforce_cooldown(self, entry: _UpstreamEntry, server_name: str) -> None:
+        """Raise if the entry is in an active cooldown; reset an expired one.
 
-        Raises UpstreamUnavailable if the server is currently in cooldown
-        or if all retry attempts fail.
+        Called both BEFORE acquiring spawn_lock (cheap fast-fail for the many
+        waiters during cooldown) and AGAIN after acquiring it (CODE-H1): a
+        concurrent caller may have exhausted the retry ladder and entered
+        cooldown while we were queued on the lock. Without the second check,
+        every waiter re-ran the entire ladder, amplifying the work N-fold and
+        wedging a session's tool calls for minutes against a single dead
+        upstream.
         """
-        entry = self._entries.setdefault(server_name, _UpstreamEntry())
-
-        # Cooldown gate — checked BEFORE acquiring spawn_lock to avoid
-        # blocking many waiters during cooldown.
         if entry.state == UpstreamHealth.COOLDOWN:
             if entry.cooldown_until and self._now() < entry.cooldown_until:
                 raise UpstreamUnavailable(
@@ -167,10 +129,26 @@ class SubprocessSupervisor:
             entry.consecutive_failures = 0
             entry.cooldown_until = None
 
+    async def get_or_spawn(self, server_name: str) -> UpstreamConnection:
+        """Return a live connection for `server_name`, lazily spawning if needed.
+
+        Raises UpstreamUnavailable if the server is currently in cooldown
+        or if all retry attempts fail.
+        """
+        entry = self._entries.setdefault(server_name, _UpstreamEntry())
+
+        # Cooldown gate — checked BEFORE acquiring spawn_lock to avoid
+        # blocking many waiters during cooldown.
+        self._enforce_cooldown(entry, server_name)
+
         async with entry.spawn_lock:
             # Re-check after acquiring the lock: another coroutine may have spawned.
             if entry.connection is not None and entry.state == UpstreamHealth.HEALTHY:
                 return entry.connection
+
+            # Re-check cooldown under the lock (CODE-H1): a racer ahead of us may
+            # have just entered cooldown — don't restart the retry ladder.
+            self._enforce_cooldown(entry, server_name)
 
             entry.state = UpstreamHealth.STARTING
 

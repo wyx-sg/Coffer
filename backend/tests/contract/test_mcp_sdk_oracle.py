@@ -21,41 +21,18 @@ import time
 from pathlib import Path
 
 import httpx
-import keyring
-import keyring.core
 import pytest
 import uvicorn
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
+from tests.fixtures.keyring import install_in_memory_keyring
+from tests.fixtures.net import free_port
+
 _FAKE = Path(__file__).resolve().parents[1] / "fixtures" / "fake_mcp_server.py"
 
 _TOKEN = "test-oracle-token"
 _HEADERS = {"X-Coffer-Token": _TOKEN}
-
-
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1.0  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, s: str, u: str) -> str | None:
-        return self._data.get((s, u))
-
-    def set_password(self, s: str, u: str, p: str) -> None:
-        self._data[(s, u)] = p
-
-    def delete_password(self, s: str, u: str) -> None:
-        self._data.pop((s, u), None)
-
-
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
 
 
 @pytest.fixture
@@ -72,9 +49,9 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Port range must not clash with other parallel test processes
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59600")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59649")
-    monkeypatch.setattr(keyring.core, "_keyring_backend", _InMemoryKeyring())
+    install_in_memory_keyring(monkeypatch)
 
-    port = _free_port()
+    port = free_port()
 
     from coffer.surfaces.http.app import create_app
     from coffer.surfaces.http.auth import set_active_token

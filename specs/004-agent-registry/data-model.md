@@ -158,9 +158,11 @@ The lifecycle steps required by FR-011 — registration, update, and removal —
 
 `AgentCandidate` is a derived value object (not a SQLite entity, never stored):
 an installed-but-unregistered agent the user can confirm to register. Fields:
-`type` (`AgentType`), `display_name`, `default_config_dir`, and
-`suggested_name` (the type's `default_name()`). A removed agent re-appears as a
-candidate on the next scan — there is no suppression list.
+`type` (`AgentType`), `display_name`, `config_dir` (the type's default config
+directory, as a string), `default_skill_dir` (the type's default skill
+directory, as a string), and `suggested_name` (the type's `default_name()`).
+A removed agent re-appears as a candidate on the next scan — there is no
+suppression list.
 
 ### `BrowseService` (`application/fs/browse_service.py`)
 

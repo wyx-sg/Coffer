@@ -308,7 +308,7 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 - **FR-009**：启用一个 binding 必须在 `<config_dir>/skills/<skill-name>` 创建一个指向 `~/.coffer/skills/<skill-name>/` 的目录 symlink（POSIX）或目录 junction（Windows）。
 - **FR-010**：禁用一个 binding 必须移除目标 link，不动 master。
 - **FR-011**：启用时若目标位置已存在非 Coffer 目标，未加 `--force` 则拒绝；`--force` 在创建 link 前先备份既有目标。
-- **FR-012**：当目录 junction 不可用（如 FAT32、网络共享）时，系统可降级为复制模式并打 `degraded=true` 审计；UI 必须呈现该降级状态。
+- **FR-012**：当符号链接/目录 junction 不可用（如 FAT32、网络共享）时，系统可降级为复制模式；绑定记录 `link_mode=copy_fallback`（enable 事件审计为 `mode: copy_fallback`），UI 必须呈现该降级状态（Agent 的 Skills 标签页对此类绑定显示 "已复制" 警示徽标）。
 
 **更新**
 

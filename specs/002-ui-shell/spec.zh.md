@@ -18,15 +18,15 @@
 
 ```
  AGENTS
-  Agents           /agents      — 消费者（Bot 图标）
+  Agents           /agents        — 消费者（Bot 图标）
  RESOURCES
-  MCP servers      /resources   — 带列表 UI 的 resource kind（今天：mcp_server）
+  MCP servers      /mcp-servers   — 带列表 UI 的 resource kind（今天：mcp_server）
  SYSTEM
-  Audit log        /audit       — 谁在什么时候做了什么
+  Audit log        /audit         — 谁在什么时候做了什么
   Settings         /settings
 ```
 
-它分组为 **Agents**（消费者）、**Resources**（resource kind）与 **System**（横切工具：Audit log 与 Settings），这样导航在 Coffer 成长时保持稳定。agent 住在 `/agents`（列表）与 `/agents/:name`（详情），不出现在 `/resources` 的 kind 浏览器里。agent 详情页是一个简单的 **Overview + Config files** 详情页：一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 只读地呈现其已知配置文件，没有创建 / 编辑 / 删除 / 启用。
+应用的 index (`/`) 重定向到 `/agents`，因此首次访问者落在 Agents 界面。它分组为 **Agents**（消费者）、**Resources**（resource kind）与 **System**（横切工具：Audit log 与 Settings），这样导航在 Coffer 成长时保持稳定。agent 住在 `/agents`（列表）与 `/agents/:name`（详情），不出现在 `/mcp-servers` 的 kind 浏览器里。（`/resources` 保留为指向 `/mcp-servers` 的 legacy 重定向，兼容旧书签。）agent 详情页是一个简单的 **Overview + Config files** 详情页：一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 只读地呈现其已知配置文件，没有创建 / 编辑 / 删除 / 启用。
 
 所有列表界面（agents、MCP servers、审计日志）共用同一个可搜索、可过滤、可分页的表格：点击一行打开该项的详情页，行内操作是紧凑的图标。卡片只保留给欢迎 / 空态。
 
@@ -44,7 +44,7 @@
 
 **Why this priority**: 这是通往其它一切流程的门。如果第一屏看起来坏了或对下一步沉默，用户关掉标签页，产品其它部分都没机会出现。
 
-**Independent Test**: 清掉 `localStorage`，`make dev` 之后打开 `http://localhost:5173/`。页面通过 dev 专用的 token 注入插件 (`frontend/vite.config.ts`) 自动鉴权；用户落到 `/resources`，看到一张欢迎卡片，主行动是 "Add MCP server"。
+**Independent Test**: 清掉 `localStorage`，`make dev` 之后打开 `http://localhost:5173/`。页面通过 dev 专用的 token 注入插件 (`frontend/vite.config.ts`) 自动鉴权；index 重定向到 `/agents`，用户看到 Agents 欢迎卡片，主行动是 "Add agent"。"Add MCP server" 欢迎卡片在 `/mcp-servers`，一步可达。
 
 **Representative scenarios** (完整 Given/When/Then 见 `## Acceptance Scenarios`):
 
@@ -62,7 +62,7 @@
 
 **Why this priority**: spec 001 把后端正确性交付了，但 UI 是裸 tailwind 默认值。"MCP gateway 完成了"的用户可见标杆是：UI 能在真人手里走通（不是只能在 Playwright fixture 里跑）。
 
-**Independent Test**: 在真实浏览器里把 MCP 流程走一遍：开 `/resources`（欢迎或列表），点 "Add MCP server"，填表，提交，落到详情页，依次切 Overview / Tools / Resources / Prompts / Invocations tabs，切换一个工具，回到列表，把语言在英文与 中文 之间切换。每一步都呈现打磨过的内容；没有任何视图死在一个 generic error。
+**Independent Test**: 在真实浏览器里把 MCP 流程走一遍：开 `/mcp-servers`（欢迎或列表），点 "Add MCP server"，填表，提交，落到详情页，依次切 Overview / Tools / Resources / Prompts / Invocations tabs，切换一个工具，回到列表，把语言在英文与 中文 之间切换。每一步都呈现打磨过的内容；没有任何视图死在一个 generic error。
 
 **Representative scenarios** (完整 Given/When/Then 见 `## Acceptance Scenarios`):
 
@@ -93,7 +93,9 @@
 
 ### User Story 4 — Settings 按用户角度组织，不是按 daemon 内部 (Priority: P2)
 
-开发者打开 Settings，看到的 tab 是按"他在管什么"分组，不是按"Coffer 怎么搭的"：**Data**（retention 策略、手动清理、备份）与 **About**（版本、许可证、源代码）。daemon 是实现细节——没有 "Daemon" tab，没有只读的 daemon 状态面板。用户永远不需要知道 Coffer 跑了一个后台 daemon。
+开发者打开 Settings，看到的 tab 是按"他在管什么"分组，不是按"Coffer 怎么搭的"：**General**（列表表格的默认每页条数偏好）、**Data**（retention 策略、手动清理、备份）与 **About**（版本、许可证、源代码）。在桌面 (Tauri) 构建中，Data 与 About 之间会多出一个 **App** tab（开机自启），它在浏览器里隐藏，因为那些能力不存在。Settings 打开时落在 General tab。daemon 是实现细节——没有 "Daemon" tab，没有只读的 daemon 状态面板。用户永远不需要知道 Coffer 跑了一个后台 daemon。
+
+**General** tab 必须暴露默认每页条数偏好（每个列表表格据此初始化的 rows-per-page），持久化在 `localStorage`。
 
 **Why this priority**: P2——底层控件已能工作；本故事是重新组织 + 删除，不是新能力。一个没组织好的 Settings 页恰是 US2 反对的"像脚手架"信号，用户也明确反馈过它令人困惑。
 
@@ -106,7 +108,7 @@
 
 剩余术语改成口语（例如 "prune" 改写成"清理过期数据"）。
 
-**Independent Test**: 开 `/settings`——落在 Data。浏览器里的 tab 是 Data / About。没有 "Daemon" tab，没有 daemon 状态面板；任何 tab 都不暴露 "Shutdown" 或 "Rotate token"。
+**Independent Test**: 开 `/settings`——落在 General。tab 列表是 General / Data / About（桌面构建还多一个 App）。没有 "Daemon" tab，没有 daemon 状态面板；任何 tab 都不暴露 "Shutdown" 或 "Rotate token"。
 
 **Representative scenarios** (完整 Given/When/Then 见 `## Acceptance Scenarios`):
 
@@ -122,8 +124,8 @@
 - **Given** 用户从未打开过 Coffer (localStorage 空，HOME 下还没有 daemon.json)
 - **And** `coffer daemon start` 正在跑（HOME 下有 daemon.json）
 - **When** 他们在真实浏览器里访问 `http://localhost:5173/`
-- **Then** 页面在 2 秒内渲染出侧栏 + 主内容区
-- **And** 主内容显示 resources 欢迎视图（不出现 generic error 卡片）
+- **Then** index 重定向到 `/agents`，页面在 2 秒内渲染出侧栏 + 主内容区
+- **And** 主内容显示 Agents 欢迎视图（不出现 generic error 卡片）
 - **And** 侧栏列出 Coffer 的运营界面——Agents、MCP servers、Audit log、Settings——分组在 "Agents"、"Resources"、"System" 标题下
 
 ### Scenario: token-missing renders an actionable empty state
@@ -137,7 +139,7 @@
 ### Scenario: empty resources list renders a welcome view
 
 - **Given** daemon 正在跑且尚未注册任何 resource
-- **When** 用户打开 `/resources`
+- **When** 用户打开 `/mcp-servers`
 - **Then** 页面渲染一张欢迎卡片，带简短介绍以及主行动 "Add MCP server" 按钮
 - **And** 欢迎卡片**不**显示空表格或占位 ghost 行
 
@@ -146,13 +148,13 @@
 - **Given** 用户在 resources 列表打开 "Add MCP server" 对话框
 - **When** 他们粘入标准的 `mcpServers` JSON 并确认 review 步骤
 - **Then** app 先把每台服务器 POST 到 `/api/v1/resources`，再把任何 secret env 值通过 `/api/v1/keychain` 写入 keychain（register-first 顺序避免注册失败时遗留 orphan keychain 条目）
-- **And** 成功时对话框关闭；只有一台服务器时，app 跳到 `/resources/mcp_server/<name>` 的 Overview tab
+- **And** 成功时对话框关闭；只有一台服务器时，app 跳到 `/mcp-servers/mcp_server/<name>` 的 Overview tab
 - **And** 新服务器立刻出现在 resources 列表，健康状态先是 "unknown"，10 秒内变为 "healthy"
 
 ### Scenario: add-server form navigates to detail then back to list shows card
 
 - **Given** 用户完成了一台新 MCP 服务器的 JSON 导入对话框
-- **When** 他们落到服务器详情页，再返回 `/resources`
+- **When** 他们落到服务器详情页，再返回 `/mcp-servers`
 - **Then** 该服务器卡片出现在 resources 列表
 
 ### Scenario: capability toggle uses the redesigned tab layout
@@ -236,8 +238,8 @@
 
 - **Given** 用户访问 `/settings`
 - **When** 页面解析
-- **Then** 它落在 Data tab
-- **And** settings 侧栏显示 Data 与 About，当前路由高亮
+- **Then** 它落在 General tab
+- **And** settings 侧栏显示 General、Data 与 About（桌面构建还多一个 App），当前路由高亮
 - **And** 点 tab 切换右侧面板内容，不整页刷新
 
 ### Scenario: settings drops the confusing controls

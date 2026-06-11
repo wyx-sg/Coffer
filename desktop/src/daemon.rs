@@ -53,10 +53,6 @@ pub fn bundled_daemon_path(app: &AppHandle) -> Result<PathBuf, String> {
 /// Read the daemon discovery file at `~/.coffer/daemon.json` and return the
 /// port if present. Returns `None` on any I/O / parse failure — callers
 /// treat that as "no daemon running."
-///
-/// We deliberately do not pull in serde_json here: the file is small and
-/// the format is fixed (the daemon writes it), so a tiny string scan keeps
-/// the desktop crate dependency-light.
 pub fn read_daemon_port() -> Option<u16> {
     let home = env::var("HOME").ok().or_else(|| env::var("USERPROFILE").ok())?;
     let path = PathBuf::from(home).join(".coffer").join("daemon.json");
@@ -64,43 +60,20 @@ pub fn read_daemon_port() -> Option<u16> {
     parse_daemon_port(&raw)
 }
 
-/// Extract the `"port"` value from the daemon discovery JSON via a tiny
-/// hand-rolled scan — we avoid pulling `serde_json` into the desktop crate
-/// (the file is small and the daemon controls its format). Returns `None`
-/// for a missing key, a malformed value, or a port outside the u16 range.
+/// Extract the `"port"` value from the daemon discovery JSON. Returns `None`
+/// for malformed JSON, a missing key, a non-numeric value, or a port outside
+/// the u16 range. (serde_json is already in the Tauri dependency graph; the
+/// previous hand-rolled string scan silently coupled to the daemon's
+/// serializer — CODE-L7.)
 fn parse_daemon_port(raw: &str) -> Option<u16> {
-    let port_key = "\"port\"";
-    let idx = raw.find(port_key)?;
-    let after = &raw[idx + port_key.len()..];
-    let colon = after.find(':')?;
-    let tail = &after[colon + 1..];
-    let mut digits = String::new();
-    for ch in tail.chars() {
-        if ch.is_ascii_digit() {
-            digits.push(ch);
-        } else if !digits.is_empty() {
-            break;
-        } else if !ch.is_whitespace() {
-            // First non-digit, non-whitespace char before any digits — malformed.
-            return None;
-        }
-    }
-    digits.parse::<u16>().ok()
+    let v: serde_json::Value = serde_json::from_str(raw).ok()?;
+    u16::try_from(v.get("port")?.as_u64()?).ok()
 }
 
-/// Extract the `"token"` string value from the daemon discovery JSON via the
-/// same dependency-light scan as `parse_daemon_port`. The token is a
-/// URL-safe base64 string (`[A-Za-z0-9_-]`, no embedded quotes/escapes), so a
-/// plain "first quote after the colon → next quote" read is sufficient.
+/// Extract the `"token"` string value from the daemon discovery JSON.
 fn parse_daemon_token(raw: &str) -> Option<String> {
-    let key = "\"token\"";
-    let idx = raw.find(key)?;
-    let after = &raw[idx + key.len()..];
-    let colon = after.find(':')?;
-    let open = after[colon + 1..].find('"')?;
-    let rest = &after[colon + 1 + open + 1..];
-    let close = rest.find('"')?;
-    Some(rest[..close].to_string())
+    let v: serde_json::Value = serde_json::from_str(raw).ok()?;
+    Some(v.get("token")?.as_str()?.to_string())
 }
 
 /// Read both the port and token from `~/.coffer/daemon.json`. Returns `None`
@@ -120,15 +93,62 @@ pub fn daemon_is_listening(port: u16) -> bool {
     TcpStream::connect_timeout(&addr.into(), Duration::from_millis(250)).is_ok()
 }
 
-/// Spawn the bundled `coffer-daemon` binary detached so it survives the app.
+/// Ask the running daemon to shut itself down via its token-gated
+/// `POST /api/v1/daemon/shutdown` route (a raw HTTP/1.1 request over
+/// `TcpStream` — not worth an HTTP-client dependency for one loopback call).
+/// The daemon replies 204 and SIGTERMs itself.
+fn request_daemon_shutdown(port: u16, token: &str) -> Result<(), String> {
+    use std::io::{Read, Write};
+    use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
+    use std::time::Duration;
+
+    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+    let mut stream = TcpStream::connect_timeout(&addr.into(), Duration::from_millis(500))
+        .map_err(|e| format!("shutdown connect: {e}"))?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(2)))
+        .and_then(|_| stream.set_read_timeout(Some(Duration::from_secs(2))))
+        .map_err(|e| format!("shutdown socket timeout: {e}"))?;
+    let req = format!(
+        "POST /api/v1/daemon/shutdown HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\
+         X-Coffer-Token: {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    );
+    stream
+        .write_all(req.as_bytes())
+        .map_err(|e| format!("shutdown write: {e}"))?;
+    let mut buf = [0u8; 32];
+    let n = stream.read(&mut buf).map_err(|e| format!("shutdown read: {e}"))?;
+    let head = String::from_utf8_lossy(&buf[..n]);
+    if head.starts_with("HTTP/1.1 204") || head.starts_with("HTTP/1.0 204") {
+        Ok(())
+    } else {
+        Err(format!("shutdown rejected: {}", head.lines().next().unwrap_or("")))
+    }
+}
+
+/// Poll until nothing is listening on `port` (the old daemon has exited),
+/// up to `timeout`. Returns `true` when the port is free.
+fn wait_for_port_free(port: u16, timeout: std::time::Duration) -> bool {
+    use std::time::Instant;
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if !daemon_is_listening(port) {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    false
+}
+
+/// Restart the daemon: stop the running one (if any), spawn a fresh one.
 ///
 /// Behaviour:
 ///   1. Rate-limit: refuse if called within `RESTART_MIN_INTERVAL_SECS` of
 ///      the previous successful restart.
-///   2. Detect-or-spawn: if `~/.coffer/daemon.json` lists a port and we can
-///      open a TCP connection to it, return `started: false` with PID 0
-///      instead of spawning a duplicate daemon.
-///   3. Otherwise spawn the bundled binary detached and return its PID.
+///   2. True restart: if `~/.coffer/daemon.json` lists a responsive daemon,
+///      POST its token-gated /daemon/shutdown route and wait for the port
+///      to free.
+///   3. Spawn the bundled binary detached and return its PID.
 ///
 /// We deliberately use `std::process::Command` instead of the Tauri shell
 /// sidecar API here so the spawned daemon survives the app's exit (the
@@ -167,12 +187,20 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
         }
     }
 
-    // (2) Detect-or-spawn: if the discovery file lists a port and a daemon
-    // is responsive on it, skip spawning a duplicate.
-    if let Some(port) = read_daemon_port() {
+    // (2) True restart: when a daemon is responsive, ask it to shut down
+    // (token-gated POST /daemon/shutdown) and wait for the port to free
+    // before spawning the replacement. Previously this branch was a silent
+    // no-op, so "Restart daemon" did nothing exactly when a user would
+    // reach for it (a wedged-but-listening daemon).
+    if let Some((port, token)) = read_daemon_info() {
         if daemon_is_listening(port) {
-            log::info!("daemon already running on port {} — skipping spawn", port);
-            return Ok(RestartResult { pid: 0, started: false });
+            request_daemon_shutdown(port, &token)?;
+            if !wait_for_port_free(port, Duration::from_secs(8)) {
+                return Err(format!(
+                    "daemon on port {port} did not stop within 8s of the shutdown request"
+                ));
+            }
+            log::info!("daemon on port {} stopped for restart", port);
         }
     }
 
@@ -286,6 +314,61 @@ mod tests {
     #[test]
     fn parse_daemon_port_reads_well_formed_value() {
         assert_eq!(parse_daemon_port(r#"{"port": 8000, "pid": 1}"#), Some(8000));
+    }
+
+    /// request_daemon_shutdown sends a token-carrying POST to the shutdown
+    /// route and treats a 204 as success. Driven against an in-test TCP
+    /// listener standing in for the daemon.
+    #[test]
+    fn request_daemon_shutdown_posts_token_and_accepts_204() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let handle = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().expect("accept");
+            let mut buf = [0u8; 1024];
+            let n = sock.read(&mut buf).expect("read");
+            let req = String::from_utf8_lossy(&buf[..n]).into_owned();
+            sock.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
+                .expect("write");
+            req
+        });
+
+        request_daemon_shutdown(port, "tok-123").expect("shutdown ok");
+        let req = handle.join().expect("server thread");
+        assert!(req.starts_with("POST /api/v1/daemon/shutdown HTTP/1.1\r\n"), "{req}");
+        assert!(req.contains("X-Coffer-Token: tok-123\r\n"), "{req}");
+    }
+
+    #[test]
+    fn request_daemon_shutdown_rejects_non_204() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().expect("accept");
+            let mut buf = [0u8; 1024];
+            let _ = sock.read(&mut buf);
+            let _ = sock.write_all(b"HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+        });
+
+        let err = request_daemon_shutdown(port, "bad-token").unwrap_err();
+        assert!(err.contains("401"), "{err}");
+    }
+
+    #[test]
+    fn wait_for_port_free_returns_true_when_nothing_listens() {
+        use std::net::TcpListener;
+        // Grab a free port, then release it so nothing is listening.
+        let port = {
+            let l = TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap().port()
+        };
+        assert!(wait_for_port_free(port, Duration::from_millis(300)));
     }
 
     #[test]

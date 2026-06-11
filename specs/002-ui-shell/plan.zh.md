@@ -3,7 +3,6 @@
 > English: [plan.md](./plan.md)
 
 **Branch**: `feature/002-mcp-gateway-web`
-**Date**: 2026-05-28
 **Spec**: [./spec.md](./spec.md)
 **Status**: Accepted
 
@@ -60,30 +59,40 @@ specs/002-ui-shell/
 
 ```text
 frontend/src/
-├── App.tsx                                # 路由 + 全局 providers
-├── main.tsx                               # bootstrap (QueryClient、i18n、router)
+├── App.tsx                                # 全局 providers (QueryClient、i18n) + RouterProvider
+├── main.tsx                               # bootstrap 入口
+├── router.tsx                             # createBrowserRouter 路由表
+├── kinds.ts                               # 组装入口：注册每个 kind 的 UI 模块
+├── i18n/
+│   ├── index.ts                           # i18next 配置
+│   └── locales/{en,zh}.json               # 每种语言一份扁平词条
 ├── lib/
-│   ├── api/                               # openapi-fetch 客户端 + 类型化 query hooks
-│   ├── auth/                              # daemon token 加载（由 dev 插件读 ~/.coffer/daemon.json）
-│   ├── i18n/                              # i18next 配置；resources/en、resources/zh
-│   ├── layout/                            # AppShell、Sidebar、SidebarGroup、LanguageSwitcher
-│   ├── empty-state/                       # EmptyState、WelcomeCard 等基础件
-│   ├── status/                            # DaemonOfflineBanner、ErrorView
-│   └── components/                        # shadcn primitives (button、dialog、tabs、table…)
+│   ├── api/                               # 类型化 API 客户端 + 各资源模块 (resources、agents、skills、fs)
+│   ├── hooks/                             # TanStack Query hooks (useResources、useAudit、useAgents…)
+│   ├── components/                        # kindRegistry.ts + 共享 ResourceListView
+│   ├── auth.ts                            # daemon token 加载（由 dev 插件读 ~/.coffer/daemon.json）
+│   ├── preferences.ts                     # 默认每页条数偏好 (General 设置)
+│   ├── tauri.ts                           # isTauri() 守卫，用于桌面专属界面
+│   └── queryClient.ts / statusColors.ts / timeRange.ts / utils.ts
+├── components/                            # 共享 shell + 表格基础件
+│   ├── Layout.tsx                         # AppShell + 可折叠侧栏 (localStorage "coffer.nav.collapsed")
+│   ├── LanguageSwitcher.tsx
+│   ├── DataTable.tsx / DataCardGrid.tsx / Pagination.tsx / SearchInput.tsx / …
+│   ├── DaemonOfflineBanner.tsx
+│   ├── agents/                            # agent kind UI 组件 (spec 004)
+│   └── skills/                            # skill kind UI 组件 (spec 005)
 ├── kinds/
 │   └── mcp/
-│       ├── kindRegistry.ts                # 注册进 per-kind 注册表的入口
-│       ├── pages/{ResourceListPage,ResourceDetailPage}
-│       ├── components/{AddMcpServerDialog,ToolList,InvocationsTable,…}
-│       └── routes.tsx                     # /resources/mcp_server/* 子路由
-├── pages/
-│   ├── ResourcesPage.tsx                  # /resources — kind-agnostic 分派
-│   ├── AgentsPage.tsx                      # /agents — agent 列表（消费者，不是 resource kind）
-│   ├── AgentDetailPage.tsx                 # /agents/:name — agent 详情
-│   ├── audit/AuditLogPage.tsx             # /audit — 审计日志视图（/observability 重定向到这里）
-│   ├── SettingsLayout.tsx                 # /settings 布局 (tab 侧栏)
-│   └── settings/{DataSettings,AboutSettings,AppSettings}
-└── locales/{en,zh}/*.json                 # i18n 词条
+│       ├── index.tsx                      # MCP_KIND_UI 入口，由 kinds.ts 注册
+│       ├── McpServersTable.tsx / McpServerDetailPage.tsx / McpServerDetailTabs.tsx
+│       └── AddMcpServerDialog.tsx / CapabilityList.tsx / InvocationsTable.tsx / …
+└── pages/
+    ├── ResourcesPage.tsx                  # /mcp-servers — kind-agnostic 分派 (/resources 重定向到这里)
+    ├── ResourceDetailPage.tsx             # /mcp-servers/:kind/:name
+    ├── AgentsPage.tsx / AgentDetailPage.tsx     # /agents、/agents/:name
+    ├── SkillsPage.tsx / SkillDetailPage.tsx     # /skills、/skills/:name
+    ├── audit/AuditLogPage.tsx             # /audit — 审计日志视图（/observability 重定向到这里）
+    └── settings/                          # SettingsLayout + GeneralSettings、DataSettings、AppSettings、AboutPage
 
 frontend/
 ├── vite.config.ts                         # dev 专用的 token 注入插件 (读 daemon.json)
@@ -93,7 +102,13 @@ frontend/
 
 ### 扩展点：kind 注册表
 
-`frontend/src/kinds/<kind>/kindRegistry.ts` 导出一个小对象，声明该 kind 的展示名、侧栏图标、路由子项以及列表/详情组件。kind-agnostic 的 `ResourcesPage` 通过查注册表来分派——共享代码里没有任何按 kind 分支的逻辑。新增一个 kind 时各自加一份 `kindRegistry.ts`，在 composition root 处 import 即可，其它共享文件不需改。
+`frontend/src/lib/components/kindRegistry.ts` 暴露 `registerKindUI`；每个 kind
+在 `frontend/src/kinds/<kind>/` 下提供一个自包含的 UI 模块，其 `index.tsx`
+导出该 kind 的展示名、侧栏图标以及列表/详情组件。组装入口
+`frontend/src/kinds.ts` import 每个模块并注册；kind-agnostic 的
+`ResourcesPage` 通过查注册表来分派——共享代码里没有任何按 kind 分支的逻辑。
+新增一个 kind 时各自加一份模块，并在 `kinds.ts` 里加一行 import +
+`registerKindUI` 调用即可，其它共享文件不需改。
 
 这是后端 `KindModule` 组合模式（[ADR-001](../../docs/decisions/ADR-001-resource-framework-upfront.md)、[ADR-002](../../docs/decisions/ADR-002-code-layout-layer-first.md)）在 UI 侧的镜像。
 
@@ -117,7 +132,7 @@ Tailwind 配置 (`frontend/tailwind.config.js`)、shadcn primitives、`AppShell`
 
 ### Phase 2 — US1：首次访问流
 
-`/resources` 在没有资源时的欢迎视图、带「重新加载」恢复操作（桌面应用为「重启」）的"Daemon not running"视图，以及通过 dev token 插件实现的冷启动自动鉴权渲染。
+`/mcp-servers` 在没有资源时的欢迎视图（以及 index 落地的 `/agents` Agents 欢迎视图）、带「重新加载」恢复操作（桌面应用为「重启」）的"Daemon not running"视图，以及通过 dev token 插件实现的冷启动自动鉴权渲染。
 
 **Done when:** US1 的三个 representative scenarios 通过。
 

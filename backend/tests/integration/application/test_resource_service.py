@@ -84,6 +84,126 @@ async def test_register_validates_via_schema(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_generic_register_rejects_lifecycle_kind(tmp_path):
+    """CODE-REG: a kind that owns creation invariants (master folder, agent
+    detection) must declare ``generic_create_allowed=False`` so the generic
+    POST /resources path cannot create a half-formed row behind its back. The
+    kind-owning service opts in via ``allow_lifecycle_kind=True``.
+    """
+    from coffer.domain.errors import GenericCreateNotAllowed
+
+    kinds = {
+        "skill": Kind(
+            name="skill",
+            display_name="Skill",
+            config_schema=_FakeConfig,
+            generic_create_allowed=False,
+        ),
+    }
+    svc, _, engine = await _service(tmp_path, kinds=kinds)
+    try:
+        # Generic path (no opt-in) is rejected.
+        with pytest.raises(GenericCreateNotAllowed):
+            await svc.register(kind="skill", name="t", config={"foo": 1}, actor="cli")
+        # Kind-owning service path succeeds.
+        r = await svc.register(
+            kind="skill",
+            name="t",
+            config={"foo": 1},
+            actor="skill-service",
+            allow_lifecycle_kind=True,
+        )
+        assert r.id != 0
+
+        # The same guard covers UPDATE: a generic PATCH must not rewrite a
+        # lifecycle kind's config behind its owning service (the row would
+        # desync from the on-disk artifact). The owning service opts in.
+        with pytest.raises(GenericCreateNotAllowed):
+            await svc.update_config(ResourceRef("skill", "t"), new_config={"foo": 2}, actor="cli")
+        updated = await svc.update_config(
+            ResourceRef("skill", "t"),
+            new_config={"foo": 2},
+            actor="skill-service",
+            allow_lifecycle_kind=True,
+        )
+        assert updated.config["foo"] == 2
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
+    """CODE-006/ADR-001: ResourceService must NOT hardcode the mcp_server
+    ``transport`` config shape. A kind supplies its own credential-ref
+    extractor (probed before any DB write) and audit redactor (secrets stripped
+    before audit), and the kind-agnostic core just calls them — proven here with
+    a kind that stores its ref/secret OUTSIDE any ``transport`` key.
+    """
+    from coffer.domain.audit import AuditEventType
+    from coffer.domain.errors import CredentialMissing
+
+    class _SecretConfig(BaseModel):
+        secret_ref: str
+        plaintext: str = ""
+
+    class _FakeKeyring:
+        def __init__(self, present: set[str]) -> None:
+            self._present = present
+
+        def get(self, ref: str) -> str | None:
+            return "value" if ref in self._present else None
+
+    kinds = {
+        "vault": Kind(
+            name="vault",
+            display_name="Vault",
+            config_schema=_SecretConfig,
+            credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+            audit_redactor=lambda cfg: {k: v for k, v in cfg.items() if k != "plaintext"},
+        ),
+    }
+
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+    audit = AuditService(SqlAlchemyAuditRepo(sm))
+    try:
+        # Missing credential → probe fails before any DB write.
+        svc_missing = ResourceService(
+            kinds=kinds,
+            repo=SqlAlchemyResourceRepo(sm),
+            audit=audit,
+            keyring=_FakeKeyring(present=set()),
+        )
+        with pytest.raises(CredentialMissing):
+            await svc_missing.register(
+                kind="vault", name="t", config={"secret_ref": "k1"}, actor="cli"
+            )
+
+        # Present credential → succeeds; audit drops the redacted field.
+        svc_ok = ResourceService(
+            kinds=kinds,
+            repo=SqlAlchemyResourceRepo(sm),
+            audit=audit,
+            keyring=_FakeKeyring(present={"k1"}),
+        )
+        await svc_ok.register(
+            kind="vault",
+            name="t",
+            config={"secret_ref": "k1", "plaintext": "leak-me"},
+            actor="cli",
+        )
+        entries = await audit.query(event_type=AuditEventType.RESOURCE_CREATED.value)
+        created = [e for e in entries if e.resource_name == "t"]
+        assert created, "expected a RESOURCE_CREATED audit entry"
+        assert "plaintext" not in created[0].details["config"]
+        assert created[0].details["config"]["secret_ref"] == "k1"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_register_unknown_kind_raises(tmp_path):
     svc, _, engine = await _service(tmp_path)
     with pytest.raises(UnknownKind):

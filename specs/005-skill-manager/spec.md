@@ -306,7 +306,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **FR-009**: Enabling a binding MUST create a directory symlink (POSIX) or directory junction (Windows) at `<config_dir>/skills/<skill-name>` pointing to `~/.coffer/skills/<skill-name>/`.
 - **FR-010**: Disabling a binding MUST remove the target link without touching the master folder.
 - **FR-011**: Enabling MUST refuse to overwrite an existing non-Coffer target without `--force`; `--force` backs up the existing target before creating the link.
-- **FR-012**: When directory junctions are unavailable (e.g., FAT32, network share), System MAY fall back to copy mode for that target with an audit `degraded=true` flag; UI MUST surface the degradation.
+- **FR-012**: When symlinks/directory junctions are unavailable (e.g., FAT32, network share), System MAY fall back to copy mode for that target; the binding records `link_mode=copy_fallback` (audited as `mode: copy_fallback` on the enable event) and the UI MUST surface the degradation (the agent Skills tab shows a "Copied" warning chip on such bindings).
 
 **Updates**
 

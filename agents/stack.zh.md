@@ -11,7 +11,7 @@ Coffer 后端用 Python 3.12+。
 - **Python 3.12+**
 - **FastAPI** 提供 HTTP surface
 - **Pydantic v2** 用于模型与校验
-- **SQLite** 通过标准库 `sqlite3` 或 SQLAlchemy
+- **SQLite** 通过 **SQLAlchemy 2 (async)** + **`aiosqlite`**（唯一的数据访问路径）
 - **`keyring`** 接 OS keychain（仅用于凭据）
 - **`anyio`** + `asyncio` 用于异步与子进程管理
 
@@ -61,7 +61,8 @@ make lint / make test / make format / make verify
 
 ## E2E — TypeScript / Playwright
 
-端到端层位于 `e2e/`，是仓库里唯一的 TypeScript。
+端到端层位于 `e2e/`。仓库主要的 TypeScript surface 是前端
+（`frontend/src`，约 18k 行 TS/TSX）；`e2e/` 是在其之上额外的 TypeScript 层。
 
 - **TypeScript 5.x**，ESM 模块（`tsconfig.json`，types 为 `@playwright/test` + `node`）。
 - **Playwright**（`@playwright/test`）作为 e2e runner。

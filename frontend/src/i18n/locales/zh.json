@@ -505,7 +505,9 @@
     "agentOwn": "Agent 自有（非 Coffer 管理）",
     "skillsTab": {
       "empty": "该 Agent 暂无 Coffer 管理的 Skill —— 点击“安装 Skill”来添加。",
-      "toggleAria": "在该 Agent 上启用/停用 Skill {{name}}"
+      "toggleAria": "在该 Agent 上启用/停用 Skill {{name}}",
+      "degradedBadge": "已复制",
+      "degradedTooltip": "当前文件系统不支持符号链接，Coffer 改为下发了一份副本。在重新启用之前，Agent 不会看到主 Skill 的后续修改。"
     },
     "mcpTab": {
       "notInstalled": "尚未在该 Agent 上安装 Coffer MCP —— 安装后可在此暴露 Coffer 的 MCP 服务器。",

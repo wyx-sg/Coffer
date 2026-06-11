@@ -23,6 +23,7 @@ from mcp.types import ServerNotification
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import StdioTransport
 from coffer.infrastructure.daemon.orphan_sweep import reap_pidfile, record_spawn
+from coffer.infrastructure.mcp.dispatch import dispatch_method
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
 
@@ -205,35 +206,13 @@ class StdioUpstreamConnection:
         progress_callback: Any | None = None,
     ) -> Any:
         assert self._session is not None
-        if method == "tools/list":
-            return await self._session.list_tools()
-        if method == "tools/call":
-            # T-060: pass read_timeout_seconds so the SDK resets the idle timer
-            # on every notifications/progress event, preventing premature timeout
-            # of long-running tools that stream progress.
-            from datetime import timedelta
-
-            try:
-                return await self._session.call_tool(
-                    params["name"],
-                    arguments=params.get("arguments"),
-                    read_timeout_seconds=timedelta(seconds=self._request_timeout),
-                    progress_callback=progress_callback,
-                )
-            except TypeError:
-                # Older SDK build that doesn't accept read_timeout_seconds
-                return await self._session.call_tool(
-                    params["name"], arguments=params.get("arguments")
-                )
-        if method == "resources/list":
-            return await self._session.list_resources()
-        if method == "resources/read":
-            return await self._session.read_resource(params["uri"])
-        if method == "prompts/list":
-            return await self._session.list_prompts()
-        if method == "prompts/get":
-            return await self._session.get_prompt(params["name"], arguments=params.get("arguments"))
-        raise UpstreamUnavailable(f"method not supported by gateway: {method!r}")
+        return await dispatch_method(
+            self._session,
+            method,
+            params,
+            request_timeout_seconds=float(self._request_timeout),
+            progress_callback=progress_callback,
+        )
 
     async def close(self) -> None:
         """Close the upstream connection gracefully."""

@@ -91,6 +91,7 @@ String-valued enum (use `StrEnum`):
 | `"retention_updated"`     | When a retention policy is changed                         |
 | `"backup_created"`        | After `POST /api/v1/daemon/backup`                         |
 | `"keychain_set"`          | After `POST /api/v1/keychain` stores a secret              |
+| `"keychain_read"`         | After `GET /api/v1/keychain/{ref}` reads a secret          |
 | `"keychain_deleted"`      | After `DELETE /api/v1/keychain/{ref}` removes a secret     |
 
 ### `RetentionPolicy` (`domain/retention.py`)

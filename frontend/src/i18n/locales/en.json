@@ -505,7 +505,9 @@
     "agentOwn": "Agent's own (not via Coffer)",
     "skillsTab": {
       "empty": "No Coffer-managed skills on this agent yet — use Install skills to add some.",
-      "toggleAria": "Toggle skill {{name}} on this agent"
+      "toggleAria": "Toggle skill {{name}} on this agent",
+      "degradedBadge": "Copied",
+      "degradedTooltip": "Symlinks aren't available on this filesystem, so Coffer delivered a copy. The agent won't see edits to the master skill until you re-enable it."
     },
     "mcpTab": {
       "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to expose Coffer's MCP servers here.",

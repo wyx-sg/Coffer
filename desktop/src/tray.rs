@@ -12,9 +12,11 @@ use tauri::{
 
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open Coffer", true, None::<&str>)?;
+    // FR-D03: the tray must offer "Restart daemon" (spec 003-mcp-gateway-desktop).
+    let restart = MenuItem::with_id(app, "restart_daemon", "Restart daemon", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Coffer", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&open, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &restart, &sep, &quit])?;
 
     let icon = app.default_window_icon().cloned().unwrap_or_else(|| {
         Image::from_bytes(include_bytes!("../icons/icon.png")).expect("tray icon bytes valid PNG")
@@ -32,6 +34,22 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                     let _ = window.set_focus();
                     let _ = window.unminimize();
                 }
+            }
+            "restart_daemon" => {
+                // Same rate-limited stop-then-spawn the webview banner uses
+                // (daemon.rs::restart_daemon). Run off the menu-event thread:
+                // a true restart blocks for seconds (shutdown + port-free
+                // poll), which must not freeze the UI. The tray has no place
+                // to show a dialog, so the outcome is just logged.
+                let app = app.clone();
+                std::thread::spawn(move || match crate::daemon::restart_daemon(app) {
+                    Ok(r) => log::info!(
+                        "tray.restart_daemon ok pid={} started={}",
+                        r.pid,
+                        r.started
+                    ),
+                    Err(e) => log::warn!("tray.restart_daemon failed: {e}"),
+                });
             }
             "quit" => {
                 app.exit(0);

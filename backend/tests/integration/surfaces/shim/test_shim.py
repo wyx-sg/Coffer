@@ -18,9 +18,6 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-import keyring
-import keyring.backend
-import keyring.core
 import pytest
 import uvicorn
 from fastapi import FastAPI
@@ -36,6 +33,7 @@ from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.infrastructure.daemon.pid_lock import write as write_daemon_json
+from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
@@ -56,32 +54,10 @@ from coffer.surfaces.http.daemon_routes import set_port
 from coffer.surfaces.http.dependencies import set_mcp_session_factory
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_router
 from coffer.surfaces.http.mcp.protocol_routes import shutdown_all_sessions
+from tests.fixtures.keyring import install_in_memory_keyring
+from tests.fixtures.net import free_port
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
-
-
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1.0  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, s: str, u: str) -> str | None:
-        return self._data.get((s, u))
-
-    def set_password(self, s: str, u: str, p: str) -> None:
-        self._data[(s, u)] = p
-
-    def delete_password(self, s: str, u: str) -> None:
-        self._data.pop((s, u), None)
-
-
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
 
 
 def _stdio_cfg(*tools: str) -> dict:  # type: ignore[type-arg]
@@ -143,6 +119,7 @@ def _build_app_sync(tmp_path: Path, token: str, port: int) -> FastAPI:
             audit=audit2,
         )
         supervisor = SubprocessSupervisor(
+            upstream_factory=build_upstream,
             resource_service=rsvc2,
             credential_resolver=CredentialResolver(KeyringAdapter()),
         )
@@ -181,9 +158,9 @@ def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setattr(keyring.core, "_keyring_backend", _InMemoryKeyring())
+    install_in_memory_keyring(monkeypatch)
 
-    port = _free_port()
+    port = free_port()
     token = "test-shim-token"
 
     app = _build_app_sync(tmp_path, token, port)
