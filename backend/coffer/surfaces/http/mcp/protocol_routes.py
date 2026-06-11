@@ -206,8 +206,17 @@ async def handle_post(
             )
             response: dict[str, Any] = _error_response(req_id, code, str(e))
         except Exception as e:
+            # CODE-M1: never echo an arbitrary exception message onto the wire —
+            # upstream/library errors can embed credentials (e.g. an auth
+            # failure that reflects the API key). This branch only ever catches
+            # non-CofferError exceptions (CofferError is handled above), so the
+            # class name alone is the safe summary; the full detail is logged
+            # server-side via ``_logger.exception``. Mirrors the invocation-log
+            # rule in ``gateway_handlers._safe_error_summary`` (SC-010).
             _logger.exception("mcp.post.unexpected", extra={"method": method})
-            response = _error_response(req_id, _JSON_RPC_INTERNAL_ERROR, str(e))
+            response = _error_response(
+                req_id, _JSON_RPC_INTERNAL_ERROR, f"internal error: {type(e).__name__}"
+            )
         else:
             response = {"jsonrpc": "2.0", "id": req_id, "result": result}
 

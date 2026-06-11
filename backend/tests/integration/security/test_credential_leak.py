@@ -18,7 +18,6 @@ import sys
 from pathlib import Path
 
 import keyring
-import keyring.core
 import pytest
 
 from coffer.application.audit_service import AuditService
@@ -32,6 +31,7 @@ from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.logging.setup import _attach_file_handler
+from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
@@ -45,24 +45,9 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[2] / "fixtures" / "fake_mcp_server.py"
-
-
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1.0  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, s: str, u: str) -> str | None:
-        return self._data.get((s, u))
-
-    def set_password(self, s: str, u: str, p: str) -> None:
-        self._data[(s, u)] = p
-
-    def delete_password(self, s: str, u: str) -> None:
-        self._data.pop((s, u), None)
 
 
 @pytest.mark.acceptance(spec="001-mcp-gateway", scenario="credentials never leak to logs or audit")
@@ -74,7 +59,7 @@ async def test_secret_value_never_in_db_or_logs(
     sentinel = f"COFFER_LEAK_SENTINEL_{secrets.token_hex(16)}"
 
     # Install in-memory keyring and store the sentinel under a ref key.
-    monkeypatch.setattr(keyring.core, "_keyring_backend", _InMemoryKeyring())
+    install_in_memory_keyring(monkeypatch)
     keyring.set_password("coffer", "leak-test-ref", sentinel)
 
     # Redirect coffer log files to a temp dir so we can grep them cleanly, and
@@ -169,6 +154,7 @@ async def test_secret_value_never_in_db_or_logs(
     )
 
     supervisor = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=rsvc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
         retry_delays=(),

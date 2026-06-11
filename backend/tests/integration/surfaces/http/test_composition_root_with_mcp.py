@@ -28,36 +28,19 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import keyring
-import keyring.core
 import pytest
 from starlette.testclient import TestClient
 
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 _HEADERS = {"X-Coffer-Token": "test-token"}
 
 
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1.0  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, s: str, u: str) -> str | None:
-        return self._data.get((s, u))
-
-    def set_password(self, s: str, u: str, p: str) -> None:
-        self._data[(s, u)] = p
-
-    def delete_password(self, s: str, u: str) -> None:
-        self._data.pop((s, u), None)
-
-
 def _install_in_memory_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(keyring.core, "_keyring_backend", _InMemoryKeyring())
+    install_in_memory_keyring(monkeypatch)
 
 
 def _make_client(

@@ -8,8 +8,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import keyring
-import keyring.core
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -22,6 +20,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
@@ -47,28 +46,13 @@ from coffer.surfaces.http.dependencies import (
     get_resource_service,
 )
 from coffer.surfaces.http.mcp.capability_routes import router as capability_router
+from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[4] / "fixtures" / "fake_mcp_server.py"
 
 
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1.0  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, s: str, u: str) -> str | None:
-        return self._data.get((s, u))
-
-    def set_password(self, s: str, u: str, p: str) -> None:
-        self._data[(s, u)] = p
-
-    def delete_password(self, s: str, u: str) -> None:
-        self._data.pop((s, u), None)
-
-
 def _with_in_memory(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(keyring.core, "_keyring_backend", _InMemoryKeyring())
+    install_in_memory_keyring(monkeypatch)
 
 
 def _stdio_config(*tools: str) -> dict[str, Any]:
@@ -131,6 +115,7 @@ async def _build_app(
     prefs_repo = MCPCapabilityPreferenceRepo(sm)
 
     supervisor = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=rsvc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
@@ -276,6 +261,7 @@ async def test_list_capabilities_tools_only_upstream_method_not_found(
 
     prefs_repo = MCPCapabilityPreferenceRepo(sm)
     supervisor = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=rsvc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
@@ -328,6 +314,55 @@ async def test_list_capabilities_returns_404_for_unknown_server(
     # regression that swallowed it into a 503/500 would be caught.
     assert r.status_code == 404, r.text
     assert "error" in r.json()
+
+
+@pytest.mark.asyncio
+async def test_list_capabilities_times_out_on_hung_upstream(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CODE-M2: a dead/hung upstream must not let the management capabilities
+    page hang for the supervisor's full retry ladder. The route applies a
+    per-call timeout budget and surfaces 503 within it.
+    """
+    import asyncio
+
+    from coffer.surfaces.http.mcp import capability_routes
+
+    _with_in_memory(monkeypatch)
+    # Shrink the budget so the test is fast but still proves the bound.
+    monkeypatch.setattr(capability_routes, "_CAPABILITY_LIST_TIMEOUT", 0.1)
+
+    class _HangingDiscovery:
+        async def list_tools(self, name: str, include_disabled: bool = False) -> list:
+            await asyncio.sleep(30)  # simulate a wedged upstream spawn
+            return []
+
+        async def list_resources(self, name: str, include_disabled: bool = False) -> list:
+            await asyncio.sleep(30)
+            return []
+
+        async def list_prompts(self, name: str, include_disabled: bool = False) -> list:
+            await asyncio.sleep(30)
+            return []
+
+    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app.dependency_overrides[get_capability_discovery] = lambda: _HangingDiscovery()
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"X-Coffer-Token": "test-token"},
+        ) as client:
+            start = asyncio.get_event_loop().time()
+            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            elapsed = asyncio.get_event_loop().time() - start
+            assert r.status_code == 503, r.text
+            assert elapsed < 5.0, f"route hung for {elapsed:.1f}s instead of failing fast"
+    finally:
+        await supervisor.dispose()
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -564,6 +599,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
 
     prefs_repo = MCPCapabilityPreferenceRepo(sm)
     supervisor = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=rsvc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
@@ -644,6 +680,7 @@ async def test_enable_capability_creates_audit_event(
 
     prefs_repo = MCPCapabilityPreferenceRepo(sm)
     supervisor = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=rsvc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
@@ -927,6 +964,7 @@ async def test_test_endpoint_http_transport(
 
         prefs_repo = MCPCapabilityPreferenceRepo(sm)
         supervisor = SubprocessSupervisor(
+            upstream_factory=build_upstream,
             resource_service=rsvc,
             credential_resolver=CredentialResolver(KeyringAdapter()),
         )

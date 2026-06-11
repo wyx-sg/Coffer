@@ -3,7 +3,6 @@
 > English: [plan.md](./plan.md)
 
 **Branch**: `feature/003-mcp-gateway-desktop`
-**Date**: 2026-05-28
 **Spec**: [./spec.zh.md](./spec.zh.md)
 **Status**: Accepted
 
@@ -13,11 +12,11 @@
 [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.md) 的
 detect-or-spawn 模式监管无头 daemon，在每次启动把 bundle 自带的
 `coffer-mcp-shim` 部署到稳定的用户可写 PATH 目录，并把成品以两个下载层级
-分发，二者都基于同一对 PyInstaller 二进制构建：一份 **CLI-only** 的
-`coffer-cli-<triple>` 归档（仅含 `coffer-daemon` + `coffer-mcp-shim`，
-用于 headless 安装），以及一份 **CLI+desktop** 的 Tauri bundle
-（DMG / MSI / AppImage / deb），覆盖 macOS（arm64 + x64）、Linux x64、
-Windows x64。PyInstaller 构建的 daemon + shim 二进制以
+分发，二者都基于同一组 PyInstaller 二进制构建，**仅发布 macOS arm64**：
+一份 **CLI-only** 的 `coffer-cli-<triple>.tar.gz` 归档（含 `coffer` +
+`coffer-daemon` + `coffer-mcp-shim`，用于 headless 安装），以及一份
+**CLI+desktop** 的 Tauri bundle（未签名 macOS arm64 `.dmg`）。PyInstaller
+构建的 daemon + shim 二进制以
 [ADR-008](../../docs/decisions/ADR-008-distribution-pyinstaller-tauri-sidecar.md)
 约定的 `bundle.externalBin` sidecar 方式装入 Tauri bundle。
 
@@ -39,7 +38,7 @@ Windows x64。PyInstaller 构建的 daemon + shim 二进制以
 | **Daemon 发现**    | `~/.coffer/daemon.json`（port + token + pid），与 CLI、shim 共享。见 [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.zh.md)。                                                        |
 | **Shim PATH 目录** | macOS / Linux：`~/.coffer/bin/`。Windows：`%LOCALAPPDATA%\Coffer\bin\`（未设时退回 `%USERPROFILE%\Coffer\bin\`）。                                                                                 |
 | **测试**           | Rust 单元测试（`#[cfg(test)]`）覆盖 shim-deploy、daemon-supervisor、tray-handler；`make dev-tauri` 下用 Playwright（`e2e/`）跑托盘与窗口场景；CI 跑 smoke test（`scripts/smoke_test_bundle.sh`）。 |
-| **目标平台**       | macOS 12+（arm64 + x64，独立 DMG）；Linux x64（AppImage + deb）；Windows 10+ x64（MSI + NSIS）。                                                                                                   |
+| **目标平台**       | 仅 macOS 12+ arm64（Apple Silicon）—— 一份未签名 `.dmg`。macOS x64、Linux、Windows 不构建（见构建矩阵）。                                                                                          |
 | **工程类型**       | 包裹一个 SPA 的原生桌面外壳。Tauri crate 位于 `desktop/`；前端 bundle 是 `frontend/dist/`（由 002 的 Vite 流水线构建）。                                                                           |
 | **性能目标**       | 冷启动 < 3 秒（daemon 未跑时）、< 1 秒（daemon 已跑时），见 SC-D01。PyInstaller sidecar 决定了冷启动下限。                                                                                         |
 | **约束**           | local-first（daemon 仅 loopback）；不访问公共互联网；不接埋点。每份 bundle ≤ 200 MB（SC-D02）。无新增章程级依赖 —— 选择均已被 ADR-006 / ADR-008 批准。                                             |
@@ -94,7 +93,7 @@ scripts/
 └── smoke_test_bundle.sh              # CI post-build smoke test（本 PR 新增）
 
 .github/workflows/
-└── release.yml                       # 跨平台 release 矩阵 + 逐制品 SHA-256
+└── release.yml                       # 仅 macOS-arm64 的 release 矩阵 + 聚合的 SHA256SUMS
 ```
 
 ### 扩展点：daemon-supervisor 模块
@@ -124,24 +123,24 @@ PATH 是否包含目标目录的提示，由 002 的 `AppSettings` tab 在首次
 
 ### 构建矩阵
 
-每个目标只运行一次 PyInstaller，随后从同一对二进制产出两个下载层级：
-CLI-only 归档与桌面安装包。
+构建矩阵**仅发布 macOS arm64**。它只运行一次 PyInstaller，随后从同一组
+二进制产出两个下载层级：CLI-only 归档与桌面安装包。
 
-| 平台    | 架构  | CLI-only 归档                | 桌面安装包格式         | 跨平台宿主 runner   |
-| ------- | ----- | ---------------------------- | ---------------------- | ------------------- |
-| macOS   | arm64 | `coffer-cli-<triple>.tar.gz` | `.dmg`                 | macos-14 runner     |
-| macOS   | x64   | `coffer-cli-<triple>.tar.gz` | `.dmg`                 | macos-13 runner     |
-| Linux   | x64   | `coffer-cli-<triple>.tar.gz` | `.AppImage`、`.deb`    | ubuntu-22.04 runner |
-| Windows | x64   | `coffer-cli-<triple>.zip`    | `.msi`、`.exe`（NSIS） | windows-2022 runner |
+| 平台  | 架构  | CLI-only 归档                | 桌面安装包         | 构建宿主        |
+| ----- | ----- | ---------------------------- | ------------------ | --------------- |
+| macOS | arm64 | `coffer-cli-<triple>.tar.gz` | `.dmg`（未签名）   | macos-14 runner |
 
-`<triple>` 是每个目标的构建 triple（如 `aarch64-apple-darwin`、
-`x86_64-apple-darwin`、`x86_64-unknown-linux-gnu`、
-`x86_64-pc-windows-msvc`）。每份 CLI-only 归档仅含 `coffer-daemon` 与
-`coffer-mcp-shim`。每份制品 —— CLI-only 归档与桌面安装包同等 —— 都伴随
-一份 `<artifact>.sha256` 校验文件，由同一个 job step 生成。macOS 公证仅当
-Apple Developer secrets 存在时才运行（见
-[`docs/distribution/macos-notarization.zh.md`](../../docs/distribution/macos-notarization.zh.md)）；
-在 secrets 就位之前，DMG 以未签名形式继续发布。
+`<triple>` 是构建 triple `aarch64-apple-darwin`。CLI-only 归档含 `coffer`、
+`coffer-daemon` 与 `coffer-mcp-shim`。DMG 与打包的 `.app` 因没有接入
+签名 / 公证而被重命名为 `*-unsigned`。单个聚合的 `SHA256SUMS` 文件（而非逐
+制品的 `.sha256` 兄弟文件）覆盖每一份制品。
+
+macOS x64（Intel）刻意不构建 —— Intel runner 池正在被弃用且会让 job 长期
+饿死，且 PyInstaller 无法从 arm64 runner 交叉编译 x86_64 sidecar。Linux 与
+Windows bundle 不发布 —— 那些 leg 从未验证过。acceptance 矩阵断言只构建
+macOS-arm64。签名 / 公证在拿到付费 Apple Developer ID 之后由一条单独的签名
+发布 workflow 加入（见
+[`docs/distribution/macos-notarization.zh.md`](../../docs/distribution/macos-notarization.zh.md)）。
 
 ### 文件体积上限
 
@@ -191,12 +190,13 @@ Windows PATH 兜底。
 
 ### Phase 6 —— Release 流水线 + smoke test
 
-`.github/workflows/release.yml` 跑构建矩阵；每个目标把两份二进制打成
-`coffer-cli-<triple>` 归档并构建桌面安装包；每份制品伴随 SHA-256；
-对每份 bundle 运行 `scripts/smoke_test_bundle.sh`。
+`.github/workflows/release.yml` 跑 macOS-arm64 构建 leg；它把三份二进制
+（`coffer`、`coffer-daemon`、`coffer-mcp-shim`）打成 `coffer-cli-<triple>.tar.gz`
+归档并构建未签名桌面 bundle；每一份制品由单个聚合的 `SHA256SUMS` 文件覆盖；
+对 bundle 运行 `scripts/smoke_test_bundle.sh`。
 
 **完成标志**：US2 的两个 build-pipeline 场景通过；在某个 `v*-rc` tag 上
-打 draft release 时 CLI-only 归档与四份桌面安装包全绿。
+打 draft release 时 CLI-only 归档与 macOS-arm64 桌面 bundle 全绿。
 
 ## 复杂度记录
 
@@ -205,7 +205,7 @@ Windows PATH 兜底。
 | Tauri 2 而非 Electron                                         | bundle 更小（不内嵌 Chromium）、原生 OS 控件、Rust 内核 —— 契合 Coffer「本地优先 + 轻量」的定位。                                     | Electron 会在 PyInstaller sidecar 之上再加 ~150 MB 并引入完整 Node 运行时；002 的视觉语言润色不需要 Chromium 特有功能。                           |
 | 脱离父进程的 daemon spawn（setsid / DETACHED_PROCESS）        | 让 daemon 在窗口 close-to-tray 后仍存活的必要条件 —— 否则 OS 进程树清理会在 Tauri 进程退出时连带杀掉 daemon。                         | 前台子进程会破坏 close-to-tray 场景；reparent 到 PID 1 正是 `setsid` 与 `DETACHED_PROCESS` 的用途。                                               |
 | 每次启动幂等 shim 部署                                        | 桌面外壳是唯一知道 bundle 自带 shim 在哪的入口；只在安装时部署一次会错过原地升级。                                                    | 独立的 "shim updater" 服务会增加运动部件；size-mismatch 启发式只有几行代码，shim 已最新时在微秒级完成。                                           |
-| macOS 两份独立 DMG（arm64 + x64），不做 universal binary      | Tauri 2 的 release 流水线一次 `cargo tauri build` 产出一份 DMG；universal DMG 需要额外的 `lipo` 后处理步骤，目前没在跑。              | universal binary 能把 macOS 下载次数减半，但代价是每个用户的下载体积翻倍并让 release 矩阵更复杂；两份 DMG 更简单，也与当前 release.yml 行为一致。 |
+| 仅 macOS arm64（不做 x64 / Linux / Windows leg）             | Intel runner 池正在被弃用且会饿死 job，PyInstaller 无法从 arm64 交叉编译 x86_64 sidecar，且 Linux/Windows leg 从未验证过。           | 发布未验证的跨平台 bundle 等于发出没人测过的制品；矩阵刻意收敛到唯一已验证的目标，直到其他目标被接好并验证。                                       |
 | 用 `tauri-plugin-autostart` 而非自手 launchd / Task Scheduler | 跨平台 launch-at-login 并不简单（launchd plist + systemd user unit + Windows Task Scheduler / Run key）；该插件已经被维护并通过测试。 | 自己撸三套平台逻辑会让 bug 表面与测试量乘三，却没有功能收益。                                                                                     |
 
 ## 交叉引用索引

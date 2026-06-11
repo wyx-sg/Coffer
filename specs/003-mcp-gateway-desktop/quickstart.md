@@ -9,73 +9,63 @@ in the background. This is the **end-user** companion to
 
 ## Pick your download tier
 
-The Releases page offers two tiers, both built from the same `coffer-daemon`
-+ `coffer-mcp-shim` binaries:
+Coffer ships **macOS (Apple Silicon) only** today. The Releases page offers
+two tiers, both built from the same `coffer` + `coffer-daemon` +
+`coffer-mcp-shim` binaries:
 
-- **CLI-only** — a `coffer-cli-<triple>` archive (`.tar.gz` on macOS / Linux,
-  `.zip` on Windows) with just the two binaries. Best for headless servers
-  and no-GUI installs. See [CLI-only install](#cli-only-install) below.
-- **CLI+desktop** — the Tauri installer (DMG / MSI / AppImage / deb) with
-  the desktop shell + web UI. Best for daily-driver desktop use. This is
-  the path documented in steps 1–7 below.
+- **CLI-only** — a `coffer-cli-<triple>.tar.gz` archive (macOS arm64) with
+  all three binaries. Best for headless servers and no-GUI installs. See
+  [CLI-only install](#cli-only-install) below.
+- **CLI+desktop** — the unsigned macOS arm64 `.dmg` with the desktop shell +
+  web UI. Best for daily-driver desktop use. This is the path documented in
+  steps 1–7 below.
 
 ## Prerequisites
 
-- A laptop or desktop running macOS 12+, Linux x64 (a glibc-based distro
-  for the AppImage / deb), or Windows 10+ x64. No Python required.
+- A Mac running macOS 12+ on Apple Silicon (M-series). No Python required.
 - An MCP client (Claude Code, Claude Desktop, Cursor, or any other client
   that supports stdio MCP servers).
 
 ## 1. Download the installer
 
 Go to the [GitHub Releases page](https://github.com/coffer/coffer/releases)
-and download the file matching your platform:
+and download the macOS bundle:
 
-| Platform                          | File                                                                 |
-| --------------------------------- | -------------------------------------------------------------------- |
-| macOS, Apple silicon (M-series)   | `Coffer_<version>_aarch64.dmg`                                       |
-| macOS, Intel                      | `Coffer_<version>_x64.dmg`                                           |
-| Linux x64 (AppImage, recommended) | `Coffer_<version>_amd64.AppImage`                                    |
-| Linux x64 (deb)                   | `coffer_<version>_amd64.deb`                                         |
-| Windows 10+ x64 (installer)       | `Coffer_<version>_x64_en-US.msi` or `Coffer_<version>_x64-setup.exe` |
+| Platform                        | File                                       |
+| ------------------------------- | ------------------------------------------ |
+| macOS, Apple silicon (M-series) | `Coffer_<version>_aarch64-unsigned.dmg`    |
 
-Each download has a `.sha256` sibling. Verify (optional but recommended):
+The release ships one aggregated `SHA256SUMS` file (not a per-file `.sha256`
+sibling). Verify (optional but recommended):
 
 ```bash
-shasum -a 256 -c Coffer_<version>_aarch64.dmg.sha256   # macOS / Linux
-certutil -hashfile Coffer_<version>_x64_en-US.msi SHA256   # Windows
+# from the directory holding the download + the SHA256SUMS file
+shasum -a 256 -c SHA256SUMS --ignore-missing
 ```
 
 > **macOS Gatekeeper**: until Coffer has an Apple Developer ID, the DMG
-> ships unsigned. On first open, macOS will refuse to launch it. Either
-> right-click the app and pick **Open** (one-time bypass), or run
-> `xattr -d com.apple.quarantine /Applications/Coffer.app`. See
+> ships unsigned (note the `-unsigned` in the filename). On first open,
+> macOS will refuse to launch it. Either right-click the app and pick
+> **Open** (one-time bypass), or run
+> `xattr -dr com.apple.quarantine /Applications/Coffer.app`. See
 > [macos-notarization.md](../../docs/distribution/macos-notarization.md).
 
 ## 2. Install
 
 - **macOS**: open the DMG, drag **Coffer.app** to `/Applications`.
-- **Linux (AppImage)**: `chmod +x Coffer_<version>_amd64.AppImage`, then
-  double-click or run it from a terminal.
-- **Linux (deb)**: `sudo apt install ./coffer_<version>_amd64.deb`.
-- **Windows**: double-click the MSI (or NSIS `setup.exe`) and follow the
-  installer.
 
 ## 3. First launch
 
-Open **Coffer** from your application menu (or run the AppImage). On first
-launch:
+Open **Coffer** from your Applications folder. On first launch:
 
-- The main window opens to the Resources welcome view (the same web UI
-  documented in [002-ui-shell quickstart](../002-ui-shell/quickstart.md)
-  step 2).
+- The main window opens to the Agents view (the index redirects to
+  `/agents`; same web UI documented in
+  [002-ui-shell quickstart](../002-ui-shell/quickstart.md) step 2).
 - The desktop shell silently deploys `coffer-mcp-shim` to a stable PATH
-  location:
-  - **macOS / Linux**: `~/.coffer/bin/coffer-mcp-shim`
-  - **Windows**: `%LOCALAPPDATA%\Coffer\bin\coffer-mcp-shim.exe`
+  location: `~/.coffer/bin/coffer-mcp-shim`.
 - The daemon comes up on a free port (defaults to 8000, falls back to
   8001–8009 if taken) and writes `~/.coffer/daemon.json`.
-- A tray icon appears in your menu bar / system tray.
+- A tray icon appears in your menu bar.
 
 If the shim's target directory is not on `PATH`, Coffer shows a one-time
 prompt on the **Settings → App** tab with the exact line to add to your
@@ -83,10 +73,10 @@ shell rc file (`~/.zshrc`, `~/.bashrc`, etc.).
 
 ## 4. Add an MCP server
 
-From the welcome view, click **Add MCP server**. Paste the standard
-`mcpServers` JSON from any vendor's README, confirm the secrets-review
-step, and submit. The server lands on the Resources list and reaches
-"healthy" within ~10 seconds.
+Open **MCP servers** in the sidebar (`/mcp-servers`) and click
+**Add MCP server**. Paste the standard `mcpServers` JSON from any vendor's
+README, confirm the secrets-review step, and submit. The server lands on the
+MCP servers list and reaches "healthy" within ~10 seconds.
 
 ## 5. Point your MCP client at Coffer
 
@@ -112,13 +102,22 @@ every registered Coffer server.
 
 ## 6. Tray usage
 
-Right-click (or left-click on macOS) the tray icon. The menu offers:
+Left-click the tray icon (macOS shows the menu on left-click). The menu
+offers:
 
-| Item               | What it does                                                                                        |
-| ------------------ | --------------------------------------------------------------------------------------------------- |
-| **Open**           | Restore the main Coffer window (the same one closing-the-X just hid).                               |
-| **Restart daemon** | Stop the local `coffer-daemon` process and start a fresh one on the same port.                      |
-| **Quit**           | Stop the desktop process **and** the daemon, removing the tray icon. (Closing the window does not.) |
+| Item               | What it does                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------------- |
+| **Open**           | Restore the main Coffer window (the same one closing-the-X just hid).                                 |
+| **Restart daemon** | Bounce the daemon (rate-limited; same command as the in-app banner's Restart button).                 |
+| **Quit**           | Exit the desktop app and remove the tray icon. The daemon keeps running, so MCP clients still work.   |
+
+**Quit** stops only the desktop (GUI) app — the daemon is a detached process
+and survives Quit, so registered MCP clients continue to work through the
+shim. To stop the daemon itself, use the CLI (`coffer daemon stop`).
+
+The daemon can also be restarted from inside the app: when the daemon is
+unreachable, the **Daemon not running** banner offers a **Restart** button
+backed by the same rate-limited command as the tray item.
 
 Closing the main window with the OS close button just **hides** the window
 to the tray; the daemon stays alive and your MCP clients keep working.
@@ -126,11 +125,8 @@ to the tray; the daemon stays alive and your MCP clients keep working.
 ## 7. Optional: launch Coffer at login
 
 Open **Settings → App**, flip the **Launch at login** toggle. Coffer
-re-registers itself with your OS's autostart mechanism:
-
-- macOS: a LaunchAgent under `~/Library/LaunchAgents/`.
-- Linux: a `.desktop` file under `~/.config/autostart/`.
-- Windows: a Run key under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
+re-registers itself with macOS's autostart mechanism (a LaunchAgent under
+`~/Library/LaunchAgents/`).
 
 Log out and back in (or reboot) to confirm — the tray icon appears without
 you opening anything.
@@ -141,23 +137,21 @@ For a headless box or any machine where you don't want the desktop app,
 grab the CLI-only archive instead of the installer.
 
 1. From the [GitHub Releases page](https://github.com/coffer/coffer/releases),
-   download the archive matching your platform's build triple
-   (`<triple>` is e.g. `aarch64-apple-darwin`, `x86_64-apple-darwin`,
-   `x86_64-unknown-linux-gnu`, or `x86_64-pc-windows-msvc`):
-   - **macOS / Linux**: `coffer-cli-<triple>.tar.gz`
-   - **Windows**: `coffer-cli-<triple>.zip`
+   download the macOS arm64 archive (`<triple>` is `aarch64-apple-darwin`):
+   `coffer-cli-<triple>.tar.gz`.
 
-   Verify the checksum (optional but recommended):
+   Verify the checksum against the aggregated `SHA256SUMS` (optional but
+   recommended):
 
    ```bash
-   shasum -a 256 -c coffer-cli-<triple>.tar.gz.sha256   # macOS / Linux
-   certutil -hashfile coffer-cli-<triple>.zip SHA256     # Windows
+   shasum -a 256 -c SHA256SUMS --ignore-missing
    ```
 
-2. Extract it — it contains just `coffer-daemon` and `coffer-mcp-shim`:
+2. Extract it — it contains `coffer`, `coffer-daemon`, and `coffer-mcp-shim`
+   (keep all three co-located so `coffer` can detect-or-spawn the daemon):
 
    ```bash
-   tar -xzf coffer-cli-<triple>.tar.gz                   # macOS / Linux
+   tar -xzf coffer-cli-<triple>.tar.gz
    ```
 
 3. Start the daemon. It picks a free port (default 8000, falling back to
@@ -168,11 +162,8 @@ grab the CLI-only archive instead of the installer.
    ```
 
 4. Put `coffer-mcp-shim` on your `PATH` so MCP clients can resolve the
-   `command: coffer-mcp-shim` config:
-   - **macOS / Linux**: move it to `~/.coffer/bin/` and add that directory
-     to `PATH` in your shell rc (`~/.zshrc`, `~/.bashrc`, etc.).
-   - **Windows**: move it to `%LOCALAPPDATA%\coffer\bin` and add that
-     directory to your user `PATH`.
+   `command: coffer-mcp-shim` config: move it to `~/.coffer/bin/` and add
+   that directory to `PATH` in your shell rc (`~/.zshrc`, `~/.bashrc`, etc.).
 
 5. Point your MCP client at the shim — the same snippet as the desktop
    path ([step 5](#5-point-your-mcp-client-at-coffer)):
@@ -194,8 +185,9 @@ so no per-machine parameterisation is needed.
 
 - **Tray icon never shows up** — the desktop shell falls back to an
   embedded PNG when the platform tray icon fails to load (see spec's Edge
-  Cases). If you still see nothing, check
-  `~/.coffer/logs/desktop.log`.
+  Cases). Desktop-side diagnostics are not file-backed yet (the desktop
+  crate wires no log sink), so launch Coffer from a terminal to see its
+  stderr; for daemon problems check `~/.coffer/logs/daemon.log`.
 - **`coffer-mcp-shim: command not found`** — your shell's `PATH` does not
   include the shim directory. Re-launch Coffer once, follow the prompt on
   Settings → App, then open a new terminal.

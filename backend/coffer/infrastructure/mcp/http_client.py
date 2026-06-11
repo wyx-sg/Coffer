@@ -38,6 +38,7 @@ from mcp.types import ServerNotification
 
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport
+from coffer.infrastructure.mcp.dispatch import dispatch_method
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
 
@@ -150,52 +151,47 @@ class HttpUpstreamConnection:
             capabilities = {}
         return capabilities
 
-    async def request(self, method: str, params: dict[str, Any]) -> Any:
+    async def request(
+        self,
+        method: str,
+        params: dict[str, Any],
+        progress_callback: Any | None = None,
+    ) -> Any:
         """Forward a single MCP request, with timeout.  Returns the SDK result object."""
         if self._session is None:
             raise UpstreamUnavailable("upstream not initialized")
         # The httpx client was created with a read timeout of 300 s; for
         # per-request control we rely on the caller to set request_timeout_seconds
-        # appropriately.  asyncio.wait_for is safe here because we are outside
-        # any anyio task group at this call site.
+        # appropriately. Despite the module-header rule, asyncio.wait_for is
+        # safe at THIS call site (CODE-L1): we await session.send_request from
+        # outside the SDK's anyio task group, so cancellation lands on our
+        # coroutine, not inside the group (no cross-task cancel-scope error).
+        # The connection deliberately stays cached after an UpstreamTimeout
+        # (the gateway does not evict on timeout): the SDK matches responses
+        # by request id, so a late reply to the abandoned id is discarded and
+        # cannot corrupt the next request on this session.
         try:
             return await asyncio.wait_for(
-                self._dispatch_method(method, params),
+                self._dispatch_method(method, params, progress_callback=progress_callback),
                 timeout=float(self._request_timeout),
             )
         except TimeoutError as exc:
             raise UpstreamTimeout(f"upstream {method} exceeded {self._request_timeout}s") from exc
 
-    async def _dispatch_method(self, method: str, params: dict[str, Any]) -> Any:
+    async def _dispatch_method(
+        self,
+        method: str,
+        params: dict[str, Any],
+        progress_callback: Any | None = None,
+    ) -> Any:
         assert self._session is not None
-        if method == "tools/list":
-            return await self._session.list_tools()
-        if method == "tools/call":
-            # T-060: pass read_timeout_seconds so the SDK resets the idle timer
-            # on every notifications/progress event, preventing premature timeout
-            # of long-running tools that stream progress.
-            from datetime import timedelta
-
-            try:
-                return await self._session.call_tool(
-                    params["name"],
-                    arguments=params.get("arguments"),
-                    read_timeout_seconds=timedelta(seconds=float(self._request_timeout)),
-                )
-            except TypeError:
-                # Older SDK build that doesn't accept read_timeout_seconds
-                return await self._session.call_tool(
-                    params["name"], arguments=params.get("arguments")
-                )
-        if method == "resources/list":
-            return await self._session.list_resources()
-        if method == "resources/read":
-            return await self._session.read_resource(params["uri"])
-        if method == "prompts/list":
-            return await self._session.list_prompts()
-        if method == "prompts/get":
-            return await self._session.get_prompt(params["name"], arguments=params.get("arguments"))
-        raise UpstreamUnavailable(f"method not supported by gateway: {method!r}")
+        return await dispatch_method(
+            self._session,
+            method,
+            params,
+            request_timeout_seconds=float(self._request_timeout),
+            progress_callback=progress_callback,
+        )
 
     async def close(self) -> None:
         """Close the upstream connection gracefully."""

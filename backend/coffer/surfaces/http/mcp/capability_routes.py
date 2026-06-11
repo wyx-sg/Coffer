@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
@@ -14,7 +14,7 @@ from coffer.application.mcp.credential_resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
+from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
@@ -55,6 +55,13 @@ router = APIRouter(
 
 CapabilityType = Literal["tool", "resource", "prompt"]
 
+# CODE-M2: hard ceiling on the management capabilities page so a wedged
+# upstream can't hang it for the supervisor's full retry ladder (~minutes).
+# Deliberately LARGER than the gateway's 5 s PER_SERVER_LIST_TIMEOUT: this
+# page may trigger a cold spawn, and spawn_timeout defaults to 30 s — a 5 s
+# budget would cancel every healthy-but-slow first spawn mid-initialize.
+_CAPABILITY_LIST_TIMEOUT = 35.0
+
 
 @router.get("/{name}/capabilities", response_model=CapabilityListOut)
 async def list_capabilities(
@@ -64,17 +71,33 @@ async def list_capabilities(
     """Return the live (cache-aware) capability list for one MCP server.
 
     This is the management surface: it returns every discovered capability
-    with its ``enabled`` flag (including disabled ones) so the UI can show
-    and re-enable them. The gateway's client-facing ``tools/list`` uses the
-    default ``include_disabled=False`` path to hide disabled capabilities.
-
-    ``UpstreamUnavailable`` propagates to the domain error handler, which
-    surfaces the ``UPSTREAM_UNAVAILABLE`` envelope code (one dead upstream),
-    rather than the misleading ``DAEMON_NOT_READY`` a bare 503 would yield.
+    with its ``enabled`` flag (including disabled ones) so the UI can show and
+    re-enable them. The three discovery calls run concurrently under a single
+    timeout budget (CODE-M2); a dead upstream surfaces ``UpstreamUnavailable``
+    (→ UPSTREAM_UNAVAILABLE) instead of hanging the detail page for minutes.
     """
-    tools = await discovery.list_tools(name, include_disabled=True)
-    resources = await discovery.list_resources(name, include_disabled=True)
-    prompts = await discovery.list_prompts(name, include_disabled=True)
+    tasks: list[asyncio.Task[Any]] = [
+        asyncio.ensure_future(discovery.list_tools(name, include_disabled=True)),
+        asyncio.ensure_future(discovery.list_resources(name, include_disabled=True)),
+        asyncio.ensure_future(discovery.list_prompts(name, include_disabled=True)),
+    ]
+    try:
+        tools, resources, prompts = await asyncio.wait_for(
+            asyncio.gather(*tasks),
+            timeout=_CAPABILITY_LIST_TIMEOUT,
+        )
+    except TimeoutError as e:
+        raise UpstreamUnavailable(
+            f"{name!r} did not respond within {_CAPABILITY_LIST_TIMEOUT:.0f}s"
+        ) from e
+    except BaseException:
+        # gather() propagates the first child failure WITHOUT cancelling the
+        # siblings — reap them so they don't grind the spawn retry ladder in
+        # the background. (wait_for's timeout path already cancels the gather.)
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
     return CapabilityListOut(
         server_name=name,
         tools=[
@@ -367,15 +390,7 @@ async def test_mcp_server(
             )
         finally:
             await conn.close()
-    except (UpstreamUnavailable, UpstreamTimeout) as e:
-        latency_ms = int((time.monotonic() - start) * 1000)
-        await health_repo.upsert(name, "failing", datetime.now(tz=UTC))
-        return McpTestResultOut(
-            ok=False,
-            latency_ms=latency_ms,
-            error_message=str(e),
-        )
-    except Exception as e:
+    except Exception as e:  # incl. UpstreamUnavailable / UpstreamTimeout
         latency_ms = int((time.monotonic() - start) * 1000)
         await health_repo.upsert(name, "failing", datetime.now(tz=UTC))
         return McpTestResultOut(

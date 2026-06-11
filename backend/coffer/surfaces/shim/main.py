@@ -150,23 +150,33 @@ class _Bridge:
         return 0
 
     async def _pump_stdin(self, client: httpx.AsyncClient) -> None:
-        """Read JSON-RPC envelopes from stdin, POST to /mcp, write reply to stdout."""
+        """Read JSON-RPC envelopes from stdin, POST to /mcp, write reply to stdout.
+
+        CODE-M3: MCP clients pipeline requests (concurrent tool calls, ping
+        keepalives, cancellations). Each envelope is dispatched as its own task
+        so a single slow ``tools/call`` cannot head-of-line-block the others —
+        previously the pump awaited every POST inline, starving pings until a
+        client could declare the shim dead. Stdout stays uncorrupted because
+        every write (``_forward_response`` / ``_emit_error``) emits a complete
+        line + flush with no ``await`` in between, so concurrent tasks never
+        interleave a partial line.
+        """
         loop = asyncio.get_event_loop()
         reader = asyncio.StreamReader(limit=_STDIN_READ_LIMIT)
         protocol = asyncio.StreamReaderProtocol(reader)
         await loop.connect_read_pipe(lambda: protocol, sys.stdin)
         _logger.info("shim.stdin_pump_started")
 
+        inflight: set[asyncio.Task[None]] = set()
         while not self._stop.is_set():
             try:
                 line = await reader.readline()
             except (ConnectionResetError, OSError):
                 break
             if not line:
-                # stdin EOF — request shutdown
+                # stdin EOF — drain below, then request shutdown
                 _logger.info("shim.stdin_eof")
-                self._stop.set()
-                return
+                break
             try:
                 envelope = _json.loads(line.decode("utf-8").strip())
             except _json.JSONDecodeError as e:
@@ -178,38 +188,52 @@ class _Bridge:
                 envelope.get("id"),
             )
 
-            headers = dict(self._headers)
-            if self._session_id is not None:
-                headers["Mcp-Session-Id"] = self._session_id
+            # Establish the session synchronously on the first request so every
+            # pipelined follow-up carries the same Mcp-Session-Id. MCP clients
+            # wait for the initialize response before pipelining, but be
+            # defensive. Once the id is known, dispatch concurrently.
+            if self._session_id is None:
+                await self._handle_envelope(client, envelope)
+            else:
+                task = asyncio.create_task(self._handle_envelope(client, envelope))
+                inflight.add(task)
+                task.add_done_callback(inflight.discard)
 
-            try:
-                response = await client.post("/mcp", json=envelope, headers=headers)
-                _logger.info(
-                    "shim.out status=%s len=%s",
-                    response.status_code,
-                    len(response.text or ""),
-                )
-            except Exception as e:
-                _logger.exception("shim.post_failed")
-                err = {
-                    "jsonrpc": "2.0",
-                    "id": envelope.get("id"),
-                    "error": {"code": -32603, "message": f"shim: {e}"},
-                }
-                sys.stdout.write(_json.dumps(err) + "\n")
-                sys.stdout.flush()
-                continue
+        # Drain in-flight handlers BEFORE signalling stop (CODE-R1): run()'s
+        # FIRST_COMPLETED wait cancels this task the moment _stop fires, so
+        # setting it first would abort the drain mid-POST and silently drop
+        # replies to pipelined requests on stdin EOF.
+        if inflight:
+            await asyncio.gather(*inflight, return_exceptions=True)
+        self._stop.set()
 
-            if "Mcp-Session-Id" in response.headers:
-                self._session_id = response.headers["Mcp-Session-Id"]
+    async def _handle_envelope(self, client: httpx.AsyncClient, envelope: dict[str, Any]) -> None:
+        """POST one envelope to /mcp and forward the validated reply to stdout."""
+        headers = dict(self._headers)
+        if self._session_id is not None:
+            headers["Mcp-Session-Id"] = self._session_id
 
-            # Stdout IS the MCP wire. If we ever write a non-JSON-RPC line
-            # here the client crashes with JSONDecodeError on the very next
-            # message. So: validate the gateway's response before forwarding.
-            # On status / parse failure, synthesize a JSON-RPC error envelope
-            # tied to the request id so the client sees a structured reply
-            # rather than `Internal Server Error` plain text.
-            self._forward_response(envelope, response)
+        try:
+            response = await client.post("/mcp", json=envelope, headers=headers)
+            _logger.info(
+                "shim.out status=%s len=%s",
+                response.status_code,
+                len(response.text or ""),
+            )
+        except Exception as e:
+            _logger.exception("shim.post_failed")
+            self._emit_error(envelope.get("id"), code=-32603, message=f"shim: {e}")
+            return
+
+        if "Mcp-Session-Id" in response.headers:
+            self._session_id = response.headers["Mcp-Session-Id"]
+
+        # Stdout IS the MCP wire. If we ever write a non-JSON-RPC line here the
+        # client crashes with JSONDecodeError on the very next message. So:
+        # validate the gateway's response before forwarding. On status / parse
+        # failure, synthesize a JSON-RPC error envelope tied to the request id
+        # so the client sees a structured reply rather than plain text.
+        self._forward_response(envelope, response)
 
     def _forward_response(
         self,

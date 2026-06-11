@@ -17,6 +17,7 @@ import {
   type AgentSkillRow,
 } from "@/components/agents/AgentSkillsBulkActions";
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
@@ -62,7 +63,21 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
       key: "name",
       header: t("skills.name"),
       className: "whitespace-nowrap",
-      cell: (r) => <span className="font-medium">{r.skill.name}</span>,
+      cell: (r) => (
+        <span className="flex items-center gap-2">
+          <span className="font-medium">{r.skill.name}</span>
+          {r.binding.link_mode === "copy_fallback" && (
+            <Badge
+              variant="outline"
+              data-testid="skill-degraded-badge"
+              className="border-amber-500/50 text-amber-600 dark:text-amber-400"
+              title={t("agents.skillsTab.degradedTooltip")}
+            >
+              {t("agents.skillsTab.degradedBadge")}
+            </Badge>
+          )}
+        </span>
+      ),
     },
     {
       key: "description",

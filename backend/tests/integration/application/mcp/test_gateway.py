@@ -8,8 +8,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-import keyring
-import keyring.core
 import pytest
 
 from coffer.application.audit_service import AuditService
@@ -22,6 +20,7 @@ from coffer.domain.errors import ResourceNotFound, ToolDisabled
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
@@ -35,6 +34,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
@@ -51,24 +51,8 @@ async def _safe_dispose(engine: object) -> None:
         await engine.dispose()  # type: ignore[union-attr]
 
 
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1.0  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, s: str, u: str) -> str | None:
-        return self._data.get((s, u))
-
-    def set_password(self, s: str, u: str, p: str) -> None:
-        self._data[(s, u)] = p
-
-    def delete_password(self, s: str, u: str) -> None:
-        self._data.pop((s, u), None)
-
-
 def _with_in_memory(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(keyring.core, "_keyring_backend", _InMemoryKeyring())
+    install_in_memory_keyring(monkeypatch)
 
 
 def _stdio_config(
@@ -124,7 +108,7 @@ async def _setup(
     }
     if supervisor_retry_delays is not None:
         sup_kwargs["retry_delays"] = supervisor_retry_delays
-    supervisor = SubprocessSupervisor(**sup_kwargs)
+    supervisor = SubprocessSupervisor(upstream_factory=build_upstream, **sup_kwargs)
     prefs_repo = MCPCapabilityPreferenceRepo(sm)
     inv_repo = MCPInvocationRepo(sm)
     discovery = CapabilityDiscovery(

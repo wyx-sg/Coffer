@@ -15,17 +15,13 @@ import {
 import { useMcpCapabilities } from "@/lib/hooks/useMcpCapabilities";
 import { useMcpServerStatus } from "@/lib/hooks/useMcpInvocations";
 import { getApiClient } from "@/lib/api/client";
+import type { components } from "@/lib/api/types";
 import { type HealthState } from "./HealthBadge";
 import { McpServerDetailHeader } from "./McpServerDetailHeader";
 import { McpServerDetailTabs } from "./McpServerDetailTabs";
 import { McpServerDeleteDialog } from "./McpServerDeleteDialog";
 
-interface TestResult {
-  ok: boolean;
-  latency_ms: number;
-  protocol_version?: string | null;
-  error_message?: string | null;
-}
+type TestResult = components["schemas"]["McpTestResultOut"];
 
 export function McpServerDetailPage() {
   const { t } = useTranslation();
@@ -53,8 +49,8 @@ export function McpServerDetailPage() {
       const { data, error: e } = await client.POST("/resources/mcp_server/{name}/test", {
         params: { path: { name } },
       });
-      if (e) throw new Error(e.error?.message ?? "test failed");
-      return data as TestResult;
+      if (e || data === undefined) throw new Error(e?.error?.message ?? "test failed");
+      return data;
     },
   });
 

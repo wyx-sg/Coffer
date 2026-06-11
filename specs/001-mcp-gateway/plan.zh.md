@@ -135,7 +135,7 @@ backend/coffer/
 │   │   ├── audit_routes.py               # /api/v1/audit
 │   │   ├── retention_routes.py           # /api/v1/retention/*
 │   │   ├── daemon_routes.py              # /api/v1/daemon/*
-│   │   ├── keychain_routes.py            # /api/v1/keychain/* (仅写入与删除)
+│   │   ├── keychain_routes.py            # /api/v1/keychain/* (写入、带审计的读取、exists、删除)
 │   │   └── mcp/
 │   │       ├── capability_routes.py
 │   │       ├── invocation_routes.py
@@ -149,7 +149,7 @@ backend/coffer/
 │   │   ├── resource_cmd.py               # coffer resource ...
 │   │   ├── audit_cmd.py                  # coffer audit ...
 │   │   ├── retention_cmd.py              # coffer retention ...
-│   │   ├── keychain_cmd.py               # coffer keychain set/delete ...
+│   │   ├── keychain_cmd.py               # coffer keychain set/get/list/delete ...
 │   │   └── mcp.py                        # coffer mcp ... (kind 子命令组)
 │   └── shim/
 │       └── main.py                       # coffer-mcp-shim 入口
@@ -188,8 +188,8 @@ composition root 脚手架、Typer composition root 脚手架。尚无业务逻�
 `SubprocessSupervisor`、`CapabilityDiscovery`、`/mcp` JSON-RPC 端点、
 `coffer-mcp-shim` 二进制以及 `coffer mcp …` CLI 子命令。按工具的启用/禁用
 （US2）也在这里落地——它们与 US1 共享同一代码路径，因此一起实现。
-keychain 写入与删除的管理端点（FR-011）也在本阶段落地，以便 HTTP MCP
-服务器可以端到端引用凭据。
+keychain 管理端点（FR-011）也在本阶段落地——写入、带审计的读取、exists
+与删除——以便 HTTP MCP 服务器可以端到端引用凭据。
 
 **Done when:** User Story 1 与 User Story 2 的 acceptance scenario 在
 `make verify` 与 `make verify-e2e`（`e2e/mcp/` 的子进程驱动套件）下通过。

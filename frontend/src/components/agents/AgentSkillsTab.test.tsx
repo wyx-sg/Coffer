@@ -11,9 +11,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AgentSkillsTab } from "./AgentSkillsTab";
 import type { AgentOut } from "@/lib/api/agents";
+import type { LinkMode } from "@/lib/api/skills";
 
-vi.mock("@/lib/hooks/useSkills", () => ({
-  useSkills: vi.fn(() => ({
+const useSkillsMock = vi.fn();
+
+function mockBinding(linkMode: LinkMode | null) {
+  return {
     data: [
       {
         name: "hello",
@@ -24,7 +27,7 @@ vi.mock("@/lib/hooks/useSkills", () => ({
             enabled: true,
             last_linked_at: null,
             last_link_path: null,
-            link_mode: null,
+            link_mode: linkMode,
           },
         ],
       },
@@ -33,7 +36,11 @@ vi.mock("@/lib/hooks/useSkills", () => ({
     ],
     isPending: false,
     error: null,
-  })),
+  };
+}
+
+vi.mock("@/lib/hooks/useSkills", () => ({
+  useSkills: () => useSkillsMock(),
   useEnableSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useDisableSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
@@ -49,18 +56,23 @@ const AGENT: AgentOut = {
 
 afterEach(() => vi.clearAllMocks());
 
+function renderTab() {
+  // AgentInstallSkillsDialog + AgentSkillsBulkActions now run via useBulkMutate,
+  // which reads the QueryClient — provide one even though no bulk op fires here.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <AgentSkillsTab agent={AGENT} />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
 describe("AgentSkillsTab", () => {
   test("lists the skill bound to this agent with a toggle switch", () => {
-    // AgentInstallSkillsDialog + AgentSkillsBulkActions now run via useBulkMutate,
-    // which reads the QueryClient — provide one even though no bulk op fires here.
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <AgentSkillsTab agent={AGENT} />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    useSkillsMock.mockReturnValue(mockBinding(null));
+    renderTab();
 
     expect(screen.getByText("hello")).toBeInTheDocument();
     expect(screen.queryByText("other")).not.toBeInTheDocument();
@@ -68,5 +80,23 @@ describe("AgentSkillsTab", () => {
     const sw = screen.getByRole("switch");
     expect(sw).toBeInTheDocument();
     expect(sw).toBeChecked();
+  });
+
+  test("shows a degraded warning chip when the binding fell back to a copy", () => {
+    // FR-012: when symlink/junction delivery isn't available Coffer copies the
+    // skill instead; the UI MUST surface that the binding is degraded.
+    useSkillsMock.mockReturnValue(mockBinding("copy_fallback"));
+    renderTab();
+
+    expect(screen.getByText("hello")).toBeInTheDocument();
+    expect(screen.getByTestId("skill-degraded-badge")).toBeInTheDocument();
+  });
+
+  test("does NOT show the degraded chip for a normal symlink binding", () => {
+    useSkillsMock.mockReturnValue(mockBinding("symlink"));
+    renderTab();
+
+    expect(screen.getByText("hello")).toBeInTheDocument();
+    expect(screen.queryByTestId("skill-degraded-badge")).not.toBeInTheDocument();
   });
 });

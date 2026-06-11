@@ -38,6 +38,20 @@ class UnknownKind(CofferError):  # noqa: N818
         self.kind = kind
 
 
+class GenericCreateNotAllowed(CofferError):  # noqa: N818
+    """The generic /resources endpoints cannot create or update this kind; a
+    dedicated endpoint owns its lifecycle invariants. Maps to 409."""
+
+    code = "GENERIC_CREATE_NOT_ALLOWED"
+
+    def __init__(self, kind: str) -> None:
+        super().__init__(
+            f"kind {kind!r} cannot be created or updated via the generic "
+            f"resources endpoint; use its dedicated endpoint"
+        )
+        self.kind = kind
+
+
 class ConfigValidationError(CofferError):
     code = "CONFIG_INVALID"
 

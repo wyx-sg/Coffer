@@ -3,11 +3,11 @@
 Extracted from ``app.py`` to keep that composition root under the
 400-line guideline. Holds:
 
-* :func:`build_upstream` — the application UpstreamFactory bridge to the
-  concrete HTTP/stdio adapters (CODE-005).
 * :func:`wire_mcp_kind` — builds MCP repos, supervisors, discovery,
   per-session gateway factory and installs them on the FastAPI app +
-  dependency module.
+  dependency module. Supervisors get the concrete upstream factory
+  (:func:`coffer.infrastructure.mcp.factory.build_upstream`) injected here
+  (CODE-005).
 * :func:`build_prunable_registry` — the retention registry for the
   audit log + MCP invocation tables.
 * :func:`reaper_kwargs_from_env` — parses ``COFFER_MCP_SESSION_*``
@@ -28,15 +28,13 @@ from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
-from coffer.domain.mcp.server_config import HttpTransport, StdioTransport
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
-from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
+from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
-from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 from coffer.infrastructure.persistence.retention import (
     PrunableRegistry,
     PrunableTable,
@@ -49,31 +47,6 @@ from coffer.surfaces.http.dependencies import (
     set_preferences_repo,
     set_supervisor,
 )
-
-
-def build_upstream(
-    transport: HttpTransport | StdioTransport,
-    overlay: dict[str, str],
-    spawn_timeout: int,
-    request_timeout: int,
-    server_name: str,
-) -> object:
-    """Composition-root factory bridging the application UpstreamFactory port
-    to the concrete infrastructure adapters (CODE-005)."""
-    if isinstance(transport, StdioTransport):
-        return StdioUpstreamConnection(
-            transport=transport,
-            env_overlay=overlay,
-            spawn_timeout_seconds=spawn_timeout,
-            request_timeout_seconds=request_timeout,
-            server_name=server_name,
-        )
-    return HttpUpstreamConnection(
-        transport=transport,
-        header_overlay=overlay,
-        spawn_timeout_seconds=spawn_timeout,
-        request_timeout_seconds=request_timeout,
-    )
 
 
 def wire_mcp_kind(
@@ -104,7 +77,7 @@ def wire_mcp_kind(
     process_supervisor = SubprocessSupervisor(
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
-        upstream_factory=build_upstream,  # type: ignore[arg-type]
+        upstream_factory=build_upstream,
     )
     process_discovery = CapabilityDiscovery(
         resource_service=resource_svc,
@@ -118,7 +91,7 @@ def wire_mcp_kind(
         supervisor = SubprocessSupervisor(
             resource_service=resource_svc,
             credential_resolver=CredentialResolver(KeyringAdapter()),
-            upstream_factory=build_upstream,  # type: ignore[arg-type]
+            upstream_factory=build_upstream,
         )
         session_supervisors[session_id] = supervisor
 

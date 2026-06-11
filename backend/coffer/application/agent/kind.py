@@ -30,4 +30,8 @@ def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
         display_name="Agent",
         config_schema=AgentConfig,
         on_delete=on_delete,
+        # An agent row is created from detection/validation of an on-disk config
+        # dir by AgentService; the generic POST /resources path must not create
+        # an undetected, folder-less agent (CODE-REG).
+        generic_create_allowed=False,
     )

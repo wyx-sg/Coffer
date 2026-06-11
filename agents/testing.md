@@ -11,7 +11,7 @@ Coffer uses four test tiers running in parallel CI jobs. Acceptance scenarios fr
 | **Contract**    | Wire-format conformance: hand-written `*.openapi.yaml` ↔ Pydantic models. Blocks PR on drift.                                                       | < 1 s                   | Currently: `pytest` + `TestClient` manual assertions on `/openapi.json`. **Future** (add when contract surface grows): `schemathesis` for backend fuzzing.                                                | yes                             |
 | **E2E**         | Full stack via real surfaces: a real MCP client → `coffer-mcp-shim` (stdio) → daemon (`/mcp` HTTP) → upstream MCP servers → SQLite.                  | < 30 s                  | `Playwright` (`@playwright/test`) + TypeScript 5.x. Specs spawn the real shim + daemon as OS subprocesses and drive JSON-RPC across them end-to-end.                                                       | NO (separate `make verify-e2e`) |
 
-**Pyramid shape**: unit ≫ integration > contract > e2e (in counts of tests).
+**Suite shape**: integration ≫ unit > contract > e2e (in counts of tests). This is deliberately NOT the classic unit-heavy pyramid: the integration tier runs against real SQLite files and real subprocesses but stays fast (the full backend suite is ~100 s), so most behavior is pinned where the real wiring lives. The unit tier is reserved for pure logic (mechanically enforced by `scripts/check_unit_purity.py`).
 
 Per-test budgets are guidance, not gates — a single slow test isn't a CI failure. They exist so a test that drifts an order of magnitude past its tier prompts a "wrong tier?" question. No total-suite budget is enforced; the suite grows with the project.
 

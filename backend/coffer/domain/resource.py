@@ -89,3 +89,21 @@ class Kind:
     # persistence. Raises to reject the name. Used by `mcp_server` to reserve
     # the `__` tool/prompt namespace separator (CODE-030).
     validate_name: Callable[[str], None] | None = None
+    # Whether the kind-agnostic POST /api/v1/resources endpoint may create this
+    # kind. Kinds that own creation invariants beyond config validation — a
+    # skill's master folder under ~/.coffer/skills/, an agent's on-disk
+    # detection — set this False so the generic path cannot create a row with
+    # no backing artifact. Their dedicated services still create rows by
+    # passing ``allow_lifecycle_kind=True`` to ResourceService.register
+    # (CODE-REG, symmetric with the on_delete cleanup hook).
+    generic_create_allowed: bool = True
+    # Optional kind-supplied audit redactor: given a validated config dict,
+    # return an audit-safe copy with secret-bearing fields stripped. Keeps the
+    # kind-agnostic ResourceService from hardcoding any one kind's config shape
+    # (e.g. mcp_server's ``transport.env``/``headers``) — ADR-001 / CODE-006.
+    audit_redactor: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+    # Optional kind-supplied credential-ref extractor: given a validated config
+    # dict, return ``{logical_key: keychain_ref}``. ResourceService probes each
+    # ref at register/update time so a missing credential fails before any DB
+    # write — without the core knowing where a kind stores its refs.
+    credential_ref_extractor: Callable[[dict[str, Any]], dict[str, str]] | None = None

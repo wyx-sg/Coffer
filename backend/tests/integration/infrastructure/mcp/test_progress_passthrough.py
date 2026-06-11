@@ -116,7 +116,11 @@ async def test_dispatch_falls_back_on_type_error() -> None:
 
     async def _raise_on_kwarg(*args: Any, **kwargs: Any) -> Any:
         if "read_timeout_seconds" in kwargs:
-            raise TypeError("unexpected keyword argument")
+            # Realistic CPython message — it always names the offending kwarg;
+            # dispatch_method only retries when the message cites one of the
+            # optional kwargs (a TypeError from inside the tool must not
+            # re-invoke a non-idempotent call).
+            raise TypeError("call_tool() got an unexpected keyword argument 'read_timeout_seconds'")
         return fallback_result
 
     mock_session = MagicMock()

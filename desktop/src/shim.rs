@@ -170,10 +170,56 @@ pub fn shim_needs_copy(target: &PathBuf, bundled: &PathBuf, sentinel: &PathBuf) 
     }
 }
 
+/// Atomically replace `target` with the contents of `bundled`.
+///
+/// Copies to a sibling temp file in the SAME directory (so the final
+/// `rename` is a same-filesystem atomic swap) and only then renames over the
+/// target. A crash or a concurrently-executing shim therefore never observes
+/// a half-written binary: it sees either the old file or the complete new one
+/// — never a truncated one. On Unix the 0o755 mode is set on the temp file
+/// before the rename so the swapped-in binary is executable from the instant
+/// it appears at `target`.
+pub fn atomic_replace(bundled: &PathBuf, target: &PathBuf) -> Result<(), String> {
+    let mut tmp = target.clone();
+    let fname = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "coffer-mcp-shim".to_string());
+    tmp.set_file_name(format!(".{}.tmp-{}", fname, std::process::id()));
+
+    fs::copy(bundled, &tmp)
+        .map_err(|e| format!("copy {} → {}: {e}", bundled.display(), tmp.display()))?;
+
+    // Make the binary executable on Unix BEFORE the rename so the swap exposes
+    // an already-runnable file.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = match fs::metadata(&tmp) {
+            Ok(m) => m.permissions(),
+            Err(e) => {
+                let _ = fs::remove_file(&tmp);
+                return Err(e.to_string());
+            }
+        };
+        perms.set_mode(0o755);
+        if let Err(e) = fs::set_permissions(&tmp, perms) {
+            let _ = fs::remove_file(&tmp);
+            return Err(e.to_string());
+        }
+    }
+
+    fs::rename(&tmp, target).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("rename {} → {}: {e}", tmp.display(), target.display())
+    })
+}
+
 /// Copy the bundled `coffer-mcp-shim` binary into `~/.coffer/bin/` (or the
 /// Windows equivalent), making it available on the user's PATH once they
 /// add that directory.  Staleness is decided by `shim_needs_copy()` — see
-/// its doc-comment for the full rule.
+/// its doc-comment for the full rule. The replace itself is atomic (see
+/// `atomic_replace`).
 pub fn deploy_shim_to_user_path(app: AppHandle) -> Result<ShimDeployResult, String> {
     let bundled = bundled_shim_path(&app)?;
     let target = shim_user_path();
@@ -187,19 +233,7 @@ pub fn deploy_shim_to_user_path(app: AppHandle) -> Result<ShimDeployResult, Stri
     let needs_copy = shim_needs_copy(&target, &bundled, &sentinel);
 
     if needs_copy {
-        fs::copy(&bundled, &target)
-            .map_err(|e| format!("copy {} → {}: {e}", bundled.display(), target.display()))?;
-
-        // Make the binary executable on Unix platforms.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&target)
-                .map_err(|e| e.to_string())?
-                .permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&target, perms).map_err(|e| e.to_string())?;
-        }
+        atomic_replace(&bundled, &target)?;
 
         // Best-effort: write/refresh the version sentinel. Failure here is
         // not fatal — we'll just re-copy on the next launch.
@@ -347,5 +381,44 @@ mod tests {
         make_strictly_newer(&target, &bundled, "BINARY"); // target newer → bundled not newer
         write(&sentinel, APP_VERSION);
         assert!(!shim_needs_copy(&target, &bundled, &sentinel));
+    }
+
+    #[test]
+    fn atomic_replace_writes_full_content_and_leaves_no_temp() {
+        let d = TmpDir::new();
+        let (target, bundled) = (d.path("shim"), d.path("bundled"));
+        write(&bundled, "NEW-BINARY-CONTENT");
+        atomic_replace(&bundled, &target).expect("atomic replace");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "NEW-BINARY-CONTENT");
+        // No leftover temp sibling.
+        let leftovers: Vec<_> = fs::read_dir(&d.0)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.contains(".tmp-"))
+            .collect();
+        assert!(leftovers.is_empty(), "temp files left behind: {leftovers:?}");
+    }
+
+    #[test]
+    fn atomic_replace_overwrites_existing_target() {
+        let d = TmpDir::new();
+        let (target, bundled) = (d.path("shim"), d.path("bundled"));
+        write(&target, "OLD");
+        write(&bundled, "REPLACEMENT");
+        atomic_replace(&bundled, &target).expect("atomic replace");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "REPLACEMENT");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn atomic_replace_sets_executable_bit_on_unix() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = TmpDir::new();
+        let (target, bundled) = (d.path("shim"), d.path("bundled"));
+        write(&bundled, "BINARY");
+        atomic_replace(&bundled, &target).expect("atomic replace");
+        let mode = fs::metadata(&target).unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0o111, "replaced binary must be executable");
     }
 }

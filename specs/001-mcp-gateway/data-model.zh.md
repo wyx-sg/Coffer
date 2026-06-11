@@ -90,6 +90,7 @@ frozen dataclass。一个资源 kind 的纯描述符。只属于 domain——不
 | `"retention_updated"`     | retention policy 变更时                          |
 | `"backup_created"`        | `POST /api/v1/daemon/backup` 之后                |
 | `"keychain_set"`          | `POST /api/v1/keychain` 存储 secret 之后         |
+| `"keychain_read"`         | `GET /api/v1/keychain/{ref}` 读取 secret 之后    |
 | `"keychain_deleted"`      | `DELETE /api/v1/keychain/{ref}` 删除 secret 之后 |
 
 ### `RetentionPolicy` (`domain/retention.py`)
@@ -332,6 +333,19 @@ for table_name, days in defaults:
     if not exists(table_name):
         upsert(table_name=table_name, retention_days=days, updated_at=utcnow())
 ```
+
+## API authentication
+
+`/api/v1/*` 下的每条路由都要求 `X-Coffer-Token` header。唯一刻意豁免的是：
+
+| Endpoint                    | 为什么免鉴权                                                                                                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/daemon/status` | 被 CLI 与 `coffer-mcp-shim` 用作廉价的就绪探针，在还没从 `~/.coffer/daemon.json` 读到任何 token 之前调用。只返回生命周期阶段、版本、端口、started-at 以及一个聚合的 upstream 概要 —— 不含 secret、不含逐 resource 细节、不含审计数据。 |
+
+所有改动型 endpoint（包括 `/daemon/backup`、`/daemon/rotate-token`、
+`/daemon/shutdown`）都要求 token。`/mcp` JSON-RPC 面也要求 token。客户端
+SHOULD 设置可选的 `X-Coffer-Actor` header（`cli` | `api` | `ui` | `system`），
+使审计条目带上来源 surface；缺省时默认为 `"api"`。
 
 ## Invariants enforced by importlinter
 

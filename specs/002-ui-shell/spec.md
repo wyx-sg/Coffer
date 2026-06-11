@@ -22,15 +22,16 @@ Today the sidebar's four shipped surfaces are:
 
 ```
  AGENTS
-  Agents           /agents      — the consumers (Bot icon)
+  Agents           /agents        — the consumers (Bot icon)
  RESOURCES
-  MCP servers      /resources   — resource kinds with a list UI (today: mcp_server)
+  MCP servers      /mcp-servers   — resource kinds with a list UI (today: mcp_server)
  SYSTEM
-  Audit log        /audit       — who did what, when
+  Audit log        /audit         — who did what, when
   Settings         /settings
 ```
 
-It is grouped into **Agents** (the consumers), **Resources** (resource kinds), and **System** (cross-cutting tooling: the Audit log and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/resources` kind browser. The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
+The app's index (`/`) redirects to `/agents`, so a first-time visitor lands on
+the Agents surface. It is grouped into **Agents** (the consumers), **Resources** (resource kinds), and **System** (cross-cutting tooling: the Audit log and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` is kept as a legacy redirect to `/mcp-servers` for old bookmarks.) The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
 
 All list surfaces (agents, MCP servers, the audit log) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are compact icons. Cards are reserved for welcome / empty states only.
 
@@ -48,7 +49,7 @@ A developer opens the web UI for the first time. They have never registered a se
 
 **Why this priority**: This is the gate to every other flow. If the first screen looks broken or is silent on what to do next, the user closes the tab and the rest of the product doesn't matter.
 
-**Independent Test**: Clear `localStorage`, open `http://localhost:5173/` after `make dev`. The page authenticates automatically via the dev-only token-injection plugin (`frontend/vite.config.ts`); the user lands on `/resources` and sees a welcome card with a primary "Add MCP server" button.
+**Independent Test**: Clear `localStorage`, open `http://localhost:5173/` after `make dev`. The page authenticates automatically via the dev-only token-injection plugin (`frontend/vite.config.ts`); the index redirects to `/agents` and the user sees the Agents welcome card with a primary "Add agent" button. The "Add MCP server" welcome lives one click away on `/mcp-servers`.
 
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
@@ -66,7 +67,7 @@ A developer who already uses Coffer for MCP gateway aggregation wants the routin
 
 **Why this priority**: Spec 001 delivered the backend correctness but the UI shipped as bare tailwind defaults. The user-visible bar for "the MCP gateway is done" is the UI passing a real user (not a Playwright fixture).
 
-**Independent Test**: Walk the MCP flows end-to-end in a real browser: open `/resources` (welcome or list), click "Add MCP server", fill the form, submit, land on the detail page, switch through the Overview / Tools / Resources / Prompts / Invocations tabs, toggle a tool, return to the list, switch language between English and 中文. Every step shows polished content; no view dead-ends in a generic error.
+**Independent Test**: Walk the MCP flows end-to-end in a real browser: open `/mcp-servers` (welcome or list), click "Add MCP server", fill the form, submit, land on the detail page, switch through the Overview / Tools / Resources / Prompts / Invocations tabs, toggle a tool, return to the list, switch language between English and 中文. Every step shows polished content; no view dead-ends in a generic error.
 
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
@@ -97,7 +98,9 @@ The audit log is NOT **Observability** — system health / metrics is a distinct
 
 ### User Story 4 — Settings is organised around the user, not the daemon (Priority: P2)
 
-A developer opens Settings and finds tabs grouped by what they manage, not by how Coffer is built: **Data** (retention policy, manual prune, and backups) and **About** (version, license, source). The daemon is an implementation detail — there is no "Daemon" tab and no read-only daemon-status panel. A user never needs to know Coffer runs a background daemon.
+A developer opens Settings and finds tabs grouped by what they manage, not by how Coffer is built: **General** (the default rows-per-page preference for list tables), **Data** (retention policy, manual prune, and backups), and **About** (version, license, source). In the desktop (Tauri) build an extra **App** tab (launch-at-login) appears between Data and About; it is hidden in the browser, where those capabilities don't exist. Settings opens on the General tab. The daemon is an implementation detail — there is no "Daemon" tab and no read-only daemon-status panel. A user never needs to know Coffer runs a background daemon.
+
+The **General** tab MUST expose the default page-size preference (the rows-per-page every list table seeds from), persisted in `localStorage`.
 
 **Why this priority**: P2 — the underlying controls already function; this story is reorganisation and subtraction, not new capability. An unorganised Settings page is exactly the "feels like a scaffold" signal US2 fights, and the user flagged it as confusing.
 
@@ -110,7 +113,7 @@ Removed — none of these is something a user needs to operate or see:
 
 Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clearing expired data).
 
-**Independent Test**: open `/settings` — it lands on Data. The tab list reads Data / About. There is no "Daemon" tab and no daemon-status panel; no tab exposes a "Shutdown" or "Rotate token" control.
+**Independent Test**: open `/settings` — it lands on General. The tab list reads General / Data / About (plus App in the desktop build). There is no "Daemon" tab and no daemon-status panel; no tab exposes a "Shutdown" or "Rotate token" control.
 
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
@@ -126,8 +129,8 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **Given** the user has never opened Coffer (localStorage is empty, no daemon.json in user HOME yet)
 - **And** `coffer daemon start` is running (so daemon.json exists in user HOME)
 - **When** they navigate to `http://localhost:5173/` in a real browser
-- **Then** the page renders the sidebar + main content area within 2 seconds
-- **And** the main content shows the resources welcome view (no generic error card)
+- **Then** the index redirects to `/agents` and the page renders the sidebar + main content area within 2 seconds
+- **And** the main content shows the Agents welcome view (no generic error card)
 - **And** the sidebar lists Coffer's operational surfaces — Agents, MCP servers, Audit log, Settings — grouped under "Agents", "Resources", and "System" headings
 
 ### Scenario: token-missing renders an actionable empty state
@@ -141,7 +144,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 ### Scenario: empty resources list renders a welcome view
 
 - **Given** the daemon is running and zero resources are registered
-- **When** the user opens `/resources`
+- **When** the user opens `/mcp-servers`
 - **Then** the page renders a welcome card with a short pitch and a primary "Add MCP server" button
 - **And** the welcome card does NOT show an empty table or a placeholder ghost row
 
@@ -150,13 +153,13 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **Given** the user opens the "Add MCP server" dialog from the resources list
 - **When** they paste the standard `mcpServers` JSON and confirm the review step
 - **Then** the app posts each server to `/api/v1/resources`, then writes any secret env values to `/api/v1/keychain` (register-first ordering avoids orphan keychain entries when registration fails)
-- **And** on success the dialog closes and (for a single server) the app navigates to `/resources/mcp_server/<name>` showing the Overview tab
+- **And** on success the dialog closes and (for a single server) the app navigates to `/mcp-servers/mcp_server/<name>` showing the Overview tab
 - **And** the new server appears on the resources list with health "unknown" then "healthy" within 10 seconds
 
 ### Scenario: add-server form navigates to detail then back to list shows card
 
 - **Given** the user completes the JSON-import dialog for a new MCP server
-- **When** they are taken to the server's detail page and then navigate back to `/resources`
+- **When** they are taken to the server's detail page and then navigate back to `/mcp-servers`
 - **Then** the server card appears in the resources list
 
 ### Scenario: capability toggle uses the redesigned tab layout
@@ -240,8 +243,8 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 - **Given** the user navigates to `/settings`
 - **When** the page resolves
-- **Then** it lands on the Data tab
-- **And** the settings sidebar shows Data and About, with the current route highlighted
+- **Then** it lands on the General tab
+- **And** the settings sidebar shows General, Data, and About (plus App in the desktop build), with the current route highlighted
 - **And** clicking a tab swaps the right pane content without a full page reload
 
 ### Scenario: settings drops the confusing controls

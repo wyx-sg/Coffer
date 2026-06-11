@@ -27,10 +27,10 @@ make dev
 
 在任意现代浏览器打开 `http://localhost:5173/`。
 
-首次访问时 URL 解析到 `/resources`，你会看到：
+首次访问时 index (`/`) 重定向到 `/agents`，你会看到：
 
-- 重设计后的侧栏——基于角色的分组：**Agents**（`/agents`——你使用的 agent）、**Resources**（**MCP servers**，位于 `/resources`）、**System**（**Audit log** 位于 `/audit`、**Settings**）。当前路由高亮。点击收起手柄在完整与图标态之间切换；选择跨刷新持久化。
-- 一张欢迎卡片，介绍 Coffer 是什么，并给出一个主行动：**Add MCP server**。
+- 重设计后的侧栏——基于角色的分组：**Agents**（`/agents`——你使用的 agent）、**Resources**（**MCP servers**，位于 `/mcp-servers`）、**System**（**Audit log** 位于 `/audit`、**Settings**）。当前路由高亮。点击收起手柄在完整与图标态之间切换；选择跨刷新持久化。（`/resources` 仍可用——它是指向 `/mcp-servers` 的 legacy 重定向。）
+- Agents 欢迎卡片，介绍 Coffer 是什么，并给出一个主行动：**Add agent**。对应的 **Add MCP server** 欢迎卡片在 **MCP servers**（`/mcp-servers`），一步可达。
 
 如果 daemon 没在跑（你跳过了 `make dev`，或它崩了），你会看到一个 "Daemon not running" 视图，带一个「重新加载」恢复操作（桌面应用提供「重启」）。把 daemon 拉起来，视图会在下一次渲染就自动恢复——不需要手动刷页（见 `daemon-offline banner` acceptance scenario）。
 
@@ -58,7 +58,7 @@ make dev
 - 确认服务器名。
 - 标记哪些 `env` 值是 secret。secret 会写到 OS keychain (`/api/v1/keychain`)，而不是 resource 配置里。顺序是**先注册、再写 keychain**——这样一旦注册失败，也不会留下孤儿 keychain 条目（详见 spec scenario）。
 
-点 **Add** 完成。成功后对话框关闭；如果只有一台服务器，app 会跳到 `/resources/mcp_server/<name>` 的 Overview tab。新服务器立刻出现在列表中，健康状态先是 "unknown"，约 10 秒内变为 "healthy"。
+点 **Add** 完成。成功后对话框关闭；如果只有一台服务器，app 会跳到 `/mcp-servers/mcp_server/<name>` 的 Overview tab。新服务器立刻出现在列表中，健康状态先是 "unknown"，约 10 秒内变为 "healthy"。
 
 如果 JSON 解析失败或形状不对，对话框不关并显示一条可读的错误，说明问题在哪；不向后端发任何请求（见 `JSON import shows readable error for malformed JSON` scenario）。
 
@@ -75,7 +75,7 @@ make dev
 ## 5. 审计日志与 Settings
 
 - `/audit` — 审计日志视图（在 **System** 分组下）。按时间范围与 actor 过滤；点任意行展开它的原始日志——该条目完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。legacy `/observability` URL 仍能解析并重定向到这里。（Observability——系统健康 / 指标——是另一个预留给未来的独立界面，不是这个审计日志。）
-- `/settings` — tabs 侧栏分 **Data**（retention 策略、手动清理、备份）和 **About**（版本 / 许可证 / 源代码）。
+- `/settings` — tabs 侧栏打开在 **General**（默认每页条数偏好），另有 **Data**（retention 策略、手动清理、备份）与 **About**（版本 / 许可证 / 源代码）。桌面构建还多一个 **App** tab（开机自启）。
 
 相比 v0 壳，刻意删掉的三处地方：
 
@@ -86,5 +86,5 @@ make dev
 ## Where things live
 
 - daemon 状态：`~/.coffer/coffer.db` 与 `~/.coffer/daemon.json`（与 spec 001 一致）。
-- UI 偏好：只在 `localStorage`——`coffer.language`（语言）与 `coffer.sidebar.collapsed`（侧栏态）。
+- UI 偏好：只在 `localStorage`——`coffer.language`（语言）与 `coffer.nav.collapsed`（侧栏态）。
 - UI 源码：`frontend/src/`——目录见 [`plan.md`](./plan.md)。

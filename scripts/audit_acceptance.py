@@ -113,21 +113,96 @@ def _extract_acceptance_call(node: ast.Call) -> tuple[str, str] | None:
     return None
 
 
-def collect_python_markers(root: Path) -> set[tuple[str, str]]:
+def _is_unconditional_skip(dec: ast.expr) -> bool:
+    """True for ``@pytest.mark.skip`` / ``@pytest.mark.skip(...)`` — NOT skipif.
+
+    A bare ``skip`` marker hides the test from every run, so an acceptance
+    marker sitting on it reports green while the scenario is never executed.
+    ``skipif`` is conditional (the test may run under the right env) and is
+    intentionally allowed.
+    """
+    target = dec.func if isinstance(dec, ast.Call) else dec
+    return (
+        isinstance(target, ast.Attribute)
+        and target.attr == "skip"
+        and isinstance(target.value, ast.Attribute)
+        and target.value.attr == "mark"
+    )
+
+
+def _module_pytestmark_skips(tree: ast.Module) -> bool:
+    """True when a module-level ``pytestmark`` unconditionally skips the file.
+
+    Covers ``pytestmark = pytest.mark.skip(...)`` and
+    ``pytestmark = [pytest.mark.skip(...), ...]``.
+    """
+    for stmt in tree.body:
+        if not isinstance(stmt, ast.Assign):
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in stmt.targets):
+            continue
+        values = stmt.value.elts if isinstance(stmt.value, ast.List | ast.Tuple) else [stmt.value]
+        if any(_is_unconditional_skip(v) for v in values):
+            return True
+    return False
+
+
+def _scan_python_file(
+    py: Path,
+    tree: ast.Module,
+    markers: set[tuple[str, str]],
+    dead: list[tuple[str, str, str]],
+) -> None:
+    """One AST pass: collect acceptance markers AND dead (always-skipped) ones.
+
+    A marker is dead when its test can never run: a ``@pytest.mark.skip`` on
+    the function itself, on an enclosing class, or a module-level
+    ``pytestmark`` skip — any of those would report the scenario covered
+    while it never executes.
+    """
+    module_skipped = _module_pytestmark_skips(tree)
+
+    def visit(node: ast.AST, scope_skipped: bool) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.ClassDef):
+                cls_skipped = scope_skipped or any(
+                    _is_unconditional_skip(d) for d in child.decorator_list
+                )
+                visit(child, cls_skipped)
+            elif isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                pair: tuple[str, str] | None = None
+                fn_skipped = scope_skipped
+                for dec in child.decorator_list:
+                    if isinstance(dec, ast.Call):
+                        pair = _extract_acceptance_call(dec) or pair
+                    if _is_unconditional_skip(dec):
+                        fn_skipped = True
+                if pair is not None:
+                    markers.add(pair)
+                    if fn_skipped:
+                        dead.append((pair[0], pair[1], f"{py.relative_to(REPO_ROOT)}::{child.name}"))
+                visit(child, fn_skipped)
+            else:
+                visit(child, scope_skipped)
+
+    visit(tree, module_skipped)
+
+
+def collect_python_markers_and_dead(
+    root: Path,
+) -> tuple[set[tuple[str, str]], list[tuple[str, str, str]]]:
+    """Single sweep over the test tree → (all markers, dead markers)."""
     markers: set[tuple[str, str]] = set()
+    dead: list[tuple[str, str, str]] = []
     if not root.exists():
-        return markers
+        return markers, dead
     for py in root.rglob("*.py"):
         try:
             tree = ast.parse(py.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError):
             continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                pair = _extract_acceptance_call(node)
-                if pair is not None:
-                    markers.add(pair)
-    return markers
+        _scan_python_file(py, tree, markers, dead)
+    return markers, dead
 
 
 def collect_ts_markers(roots: list[Path]) -> set[tuple[str, str]]:
@@ -171,7 +246,8 @@ def main() -> int:
             print(f"    - {spec_id} (add `## Acceptance Scenarios` with `### <title>` items)", file=sys.stderr)
         return 1
 
-    all_markers = collect_python_markers(BACKEND_TESTS) | collect_ts_markers(FRONTEND_TS_ROOTS)
+    py_markers, dead = collect_python_markers_and_dead(BACKEND_TESTS)
+    all_markers = py_markers | collect_ts_markers(FRONTEND_TS_ROOTS)
 
     markers_by_spec: dict[str, set[str]] = defaultdict(set)
     for spec_id, scenario in all_markers:
@@ -187,7 +263,12 @@ def main() -> int:
         if spec_id not in specs or scenario not in specs[spec_id]:
             orphans.add((spec_id, scenario))
 
-    if not missing and not orphans:
+    # `dead` (collected above in the same AST sweep): acceptance markers on
+    # unconditionally-skipped tests report coverage that never executes —
+    # treat as failure so function-, class-, or module-level `pytest.mark.skip`
+    # can't mask a scenario as covered. (skipif/env-gated tests like the
+    # benchmark suite are allowed; they run in a dedicated CI job.)
+    if not missing and not orphans and not dead:
         if not args.quiet:
             total = sum(len(s) for s in specs.values())
             print(
@@ -205,6 +286,14 @@ def main() -> int:
         print("\n  Test markers referring to unknown spec/scenario:", file=sys.stderr)
         for spec_id, scenario in sorted(orphans):
             print(f"    - {spec_id} :: {scenario}", file=sys.stderr)
+    if dead:
+        print(
+            "\n  Acceptance markers on unconditionally-skipped tests "
+            "(scenario reported covered but never runs):",
+            file=sys.stderr,
+        )
+        for spec_id, scenario, loc in sorted(dead):
+            print(f"    - {spec_id} :: {scenario}  ({loc})", file=sys.stderr)
     return 1
 
 

@@ -122,6 +122,44 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         assert r.status_code == 404
 
 
+def test_deleting_agent_cascades_into_skill_binding_cleanup(tmp_path, monkeypatch):
+    """CODE-WIRING: exercise the real composition-root cross-kind hook.
+
+    ``agent_skill_wiring._agent_on_delete`` (wired only in the assembled app,
+    previously untested — the unit skill tests build their own wiring) must,
+    when an agent is deleted, tear down every per-agent skill symlink and drop
+    the binding row. We drive it end-to-end through create_app().
+    """
+    app = _app(tmp_path, monkeypatch, 59620)
+    agent_config_dir = tmp_path / "agent-cfg"
+    agent_config_dir.mkdir()
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="hello-world")
+
+    with _client(app) as c:
+        r = c.post(
+            "/api/v1/agents",
+            json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
+        )
+        assert r.status_code == 201, r.text
+
+        r = c.post("/api/v1/skills/import", json={"path": str(src)})
+        assert r.status_code == 201, r.text
+        link = agent_config_dir / "skills" / "hello-world"
+        assert link.exists(), "skill should be delivered to the agent on import"
+
+        # Delete the agent — the cross-kind on_delete hook must cascade.
+        r = c.delete("/api/v1/agents/cur")
+        assert r.status_code == 204, r.text
+
+        # The per-agent symlink is torn down...
+        assert not link.exists(), "agent delete must remove its delivered skill link"
+        # ...and the skill no longer lists a binding for the deleted agent.
+        r = c.get("/api/v1/skills/hello-world")
+        assert r.status_code == 200
+        assert all(b["agent_name"] != "cur" for b in r.json()["bindings"])
+
+
 # TEST21-010: error envelope shape for non-SSRF errors. The envelope is
 # `{error: {code, message, details}}` — without this assertion only the
 # SSRF code is pinned, leaving other surfaces free to regress to a bare

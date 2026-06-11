@@ -1,34 +1,15 @@
 from __future__ import annotations
 
-import keyring
-import keyring.core
 import pytest
 
 from coffer.application.mcp.credential_resolver import CredentialResolver
 from coffer.domain.errors import CredentialMissing
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
-
-
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, service: str, username: str) -> str | None:
-        return self._data.get((service, username))
-
-    def set_password(self, service: str, username: str, password: str) -> None:
-        self._data[(service, username)] = password
-
-    def delete_password(self, service: str, username: str) -> None:
-        self._data.pop((service, username), None)
+from tests.fixtures.keyring import install_in_memory_keyring
 
 
 def _with_in_memory(monkeypatch):
-    backend = _InMemoryKeyring()
-    monkeypatch.setattr(keyring.core, "_keyring_backend", backend)
-    return backend
+    return install_in_memory_keyring(monkeypatch)
 
 
 def test_materialize_round_trip(monkeypatch):

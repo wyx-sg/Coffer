@@ -9,8 +9,6 @@ from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import keyring
-import keyring.core
 import pytest
 
 from coffer.application.audit_service import AuditService
@@ -24,6 +22,7 @@ from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -33,30 +32,13 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from tests.fixtures.keyring import InMemoryKeyring, install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
 
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, service: str, username: str) -> str | None:
-        return self._data.get((service, username))
-
-    def set_password(self, service: str, username: str, password: str) -> None:
-        self._data[(service, username)] = password
-
-    def delete_password(self, service: str, username: str) -> None:
-        self._data.pop((service, username), None)
-
-
-def _with_in_memory(monkeypatch) -> _InMemoryKeyring:
-    backend = _InMemoryKeyring()
-    monkeypatch.setattr(keyring.core, "_keyring_backend", backend)
-    return backend
+def _with_in_memory(monkeypatch) -> InMemoryKeyring:
+    return install_in_memory_keyring(monkeypatch)
 
 
 async def _make_services(tmp_path, *, register_servers: list[tuple[str, dict]]):
@@ -116,6 +98,7 @@ async def test_lazy_spawn_returns_initialized_connection(tmp_path, monkeypatch):
         register_servers=[("fs", _basic_stdio_config("read_file", "write_file"))],
     )
     sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
@@ -139,6 +122,7 @@ async def test_get_or_spawn_is_idempotent(tmp_path, monkeypatch):
         tmp_path, register_servers=[("fs", _basic_stdio_config("x"))]
     )
     sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
@@ -159,6 +143,7 @@ async def test_disabled_resource_rejected(tmp_path, monkeypatch):
     )
     await resource_svc.set_enabled(ResourceRef("mcp_server", "fs"), False, actor="test")
     sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
@@ -185,6 +170,7 @@ async def test_spawn_failure_retries_then_enters_cooldown(tmp_path, monkeypatch)
     }
     resource_svc, engine = await _make_services(tmp_path, register_servers=[("bad", bad_config)])
     sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
         retry_delays=(0.01, 0.01, 0.01),  # snappy for tests
@@ -224,6 +210,7 @@ async def test_cooldown_expires_and_allows_new_attempt(tmp_path, monkeypatch):
     }
     resource_svc, engine = await _make_services(tmp_path, register_servers=[("flaky", bad_config)])
     sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
         retry_delays=(0.01,),
@@ -261,6 +248,7 @@ async def test_evict_closes_connection_and_marks_unhealthy(tmp_path, monkeypatch
         tmp_path, register_servers=[("fs", _basic_stdio_config("x"))]
     )
     sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
@@ -288,6 +276,7 @@ async def test_dispose_closes_all_connections(tmp_path, monkeypatch):
         ],
     )
     sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
@@ -352,6 +341,79 @@ async def test_concurrent_get_or_spawn_yields_one_subprocess(tmp_path, monkeypat
 
 
 @pytest.mark.asyncio
+async def test_concurrent_get_or_spawn_on_dead_upstream_runs_one_retry_ladder(
+    tmp_path, monkeypatch
+):
+    """CODE-H1: when several callers race to reach a dead upstream, the retry
+    ladder must run exactly once in total, not once per caller.
+
+    Regression: the cooldown gate was only checked before acquiring spawn_lock.
+    Each waiter that then acquired the lock saw state != HEALTHY, reset to
+    STARTING, and burned the whole ladder again — so N concurrent callers
+    amplified the work N-fold (and held a session's tool calls hostage for
+    minutes). Re-checking cooldown *under* the lock makes later waiters fail
+    fast once the first caller has entered cooldown.
+    """
+    import asyncio as _asyncio
+
+    _with_in_memory(monkeypatch)
+    resource_svc, engine = await _make_services(
+        tmp_path, register_servers=[("bad", _basic_stdio_config("x"))]
+    )
+
+    attempts = {"n": 0}
+
+    class _AlwaysFailUpstream:
+        async def spawn_and_initialize(self) -> dict:
+            attempts["n"] += 1
+            raise UpstreamUnavailable("boom")
+
+        async def request(self, method, params):  # type: ignore[no-untyped-def]
+            raise UpstreamUnavailable("boom")
+
+        def on_notification(self, cb):  # type: ignore[no-untyped-def]
+            pass
+
+        def on_sampling_request(self, cb):  # type: ignore[no-untyped-def]
+            pass
+
+        def on_roots_request(self, cb):  # type: ignore[no-untyped-def]
+            pass
+
+        async def close(self) -> None:
+            pass
+
+    def _failing_factory(transport, overlay, spawn_to, req_to, name):  # type: ignore[no-untyped-def]
+        return _AlwaysFailUpstream()
+
+    retry_delays = (0.01, 0.01, 0.01)
+    sup = SubprocessSupervisor(
+        resource_service=resource_svc,
+        credential_resolver=CredentialResolver(KeyringAdapter()),
+        upstream_factory=_failing_factory,  # type: ignore[arg-type]
+        retry_delays=retry_delays,
+        cooldown_seconds=60,
+    )
+
+    try:
+        results = await _asyncio.gather(
+            *[sup.get_or_spawn("bad") for _ in range(5)],
+            return_exceptions=True,
+        )
+        assert all(isinstance(r, UpstreamUnavailable) for r in results)
+        assert sup.health("bad") == UpstreamHealth.COOLDOWN
+        # One ladder = len(retry_delays) + 1 attempts. Without the under-lock
+        # cooldown re-check this would be 5x that.
+        assert attempts["n"] == len(retry_delays) + 1, (
+            f"expected one retry ladder ({len(retry_delays) + 1} attempts) for "
+            f"5 concurrent callers, got {attempts['n']}"
+        )
+    finally:
+        await sup.dispose()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_credential_overlay_passed_through(tmp_path, monkeypatch):
     """Verify the supervisor materialises credentials through the resolver."""
     backend = _with_in_memory(monkeypatch)
@@ -373,6 +435,7 @@ async def test_credential_overlay_passed_through(tmp_path, monkeypatch):
         ],
     )
     sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=resource_svc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )

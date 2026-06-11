@@ -339,7 +339,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 **发现（检测 = 发现 + 确认）**
 
-- **FR-004**: 系统 MUST 提供一个只读的发现操作，扫描每种受支持 agent 类型的常见安装标记，并把已安装但尚未注册的类型作为**候选项（candidate）**报告（每个携带类型、显示名、默认 `config_dir` 与一个建议名称）。发现 MUST NOT 自动注册任何内容——由用户审阅候选项并确认要添加哪些。daemon MUST NOT 在启动时自动注册 agent。
+- **FR-004**: 系统 MUST 提供一个只读的发现操作，扫描每种受支持 agent 类型的常见安装标记，并把已安装但尚未注册的类型作为**候选项（candidate）**报告（每个携带 `type`、`display_name`、`config_dir`、`default_skill_dir` 与 `suggested_name`）。发现 MUST NOT 自动注册任何内容——由用户审阅候选项并确认要添加哪些。daemon MUST NOT 在启动时自动注册 agent。
 - **FR-005**: 只要安装标记仍存在，被移除的 agent MUST 在后续扫描中重新作为发现候选项出现——移除并非永久（可能是误操作）。系统 MUST NOT 保留任何「已抑制类型」列表。
 
 **生命周期**
@@ -383,7 +383,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 - **Agent**：一个 kind 为 `agent` 的 Resource。代表一份本地安装的 AI agent。Config: `type`（受支持的 enum）、`config_dir`（可选的绝对路径覆盖；默认回退到该类型的标准位置）。skill 投递到 `<config_dir>/skills`。标识为 `agent:<name>`。
 - **Agent Type**：一个 enum 值，标识一个已知 agent 产品（`claude_code`、`codex`）。每个类型有一个默认 `config_dir`（`~/.claude` / `~/.codex`）、一个显示名、一个用于发现的安装标记扫描器，以及一份精选的**配置文件 allowlist**。
-- **Agent Candidate（候选项）**：一个被发现的、已安装但尚未注册的 agent——类型、显示名、默认 `config_dir` 与建议名称。在扫描时派生，从不存储；用户确认某个候选项即可注册它。
+- **Agent Candidate（候选项）**：一个被发现的、已安装但尚未注册的 agent——`type`、`display_name`、`config_dir`（该类型的默认配置目录）、`default_skill_dir` 与 `suggested_name`。在扫描时派生，从不存储；用户确认某个候选项即可注册它。
 - **Config File（配置文件）**：属于某个 agent 类型、在 allowlist 内的精选文件，以稳定的 `key` 标识。携带显示名、解析后的绝对路径、`format`（`json` / `toml` / `markdown` / `text`），以及（存在时）大小与修改时间。按 key 读写，绝不按任意路径。不持久化到 SQLite——磁盘上的文件即为事实来源。
 - **Coffer MCP Install Status（安装状态）**：某个 agent 的派生（非存储）状态：其 MCP 配置文件中是否存在 `coffer` MCP-server 条目。
 

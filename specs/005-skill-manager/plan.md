@@ -77,7 +77,7 @@ backend/coffer/infrastructure/skill/
   ssrf_guard.py        # host predicate (loopback / RFC1918 / link-local rejection)
 
 backend/coffer/infrastructure/persistence/migrations/versions/
-  20260526_0006_skill_tables.py   # skill_agent_bindings (solo migration; spec 004 ships its own 0005)
+  20260526_0005_skill_tables.py   # skill_agent_bindings (revision 0005, down_revision 0004)
 
 backend/coffer/surfaces/http/skill_routes.py
 backend/coffer/surfaces/http/agent_skill_wiring.py    # cross-kind composition (agent on_delete → skill cleanup)
@@ -109,7 +109,7 @@ frontend/src/i18n/locales/{en,zh}.json     # skill strings appended
 ### Phase 1 — Data model + contracts
 
 - Write data-model.md (done) and contracts/api.openapi.yaml (done).
-- Add Alembic migration `20260526_0006_skill_tables.py` creating `skill_agent_bindings` (solo; spec 004's `suppressed_agent_types` already shipped in `20260525_0005_agent_tables.py`).
+- Add Alembic migration `20260526_0005_skill_tables.py` (revision `0005`, down_revision `0004`) creating `skill_agent_bindings`. Agents live in the shared `resources` tables, so spec 004 needs no agent-tables migration.
 
 ### Phase 2 — Backend implementation
 

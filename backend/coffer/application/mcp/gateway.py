@@ -102,6 +102,10 @@ class MCPGatewaySession:
         # Track which servers we've subscribed to notifications on so we
         # only attach the handler once per (session, server) pair.
         self._notification_subscriptions: set[str] = set()
+        # CODE-L4: the event loop holds tasks weakly — an un-referenced
+        # ensure_future() task can be garbage-collected mid-flight, silently
+        # dropping an upstream notification. Hold strong refs until done.
+        self._notification_tasks: set[asyncio.Task[None]] = set()
         # Downstream client capabilities declared during initialize (T-061/T-062).
         self._client_capabilities: dict[str, Any] = {}
         # Server-initiated request bookkeeping (T-061 sampling, T-062 roots).
@@ -184,9 +188,14 @@ class MCPGatewaySession:
             conn = await self._supervisor.get_or_spawn(server_name)
         except UpstreamUnavailable:
             return
-        conn.on_notification(
-            lambda notif: asyncio.ensure_future(self._on_upstream_notification(server_name, notif))
-        )
+
+        def _spawn_notification_task(notif: Any) -> asyncio.Task[None]:
+            task = asyncio.ensure_future(self._on_upstream_notification(server_name, notif))
+            self._notification_tasks.add(task)
+            task.add_done_callback(self._notification_tasks.discard)
+            return task
+
+        conn.on_notification(_spawn_notification_task)
         # T-061/T-062: register callbacks so the SDK can handle server-initiated
         # sampling and roots requests from this upstream.
         conn.on_sampling_request(self._sampling_callback)

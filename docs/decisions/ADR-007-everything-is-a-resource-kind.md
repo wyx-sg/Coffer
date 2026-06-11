@@ -1,6 +1,6 @@
 # ADR-007: Information Architecture — Everything Is a Resource Kind
 
-**Status**: Amended (2026-05-30) — see [Amendment](#amendment-2026-05-30)
+**Status**: Amended (2026-05-30, 2026-06-11) — see [Amendment](#amendment-2026-05-30) and [Amendment: frontend kind UI](#amendment-2026-06-11--frontend-kind-ui)
 **Date**: 2026-05-28
 **Deciders**: Yuxing Wu
 **Related**: [ADR-001](ADR-001-resource-framework-upfront.md), spec `002-ui-shell`
@@ -107,7 +107,8 @@ What changed:
   - **Resources** — the assets agents draw on, modelled as kind-agnostic
     resource kinds and surfaced through the kind registry. The nav entry is
     labelled **"MCP servers"** and lists only the kinds that register a
-    list/card UI (today just `mcp_server`); the route stays `/resources`.
+    list/card UI (today just `mcp_server`); the route is `/mcp-servers`
+    (`/resources` is kept as a legacy redirect for old bookmarks).
   - **System** — cross-cutting tooling: the **Audit log** (`/audit`) and
     **Settings** (`/settings`).
 - **The audit log lives at `/audit`, not `/observability`.** The shipped
@@ -132,3 +133,33 @@ sidebar still shows only what ships today. The amendment narrows "everything
 is a resource kind" to "every **asset** is a resource kind, surfaced under
 Resources; consumers (agents) and cross-cutting tooling (System) are their
 own role-based groups."
+
+## Amendment (2026-06-11) — frontend kind UI
+
+Spec 005 shipped **skills** as a backend resource kind (identity, lifecycle,
+audit, `on_delete` cascade all ride the kind-agnostic framework) but as
+**bespoke frontend pages** (`/skills`, `/skills/:name`) rather than through
+the frontend kind registry. That left the UI in an undeclared half-state:
+the registry promised "one generic browse surface per kind" while skills
+quietly bypassed it.
+
+This amendment settles the frontend pattern:
+
+- **The backend axis is unchanged.** Every asset is a resource kind; the
+  unify-identity/lifecycle/audit rule and the never-unify-invocation rule
+  (ADR-001) still hold for all kinds.
+- **The frontend kind registry is scoped, not universal.** It serves kinds
+  whose UI fits the generic browse pattern (card/table + config-centric
+  detail) — today `mcp_server` under `/mcp-servers`. It is NOT a promise
+  that every kind renders through it.
+- **Asset kinds with richer interaction models ship bespoke page-sets.**
+  Skills (per-agent bindings, file viewer, drift verify) live at `/skills`
+  with their own pages. This is the sanctioned pattern, not an exception.
+- **New kinds choose explicitly at design time**: register a kind UI for
+  generic browsing, or ship a bespoke page-set under their own route. The
+  spec for the kind must state which.
+
+Consequence: "skills appear in the sidebar's Resources group" (the 2026-05-30
+amendment's future-groups list) is now shipped — the Resources group contains
+**MCP servers** (`/mcp-servers`, registry-driven) and **Skills** (`/skills`,
+bespoke).

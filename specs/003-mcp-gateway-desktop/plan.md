@@ -1,7 +1,6 @@
 # Implementation Plan: 003 — MCP Gateway Desktop
 
 **Branch**: `feature/003-mcp-gateway-desktop`
-**Date**: 2026-05-28
 **Spec**: [./spec.md](./spec.md)
 **Status**: Accepted
 
@@ -11,11 +10,11 @@ Wrap the 002 web UI in a Tauri 2 desktop shell, supervise the headless daemon
 via [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.md)'s
 detect-or-spawn pattern, deploy the bundled `coffer-mcp-shim` to a stable
 user-writable PATH location on every launch, and ship the result as two
-download tiers built from the same pair of PyInstaller binaries:
-a **CLI-only** `coffer-cli-<triple>` archive (just `coffer-daemon` +
-`coffer-mcp-shim`, for headless installs) and a **CLI+desktop** Tauri
-bundle (DMG / MSI / AppImage / deb) for macOS (arm64 + x64), Linux x64,
-and Windows x64. The PyInstaller-built daemon + shim binaries are carried
+download tiers built from the same PyInstaller binaries, shipped for
+**macOS arm64 only**: a **CLI-only** `coffer-cli-<triple>.tar.gz` archive
+(`coffer` + `coffer-daemon` + `coffer-mcp-shim`, for headless installs)
+and a **CLI+desktop** Tauri bundle (unsigned macOS arm64 `.dmg`). The
+PyInstaller-built daemon + shim binaries are carried
 inside the Tauri bundle as `bundle.externalBin` sidecars per
 [ADR-008](../../docs/decisions/ADR-008-distribution-pyinstaller-tauri-sidecar.md).
 
@@ -38,7 +37,7 @@ for the distribution-architecture decision.
 | **Daemon Discovery**     | `~/.coffer/daemon.json` (port + token + pid), shared with the CLI and shim. See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.md).                                                                                                         |
 | **Shim PATH target**     | macOS / Linux: `~/.coffer/bin/`. Windows: `%LOCALAPPDATA%\Coffer\bin\` (fallback `%USERPROFILE%\Coffer\bin\` when unset).                                                                                                                                  |
 | **Testing**              | Rust unit tests (`#[cfg(test)]`) for shim-deploy, daemon-supervisor, and tray-handler logic; Playwright (`e2e/`) for tray + window scenarios when running under `make dev-tauri`; CI smoke test (`scripts/smoke_test_bundle.sh`) for the bundled artifact. |
-| **Target Platforms**     | macOS 12+ (arm64 + x64, separate DMGs), Linux x64 (AppImage + deb), Windows 10+ x64 (MSI + NSIS).                                                                                                                                                          |
+| **Target Platforms**     | macOS 12+ arm64 (Apple Silicon) only — one unsigned `.dmg`. macOS x64, Linux, and Windows are not built (see Build matrix).                                                                                                                                |
 | **Project Type**         | Native desktop shell wrapping a SPA. The Tauri crate lives in `desktop/`; the frontend bundle is `frontend/dist/` (built by 002's Vite pipeline).                                                                                                          |
 | **Performance Goals**    | Cold-start < 3 s with no daemon running, < 1 s with daemon already running (SC-D01). PyInstaller sidecars carry the cold-start floor.                                                                                                                      |
 | **Constraints**          | Local-first (loopback-only daemon); no public-internet calls; no analytics. Each bundle file ≤ 200 MB (SC-D02). No new constitutional dependencies — all picks were already approved by ADR-006 / ADR-008.                                                 |
@@ -94,7 +93,7 @@ scripts/
 └── smoke_test_bundle.sh              # CI post-build smoke test (added in this PR)
 
 .github/workflows/
-└── release.yml                       # cross-platform release matrix + per-artifact SHA-256
+└── release.yml                       # macOS-arm64-only release matrix + aggregated SHA256SUMS
 ```
 
 ### Extension point: the daemon-supervisor module
@@ -127,24 +126,27 @@ just deploys the binary).
 
 ### Build matrix
 
-Each target runs PyInstaller once, then emits two download tiers from the
-same binaries: the CLI-only archive and the desktop installer(s).
+The build matrix ships **macOS arm64 only**. It runs PyInstaller once, then
+emits two download tiers from the same binaries: the CLI-only archive and the
+desktop installer.
 
-| Platform | Architecture | CLI-only archive             | Desktop installer formats | Cross-build host    |
-| -------- | ------------ | ---------------------------- | ------------------------- | ------------------- |
-| macOS    | arm64        | `coffer-cli-<triple>.tar.gz` | `.dmg`                    | macos-14 runner     |
-| macOS    | x64          | `coffer-cli-<triple>.tar.gz` | `.dmg`                    | macos-13 runner     |
-| Linux    | x64          | `coffer-cli-<triple>.tar.gz` | `.AppImage`, `.deb`       | ubuntu-22.04 runner |
-| Windows  | x64          | `coffer-cli-<triple>.zip`    | `.msi`, `.exe` (NSIS)     | windows-2022 runner |
+| Platform | Architecture | CLI-only archive             | Desktop installer | Build host      |
+| -------- | ------------ | ---------------------------- | ----------------- | --------------- |
+| macOS    | arm64        | `coffer-cli-<triple>.tar.gz` | `.dmg` (unsigned) | macos-14 runner |
 
-`<triple>` is the per-target build triple (e.g. `aarch64-apple-darwin`,
-`x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`,
-`x86_64-pc-windows-msvc`). Each CLI-only archive holds just `coffer-daemon`
-and `coffer-mcp-shim`. Every artifact — CLI-only archive and desktop
-installer alike — is paired with a `<artifact>.sha256` file generated in
-the same job step. macOS notarization runs only when the Apple Developer
-secrets are present (see [`docs/distribution/macos-notarization.md`](../../docs/distribution/macos-notarization.md));
-unsigned DMGs continue to ship until the secrets land.
+`<triple>` is the build triple `aarch64-apple-darwin`. The CLI-only archive
+holds `coffer`, `coffer-daemon`, and `coffer-mcp-shim`. The DMG and the zipped
+`.app` are renamed `*-unsigned` because no code-signing / notarisation is
+wired. A single aggregated `SHA256SUMS` file (not per-artifact `.sha256`
+siblings) covers every artifact.
+
+macOS x64 (Intel) is deliberately not built — the Intel runner pool is being
+deprecated and reliably starves the job, and PyInstaller can't cross-compile
+the x86_64 sidecars from the arm64 runner. Linux and Windows bundles are not
+shipped — those legs were never validated. The acceptance matrix asserts a
+macOS-arm64-only build. Code-signing / notarisation is added in a separate
+signed-release workflow once a paid Apple Developer ID is provisioned (see
+[`docs/distribution/macos-notarization.md`](../../docs/distribution/macos-notarization.md)).
 
 ### File size caps
 
@@ -197,14 +199,15 @@ probing, Windows PATH fallback.
 
 ### Phase 6 — Release pipeline + smoke test
 
-`.github/workflows/release.yml` runs the build matrix; each target packages
-the two binaries into a `coffer-cli-<triple>` archive and builds the desktop
-installer(s); each artifact is accompanied by a SHA-256;
-`scripts/smoke_test_bundle.sh` runs against each bundle.
+`.github/workflows/release.yml` runs the macOS-arm64 build leg; it packages
+the three binaries (`coffer`, `coffer-daemon`, `coffer-mcp-shim`) into a
+`coffer-cli-<triple>.tar.gz` archive and builds the unsigned desktop bundle;
+every artifact is covered by one aggregated `SHA256SUMS` file;
+`scripts/smoke_test_bundle.sh` runs against the bundle.
 
 **Done when:** US2's two build-pipeline scenarios pass and a draft release
-on a `v*-rc` tag produces both the CLI-only archives and all four desktop
-installers green.
+on a `v*-rc` tag produces the CLI-only archive and the macOS-arm64 desktop
+bundle green.
 
 ## Complexity Tracking
 
@@ -213,7 +216,7 @@ installers green.
 | Tauri 2 over Electron                                               | Smaller bundle (no embedded Chromium), native OS controls, Rust core — fits Coffer's "local-first lightweight" posture.                                            | Electron would inflate each installer by ~150 MB on top of the PyInstaller sidecars and pull in a full Node runtime; the visual-language polish from 002 doesn't need a Chromium-specific feature.            |
 | Detached daemon spawn (setsid / DETACHED_PROCESS)                   | Required for the daemon to outlive the desktop window's close-to-tray — otherwise OS process tree cleanup kills the daemon when the Tauri process exits.           | A foreground child process leaks the close-to-tray scenario; reparenting to PID 1 is what `setsid` and `DETACHED_PROCESS` are for.                                                                            |
 | Shim deploy on every launch (idempotent)                            | The desktop shell is the only entry point that knows where the bundled shim lives; deploying once-only (at install time) would miss in-place bundle upgrades.      | A separate "shim updater" service would be more moving parts; the size-mismatch heuristic is a few lines and runs in microseconds when the binary is already up to date.                                      |
-| Two separate macOS DMGs (arm64 + x64) instead of a universal binary | Tauri 2's release pipeline emits one DMG per `cargo tauri build`; a universal DMG would require a separate `lipo` post-processing step we don't currently run.     | A universal binary would halve the macOS download count at the cost of doubling per-user download size and complicating the release matrix; two DMGs is simpler and matches the current release.yml behavior. |
+| macOS arm64 only (no x64 / Linux / Windows legs)                   | The Intel runner pool is being deprecated and starves the job, PyInstaller can't cross-compile x86_64 sidecars from arm64, and the Linux/Windows legs were never validated.                                  | Shipping unvalidated cross-platform bundles would mean publishing artifacts no one tested; the matrix is intentionally scoped to the one validated target until the others are wired and proven.               |
 | `tauri-plugin-autostart` over hand-rolling launchd / Task Scheduler | Cross-platform launch-at-login is non-trivial (launchd plist + systemd user unit + Windows Task Scheduler / Run key); the plugin is already maintained and tested. | Hand-rolling per-platform launch-at-login multiplies bug surface and tests across three OSes for zero functional gain.                                                                                        |
 
 ## Cross-Reference Index

@@ -1,7 +1,6 @@
 # Implementation Plan: 002 — UI Shell & Visual Language
 
 **Branch**: `feature/002-mcp-gateway-web`
-**Date**: 2026-05-28
 **Spec**: [./spec.md](./spec.md)
 **Status**: Accepted
 
@@ -75,30 +74,40 @@ level — there's no atomic-task TDD breakdown because the unit of change is
 
 ```text
 frontend/src/
-├── App.tsx                                # router + global providers
-├── main.tsx                               # bootstrap (QueryClient, i18n, router)
+├── App.tsx                                # global providers (QueryClient, i18n) + RouterProvider
+├── main.tsx                               # bootstrap entry
+├── router.tsx                             # createBrowserRouter route table
+├── kinds.ts                               # composition root: registers each kind's UI module
+├── i18n/
+│   ├── index.ts                           # i18next config
+│   └── locales/{en,zh}.json               # one flat catalogue per language
 ├── lib/
-│   ├── api/                               # openapi-fetch client + typed query hooks
-│   ├── auth/                              # daemon-token loader (reads ~/.coffer/daemon.json via dev plugin)
-│   ├── i18n/                              # i18next config; resources/en, resources/zh
-│   ├── layout/                            # AppShell, Sidebar, SidebarGroup, LanguageSwitcher
-│   ├── empty-state/                       # EmptyState, WelcomeCard primitives
-│   ├── status/                            # DaemonOfflineBanner, ErrorView
-│   └── components/                        # shadcn primitives (button, dialog, tabs, table, …)
+│   ├── api/                               # typed API client + per-resource modules (resources, agents, skills, fs)
+│   ├── hooks/                             # TanStack Query hooks (useResources, useAudit, useAgents, …)
+│   ├── components/                        # kindRegistry.ts + shared ResourceListView
+│   ├── auth.ts                            # daemon-token loader (reads ~/.coffer/daemon.json via dev plugin)
+│   ├── preferences.ts                     # default page-size preference (General settings)
+│   ├── tauri.ts                           # isTauri() guard for desktop-only surfaces
+│   └── queryClient.ts / statusColors.ts / timeRange.ts / utils.ts
+├── components/                            # shared shell + table primitives
+│   ├── Layout.tsx                         # AppShell + collapsible sidebar (localStorage "coffer.nav.collapsed")
+│   ├── LanguageSwitcher.tsx
+│   ├── DataTable.tsx / DataCardGrid.tsx / Pagination.tsx / SearchInput.tsx / …
+│   ├── DaemonOfflineBanner.tsx
+│   ├── agents/                            # agent-kind UI components (spec 004)
+│   └── skills/                            # skill-kind UI components (spec 005)
 ├── kinds/
 │   └── mcp/
-│       ├── kindRegistry.ts                # entry registered into the per-kind registry
-│       ├── pages/{ResourceListPage,ResourceDetailPage}
-│       ├── components/{AddMcpServerDialog,ToolList,InvocationsTable,…}
-│       └── routes.tsx                     # /resources/mcp_server/* route children
-├── pages/
-│   ├── ResourcesPage.tsx                  # /resources — kind-agnostic dispatcher
-│   ├── AgentsPage.tsx                      # /agents — agents list (consumers, not a resource kind)
-│   ├── AgentDetailPage.tsx                 # /agents/:name — agent detail
-│   ├── audit/AuditLogPage.tsx             # /audit — audit-log view (/observability redirects here)
-│   ├── SettingsLayout.tsx                 # /settings layout (tabs sidebar)
-│   └── settings/{DataSettings,AboutSettings,AppSettings}
-└── locales/{en,zh}/*.json                 # i18n catalogues
+│       ├── index.tsx                      # MCP_KIND_UI entry registered via kinds.ts
+│       ├── McpServersTable.tsx / McpServerDetailPage.tsx / McpServerDetailTabs.tsx
+│       └── AddMcpServerDialog.tsx / CapabilityList.tsx / InvocationsTable.tsx / …
+└── pages/
+    ├── ResourcesPage.tsx                  # /mcp-servers — kind-agnostic dispatcher (/resources redirects here)
+    ├── ResourceDetailPage.tsx             # /mcp-servers/:kind/:name
+    ├── AgentsPage.tsx / AgentDetailPage.tsx     # /agents, /agents/:name
+    ├── SkillsPage.tsx / SkillDetailPage.tsx     # /skills, /skills/:name
+    ├── audit/AuditLogPage.tsx             # /audit — audit-log view (/observability redirects here)
+    └── settings/                          # SettingsLayout + GeneralSettings, DataSettings, AppSettings, AboutPage
 
 frontend/
 ├── vite.config.ts                         # dev-only token-injection plugin (reads daemon.json)
@@ -108,12 +117,14 @@ frontend/
 
 ### Extension point: the kind registry
 
-`frontend/src/kinds/<kind>/kindRegistry.ts` exports a small object that
-declares the kind's display label, sidebar icon, route children, and
-list/detail components. The kind-agnostic `ResourcesPage` dispatches by
-looking up the registry — no per-kind branches in shared code. A new kind
-adds its own `kindRegistry.ts` and is wired in by importing it at the
-composition root; no other shared file changes.
+`frontend/src/lib/components/kindRegistry.ts` exposes `registerKindUI`; each
+kind ships a self-contained UI module under `frontend/src/kinds/<kind>/` whose
+`index.tsx` exports the kind's display label, sidebar icon, and list/detail
+components. The composition root `frontend/src/kinds.ts` imports each module
+and registers it; the kind-agnostic `ResourcesPage` dispatches by looking up
+the registry — no per-kind branches in shared code. A new kind adds its own
+module plus one import + `registerKindUI` call in `kinds.ts`; no other shared
+file changes.
 
 This is the UI mirror of the backend's `KindModule` composition pattern
 established in [ADR-001](../../docs/decisions/ADR-001-resource-framework-upfront.md)
@@ -155,9 +166,10 @@ unreachable.
 
 ### Phase 2 — US1: First-time-visitor flow
 
-Welcome view on `/resources` when no resources are registered, the "Daemon
-not running" view with a Reload recovery affordance (Restart in the desktop
-app), the cold-start authenticated render via the dev token plugin.
+Welcome view on `/mcp-servers` when no resources are registered (and the
+Agents welcome on `/agents`, the index landing), the "Daemon not running"
+view with a Reload recovery affordance (Restart in the desktop app), the
+cold-start authenticated render via the dev token plugin.
 
 **Done when:** US1's three representative scenarios pass.
 

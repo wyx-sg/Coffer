@@ -153,7 +153,8 @@ FR-011 要求的生命周期步骤——注册、更新与移除——通过已�
 
 `AgentCandidate` 是一个派生的值对象（不是 SQLite 实体，从不存储）：一个已安装但
 未注册、用户可确认以注册的 agent。字段：`type`（`AgentType`）、`display_name`、
-`default_config_dir` 与 `suggested_name`（即该类型的 `default_name()`）。
+`config_dir`（该类型的默认配置目录，字符串）、`default_skill_dir`（该类型的默认
+skill 目录，字符串）与 `suggested_name`（即该类型的 `default_name()`）。
 被移除的 agent 会在下次扫描时重新作为候选项出现——没有抑制列表。
 
 ### `BrowseService` (`application/fs/browse_service.py`)

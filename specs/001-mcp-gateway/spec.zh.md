@@ -224,7 +224,7 @@
 ### Scenario: store and reference a keychain credential
 
 - **Given** 用户尚未存入 HTTP 凭据,
-- **When** 用户通过 `POST /api/v1/keychain/{ref}`（或等价 CLI）写入一个 secret，再注册一台 HTTP MCP 服务器，其 `credential_refs` 引用 `{ref}`,
+- **When** 用户通过 `POST /api/v1/keychain`（或等价 CLI）在请求体里带上 `ref` 与 secret `value` 写入一个 secret，再注册一台 HTTP MCP 服务器，其 `credential_refs` 引用 `{ref}`,
 - **Then** 凭据值只被写入 OS keychain（永不进入 SQLite 数据库或任何日志），服务器注册成功，凭据在拉起上游时按需解析。
 
 ### Scenario: delete a keychain credential frees the reference
@@ -300,7 +300,7 @@
 
 **Credentials and safety**
 
-- **FR-011**: System MUST 仅把上游服务器的凭据存储在操作系统钥匙串 (keychain) 中，配置中按名称引用；凭据值 MUST NOT 写入数据库或任何日志。管理 API MUST 提供 keychain 的**写入与删除**端点，使 UI 能直接在 keychain 中存或删一个 secret 而不经过数据库。
+- **FR-011**: System MUST 仅把上游服务器的凭据存储在操作系统钥匙串 (keychain) 中，配置中按名称引用；凭据值 MUST NOT 写入数据库或任何日志。管理 API MUST 提供 keychain 端点，使 UI 能直接在 keychain 中管理一个 secret 而不经过数据库：写入（`POST /api/v1/keychain`）、删除（`DELETE /api/v1/keychain/{ref}`）、存在性检查（`GET /api/v1/keychain/{ref}/exists`）以及一个带审计的读取（`GET /api/v1/keychain/{ref}`）。读取端点返回 secret 值并发出一条 `keychain_read` 审计事件，使每次 secret 读取都被记录。
 - **FR-012**: System MUST 将所有 HTTP 端点（管理 API 和 MCP 协议端点）仅绑定到 loopback 接口。
 - **FR-013**: System MUST 要求每一次管理 API 调用携带认证 token；token 在 daemon 启动时本地生成，以 user-only 文件权限存储，并可轮换。
 

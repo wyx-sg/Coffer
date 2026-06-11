@@ -3,10 +3,45 @@
 from __future__ import annotations
 
 import contextlib
+from typing import Any
 
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
+
+# Keys inside ``transport`` whose values may carry auth material (custom
+# headers, raw environment overlays). credential_refs (keychain ref strings
+# only) survive audit; the raw maps are stripped. See CODE-006.
+_AUDIT_STRIP_TRANSPORT_KEYS: frozenset[str] = frozenset({"env", "headers"})
+
+
+def _mcp_audit_redactor(config: dict[str, Any]) -> dict[str, Any]:
+    """Strip auth-bearing maps from an mcp_server config before audit.
+
+    Clients can paste custom auth headers / env vars into MCP server config
+    (e.g. an Authorization header on an HTTP transport). Those are materialised
+    at spawn time from the keychain, but a careless user might paste the raw
+    secret in instead — and we don't want it landing verbatim in
+    audit_log.details_json. Stripping the structural maps keeps audit useful
+    (credential_refs survive; users still see *what* changed) without ever
+    persisting the secret material itself.
+    """
+    transport = config.get("transport")
+    if not isinstance(transport, dict):
+        return config
+    sanitised = {k: v for k, v in transport.items() if k not in _AUDIT_STRIP_TRANSPORT_KEYS}
+    return {**config, "transport": sanitised}
+
+
+def _mcp_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
+    """Pull ``transport.credential_refs`` out of a validated mcp_server config."""
+    transport = config.get("transport")
+    if not isinstance(transport, dict):
+        return {}
+    refs = transport.get("credential_refs")
+    if not isinstance(refs, dict):
+        return {}
+    return {str(k): str(v) for k, v in refs.items()}
 
 
 def _validate_mcp_name(name: str) -> None:
@@ -49,4 +84,6 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         config_schema=MCPServerConfig,
         on_delete=on_delete,
         validate_name=_validate_mcp_name,
+        audit_redactor=_mcp_audit_redactor,
+        credential_ref_extractor=_mcp_credential_ref_extractor,
     )

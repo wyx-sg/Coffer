@@ -32,4 +32,8 @@ def make_skill_kind(cleanup_bindings_for_skill: AsyncOnDelete) -> Kind:
         display_name="Skill",
         config_schema=SkillConfig,
         on_delete=_on_delete,
+        # A skill row must be backed by an imported master folder under
+        # ~/.coffer/skills/. Only SkillService (which creates that folder) may
+        # register it; the generic POST /resources path is rejected (CODE-REG).
+        generic_create_allowed=False,
     )

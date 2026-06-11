@@ -9,7 +9,7 @@ Coffer's backend is Python 3.12+.
 - **Python 3.12+**
 - **FastAPI** for HTTP surface
 - **Pydantic v2** for models + validation
-- **SQLite** via standard library `sqlite3` or SQLAlchemy
+- **SQLite** via **SQLAlchemy 2 (async)** + **`aiosqlite`** (the exclusive data-access path)
 - **`keyring`** for OS keychain (credentials only)
 - **`anyio`** + `asyncio` for async + subprocess management
 
@@ -60,7 +60,9 @@ make lint / make test / make format / make verify
 
 ## E2E — TypeScript / Playwright
 
-The end-to-end tier lives in `e2e/` and is the only TypeScript in the repo.
+The end-to-end tier lives in `e2e/`. The primary TypeScript surface is the
+frontend (`frontend/src`, ~18k lines of TS/TSX); `e2e/` is an additional
+TypeScript tier on top of it.
 
 - **TypeScript 5.x**, ESM modules (`tsconfig.json` with `@playwright/test` + `node` types).
 - **Playwright** (`@playwright/test`) as the e2e runner.

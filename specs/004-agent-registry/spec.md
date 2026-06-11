@@ -337,7 +337,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 **Discovery (detection = discovery + confirm)**
 
-- **FR-004**: System MUST provide a read-only discovery operation that scans well-known install markers for each supported agent type and reports installed types that are not already registered as **candidates** (each carrying type, display name, default `config_dir`, and a suggested name). Discovery MUST NOT register anything automatically — the user reviews candidates and confirms which to add. The daemon MUST NOT auto-register agents on startup.
+- **FR-004**: System MUST provide a read-only discovery operation that scans well-known install markers for each supported agent type and reports installed types that are not already registered as **candidates** (each carrying `type`, `display_name`, `config_dir`, `default_skill_dir`, and `suggested_name`). Discovery MUST NOT register anything automatically — the user reviews candidates and confirms which to add. The daemon MUST NOT auto-register agents on startup.
 - **FR-005**: A removed agent MUST re-appear as a discovery candidate on subsequent scans while its install marker is present — a removal is not permanent (it may be accidental). System MUST NOT keep a "suppressed types" list.
 
 **Lifecycle**
@@ -381,7 +381,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 - **Agent**: A Resource of kind `agent`. Represents one locally-installed AI agent. Config: `type` (supported enum), `config_dir` (optional absolute-path override; defaults to the type's standard location). Skills are delivered to `<config_dir>/skills`. Identified by `agent:<name>`.
 - **Agent Type**: An enum value identifying a known agent product (`claude_code`, `codex`). Each type has a default `config_dir` (`~/.claude` / `~/.codex`), a display name, an install-marker scanner used for discovery, and a curated **config-file allowlist**.
-- **Agent Candidate**: A discovered installed-but-unregistered agent — type, display name, default `config_dir`, and suggested name. Derived at scan time, never stored; the user confirms a candidate to register it.
+- **Agent Candidate**: A discovered installed-but-unregistered agent — `type`, `display_name`, `config_dir` (the type's default config directory), `default_skill_dir`, and `suggested_name`. Derived at scan time, never stored; the user confirms a candidate to register it.
 - **Config File**: A curated, allowlisted file belonging to an agent type, identified by a stable `key`. Carries a display name, a resolved absolute path, a `format` (`json` / `toml` / `markdown` / `text`), and (when present) size and modified time. Read/written by key, never by arbitrary path. Not persisted in SQLite — the file on disk is the source of truth.
 - **Coffer MCP Install Status**: Derived (not stored) state for an agent: whether a `coffer` MCP-server entry is present in that agent's MCP config file.
 

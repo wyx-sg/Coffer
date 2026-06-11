@@ -89,6 +89,7 @@ async def apply_update(
         ref,
         new_config=new_cfg.model_dump(mode="json"),
         actor=actor,
+        allow_lifecycle_kind=True,  # CODE-REG: master folder synced above
     )
     await service._audit.record(
         AuditEventType.SKILL_UPDATED.value,
@@ -145,6 +146,7 @@ async def _rename_master_and_bindings(
             config=new_cfg.model_dump(mode="json"),
             description=new_cfg.skill_md_description,
             actor=actor,
+            allow_lifecycle_kind=True,  # CODE-REG: master folder maintained above
         )
     except Exception:
         service._store.delete(new_name)  # roll back the staged master

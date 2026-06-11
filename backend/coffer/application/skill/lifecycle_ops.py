@@ -94,6 +94,7 @@ async def register_from_validated(
             config=cfg.model_dump(mode="json"),
             description=validation.frontmatter.description,
             actor=actor,
+            allow_lifecycle_kind=True,  # CODE-REG: master folder created above
         )
     except Exception:
         # Best-effort rollback of master

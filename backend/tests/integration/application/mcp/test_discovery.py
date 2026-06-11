@@ -6,8 +6,6 @@ import asyncio
 import sys
 from pathlib import Path
 
-import keyring
-import keyring.core
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -21,6 +19,7 @@ from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -32,28 +31,13 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyResourceRepo,
 )
 from tests.fixtures.fake_mcp_server import start_http_fake as _start_http_fake
+from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
 
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1.0
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, s: str, u: str) -> str | None:
-        return self._data.get((s, u))
-
-    def set_password(self, s: str, u: str, p: str) -> None:
-        self._data[(s, u)] = p
-
-    def delete_password(self, s: str, u: str) -> None:
-        self._data.pop((s, u), None)
-
-
 def _with_in_memory(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(keyring.core, "_keyring_backend", _InMemoryKeyring())
+    install_in_memory_keyring(monkeypatch)
 
 
 def _stdio_config(*tools_or_resources_or_prompts: str, kind_args: str = "--tools") -> dict:  # type: ignore[type-arg]
@@ -99,6 +83,7 @@ async def _setup(
             cfg = {**cfg, "auto_enable_new_capabilities": False}
         await rsvc.register(kind="mcp_server", name=name, config=cfg, actor="test")
     supervisor = SubprocessSupervisor(
+        upstream_factory=build_upstream,
         resource_service=rsvc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
@@ -328,8 +313,7 @@ async def test_register_http_mcp_server_discovers_capabilities(
     - capabilities are discovered (tools list is populated)
     - the credential value does not appear in any DB row (config column, audit entries)
     """
-    backend = _InMemoryKeyring()
-    monkeypatch.setattr(keyring.core, "_keyring_backend", backend)
+    backend = install_in_memory_keyring(monkeypatch)
 
     # Store a fake token in the keyring — never in the config dict.
     secret_value = "super-secret-token-xyz"

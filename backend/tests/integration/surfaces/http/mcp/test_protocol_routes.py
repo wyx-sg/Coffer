@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from contextlib import suppress
 from pathlib import Path
 
-import keyring
-import keyring.core
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -21,6 +20,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
@@ -50,28 +50,13 @@ from coffer.surfaces.http.mcp.protocol_routes import (
 from coffer.surfaces.http.mcp.protocol_routes import (
     router as mcp_router,
 )
+from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[4] / "fixtures" / "fake_mcp_server.py"
 
 
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    priority = 1.0  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, s: str, u: str) -> str | None:
-        return self._data.get((s, u))
-
-    def set_password(self, s: str, u: str, p: str) -> None:
-        self._data[(s, u)] = p
-
-    def delete_password(self, s: str, u: str) -> None:
-        self._data.pop((s, u), None)
-
-
 def _with_in_memory(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(keyring.core, "_keyring_backend", _InMemoryKeyring())
+    install_in_memory_keyring(monkeypatch)
 
 
 def _stdio_config(*tools: str) -> dict:  # type: ignore[type-arg]
@@ -117,6 +102,7 @@ async def _build_app(
 
     def factory(session_id: str) -> MCPGatewaySession:
         supervisor = SubprocessSupervisor(
+            upstream_factory=build_upstream,
             resource_service=rsvc,
             credential_resolver=CredentialResolver(KeyringAdapter()),
         )
@@ -228,6 +214,44 @@ async def test_post_unknown_method_returns_json_rpc_error(
     body = r.json()
     assert "error" in body
     assert body["error"]["code"] in (_JSON_RPC_METHOD_NOT_FOUND, _JSON_RPC_INTERNAL_ERROR)
+
+
+@pytest.mark.asyncio
+async def test_post_unexpected_exception_does_not_leak_message_to_wire(
+    http_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CODE-M1: an unexpected (non-Coffer) exception raised while handling a
+    request must NOT have its ``str(e)`` echoed onto the JSON-RPC wire.
+
+    Upstream errors can embed credentials (an auth failure echoing the API
+    key). The catch-all branch previously sent ``str(e)`` verbatim to the
+    downstream client, defeating the same SC-010 secret-hygiene rule the
+    invocation-log path already honours via ``_safe_error_summary``.
+    """
+    secret = "ghp_SUPERSECRET_TOKEN_should_never_reach_client"
+
+    async def _boom(self: object, method: str, params: dict) -> dict:  # type: ignore[no-untyped-def]
+        raise RuntimeError(f"upstream auth failed: {secret}")
+
+    monkeypatch.setattr(MCPGatewaySession, "handle_request", _boom)
+
+    init = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+    )
+    session_id = init.headers["mcp-session-id"]
+    r = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        headers={"Mcp-Session-Id": session_id},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["error"]["code"] == _JSON_RPC_INTERNAL_ERROR
+    assert secret not in json.dumps(body), "secret leaked into JSON-RPC error body"
+    # The class name is a safe summary to keep.
+    assert "RuntimeError" in body["error"]["message"]
 
 
 @pytest.mark.asyncio

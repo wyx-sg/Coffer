@@ -20,15 +20,11 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
     ConfigValidationError,
     CredentialMissing,
+    GenericCreateNotAllowed,
     ResourceNotFound,
     UnknownKind,
 )
 from coffer.domain.resource import Kind, Resource, ResourceRef
-
-# Keys inside ``transport`` whose values may carry auth material (custom
-# headers, raw environment overlays). We persist credential_refs in audit
-# (those are keychain ref strings only) but strip the raw maps. See CODE-006.
-_AUDIT_STRIP_TRANSPORT_KEYS: frozenset[str] = frozenset({"env", "headers"})
 
 
 class _KeyringPort(Protocol):
@@ -42,40 +38,28 @@ class _KeyringPort(Protocol):
     def get(self, ref: str) -> str | None: ...
 
 
-def _audit_safe_config(config: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of ``config`` with auth-bearing keys stripped from transport.
+def _audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
+    """Return an audit-safe copy of ``config`` using the kind's redactor.
 
-    Why: clients can paste custom auth headers / env vars into MCP server
-    config (e.g. an Authorization header on an HTTP transport). Those are
-    materialised at spawn time from the keychain — but a careless user might
-    paste the raw secret in instead, and we don't want it landing verbatim
-    in audit_log.details_json. Stripping the structural maps keeps audit
-    useful (credential_refs survive; users can still see *what* changed)
-    without ever persisting the secret material itself.
+    The kind-agnostic core knows nothing about where a given kind stores
+    secrets; each kind supplies its own ``audit_redactor`` (e.g. mcp_server
+    strips ``transport.env``/``headers``). Kinds without one audit their
+    config verbatim. See ADR-001 / CODE-006.
     """
-    transport = config.get("transport")
-    if not isinstance(transport, dict):
+    if kind_def.audit_redactor is None:
         return config
-    sanitised_transport = {
-        k: v for k, v in transport.items() if k not in _AUDIT_STRIP_TRANSPORT_KEYS
-    }
-    return {**config, "transport": sanitised_transport}
+    return kind_def.audit_redactor(config)
 
 
-def _extract_credential_refs(config: dict[str, Any]) -> dict[str, str]:
-    """Pull `transport.credential_refs` out of a validated config dict.
+def _extract_credential_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
+    """Return ``{key: keychain_ref}`` for ``config`` using the kind's extractor.
 
-    Kind-agnostic by shape: any config whose validated form has a
-    `transport.credential_refs` mapping participates in register-time
-    credential probing. Returns {} otherwise.
+    Kinds without a ``credential_ref_extractor`` declare no credentials and are
+    not probed.
     """
-    transport = config.get("transport")
-    if not isinstance(transport, dict):
+    if kind_def.credential_ref_extractor is None:
         return {}
-    refs = transport.get("credential_refs")
-    if not isinstance(refs, dict):
-        return {}
-    return {str(k): str(v) for k, v in refs.items()}
+    return kind_def.credential_ref_extractor(config)
 
 
 class ResourceService:
@@ -91,7 +75,7 @@ class ResourceService:
         self._audit = audit
         self._keyring = keyring
 
-    def _probe_credentials(self, config: dict[str, Any]) -> None:
+    def _probe_credentials(self, kind_def: Kind, config: dict[str, Any]) -> None:
         """Raise CredentialMissing if any cited credential_ref is absent.
 
         Called BEFORE persisting a Resource so a missing credential never
@@ -100,7 +84,7 @@ class ResourceService:
         """
         if self._keyring is None:
             return
-        for _key, ref in _extract_credential_refs(config).items():
+        for _key, ref in _extract_credential_refs(kind_def, config).items():
             if self._keyring.get(ref) is None:
                 raise CredentialMissing(ref)
 
@@ -126,8 +110,18 @@ class ResourceService:
         config: dict[str, Any],
         actor: str,
         description: str | None = None,
+        *,
+        allow_lifecycle_kind: bool = False,
     ) -> Resource:
         kind_def = self._require_kind(kind)
+        # CODE-REG: a kind that owns creation invariants beyond config
+        # validation (skill master folder, agent on-disk detection) sets
+        # ``generic_create_allowed=False``. The generic POST /resources path
+        # calls register() with the default ``allow_lifecycle_kind=False`` and
+        # is rejected here, so it can never create a row with no backing
+        # artifact; the kind's dedicated service opts in explicitly.
+        if not kind_def.generic_create_allowed and not allow_lifecycle_kind:
+            raise GenericCreateNotAllowed(kind)
         # CODE-030: kind-specific name validation BEFORE any DB write (e.g.
         # mcp_server reserves '__' as the tool/prompt namespace separator).
         if kind_def.validate_name is not None:
@@ -139,7 +133,7 @@ class ResourceService:
         # Probe before any DB write — a missing credential must not leave a
         # half-created resource row behind. The spec's "credential missing"
         # edge case requires registration to fail naming the missing ref.
-        self._probe_credentials(validated)
+        self._probe_credentials(kind_def, validated)
         now = datetime.now(tz=UTC)
         created = await self._repo.create(
             Resource(
@@ -157,7 +151,7 @@ class ResourceService:
             AuditEventType.RESOURCE_CREATED.value,
             ref=created.ref,
             actor=actor,
-            details={"config": _audit_safe_config(validated)},
+            details={"config": _audit_safe_config(kind_def, validated)},
         )
         return created
 
@@ -180,12 +174,19 @@ class ResourceService:
         new_config: dict[str, Any],
         actor: str,
         description: str | None = None,
+        *,
+        allow_lifecycle_kind: bool = False,
     ) -> Resource:
         kind_def = self._require_kind(ref.kind)
+        # CODE-REG applies to updates too: a generic PATCH rewriting a
+        # lifecycle kind's config (e.g. a skill's name) would desync the row
+        # from the on-disk artifact its owning service maintains.
+        if not kind_def.generic_create_allowed and not allow_lifecycle_kind:
+            raise GenericCreateNotAllowed(ref.kind)
         validated = self._validate_config(kind_def, new_config)
         # Same register-time invariant: if the update introduces a credential
         # ref that does not exist in the keychain, fail before the DB write.
-        self._probe_credentials(validated)
+        self._probe_credentials(kind_def, validated)
         before = await self.get(ref)
         updated = await self._repo.update_config(ref, validated, description)
         await self._audit.record(
@@ -193,8 +194,8 @@ class ResourceService:
             ref=ref,
             actor=actor,
             details={
-                "before": _audit_safe_config(before.config),
-                "after": _audit_safe_config(validated),
+                "before": _audit_safe_config(kind_def, before.config),
+                "after": _audit_safe_config(kind_def, validated),
             },
         )
         return updated
@@ -230,7 +231,7 @@ class ResourceService:
                 "snapshot": {
                     "kind": snapshot.kind,
                     "name": snapshot.name,
-                    "config": _audit_safe_config(snapshot.config),
+                    "config": _audit_safe_config(kind_def, snapshot.config),
                     "enabled": snapshot.enabled,
                 }
             },

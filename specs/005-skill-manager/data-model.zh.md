@@ -75,7 +75,7 @@ frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `S
 
 ## SQLite schema 增量
 
-迁移 `20260526_0006_skill_tables.py`（独立；spec 004 自带 `20260525_0005_agent_tables.py`）新增：
+迁移 `20260526_0005_skill_tables.py`（revision `0005`，down_revision `0004`）新增 skill 绑定表。agent 本身存在共享的 `resources` 表里，因此 spec 004 不需要专门的 agent-tables 迁移。
 
 ### `skill_agent_bindings`
 
@@ -107,10 +107,13 @@ frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `S
 | `skill_updated`        | Git 更新有内容变化（details 含前后哈希）    |
 | `skill_update_noop`    | update 检查后无变化                         |
 | `skill_renamed`        | 带 `--allow-rename` 完成的 frontmatter 改名 |
-| `skill_removed`        | skill Resource 被删除（details 含快照）     |
 | `skill_bound`          | 按 agent 启用 binding（创建 symlink）       |
 | `skill_unbound`        | 按 agent 禁用 binding（移除 symlink）       |
 | `skill_drift_detected` | `verify` 报告 drift（details 含计数与类别） |
+
+skill **删除** 没有专门的事件——删除一个 skill 走 `ResourceService.delete`，
+它发出通用的 `resource_deleted` 事件（`details` 含删除前快照），与任何其他
+resource kind 一样。
 
 ## 磁盘布局
 
@@ -228,4 +231,4 @@ containment 通过解析每个候选路径并要求其位于解析后的 master 
 - 全部 HTTP 仅 loopback。
 - Git 拉取经 SSRF guard URL 谓词（拒绝 loopback / RFC1918 / link-local）。
 - v1 无 keychain 条目（skill 源不带鉴权）。
-- 单 skill 文件大小上限（默认 50 MB）可通过 `~/.coffer/daemon.json` 配置；v1 出厂使用默认值。
+- 文件大小上限：每个 skill 文件夹总计 50 MB，由 `validate_skill_folder` 强制。该上限是 `SkillService` 构造函数默认值（`size_limit_bytes`）；目前尚未接到配置文件，因此 v1 始终使用硬编码的 50 MB。

@@ -41,8 +41,12 @@ def test_backup_rejects_traversal(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 
 def test_audit_safe_config_strips_env_and_headers() -> None:
-    """`env` and `headers` inside transport are stripped from the audited config."""
-    from coffer.application.resource_service import _audit_safe_config
+    """`env` and `headers` inside transport are stripped from the audited config.
+
+    CODE-006 lives in the mcp_server Kind's redactor now (ADR-001: the
+    kind-agnostic ResourceService no longer hardcodes the transport shape).
+    """
+    from coffer.application.mcp.kind import _mcp_audit_redactor
 
     cfg = {
         "transport": {
@@ -53,7 +57,7 @@ def test_audit_safe_config_strips_env_and_headers() -> None:
         },
         "auto_enable_new_capabilities": True,
     }
-    sanitised = _audit_safe_config(cfg)
+    sanitised = _mcp_audit_redactor(cfg)
     assert "headers" not in sanitised["transport"]
     assert sanitised["transport"]["credential_refs"] == {"X-Api-Key": "mykey"}
     # Original input must not be mutated.
