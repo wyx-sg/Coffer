@@ -252,7 +252,7 @@ class MemoryService:
         """Remove every fact in a store; keep the store Resource."""
         await self.get_store_config(store_name)
         resolved = await self._resolved_for_store(store_name)
-        scan = scan_store_dir(resolved.store_dir)
+        scan = await asyncio.to_thread(scan_store_dir, resolved.store_dir)
         return await clear_all_facts(
             deps=self._writes,
             resolved=resolved,
@@ -339,7 +339,7 @@ class MemoryService:
         (project then global). Raises ``MemoryNotFound`` if absent everywhere.
         Used by the agent ``update_memory`` / ``forget`` tools (id-only)."""
         scopes = await self._scope.resolve_recall_scopes(cwd=cwd)
-        return find_fact_store(scopes, fact_id, store_name_for)
+        return await asyncio.to_thread(find_fact_store, scopes, fact_id, store_name_for)
 
     async def metrics(self, *, store_name: str) -> dict[str, object]:
         config = await self.get_store_config(store_name)
@@ -368,6 +368,7 @@ class MemoryService:
             store_ref=self._recall.store_ref,
             documents=self._documents,
             retrieval=self._retrieval,
+            reconciler=self._reconciler,
             store_name=store_name,
         )
 

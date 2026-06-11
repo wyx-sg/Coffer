@@ -70,7 +70,24 @@ async def dispatch_builtin_tool(
             error_message=_safe_error_summary(exc)[:200],
             session_id=session_id,
         )
-        raise
+        # Per the MCP spec, TOOL-execution failures are in-band ``isError``
+        # results the model can read and self-correct from; JSON-RPC errors
+        # are reserved for protocol problems (unknown tool, transport).
+        return {
+            "content": [{"type": "text", "text": _tool_error_text(exc)}],
+            "isError": True,
+        }
+
+
+def _tool_error_text(exc: Exception) -> str:
+    """The in-band error text shown to the calling agent.
+
+    Coffer-authored messages (``CofferError`` and the handlers' own argument
+    ``ValueError``s) are helpful and safe to surface; anything else is reduced
+    to its class name so upstream/library messages can't leak content."""
+    if isinstance(exc, ValueError):
+        return f"{type(exc).__name__}: {exc}"
+    return _safe_error_summary(exc)
 
 
 def _to_call_tool_result(payload: dict[str, Any]) -> dict[str, Any]:
@@ -84,7 +101,9 @@ def _to_call_tool_result(payload: dict[str, Any]) -> dict[str, Any]:
     text = json.dumps(payload, ensure_ascii=False, default=str)
     return {
         "content": [{"type": "text", "text": text}],
-        "structuredContent": payload,
+        # Round-trip through the same dump so a handler returning a non-JSON
+        # value (datetime, Path, …) can't blow up response serialization later.
+        "structuredContent": json.loads(text),
         "isError": False,
     }
 

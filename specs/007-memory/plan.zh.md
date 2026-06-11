@@ -4,7 +4,7 @@
 
 **Branch**: `feature/kb-memory-redesign`
 **Spec**: [./spec.zh.md](./spec.zh.md)
-**Status**: Draft (redesign)
+**Status**: Accepted (redesign — in development)
 
 ## Summary
 
@@ -139,10 +139,10 @@ frontend/src/kinds/memory/
 
 | 风险                                                 | 缓解                                                                                                |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| MCP shim cwd 在某些 agent 上不传播（作用域解析失败） | 设计文档 open item #1；实现期在 Claude/Codex 上验证。无法解析的 project 作用域被以 `ScopeUnresolved` **拒绝**（清晰错误；不写任何东西）；`scope=global` 仍可用。 |
+| MCP shim cwd 在某些 agent 上不传播（作用域解析失败） | [research.zh.md](./research.zh.md)（§11）open item #1；实现期在 Claude/Codex 上验证。无法解析的 project 作用域被以 `ScopeUnresolved` **拒绝**（清晰错误；不写任何东西）；`scope=global` 仍可用。 |
 | Claude 带外改写 `MEMORY.md` 或事实文件               | `MEMORY.md` 是幂等重生的派生索引；lazy reindex-on-read 按内容哈希对账事实增量 —— 无需 watcher。     |
 | 首次投影会丢失已存在的原生记忆文件                   | adapter 先把已存在文件合并进规范化，再 symlink；绝不覆盖（FR-012）。                                |
-| sqlite-vec 在 macOS arm64 / Linux 上打包/加载        | open item #4；默认检索是 keyword+grep（无需原生扩展）；vector 为可选项，扩展缺失时优雅降级。        |
+| sqlite-vec 在 macOS arm64 / Linux 上打包/加载        | [research.zh.md](./research.zh.md)（§11）open item #2；默认检索是 keyword+grep（无需原生扩展）；vector 为可选项，扩展缺失时优雅降级。        |
 | embedding 模型对中文嵌入效果差                       | 默认是 keyword+grep（语言无关）；双语 vector recall 推荐本地 `bge-m3` 或某云端 provider。           |
 
 ## Out of scope（推迟）

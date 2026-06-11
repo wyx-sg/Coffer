@@ -60,6 +60,7 @@ _STATUS: dict[str, int] = {
     "ENGINE_UNAVAILABLE": 503,
     "RECONVERSION_BLOCKED": 409,
     "SEARCH_MODE_INVALID": 400,
+    "GREP_PATTERN_INVALID": 400,
     # memory kind (spec 007)
     "MEMORY_STORE_NOT_FOUND": 404,
     "MEMORY_NOT_FOUND": 404,

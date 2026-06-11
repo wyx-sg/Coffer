@@ -121,8 +121,8 @@ class VecIndex:
     def _ensure(self, conn: sqlite3.Connection) -> None:
         """Create the per-store table at the configured width, rebuilding it if a
         prior table exists at a DIFFERENT width (a model/config change). Only
-        writes/queries ensure; deletes never do (a delete must not rebuild —
-        i.e. destroy — the table on a stale width)."""
+        WRITES ensure; reads and deletes never do (a read/delete must not
+        rebuild — i.e. destroy — the table on a stale width)."""
         if self._dimensions is None:
             raise RuntimeError(
                 "vector writes/queries need an embedding width; "
@@ -137,15 +137,6 @@ class VecIndex:
                 f'CREATE VIRTUAL TABLE IF NOT EXISTS "{self._table}" '
                 f"USING vec0(chunk_id TEXT PRIMARY KEY, embedding FLOAT[{self._dimensions}])"
             )
-
-    def ensure_table(self) -> None:
-        """Create (or rebuild on width change) this store's virtual table."""
-        conn = self._connect()
-        try:
-            self._ensure(conn)
-            conn.commit()
-        finally:
-            conn.close()
 
     async def upsert(self, rows: Sequence[tuple[str, Sequence[float]]]) -> None:
         if not rows:
@@ -206,12 +197,17 @@ class VecIndex:
 
     async def knn(self, vector: Sequence[float], top_k: int) -> list[tuple[str, float]]:
         """Return ``[(chunk_id, distance), ...]`` nearest the query vector,
-        scoped to THIS store's table only."""
+        scoped to THIS store's table only.
+
+        Read-only: a missing table or a width mismatch (e.g. the config changed
+        but the forced re-embed failed) degrades to no hits — it must never
+        drop/rebuild the table; only the write path does that."""
 
         def _run() -> list[tuple[str, float]]:
             conn = self._connect()
             try:
-                self._ensure(conn)
+                if self._current_width(conn) != self._dimensions:
+                    return []
                 # Use the ``k = ?`` constraint (not ``LIMIT``) for the KNN: it is
                 # a virtual-table constraint sqlite-vec always sees, whereas a
                 # ``LIMIT`` only reaches vec0 if the host sqlite pushes it down —

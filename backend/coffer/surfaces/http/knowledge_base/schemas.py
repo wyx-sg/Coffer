@@ -110,6 +110,11 @@ class ReindexResult(BaseModel):
     documents_scanned: int
     documents_reindexed: int
     documents_skipped: int
+    # Rows pruned because their markdown file was removed out-of-band.
+    documents_removed: int = 0
+    # Docs indexed keyword-only because the embedding provider was unavailable
+    # (retried on the next scan via the empty-sha sentinel).
+    documents_degraded: int = 0
 
 
 class SearchRequest(BaseModel):

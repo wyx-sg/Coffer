@@ -307,6 +307,18 @@ class ReconversionBlocked(CofferError):  # noqa: N818
         self.document_id = document_id
 
 
+class GrepPatternInvalid(CofferError):  # noqa: N818
+    """ripgrep rejected the pattern (exit code 2, e.g. invalid regex). Maps to
+    400 — without this an rg failure masquerades as 'no matches'."""
+
+    code = "GREP_PATTERN_INVALID"
+
+    def __init__(self, pattern: str, detail: str) -> None:
+        super().__init__(f"grep pattern rejected: {detail}")
+        self.pattern = pattern
+        self.detail = detail
+
+
 class SearchModeInvalid(CofferError):  # noqa: N818
     """An explicit search mode the store cannot serve. Maps to 400.
 

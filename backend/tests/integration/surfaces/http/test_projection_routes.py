@@ -210,3 +210,64 @@ def test_deleting_store_removes_bindings_and_projection_targets(tmp_path, monkey
         # And the binding row is gone (a fresh store of the same name lists none).
         listed = c.get(f"/api/v1/memory_stores/{store}/projections", headers=_HEADERS)
         assert listed.json()["projections"] == []
+
+
+def test_project_root_must_be_an_existing_directory(tmp_path, monkeypatch):
+    """FR-020: an absent / relative project_root is rejected with 400 before
+    any filesystem mutation (review: untested fix path)."""
+    app = _app(tmp_path, monkeypatch, 59930)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        _register_codex(c, tmp_path)
+        store = "project-04ABCDEF04ABCDEF04ABCDEF04"
+        c.post(
+            f"/api/v1/memory_stores/{store}/facts",
+            json={"text": "seed", "name": "s"},
+            headers={**_HEADERS, "X-Coffer-Actor": "user"},
+        )
+        for bad_root in [str(tmp_path / "does-not-exist"), "relative/path"]:
+            r = c.post(
+                f"/api/v1/memory_stores/{store}/projections",
+                json={"agent_ref": "codex-x", "project_root": bad_root},
+                headers=_HEADERS,
+            )
+            assert r.status_code == 400, (bad_root, r.text)
+            assert r.json()["error"]["code"] == "BAD_REQUEST"
+
+
+def test_establish_and_remove_emit_memory_projected_audit(tmp_path, monkeypatch):
+    """FR-020: every establish/remove writes a ``memory_projected`` audit row."""
+    app = _app(tmp_path, monkeypatch, 59940)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        _register_codex(c, tmp_path)
+        project = tmp_path / "proj"
+        project.mkdir()
+        store = "project-05ABCDEF05ABCDEF05ABCDEF05"
+        c.post(
+            f"/api/v1/memory_stores/{store}/facts",
+            json={"text": "seed fact", "name": "s"},
+            headers={**_HEADERS, "X-Coffer-Actor": "user"},
+        )
+        est = c.post(
+            f"/api/v1/memory_stores/{store}/projections",
+            json={"agent_ref": "codex-x", "project_root": str(project)},
+            headers=_HEADERS,
+        )
+        assert est.status_code == 200, est.text
+        rm = c.delete(
+            f"/api/v1/memory_stores/{store}/projections/codex-x",
+            headers=_HEADERS,
+        )
+        assert rm.status_code == 204, rm.text
+
+        audit = c.get(
+            "/api/v1/audit",
+            params={"event_type": "memory_projected", "limit": 50},
+            headers=_HEADERS,
+        )
+        assert audit.status_code == 200, audit.text
+        entries = audit.json()["entries"]
+        actions = [e["details"].get("action") for e in entries]
+        assert "established" in actions
+        assert "removed" in actions

@@ -4,7 +4,7 @@
 
 **Branch**: `feature/kb-memory-redesign`
 **Spec**: [./spec.md](./spec.md)
-**Status**: Draft (redesign)
+**Status**: Accepted (redesign — in development)
 
 ## Summary
 

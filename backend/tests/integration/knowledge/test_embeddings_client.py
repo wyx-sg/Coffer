@@ -139,12 +139,52 @@ async def test_provider_failure_raises_engine_unavailable(monkeypatch) -> None:
 
 
 def test_make_embedder_local_uses_fastembed_path() -> None:
-    from coffer.infrastructure.knowledge.embeddings import LocalEmbedder
+    from coffer.infrastructure.knowledge.embeddings import CooldownEmbedder, LocalEmbedder
 
     cfg = EmbeddingConfig(provider="local", model="bge-m3", dimensions=1024)
-    assert isinstance(make_embedder(cfg), LocalEmbedder)
+    embedder = make_embedder(cfg)
+    assert isinstance(embedder, CooldownEmbedder)
+    assert isinstance(embedder._inner, LocalEmbedder)
 
 
 def test_dimensions_exposed() -> None:
     emb = make_embedder(_cfg())
     assert emb.dimensions == 3
+
+
+@pytest.mark.asyncio
+async def test_cooldown_embedder_skips_provider_after_failure() -> None:
+    """After an EngineUnavailable the wrapper must short-circuit further embeds
+    for the cooldown window (no provider call), then retry once it elapses —
+    otherwise a downed provider turns every reconcile into O(N x timeout)
+    under the store lock (review H1)."""
+    from coffer.infrastructure.knowledge.embeddings import CooldownEmbedder
+
+    calls = {"n": 0}
+
+    class _FlakyInner:
+        dimensions = 3
+
+        async def embed(self, texts):  # type: ignore[no-untyped-def]
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise EngineUnavailable("embedding", "provider down")
+            return [[0.0] * 3 for _ in texts]
+
+    now = {"t": 100.0}
+    embedder = CooldownEmbedder(_FlakyInner(), cooldown_s=60.0, clock=lambda: now["t"])
+
+    with pytest.raises(EngineUnavailable):
+        await embedder.embed(["a"])
+    assert calls["n"] == 1
+
+    # Within the cooldown: raises immediately, provider NOT called again.
+    now["t"] = 130.0
+    with pytest.raises(EngineUnavailable):
+        await embedder.embed(["a"])
+    assert calls["n"] == 1
+
+    # After the cooldown: retried and succeeds.
+    now["t"] = 161.0
+    assert await embedder.embed(["a"]) == [[0.0, 0.0, 0.0]]
+    assert calls["n"] == 2

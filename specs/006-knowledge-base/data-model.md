@@ -232,7 +232,9 @@ compute content_sha256 of the new markdown body
              → audit KB_DOCUMENT_UPDATED  (or _INGESTED on first index)
 ```
 
-`coffer kb reindex <name>` rescans the `docs/` directory for deltas and runs this routine per file, reconstructing all SQLite state from the files.
+`coffer kb reindex <name>` rescans the `docs/` directory for deltas and runs this routine per file, reconstructing all SQLite state from the files. The scan also prunes `documents` rows whose markdown file was removed out-of-band, reported in the optional `ReindexResult.documents_removed`; documents indexed keyword-only because the embed degraded are counted in the optional `documents_degraded`.
+
+When an embed degrades (embedding provider unavailable), the routine indexes the document keyword-only and persists an **empty-string `content_sha256`** — a deliberate never-matching sentinel so the next reconcile retries the embed instead of treating the document as up to date. The empty value can appear on the wire in `DocumentOut`.
 
 ## Cascade & integrity rules
 

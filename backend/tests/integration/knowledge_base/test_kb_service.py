@@ -388,3 +388,33 @@ async def test_list_documents_offset_past_total(kb) -> None:
     docs, total = await kb.service.list_documents(kb_name="kb1", limit=50, offset=10)
     assert docs == []
     assert total == 1
+
+
+async def test_replace_reupload_audits_document_updated(kb) -> None:
+    """FR-016: a replace re-upload of an existing source is an UPDATE in the
+    audit trail, not a second INGEST (review: audit can't distinguish them)."""
+    await kb.create_kb("kb1")
+    await _ingest(kb, "kb1", "a.md", b"# A\n\naudited body")
+    await _ingest(kb, "kb1", "a.md", b"# A\n\naudited body", replace=True)
+
+    events = await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
+    types = [e.event_type for e in events]
+    assert types.count("kb_document_ingested") == 1
+    assert "kb_document_updated" in types
+
+
+async def test_reindex_prunes_rows_whose_file_was_removed(kb) -> None:
+    """FR-008 as a true mirror: a documents row whose docs/<id>.md vanished
+    out-of-band is pruned (with its chunks) on reindex, reported in
+    documents_removed (review: reindex was additive-only)."""
+    await kb.create_kb("kb1")
+    keep = await _ingest(kb, "kb1", "keep.md", b"# Keep\n\nkeeper body")
+    gone = await _ingest(kb, "kb1", "gone.md", b"# Gone\n\nvanishing body")
+    paths.doc_path("kb1", gone.id).unlink()
+
+    stats = await kb.service.reindex(kb_name="kb1", actor="user")
+    assert stats["removed"] == 1
+
+    assert await kb.documents.get_document("knowledge_base", "kb1", gone.id) is None
+    assert await kb.documents.get_document("knowledge_base", "kb1", keep.id) is not None
+    assert (await kb.service.search(kb_name="kb1", query="vanishing", top_k=5)).passages == ()

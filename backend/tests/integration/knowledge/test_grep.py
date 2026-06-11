@@ -74,3 +74,16 @@ async def test_grep_timeout_is_flagged_not_silent(tmp_path) -> None:
     result = await RipgrepGrep(timeout_s=0.000001).grep(str(docs), "needle")
     assert result.hits == ()
     assert result.truncated is True
+
+
+@pytest.mark.asyncio
+async def test_invalid_pattern_raises_instead_of_empty(tmp_path) -> None:
+    """An rg failure (exit 2, e.g. an invalid regex) must surface as an error,
+    not masquerade as 'no matches' (review L1)."""
+    from coffer.domain.errors import GrepPatternInvalid
+
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "a.md").write_text("content\n", encoding="utf-8")
+    with pytest.raises(GrepPatternInvalid):
+        await RipgrepGrep().grep(str(docs), "(unclosed")

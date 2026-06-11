@@ -62,7 +62,7 @@ markdown 文件成为唯一事实源，所有派生的索引/元数据经由 SQL
   客户端，`base_url` 可替换）。逐语料配置：`embedding_provider`、
   `embedding_model`、`embedding_base_url`、`embedding_credential_ref`
   （keychain ref，绝不明文）。同一个 `.embeddings.create` 调用即可对接
-  OpenAI / OpenRouter / Voyage / Cohere / Jina / Gemini / Azure / DashScope
+  OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope
   以及本地 Ollama / LM Studio，另有一个可选的进程内 `local` provider
   （fastembed）做零服务端、离线 embedding。embedding 模型是**可变的** ——
   改它会对语料重新 embed（文件即事实），因此没有不可变锁。

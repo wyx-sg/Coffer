@@ -8,7 +8,7 @@ memory 面的实体、端口、统一 SQLite schema（与 knowledge base 共享�
 
 ### `MemoryStoreConfig` (`domain/memory/config.py`)
 
-Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。检索/embedding 配置形状与 KB 面共享。
+Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。与 KB 面共享检索模式词汇与 embedding 语义；字段布局刻意不同 —— 见下文。
 
 | 字段                       | 类型                                       | 说明                                                                       |
 | -------------------------- | ------------------------------------------ | -------------------------------------------------------------------------- |
@@ -217,6 +217,8 @@ compute content_sha256 of the new markdown
 ```
 
 memory 的所有写路径（remember、update、用户编辑、惰性 reindex 扫描）都汇入这一个例程。
+
+当启用 vector 的 store 在 embed 时降级（embedding provider 不可用），该例程只做 keyword 索引并持久化一个**空字符串 `content_sha256`** —— 一个刻意永不匹配的哨兵值，使下一次惰性对账重试 embed，而不是把这条事实当作已是最新。
 
 ## 新增审计事件
 

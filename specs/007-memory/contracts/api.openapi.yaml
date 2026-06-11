@@ -12,8 +12,8 @@ info:
     (project_id = project ULID). No LLM runs at write time. Retrieval reuses the
     shared engine (grep / keyword FTS5+BM25 / vector sqlite-vec).
 
-    All routes are loopback-only and require the daemon's auth token
-    (`Authorization: Bearer <token>` from `~/.coffer/daemon.json`). All error
+    All routes are loopback-only and require the daemon's auth token in the
+    `X-Coffer-Token` header (token from `~/.coffer/daemon.json`). All error
     responses use the app-wide envelope `{ "error": { code, message, details } }`.
 
 servers:
@@ -244,8 +244,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RecallResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: >
+            Memory store not found (`MEMORY_STORE_NOT_FOUND`) — e.g. a
+            never-provisioned project store.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: >
+            Schema-level request validation failure (`CONFIG_INVALID`
+            envelope).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/memory_stores/{name}/projections:
     parameters:
@@ -526,6 +540,10 @@ components:
           type: string
           enum: [global, project, both]
           default: both
+          description: >
+            `project` = the named store only, `global` = the global store
+            only, `both` (default) = the named store + the global store
+            merged by reciprocal rank fusion.
         mode:
           $ref: "#/components/schemas/RetrievalMode"
         top_k:

@@ -204,3 +204,22 @@ async def test_drop_store_removes_only_that_stores_vectors(substrate) -> None:
     assert await a.vector_search("kbA", [1.0, 0.0, 0.0], top_k=5) == []
     # kbB is untouched.
     assert {h.document_id for h in await b.vector_search("kbB", [1.0, 0.0, 0.0], top_k=5)} == {"d2"}
+
+
+@pytest.mark.skipif(not _sqlite_vec_available(), reason="sqlite-vec not installed/loadable")
+@pytest.mark.asyncio
+async def test_knn_at_stale_width_does_not_destroy_table(substrate) -> None:
+    """A SEARCH must never drop-and-rebuild the vector table: if the live
+    config's width disagrees with the stored table (e.g. a failed re-embed
+    after a dimensions change), knn degrades to no hits and the embeddings
+    survive until a write rebuilds them (review M1)."""
+    await substrate.repo.upsert_document(_doc("d1", "kb1"))
+    idx3 = _index(substrate, "kb1", _vec(substrate, "kb1", 3))
+    await idx3.upsert_chunks("d1", ["near"], [[1.0, 0.0, 0.0]])
+
+    stale = _vec(substrate, "kb1", 8)
+    assert await stale.knn([0.0] * 8, 5) == []
+
+    # The width-3 embeddings are still there.
+    hits = await idx3.vector_search("kb1", [1.0, 0.0, 0.0], top_k=5)
+    assert {h.document_id for h in hits} == {"d1"}

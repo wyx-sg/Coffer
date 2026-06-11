@@ -8,7 +8,7 @@ memory 是 Coffer 统一知识底座的 **memory 面**。事实是 markdown 文�
 
 出现五个内置工具（无需 store 引用 —— 作用域由 agent 的工作目录解析）：
 
-- `coffer__recall(query, scope?, top_k?)` —— 搜索 project + global 记忆（默认两者）。
+- `coffer__recall(query, scope?, mode?, top_k?)` —— 搜索 project + global 记忆（默认两者；`mode` 为 `grep` | `keyword` | `vector`）。
 - `coffer__remember(text, scope?, type?)` —— 保存一条事实（默认 `scope=project`）。
 - `coffer__update_memory(id, text)` —— 编辑一条事实。
 - `coffer__forget(id)` —— 删除一条事实。
@@ -41,7 +41,9 @@ coffer__recall("how do we deploy?")
 
 ```
 <!-- coffer:memory:start (managed, do not edit) -->
-- [deploy-via-make-release](deploy-via-make-release.md) — This repo deploys via make release.
+# Memory
+
+- deploy-via-make-release — This repo deploys via make release.
 <!-- coffer:memory:end -->
 ```
 

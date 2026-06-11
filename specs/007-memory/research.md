@@ -64,13 +64,13 @@ Memory uses **lazy reindex-on-read**: `recall` first scans the small fact dir fo
 
 **Question**: How is vector recall configured?
 
-**Decision**: DevPilot-style OpenAI-compatible provider abstraction (one `AsyncOpenAI` client with swappable `base_url`): `embedding_provider`, `embedding_model`, `embedding_base_url`, `embedding_credential_ref` (keychain ref, never plaintext). Providers: OpenAI / OpenRouter / Voyage / Cohere / Jina / Gemini / Azure / DashScope and local Ollama / LM Studio — all via `.embeddings.create`; plus an optional in-process `local` provider (fastembed) for zero-server offline embeddings. Default retrieval is `keyword`+`grep` (zero config, offline, language-agnostic); vector is opt-in. For bilingual content recommend local `bge-m3` or a cloud provider (English-only small models embed Chinese poorly). The embedding model is **mutable** — changing it re-embeds the store (files are truth).
+**Decision**: DevPilot-style OpenAI-compatible provider abstraction (one `AsyncOpenAI` client with swappable `base_url`): `embedding_provider`, `embedding_model`, `embedding_base_url`, `embedding_credential_ref` (keychain ref, never plaintext). Providers: OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope and local Ollama / LM Studio — all via `.embeddings.create`; plus an optional in-process `local` provider (fastembed) for zero-server offline embeddings. Default retrieval is `keyword`+`grep` (zero config, offline, language-agnostic); vector is opt-in. For bilingual content recommend local `bge-m3` or a cloud provider (English-only small models embed Chinese poorly). The embedding model is **mutable** — changing it re-embeds the store (files are truth).
 
 ## 8. Built-in MCP tools
 
 Five memory tools, namespaced under `coffer__`, agent-centric and frictionless:
 
-- `coffer__recall(query, scope?, top_k?)` → `[{id, text, score, source, time}, …]` (default both scopes).
+- `coffer__recall(query, scope?, mode?, top_k?)` → `[{id, text, score, source, time}, …]` (default both scopes; `mode` ∈ `grep` | `keyword` | `vector`).
 - `coffer__remember(text, scope?, type?)` → `{id, …}` (default `scope=project`).
 - `coffer__update_memory(id, text)` → `{id, …}`.
 - `coffer__forget(id)` → `{deleted: bool}`.

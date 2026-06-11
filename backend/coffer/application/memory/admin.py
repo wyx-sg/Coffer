@@ -98,22 +98,28 @@ async def cleanup_store(
     store_ref: StoreRefFn,
     documents: MemoryDocumentRepo,
     retrieval: KnowledgeRetrieval,
+    reconciler: MemoryReconciler,
     store_name: str,
 ) -> None:
-    """Drop a store's rows, vec table and on-disk dir (the on_delete hook)."""
+    """Drop a store's rows, vec table and on-disk dir (the on_delete hook).
+
+    Runs under the reconciler's per-store lock so a concurrent recall's
+    reconcile cannot scan the dir mid-teardown and re-insert rows for the
+    deleted store."""
     config = await get_config(store_name)
     resolved = await resolved_for(store_name)
-    await documents.delete_resource(KIND_MEMORY, store_name)
-    # Drop the per-store sqlite-vec table too (lives outside the async
-    # session → leaks across a same-name re-create otherwise — finding #6).
-    dims = config.embedding_dimensions if config.vector_enabled else None
-    try:
-        await retrieval.drop_store(store_ref(store_name, resolved.project_id), dimensions=dims)
-    except Exception:
-        _logger.warning(
-            "memory.cleanup.drop_vec_store_failed",
-            extra={"store": store_name},
-            exc_info=True,
-        )
-    if resolved.store_dir.exists():
-        await asyncio.to_thread(shutil.rmtree, resolved.store_dir, ignore_errors=True)
+    async with reconciler.lock_for(store_name):
+        await documents.delete_resource(KIND_MEMORY, store_name)
+        # Drop the per-store sqlite-vec table too (lives outside the async
+        # session → leaks across a same-name re-create otherwise — finding #6).
+        dims = config.embedding_dimensions if config.vector_enabled else None
+        try:
+            await retrieval.drop_store(store_ref(store_name, resolved.project_id), dimensions=dims)
+        except Exception:
+            _logger.warning(
+                "memory.cleanup.drop_vec_store_failed",
+                extra={"store": store_name},
+                exc_info=True,
+            )
+        if resolved.store_dir.exists():
+            await asyncio.to_thread(shutil.rmtree, resolved.store_dir, ignore_errors=True)

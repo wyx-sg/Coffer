@@ -17,7 +17,7 @@ A developer has design notes, ADRs, internal wikis, PDFs of papers, a spreadshee
 
 **Independent Test**: From a fresh install, create a KB `design-notes`, upload a `.md`, a `.pdf`, a `.docx`, and a `.csv`; observe each becomes a Markdown file under `~/.coffer/knowledge/design-notes/docs/`, the original under `raw/`, and a row in the unified `documents` table.
 
-**Covering scenarios**: create a knowledge base; ingest converts any format to markdown; list documents; delete a single document; delete a knowledge base cleans up files and index.
+**Covering scenarios**: create a knowledge base; ingest converts any format to markdown; list documents in a knowledge base; delete a single document; delete a knowledge base cleans up files and index.
 
 ---
 
@@ -226,12 +226,12 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 **Embedding configuration**
 
-- **FR-013**: The embedding provider MUST be user-configurable per KB (DevPilot-style OpenAI-compatible: `embedding_provider`, `embedding_model`, `embedding_base_url`, `embedding_credential_ref`), with an optional in-process `local` provider (fastembed). Credentials MUST be referenced via the keychain, never stored in plaintext.
+- **FR-013**: The embedding provider MUST be user-configurable per KB via the nested `embedding` config object (DevPilot-style OpenAI-compatible: `provider`, `model`, `base_url`, `credential_ref`, `dimensions`), with an optional in-process `local` provider (fastembed). Credentials MUST be referenced via the keychain, never stored in plaintext.
 - **FR-014**: Chunk parameters and the embedding model MUST be mutable; changing chunk params re-chunks+re-indexes and changing the embedding model re-embeds the corpus. There is NO immutability lock on these fields.
 
 **Curation & consistency**
 
-- **FR-015**: Each document MUST carry a `source_mode` of `converted` (Markdown derived from raw, re-convertible) or `edited` (hand-edited; re-conversion blocked until a new source is uploaded). Users MUST be able to edit a document's Markdown, re-upload its source, delete it, and reindex.
+- **FR-015**: Each document MUST carry a `source_mode` of `converted` (Markdown derived from raw, re-convertible) or `edited` (hand-edited; re-conversion blocked). Document ids are content-addressed (the first 16 hex chars of the source's sha256), so re-uploading the **identical** source with `replace=true` resets `source_mode` to `converted`; uploading a different source creates a new document and the edited one remains `edited`. Users MUST be able to edit a document's Markdown, re-upload its source, delete it, and reindex.
 - **FR-016**: All write paths (re-upload, edit, reindex scan) MUST funnel through one idempotent re-index routine: if `content_sha256` is unchanged it is a no-op; if changed it deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector enabled), updates the `documents` row, and audits `KB_DOCUMENT_UPDATED`. The KB is **agent-read-only**; agents MUST NOT write KB documents.
 
 **Agent integration via MCP**

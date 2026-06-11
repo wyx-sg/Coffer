@@ -8,7 +8,7 @@ Memory is the **memory face** of Coffer's unified knowledge substrate. Facts are
 
 Five built-in tools appear (no store reference needed — scope is resolved from the agent's working directory):
 
-- `coffer__recall(query, scope?, top_k?)` — search project + global memory (default: both).
+- `coffer__recall(query, scope?, mode?, top_k?)` — search project + global memory (default: both; `mode` is `grep` | `keyword` | `vector`).
 - `coffer__remember(text, scope?, type?)` — save a fact (default `scope=project`).
 - `coffer__update_memory(id, text)` — edit a fact.
 - `coffer__forget(id)` — delete a fact.
@@ -41,7 +41,9 @@ For Claude, keep auto-memory **on** — the symlinked dir _is_ the canonical sto
 
 ```
 <!-- coffer:memory:start (managed, do not edit) -->
-- [deploy-via-make-release](deploy-via-make-release.md) — This repo deploys via make release.
+# Memory
+
+- deploy-via-make-release — This repo deploys via make release.
 <!-- coffer:memory:end -->
 ```
 

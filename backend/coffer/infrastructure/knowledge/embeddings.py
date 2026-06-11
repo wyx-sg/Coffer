@@ -12,6 +12,7 @@ so no plaintext ever lives in config or here.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -154,12 +155,60 @@ class LocalEmbedder:
         return _validate_widths(await asyncio.to_thread(_run), self.dimensions)
 
 
+#: How long a failed provider is skipped before the next embed attempt.
+DEFAULT_EMBED_COOLDOWN_S = 60.0
+
+
+class CooldownEmbedder:
+    """Circuit breaker around an embedder: after an ``EngineUnavailable`` the
+    provider is not re-attempted for ``cooldown_s`` — further embeds raise
+    immediately. Without this, the degraded-embed retry sentinel makes every
+    reconcile pay a full provider timeout PER previously-degraded document,
+    sequentially, under the per-store lock, while a provider is down."""
+
+    def __init__(
+        self,
+        inner: OpenAICompatibleEmbedder | LocalEmbedder,
+        *,
+        cooldown_s: float = DEFAULT_EMBED_COOLDOWN_S,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._inner = inner
+        self._cooldown_s = cooldown_s
+        self._clock = clock
+        self._retry_after: float | None = None
+
+    @property
+    def dimensions(self) -> int:
+        return self._inner.dimensions
+
+    async def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        now = self._clock()
+        if self._retry_after is not None and now < self._retry_after:
+            raise EngineUnavailable(
+                "embedding",
+                f"provider in cooldown after a failure (retries in {self._retry_after - now:.0f}s)",
+            )
+        try:
+            result = await self._inner.embed(texts)
+        except EngineUnavailable:
+            self._retry_after = now + self._cooldown_s
+            raise
+        self._retry_after = None
+        return result
+
+
 def make_embedder(
     config: EmbeddingConfig,
     *,
     resolve_credential: CredentialResolver | None = None,
-) -> OpenAICompatibleEmbedder | LocalEmbedder:
-    """Build the right ``Embedder`` for the configured provider."""
+) -> CooldownEmbedder:
+    """Build the right ``Embedder`` for the configured provider, wrapped in the
+    failure-cooldown circuit breaker. Callers cache one per config (see
+    ``wiring.build_substrate``) so the cooldown state is shared."""
+    inner: OpenAICompatibleEmbedder | LocalEmbedder
     if config.provider == "local":
-        return LocalEmbedder(config)
-    return OpenAICompatibleEmbedder(config, resolve_credential=resolve_credential)
+        inner = LocalEmbedder(config)
+    else:
+        inner = OpenAICompatibleEmbedder(config, resolve_credential=resolve_credential)
+    return CooldownEmbedder(inner)

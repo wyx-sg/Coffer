@@ -404,3 +404,82 @@ async def test_recall_hit_time_and_source_carry_fact_metadata(mem) -> None:
     assert doc.path.endswith(".md")
     assert h.source == f"global:{doc.path}"
     assert h.time == doc.updated_at
+
+
+async def test_grep_recall_budget_not_consumed_by_one_facts_lines(mem) -> None:
+    """A fact with many matching lines must not starve other matching facts:
+    the grep line budget is wider than top_k and dedupe happens before the
+    cut (review L2)."""
+    await mem.service.add_fact_to_store(
+        store_name="global",
+        name="multi",
+        description="",
+        body="\n".join(f"needle line {i}" for i in range(10)),
+        actor="user",
+    )
+    await mem.service.add_fact_to_store(
+        store_name="global", name="other", description="", body="a single needle here", actor="user"
+    )
+    hits, mode, _fb = await mem.service.recall_in_store(
+        store_name="global", query="needle", mode="grep", top_k=3
+    )
+    assert mode == "grep"
+    assert len(hits) == 2  # one hit per fact, both facts found
+
+
+async def test_recall_scope_global_returns_global_only(mem) -> None:
+    """scope="global" on a project store must return GLOBAL hits only — it is
+    not an alias for "both" (review L3)."""
+    from coffer.application.memory.scope import project_store_name
+
+    resolved = await mem.service.resolve_scope(scope=MemoryScope.PROJECT, cwd=mem.project_cwd)
+    project_store = project_store_name(resolved.project_id)
+    await mem.service.add_fact_to_store(
+        store_name=project_store, name="p", description="", body="ocelot project fact", actor="user"
+    )
+    await mem.service.add_fact_to_store(
+        store_name="global", name="g", description="", body="ocelot global fact", actor="user"
+    )
+
+    hits, _mode, _fb = await mem.service.recall_in_store(
+        store_name=project_store, query="ocelot", scope="global", top_k=10
+    )
+    texts = [h.text for h in hits]
+    assert any("global" in t for t in texts)
+    assert not any("project" in t for t in texts)
+
+
+async def test_store_delete_and_recreate_has_no_stale_vectors(mem) -> None:
+    """Deleting a vector-enabled store drops its vec table; a same-name
+    re-create starts clean (review gap: end-to-end vec-leak test)."""
+    from coffer.domain.resource import ResourceRef
+
+    await mem.service.ensure_store(GLOBAL_STORE_NAME)
+    await mem.resources.update_config(
+        ResourceRef("memory", GLOBAL_STORE_NAME),
+        new_config={
+            "retrieval_modes": ["grep", "keyword", "vector"],
+            "default_mode": "keyword",
+            "embedding_provider": "local",
+            "embedding_model": "fake-model",
+            "embedding_dimensions": 32,
+        },
+        actor="user",
+    )
+    await mem.service.add_fact_to_store(
+        store_name=GLOBAL_STORE_NAME,
+        name="v",
+        description="",
+        body="vanishing vector fact",
+        actor="user",
+    )
+    await mem.resources.delete(ResourceRef("memory", GLOBAL_STORE_NAME), actor="user")
+    vec = (mem.vec_stores or {}).get(("memory", GLOBAL_STORE_NAME))
+    assert vec is not None and vec.dropped
+
+    # Recreate (lazy provision) — vector recall over the fresh store is empty.
+    await mem.service.ensure_store(GLOBAL_STORE_NAME)
+    hits, _mode, _fb = await mem.service.recall_in_store(
+        store_name=GLOBAL_STORE_NAME, query="vanishing", mode="keyword", top_k=5
+    )
+    assert hits == []

@@ -22,6 +22,7 @@ acceptance(
     const apiBase = `http://127.0.0.1:${port}/api/v1`;
     const kbName = `e2e-kb-${Date.now().toString(36)}`;
 
+    try {
     // 1. /knowledge-bases renders and the create dialog works end-to-end.
     await page.goto("/knowledge-bases");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -58,11 +59,13 @@ acceptance(
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page.getByText(/make release/).first()).toBeVisible();
 
-    // 4. Clean up so reruns against a reused daemon stay isolated.
-    const del = await fetch(`${apiBase}/resources/knowledge_base/${kbName}`, {
-      method: "DELETE",
-      headers: { "X-Coffer-Token": token },
-    });
-    expect([200, 204]).toContain(del.status);
+    } finally {
+      // Clean up even on assertion failure so reruns against a reused daemon
+      // stay isolated.
+      await fetch(`${apiBase}/resources/knowledge_base/${kbName}`, {
+        method: "DELETE",
+        headers: { "X-Coffer-Token": token },
+      });
+    }
   },
 );

@@ -10,8 +10,8 @@ info:
     modes: `grep`, `keyword`, `vector`. The KB is user-curated; agents read it
     read-only over the MCP gateway.
 
-    All routes are loopback-only and require the daemon's auth token
-    (`Authorization: Bearer <token>` from `~/.coffer/daemon.json`). Errors use
+    All routes are loopback-only and require the daemon's auth token in the
+    `X-Coffer-Token` header (token from `~/.coffer/daemon.json`). Errors use
     the app-wide envelope `{ "error": { "code", "message", "details" } }`.
 
 servers:
@@ -207,12 +207,6 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
-        "503":
-          description: Re-embedding engine unavailable (vector enabled)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
 
     delete:
       summary: Delete a document
@@ -249,6 +243,12 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/ReconversionBlocked"
+        "503":
+          description: Converter engine unavailable for this format (`ENGINE_UNAVAILABLE`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/knowledge_bases/{name}/reindex:
     parameters:
@@ -270,12 +270,6 @@ paths:
                 $ref: "#/components/schemas/ReindexResult"
         "404":
           $ref: "#/components/responses/NotFound"
-        "503":
-          description: Re-embedding engine unavailable (vector enabled)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/knowledge_bases/{name}/search:
     parameters:
@@ -581,6 +575,16 @@ components:
         documents_reindexed: { type: integer }
         documents_skipped:
           { type: integer, description: Unchanged content (no-op). }
+        documents_removed:
+          {
+            type: integer,
+            description: Rows pruned because their markdown file vanished out-of-band.,
+          }
+        documents_degraded:
+          {
+            type: integer,
+            description: Documents indexed keyword-only because embedding degraded.,
+          }
 
     SearchRequest:
       type: object

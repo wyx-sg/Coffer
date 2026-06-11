@@ -191,13 +191,16 @@ async def recall_in_store_scoped(
 ) -> tuple[list[MemoryHit], RetrievalMode, bool]:
     """Store-scoped REST recall that honours the request ``scope`` (finding #5).
 
-    ``project`` (default) spans the named store only; ``both``/``global`` also
-    fold in the global store (skipped when the named store IS global, to avoid
-    double counting). The named store reports the effective mode + fallback."""
+    ``project`` (default) spans the named store only; ``global`` queries the
+    GLOBAL store only; ``both`` merges the named store with the global store
+    (no double counting when the named store IS global). The primary store
+    reports the effective mode + fallback."""
+    if scope == "global":
+        store_name = GLOBAL_STORE_NAME
     config = await get_config(store_name)
     resolved = await resolved_for(store_name)
     extra: list[ExtraStore] | None = None
-    if scope != "project" and store_name != GLOBAL_STORE_NAME:
+    if scope == "both" and store_name != GLOBAL_STORE_NAME:
         g_resolved = await resolved_for(GLOBAL_STORE_NAME)
         extra = [(g_resolved, GLOBAL_STORE_NAME, await get_config(GLOBAL_STORE_NAME))]
     return await recall_single(
@@ -243,8 +246,11 @@ async def recall_store_with_mode(
         chosen = "keyword"
 
     if chosen == "grep":
-        grep_result = await deps.retrieval.grep(store_ref, query, max_matches=top_k)
-        grep_hits = grep_hits_to_memory_hits(grep_result.hits, resolved)
+        # Line budget wider than top_k: dedupe (many matching lines in one
+        # fact → one hit) happens BEFORE the cut, so a verbose fact can't
+        # starve the other matching facts.
+        grep_result = await deps.retrieval.grep(store_ref, query, max_matches=max(top_k * 10, 100))
+        grep_hits = grep_hits_to_memory_hits(grep_result.hits, resolved)[:top_k]
         return grep_hits, "grep", False
 
     result = await deps.retrieval.search(

@@ -14,7 +14,6 @@ its own imports and the importlinter engine-confinement contract holds.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
 from coffer.domain.errors import EngineUnavailable
@@ -22,7 +21,6 @@ from coffer.domain.knowledge.embedder import Embedder, EmbeddingConfig
 from coffer.domain.knowledge.index import GrepPort, KnowledgeIndex
 from coffer.domain.knowledge.retrieval import (
     GrepResult,
-    Passage,
     RetrievalMode,
     SearchResult,
     StoreRef,
@@ -157,8 +155,3 @@ class KnowledgeRetrieval:
     async def grep(self, store: StoreRef, pattern: str, *, max_matches: int = 200) -> GrepResult:
         """Ripgrep over the store's ``docs_dir`` (no index)."""
         return await self._grep.grep(store.docs_dir, pattern, max_matches=max_matches)
-
-
-def keyword_passages_to_result(passages: Sequence[Passage]) -> SearchResult:
-    """Wrap raw keyword passages as a ``SearchResult`` (test/helper use)."""
-    return SearchResult(mode="keyword", passages=tuple(passages), fallback=None)

@@ -64,13 +64,13 @@ memory 用 **lazy reindex-on-read**：`recall` 先按 `content_sha256` 扫描这
 
 **问题**：vector recall 怎么配置？
 
-**决定**：DevPilot 风格的 OpenAI 兼容 provider 抽象（一个 `AsyncOpenAI` 客户端配可换的 `base_url`）：`embedding_provider`、`embedding_model`、`embedding_base_url`、`embedding_credential_ref`（keychain ref，绝不明文）。Provider：OpenAI / OpenRouter / Voyage / Cohere / Jina / Gemini / Azure / DashScope 与本地 Ollama / LM Studio —— 全经 `.embeddings.create`；外加一个可选的进程内 `local` provider（fastembed）做零服务离线 embedding。默认检索是 `keyword`+`grep`（零配置、离线、语言无关）；vector 为可选项。双语内容推荐本地 `bge-m3` 或某云端 provider（仅英文的小模型对中文嵌入差）。embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。
+**决定**：DevPilot 风格的 OpenAI 兼容 provider 抽象（一个 `AsyncOpenAI` 客户端配可换的 `base_url`）：`embedding_provider`、`embedding_model`、`embedding_base_url`、`embedding_credential_ref`（keychain ref，绝不明文）。Provider：OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope 与本地 Ollama / LM Studio —— 全经 `.embeddings.create`；外加一个可选的进程内 `local` provider（fastembed）做零服务离线 embedding。默认检索是 `keyword`+`grep`（零配置、离线、语言无关）；vector 为可选项。双语内容推荐本地 `bge-m3` 或某云端 provider（仅英文的小模型对中文嵌入差）。embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。
 
 ## 8. 内置 MCP 工具
 
 五个 memory 工具，挂在 `coffer__` 下，以 agent 为中心、低摩擦：
 
-- `coffer__recall(query, scope?, top_k?)` → `[{id, text, score, source, time}, …]`（默认两个作用域）。
+- `coffer__recall(query, scope?, mode?, top_k?)` → `[{id, text, score, source, time}, …]`（默认两个作用域；`mode` ∈ `grep` | `keyword` | `vector`）。
 - `coffer__remember(text, scope?, type?)` → `{id, …}`（默认 `scope=project`）。
 - `coffer__update_memory(id, text)` → `{id, …}`。
 - `coffer__forget(id)` → `{deleted: bool}`。

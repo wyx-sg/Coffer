@@ -49,7 +49,8 @@ Concrete shape:
   format, adopted as canonical _precisely so_ the Claude projection can be a
   native directory symlink (no rendering, no lossy round-trip).
 - **Two-layer scope.** Global facts live in the `WORKSPACE_GLOBAL_PROJECT_ID`
-  sentinel store (the existing F0x sentinel — not a new one); per-project facts
+  sentinel store (the existing `00000000000000000000000000` sentinel — not a
+  new one); per-project facts
   live in `projects/<project-ulid>/`. `remember(scope=project)` resolves to the
   project store via the MCP shim's reported cwd → git-root; `recall` defaults to
   both layers.

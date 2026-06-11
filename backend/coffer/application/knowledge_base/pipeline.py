@@ -22,6 +22,7 @@ import hashlib
 import shutil
 from dataclasses import replace as dc_replace
 from datetime import UTC, datetime
+from pathlib import Path
 
 from coffer.application.knowledge.locks import StoreLocks
 from coffer.application.knowledge.reindex import Reindexer
@@ -93,11 +94,13 @@ class KBPipeline:
         raw_bytes: bytes,
         config: KnowledgeBaseConfig,
         replace: bool,
-    ) -> Document:
+    ) -> tuple[Document, bool]:
+        """Ingest one upload. Returns ``(document, replaced)`` — ``replaced`` is
+        True for a replace overwrite (audited as UPDATE, not a second INGEST)."""
         self._check_size(raw_bytes, config)
         prepared = await self._prepare(filename, raw_bytes)
         async with self._lock(kb_name):
-            await self._dedup_guard(kb_name, prepared.source_sha256, replace)
+            existed = await self._dedup_guard(kb_name, prepared.source_sha256, replace)
             await self._write_files(kb_name, prepared, raw_bytes, filename)
             now = datetime.now(tz=UTC)
             doc = self._build_document(
@@ -112,7 +115,7 @@ class KBPipeline:
                 kb_name, doc, prepared.markdown, config, previous_sha=None
             )
             stored = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
-            return stored or doc
+            return stored or doc, existed
 
     # ----- edit -----
 
@@ -171,29 +174,49 @@ class KBPipeline:
         docs_dir = self._paths.docs_dir(kb_name)
         reindexed = 0
         skipped = 0
+        removed = 0
+        degraded = 0
         async with self._lock(kb_name):
+            paths: list[Path] = []
             if docs_dir.exists():
-                for path in sorted(docs_dir.glob("*.md")):
-                    doc_id = path.stem
-                    doc = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc_id)
-                    frontmatter, body = split_frontmatter(
-                        await asyncio.to_thread(path.read_text, "utf-8")
-                    )
-                    if doc is None:
-                        # No row (DB loss / restore-from-backup): reconstruct it
-                        # from the file's frontmatter — files are the source of
-                        # truth for the documents table too (FR-008/SC-005).
-                        doc = document_from_frontmatter(kb_name, doc_id, frontmatter)
-                    # ``force`` bypasses the sha no-op gate (chunk params changed).
-                    previous = None if force else doc.content_sha256
-                    changed = await self._index_and_persist(
-                        kb_name, doc, body, config, previous_sha=previous
-                    )
-                    if changed:
-                        reindexed += 1
-                    else:
-                        skipped += 1
-        return {"reindexed": reindexed, "skipped": skipped}
+                paths = await asyncio.to_thread(lambda: sorted(docs_dir.glob("*.md")))
+            on_disk_ids: set[str] = set()
+            for path in paths:
+                doc_id = path.stem
+                on_disk_ids.add(doc_id)
+                doc = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc_id)
+                frontmatter, body = split_frontmatter(
+                    await asyncio.to_thread(path.read_text, "utf-8")
+                )
+                if doc is None:
+                    # No row (DB loss / restore-from-backup): reconstruct it
+                    # from the file's frontmatter — files are the source of
+                    # truth for the documents table too (FR-008/SC-005).
+                    doc = document_from_frontmatter(kb_name, doc_id, frontmatter)
+                # ``force`` bypasses the sha no-op gate (chunk params changed).
+                previous = None if force else doc.content_sha256
+                changed, was_degraded = await self._index_and_persist(
+                    kb_name, doc, body, config, previous_sha=previous
+                )
+                if changed:
+                    reindexed += 1
+                else:
+                    skipped += 1
+                if was_degraded:
+                    degraded += 1
+            # Files are truth in BOTH directions: rows whose markdown vanished are pruned.
+            index = self._retrieval.index_for(self._store_ref(kb_name), dimensions=None)
+            known = await self._documents.list_documents(
+                KIND_KNOWLEDGE_BASE, kb_name, limit=100_000, offset=0
+            )
+            for stale in (d for d in known if d.id not in on_disk_ids):
+                await index.delete_chunks(stale.id)
+                await self._documents.delete_document(KIND_KNOWLEDGE_BASE, kb_name, stale.id)
+                removed += 1
+        return {"reindexed": reindexed, "skipped": skipped} | {
+            "removed": removed,
+            "degraded": degraded,
+        }
 
     # ----- delete / cleanup -----
 
@@ -259,13 +282,16 @@ class KBPipeline:
             conversion_engine=str(meta.get("conversion_engine", "unknown")),
         )
 
-    async def _dedup_guard(self, kb_name: str, source_sha: str, replace: bool) -> None:
+    async def _dedup_guard(self, kb_name: str, source_sha: str, replace: bool) -> bool:
+        """Reject a duplicate source unless ``replace``; returns whether the
+        source already existed (a replace overwrite)."""
         exists = await self._documents.exists_source(KIND_KNOWLEDGE_BASE, kb_name, source_sha)
         if exists and not replace:
             raise IngestRejected(
                 "duplicate",
                 "a document with the same source content already exists; pass replace=true",
             )
+        return exists
 
     async def _write_files(
         self, kb_name: str, prepared: Prepared, raw_bytes: bytes, filename: str
@@ -330,9 +356,12 @@ class KBPipeline:
         config: KnowledgeBaseConfig,
         *,
         previous_sha: str | None,
-    ) -> bool:
-        """Run the shared reindex routine + persist the row. Returns whether the
-        content changed (the documents row is written either way on first index)."""
+    ) -> tuple[bool, bool]:
+        """Run the shared reindex routine + persist the row.
+
+        Returns ``(changed, degraded)`` — ``changed`` is whether the content was
+        (re)indexed; ``degraded`` is whether an embed was requested but the
+        provider was unavailable (indexed keyword-only, retried next scan)."""
         index = self._retrieval.index_for(
             self._store_ref(kb_name),
             dimensions=config.embedding.dimensions if config.embedding else None,
@@ -348,12 +377,13 @@ class KBPipeline:
             doc_id=doc.id,
             chunker=chunker_for(config),
         )
+        degraded = outcome.changed and outcome.content_sha256 == ""
         if not outcome.changed and previous_sha is not None:
-            return False
+            return False, degraded
         await self._documents.upsert_document(
             dc_replace(doc, content_sha256=outcome.content_sha256)
         )
-        return True
+        return True, degraded
 
     def _render_doc_markdown(self, doc: Document, body: str, *, source_mode: str) -> str:
         return render_frontmatter(

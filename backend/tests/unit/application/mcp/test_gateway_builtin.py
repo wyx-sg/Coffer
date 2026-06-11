@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import pytest
-
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.application.mcp.gateway_builtin import dispatch_builtin_tool
 from coffer.domain.errors import MemoryStoreNotFound
@@ -45,15 +43,15 @@ async def test_downstream_exception_logs_class_name_only() -> None:
         raise RuntimeError(f"downstream failure with secret {_SENTINEL}")
 
     invocations = _RecordingInvocations()
-    with pytest.raises(RuntimeError):
-        await dispatch_builtin_tool(
-            prefixed_name="coffer__recall",
-            params={"arguments": {}},
-            builtin=_registry(_boom),
-            invocations=invocations,
-            session_id="s1",
-            clock=_clock,
-        )
+    result = await dispatch_builtin_tool(
+        prefixed_name="coffer__recall",
+        params={"arguments": {}},
+        builtin=_registry(_boom),
+        invocations=invocations,
+        session_id="s1",
+        clock=_clock,
+    )
+    assert result["isError"] is True
     (row,) = invocations.rows
     assert row.status == "error"
     # Class name only — the sentinel-bearing message must NOT be persisted.
@@ -66,15 +64,16 @@ async def test_coffer_error_keeps_its_message() -> None:
         raise MemoryStoreNotFound("project-X")
 
     invocations = _RecordingInvocations()
-    with pytest.raises(MemoryStoreNotFound):
-        await dispatch_builtin_tool(
-            prefixed_name="coffer__recall",
-            params={"arguments": {}},
-            builtin=_registry(_coffer_boom),
-            invocations=invocations,
-            session_id="s1",
-            clock=_clock,
-        )
+    result = await dispatch_builtin_tool(
+        prefixed_name="coffer__recall",
+        params={"arguments": {}},
+        builtin=_registry(_coffer_boom),
+        invocations=invocations,
+        session_id="s1",
+        clock=_clock,
+    )
+    assert result["isError"] is True
+    assert "project-X" in result["content"][0]["text"]
     (row,) = invocations.rows
     assert row.status == "error"
     assert "MemoryStoreNotFound" in (row.error_message or "")
@@ -112,3 +111,45 @@ async def test_success_path_wraps_result_as_mcp_call_tool_result() -> None:
     assert row.status == "ok"
     assert row.capability_key == "recall"
     assert row.resource_name == "coffer"
+
+
+async def test_handler_error_returns_in_band_iserror_result() -> None:
+    """Per the MCP spec, TOOL-execution failures must come back as an
+    ``isError: true`` result the model can read and self-correct from — not a
+    JSON-RPC protocol error (review M2). Coffer-authored messages (CofferError,
+    handler ValueErrors) are included; arbitrary exceptions stay class-name-only."""
+
+    async def _bad_args(_args: dict) -> dict:
+        raise ValueError("'text' must be a non-empty string")
+
+    invocations = _RecordingInvocations()
+    result = await dispatch_builtin_tool(
+        prefixed_name="coffer__recall",
+        params={"arguments": {}},
+        builtin=_registry(_bad_args),
+        invocations=invocations,
+        session_id="s1",
+        clock=_clock,
+    )
+    assert result["isError"] is True
+    assert "'text' must be a non-empty string" in result["content"][0]["text"]
+    (row,) = invocations.rows
+    assert row.status == "error"
+
+
+async def test_arbitrary_exception_is_in_band_but_redacted() -> None:
+    async def _boom(_args: dict) -> dict:
+        raise RuntimeError(f"downstream failure with secret {_SENTINEL}")
+
+    invocations = _RecordingInvocations()
+    result = await dispatch_builtin_tool(
+        prefixed_name="coffer__recall",
+        params={"arguments": {}},
+        builtin=_registry(_boom),
+        invocations=invocations,
+        session_id="s1",
+        clock=_clock,
+    )
+    assert result["isError"] is True
+    assert _SENTINEL not in result["content"][0]["text"]
+    assert "RuntimeError" in result["content"][0]["text"]

@@ -393,6 +393,8 @@ def test_document_flow_ingest_get_edit_reconvert_reindex_grep(tmp_path, monkeypa
             "documents_scanned",
             "documents_reindexed",
             "documents_skipped",
+            "documents_removed",
+            "documents_degraded",
         }
 
         # grep over the markdown files

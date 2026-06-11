@@ -4,7 +4,7 @@
 
 **Branch**: `feature/kb-memory-redesign`
 **Spec**: [./spec.md](./spec.md)
-**Status**: Draft (redesign)
+**Status**: Accepted (redesign — in development)
 
 ## Summary
 
@@ -139,10 +139,10 @@ frontend/src/kinds/memory/
 
 | Risk                                                                   | Mitigation                                                                                                                               |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| MCP shim cwd does not propagate on some agent (scope resolution fails) | Open item #1 in the design doc; verify on Claude/Codex during impl. An unresolved project scope is REJECTED with `ScopeUnresolved` (clear error; nothing written); `scope=global` still works.      |
+| MCP shim cwd does not propagate on some agent (scope resolution fails) | Open item #1 in [research.md](./research.md) (§11); verify on Claude/Codex during impl. An unresolved project scope is REJECTED with `ScopeUnresolved` (clear error; nothing written); `scope=global` still works.      |
 | Claude rewrites `MEMORY.md` or fact files out of band                  | `MEMORY.md` is a derived index regenerated idempotently; lazy reindex-on-read reconciles fact deltas by content hash — no watcher.       |
 | Existing native memory files would be lost on first projection         | Adapter merges existing files into canonical first, then symlinks; never overwrites (FR-012).                                            |
-| sqlite-vec packaging/loading on macOS arm64 / Linux                    | Open item #4; default retrieval is keyword+grep (no native ext needed); vector is opt-in and degrades gracefully when the ext is absent. |
+| sqlite-vec packaging/loading on macOS arm64 / Linux                    | Open item #2 in [research.md](./research.md) (§11); default retrieval is keyword+grep (no native ext needed); vector is opt-in and degrades gracefully when the ext is absent. |
 | Embedding model embeds Chinese poorly                                  | Default is keyword+grep (language-agnostic); recommend local `bge-m3` or a cloud provider for bilingual vector recall.                   |
 
 ## Out of scope (deferred)

@@ -34,9 +34,9 @@ Three structural problems surfaced once both kinds were in use:
    LLM that can decide what to remember and write a clean fact itself.
 
 The original ADR-010 explicitly parked `sqlite-vec + FTS5` ("revisit when scale
-or zero-dependency policy demands it") and ADR-011 mirrored that reasoning. The
-redesign (see the design doc) revisits exactly that: the configurable-embedding
-requirement and the files-as-truth requirement together change the calculus.
+or zero-dependency policy demands it") and ADR-011 mirrored that reasoning. This
+redesign revisits exactly that: the configurable-embedding requirement and the
+files-as-truth requirement together change the calculus.
 
 ## Decision
 
@@ -69,7 +69,7 @@ Concrete shape:
   `AsyncOpenAI` client with a swappable `base_url`). Per-corpus config:
   `embedding_provider`, `embedding_model`, `embedding_base_url`,
   `embedding_credential_ref` (keychain ref, never plaintext). Works against
-  OpenAI / OpenRouter / Voyage / Cohere / Jina / Gemini / Azure / DashScope and
+  OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope and
   local Ollama / LM Studio through the same `.embeddings.create` call, plus an
   optional in-process `local` provider (fastembed) for zero-server offline
   embeddings. The embedding model is **mutable** — changing it re-embeds the

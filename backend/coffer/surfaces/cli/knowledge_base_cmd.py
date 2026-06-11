@@ -294,7 +294,9 @@ def reindex(
     out = r.json()
     typer.echo(
         f"reindexed: scanned={out['documents_scanned']} "
-        f"reindexed={out['documents_reindexed']} skipped={out['documents_skipped']}"
+        f"reindexed={out['documents_reindexed']} skipped={out['documents_skipped']} "
+        f"removed={out.get('documents_removed', 0)} "
+        f"degraded={out.get('documents_degraded', 0)}"
     )
 
 

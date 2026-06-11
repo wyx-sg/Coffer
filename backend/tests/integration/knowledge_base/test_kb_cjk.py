@@ -55,3 +55,15 @@ async def test_cjk_fact_roundtrip_via_grep_recall(kb) -> None:
 
     result = await kb.service.grep(kb_name="kb1", pattern="超时时间")
     assert len(result.hits) == 1
+
+
+async def test_keyword_does_not_match_cjk_substring_inside_a_run(kb) -> None:
+    """Negative pin of the FTS5 unicode61 limitation: a substring inside a
+    contiguous CJK run is NOT a keyword match (grep is the substring mode).
+    If the tokenizer ever changes, this fails and the docs need updating."""
+    await kb.create_kb("kb1")
+    body = "# 策略\n\n我们的服务采用蓝绿发布策略完成上线。\n"
+    await _ingest(kb, "kb1", "policy.md", body.encode("utf-8"))
+
+    result = await kb.service.search(kb_name="kb1", query="蓝绿发布", top_k=5)
+    assert result.passages == ()

@@ -232,7 +232,9 @@ compute content_sha256 of the new markdown body
              → audit KB_DOCUMENT_UPDATED  (or _INGESTED on first index)
 ```
 
-`coffer kb reindex <name>` 重新扫描 `docs/` 目录找增量，逐文件运行该例程，从文件重建全部 SQLite 状态。
+`coffer kb reindex <name>` 重新扫描 `docs/` 目录找增量，逐文件运行该例程，从文件重建全部 SQLite 状态。该扫描还会清理 markdown 文件被带外删除的 `documents` 行，计入可选的 `ReindexResult.documents_removed`；因 embed 降级而只做了 keyword 索引的文档计入可选的 `documents_degraded`。
+
+当 embed 降级（embedding provider 不可用）时，该例程对文档只做 keyword 索引，并持久化一个**空字符串 `content_sha256`** —— 一个刻意永不匹配的哨兵值，使下一次对账重试 embed，而不是把该文档当作已是最新。这个空值可能出现在线上契约的 `DocumentOut` 里。
 
 ## 级联与完整性规则
 

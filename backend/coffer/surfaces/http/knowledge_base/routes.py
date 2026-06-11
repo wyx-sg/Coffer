@@ -246,6 +246,8 @@ async def reindex(
         documents_scanned=reindexed + skipped,
         documents_reindexed=reindexed,
         documents_skipped=skipped,
+        documents_removed=stats.get("removed", 0),
+        documents_degraded=stats.get("degraded", 0),
     )
 
 

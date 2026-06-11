@@ -156,3 +156,29 @@ def test_every_mapped_component_is_in_contract() -> None:
         components = set(_load(path)["components"]["schemas"])
         unmapped = components - set(mapping)
         assert not unmapped, f"{path.name}: contract components not in the mapping: {unmapped}"
+
+
+def test_retrieval_mode_enum_values_match_code() -> None:
+    """Enum VALUES are the one drift class the field-coverage check waves
+    through — pin them against the domain literal (review gap)."""
+    from coffer.domain.knowledge.retrieval import RETRIEVAL_MODES
+
+    for path in (_KB_CONTRACT, _MEM_CONTRACT):
+        components = _load(path)["components"]["schemas"]
+        assert set(components["RetrievalMode"]["enum"]) == set(RETRIEVAL_MODES), path.name
+
+
+def test_memory_scope_enum_values_match_wire() -> None:
+    components = _load(_MEM_CONTRACT)["components"]["schemas"]
+    # Store-level scope (MemoryStoreOut.scope).
+    assert set(components["Scope"]["enum"]) == {"global", "project"}
+    # Recall-request scope is an inline enum: project-only / global-only / both.
+    recall_scope = components["RecallRequest"]["properties"]["scope"]
+    assert set(recall_scope["enum"]) == {"global", "project", "both"}
+
+
+def test_error_envelope_shape_is_declared() -> None:
+    for path in (_KB_CONTRACT, _MEM_CONTRACT):
+        envelope = _load(path)["components"]["schemas"]["ErrorEnvelope"]
+        error_props = envelope["properties"]["error"]["properties"]
+        assert {"code", "message", "details"} <= set(error_props), path.name

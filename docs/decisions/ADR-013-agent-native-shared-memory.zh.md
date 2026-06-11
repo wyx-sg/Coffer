@@ -44,7 +44,7 @@ store 如何在不重新引入分叉副本的前提下触达多个 agent。
   `MEMORY.md` 索引。这就是 Claude Code 的 auto-memory 格式，*正是为了*让 Claude
   投影能是一个原生目录 symlink（无渲染、无有损往返）才把它选作规范格式。
 - **两层作用域。** global 事实存在 `WORKSPACE_GLOBAL_PROJECT_ID` 哨兵 store 里
-  （即既有的 F0x 哨兵 —— 不新造）；per-project 事实存在
+  （即既有哨兵 `00000000000000000000000000` —— 不新造）；per-project 事实存在
   `projects/<project-ulid>/`。`remember(scope=project)` 经 MCP shim 上报的
   cwd → git-root 解析到对应项目 store；`recall` 默认查两层。
 - **投影矩阵。**

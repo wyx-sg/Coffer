@@ -19,6 +19,7 @@ from pathlib import Path
 from coffer.application.knowledge.locks import StoreLocks
 from coffer.application.knowledge.reindex import Reindexer
 from coffer.application.knowledge.retrieval import KnowledgeRetrieval
+from coffer.application.memory.ports import MemoryDocumentRepo
 from coffer.domain.knowledge.document import KIND_MEMORY, Document
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge.retrieval import StoreRef
@@ -81,6 +82,13 @@ class MemoryReconciler:
         self._retrieval = retrieval
         self._reindexer = reindexer
         self._locks = StoreLocks()
+
+    def lock_for(self, store_name: str) -> asyncio.Lock:
+        """The per-store lock guarding this reconciler's index mutations.
+
+        Store teardown acquires it too, so a racing reconcile can't re-insert
+        rows for a store being deleted."""
+        return self._locks.lock(KIND_MEMORY, store_name)
 
     async def reconcile(
         self, *, store: StoreRef, embedding: EmbeddingConfig | None, force: bool = False
@@ -174,10 +182,6 @@ class MemoryReconciler:
             await index.delete_chunks(fact_id)
             await self._documents.delete_document(KIND_MEMORY, store.resource_name, fact_id)
 
-
-# The repo port (structurally the substrate ``DocumentRepo``) lives in
-# ``ports.py`` so both ``sync.py`` and ``service.py`` share one definition.
-from coffer.application.memory.ports import MemoryDocumentRepo  # noqa: E402
 
 __all__ = [
     "MemoryDocumentRepo",

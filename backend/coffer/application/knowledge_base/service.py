@@ -112,15 +112,20 @@ class KnowledgeBaseService:
         """Ingest one uploaded file: size check → source dedup → convert →
         clean → frontmatter → write ``docs/``+``raw/`` → reindex → audit."""
         config = await self.get_kb_config(kb_name)
-        doc = await self._pipeline.ingest(
+        doc, replaced = await self._pipeline.ingest(
             kb_name=kb_name,
             filename=filename,
             raw_bytes=raw_bytes,
             config=config,
             replace=replace,
         )
+        # A replace overwrite of an existing source is an UPDATE in the audit
+        # trail (FR-016), not a second ingest.
+        event = (
+            AuditEventType.KB_DOCUMENT_UPDATED if replaced else AuditEventType.KB_DOCUMENT_INGESTED
+        )
         await self._audit.record(
-            AuditEventType.KB_DOCUMENT_INGESTED.value,
+            event.value,
             ref=ResourceRef(KIND_KNOWLEDGE_BASE, kb_name),
             actor=actor,
             details={

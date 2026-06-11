@@ -7,7 +7,6 @@ Both faces share this repo, scoped by ``(kind, resource_name)``.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import delete as sa_delete
@@ -202,11 +201,3 @@ class DocumentRepo:
             result = await session.execute(stmt)
             await session.commit()
             return result.rowcount or 0
-
-    async def all_document_ids(self, kind: str, resource_name: str) -> Sequence[str]:
-        async with self._sm() as session:
-            stmt = select(DocumentModel.id).where(
-                DocumentModel.kind == kind,
-                DocumentModel.resource_name == resource_name,
-            )
-            return [r[0] for r in (await session.execute(stmt)).all()]

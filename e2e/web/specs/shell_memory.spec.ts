@@ -76,22 +76,25 @@ acceptance("007-memory", "clear a memory scope", async ({ page }) => {
 acceptance("007-memory", "user adds a fact", async ({ page }) => {
   const factText = `e2e ui fact ${Date.now().toString(36)}`;
 
-  // Navigate /memory → the global store's detail page via the stores table.
-  await page.goto("/memory");
-  await page.getByText("global", { exact: true }).first().click();
-  await expect(page.getByRole("heading", { name: "Add fact" })).toBeVisible();
+  try {
+    // Navigate /memory → the global store's detail page via the stores table.
+    await page.goto("/memory");
+    await page.getByText("global", { exact: true }).first().click();
+    await expect(page.getByRole("heading", { name: "Add fact" })).toBeVisible();
 
-  // Fill the form and submit through the real DOM.
-  await page.locator("#fact-body").fill(factText);
-  await page.getByRole("button", { name: "Add fact" }).click();
+    // Fill the form and submit through the real DOM.
+    await page.locator("#fact-body").fill(factText);
+    await page.getByRole("button", { name: "Add fact" }).click();
 
-  // The fact appears in the list without a reload.
-  await expect(page.getByText(factText).first()).toBeVisible();
-
-  // Cleanup: clear the scope so reruns against a reused daemon stay isolated.
-  const { token, port } = readDaemonToken();
-  await fetch(`http://127.0.0.1:${port}/api/v1/memory_stores/global/facts`, {
-    method: "DELETE",
-    headers: { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e" },
-  });
+    // The fact appears in the list without a reload.
+    await expect(page.getByText(factText).first()).toBeVisible();
+  } finally {
+    // Clear the scope even on failure so reruns against a reused daemon stay
+    // isolated (safe under workers:1 — nothing else shares the store mid-run).
+    const { token, port } = readDaemonToken();
+    await fetch(`http://127.0.0.1:${port}/api/v1/memory_stores/global/facts`, {
+      method: "DELETE",
+      headers: { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e" },
+    });
+  }
 });

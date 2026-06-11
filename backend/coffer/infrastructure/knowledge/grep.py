@@ -13,7 +13,7 @@ import logging
 import shutil
 from pathlib import Path
 
-from coffer.domain.errors import EngineUnavailable
+from coffer.domain.errors import EngineUnavailable, GrepPatternInvalid
 from coffer.domain.knowledge.retrieval import GrepHit, GrepResult
 
 DEFAULT_MAX_MATCHES = 200
@@ -62,7 +62,7 @@ class RipgrepGrep:
         except OSError as exc:  # pragma: no cover - rg present but unexecutable
             raise EngineUnavailable("ripgrep", f"failed to run rg: {exc}") from exc
         try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
         except TimeoutError:
             # Kill the still-running rg (it would otherwise leak) and report
             # the truncation — a timeout is not "no matches".
@@ -73,6 +73,11 @@ class RipgrepGrep:
                 extra={"docs_dir": docs_dir, "timeout_s": self._timeout},
             )
             return GrepResult(truncated=True)
+        # rg exits 0 on matches, 1 on no matches, 2 on error (e.g. an invalid
+        # regex). An error must surface, not masquerade as "no matches".
+        if proc.returncode == 2:
+            detail = stderr.decode("utf-8", errors="replace").strip().splitlines()
+            raise GrepPatternInvalid(pattern, detail[0] if detail else "ripgrep error")
         hits = _parse(stdout.decode("utf-8", errors="replace"), cap + 1)
         truncated = len(hits) > cap
         return GrepResult(hits=tuple(hits[:cap]), truncated=truncated)

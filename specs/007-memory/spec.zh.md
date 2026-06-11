@@ -40,7 +40,7 @@
 **代表性场景**：
 
 - 在 global 作用域 remember
-- 在 project 作用域 remember
+- agent 记住一条项目事实
 - project 作用域由 agent 的工作目录解析得到
 - recall 跨 project 与 global 两个作用域
 
@@ -248,7 +248,7 @@
 **检索**
 
 - **FR-008**：recall MUST 使用与 knowledge base 共享的统一检索引擎：`grep`（真实服务 —— ripgrep 扫该 store 的事实文件；对 FTS5 无法分词的内容必不可少，如 CJK）、`keyword`（FTS5 BM25，默认）、`vector`（sqlite-vec 配可配置的 embedding provider）。当请求 `vector` 但未配置 embedding provider 时，recall MUST 回退到 `keyword` 并以布尔值在响应里标注此次回退 —— 绝不阻塞。MCP `coffer__recall` 的响应包含该 `fallback` 布尔值。
-- **FR-009**：`coffer__recall` MUST 默认跨 project 与 global 两个 store；跨 store 的结果用倒数排名融合（reciprocal rank fusion）合并（逐 store 的分数跨模式/跨 store 不可比；每条命中保留其逐 store 分数，只有合并后的顺序来自融合）。结果带 id、text、score、source、time —— `time` 是事实的 `updated_at`，`source` 是 `<scope>:<fact file path>`。默认 `top_k` 为 5；调用方 MAY 指定 1–20。
+- **FR-009**：`coffer__recall` MUST 默认跨 project 与 global 两个 store（显式给出 `scope` 时收窄到单个 store：`project` = 仅项目 store，`global` = 仅 global store）；跨 store 的结果用倒数排名融合（reciprocal rank fusion）合并（逐 store 的分数跨模式/跨 store 不可比；每条命中保留其逐 store 分数，只有合并后的顺序来自融合）。结果带 id、text、score、source、time —— `time` 是事实的 `updated_at`，`source` 是 `<scope>:<fact file path>`。默认 `top_k` 为 5；调用方 MAY 指定 1–20。
 - **FR-010**：memory MUST 用 **lazy reindex-on-read**：`recall` 先按内容哈希扫描事实目录的增量（新增/变更/删除文件）并对账索引，再搜索，使带外编辑（含 Claude 的 symlink 编辑）即时可见，无需文件系统 watcher。
 
 **投影与绑定**
@@ -260,7 +260,7 @@
 
 **通过 MCP 集成 agent**
 
-- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, top_k?)`、`coffer__remember(text, scope?, type?)`、`coffer__update_memory(id, text)`、`coffer__forget(id)`、`coffer__list_memory(scope?)`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。
+- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, mode?, top_k?)`（`mode` ∈ `grep` | `keyword` | `vector`）、`coffer__remember(text, scope?, type?)`、`coffer__update_memory(id, text)`、`coffer__forget(id)`、`coffer__list_memory(scope?)`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。
 - **FR-016**：这些内置 memory 工具调用 MUST 共用既有调用日志面（`mcp_invocations` 一行：工具名 + who/when/duration/outcome，不记参数也不记返回内容）。
 
 **Surfaces**
@@ -273,7 +273,7 @@
 
 **迁移**
 
-- **FR-019**：本分支未发布；**没有数据迁移**。单个迁移 MUST 删除 `memory_records`、删掉任何 chroma/LlamaIndex 目录、创建全新统一 schema。旧的 mem0/chroma 文本不迁移。
+- **FR-019**：本分支未发布；**没有数据迁移**。单个迁移 MUST 删除 `memory_records` 并创建全新统一 schema。预发布构建遗留在磁盘上的旧引擎目录（chroma/LlamaIndex）原地废弃 —— 没有任何代码再读它们 —— 而非删除。旧的 mem0/chroma 文本不迁移。
 
 **投影 surface**
 

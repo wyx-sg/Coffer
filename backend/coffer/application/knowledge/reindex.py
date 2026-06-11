@@ -25,7 +25,6 @@ from dataclasses import dataclass
 
 from coffer.application.knowledge.retrieval import EmbedderFactory
 from coffer.domain.errors import EngineUnavailable
-from coffer.domain.knowledge.document import Document
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge.index import KnowledgeIndex
 
@@ -117,10 +116,3 @@ class Reindexer:
             )
             return None, False
         return vectors, True
-
-
-def doc_with_sha(doc: Document, sha: str) -> Document:
-    """A copy of ``doc`` with ``content_sha256`` replaced (frozen dataclass)."""
-    from dataclasses import replace
-
-    return replace(doc, content_sha256=sha)

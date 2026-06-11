@@ -15,7 +15,6 @@ from pathlib import Path
 from coffer.application.memory.service_helpers import du_bytes
 from coffer.domain.errors import MemoryNotFound
 from coffer.domain.memory.config import MemoryStoreConfig
-from coffer.domain.memory.fact import MemoryFact
 from coffer.domain.memory.scope import ResolvedScope
 from coffer.infrastructure.memory.files import FactFile, scan_store_dir
 
@@ -29,17 +28,11 @@ def read_fact(store_dir: Path, fact_id: str) -> FactFile:
     return ff
 
 
-def list_facts_in_dir(store_dir: Path, *, limit: int, offset: int) -> tuple[list[MemoryFact], int]:
-    """Facts in a store, newest-updated first, with the total before paging."""
-    files, total = list_fact_files_in_dir(store_dir, limit=limit, offset=offset)
-    return [ff.fact for ff in files], total
-
-
 def list_fact_files_in_dir(
     store_dir: Path, *, limit: int, offset: int
 ) -> tuple[list[FactFile], int]:
-    """Like :func:`list_facts_in_dir` but keeps each fact's on-disk path — one
-    directory scan serves the whole page (no per-fact rescans)."""
+    """Fact files in a store, newest-updated first, with the total before
+    paging — one directory scan serves the whole page (no per-fact rescans)."""
     scan = scan_store_dir(store_dir)
     files = sorted(
         scan.files.values(),

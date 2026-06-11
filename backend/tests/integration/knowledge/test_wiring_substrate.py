@@ -75,3 +75,22 @@ async def test_drop_store_without_dimensions_drops_vec_table(substrate, tmp_path
     finally:
         conn.close()
     assert row is None
+
+
+def test_embedder_cache_reuses_per_config(substrate) -> None:
+    """One embedder per config: the same config must return the SAME instance
+    (cooldown state + HTTP pool are shared) and a changed config a different
+    one (review gap: cache-key correctness untested)."""
+    from coffer.domain.knowledge.embedder import EmbeddingConfig
+
+    _documents, retrieval, _reindexer = build_substrate(substrate.sm)
+    factory = retrieval._embedder_factory  # the cached factory under test
+
+    a1 = factory(EmbeddingConfig(provider="local", model="m1", dimensions=8))
+    a2 = factory(EmbeddingConfig(provider="local", model="m1", dimensions=8))
+    b = factory(EmbeddingConfig(provider="local", model="m1", dimensions=16))
+    c = factory(EmbeddingConfig(provider="local", model="m2", dimensions=8))
+
+    assert a1 is a2
+    assert a1 is not b
+    assert a1 is not c

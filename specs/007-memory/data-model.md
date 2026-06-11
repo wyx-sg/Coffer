@@ -8,7 +8,7 @@ Entities, ports, the unified SQLite schema (shared with the knowledge base), and
 
 ### `MemoryStoreConfig` (`domain/memory/config.py`)
 
-Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "memory"`. Shares the retrieval/embedding config shape with the KB face.
+Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "memory"`. Shares the retrieval-mode vocabulary and embedding semantics with the KB face; the field layout deliberately differs — see below.
 
 | Field                      | Type                                       | Notes                                                                                    |
 | -------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------- |
@@ -217,6 +217,8 @@ compute content_sha256 of the new markdown
 ```
 
 All memory write paths (remember, update, user edit, lazy reindex scan) funnel through this one routine.
+
+When a vector-enabled store's embed degrades (embedding provider unavailable), the routine indexes keyword-only and persists an **empty-string `content_sha256`** — a deliberate never-matching sentinel so the next lazy reconcile retries the embed instead of treating the fact as up to date.
 
 ## Audit events added
 

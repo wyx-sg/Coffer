@@ -40,7 +40,7 @@ Some facts are about the developer everywhere ("prefers tabs over spaces"); othe
 **Covering scenarios**:
 
 - remember at global scope
-- remember at project scope
+- agent remembers a project fact
 - project scope resolves from the agent's working directory
 - recall spans project and global scope
 
@@ -248,7 +248,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 **Retrieval**
 
 - **FR-008**: Recall MUST use the unified retrieval engine shared with the knowledge base: `grep` (served for real — ripgrep over the store's fact files; essential for content FTS5 cannot tokenize, e.g. CJK), `keyword` (FTS5 BM25, the default), and `vector` (sqlite-vec with a configurable embedding provider). When `vector` is requested but no embedding provider is configured, recall MUST fall back to `keyword` and flag the fallback as a boolean in the response — never block. The MCP `coffer__recall` response includes that `fallback` boolean.
-- **FR-009**: `coffer__recall` MUST default to spanning both the project and global stores; cross-store results are merged by reciprocal rank fusion (per-store scores are not comparable across modes/stores; each hit keeps its per-store score, only the merged order comes from the fusion). Results carry id, text, score, source, and time — `time` is the fact's `updated_at` and `source` is `<scope>:<fact file path>`. Default `top_k` is 5; callers MAY specify 1–20.
+- **FR-009**: `coffer__recall` MUST default to spanning both the project and global stores (an explicit `scope` narrows recall to one store: `project` = the project store only, `global` = the global store only); cross-store results are merged by reciprocal rank fusion (per-store scores are not comparable across modes/stores; each hit keeps its per-store score, only the merged order comes from the fusion). Results carry id, text, score, source, and time — `time` is the fact's `updated_at` and `source` is `<scope>:<fact file path>`. Default `top_k` is 5; callers MAY specify 1–20.
 - **FR-010**: Memory MUST use **lazy reindex-on-read**: `recall` first scans the fact directory for deltas (added/changed/removed files by content hash) and reconciles the index before searching, so out-of-band edits (including Claude's symlink edits) are visible immediately with no filesystem watcher.
 
 **Projection & binding**
@@ -260,7 +260,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Agent integration via MCP**
 
-- **FR-015**: Coffer's MCP gateway MUST expose built-in tools `coffer__recall(query, scope?, top_k?)`, `coffer__remember(text, scope?, type?)`, `coffer__update_memory(id, text)`, `coffer__forget(id)`, and `coffer__list_memory(scope?)`, namespaced under the reserved `coffer__` prefix. `remember` defaults to `scope=project`; `recall` defaults to both scopes.
+- **FR-015**: Coffer's MCP gateway MUST expose built-in tools `coffer__recall(query, scope?, mode?, top_k?)` (`mode` ∈ `grep` | `keyword` | `vector`), `coffer__remember(text, scope?, type?)`, `coffer__update_memory(id, text)`, `coffer__forget(id)`, and `coffer__list_memory(scope?)`, namespaced under the reserved `coffer__` prefix. `remember` defaults to `scope=project`; `recall` defaults to both scopes.
 - **FR-016**: Built-in memory tool invocations MUST share the existing invocation-logging surface (one `mcp_invocations` row: tool name + who/when/duration/outcome only — no arguments or returned content).
 
 **Surfaces**
@@ -273,7 +273,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Migration**
 
-- **FR-019**: This branch is unreleased; there is **no data migration**. A single migration MUST drop `memory_records`, delete any chroma/LlamaIndex directories, and create the fresh unified schema. Old mem0/chroma text is not migrated.
+- **FR-019**: This branch is unreleased; there is **no data migration**. A single migration MUST drop `memory_records` and create the fresh unified schema. Legacy on-disk engine directories (chroma/LlamaIndex) from pre-release builds are abandoned in place — nothing reads them — rather than deleted. Old mem0/chroma text is not migrated.
 
 **Projection surface**
 
