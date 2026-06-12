@@ -79,6 +79,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
 )
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
+from coffer.surfaces.http.settings_routes import router as settings_router
 from coffer.surfaces.http.skill_routes import router as skill_router
 
 
@@ -297,6 +298,7 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(audit_router)
     app.include_router(retention_router)
     app.include_router(credential_router)
+    app.include_router(settings_router)
     # Agent + skill kind routes (specs 004-agent-registry, 005-skill-manager)
     app.include_router(agent_router)
     app.include_router(agent_config_router)

@@ -255,3 +255,20 @@ class McpServerStatusOut(BaseModel):
     """Cheap per-server status, derived from persisted state (no spawn)."""
 
     status: Literal["healthy", "failing", "unknown"]
+
+
+# --- Settings ---
+
+
+class CredentialSettingsOut(BaseModel):
+    """Where the credential-store master key currently lives."""
+
+    master_key_storage: Literal["file", "keychain"] = Field(
+        description="file = ~/.coffer/master.key (default); keychain = OS keychain entry."
+    )
+
+
+class CredentialSettingsIn(BaseModel):
+    """Request body to relocate the master key."""
+
+    master_key_storage: Literal["file", "keychain"]

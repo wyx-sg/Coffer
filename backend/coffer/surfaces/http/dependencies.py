@@ -210,6 +210,22 @@ def get_credential_store() -> Any:
     return _credential_store
 
 
+_master_key_manager: Any | None = None
+
+
+def set_master_key_manager(manager: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _master_key_manager
+    _master_key_manager = manager
+
+
+def get_master_key_manager() -> Any:
+    """FastAPI Depends() target — actual type is MasterKeyManager."""
+    if _master_key_manager is None:
+        raise RuntimeError("master key manager not initialised")
+    return _master_key_manager
+
+
 # --- Agent kind-specific dependency providers (spec 004-agent-registry) ---
 
 _agent_service: Any | None = None
