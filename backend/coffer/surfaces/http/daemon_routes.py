@@ -42,6 +42,11 @@ def set_port(port: int) -> None:
     _PORT = port
 
 
+def get_port() -> int:
+    """The port the daemon is serving on (set by the composition root)."""
+    return _PORT
+
+
 def set_started_at(started_at: datetime) -> None:
     """Override the module-level started_at from daemon.json (set by composition root)."""
     global _STARTED_AT

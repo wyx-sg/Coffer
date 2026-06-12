@@ -48,6 +48,7 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "agents": "Agents",
+    "channels": "Channels",
     "audit": "Audit log",
     "chat": "Chat"
   },
@@ -421,7 +422,10 @@
     "BAD_REQUEST": "The request was rejected as malformed.",
     "NOT_FOUND": "Not found.",
     "FORBIDDEN": "This action is not permitted.",
-    "AGENT_CONFIG_DIR_REGISTERED": "An agent for this config directory is already registered."
+    "AGENT_CONFIG_DIR_REGISTERED": "An agent for this config directory is already registered.",
+    "CHANNEL_NOT_PAIRED": "This channel has no paired peer yet",
+    "CHANNEL_NOT_RUNNING": "The channel adapter is not running",
+    "CHANNEL_SEND_FAILED": "Delivery to the IM platform failed"
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -958,5 +962,85 @@
       "allow": "Allow",
       "deny": "Deny"
     }
+  },
+  "channels": {
+    "title": "Channels",
+    "subtitle": "Connect the IM accounts you already use — Telegram and SeaTalk — to your agents.",
+    "add": "Add channel",
+    "loadFailed": "Failed to load channels",
+    "searchPlaceholder": "Search channels…",
+    "noMatches": "No channels match your search.",
+    "backToChannels": "Back to channels",
+    "paired": "Paired",
+    "notPaired": "Not paired",
+    "types": {
+      "telegram": "Telegram",
+      "seatalk": "SeaTalk"
+    },
+    "cols": {
+      "name": "Name",
+      "type": "Type",
+      "agent": "Default agent",
+      "state": "State",
+      "paired": "Paired"
+    },
+    "welcome": {
+      "title": "Talk to your agents from the IM apps you live in",
+      "body": "A channel connects one Telegram bot or SeaTalk app to Coffer's chat platform. Pair it with your own account, then message the bot to chat with an agent — replies, approvals, and notifications all arrive in the IM chat.",
+      "featureChat": {
+        "title": "Chat anywhere",
+        "body": "Messages route into an ordinary conversation; the agent's reply comes back to the IM chat."
+      },
+      "featurePair": {
+        "title": "Paired to you only",
+        "body": "A single-use pairing code binds the channel to your account; strangers are ignored silently."
+      },
+      "featureNotify": {
+        "title": "Push notifications",
+        "body": "Coffer can push a message to the paired owner — no inbound message required."
+      }
+    },
+    "dialog": {
+      "title": "Add channel",
+      "subtitle": "Secrets are stored in Coffer's credential store; the channel config only carries references.",
+      "type": "Type",
+      "name": "Name",
+      "botToken": "Bot token",
+      "appId": "App ID",
+      "appSecret": "App secret",
+      "signingSecret": "Signing secret",
+      "telegramHint": "The token BotFather gave you for the bot.",
+      "seatalkHint": "App ID, App Secret, and Signing Secret from the SeaTalk Open Platform app.",
+      "created": "Channel {{name}} registered"
+    },
+    "status": {
+      "title": "Status",
+      "adapter": "Adapter",
+      "running": "Running",
+      "stopped": "Stopped",
+      "peer": "Paired peer",
+      "chatId": "Chat ID",
+      "pairedAt": "Paired at",
+      "conversation": "Active conversation",
+      "none": "No active conversation",
+      "pendingPairing": "A pairing code is outstanding."
+    },
+    "pairing": {
+      "title": "Pairing",
+      "instruction": "Generate a code, then send it to the bot from your own account. The sender becomes this channel's sole owner — re-pairing replaces the previous one.",
+      "generate": "Generate pairing code",
+      "generating": "Generating…",
+      "copy": "Copy",
+      "copied": "Copied",
+      "expires": "Expires at {{time}} (single use)."
+    },
+    "callback": {
+      "title": "SeaTalk callback",
+      "endpoint": "Endpoint",
+      "listener": "Listener",
+      "hint": "Point a tunnel (cloudflared, ngrok) at this address and register the public URL on the SeaTalk Open Platform."
+    },
+    "deleteTitle": "Delete channel",
+    "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed."
   }
 }

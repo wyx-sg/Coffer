@@ -44,6 +44,7 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 | `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。workspace 修订新增了未托管 skill 扫描（把手工放置的 skill adopt 进主库）以及逐 agent 的 follow-master-library 策略（开关 + 排除列表，存于 agent 配置），由同步引擎负责调和。 |
 | `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | 共享知识基底的 **KB 面**。任意格式上传 → 转成 markdown（经一个 `MarkdownConverter` 端口做 any-format→markdown，默认 MarkItDown），`docs/<doc-id>.md` 即事实 + `raw/` 作出处。agent 只读；grep / FTS5 / sqlite-vec 检索。见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)。 |
 | `memory`         | [007-memory](../../specs/007-memory/spec.md)                 | 同一基底的 **memory 面**。逐条 `<slug>.md` + 重新生成的 `MEMORY.md` 即事实，两层作用域（global 哨兵 + per-project ULID）。经 MCP 读写 + 原生投影（Claude symlink / Codex 托管块）跨 agent 共享 —— 一个规范 store，不分叉。见 [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)。    |
+| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与聊天平台的 agent 对话、应答审批提示并接收通知。薄 adapter 架在 spec-008 的接缝之上（[ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)）。                       |
 
 `knowledge_base` 与 `memory` 是**同一个知识基底 (knowledge substrate)** 的两副
 面孔：**落盘的 markdown 文件是事实源；SQLite 是可重建索引**（`coffer reindex`
@@ -68,14 +69,17 @@ backend/coffer/
 │   ├── audit.py
 │   ├── mcp/                      # MCP 特定的值对象
 │   ├── agent/                   # agent 特定的值对象 (config 等)
-│   └── skill/                   # skill 特定的值对象
+│   ├── skill/                   # skill 特定的值对象
+│   └── channel/                 # channel 配置、信封、seatalk 签名
 ├── application/
 │   ├── resource_service.py       # 与 kind 无关的 CRUD；接受 kinds 字典
 │   ├── audit_service.py
 │   ├── retention_service.py
+│   ├── credentials/              # 共享的 CredentialResolver (ref → secret)
 │   ├── mcp/                      # MCP 特定的应用层服务
 │   ├── agent/                   # agent 服务 + make_agent_kind
 │   ├── skill/                   # skill 服务 + make_skill_kind
+│   ├── channel/                 # adapter 协议、配对、入站、运行时
 │   └── fs/                      # 文件系统浏览服务
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (统一元数据)
@@ -83,11 +87,13 @@ backend/coffer/
 │   ├── daemon/                   # pid_lock、端口分配
 │   ├── mcp/                      # 子进程、HTTP 上游客户端
 │   ├── agent/                   # agent 配置文件存储
-│   └── skill/                   # 主存储、源拉取器、同步引擎
+│   ├── skill/                   # 主存储、源拉取器、同步引擎
+│   └── channel/                 # telegram/seatalk 传输、peer 仓储、渲染
 └── surfaces/
     ├── http/                     # FastAPI app + 每个 kind 的子路由 (含 agent/skill/fs 路由)
     ├── cli/                      # Typer app + 每个 kind 的子命令组
-    └── shim/                     # coffer-mcp-shim 入口
+    ├── shim/                     # coffer-mcp-shim 入口
+    └── callback/                 # channel 回调监听器 (独立进程)
 ```
 
 组装入口 (`surfaces/http/app.py`、`surfaces/cli/main.py`) 显式地装配每个
@@ -115,12 +121,16 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 | MCP protocol                   | daemon                  | `/mcp` HTTP/SSE 端点，承载 MCP JSON-RPC。                         |
 | CLI (`coffer …`)               | 短生命周期子进程        | 通过 loopback HTTP 调用 daemon。                                  |
 | Stdio shim (`coffer-mcp-shim`) | 每个 MCP 客户端会话一份 | `stdin/stdout ↔ daemon HTTP/SSE` 转发器；检测 daemon，否则拉起。 |
+| Callback listener              | daemon 拉起的子进程     | 只服务带签名的 channel webhook (`POST /seatalk/{channel}`)；loopback 端口，公网侧由用户自行运行的隧道承接 (spec 009)。 |
 
 ## 进程 (Processes)
 
 - **`coffer-daemon`** — 长生命周期的 FastAPI 服务，监听
   `127.0.0.1:<auto-port>`。持有全部状态；唯一的 SQLite 写入者。
 - **Stdio shim** — 短生命周期；其生命周期绑定到单个 MCP 客户端进程。
+- **Callback listener** — daemon 拉起的子进程，只在
+  `127.0.0.1:<callback-port>` 上服务带签名的 channel 回调路径；在任何
+  SeaTalk channel 处于启用状态时运行 (spec 009，[ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md))。
 
 两者通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + token，权限位
 `0600`)。见

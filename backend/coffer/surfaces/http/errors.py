@@ -88,6 +88,10 @@ _STATUS: dict[str, int] = {
     "UNKNOWN_AGENT": 400,
     "AGENT_CONFIG_REJECTED": 400,
     "APPROVAL_NOT_FOUND": 409,
+    # channels (spec 009)
+    "CHANNEL_NOT_PAIRED": 409,
+    "CHANNEL_NOT_RUNNING": 409,
+    "CHANNEL_SEND_FAILED": 502,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a
