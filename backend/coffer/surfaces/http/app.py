@@ -78,6 +78,7 @@ from coffer.surfaces.http.credential_composition import (
 from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
+    get_master_key_manager,
     get_mcp_session_factory,
     set_audit_service,
     set_embedding_config_service,
@@ -103,6 +104,8 @@ from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.settings_routes import router as settings_router
 from coffer.surfaces.http.skill_routes import router as skill_router
+from coffer.surfaces.http.sync_routes import router as sync_router
+from coffer.surfaces.http.sync_wiring import start_sync, stop_sync
 from coffer.surfaces.http.wiring import (
     build_substrate,
     wire_chat,
@@ -142,9 +145,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine_with_pragmas(_db_url())
     sm = session_maker(engine)
 
-    credential_store = await init_credential_store(
-        engine, pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
-    )
+    db_path = pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
+    credential_store = await init_credential_store(engine, db_path)
 
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resource_svc = ResourceService(
@@ -271,6 +273,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retention_worker = worker
     app.state.retention_worker_task = worker_task
 
+    # Multi-machine sync (spec 010); worker is inert until the user enables it.
+    start_sync(app, resource_svc, audit, sm, db_path, get_master_key_manager())
+
     # Channel adapter reconciler (spec 009). Started after the daemon token is
     # published so the callback listener can be spawned with valid loopback
     # credentials on its first tick.
@@ -296,6 +301,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(Exception):
             await audit.record(AuditEventType.DAEMON_STOPPED.value, actor="system")
         worker.stop()
+        await stop_sync(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an
         # in-flight tick cannot resurrect adapters dispose() just stopped;
@@ -364,35 +370,18 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.state.kinds.setdefault("channel", make_channel_kind())
     cors.install(app)
     err_handlers.register(app)
-    app.include_router(daemon_routes.router)
-    app.include_router(resource_router)
-    app.include_router(audit_router)
-    app.include_router(retention_router)
-    app.include_router(credential_router)
-    app.include_router(settings_router)
-    app.include_router(embedding_router)
-    # Agent + skill kind routes (specs 004-agent-registry, 005-skill-manager)
-    app.include_router(agent_router)
-    app.include_router(agent_config_router)
-    app.include_router(agent_workspace_router)
-    app.include_router(agent_unmanaged_skill_router)
-    app.include_router(fs_router)
-    app.include_router(skill_router)
-    # KB router (spec 006-knowledge-base)
-    app.include_router(kb_router)
-    # MCP-specific routers
-    app.include_router(mcp_protocol_router)
-    app.include_router(mcp_capability_router)
-    app.include_router(mcp_invocation_router)
-    # Memory router (spec 007-memory)
-    app.include_router(memory_router)
-    # Memory projection router (spec 007-memory; bridges memory + agent)
-    app.include_router(projection_router)
-    app.include_router(agent_native_router)
-    # Agent chat routers (spec 008)
-    app.include_router(chat_conversation_router)
-    app.include_router(chat_turn_router)
-    app.include_router(chat_model_router)
-    # Channel routes (spec 009)
-    app.include_router(channel_router)
+    # Every sub-router, grouped by spec. The kind-agnostic core, then per-kind
+    # and per-feature routers (agent/skill 004/005, KB 006, MCP, memory 007,
+    # chat 008, channels 009, sync 010).
+    for sub_router in (
+        daemon_routes.router, resource_router, audit_router, retention_router,
+        credential_router, settings_router, sync_router, embedding_router,
+        agent_router, agent_config_router, agent_workspace_router,
+        agent_unmanaged_skill_router, fs_router, skill_router, kb_router,
+        mcp_protocol_router, mcp_capability_router, mcp_invocation_router,
+        memory_router, projection_router, agent_native_router,
+        chat_conversation_router, chat_turn_router, chat_model_router,
+        channel_router,
+    ):
+        app.include_router(sub_router)
     return app

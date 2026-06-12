@@ -17,6 +17,7 @@ from coffer.surfaces.cli import (
     resource_cmd,
     retention_cmd,
     skill_cmd,
+    sync_cmd,
 )
 from coffer.surfaces.cli import mcp as mcp_cmd
 
@@ -51,6 +52,7 @@ app.add_typer(knowledge_base_cmd.app, name="kb")
 app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(chat_cmd.app, name="chat")
 app.add_typer(model_cmd.app, name="model")
+app.add_typer(sync_cmd.app, name="sync")
 
 
 def run() -> None:

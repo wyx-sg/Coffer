@@ -75,7 +75,7 @@ class MasterKeyFileInvalid(CofferError):  # noqa: N818
         self.reason = reason
 
 
-class SyncSerializationError(CofferError):  # noqa: N818
+class SyncSerializationError(CofferError):
     """A workspace resource document is malformed on import. Maps to 422."""
 
     code = "SYNC_SERIALIZATION_INVALID"
