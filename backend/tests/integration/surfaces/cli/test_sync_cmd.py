@@ -36,8 +36,12 @@ def sync_cli_daemon(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     app = create_app()
     set_active_token(_TOKEN)
     info = DaemonInfo(
-        version=1, pid=1, port=59820, token=_TOKEN,
-        started_at=dt.now(tz=UTC), binary_path="/test",
+        version=1,
+        pid=1,
+        port=59820,
+        token=_TOKEN,
+        started_at=dt.now(tz=UTC),
+        binary_path="/test",
     )
     fake = TestClient(
         app,

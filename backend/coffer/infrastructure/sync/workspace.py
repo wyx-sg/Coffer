@@ -129,9 +129,7 @@ class Workspace:
         target = self._root / _CREDENTIALS
         if not target.exists():
             return {}
-        return {
-            path.stem: path.read_bytes() for path in sorted(target.glob("*.enc"))
-        }
+        return {path.stem: path.read_bytes() for path in sorted(target.glob("*.enc"))}
 
     # --- inspection --------------------------------------------------------
 

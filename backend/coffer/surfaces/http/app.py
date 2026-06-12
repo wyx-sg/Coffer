@@ -54,28 +54,18 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.surfaces.http import cors, daemon_routes
 from coffer.surfaces.http import errors as err_handlers
-from coffer.surfaces.http.agent_config_routes import router as agent_config_router
-from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
-from coffer.surfaces.http.agent_unmanaged_skill_routes import router as agent_unmanaged_skill_router
-from coffer.surfaces.http.agent_workspace_routes import router as agent_workspace_router
 from coffer.surfaces.http.app_mcp_composition import (
     build_prunable_registry,
     reaper_kwargs_from_env,
     wire_mcp_kind,
 )
-from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.channel_routes import router as channel_router
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
-from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
-from coffer.surfaces.http.chat.model_routes import router as chat_model_router
-from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
     run_legacy_keychain_migration,
 )
-from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
     get_master_key_manager,
@@ -85,26 +75,13 @@ from coffer.surfaces.http.dependencies import (
     set_resource_service,
     set_retention_service,
 )
-from coffer.surfaces.http.embedding_routes import router as embedding_router
-from coffer.surfaces.http.fs_routes import router as fs_router
-from coffer.surfaces.http.knowledge_base import router as kb_router
-from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
-from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
-from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
-from coffer.surfaces.http.memory import router as memory_router
 from coffer.surfaces.http.migrations_runner import run_migrations
-from coffer.surfaces.http.projection_routes import agent_native_router
-from coffer.surfaces.http.projection_routes import router as projection_router
 from coffer.surfaces.http.projection_wiring import wire_projection
-from coffer.surfaces.http.resource_routes import router as resource_router
-from coffer.surfaces.http.retention_routes import router as retention_router
-from coffer.surfaces.http.settings_routes import router as settings_router
-from coffer.surfaces.http.skill_routes import router as skill_router
-from coffer.surfaces.http.sync_routes import router as sync_router
+from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_wiring import start_sync, stop_sync
 from coffer.surfaces.http.wiring import (
     build_substrate,
@@ -370,18 +347,5 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.state.kinds.setdefault("channel", make_channel_kind())
     cors.install(app)
     err_handlers.register(app)
-    # Every sub-router, grouped by spec. The kind-agnostic core, then per-kind
-    # and per-feature routers (agent/skill 004/005, KB 006, MCP, memory 007,
-    # chat 008, channels 009, sync 010).
-    for sub_router in (
-        daemon_routes.router, resource_router, audit_router, retention_router,
-        credential_router, settings_router, sync_router, embedding_router,
-        agent_router, agent_config_router, agent_workspace_router,
-        agent_unmanaged_skill_router, fs_router, skill_router, kb_router,
-        mcp_protocol_router, mcp_capability_router, mcp_invocation_router,
-        memory_router, projection_router, agent_native_router,
-        chat_conversation_router, chat_turn_router, chat_model_router,
-        channel_router,
-    ):
-        app.include_router(sub_router)
+    include_all_routers(app)
     return app

@@ -92,9 +92,7 @@ class SyncService:
             assert config.remote is not None
             await asyncio.to_thread(self._git.ensure_repo, config.remote, config.branch)
             await self._exporter.export()
-            await asyncio.to_thread(
-                self._git.commit_all, f"coffer sync from {self._machine_id}"
-            )
+            await asyncio.to_thread(self._git.commit_all, f"coffer sync from {self._machine_id}")
             if pull:
                 outcome = await asyncio.to_thread(self._git.pull, config.branch)
                 if outcome.is_conflict:

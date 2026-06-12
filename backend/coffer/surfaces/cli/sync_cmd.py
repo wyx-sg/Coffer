@@ -66,8 +66,13 @@ def init(
     with c:
         r = c.put(
             "/sync/config",
-            json={"remote": remote, "enabled": True, "auto": False,
-                  "interval_seconds": 300, "branch": branch},
+            json={
+                "remote": remote,
+                "enabled": True,
+                "auto": False,
+                "interval_seconds": 300,
+                "branch": branch,
+            },
         )
         _cli_client.check(r, verbose=verbose)
     _run(verbose)

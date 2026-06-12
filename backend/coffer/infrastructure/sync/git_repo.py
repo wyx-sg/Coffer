@@ -27,9 +27,7 @@ class GitRepo:
     def __init__(self, workspace: pathlib.Path) -> None:
         self._ws = workspace
 
-    def _run(
-        self, *args: str, check: bool = True
-    ) -> subprocess.CompletedProcess[str]:
+    def _run(self, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         proc = subprocess.run(
             ["git", *args],
             cwd=self._ws,

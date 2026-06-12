@@ -50,11 +50,7 @@ class _FakeConfig(BaseModel):
 
 
 def _kinds() -> dict[str, Kind]:
-    return {
-        "mcp_server": Kind(
-            name="mcp_server", display_name="MCP", config_schema=_FakeConfig
-        )
-    }
+    return {"mcp_server": Kind(name="mcp_server", display_name="MCP", config_schema=_FakeConfig)}
 
 
 class _NoKeyring:
@@ -107,9 +103,7 @@ async def _make_machine(name: str, root: Path, remote: Path, *, create_key: bool
     workspace = Workspace(root / "ws", trees=[("knowledge", knowledge)])
     git = GitRepo(root / "ws")
 
-    config_svc = SyncConfigService(
-        SqlAlchemySyncConfigRepo(sm), SqlAlchemySyncStateRepo(sm), audit
-    )
+    config_svc = SyncConfigService(SqlAlchemySyncConfigRepo(sm), SqlAlchemySyncStateRepo(sm), audit)
     await config_svc.update_config(
         remote=str(remote),
         enabled=True,
@@ -223,8 +217,12 @@ async def test_auto_sync_converges(tmp_path, remote) -> None:  # type: ignore[no
     # Enable auto-sync on both; interval 0 so each tick is due immediately.
     for m in (a, b):
         await m.config_svc.update_config(
-            remote=str(remote), enabled=True, auto=True,
-            interval_seconds=30, branch="main", actor="test",
+            remote=str(remote),
+            enabled=True,
+            auto=True,
+            interval_seconds=30,
+            branch="main",
+            actor="test",
         )
     a_worker = SyncWorker(a.service, a.config_svc)
     b_worker = SyncWorker(b.service, b.config_svc)

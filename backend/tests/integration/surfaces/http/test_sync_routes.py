@@ -75,9 +75,7 @@ async def client(tmp_path):  # type: ignore[no-untyped-def]
     cred_sync = CredentialSyncAdapter(db_path, master_key)
     workspace = Workspace(tmp_path / "ws", trees=[])
     git = GitRepo(tmp_path / "ws")
-    config_svc = SyncConfigService(
-        SqlAlchemySyncConfigRepo(sm), SqlAlchemySyncStateRepo(sm), audit
-    )
+    config_svc = SyncConfigService(SqlAlchemySyncConfigRepo(sm), SqlAlchemySyncStateRepo(sm), audit)
     service = SyncService(
         config=config_svc,
         git=git,
@@ -114,8 +112,13 @@ async def test_config_get_defaults_then_put(client) -> None:  # type: ignore[no-
     subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
     r = await client.put(
         "/api/v1/sync/config",
-        json={"remote": str(bare), "enabled": True, "auto": False,
-              "interval_seconds": 120, "branch": "main"},
+        json={
+            "remote": str(bare),
+            "enabled": True,
+            "auto": False,
+            "interval_seconds": 120,
+            "branch": "main",
+        },
     )
     assert r.status_code == 200
     assert r.json()["enabled"] is True
@@ -125,8 +128,13 @@ async def test_config_get_defaults_then_put(client) -> None:  # type: ignore[no-
 async def test_put_config_rejects_short_interval(client) -> None:  # type: ignore[no-untyped-def]
     r = await client.put(
         "/api/v1/sync/config",
-        json={"remote": "x", "enabled": False, "auto": False,
-              "interval_seconds": 5, "branch": "main"},
+        json={
+            "remote": "x",
+            "enabled": False,
+            "auto": False,
+            "interval_seconds": 5,
+            "branch": "main",
+        },
     )
     assert r.status_code == 422
     assert r.json()["error"]["code"] == "CONFIG_INVALID"
@@ -150,8 +158,13 @@ async def test_configure_and_run_clean(client) -> None:  # type: ignore[no-untyp
     subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
     await client.put(
         "/api/v1/sync/config",
-        json={"remote": str(bare), "enabled": True, "auto": False,
-              "interval_seconds": 300, "branch": "main"},
+        json={
+            "remote": str(bare),
+            "enabled": True,
+            "auto": False,
+            "interval_seconds": 300,
+            "branch": "main",
+        },
     )
     r = await client.post("/api/v1/sync/run")
     assert r.status_code == 200

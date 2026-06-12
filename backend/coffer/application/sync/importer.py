@@ -60,9 +60,7 @@ class SyncImporter:
         for ref, blob in blobs.items():
             await asyncio.to_thread(self._credentials.write_ciphertext, ref, blob)
 
-    async def _reconcile_resources(
-        self, docs: list[ResourceDoc], result: ImportResult
-    ) -> None:
+    async def _reconcile_resources(self, docs: list[ResourceDoc], result: ImportResult) -> None:
         current = {(r.kind, r.name): r for r in await self._resources.list()}
         wanted: set[tuple[str, str]] = set()
 

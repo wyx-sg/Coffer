@@ -46,9 +46,7 @@ def wire_sync(
     cred_sync = CredentialSyncAdapter(db_path, master_key)
     workspace = Workspace(root)
     git = GitRepo(root)
-    config_svc = SyncConfigService(
-        SqlAlchemySyncConfigRepo(sm), SqlAlchemySyncStateRepo(sm), audit
-    )
+    config_svc = SyncConfigService(SqlAlchemySyncConfigRepo(sm), SqlAlchemySyncStateRepo(sm), audit)
     service = SyncService(
         config=config_svc,
         git=git,
