@@ -7,12 +7,17 @@
 // Code / Codex memory, so this is the single source of truth). Resource pages
 // manage the store; the agent page binds it — matching the skills tab.
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
-import { getAgentNativeMemory, type AgentOut } from "@/lib/api/agents";
+import {
+  getAgentNativeMemory,
+  importAgentNativeMemory,
+  type AgentOut,
+} from "@/lib/api/agents";
 import { listFacts, type MemoryStoreOut } from "@/kinds/memory/api";
 import {
   useEstablishProjection,
@@ -143,20 +148,46 @@ function StoreProjectionRow({ store, agent }: { store: MemoryStoreOut; agent: Ag
 
 function NativeMemoryBanner({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const native = useQuery({
     queryKey: ["agent-native-memory", agent.name],
     queryFn: () => getAgentNativeMemory(agent.name),
   });
+  const takeover = useMutation({
+    mutationFn: () => importAgentNativeMemory(agent.name),
+    onSuccess: () => {
+      // The takeover provisions stores + projections and flips dirs to managed;
+      // refresh every view that reflects that state.
+      void qc.invalidateQueries({ queryKey: ["agent-native-memory", agent.name] });
+      void qc.invalidateQueries({ queryKey: ["memory-stores"] });
+      void qc.invalidateQueries({ queryKey: ["memory-projections"] });
+      void qc.invalidateQueries({ queryKey: ["memory-facts"] });
+    },
+  });
   const count = native.data?.unmanaged_fact_count ?? 0;
   if (count === 0) return null;
+  const projects = (native.data?.projects ?? []).filter((p) => !p.managed).length;
   return (
-    <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-      <p>
-        {t("agents.memoryTab.nativeDiscovered", {
-          count,
-          projects: (native.data?.projects ?? []).filter((p) => !p.managed).length,
-        })}
-      </p>
+    <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <p>{t("agents.memoryTab.nativeDiscovered", { count, projects })}</p>
+        <Button size="sm" onClick={() => takeover.mutate()} disabled={takeover.isPending}>
+          {takeover.isPending
+            ? t("agents.memoryTab.takingOver")
+            : t("agents.memoryTab.takeOver")}
+        </Button>
+      </div>
+      {takeover.error ? (
+        <p className="text-xs text-destructive">{translateApiError(t, takeover.error)}</p>
+      ) : null}
+      {takeover.data ? (
+        <p className="text-xs text-muted-foreground">
+          {t("agents.memoryTab.takeOverDone", {
+            imported: takeover.data.imported,
+            skipped: takeover.data.skipped,
+          })}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -86,6 +86,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
 )
 from coffer.surfaces.http.memory import router as memory_router
 from coffer.surfaces.http.migrations_runner import run_migrations
+from coffer.surfaces.http.projection_routes import agent_native_router
 from coffer.surfaces.http.projection_routes import router as projection_router
 from coffer.surfaces.http.projection_wiring import wire_projection
 from coffer.surfaces.http.resource_routes import router as resource_router
@@ -352,6 +353,7 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(memory_router)
     # Memory projection router (spec 007-memory; bridges memory + agent)
     app.include_router(projection_router)
+    app.include_router(agent_native_router)
     # Agent chat routers (spec 008)
     app.include_router(chat_conversation_router)
     app.include_router(chat_turn_router)

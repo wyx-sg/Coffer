@@ -17,7 +17,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from pathlib import Path
 
+from coffer.application.agent.native_memory import (
+    NativeMemoryProject,
+    decode_claude_slug,
+    scan_claude_native_memory,
+)
 from coffer.application.agent.projection import (
     CanonicalMemory,
     MemoryLayer,
@@ -30,6 +39,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.memory.scope import GLOBAL_STORE_NAME
 from coffer.application.memory.service import MemoryService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.agent.projection_persistence import (
@@ -38,6 +48,45 @@ from coffer.infrastructure.agent.projection_persistence import (
 )
 
 _logger = logging.getLogger(__name__)
+
+#: Resolves an absolute project root to the memory-store name Coffer keys it by
+#: (provisioning the store if needed). Injected so the projection service stays
+#: free of the scope-resolution wiring.
+StoreForRootFn = Callable[[str], Awaitable[str]]
+
+
+@dataclass
+class TakeoverItem:
+    """The outcome of attempting to take over one native project memory dir."""
+
+    slug: str
+    fact_count: int
+    status: str  # imported | skipped_managed | skipped_undecodable | error
+    project_root: str | None = None
+    store_name: str | None = None
+    backup_dir: str | None = None
+    detail: str | None = None
+
+
+@dataclass
+class TakeoverResult:
+    items: list[TakeoverItem]
+    imported: int
+    skipped: int
+
+
+def _backup_memory_dir(mem: Path, suffix: str) -> Path:
+    """Copy ``mem`` to a sibling ``<name>.bak-<suffix>`` before takeover touches
+    it (the migration only moves files, but this is real user data — keep a full
+    copy). Disambiguates with a counter if the backup name already exists."""
+    base = mem.parent / f"{mem.name}.bak-{suffix}"
+    backup = base
+    n = 1
+    while backup.exists():
+        backup = mem.parent / f"{mem.name}.bak-{suffix}-{n}"
+        n += 1
+    shutil.copytree(mem, backup)
+    return backup
 
 
 def render_facts_markdown(facts: list[tuple[str, str]]) -> str:
@@ -62,12 +111,14 @@ class ProjectionService:
         engine: ProjectionEngine,
         bindings: ProjectionBindingRepo,
         audit: AuditService | None = None,
+        store_for_root: StoreForRootFn | None = None,
     ) -> None:
         self._memory = memory
         self._agents = agents
         self._engine = engine
         self._bindings = bindings
         self._audit = audit
+        self._store_for_root = store_for_root
 
     async def _record(self, event: str, store_name: str, details: dict[str, object]) -> None:
         if self._audit is None:
@@ -122,6 +173,76 @@ class ProjectionService:
             },
         )
         return result
+
+    async def take_over_claude_native_memory(
+        self, *, agent_ref: str, backup_suffix: str
+    ) -> TakeoverResult:
+        """Take over every UNMANAGED Claude Code project memory dir Coffer finds.
+
+        For each ``<config_dir>/projects/<slug>/memory`` not already a symlink:
+        decode the slug back to a real project root (filesystem-guided, never
+        guessed — undecodable slugs are reported and left untouched), back the
+        dir up, provision the project's canonical store, then ``establish`` a
+        SYMLINK projection (which migrates the existing facts in first). The
+        agent must be Claude Code; other types yield an empty result."""
+        if self._store_for_root is None:
+            raise RuntimeError("store_for_root resolver not configured")
+        agent = await self._agents.get(agent_ref)  # raises ResourceNotFound
+        cfg = AgentConfig.model_validate(agent.config)
+        if cfg.type is not AgentType.CLAUDE_CODE:
+            return TakeoverResult(items=[], imported=0, skipped=0)
+        config_dir = cfg.resolved_config_dir()
+        projects = await asyncio.to_thread(scan_claude_native_memory, config_dir)
+        items: list[TakeoverItem] = []
+        for proj in projects:
+            if proj.managed:
+                continue  # already a Coffer symlink — nothing to take over.
+            items.append(await self._take_over_one(proj, agent_ref, backup_suffix))
+        imported = sum(1 for i in items if i.status == "imported")
+        return TakeoverResult(items=items, imported=imported, skipped=len(items) - imported)
+
+    async def _take_over_one(
+        self, proj: NativeMemoryProject, agent_ref: str, backup_suffix: str
+    ) -> TakeoverItem:
+        slug = proj.slug
+        fact_count = proj.fact_count
+        mem = Path(proj.memory_dir)
+        project_root = decode_claude_slug(slug)
+        if project_root is None:
+            return TakeoverItem(
+                slug=slug,
+                fact_count=fact_count,
+                status="skipped_undecodable",
+                detail="slug does not map to any existing path",
+            )
+        try:
+            assert self._store_for_root is not None
+            backup = await asyncio.to_thread(_backup_memory_dir, mem, backup_suffix)
+            store_name = await self._store_for_root(str(project_root))
+            await self.establish(
+                store_name=store_name, agent_ref=agent_ref, project_root=str(project_root)
+            )
+        except (OSError, ValueError) as exc:
+            _logger.warning(
+                "projection.takeover.failed",
+                extra={"slug": slug, "project_root": str(project_root)},
+                exc_info=True,
+            )
+            return TakeoverItem(
+                slug=slug,
+                fact_count=fact_count,
+                status="error",
+                project_root=str(project_root),
+                detail=str(exc),
+            )
+        return TakeoverItem(
+            slug=slug,
+            fact_count=fact_count,
+            status="imported",
+            project_root=str(project_root),
+            store_name=store_name,
+            backup_dir=str(backup),
+        )
 
     async def list_projections(self, *, store_name: str) -> list[ProjectionBinding]:
         return await self._bindings.list_for_store(store_name)

@@ -40,12 +40,36 @@ def wire_projection(
     """Build + install the projection service and the memory change hook."""
     bindings = ProjectionBindingRepo(sm)  # type: ignore[arg-type]
     engine = ProjectionEngine(ProjectionFsAdapter())
+
+    async def _store_for_root(project_root: str) -> str:
+        """The memory-store name Coffer keys ``project_root`` by (provisioning if
+        needed). Resolves it the SAME way a ``remember`` from that directory
+        would — by git-root — so a takeover and later writes land in one store.
+        A non-git project root has no git-keyed store, so fall back to a store
+        keyed by the root path itself."""
+        from coffer.application.memory.scope import project_store_name
+        from coffer.application.memory.stores import store_name_for
+        from coffer.domain.errors import ScopeUnresolved
+        from coffer.domain.memory.scope import MemoryScope
+        from coffer.infrastructure.memory.scope_fs import project_ulid
+
+        try:
+            resolved = await memory_service.resolve_scope(
+                scope=MemoryScope.PROJECT, cwd=project_root
+            )
+            return store_name_for(resolved)
+        except ScopeUnresolved:
+            store = project_store_name(project_ulid(project_root))
+            await memory_service.ensure_store(store)
+            return store
+
     service = ProjectionService(
         memory=memory_service,
         agents=get_agent_service(),
         engine=engine,
         bindings=bindings,
         audit=audit,
+        store_for_root=_store_for_root,
     )
     set_projection_service(service)
 

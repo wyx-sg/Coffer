@@ -46,3 +46,20 @@ def test_scan_marks_a_symlinked_memory_dir_as_managed(tmp_path):
 
 def test_scan_missing_projects_dir_returns_empty(tmp_path):
     assert scan_claude_native_memory(tmp_path) == []
+
+
+def test_decode_claude_slug_round_trips_via_filesystem(tmp_path):
+    from coffer.application.agent.native_memory import _full_slug, decode_claude_slug
+
+    # Build a real path with a dotted + underscored component.
+    proj = tmp_path / "my.proj" / "sub_dir"
+    proj.mkdir(parents=True)
+    slug = _full_slug(proj)
+    assert "-" in slug
+    assert decode_claude_slug(slug) == proj
+
+
+def test_decode_claude_slug_returns_none_for_nonexistent(tmp_path):
+    from coffer.application.agent.native_memory import decode_claude_slug
+
+    assert decode_claude_slug("-no-such-path-anywhere-xyz") is None

@@ -26,6 +26,8 @@ def _to_out(cfg: GlobalEmbeddingConfig) -> EmbeddingConfigOut:
         base_url=cfg.base_url,
         credential_ref=cfg.credential_ref,
         dimensions=cfg.dimensions,
+        default_chunk_size=cfg.default_chunk_size,
+        default_chunk_overlap=cfg.default_chunk_overlap,
         updated_at=cfg.updated_at,
     )
 
@@ -50,6 +52,8 @@ async def update_config(
         base_url=body.base_url,
         credential_ref=body.credential_ref,
         dimensions=body.dimensions,
+        default_chunk_size=body.default_chunk_size,
+        default_chunk_overlap=body.default_chunk_overlap,
         actor=actor,
     )
     return _to_out(saved)

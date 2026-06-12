@@ -93,6 +93,8 @@ class EmbeddingConfigModel(Base):
     base_url: Mapped[str | None] = mapped_column(String, nullable=True)
     credential_ref: Mapped[str | None] = mapped_column(String, nullable=True)
     dimensions: Mapped[int] = mapped_column(Integer, nullable=False, default=768)
+    default_chunk_size: Mapped[int] = mapped_column(Integer, nullable=False, default=512)
+    default_chunk_overlap: Mapped[int] = mapped_column(Integer, nullable=False, default=64)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
     __table_args__ = (CheckConstraint("id = 1", name="ck_embedding_config_singleton"),)

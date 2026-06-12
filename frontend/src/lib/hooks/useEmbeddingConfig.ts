@@ -15,6 +15,8 @@ export interface EmbeddingConfigOut {
   base_url: string | null;
   credential_ref: string | null;
   dimensions: number;
+  default_chunk_size: number;
+  default_chunk_overlap: number;
   updated_at: string | null;
 }
 
@@ -25,6 +27,8 @@ export interface EmbeddingConfigUpdate {
   base_url: string | null;
   credential_ref: string | null;
   dimensions: number;
+  default_chunk_size: number;
+  default_chunk_overlap: number;
 }
 
 function headers(extra: HeadersInit = {}): HeadersInit {

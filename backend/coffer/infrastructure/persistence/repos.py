@@ -338,6 +338,8 @@ def _embedding_to_domain(row: EmbeddingConfigModel) -> GlobalEmbeddingConfig:
         base_url=row.base_url,
         credential_ref=row.credential_ref,
         dimensions=row.dimensions,
+        default_chunk_size=row.default_chunk_size,
+        default_chunk_overlap=row.default_chunk_overlap,
         updated_at=row.updated_at.replace(tzinfo=UTC) if row.updated_at else datetime.now(tz=UTC),
     )
 
@@ -363,6 +365,8 @@ class SqlAlchemyEmbeddingConfigRepo:
         base_url: str | None,
         credential_ref: str | None,
         dimensions: int,
+        default_chunk_size: int,
+        default_chunk_overlap: int,
     ) -> GlobalEmbeddingConfig:
         async with self._sm() as session:
             stmt = select(EmbeddingConfigModel).where(EmbeddingConfigModel.id == SINGLETON_ID)
@@ -377,6 +381,8 @@ class SqlAlchemyEmbeddingConfigRepo:
             row.base_url = base_url
             row.credential_ref = credential_ref
             row.dimensions = dimensions
+            row.default_chunk_size = default_chunk_size
+            row.default_chunk_overlap = default_chunk_overlap
             row.updated_at = now
             await session.commit()
             await session.refresh(row)
