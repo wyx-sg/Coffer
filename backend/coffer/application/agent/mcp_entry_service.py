@@ -16,6 +16,7 @@ resource back so the user never loses a working entry.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -268,13 +269,21 @@ class AgentMcpEntryService:
             details={"key": spec.key, "entry": entry, "enabled": enabled},
         )
 
-    def _cleanup_refs(self, refs: dict[str, str]) -> None:
+    async def _cleanup_refs(self, refs: dict[str, str]) -> None:
         """Best-effort removal of keychain entries written by a failed adopt."""
         import contextlib
 
-        for ref in refs.values():
-            with contextlib.suppress(Exception):
-                self._credentials.delete(ref)
+        def _delete_all() -> None:
+            for ref in refs.values():
+                with contextlib.suppress(Exception):
+                    self._credentials.delete(ref)
+
+        # One to_thread for the whole rollback: the store write blocks on
+        # SQLite's busy_timeout, which on the loop would freeze the very
+        # coroutine holding the write lock (guaranteed deadlock) — and a
+        # single thread, once started, runs to completion even if the
+        # awaiting task is cancelled, so the rollback stays atomic.
+        await asyncio.to_thread(_delete_all)
 
     async def adopt(
         self,
@@ -312,9 +321,27 @@ class AgentMcpEntryService:
             k: r for k, r in provided.items() if k in parsed_entry.env or k in parsed_entry.headers
         }
 
-        for key, ref in applicable.items():
-            value = parsed_entry.env[key] if key in parsed_entry.env else parsed_entry.headers[key]
-            self._credentials.set(ref, value)
+        def _write_secrets() -> None:
+            import contextlib
+
+            written: list[str] = []
+            try:
+                for key, ref in applicable.items():
+                    env, headers = parsed_entry.env, parsed_entry.headers
+                    value = env[key] if key in env else headers[key]
+                    self._credentials.set(ref, value)
+                    written.append(ref)
+            except Exception:
+                # Don't orphan the refs already written before the failure.
+                for ref in written:
+                    with contextlib.suppress(Exception):
+                        self._credentials.delete(ref)
+                raise
+
+        # One to_thread for all writes: off the loop (SQLite busy-wait would
+        # deadlock against the loop's own writer) and atomic under task
+        # cancellation — the thread runs to completion once started.
+        await asyncio.to_thread(_write_secrets)
 
         config = {"transport": to_transport_config(parsed_entry, applicable)}
         try:
@@ -323,7 +350,7 @@ class AgentMcpEntryService:
                 kind="mcp_server", name=new_name or entry, config=config, actor=actor
             )
         except Exception:
-            self._cleanup_refs(applicable)  # don't orphan just-written secrets
+            await self._cleanup_refs(applicable)  # don't orphan just-written secrets
             raise
         try:
             # Verify the resource is really readable before touching the file.
@@ -342,7 +369,7 @@ class AgentMcpEntryService:
             # Roll back: never leave both a half-adopted resource AND a
             # still-present (or half-removed) config entry inconsistent.
             await self._rs.delete(ResourceRef("mcp_server", resource.name), actor=actor)
-            self._cleanup_refs(applicable)
+            await self._cleanup_refs(applicable)
             raise
         await self._audit.record(
             AuditEventType.AGENT_MCP_ENTRY_ADOPTED.value,
