@@ -213,6 +213,9 @@ class SqlAlchemyAuditRepo:
 _PRUNABLE_TABLE_ALLOWLIST: dict[str, set[str]] = {
     "audit_log": {"timestamp"},
     "mcp_invocations": {"timestamp"},
+    # Conversations prune whole threads by last activity; their messages are
+    # deleted alongside (see delete_older_than's conversations special-case).
+    "conversations": {"updated_at"},
 }
 
 
@@ -304,6 +307,17 @@ class SqlAlchemyRetentionRepo:
                 f"table/column not in allowlist: ({table!r}, {timestamp_column!r})"
             )
         async with self._sm() as session:
+            if table == "conversations":
+                # A conversation owns its messages; pruning a thread must take
+                # them with it (chat_messages has no DB-level cascade), so delete
+                # the messages of the to-be-pruned threads first, in the same txn.
+                await session.execute(
+                    text(
+                        "DELETE FROM chat_messages WHERE conversation_id IN "
+                        f"(SELECT id FROM conversations WHERE {timestamp_column} < :cutoff)"
+                    ),
+                    {"cutoff": cutoff},
+                )
             stmt = text(f"DELETE FROM {table} WHERE {timestamp_column} < :cutoff")
             result = await session.execute(stmt, {"cutoff": cutoff})
             await session.commit()

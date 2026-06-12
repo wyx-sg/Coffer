@@ -318,6 +318,10 @@
         "mcp_invocations": {
           "name": "MCP 调用记录",
           "description": "MCP 工具 / 资源 / 提示词的调用日志。"
+        },
+        "conversations": {
+          "name": "聊天对话",
+          "description": "聊天会话及其消息，按最后活动时间清理。"
         }
       }
     },

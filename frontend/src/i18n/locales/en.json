@@ -318,6 +318,10 @@
         "mcp_invocations": {
           "name": "MCP invocations",
           "description": "MCP tool/resource/prompt invocation log."
+        },
+        "conversations": {
+          "name": "Chat conversations",
+          "description": "Chat threads and their messages, pruned by last activity."
         }
       }
     },

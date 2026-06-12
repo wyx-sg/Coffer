@@ -541,6 +541,11 @@ referenced by at least one test marked
   archived conversation is excluded from the default (active) list, retrievable
   through an archived listing, and not destroyed; archiving is reversible and
   distinct from deletion. The conversation history MUST be searchable by title.
+- **FR-016b**: Conversations MUST be a retention-managed store: the user can set
+  a retention window for chat conversations under Settings → Data, after which
+  the retention worker prunes conversations (and their messages) older than the
+  window by last activity. The default is keep-forever — chat content is never
+  auto-deleted until the user opts in.
 - **FR-017**: A message MUST store its role and an ordered list of content blocks
   of types `text`, `tool_use`, and `tool_result`; assistant messages MUST also
   store token usage and the model that produced them when the agent reports one.
