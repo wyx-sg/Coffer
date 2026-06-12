@@ -27,13 +27,30 @@ class UnknownPrunableTable(CofferError):  # noqa: N818
 
 @dataclass(frozen=True)
 class PrunableTable:
-    """Declarative registration of a log-style table that can be pruned."""
+    """Declarative registration of a table the retention worker sweeps.
+
+    Most entries ``delete`` rows older than the policy window. A few model a
+    two-stage lifecycle instead: an ``archive`` action stamps ``archive_set_column``
+    with the current time on rows older than the window (e.g. auto-archiving idle
+    chat threads), and a sibling ``delete`` entry keyed on that stamp removes them
+    later. ``name`` is the policy key (one ``retention_policies`` row); ``target_table``
+    is the SQL table acted on, which differs from ``name`` only for an archive entry
+    that shares a table with its delete sibling.
+    """
 
     name: str
     timestamp_column: str
     default_retention_days: int | None
     display_name: str
     description: str
+    action: str = "delete"  # "delete" | "archive"
+    target_table: str | None = None
+    archive_set_column: str | None = None
+
+    @property
+    def sql_table(self) -> str:
+        """The actual SQL table this policy acts on (``name`` unless overridden)."""
+        return self.target_table or self.name
 
 
 class PrunableRegistry:

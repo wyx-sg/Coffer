@@ -540,12 +540,15 @@ referenced by at least one test marked
 - **FR-016a**: Users MUST be able to archive a conversation and restore it. An
   archived conversation is excluded from the default (active) list, retrievable
   through an archived listing, and not destroyed; archiving is reversible and
-  distinct from deletion. The conversation history MUST be searchable by title.
-- **FR-016b**: Conversations MUST be a retention-managed store: the user can set
-  a retention window for chat conversations under Settings → Data, after which
-  the retention worker prunes conversations (and their messages) older than the
-  window by last activity. The default is keep-forever — chat content is never
-  auto-deleted until the user opts in.
+  distinct from deletion. The conversation history MUST be searchable by title,
+  and the active/archived views MUST be switchable from an in-list filter.
+- **FR-016b**: Conversations MUST follow a two-stage, retention-managed lifecycle,
+  both windows configurable under Settings → Data: (1) the retention worker
+  auto-archives conversations with no new message for the auto-archive window
+  (default 7 days), and (2) deletes archived conversations (and their messages)
+  the configured number of days after they were archived (default 30 days).
+  Either window may be set to keep-forever to disable that stage; auto-archiving
+  is reversible (the user can restore) and only deletion is destructive.
 - **FR-017**: A message MUST store its role and an ordered list of content blocks
   of types `text`, `tool_use`, and `tool_result`; assistant messages MUST also
   store token usage and the model that produced them when the agent reports one.

@@ -332,9 +332,13 @@
           "name": "MCP 调用记录",
           "description": "MCP 工具 / 资源 / 提示词的调用日志。"
         },
+        "conversations_archive": {
+          "name": "自动归档闲置对话",
+          "description": "超过设定天数没有新消息的对话将被自动归档。"
+        },
         "conversations": {
-          "name": "聊天对话",
-          "description": "聊天会话及其消息，按最后活动时间清理。"
+          "name": "删除已归档对话",
+          "description": "对话归档后超过设定天数将被删除（连同其消息）。"
         }
       }
     },
@@ -957,7 +961,10 @@
       "viewArchived": "查看归档",
       "backToActive": "返回活跃",
       "archivedTitle": "已归档",
-      "archivedEmpty": "没有已归档的对话"
+      "archivedEmpty": "没有已归档的对话",
+      "filterLabel": "筛选对话",
+      "filterActive": "活跃",
+      "filterArchived": "归档"
     },
     "thread": {
       "empty": "发送消息开始对话。",

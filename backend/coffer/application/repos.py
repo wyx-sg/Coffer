@@ -59,4 +59,12 @@ class RetentionRepo(Protocol):
         timestamp_column: str,
         cutoff: datetime,
     ) -> int: ...
+    async def archive_older_than(
+        self,
+        target_table: str,
+        match_column: str,
+        set_column: str,
+        cutoff: datetime,
+        now: datetime,
+    ) -> int: ...
     async def exists(self, table_name: str) -> bool: ...

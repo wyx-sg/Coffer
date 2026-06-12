@@ -153,15 +153,29 @@ def build_prunable_registry() -> PrunableRegistry:
             description="MCP tool/resource/prompt invocation log.",
         )
     )
+    # Conversations follow a two-stage lifecycle: idle threads are auto-archived,
+    # then archived threads are deleted a while later. Both windows are user-tunable
+    # (or None to disable) via the same retention surface as the log tables.
+    registry.register(
+        PrunableTable(
+            name="conversations_archive",
+            timestamp_column="updated_at",
+            default_retention_days=7,
+            display_name="Auto-archive Idle Chats",
+            description="Archive conversations with no new message for this many days.",
+            action="archive",
+            target_table="conversations",
+            archive_set_column="archived_at",
+        )
+    )
     registry.register(
         PrunableTable(
             name="conversations",
-            timestamp_column="updated_at",
-            # None = keep forever until the user sets a retention window; chat
-            # threads are user content, so retention is opt-in, never a surprise.
-            default_retention_days=None,
-            display_name="Chat Conversations",
-            description="Chat threads and their messages, pruned by last activity.",
+            timestamp_column="archived_at",
+            default_retention_days=30,
+            display_name="Delete Archived Chats",
+            description="Delete archived conversations this many days after archival "
+            "(with their messages).",
         )
     )
     return registry

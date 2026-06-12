@@ -16,6 +16,7 @@ resource back so the user never loses a working entry.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -268,13 +269,16 @@ class AgentMcpEntryService:
             details={"key": spec.key, "entry": entry, "enabled": enabled},
         )
 
-    def _cleanup_refs(self, refs: dict[str, str]) -> None:
+    async def _cleanup_refs(self, refs: dict[str, str]) -> None:
         """Best-effort removal of keychain entries written by a failed adopt."""
         import contextlib
 
         for ref in refs.values():
             with contextlib.suppress(Exception):
-                self._credentials.delete(ref)
+                # to_thread: the store write blocks on SQLite's busy_timeout;
+                # on the loop it would freeze the very coroutine holding the
+                # write lock, turning a wait into a guaranteed deadlock.
+                await asyncio.to_thread(self._credentials.delete, ref)
 
     async def adopt(
         self,
@@ -314,7 +318,7 @@ class AgentMcpEntryService:
 
         for key, ref in applicable.items():
             value = parsed_entry.env[key] if key in parsed_entry.env else parsed_entry.headers[key]
-            self._credentials.set(ref, value)
+            await asyncio.to_thread(self._credentials.set, ref, value)
 
         config = {"transport": to_transport_config(parsed_entry, applicable)}
         try:
@@ -323,7 +327,7 @@ class AgentMcpEntryService:
                 kind="mcp_server", name=new_name or entry, config=config, actor=actor
             )
         except Exception:
-            self._cleanup_refs(applicable)  # don't orphan just-written secrets
+            await self._cleanup_refs(applicable)  # don't orphan just-written secrets
             raise
         try:
             # Verify the resource is really readable before touching the file.
@@ -342,7 +346,7 @@ class AgentMcpEntryService:
             # Roll back: never leave both a half-adopted resource AND a
             # still-present (or half-removed) config entry inconsistent.
             await self._rs.delete(ResourceRef("mcp_server", resource.name), actor=actor)
-            self._cleanup_refs(applicable)
+            await self._cleanup_refs(applicable)
             raise
         await self._audit.record(
             AuditEventType.AGENT_MCP_ENTRY_ADOPTED.value,

@@ -80,11 +80,12 @@ describe("ChatPage", () => {
     vi.clearAllMocks();
   });
 
-  test("shows conversation history panel with new chat button", async () => {
+  test("shows conversation history panel with active/archived filter", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     modelsApiMock.list.mockResolvedValue({ models: [] });
     renderPage();
-    expect(await screen.findByText("Conversations")).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: /active/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /archived/i })).toBeInTheDocument();
   });
 
   test("bare /chat shows the draft surface (composer), not a modal", async () => {

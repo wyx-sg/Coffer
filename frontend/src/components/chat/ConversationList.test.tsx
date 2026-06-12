@@ -76,16 +76,22 @@ describe("ConversationList archive", () => {
     expect(onArchive).toHaveBeenCalledWith("1");
   });
 
-  test("the view-toggle switches to archived", () => {
+  test("the archived filter tab switches to archived", () => {
     const { onToggleView } = renderList([conv("1", "A")]);
-    fireEvent.click(screen.getByRole("button", { name: /view archived/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /archived/i }));
     expect(onToggleView).toHaveBeenCalledOnce();
   });
 
-  test("archived view exposes a restore action and a back link", () => {
+  test("clicking the already-selected filter tab is a no-op", () => {
+    const { onToggleView } = renderList([conv("1", "A")]);
+    fireEvent.click(screen.getByRole("tab", { name: /active/i }));
+    expect(onToggleView).not.toHaveBeenCalled();
+  });
+
+  test("archived view exposes a restore action and selects the archived tab", () => {
     const { onRestore } = renderList([conv("1", "Old chat")], { view: "archived" });
     fireEvent.click(screen.getByRole("button", { name: /restore/i }));
     expect(onRestore).toHaveBeenCalledWith("1");
-    expect(screen.getByRole("button", { name: /back to active/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /archived/i })).toHaveAttribute("aria-selected", "true");
   });
 });

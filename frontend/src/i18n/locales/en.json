@@ -332,9 +332,13 @@
           "name": "MCP invocations",
           "description": "MCP tool/resource/prompt invocation log."
         },
+        "conversations_archive": {
+          "name": "Auto-archive idle chats",
+          "description": "Archive conversations with no new message for this many days."
+        },
         "conversations": {
-          "name": "Chat conversations",
-          "description": "Chat threads and their messages, pruned by last activity."
+          "name": "Delete archived chats",
+          "description": "Delete archived conversations this many days after archival (with their messages)."
         }
       }
     },
@@ -957,7 +961,10 @@
       "viewArchived": "View archived",
       "backToActive": "Back to active",
       "archivedTitle": "Archived",
-      "archivedEmpty": "No archived conversations"
+      "archivedEmpty": "No archived conversations",
+      "filterLabel": "Filter conversations",
+      "filterActive": "Active",
+      "filterArchived": "Archived"
     },
     "thread": {
       "empty": "Send a message to start the conversation.",
