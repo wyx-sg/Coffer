@@ -24,7 +24,7 @@ import pytest
 from cryptography.fernet import Fernet
 
 from coffer.application.audit_service import AuditService
-from coffer.application.mcp.credential_resolver import CredentialResolver
+from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor

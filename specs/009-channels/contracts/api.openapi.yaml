@@ -1,0 +1,243 @@
+openapi: 3.0.3
+info:
+  title: Coffer — Channels API
+  version: 0.1.0
+  description: >
+    REST surface for messaging channels (spec 009). Channel CRUD rides the
+    generic /resources endpoints (spec 001); this contract adds the
+    channel-specific operations: pairing, status, notify, and the SeaTalk
+    event ingest the callback listener forwards to. The callback listener's
+    own public path (POST /seatalk/{channel}) is served by a separate process
+    and is not part of the daemon's API surface.
+
+servers:
+  - url: http://127.0.0.1:8000
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/channels/{name}/pairing-code:
+    post:
+      summary: Issue a single-use pairing code for a channel
+      operationId: issuePairingCode
+      tags: [channels]
+      parameters:
+        - $ref: '#/components/parameters/ChannelName'
+      responses:
+        '200':
+          description: Code issued (replaces any previous pending code)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairingCodeOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/channels/{name}/status:
+    get:
+      summary: Runtime, pairing, and callback status of a channel
+      operationId: getChannelStatus
+      tags: [channels]
+      parameters:
+        - $ref: '#/components/parameters/ChannelName'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelStatusOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/channels/{name}/notify:
+    post:
+      summary: Push a text message to the channel's paired peer
+      operationId: notifyChannel
+      tags: [channels]
+      parameters:
+        - $ref: '#/components/parameters/ChannelName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotifyIn'
+      responses:
+        '200':
+          description: Delivered to the IM platform
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotifyOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Channel has no paired peer or is disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /api/v1/channels/{name}/events:
+    post:
+      summary: Ingest a verified SeaTalk callback event (listener-internal)
+      description: >
+        Called by the callback listener over loopback after signature
+        verification. Requires the daemon token like every other route;
+        the body is the raw SeaTalk event envelope.
+      operationId: ingestChannelEvent
+      tags: [channels]
+      parameters:
+        - $ref: '#/components/parameters/ChannelName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeaTalkEventIn'
+      responses:
+        '200':
+          description: Accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventAcceptedOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The channel's adapter is not running (channel disabled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    ChannelName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string }
+      description: Channel resource name (the `<name>` of `channel:<name>`)
+
+  responses:
+    NotFound:
+      description: No channel with this name
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+
+  schemas:
+    PairingCodeOut:
+      type: object
+      required: [code, expires_at]
+      properties:
+        code:
+          type: string
+          description: 8-character code from an unambiguous alphabet
+        expires_at:
+          type: string
+          format: date-time
+
+    ChannelStatusOut:
+      type: object
+      required: [name, channel_type, enabled, running, peer, callback]
+      properties:
+        name: { type: string }
+        channel_type:
+          type: string
+          enum: [telegram, seatalk]
+        enabled: { type: boolean }
+        running:
+          type: boolean
+          description: Whether the adapter task is currently live
+        pending_pairing:
+          type: boolean
+          description: Whether an unexpired pairing code is outstanding
+        peer:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ChannelPeerOut'
+        callback:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/CallbackInfoOut'
+          description: Present for seatalk channels only
+
+    ChannelPeerOut:
+      type: object
+      required: [chat_id, display_name, paired_at, active_conversation_id]
+      properties:
+        chat_id: { type: string }
+        display_name: { type: string }
+        paired_at:
+          type: string
+          format: date-time
+        active_conversation_id:
+          type: string
+          nullable: true
+
+    CallbackInfoOut:
+      type: object
+      required: [port, path, listener_running]
+      properties:
+        port: { type: integer }
+        path:
+          type: string
+          description: The path to append to the tunnel URL
+        listener_running: { type: boolean }
+
+    NotifyIn:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4096
+
+    NotifyOut:
+      type: object
+      required: [sent]
+      properties:
+        sent: { type: boolean }
+
+    SeaTalkEventIn:
+      type: object
+      required: [event_type, event]
+      properties:
+        event_id: { type: string }
+        event_type: { type: string }
+        timestamp: { type: integer }
+        app_id: { type: string }
+        event:
+          type: object
+          additionalProperties: true
+
+    EventAcceptedOut:
+      type: object
+      required: [accepted]
+      properties:
+        accepted: { type: boolean }
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true

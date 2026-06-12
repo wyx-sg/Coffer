@@ -7,6 +7,7 @@ import typer
 from coffer.surfaces.cli import (
     agent_cmd,
     audit_cmd,
+    channel_cmd,
     chat_cmd,
     credentials_cmd,
     daemon_cmd,
@@ -44,6 +45,7 @@ app.add_typer(retention_cmd.app, name="retention")
 app.add_typer(mcp_cmd.app, name="mcp")
 app.add_typer(credentials_cmd.app, name="credentials")
 app.add_typer(agent_cmd.app, name="agent")
+app.add_typer(channel_cmd.app, name="channel")
 app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(knowledge_base_cmd.app, name="kb")
 app.add_typer(memory_cmd.app, name="memory")

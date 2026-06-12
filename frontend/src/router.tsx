@@ -3,6 +3,8 @@ import { Layout } from "./components/Layout";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { ChatPage } from "./pages/ChatPage";
+import { ChannelsPage } from "./pages/ChannelsPage";
+import { ChannelDetailPage } from "./pages/ChannelDetailPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { SkillDetailPage } from "./pages/SkillDetailPage";
 import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
@@ -37,6 +39,8 @@ export const router = createBrowserRouter([
       { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
       { path: "agents", element: <AgentsPage /> },
       { path: "agents/:name", element: <AgentDetailPage /> },
+      { path: "channels", element: <ChannelsPage /> },
+      { path: "channels/:name", element: <ChannelDetailPage /> },
       { path: "skills", element: <SkillsPage /> },
       { path: "skills/:name", element: <SkillDetailPage /> },
       { path: "knowledge-bases", element: <KnowledgeBasesPage /> },

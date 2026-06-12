@@ -33,6 +33,7 @@ from fastapi import FastAPI
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.channel.kind import make_channel_kind
 from coffer.application.credential_migration import (
     gather_extra_credential_refs,
     migrate_legacy_keychain,
@@ -70,6 +71,8 @@ from coffer.surfaces.http.app_mcp_composition import (
 )
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.channel_routes import router as channel_router
+from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.model_routes import router as chat_model_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
@@ -255,6 +258,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # the supervisor loop never double-disposes it (dispose() is idempotent).
     app.state.mcp_session_supervisors = session_supervisors
 
+    # Wire the channel kind (spec 009) AFTER wire_chat: the inbound processor
+    # drives turns through the chat service handles wire_chat published.
+    channel_runtime = wire_channel_kind(app, resource_svc, audit, sm, credential_store)
+
     # One-time move of legacy OS-keychain secrets into the encrypted store
     # (no-op once migrated). Best-effort: failures must not block startup.
     try:
@@ -296,6 +303,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retention_worker = worker
     app.state.retention_worker_task = worker_task
 
+    # Channel adapter reconciler (spec 009). Started after the daemon token is
+    # published so the callback listener can be spawned with valid loopback
+    # credentials on its first tick.
+    channel_runtime_task = asyncio.create_task(channel_runtime.run())
+    app.state.channel_runtime = channel_runtime
+    app.state.channel_runtime_task = channel_runtime_task
+
     # Reap /mcp sessions that have been idle past the threshold. Without this
     # a downstream client that never closes its SSE stream would leak its
     # session + per-session supervisor + upstream subprocesses indefinitely.
@@ -314,6 +328,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(Exception):
             await audit.record(AuditEventType.DAEMON_STOPPED.value, actor="system")
         worker.stop()
+        # Stop channel adapters first so no new turns start mid-teardown.
+        # Order matters: cancel the reconciler task BEFORE dispose() so an
+        # in-flight tick cannot resurrect adapters dispose() just stopped;
+        # everything is suppressed so a dead reconciler (stored exception)
+        # can never abort the rest of this teardown.
+        channel_runtime.stop()
+        channel_runtime_task.cancel()
+        with contextlib.suppress(BaseException):
+            await asyncio.wait_for(channel_runtime_task, timeout=2.0)
+        with contextlib.suppress(Exception):
+            await channel_runtime.dispose()
         # Best-effort shutdown
         try:
             await asyncio.wait_for(worker_task, timeout=2.0)
@@ -366,6 +391,9 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     # `wire_agent_and_skill_kinds` overwrites this entry with a real cross-kind
     # hook (agent deletion cascades into skill binding cleanup).
     app.state.kinds.setdefault("agent", make_agent_kind(on_delete=None))
+    # Same eager registration for the channel kind (the lifespan's
+    # wire_channel_kind overwrites it with the runtime-evicting on_delete).
+    app.state.kinds.setdefault("channel", make_channel_kind())
     cors.install(app)
     err_handlers.register(app)
     app.include_router(daemon_routes.router)
@@ -395,4 +423,6 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(chat_conversation_router)
     app.include_router(chat_turn_router)
     app.include_router(chat_model_router)
+    # Channel routes (spec 009)
+    app.include_router(channel_router)
     return app

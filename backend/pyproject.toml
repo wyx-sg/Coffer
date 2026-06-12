@@ -243,6 +243,12 @@ forbidden_modules = [
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
 ]
 
 # Contract 5b: agent kind may not reach into mcp or skill. Symmetric with 5.
@@ -277,6 +283,12 @@ forbidden_modules = [
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
 ]
 
 # Contract 5c: skill kind may not reach into mcp or agent. Symmetric with 5/5b.
@@ -313,6 +325,12 @@ forbidden_modules = [
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
 ]
 
 # Contract 5d: knowledge_base kind may not reach into mcp/agent/skill. Symmetric.
@@ -347,6 +365,12 @@ forbidden_modules = [
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
 ]
 
 # Contract 5e: memory kind may not reach into mcp/agent/skill/knowledge_base.
@@ -381,6 +405,52 @@ forbidden_modules = [
     "coffer.infrastructure.knowledge_base",
     "coffer.surfaces.http.knowledge_base",
     "coffer.surfaces.cli.knowledge_base_cmd",
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
+]
+
+# Contract 5f: channel kind may not reach into any other kind. Symmetric.
+[[tool.importlinter.contracts]]
+name = "Cross-kind imports forbidden (channel)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
+]
+forbidden_modules = [
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+    "coffer.domain.agent",
+    "coffer.application.agent",
+    "coffer.infrastructure.agent",
+    "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.cli.agent_cmd",
+    "coffer.domain.skill",
+    "coffer.application.skill",
+    "coffer.infrastructure.skill",
+    "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.cli.skill_cmd",
+    "coffer.domain.knowledge_base",
+    "coffer.application.knowledge_base",
+    "coffer.infrastructure.knowledge_base",
+    "coffer.surfaces.http.knowledge_base",
+    "coffer.surfaces.cli.knowledge_base_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
 ]
 
 # Contract 6: kind-agnostic core does not import kind-specific modules.
@@ -422,6 +492,10 @@ forbidden_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
 ]
 
 # Contract 7 (REPLACES the old LlamaIndex + mem0 rules): engine confinement.
@@ -440,6 +514,7 @@ source_modules = [
     "coffer.infrastructure.mcp",
     "coffer.infrastructure.agent",
     "coffer.infrastructure.skill",
+    "coffer.infrastructure.channel",
     "coffer.infrastructure.knowledge_base",
     "coffer.infrastructure.memory",
     "coffer.infrastructure.persistence",
@@ -483,6 +558,7 @@ source_modules = [
     "coffer.domain",
     "coffer.application",
     "coffer.infrastructure.mcp",
+    "coffer.infrastructure.channel",
     "coffer.infrastructure.knowledge",
     "coffer.infrastructure.memory",
     "coffer.infrastructure.persistence",

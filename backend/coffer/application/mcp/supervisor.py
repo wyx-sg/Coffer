@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
-from coffer.application.mcp.credential_resolver import CredentialResolver
+from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.ports import UpstreamConnectionPort
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import (

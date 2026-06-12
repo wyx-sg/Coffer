@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.application.mcp.credential_resolver import CredentialResolver
+from coffer.application.credentials.resolver import CredentialResolver
 from coffer.domain.errors import CredentialMissing
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import install_in_memory_keyring

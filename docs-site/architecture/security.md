@@ -44,7 +44,7 @@ Secrets are stored as **Fernet ciphertext** in the `credentials` table of `~/.co
 
 Envelope encryption means there is exactly one piece of secret material outside the database: the Fernet **master key**. It lives in **exactly one** of two places:
 
-- **`~/.coffer/master.key`** — a `0600` file beside the database. This is the **default**: zero keychain prompts. (Why: macOS pins keychain ACLs to the binary's cdhash, so every rebuild of the unsigned daemon re-prompted for every secret. A file-backed master key removes the prompts entirely. See [ADR-014](/reference/decisions/ADR-014-envelope-encrypted-credential-store).)
+- **`~/.coffer/master.key`** — a `0600` file beside the database. This is the **default**: zero keychain prompts. (Why: macOS pins keychain ACLs to the binary's cdhash, so every rebuild of the unsigned daemon re-prompted for every secret. A file-backed master key removes the prompts entirely. See [ADR-015](/reference/decisions/ADR-015-envelope-encrypted-credential-store).)
 - **The OS keychain** (service `coffer`, ref `master-key`) — opt-in hardening via **Settings → Security** or `coffer credentials storage --set keychain`. macOS may prompt once per daemon start. This is the mode that defends against offline exfiltration of `~/.coffer/`.
 
 Resolution is **file-first**: the daemon looks for the file before the keychain. This makes relocation **crash-safe** — `relocate` moves only the master key and removes the old copy **last**, so an interrupted move always resolves back to a working state. The ciphertext in the `credentials` table is never touched by a relocation (the key moves; the data stays); switching storage modes does not re-encrypt.

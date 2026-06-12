@@ -41,6 +41,7 @@ Currently registered kinds:
 | `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories.                                                     |
 | `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | **KB face** of the shared knowledge substrate. Any-format upload → converted to markdown (any-format→markdown via a `MarkdownConverter` port, MarkItDown default), `docs/<doc-id>.md` = truth + `raw/` provenance. Agent-read-only; grep / FTS5 / sqlite-vec retrieval. See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md).                  |
 | `memory`         | [007-memory](../../specs/007-memory/spec.md)                 | **memory face** of the same substrate. Per-fact `<slug>.md` + regenerated `MEMORY.md` = truth, two-layer scope (global sentinel + per-project ULID). Shared across agents via MCP read/write + native projection (Claude symlink / Codex managed block) — one canonical store, no divergence. See [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md). |
+| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | A messaging-channel binding (Telegram, SeaTalk). Carries transport config + credential refs and a default agent; a paired owner chats with chat-platform agents from the IM app, answers approval prompts, and receives notifications. Thin adapters over the spec-008 seams ([ADR-015](../../docs/decisions/ADR-014-channel-adapter-framework.md)).                       |
 
 `knowledge_base` and `memory` are two faces of **one knowledge substrate**:
 **markdown files on disk are the source of truth; SQLite is a rebuildable index**
@@ -67,14 +68,17 @@ backend/coffer/
 │   ├── audit.py
 │   ├── mcp/                      # MCP-specific value objects
 │   ├── agent/                   # agent-specific value objects (config, etc.)
-│   └── skill/                   # skill-specific value objects
+│   ├── skill/                   # skill-specific value objects
+│   └── channel/                 # channel config, envelopes, seatalk signing
 ├── application/
 │   ├── resource_service.py       # kind-agnostic CRUD; takes kinds dict
 │   ├── audit_service.py
 │   ├── retention_service.py
+│   ├── credentials/              # shared CredentialResolver (refs → secrets)
 │   ├── mcp/                      # MCP-specific application services
 │   ├── agent/                   # agent services + make_agent_kind
 │   ├── skill/                   # skill services + make_skill_kind
+│   ├── channel/                 # adapter protocol, pairing, inbound, runtime
 │   └── fs/                      # filesystem-browse service
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
@@ -82,11 +86,13 @@ backend/coffer/
 │   ├── daemon/                   # pid_lock, port allocation
 │   ├── mcp/                      # subprocess, http upstream client
 │   ├── agent/                   # agent config-file store
-│   └── skill/                   # master store, source fetcher, sync engine
+│   ├── skill/                   # master store, source fetcher, sync engine
+│   └── channel/                 # telegram/seatalk transports, peer repo, render
 └── surfaces/
     ├── http/                     # FastAPI app + per-kind sub-routers (incl. agent/skill/fs routes)
     ├── cli/                      # Typer app + per-kind subcommand groups
-    └── shim/                     # coffer-mcp-shim entry
+    ├── shim/                     # coffer-mcp-shim entry
+    └── callback/                 # channel callback listener (separate process)
 ```
 
 Composition root (`surfaces/http/app.py`, `surfaces/cli/main.py`) explicitly
@@ -116,12 +122,16 @@ importing kind modules (Contract 6).
 | MCP protocol                   | daemon                 | `/mcp` HTTP/SSE endpoint speaking MCP JSON-RPC.                      |
 | CLI (`coffer …`)               | short-lived child      | Calls daemon over loopback HTTP.                                     |
 | Stdio shim (`coffer-mcp-shim`) | per MCP-client session | `stdin/stdout ↔ daemon HTTP/SSE` forwarder; detect-or-spawn daemon. |
+| Callback listener              | daemon-spawned child   | Signed channel webhooks only (`POST /seatalk/{channel}`); loopback port behind a user-run tunnel (spec 009). |
 
 ## Processes
 
 - **`coffer-daemon`** — long-lived FastAPI service on `127.0.0.1:<auto-port>`.
   Owns all state; single SQLite writer.
 - **Stdio shim** — short-lived; lifecycle bound to one MCP client process.
+- **Callback listener** — daemon-spawned child serving only signed channel
+  callback paths on `127.0.0.1:<callback-port>`; runs while any SeaTalk
+  channel is enabled (spec 009, [ADR-015](../../docs/decisions/ADR-014-channel-adapter-framework.md)).
 
 Both discover the daemon through `~/.coffer/daemon.json` (PID + port +
 token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.md).

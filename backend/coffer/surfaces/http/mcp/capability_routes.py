@@ -10,7 +10,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from coffer.application.audit_service import AuditService
-from coffer.application.mcp.credential_resolver import CredentialResolver
+from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType

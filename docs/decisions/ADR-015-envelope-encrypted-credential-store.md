@@ -1,4 +1,4 @@
-# ADR-014: Envelope-Encrypted Credential Store
+# ADR-015: Envelope-Encrypted Credential Store
 
 **Status**: Accepted
 **Date**: 2026-06-12

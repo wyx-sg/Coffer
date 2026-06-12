@@ -57,7 +57,24 @@ async def set_secret(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/{ref}", response_model=CredentialGetOut)
+# NOTE: /exists is declared BEFORE the value route — both use `{ref:path}`
+# (refs may contain slashes, e.g. channel tokens), so declaration order is
+# what keeps `/x/exists` from being swallowed by the value route.
+@router.get("/{ref:path}/exists", response_model=CredentialExistsOut)
+async def secret_exists(
+    ref: str,
+    store: Any = Depends(get_credential_store),  # noqa: B008
+) -> CredentialExistsOut:
+    """Report whether a secret is stored under `ref`.
+
+    Presence only — the value is never decrypted or read out for this check,
+    so no audit event is recorded and a corrupt (undecryptable) row can't
+    500 the probe; it still reports present.
+    """
+    return CredentialExistsOut(present=store.exists(ref))
+
+
+@router.get("/{ref:path}", response_model=CredentialGetOut)
 async def get_secret(
     ref: str,
     store: Any = Depends(get_credential_store),  # noqa: B008
@@ -80,22 +97,9 @@ async def get_secret(
     return CredentialGetOut(value=value)
 
 
-@router.get("/{ref}/exists", response_model=CredentialExistsOut)
-async def secret_exists(
-    ref: str,
-    store: Any = Depends(get_credential_store),  # noqa: B008
-) -> CredentialExistsOut:
-    """Report whether a secret is stored under `ref`.
-
-    Presence only — the value is never decrypted or read out for this check,
-    so no audit event is recorded and a corrupt (undecryptable) row can't
-    500 the probe; it still reports present.
-    """
-    return CredentialExistsOut(present=store.exists(ref))
-
 
 @router.delete(
-    "/{ref}",
+    "/{ref:path}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )

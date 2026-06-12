@@ -1,0 +1,104 @@
+"""Channel-kind composition (spec 009) — called from the app lifespan.
+
+Wires the kind, the peer repo, the inbound processor (against the chat
+platform's service handles), the adapter factory, the callback-listener
+controller, and the reconciling runtime. Must run AFTER ``wire_chat``.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from typing import Any, TYPE_CHECKING
+
+from fastapi import FastAPI
+
+from coffer.application.audit_service import AuditService
+from coffer.application.channel.inbound import InboundProcessor
+from coffer.application.channel.kind import make_channel_kind
+from coffer.application.channel.pairing import PairingManager
+from coffer.application.channel.ports import ChannelAdapter
+from coffer.application.channel.runtime import ChannelRuntime
+from coffer.application.channel.service import ChannelService
+from coffer.application.credentials.resolver import CredentialResolver
+from coffer.domain.channel.config import parse_channel_config
+from coffer.domain.resource import ResourceRef
+from coffer.infrastructure.channel.listener_spawn import CallbackListenerController
+from coffer.infrastructure.channel.persistence import ChannelPeerRepo
+from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
+from coffer.infrastructure.channel.telegram import TelegramAdapter
+from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.surfaces.http import daemon_routes
+from coffer.surfaces.http.auth import get_active_token
+from coffer.surfaces.http.channel_routes import set_channel_service
+from coffer.surfaces.http.chat.dependencies import get_chat_service, get_turn_orchestrator
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from coffer.application.resource_service import ResourceService
+
+
+def _daemon_info() -> tuple[str, str]:
+    token = get_active_token()
+    if token is None:
+        raise RuntimeError("daemon token not published yet")
+    return f"http://127.0.0.1:{daemon_routes.get_port()}", token
+
+
+def wire_channel_kind(
+    app: FastAPI,
+    resource_svc: ResourceService,
+    audit: AuditService,
+    sm: async_sessionmaker,  # type: ignore[type-arg]
+    credential_store: Any = None,
+) -> ChannelRuntime:
+    peers = ChannelPeerRepo(sm)
+    pairing = PairingManager()
+    processor = InboundProcessor(
+        peers=peers,
+        pairing=pairing,
+        conversations=get_chat_service(),
+        turns=get_turn_orchestrator(),
+        audit=audit,
+    )
+
+    # Production injects the EncryptedCredentialStore; None (tests) falls back
+    # to the OS keychain adapter, which resolves nothing unless seeded.
+    resolver = CredentialResolver(credential_store if credential_store is not None else KeyringAdapter())
+
+    async def materialize(refs: dict[str, str]) -> dict[str, str]:
+        # The store read is blocking (CODE-034) — never call it on the event loop.
+        return await asyncio.to_thread(resolver.materialize, refs)
+
+    async def adapter_factory(name: str, config: dict[str, object]) -> ChannelAdapter:
+        parsed = parse_channel_config(dict(config))
+        if parsed.channel_type == "telegram":
+            token = (await materialize({"token": parsed.bot_token_ref}))["token"]
+            return TelegramAdapter(name, token)
+        secret = (await materialize({"secret": parsed.app_secret_ref}))["secret"]
+        return SeaTalkAdapter(name, parsed.app_id, secret)
+
+    listener = CallbackListenerController(daemon_info=_daemon_info)
+    runtime = ChannelRuntime(
+        resources=resource_svc,
+        adapter_factory=adapter_factory,
+        processor=processor,
+        pairing=pairing,
+        listener=listener,
+        materialize=materialize,
+    )
+
+    async def on_delete(ref: ResourceRef) -> None:
+        await runtime.evict(ref.name)
+
+    app.state.kinds["channel"] = make_channel_kind(on_delete=on_delete)
+
+    service = ChannelService(
+        resources=resource_svc,
+        peers=peers,
+        pairing=pairing,
+        runtime=runtime,
+        audit=audit,
+    )
+    set_channel_service(service)
+    return runtime

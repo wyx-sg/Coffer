@@ -44,7 +44,7 @@ daemon 的 FastAPI 应用将其 HTTP 服务器绑定到 `127.0.0.1`，而非 `0.
 
 envelope 加密意味着数据库之外只剩唯一一份密钥材料：Fernet **主密钥**。它**恰好**存在于以下两个位置之一：
 
-- **`~/.coffer/master.key`** —— 数据库旁的 `0600` 文件。这是**默认**：零钥匙串弹窗。（原因：macOS 把钥匙串 ACL 绑定到二进制的 cdhash，因此每次重新构建未签名 daemon 都会对每个密钥重新弹窗。文件背书的主密钥彻底消除了弹窗。见 [ADR-014](/zh/reference/decisions/ADR-014-envelope-encrypted-credential-store)。）
+- **`~/.coffer/master.key`** —— 数据库旁的 `0600` 文件。这是**默认**：零钥匙串弹窗。（原因：macOS 把钥匙串 ACL 绑定到二进制的 cdhash，因此每次重新构建未签名 daemon 都会对每个密钥重新弹窗。文件背书的主密钥彻底消除了弹窗。见 [ADR-015](/zh/reference/decisions/ADR-015-envelope-encrypted-credential-store)。）
 - **操作系统钥匙串**（service `coffer`，ref `master-key`）—— 通过 **设置 → 安全** 或 `coffer credentials storage --set keychain` opt-in 的加固。macOS 每次 daemon 启动可能弹窗一次。这是防范 `~/.coffer/` 离线窃取的模式。
 
 解析采用 **file-first**：daemon 先找文件，再找钥匙串。这让迁移**崩溃安全**——`relocate` 只移动主密钥，并**最后**删除旧副本，因此被中断的迁移总能解析回一个可用状态。迁移永不触碰 `credentials` 表中的密文（密钥搬家，数据不动）；切换存储模式不会重新加密。
