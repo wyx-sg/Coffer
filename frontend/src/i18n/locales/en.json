@@ -3,6 +3,8 @@
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
+    "dismiss": "Dismiss",
+    "edit": "Edit",
     "loading": "Loading…",
     "enabled": "Enabled",
     "disabled": "Disabled",
@@ -39,12 +41,15 @@
     },
     "mcpServers": "MCP servers",
     "skills": "Skills",
+    "knowledgeBases": "Knowledge bases",
+    "memory": "Memory",
     "settings": "Settings",
     "language": "Language",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "agents": "Agents",
-    "audit": "Audit log"
+    "audit": "Audit log",
+    "chat": "Chat"
   },
   "resources": {
     "title": "MCP servers",
@@ -286,7 +291,9 @@
       "general": "General",
       "data": "Data",
       "app": "App",
-      "about": "About"
+      "about": "About",
+      "embedding": "Embedding & chunking",
+      "models": "Models"
     },
     "general": {
       "title": "Display",
@@ -311,6 +318,10 @@
         "mcp_invocations": {
           "name": "MCP invocations",
           "description": "MCP tool/resource/prompt invocation log."
+        },
+        "conversations": {
+          "name": "Chat conversations",
+          "description": "Chat threads and their messages, pruned by last activity."
         }
       }
     },
@@ -335,6 +346,41 @@
         "license": "License",
         "source": "Source"
       }
+    },
+    "embedding": {
+      "title": "Embedding",
+      "description": "One global embedding model powers vector search across every knowledge base and memory store. Turn it off to use keyword and grep only.",
+      "enabled": "Enable vector embedding",
+      "enabledHint": "When off, all stores fall back to keyword/grep.",
+      "provider": "Provider",
+      "model": "Model",
+      "dimensions": "Dimensions",
+      "baseUrl": "Base URL (optional)",
+      "credential": "Credential reference",
+      "credentialHint": "Keychain entry name (not the key itself)",
+      "chunkingTitle": "Chunking defaults",
+      "chunkingHint": "Default chunk size/overlap for NEW knowledge bases. Each knowledge base can override these in its settings.",
+      "chunkSize": "Chunk size",
+      "chunkOverlap": "Chunk overlap"
+    },
+    "models": {
+      "title": "Models",
+      "subtitle": "AI model configurations used by Coffer Assistant.",
+      "add": "Add model",
+      "addTitle": "Add model",
+      "editTitle": "Edit model",
+      "empty": "No models configured yet. Add one to start chatting.",
+      "default": "Default",
+      "displayName": "Display name",
+      "displayNamePlaceholder": "e.g. Claude 3.5 Sonnet",
+      "provider": "Provider",
+      "modelId": "Model ID",
+      "modelIdPlaceholder": "e.g. claude-3-5-sonnet-20241022",
+      "credentialRef": "Credential reference",
+      "credentialRefPlaceholder": "e.g. ANTHROPIC_API_KEY",
+      "baseUrl": "Base URL",
+      "baseUrlPlaceholder": "e.g. http://localhost:11434",
+      "setDefault": "Set as default"
     }
   },
   "daemon": {
@@ -467,7 +513,24 @@
         "parseError": "Failed to parse config — this file is read-only",
         "empty": "No direct MCP servers",
         "adoptSuccess": "Adopted {{name}} — now served to all agents via the gateway"
-      }
+      },
+      "memory": "Memory"
+    },
+    "memoryTab": {
+      "title": "Memory projection",
+      "subtitle": "Project a memory store into this agent's native memory location so its own edits stay canonical and shared.",
+      "empty": "No memory stores yet.",
+      "notProjected": "Not projected into this agent.",
+      "nativeDisabled": "Native memory disabled to prevent a divergent copy.",
+      "merged": "Pre-existing native files were merged into the store first.",
+      "missingProjectRoot": "This project store has no known root yet, so it can't be projected.",
+      "toggleAria": "Toggle projection of {{store}} into this agent",
+      "facts": "Memories ({{count}})",
+      "factsEmpty": "No memories yet.",
+      "nativeDiscovered": "Found {{count}} memories Claude Code wrote natively across {{projects}} project(s) that Coffer is not managing yet.",
+      "takeOver": "Take over",
+      "takingOver": "Taking over…",
+      "takeOverDone": "Took over {{imported}} project(s); skipped {{skipped}}. Originals backed up alongside each memory dir."
     },
     "configDirOverride": "Config directory (optional)",
     "configDirPlaceholder": "Leave blank for the default (~/.claude)",
@@ -648,6 +711,252 @@
         "title": "Drift detection",
         "body": "Verify that every enabled binding still matches its on-disk link."
       }
+    }
+  },
+  "knowledgeBases": {
+    "title": "Knowledge bases",
+    "subtitle": "Local document collections your agents can search through the MCP gateway.",
+    "add": "New knowledge base",
+    "empty": "No knowledge bases yet. Create one, then upload documents your agents can search.",
+    "loadFailed": "Failed to load knowledge bases",
+    "searchPlaceholder": "Search knowledge bases…",
+    "noMatches": "No knowledge bases match your search.",
+    "modes": {
+      "grep": "Grep",
+      "keyword": "Keyword",
+      "vector": "Vector"
+    },
+    "sourceMode": {
+      "converted": "Converted",
+      "edited": "Edited"
+    },
+    "cols": {
+      "name": "Name",
+      "mode": "Retrieval",
+      "description": "Description",
+      "docs": "Documents"
+    },
+    "dialog": {
+      "title": "New knowledge base",
+      "name": "Name",
+      "description": "Description (optional)",
+      "vector": "Vector search",
+      "vectorHint": "Add meaning-based vector retrieval (keyword + grep are always on). Requires an embedding provider.",
+      "provider": "Embedding provider",
+      "embeddingModel": "Embedding model",
+      "dimensions": "Dimensions",
+      "baseUrl": "Base URL",
+      "credential": "Credential reference"
+    },
+    "detail": {
+      "metrics": "{{docs}} documents · {{chunks}} chunks · {{bytes}}",
+      "reindex": "Reindex",
+      "reindexResult": "Reindexed: {{scanned}} scanned, {{reindexed}} reindexed, {{skipped}} unchanged.",
+      "search": "Search",
+      "mode": "Mode",
+      "searchPlaceholder": "Search this knowledge base…",
+      "fallback": "No embedding configured — fell back to {{mode}}.",
+      "score": "score={{score}}",
+      "noMatches": "No matches.",
+      "grep": "Grep",
+      "grepPlaceholder": "Pattern (exact / regex) over the Markdown files…",
+      "truncated": "Results truncated (max matches or timeout reached).",
+      "documents": "Documents",
+      "upload": "Upload",
+      "replaceExisting": "Upload again and replace",
+      "reconvert": "Reconvert",
+      "settings": "Settings",
+      "chunks": "{{count}} chunks",
+      "editAria": "Edit Markdown for {{title}}",
+      "deleteConfirm": "Delete document {{title}}? This cannot be undone.",
+      "loadFailed": "Failed to load this knowledge base.",
+      "empty": "No documents yet. Upload a file of any format to populate this knowledge base.",
+      "back": "Back to knowledge bases",
+      "docBadge": "{{count}} documents",
+      "chunkBadge": "{{count}} chunks",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "selectDocument": "Select a document on the left to preview or edit it."
+    },
+    "settings": {
+      "title": "Knowledge base settings",
+      "description": "Update chunking and embedding for this knowledge base. Reindex afterwards to apply chunking changes to existing documents.",
+      "chunkSize": "Chunk size",
+      "chunkOverlap": "Chunk overlap",
+      "vectorHint": "Add meaning-based vector retrieval for this knowledge base (keyword + grep are always on). The embedding model is configured globally in Settings → Embedding."
+    },
+    "welcome": {
+      "title": "Manage your knowledge bases",
+      "body": "Collect local documents your coding agents can search through the MCP gateway — keyword and grep work out of the box, vector search is one toggle away.",
+      "featureKeyword": {
+        "title": "Keyword + grep by default",
+        "body": "Search ingested files instantly — no embedding model or download required."
+      },
+      "featureSemantic": {
+        "title": "Vector when you want it",
+        "body": "Opt into meaning-based vector search with a configurable embedding provider."
+      },
+      "featureAgent": {
+        "title": "Reachable by agents",
+        "body": "Agents search and fetch documents through Coffer's built-in MCP tools."
+      }
+    },
+    "deleteConfirm": "Delete knowledge base \"{{name}}\"? Its documents and index are removed. This cannot be undone."
+  },
+  "memory": {
+    "title": "Memory",
+    "subtitle": "Local memory stores your agents read and write through the MCP gateway. Stores are provisioned automatically.",
+    "empty": "No memory stores yet — they appear automatically as your agents work.",
+    "loadFailed": "Failed to load memory stores",
+    "searchPlaceholder": "Search memory stores…",
+    "noMatches": "No memory stores match your search.",
+    "modes": {
+      "grep": "Grep",
+      "keyword": "Keyword",
+      "vector": "Vector"
+    },
+    "cols": {
+      "name": "Name",
+      "scope": "Scope",
+      "description": "Description",
+      "facts": "Facts"
+    },
+    "scope": {
+      "global": "Global",
+      "project": "Project",
+      "unknown": "Unknown"
+    },
+    "detail": {
+      "metrics": "{{facts}} facts · {{bytes}}",
+      "recall": "Recall",
+      "mode": "Mode",
+      "recallPlaceholder": "Recall facts from this store…",
+      "fallback": "No embedding configured — fell back to keyword.",
+      "score": "score={{score}}",
+      "noMatches": "No matches.",
+      "addFact": "Add fact",
+      "factName": "Name (optional)",
+      "factNamePlaceholder": "Derived from the text if left blank",
+      "factType": "Type (optional)",
+      "factDescription": "Description (optional)",
+      "factBody": "Fact",
+      "factBodyPlaceholder": "Write the fact in Markdown…",
+      "facts": "Facts",
+      "clearAll": "Clear all",
+      "clearConfirm": "Clear all facts in {{store}}? This cannot be undone.",
+      "deleteConfirm": "Delete fact {{name}}? This cannot be undone.",
+      "editAria": "Edit fact {{name}}",
+      "loadFailed": "Failed to load this memory store.",
+      "empty": "No facts yet.",
+      "back": "Back to memory stores",
+      "factBadge": "{{count}} facts",
+      "selectFact": "Select a memory on the left to preview or edit it.",
+      "untitled": "(untitled)",
+      "actorUser": "edited"
+    },
+    "welcome": {
+      "title": "Your shared agent memory",
+      "body": "A global store plus one per project, shared across every agent — facts are written directly (no LLM) and recalled through Coffer's built-in MCP tools. Everything stays on your machine.",
+      "featureRecall": {
+        "title": "Remembers facts",
+        "body": "Agents store and recall short facts across sessions."
+      },
+      "featureLocal": {
+        "title": "Local-first",
+        "body": "Facts are plain Markdown files on your machine; the index rebuilds from them."
+      },
+      "featureAgent": {
+        "title": "Reachable by agents",
+        "body": "Add, recall, and curate facts through Coffer's built-in MCP tools."
+      }
+    },
+    "deleteStoreConfirm": "Delete memory store \"{{name}}\"? Its facts are removed. This cannot be undone."
+  },
+  "chat": {
+    "title": "Chat",
+    "thinking": "Thinking…",
+    "emptyState": {
+      "title": "No model configured",
+      "body": "You need to add at least one model before you can start chatting.",
+      "cta": "Go to Settings → Models"
+    },
+    "agent": {
+      "cofferAssistant": "Coffer Assistant"
+    },
+    "message": {
+      "failed": "This response did not complete.",
+      "tokens": "{{prompt}} in · {{completion}} out"
+    },
+    "modelBar": {
+      "model": "Model",
+      "noModel": "No model",
+      "noModels": "No models configured",
+      "selectAria": "Select model"
+    },
+    "history": {
+      "title": "Conversations",
+      "new": "New chat",
+      "empty": "No conversations yet",
+      "search": "Search conversations",
+      "noMatches": "No matching conversations",
+      "ariaLabel": "Conversation history",
+      "rename": "Rename",
+      "renameAria": "Rename conversation",
+      "delete": "Delete",
+      "collapse": "Collapse history",
+      "expand": "Expand history",
+      "restore": "Restore",
+      "archive": "Archive",
+      "viewArchived": "View archived",
+      "backToActive": "Back to active",
+      "archivedTitle": "Archived",
+      "archivedEmpty": "No archived conversations"
+    },
+    "thread": {
+      "empty": "Send a message to start the conversation.",
+      "selectOrCreate": "Select a conversation or start a new one."
+    },
+    "composer": {
+      "placeholder": "Message Coffer Assistant… (Enter to send, Shift+Enter for new line)",
+      "ariaLabel": "Message input",
+      "send": "Send",
+      "stop": "Stop",
+      "streaming": "Waiting for response…"
+    },
+    "toolCard": {
+      "unknown": "unknown tool",
+      "running": "running",
+      "done": "done",
+      "error": "error",
+      "input": "Input",
+      "result": "Result",
+      "errorLabel": "Error",
+      "toggleAria": "Toggle tool call {{name}}"
+    },
+    "newConversation": {
+      "agent": "Agent",
+      "model": "Model",
+      "noModels": "No models yet — add one in Settings → Models first.",
+      "unavailable": "unavailable"
+    },
+    "draft": {
+      "guide": "Message {{agent}} to start a new conversation."
+    },
+    "delete": {
+      "title": "Delete this conversation?",
+      "body": "This conversation and all of its messages will be permanently removed."
+    },
+    "archive": {
+      "title": "Archive this conversation?",
+      "body": "It will be moved to the archive. You can restore it anytime.",
+      "confirm": "Archive"
+    },
+    "approval": {
+      "title": "Approval required",
+      "tool": "Tool",
+      "allow": "Allow",
+      "deny": "Deny"
     }
   }
 }

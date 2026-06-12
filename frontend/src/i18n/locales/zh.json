@@ -3,6 +3,8 @@
     "save": "保存",
     "cancel": "取消",
     "delete": "删除",
+    "dismiss": "关闭",
+    "edit": "编辑",
     "loading": "加载中…",
     "enabled": "已启用",
     "disabled": "已禁用",
@@ -39,12 +41,15 @@
     },
     "mcpServers": "MCP 服务器",
     "skills": "Skill",
+    "knowledgeBases": "知识库",
+    "memory": "记忆",
     "settings": "设置",
     "language": "语言",
     "collapse": "折叠侧边栏",
     "expand": "展开侧边栏",
     "agents": "Agent",
-    "audit": "审计日志"
+    "audit": "审计日志",
+    "chat": "对话"
   },
   "resources": {
     "title": "MCP 服务器",
@@ -286,7 +291,9 @@
       "general": "通用",
       "data": "数据",
       "app": "应用",
-      "about": "关于"
+      "about": "关于",
+      "embedding": "向量与分块",
+      "models": "模型"
     },
     "general": {
       "title": "显示",
@@ -311,6 +318,10 @@
         "mcp_invocations": {
           "name": "MCP 调用记录",
           "description": "MCP 工具 / 资源 / 提示词的调用日志。"
+        },
+        "conversations": {
+          "name": "聊天对话",
+          "description": "聊天会话及其消息，按最后活动时间清理。"
         }
       }
     },
@@ -335,6 +346,41 @@
         "license": "许可证",
         "source": "源代码"
       }
+    },
+    "embedding": {
+      "title": "向量模型（Embedding）",
+      "description": "一份全局向量模型为所有知识库和记忆库的向量检索提供支持。关闭后将只使用关键词和 grep。",
+      "enabled": "启用向量 embedding",
+      "enabledHint": "关闭后所有库回退到关键词/grep。",
+      "provider": "提供方",
+      "model": "模型",
+      "dimensions": "维度",
+      "baseUrl": "Base URL（可选）",
+      "credential": "凭证引用",
+      "credentialHint": "keychain 条目名（不是密钥本身）",
+      "chunkingTitle": "分块默认值",
+      "chunkingHint": "新建知识库的默认分块大小/重叠。每个知识库可在自己的设置里覆盖。",
+      "chunkSize": "分块大小",
+      "chunkOverlap": "分块重叠"
+    },
+    "models": {
+      "title": "模型",
+      "subtitle": "Coffer 助手使用的 AI 模型配置。",
+      "add": "添加模型",
+      "addTitle": "添加模型",
+      "editTitle": "编辑模型",
+      "empty": "尚未配置任何模型。请添加一个以开始对话。",
+      "default": "默认",
+      "displayName": "显示名称",
+      "displayNamePlaceholder": "例：Claude 3.5 Sonnet",
+      "provider": "提供商",
+      "modelId": "模型 ID",
+      "modelIdPlaceholder": "例：claude-3-5-sonnet-20241022",
+      "credentialRef": "凭证引用",
+      "credentialRefPlaceholder": "例：ANTHROPIC_API_KEY",
+      "baseUrl": "Base URL",
+      "baseUrlPlaceholder": "例：http://localhost:11434",
+      "setDefault": "设为默认"
     }
   },
   "daemon": {
@@ -467,7 +513,24 @@
         "parseError": "配置解析失败，该文件降级只读",
         "empty": "没有直连 MCP server",
         "adoptSuccess": "已收编 {{name}}，现经网关服务于所有 agent"
-      }
+      },
+      "memory": "记忆"
+    },
+    "memoryTab": {
+      "title": "记忆投影",
+      "subtitle": "将记忆库投影到该 agent 的原生记忆位置，使其自身的编辑保持为权威来源并共享。",
+      "empty": "还没有记忆库。",
+      "notProjected": "尚未投影到该 agent。",
+      "nativeDisabled": "已禁用原生记忆，以避免产生分叉副本。",
+      "merged": "已先将原有的原生文件合并进记忆库。",
+      "missingProjectRoot": "该项目记忆库尚无已知根目录，无法投影。",
+      "toggleAria": "切换将 {{store}} 投影到该 agent",
+      "facts": "记忆（{{count}}）",
+      "factsEmpty": "暂无记忆。",
+      "nativeDiscovered": "发现 Claude Code 在 {{projects}} 个项目里原生写入的 {{count}} 条记忆,尚未被 Coffer 接管。",
+      "takeOver": "接管",
+      "takingOver": "接管中…",
+      "takeOverDone": "已接管 {{imported}} 个项目,跳过 {{skipped}} 个。原始记忆已在各记忆目录旁备份。"
     },
     "configDirOverride": "配置目录（可选）",
     "configDirPlaceholder": "留空则使用默认目录（~/.claude）",
@@ -648,6 +711,252 @@
         "title": "漂移检测",
         "body": "校验每个已启用的绑定是否仍与磁盘上的链接一致。"
       }
+    }
+  },
+  "knowledgeBases": {
+    "title": "知识库",
+    "subtitle": "本地文档集合，你的 agent 可通过 MCP 网关检索。",
+    "add": "新建知识库",
+    "empty": "还没有知识库。先创建一个，再上传文档供 agent 检索。",
+    "loadFailed": "加载知识库失败",
+    "searchPlaceholder": "搜索知识库…",
+    "noMatches": "没有匹配的知识库。",
+    "modes": {
+      "grep": "Grep",
+      "keyword": "关键词",
+      "vector": "向量"
+    },
+    "sourceMode": {
+      "converted": "已转换",
+      "edited": "已编辑"
+    },
+    "cols": {
+      "name": "名称",
+      "mode": "检索",
+      "description": "描述",
+      "docs": "文档数"
+    },
+    "dialog": {
+      "title": "新建知识库",
+      "name": "名称",
+      "description": "描述（可选）",
+      "vector": "向量检索",
+      "vectorHint": "新增基于含义的向量检索（关键词与 grep 始终开启）。需要配置 embedding 提供方。",
+      "provider": "Embedding 提供方",
+      "embeddingModel": "Embedding 模型",
+      "dimensions": "维度",
+      "baseUrl": "Base URL",
+      "credential": "凭据引用"
+    },
+    "detail": {
+      "metrics": "{{docs}} 个文档 · {{chunks}} 个分块 · {{bytes}}",
+      "reindex": "重建索引",
+      "reindexResult": "已重建：扫描 {{scanned}}，重建 {{reindexed}}，未变更 {{skipped}}。",
+      "search": "检索",
+      "mode": "模式",
+      "searchPlaceholder": "在此知识库中检索…",
+      "fallback": "未配置 embedding——已回退到 {{mode}}。",
+      "score": "得分={{score}}",
+      "noMatches": "没有匹配。",
+      "grep": "Grep",
+      "grepPlaceholder": "在 Markdown 文件上做精确/正则匹配的模式…",
+      "truncated": "结果已截断（达到最大匹配数或超时）。",
+      "documents": "文档",
+      "upload": "上传",
+      "replaceExisting": "重新上传并替换",
+      "reconvert": "重新转换",
+      "settings": "设置",
+      "chunks": "{{count}} 个分块",
+      "editAria": "编辑 {{title}} 的 Markdown",
+      "deleteConfirm": "删除文档 {{title}}？此操作不可撤销。",
+      "loadFailed": "加载该知识库失败。",
+      "empty": "还没有文档。上传任意格式的文件以填充该知识库。",
+      "back": "返回知识库",
+      "docBadge": "{{count}} 个文档",
+      "chunkBadge": "{{count}} 个分块",
+      "edit": "编辑",
+      "save": "保存",
+      "cancel": "取消",
+      "selectDocument": "在左侧选择一个文档以预览或编辑。"
+    },
+    "settings": {
+      "title": "知识库设置",
+      "description": "更新该知识库的分块与 embedding 配置。修改分块后请重建索引，以应用到已有文档。",
+      "chunkSize": "分块大小",
+      "chunkOverlap": "分块重叠",
+      "vectorHint": "为该知识库启用基于含义的向量检索（关键词与 grep 始终开启）。向量模型在「设置 → 向量模型」中统一配置。"
+    },
+    "welcome": {
+      "title": "管理你的知识库",
+      "body": "收集本地文档，让你的编码 agent 通过 MCP 网关检索——关键词与 grep 开箱即用，向量检索一键开启。",
+      "featureKeyword": {
+        "title": "默认关键词 + grep",
+        "body": "即时检索已摄入的文件——无需 embedding 模型，也不下载。"
+      },
+      "featureSemantic": {
+        "title": "需要时再用向量",
+        "body": "通过可配置的 embedding 提供方启用基于含义的向量检索。"
+      },
+      "featureAgent": {
+        "title": "可被 agent 访问",
+        "body": "agent 通过 Coffer 内置的 MCP 工具检索并获取文档。"
+      }
+    },
+    "deleteConfirm": "删除知识库「{{name}}」？其文档与索引都会被移除，此操作不可撤销。"
+  },
+  "memory": {
+    "title": "记忆",
+    "subtitle": "你的 agent 可通过 MCP 网关读写的本地记忆库。记忆库会自动创建。",
+    "empty": "还没有记忆库——随着 agent 工作会自动出现。",
+    "loadFailed": "加载记忆库失败",
+    "searchPlaceholder": "搜索记忆库…",
+    "noMatches": "没有匹配的记忆库。",
+    "modes": {
+      "grep": "Grep",
+      "keyword": "关键词",
+      "vector": "向量"
+    },
+    "cols": {
+      "name": "名称",
+      "scope": "范围",
+      "description": "描述",
+      "facts": "事实数"
+    },
+    "scope": {
+      "global": "全局",
+      "project": "项目",
+      "unknown": "未知"
+    },
+    "detail": {
+      "metrics": "{{facts}} 条事实 · {{bytes}}",
+      "recall": "回忆",
+      "mode": "模式",
+      "recallPlaceholder": "从该记忆库回忆事实…",
+      "fallback": "未配置 embedding——已回退到关键词。",
+      "score": "得分={{score}}",
+      "noMatches": "没有匹配。",
+      "addFact": "添加事实",
+      "factName": "名称（可选）",
+      "factNamePlaceholder": "留空则从正文派生",
+      "factType": "类型（可选）",
+      "factDescription": "描述（可选）",
+      "factBody": "事实",
+      "factBodyPlaceholder": "用 Markdown 写下这条事实…",
+      "facts": "事实",
+      "clearAll": "清空全部",
+      "clearConfirm": "清空 {{store}} 中的全部事实？此操作不可撤销。",
+      "deleteConfirm": "删除事实 {{name}}？此操作不可撤销。",
+      "editAria": "编辑事实 {{name}}",
+      "loadFailed": "加载该记忆库失败。",
+      "empty": "还没有事实。",
+      "back": "返回记忆库",
+      "factBadge": "{{count}} 条事实",
+      "selectFact": "在左侧选择一条记忆以预览或编辑。",
+      "untitled": "（无标题）",
+      "actorUser": "已编辑"
+    },
+    "welcome": {
+      "title": "你的共享 agent 记忆",
+      "body": "一个全局库加每个项目一个库，跨所有 agent 共享——事实直接写入（无需 LLM），并通过 Coffer 内置的 MCP 工具回忆。所有数据都留在你的机器上。",
+      "featureRecall": {
+        "title": "记住事实",
+        "body": "agent 跨会话存储并回忆短事实。"
+      },
+      "featureLocal": {
+        "title": "本地优先",
+        "body": "事实是机器上的纯 Markdown 文件；索引从中重建。"
+      },
+      "featureAgent": {
+        "title": "可被 agent 访问",
+        "body": "通过 Coffer 内置的 MCP 工具增改、回忆并整理事实。"
+      }
+    },
+    "deleteStoreConfirm": "删除记忆库「{{name}}」？其中的事实都会被移除，此操作不可撤销。"
+  },
+  "chat": {
+    "title": "对话",
+    "thinking": "思考中…",
+    "emptyState": {
+      "title": "尚未配置模型",
+      "body": "请先添加至少一个模型，再开始对话。",
+      "cta": "前往设置 → 模型"
+    },
+    "agent": {
+      "cofferAssistant": "Coffer 助手"
+    },
+    "message": {
+      "failed": "该回复未完成。",
+      "tokens": "输入 {{prompt}} · 输出 {{completion}}"
+    },
+    "modelBar": {
+      "model": "模型",
+      "noModel": "未选择模型",
+      "noModels": "尚无模型",
+      "selectAria": "选择模型"
+    },
+    "history": {
+      "title": "对话列表",
+      "new": "新对话",
+      "empty": "暂无对话",
+      "search": "搜索对话",
+      "noMatches": "没有匹配的对话",
+      "ariaLabel": "对话历史",
+      "rename": "重命名",
+      "renameAria": "重命名对话",
+      "delete": "删除",
+      "collapse": "折叠历史面板",
+      "expand": "展开历史面板",
+      "restore": "恢复",
+      "archive": "归档",
+      "viewArchived": "查看归档",
+      "backToActive": "返回活跃",
+      "archivedTitle": "已归档",
+      "archivedEmpty": "没有已归档的对话"
+    },
+    "thread": {
+      "empty": "发送消息开始对话。",
+      "selectOrCreate": "选择一个对话或新建一个。"
+    },
+    "composer": {
+      "placeholder": "发消息给 Coffer 助手…（Enter 发送，Shift+Enter 换行）",
+      "ariaLabel": "消息输入框",
+      "send": "发送",
+      "stop": "停止",
+      "streaming": "等待响应中…"
+    },
+    "toolCard": {
+      "unknown": "未知工具",
+      "running": "运行中",
+      "done": "完成",
+      "error": "错误",
+      "input": "输入",
+      "result": "结果",
+      "errorLabel": "错误",
+      "toggleAria": "切换工具调用 {{name}}"
+    },
+    "newConversation": {
+      "agent": "Agent",
+      "model": "模型",
+      "noModels": "尚无模型 —— 请先到「设置 → 模型」添加。",
+      "unavailable": "不可用"
+    },
+    "draft": {
+      "guide": "给 {{agent}} 发消息，开始新对话。"
+    },
+    "delete": {
+      "title": "删除此对话？",
+      "body": "此对话及其所有消息将被永久删除。"
+    },
+    "archive": {
+      "title": "归档此对话？",
+      "body": "它将被移入归档，你可以随时恢复。",
+      "confirm": "归档"
+    },
+    "approval": {
+      "title": "需要审批",
+      "tool": "工具",
+      "allow": "允许",
+      "deny": "拒绝"
     }
   }
 }

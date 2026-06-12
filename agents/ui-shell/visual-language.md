@@ -63,13 +63,17 @@ single root variable retunes the whole UI. Use `rounded-lg` for cards,
 
 ## Composition rules
 
-- Build screens from shadcn primitives in `frontend/src/lib/components/`
+- Build screens from shadcn primitives in `frontend/src/components/ui/`
   rather than inventing new wrappers per page.
 - Empty / loading / error states are first-class — never let a screen
-  render with no content while data resolves. Reuse `EmptyState` and
-  `WelcomeCard` from `frontend/src/lib/empty-state/`.
-- Status surfaces (daemon offline, capability disabled) use the
-  `status.*` tokens; do not pick raw colours.
+  render with no content while data resolves. Give each surface its own
+  empty/loading/error treatment (e.g. `components/chat/ChatEmptyState.tsx`);
+  there is no shared `EmptyState` primitive yet — factor one out when a
+  second feature needs the same shape.
+- Status surfaces (daemon offline, capability disabled, tool-call health)
+  use the `status.*` tokens; do not pick raw `green/amber/emerald` palette
+  classes. Type sizes come from the built-in scale (`text-sm`/`text-xs`/…),
+  never per-component `text-[Npx]`.
 
 ## When in doubt
 

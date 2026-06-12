@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field
 
 from coffer.application.agent.auto_detect import AutoDetectService
+from coffer.application.agent.native_memory import scan_claude_native_memory
 from coffer.application.agent.service import AgentService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
@@ -81,6 +82,21 @@ class AgentCandidatesOut(BaseModel):
     candidates: list[AgentCandidate]
 
 
+class NativeMemoryProjectOut(BaseModel):
+    """One project's native memory directory under the agent's config dir."""
+
+    slug: str
+    memory_dir: str
+    fact_count: int
+    managed: bool
+
+
+class NativeMemoryOut(BaseModel):
+    projects: list[NativeMemoryProjectOut]
+    #: Facts across projects not yet managed by Coffer (a quick banner number).
+    unmanaged_fact_count: int
+
+
 def _to_out(r: Resource) -> AgentOut:
     cfg = AgentConfig.model_validate(r.config)
     return AgentOut(
@@ -150,6 +166,32 @@ async def get_agent(
     svc: AgentService = Depends(get_agent_service),  # noqa: B008
 ) -> AgentOut:
     return _to_out(await svc.get(name))
+
+
+@router.get("/{name}/native-memory", response_model=NativeMemoryOut)
+async def get_native_memory(
+    name: str,
+    svc: AgentService = Depends(get_agent_service),  # noqa: B008
+) -> NativeMemoryOut:
+    """Discover the agent's EXISTING on-disk memory (read-only). Surfaces memory
+    Claude Code wrote natively that Coffer hasn't taken over yet."""
+    r = await svc.get(name)
+    cfg = AgentConfig.model_validate(r.config)
+    if cfg.type is not AgentType.CLAUDE_CODE:
+        return NativeMemoryOut(projects=[], unmanaged_fact_count=0)
+    found = scan_claude_native_memory(cfg.resolved_config_dir())
+    return NativeMemoryOut(
+        projects=[
+            NativeMemoryProjectOut(
+                slug=p.slug,
+                memory_dir=p.memory_dir,
+                fact_count=p.fact_count,
+                managed=p.managed,
+            )
+            for p in found
+        ],
+        unmanaged_fact_count=sum(p.fact_count for p in found if not p.managed),
+    )
 
 
 @router.patch("/{name}", response_model=AgentOut)

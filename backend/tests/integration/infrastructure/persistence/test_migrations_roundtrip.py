@@ -19,12 +19,21 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0005"
+HEAD_REVISION = "0014"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
 # live in the generic `resources` table. The skill kind (spec 005-skill-manager)
-# adds skill_agent_bindings in revision 0005, the current head.
+# adds skill_agent_bindings in revision 0005. The knowledge_base kind (spec
+# 006-knowledge-base) replaces the old per-kind ``kb_documents`` table with the
+# unified ``documents`` + ``chunks`` + ``documents_fts`` (FTS5) schema in 0006;
+# the memory kind (spec 007-memory) reuses that same unified schema (0007 adds
+# no table of its own), 0008 adds ``memory_projection_bindings`` for the
+# agent-side memory projection (which agents a store is projected into), and
+# 0009 adds ``memory_store_project_roots`` mapping a project store to the
+# absolute git-root it was provisioned from. The ``documents_fts_*`` shadow
+# tables FTS5 creates under the hood are excluded — the assertions speak to the
+# logical schema.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -33,7 +42,20 @@ EXPECTED_TABLES = {
     "mcp_invocations",
     "mcp_server_health",
     "skill_agent_bindings",
+    "documents",
+    "chunks",
+    "documents_fts",
+    "memory_projection_bindings",
+    "memory_store_project_roots",
+    "embedding_config",
+    "conversations",
+    "chat_messages",
+    "chat_models",
 }
+
+# FTS5 creates these shadow tables for ``documents_fts``; they are an
+# implementation detail of the virtual table, not schema the migrations name.
+_FTS_SHADOW_PREFIX = "documents_fts_"
 
 _ALEMBIC_INI = (
     pathlib.Path(__file__).resolve().parents[4]
@@ -65,7 +87,11 @@ def _user_tables(db_path: pathlib.Path) -> set[str]:
         ).fetchall()
     finally:
         conn.close()
-    return {name for (name,) in rows} - {"alembic_version"}
+    return {
+        name
+        for (name,) in rows
+        if name != "alembic_version" and not name.startswith(_FTS_SHADOW_PREFIX)
+    }
 
 
 def _alembic_version(db_path: pathlib.Path) -> str | None:
@@ -112,13 +138,68 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
+    # 0013 added conversations.archived_at (spec 008 archive); it exists at head.
+    with sqlite3.connect(db_path) as conn:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
+    assert "archived_at" in cols
+
+    # 0013 -> 0012: drops conversations.archived_at (column-only, no table change).
+    command.downgrade(cfg, "0012")
+    with sqlite3.connect(db_path) as conn:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
+    assert "archived_at" not in cols
+    assert _user_tables(db_path) == EXPECTED_TABLES
+
+    # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
+    command.downgrade(cfg, "0011")
+    assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "conversations",
+        "chat_messages",
+        "chat_models",
+    }
+
+    # 0011 -> 0010: drops embedding_config (global embedding singleton).
+    command.downgrade(cfg, "0010")
+    assert "embedding_config" not in _user_tables(db_path)
+
+    # 0009 -> 0008: drops memory_store_project_roots (spec 007-memory project root).
+    command.downgrade(cfg, "0008")
+    assert "memory_store_project_roots" not in _user_tables(db_path)
+
+    # 0008 -> 0007: drops memory_projection_bindings (spec 007-memory projection).
+    command.downgrade(cfg, "0007")
+    assert "memory_projection_bindings" not in _user_tables(db_path)
+
+    # 0007 -> 0006: memory reuses the unified substrate, so 0007 owns no table;
+    # the unified schema stays present.
+    command.downgrade(cfg, "0006")
+    assert {"documents", "chunks", "documents_fts"} <= _user_tables(db_path)
+
+    # 0006 -> 0005: drops the unified substrate (spec 006-knowledge-base).
+    command.downgrade(cfg, "0005")
+    tables_after_0005 = _user_tables(db_path)
+    assert "documents" not in tables_after_0005
+    assert "chunks" not in tables_after_0005
+    assert "documents_fts" not in tables_after_0005
+
     # 0005 -> 0004: drops skill_agent_bindings (spec 005-skill-manager).
     command.downgrade(cfg, "0004")
     assert "skill_agent_bindings" not in _user_tables(db_path)
 
     # 0004 -> 0003: index-only revision, table set otherwise unchanged.
     command.downgrade(cfg, "0003")
-    assert _user_tables(db_path) == EXPECTED_TABLES - {"skill_agent_bindings"}
+    assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "embedding_config",
+        "conversations",
+        "chat_messages",
+        "chat_models",
+        "memory_store_project_roots",
+        "memory_projection_bindings",
+        "skill_agent_bindings",
+        "documents",
+        "chunks",
+        "documents_fts",
+    }
 
     # 0003 -> 0002: drops mcp_server_health.
     command.downgrade(cfg, "0002")
@@ -181,3 +262,39 @@ def test_migration_0005_maps_legacy_skill_dir_to_config_dir(tmp_path, monkeypatc
     assert "skill_dir" not in team and team["config_dir"] == "/data/team"
     odd = json.loads(rows["odd"])
     assert "skill_dir" not in odd and odd["config_dir"] == "/data/custom"
+
+
+def test_db_stamped_by_pre_redesign_branch_is_repaired(tmp_path, monkeypatch):
+    """A DB that applied the PRE-redesign 0006/0007 (which created
+    ``kb_documents``/``memory_records``) is stamped at 0007, so the in-place
+    rewritten 0006 never re-runs and the unified ``documents`` schema is
+    missing — every KB/memory write then 500s with "no such table: documents"
+    (reproduced on a real install). ``upgrade head`` must repair such a DB:
+    create the unified schema and drop the legacy tables."""
+    db_path = tmp_path / "legacy.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    # Build the pre-redesign world: schema as of the OLD 0006/0007 — the 0005
+    # baseline tables plus the legacy per-kind tables — stamped at 0007.
+    command.upgrade(cfg, "0005")
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute("CREATE TABLE kb_documents (id TEXT PRIMARY KEY, kb_name TEXT)")
+        conn.execute("CREATE TABLE memory_records (id TEXT PRIMARY KEY, scope TEXT)")
+        conn.execute("UPDATE alembic_version SET version_num = '0007'")
+        conn.commit()
+    finally:
+        conn.close()
+
+    command.upgrade(cfg, "head")
+
+    tables = _user_tables(db_path)
+    assert {"documents", "chunks", "documents_fts"} <= tables
+    assert "kb_documents" not in tables
+    assert "memory_records" not in tables
+    assert _alembic_version(db_path) == HEAD_REVISION
+
+    # And the repair is idempotent for fresh DBs: a second upgrade is a no-op.
+    command.upgrade(cfg, "head")
+    assert {"documents", "chunks", "documents_fts"} <= _user_tables(db_path)

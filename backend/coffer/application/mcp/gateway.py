@@ -9,7 +9,9 @@ Invocation handlers (tools/call, resources/read, prompts/get) live in
 `gateway_handlers` to keep this module under 400 LOC.
 
 Server-initiated request plumbing (T-061 sampling, T-062 roots) lives in
-`gateway_server_requests` for the same reason.
+`gateway_server_requests` for the same reason. The pure envelope-parsing
+helpers (launch-cwd extraction, upstream-notification method/params parsing)
+live in `gateway_parsing`.
 
 For the spec's "upstream tool list changes mid-session" scenario, the
 session subscribes to each upstream's notification stream (via
@@ -28,16 +30,26 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from coffer.application.builtin_tools import (
+    COFFER_TOOL_PREFIX,
+    BuiltinToolRegistry,
+)
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway_aggregate_lists import (
     list_prompts_across,
     list_resources_across,
     list_tools_across,
 )
+from coffer.application.mcp.gateway_builtin import dispatch_builtin_tool
 from coffer.application.mcp.gateway_handlers import (
     handle_prompts_get,
     handle_resources_read,
     handle_tools_call,
+)
+from coffer.application.mcp.gateway_parsing import (
+    _extract_cwd,
+    _extract_method,
+    _extract_params,
 )
 from coffer.application.mcp.gateway_server_requests import (
     ServerRequestRegistry,
@@ -84,6 +96,7 @@ class MCPGatewaySession:
         *,
         clock: Callable[[], datetime] | None = None,
         on_dispose: Callable[[], None] | None = None,
+        builtin_tools: BuiltinToolRegistry | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._resources = resource_service
@@ -98,7 +111,13 @@ class MCPGatewaySession:
         # (otherwise disposed-but-registered supervisors accumulate for the
         # daemon's lifetime and the on_delete hook walks dead ones).
         self._on_dispose = on_dispose
+        self._builtin = builtin_tools or BuiltinToolRegistry()
         self._initialized = False
+        # FR-004: the agent's launch cwd, reported by the shim at the
+        # ``initialize`` handshake (params._meta["coffer/cwd"]). Threaded into
+        # memory built-in tool calls so project-scope resolution works. Falls
+        # back to the daemon's own cwd when the client omits it.
+        self._session_cwd: str | None = None
         # Track which servers we've subscribed to notifications on so we
         # only attach the handler once per (session, server) pair.
         self._notification_subscriptions: set[str] = set()
@@ -137,6 +156,7 @@ class MCPGatewaySession:
         # Record the downstream client's capabilities so we can gate server-initiated
         # requests appropriately (T-061: sampling capability check).
         self._client_capabilities = params.get("capabilities", {}) or {}
+        self._session_cwd = _extract_cwd(params)
         self._initialized = True
         return {
             "protocolVersion": "2025-06-18",
@@ -207,9 +227,19 @@ class MCPGatewaySession:
     # module's header for the per-server budget + parallelism rationale.
 
     async def _handle_tools_list(self) -> dict[str, Any]:
-        return await list_tools_across(
+        result = await list_tools_across(
             self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
         )
+        # Append Coffer's own built-in tools (spec 006: search_knowledge_base, ...).
+        for bt in self._builtin.list():
+            result["tools"].append(
+                {
+                    "name": f"{COFFER_TOOL_PREFIX}{bt.name}",
+                    "description": bt.description,
+                    "inputSchema": bt.input_schema,
+                }
+            )
+        return result
 
     async def _handle_resources_list(self) -> dict[str, Any]:
         return await list_resources_across(
@@ -232,6 +262,17 @@ class MCPGatewaySession:
         self._notification_subscriptions.discard(server_name)
 
     async def _handle_tools_call(self, params: dict[str, Any]) -> Any:
+        name = str(params.get("name") or "")
+        if self._builtin.is_builtin(name):
+            params = self._inject_session_cwd(name, params)
+            return await dispatch_builtin_tool(
+                prefixed_name=name,
+                params=params,
+                builtin=self._builtin,
+                invocations=self._invocations,
+                session_id=self.id,
+                clock=self._clock,
+            )
         return await handle_tools_call(
             params,
             resources=self._resources,
@@ -243,6 +284,27 @@ class MCPGatewaySession:
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
         )
+
+    def _inject_session_cwd(self, prefixed_name: str, params: dict[str, Any]) -> dict[str, Any]:
+        """Thread the session's launch cwd into a built-in tool call.
+
+        Generic: a tool opts in by declaring a ``cwd`` property in its input
+        schema (the memory tools do). The gateway never special-cases the memory
+        kind (Contract 5/6). A client-supplied ``cwd`` is left untouched. When
+        the session never reported a cwd, NOTHING is injected — scope resolution
+        then rejects project scope / serves global only, which is correct; the
+        daemon's own cwd would silently scope agent memory to whatever project
+        the daemon happens to run in."""
+        tool = self._builtin.get(prefixed_name)
+        if tool is None:
+            return params
+        props = tool.input_schema.get("properties", {})
+        if not isinstance(props, dict) or "cwd" not in props:
+            return params
+        args = dict(params.get("arguments") or {})
+        if not args.get("cwd") and self._session_cwd:
+            args["cwd"] = self._session_cwd
+        return {**params, "arguments": args}
 
     async def _handle_resources_read(self, params: dict[str, Any]) -> Any:
         return await handle_resources_read(
@@ -325,44 +387,3 @@ class MCPGatewaySession:
         if self._on_dispose is not None:
             with contextlib.suppress(Exception):
                 self._on_dispose()
-
-
-# --------------------------------------------------------------------------- #
-# Module-level notification parsing helpers                                    #
-# --------------------------------------------------------------------------- #
-
-
-def _extract_method(notification: Any) -> str | None:
-    """Defensive extraction — the SDK wraps notifications in various shapes."""
-    m = getattr(notification, "method", None)
-    if m is not None:
-        return str(m)
-    root = getattr(notification, "root", None)
-    if root is not None:
-        # CODE-032: coerce to str like the branch above. The SDK may expose
-        # ``root.method`` as an enum/Pydantic value; comparing that to the
-        # plain string literals in _on_upstream_notification would never match,
-        # silently dropping list_changed invalidation + forwarding.
-        rm = getattr(root, "method", None)
-        return str(rm) if rm is not None else None
-    if isinstance(notification, dict):
-        return notification.get("method")
-    return None
-
-
-def _extract_params(notification: Any) -> dict[str, Any] | None:
-    p = getattr(notification, "params", None)
-    if p is None:
-        root = getattr(notification, "root", None)
-        if root is not None:
-            p = getattr(root, "params", None)
-    if p is None and isinstance(notification, dict):
-        p = notification.get("params")
-    if p is None:
-        return None
-    if hasattr(p, "model_dump"):
-        result: dict[str, Any] = p.model_dump(exclude_none=True)
-        return result
-    if isinstance(p, dict):
-        return p
-    return None

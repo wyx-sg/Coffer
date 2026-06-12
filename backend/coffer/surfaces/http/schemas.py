@@ -243,3 +243,29 @@ class McpServerStatusOut(BaseModel):
     """Cheap per-server status, derived from persisted state (no spawn)."""
 
     status: Literal["healthy", "failing", "unknown"]
+
+
+# --- Embedding config (global) ---
+
+
+class EmbeddingConfigOut(BaseModel):
+    enabled: bool
+    provider: str | None = None
+    model: str | None = None
+    base_url: str | None = None
+    credential_ref: str | None = None
+    dimensions: int
+    default_chunk_size: int = 512
+    default_chunk_overlap: int = 64
+    updated_at: datetime | None = None
+
+
+class EmbeddingConfigUpdate(BaseModel):
+    enabled: bool = False
+    provider: str | None = None
+    model: str | None = None
+    base_url: str | None = None
+    credential_ref: str | None = None
+    dimensions: int = Field(default=768, ge=1, le=8192)
+    default_chunk_size: int = Field(default=512, ge=64, le=2048)
+    default_chunk_overlap: int = Field(default=64, ge=0)

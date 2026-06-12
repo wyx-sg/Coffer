@@ -25,9 +25,28 @@ dependencies = [
     "psutil>=5.9",
     "tomlkit>=0.13",
     "pyyaml>=6.0",
+    # specs 006 (knowledge_base) + 007 (memory): shared knowledge substrate.
+    # Converters → Markdown (MarkItDown default); FTS5 ships with SQLite; the
+    # OpenAI SDK drives the swappable-base_url embedding client; sqlite-vec is
+    # the vector index. Removed: llama-index-*, sentence-transformers, chromadb,
+    # mem0ai, pypdf (all belonged to the dropped LlamaIndex/mem0 stack).
+    "markitdown>=0.0.1",
+    "sqlite-vec>=0.1.1",
+    "openai>=1.40",
+    # spec 008 — agent chat: built-in LangGraph multi-LLM agent.
+    "langgraph>=1.2",
+    "langchain>=1.3",
+    "langchain-anthropic>=1.4",
+    "langchain-openai>=1.2",
+    "langchain-ollama>=1.1",
 ]
 
 [project.optional-dependencies]
+# Optional in-process local embeddings (no cloud call). Vector retrieval still
+# works via any OpenAI-compatible provider without this extra.
+local-embeddings = [
+    "fastembed>=0.3",
+]
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
@@ -79,6 +98,13 @@ warn_unused_configs = true
 show_error_codes = true
 pretty = true
 
+# Optional, lazily-imported third-party engines without type stubs. They are
+# present on CI (→ import-untyped) but may be absent in a lean dev/verify env
+# (→ import-not-found); ignoring missing imports keeps mypy stable across both.
+[[tool.mypy.overrides]]
+module = ["sqlite_vec.*", "markitdown.*", "fastembed.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
@@ -87,6 +113,7 @@ markers = [
     "acceptance(spec, scenario): tags a test as covering a spec.md acceptance scenario",
     "benchmark: performance benchmark; only runs when COFFER_RUN_BENCHMARKS=1",
     "timeout(seconds): per-test wall-clock cap enforced by pytest-timeout",
+    "engine: real-engine integration test; only runs when COFFER_RUN_ENGINE_TESTS=1",
 ]
 
 [tool.importlinter]
@@ -114,11 +141,26 @@ forbidden_modules = ["coffer.surfaces"]
 # Contract 2b (CODE-005): application code depends only on ports it defines
 # (Protocols in application/*); it must not import infrastructure directly.
 # Concrete infrastructure adapters are wired at composition root.
+#
+# Exception (specs 006/007): the shared knowledge substrate
+# (``coffer.infrastructure.knowledge`` + ``coffer.infrastructure.memory``) is a
+# kind-agnostic set of pure-ish helpers (chunking, frontmatter/YAML, content
+# ids, per-fact file I/O, path layout) that the application phase composes
+# behind the shared ``RetrievalPort`` / reindex routine. The data-model frames
+# this substrate as application-composable; the heavy engines (markitdown,
+# sqlite-vec, embedding SDKs) are still injected as ports and confined to
+# infrastructure by Contract 7 (engine confinement). So the application MAY
+# import the substrate helper modules, but no other infrastructure.
 [[tool.importlinter.contracts]]
 name = "Application does not import infrastructure"
 type = "forbidden"
 source_modules = ["coffer.application"]
 forbidden_modules = ["coffer.infrastructure"]
+ignore_imports = [
+    "coffer.application.knowledge_base.* -> coffer.infrastructure.knowledge.*",
+    "coffer.application.memory.* -> coffer.infrastructure.knowledge.*",
+    "coffer.application.memory.* -> coffer.infrastructure.memory.*",
+]
 
 # Contract 3: domain is pure — no imports from any other project layer, no
 # external SDKs that imply I/O. The list of forbidden externals is the smell
@@ -190,6 +232,16 @@ forbidden_modules = [
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
     "coffer.surfaces.cli.skill_cmd",
+    "coffer.domain.knowledge_base",
+    "coffer.application.knowledge_base",
+    "coffer.infrastructure.knowledge_base",
+    "coffer.surfaces.http.knowledge_base",
+    "coffer.surfaces.cli.knowledge_base_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
 ]
 
 # Contract 5b: agent kind may not reach into mcp or skill. Symmetric with 5.
@@ -214,6 +266,16 @@ forbidden_modules = [
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
     "coffer.surfaces.cli.skill_cmd",
+    "coffer.domain.knowledge_base",
+    "coffer.application.knowledge_base",
+    "coffer.infrastructure.knowledge_base",
+    "coffer.surfaces.http.knowledge_base",
+    "coffer.surfaces.cli.knowledge_base_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
 ]
 
 # Contract 5c: skill kind may not reach into mcp or agent. Symmetric with 5/5b.
@@ -240,6 +302,84 @@ forbidden_modules = [
     "coffer.infrastructure.agent",
     "coffer.surfaces.http.agent_routes",
     "coffer.surfaces.cli.agent_cmd",
+    "coffer.domain.knowledge_base",
+    "coffer.application.knowledge_base",
+    "coffer.infrastructure.knowledge_base",
+    "coffer.surfaces.http.knowledge_base",
+    "coffer.surfaces.cli.knowledge_base_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+]
+
+# Contract 5d: knowledge_base kind may not reach into mcp/agent/skill. Symmetric.
+[[tool.importlinter.contracts]]
+name = "Cross-kind imports forbidden (knowledge_base)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain.knowledge_base",
+    "coffer.application.knowledge_base",
+    "coffer.infrastructure.knowledge_base",
+    "coffer.surfaces.http.knowledge_base",
+    "coffer.surfaces.cli.knowledge_base_cmd",
+]
+forbidden_modules = [
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+    "coffer.domain.agent",
+    "coffer.application.agent",
+    "coffer.infrastructure.agent",
+    "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.cli.agent_cmd",
+    "coffer.domain.skill",
+    "coffer.application.skill",
+    "coffer.infrastructure.skill",
+    "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.cli.skill_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+]
+
+# Contract 5e: memory kind may not reach into mcp/agent/skill/knowledge_base.
+[[tool.importlinter.contracts]]
+name = "Cross-kind imports forbidden (memory)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+]
+forbidden_modules = [
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+    "coffer.domain.agent",
+    "coffer.application.agent",
+    "coffer.infrastructure.agent",
+    "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.cli.agent_cmd",
+    "coffer.domain.skill",
+    "coffer.application.skill",
+    "coffer.infrastructure.skill",
+    "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.cli.skill_cmd",
+    "coffer.domain.knowledge_base",
+    "coffer.application.knowledge_base",
+    "coffer.infrastructure.knowledge_base",
+    "coffer.surfaces.http.knowledge_base",
+    "coffer.surfaces.cli.knowledge_base_cmd",
 ]
 
 # Contract 6: kind-agnostic core does not import kind-specific modules.
@@ -251,6 +391,7 @@ source_modules = [
     "coffer.application.audit_service",
     "coffer.application.retention_service",
     "coffer.application.retention_worker",
+    "coffer.application.builtin_tools",
     "coffer.domain.resource",
     "coffer.domain.audit",
     "coffer.domain.retention",
@@ -272,4 +413,87 @@ forbidden_modules = [
     "coffer.application.skill",
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
+    "coffer.domain.knowledge_base",
+    "coffer.application.knowledge_base",
+    "coffer.infrastructure.knowledge_base",
+    "coffer.surfaces.http.knowledge_base",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+]
+
+# Contract 7 (REPLACES the old LlamaIndex + mem0 rules): engine confinement.
+# The knowledge-substrate engines (file→markdown converters, the sqlite-vec
+# vector index, and the OpenAI/fastembed embedding clients) may be imported
+# ONLY by the shared infrastructure substrate ``coffer.infrastructure.knowledge``.
+# Domain + application MUST NOT import them, and neither may sibling
+# infrastructure packages. ``llama_index``, ``mem0``, and ``chromadb`` are gone
+# from the codebase and are banned everywhere to prevent reintroduction.
+[[tool.importlinter.contracts]]
+name = "Engine confinement: converters/sqlite-vec/embedding SDKs in infrastructure.knowledge only"
+type = "forbidden"
+source_modules = [
+    "coffer.domain",
+    "coffer.application",
+    "coffer.infrastructure.mcp",
+    "coffer.infrastructure.agent",
+    "coffer.infrastructure.skill",
+    "coffer.infrastructure.knowledge_base",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence",
+    "coffer.infrastructure.credentials",
+    "coffer.infrastructure.daemon",
+    "coffer.infrastructure.logging",
+]
+forbidden_modules = [
+    "markitdown",
+    "docling",
+    "sqlite_vec",
+    "openai",
+    "fastembed",
+]
+
+# Contract 8: the dropped stacks must not return anywhere in the codebase.
+[[tool.importlinter.contracts]]
+name = "Dropped engines banned everywhere (llama_index/mem0/chromadb)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain",
+    "coffer.application",
+    "coffer.infrastructure",
+    "coffer.surfaces",
+]
+forbidden_modules = [
+    "llama_index",
+    "mem0",
+    "chromadb",
+    "sentence_transformers",
+]
+
+# Contract 9: langgraph + langchain* confined to infrastructure/chat (spec 008).
+# Domain + application MUST NOT import these SDKs; all other infrastructure
+# packages MUST NOT either. The composition root (surfaces/http/app.py +
+# surfaces/http/wiring.py) instantiates LangGraphBuiltinAgent via wire_chat.
+[[tool.importlinter.contracts]]
+name = "LangGraph and LangChain confined to infrastructure/chat"
+type = "forbidden"
+source_modules = [
+    "coffer.domain",
+    "coffer.application",
+    "coffer.infrastructure.mcp",
+    "coffer.infrastructure.knowledge",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence",
+    "coffer.infrastructure.credentials",
+    "coffer.infrastructure.daemon",
+    "coffer.infrastructure.logging",
+]
+forbidden_modules = [
+    "langgraph",
+    "langchain",
+    "langchain_core",
+    "langchain_anthropic",
+    "langchain_openai",
+    "langchain_ollama",
 ]

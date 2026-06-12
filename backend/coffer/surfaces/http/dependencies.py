@@ -9,9 +9,37 @@ from typing import Any
 from fastapi import Header, HTTPException, status
 
 from coffer.application.audit_service import AuditService
+from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+
+# Agent-chat (spec 008) providers live in their own module; re-export them so
+# the long-standing surfaces.http.dependencies.get_chat_service paths keep working.
+from coffer.surfaces.http.chat.dependencies import (
+    get_agent_registry as get_agent_registry,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    get_chat_service as get_chat_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    get_model_service as get_model_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    get_turn_orchestrator as get_turn_orchestrator,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_agent_registry as set_agent_registry,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_chat_service as set_chat_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_model_service as set_model_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_turn_orchestrator as set_turn_orchestrator,
+)
 
 # X-Coffer-Actor accepts any short identifier. Canonical values: "cli", "api",
 # "ui", "system". Tests use prefixed identifiers like "e2e-mcp"; downstream
@@ -83,6 +111,22 @@ def get_retention_service() -> RetentionService:
     if _retention_service is None:
         raise RuntimeError("retention service not initialised")
     return _retention_service
+
+
+_embedding_config_service: EmbeddingConfigService | None = None
+
+
+def set_embedding_config_service(svc: EmbeddingConfigService) -> None:
+    """Called by the composition root once on startup."""
+    global _embedding_config_service
+    _embedding_config_service = svc
+
+
+def get_embedding_config_service() -> EmbeddingConfigService:
+    """FastAPI Depends() target."""
+    if _embedding_config_service is None:
+        raise RuntimeError("embedding config service not initialised")
+    return _embedding_config_service
 
 
 # Factory type: (session_id: str) -> <MCPGatewaySession>.
@@ -319,3 +363,56 @@ def get_skill_service() -> Any:
     if _skill_service is None:
         raise RuntimeError("skill service not initialised")
     return _skill_service
+
+
+# --- knowledge_base kind (spec 006-knowledge-base) ---
+
+_kb_service: Any | None = None
+
+
+def set_kb_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _kb_service
+    _kb_service = svc
+
+
+def get_kb_service() -> Any:
+    """FastAPI Depends() target — actual type is KnowledgeBaseService."""
+    if _kb_service is None:
+        raise RuntimeError("knowledge base service not initialised")
+    return _kb_service
+
+
+# --- memory kind dependency providers (spec 007) ---
+
+_memory_service: Any | None = None
+
+
+def set_memory_service(svc: Any) -> None:
+    global _memory_service
+    _memory_service = svc
+
+
+def get_memory_service() -> Any:
+    if _memory_service is None:
+        raise RuntimeError("memory service not initialised")
+    return _memory_service
+
+
+_project_root_repo: Any | None = None
+
+
+def set_project_root_repo(repo: Any) -> None:
+    global _project_root_repo
+    _project_root_repo = repo
+
+
+def get_project_root_repo() -> Any:
+    if _project_root_repo is None:
+        raise RuntimeError("project-root repo not initialised")
+    return _project_root_repo
+
+
+# Agent-chat (spec 008) dependency providers are re-exported from
+# surfaces/http/chat/dependencies.py (see the import at the top of this module),
+# which keeps this kind-agnostic core under its file-size budget.

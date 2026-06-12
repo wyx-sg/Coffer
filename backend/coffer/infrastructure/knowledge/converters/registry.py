@@ -1,0 +1,64 @@
+"""Converter dispatch: format → the first ``MarkdownConverter`` that handles it.
+
+Order matters: passthrough (text/code) and csv claim their formats before the
+MarkItDown fallback, so cheap formats never spin up the heavy engine.
+"""
+
+from __future__ import annotations
+
+from coffer.domain.errors import IngestRejected
+from coffer.domain.knowledge.converter import MarkdownConverter
+from coffer.infrastructure.knowledge.cleaning import clean_markdown
+from coffer.infrastructure.knowledge.converters.csv_converter import CsvConverter
+from coffer.infrastructure.knowledge.converters.markitdown_converter import (
+    MarkItDownConverter,
+)
+from coffer.infrastructure.knowledge.converters.passthrough_converter import (
+    PassthroughConverter,
+)
+
+
+class ConverterRegistry:
+    """Dispatches a format to its converter and cleans the result."""
+
+    def __init__(self, converters: list[MarkdownConverter]) -> None:
+        self._converters = converters
+
+    def supports(self, fmt: str) -> bool:
+        norm = fmt.lower().lstrip(".")
+        return any(c.can_handle(norm) for c in self._converters)
+
+    def _resolve(self, fmt: str) -> MarkdownConverter:
+        norm = fmt.lower().lstrip(".")
+        for converter in self._converters:
+            if converter.can_handle(norm):
+                return converter
+        raise IngestRejected(
+            "unsupported_type",
+            f"no converter for format {fmt!r}",
+        )
+
+    async def convert(self, data: bytes, fmt: str) -> tuple[str, dict[str, object]]:
+        """Convert + clean. Returns ``(clean_markdown, metadata)``.
+
+        Raises ``IngestRejected('unsupported_type')`` if no converter handles
+        the format, or ``IngestRejected('empty')`` if conversion yields empty
+        markdown. ``EngineUnavailable`` propagates from the engine.
+        """
+        converter = self._resolve(fmt)
+        raw, meta = await converter.convert(data, fmt)
+        markdown = clean_markdown(raw)
+        if not markdown.strip():
+            raise IngestRejected("empty", f"conversion of {fmt!r} produced empty markdown")
+        return markdown, meta
+
+
+def default_registry() -> ConverterRegistry:
+    """The production registry: passthrough → csv → markitdown."""
+    return ConverterRegistry(
+        [
+            PassthroughConverter(),
+            CsvConverter(),
+            MarkItDownConverter(),
+        ]
+    )

@@ -19,7 +19,9 @@ from coffer.application.agent.mcp_service import AgentMcpService
 from coffer.application.agent.plugin_service import AgentPluginService
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
+from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.resource_service import ResourceService
+from coffer.application.skill.builtin_tools import register_skill_builtin_tools
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
@@ -51,6 +53,7 @@ def wire_agent_and_skill_kinds(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: object,
+    builtin_tools: BuiltinToolRegistry | None = None,
 ) -> None:
     """Wire the agent + skill kinds (specs 004, 005) into a running app.
 
@@ -157,3 +160,6 @@ def wire_agent_and_skill_kinds(
     set_agent_mcp_entry_service(agent_mcp_entry_svc)
     set_agent_plugin_service(agent_plugin_svc)
     set_skill_service(skill_svc)
+
+    if builtin_tools is not None:
+        register_skill_builtin_tools(builtin_tools, resources=resource_svc, skill_service=skill_svc)

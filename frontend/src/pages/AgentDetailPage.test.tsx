@@ -61,19 +61,20 @@ function renderAt() {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentDetailPage", () => {
-  test("renders the header, the Overview/Skills/MCP/Plugins/Config tabs, and the overview by default", () => {
+  test("renders the header, the Overview/Skills/MCP/Plugins/Memory/Config tabs, and the overview by default", () => {
     mockAgentLoaded();
 
     renderAt();
 
     expect(screen.getByRole("heading", { name: "cur" })).toBeInTheDocument();
 
-    // Overview, Skills, MCP servers, Plugins, and Config files tabs exist; the
-    // not-yet-built asset categories (Subagents/Memory) do not.
+    // Overview, Skills, MCP servers, Plugins, Memory, and Config files tabs
+    // exist; the not-yet-built asset category (Subagents) does not.
     expect(screen.getByRole("tab", { name: /overview/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^skills$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /mcp servers/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^plugins$/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^memory$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /config files/i })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /subagents & commands/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /memory & rules/i })).not.toBeInTheDocument();

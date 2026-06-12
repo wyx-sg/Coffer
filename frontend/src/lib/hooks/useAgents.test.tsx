@@ -12,11 +12,18 @@ import { ApiError } from "@/lib/api/errors";
 import {
   useAdoptMcpEntry,
   useAdoptUnmanagedSkill,
+  useAgent,
   useAgentCandidates,
+  useAgentConfigFile,
+  useAgentConfigFiles,
   useAgentMcpEntries,
+  useAgentMcpInstall,
+  useAgentMcpStatus,
   useAgents,
+  usePatchAgent,
   useRegisterAgent,
   useRemoveAgent,
+  useSaveAgentConfigFile,
   useTogglePlugin,
   useWriteConfigChild,
 } from "./useAgents";
@@ -134,6 +141,141 @@ describe("useRemoveAgent", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/agents\/cur$/);
     expect((init as RequestInit).method).toBe("DELETE");
+  });
+});
+
+describe("useAgent", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("GETs the named agent", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        name: "cur",
+        type: "codex",
+        config_dir: "/home/u/.codex",
+        description: null,
+        created_at: "2026-05-22T00:00:00Z",
+        updated_at: "2026-05-22T00:00:00Z",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useAgent("cur"), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.name).toBe("cur");
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/cur$/);
+  });
+
+  test("does not fetch when the name is empty", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderHook(() => useAgent(""), { wrapper: wrapper() });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("usePatchAgent", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("PATCHes the named agent with the body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        name: "cur",
+        type: "codex",
+        config_dir: "/home/u/.codex",
+        description: "updated",
+        created_at: "2026-05-22T00:00:00Z",
+        updated_at: "2026-05-22T00:00:00Z",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => usePatchAgent(), { wrapper: wrapper() });
+    await result.current.mutateAsync({ name: "cur", body: { description: "updated" } });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/agents\/cur$/);
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ description: "updated" });
+  });
+});
+
+describe("useAgentConfigFiles / useAgentConfigFile", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("GETs the config-file list and unwraps items", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        items: [{ key: "settings.json", path: "/x/settings.json", exists: true, size: 10 }],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useAgentConfigFiles("cur"), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.[0].key).toBe("settings.json");
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/cur\/config-files$/);
+  });
+
+  test("GETs a single config file when a key is selected, not before", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { key: "settings.json", content: "{}" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result, rerender } = renderHook(
+      ({ key }: { key: string | null }) => useAgentConfigFile("cur", key),
+      { wrapper: wrapper(), initialProps: { key: null as string | null } },
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    rerender({ key: "settings.json" });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(
+      /\/agents\/cur\/config-files\/settings.json$/,
+    );
+  });
+});
+
+describe("useSaveAgentConfigFile", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("PUTs the content to the keyed config file", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { key: "settings.json", path: "/x", exists: true, size: 2 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useSaveAgentConfigFile("cur"), { wrapper: wrapper() });
+    await result.current.mutateAsync({ key: "settings.json", content: "{}" });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/agents\/cur\/config-files\/settings.json$/);
+    expect((init as RequestInit).method).toBe("PUT");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ content: "{}" });
+  });
+});
+
+describe("useAgentMcpStatus / useAgentMcpInstall", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("GETs the MCP install status", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { installed: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useAgentMcpStatus("cur"), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/agents\/cur\/mcp-install$/);
+    expect((init as RequestInit).method).toBe("GET");
+  });
+
+  test("POSTs to install and DELETEs to uninstall", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { installed: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useAgentMcpInstall("cur"), { wrapper: wrapper() });
+
+    await result.current.mutateAsync(true);
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe("POST");
+
+    await result.current.mutateAsync(false);
+    expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("DELETE");
+    expect(String(fetchMock.mock.calls[1][0])).toMatch(/\/agents\/cur\/mcp-install$/);
   });
 });
 

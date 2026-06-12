@@ -1,9 +1,7 @@
 // frontend/src/pages/ResourcesPage.tsx
-import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Server } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { listKindUIs } from "@/lib/components/kindRegistry";
 import { PageHeader } from "@/components/PageHeader";
 import { AddMcpServerDialog } from "@/kinds/mcp/AddMcpServerDialog";
 import { McpServersTable } from "@/kinds/mcp/McpServersTable";
@@ -16,20 +14,17 @@ import { translateApiError } from "@/lib/api/errors";
  * a welcome card; otherwise the shared DataTable (search / filter / pagination
  * + row multi-select bulk actions), with a row click opening the server's
  * detail page.
+ *
+ * Scopes the query to `mcp_server` SERVER-SIDE. Filtering client-side off the
+ * kind registry was wrong: `memory` and `knowledge_base` register their own
+ * UIs too, so a "kind has a registered UI" filter let their stores leak into
+ * this list. Asking the backend for one kind is correct no matter what else is
+ * registered in the browser.
  */
 export function ResourcesPage() {
   const { t } = useTranslation();
-  const kinds = listKindUIs();
-  const { data: resources, isPending, error } = useResources();
-
-  // Only surface resources whose kind has a registered UI in this browser.
-  // Kinds with a bespoke page (e.g. `agent`, which lives at /agents) are not
-  // registered here, so they never leak into the MCP servers list.
-  const knownKinds = useMemo(() => new Set(kinds.map((k) => k.name)), [kinds]);
-  const visible = useMemo(
-    () => (resources ?? []).filter((r) => knownKinds.has(r.kind)),
-    [resources, knownKinds],
-  );
+  const { data: resources, isPending, error } = useResources("mcp_server");
+  const visible = resources ?? [];
   const hasResources = visible.length > 0;
 
   return (

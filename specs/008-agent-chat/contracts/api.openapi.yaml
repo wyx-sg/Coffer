@@ -1,0 +1,519 @@
+openapi: 3.0.3
+info:
+  title: Coffer — Agent Chat API
+  version: 0.1.0
+  description: >
+    REST + SSE surface for the chat platform, the agent-provider registry, the
+    built-in agent, and configured LLM models. Spec 008. Conversations and
+    models are not Resources. An agent is reached only through the registry;
+    adding another agent provider requires no change to this contract.
+
+servers:
+  - url: http://127.0.0.1:8000
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/chat/agents:
+    get:
+      summary: List the agents the platform offers
+      operationId: listAgents
+      tags: [chat]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatAgentListOut'
+
+  /api/v1/chat/conversations:
+    get:
+      summary: List conversations, newest first
+      operationId: listConversations
+      tags: [chat]
+      parameters:
+        - name: archived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: >
+            When true, returns archived conversations; the default lists active
+            (non-archived) conversations only.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationListOut'
+    post:
+      summary: Create a conversation
+      operationId: createConversation
+      description: >
+        Creates a conversation for the named agent. `agent_key` selects the
+        agent (defaults to the built-in agent); `agent_config` is an opaque,
+        agent-specific configuration object the named agent validates and
+        stores. For the built-in agent, `agent_config` accepts an optional
+        `model_id`. An unknown `agent_key` or an invalid `agent_config` is
+        rejected with 400.
+      tags: [chat]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationOut'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/chat/conversations/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    get:
+      summary: Get one conversation
+      operationId: getConversation
+      tags: [chat]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      summary: Rename a conversation or change its model
+      operationId: updateConversation
+      tags: [chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationPatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Delete a conversation and its messages
+      operationId: deleteConversation
+      tags: [chat]
+      responses:
+        '204':
+          description: No Content
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/chat/conversations/{id}/archive:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    post:
+      summary: Archive a conversation (hide from the active list, keep restorable)
+      operationId: archiveConversation
+      tags: [chat]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/chat/conversations/{id}/unarchive:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    post:
+      summary: Restore an archived conversation into the active list
+      operationId: unarchiveConversation
+      tags: [chat]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/chat/conversations/{id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    get:
+      summary: Conversation message history
+      operationId: listMessages
+      tags: [chat]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageListOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Send a user message and stream the agent turn
+      operationId: sendMessage
+      description: >
+        Appends the user message, then streams the agent turn as
+        Server-Sent Events. Event names: `turn_start`, `text_delta`,
+        `tool_call`, `tool_result`, `approval_request`, `turn_done`,
+        `turn_error`. A turn that emits `approval_request` pauses until a
+        decision is posted to `.../approvals`. Each `data:` payload is a JSON
+        object. The stream closes when the turn ends.
+      tags: [chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: SSE stream of agent events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: A turn is already in progress, or no model is configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+
+  /api/v1/chat/conversations/{id}/approvals:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    post:
+      summary: Submit an allow/deny decision for a paused approval request
+      operationId: submitApproval
+      description: >
+        Delivers the user's decision to a turn paused on an `approval_request`
+        event. Returns 409 when no pending request matches `request_id`
+        (unknown or already decided).
+      tags: [chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalSubmit'
+      responses:
+        '204':
+          description: No Content — decision delivered
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: No pending approval request matches request_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+
+  /api/v1/chat/conversations/{id}/interrupt:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    post:
+      summary: Stop the conversation's in-flight turn, keeping partial output
+      operationId: interruptTurn
+      description: >
+        Stops a running turn. Whatever the agent produced so far is persisted
+        as the assistant message. A no-op when no turn is in flight.
+      tags: [chat]
+      responses:
+        '204':
+          description: No Content
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/models:
+    get:
+      summary: List configured models
+      operationId: listModels
+      tags: [models]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelListOut'
+    post:
+      summary: Register a model
+      operationId: createModel
+      tags: [models]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelOut'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/models/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ModelId'
+    patch:
+      summary: Edit a model
+      operationId: updateModel
+      tags: [models]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelPatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelOut'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Remove a model
+      operationId: deleteModel
+      tags: [models]
+      responses:
+        '204':
+          description: No Content
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    ConversationId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+    ModelId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOut'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOut'
+
+  schemas:
+    ChatAgentOut:
+      type: object
+      required: [agent_key, display_name, available]
+      properties:
+        agent_key: { type: string, example: builtin }
+        display_name: { type: string, example: Coffer Assistant }
+        available: { type: boolean }
+
+    ChatAgentListOut:
+      type: object
+      required: [agents]
+      properties:
+        agents:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatAgentOut'
+
+    ConversationCreate:
+      type: object
+      properties:
+        agent_key:
+          type: string
+          default: builtin
+          description: Which agent the conversation talks to.
+        agent_config:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: >
+            Opaque, agent-specific configuration validated by the named agent.
+            For the built-in agent: an optional `model_id`.
+
+    ConversationPatch:
+      type: object
+      properties:
+        title: { type: string, nullable: true }
+        model_id: { type: string, nullable: true }
+
+    ConversationOut:
+      type: object
+      required: [id, agent_key, title, model_id, created_at, updated_at]
+      properties:
+        id: { type: string }
+        agent_key: { type: string, example: builtin }
+        title: { type: string }
+        model_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        archived_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null for an active conversation; the instant it was archived otherwise.
+
+    ConversationListOut:
+      type: object
+      required: [conversations]
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationOut'
+
+    ContentBlock:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [text, tool_use, tool_result] }
+        text: { type: string, nullable: true }
+        tool_use_id: { type: string, nullable: true }
+        tool_name: { type: string, nullable: true }
+        tool_input: { type: object, additionalProperties: true, nullable: true }
+        output: { type: object, additionalProperties: true, nullable: true }
+        error: { type: string, nullable: true }
+
+    MessageOut:
+      type: object
+      required: [id, conversation_id, seq, role, content, status, created_at]
+      properties:
+        id: { type: string }
+        conversation_id: { type: string }
+        seq: { type: integer }
+        role: { type: string, enum: [user, assistant] }
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentBlock'
+        status: { type: string, enum: [complete, streaming, failed] }
+        model_id: { type: string, nullable: true }
+        prompt_tokens: { type: integer, nullable: true }
+        completion_tokens: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    MessageListOut:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageOut'
+
+    SendMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 32768 }
+
+    ApprovalSubmit:
+      type: object
+      required: [request_id, behavior]
+      properties:
+        request_id: { type: string }
+        behavior: { type: string, enum: [allow, deny] }
+        message: { type: string, nullable: true }
+
+    ModelCreate:
+      type: object
+      required: [display_name, provider, model]
+      properties:
+        display_name: { type: string, minLength: 1 }
+        provider: { type: string, enum: [anthropic, openai, ollama] }
+        model: { type: string, minLength: 1 }
+        credential_ref: { type: string, nullable: true }
+        base_url: { type: string, nullable: true }
+        is_default: { type: boolean, default: false }
+
+    ModelPatch:
+      type: object
+      properties:
+        display_name: { type: string, nullable: true }
+        model: { type: string, nullable: true }
+        credential_ref: { type: string, nullable: true }
+        base_url: { type: string, nullable: true }
+        is_default: { type: boolean, nullable: true }
+
+    ModelOut:
+      type: object
+      required: [id, display_name, provider, model, is_default, created_at, updated_at]
+      properties:
+        id: { type: string }
+        display_name: { type: string }
+        provider: { type: string, enum: [anthropic, openai, ollama] }
+        model: { type: string }
+        credential_ref: { type: string, nullable: true }
+        base_url: { type: string, nullable: true }
+        is_default: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ModelListOut:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelOut'
+
+    ErrorOut:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
