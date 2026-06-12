@@ -72,6 +72,27 @@ class MasterKeyManager:
         self._location = "file"
         return key
 
+    def export_key(self) -> bytes | None:
+        """Return the current master key for out-of-band transfer, or None.
+
+        Used by sync (spec 010) to write the key to a file the user moves to
+        another machine by a channel they trust — the key never travels through
+        the sync medium itself.
+        """
+        return self.resolve(allow_create=False)
+
+    def install_key(self, key: bytes) -> None:
+        """Install a master key brought from another machine (spec 010 bootstrap).
+
+        Writes to the 0600 file store (the default); a machine that prefers the
+        keychain can ``relocate("keychain")`` afterwards. Validates the bytes are
+        a usable Fernet key so a corrupt import fails loudly instead of locking
+        every credential on next decrypt.
+        """
+        Fernet(key.strip())  # raises ValueError on a malformed key
+        self._write_file(key.strip())
+        self._location = "file"
+
     def relocate(self, to: StorageLocation) -> None:
         """Move the key between file and keychain. Old copy removed last."""
         if to == self._location:
