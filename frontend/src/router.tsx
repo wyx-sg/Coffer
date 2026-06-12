@@ -19,6 +19,7 @@ import { GeneralSettings } from "./pages/settings/GeneralSettings";
 import { DataSettings } from "./pages/settings/DataSettings";
 import { EmbeddingSettings } from "./pages/settings/EmbeddingSettings";
 import { AppSettings } from "./pages/settings/AppSettings";
+import { SecuritySettings } from "./pages/settings/SecuritySettings";
 import { AboutPage } from "./pages/settings/AboutPage";
 import { ModelsPage } from "./pages/settings/ModelsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -65,6 +66,7 @@ export const router = createBrowserRouter([
           { path: "models", element: <ModelsPage /> },
           { path: "data", element: <DataSettings /> },
           { path: "embedding", element: <EmbeddingSettings /> },
+          { path: "security", element: <SecuritySettings /> },
           { path: "app", element: <AppSettings /> },
           { path: "about", element: <AboutPage /> },
         ],

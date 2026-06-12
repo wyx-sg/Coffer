@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0015"
+HEAD_REVISION = "0016"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -32,9 +32,10 @@ HEAD_REVISION = "0015"
 # agent-side memory projection (which agents a store is projected into), and
 # 0009 adds ``memory_store_project_roots`` mapping a project store to the
 # absolute git-root it was provisioned from. 0015 adds ``channel_peers``
-# (spec 009-channels: the paired owner of a messaging channel). The
-# ``documents_fts_*`` shadow tables FTS5 creates under the hood are excluded —
-# the assertions speak to the logical schema.
+# (spec 009-channels: the paired owner of a messaging channel); 0016 adds the
+# ``credentials`` table for the Fernet-encrypted secret store (envelope
+# encryption). The ``documents_fts_*`` shadow tables FTS5 creates under the
+# hood are excluded — the assertions speak to the logical schema.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -43,6 +44,7 @@ EXPECTED_TABLES = {
     "mcp_invocations",
     "mcp_server_health",
     "skill_agent_bindings",
+    "credentials",
     "documents",
     "chunks",
     "documents_fts",
@@ -140,6 +142,10 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
+    # 0016 -> 0015: drops credentials (encrypted credential store).
+    command.downgrade(cfg, "0015")
+    assert "credentials" not in _user_tables(db_path)
+
     # 0013 added conversations.archived_at (spec 008 archive); it exists at head.
     with sqlite3.connect(db_path) as conn:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
@@ -154,11 +160,12 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     with sqlite3.connect(db_path) as conn:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
     assert "archived_at" not in cols
-    assert _user_tables(db_path) == EXPECTED_TABLES - {"channel_peers"}
+    assert _user_tables(db_path) == EXPECTED_TABLES - {"credentials", "channel_peers"}
 
     # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
     command.downgrade(cfg, "0011")
     assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "credentials",
         "channel_peers",
         "conversations",
         "chat_messages",
@@ -196,6 +203,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # 0004 -> 0003: index-only revision, table set otherwise unchanged.
     command.downgrade(cfg, "0003")
     assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "credentials",
         "channel_peers",
         "embedding_config",
         "conversations",

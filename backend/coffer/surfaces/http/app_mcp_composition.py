@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -29,7 +30,6 @@ from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -55,6 +55,7 @@ def wire_mcp_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: object,
+    credential_store: Any,
     builtin_tools: BuiltinToolRegistry | None = None,
 ) -> tuple[SubprocessSupervisor, dict[str, SubprocessSupervisor]]:
     """Build and wire all MCP-specific plumbing into the app.
@@ -78,7 +79,7 @@ def wire_mcp_kind(
     #    (management routes: capabilities, refresh, test — not per-session protocol routing)
     process_supervisor = SubprocessSupervisor(
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        credential_resolver=CredentialResolver(credential_store),
         upstream_factory=build_upstream,
     )
     process_discovery = CapabilityDiscovery(
@@ -92,7 +93,7 @@ def wire_mcp_kind(
     def mcp_session_factory(session_id: str) -> MCPGatewaySession:
         supervisor = SubprocessSupervisor(
             resource_service=resource_svc,
-            credential_resolver=CredentialResolver(KeyringAdapter()),
+            credential_resolver=CredentialResolver(credential_store),
             upstream_factory=build_upstream,
         )
         session_supervisors[session_id] = supervisor

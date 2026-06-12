@@ -61,7 +61,7 @@ After conversion the pipeline **cleans** (normalize whitespace, strip control ch
 
 **Question**: Which embedding model, and how is it configured?
 
-**Decision**: A **user-configurable, OpenAI-compatible provider abstraction** (DevPilot-style: one `AsyncOpenAI` client with a swappable `base_url`). Per-KB `EmbeddingConfig`: `provider`, `model`, `base_url`, `credential_ref` (keychain ref, never plaintext), `dimensions`. Providers reachable through the same `.embeddings.create` call: OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope and local Ollama / LM Studio; plus an in-process **`local`** provider (fastembed) for zero-server offline embeddings.
+**Decision**: A **user-configurable, OpenAI-compatible provider abstraction** (DevPilot-style: one `AsyncOpenAI` client with a swappable `base_url`). Per-KB `EmbeddingConfig`: `provider`, `model`, `base_url`, `credential_ref` (encrypted-store ref, never plaintext), `dimensions`. Providers reachable through the same `.embeddings.create` call: OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope and local Ollama / LM Studio; plus an in-process **`local`** provider (fastembed) for zero-server offline embeddings.
 
 - **Default retrieval is `keyword`+`grep`** (zero config, offline). Vector is opt-in — the user is never forced to pick a model or download anything to get a working KB.
 - **The embedding model is mutable.** Changing it re-embeds the corpus (files are the truth, so this is cheap to re-derive). No immutability lock — this fixes the original spec's "recreate the KB to change the model" friction.

@@ -53,7 +53,7 @@ for the distribution-architecture decision.
 | **Languages**                             | OK         | Rust is allowed for the desktop shell per the constitution Languages clause; the daemon and shim remain Python 3.12.                                                                               |
 | **Architecture: layered**                 | OK         | Desktop crate is a thin shell — supervision, tray, and shim deploy live in dedicated modules; the web UI from 002 is the view layer.                                                               |
 | **Persistence: SQLite for control plane** | OK         | This spec owns no persistence; the daemon does. The shell reads `~/.coffer/daemon.json` (not SQLite) to discover the daemon — the discovery file is part of the runtime contract owned by ADR-006. |
-| **Credentials: keychain only**            | OK         | Spec owns no credentials. The autostart preference is stored by `tauri-plugin-autostart` (OS-native, not the keychain).                                                                            |
+| **Credentials: encrypted store**          | OK         | Spec owns no credentials. The autostart preference is stored by `tauri-plugin-autostart` (OS-native, not the credential store).                                                                    |
 | **Network defaults: loopback-only**       | OK         | The shell talks to the daemon on `127.0.0.1:<port>` from `daemon.json`; no other HTTP origin is reached.                                                                                           |
 
 ## Project Structure

@@ -372,7 +372,7 @@ The `on_delete_hook` is bound to a callable supplied by the skill module (the 00
 ## Constraints summary
 
 - All HTTP routes bind `127.0.0.1`, share `X-Coffer-Token` auth (per spec 001).
-- No new keychain entries — `agent` config has no credentials. Config-file
+- No new credential-store entries — `agent` config has no credentials. Config-file
   reads do not parse or extract secrets; `~/.codex/auth.json` is excluded from
   the allowlist.
 - Config files are editable through Coffer. All writes to an agent's own config

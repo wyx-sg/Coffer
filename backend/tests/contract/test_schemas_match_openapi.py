@@ -59,10 +59,12 @@ def openapi_components() -> dict[str, Any]:
         ("DaemonStatusOut", "DaemonStatusOut", {"status", "version", "started_at", "port"}),
         ("BackupResultOut", "BackupResultOut", {"path", "size_bytes"}),
         ("TokenRotationOut", "TokenRotationOut", {"token"}),
-        # MCP / keychain schemas
-        ("KeychainSetIn", "KeychainSetIn", {"ref", "value"}),
-        ("KeychainGetOut", "KeychainGetOut", {"value"}),
-        ("KeychainExistsOut", "KeychainExistsOut", {"present"}),
+        # MCP / credentials schemas
+        ("CredentialSetIn", "CredentialSetIn", {"ref", "value"}),
+        ("CredentialGetOut", "CredentialGetOut", {"value"}),
+        ("CredentialExistsOut", "CredentialExistsOut", {"present"}),
+        ("CredentialSettingsOut", "CredentialSettingsOut", {"master_key_storage"}),
+        ("CredentialSettingsIn", "CredentialSettingsIn", {"master_key_storage"}),
         ("McpServerStatusOut", "McpServerStatusOut", {"status"}),
         (
             "CapabilityListOut",

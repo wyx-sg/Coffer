@@ -347,7 +347,7 @@ application 层接口；具体实现位于 `infrastructure/agent/config_file_sto
 ## 约束小结
 
 - 所有 HTTP 路由绑定 `127.0.0.1`，共用 `X-Coffer-Token` 鉴权（依 spec 001）。
-- 无新增 keychain 条目——`agent` config 不含凭据。配置文件读取不解析或抽取任何
+- 无新增凭据存储条目——`agent` config 不含凭据。配置文件读取不解析或抽取任何
   密钥；`~/.codex/auth.json` 被排除在 allowlist 之外。
 - 配置文件在 Coffer 中可编辑。对 agent 自己的配置文件（位于 `~/.claude/`、
   `~/.codex/` 与 `~/.claude.json`）的所有写入——无论是用户保存还是 Coffer-MCP

@@ -84,7 +84,7 @@ Architecture       (authored deep-dive, bilingual, Mermaid; ordered by
   · Surfaces (REST · MCP · CLI · shim · Web · Desktop — uniform template)
   · Request lifecycle (end-to-end tool call + sequence diagram + error path)
   · Persistence (SQLite + table map + migrations)
-  · Security (invariants: loopback · keychain-only · namespacing)
+  · Security (invariants: loopback · encrypted-credential-store · namespacing)
   · Audit & accountability (audit log · invocation log · retention)
   · Observability (structured logging · trace correlation · error model)
   · Distribution (PyInstaller + Tauri sidecar)

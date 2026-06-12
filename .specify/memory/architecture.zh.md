@@ -44,7 +44,7 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 | `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。workspace 修订新增了未托管 skill 扫描（把手工放置的 skill adopt 进主库）以及逐 agent 的 follow-master-library 策略（开关 + 排除列表，存于 agent 配置），由同步引擎负责调和。 |
 | `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | 共享知识基底的 **KB 面**。任意格式上传 → 转成 markdown（经一个 `MarkdownConverter` 端口做 any-format→markdown，默认 MarkItDown），`docs/<doc-id>.md` 即事实 + `raw/` 作出处。agent 只读；grep / FTS5 / sqlite-vec 检索。见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)。 |
 | `memory`         | [007-memory](../../specs/007-memory/spec.md)                 | 同一基底的 **memory 面**。逐条 `<slug>.md` + 重新生成的 `MEMORY.md` 即事实，两层作用域（global 哨兵 + per-project ULID）。经 MCP 读写 + 原生投影（Claude symlink / Codex 托管块）跨 agent 共享 —— 一个规范 store，不分叉。见 [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)。    |
-| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与聊天平台的 agent 对话、应答审批提示并接收通知。薄 adapter 架在 spec-008 的接缝之上（[ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)）。                       |
+| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与聊天平台的 agent 对话、应答审批提示并接收通知。薄 adapter 架在 spec-008 的接缝之上（[ADR-015](../../docs/decisions/ADR-014-channel-adapter-framework.md)）。                       |
 
 `knowledge_base` 与 `memory` 是**同一个知识基底 (knowledge substrate)** 的两副
 面孔：**落盘的 markdown 文件是事实源；SQLite 是可重建索引**（`coffer reindex`
@@ -83,7 +83,7 @@ backend/coffer/
 │   └── fs/                      # 文件系统浏览服务
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (统一元数据)
-│   ├── credentials/              # 钥匙串适配器——唯一被允许 import `keyring` 的位置
+│   ├── credentials/              # 加密凭据存储 + 主密钥——唯一被允许 import `keyring` 的位置
 │   ├── daemon/                   # pid_lock、端口分配
 │   ├── mcp/                      # 子进程、HTTP 上游客户端
 │   ├── agent/                   # agent 配置文件存储
@@ -130,7 +130,7 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 - **Stdio shim** — 短生命周期；其生命周期绑定到单个 MCP 客户端进程。
 - **Callback listener** — daemon 拉起的子进程，只在
   `127.0.0.1:<callback-port>` 上服务带签名的 channel 回调路径；在任何
-  SeaTalk channel 处于启用状态时运行 (spec 009，[ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md))。
+  SeaTalk channel 处于启用状态时运行 (spec 009，[ADR-015](../../docs/decisions/ADR-014-channel-adapter-framework.md))。
 
 两者通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + token，权限位
 `0600`)。见
@@ -158,7 +158,7 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 
 | 关注点      | 位置                                                                          | 备注                                                                                                                                                                                                                                           |
 | ----------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 凭据        | `infrastructure/credentials/keyring_adapter.py`                               | 唯一可 import `keyring` 的文件。**daemon 是唯一 keychain 所有者**:所有 surface(桌面、CLI、shim)都通过 daemon 的 `/api/v1/keychain` 路由访问 keychain —— CLI 不在进程内直接访问(spec 006)。配置里只放 ref；在上游进程拉起时按需物化；永不落盘。 |
+| 凭据        | `infrastructure/credentials/`(`encrypted_store.py`、`master_key.py`、`keyring_adapter.py`） | 密钥只以 Fernet 密文形式存于 `credentials` 表；主密钥（默认 `0600` 文件，opt-in 时存于操作系统钥匙串）与 legacy 迁移是唯一的 `keyring` 使用方。**daemon 是唯一凭据存储所有者**:所有 surface(桌面、CLI、shim)都通过 daemon 的 `/api/v1/credentials` 路由访问密钥，并通过 `/api/v1/settings/credentials` 切换主密钥存储位置 —— CLI 不在进程内直接访问存储(spec 006)。配置里只放 ref；在上游进程拉起时按需物化（解密）；明文永不落盘。 |
 | 审计        | `domain/audit.py` + `application/audit_service.py` + `audit_log` 表           | 覆盖每一次资源生命周期变更。必须带 actor (cli / api / ui / system)。                                                                                                                                                                           |
 | 保留策略    | `application/retention_service.py` + `retention_policies` 表 + asyncio worker | 每个日志类表注册为 `PrunableTable`；中央注册表强制执行 SQL allowlist。                                                                                                                                                                         |
 | 错误        | `domain/errors.py` + FastAPI 全局处理器                                       | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。                                                                                                                                                             |

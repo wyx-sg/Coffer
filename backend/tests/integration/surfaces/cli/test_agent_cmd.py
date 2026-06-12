@@ -587,7 +587,7 @@ def test_mcp_remove_entry_force_and_prompt(workspace_cli):
 
 def test_mcp_adopt_with_secret(workspace_cli):
     """`mcp adopt --secret KEY=REF` adopts the entry into a managed resource."""
-    _tmp, keyring = workspace_cli
+    _tmp, _keyring = workspace_cli
     # Without the secret mapping: exit 6 plus the --secret hint.
     r = _runner.invoke(cli_app, ["agent", "mcp", "adopt", "cx", "fetcher"])
     assert r.exit_code == 6, r.output
@@ -600,8 +600,11 @@ def test_mcp_adopt_with_secret(workspace_cli):
     )
     assert r.exit_code == 0, r.output
     assert "adopted: mcp_server:fetcher" in r.output
-    # The secret value landed in the (fake) keychain, keyed by the ref.
-    assert keyring[ref] == _SECRET_VALUE
+    # The secret value landed in the encrypted credential store, keyed by the
+    # ref — read it back through the CLI (audited daemon read).
+    r = _runner.invoke(cli_app, ["credentials", "get", ref, "--show"])
+    assert r.exit_code == 0, r.output
+    assert _SECRET_VALUE in r.output
 
 
 def test_mcp_adopt_bad_secret_syntax_exit2(workspace_cli):

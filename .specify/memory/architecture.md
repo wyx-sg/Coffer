@@ -41,7 +41,7 @@ Currently registered kinds:
 | `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories. The workspace amendment adds an unmanaged-skill scan (adopt hand-placed skills into the master store) and a per-agent follow-master-library policy (flag + exclusions on the agent's config) that the sync engine reconciles. |
 | `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | **KB face** of the shared knowledge substrate. Any-format upload → converted to markdown (any-format→markdown via a `MarkdownConverter` port, MarkItDown default), `docs/<doc-id>.md` = truth + `raw/` provenance. Agent-read-only; grep / FTS5 / sqlite-vec retrieval. See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md).                  |
 | `memory`         | [007-memory](../../specs/007-memory/spec.md)                 | **memory face** of the same substrate. Per-fact `<slug>.md` + regenerated `MEMORY.md` = truth, two-layer scope (global sentinel + per-project ULID). Shared across agents via MCP read/write + native projection (Claude symlink / Codex managed block) — one canonical store, no divergence. See [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md). |
-| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | A messaging-channel binding (Telegram, SeaTalk). Carries transport config + credential refs and a default agent; a paired owner chats with chat-platform agents from the IM app, answers approval prompts, and receives notifications. Thin adapters over the spec-008 seams ([ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)).                       |
+| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | A messaging-channel binding (Telegram, SeaTalk). Carries transport config + credential refs and a default agent; a paired owner chats with chat-platform agents from the IM app, answers approval prompts, and receives notifications. Thin adapters over the spec-008 seams ([ADR-015](../../docs/decisions/ADR-014-channel-adapter-framework.md)).                       |
 
 `knowledge_base` and `memory` are two faces of **one knowledge substrate**:
 **markdown files on disk are the source of truth; SQLite is a rebuildable index**
@@ -82,7 +82,7 @@ backend/coffer/
 │   └── fs/                      # filesystem-browse service
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
-│   ├── credentials/              # keychain adapter — only place importing `keyring`
+│   ├── credentials/              # encrypted credential store + master key — only place importing `keyring`
 │   ├── daemon/                   # pid_lock, port allocation
 │   ├── mcp/                      # subprocess, http upstream client
 │   ├── agent/                   # agent config-file store
@@ -131,7 +131,7 @@ importing kind modules (Contract 6).
 - **Stdio shim** — short-lived; lifecycle bound to one MCP client process.
 - **Callback listener** — daemon-spawned child serving only signed channel
   callback paths on `127.0.0.1:<callback-port>`; runs while any SeaTalk
-  channel is enabled (spec 009, [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)).
+  channel is enabled (spec 009, [ADR-015](../../docs/decisions/ADR-014-channel-adapter-framework.md)).
 
 Both discover the daemon through `~/.coffer/daemon.json` (PID + port +
 token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.md).
@@ -160,7 +160,7 @@ token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or
 
 | Concern           | Location                                                                         | Notes                                                                                                                                                                                                                                                                                                             |
 | ----------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Credentials       | `infrastructure/credentials/keyring_adapter.py`                                  | Only file allowed to import `keyring`. The **daemon is the sole keychain owner**: every surface (desktop, CLI, shim) reaches the keychain through the daemon's `/api/v1/keychain` routes — the CLI never accesses it in-process (spec 006). Refs in config; materialized at upstream-spawn time; never persisted. |
+| Credentials       | `infrastructure/credentials/` (`encrypted_store.py`, `master_key.py`, `keyring_adapter.py`) | Secrets stored only as Fernet ciphertext in the `credentials` table; the master key (`0600` file by default, OS keychain opt-in) and legacy migration are the sole `keyring` users. The **daemon is the sole credential-store owner**: every surface (desktop, CLI, shim) reaches secrets through the daemon's `/api/v1/credentials` routes and toggles master-key storage via `/api/v1/settings/credentials` — the CLI never touches the store in-process (spec 006). Refs in config; materialized (decrypted) at upstream-spawn time; plaintext never persisted. |
 | Audit             | `domain/audit.py` + `application/audit_service.py` + `audit_log` table           | Every resource lifecycle change. Actor (cli / api / ui / system) required.                                                                                                                                                                                                                                        |
 | Retention         | `application/retention_service.py` + `retention_policies` table + asyncio worker | Each log-style table registers as a `PrunableTable`; central registry enforces SQL allowlist.                                                                                                                                                                                                                     |
 | Errors            | `domain/errors.py` + FastAPI global handlers                                     | Uniform `{error: {code, message, details}}` envelope; `X-Coffer-Trace` header for correlation.                                                                                                                                                                                                                    |

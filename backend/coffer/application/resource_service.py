@@ -27,11 +27,11 @@ from coffer.domain.errors import (
 from coffer.domain.resource import Kind, Resource, ResourceRef
 
 
-class _KeyringPort(Protocol):
+class _CredentialStorePort(Protocol):
     """Minimal kind-agnostic port for register-time credential probing.
 
-    Structurally compatible with :class:`coffer.application.mcp.ports.KeyringPort`
-    but defined locally so the kind-agnostic resource service does not import
+    Mirrors :class:`coffer.application.mcp.ports.CredentialStorePort` but
+    defined locally so the kind-agnostic resource service does not import
     the mcp-specific port module (importlinter Contract 6).
     """
 
@@ -52,7 +52,7 @@ def _audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]
 
 
 def _extract_credential_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
-    """Return ``{key: keychain_ref}`` for ``config`` using the kind's extractor.
+    """Return ``{key: credential_ref}`` for ``config`` using the kind's extractor.
 
     Kinds without a ``credential_ref_extractor`` declare no credentials and are
     not probed.
@@ -68,24 +68,24 @@ class ResourceService:
         kinds: dict[str, Kind],
         repo: ResourceRepo,
         audit: AuditService,
-        keyring: _KeyringPort | None = None,
+        credentials: _CredentialStorePort | None = None,
     ) -> None:
         self._kinds = kinds
         self._repo = repo
         self._audit = audit
-        self._keyring = keyring
+        self._credentials = credentials
 
     def _probe_credentials(self, kind_def: Kind, config: dict[str, Any]) -> None:
-        """Raise CredentialMissing if any cited credential_ref is absent.
+        """Raise CredentialMissing if any cited credential_ref is absent from the credential store.
 
         Called BEFORE persisting a Resource so a missing credential never
-        leaves a partial row in the resources table. Skipped if no keyring
-        is wired (back-compat for tests that don't need credential checks).
+        leaves a partial row in the resources table. Skipped if no credential
+        store is wired (back-compat for tests that don't need credential checks).
         """
-        if self._keyring is None:
+        if self._credentials is None:
             return
         for _key, ref in _extract_credential_refs(kind_def, config).items():
-            if self._keyring.get(ref) is None:
+            if self._credentials.get(ref) is None:
                 raise CredentialMissing(ref)
 
     def _require_kind(self, kind: str) -> Kind:
@@ -185,7 +185,7 @@ class ResourceService:
             raise GenericCreateNotAllowed(ref.kind)
         validated = self._validate_config(kind_def, new_config)
         # Same register-time invariant: if the update introduces a credential
-        # ref that does not exist in the keychain, fail before the DB write.
+        # ref that does not exist in the credential store, fail before the DB write.
         self._probe_credentials(kind_def, validated)
         before = await self.get(ref)
         # Per-kind cross-version hook (e.g. ``knowledge_base``/``memory``

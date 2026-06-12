@@ -8,7 +8,7 @@ controller, and the reconciling runtime. Must run AFTER ``wire_chat``.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
 
@@ -50,6 +50,7 @@ def wire_channel_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: async_sessionmaker,  # type: ignore[type-arg]
+    credential_store: Any = None,
 ) -> ChannelRuntime:
     peers = ChannelPeerRepo(sm)
     pairing = PairingManager()
@@ -61,10 +62,13 @@ def wire_channel_kind(
         audit=audit,
     )
 
-    resolver = CredentialResolver(KeyringAdapter())
+    # Production injects the EncryptedCredentialStore; None (tests) falls back
+    # to the OS keychain adapter, which resolves nothing unless seeded.
+    store = credential_store if credential_store is not None else KeyringAdapter()
+    resolver = CredentialResolver(store)
 
     async def materialize(refs: dict[str, str]) -> dict[str, str]:
-        # keyring is blocking (CODE-034) — never call it on the event loop.
+        # The store read is blocking (CODE-034) — never call it on the event loop.
         return await asyncio.to_thread(resolver.materialize, refs)
 
     async def adapter_factory(name: str, config: dict[str, object]) -> ChannelAdapter:

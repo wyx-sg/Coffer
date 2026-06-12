@@ -9,7 +9,7 @@ import { throwApiError } from "@/lib/api/errors";
 import type { ChannelPlan } from "./schema";
 
 async function writeSecret(ref: string, value: string): Promise<void> {
-  const { error } = await getApiClient().POST("/keychain", { body: { ref, value } });
+  const { error } = await getApiClient().POST("/credentials", { body: { ref, value } });
   if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
 }
 
@@ -17,7 +17,7 @@ async function writeSecret(ref: string, value: string): Promise<void> {
 async function rollbackSecrets(refs: string[]): Promise<void> {
   for (const ref of refs) {
     try {
-      await getApiClient().DELETE("/keychain/{ref}", { params: { path: { ref } } });
+      await getApiClient().DELETE("/credentials/{ref}", { params: { path: { ref } } });
     } catch (e) {
       console.warn(`[AddChannelDialog] rollback delete failed for ${ref}:`, e);
     }

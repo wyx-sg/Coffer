@@ -41,9 +41,11 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `token_rotated`                              | After `POST /api/v1/daemon/rotate-token`                           |
 | `retention_updated`                          | When a retention policy is changed                                 |
 | `backup_created`                             | After `POST /api/v1/daemon/backup`                                 |
-| `keychain_set` / `keychain_deleted`          | After keychain write or delete                                     |
+| `credential_set` / `credential_read` / `credential_deleted` | After a write / read / delete in the encrypted credential store    |
+| `credential_migrated`                        | Per ref, when a legacy keychain secret is migrated into the store  |
+| `master_key_relocated`                       | After the master key moves between file and keychain storage       |
 
-Note that `keychain_set` and `keychain_deleted` are audited — the _fact_ that a secret was stored or removed is recorded. The secret value itself is never in the `details` payload.
+Note that `credential_set` and `credential_deleted` are audited — the _fact_ that a secret was stored or removed is recorded. The secret value itself is never in the `details` payload. (The legacy `keychain_set` / `keychain_deleted` event types remain renderable for historical rows.)
 
 ## Invocation log: what went through the gateway
 

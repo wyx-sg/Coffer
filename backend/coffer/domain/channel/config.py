@@ -32,7 +32,7 @@ def _reject_raw_secret(field: str, value: str) -> str:
         if pat.search(value):
             raise ValueError(
                 f"{field} looks like a raw secret; store the secret with "
-                f"`coffer keychain set <ref>` and put the ref here instead"
+                f"`coffer credentials set <ref>` and put the ref here instead"
             )
     return value
 

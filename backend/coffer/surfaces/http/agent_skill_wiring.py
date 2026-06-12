@@ -9,7 +9,7 @@ subpackages — they cannot import each other (Contract 5).
 from __future__ import annotations
 
 import pathlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.config_file_service import AgentConfigFileService
@@ -28,7 +28,6 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.scan import scan_locations
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.source_fetcher import GitSourceFetcher
@@ -56,6 +55,7 @@ def wire_agent_and_skill_kinds(
     audit: AuditService,
     sm: object,
     builtin_tools: BuiltinToolRegistry | None = None,
+    credential_store: Any = None,
 ) -> None:
     """Wire the agent + skill kinds (specs 004, 005) into a running app.
 
@@ -136,7 +136,7 @@ def wire_agent_and_skill_kinds(
         audit=audit,
         store=config_file_store,
         resource_service=resource_svc,
-        keyring=KeyringAdapter(),
+        credentials=credential_store,
     )
     agent_plugin_svc = AgentPluginService(
         agent_service=agent_svc, audit=audit, store=config_file_store

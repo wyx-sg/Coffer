@@ -3,7 +3,7 @@
 Extracted from `app.py` so that file stays under the project's 400-LOC ceiling.
 ``build_substrate`` constructs the shared knowledge substrate ONCE per process
 (unified ``DocumentRepo``, the ``SqliteKnowledgeIndex`` factory, the converter
-registry, the cached ``make_embedder`` factory bound to the keychain, ripgrep,
+registry, the cached ``make_embedder`` factory bound to the encrypted credential store, ripgrep,
 the retrieval facade + reindexer); each `wire_<kind>` function takes it,
 constructs the kind's service, registers the kind into ``app.state.kinds`` and
 its built-in tools into the shared registry.
@@ -91,16 +91,21 @@ def _sqlite_path(sm: async_sessionmaker[AsyncSession]) -> str | None:
 
 def build_substrate(
     sm: async_sessionmaker[AsyncSession],
+    credential_store: Any | None = None,
 ) -> tuple[DocumentRepo, KnowledgeRetrieval, Reindexer]:
     """Construct the shared knowledge substrate over one session maker.
 
     The ``index_factory`` always attaches a ``VecIndex`` (maintenance mode when
     no width is given) so delete paths reach the vector rows; ``make_embedder``
-    is bound to the keychain so cloud providers authenticate via stored creds.
-    Call once per process and share across kinds.
+    is bound to the encrypted credential store so cloud providers authenticate
+    via stored creds. Call once per process and share across kinds.
+
+    ``credential_store`` is the EncryptedCredentialStore in production; tests
+    that exercise no cloud embedder may omit it (falls back to the OS keychain
+    adapter, which resolves nothing unless seeded).
     """
     documents = DocumentRepo(sm)
-    keyring = KeyringAdapter()
+    creds = credential_store if credential_store is not None else KeyringAdapter()
     db_path = _sqlite_path(sm)
 
     def index_factory(kind: str, resource_name: str, *, dimensions: int | None) -> KnowledgeIndex:
@@ -129,7 +134,7 @@ def build_substrate(
         )
         embedder = embedder_cache.get(key)
         if embedder is None:
-            embedder = make_embedder(config, resolve_credential=keyring.get)
+            embedder = make_embedder(config, resolve_credential=creds.get)
             embedder_cache[key] = embedder
         return embedder
 
@@ -230,6 +235,7 @@ def wire_chat(
     audit: AuditService,
     sm: object,
     mcp_session_factory: Callable[[str], Any],
+    credential_store: Any,
 ) -> MCPGatewaySession:
     """Wire the agent-chat feature (spec 008) into the running app.
 
@@ -254,11 +260,10 @@ def wire_chat(
     agent_session: MCPGatewaySession = mcp_session_factory("coffer-builtin-agent")
     tool_gateway = GatewayToolProvider(agent_session)
 
-    # 4. Credential resolver: resolve a credential ref → raw API key.
-    keyring = KeyringAdapter()
-
+    # 4. Credential resolver: resolve a credential ref → raw API key from the
+    #    encrypted credential store.
     def _credential_resolver(ref: str) -> str:
-        value = keyring.get(ref)
+        value: str | None = credential_store.get(ref)
         if value is None:
             # A domain error so a missing/revoked key surfaces as a mapped 400
             # (CREDENTIAL_MISSING) and the conversation stays usable, rather

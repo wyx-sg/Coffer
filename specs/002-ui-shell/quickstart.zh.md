@@ -56,7 +56,7 @@ make dev
 一次粘一台或多台都可以。点 **Review**。对话框对每台服务器走一屏，让你：
 
 - 确认服务器名。
-- 标记哪些 `env` 值是 secret。secret 会写到 OS keychain (`/api/v1/keychain`)，而不是 resource 配置里。顺序是**先注册、再写 keychain**——这样一旦注册失败，也不会留下孤儿 keychain 条目（详见 spec scenario）。
+- 标记哪些 `env` 值是 secret。secret 会加密进凭据存储 (`/api/v1/credentials`)，而不是 resource 配置里。顺序是**先注册、再写凭据存储**——这样一旦注册失败，也不会留下孤儿凭据条目（详见 spec scenario）。
 
 点 **Add** 完成。成功后对话框关闭；如果只有一台服务器，app 会跳到 `/mcp-servers/mcp_server/<name>` 的 Overview tab。新服务器立刻出现在列表中，健康状态先是 "unknown"，约 10 秒内变为 "healthy"。
 

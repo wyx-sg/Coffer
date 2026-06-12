@@ -58,7 +58,7 @@
 
 已经在用 Coffer 做 MCP gateway 聚合的开发者希望日常流程——注册服务器、看健康、浏览工具、切换能力、看 invocation——看起来、用起来像一个真正的产品，而不是一坨脚手架。标题在字体上有区分；间距统一；每台服务器页面在 per-tool 开关之前先有一个"这台服务器在干嘛"的总览视图；空 / 错 / 加载态都是一等公民。Tools、Resources、Prompts 三个 tab 保持统一——各自带相同的搜索框、状态过滤和逐行启用开关，即使上游没有该类型的任何条目也保留这套外壳（空态渲染在表格内部，而不是一张光秃秃的卡片）。服务器列表带搜索框、状态过滤、客户端分页，让一个大 vault 也能浏览。Invocations tab 列出每一次调用；展开一行可看它的原始日志——该次 invocation 完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现——与审计日志的展开行为一致。
 
-"Add MCP server" 是一个对话框，用户把标准的 `mcpServers` JSON 块粘进去（一次一台或多台都行）——就是每台 MCP server README 给的那块。Review 一步让他们确认哪些 `env` 是 secret；这些值会被提到 OS keychain，而不是写在 config 里。
+"Add MCP server" 是一个对话框，用户把标准的 `mcpServers` JSON 块粘进去（一次一台或多台都行）——就是每台 MCP server README 给的那块。Review 一步让他们确认哪些 `env` 是 secret；这些值会被提到加密凭据存储（config 里只保留它们的 ref），而不是以明文写在 config 里。
 
 **Why this priority**: spec 001 把后端正确性交付了，但 UI 是裸 tailwind 默认值。"MCP gateway 完成了"的用户可见标杆是：UI 能在真人手里走通（不是只能在 Playwright fixture 里跑）。
 
@@ -147,7 +147,7 @@
 
 - **Given** 用户在 resources 列表打开 "Add MCP server" 对话框
 - **When** 他们粘入标准的 `mcpServers` JSON 并确认 review 步骤
-- **Then** app 先把每台服务器 POST 到 `/api/v1/resources`，再把任何 secret env 值通过 `/api/v1/keychain` 写入 keychain（register-first 顺序避免注册失败时遗留 orphan keychain 条目）
+- **Then** app 先把每台服务器 POST 到 `/api/v1/resources`，再把任何 secret env 值通过 `/api/v1/credentials` 写入凭据存储（register-first 顺序避免注册失败时遗留 orphan 凭据条目）
 - **And** 成功时对话框关闭；只有一台服务器时，app 跳到 `/mcp-servers/mcp_server/<name>` 的 Overview tab
 - **And** 新服务器立刻出现在 resources 列表，健康状态先是 "unknown"，10 秒内变为 "healthy"
 
@@ -275,7 +275,7 @@
 - **Given** 用户打开 "Add MCP server" 对话框
 - **When** 他们粘入一个 JSON 解析失败（或 JSON 合法但形状不匹配 `mcpServers` 结构）的载荷并提交
 - **Then** 对话框保持打开并显示一条可读错误，说明问题在哪（JSON 解析错给出位置，形状不匹配给出失败字段）
-- **And** 不向 `/api/v1/resources` 或 `/api/v1/keychain` 发任何请求
+- **And** 不向 `/api/v1/resources` 或 `/api/v1/credentials` 发任何请求
 - **And** 对话框永不显示字面 "unexpected error" 或 `INTERNAL_ERROR`
 
 ---

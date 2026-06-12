@@ -1,12 +1,12 @@
-"""coffer keychain — manage OS keychain credentials.
+"""coffer credentials — manage encrypted credentials (via the daemon).
 
-Spec 006: every subcommand goes through the daemon's HTTP API. The CLI never
-touches the OS keychain in-process, so the daemon is the sole keychain owner
-(creator = reader → silent reads within an app version). The CLI here imports
-no credential/keyring code.
+Secrets are Fernet-encrypted into coffer's database; the master key lives in
+``~/.coffer/master.key`` or, opt-in, the OS keychain.  Every subcommand goes
+through the daemon's HTTP API; secrets never appear in logs / audit /
+structured events.
 
-Secrets must never appear in logs / audit / structured events. This command
-intentionally NEVER logs the value.
+Spec 006: the daemon is the sole credential owner (creator = reader → silent
+reads within an app version). The CLI here imports no credential/keyring code.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from rich.table import Table
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._options import ExitCode
 
-app = typer.Typer(help="Manage OS keychain credentials.")
+app = typer.Typer(help="Manage encrypted credentials.")
 _console = Console()
 
 
@@ -37,7 +37,7 @@ def _read_value(value: str | None) -> str:
 @app.command("set")
 def set_secret(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Keychain reference key"),
+    ref: str = typer.Argument(..., help="Credential reference key"),
     value: str | None = typer.Option(
         None,
         "--value",
@@ -47,7 +47,7 @@ def set_secret(
         ),
     ),
 ) -> None:
-    """Store a secret in the OS keychain (via the daemon)."""
+    """Store a secret in the encrypted credential store (via the daemon)."""
     verbose = (ctx.obj or {}).get("verbose", False)
     secret = _read_value(value)
     if not secret:
@@ -55,7 +55,7 @@ def set_secret(
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/keychain", json={"ref": ref, "value": secret})
+        r = c.post("/credentials", json={"ref": ref, "value": secret})
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"stored: {ref}")
 
@@ -63,7 +63,7 @@ def set_secret(
 @app.command("get")
 def get_secret(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Keychain reference key"),
+    ref: str = typer.Argument(..., help="Credential reference key"),
     show: bool = typer.Option(
         False,
         "--show",
@@ -71,7 +71,7 @@ def get_secret(
     ),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Retrieve a secret from the OS keychain (via the daemon).
+    """Retrieve a secret from the encrypted credential store (via the daemon).
 
     Without ``--show`` only presence is checked (cheap ``/exists`` probe, no
     value leaves the daemon and no read is audited). ``--show`` fetches the
@@ -81,14 +81,14 @@ def get_secret(
     c, _info = _cli_client.client_or_exit()
     with c:
         if show:
-            r = c.get(f"/keychain/{ref}")
+            r = c.get(f"/credentials/{ref}")
             if r.status_code == 404:
                 typer.echo(f"not found: {ref}", err=True)
                 raise typer.Exit(int(ExitCode.NOT_FOUND))
             _cli_client.check(r, verbose=verbose)
             rendered = r.json()["value"]
         else:
-            r = c.get(f"/keychain/{ref}/exists")
+            r = c.get(f"/credentials/{ref}/exists")
             _cli_client.check(r, verbose=verbose)
             if not r.json()["present"]:
                 typer.echo(f"not found: {ref}", err=True)
@@ -105,10 +105,10 @@ def list_refs(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """List known keychain refs (scanned from registered MCP server resources).
+    """List known credential refs (scanned from registered MCP server resources).
 
     Refs are enumerated from the daemon's registered MCP server configs; each
-    ref's presence is then probed via the daemon's ``/keychain/{ref}/exists``
+    ref's presence is then probed via the daemon's ``/credentials/{ref}/exists``
     endpoint (no secret value crosses the API).
     """
     verbose = (ctx.obj or {}).get("verbose", False)
@@ -132,18 +132,18 @@ def list_refs(
             refs.update(cred_refs.values())
         if not output_json:
             for ref in refs:
-                er = c.get(f"/keychain/{ref}/exists")
+                er = c.get(f"/credentials/{ref}/exists")
                 _cli_client.check(er, verbose=verbose)
                 presence[ref] = bool(er.json().get("present"))
     if output_json:
         typer.echo(_json.dumps({"refs": sorted(refs)}))
         return
     if not refs:
-        typer.echo("(no keychain refs registered in any resource)")
+        typer.echo("(no credential refs registered in any resource)")
         return
     table = Table(title="Known credential refs")
     table.add_column("Ref")
-    table.add_column("Present in keychain")
+    table.add_column("Present in store")
     for ref in sorted(refs):
         table.add_row(ref, "yes" if presence.get(ref) else "no")
     _console.print(table)
@@ -152,15 +152,44 @@ def list_refs(
 @app.command("delete")
 def delete_secret(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Keychain reference key"),
+    ref: str = typer.Argument(..., help="Credential reference key"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation prompt"),
 ) -> None:
-    """Delete a secret from the OS keychain (via the daemon)."""
-    if not force and not typer.confirm(f"Delete keychain entry {ref!r}?"):
+    """Delete a secret from the encrypted credential store (via the daemon)."""
+    if not force and not typer.confirm(f"Delete credential {ref!r}?"):
         raise typer.Exit(int(ExitCode.GENERIC))
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/keychain/{ref}")
+        r = c.delete(f"/credentials/{ref}")
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"deleted: {ref}")
+
+
+@app.command("storage")
+def storage(
+    ctx: typer.Context,
+    set_to: str | None = typer.Option(
+        None,
+        "--set",
+        help="Move the master key: 'file' (default location) or 'keychain'.",
+    ),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+) -> None:
+    """Show or change where the credential master key is stored."""
+    verbose = (ctx.obj or {}).get("verbose", False)
+    if set_to is not None and set_to not in ("file", "keychain"):
+        typer.echo("invalid value: --set must be 'file' or 'keychain'", err=True)
+        raise typer.Exit(int(ExitCode.INVALID_INPUT))
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        if set_to is None:
+            r = c.get("/settings/credentials")
+        else:
+            r = c.put("/settings/credentials", json={"master_key_storage": set_to})
+        _cli_client.check(r, verbose=verbose)
+        storage_now = r.json()["master_key_storage"]
+    if output_json:
+        typer.echo(_json.dumps({"master_key_storage": storage_now}))
+    else:
+        typer.echo(f"master key storage: {storage_now}")

@@ -75,8 +75,9 @@ block from any vendor's README — one server or many at once:
 }
 ```
 
-A review step lets you mark which `env` values are secrets; those are written to the OS
-keychain rather than stored in the resource config.
+A review step lets you mark which `env` values are secrets; those are encrypted into
+Coffer's credential store (only their refs are kept in the resource config) rather than
+stored as plaintext in the resource config.
 
 On the server detail page, switch between tabs:
 

@@ -46,10 +46,11 @@ interface Props {
 
 /**
  * Edit an MCP server: description, the config as JSON, and credentials.
- * Credentials live in their own section because the keychain holds the
- * values — the config JSON only ever carries references. On save, new /
- * rotated secrets are written to the keychain and any credential the
- * server no longer references (and that this server owns) is deleted.
+ * Credentials live in their own section because the encrypted credential
+ * store holds the values — the config JSON only ever carries references.
+ * On save, new / rotated secrets are written to the credential store and
+ * any credential the server no longer references (and that this server
+ * owns) is deleted.
  */
 export function EditMcpServerDialog({ resource }: Props) {
   const { t } = useTranslation();
@@ -83,9 +84,9 @@ export function EditMcpServerDialog({ resource }: Props) {
       }
       const client = getApiClient();
 
-      // Pre-validate before any keychain write: a row renamed without a new
-      // value can't be moved in the keychain blind (we don't hold the
-      // plaintext), so require the secret to be re-entered under the new
+      // Pre-validate before any credential write: a row renamed without a
+      // new value can't be moved in the encrypted store blind (we don't hold
+      // the plaintext), so require the secret to be re-entered under the new
       // name rather than silently leaving the ref pointing at the old name.
       for (const row of creds) {
         const name = row.name.trim();
@@ -96,9 +97,9 @@ export function EditMcpServerDialog({ resource }: Props) {
       }
 
       // Build credential_refs; write new / rotated secret values first.
-      // Track keychain refs we create that are BRAND NEW (not a rotation of
-      // an existing ref) so we can clean them up if the PATCH below fails —
-      // otherwise a config the backend rejects would orphan the secret.
+      // Track credential refs we create that are BRAND NEW (not a rotation
+      // of an existing ref) so we can clean them up if the PATCH below
+      // fails — otherwise a config the backend rejects would orphan the secret.
       const originalRefSet = new Set(Object.values(credentialRefsOf(resource.config)));
       const credentialRefs: Record<string, string> = {};
       const newlyWrittenRefs: string[] = [];
@@ -107,10 +108,10 @@ export function EditMcpServerDialog({ resource }: Props) {
         if (name === "") continue;
         if (row.value !== "") {
           const ref = `${resource.name}.${name}`;
-          const { error: e } = await client.POST("/keychain", {
+          const { error: e } = await client.POST("/credentials", {
             body: { ref, value: row.value },
           });
-          if (e) throwApiError(e, "INTERNAL_ERROR", "keychain write failed");
+          if (e) throwApiError(e, "INTERNAL_ERROR", "credential write failed");
           credentialRefs[name] = ref;
           if (!originalRefSet.has(ref)) newlyWrittenRefs.push(ref);
         } else if (row.originalRef) {
@@ -131,12 +132,12 @@ export function EditMcpServerDialog({ resource }: Props) {
         },
       });
       if (pe) {
-        // PATCH rejected the config — delete the brand-new keychain entries
+        // PATCH rejected the config — delete the brand-new credential entries
         // we just wrote so they don't dangle (best-effort; rotations of
         // existing refs are left, since the unchanged config still uses them).
         for (const ref of newlyWrittenRefs) {
           try {
-            await client.DELETE("/keychain/{ref}", { params: { path: { ref } } });
+            await client.DELETE("/credentials/{ref}", { params: { path: { ref } } });
           } catch {
             // best-effort cleanup; the PATCH error below is what matters
           }
@@ -144,8 +145,8 @@ export function EditMcpServerDialog({ resource }: Props) {
         throwApiError(pe, "INTERNAL_ERROR", "update failed");
       }
 
-      // Clean up keychain entries this server no longer references — but
-      // only ones it owns (`<name>.` prefix); never a shared/manual ref.
+      // Clean up credential store entries this server no longer references —
+      // but only ones it owns (`<name>.` prefix); never a shared/manual ref.
       // A failed cleanup must not roll back the successful PATCH above;
       // we log a warning and let the user re-trigger if needed.
       const newRefs = new Set(Object.values(credentialRefs));
@@ -153,11 +154,11 @@ export function EditMcpServerDialog({ resource }: Props) {
       const orphanWarnings: string[] = [];
       for (const ref of Object.values(credentialRefsOf(resource.config))) {
         if (!newRefs.has(ref) && ref.startsWith(prefix)) {
-          const { error: de } = await client.DELETE("/keychain/{ref}", {
+          const { error: de } = await client.DELETE("/credentials/{ref}", {
             params: { path: { ref } },
           });
           if (de) {
-            const msg = de.error?.message ?? "keychain delete failed";
+            const msg = de.error?.message ?? "credential delete failed";
             console.warn(`[EditMcpServerDialog] orphan cleanup failed for ${ref}:`, msg);
             orphanWarnings.push(ref);
           }

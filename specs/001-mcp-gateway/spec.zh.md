@@ -83,7 +83,7 @@
 
 - **Upstream unreachable on register**: 注册必须成功（配置已保存）；发现 (discovery) 和健康检查会报错；该服务器在重新可达前被标为 unhealthy，且不会出现重试风暴。
 - **Upstream crashes mid-call**: 正在进行的调用返回错误；该服务器被标为 unhealthy；后续调用会以有界重试 (bounded retries) 重新拉起上游；用户能在 invocation 日志中看到这次失败。
-- **Credential missing or keychain locked**: 注册失败，错误消息会指出缺失的凭据 (credential) 并指引用户去配置凭据的位置。不会留下任何部分写入的状态。
+- **Credential missing or master key unavailable**: 注册失败，错误消息会指出缺失的凭据 (credential) 并指引用户去配置凭据的位置。不会留下任何部分写入的状态。（若存在密文但无法解析主密钥，daemon 会以 `MasterKeyMissing` 拒绝启动，而非悄然丢失访问。）
 - **Duplicate registration**: 同一 kind 下注册重名的服务器会被拒绝并给出明确错误；不可能产生部分写入。
 - **Tool-name collision across servers**: 通过 `<server>__<tool>` 命名空间阻止；客户端永远看不到冲突。
 - **Tools-only upstream**: 只实现 `tools`、对 `resources/list` 或 `prompts/list` 返回 JSON-RPC `-32601`（METHOD_NOT_FOUND）的上游，被视为没有 resources / 没有 prompts。单服务器能力视图与聚合列表会返回该服务器的 tools，并将 resources/prompts 置为空集（HTTP 200），而不是报错——因此对于仅支持 tools 的服务器，管理端 / Web-UI 的能力视图依然可用。
@@ -221,17 +221,17 @@
 - **When** 用 `--json` 调用,
 - **Then** stdout 是可解析的 JSON 文档，顶层有稳定的 key（`list` → `resources`；`invocations` → `invocations`），不掺杂任何面向人类的格式。
 
-### Scenario: store and reference a keychain credential
+### Scenario: store and reference a credential
 
 - **Given** 用户尚未存入 HTTP 凭据,
-- **When** 用户通过 `POST /api/v1/keychain`（或等价 CLI）在请求体里带上 `ref` 与 secret `value` 写入一个 secret，再注册一台 HTTP MCP 服务器，其 `credential_refs` 引用 `{ref}`,
-- **Then** 凭据值只被写入 OS keychain（永不进入 SQLite 数据库或任何日志），服务器注册成功，凭据在拉起上游时按需解析。
+- **When** 用户通过 `POST /api/v1/credentials`（或等价 CLI）在请求体里带上 `ref` 与 secret `value` 写入一个 secret，再注册一台 HTTP MCP 服务器，其 `credential_refs` 引用 `{ref}`,
+- **Then** 凭据值只以 Fernet 密文形式写入 `credentials` 表（其明文永不进入 SQLite 数据库、任何日志或审计），服务器注册成功，凭据在拉起上游时按需解析（解密）。
 
-### Scenario: delete a keychain credential frees the reference
+### Scenario: delete a credential frees the reference
 
-- **Given** keychain 凭据 `{ref}` 存在，且无任何 MCP 服务器引用它,
-- **When** 用户通过 `DELETE /api/v1/keychain/{ref}`（或等价 CLI）删除它,
-- **Then** OS keychain 中的条目被移除，删除操作被审计，后续注册可在不冲突的情况下重新使用 `{ref}`。
+- **Given** 凭据 `{ref}` 存在，且无任何 MCP 服务器引用它,
+- **When** 用户通过 `DELETE /api/v1/credentials/{ref}`（或等价 CLI）删除它,
+- **Then** 密文行被移除，删除操作被审计，后续注册可在不冲突的情况下重新使用 `{ref}`。
 
 ### Scenario: daemon status reflects ready state
 
@@ -300,7 +300,7 @@
 
 **Credentials and safety**
 
-- **FR-011**: System MUST 仅把上游服务器的凭据存储在操作系统钥匙串 (keychain) 中，配置中按名称引用；凭据值 MUST NOT 写入数据库或任何日志。管理 API MUST 提供 keychain 端点，使 UI 能直接在 keychain 中管理一个 secret 而不经过数据库：写入（`POST /api/v1/keychain`）、删除（`DELETE /api/v1/keychain/{ref}`）、存在性检查（`GET /api/v1/keychain/{ref}/exists`）以及一个带审计的读取（`GET /api/v1/keychain/{ref}`）。读取端点返回 secret 值并发出一条 `keychain_read` 审计事件，使每次 secret 读取都被记录。
+- **FR-011**: System MUST 仅把上游服务器的凭据以 Fernet 密文形式存储在 `credentials` 表中（envelope 加密），配置中按名称引用；凭据明文 MUST NOT 写入数据库、任何日志或审计。Fernet 主密钥 MUST 仅由 `infrastructure/credentials/` 管理——默认为 DB 旁的 `0600` 文件，opt-in 时存于操作系统钥匙串。管理 API MUST 提供 credential 端点，使 UI 能管理一个 secret 而其明文不落入任何持久化配置：写入（`POST /api/v1/credentials`）、删除（`DELETE /api/v1/credentials/{ref}`）、存在性检查（`GET /api/v1/credentials/{ref}/exists`）以及一个带审计的读取（`GET /api/v1/credentials/{ref}`）。读取端点返回 secret 值并发出一条 `credential_read` 审计事件，使每次 secret 读取都被记录。
 - **FR-012**: System MUST 将所有 HTTP 端点（管理 API 和 MCP 协议端点）仅绑定到 loopback 接口。
 - **FR-013**: System MUST 要求每一次管理 API 调用携带认证 token；token 在 daemon 启动时本地生成，以 user-only 文件权限存储，并可轮换。
 
@@ -347,6 +347,6 @@
 - 单一用户在自己机器上运行 coffer。不存在多租户或远程访问需求。
 - MCP 客户端（Claude Code、Codex 等）至少支持 `stdio` 或 `http`/`sse` 中的一种 MCP 服务器配置；coffer 两种入口都提供。
 - 上游 MCP 服务器遵循公开的 MCP 协议规范。行为异常的上游被作为故障处理，而不是建模为正式特性。
-- 操作系统钥匙串（macOS Keychain、Windows Credential Manager、Linux Secret Service / KWallet）在 coffer 启动时可用且已解锁；如不可用，用户会看到明确提示。
+- Fernet 主密钥在 coffer 启动时可解析（默认为可读的 `~/.coffer/master.key`，钥匙串模式下则是已解锁的操作系统钥匙串）；如不可用，用户会看到明确提示（存在密文但无可解析密钥是致命的 `MasterKeyMissing` 启动错误）。
 - 本 spec 只引入一个 resource kind（`mcp_server`）。Resource 框架的设计允许后续 spec 在不重新建模现有数据的前提下加入更多 kind。
 - 并发 MCP 客户端负载较小（低个位数）；coffer 不是 fleet 规模的网关。

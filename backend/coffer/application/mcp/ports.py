@@ -24,8 +24,9 @@ from coffer.domain.mcp.capability import (
 )
 
 
-class KeyringPort(Protocol):
-    """OS-keychain bridge. Confined to infrastructure via importlinter Contract 4."""
+class CredentialStorePort(Protocol):
+    """Secret storage bridge — encrypted SQLite store (default) wired at
+    composition root. Confined to infrastructure via importlinter Contract 4."""
 
     def get(self, ref: str) -> str | None: ...
     def set(self, ref: str, value: str) -> None: ...

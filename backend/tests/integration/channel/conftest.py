@@ -98,7 +98,7 @@ def inbound(
 
 
 # ---------------------------------------------------------------------------
-# Fakes at the non-local boundaries (IM platform, OS keychain, child process)
+# Fakes at the non-local boundaries (IM platform, credential store, child process)
 # ---------------------------------------------------------------------------
 
 
@@ -346,7 +346,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     keyring = FakeKeyring()
     kinds: dict[str, Any] = {}
     resources = ResourceService(
-        kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, keyring=keyring
+        kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, credentials=keyring
     )
     peers = ChannelPeerRepo(sm)
     pairing = PairingManager()

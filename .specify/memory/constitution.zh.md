@@ -43,9 +43,12 @@
   [ADR-001](../../docs/decisions/ADR-001-resource-framework-upfront.md)。）
 - **持久化。** SQLite 是控制面状态的事实记录方。批量用户内容（按规范
   引入时）以文件形式存放于本地文件系统，按需建立索引。
-- **凭据。** 仅凭据模块可通过 `keyring` 访问操作系统钥匙串。其他代码一
-  律只持有凭据引用 (credential ref)。任何敏感材料都不得以明文形式进入
-  数据库。
+- **凭据。** 密钥**只**以 Fernet 密文形式存放于 `credentials` 表；明文仅在
+  解密与拉起子进程/注入 header（消费密钥处）之间短暂存在于内存。Fernet 主
+  密钥由 `coffer.infrastructure.credentials` 独占管理——默认为 DB 旁的
+  `0600` 文件，opt-in 时通过 `keyring` 存于操作系统钥匙串。`keyring` 的
+  import 仅限该模块。其他代码一律只持有凭据引用 (credential ref)。任何密钥
+  明文都不得进入数据库、日志、审计或任何结构化事件。
 - **网络默认值。** 仅监听 loopback。一旦需要发起对外 HTTP，必须经过一
   个具备 SSRF 防护的客户端。一旦需要对公网暴露任何 surface，必须以独立
   进程运行，并仅限于经过签名校验的回调路径。
@@ -75,4 +78,4 @@ Architectural Constraints 或 Quality Gate 的修改，必须满足：
 **PR 评审。** 每个 PR 描述都应在适用时点出它所触及的章程原则或约束，
 并解释该变更为何尊重 (或正式修订) 它们。
 
-**Version**: 0.1.0
+**Version**: 0.2.0

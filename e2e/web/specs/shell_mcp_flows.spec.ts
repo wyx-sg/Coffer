@@ -362,13 +362,13 @@ acceptance(
     ).toBeVisible();
 
     // Capture network requests so we can later assert nothing fired
-    // against /resources or /keychain while the JSON is malformed.
+    // against /resources or /credentials while the JSON is malformed.
     const apiCalls: string[] = [];
     page.on("request", (req) => {
       const url = req.url();
       if (
         url.includes("/api/v1/resources") ||
-        url.includes("/api/v1/keychain")
+        url.includes("/api/v1/credentials")
       ) {
         apiCalls.push(`${req.method()} ${url}`);
       }

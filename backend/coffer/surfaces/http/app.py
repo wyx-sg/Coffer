@@ -12,6 +12,9 @@ MCP-specific composition (upstream factory, session supervisors,
 prunable registry, reaper env knobs) lives in
 :mod:`coffer.surfaces.http.app_mcp_composition` to keep this file under
 the 400-line guideline.
+
+Credential-store DI singletons and the master-key bootstrap live in
+:mod:`coffer.surfaces.http.credential_composition` for the same reason.
 """
 
 from __future__ import annotations
@@ -23,7 +26,6 @@ import os
 import pathlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Literal
 
 from fastapi import FastAPI
 
@@ -37,7 +39,6 @@ from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
 from coffer.infrastructure.logging.setup import configure_logging
@@ -70,6 +71,11 @@ from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.model_routes import router as chat_model_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
+from coffer.surfaces.http.credential_composition import (
+    init_credential_store,
+    run_legacy_keychain_migration,
+)
+from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
     get_mcp_session_factory,
@@ -80,7 +86,6 @@ from coffer.surfaces.http.dependencies import (
 )
 from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
-from coffer.surfaces.http.keychain_routes import router as keychain_router
 from coffer.surfaces.http.knowledge_base import router as kb_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
@@ -96,6 +101,7 @@ from coffer.surfaces.http.projection_routes import router as projection_router
 from coffer.surfaces.http.projection_wiring import wire_projection
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
+from coffer.surfaces.http.settings_routes import router as settings_router
 from coffer.surfaces.http.skill_routes import router as skill_router
 from coffer.surfaces.http.wiring import (
     build_substrate,
@@ -118,20 +124,6 @@ def _daemon_json_path() -> pathlib.Path:
 
 _logger = logging.getLogger(__name__)
 
-# Daemon lifecycle phase — updated by the lifespan.
-# Readable by daemon_routes.get_status to report real phase.
-_DaemonPhase = Literal["starting", "ready", "draining"]
-_DAEMON_PHASE: _DaemonPhase = "starting"
-
-
-def get_daemon_phase() -> _DaemonPhase:
-    return _DAEMON_PHASE
-
-
-def set_daemon_phase(phase: _DaemonPhase) -> None:
-    global _DAEMON_PHASE
-    _DAEMON_PHASE = phase
-
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -150,15 +142,19 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine_with_pragmas(_db_url())
     sm = session_maker(engine)
 
+    credential_store = await init_credential_store(
+        engine, pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
+    )
+
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resource_svc = ResourceService(
         kinds=app.state.kinds,
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
         # Wired so register/update_config can probe credential_refs against
-        # the keychain BEFORE persisting (spec edge case: missing credential
-        # must fail registration with a named ref, no partial state).
-        keyring=KeyringAdapter(),
+        # the encrypted store BEFORE persisting (spec edge case: missing
+        # credential must fail registration with a named ref, no partial state).
+        credentials=credential_store,
     )
     registry = build_prunable_registry()
     retention_svc = RetentionService(
@@ -188,13 +184,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # discovery + confirm (no auto-registration on startup). Passing
     # builtin_tools registers the skill tools (list_skills / load_skill) so the
     # built-in chat agent can reach them through the gateway (spec 008).
-    wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools)
+    wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools, credential_store)
 
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
     # into `builtin_tools` so the gateway can expose them.
     # One substrate per process: KB + memory share the DocumentRepo,
     # retrieval facade and reindexer (per KnowledgeRetrieval's contract).
-    substrate = build_substrate(sm)
+    substrate = build_substrate(sm, credential_store)
 
     # Embedding is global: KB + memory resolve the current config at index/recall
     # time so a Settings change applies without a daemon restart.
@@ -229,14 +225,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
     process_supervisor, session_supervisors = wire_mcp_kind(
-        app, resource_svc, audit, sm, builtin_tools
+        app, resource_svc, audit, sm, credential_store, builtin_tools
     )
 
     # Wire the chat feature (spec 008). Must come AFTER all other wiring so the
     # coffer-builtin-agent gateway session sees the fully-populated
     # BuiltinToolRegistry (KB + memory + skill + MCP tools). The session factory
     # is the one wire_mcp_kind registered via set_mcp_session_factory.
-    chat_gateway_session = wire_chat(audit, sm, get_mcp_session_factory())
+    chat_gateway_session = wire_chat(audit, sm, get_mcp_session_factory(), credential_store)
     # The chat session's supervisor stays registered in session_supervisors so
     # the mcp_server on_delete hook evicts its upstream connections too; shutdown
     # disposes the chat session first (its on_dispose deregisters the entry), so
@@ -245,7 +241,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Wire the channel kind (spec 009) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.
-    channel_runtime = wire_channel_kind(app, resource_svc, audit, sm)
+    channel_runtime = wire_channel_kind(app, resource_svc, audit, sm, credential_store)
+
+    # One-time move of legacy OS-keychain secrets into the encrypted store
+    # (best-effort; see credential_composition for the mechanics).
+    await run_legacy_keychain_migration(
+        app.state.kinds, sm, credential_store, audit, embedding_config_svc
+    )
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -283,14 +285,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.mcp_session_reaper_task = reaper_task
 
     # FR-014: record daemon lifecycle audit events; T3: set lifecycle phase
-    set_daemon_phase("ready")
+    daemon_routes.set_daemon_phase("ready")
     with contextlib.suppress(Exception):
         await audit.record(AuditEventType.DAEMON_STARTED.value, actor="system")
 
     try:
         yield
     finally:
-        set_daemon_phase("draining")
+        daemon_routes.set_daemon_phase("draining")
         with contextlib.suppress(Exception):
             await audit.record(AuditEventType.DAEMON_STOPPED.value, actor="system")
         worker.stop()
@@ -366,8 +368,9 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(resource_router)
     app.include_router(audit_router)
     app.include_router(retention_router)
+    app.include_router(credential_router)
+    app.include_router(settings_router)
     app.include_router(embedding_router)
-    app.include_router(keychain_router)
     # Agent + skill kind routes (specs 004-agent-registry, 005-skill-manager)
     app.include_router(agent_router)
     app.include_router(agent_config_router)

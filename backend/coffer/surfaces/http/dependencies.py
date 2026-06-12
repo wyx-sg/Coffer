@@ -12,7 +12,6 @@ from coffer.application.audit_service import AuditService
 from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 
 # Agent-chat (spec 008) providers live in their own module; re-export them so
 # the long-standing surfaces.http.dependencies.get_chat_service paths keep working.
@@ -239,10 +238,15 @@ def get_health_repo() -> Any:
     return _health_repo
 
 
-def get_keyring() -> KeyringAdapter:
-    """FastAPI Depends() target — the keychain bridge is stateless."""
-    return KeyringAdapter()
-
+# Credential-store DI singletons: re-exported from credential_composition (split
+# for the file-size limit) so the long-standing dependencies.get_credential_store
+# / get_master_key_manager import paths keep working.
+from coffer.surfaces.http.credential_composition import (  # noqa: E402, I001
+    get_credential_store as get_credential_store,
+    get_master_key_manager as get_master_key_manager,
+    set_credential_store as set_credential_store,
+    set_master_key_manager as set_master_key_manager,
+)
 
 # --- Agent kind-specific dependency providers (spec 004-agent-registry) ---
 

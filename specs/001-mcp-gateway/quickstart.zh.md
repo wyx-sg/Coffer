@@ -51,12 +51,12 @@ Coffer 会注册该服务器、启动它一次以发现能力，并列出发现�
 带凭据添加 HTTP MCP 服务器的方式相同：
 
 ```bash
-coffer keychain set github-token "ghp_xxxxxxxxxxxx"
+coffer credentials set github-token "ghp_xxxxxxxxxxxx"
 coffer mcp add github --http https://api.github.com/mcp \
   --credential "Authorization=Bearer ${github-token}"
 ```
 
-（凭据存放在 OS keychain；coffer 配置里仅持有 keychain 的引用。）
+（密钥以密文形式存放在 coffer 的加密凭据存储中；coffer 配置里仅持有凭据 ref。）
 
 ## Wire Coffer into your MCP client
 
@@ -134,10 +134,10 @@ coffer retention set audit_log --forever
 ### Update a credential
 
 ```bash
-coffer keychain set github-token "<new value>"
+coffer credentials set github-token "<new value>"
 ```
 
-（无需更新服务器配置——它已通过 key 名称引用 keychain。）
+（无需更新服务器配置——它已通过 ref 引用该凭据。）
 
 ## Troubleshooting
 

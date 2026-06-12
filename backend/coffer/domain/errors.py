@@ -49,16 +49,14 @@ class ConfigValidationError(CofferError):
     code = "CONFIG_INVALID"
 
 
-class CredentialMissing(CofferError):  # noqa: N818
-    code = "CREDENTIAL_MISSING"
-
-    def __init__(self, ref: str) -> None:
-        super().__init__(f"credential not found in keychain: {ref}")
-        self.ref = ref
-
-
-class CredentialLocked(CofferError):  # noqa: N818
-    code = "CREDENTIAL_LOCKED"
+# credential-store error family: re-exported from coffer.domain.credential_errors
+# (split for the file-size limit) so the coffer.domain.errors.X import paths keep working.
+from coffer.domain.credential_errors import (  # noqa: E402, I001
+    CredentialLocked as CredentialLocked,
+    CredentialMissing as CredentialMissing,
+    CredentialUnreadable as CredentialUnreadable,
+    MasterKeyMissing as MasterKeyMissing,
+)
 
 
 class UpstreamUnavailable(CofferError):  # noqa: N818

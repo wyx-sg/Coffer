@@ -34,7 +34,7 @@
 | **Languages**             | ✅         | 仅 Python 3.12 + TS 5。                                                                                                                                                     |
 | **Architecture: layered** | ✅         | 转换器 + vector/embedding 引擎限制在 `infrastructure/`；新增 importlinter 条款（见下）。                                                                                    |
 | **Persistence**           | ✅         | SQLite 控制面 + 派生索引；批量内容（Markdown + raw）作为文件 —— 符合宪法的文件落盘规则。                                                                                    |
-| **Credentials**           | ✅         | embedding 凭据仅经 keychain ref（`embedding_credential_ref`）；DB 里无明文。                                                                                                |
+| **Credentials**           | ✅         | embedding 凭据仅经加密存储 ref（`embedding_credential_ref`）；密钥为密文，DB 里无明文。                                                                                     |
 | **Network defaults**      | ✅         | REST 仅 loopback；出站 embedding 调用走 SSRF 防护客户端。                                                                                                                   |
 
 ## Project Structure

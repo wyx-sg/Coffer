@@ -1,0 +1,4 @@
+# Fake test fixture value ("ghp_secret123") in a feature-branch commit; the
+# string was replaced before merge, but the historical commit still trips the
+# generic-api-key rule when the PR range is scanned.
+203e81651edb7fd991789b1fb834991ee049aa6d:backend/tests/unit/infrastructure/credentials/test_encrypted_store.py:generic-api-key:40

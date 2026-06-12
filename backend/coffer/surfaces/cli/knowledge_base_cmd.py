@@ -209,7 +209,7 @@ def set_embedding(
     dimensions: int = typer.Option(..., "--dimensions"),
     base_url: str | None = typer.Option(None, "--base-url"),
     credential_ref: str | None = typer.Option(
-        None, "--credential-ref", help="Keychain credential name (never a raw key)."
+        None, "--credential-ref", help="Stored credential ref (never a raw key)."
     ),
 ) -> None:
     """Configure embeddings + enable vector mode (re-embeds the corpus)."""

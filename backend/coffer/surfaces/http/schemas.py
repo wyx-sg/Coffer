@@ -193,16 +193,23 @@ class InvocationListOut(BaseModel):
     invocations: list[InvocationOut]
 
 
-# --- Keychain ---
+# --- Credentials ---
 
 
-class KeychainSetIn(BaseModel):
-    """Request body for storing a secret in the OS keychain."""
+class CredentialSetIn(BaseModel):
+    """Request body for storing a secret in the credential store.
+
+    Secrets are Fernet-encrypted into the coffer DB; only ciphertext is
+    persisted; audit rows carry the ref only.
+    """
 
     ref: str = Field(
         min_length=1,
-        pattern=r"^[A-Za-z0-9_.-]+$",
-        description="Reference key the secret is stored under.",
+        pattern=r"^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+        description=(
+            "Reference key the secret is stored under. Slash-separated "
+            "segments are allowed (e.g. channel/tg/bot-token)."
+        ),
     )
     value: str = Field(
         max_length=8192,
@@ -210,14 +217,14 @@ class KeychainSetIn(BaseModel):
     )
 
 
-class KeychainExistsOut(BaseModel):
+class CredentialExistsOut(BaseModel):
     """Presence-only response — never carries the secret value."""
 
     present: bool = Field(description="Whether a secret is stored under the ref.")
 
 
-class KeychainGetOut(BaseModel):
-    """Secret-value response for an explicit read."""
+class CredentialGetOut(BaseModel):
+    """Secret-value response for an explicit read from the credential store."""
 
     value: str = Field(description="The stored secret value.")
 
@@ -243,6 +250,23 @@ class McpServerStatusOut(BaseModel):
     """Cheap per-server status, derived from persisted state (no spawn)."""
 
     status: Literal["healthy", "failing", "unknown"]
+
+
+# --- Settings ---
+
+
+class CredentialSettingsOut(BaseModel):
+    """Where the credential-store master key currently lives."""
+
+    master_key_storage: Literal["file", "keychain"] = Field(
+        description="file = ~/.coffer/master.key (default); keychain = OS keychain entry."
+    )
+
+
+class CredentialSettingsIn(BaseModel):
+    """Request body to relocate the master key."""
+
+    master_key_storage: Literal["file", "keychain"]
 
 
 # --- Embedding config (global) ---

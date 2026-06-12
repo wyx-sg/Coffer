@@ -21,7 +21,7 @@ channel 注册。
 CLI 等价做法：
 
 ```bash
-coffer keychain set channel/my-telegram/bot-token     # paste token at prompt
+coffer credentials set channel/my-telegram/bot-token     # paste token at prompt
 coffer channel register my-telegram --type telegram \
   --bot-token-ref channel/my-telegram/bot-token
 ```
@@ -62,8 +62,8 @@ secret。
 CLI 等价做法：
 
 ```bash
-coffer keychain set channel/st/app-secret
-coffer keychain set channel/st/signing-secret
+coffer credentials set channel/st/app-secret
+coffer credentials set channel/st/signing-secret
 coffer channel register my-seatalk --type seatalk --app-id <APP_ID> \
   --app-secret-ref channel/st/app-secret \
   --signing-secret-ref channel/st/signing-secret

@@ -112,7 +112,7 @@ Every user write regenerates `MEMORY.md`, reindexes, re-projects to bound agents
 Default retrieval is keyword + grep — zero config, offline, language-agnostic. To enable vector recall, configure an embedding provider on the store:
 
 ```bash
-coffer keychain set embed-key
+coffer credentials set embed-key
 coffer memory configure project-01J… \
     --enable-vector \
     --provider openai \

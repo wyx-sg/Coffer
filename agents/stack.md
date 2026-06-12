@@ -10,7 +10,8 @@ Coffer's backend is Python 3.12+.
 - **FastAPI** for HTTP surface
 - **Pydantic v2** for models + validation
 - **SQLite** via **SQLAlchemy 2 (async)** + **`aiosqlite`** (the exclusive data-access path)
-- **`keyring`** for OS keychain (credentials only)
+- **`cryptography`** (Fernet) for the envelope-encrypted credential store
+- **`keyring`** for OS keychain (credential module only — master key opt-in + legacy migration)
 - **`anyio`** + `asyncio` for async + subprocess management
 
 Feature-specific libraries (e.g. an MCP SDK) are added by the spec that first

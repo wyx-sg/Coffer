@@ -50,7 +50,7 @@ export function channelSecretRef(
 }
 
 /**
- * Turn validated form values into the resource config plus the keychain
+ * Turn validated form values into the resource config plus the credential-store
  * writes. Pure (no network) — the config is fully built before any side
  * effect runs, mirroring AddMcpServerDialog's planServer.
  */

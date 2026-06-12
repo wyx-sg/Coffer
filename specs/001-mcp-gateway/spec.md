@@ -81,7 +81,7 @@ These cases are tracked by integration tests, not by the acceptance audit, excep
 
 - **Upstream unreachable on register**: Registration must succeed (config saved); discovery and health report the failure; the server is marked unhealthy until reachable, and there is no silent retry storm.
 - **Upstream crashes mid-call**: The in-flight call returns an error; the server is marked unhealthy; a subsequent call respawns the upstream with bounded retries; the user sees the failure in the invocation log.
-- **Credential missing or keychain locked**: Registration fails with a message naming the missing credential and pointing the user at the credential setup path. No partial state is persisted.
+- **Credential missing or master key unavailable**: Registration fails with a message naming the missing credential and pointing the user at the credential setup path. No partial state is persisted. (If ciphertext exists but the master key cannot be resolved, the daemon refuses to start with `MasterKeyMissing` rather than silently lose access.)
 - **Duplicate registration**: Registering a server with an existing name in the same kind is rejected with a clear error; partial-write is impossible.
 - **Tool-name collision across servers**: Prevented by the `<server>__<tool>` namespace; never visible to clients.
 - **Tools-only upstream**: An upstream that implements only `tools` and replies with JSON-RPC `-32601` (METHOD_NOT_FOUND) for `resources/list` or `prompts/list` is treated as having no resources / no prompts. The per-server capability view and the aggregate lists return that server's tools with an empty resources/prompts set (HTTP 200), not an error — so the management / Web-UI capability view works for tools-only servers.
@@ -219,17 +219,17 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the subcommand is invoked with `--json`,
 - **Then** stdout is a parseable JSON document with stable top-level keys (`resources` for `list`, `invocations` for `invocations`) and no human-readable framing.
 
-### Scenario: store and reference a keychain credential
+### Scenario: store and reference a credential
 
 - **Given** the user has not yet stored an HTTP credential,
-- **When** the user issues `POST /api/v1/keychain` (or the equivalent CLI) with `ref` and the secret `value` in the request body, then registers an HTTP MCP server whose `credential_refs` cites `{ref}`,
-- **Then** the credential value is written only to the OS keychain (never to the SQLite DB or any log), and the server registration succeeds with the credential resolved at upstream-spawn time.
+- **When** the user issues `POST /api/v1/credentials` (or the equivalent CLI) with `ref` and the secret `value` in the request body, then registers an HTTP MCP server whose `credential_refs` cites `{ref}`,
+- **Then** the credential value is written only as Fernet ciphertext in the `credentials` table (its plaintext never reaches the SQLite DB, any log, or the audit), and the server registration succeeds with the credential resolved (decrypted) at upstream-spawn time.
 
-### Scenario: delete a keychain credential frees the reference
+### Scenario: delete a credential frees the reference
 
-- **Given** a keychain credential `{ref}` exists and is cited by zero MCP servers,
-- **When** the user issues `DELETE /api/v1/keychain/{ref}` (or the equivalent CLI),
-- **Then** the OS keychain entry is removed, the deletion is audited, and a later registration may reuse `{ref}` without conflict.
+- **Given** a credential `{ref}` exists and is cited by zero MCP servers,
+- **When** the user issues `DELETE /api/v1/credentials/{ref}` (or the equivalent CLI),
+- **Then** the ciphertext row is removed, the deletion is audited, and a later registration may reuse `{ref}` without conflict.
 
 ### Scenario: daemon status reflects ready state
 
@@ -298,7 +298,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 **Credentials and safety**
 
-- **FR-011**: System MUST store all upstream-server credentials only in the operating system's keychain, referenced from configuration by name; credentials MUST never be written to the database or to any log. The management API MUST expose keychain endpoints so a UI can manage a secret directly in the keychain without it passing through the database: write (`POST /api/v1/keychain`), delete (`DELETE /api/v1/keychain/{ref}`), an existence check (`GET /api/v1/keychain/{ref}/exists`), and an audited read (`GET /api/v1/keychain/{ref}`). The read endpoint returns the secret value and emits a `keychain_read` audit event so every secret read is recorded.
+- **FR-011**: System MUST store all upstream-server credentials only as Fernet ciphertext in the `credentials` table (envelope encryption), referenced from configuration by name; credential plaintext MUST never be written to the database, any log, or the audit. The Fernet master key MUST be managed solely by `infrastructure/credentials/` — a `0600` file beside the DB by default, the OS keychain opt-in. The management API MUST expose credential endpoints so a UI can manage a secret without its plaintext landing in any persisted config: write (`POST /api/v1/credentials`), delete (`DELETE /api/v1/credentials/{ref}`), an existence check (`GET /api/v1/credentials/{ref}/exists`), and an audited read (`GET /api/v1/credentials/{ref}`). The read endpoint returns the secret value and emits a `credential_read` audit event so every secret read is recorded.
 - **FR-012**: System MUST bind all HTTP endpoints (management API and MCP protocol endpoint) to the loopback interface only.
 - **FR-013**: System MUST require an authentication token on every management API call; the token is generated locally at daemon startup, stored with user-only file permissions, and rotatable.
 
@@ -345,6 +345,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - The single user runs coffer on their own machine. There is no multi-tenant or remote-access requirement.
 - The MCP client (Claude Code, Codex, etc.) supports either an `stdio` MCP server configuration or an `http`/`sse` MCP server configuration; coffer ships both entry points.
 - Upstream MCP servers behave according to the public MCP protocol specification. Misbehaving upstreams are handled as faults, not modelled as features.
-- The OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service / KWallet) is available and unlocked at coffer startup, or the user is shown a clear message when it isn't.
+- The Fernet master key is resolvable at coffer startup (a readable `~/.coffer/master.key` by default, or an unlocked OS keychain in keychain mode), or the user is shown a clear message when it isn't (ciphertext with no resolvable key is a fatal `MasterKeyMissing` startup error).
 - This spec ships with one resource kind (`mcp_server`). The Resource framework is designed so additional kinds can be added by later specs without re-modelling existing data.
 - Concurrent MCP client load is small (low single digits); coffer is not a fleet-scale gateway.

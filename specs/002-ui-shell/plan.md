@@ -51,7 +51,7 @@ See [./spec.md](./spec.md) for the user-visible contract,
 | **Languages**                             | OK         | TypeScript 5 only; no new languages.                                                                                                                 |
 | **Architecture: layered**                 | OK         | Frontend folder layout mirrors the layer-first convention: `lib/` (cross-cutting), `kinds/<kind>/` (per-kind UI), `pages/` (compose into routes).    |
 | **Persistence: SQLite for control plane** | OK         | This spec does not own persistence; the daemon does.                                                                                                 |
-| **Credentials: keychain only**            | OK         | The Add-MCP-server dialog posts to `/api/v1/keychain` for secret env values; the UI never persists credentials locally.                              |
+| **Credentials: encrypted store**          | OK         | The Add-MCP-server dialog posts to `/api/v1/credentials` for secret env values; the UI never persists credentials locally.                           |
 | **Network defaults: loopback-only**       | OK         | The Vite dev server targets `http://127.0.0.1:<port>` from `~/.coffer/daemon.json`; production assets are served by the daemon on the same loopback. |
 
 ## Project Structure
@@ -176,7 +176,7 @@ cold-start authenticated render via the dev token plugin.
 ### Phase 3 — US2: MCP day-to-day flows
 
 `AddMcpServerDialog` (JSON-import, secret-env review step,
-register-first-then-keychain ordering — see spec scenario), the redesigned
+register-first-then-credential ordering — see spec scenario), the redesigned
 server list (search / status filter / pager), the server detail page
 (Overview / Tools / Resources / Prompts / Invocations tabs, where an
 invocation row expands to its raw log JSON), capability toggles, the
@@ -217,7 +217,7 @@ smoke, language QA pass.
 | Tailwind + shadcn over plain CSS                            | Visual language consistency is the headline goal of this spec; ad-hoc CSS is exactly the "feels like a scaffold" state US2 fights.               | Plain CSS would re-litigate spacing / typography / colour for every component; shadcn gives us audited Radix primitives without a heavyweight UI framework.                  |
 | TanStack Query over raw fetch                               | The audit / invocation / capability tables all need stale-while-revalidate and refetch-on-toggle; rolling our own would re-implement that badly. | Plain fetch would force every page to hand-roll loading / error / refetch state.                                                                                             |
 | Per-kind registry (`kindRegistry.ts`)                       | Future kinds plug in without touching shared code; mirrors the backend's `KindModule` pattern.                                                   | Per-kind `if (kind === "mcp_server") { … }` branches inside `ResourcesPage` would grow linearly with kind count and re-litigate the kind-agnostic invariant on every screen. |
-| Register-first-then-keychain ordering in AddMcpServerDialog | Avoids orphan keychain entries when registration fails (chosen at impl time; see spec scenario).                                                 | Keychain-first ordering looked symmetric but leaves dead keychain entries on registration failure — orphan cleanup is harder than re-trying registration.                    |
+| Register-first-then-credential ordering in AddMcpServerDialog | Avoids orphan credential entries when registration fails (chosen at impl time; see spec scenario).                                               | Credential-first ordering looked symmetric but leaves dead credential entries on registration failure — orphan cleanup is harder than re-trying registration.                |
 
 ## Cross-Reference Index
 

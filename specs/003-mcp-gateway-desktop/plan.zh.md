@@ -54,7 +54,7 @@ detect-or-spawn 模式监管无头 daemon，在每次启动把 bundle 自带的
 | **语言**                            | OK   | 章程 Languages 条款允许桌面外壳用 Rust；daemon 与 shim 仍是 Python 3.12。                                                                    |
 | **架构：分层**                      | OK   | 桌面 crate 是薄薄一层 —— supervisor、tray、shim-deploy 各自有模块；视图层来自 002 的 Web UI。                                                |
 | **持久化：SQLite 作为控制面**       | OK   | 本规范不拥有持久化；daemon 拥有。外壳读 `~/.coffer/daemon.json`（不是 SQLite）发现 daemon —— 该发现文件是 ADR-006 拥有的运行时契约的一部分。 |
-| **凭据：仅 keychain**               | OK   | 本规范不拥有凭据。autostart 偏好由 `tauri-plugin-autostart`（OS 原生设施）存储，不进 keychain。                                              |
+| **凭据：加密存储**                  | OK   | 本规范不拥有凭据。autostart 偏好由 `tauri-plugin-autostart`（OS 原生设施）存储，不进凭据存储。                                              |
 | **网络默认：仅 loopback**           | OK   | 外壳只与 daemon.json 中的 `127.0.0.1:<port>` 通话；不访问其他 HTTP origin。                                                                  |
 
 ## 工程结构

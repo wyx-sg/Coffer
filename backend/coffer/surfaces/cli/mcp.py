@@ -36,7 +36,7 @@ def _parse_credentials(creds: list[str]) -> dict[str, str]:
     out: dict[str, str] = {}
     for c in creds:
         if "=" not in c:
-            raise typer.BadParameter(f"--credential must be KEY=KEYCHAIN_REF, got {c!r}")
+            raise typer.BadParameter(f"--credential must be KEY=CREDENTIAL_REF, got {c!r}")
         k, v = c.split("=", 1)
         out[k] = v
     return out
@@ -49,7 +49,7 @@ def add(
     stdio: str | None = typer.Option(None, "--stdio", help="`command [args...]`"),
     http: str | None = typer.Option(None, "--http", help="HTTP MCP server URL"),
     credential: list[str] = typer.Option(  # noqa: B008
-        [], "--credential", help="ENV_OR_HEADER=KEYCHAIN_REF (repeatable)"
+        [], "--credential", help="ENV_OR_HEADER=CREDENTIAL_REF (repeatable)"
     ),
     no_auto_enable: bool = typer.Option(
         False, "--no-auto-enable", help="Default new capabilities to disabled"

@@ -4,7 +4,7 @@
 以下规则不可妥协，适用于整个代码库。它们由 importlinter 契约、集成测试和架构本身强制执行，而不仅仅是约定俗成。
 
 1. **仅监听 loopback。** HTTP API 只绑定到 `127.0.0.1`。任何面向公网的接口面（如未来引入）必须以独立进程运行，并仅限于经过签名校验的回调路径。
-2. **凭据永不接触数据库。** 只有 `infrastructure/credentials/keyring_adapter.py` 可以 import `keyring`。配置只存储凭据的 _引用_，而不是凭据值本身。密钥在上游进程拉起时按需物化，永不写入 SQLite、日志或任何其他文件。
+2. **密钥明文永不落盘。** 密钥只以 Fernet 密文形式存于 `credentials` 表；配置只存储凭据的 _引用_，而不是凭据值本身。明文仅在解密与拉起子进程/注入 header（消费密钥处）之间短暂存在于内存——永不以明文进入 SQLite、日志、审计或任何结构化事件。Fernet 主密钥由 `infrastructure/credentials/` 独占管理，它是唯一被允许 import `keyring` 的位置。
 3. **REST API 启用 Token + CORS 鉴权。** 每次管理 API 调用都需要 `X-Coffer-Token` header。daemon token 存储在权限位为 `0600` 的 `~/.coffer/daemon.json` 中。
 4. **出站 HTTP 在引入时将经过 SSRF 防护。** 章程要求：当 daemon 发起出站 HTTP 调用时（例如连接 HTTP 传输的 MCP 服务器），必须经过具备 SSRF 防护的客户端。这是一条前瞻性不变量：当前实现使用 MCP SDK 的 httpx 客户端，没有 IP 范围过滤。受保护的 SSRF 防护封装器已列入计划，尚未实装。面向公网的接口面（如未来引入）必须以独立进程运行，并仅限于经过签名校验的回调路径。
    :::
@@ -21,7 +21,7 @@ Coffer 是一个单用户、本地优先的工具。其信任模型相应地也�
 
 2. **恶意的上游 MCP 服务器配置。** 一个使用精心构造的 `command` 或 `url` 注册的服务器，可能尝试访问内网服务（SSRF）、通过环境变量泄露凭据，或在工作目录之外写入文件。凭据引用模型（配置中不存储明文密钥）以及静态 `env` 的正则检测（拒绝任何看起来像 token 的 `env` 值）是当前的抵御手段。SSRF 防护出站 HTTP 客户端是根据章程不变量计划中的加固措施。
 
-Coffer **不**防范的情况：能够直接读取 `~/.coffer/` 的特权攻击者、已被攻陷的操作系统钥匙串，或恶意的 Coffer 二进制文件。这些超出了本地优先开发者工具的防护范围。
+Coffer（在默认配置下）**不**防范的情况：能够直接读取 `~/.coffer/` 的特权攻击者，或恶意的 Coffer 二进制文件。默认模式下，主密钥位于加密数据库旁的 `0600` 文件中——与此前同样的 `~/.coffer/` 边界，本就把能读取该目录的攻击者排除在外——因此 envelope 加密并未改变这条边界。opt-in 的**钥匙串模式**提高了门槛：主密钥存于操作系统钥匙串后，`~/.coffer/coffer.db` 中的密文对一个仅窃取目录内容、但未同时解锁钥匙串的攻击者毫无用处。已被攻陷的操作系统钥匙串（钥匙串模式下）以及恶意的 Coffer 二进制文件，仍超出本地优先开发者工具的防护范围。
 
 ## 仅监听 loopback 的 HTTP 绑定
 
@@ -31,17 +31,36 @@ daemon 的 FastAPI 应用将其 HTTP 服务器绑定到 `127.0.0.1`，而非 `0.
 
 唯一有意设计为无需鉴权的端点是 `GET /api/v1/daemon/status`。它仅监听 loopback，只返回生命周期阶段、版本、端口和上游健康状态摘要——不包含密钥、每个资源的详情或审计数据。其存在是为了让 CLI 和 shim 在从 `daemon.json` 读取 token 之前就能探测 daemon 是否就绪。
 
-## 凭据：keyring 约束
+## 凭据：加密存储
 
-操作系统钥匙串（macOS Keychain、Windows Credential Manager、Linux Secret Service / KWallet）是唯一存储密钥材料的地方。其工作机制：
+密钥以 **Fernet 密文**形式存储在 `~/.coffer/coffer.db` 的 `credentials` 表中（envelope 加密）。明文值仅在解密与拉起子进程/注入 header（消费密钥处）之间存在于内存。其工作机制：
 
-1. **存储**：用户调用 `POST /api/v1/keychain/{ref}`，传入密钥值。daemon 使用 `keyring.set_password()` 将该值写入操作系统钥匙串，并返回一个引用键。该值不会被写到任何其他地方。
-2. **引用**：注册 MCP 服务器时，用户在配置中指定 `credential_refs: { "SOME_ENV_VAR": "my-secret-ref" }`。这个映射关系——从环境变量名到钥匙串引用键——存储在数据库的 `config_json` 中。密钥本身不被存储。
-3. **物化**：在上游进程拉起时，daemon 对每个 `credential_refs` 条目调用 `keyring.get_password()`，将值注入子进程的环境变量，然后拉起进程。密钥值只在拉起调用的持续时间内存在于内存中，永不写入日志、审计条目或数据库列。
-4. **删除**：用户调用 `DELETE /api/v1/keychain/{ref}`。daemon 删除钥匙串条目，并记录一条 `keychain_deleted` 审计事件（详情中不包含密钥值）。
+1. **存储**：用户调用 `POST /api/v1/credentials`，传入 ref 和密钥值。daemon 用主密钥对该值做 Fernet 加密，只把密文写入 `credentials` 表，并记录一条 `credential_set` 审计事件（详情中不含密钥值）。明文永不落盘。
+2. **引用**：注册 MCP 服务器时，用户在配置中指定 `credential_refs: { "SOME_ENV_VAR": "my-secret-ref" }`。这个映射关系——从环境变量名到加密凭据存储中的一个 ref——存储在数据库的 `config_json` 中。密钥本身不被存储。
+3. **物化**：在上游进程拉起时，daemon 读取每个 `credential_refs` 条目的密文，用主密钥解密，将明文注入子进程的环境变量（HTTP 传输则注入请求 header），然后拉起进程。明文只在拉起调用的持续时间内存在于内存中，永不写入日志、审计条目或数据库列。
+4. **删除**：用户调用 `DELETE /api/v1/credentials/{ref}`。daemon 删除该行，并记录一条 `credential_deleted` 审计事件（详情中不含密钥值）。
+
+### 主密钥
+
+envelope 加密意味着数据库之外只剩唯一一份密钥材料：Fernet **主密钥**。它**恰好**存在于以下两个位置之一：
+
+- **`~/.coffer/master.key`** —— 数据库旁的 `0600` 文件。这是**默认**：零钥匙串弹窗。（原因：macOS 把钥匙串 ACL 绑定到二进制的 cdhash，因此每次重新构建未签名 daemon 都会对每个密钥重新弹窗。文件背书的主密钥彻底消除了弹窗。见 [ADR-015](/zh/reference/decisions/ADR-015-envelope-encrypted-credential-store)。）
+- **操作系统钥匙串**（service `coffer`，ref `master-key`）—— 通过 **设置 → 安全** 或 `coffer credentials storage --set keychain` opt-in 的加固。macOS 每次 daemon 启动可能弹窗一次。这是防范 `~/.coffer/` 离线窃取的模式。
+
+解析采用 **file-first**：daemon 先找文件，再找钥匙串。这让迁移**崩溃安全**——`relocate` 只移动主密钥，并**最后**删除旧副本，因此被中断的迁移总能解析回一个可用状态。迁移永不触碰 `credentials` 表中的密文（密钥搬家，数据不动）；切换存储模式不会重新加密。
+
+只有当 `credentials` 表为**空**时，才会生成全新的主密钥。存在密文但无可解析密钥是一个致命且可操作的启动错误（`MasterKeyMissing`）—— Coffer 宁可拒绝启动，也不会悄然丢失对现有密钥的访问。
+
+::: warning 备份注意
+`coffer.db` 现在包含密文。恢复它的备份需要配套的 `master.key` 文件（钥匙串模式下则是钥匙串条目）。请把主密钥与数据库一起备份，否则恢复出的 `coffer.db` 无法读取。
+:::
+
+### legacy 钥匙串迁移
+
+在 envelope 加密之前，密钥直接存于操作系统钥匙串。启动时 daemon 会运行一次性、尽力而为的迁移：读取那些被已注册资源引用的 legacy 钥匙串密钥，加密写入 `credentials` 表，并按 ref 以 `credential_migrated` 审计。若钥匙串被锁定，则跳过迁移，下次启动重试。
 
 ::: warning 绝对约束
-`keyring_adapter.py` 是整个代码库中**唯一**被允许 import `keyring` 的文件。这由 importlinter 契约（`backend/pyproject.toml` 中的 Contract 4）强制执行。任何在其他地方添加 `import keyring` 的 PR 都会导致 CI 失败。
+`infrastructure/credentials/` 是整个代码库中**唯一**被允许 import `keyring` 的位置，且仅用于主密钥（钥匙串模式）与 legacy 迁移。这由 importlinter 契约（`backend/pyproject.toml` 中的 Contract 4）强制执行。任何在其他地方添加 `import keyring` 的 PR 都会导致 CI 失败。
 :::
 
 `StdioTransport` 配置 schema 还有第二道防线：其 `env` 字段对每个静态环境变量的值执行正则检测，并拒绝任何看起来像 token 或密钥的值（匹配 token 检测正则）。这能捕获用户不小心将明文密钥粘贴进静态 `env` map 而非使用 `credential_refs` 的情况。

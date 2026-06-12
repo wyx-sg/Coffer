@@ -227,7 +227,7 @@ def configure(
     dimensions: int | None = typer.Option(None, "--dimensions"),
     base_url: str | None = typer.Option(None, "--base-url"),
     credential_ref: str | None = typer.Option(
-        None, "--credential-ref", help="Keychain credential name (never a raw key)."
+        None, "--credential-ref", help="Stored credential ref (never a raw key)."
     ),
     enable_vector: bool = typer.Option(
         False, "--enable-vector", help="Add 'vector' to retrieval_modes."

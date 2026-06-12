@@ -1,7 +1,7 @@
 // frontend/src/pages/settings/SettingsLayout.test.tsx
 //
 // Direct-render tests for the settings tab-strip + pane-swap behaviour.
-// The browser path renders 2 tabs (Data + About) — the App tab is hidden
+// The browser path renders Security + Data + About — the App tab is hidden
 // when `isTauri()` returns false, and the daemon is never a tab.
 
 import { describe, expect, test, vi } from "vitest";
@@ -28,9 +28,10 @@ function wrap(route = "/settings/data") {
 }
 
 describe("SettingsLayout (browser mode)", () => {
-  test("renders the Data and About tabs but not App / Daemon", () => {
+  test("renders the Data, Security, and About tabs but not App / Daemon", () => {
     render(wrap());
     expect(screen.getByRole("link", { name: /Data/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Security/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /About/ })).toBeInTheDocument();
     // The desktop-only App tab is hidden in browser mode.
     expect(screen.queryByRole("link", { name: /^App$/ })).not.toBeInTheDocument();
@@ -67,6 +68,7 @@ describe("SettingsLayout (desktop mode)", () => {
         <Routes>
           <Route path="/settings" element={<DesktopLayout />}>
             <Route path="data" element={<div>data</div>} />
+            <Route path="security" element={<div>security</div>} />
             <Route path="app" element={<div>app</div>} />
             <Route path="about" element={<div>about</div>} />
           </Route>
@@ -74,9 +76,10 @@ describe("SettingsLayout (desktop mode)", () => {
       </MemoryRouter>,
     );
 
-    // The App tab appears in addition to Data + About.
+    // The App tab appears in addition to Data + Security + About.
     expect(screen.getByRole("link", { name: /^App$/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^Data$/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Security$/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^About$/ })).toBeInTheDocument();
   });
 });

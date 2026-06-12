@@ -29,7 +29,7 @@ A `contextvar` carries the `trace_id` through the full async call stack for a re
 
 Log files are in `~/.coffer/logs/`. Rotation is handled by Python's `logging.handlers.RotatingFileHandler` (size-based: 10 MB per file, 3 backup files kept). Logs are subject to the same `~/.coffer/` backup footprint as the database.
 
-Log lines never contain secret material. Secrets are confined to the OS keychain and are never passed as log fields — so no scrub processor is needed or present. The structlog pipeline is: `merge_contextvars`, `add_log_level`, `TimeStamper`, `_add_trace_id`, `JSONRenderer`.
+Log lines never contain secret material. Secrets live only as ciphertext in the credential store, and their plaintext is never passed as a log field — so no scrub processor is needed or present. The structlog pipeline is: `merge_contextvars`, `add_log_level`, `TimeStamper`, `_add_trace_id`, `JSONRenderer`.
 
 ## Trace correlation
 

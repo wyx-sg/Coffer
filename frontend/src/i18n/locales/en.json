@@ -184,7 +184,7 @@
       "env": "Environment variables",
       "noEnv": "No environment variables",
       "secret": "Secret",
-      "secretHint": "Values marked Secret go to the OS keychain; the rest stay in the config.",
+      "secretHint": "Values marked Secret are encrypted into Coffer's local database; the rest stay in the config.",
       "errInvalidJson": "That's not valid JSON.",
       "errNoServers": "Couldn't find an MCP server. Expected the {\"mcpServers\": {…}} format.",
       "errBadServer": "Server \"{{name}}\" needs a \"command\" (stdio) or a \"url\" (http).",
@@ -204,7 +204,7 @@
       "removeCredential": "Remove credential",
       "credentialKeep": "Leave blank to keep",
       "credentialNew": "Secret value",
-      "credentialHint": "Credential values go to the OS keychain. Removing a credential deletes its keychain entry.",
+      "credentialHint": "Credential values are encrypted into Coffer's local database. Removing a credential deletes its stored entry.",
       "errRenameNeedsValue": "Re-enter the secret value for \"{{name}}\" to rename it."
     }
   },
@@ -240,6 +240,12 @@
       "backup_created": "Created a backup",
       "keychain_set": "Stored a credential",
       "keychain_deleted": "Removed a credential",
+      "keychain_read": "Read a credential",
+      "credential_set": "Stored a credential",
+      "credential_read": "Read a credential",
+      "credential_deleted": "Removed a credential",
+      "credential_migrated": "Credential migrated from OS keychain",
+      "master_key_relocated": "Master key storage changed",
       "agent_config_file_written": "Edited {{resource}} config ({{key}})",
       "agent_mcp_installed": "Installed Coffer MCP into {{resource}}",
       "agent_mcp_uninstalled": "Removed Coffer MCP from {{resource}}"
@@ -259,7 +265,13 @@
       "retention_updated": "Retention changed",
       "backup_created": "Backup created",
       "keychain_set": "Credential stored",
-      "keychain_deleted": "Credential removed"
+      "keychain_deleted": "Credential removed",
+      "keychain_read": "Credential read",
+      "credential_set": "Credential stored",
+      "credential_read": "Credential read",
+      "credential_deleted": "Credential removed",
+      "credential_migrated": "Credential migrated from OS keychain",
+      "master_key_relocated": "Master key storage changed"
     },
     "capType": {
       "tool": "tool",
@@ -291,6 +303,7 @@
     "tabs": {
       "general": "General",
       "data": "Data",
+      "security": "Security",
       "app": "App",
       "about": "About",
       "embedding": "Embedding & chunking",
@@ -358,11 +371,20 @@
       "dimensions": "Dimensions",
       "baseUrl": "Base URL (optional)",
       "credential": "Credential reference",
-      "credentialHint": "Keychain entry name (not the key itself)",
+      "credentialHint": "Credential store entry name (not the key itself)",
       "chunkingTitle": "Chunking defaults",
       "chunkingHint": "Default chunk size/overlap for NEW knowledge bases. Each knowledge base can override these in its settings.",
       "chunkSize": "Chunk size",
       "chunkOverlap": "Chunk overlap"
+    },
+    "security": {
+      "masterKey": {
+        "title": "Credential encryption",
+        "description": "Secrets are always encrypted into Coffer's local database. This controls where the encryption master key lives.",
+        "fileNote": "Master key: file beside the database (no keychain prompts).",
+        "keychainNote": "Master key: OS keychain (may prompt once per daemon start).",
+        "toggle": "Store master key in OS keychain"
+      }
     },
     "models": {
       "title": "Models",
@@ -409,7 +431,8 @@
     "CONFIG_INVALID": "Configuration is invalid",
     "CONFIG_FILE_FORMAT_INVALID": "The content isn't valid for this file's format. The file was left unchanged.",
     "TOOL_DISABLED": "This capability is disabled",
-    "CREDENTIAL_MISSING": "Required credential is missing from the keychain",
+    "CREDENTIAL_MISSING": "Required credential is missing from the credential store",
+    "CREDENTIAL_UNREADABLE": "Stored credential could not be decrypted with the current master key",
     "CREDENTIAL_LOCKED": "The OS keychain is locked",
     "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable",
     "UPSTREAM_TIMEOUT": "Upstream server did not respond in time",

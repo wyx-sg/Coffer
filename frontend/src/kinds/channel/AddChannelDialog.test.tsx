@@ -56,7 +56,7 @@ acceptance("009-channels", "register a telegram channel", async () => {
   await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
   // Secret write first (registration probes the credential ref) …
   expect(api.POST.mock.calls[0]).toEqual([
-    "/keychain",
+    "/credentials",
     { body: { ref: "channel/tg/bot-token", value: "123:abc" } },
   ]);
   // … then the resource registration with refs only (never the secret).
@@ -104,7 +104,7 @@ describe("AddChannelDialog", () => {
     submit();
 
     await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(3));
-    expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/keychain", "/keychain", "/resources"]);
+    expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/credentials", "/credentials", "/resources"]);
     expect(api.POST.mock.calls[2][1]).toEqual({
       body: {
         kind: "channel",
@@ -135,7 +135,7 @@ describe("AddChannelDialog", () => {
     submit();
 
     await waitFor(() => expect(api.DELETE).toHaveBeenCalledTimes(1));
-    expect(api.DELETE).toHaveBeenCalledWith("/keychain/{ref}", {
+    expect(api.DELETE).toHaveBeenCalledWith("/credentials/{ref}", {
       params: { path: { ref: "channel/tg/bot-token" } },
     });
     // The translated error surfaces in the dialog.

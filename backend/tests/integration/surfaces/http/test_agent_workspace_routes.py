@@ -262,8 +262,11 @@ def test_adopt_mcp_entry(tmp_path, monkeypatch, fake_keyring):
         data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8"))
         assert "fetcher" not in data["mcp_servers"]
 
-        # The secret value landed in the (fake) OS keychain under the ref.
-        assert fake_keyring[ref] == SECRET_VALUE
+        # The secret value landed in the encrypted credential store under the
+        # ref (read back through the audited API — never via the keychain).
+        r = c.get(f"/api/v1/credentials/{ref}")
+        assert r.status_code == 200, r.text
+        assert r.json() == {"value": SECRET_VALUE}
 
 
 @pytest.mark.acceptance(

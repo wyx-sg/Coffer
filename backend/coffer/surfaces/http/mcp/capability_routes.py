@@ -17,7 +17,6 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
 from coffer.domain.resource import ResourceRef
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -30,6 +29,7 @@ from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
     get_capability_discovery,
+    get_credential_store,
     get_health_repo,
     get_invocation_repo,
     get_preferences_repo,
@@ -338,19 +338,19 @@ async def test_mcp_server(
     name: str,
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
+    credential_store: Any = Depends(get_credential_store),  # noqa: B008
 ) -> McpTestResultOut:
     """Open a transient upstream session, run MCP initialize, return health info.
     Persists the result to mcp_server_health so GET /status reflects it."""
     resource = await resource_service.get(ResourceRef("mcp_server", name))
     config = MCPServerConfig.model_validate(resource.config)
 
-    keyring_adapter = KeyringAdapter()
-    resolver = CredentialResolver(keyring_adapter)
+    resolver = CredentialResolver(credential_store)
 
     start = time.monotonic()
     try:
         if isinstance(config.transport, StdioTransport):
-            # CODE-034: offload the blocking keychain read off the event loop.
+            # CODE-034: offload the blocking credential-store read off the event loop.
             overlay = await asyncio.to_thread(
                 resolver.materialize, config.transport.credential_refs
             )

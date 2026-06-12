@@ -39,7 +39,7 @@
 | **Languages**                     | OK     | 仅 TypeScript 5；不引入新语言。                                                                                                 |
 | **Architecture: layered**         | OK     | 前端目录沿用 layer-first 约定：`lib/`（横切）、`kinds/<kind>/`（按 kind UI）、`pages/`（合成路由）。                            |
 | **Persistence: SQLite 控制平面**  | OK     | 本 spec 不持有持久化；持久化在 daemon。                                                                                         |
-| **Credentials: 仅 keychain**      | OK     | Add-MCP-server 对话框把 secret env 值发到 `/api/v1/keychain`；UI 永不本地保存凭据。                                             |
+| **Credentials: 加密存储**         | OK     | Add-MCP-server 对话框把 secret env 值发到 `/api/v1/credentials`；UI 永不本地保存凭据。                                          |
 | **Network defaults: loopback 限** | OK     | Vite dev server 通过 `~/.coffer/daemon.json` 拿到 `http://127.0.0.1:<port>`；生产构建由 daemon 在同一 loopback 上提供静态资源。 |
 
 ## Project Structure
@@ -138,7 +138,7 @@ Tailwind 配置 (`frontend/tailwind.config.js`)、shadcn primitives、`AppShell`
 
 ### Phase 3 — US2：MCP 日常流
 
-`AddMcpServerDialog`（JSON 导入、secret env review 步骤、register-first-then-keychain 顺序——见 spec scenario）、重设计的服务器列表（搜索 / 状态过滤 / 分页）、服务器详情页（Overview / Tools / Resources / Prompts / Invocations tabs，其中 invocation 行可展开为它的原始日志 JSON）、能力开关，以及重设计的空 / 错误 / 加载态。
+`AddMcpServerDialog`（JSON 导入、secret env review 步骤、register-first-then-credential 顺序——见 spec scenario）、重设计的服务器列表（搜索 / 状态过滤 / 分页）、服务器详情页（Overview / Tools / Resources / Prompts / Invocations tabs，其中 invocation 行可展开为它的原始日志 JSON）、能力开关，以及重设计的空 / 错误 / 加载态。
 
 **Done when:** US2 的 representative scenarios 通过，MCP 流程的 `make verify-e2e` 绿。
 
@@ -167,7 +167,7 @@ Acceptance 审计、`make verify`、`make verify-e2e`、跨浏览器手动冒烟
 | Tailwind + shadcn 取代裸 CSS                            | 视觉语言一致性是本 spec 的头号目标；ad-hoc CSS 恰是 US2 反对的"像脚手架"状态。                       | 裸 CSS 会让每个组件重新讨论 spacing / typography / color；shadcn 给我们一组被审计过的 Radix 基础件，又不带笨重的 UI 框架。         |
 | TanStack Query 取代原生 fetch                           | 审计 / 调用 / 能力表格都需要 stale-while-revalidate 和切换后自动 refetch；自己重造一遍只会做得更差。 | 原生 fetch 会让每个页面手摇 loading / error / refetch 状态。                                                                       |
 | Per-kind 注册表 (`kindRegistry.ts`)                     | 未来的 kind 接入时不动共享代码；与后端的 `KindModule` 模式镜像。                                     | 在 `ResourcesPage` 里写 `if (kind === "mcp_server") { … }` 分支，会随 kind 数线性膨胀，并在每个界面重新挑战 kind-agnostic 不变式。 |
-| AddMcpServerDialog 中 register-first-then-keychain 顺序 | 注册失败时避免遗留 orphan keychain 条目（实现阶段确定；见 spec scenario）。                          | keychain-first 看起来对称，但注册失败时会留死的 keychain 条目；清理 orphan 比重试注册更难。                                        |
+| AddMcpServerDialog 中 register-first-then-credential 顺序 | 注册失败时避免遗留 orphan 凭据条目（实现阶段确定；见 spec scenario）。                              | credential-first 看起来对称，但注册失败时会留死的凭据条目；清理 orphan 比重试注册更难。                                            |
 
 ## Cross-Reference Index
 

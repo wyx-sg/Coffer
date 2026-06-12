@@ -66,8 +66,8 @@ coffer kb delete-kb design-notes --yes
 # set-embedding enables vector mode and re-embeds the corpus.
 coffer kb set-embedding design-notes --provider local --model bge-m3 --dimensions 1024
 
-# Or a cloud / OpenAI-compatible provider; the credential is a keychain ref, never plaintext.
-coffer keychain set openai-embed                         # stores the key in the OS keychain
+# Or a cloud / OpenAI-compatible provider; the credential is a store ref, never plaintext.
+coffer credentials set openai-embed                      # stores the key as ciphertext in the credential store
 coffer kb set-embedding design-notes \
   --provider openai --model text-embedding-3-small --dimensions 1536 \
   --credential-ref openai-embed

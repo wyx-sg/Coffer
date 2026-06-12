@@ -90,9 +90,12 @@ String-valued enum (use `StrEnum`):
 | `"token_rotated"`         | After `POST /api/v1/daemon/rotate-token`                   |
 | `"retention_updated"`     | When a retention policy is changed                         |
 | `"backup_created"`        | After `POST /api/v1/daemon/backup`                         |
-| `"keychain_set"`          | After `POST /api/v1/keychain` stores a secret              |
-| `"keychain_read"`         | After `GET /api/v1/keychain/{ref}` reads a secret          |
-| `"keychain_deleted"`      | After `DELETE /api/v1/keychain/{ref}` removes a secret     |
+| `"credential_set"`        | After `POST /api/v1/credentials` stores a secret           |
+| `"credential_read"`       | After `GET /api/v1/credentials/{ref}` reads a secret       |
+| `"credential_deleted"`    | After `DELETE /api/v1/credentials/{ref}` removes a secret  |
+| `"credential_migrated"`   | Per ref, when a legacy keychain secret migrates into the store |
+| `"master_key_relocated"`  | After `PUT /api/v1/settings/credentials` moves the master key |
+| `"keychain_set"` / `"keychain_read"` / `"keychain_deleted"` | _Legacy_ (pre-envelope-encryption); kept renderable for historical rows |
 
 ### `RetentionPolicy` (`domain/retention.py`)
 
@@ -132,7 +135,7 @@ Pydantic `BaseModel`. Discriminator value: `"stdio"`.
 | `command`         | `str`              | executable, e.g. `"npx"`                                                                 |
 | `args`            | `list[str]`        | default `[]`                                                                             |
 | `env`             | `dict[str, str]`   | static env, never contains secrets; rejected if a value looks like a token (regex check) |
-| `credential_refs` | `dict[str, str]`   | maps `env_var_name → keychain_ref_key`; resolved at spawn                                |
+| `credential_refs` | `dict[str, str]`   | maps `env_var_name → ref` into the encrypted credential store; resolved (decrypted) at spawn |
 | `cwd`             | `str \| None`      | optional working directory                                                               |
 
 ### `HttpTransport` (`domain/mcp/server_config.py`)
@@ -144,7 +147,7 @@ Pydantic `BaseModel`. Discriminator value: `"http"`.
 | `type`            | `Literal["http"]`  | discriminator                              |
 | `url`             | `pydantic.HttpUrl` | upstream MCP HTTP/SSE endpoint             |
 | `headers`         | `dict[str, str]`   | static headers; same secret regex as `env` |
-| `credential_refs` | `dict[str, str]`   | maps `header_name → keychain_ref_key`      |
+| `credential_refs` | `dict[str, str]`   | maps `header_name → ref` into the encrypted credential store |
 
 ### `MCPServerConfig` (`domain/mcp/server_config.py`)
 

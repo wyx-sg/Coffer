@@ -2318,7 +2318,7 @@ learnings from the MVP to inform the breakdown.
 - T079 `--json` flag on every list/show command
 - T080 `--verbose` traceback rendering
 - T081 Exit code map per error class
-- T082 `coffer keychain set/get/list` (credential management)
+- T082 `coffer credentials set/get/list` (credential management)
 
 ### Phase 5 — User Story 4 (P3): Auditing & activity logs (audit + invocations + retention)
 

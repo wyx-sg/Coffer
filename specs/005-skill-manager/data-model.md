@@ -321,5 +321,5 @@ This closure-based composition keeps both kinds independent at the application l
 
 - All HTTP loopback-only.
 - Git fetch through SSRF-guarded URL predicate (loopback / RFC1918 / link-local rejected).
-- No keychain entries in v1 (no auth on skill sources).
+- No credential-store entries in v1 (no auth on skill sources).
 - File-size limit: 50 MB total per skill folder, enforced by `validate_skill_folder`. The limit is a `SkillService` constructor default (`size_limit_bytes`); it is not yet plumbed to a config file, so v1 always uses the hardcoded 50 MB.

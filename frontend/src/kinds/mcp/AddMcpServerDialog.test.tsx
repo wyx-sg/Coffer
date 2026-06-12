@@ -101,7 +101,7 @@ describe("AddMcpServerDialog", () => {
 
   test("lifts a secret env var into the keychain, storing only a ref", async () => {
     const postMock = vi.fn().mockImplementation((path: string) =>
-      path === "/keychain"
+      path === "/credentials"
         ? Promise.resolve({ data: undefined, error: undefined })
         : Promise.resolve({
             data: {
@@ -138,10 +138,10 @@ describe("AddMcpServerDialog", () => {
       expect(screen.getByTestId("detail-page")).toBeInTheDocument();
     });
 
-    // Resource is registered before the keychain is written (no orphans).
-    expect(postMock.mock.calls.map((c) => c[0])).toEqual(["/resources", "/keychain"]);
-    // The secret goes to the keychain; the config keeps only a ref.
-    const keychainCall = postMock.mock.calls.find((c) => c[0] === "/keychain");
+    // Resource is registered before the credential store is written (no orphans).
+    expect(postMock.mock.calls.map((c) => c[0])).toEqual(["/resources", "/credentials"]);
+    // The secret goes to the encrypted credential store; the config keeps only a ref.
+    const keychainCall = postMock.mock.calls.find((c) => c[0] === "/credentials");
     expect(keychainCall?.[1].body).toEqual({
       ref: "gh.GITHUB_TOKEN",
       value: "ghp_secret",

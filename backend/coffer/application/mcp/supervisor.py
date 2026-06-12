@@ -210,10 +210,10 @@ class SubprocessSupervisor:
         self, server_name: str, config: MCPServerConfig
     ) -> UpstreamConnectionPort:
         if isinstance(config.transport, StdioTransport | HttpTransport):
-            # CODE-034: keyring.get() is a synchronous, potentially-blocking OS
-            # keychain call (macOS securityd can stall on first-unlock/IPC).
-            # Offload to a thread so a slow/locked keychain can't freeze the
-            # whole event loop and stall every other concurrent session.
+            # CODE-034: materialize() is a synchronous, potentially-blocking
+            # store read (sqlite, or the OS keychain in legacy setups).
+            # Offload to a thread so a slow read can't freeze the whole
+            # event loop and stall every other concurrent session.
             overlay = await asyncio.to_thread(
                 self._credentials.materialize, config.transport.credential_refs
             )
