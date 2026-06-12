@@ -14,14 +14,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import {
-  useExportMasterKey,
-  useImportMasterKey,
   useResolveSync,
   useRunSync,
   useSyncConfig,
   useSyncStatus,
   useUpdateSyncConfig,
 } from "@/lib/hooks/useSync";
+
+import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
 
 const STATUS_TONE: Record<string, string> = {
   clean: "text-green-600",
@@ -39,15 +39,11 @@ export function SyncSettings() {
   const update = useUpdateSyncConfig();
   const run = useRunSync();
   const resolve = useResolveSync();
-  const importKey = useImportMasterKey();
-  const exportKey = useExportMasterKey();
-
   const [remote, setRemote] = useState("");
   const [branch, setBranch] = useState("main");
   const [enabled, setEnabled] = useState(false);
   const [auto, setAuto] = useState(false);
   const [interval, setIntervalSeconds] = useState(300);
-  const [keyPath, setKeyPath] = useState("");
 
   useEffect(() => {
     if (!config) return;
@@ -173,39 +169,7 @@ export function SyncSettings() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.sync.masterKey")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-foreground/70">{t("settings.sync.masterKeyHint")}</p>
-          <div className="space-y-2">
-            <Label htmlFor="sync-key-path">{t("settings.sync.keyPath")}</Label>
-            <Input
-              id="sync-key-path"
-              value={keyPath}
-              placeholder="/path/to/coffer-master.key"
-              onChange={(e) => setKeyPath(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => exportKey.mutate(keyPath)}
-              disabled={!keyPath || exportKey.isPending}
-            >
-              {t("settings.sync.exportKey")}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => importKey.mutate(keyPath)}
-              disabled={!keyPath || importKey.isPending}
-            >
-              {t("settings.sync.importKey")}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <SyncMasterKeyCard />
     </div>
   );
 }
