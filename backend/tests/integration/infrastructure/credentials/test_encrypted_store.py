@@ -37,8 +37,8 @@ def store(db_path: pathlib.Path) -> EncryptedCredentialStore:
 
 
 def test_set_get_roundtrip(store: EncryptedCredentialStore) -> None:
-    store.set("github-token", "ghp_secret123")
-    assert store.get("github-token") == "ghp_secret123"
+    store.set("github-token", "fake-token-value-123")
+    assert store.get("github-token") == "fake-token-value-123"
 
 
 def test_get_missing_returns_none(store: EncryptedCredentialStore) -> None:
