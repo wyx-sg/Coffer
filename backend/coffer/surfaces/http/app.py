@@ -25,8 +25,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from alembic import command
-from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 
 from coffer.application.agent.kind import make_agent_kind
@@ -37,7 +35,6 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import DatabaseSchemaTooNew
 from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
@@ -65,8 +62,12 @@ from coffer.surfaces.http.app_mcp_composition import (
 )
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
+from coffer.surfaces.http.chat.model_routes import router as chat_model_router
+from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
+    get_mcp_session_factory,
     set_audit_service,
     set_embedding_config_service,
     set_resource_service,
@@ -84,12 +85,18 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
 from coffer.surfaces.http.memory import router as memory_router
+from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.projection_routes import router as projection_router
 from coffer.surfaces.http.projection_wiring import wire_projection
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.skill_routes import router as skill_router
-from coffer.surfaces.http.wiring import build_substrate, wire_kb_kind, wire_memory_kind
+from coffer.surfaces.http.wiring import (
+    build_substrate,
+    wire_chat,
+    wire_kb_kind,
+    wire_memory_kind,
+)
 
 
 def _db_url() -> str:
@@ -101,51 +108,6 @@ def _db_url() -> str:
 
 def _daemon_json_path() -> pathlib.Path:
     return pathlib.Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "daemon.json"
-
-
-def _alembic_config() -> AlembicConfig:
-    cfg = AlembicConfig(
-        str(
-            pathlib.Path(__file__).resolve().parent.parent.parent
-            / "infrastructure/persistence/migrations/alembic.ini"
-        )
-    )
-    return cfg
-
-
-def _guard_schema_not_newer(cfg: AlembicConfig) -> None:
-    """Fail fast when the on-disk DB was migrated by a newer/divergent build.
-
-    If the DB's current Alembic revision is not in this build's migration
-    tree (e.g. the DB was created by a feature branch whose migrations this
-    release doesn't ship), ``upgrade head`` raises an opaque "Can't locate
-    revision identified by ..." and the daemon dies during lifespan startup
-    with no actionable message. Detect that here and raise a clear error.
-
-    A fresh DB (no ``alembic_version`` row) reports ``None`` and is fine.
-    """
-    from alembic.runtime.migration import MigrationContext
-    from alembic.script import ScriptDirectory
-    from sqlalchemy import create_engine
-
-    known = {rev.revision for rev in ScriptDirectory.from_config(cfg).walk_revisions()}
-    sync_url = _db_url().replace("sqlite+aiosqlite://", "sqlite://")
-    engine = create_engine(sync_url)
-    try:
-        with engine.connect() as conn:
-            current = MigrationContext.configure(conn).get_current_revision()
-    finally:
-        engine.dispose()
-    if current is not None and current not in known:
-        raise DatabaseSchemaTooNew(current=current, db_path=_db_url())
-
-
-def _run_migrations() -> None:
-    """Run Alembic upgrade head synchronously. Caller is expected to be off
-    the request path (lifespan startup)."""
-    cfg = _alembic_config()
-    _guard_schema_not_newer(cfg)
-    command.upgrade(cfg, "head")
 
 
 _logger = logging.getLogger(__name__)
@@ -168,7 +130,7 @@ def set_daemon_phase(phase: _DaemonPhase) -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Run migrations BEFORE building services so they have a schema to talk to.
-    await asyncio.get_running_loop().run_in_executor(None, _run_migrations)
+    await asyncio.get_running_loop().run_in_executor(None, run_migrations, _db_url())
 
     # Sweep orphans from a previous (potentially crashed) daemon run BEFORE
     # starting any new upstreams. Best-effort; failures don't block startup.
@@ -209,15 +171,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     set_retention_service(retention_svc)
     set_embedding_config_service(embedding_config_svc)
 
+    # Build the shared built-in tool registry; each kind contributes its tools.
+    # Created before kind wiring so skill/KB/memory can all register into it.
+    builtin_tools = BuiltinToolRegistry()
+
     # Wire up agent + skill kinds (specs 004-agent-registry, 005-skill-manager).
     # The helper builds both in lockstep so the cross-kind on_delete hook (agent
     # deletion cascades into skill binding cleanup) can reference both services,
     # and so app.py stays under the 400-line guideline. Agent detection stays
-    # discovery + confirm (no auto-registration on startup).
-    wire_agent_and_skill_kinds(app, resource_svc, audit, sm)
-
-    # Build the shared built-in tool registry; each kind contributes its tools.
-    builtin_tools = BuiltinToolRegistry()
+    # discovery + confirm (no auto-registration on startup). Passing
+    # builtin_tools registers the skill tools (list_skills / load_skill) so the
+    # built-in chat agent can reach them through the gateway (spec 008).
+    wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools)
 
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
     # into `builtin_tools` so the gateway can expose them.
@@ -260,6 +225,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     process_supervisor, session_supervisors = wire_mcp_kind(
         app, resource_svc, audit, sm, builtin_tools
     )
+
+    # Wire the chat feature (spec 008). Must come AFTER all other wiring so the
+    # coffer-builtin-agent gateway session sees the fully-populated
+    # BuiltinToolRegistry (KB + memory + skill + MCP tools). The session factory
+    # is the one wire_mcp_kind registered via set_mcp_session_factory.
+    chat_gateway_session = wire_chat(audit, sm, get_mcp_session_factory())
+    # The chat session's supervisor stays registered in session_supervisors so
+    # the mcp_server on_delete hook evicts its upstream connections too; shutdown
+    # disposes the chat session first (its on_dispose deregisters the entry), so
+    # the supervisor loop never double-disposes it (dispose() is idempotent).
+    app.state.mcp_session_supervisors = session_supervisors
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -314,6 +290,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         if _inv_repo is not None:
             with contextlib.suppress(Exception):
                 await _inv_repo.stop()
+        # Dispose the built-in agent's chat gateway session first (best-effort);
+        # its on_dispose callback removes its entry from session_supervisors.
+        with contextlib.suppress(Exception):
+            await chat_gateway_session.dispose()
         # Dispose MCP supervisors (best-effort)
         with contextlib.suppress(Exception):
             await process_supervisor.dispose()
@@ -372,4 +352,8 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(memory_router)
     # Memory projection router (spec 007-memory; bridges memory + agent)
     app.include_router(projection_router)
+    # Agent chat routers (spec 008)
+    app.include_router(chat_conversation_router)
+    app.include_router(chat_turn_router)
+    app.include_router(chat_model_router)
     return app

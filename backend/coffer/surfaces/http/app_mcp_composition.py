@@ -152,6 +152,17 @@ def build_prunable_registry() -> PrunableRegistry:
             description="MCP tool/resource/prompt invocation log.",
         )
     )
+    registry.register(
+        PrunableTable(
+            name="conversations",
+            timestamp_column="updated_at",
+            # None = keep forever until the user sets a retention window; chat
+            # threads are user content, so retention is opt-in, never a surprise.
+            default_retention_days=None,
+            display_name="Chat Conversations",
+            description="Chat threads and their messages, pruned by last activity.",
+        )
+    )
     return registry
 
 

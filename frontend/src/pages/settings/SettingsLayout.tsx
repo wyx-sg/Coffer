@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
+  Bot,
   Boxes,
   Database,
   Info,
@@ -23,6 +24,11 @@ const GENERAL_ITEM: Item = {
   to: "/settings/general",
   labelKey: "settings.tabs.general",
   icon: SlidersHorizontal,
+};
+const MODELS_ITEM: Item = {
+  to: "/settings/models",
+  labelKey: "settings.tabs.models",
+  icon: Bot,
 };
 const DATA_ITEM: Item = {
   to: "/settings/data",
@@ -50,8 +56,8 @@ export function SettingsLayout() {
   // The App tab (launch-at-login) is desktop-only — it is hidden in the
   // browser, where those Tauri capabilities don't exist.
   const items: Item[] = isTauri()
-    ? [GENERAL_ITEM, EMBEDDING_ITEM, DATA_ITEM, APP_ITEM, ABOUT_ITEM]
-    : [GENERAL_ITEM, EMBEDDING_ITEM, DATA_ITEM, ABOUT_ITEM];
+    ? [GENERAL_ITEM, MODELS_ITEM, EMBEDDING_ITEM, DATA_ITEM, APP_ITEM, ABOUT_ITEM]
+    : [GENERAL_ITEM, MODELS_ITEM, EMBEDDING_ITEM, DATA_ITEM, ABOUT_ITEM];
 
   return (
     <div className="space-y-8">

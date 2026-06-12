@@ -14,6 +14,33 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 
+# Agent-chat (spec 008) providers live in their own module; re-export them so
+# the long-standing surfaces.http.dependencies.get_chat_service paths keep working.
+from coffer.surfaces.http.chat.dependencies import (
+    get_agent_registry as get_agent_registry,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    get_chat_service as get_chat_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    get_model_service as get_model_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    get_turn_orchestrator as get_turn_orchestrator,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_agent_registry as set_agent_registry,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_chat_service as set_chat_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_model_service as set_model_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_turn_orchestrator as set_turn_orchestrator,
+)
+
 # X-Coffer-Actor accepts any short identifier. Canonical values: "cli", "api",
 # "ui", "system". Tests use prefixed identifiers like "e2e-mcp"; downstream
 # integrations may add their own. Length-and-charset bounded to keep audit
@@ -354,3 +381,8 @@ def get_project_root_repo() -> Any:
     if _project_root_repo is None:
         raise RuntimeError("project-root repo not initialised")
     return _project_root_repo
+
+
+# Agent-chat (spec 008) dependency providers are re-exported from
+# surfaces/http/chat/dependencies.py (see the import at the top of this module),
+# which keeps this kind-agnostic core under its file-size budget.

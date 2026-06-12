@@ -3,6 +3,7 @@
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
+    "dismiss": "Dismiss",
     "edit": "Edit",
     "loading": "Loading…",
     "enabled": "Enabled",
@@ -47,7 +48,8 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "agents": "Agents",
-    "audit": "Audit log"
+    "audit": "Audit log",
+    "chat": "Chat"
   },
   "resources": {
     "title": "MCP servers",
@@ -290,7 +292,8 @@
       "data": "Data",
       "app": "App",
       "about": "About",
-      "embedding": "Embedding"
+      "embedding": "Embedding",
+      "models": "Models"
     },
     "general": {
       "title": "Display",
@@ -315,6 +318,10 @@
         "mcp_invocations": {
           "name": "MCP invocations",
           "description": "MCP tool/resource/prompt invocation log."
+        },
+        "conversations": {
+          "name": "Chat conversations",
+          "description": "Chat threads and their messages, pruned by last activity."
         }
       }
     },
@@ -351,6 +358,25 @@
       "baseUrl": "Base URL (optional)",
       "credential": "Credential reference",
       "credentialHint": "Keychain entry name (not the key itself)"
+    },
+    "models": {
+      "title": "Models",
+      "subtitle": "AI model configurations used by Coffer Assistant.",
+      "add": "Add model",
+      "addTitle": "Add model",
+      "editTitle": "Edit model",
+      "empty": "No models configured yet. Add one to start chatting.",
+      "default": "Default",
+      "displayName": "Display name",
+      "displayNamePlaceholder": "e.g. Claude 3.5 Sonnet",
+      "provider": "Provider",
+      "modelId": "Model ID",
+      "modelIdPlaceholder": "e.g. claude-3-5-sonnet-20241022",
+      "credentialRef": "Credential reference",
+      "credentialRefPlaceholder": "e.g. ANTHROPIC_API_KEY",
+      "baseUrl": "Base URL",
+      "baseUrlPlaceholder": "e.g. http://localhost:11434",
+      "setDefault": "Set as default"
     }
   },
   "daemon": {
@@ -788,5 +814,91 @@
       }
     },
     "deleteStoreConfirm": "Delete memory store \"{{name}}\"? Its facts are removed. This cannot be undone."
+  },
+  "chat": {
+    "title": "Chat",
+    "thinking": "Thinking…",
+    "emptyState": {
+      "title": "No model configured",
+      "body": "You need to add at least one model before you can start chatting.",
+      "cta": "Go to Settings → Models"
+    },
+    "agent": {
+      "cofferAssistant": "Coffer Assistant"
+    },
+    "message": {
+      "failed": "This response did not complete.",
+      "tokens": "{{prompt}} in · {{completion}} out"
+    },
+    "modelBar": {
+      "model": "Model",
+      "noModel": "No model",
+      "noModels": "No models configured",
+      "selectAria": "Select model"
+    },
+    "history": {
+      "title": "Conversations",
+      "new": "New chat",
+      "empty": "No conversations yet",
+      "search": "Search conversations",
+      "noMatches": "No matching conversations",
+      "ariaLabel": "Conversation history",
+      "rename": "Rename",
+      "renameAria": "Rename conversation",
+      "delete": "Delete",
+      "collapse": "Collapse history",
+      "expand": "Expand history",
+      "restore": "Restore",
+      "archive": "Archive",
+      "viewArchived": "View archived",
+      "backToActive": "Back to active",
+      "archivedTitle": "Archived",
+      "archivedEmpty": "No archived conversations"
+    },
+    "thread": {
+      "empty": "Send a message to start the conversation.",
+      "selectOrCreate": "Select a conversation or start a new one."
+    },
+    "composer": {
+      "placeholder": "Message Coffer Assistant… (Enter to send, Shift+Enter for new line)",
+      "ariaLabel": "Message input",
+      "send": "Send",
+      "stop": "Stop",
+      "streaming": "Waiting for response…"
+    },
+    "toolCard": {
+      "unknown": "unknown tool",
+      "running": "running",
+      "done": "done",
+      "error": "error",
+      "input": "Input",
+      "result": "Result",
+      "errorLabel": "Error",
+      "toggleAria": "Toggle tool call {{name}}"
+    },
+    "newConversation": {
+      "agent": "Agent",
+      "model": "Model",
+      "noModels": "No models yet — add one in Settings → Models first.",
+      "unavailable": "unavailable"
+    },
+    "draft": {
+      "guide": "Message {{agent}} to start a new conversation."
+    },
+    "delete": {
+      "title": "Delete this conversation?",
+      "body": "This conversation and all of its messages will be permanently removed."
+    },
+    "archive": {
+      "title": "Archive this conversation?",
+      "body": "It will be moved to the archive. You can restore it anytime.",
+      "confirm": "Archive"
+    },
+    "approval": {
+      "title": "Approval required",
+      "tool": "Tool",
+      "allow": "Allow",
+      "deny": "Deny"
+    }
   }
 }
