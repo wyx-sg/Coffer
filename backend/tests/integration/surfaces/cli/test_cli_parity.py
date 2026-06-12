@@ -50,7 +50,7 @@ def test_cli_covers_every_visual_operation():
         "mcp tool": ["list", "enable", "disable"],
         "mcp resource": ["list", "enable", "disable"],
         "mcp prompt": ["list", "enable", "disable"],
-        "keychain": ["set", "get", "list", "delete"],
+        "credentials": ["set", "get", "list", "delete", "storage"],
     }
     for group_path, names in expected_subcommands.items():
         parts = group_path.split()
