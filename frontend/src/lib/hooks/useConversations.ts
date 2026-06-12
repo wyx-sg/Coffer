@@ -63,13 +63,13 @@ export function useConversation(id: string) {
 
 export function useCreateConversation() {
   const qc = useQueryClient();
-  const onError = useConversationToastError();
+  // No onError toast here: ChatPage renders a contextual create-error banner
+  // next to the draft composer, so a toast would double-surface the same failure.
   return useMutation({
     mutationFn: (body: ConversationCreate | undefined) => chatApi.createConversation(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },
-    onError,
   });
 }
 

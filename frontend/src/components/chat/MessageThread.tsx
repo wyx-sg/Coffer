@@ -71,14 +71,18 @@ export function MessageThread({
   // to read history, new tokens must not yank them back down. Seeded true so
   // the first render lands at the latest message.
   const followRef = useRef(true);
-  // I2: Drive no-model empty state from whether ANY model is configured,
+  // I2: Drive the no-model empty state from whether ANY model is configured,
   // not from the conversation's model_id (which is NULL when using the default).
+  // Only the built-in agent needs a model — CLI agents (Claude Code, Codex) are
+  // configured by a working directory and must NOT be blanked when no model exists.
+  const requiresModel = conversation.agent_key === "builtin";
   const hasModel = models.length > 0;
+  const blockedOnModel = requiresModel && !hasModel;
 
   const { data, isPending, error } = useQuery({
     queryKey: messagesKey(conversation.id),
     queryFn: async () => (await chatApi.listMessages(conversation.id)).messages,
-    enabled: hasModel,
+    enabled: !blockedOnModel,
     // While the fetched history holds a streaming placeholder (a turn running
     // server-side with no client stream attached — reload / switch-back),
     // poll until it resolves so the finished reply appears without a manual
@@ -117,7 +121,7 @@ export function MessageThread({
     }
   }, [data, liveMessage]);
 
-  if (!hasModel) {
+  if (blockedOnModel) {
     return (
       <div className="flex flex-1 flex-col">
         <AgentModelBar

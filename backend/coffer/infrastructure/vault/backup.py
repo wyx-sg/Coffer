@@ -24,6 +24,7 @@ key re-placed at ``~/.coffer/master.key``).
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -65,7 +66,12 @@ def _copy_trees(src_root: Path, dest_root: Path, manifest: BackupManifest) -> No
     for name in _TREE_NAMES:
         src_tree = src_root / name
         if src_tree.is_dir():
-            shutil.copytree(src_tree, dest_root / name, dirs_exist_ok=True)
+            # Replace, never merge: a file deleted from the live tree must not
+            # survive in a re-used backup dest and get resurrected on restore.
+            dest_tree = dest_root / name
+            if dest_tree.exists():
+                shutil.rmtree(dest_tree)
+            shutil.copytree(src_tree, dest_tree)
             manifest.trees.append(name)
 
 
@@ -117,34 +123,85 @@ def vault_is_populated() -> bool:
     return any((root / name).is_dir() for name in _TREE_NAMES)
 
 
+def _remove(path: Path) -> None:
+    """Delete a file or directory, tolerating absence."""
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path, ignore_errors=True)
+    else:
+        with contextlib.suppress(FileNotFoundError):
+            path.unlink()
+
+
 def restore_backup(src: Path) -> BackupManifest:
-    """Re-place a backup's db + file trees into the live vault root.
+    """Re-place a backup's db + file trees into the live vault root, atomically.
+
+    The restore is staged under the vault root and swapped into place with
+    same-filesystem renames, so a mid-restore I/O failure (ENOSPC, EIO, an
+    interrupt) NEVER leaves the live source-of-record trees destroyed: each
+    live component is renamed aside before its replacement is moved in, and any
+    failure rolls every swap back. The vault is made to MIRROR the backup —
+    trees present live but absent from the backup are removed — so the restored
+    index never disagrees with what is on disk.
 
     Caller is responsible for confirming an overwrite of a populated vault.
-    Existing trees are replaced wholesale (a removed file in the backup must not
-    survive in the restored tree); the db is overwritten in place.
     """
     verify_backup(src)
     root = vault_root()
     root.mkdir(parents=True, exist_ok=True)
     manifest = BackupManifest()
 
-    shutil.copy2(src / _DB_NAME, root / _DB_NAME)
+    staging = root / ".restore-staging"
+    _remove(staging)
+    staging.mkdir()
+
+    # Components to swap in: (live destination, staged source or None).
+    # None source = remove the live component (mirror a backup that omits it).
+    swaps: list[tuple[Path, Path | None]] = []
+    moved_aside: list[tuple[Path, Path]] = []  # (live, .restore-old)
+    placed: list[Path] = []
+    try:
+        # 1. Stage everything from the backup (the expensive, failure-prone copy
+        #    happens entirely off to the side; the live vault is untouched here).
+        shutil.copy2(src / _DB_NAME, staging / _DB_NAME)
+        swaps.append((root / _DB_NAME, staging / _DB_NAME))
+        for name in _TREE_NAMES:
+            if (src / name).is_dir():
+                shutil.copytree(src / name, staging / name)
+                swaps.append((root / name, staging / name))
+            else:
+                swaps.append((root / name, None))  # absent in backup → remove live
+        if (src / _MASTER_KEY_NAME).exists():
+            shutil.copy2(src / _MASTER_KEY_NAME, staging / _MASTER_KEY_NAME)
+            os.chmod(staging / _MASTER_KEY_NAME, 0o600)
+            swaps.append((root / _MASTER_KEY_NAME, staging / _MASTER_KEY_NAME))
+
+        # 2. Atomic swap: move each live component aside, then rename the staged
+        #    replacement in. Same-filesystem renames are atomic and fast.
+        for dest, staged in swaps:
+            if dest.exists() or dest.is_symlink():
+                aside = dest.with_name(dest.name + ".restore-old")
+                _remove(aside)
+                os.replace(dest, aside)
+                moved_aside.append((dest, aside))
+            if staged is not None:
+                os.replace(staged, dest)
+                placed.append(dest)
+    except BaseException:
+        # Roll back: drop anything we placed, move every aside original back.
+        for dest in placed:
+            _remove(dest)
+        for dest, aside in moved_aside:
+            with contextlib.suppress(OSError):
+                os.replace(aside, dest)
+        _remove(staging)
+        raise
+
+    # Success: discard the aside originals and the staging dir.
+    for _dest, aside in moved_aside:
+        _remove(aside)
+    _remove(staging)
+
     manifest.db = True
-
-    for name in _TREE_NAMES:
-        src_tree = src / name
-        if src_tree.is_dir():
-            dest_tree = root / name
-            if dest_tree.exists():
-                shutil.rmtree(dest_tree)
-            shutil.copytree(src_tree, dest_tree)
-            manifest.trees.append(name)
-
-    src_key = src / _MASTER_KEY_NAME
-    if src_key.exists():
-        shutil.copy2(src_key, root / _MASTER_KEY_NAME)
-        os.chmod(root / _MASTER_KEY_NAME, 0o600)
-        manifest.master_key = True
-
+    manifest.trees = [n for n in _TREE_NAMES if (src / n).is_dir()]
+    manifest.master_key = (src / _MASTER_KEY_NAME).exists()
     return manifest

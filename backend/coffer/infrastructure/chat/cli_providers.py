@@ -158,7 +158,9 @@ class CodexDialect:
         if kind in ("agent_message", "agent_message_delta"):
             text = msg.get("message") or msg.get("text") or msg.get("delta") or ""
             return [TextDelta(text=str(text))] if text else []
-        if kind in ("item.completed", "item.started"):
+        if kind == "item.completed":
+            # Only the terminal item.completed carries content; emitting on
+            # item.started too would duplicate every text block and tool call.
             return self._item(msg.get("item") or {}, state)
         if kind in ("turn.completed", "task_complete", "turn_complete"):
             return self._complete(msg, state)

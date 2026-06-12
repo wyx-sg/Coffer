@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -29,6 +30,8 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Message, Role, TextBlock
+
+_logger = logging.getLogger(__name__)
 
 
 class CliProcess(Protocol):
@@ -152,6 +155,23 @@ class CliAgentAdapter:
         # async generator rather than being one (the builtin adapter does the same).
         return self._stream(history)
 
+    async def _persist_session(self, state: ParseState) -> None:
+        """Write a newly-discovered CLI session id back for the next --resume.
+
+        Best-effort but NOT silent: a failed write only costs session continuity,
+        so it must not fail the turn — but it is logged so the loss is diagnosable.
+        """
+        if not state.session_id or state.session_id == self._resume:
+            return
+        try:
+            await self._on_session(state.session_id)
+        except Exception:
+            _logger.warning(
+                "cli_agent.session_persist_failed",
+                extra={"session_id": state.session_id},
+                exc_info=True,
+            )
+
     async def _stream(self, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
         prompt = last_user_text(history)
         if not prompt:
@@ -181,12 +201,13 @@ class CliAgentAdapter:
             proc.terminate()
             with contextlib.suppress(Exception):
                 await proc.wait()
+            # Persist the session id even on interruption: the CLI emits it early
+            # (its init line), so an interrupted turn must still be resumable.
+            await self._persist_session(state)
             raise
 
         # Persist the (possibly new) session id so the next turn can --resume it.
-        if state.session_id and state.session_id != self._resume:
-            with contextlib.suppress(Exception):
-                await self._on_session(state.session_id)
+        await self._persist_session(state)
 
         if not state.terminal_emitted:
             # The CLI closed without a result line — synthesize a terminal event

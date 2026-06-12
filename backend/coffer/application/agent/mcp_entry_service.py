@@ -316,9 +316,17 @@ class AgentMcpEntryService:
             k: r for k, r in provided.items() if k in parsed_entry.env or k in parsed_entry.headers
         }
 
-        for key, ref in applicable.items():
-            value = parsed_entry.env[key] if key in parsed_entry.env else parsed_entry.headers[key]
-            await asyncio.to_thread(self._credentials.set, ref, value)
+        try:
+            for key, ref in applicable.items():
+                value = (
+                    parsed_entry.env[key] if key in parsed_entry.env else parsed_entry.headers[key]
+                )
+                await asyncio.to_thread(self._credentials.set, ref, value)
+        except Exception:
+            # A later write failed mid-loop: don't orphan the secrets already
+            # written. cleanup is keyed by ref and tolerant of absent ones.
+            await self._cleanup_refs(applicable)
+            raise
 
         config = {"transport": to_transport_config(parsed_entry, applicable)}
         try:

@@ -112,6 +112,48 @@ def test_backup_include_master_key_opt_in(tmp_path, monkeypatch):
     assert "WARNING" in result.output.upper()
 
 
+def test_restore_is_atomic_on_failure(tmp_path, monkeypatch):
+    """A mid-restore failure must NOT destroy the live source-of-record trees —
+    the live vault is left exactly as it was, never half-overwritten."""
+    from coffer.infrastructure.vault import backup as vault_backup
+
+    src_home = tmp_path / "src"
+    live_home = tmp_path / "live"
+    backup = tmp_path / "backup"
+
+    monkeypatch.setenv("HOME", str(src_home))
+    _populate_vault(src_home)
+    result = _runner.invoke(app, ["backup", str(backup)])
+    assert result.exit_code == 0, result.output
+
+    # A DIFFERENT populated live vault we are about to restore over.
+    monkeypatch.setenv("HOME", str(live_home))
+    _populate_vault(live_home)
+    live_doc = live_home / ".coffer" / "knowledge" / "handbook" / "docs" / "welcome.md"
+    live_doc.write_text("# LIVE — must survive a failed restore\n", encoding="utf-8")
+
+    # Force the staging copy to blow up partway (simulates ENOSPC/EIO).
+    real_copytree = vault_backup.shutil.copytree
+    calls = {"n": 0}
+
+    def exploding_copytree(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError(28, "No space left on device")
+        return real_copytree(*a, **k)
+
+    monkeypatch.setattr(vault_backup.shutil, "copytree", exploding_copytree)
+
+    with pytest.raises(OSError):
+        vault_backup.restore_backup(backup)
+
+    # The live tree is intact (not destroyed), and no staging/aside debris remains.
+    assert live_doc.read_text(encoding="utf-8").startswith("# LIVE")
+    coffer = live_home / ".coffer"
+    assert not (coffer / ".restore-staging").exists()
+    assert not (coffer / "knowledge.restore-old").exists()
+
+
 def test_backup_refuses_when_no_vault(tmp_path, monkeypatch):
     """Backing up a non-existent vault is a clean error, not a traceback."""
     monkeypatch.setenv("HOME", str(tmp_path / "empty_home"))

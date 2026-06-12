@@ -86,6 +86,15 @@ describe("MessageThread", () => {
     );
   });
 
+  test("a CLI agent conversation renders without any model (CLI agents need no model)", async () => {
+    // CLI agents (Claude Code, Codex) are configured by a working directory, so
+    // a zero-model vault must NOT blank their thread with the no-model state.
+    chatApiMock.listMessages = vi.fn().mockResolvedValue({ messages: [] });
+    renderThread({ conversation: { ...BASE_CONV, agent_key: "claude_code" }, models: [] });
+    await waitFor(() => expect(chatApiMock.listMessages).toHaveBeenCalled());
+    expect(screen.queryByText("No model configured")).not.toBeInTheDocument();
+  });
+
   test("renders user messages right-aligned", async () => {
     chatApiMock.listMessages.mockResolvedValue({
       messages: [makeMsg({ role: "user", content: [{ type: "text", text: "Hey there" }] })],
