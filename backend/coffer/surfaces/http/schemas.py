@@ -226,14 +226,6 @@ class CredentialGetOut(BaseModel):
     value: str = Field(description="The stored secret value.")
 
 
-# Backward-compat aliases — used by the OpenAPI yaml (still named Keychain*)
-# and any callers that haven't migrated yet (≤0.1.x).  Remove once the yaml
-# and all callers are updated.
-KeychainSetIn = CredentialSetIn
-KeychainExistsOut = CredentialExistsOut
-KeychainGetOut = CredentialGetOut
-
-
 # --- MCP capability enable/disable body ---
 
 

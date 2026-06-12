@@ -43,8 +43,8 @@ tags:
     description: Retention policy management
   - name: daemon
     description: Daemon lifecycle and metadata
-  - name: keychain
-    description: OS keychain credential storage
+  - name: credentials
+    description: Fernet-encrypted credential store
 
 paths:
   /resources:
@@ -481,26 +481,26 @@ paths:
               schema: { $ref: "#/components/schemas/TokenRotationOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /keychain:
+  /credentials:
     post:
-      tags: [keychain]
-      operationId: setKeychainSecret
-      summary: Store a secret in the OS keychain under a reference key.
+      tags: [credentials]
+      operationId: setCredential
+      summary: Store a secret in the Fernet-encrypted credential store under a reference key.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/KeychainSetIn" }
+            schema: { $ref: "#/components/schemas/CredentialSetIn" }
       responses:
         "204":
-          description: Secret stored.
+          description: Secret stored. Ciphertext persisted in the local DB; audit row carries the ref only.
         "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /keychain/{ref}:
+  /credentials/{ref}:
     get:
-      tags: [keychain]
-      operationId: getKeychainSecret
-      summary: Read a secret value from the OS keychain (audited).
+      tags: [credentials]
+      operationId: getCredential
+      summary: Read a secret value from the encrypted credential store (audited).
       parameters:
         - name: ref
           in: path
@@ -508,16 +508,16 @@ paths:
           schema: { type: string, pattern: "^[A-Za-z0-9_.-]+$" }
       responses:
         "200":
-          description: The stored secret value.
+          description: The stored secret value (decrypted in memory, never logged).
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/KeychainGetOut" }
+              schema: { $ref: "#/components/schemas/CredentialGetOut" }
         "404": { $ref: "#/components/responses/NotFound" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     delete:
-      tags: [keychain]
-      operationId: deleteKeychainSecret
-      summary: Remove a secret from the OS keychain. Idempotent.
+      tags: [credentials]
+      operationId: deleteCredential
+      summary: Remove a secret from the encrypted credential store. Idempotent.
       parameters:
         - name: ref
           in: path
@@ -528,10 +528,10 @@ paths:
           description: Secret removed (or already absent).
         "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /keychain/{ref}/exists:
+  /credentials/{ref}/exists:
     get:
-      tags: [keychain]
-      operationId: keychainSecretExists
+      tags: [credentials]
+      operationId: credentialExists
       summary: Report whether a secret is stored under a ref (no value returned).
       parameters:
         - name: ref
@@ -543,7 +543,37 @@ paths:
           description: Presence flag.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/KeychainExistsOut" }
+              schema: { $ref: "#/components/schemas/CredentialExistsOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /settings/credentials:
+    get:
+      tags: [credentials]
+      operationId: getCredentialSettings
+      summary: Report where the credential master key is stored.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialSettingsOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    put:
+      tags: [credentials]
+      operationId: putCredentialSettings
+      summary: Relocate the credential master key (file <-> OS keychain).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CredentialSettingsIn" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialSettingsOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
 components:
@@ -586,7 +616,7 @@ components:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   schemas:
-    KeychainSetIn:
+    CredentialSetIn:
       type: object
       required: [ref, value]
       properties:
@@ -598,23 +628,40 @@ components:
         value:
           type: string
           maxLength: 8192
-          description: The secret value.
+          description: The secret value. Persisted Fernet-encrypted; audit rows carry the ref only.
 
-    KeychainGetOut:
+    CredentialGetOut:
       type: object
       required: [value]
       properties:
         value:
           type: string
-          description: The stored secret value.
+          description: The stored secret value (decrypted in memory, never logged).
 
-    KeychainExistsOut:
+    CredentialExistsOut:
       type: object
       required: [present]
       properties:
         present:
           type: boolean
           description: Whether a secret is stored under the ref.
+
+    CredentialSettingsOut:
+      type: object
+      required: [master_key_storage]
+      properties:
+        master_key_storage:
+          type: string
+          enum: [file, keychain]
+          description: file = master.key beside the DB (default); keychain = OS keychain entry.
+
+    CredentialSettingsIn:
+      type: object
+      required: [master_key_storage]
+      properties:
+        master_key_storage:
+          type: string
+          enum: [file, keychain]
 
     CapabilityKeyBody:
       type: object
