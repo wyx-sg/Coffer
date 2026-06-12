@@ -12,7 +12,7 @@
 | --- | ----------------------------------------------------------------------------- | ---------------------------------------- |
 | 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md))                 | 已采纳 — 代码已随 PR #14 合并            |
 | 002 | **UI Shell 与视觉语言** ([spec](../../specs/002-ui-shell/spec.md))            | 已采纳 — 代码已随 PR #23 合并            |
-| 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | 已采纳 — 代码评审中 (PR #28)             |
+| 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | 已采纳 — 代码已随 PR #28 合并            |
 | 004 | **Agent Registry** ([spec](../../specs/004-agent-registry/spec.md))           | 已采纳 — 代码已合并                       |
 | 005 | **Skill Manager** ([spec](../../specs/005-skill-manager/spec.md))             | 已采纳 — 代码已合并                       |
 | 006 | **Knowledge Base** ([spec](../../specs/006-knowledge-base/spec.md))           | 已采纳 — 代码已随 PR #55 合并 (知识基底的 KB 面，[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md))                                                                                     |

@@ -172,8 +172,10 @@ coffer agent mcp toggle-entry codex my-server --disabled   # Codex only
 ```
 
 **Adopt** a direct entry into Coffer to serve it to all agents through the
-gateway instead. Secret-looking env/header keys must be mapped to keychain
-references — the values go into the OS keychain, never into Coffer's database:
+gateway instead. Secret-looking env/header keys must be mapped to credential
+references — Coffer stores the value as Fernet ciphertext in its encrypted
+credential store ([ADR-015](../../docs/decisions/ADR-015-envelope-encrypted-credential-store.md));
+plaintext never reaches the database, logs, or audit:
 
 ```bash
 coffer agent mcp adopt claude-code my-server --secret API_KEY=coffer/mcp/my-server/api_key

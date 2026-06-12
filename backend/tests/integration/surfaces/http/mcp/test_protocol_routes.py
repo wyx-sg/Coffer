@@ -40,6 +40,7 @@ from coffer.surfaces.http.dependencies import set_mcp_session_factory
 from coffer.surfaces.http.mcp.protocol_routes import (
     _ACTIVE_SESSIONS,
     _JSON_RPC_INTERNAL_ERROR,
+    _JSON_RPC_INVALID_REQUEST,
     _JSON_RPC_METHOD_NOT_FOUND,
     _LAST_ACTIVITY,
     _NOTIFICATION_QUEUES,
@@ -338,6 +339,28 @@ async def test_post_malformed_json_returns_400(
 
 
 @pytest.mark.asyncio
+async def test_post_top_level_json_array_returns_invalid_request(
+    http_client: AsyncClient,
+) -> None:
+    """A POST whose body is a top-level JSON array (not a JSON-RPC object) must
+    return a JSON-RPC -32600 invalid-request error, not a 500.
+
+    The body parses as valid JSON, so it clears the 400 malformed-JSON gate,
+    but a list has no ``.get`` — the handler previously crashed with an
+    AttributeError and returned an opaque 500. Per JSON-RPC, a non-object
+    envelope is an invalid request (-32600).
+    """
+    r = await http_client.post(
+        "/mcp",
+        json=[{"jsonrpc": "2.0", "id": 1, "method": "initialize"}],
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["error"]["code"] == _JSON_RPC_INVALID_REQUEST
+    assert body["id"] is None
+
+
+@pytest.mark.asyncio
 async def test_get_without_session_id_400(
     http_client: AsyncClient,
 ) -> None:
@@ -448,6 +471,69 @@ async def test_reap_idle_sessions_drops_stale_only(
     assert session_b not in reaped
     assert session_a not in _ACTIVE_SESSIONS
     assert session_b in _ACTIVE_SESSIONS
+
+
+@pytest.mark.asyncio
+async def test_sse_client_disconnect_does_not_dispose_session(
+    http_client: AsyncClient,
+) -> None:
+    """A downstream SSE disconnect must NOT immediately dispose the gateway
+    session. The shim reconnects its GET stream routinely (network blips, proxy
+    timeouts); disposing the session on every stream close would tear down the
+    upstream subprocess connections within ~5 s and defeat that reconnect
+    design. The session must survive a stream close and be left for the idle
+    reaper to own.
+    """
+    from coffer.surfaces.http.dependencies import get_mcp_session_factory
+    from coffer.surfaces.http.mcp.protocol_routes import handle_get
+
+    init = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+    )
+    session_id = init.headers["mcp-session-id"]
+    assert session_id in _ACTIVE_SESSIONS
+
+    factory = get_mcp_session_factory()
+    resp = await handle_get(mcp_session_id=session_id, factory=factory)
+
+    # Drive the SSE generator: consume the initial "connected" comment, then
+    # simulate the client closing the connection (Starlette throws
+    # CancelledError into the generator on disconnect).
+    import asyncio
+
+    gen = resp.body_iterator
+    first = await gen.__anext__()
+    assert "comment" in first
+
+    # Advance the generator into its main loop so it parks waiting for the next
+    # notification (the realistic mid-stream state). Pushing one queued message
+    # lets __anext__ return and re-enter the loop, parked on the next get().
+    _NOTIFICATION_QUEUES[session_id].put_nowait('{"jsonrpc":"2.0"}')
+    second = await gen.__anext__()
+    assert second.get("event") == "message"
+
+    # Now the generator is parked inside the loop. A client disconnect cancels
+    # the in-flight __anext__, which throws CancelledError into the generator at
+    # its parked await — exactly Starlette's disconnect behaviour. This is the
+    # path that previously called _drop_session.
+    parked = asyncio.ensure_future(gen.__anext__())
+    await asyncio.sleep(0.05)  # let it reach the parked await
+    parked.cancel()
+    with suppress(asyncio.CancelledError):
+        await parked
+    # Let any cleanup coroutine the generator scheduled run to completion.
+    await asyncio.sleep(0.05)
+
+    # The session must still be live — only the idle reaper may dispose it.
+    assert session_id in _ACTIVE_SESSIONS, "SSE disconnect must not dispose the session"
+    assert session_id in _NOTIFICATION_QUEUES
+
+    # And the reaper still owns disposal: a stale session is reaped as before.
+    _LAST_ACTIVITY[session_id] = _LAST_ACTIVITY[session_id] - 10_000
+    reaped = await reap_idle_sessions(max_idle_seconds=3600)
+    assert session_id in reaped
+    assert session_id not in _ACTIVE_SESSIONS
 
 
 # ---------------------------------------------------------------------------

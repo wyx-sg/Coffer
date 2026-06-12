@@ -160,8 +160,9 @@ coffer agent mcp toggle-entry codex my-server --disabled   # 仅 Codex
 ```
 
 把一个直连条目 **adopt** 进 Coffer，改为通过 gateway 服务所有 agent。疑似密钥
-的 env/header 键必须映射到 keychain 引用——值进入操作系统 keychain，绝不进入
-Coffer 的数据库：
+的 env/header 键必须映射到凭据 (credential) 引用——Coffer 把值作为 Fernet 密文
+存入其加密凭据存储 ([ADR-015](../../docs/decisions/ADR-015-envelope-encrypted-credential-store.md))；
+明文绝不进入数据库、日志或审计：
 
 ```bash
 coffer agent mcp adopt claude-code my-server --secret API_KEY=coffer/mcp/my-server/api_key

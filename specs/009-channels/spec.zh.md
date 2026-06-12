@@ -4,7 +4,7 @@
 
 **Feature Branch**: `feature/channels`
 **Created**: 2026-06-12
-**Status**: Draft
+**Status**: Accepted
 **Input**: 用户描述: "Coffer needs messaging channels — Telegram and
 SeaTalk first — so the owner can talk to any agent on the chat platform from
 the IM apps they already use, approve tool calls without leaving the chat, and

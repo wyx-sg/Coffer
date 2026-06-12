@@ -6,8 +6,11 @@
 //   const { send, isStreaming, liveMessage, error,
 //           pendingApproval, submitApproval, interrupt } = useChatTurn(convId);
 //
-// `liveMessage` is non-null while a turn is in flight and cleared after the
-// persisted message is loaded (via messages query invalidation on turn_done).
+// `liveMessage` is non-null while a turn is in flight (it carries the user's
+// just-sent prompt as an optimistic echo plus the streaming reply) and is
+// cleared after the persisted messages are loaded — via messages query
+// invalidation on turn_done, or on stream failure (the persisted failed row
+// is authoritative).
 // `pendingApproval` is non-null while a turn is paused on a human-approval
 // request — the platform capability; Coffer's built-in agent does not use it.
 
@@ -24,6 +27,12 @@ import { CONVERSATIONS_KEY, messagesKey } from "./useConversations";
 // ---------------------------------------------------------------------------
 
 export interface LiveMessage {
+  /**
+   * The prompt that started this turn — echoed in the thread immediately so
+   * the user's message is visible while the reply streams (the persisted row
+   * takes over once the next messages fetch lands).
+   */
+  userText?: string;
   /** Partial accumulated text from text_delta events. */
   text: string;
   /** Tool call/result blocks accumulated during the turn. */
@@ -90,7 +99,7 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
 
       setError(null);
       setIsStreaming(true);
-      setLiveMessage({ text: "", toolBlocks: [], streaming: true });
+      setLiveMessage({ userText: text, text: "", toolBlocks: [], streaming: true });
       setPendingApproval(null);
 
       const controller = new AbortController();
@@ -127,7 +136,11 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
         const wrapped =
           err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
         setError(wrapped);
-        setLiveMessage((prev) => (prev ? { ...prev, streaming: false } : null));
+        // The stream ended without turn_done, so nothing else refreshes the
+        // thread — refetch so the persisted user message and the failed turn
+        // replace the optimistic echo / partial live bubble.
+        await qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
+        if (isCurrent()) setLiveMessage(null);
       } finally {
         if (isCurrent()) {
           setIsStreaming(false);

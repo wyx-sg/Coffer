@@ -76,16 +76,38 @@ describe("ConversationList archive", () => {
     expect(onArchive).toHaveBeenCalledWith("1");
   });
 
-  test("the view-toggle switches to archived", () => {
+  test("the archived filter tab switches to archived", () => {
     const { onToggleView } = renderList([conv("1", "A")]);
-    fireEvent.click(screen.getByRole("button", { name: /view archived/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /archived/i }));
     expect(onToggleView).toHaveBeenCalledOnce();
   });
 
-  test("archived view exposes a restore action and a back link", () => {
+  test("clicking the already-selected filter tab is a no-op", () => {
+    const { onToggleView } = renderList([conv("1", "A")]);
+    fireEvent.click(screen.getByRole("tab", { name: /active/i }));
+    expect(onToggleView).not.toHaveBeenCalled();
+  });
+
+  test("archived view exposes a restore action and selects the archived tab", () => {
     const { onRestore } = renderList([conv("1", "Old chat")], { view: "archived" });
     fireEvent.click(screen.getByRole("button", { name: /restore/i }));
     expect(onRestore).toHaveBeenCalledWith("1");
-    expect(screen.getByRole("button", { name: /back to active/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /archived/i })).toHaveAttribute("aria-selected", "true");
+  });
+});
+
+describe("ConversationListItem keyboard reachability", () => {
+  // The row action buttons are hover-only (opacity-0 group-hover:opacity-100),
+  // which makes them invisible — and thus effectively unreachable — for keyboard
+  // users. They must also reveal on keyboard focus, so each carries
+  // focus-visible:opacity-100 (the button itself) and group-focus-within:opacity-100
+  // (any sibling focused within the row).
+  test("hover-only action buttons reveal on focus, not just hover", () => {
+    renderList([conv("1", "Keep me")]);
+    for (const name of [/^rename$/i, /^archive$/i, /^delete$/i]) {
+      const btn = screen.getByRole("button", { name });
+      expect(btn.className).toContain("focus-visible:opacity-100");
+      expect(btn.className).toContain("group-focus-within:opacity-100");
+    }
   });
 });

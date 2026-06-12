@@ -44,7 +44,7 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 | `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。workspace 修订新增了未托管 skill 扫描（把手工放置的 skill adopt 进主库）以及逐 agent 的 follow-master-library 策略（开关 + 排除列表，存于 agent 配置），由同步引擎负责调和。 |
 | `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | 共享知识基底的 **KB 面**。任意格式上传 → 转成 markdown（经一个 `MarkdownConverter` 端口做 any-format→markdown，默认 MarkItDown），`docs/<doc-id>.md` 即事实 + `raw/` 作出处。agent 只读；grep / FTS5 / sqlite-vec 检索。见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)。 |
 | `memory`         | [007-memory](../../specs/007-memory/spec.md)                 | 同一基底的 **memory 面**。逐条 `<slug>.md` + 重新生成的 `MEMORY.md` 即事实，两层作用域（global 哨兵 + per-project ULID）。经 MCP 读写 + 原生投影（Claude symlink / Codex 托管块）跨 agent 共享 —— 一个规范 store，不分叉。见 [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)。    |
-| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与聊天平台的 agent 对话、应答审批提示并接收通知。薄 adapter 架在 spec-008 的接缝之上（[ADR-015](../../docs/decisions/ADR-014-channel-adapter-framework.md)）。                       |
+| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与聊天平台的 agent 对话、应答审批提示并接收通知。薄 adapter 架在 spec-008 的接缝之上（[ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)）。                       |
 
 `knowledge_base` 与 `memory` 是**同一个知识基底 (knowledge substrate)** 的两副
 面孔：**落盘的 markdown 文件是事实源；SQLite 是可重建索引**（`coffer reindex`
@@ -96,13 +96,15 @@ backend/coffer/
     └── callback/                 # channel 回调监听器 (独立进程)
 ```
 
-组装入口 (`surfaces/http/app.py`、`surfaces/cli/main.py`) 显式地装配每个
+组装入口 (`surfaces/http/app.py`、`surfaces/cli/main.py`) 显式地装配全部六个
 kind——没有全局注册表，也不依赖 import 副作用。每个 kind 的
-`make_*_kind()` 工厂 (如 `make_mcp_kind`、`make_agent_kind`、
-`make_skill_kind`) 返回一个 frozen `Kind` (`domain/resource.py`)，组装入口
-直接把它填入每个 app 的 `app.state.kinds` 字典 (`kind_name → Kind`)：
-`app_mcp_composition.py` 设置 `"mcp_server"`，`agent_skill_wiring.py` 设置
-`"agent"` 与 `"skill"`。`ResourceService` 读取该字典做与 kind 无关的分发。
+`make_*_kind()` 工厂 (`make_mcp_kind`、`make_agent_kind`、`make_skill_kind`、
+`make_kb_kind`、`make_memory_kind`、`make_channel_kind`) 返回一个 frozen
+`Kind` (`domain/resource.py`)，组装入口直接把它填入每个 app 的
+`app.state.kinds` 字典 (`kind_name → Kind`)：`app_mcp_composition.py` 设置
+`"mcp_server"`，`agent_skill_wiring.py` 设置 `"agent"` 与 `"skill"`，
+`wiring.py` 设置 `"knowledge_base"` 与 `"memory"`，`channel_wiring.py` 设置
+`"channel"`。`ResourceService` 读取该字典做与 kind 无关的分发。
 一个 kind 贡献的 surface 层制品 (HTTP 路由、Typer 组) 由 `KindModule`
 dataclass (`domain/kind_module.py`) 承载，它通过 `Any` 类型字段引用它们，
 使 domain 层永不 import 它们。
@@ -130,7 +132,7 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 - **Stdio shim** — 短生命周期；其生命周期绑定到单个 MCP 客户端进程。
 - **Callback listener** — daemon 拉起的子进程，只在
   `127.0.0.1:<callback-port>` 上服务带签名的 channel 回调路径；在任何
-  SeaTalk channel 处于启用状态时运行 (spec 009，[ADR-015](../../docs/decisions/ADR-014-channel-adapter-framework.md))。
+  SeaTalk channel 处于启用状态时运行 (spec 009，[ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md))。
 
 两者通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + token，权限位
 `0600`)。见

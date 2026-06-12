@@ -23,7 +23,7 @@ Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。�
 
 embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。没有不可变锁。
 
-与 spec 006 的形状差异是刻意的：007 把 embedding 字段保持**扁平**，让 memory 表单保持轻薄；006 则把它们嵌套在一个 `EmbeddingConfig` 对象里（`MemoryStoreConfig.to_embedding_config()` 把扁平字段投影到共享对象上）。同理，007 recall 响应里的 `fallback` 是**布尔值** —— recall 跨多个 store，单一的回退模式字符串没有良定义；而 006 的单 store 搜索报告一个可空的模式枚举（`fallback: "keyword" | null`）。
+与 spec 006 的形状差异是刻意的：007 把 embedding 字段保持**扁平**，让 memory 表单保持轻薄；006 则把它们嵌套在一个 `EmbeddingConfig` 对象里。自全局 embedding 重设计起，扁平字段已是遗留字段——为兼容性在 wire 上继续接受但被忽略；索引与 recall 都解析**全局** embedding 配置。同理，007 recall 响应里的 `fallback` 是**布尔值** —— recall 跨多个 store，单一的回退模式字符串没有良定义；而 006 的单 store 搜索报告一个可空的模式枚举（`fallback: "keyword" | null`）。
 
 ### `MemoryFact` (`domain/memory/fact.py`)
 
@@ -119,7 +119,8 @@ CREATE INDEX idx_documents_kind_res_time ON documents(kind, resource_name, updat
 CREATE INDEX idx_documents_project ON documents(project_id);
 
 CREATE TABLE chunks (
-    id           TEXT PRIMARY KEY,              -- '<doc-id>:<position>'
+    id           TEXT PRIMARY KEY,              -- '<store-scope>:<doc-id>:<position>'
+    -- store-scope = 12-hex digest of (kind, resource_name); keeps ids unique across stores
     document_id  TEXT NOT NULL,                 -- app-level cascade (not a FK; KB+memory share the table)
     kind         TEXT NOT NULL,
     resource_name TEXT NOT NULL,
@@ -136,7 +137,8 @@ CREATE VIRTUAL TABLE documents_fts USING fts5(
 -- sqlite-vec virtual table (only when a vector mode is enabled); created lazily
 -- per store at the configured width.
 CREATE VIRTUAL TABLE vec_chunks USING vec0(
-    chunk_id TEXT PRIMARY KEY, embedding FLOAT[<dim>]
+    chunk_id TEXT PRIMARY KEY,                  -- bare '<doc-id>:<position>' (the table itself is per-store)
+    embedding FLOAT[<dim>]
 );
 ```
 

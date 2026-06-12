@@ -8,11 +8,8 @@ surface stays a thin form. All fields are mutable.
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field, model_validator
 
-from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge.retrieval import RETRIEVAL_MODES, RetrievalMode
 
 DEFAULT_MAX_FACT_CHARS = 8192
@@ -58,28 +55,3 @@ class MemoryStoreConfig(BaseModel):
         # global embedding config being active. The legacy ``embedding_*``
         # fields are accepted but ignored.
         return "vector" in self.retrieval_modes
-
-    def to_embedding_config(self) -> EmbeddingConfig | None:
-        """Project the flat fields onto the shared ``EmbeddingConfig`` (or None
-        when vector is not enabled)."""
-        if not (self.embedding_provider and self.embedding_model):
-            return None
-        provider: Literal[
-            "openai",
-            "openrouter",
-            "voyage",
-            "jina",
-            "gemini",
-            "azure",
-            "dashscope",
-            "ollama",
-            "lmstudio",
-            "local",
-        ] = self.embedding_provider  # type: ignore[assignment]
-        return EmbeddingConfig(
-            provider=provider,
-            model=self.embedding_model,
-            base_url=self.embedding_base_url,
-            credential_ref=self.embedding_credential_ref,
-            dimensions=self.embedding_dimensions,
-        )

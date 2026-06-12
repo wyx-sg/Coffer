@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getCofferBaseUrl, getCofferToken, setCofferToken } from "./auth";
+import {
+  getCofferBaseUrl,
+  getCofferToken,
+  setCofferToken,
+  setDaemonConnection,
+} from "./auth";
 
 // The desktop app authenticates by having the Tauri shell inject
 // window.__COFFER_TOKEN__ / __COFFER_BASE_URL__ into the WebView. That
@@ -41,6 +46,18 @@ describe("getCofferBaseUrl", () => {
   it("falls back to a loopback default when nothing is injected", () => {
     // No Tauri global and (in the test env) no VITE_COFFER_BASE_URL.
     expect(getCofferBaseUrl()).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/api\/v1$/);
+  });
+});
+
+describe("setDaemonConnection", () => {
+  it("overwrites the injected globals so reads pick up the new daemon", () => {
+    // Simulate the launch-time injection, then a daemon restart that minted
+    // a new token (the daemon regenerates its token on every start).
+    w.__COFFER_BASE_URL__ = "http://127.0.0.1:18000/api/v1";
+    w.__COFFER_TOKEN__ = "stale-token";
+    setDaemonConnection("http://127.0.0.1:18042/api/v1", "fresh-token");
+    expect(getCofferBaseUrl()).toBe("http://127.0.0.1:18042/api/v1");
+    expect(getCofferToken()).toBe("fresh-token");
   });
 });
 

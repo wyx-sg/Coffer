@@ -153,6 +153,14 @@ async def handle_post(
     except Exception:
         raise HTTPException(status_code=400, detail="invalid JSON") from None
 
+    # The body parsed as valid JSON but must be a JSON-RPC request object. A
+    # top-level array (batch) or scalar has no "id"/"method" to read — reject
+    # it as an invalid request rather than crashing on ``.get`` (→ opaque 500).
+    if not isinstance(envelope, dict):
+        return JSONResponse(
+            content=_error_response(None, _JSON_RPC_INVALID_REQUEST, "invalid request"),
+        )
+
     req_id = envelope.get("id")
     method = envelope.get("method")
     params = envelope.get("params") or {}
@@ -271,11 +279,32 @@ async def handle_get(
                     # Session is being disposed — end the stream cleanly.
                     return
         except asyncio.CancelledError:
-            # Client closed; clean up the session
-            await _drop_session(mcp_session_id)
+            # Client closed the SSE stream. Release ONLY the stream, never the
+            # session: the shim reconnects its GET stream routinely (proxy
+            # timeouts, network blips) and immediately re-opens it on the same
+            # Mcp-Session-Id. Disposing the session here would tear down the
+            # upstream subprocess connections within seconds and defeat that
+            # reconnect design — a reconnecting client would find its upstreams
+            # gone. Session disposal is owned solely by the idle reaper, which
+            # only drops a session after it has been untouched past the idle
+            # window. The shared stream-stop event is reset so the next GET on
+            # the same session parks cleanly instead of returning immediately.
+            _release_stream(mcp_session_id)
             raise
 
     return EventSourceResponse(event_stream())
+
+
+def _release_stream(session_id: str) -> None:
+    """Tear down per-stream state for a closed SSE connection, leaving the
+    session itself intact for reuse / the idle reaper.
+
+    A single stream-stop event is shared per session id; clearing it (rather
+    than popping it) keeps the same object the next GET looks up via
+    ``_stream_stop_event`` while ensuring that next stream starts un-signalled.
+    """
+    if (ev := _SESSION_STREAM_STOP.get(session_id)) is not None:
+        ev.clear()
 
 
 # Maximum number of 100ms polls _drop_session will perform waiting for an

@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +40,7 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
   if (items.length === 0) return null;
 
   return (
-    <section className="space-y-3" data-testid="unmanaged-skills">
+    <Card className="space-y-3 p-4" data-testid="unmanaged-skills">
       <h3 className="text-sm font-medium text-muted-foreground">
         {t("agents.skillsTab.unmanagedTitle")}
       </h3>
@@ -144,6 +145,6 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </Card>
   );
 }

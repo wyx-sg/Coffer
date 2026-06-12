@@ -97,7 +97,7 @@ The six surfaces are described below using a consistent template: **What it is �
 
 **Lifecycle.** The desktop app applies the detect-or-spawn pattern: on launch, it reads `daemon.json`; if the daemon is already running, it connects; if not, it spawns `coffer-daemon` as a detached process (`setsid` on POSIX) and waits for `daemon.json` to appear. Closing the main window hides it to the system tray — the daemon keeps running. Selecting "Quit" from the tray exits the desktop process. The daemon's fate on desktop-app quit depends on whether any other entry points (shim, CLI) are still using it; a detached daemon survives the desktop app.
 
-The desktop app also idempotently deploys the bundled `coffer-mcp-shim` binary to a stable user-writable PATH directory (`~/.coffer/bin/` on macOS and Linux) on every launch, using a size-mismatch heuristic to detect upgrades. This ensures that `coffer-mcp-shim` is always on PATH after the first desktop launch, without requiring the user to manually edit their shell profile.
+The desktop app also idempotently deploys the bundled `coffer-mcp-shim` and `coffer-daemon` binaries to a stable user-writable PATH directory (`~/.coffer/bin/` on macOS and Linux) on every launch, using a size/mtime/version-sentinel staleness check to detect upgrades. This ensures that `coffer-mcp-shim` is always on PATH after the first desktop launch — with a sibling `coffer-daemon` for its detect-or-spawn to find — without requiring the user to manually edit their shell profile.
 
 **Security boundary.** Same as the Web UI: `X-Coffer-Token` on every API call, loopback-only daemon, local user account trust boundary. The desktop app bundles `coffer-daemon` and `coffer-mcp-shim` as PyInstaller sidecars — no system Python dependency at runtime.
 

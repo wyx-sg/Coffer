@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0017"
+HEAD_REVISION = "0019"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -34,9 +34,12 @@ HEAD_REVISION = "0017"
 # absolute git-root it was provisioned from. 0015 adds ``channel_peers``
 # (spec 009-channels: the paired owner of a messaging channel); 0016 adds the
 # ``credentials`` table for the Fernet-encrypted secret store (envelope
-# encryption); 0017 adds ``sync_config`` + ``sync_state`` for multi-machine
-# sync (spec 010). The ``documents_fts_*`` shadow tables FTS5 creates under the
-# hood are excluded — the assertions speak to the logical schema.
+# encryption); 0017 adds no table — it rekeys ``chunks.id`` /
+# ``documents_fts.chunk_id`` to the per-store namespaced form (cross-store
+# chunk-id collision fix); 0018 adds no table (conversation agent-config column);
+# 0019 adds ``sync_config`` + ``sync_state`` for multi-machine sync (spec 010).
+# The ``documents_fts_*`` shadow tables FTS5 creates under the hood are excluded
+# — the assertions speak to the logical schema.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -145,7 +148,9 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
-    # 0017 -> 0016: drops sync_config + sync_state (spec 010 multi-machine sync).
+    # head (0019) -> 0016: drops sync_config + sync_state (spec 010); the
+    # intervening 0017 (chunk-id rekey) and 0018 (conversation agent-config
+    # column) add no tables.
     command.downgrade(cfg, "0016")
     assert "sync_config" not in _user_tables(db_path)
     assert "sync_state" not in _user_tables(db_path)
@@ -331,3 +336,61 @@ def test_db_stamped_by_pre_redesign_branch_is_repaired(tmp_path, monkeypatch):
     # And the repair is idempotent for fresh DBs: a second upgrade is a no-op.
     command.upgrade(cfg, "head")
     assert {"documents", "chunks", "documents_fts"} <= _user_tables(db_path)
+
+
+def test_migration_0017_rekeys_chunk_ids_per_store(tmp_path, monkeypatch):
+    """0017 rewrites pre-existing bare ``'<doc-id>:<position>'`` chunk ids to
+    the per-store namespaced ``'<digest>:<doc-id>:<position>'`` form, in both
+    ``chunks.id`` and ``documents_fts.chunk_id`` (keeping the FTS text), and is
+    idempotent — a re-run must not double the prefix."""
+    import hashlib
+
+    db_path = tmp_path / "rekey.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    # Schema as of just before the rekey, seeded with old-format rows for two
+    # stores (distinct doc ids — the old single-column PK could not even hold
+    # the colliding case; that data was already lost and reindex rebuilds it).
+    command.upgrade(cfg, "0016")
+    conn = sqlite3.connect(str(db_path))
+    try:
+        for doc_id, store, chunk_text in (("d1", "kb1", "alpha"), ("d2", "kb2", "beta")):
+            conn.execute(
+                "INSERT INTO chunks (id, document_id, kind, resource_name, position)"
+                " VALUES (?, ?, 'knowledge_base', ?, 0)",
+                (f"{doc_id}:0", doc_id, store),
+            )
+            conn.execute(
+                "INSERT INTO documents_fts (text, resource_name, chunk_id) VALUES (?, ?, ?)",
+                (chunk_text, store, f"{doc_id}:0"),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    command.upgrade(cfg, "head")
+
+    def _scope(store: str) -> str:
+        # Mirrors store_scope in coffer/infrastructure/knowledge/sqlite_index.py.
+        return hashlib.sha1(f"knowledge_base\x00{store}".encode()).hexdigest()[:12]
+
+    expected = {f"{_scope('kb1')}:d1:0", f"{_scope('kb2')}:d2:0"}
+    conn = sqlite3.connect(str(db_path))
+    try:
+        chunk_ids = {r[0] for r in conn.execute("SELECT id FROM chunks")}
+        fts_rows = dict(conn.execute("SELECT chunk_id, text FROM documents_fts").fetchall())
+    finally:
+        conn.close()
+    assert chunk_ids == expected
+    assert set(fts_rows) == expected  # FTS rows follow their chunks rows
+    assert fts_rows[f"{_scope('kb1')}:d1:0"] == "alpha"  # text survives the rekey
+
+    # Idempotent: re-running 0017 (stamp back + upgrade) must not re-prefix.
+    command.stamp(cfg, "0016")
+    command.upgrade(cfg, "head")
+    conn = sqlite3.connect(str(db_path))
+    try:
+        assert {r[0] for r in conn.execute("SELECT id FROM chunks")} == expected
+    finally:
+        conn.close()

@@ -210,16 +210,21 @@ def test_chat_db_tables_created_on_startup(app, tmp_path) -> None:  # type: igno
 
 @pytest.mark.acceptance(spec="008-agent-chat", scenario="list available agents")
 def test_list_agents_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-def]
-    """GET /api/v1/chat/agents lists the built-in agent with an availability flag."""
+    """GET /api/v1/chat/agents lists the built-in + CLI agents with availability."""
     with TestClient(app) as client:
         set_active_token(_TOKEN)
         resp = client.get("/api/v1/chat/agents", headers=_HEADERS)
         assert resp.status_code == 200, resp.text
         agents = resp.json()["agents"]
-        assert len(agents) == 1
-        assert agents[0]["agent_key"] == "builtin"
-        assert agents[0]["display_name"] == "Coffer Assistant"
-        assert agents[0]["available"] is True
+        by_key = {a["agent_key"]: a for a in agents}
+        # The built-in agent is always present and available.
+        assert by_key["builtin"]["display_name"] == "Coffer Assistant"
+        assert by_key["builtin"]["available"] is True
+        # The CLI agents are registered; availability tracks whether their
+        # binary is on PATH on this host (a bool either way, but present).
+        assert {"claude_code", "codex"} <= set(by_key)
+        assert by_key["claude_code"]["display_name"] == "Claude Code"
+        assert isinstance(by_key["codex"]["available"], bool)
 
 
 @pytest.mark.acceptance(

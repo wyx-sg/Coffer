@@ -249,7 +249,19 @@
 
 - **Given** daemon 的 `~/.coffer/coffer.db` 中有运行状态,
 - **When** 用户触发 daemon 备份操作,
-- **Then** 一份自洽的 SQLite 拷贝被写入 `~/.coffer/backups/`（即便 daemon 仍在运行也可放心 copy 出去），并记录一条 `backup_created` 审计。
+- **Then** 即便 daemon 仍在运行，也会向 `~/.coffer/backups/` 写入一份自洽的索引 SQLite 拷贝，并记录一条 `backup_created` 审计。（它只拷贝 `coffer.db`——可重建的索引——不含作为事实源的文件树；要得到完整、可恢复的 vault 快照，请用下面的 vault 备份。）
+
+### Scenario: vault backup captures db + file trees, restore round-trips them
+
+- **Given** `~/.coffer/` 下有一个已填充的 vault——`coffer.db` 加上作为事实源的 markdown 文件树（`knowledge/`、`memory/`、`skills/`）,
+- **When** 用户运行 `coffer backup <dest>`，之后再 `coffer restore <dest>` 到一个全新的 vault,
+- **Then** 目标目录包含 `coffer.db` 与每一棵文件树；恢复会把它们全部重新放回，使得一个样例 KB 文档与一个样例 memory fact 逐字节往返一致，且恢复后的 `coffer.db` 是这些文件树的一份一致索引。
+
+### Scenario: backup excludes the master key by default
+
+- **Given** vault 中存有解密 `coffer.db` 内凭据密文的 Fernet `master.key`,
+- **When** 用户在不带 `--include-master-key` 的情况下运行 `coffer backup <dest>`,
+- **Then** `master.key` 不会被写入备份（因此备份可以放心 copy 出机器），命令会提示已存储的凭据需要该 key 才能解密；传入 `--include-master-key` 会在打印明确警告后才把 key 一并打包。
 
 ### Scenario: gateway overhead stays under budget
 

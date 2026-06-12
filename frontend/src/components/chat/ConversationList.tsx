@@ -4,7 +4,8 @@
 // single-user vault; server-side search is the scale path if lists grow large.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Archive, ArrowLeft } from "lucide-react";
+import { Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/SearchInput";
 import type { Conversation } from "@/lib/api/chat";
@@ -49,10 +50,37 @@ export function ConversationList({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {archivedView ? t("chat.history.archivedTitle") : t("chat.history.title")}
-        </span>
+      <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-2">
+        <div
+          className="inline-flex rounded-md bg-muted p-0.5"
+          role="tablist"
+          aria-label={t("chat.history.filterLabel")}
+        >
+          {(["active", "archived"] as const).map((v) => {
+            const selected = view === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => {
+                  if (!selected) onToggleView();
+                }}
+                className={cn(
+                  "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                  selected
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {v === "active"
+                  ? t("chat.history.filterActive")
+                  : t("chat.history.filterArchived")}
+              </button>
+            );
+          })}
+        </div>
         {!archivedView && (
           <Button
             variant="ghost"
@@ -90,12 +118,7 @@ export function ConversationList({
         )}
         {!loading && conversations.length === 0 && (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {t("chat.history.empty")}
-          </p>
-        )}
-        {!loading && conversations.length === 0 && archivedView && (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {t("chat.history.archivedEmpty")}
+            {archivedView ? t("chat.history.archivedEmpty") : t("chat.history.empty")}
           </p>
         )}
         {!loading && conversations.length > 0 && filtered.length === 0 && (
@@ -115,18 +138,6 @@ export function ConversationList({
             onRestore={archivedView ? () => onRestore(conv.id) : undefined}
           />
         ))}
-      </div>
-
-      <div className="border-t border-border p-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-full justify-start gap-2 text-xs text-muted-foreground"
-          onClick={onToggleView}
-        >
-          {archivedView ? <ArrowLeft className="size-3.5" /> : <Archive className="size-3.5" />}
-          {archivedView ? t("chat.history.backToActive") : t("chat.history.viewArchived")}
-        </Button>
       </div>
     </div>
   );

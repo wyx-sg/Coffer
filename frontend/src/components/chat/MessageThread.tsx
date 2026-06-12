@@ -9,6 +9,7 @@ import { isNearBottom } from "@/lib/chat/scroll";
 import type { LiveMessage, PendingApproval } from "@/lib/hooks/useChatTurn";
 import type { Conversation } from "@/lib/api/chat";
 import type { Model } from "@/lib/api/models";
+import { Button } from "@/components/ui/button";
 import { AgentModelBar } from "./AgentModelBar";
 import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";
@@ -37,6 +38,12 @@ interface Props {
   agentLabel?: string;
   /** Whether to show the model selector (built-in agent only). */
   showModelSelector?: boolean;
+  /** Render read-only (archived conversation): restore CTA instead of composer. */
+  readOnly?: boolean;
+  /** Called when the user restores the archived conversation. */
+  onRestore?: () => void;
+  /** True while the restore request is in flight. */
+  restorePending?: boolean;
 }
 
 export function MessageThread({
@@ -53,6 +60,9 @@ export function MessageThread({
   onModelChange,
   agentLabel,
   showModelSelector,
+  readOnly,
+  onRestore,
+  restorePending,
 }: Props) {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -61,14 +71,18 @@ export function MessageThread({
   // to read history, new tokens must not yank them back down. Seeded true so
   // the first render lands at the latest message.
   const followRef = useRef(true);
-  // I2: Drive no-model empty state from whether ANY model is configured,
+  // I2: Drive the no-model empty state from whether ANY model is configured,
   // not from the conversation's model_id (which is NULL when using the default).
+  // Only the built-in agent needs a model — CLI agents (Claude Code, Codex) are
+  // configured by a working directory and must NOT be blanked when no model exists.
+  const requiresModel = conversation.agent_key === "builtin";
   const hasModel = models.length > 0;
+  const blockedOnModel = requiresModel && !hasModel;
 
   const { data, isPending, error } = useQuery({
     queryKey: messagesKey(conversation.id),
     queryFn: async () => (await chatApi.listMessages(conversation.id)).messages,
-    enabled: hasModel,
+    enabled: !blockedOnModel,
     // While the fetched history holds a streaming placeholder (a turn running
     // server-side with no client stream attached — reload / switch-back),
     // poll until it resolves so the finished reply appears without a manual
@@ -86,6 +100,18 @@ export function MessageThread({
     ? (data ?? []).filter((m) => m.status !== "streaming")
     : (data ?? []);
 
+  // Optimistic echo of the just-sent prompt: shown until a refetch delivers
+  // the persisted user message. Once the last fetched (non-streaming) row IS
+  // that user message, the fetched row wins and the echo is suppressed.
+  const echoText = liveMessage?.userText;
+  const lastVisible = visibleMessages[visibleMessages.length - 1];
+  const showEcho =
+    echoText !== undefined &&
+    !(
+      lastVisible?.role === "user" &&
+      lastVisible.content.some((b) => b.type === "text" && b.text === echoText)
+    );
+
   // Auto-scroll to bottom when messages or live content changes — but only if
   // the user is already near the bottom (followRef), so reading history during
   // a stream isn't interrupted.
@@ -95,7 +121,7 @@ export function MessageThread({
     }
   }, [data, liveMessage]);
 
-  if (!hasModel) {
+  if (blockedOnModel) {
     return (
       <div className="flex flex-1 flex-col">
         <AgentModelBar
@@ -147,6 +173,19 @@ export function MessageThread({
           {visibleMessages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} />
           ))}
+          {showEcho && (
+            <MessageBubble
+              message={{
+                id: "optimistic-user-echo",
+                conversation_id: conversation.id,
+                seq: Number.MAX_SAFE_INTEGER,
+                role: "user",
+                content: [{ type: "text", text: echoText }],
+                status: "complete",
+                created_at: "",
+              }}
+            />
+          )}
           {liveMessage && <MessageBubble live={liveMessage} />}
         </div>
 
@@ -175,7 +214,21 @@ export function MessageThread({
         <ApprovalCard approval={pendingApproval} onDecide={onApprovalDecide} />
       )}
 
-      <Composer onSend={onSend} disabled={isStreaming || serverTurnActive} onStop={onStop} />
+      {readOnly ? (
+        // Archived conversations are read-only — restoring re-enables chat.
+        <div className="flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3">
+          <span className="text-sm text-muted-foreground">
+            {t("chat.archivedThread.notice")}
+          </span>
+          <Button size="sm" onClick={onRestore} disabled={restorePending || !onRestore}>
+            {restorePending
+              ? t("chat.archivedThread.restoring")
+              : t("chat.archivedThread.restore")}
+          </Button>
+        </div>
+      ) : (
+        <Composer onSend={onSend} disabled={isStreaming || serverTurnActive} onStop={onStop} />
+      )}
     </div>
   );
 }

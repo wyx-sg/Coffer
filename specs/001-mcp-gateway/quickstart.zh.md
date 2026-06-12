@@ -154,9 +154,13 @@ coffer credentials set github-token "<new value>"
 
 ```text
 ~/.coffer/
-├── coffer.db              # SQLite — your config, audit, invocation log
+├── coffer.db              # SQLite — 文件树之上可重建的索引（INDEX）
 ├── coffer.db-wal          # WAL
 ├── coffer.db-shm          # WAL shared memory
+├── knowledge/             # 事实源：KB markdown 树
+├── memory/                # 事实源：memory markdown 树
+├── skills/                # 事实源：受管 skill 目录
+├── master.key             # 解密凭据密文的 Fernet key
 ├── daemon.json            # daemon discovery: pid + port + token (mode 0600)
 ├── logs/
 │   ├── daemon.log         # structured JSON, one line per event
@@ -165,4 +169,11 @@ coffer credentials set github-token "<new value>"
 └── upstream-pids/         # for orphan-subprocess cleanup
 ```
 
-要做一份干净的备份，运行 `coffer daemon backup`（WAL 模式下文件拷贝是安全的；SQLite 的 online-backup API 会处理一致性）。
+### 备份与恢复
+
+markdown 树（`knowledge/`、`memory/`、`skills/`）是事实源；`coffer.db` 只是其上可重建的索引。备份分两个层级：
+
+- `coffer daemon backup` 在 daemon 运行时向 `backups/` 写入一份仅含 `coffer.db` 的自洽 SQLite 拷贝——适合给索引打快照，但**不**包含文件树。
+- `coffer backup <dest>` 是完整的 **vault** 备份：它把 `coffer.db` 与每一棵文件树一起拷贝进 `<dest>`。`coffer restore <dest>` 会校验该备份，并把 db 与文件树重新放回 `~/.coffer/`，让一台全新机器重新可用。恢复后的 `coffer.db` 已经是一份一致的索引；如仍想从文件树重建，可加 `coffer restore <dest> --reindex`。
+
+**Master-key 策略。** `coffer backup` 默认**排除** `master.key`，因此备份可以放心 copy 出机器——把 Fernet key 与它解密的密文放在一起会让加密形同虚设。恢复出来的 vault 除了**读取**此前存储的凭据外都可正常工作；可把 `master.key` 重新放回 `~/.coffer/master.key`，或用 `coffer credentials set` 重新录入这些密钥。传入 `coffer backup <dest> --include-master-key` 可（在打印警告后）把 key 一并打包——仅限放进你与对待 live key 同等信任的存储中。

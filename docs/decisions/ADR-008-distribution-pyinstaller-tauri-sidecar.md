@@ -57,6 +57,17 @@ Concrete choices:
   `specs/001-mcp-gateway/research.md`.
 - Alembic migrations ship as data files inside the daemon binary so
   first-launch can run `upgrade head` against a fresh DB.
+- sqlite-vec's loadable native extension (`vec0.dylib`/`.so`/`.dll`) ships
+  as a data file too (`collect_data_files("sqlite_vec")`) — it is package
+  data, not a Python submodule, so `collect_submodules` alone misses it.
+  Without it a frozen build loses the vec0 extension and vector retrieval
+  silently degrades to keyword-only (`VecIndex.available()` swallows the
+  load failure). The KB/memory/chat deps added by specs 006/007/008
+  (`sqlite_vec`, `markitdown`, `openai`, `langgraph`, `langchain`) are
+  imported lazily, so they are pinned in `hiddenimports` for the same
+  reason. The bundle smoke test (`scripts/smoke_test_bundle.sh`) probes
+  `coffer-daemon --check-vec` so a build that lost the extension fails
+  instead of shipping quietly.
 - The shim binary deliberately excludes server-side heavy dependencies
   (FastAPI, uvicorn, SQLAlchemy, Alembic, structlog) to keep its size
   manageable — the shim talks to the daemon over loopback HTTP and only
@@ -67,17 +78,24 @@ Concrete choices:
   `~/.coffer/daemon.json` (see [ADR-006](ADR-006-daemon-detect-or-spawn.md)) rather than spawning it
   directly, so the same pair of binaries can be reused by the CLI and by
   external MCP clients.
-- On every launch, the desktop app deploys `coffer-mcp-shim` to a stable
-  user-writable PATH location so MCP clients can resolve the
-  `command: coffer-mcp-shim` config: macOS / Linux:
-  `~/.coffer/bin/coffer-mcp-shim`; Windows:
-  `%LOCALAPPDATA%\Coffer\bin\coffer-mcp-shim.exe` (falling back to
-  `%USERPROFILE%\Coffer\bin\` when `%LOCALAPPDATA%` is unset). The
-  POSIX path co-locates with the daemon's `~/.coffer/daemon.json` from
+- On every launch, the desktop app deploys both `coffer-mcp-shim` and
+  `coffer-daemon` to a stable user-writable PATH location so MCP clients
+  can resolve the `command: coffer-mcp-shim` config: macOS / Linux:
+  `~/.coffer/bin/`; Windows: `%LOCALAPPDATA%\Coffer\bin\` (falling back
+  to `%USERPROFILE%\Coffer\bin\` when `%LOCALAPPDATA%` is unset). The
+  daemon is co-located with the shim because the frozen shim's
+  detect-or-spawn ([ADR-006](ADR-006-daemon-detect-or-spawn.md)) probes
+  for a sibling `coffer-daemon` — with only the shim deployed, an MCP
+  client launching the shim after a reboot (desktop app not running,
+  autostart off) would have no daemon to spawn. The POSIX path
+  co-locates with the daemon's `~/.coffer/daemon.json` from
   [ADR-006](ADR-006-daemon-detect-or-spawn.md), which simplifies the
   user mental model ("everything Coffer lives under `~/.coffer/`"). The
   first launch prompts the user once if the directory is not yet on
-  `PATH`.
+  `PATH`. As a last-resort fallback for shim deployments that predate
+  the daemon co-locate, the frozen spawn resolution also probes the
+  installed bundle's daemon on macOS
+  (`/Applications/Coffer.app/Contents/MacOS/coffer-daemon`).
 - macOS Apple notarisation is deferred (requires a paid Apple Developer
   account). Users on macOS are instructed to clear quarantine on first
   launch with `xattr -d com.apple.quarantine /Applications/Coffer.app`.
@@ -241,6 +259,14 @@ Rejected.
   `https://wyx-sg.github.io/Coffer/`) into `~/.coffer/bin`; the script also
   adds `~/.coffer/bin` to `PATH` automatically. Env overrides available:
   `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
+- **2026-06-12** — Desktop deploy now ships **both** sidecars to the user
+  bin dir: `coffer-daemon` is copied to `~/.coffer/bin/` alongside
+  `coffer-mcp-shim` (same idempotent atomic-replace + version-sentinel
+  logic), so the frozen shim's ADR-006 sibling probe finds a daemon to
+  auto-spawn after a reboot. The frozen spawn resolution additionally
+  gains a macOS-only final probe for
+  `/Applications/Coffer.app/Contents/MacOS/coffer-daemon` to cover
+  shim-only deployments from older desktop builds.
 - **2026-06-05** — Shipping scope narrowed to **macOS (Apple Silicon) only**.
   The Linux and Windows Tauri bundle targets (`deb` / `appimage` / `msi` /
   `nsis`) and the Linux release matrix leg were never validated end-to-end, so

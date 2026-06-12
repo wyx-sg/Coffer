@@ -204,6 +204,67 @@ async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_find_credential_citations_lists_referencing_resources(tmp_path):
+    """find_credential_citations scans every resource's config (via each kind's
+    credential_ref_extractor) and returns the refs that cite a given credential
+    — so the credential-delete route can refuse with the citing names. A
+    credential nothing references yields an empty list; kinds without an
+    extractor are skipped, not crashed.
+    """
+
+    class _SecretConfig(BaseModel):
+        secret_ref: str
+
+    class _PlainConfig(BaseModel):
+        foo: int = 0
+
+    class _FakeKeyring:
+        def get(self, ref: str) -> str | None:
+            return "value"  # every probed ref is present
+
+    kinds = {
+        "vault": Kind(
+            name="vault",
+            display_name="Vault",
+            config_schema=_SecretConfig,
+            credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+        ),
+        "plain": Kind(
+            name="plain",
+            display_name="Plain",
+            config_schema=_PlainConfig,
+        ),
+    }
+
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'cite.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+    audit = AuditService(SqlAlchemyAuditRepo(sm))
+    try:
+        svc = ResourceService(
+            kinds=kinds,
+            repo=SqlAlchemyResourceRepo(sm),
+            audit=audit,
+            credentials=_FakeKeyring(),
+        )
+        await svc.register(kind="vault", name="a", config={"secret_ref": "k1"}, actor="cli")
+        await svc.register(kind="vault", name="b", config={"secret_ref": "k1"}, actor="cli")
+        await svc.register(kind="vault", name="c", config={"secret_ref": "k2"}, actor="cli")
+        # An extractor-less kind must be skipped, not crash the scan.
+        await svc.register(kind="plain", name="d", config={"foo": 1}, actor="cli")
+
+        citing_k1 = await svc.find_credential_citations("k1")
+        names = sorted(str(r) for r in citing_k1)
+        assert names == ["vault:a", "vault:b"]
+
+        # A credential nothing references → empty list (delete proceeds).
+        assert await svc.find_credential_citations("unused") == []
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_register_unknown_kind_raises(tmp_path):
     svc, _, engine = await _service(tmp_path)
     with pytest.raises(UnknownKind):

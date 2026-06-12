@@ -90,6 +90,11 @@ class _Session:
     queue: deque[str] = field(default_factory=lambda: deque(maxlen=_QUEUE_MAX))
     drain_task: asyncio.Task[None] | None = None
     pending_approvals: dict[str, PendingApproval] = field(default_factory=dict)
+    # The conversation whose turn is draining right now (None between turns).
+    # Tracked separately from the peer's active conversation: ``/new`` rebinds
+    # the peer while a turn keeps draining on the old conversation, so ``/stop``
+    # and unbind must target the turn that is actually running.
+    running_conversation_id: str | None = None
 
 
 class InboundProcessor:
@@ -124,6 +129,14 @@ class InboundProcessor:
             return
         if session.drain_task is not None:
             session.drain_task.cancel()
+        # Cancelling the drain task only stops the renderer; the orchestrator
+        # turn keeps running and would deliver its reply to the web UI alone,
+        # leaving the bot silent. Interrupt the live turn so its partial reply
+        # is the contract — not a turn that completes undelivered.
+        if session.running_conversation_id is not None:
+            with contextlib.suppress(Exception):
+                self._turns.interrupt_turn(session.running_conversation_id)
+            session.running_conversation_id = None
         # A turn parked on an approval gate would wait forever once its
         # prompt's buttons are gone — interrupt it instead of wedging the
         # conversation until a manual /stop.
@@ -249,8 +262,14 @@ class InboundProcessor:
             await self._peers.set_active_conversation(binding.resource_id, conv.id)
             await self._safe_send(binding, peer.chat_id, "🆕 Started a fresh conversation.")
         elif command == "/stop":
-            if peer.active_conversation_id is not None:
-                self._turns.interrupt_turn(peer.active_conversation_id)
+            # The turn that is actually draining wins over the peer's bound
+            # conversation: after ``/new`` rebinds the peer, a turn can still be
+            # running on the previous conversation. Stopping the bound (idle)
+            # conversation would claim "Stopping…" while the real turn runs on.
+            session = self._session(binding.name)
+            target = session.running_conversation_id or peer.active_conversation_id
+            if target is not None:
+                self._turns.interrupt_turn(target)
                 await self._safe_send(binding, peer.chat_id, "⏹ Stopping…")
             else:
                 await self._safe_send(binding, peer.chat_id, "Nothing is running.")
@@ -334,7 +353,14 @@ class InboundProcessor:
             pending_approvals=session.pending_approvals,
             send=_send,
         )
-        await renderer.consume(queue)
+        # Track the live turn so /stop and unbind can target it even after /new
+        # rebinds the peer to a fresh conversation mid-turn.
+        session.running_conversation_id = conversation_id
+        try:
+            await renderer.consume(queue)
+        finally:
+            if session.running_conversation_id == conversation_id:
+                session.running_conversation_id = None
 
     # -- helpers ---------------------------------------------------------------
 

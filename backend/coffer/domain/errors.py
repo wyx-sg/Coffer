@@ -52,6 +52,7 @@ class ConfigValidationError(CofferError):
 # credential-store error family: re-exported from coffer.domain.credential_errors
 # (split for the file-size limit) so the coffer.domain.errors.X import paths keep working.
 from coffer.domain.credential_errors import (  # noqa: E402, I001
+    CredentialInUse as CredentialInUse,
     CredentialLocked as CredentialLocked,
     CredentialMissing as CredentialMissing,
     CredentialUnreadable as CredentialUnreadable,

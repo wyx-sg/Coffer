@@ -9,7 +9,6 @@ renaming.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import pathlib
@@ -154,27 +153,10 @@ class MasterStore:
                 raise
         return self.paths_for(name)
 
-    def rename(self, *, old: str, new: str) -> MasterPaths:
-        """Rename `<root>/<old>/` to `<root>/<new>/`."""
-        old_paths = self.paths_for(old)
-        new_paths = self.paths_for(new)
-        if not old_paths.folder.is_dir():
-            raise FileNotFoundError(f"master folder missing: {old_paths.folder}")
-        if new_paths.folder.exists():
-            raise FileExistsError(f"target master folder exists: {new_paths.folder}")
-        os.replace(old_paths.folder, new_paths.folder)
-        return new_paths
-
     def delete(self, name: str) -> None:
         target = self.paths_for(name).folder
         if target.is_dir():
             shutil.rmtree(target)
-
-    def skill_md_sha256(self, name: str) -> str | None:
-        skill_md = self.paths_for(name).skill_md
-        if not skill_md.is_file():
-            return None
-        return hashlib.sha256(skill_md.read_bytes()).hexdigest()
 
     def find_orphans(self, known_names: set[str]) -> list[str]:
         """Folders on disk that the DB doesn't know about."""

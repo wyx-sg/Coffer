@@ -33,16 +33,22 @@ def _install_signal_handlers() -> None:
 
 
 def main() -> None:
+    # sqlite-vec availability is reported by the daemon's /daemon/status endpoint
+    # (vec_available) and asserted by the bundle smoke test against the running
+    # frozen binary — not via an argv probe here, so this module never imports
+    # the knowledge engine (engine-confinement contract).
     _install_signal_handlers()
-    # ADR-006: refuse to start a duplicate. If a daemon is already reachable,
-    # exit cleanly so the auto-spawn caller (CLI/shim) discovers it instead of
-    # us binding a second port and clobbering daemon.json (orphaning it).
-    existing = bootstrap.live_daemon()
-    if existing is not None:
+    # ADR-006: probe + bind happen under one flock (acquire_or_existing). If a
+    # daemon is already reachable, sock is None and we exit cleanly so the
+    # auto-spawn caller (CLI/shim) discovers it; otherwise we hold the bound
+    # socket. Serialising probe+bind under the lock is what stops two racing
+    # auto-spawns both binding and clobbering daemon.json (orphaning one).
+    info, sock = bootstrap.acquire_or_existing()
+    if sock is None:
         _logger.info(
             "daemon already running (pid=%s, port=%s); exiting",
-            existing.pid,
-            existing.port,
+            info.pid,
+            info.port,
         )
         return
     # CODE-041: acquire() binds the port and hands us the live socket; passing
@@ -50,7 +56,6 @@ def main() -> None:
     # port (already published in daemon.json with the token) could be stolen.
     # That also removes the old EADDRINUSE retry loop entirely — we own the
     # socket, so uvicorn cannot fail to bind it.
-    _info, sock = bootstrap.acquire()
     try:
         uvicorn.run(
             "coffer.main:app",

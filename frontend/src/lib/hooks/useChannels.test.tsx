@@ -11,6 +11,20 @@ import type { ChannelStatus, PairingCode } from "@/lib/api/channels";
 // useChannels rides the generic resources API (openapi-fetch client) …
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 
+// onError → toast is the default for every mutation (agents/frontend.md §5):
+// a failed pairing-code issue must announce itself, not fail silently.
+const errorToast = vi.fn();
+vi.mock("@/components/ui/toast", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/ui/toast")>();
+  return {
+    ...actual,
+    useToast: () => ({
+      toast: { error: errorToast, success: vi.fn(), info: vi.fn() },
+      dismiss: vi.fn(),
+    }),
+  };
+});
+
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -89,5 +103,18 @@ describe("useChannels hooks", () => {
     expect(result.current.data?.code).toBe("ABCD2345");
     expect(String(fetchMock.mock.calls[0][0])).toContain("/channels/tg/pairing-code");
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "POST" });
+  });
+
+  test("useIssuePairingCode toasts an error when the request fails (not silent)", async () => {
+    // An unmapped error code falls through to the server envelope message,
+    // so the toast carries the real failure reason rather than being silent.
+    stubFetch({ error: { code: "ADAPTER_OFFLINE", message: "adapter offline" } }, false, 500);
+
+    const { result } = renderHook(() => useIssuePairingCode("tg"), { wrapper: makeWrapper() });
+    act(() => result.current.mutate());
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(errorToast).toHaveBeenCalledTimes(1);
+    expect(errorToast).toHaveBeenCalledWith(expect.stringContaining("adapter offline"));
   });
 });

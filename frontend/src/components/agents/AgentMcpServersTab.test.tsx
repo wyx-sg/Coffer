@@ -151,6 +151,22 @@ describe("AgentMcpServersTab", () => {
     expect(screen.getByRole("switch", { name: /fetcher/ })).toBeInTheDocument();
   });
 
+  test("the direct-servers search filters rows by name", async () => {
+    stub();
+    renderTab();
+
+    // Both direct entries visible before filtering.
+    expect(await screen.findByText("github")).toBeInTheDocument();
+    expect(screen.getByText("fetcher")).toBeInTheDocument();
+
+    // The direct table's search box is the last one (gateway section has its own).
+    const searchBoxes = screen.getAllByPlaceholderText("Search servers");
+    fireEvent.change(searchBoxes[searchBoxes.length - 1], { target: { value: "github" } });
+
+    expect(screen.getByText("github")).toBeInTheDocument();
+    expect(screen.queryByText("fetcher")).not.toBeInTheDocument();
+  });
+
   test("toggling the Switch calls the API with the flipped enabled flag", async () => {
     stub();
     renderTab();

@@ -1114,6 +1114,134 @@ async def test_upstream_crash_mid_prompt_get_then_respawn(
 
 
 # ---------------------------------------------------------------------------
+# P2 — McpError (well-formed tool error) must NOT evict a healthy upstream
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mcp_error_does_not_evict_healthy_upstream(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A protocol-level McpError means the tool ran and the upstream returned a
+    well-formed JSON-RPC error — the connection is healthy. The invocation must
+    record an `error` row but the supervisor must NOT evict the upstream
+    (mirrors discovery._request_self_heal, which only self-heals transport
+    failures). Evicting here would kill+respawn a perfectly good server on every
+    tool that returns an error result.
+    """
+    import mcp.types as mcp_types
+    from mcp import McpError
+
+    from coffer.application.mcp.gateway_handlers import handle_tools_call
+
+    rsvc, prefs, inv, engine = await _build_simple_harness_with_supervisor(
+        tmp_path,
+        monkeypatch,
+        db_name="mcperr.db",
+        server_name="fs",
+        transport={
+            "type": "stdio",
+            "command": sys.executable,
+            "args": [str(_FAKE), "--tools", "stub"],
+        },
+        supervisor=None,
+    )
+
+    boom_conn = AsyncMock()
+    boom_conn.request.side_effect = McpError(
+        mcp_types.ErrorData(code=mcp_types.INVALID_PARAMS, message="tool said no")
+    )
+    evicted: list[str] = []
+
+    class _SpySup:
+        async def get_or_spawn(self, name: str) -> object:
+            return boom_conn
+
+        async def evict(self, name: str) -> None:
+            evicted.append(name)
+
+    async def _noop_subscribe(name: str) -> None:
+        pass
+
+    try:
+        with pytest.raises(McpError):
+            await handle_tools_call(
+                {"name": "fs__stub", "arguments": {}},
+                resources=rsvc,
+                supervisor=_SpySup(),  # type: ignore[arg-type]
+                prefs=prefs,
+                invocations=inv,
+                session_id="t",
+                clock=lambda: datetime.now(tz=UTC),
+                ensure_subscribed=_noop_subscribe,
+            )
+
+        # The healthy upstream must survive — no eviction.
+        assert evicted == [], f"McpError must not evict; evicted={evicted}"
+
+        # But the failed call is still recorded as an error invocation.
+        rows = await inv.query(resource_name="fs")
+        assert any(r.status == "error" for r in rows), f"no error row; rows={rows}"
+    finally:
+        await _safe_dispose(engine)
+
+
+@pytest.mark.asyncio
+async def test_transport_drop_still_evicts_for_self_heal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-McpError exception (a dropped pipe / dead process) is a transport
+    failure: the connection must be evicted so the next call self-heals onto a
+    fresh spawn. This is the counterpart to the McpError case above.
+    """
+    from coffer.application.mcp.gateway_handlers import handle_tools_call
+
+    rsvc, prefs, inv, engine = await _build_simple_harness_with_supervisor(
+        tmp_path,
+        monkeypatch,
+        db_name="drop.db",
+        server_name="fs",
+        transport={
+            "type": "stdio",
+            "command": sys.executable,
+            "args": [str(_FAKE), "--tools", "stub"],
+        },
+        supervisor=None,
+    )
+
+    boom_conn = AsyncMock()
+    boom_conn.request.side_effect = RuntimeError("pipe broken")
+    evicted: list[str] = []
+
+    class _SpySup:
+        async def get_or_spawn(self, name: str) -> object:
+            return boom_conn
+
+        async def evict(self, name: str) -> None:
+            evicted.append(name)
+
+    async def _noop_subscribe(name: str) -> None:
+        pass
+
+    try:
+        with pytest.raises(RuntimeError, match="pipe broken"):
+            await handle_tools_call(
+                {"name": "fs__stub", "arguments": {}},
+                resources=rsvc,
+                supervisor=_SpySup(),  # type: ignore[arg-type]
+                prefs=prefs,
+                invocations=inv,
+                session_id="t",
+                clock=lambda: datetime.now(tz=UTC),
+                ensure_subscribed=_noop_subscribe,
+            )
+
+        assert evicted == ["fs"], f"transport drop must evict; evicted={evicted}"
+    finally:
+        await _safe_dispose(engine)
+
+
+# ---------------------------------------------------------------------------
 # Fix 1 — re-subscribe to notifications after crash-evict
 # ---------------------------------------------------------------------------
 

@@ -1,9 +1,19 @@
 // frontend/src/lib/hooks/useModels.ts — TanStack Query bindings for models.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
+import { translateApiError } from "@/lib/api/errors";
 import { modelsApi, type Model, type ModelCreate, type ModelPatch } from "@/lib/api/models";
+import { useToast } from "@/components/ui/toast";
 
 const MODELS_KEY = ["models"] as const;
+
+/** Shared onError → toast handler — a failed mutation must never be silent. */
+function useModelToastError() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return (error: unknown) => toast.error(translateApiError(t, error));
+}
 
 // ---------------------------------------------------------------------------
 // Query
@@ -47,6 +57,9 @@ export function useUpdateModel() {
 
 export function useDeleteModel() {
   const qc = useQueryClient();
+  // Delete has no inline form to surface its error (unlike create/update,
+  // which render `submitError` in the ModelForm), so a failure must toast.
+  const onError = useModelToastError();
   return useMutation({
     mutationFn: (id: string) => modelsApi.remove(id),
     onSuccess: (_data, id) => {
@@ -55,5 +68,6 @@ export function useDeleteModel() {
       );
       qc.invalidateQueries({ queryKey: MODELS_KEY });
     },
+    onError,
   });
 }

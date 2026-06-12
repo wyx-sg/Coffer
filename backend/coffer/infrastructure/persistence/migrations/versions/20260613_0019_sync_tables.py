@@ -1,7 +1,7 @@
 """sync_config and sync_state tables for multi-machine sync (spec 010)
 
-Revision ID: 0017
-Revises: 0016
+Revision ID: 0019
+Revises: 0018
 Create Date: 2026-06-13
 
 Two singleton rows (id = 1): sync_config holds the user's remote/branch and the
@@ -15,14 +15,22 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 
-revision: str = "0017"
-down_revision: str | None = "0016"
+revision: str = "0019"
+down_revision: str | None = "0018"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _has_table(name: str) -> bool:
+    return name in inspect(op.get_bind()).get_table_names()
+
+
 def upgrade() -> None:
+    # Idempotent: the migration round-trip test re-runs the tail to head.
+    if _has_table("sync_config"):
+        return
     op.create_table(
         "sync_config",
         sa.Column("id", sa.Integer(), primary_key=True),

@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Collapse redundant runs for the same ref into one (a new push cancels the
+# previous in-flight run for that branch/PR).
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: lint

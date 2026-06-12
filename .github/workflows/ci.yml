@@ -1,9 +1,23 @@
 name: CI
 
+# Run once per push. PRs in this single-maintainer repo come from in-repo
+# `feature/**` branches, so the push event already covers every PR commit —
+# a second `pull_request` trigger would just run verify a redundant time.
 on:
   push:
     branches: [main, "feature/**"]
-  pull_request:
+  # Weekly latest-deps canary (see the `canary` job): re-resolves the `>=`
+  # floors instead of the frozen lock, so upstream releases that break Coffer
+  # surface on a schedule rather than ambushing the next dependency bump.
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+# One in-flight run per ref; a new push cancels the previous run for the same
+# branch instead of piling up duplicate verify jobs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,15 +25,19 @@ permissions:
 jobs:
   verify:
     name: verify
+    # Push / dispatch only — the scheduled run is covered by the canary job.
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      # Install backend deps FROZEN from backend/uv.lock so CI resolves the
+      # exact versions the lockfile pins (reproducible with release.yml),
+      # instead of re-resolving the `>=` floors in pyproject.toml.
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -32,11 +50,58 @@ jobs:
       - name: install system deps (ripgrep for grep retrieval)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep
 
-      - name: install backend deps
-        run: |
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -e ./backend[dev]
+      - name: install backend deps (frozen)
+        # UV_PROJECT_ENVIRONMENT puts the venv at the repo-root .venv that the
+        # Makefile's $(PY)/lint-imports paths expect (uv would otherwise create
+        # backend/.venv). --extra dev pulls the dev tooling (pytest, ruff, mypy,
+        # import-linter, …) — the same extra the old `pip install -e backend[dev]`
+        # installed.
+        env:
+          UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/.venv
+        run: uv sync --frozen --extra dev --project backend
+
+      - name: install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: install e2e deps
+        working-directory: e2e
+        run: npm ci
+
+      - name: make verify
+        run: make verify
+
+  # Latest-deps canary: install WITHOUT the frozen lock so uv re-resolves the
+  # `>=` floors in pyproject.toml to the newest compatible releases, then run
+  # the same verify suite. Catches upstream breakage early. Runs only on the
+  # weekly schedule (or manual dispatch) so it never blocks normal pushes; a
+  # red canary is a heads-up to bump + re-lock, not a merge gate.
+  canary:
+    name: latest-deps canary
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      - name: install system deps (ripgrep for grep retrieval)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep
+
+      - name: install backend deps (latest, unfrozen)
+        # No --frozen: uv re-resolves the pyproject floors to the newest
+        # compatible versions. Same repo-root .venv the Makefile expects.
+        env:
+          UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/.venv
+        run: uv sync --upgrade --extra dev --project backend
 
       - name: install frontend deps
         working-directory: frontend

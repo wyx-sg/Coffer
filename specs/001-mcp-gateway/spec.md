@@ -247,7 +247,19 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 - **Given** the daemon has running state in `~/.coffer/coffer.db`,
 - **When** the user invokes the daemon-backup operation,
-- **Then** a self-consistent SQLite copy is written under `~/.coffer/backups/` (safe to copy off-machine while the daemon keeps running) and a `backup_created` audit entry is recorded.
+- **Then** a self-consistent SQLite copy of the index is written under `~/.coffer/backups/` while the daemon keeps running, and a `backup_created` audit entry is recorded. (This copies only `coffer.db` — the rebuildable index — not the system-of-record file trees; for a complete, restorable vault snapshot use the vault backup below.)
+
+### Scenario: vault backup captures db + file trees, restore round-trips them
+
+- **Given** a populated vault under `~/.coffer/` — `coffer.db` plus the markdown file trees that are the system of record (`knowledge/`, `memory/`, `skills/`),
+- **When** the user runs `coffer backup <dest>` and later `coffer restore <dest>` into a fresh vault,
+- **Then** the destination holds `coffer.db` and every file tree; restoring re-places them all so a sample KB document and a sample memory fact round-trip byte-for-byte and the restored `coffer.db` is a consistent index of the restored trees.
+
+### Scenario: backup excludes the master key by default
+
+- **Given** the vault contains the Fernet `master.key` that decrypts the credential ciphertext in `coffer.db`,
+- **When** the user runs `coffer backup <dest>` without `--include-master-key`,
+- **Then** `master.key` is NOT written into the backup (so the backup is safe to copy off-machine), and the command warns that stored credentials need the key to decrypt; passing `--include-master-key` bundles the key only after printing an explicit warning.
 
 ### Scenario: gateway overhead stays under budget
 

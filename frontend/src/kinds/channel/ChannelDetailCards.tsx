@@ -1,14 +1,17 @@
 // frontend/src/kinds/channel/ChannelDetailCards.tsx
-// The three detail-page cards: live status (adapter + paired peer), pairing
-// (generate / show a code), and the SeaTalk callback endpoint. Kept out of
-// ChannelDetailPage so the page stays within the size budget.
+// The detail-page cards: live status (adapter + paired peer), pairing
+// (generate / show a code), the SeaTalk callback endpoint, and a "send test
+// message" card wired to the notify capability. Kept out of ChannelDetailPage
+// so the page stays within the size budget.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, KeyRound, Webhook, Activity } from "lucide-react";
+import { Copy, KeyRound, Webhook, Activity, Send } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { CallbackInfo, ChannelStatus, PairingCode } from "@/lib/api/channels";
 
 function StatusRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -179,6 +182,58 @@ export function ChannelCallbackCard({ callback }: { callback: CallbackInfo }) {
           }
         />
         <p className="pt-1 text-xs text-muted-foreground">{t("channels.callback.hint")}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Send a one-off message to the paired peer via the notify capability — the
+ * live-verification path for a freshly paired channel. Disabled until a peer
+ * exists (there is nobody to notify before pairing).
+ */
+export function ChannelTestMessageCard({
+  hasPeer,
+  isPending,
+  onSend,
+}: {
+  hasPeer: boolean;
+  isPending: boolean;
+  onSend: (text: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [text, setText] = useState("");
+  const trimmed = text.trim();
+
+  return (
+    <Card className="paper-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 font-serif text-lg">
+          <Send className="size-4 text-primary" aria-hidden />
+          {t("channels.test.title")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="max-w-prose text-sm text-muted-foreground">{t("channels.test.subtitle")}</p>
+        <div className="space-y-2">
+          <Label htmlFor="channel-test-message">{t("channels.test.title")}</Label>
+          <Input
+            id="channel-test-message"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={t("channels.test.placeholder")}
+            disabled={!hasPeer || isPending}
+          />
+        </div>
+        <Button
+          onClick={() => onSend(trimmed)}
+          disabled={!hasPeer || isPending || trimmed.length === 0}
+        >
+          {isPending ? t("channels.test.sending") : t("channels.test.send")}
+        </Button>
+        {!hasPeer ? (
+          <p className="text-xs text-muted-foreground">{t("channels.test.needsPeer")}</p>
+        ) : null}
       </CardContent>
     </Card>
   );

@@ -125,30 +125,33 @@ describe("MemoryStoreDetailPage", () => {
     );
   });
 
-  test("deleting a selected fact calls delete after confirmation", async () => {
+  test("deleting a selected fact calls delete after confirming in the dialog", async () => {
     stubLists();
     vi.mocked(api.deleteFact).mockResolvedValue(undefined);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
     const tree = screen.getByRole("complementary");
     fireEvent.click(await within(tree).findByText("tabs"));
+    // The viewer's Delete button opens the styled confirm dialog (no native
+    // window.confirm); deletion only fires after confirming inside it.
     fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(api.deleteFact).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
     await waitFor(() => expect(api.deleteFact).toHaveBeenCalledWith("global", "f1"));
-    confirmSpy.mockRestore();
   });
 
-  test("does NOT delete a fact when the confirm is cancelled", async () => {
+  test("does NOT delete a fact when the confirm dialog is cancelled", async () => {
     stubLists();
     vi.mocked(api.deleteFact).mockResolvedValue(undefined);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
 
     renderPage();
     const tree = screen.getByRole("complementary");
     fireEvent.click(await within(tree).findByText("tabs"));
     fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
     expect(api.deleteFact).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
   });
 
   test("surfaces a localized error when the facts/metrics query fails", async () => {
@@ -161,17 +164,70 @@ describe("MemoryStoreDetailPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/resource not found/i);
   });
 
-  test("clear-all calls clearFacts after confirmation", async () => {
+  test("shows a load-more affordance and fetches the next page when over the page size", async () => {
+    // 100 facts loaded, but the store has 150 — the cap must not silently hide
+    // the rest. A "Load more" button shows the loaded/total split and, on click,
+    // re-queries with a larger limit so the remaining facts become reachable.
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      ...FACT,
+      id: `f${i}`,
+      name: `fact-${i}`,
+    }));
+    const page2 = Array.from({ length: 150 }, (_, i) => ({
+      ...FACT,
+      id: `f${i}`,
+      name: `fact-${i}`,
+    }));
+    vi.mocked(api.listFacts).mockImplementation(async (_store, limit) =>
+      (limit ?? 0) > 100 ? { facts: page2, total: 150 } : { facts: page1, total: 150 },
+    );
+    vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 150, disk_bytes: 50 });
+    vi.mocked(api.getMemoryStore).mockResolvedValue({
+      ref: "memory:global",
+      kind: "memory",
+      name: "global",
+      scope: "global",
+      project_id: "0".repeat(26),
+      project_root: null,
+      description: null,
+      config: {
+        retrieval_modes: ["grep", "keyword"],
+        default_mode: "keyword",
+        embedding_provider: null,
+        embedding_model: null,
+        embedding_base_url: null,
+        embedding_credential_ref: null,
+        embedding_dimensions: 768,
+        max_fact_chars: 8192,
+      },
+      enabled: true,
+      created_at: "2026-05-29T00:00:00Z",
+      updated_at: "2026-05-29T00:00:00Z",
+    });
+
+    renderPage();
+    const loadMore = await screen.findByRole("button", { name: /showing 100 of 150/i });
+    expect(loadMore).toBeVisible();
+    expect(await screen.findByText("fact-99")).toBeVisible();
+
+    fireEvent.click(loadMore);
+    await waitFor(() => expect(api.listFacts).toHaveBeenCalledWith("global", 200, 0));
+    expect(await screen.findByText("fact-149")).toBeVisible();
+  });
+
+  test("clear-all calls clearFacts after confirming in the dialog", async () => {
     stubLists();
     vi.mocked(api.clearFacts).mockResolvedValue(1);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
     // The header Clear-all button is disabled until metrics (fact_count) load.
     const btn = await screen.findByRole("button", { name: /clear all/i });
     await waitFor(() => expect(btn).toBeEnabled());
     fireEvent.click(btn);
+    // The styled confirm dialog gates the clear; it only fires after confirming.
+    const dialog = await screen.findByRole("dialog");
+    expect(api.clearFacts).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: /clear all/i }));
     await waitFor(() => expect(api.clearFacts).toHaveBeenCalledWith("global"));
-    confirmSpy.mockRestore();
   });
 });

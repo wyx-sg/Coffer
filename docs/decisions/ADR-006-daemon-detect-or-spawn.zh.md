@@ -53,12 +53,25 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
 
 - 「daemon 归谁所有」是隐式的（最先探测到缺失的那个）。引导者的清理责任由
   「daemon 不随引导者退出而退出」予以缓解。
-- 如果两个客户端同时探测到缺失并同时 spawn，存在竞态。缓解方式：写入时对
-  `daemon.json` 加 `flock`；同时 daemon 自身在发现已有合法 `daemon.json`
-  且 PID 存活时拒绝启动。
+- 如果两个客户端同时探测到缺失并同时 spawn，存在竞态。缓解方式：在
+  `~/.coffer/daemon.lock` 上持有一把排他 `flock`，覆盖刚拉起的 daemon 的整个
+  「探测 + 绑定 + 写入」临界区（`bootstrap.acquire_or_existing`）：持锁期间先探测
+  `live_daemon()`，仅当无存活 daemon 时才绑定端口并写入 `daemon.json`，因此两个
+  几乎同时的 spawn 被串行化 —— 败者会观察到胜者并干净退出，而不会绑定第二个端口、
+  覆盖 `daemon.json`（那会把胜者变成孤儿）。关闭时 daemon 的 `release()` 只在
+  `daemon.json` 仍记录着自己 PID 时才删除它，因此孤儿 daemon 永远不会删掉存活
+  daemon 的发现文件。（Windows 没有 `fcntl`，此锁退化为 no-op，由 `live_daemon()`
+  的拒绝启动与原子 `os.replace` 充当兜底。）
 - 由子入口（shim）自动拉起一个长生存周期进程并不常见 —— 尤其在 Windows
   上用户可能短暂看到命令窗口。缓解方式：Windows 上以
   `subprocess.CREATE_NO_WINDOW` 分离；POSIX 上使用 `os.setsid()`。
+- 由于 daemon 的生存周期长于 app，刚安装的新版 app 可能复用一个仍在监听的
+  **旧** daemon —— 形成静默的版本偏差。缓解方式是**检测而非自动更新**：daemon 在
+  `GET /api/v1/daemon/status` 上上报其包版本（`coffer.__version__`），桌面 app
+  将其与本次构建期望的版本（Tauri `daemon_version_matches` 命令，取自
+  `CARGO_PKG_VERSION`）比对。不一致时，沿用现有的 daemon 离线横幅展示一个
+  「daemon 版本过旧 —— 请重启」的入口，复用手动重启路径；Coffer 绝不自动杀掉
+  正在运行的 daemon。
 
 **运维后续**
 
@@ -92,3 +105,20 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
   `coffer.infrastructure.daemon.spawn.daemon_spawn_command()` 拉起同目录下的
   `coffer-daemon` 二进制，而不是退回到 `python -m coffer_daemon`。这确保了无论
   Coffer 是从预构建的发布归档还是从源码检出安装的，都能使用正确的二进制。
+- **2026-06-13** —— 版本偏差检测：daemon 现在会在 `GET /api/v1/daemon/status`
+  上上报其包版本；当被复用的旧 detached daemon 的版本与 app 构建期望的版本不一致
+  时，桌面 app 会展示一个手动的「daemon 版本过旧 —— 请重启」横幅。仅检测 + 手动
+  重启；不自动更新，也不自动杀进程。
+- **2026-06-13** —— spawn 竞态加固（本 ADR 一直在文档里写的那把 `flock`，现在真正
+  落地了）。刚拉起的 daemon 的「探测 + 绑定 + 写入」现在在
+  `~/.coffer/daemon.lock` 上的一把排他 `flock` 下运行
+  （`bootstrap.acquire_or_existing`），关闭了「先检查后动作」的间隙 —— 此前两个
+  几乎同时的 spawn 会各自绑定一个端口，败者的 `os.replace` 把胜者变成孤儿。
+  `release()` 改为按 PID 校验 —— 仅当 `daemon.json` 仍记录着自己 PID 时才删除它，
+  因此孤儿退出时不会删掉存活 daemon 的发现文件。`coffer daemon start` 现在以
+  `live_daemon()`（真实状态探测）为准，因此陈旧的 `daemon.json` 会触发重新拉起，
+  而不是误报「已在运行」；`coffer daemon stop` 在发送 `SIGTERM` 前会校验所记录的
+  PID 的命令行确实是一个 Coffer daemon（被回收的 PID 不再被误杀）。桌面 app 的
+  detect-or-spawn 存活性检查从裸 TCP 连接改为 HTTP `GET /api/v1/daemon/status`
+  的 200 探测，因此占用了崩溃 daemon 所记录端口的「占座进程」不再被误判为存活
+  daemon。

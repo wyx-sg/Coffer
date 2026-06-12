@@ -12,9 +12,20 @@
   <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS-555">
 </p>
 
-> Local-first AI agent vault. Manage all your MCP servers from one place.
+> Local-first AI agent vault. One place to manage everything your AI agents touch.
 
-Coffer is a daemon + CLI that aggregates upstream MCP servers and re-exposes them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools. It also keeps an **agent registry** — detect and register your local AI coding agents, edit their config files in-app, and one-click install Coffer's own MCP server into any of them. Run Coffer on more than one machine? It can **sync your vault** — knowledge, memory, registered resources, and (ciphertext-only) credentials — across them through a git repository you own; the encryption key never leaves your machines. All state lives on your machine — no cloud accounts, no vendor lock-in.
+Coffer is a daemon + CLI + desktop app that gives every AI agent on your machine one safe, shared surface. All state lives on your machine — no cloud accounts, no vendor lock-in. Everything Coffer manages is a **resource kind**:
+
+- **MCP servers** — aggregate upstream MCP servers and re-expose them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools.
+- **Agents** — detect and register your local AI coding agents, edit their config files in-app, and one-click install Coffer's own MCP server into any of them.
+- **Skills** — keep a master library of agent skill bundles and deliver them into one or more agents' skill directories, with drift reconciliation.
+- **Knowledge base** — drop in any-format documents (auto-converted to markdown) and let agents retrieve them by grep / keyword / vector search.
+- **Memory** — one canonical, agent-native memory store shared across agents (Claude / Codex), readable and writable over MCP.
+- **Channels** — chat with a built-in agent from Telegram or SeaTalk, answer approval prompts, and receive notifications from your phone.
+
+Run Coffer on more than one machine? **Multi-machine sync** keeps one vault consistent across them through a git repository you own — knowledge, memory, resources, and ciphertext-only credentials travel; the encryption key never leaves your machines.
+
+A built-in **chat** platform and Web/desktop UI tie them together: talk to a Coffer agent, browse and curate every kind, and watch invocations live.
 
 📖 **Documentation site:** https://wyx-sg.github.io/Coffer/
 
@@ -34,12 +45,13 @@ overrides: `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
 
 Download the installer from [Releases](https://github.com/wyx-sg/Coffer/releases/latest):
 
-| Platform             | File                              |
-| -------------------- | --------------------------------- |
-| macOS Apple silicon  | `Coffer_<version>_aarch64.dmg`    |
+| Platform             | File                                    |
+| -------------------- | --------------------------------------- |
+| macOS Apple silicon  | `Coffer_<version>_aarch64-unsigned.dmg` |
 
-Coffer currently ships macOS (Apple Silicon) only. Each file has a `.sha256`
-sibling for verification.
+Coffer currently ships macOS (Apple Silicon) only. The `-unsigned` suffix marks
+the DMG as not yet notarised (see below). Verify the download against the
+release's `SHA256SUMS` file.
 
 > **macOS (unsigned):** the build ships unsigned (notarisation pending), so macOS may say
 > Coffer is "damaged" on first open (it isn't — right-click → Open won't help here). Clear the

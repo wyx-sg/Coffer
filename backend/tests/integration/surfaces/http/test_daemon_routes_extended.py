@@ -77,6 +77,21 @@ async def test_status_remains_unauthenticated(tmp_path):
         assert r.status_code == 200
 
 
+@pytest.mark.asyncio
+async def test_status_reports_vec_availability(tmp_path, monkeypatch):
+    """/status carries vec_available so the bundle smoke test can detect a frozen
+    build that lost the sqlite-vec extension (the probe is cached per process)."""
+    from coffer.surfaces.http import daemon_routes
+
+    monkeypatch.setattr(daemon_routes, "_vec_available_cache", None)
+    monkeypatch.setattr(daemon_routes, "_vec_available", lambda: True)
+    c, _ = await _client(tmp_path)
+    async with c:
+        r = await c.get("/api/v1/daemon/status", headers={})
+        assert r.status_code == 200
+        assert r.json()["vec_available"] is True
+
+
 @pytest.mark.acceptance(
     spec="001-mcp-gateway", scenario="rotating the daemon token invalidates the previous one"
 )

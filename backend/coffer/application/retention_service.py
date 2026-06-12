@@ -95,7 +95,19 @@ class RetentionService:
                 result[table.name] = 0
                 continue
             cutoff = clock_now - timedelta(days=policy.retention_days)
-            deleted = await self._repo.delete_older_than(table.name, table.timestamp_column, cutoff)
-            await self._repo.touch_pruned(table.name, deleted)
-            result[table.name] = deleted
+            if table.action == "archive":
+                assert table.archive_set_column is not None  # registry invariant
+                affected = await self._repo.archive_older_than(
+                    table.sql_table,
+                    table.timestamp_column,
+                    table.archive_set_column,
+                    cutoff,
+                    clock_now,
+                )
+            else:
+                affected = await self._repo.delete_older_than(
+                    table.sql_table, table.timestamp_column, cutoff
+                )
+            await self._repo.touch_pruned(table.name, affected)
+            result[table.name] = affected
         return result

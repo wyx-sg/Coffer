@@ -5,7 +5,7 @@
 // (/chat/:id), so refresh and deep-links reopen the same thread.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { MessageSquareOff, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useChatController } from "@/lib/hooks/useChatController";
@@ -92,22 +92,50 @@ export function ChatPage() {
             onModelChange={(modelId) => c.setConversationModel(c.activeConv!.id, modelId)}
             agentLabel={c.activeAgent?.display_name ?? c.activeConv.agent_key}
             showModelSelector={c.activeConv.agent_key === "builtin"}
+            readOnly={c.activeArchived}
+            onRestore={() => c.restoreConversation(c.activeConv!.id)}
+            restorePending={c.restorePending}
           />
+        ) : c.activeLoading ? (
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+          </div>
+        ) : c.activeNotFound ? (
+          // A stale deep-link or deleted conversation: say so explicitly
+          // instead of silently dropping into the draft surface.
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12 text-center">
+            <MessageSquareOff
+              className="size-12 text-muted-foreground/40"
+              strokeWidth={1.25}
+              aria-hidden
+            />
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold">{t("chat.thread.notFoundTitle")}</h2>
+              <p className="max-w-xs text-sm text-muted-foreground">
+                {t("chat.thread.notFoundBody")}
+              </p>
+            </div>
+            <Button variant="outline" onClick={c.startDraft}>
+              {t("chat.thread.notFoundCta")}
+            </Button>
+          </div>
         ) : (
           <DraftThread
             agents={c.agents}
             models={c.models}
             agentKey={c.effectiveDraft.agentKey}
             modelId={c.effectiveDraft.modelId}
+            cwd={c.effectiveDraft.cwd}
             onAgentChange={c.setDraftAgent}
             onModelChange={c.setDraftModel}
+            onCwdChange={c.setDraftCwd}
             onSend={c.sendDraft}
             creating={c.creating}
           />
         )}
       </div>
 
-      {c.createError && (
+      {c.createError ? (
         <div
           role="alert"
           className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive shadow-md"
@@ -121,7 +149,7 @@ export function ChatPage() {
             {t("common.dismiss")}
           </button>
         </div>
-      )}
+      ) : null}
 
       <ConfirmDialog
         open={c.deletingId !== null}

@@ -29,6 +29,7 @@ import { UnmanagedSkillsSection } from "@/components/agents/AgentUnmanagedSkills
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut } from "@/lib/api/agents";
@@ -177,54 +178,56 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
         />
       </div>
 
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">{t("agents.cofferManaged")}</h3>
-        <Button size="sm" variant="outline" onClick={() => setInstallOpen(true)}>
-          <Plus className="mr-1.5 size-3.5" /> {t("agents.bulkInstallSkills")}
-        </Button>
-      </div>
+      <Card className="space-y-3 p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-muted-foreground">{t("agents.cofferManaged")}</h3>
+          <Button size="sm" variant="outline" onClick={() => setInstallOpen(true)}>
+            <Plus className="mr-1.5 size-3.5" /> {t("agents.bulkInstallSkills")}
+          </Button>
+        </div>
 
-      {skills.isPending ? (
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-      ) : skills.error ? (
-        <p className="text-sm text-destructive">{translateApiError(t, skills.error)}</p>
-      ) : (
-        <DataTable
-          rows={managed}
-          columns={columns}
-          rowKey={(r) => r.skill.name}
-          search={{
-            accessor: (r) => `${r.skill.name} ${r.skill.description}`,
-            placeholder: t("skills.searchPlaceholder"),
-          }}
-          filters={filters}
-          onRowClick={(r) =>
-            navigate(`/skills/${r.skill.name}`, {
-              state: { backTo: `/agents/${agent.name}`, backLabel: agent.name },
-            })
-          }
-          // In follow mode the reconciler owns delivery — bulk binding
-          // mutations would silently fight it, so selection is hidden.
-          selection={
-            followAll
-              ? undefined
-              : {
-                  ariaSelectAll: t("common.bulk.selectAll"),
-                  ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.skill.name}`,
-                  bulkLabel: (count) => t("common.bulk.selected", { count }),
-                  clearLabel: t("common.clear"),
-                  renderBulkActions: ({ selectedRows, clear }) => (
-                    <AgentSkillsBulkActions
-                      agentName={agent.name}
-                      rows={selectedRows}
-                      onDone={clear}
-                    />
-                  ),
-                }
-          }
-          emptyMessage={t("agents.skillsTab.empty")}
-        />
-      )}
+        {skills.isPending ? (
+          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+        ) : skills.error ? (
+          <p className="text-sm text-destructive">{translateApiError(t, skills.error)}</p>
+        ) : (
+          <DataTable
+            rows={managed}
+            columns={columns}
+            rowKey={(r) => r.skill.name}
+            search={{
+              accessor: (r) => `${r.skill.name} ${r.skill.description}`,
+              placeholder: t("skills.searchPlaceholder"),
+            }}
+            filters={filters}
+            onRowClick={(r) =>
+              navigate(`/skills/${r.skill.name}`, {
+                state: { backTo: `/agents/${agent.name}`, backLabel: agent.name },
+              })
+            }
+            // In follow mode the reconciler owns delivery — bulk binding
+            // mutations would silently fight it, so selection is hidden.
+            selection={
+              followAll
+                ? undefined
+                : {
+                    ariaSelectAll: t("common.bulk.selectAll"),
+                    ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.skill.name}`,
+                    bulkLabel: (count) => t("common.bulk.selected", { count }),
+                    clearLabel: t("common.clear"),
+                    renderBulkActions: ({ selectedRows, clear }) => (
+                      <AgentSkillsBulkActions
+                        agentName={agent.name}
+                        rows={selectedRows}
+                        onDone={clear}
+                      />
+                    ),
+                  }
+            }
+            emptyMessage={t("agents.skillsTab.empty")}
+          />
+        )}
+      </Card>
 
       <UnmanagedSkillsSection agentName={agent.name} />
 

@@ -11,6 +11,18 @@ import { Button } from "@/components/ui/button";
 import type { ConfigFileInfo } from "@/lib/api/agents";
 import { cn } from "@/lib/utils";
 
+// Keys that have a human description under `agents.config.desc.<key>`. Listing
+// them explicitly keeps an unknown/new key from rendering a raw i18n string.
+const DESCRIBED_KEYS = new Set([
+  "settings",
+  "settings_local",
+  "global",
+  "instructions",
+  "subagents",
+  "config",
+  "hooks",
+]);
+
 export interface ConfigFileTreeProps {
   files: ConfigFileInfo[];
   selectedKey: string | null;
@@ -33,6 +45,11 @@ export function ConfigFileTree({
   onNewFile,
 }: ConfigFileTreeProps) {
   const { t } = useTranslation();
+
+  // One-line "what is this file for" description, only for keys we have copy
+  // for; unknown keys render nothing rather than a raw i18n key.
+  const descFor = (key: string): string | null =>
+    DESCRIBED_KEYS.has(key) ? t(`agents.config.desc.${key}`) : null;
 
   return (
     <ul className="space-y-0.5">
@@ -61,6 +78,11 @@ export function ConfigFileTree({
                 <Folder className="size-4 shrink-0 opacity-70" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{f.display_name}</span>
+                  {descFor(f.key) ? (
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {descFor(f.key)}
+                    </span>
+                  ) : null}
                   <span className="block truncate font-mono text-[11px] text-muted-foreground">
                     {f.path}
                   </span>
@@ -122,6 +144,11 @@ export function ConfigFileTree({
               <FileText className="size-4 shrink-0 opacity-70" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{f.display_name}</span>
+                {descFor(f.key) ? (
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {descFor(f.key)}
+                  </span>
+                ) : null}
                 <span className="block truncate font-mono text-[11px] text-muted-foreground">
                   {f.path}
                 </span>

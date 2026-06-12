@@ -449,6 +449,39 @@ async def test_recall_scope_global_returns_global_only(mem) -> None:
     assert not any("project" in t for t in texts)
 
 
+async def test_new_fact_embeds_via_global_config_without_per_store_fields(mem) -> None:
+    """A fact written to a vector-enabled store with NO per-store embedding
+    fields must be embedded via the GLOBAL embedding config at write time —
+    keyword-only indexing here records the real sha, so the reconcile no-op
+    gate would otherwise block the embed forever (review P0-2)."""
+    from coffer.domain.resource import ResourceRef
+
+    await mem.service.ensure_store(GLOBAL_STORE_NAME)
+    await mem.resources.update_config(
+        ResourceRef("memory", GLOBAL_STORE_NAME),
+        new_config={
+            "retrieval_modes": ["grep", "keyword", "vector"],
+            "default_mode": "keyword",
+        },
+        actor="user",
+    )
+    await mem.service.add_fact_to_store(
+        store_name=GLOBAL_STORE_NAME,
+        name="quokka",
+        description="",
+        body="the quokka habitat fact",
+        actor="user",
+    )
+    vec = (mem.vec_stores or {}).get(("memory", GLOBAL_STORE_NAME))
+    assert vec is not None and len(vec._rows) == 1  # vec row written at remember() time
+    hits, mode, fallback = await mem.service.recall_in_store(
+        store_name=GLOBAL_STORE_NAME, query="quokka habitat", mode="vector", top_k=5
+    )
+    assert mode == "vector"
+    assert fallback is False
+    assert any("quokka" in h.text for h in hits)
+
+
 async def test_store_delete_and_recreate_has_no_stale_vectors(mem) -> None:
     """Deleting a vector-enabled store drops its vec table; a same-name
     re-create starts clean (review gap: end-to-end vec-leak test)."""

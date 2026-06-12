@@ -124,7 +124,9 @@ CREATE INDEX idx_documents_project ON documents(project_id);
 -- because memory rows have no source file.
 
 CREATE TABLE chunks (
-    id              TEXT      NOT NULL PRIMARY KEY, -- '<doc-id>:<position>'
+    id              TEXT      NOT NULL PRIMARY KEY, -- '<store-scope>:<doc-id>:<position>'
+    -- store-scope = 12-hex digest of (kind, resource_name): the same content-addressed
+    -- doc id may repeat across stores, so a bare '<doc-id>:<position>' id would collide
     document_id     TEXT      NOT NULL,
     kind            TEXT      NOT NULL,
     resource_name   TEXT      NOT NULL,
@@ -148,7 +150,7 @@ CREATE VIRTUAL TABLE documents_fts USING fts5(
 -- sqlite-vec virtual table; one row per chunk with a vector. Created LAZILY by
 -- vec_index.py at the configured width (per store), not in the migration.
 CREATE VIRTUAL TABLE vec_chunks USING vec0(
-    chunk_id TEXT PRIMARY KEY,
+    chunk_id TEXT PRIMARY KEY,                      -- bare '<doc-id>:<position>' (the table itself is per-store)
     embedding FLOAT[768]                            -- width set per KB at create/re-embed time
 );
 ```

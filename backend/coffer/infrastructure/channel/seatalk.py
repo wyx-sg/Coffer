@@ -201,9 +201,17 @@ class SeaTalkAdapter:
                 f"{self._base}/auth/app_access_token",
                 json={"app_id": self._app_id, "app_secret": self._app_secret},
             )
-            payload = response.json()
         except httpx.HTTPError as e:
             raise ChannelSendFailed(self._name, f"token: {type(e).__name__}") from e
+        try:
+            payload = response.json()
+        except ValueError as e:
+            # A gateway returns an HTML error page, not the Open API JSON
+            # envelope — json() raises a JSONDecodeError (NOT an
+            # httpx.HTTPError), so surface it as the channel error contract.
+            raise ChannelSendFailed(
+                self._name, f"token: non-JSON response ({response.status_code})"
+            ) from e
         if not isinstance(payload, dict) or payload.get("code", -1) != 0:
             raise ChannelSendFailed(self._name, "token request rejected")
         token = str(payload.get("app_access_token", ""))
@@ -225,9 +233,17 @@ class SeaTalkAdapter:
                     json=body,
                     headers={"Authorization": f"Bearer {token}"},
                 )
-                payload: Any = response.json()
             except httpx.HTTPError as e:
                 raise ChannelSendFailed(self._name, f"{path}: {type(e).__name__}") from e
+            try:
+                payload: Any = response.json()
+            except ValueError as e:
+                # A gateway returns an HTML error page, not the Open API JSON
+                # envelope — json() raises a JSONDecodeError (NOT an
+                # httpx.HTTPError), so surface it as the channel error contract.
+                raise ChannelSendFailed(
+                    self._name, f"{path}: non-JSON response ({response.status_code})"
+                ) from e
             code = payload.get("code", -1) if isinstance(payload, dict) else -1
             if response.status_code == 200 and code == 0:
                 return payload

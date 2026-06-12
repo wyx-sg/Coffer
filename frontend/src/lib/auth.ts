@@ -22,6 +22,19 @@ export function getCofferToken(): string | null {
   return localStorage.getItem("coffer.token");
 }
 
+/**
+ * Overwrite the Tauri-injected connection globals. Written pre-render by
+ * main.tsx (desktop launch) and again after a daemon restart — the daemon
+ * mints a fresh token on every start, so the launch-time copy is revoked
+ * the moment "Restart daemon" succeeds. Callers that memoised the base URL
+ * (the openapi-fetch client) must also resetApiClient().
+ */
+export function setDaemonConnection(baseUrl: string, token: string): void {
+  const w = window as unknown as Record<string, unknown>;
+  w.__COFFER_BASE_URL__ = baseUrl;
+  w.__COFFER_TOKEN__ = token;
+}
+
 export function setCofferToken(token: string | null): void {
   if (token === null) {
     localStorage.removeItem("coffer.token");

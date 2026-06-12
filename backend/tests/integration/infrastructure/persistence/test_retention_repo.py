@@ -174,6 +174,55 @@ async def test_delete_older_than_conversations_cascades_to_messages(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_archive_older_than_stamps_idle_threads_only(tmp_path):
+    """archive_older_than sets archived_at on idle, not-yet-archived rows only."""
+    from sqlalchemy import text
+
+    repo, engine = await _repo(tmp_path)
+    sm = session_maker(engine)
+    now = datetime(2026, 5, 20, tzinfo=UTC)
+    idle = now - timedelta(days=10)
+    active = now - timedelta(days=1)
+
+    conv_sql = (
+        "INSERT INTO conversations "
+        "(id, agent_key, title, model_id, created_at, updated_at, archived_at) "
+        "VALUES (:id, 'builtin', 't', NULL, :ts, :ts, :arch)"
+    )
+    async with sm() as s:
+        await s.execute(text(conv_sql), {"id": "idle", "ts": idle, "arch": None})
+        await s.execute(text(conv_sql), {"id": "active", "ts": active, "arch": None})
+        # Already archived long ago — must not be re-stamped.
+        await s.execute(text(conv_sql), {"id": "done", "ts": idle, "arch": idle})
+        await s.commit()
+
+    cutoff = now - timedelta(days=7)
+    affected = await repo.archive_older_than(
+        "conversations", "updated_at", "archived_at", cutoff, now
+    )
+    assert affected == 1  # only the idle, not-yet-archived thread
+
+    async with sm() as s:
+        rows = dict((await s.execute(text("SELECT id, archived_at FROM conversations"))).all())
+    assert rows["idle"] is not None  # newly archived
+    assert rows["active"] is None  # too recent, untouched
+    # Pre-existing archived_at preserved (its original date, not re-stamped to now).
+    # Raw text() reads the column back as a string, so compare on the date prefix.
+    assert str(rows["done"]).startswith("2026-05-10")
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_archive_older_than_rejects_unlisted_columns(tmp_path):
+    repo, engine = await _repo(tmp_path)
+    with pytest.raises(UnknownPrunableTable):
+        await repo.archive_older_than(
+            "conversations", "updated_at", "title", datetime.now(tz=UTC), datetime.now(tz=UTC)
+        )
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_delete_older_than_rejects_unknown_table(tmp_path):
     """SQL injection guard: only allow-listed tables can be pruned."""
     repo, engine = await _repo(tmp_path)

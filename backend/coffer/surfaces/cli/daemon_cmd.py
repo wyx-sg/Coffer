@@ -10,12 +10,35 @@ import sys
 import time
 from pathlib import Path
 
+import psutil
 import typer
 
+from coffer.infrastructure.daemon import bootstrap
 from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.surfaces.cli import _client as _cli_client
 
 app = typer.Typer(help="Daemon lifecycle")
+
+# Marker substrings that identify a Coffer daemon process by its command line.
+# Covers both run-from-source (``-m coffer.infrastructure.daemon.entry``) and
+# the frozen ``coffer-daemon`` binary.
+_DAEMON_CMDLINE_MARKERS = ("coffer.infrastructure.daemon.entry", "coffer-daemon")
+
+
+def _pid_is_coffer_daemon(pid: int) -> bool:
+    """Return True iff ``pid`` is a live process whose command line looks like
+    a Coffer daemon.
+
+    P1-1: ``daemon stop`` reads the pid from daemon.json and must verify it
+    before SIGTERMing — a crashed daemon's pid can be recycled onto an
+    unrelated process, and blindly signalling it would kill a stranger.
+    """
+    try:
+        cmdline = psutil.Process(pid).cmdline()
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        return False
+    joined = " ".join(cmdline)
+    return any(marker in joined for marker in _DAEMON_CMDLINE_MARKERS)
 
 
 def _wait_for_daemon_json(path: Path, timeout: float = 10.0) -> bool:
@@ -42,8 +65,11 @@ def start() -> None:
     home = Path(os.environ.get("HOME", "~")).expanduser()
     daemon_json = home / ".coffer" / "daemon.json"
 
-    if daemon_json.exists():
-        typer.echo("daemon already running (daemon.json exists)")
+    # P1-1: key off live_daemon() (a real status probe), NOT mere file
+    # presence. A stale daemon.json left by a crashed daemon must trigger a
+    # respawn, not a false "already running".
+    if bootstrap.live_daemon() is not None:
+        typer.echo("daemon already running")
         raise typer.Exit(0)
 
     cmd = daemon_spawn_command()
@@ -87,16 +113,25 @@ def stop() -> None:
         typer.echo("daemon not running", err=True)
         raise typer.Exit(0)
 
+    home = Path(os.environ.get("HOME", "~")).expanduser()
+
+    # P1-1: verify the recorded pid IS a coffer daemon before signalling it.
+    # A crashed daemon's pid can be recycled onto an unrelated process; we must
+    # not SIGTERM a stranger. If it isn't ours, the daemon.json is stale —
+    # clean it up instead of killing whoever now holds that pid.
+    if not _pid_is_coffer_daemon(info.pid):
+        (home / ".coffer" / "daemon.json").unlink(missing_ok=True)
+        typer.echo("daemon pid is not a coffer daemon; cleaned up stale daemon.json")
+        return
+
     try:
         os.kill(info.pid, signal.SIGTERM)
     except ProcessLookupError:
         # already gone; just clean up daemon.json
-        home = Path(os.environ.get("HOME", "~")).expanduser()
         (home / ".coffer" / "daemon.json").unlink(missing_ok=True)
         typer.echo("daemon already exited; cleaned up stale daemon.json")
         return
 
-    home = Path(os.environ.get("HOME", "~")).expanduser()
     if _wait_for_daemon_json_gone(home / ".coffer" / "daemon.json", timeout=5.0):
         typer.echo("daemon stopped")
     else:

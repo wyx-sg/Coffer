@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from coffer.application.audit_service import AuditService
+from coffer.application.knowledge.retrieval import EmbeddingResolver, no_embedding
 from coffer.application.memory.service_helpers import body_sha, derive_name, validate_fact
 from coffer.application.memory.sync import MemoryReconciler
 from coffer.domain.audit import AuditEventType
@@ -53,6 +54,8 @@ class WriteDeps:
     notify: NotifyFn
     fact_path: FactPathFn
     store_ref: StoreRefFn
+    # Resolves the GLOBAL embedding config (embedding is no longer per-store).
+    embedding_resolver: EmbeddingResolver = no_embedding
 
     async def audit_and_notify(
         self,
@@ -128,11 +131,12 @@ async def write_and_index(
     fact: MemoryFact,
     store_ref: StoreRef,
     config: MemoryStoreConfig,
+    embedding_resolver: EmbeddingResolver,
 ) -> None:
     """Persist ``fact`` to ``fact_path``, index it, and regenerate ``MEMORY.md``."""
     await asyncio.to_thread(write_fact_file, fact_path, fact)
     ff = FactFile(fact=fact, path=fact_path, content_sha256=body_sha(fact.body))
-    embedding = config.to_embedding_config() if config.vector_enabled else None
+    embedding = await embedding_resolver() if config.vector_enabled else None
     await reconciler.index_one(store=store_ref, fact_file=ff, embedding=embedding)
     await asyncio.to_thread(regenerate_memory_index, fact_path.parent)
 
@@ -204,6 +208,7 @@ async def add_new_fact(
         fact=fact,
         store_ref=deps.store_ref(store_name, resolved.project_id),
         config=config,
+        embedding_resolver=deps.embedding_resolver,
     )
     await deps.audit_and_notify(
         AuditEventType.MEMORY_ADDED,
@@ -243,6 +248,7 @@ async def update_existing_fact(
         fact=updated,
         store_ref=deps.store_ref(store_name, resolved.project_id),
         config=config,
+        embedding_resolver=deps.embedding_resolver,
     )
     await deps.audit_and_notify(
         AuditEventType.MEMORY_UPDATED,

@@ -29,6 +29,9 @@ import {
   type SearchResponse,
 } from "./api";
 
+// Page size for the document tree; "Load more" grows the fetch limit by this.
+const DOCS_PAGE_SIZE = 100;
+
 export function useKnowledgeBaseDetail(name: string) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -46,11 +49,15 @@ export function useKnowledgeBaseDetail(name: string) {
   const [showSettings, setShowSettings] = useState(false);
   const [lastFile, setLastFile] = useState<File | null>(null);
 
+  // Documents are paged so a large KB doesn't load all at once; the tree shows a
+  // "Load more" affordance once more documents exist than are loaded.
+  const [docLimit, setDocLimit] = useState(DOCS_PAGE_SIZE);
   const docsQuery = useQuery({
-    queryKey: ["kb-documents", name],
-    queryFn: () => listDocuments(name, 100, 0),
+    queryKey: ["kb-documents", name, docLimit],
+    queryFn: () => listDocuments(name, docLimit, 0),
     enabled: Boolean(name),
   });
+  const loadMoreDocuments = () => setDocLimit((n) => n + DOCS_PAGE_SIZE);
   const metricsQuery = useQuery({
     queryKey: ["kb-metrics", name],
     queryFn: () => getKnowledgeBaseMetrics(name),
@@ -191,6 +198,7 @@ export function useKnowledgeBaseDetail(name: string) {
     showSettings,
     setShowSettings,
     docsQuery,
+    loadMoreDocuments,
     metricsQuery,
     kbQuery,
     docDetailQuery,

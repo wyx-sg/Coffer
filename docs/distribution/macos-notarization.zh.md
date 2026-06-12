@@ -43,14 +43,15 @@
 
 ### 3. 配置 Tauri 签名 bundle
 
-在 `desktop/tauri.conf.json` 中**新增**一个 `macOS` 键（如果已经存在则
-更新其中的 `signingIdentity`）：
+在 `desktop/tauri.conf.json` 中**新增**一个 `macOS` 键（`bundle` 块已存在，
+目前没有 `macOS` 键）：
 
 ```json
 {
   "bundle": {
     "macOS": {
-      "signingIdentity": null
+      "signingIdentity": null,
+      "entitlements": "entitlements.plist"
     }
   }
 }
@@ -58,25 +59,31 @@
 
 当 `signingIdentity` 为 `null` 时，Tauri 会从环境变量读取
 `APPLE_SIGNING_IDENTITY`（Tauri 2 的默认行为）。只有当你的 Tauri 版本
-的环境变量路径走不通时，才把它显式设为字面字符串值。
+的环境变量路径走不通时，才把它显式设为字面字符串值。`entitlements` 路径
+把已随仓库存在的 hardened-runtime 授权文件 `desktop/entitlements.plist`
+接上——这些授权是必需的，因为被打包的 `coffer-daemon` / `coffer-mcp-shim`
+PyInstaller sidecar 在公证强制的 hardened runtime 下运行，需要
+`disable-library-validation` 与 `allow-unsigned-executable-memory`。
 
-### 4. 翻开 release.yml 中被禁用的步骤
+### 4. 在 release.yml 中新增 codesign + notarize 步骤
 
-在 `.github/workflows/release.yml` 里，把：
+`.github/workflows/release.yml` 今天并没有一个被禁用的签名步骤——`bundle`
+job 里（在 `install Tauri CLI` 与 `cargo tauri build` 之间）只有一段注释，
+说明签名被推迟，以免未使用的 `APPLE_*` secrets 出现在仓库 secret 审计里。
+要启用签名，用下面的步骤替换那段注释。
 
-```yaml
-- name: codesign + notarize (disabled — no Apple Developer ID yet)
-  if: false
-```
+签名分布在 job 的两个位置，顺序如下：
 
-改成：
+1. **在 `cargo tauri build` 之前**（即今天那段注释所在的位置）：把证书导入
+   一个临时 keychain，让构建得以签 `.app`。`cargo tauri build` 会从环境读到
+   `APPLE_SIGNING_IDENTITY`，并在 bundle 阶段对 `.app` 做代码签名（带上
+   step 3 的 entitlements），所以也要把 step 5 的 `env:` 块加到
+   `cargo tauri build` 步骤上。
+2. **在 `collect artifacts (macOS)` 之后**（此时 `.dmg` 才存在）：对它做公证
+   与 staple。并在构建已签名后，去掉该 collect 步骤里的 `-unsigned` 改名逻辑。
 
-```yaml
-- name: codesign + notarize
-  if: startsWith(matrix.os, 'macos')
-```
-
-再用下面的 codesign + notarize 实际命令替换占位 `run:` 体。
+step 5 中的合并步骤为便于阅读把两半放在一起；实际接入时，请把 keychain 导入
+部分（build 之前）与 `notarytool` 循环（collect 之后）拆开，以遵循上述顺序。
 
 ### 5. 完整的 codesign + notarize 步骤
 

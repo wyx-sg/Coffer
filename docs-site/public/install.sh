@@ -10,7 +10,7 @@
 #   COFFER_VERSION       Release tag to install, e.g. v0.1.0 (default: latest)
 #   COFFER_NO_MODIFY_PATH  Set to 1 to skip adding install dir to shell profile
 #
-# Supported platforms: macOS (Apple Silicon) and Linux x86_64.
+# Supported platforms: macOS (Apple Silicon) only.
 #
 # Full install guide: https://wyx-sg.github.io/Coffer/guide/install
 
@@ -64,7 +64,7 @@ main() {
                 x86_64)
                     err "unsupported macOS architecture: x86_64 (Intel)
 Intel macOS builds are not published (GitHub's Intel runner pool is being
-retired). Apple Silicon (arm64) and Linux x86_64 are supported.
+retired). Only Apple Silicon (arm64) is published.
 See https://wyx-sg.github.io/Coffer/guide/install for alternatives."
                     ;;
                 *)       err "unsupported macOS architecture: $_arch" ;;
@@ -72,18 +72,17 @@ See https://wyx-sg.github.io/Coffer/guide/install for alternatives."
             archive_ext="tar.gz"
             ;;
         Linux)
-            case "$_arch" in
-                x86_64)  triple="x86_64-unknown-linux-gnu" ;;
-                *)
-                    err "unsupported Linux architecture: $_arch
-Linux ARM / aarch64 builds are not yet published. See https://wyx-sg.github.io/Coffer/guide/install for alternatives."
-                    ;;
-            esac
-            archive_ext="tar.gz"
+            err "unsupported OS: Linux
+Coffer publishes macOS (Apple Silicon) builds only — no Linux release is built.
+Install from source instead (Python 3.12+):
+  git clone https://github.com/wyx-sg/Coffer.git && cd Coffer
+  python3.12 -m venv .venv && . .venv/bin/activate
+  pip install -e ./backend
+See https://wyx-sg.github.io/Coffer/guide/install for the from-source guide."
             ;;
         *)
             err "unsupported OS: $_os
-Only macOS and Linux x86_64 are supported.
+Coffer publishes macOS (Apple Silicon) builds only.
 See https://wyx-sg.github.io/Coffer/guide/install for alternatives."
             ;;
     esac

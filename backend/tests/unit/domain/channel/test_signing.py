@@ -48,3 +48,18 @@ def test_verify_rejects_tampered_signature():
 
 def test_verify_rejects_empty_signature():
     assert verify_seatalk_signature(BODY, SECRET, "") is False
+
+
+def test_verify_rejects_whitespace_only_signature():
+    assert verify_seatalk_signature(BODY, SECRET, "  \n") is False
+
+
+def test_verify_rejects_empty_secret():
+    # An empty secret degenerates the MAC to sha256(body), which anyone can
+    # compute — it must never verify, even with the "matching" signature.
+    degenerate = seatalk_signature(BODY, "")
+    assert verify_seatalk_signature(BODY, "", degenerate) is False
+
+
+def test_verify_rejects_empty_secret_and_empty_signature():
+    assert verify_seatalk_signature(BODY, "", "") is False

@@ -23,10 +23,15 @@ import {
   type RecallResponse,
   type RetrievalMode,
 } from "./api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MemoryDetailHeader } from "./MemoryDetailHeader";
 import { MemoryFactTree } from "./MemoryFactTree";
 import { MemoryFactViewer } from "./MemoryFactViewer";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
+
+// Facts are paged so a large (MCP-grown) store doesn't load all at once; the
+// tree shows a "Load more" affordance once more facts exist than are loaded.
+const FACTS_PAGE_SIZE = 100;
 
 export function MemoryStoreDetailPage() {
   const { t } = useTranslation();
@@ -41,9 +46,15 @@ export function MemoryStoreDetailPage() {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState("");
 
+  // Styled confirmation dialogs replace native window.confirm for the two
+  // destructive actions (delete a fact, clear the whole store).
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
+
+  const [factLimit, setFactLimit] = useState(FACTS_PAGE_SIZE);
   const factsQuery = useQuery({
-    queryKey: ["memory-facts", store],
-    queryFn: () => listFacts(store, 100, 0),
+    queryKey: ["memory-facts", store, factLimit],
+    queryFn: () => listFacts(store, factLimit, 0),
     enabled: Boolean(store),
   });
   const metricsQuery = useQuery({
@@ -102,13 +113,9 @@ export function MemoryStoreDetailPage() {
   };
   const confirmDelete = () => {
     if (!liveSelected) return;
-    if (window.confirm(t("memory.detail.deleteConfirm", { name: liveSelected.name || "fact" }))) {
-      del.mutate(liveSelected.id);
-    }
+    setDeleteOpen(true);
   };
-  const confirmClear = () => {
-    if (window.confirm(t("memory.detail.clearConfirm", { store }))) clear.mutate();
-  };
+  const confirmClear = () => setClearOpen(true);
 
   const loadError = factsQuery.error ?? metricsQuery.error;
 
@@ -144,6 +151,8 @@ export function MemoryStoreDetailPage() {
           facts={factsQuery.data}
           selectedId={liveSelected?.id ?? null}
           isLoading={factsQuery.isPending}
+          isLoadingMore={factsQuery.isFetching}
+          onLoadMore={() => setFactLimit((n) => n + FACTS_PAGE_SIZE)}
           onSelect={selectFact}
         />
         <MemoryFactViewer
@@ -165,6 +174,30 @@ export function MemoryStoreDetailPage() {
           onDelete={confirmDelete}
         />
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={t("memory.detail.deleteTitle")}
+        description={t("memory.detail.deleteConfirm", { name: liveSelected?.name || "fact" })}
+        confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
+        pending={del.isPending}
+        onConfirm={() => {
+          if (liveSelected) {
+            del.mutate(liveSelected.id, { onSuccess: () => setDeleteOpen(false) });
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={clearOpen}
+        onOpenChange={setClearOpen}
+        title={t("memory.detail.clearTitle")}
+        description={t("memory.detail.clearConfirm", { store })}
+        confirmLabel={t("memory.detail.clearAll")}
+        pending={clear.isPending}
+        onConfirm={() => clear.mutate(undefined, { onSuccess: () => setClearOpen(false) })}
+      />
     </div>
   );
 }

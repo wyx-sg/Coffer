@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ChatPage } from "./ChatPage";
 import type { Conversation } from "@/lib/api/chat";
+import { ApiError } from "@/lib/api/errors";
 import type { Model } from "@/lib/api/models";
 
 vi.mock("@/lib/api/chat", () => ({
@@ -79,11 +80,12 @@ describe("ChatPage", () => {
     vi.clearAllMocks();
   });
 
-  test("shows conversation history panel with new chat button", async () => {
+  test("shows conversation history panel with active/archived filter", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     modelsApiMock.list.mockResolvedValue({ models: [] });
     renderPage();
-    expect(await screen.findByText("Conversations")).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: /active/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /archived/i })).toBeInTheDocument();
   });
 
   test("bare /chat shows the draft surface (composer), not a modal", async () => {
@@ -146,6 +148,74 @@ describe("ChatPage", () => {
     // A confirm dialog appears; the API is NOT called until confirmed.
     expect(await screen.findByText(/delete this conversation\?/i)).toBeInTheDocument();
     expect(chatApiMock.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  test("/chat/:id for an archived conversation opens it read-only with a restore CTA", async () => {
+    // P0-3: archived rows are not in the active list — the thread must still
+    // open (by-id fetch), read-only, instead of falling through to the draft.
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
+    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    chatApiMock.getConversation.mockResolvedValue(
+      makeConv({ archived_at: "2026-02-01T00:00:00Z" }),
+    );
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [
+        {
+          id: "m1",
+          conversation_id: "conv-1",
+          seq: 1,
+          role: "user",
+          content: [{ type: "text", text: "old question" }],
+          status: "complete",
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+    });
+    renderPage("/chat/conv-1");
+
+    expect(await screen.findByText("old question")).toBeInTheDocument();
+    // Read-only: no composer; a restore call-to-action instead.
+    expect(
+      screen.queryByRole("textbox", { name: /message input/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /restore/i })).toBeInTheDocument();
+  });
+
+  test("restoring an archived thread unarchives it and re-enables the composer", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
+    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    chatApiMock.getConversation
+      .mockResolvedValueOnce(makeConv({ archived_at: "2026-02-01T00:00:00Z" }))
+      .mockResolvedValue(makeConv({ archived_at: null }));
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    chatApiMock.unarchiveConversation.mockResolvedValue(makeConv({ archived_at: null }));
+    renderPage("/chat/conv-1");
+
+    fireEvent.click(await screen.findByRole("button", { name: /restore/i }));
+
+    await waitFor(() => expect(chatApiMock.unarchiveConversation).toHaveBeenCalled());
+    expect(chatApiMock.unarchiveConversation.mock.calls[0][0]).toBe("conv-1");
+    expect(
+      await screen.findByRole("textbox", { name: /message input/i }),
+    ).toBeInTheDocument();
+  });
+
+  test("an unknown /chat/:id shows a not-found state, not the silent draft surface", async () => {
+    // P0-3: a stale deep-link must say so explicitly — typing into the draft
+    // here would silently create a NEW conversation.
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
+    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    chatApiMock.getConversation.mockRejectedValue(
+      new ApiError("CONVERSATION_NOT_FOUND", "conversation not found"),
+    );
+    renderPage("/chat/nope");
+
+    expect(await screen.findByText("Conversation not found")).toBeInTheDocument();
+    expect(screen.queryByText(/start a new conversation/i)).not.toBeInTheDocument();
+
+    // The explicit way out: start a fresh chat from the not-found state.
+    fireEvent.click(screen.getByRole("button", { name: /start a new chat/i }));
+    expect(await screen.findByText(/start a new conversation/i)).toBeInTheDocument();
   });
 
   test("surfaces an error when creating a conversation fails", async () => {
