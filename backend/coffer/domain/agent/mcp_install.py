@@ -16,35 +16,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import MutableMapping
-from typing import Any
 
 import tomlkit
 
 from coffer.domain.agent.config_files import ConfigFileFormat
-from coffer.domain.errors import ConfigFileFormatInvalid
-
-COFFER_SERVER_KEY = "coffer"
-
-
-def _parse_json(text: str) -> dict[str, Any]:
-    if not text.strip():
-        return {}
-    try:
-        data = json.loads(text)
-    except ValueError as e:
-        raise ConfigFileFormatInvalid("json", str(e)) from e
-    if not isinstance(data, dict):
-        raise ConfigFileFormatInvalid("json", "top-level value must be an object")
-    return data
-
-
-def _parse_toml(text: str) -> tomlkit.TOMLDocument:
-    if not text.strip():
-        return tomlkit.document()
-    try:
-        return tomlkit.parse(text)
-    except Exception as e:  # tomlkit raises various ParseError subclasses
-        raise ConfigFileFormatInvalid("toml", str(e)) from e
+from coffer.domain.agent.mcp_entries import COFFER_SERVER_KEY, _parse_json, _parse_toml
 
 
 def apply_install(fmt: ConfigFileFormat, text: str, shim_path: str) -> str:

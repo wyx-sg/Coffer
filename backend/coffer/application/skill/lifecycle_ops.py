@@ -108,14 +108,38 @@ async def register_from_validated(
         details={"version_hash": validation.skill_md_sha256},
     )
 
-    # Auto-bind for every enabled agent (trust mode).
+    # Auto-bind for every enabled, following agent (FR-025).
     await auto_bind_all(service=service, skill=r, actor=actor)
     return r
 
 
 async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -> None:
+    from coffer.application.skill.follow_ops import audit_autobind_skipped
+
     for a in await service._rs.list(kind="agent"):
         if not a.enabled:
+            continue
+        # Per-agent follow policy (FR-025): agents that opted out of the
+        # master library, or excluded this skill, are skipped — audibly, so
+        # "imported but not delivered to agent X" is observable.
+        follow, exclusions = service._resolve_agent_skill_policy(a)
+        if not follow:
+            await audit_autobind_skipped(
+                service=service,
+                skill_name=skill.name,
+                agent_name=a.name,
+                reason="not_following",
+                actor=actor,
+            )
+            continue
+        if skill.name in exclusions:
+            await audit_autobind_skipped(
+                service=service,
+                skill_name=skill.name,
+                agent_name=a.name,
+                reason="excluded",
+                actor=actor,
+            )
             continue
         try:
             await service.enable_for(
@@ -124,16 +148,15 @@ async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -
         except (CofferError, OSError) as e:
             # A per-agent failure (TargetConflict, config validation, OSError)
             # must not abort auto-bind for the rest — but it must not be silent
-            # either: log + audit so "imported but not delivered to agent X" is
-            # observable (the user can re-enable later).
+            # either: log + audit so the user can re-enable later.
             logger.warning("auto-bind of skill %r to agent %r skipped: %s", skill.name, a.name, e)
-            with contextlib.suppress(Exception):
-                await service._audit.record(
-                    AuditEventType.SKILL_AUTOBIND_SKIPPED.value,
-                    ref=ResourceRef("skill", skill.name),
-                    actor=actor,
-                    details={"agent": a.name, "reason": str(e)},
-                )
+            await audit_autobind_skipped(
+                service=service,
+                skill_name=skill.name,
+                agent_name=a.name,
+                reason=str(e),
+                actor=actor,
+            )
 
 
 async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: str) -> None:

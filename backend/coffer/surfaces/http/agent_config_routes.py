@@ -1,16 +1,18 @@
 """/api/v1/agents/{name}/config-files and /mcp-install routes (spec 004 v2).
 
-Config-file view + edit (list + read + write) + one-click Coffer-MCP install.
-Domain errors (ConfigFileNotAllowed → 404, ConfigFileFormatInvalid → 422,
-ShimNotFound → 422, ResourceNotFound → 404) are mapped centrally by
-surfaces/http/errors.py.
+Config-file view + edit (list + read + write), directory-entry child files
+(read + write + delete under `/files/{relpath}`), and one-click Coffer-MCP
+install. Writes carry an optional `expected_fingerprint` for optimistic
+concurrency. Domain errors (ConfigFileNotAllowed → 404,
+ConfigFileFormatInvalid → 422, ConfigFileStale → 409, ShimNotFound → 422,
+ResourceNotFound → 404) are mapped centrally by surfaces/http/errors.py.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel
 
 from coffer.application.agent.config_file_service import (
@@ -34,14 +36,22 @@ router = APIRouter(
 )
 
 
+class DirChildOut(BaseModel):
+    relpath: str
+    size: int
+    modified_at: datetime
+
+
 class ConfigFileInfoOut(BaseModel):
     key: str
     display_name: str
     path: str
     format: ConfigFileFormat
+    kind: str
     exists: bool
     size: int | None
     modified_at: datetime | None
+    files: list[DirChildOut] | None = None
 
 
 class ConfigFileListOut(BaseModel):
@@ -53,10 +63,13 @@ class ConfigFileContentOut(BaseModel):
     format: ConfigFileFormat
     exists: bool
     content: str
+    fingerprint: str
+    memory_block: bool
 
 
 class ConfigFileWrite(BaseModel):
     content: str
+    expected_fingerprint: str | None = None
 
 
 class McpInstallStatusOut(BaseModel):
@@ -70,14 +83,30 @@ def _info_out(i: ConfigFileInfo) -> ConfigFileInfoOut:
         display_name=i.display_name,
         path=i.path,
         format=i.format,
+        kind=i.kind,
         exists=i.exists,
         size=i.size,
         modified_at=i.modified_at,
+        files=(
+            None
+            if i.files is None
+            else [
+                DirChildOut(relpath=f.relpath, size=f.size, modified_at=f.modified_at)
+                for f in i.files
+            ]
+        ),
     )
 
 
 def _content_out(c: ConfigFileContent) -> ConfigFileContentOut:
-    return ConfigFileContentOut(key=c.key, format=c.format, exists=c.exists, content=c.content)
+    return ConfigFileContentOut(
+        key=c.key,
+        format=c.format,
+        exists=c.exists,
+        content=c.content,
+        fingerprint=c.fingerprint,
+        memory_block=c.memory_block,
+    )
 
 
 def _status_out(s: McpInstallStatus) -> McpInstallStatusOut:
@@ -91,6 +120,54 @@ async def list_config_files(
 ) -> ConfigFileListOut:
     items = await svc.list_files(name)
     return ConfigFileListOut(items=[_info_out(i) for i in items])
+
+
+# Child-file routes are registered BEFORE the bare `{key}` routes so the more
+# specific `/files/` path can never be captured by a `{key}` match.
+@router.get("/{name}/config-files/{key}/files/{relpath:path}", response_model=ConfigFileContentOut)
+async def read_config_dir_file(
+    name: str,
+    key: str,
+    relpath: str,
+    svc: AgentConfigFileService = Depends(get_agent_config_file_service),  # noqa: B008
+) -> ConfigFileContentOut:
+    return _content_out(await svc.read_child(name, key, relpath))
+
+
+@router.put("/{name}/config-files/{key}/files/{relpath:path}", response_model=ConfigFileInfoOut)
+async def write_config_dir_file(
+    name: str,
+    key: str,
+    relpath: str,
+    body: ConfigFileWrite,
+    svc: AgentConfigFileService = Depends(get_agent_config_file_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> ConfigFileInfoOut:
+    return _info_out(
+        await svc.write_child(
+            name,
+            key,
+            relpath,
+            body.content,
+            expected_fingerprint=body.expected_fingerprint,
+            actor=actor,
+        )
+    )
+
+
+@router.delete(
+    "/{name}/config-files/{key}/files/{relpath:path}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_config_dir_file(
+    name: str,
+    key: str,
+    relpath: str,
+    svc: AgentConfigFileService = Depends(get_agent_config_file_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> None:
+    await svc.delete_child(name, key, relpath, actor=actor)
 
 
 @router.get("/{name}/config-files/{key}", response_model=ConfigFileContentOut)
@@ -110,7 +187,11 @@ async def write_config_file(
     svc: AgentConfigFileService = Depends(get_agent_config_file_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> ConfigFileInfoOut:
-    return _info_out(await svc.write_file(name, key, body.content, actor=actor))
+    return _info_out(
+        await svc.write_file(
+            name, key, body.content, expected_fingerprint=body.expected_fingerprint, actor=actor
+        )
+    )
 
 
 @router.get("/{name}/mcp-install", response_model=McpInstallStatusOut)

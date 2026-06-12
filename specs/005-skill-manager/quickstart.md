@@ -63,6 +63,61 @@ non-Coffer symlink), the operation refuses unless you pass `--force`. Forced
 operations back up the existing target to `<path>.coffer-backup-<timestamp>`
 before linking.
 
+## Follow the master library
+
+By default every agent **follows** the master library: every skill you import
+or fetch is delivered automatically, and newly registered skills appear
+without further action. Turn it off (or back on) per agent:
+
+```bash
+coffer agent follow codex --off
+coffer agent follow codex --on
+```
+
+While following, disabling a single skill adds it to the agent's **exclusion
+list** instead of touching bindings; set the list explicitly with repeatable
+`--exclude` flags (the list is replaced as a whole):
+
+```bash
+coffer agent follow codex --on --exclude my-skill --exclude another-skill
+```
+
+Turning follow off preserves the currently delivered skills as explicit
+per-skill bindings, so nothing disappears — you just switch to manual
+`enable`/`disable` curation. The same switch lives on the agent's Skills tab
+in the desktop app.
+
+## Adopt skills Coffer doesn't manage yet
+
+If an agent's skill folders contain hand-placed skills (copied by hand or
+installed by another tool), Coffer can list and adopt them. The scan covers
+`<config_dir>/skills` for both agent types plus `~/.agents/skills` for Codex:
+
+```bash
+coffer skill unmanaged claude-code
+coffer skill unmanaged claude-code --json
+```
+
+Managed Coffer links and internal entries like Codex's `.system` never appear.
+Symlinks pointing somewhere outside Coffer's master store are listed as
+foreign links — they are surfaced but never adoptable (their origin is
+unknown).
+
+Adopt a valid entry into the master store (it is validated, moved to
+`~/.coffer/skills/<name>/`, registered, and re-delivered to the agent as a
+managed link):
+
+```bash
+coffer skill adopt claude-code my-skill --location skills
+```
+
+Or delete an unwanted entry from the agent's workspace (disk only — never
+master content or bindings):
+
+```bash
+coffer skill rm-unmanaged claude-code my-skill --location skills
+```
+
 ## Update a Git-sourced skill
 
 ```bash

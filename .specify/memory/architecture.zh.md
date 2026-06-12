@@ -40,8 +40,8 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 | Kind         | Spec                                                         | 描述                                                                                                  |
 | ------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `mcp_server` | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md)       | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。 |
-| `agent`      | [004-agent-registry](../../specs/004-agent-registry/spec.md) | 一个已注册的编码 agent（如 Claude Code）。承载其配置目录以及 Coffer-MCP 的安装状态。                  |
-| `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。                                  |
+| `agent`      | [004-agent-registry](../../specs/004-agent-registry/spec.md) | 一个已注册的编码 agent（如 Claude Code）。承载其配置目录以及 Coffer-MCP 的安装状态。workspace 修订还将 agent 自身的文件呈现为多个面 (facet)——MCP entries（移除/开关/adopt 进 Coffer）、plugins（开关/Codex 卸载）、目录型配置项（逐子文件编辑）——全部在读取时从文件派生，绝不落库。 |
+| `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。workspace 修订新增了未托管 skill 扫描（把手工放置的 skill adopt 进主库）以及逐 agent 的 follow-master-library 策略（开关 + 排除列表，存于 agent 配置），由同步引擎负责调和。 |
 
 ## 代码布局 (Code layout)
 

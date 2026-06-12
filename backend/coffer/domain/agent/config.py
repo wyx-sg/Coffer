@@ -15,7 +15,7 @@ from __future__ import annotations
 import pathlib
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from coffer.domain.agent.types import AgentType
 
@@ -30,6 +30,10 @@ class AgentConfig(BaseModel):
     # standard location (``~/.claude`` / ``~/.codex``). This is the one
     # directory the user chooses; skills go to ``<config_dir>/skills``.
     config_dir: str | None = None
+    # Skill-delivery policy (spec 005 FR-025). True preserves the
+    # pre-amendment trust-mode: every master skill is auto-delivered.
+    follow_all_skills: bool = True
+    skill_exclusions: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod

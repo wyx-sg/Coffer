@@ -52,6 +52,18 @@ _STATUS: dict[str, int] = {
     "TARGET_CONFLICT": 409,
     "SKILL_NAME_MISMATCH": 409,
     "UPDATE_NOT_SUPPORTED": 400,
+    # agent workspace (specs 004/005 amendment)
+    "MCP_ENTRY_NOT_FOUND": 404,
+    "PLUGIN_NOT_FOUND": 404,
+    "UNMANAGED_SKILL_NOT_FOUND": 404,
+    "CONFIG_FILE_STALE": 409,
+    "MCP_ENTRY_TOGGLE_UNSUPPORTED": 422,
+    "MCP_ENTRY_PROTECTED": 422,
+    "MCP_ENTRY_SOURCE_AMBIGUOUS": 422,
+    "ADOPT_SECRET_UNRESOLVED": 422,
+    "AGENT_CONFIG_PARSE_ERROR": 422,
+    "PLUGIN_UNINSTALL_UNSUPPORTED": 422,
+    "UNMANAGED_SKILL_INVALID": 422,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a
@@ -70,13 +82,24 @@ def _envelope(code: str, message: str, details: dict[str, Any] | None = None) ->
     return {"error": {"code": code, "message": message, "details": details or {}}}
 
 
+def error_response(code: str, message: str, details: dict[str, Any] | None = None) -> JSONResponse:
+    """Build the standard error-envelope response for a domain error code.
+
+    Route handlers that need to attach ``details`` (the global ``CofferError``
+    handler carries none) return this directly so the envelope shape, status
+    mapping, and ``X-Coffer-Trace`` header stay identical to the handler's.
+    """
+    resp = JSONResponse(
+        status_code=_STATUS.get(code, 500), content=_envelope(code, message, details)
+    )
+    resp.headers["X-Coffer-Trace"] = get_trace_id()
+    return resp
+
+
 def register(app: FastAPI) -> None:
     @app.exception_handler(errors.CofferError)
     async def _handle_coffer(request: Request, exc: errors.CofferError) -> JSONResponse:
-        body = _envelope(exc.code, str(exc))
-        resp = JSONResponse(status_code=_STATUS.get(exc.code, 500), content=body)
-        resp.headers["X-Coffer-Trace"] = get_trace_id()
-        return resp
+        return error_response(exc.code, str(exc))
 
     @app.exception_handler(ValidationError)
     async def _handle_pydantic(request: Request, exc: ValidationError) -> JSONResponse:

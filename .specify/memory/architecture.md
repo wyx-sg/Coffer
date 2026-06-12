@@ -37,8 +37,8 @@ Currently registered kinds:
 | Kind         | Spec                                                          | Description                                                                                                                              |
 | ------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `mcp_server` | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md)       | A registered upstream MCP server. Carries transport configuration, credential references, and the per-server policies the gateway needs. |
-| `agent`      | [004-agent-registry](../../specs/004-agent-registry/spec.md) | A registered coding agent (e.g. Claude Code). Carries its config directory and the Coffer-MCP install state.                             |
-| `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories.                                                     |
+| `agent`      | [004-agent-registry](../../specs/004-agent-registry/spec.md) | A registered coding agent (e.g. Claude Code). Carries its config directory and the Coffer-MCP install state. The workspace amendment also surfaces the agent's own files as facets — MCP entries (remove/toggle/adopt into Coffer), plugins (toggle/Codex-uninstall), and directory config entries with per-child edit — all derived at read time, never stored. |
+| `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories. The workspace amendment adds an unmanaged-skill scan (adopt hand-placed skills into the master store) and a per-agent follow-master-library policy (flag + exclusions on the agent's config) that the sync engine reconciles. |
 
 ## Code layout
 

@@ -95,10 +95,14 @@ coffer agent config ls claude-code
 coffer agent config ls claude-code --json
 ```
 
-| Agent       | Keys                                             |
-| ----------- | ------------------------------------------------ |
-| Claude Code | `settings`, `settings_local`, `global`, `memory` |
-| Codex       | `config`, `memory`                               |
+| Agent       | Keys                                                              |
+| ----------- | ----------------------------------------------------------------- |
+| Claude Code | `settings`, `settings_local`, `global`, `instructions`, `subagents` |
+| Codex       | `config`, `instructions`, `hooks`                                 |
+
+(`instructions` is the human-authored instructions file — `CLAUDE.md` /
+`AGENTS.md`. `subagents` is a **directory** entry; see "Edit directory config
+entries" below.)
 
 Print one file's content:
 
@@ -122,8 +126,81 @@ coffer agent config edit claude-code settings --from-file ./new-settings.json
 On save, Coffer validates the content against the file's format (malformed
 `json`/`toml` is rejected and the on-disk file is left unchanged), writes it
 atomically, and keeps a `.bak` of the prior version so a bad edit is
-recoverable. The desktop Config-files tab offers the same edit + save, plus an
-in-editor find / replace convenience.
+recoverable. If the file changed on disk since you read it, the save is
+rejected and the editor offers a reload instead of silently overwriting. The
+desktop Config-files tab offers the same edit + save, plus an in-editor
+find / replace convenience.
+
+## Edit directory config entries
+
+Some config entries are directories of files rather than a single file —
+Claude Code's `subagents` entry (`~/.claude/agents/`, one Markdown file per
+personal subagent). List, write, and delete individual child files:
+
+```bash
+coffer agent config files claude-code subagents          # list child files
+coffer agent config write claude-code subagents reviewer.md --from-file ./reviewer.md
+echo "..." | coffer agent config write claude-code subagents reviewer.md
+coffer agent config rm claude-code subagents reviewer.md
+```
+
+Child paths are validated before any disk access (no `..`, no absolute paths,
+`.md` only); writes create the file if needed and keep the same atomic + `.bak`
+safety net; deletes preserve the prior content as `.bak`.
+
+## View and adopt an agent's own MCP entries
+
+Beyond Coffer's one-click entry, the MCP tab (and CLI) shows every MCP server
+configured in the agent's own files — derived live from the files, never
+copied:
+
+```bash
+coffer agent mcp entries claude-code
+coffer agent mcp entries claude-code --json
+```
+
+Each entry shows its name, source file, transport, the `enabled` flag where
+the format has one (Codex), and whether an equivalent `mcp_server` resource is
+already registered in Coffer. Env/header values never leave the daemon — only
+key names are listed.
+
+Remove or toggle an entry in place (a `.bak` of the file is kept):
+
+```bash
+coffer agent mcp remove-entry claude-code my-server
+coffer agent mcp toggle-entry codex my-server --disabled   # Codex only
+```
+
+**Adopt** a direct entry into Coffer to serve it to all agents through the
+gateway instead. Secret-looking env/header keys must be mapped to keychain
+references — the values go into the OS keychain, never into Coffer's database:
+
+```bash
+coffer agent mcp adopt claude-code my-server --secret API_KEY=coffer/mcp/my-server/api_key
+```
+
+Coffer registers the `mcp_server` resource, verifies it reads back, and only
+then removes the entry from the agent's file; any failure rolls back so you
+never lose a working entry. On a name conflict the error suggests an
+alternative — retry with `--name <suggested>`.
+
+## Toggle or uninstall a plugin
+
+The Plugins tab (and CLI) lists the agent's installed plugins, grouped by
+marketplace:
+
+```bash
+coffer agent plugin list codex
+coffer agent plugin disable codex my-plugin@my-marketplace
+coffer agent plugin enable codex my-plugin@my-marketplace
+coffer agent plugin uninstall codex my-plugin@my-marketplace   # Codex only
+```
+
+Toggles write only the documented config surface (the Codex entry's `enabled`
+field; Claude Code's `enabledPlugins` map in `settings.json`) — never the
+agents' internal state files. `uninstall` removes the Codex config entry and
+its cache directory; for Claude Code, uninstall requires the agent's own
+tooling (`claude plugin`), so Coffer offers disable plus a hint instead.
 
 ## Install Coffer's MCP into an agent
 

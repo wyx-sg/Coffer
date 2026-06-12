@@ -20,6 +20,16 @@ from coffer.surfaces.http.daemon_routes import router as daemon_router
 from coffer.surfaces.http.dependencies import get_audit_service
 
 
+@pytest.fixture(autouse=True)
+def _restore_home():
+    """The _client helpers overwrite os.environ["HOME"] without a fixture;
+    restore it so later test modules don't inherit a dead tmp HOME."""
+    prior = os.environ.get("HOME")
+    yield
+    if prior is not None:
+        os.environ["HOME"] = prior
+
+
 async def _client(tmp_path: Path, *, port: int = 8000):
     monkeypatched_home = tmp_path / "home"
     monkeypatched_home.mkdir()

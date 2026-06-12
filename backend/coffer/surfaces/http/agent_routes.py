@@ -39,10 +39,13 @@ class AgentCreate(BaseModel):
 
 
 class AgentPatch(BaseModel):
-    # FR-006: agents have no enable/disable concept — only config_dir and
-    # description are updatable. (No `enabled` field by design.)
+    # FR-006: agents have no enable/disable concept — only config_dir,
+    # description, and follow policy are updatable. (No `enabled` field by design.)
     config_dir: str | None = None
     description: str | None = None
+    # FR-025: follow-master-library policy fields.
+    follow_all_skills: bool | None = None
+    skill_exclusions: list[str] | None = None
 
 
 class AgentOut(BaseModel):
@@ -53,6 +56,9 @@ class AgentOut(BaseModel):
     # override or the type's standard location (~/.claude, ~/.codex).
     config_dir: str
     description: str | None
+    # FR-025: follow-master-library policy fields.
+    follow_all_skills: bool
+    skill_exclusions: list[str]
     created_at: datetime
     updated_at: datetime
 
@@ -82,6 +88,8 @@ def _to_out(r: Resource) -> AgentOut:
         type=cfg.type,
         config_dir=str(cfg.resolved_config_dir()),
         description=r.description,
+        follow_all_skills=cfg.follow_all_skills,
+        skill_exclusions=list(cfg.skill_exclusions),
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
@@ -163,6 +171,13 @@ async def update_agent(
             new_config_dir=body.config_dir if "config_dir" in sent else current.config_dir,
             actor=actor,
             description=body.description if "description" in sent else r.description,
+        )
+    if "follow_all_skills" in sent or "skill_exclusions" in sent:
+        r = await svc.update_skill_policy(
+            name=name,
+            follow_all_skills=body.follow_all_skills if "follow_all_skills" in sent else None,
+            skill_exclusions=body.skill_exclusions if "skill_exclusions" in sent else None,
+            actor=actor,
         )
     return _to_out(r)
 

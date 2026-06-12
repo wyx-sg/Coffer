@@ -31,6 +31,12 @@ class AuditEventType(StrEnum):
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"
     AGENT_MCP_UNINSTALLED = "agent_mcp_uninstalled"
+    # agent workspace (specs 004/005 amendment)
+    AGENT_CONFIG_FILE_DELETED = "agent_config_file_deleted"
+    AGENT_MCP_ENTRY_REMOVED = "agent_mcp_entry_removed"
+    AGENT_MCP_ENTRY_ADOPTED = "agent_mcp_entry_adopted"
+    AGENT_PLUGIN_TOGGLED = "agent_plugin_toggled"
+    AGENT_PLUGIN_UNINSTALLED = "agent_plugin_uninstalled"
     # spec 005-skill-manager
     SKILL_IMPORTED = "skill_imported"
     SKILL_FETCHED = "skill_fetched"
@@ -42,6 +48,8 @@ class AuditEventType(StrEnum):
     SKILL_AUTOBIND_SKIPPED = "skill_autobind_skipped"
     SKILL_RELINKED = "skill_relinked"
     SKILL_DRIFT_DETECTED = "skill_drift_detected"
+    SKILL_ADOPTED = "skill_adopted"
+    SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
 
 
 @dataclass

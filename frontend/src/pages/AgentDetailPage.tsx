@@ -11,6 +11,7 @@ import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEdit
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
 import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
+import { AgentPluginsTab } from "@/components/agents/AgentPluginsTab";
 import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -118,6 +119,7 @@ export function AgentDetailPage() {
           <TabsTrigger value="overview">{t("agents.workspace.overview")}</TabsTrigger>
           <TabsTrigger value="skills">{t("agents.workspace.skills")}</TabsTrigger>
           <TabsTrigger value="mcpServers">{t("agents.workspace.mcpServers")}</TabsTrigger>
+          <TabsTrigger value="plugins">{t("agents.workspace.plugins")}</TabsTrigger>
           <TabsTrigger value="config">{t("agents.workspace.config")}</TabsTrigger>
         </TabsList>
 
@@ -140,6 +142,10 @@ export function AgentDetailPage() {
 
         <TabsContent value="mcpServers" className="pt-6">
           <AgentMcpServersTab agentName={name} />
+        </TabsContent>
+
+        <TabsContent value="plugins" className="pt-6">
+          <AgentPluginsTab agent={agent} />
         </TabsContent>
 
         <TabsContent value="config" className="pt-6">

@@ -37,15 +37,17 @@ Pydantic v2 `BaseModel`。注册到 `ResourceService` 的 kind 专属 config sch
 | ------------ | -------------- | ---------------------------------------------------------------- |
 | `type`       | `AgentType`    | 必填；enum 值                                                    |
 | `config_dir` | `Path \| None` | 可选的绝对路径覆盖；读取时默认回退到 `type.default_config_dir()` |
+| `follow_all_skills` | `bool` | follow-master-library 策略开关（spec 005 FR-025）；默认 `True`，保持修订前 trust-mode 自动绑定的行为 |
+| `skill_exclusions` | `list[str]` | following 期间排除投递的 skill 名称列表；默认 `[]` |
 
-skill 投递到 `<config_dir>/skills`；配置文件 allowlist 基于 `config_dir` 解析。每个解析后的 `config_dir` 至多只能有一个 agent。
+skill 投递到 `<config_dir>/skills`；配置文件 allowlist 基于 `config_dir` 解析。每个解析后的 `config_dir` 至多只能有一个 agent。两个策略字段_存储_在这里（本 spec 的 schema），但其投递语义由 spec 005 负责（`SkillService` 的 follow 调和）；它们出现在 `AgentOut` 上，并可通过 `PATCH /agents/{name}` 更新。
 
 校验器：
 
 - `config_dir`（设置时）必须是绝对路径；注册时会自动创建 `<config_dir>/skills` 子目录，随后解析后的 `config_dir` 必须是一个已存在、可写的目录。
 - `config_dir` 不得位于 `/etc`、`/usr`、`/bin`、`/sbin`、`/System`（POSIX）或 `C:\Windows`、`C:\Program Files`（Windows）之内。
 - `model_config = ConfigDict(extra="forbid")`，拒绝未知字段。
-- 一个 `model_validator(mode="before")` 会从 dict 输入中剔除遗留的 `auto_detected` 键，使早期持久化了该（现已移除）标志的旧行在 `extra="forbid"` 下仍能加载。
+- 一个 `model_validator(mode="before")` 会从 dict 输入中剔除遗留的 `auto_detected` 键（并把遗留的 `skill_dir` 映射到 `config_dir` 上），使早期持久化了这些（现已移除）字段的旧行在 `extra="forbid"` 下仍能加载。
 
 ### `ConfigFileFormat` + 配置文件 allowlist (`domain/agent/config_files.py`)
 
@@ -56,26 +58,37 @@ skill 投递到 `<config_dir>/skills`；配置文件 allowlist 基于 `config_di
 的校验：`json` 用 `json.loads` 解析，`toml` 用 `tomllib.loads`；`markdown` 与
 `text` 永远合法。
 
+`ConfigFileKind` —— `file`、`directory` 的 `StrEnum`。`directory` 条目
+（FR-034）解析为一个文件目录而非单个文件；其 `format` 描述的是**子文件**。
+
 `ConfigFileSpec` —— 描述一个 allowlist 内文件的 frozen dataclass：
 
-| 字段           | 类型               | 说明                                                |
-| -------------- | ------------------ | --------------------------------------------------- |
-| `key`          | `str`              | API/CLI 寻址用的稳定标识（如 `settings`、`memory`） |
-| `display_name` | `str`              | 人类可读标签（如「User settings」）                 |
-| `path`         | `Path`             | 解析后的绝对路径（按宿主计算）                      |
-| `format`       | `ConfigFileFormat` | 决定校验方式                                        |
+| 字段           | 类型               | 说明                                                      |
+| -------------- | ------------------ | --------------------------------------------------------- |
+| `key`          | `str`              | API/CLI 寻址用的稳定标识（如 `settings`、`instructions`） |
+| `display_name` | `str`              | 人类可读标签（如「User settings」）                       |
+| `path`         | `Path`             | 解析后的绝对路径（按宿主计算）                            |
+| `format`       | `ConfigFileFormat` | 决定校验方式（目录条目时为子文件的校验方式）              |
+| `kind`         | `ConfigFileKind`   | `file`（默认）或 `directory`                              |
 
-`config_files_for(agent_type: AgentType) -> tuple[ConfigFileSpec, ...]` 返回精选
-allowlist。v1：
+`config_files_for(agent_type, config_dir=None) -> tuple[ConfigFileSpec, ...]`
+返回基于该 agent 实际配置目录解析的精选 allowlist。当前集合（原 `memory` 键
+更名为 `instructions`——这些是人工撰写的指令文件，与 agent 写入的 memory 不同，
+后者属于 spec 007 的领域）：
 
-| Agent         | `key`            | 路径                            | 格式       |
-| ------------- | ---------------- | ------------------------------- | ---------- |
-| `claude_code` | `settings`       | `~/.claude/settings.json`       | `json`     |
-| `claude_code` | `settings_local` | `~/.claude/settings.local.json` | `json`     |
-| `claude_code` | `global`         | `~/.claude.json`                | `json`     |
-| `claude_code` | `memory`         | `~/.claude/CLAUDE.md`           | `markdown` |
-| `codex`       | `config`         | `~/.codex/config.toml`          | `toml`     |
-| `codex`       | `memory`         | `~/.codex/AGENTS.md`            | `markdown` |
+| Agent         | `key`            | 路径                            | 格式       | kind        |
+| ------------- | ---------------- | ------------------------------- | ---------- | ----------- |
+| `claude_code` | `settings`       | `~/.claude/settings.json`       | `json`     | `file`      |
+| `claude_code` | `settings_local` | `~/.claude/settings.local.json` | `json`     | `file`      |
+| `claude_code` | `global`         | `~/.claude.json`                | `json`     | `file`      |
+| `claude_code` | `instructions`   | `~/.claude/CLAUDE.md`           | `markdown` | `file`      |
+| `claude_code` | `subagents`      | `~/.claude/agents/`             | `markdown` | `directory` |
+| `codex`       | `config`         | `~/.codex/config.toml`          | `toml`     | `file`      |
+| `codex`       | `instructions`   | `~/.codex/AGENTS.md`            | `markdown` | `file`      |
+| `codex`       | `hooks`          | `~/.codex/hooks.json`           | `json`     | `file`      |
+
+（`global` 始终锚定在 `$HOME`——即使配置目录本身被覆盖，Claude Code 也把
+`~/.claude.json` 放在主目录根部。）
 
 `~/.codex/auth.json` 被有意排除（凭据/状态，而非手工编辑的配置）。`~/.claude.json`
 被纳入（按产品决策），并由每次写入的 `.bak` 备份保护。
@@ -85,6 +98,24 @@ allowlist。v1：
 
 `spec_for(agent_type, key) -> ConfigFileSpec` 在 `key` 不在该类型 allowlist 内时
 抛出 `ConfigFileNotAllowed`（驱动 404 + 不访问文件系统的规则）。
+
+### 目录型配置条目 (FR-034/FR-035)
+
+`kind=directory` 的 allowlist 条目列出其子文件而非携带内容；磁盘上的目录即为
+事实来源（派生，从不存储）。v1 的目录条目：Claude Code 的 `subagents`
+（`~/.claude/agents/`，每个个人 subagent 一个 Markdown 文件，允许嵌套路径）。
+
+`DirEntryInfo` —— 描述一个子文件的 frozen dataclass：
+
+| 字段          | 类型       | 说明                       |
+| ------------- | ---------- | -------------------------- |
+| `relpath`     | `str`      | 相对条目目录的 POSIX 路径  |
+| `size`        | `int`      | 字节大小                   |
+| `modified_at` | `datetime` | 最后修改时间               |
+
+`validate_child_relpath(root, relpath) -> Path` 是子路径的安全边界（纯路径
+运算；symlink 逃逸在 I/O 时由 store 复查）：在任何文件系统访问之前，拒绝
+路径穿越（`..`）、绝对路径、反斜杠、隐藏段，以及小写 `.md` 之外的任何扩展名。
 
 ### Coffer MCP 条目 (`domain/agent/mcp_install.py`)
 
@@ -132,6 +163,16 @@ MCP-server 条目，不触碰文件系统。
 | `agent_mcp_installed`       | Coffer 的 MCP server 条目被写入某个 agent 的 MCP 配置                           |
 | `agent_mcp_uninstalled`     | Coffer 的 MCP server 条目被从某个 agent 的 MCP 配置中移除                       |
 
+workspace 修订新增：
+
+| 值                          | 触发时机                                                                 |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `agent_config_file_deleted` | 一个目录条目的子文件被删除（先前内容保留为 `.bak`）                      |
+| `agent_mcp_entry_removed`   | 一个直连 MCP 条目被从 agent 的配置文件中移除（FR-026）                   |
+| `agent_mcp_entry_adopted`   | 一个直连 MCP 条目被 adopt 为已注册的 `mcp_server` 资源（FR-028）         |
+| `agent_plugin_toggled`      | 一个 plugin 的启用状态在其文档化的配置面上被更改（FR-032）               |
+| `agent_plugin_uninstalled`  | 一个 Codex plugin 条目 + 缓存目录被移除（FR-033）                        |
+
 FR-011 要求的生命周期步骤——注册、更新与移除——通过已有的 kind-agnostic `resource_created`、`resource_updated`、`resource_deleted` 事件发出（每条都携带对应的 `agent:<name>` 引用）。这些不新增 `agent_*` 重复事件；surfaces 按 `kind='agent'` 加 kind-agnostic 事件类型过滤。一次成功的配置文件保存会发出 `agent_config_file_written`（引用 `agent:<name>`，details 为 `{key}`）。agent 没有启用/禁用的概念，且发现（discovery）是只读的、不注册任何内容，因此二者都不发出任何 audit 事件。
 
 ## Application 服务契约 (`backend/coffer/application/agent/`)
@@ -176,9 +217,17 @@ allowlist 上操作。
 
 | 方法                                                         | 用途                                                                                                                                                                                                                                           |
 | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_files(name) -> list[ConfigFileInfo]`                   | 对该 agent 类型的每个 `ConfigFileSpec`，返回 key、显示名、路径、格式、`exists`，存在时附带大小 + mtime。                                                                                                                                       |
-| `read_file(name, key) -> ConfigFileContent`                  | 解析 `spec_for(type, key)`；返回内容 + 格式 + `exists`。文件不存在 → 空内容、`exists=False`、不创建文件。                                                                                                                                      |
-| `write_file(name, key, content, *, actor) -> ConfigFileInfo` | 解析 `spec_for(type, key)`；`validate_content(format, content)`（畸形 json/toml → `ConfigFileFormatInvalid` → 422，文件不变）；`store.write_text_atomic`（原子 + `.bak`）；写一条 `agent_config_file_written`；返回刷新后的 `ConfigFileInfo`。 |
+| `list_files(name) -> list[ConfigFileInfo]`                   | 对该 agent 类型的每个 `ConfigFileSpec`，返回 key、显示名、路径、格式、`kind`、`exists`，存在时附带大小 + mtime。目录条目额外携带 `files`（递归 `.md` 列表，`DirEntryInfo` 行）。                                                              |
+| `read_file(name, key) -> ConfigFileContent`                  | 解析 `spec_for(type, key)`；返回内容 + 格式 + `exists` + `fingerprint` + `memory_block`。文件不存在 → 空内容、`exists=False`、`fingerprint=""`、不创建文件。                                                                                  |
+| `write_file(name, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | 解析 `spec_for(type, key)`；`validate_content(format, content)`（畸形 json/toml → `ConfigFileFormatInvalid` → 422，文件不变）；提供 `expected_fingerprint` 时，若磁盘内容自读取后已变化则以 `ConfigFileStale`（→ 409）拒绝（FR-036）；`store.write_text_atomic`（原子 + `.bak`）；写一条 `agent_config_file_written`；返回刷新后的 `ConfigFileInfo`。 |
+| `read_child(name, key, relpath) -> ConfigFileContent`        | 先 `validate_child_relpath`，再读取目录条目的一个子文件；返回形状同 `read_file`。                                                                                                                                                             |
+| `write_child(name, key, relpath, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | 子文件的写即建（create-on-write）保存；与 `write_file` 共用同一套校验 / 过期检查 / 原子写入 / audit 机制（FR-035）。                                                                                                |
+| `delete_child(name, key, relpath, *, actor) -> None`         | 删除一个子文件，先前内容保留为 `.bak`；记录 `agent_config_file_deleted`。                                                                                                                                                                     |
+
+`ConfigFileContent.fingerprint` 是用于乐观并发写入的内容指纹（FR-036）——
+读取返回它，写入带回它。`ConfigFileContent.memory_block` 在文本包含 spec 007
+所拥有的受管 memory-projection 块标记时为 true（FR-037）；编辑器只呈现提示，
+绝不解析该块。
 
 ### `AgentMcpService` (`application/agent/mcp_service.py`)
 
@@ -191,6 +240,72 @@ allowlist 上操作。
 | `install(name, actor)`   | 解析 shim 路径（`COFFER_MCP_SHIM_PATH` → `shutil.which("coffer-mcp-shim")` → 解释器脚本目录 → 打包回退；全部落空则抛 `ShimNotFound`）。`apply_install`；原子写入 + `.bak`；audit `agent_mcp_installed`。幂等。 |
 | `uninstall(name, actor)` | `apply_uninstall`；原子写入 + `.bak`；audit `agent_mcp_uninstalled`。条目不存在时为空操作。                                                                                                                    |
 
+## Workspace 修订 —— 派生实体（从不存储）
+
+workspace 各个面（FR-025..FR-033）在 agent 自己的配置文件上操作；磁盘上的文件
+始终是事实来源，Coffer 不保留任何副本。下面两个实体都是读取时的投影。
+
+### Agent MCP 条目 (`domain/agent/mcp_entries.py` —— `McpEntry`)
+
+agent 自身文件中配置的一个 MCP server 条目。从 claude_code 的 `~/.claude.json`
++ `settings.json` `mcpServers` 映射以及 codex 的 `config.toml`
+`[mcp_servers.*]` 表解析而来（纯文本变换；`tomlkit` 保留用户的 TOML 布局）。
+
+| 字段               | 类型             | 说明                                                                                                       |
+| ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| `name`             | `str`            | 配置文件中的条目键                                                                                         |
+| `source`           | `str`            | 来源文件的 allowlist key（`global`/`settings`/`config`）                                                   |
+| `transport`        | `str`            | `stdio` 或 `http`（派生：存在 `url` → `http`）                                                             |
+| `command` / `args` | `str?` / `tuple` | stdio 启动参数                                                                                             |
+| `env` / `headers`  | `dict[str,str]`  | `repr=False`——值可能携带密钥；HTTP 上只输出**键名**（`env_keys`、`header_keys`，外加标记疑似密钥键名的 `secret_keys`） |
+| `url`              | `str \| None`    | http 传输目标                                                                                              |
+| `enabled`          | `bool \| None`   | 格式定义了逐条目开关时的标志（codex）；claude_code 为 `None`                                               |
+| `is_coffer`        | `bool`           | Coffer 自己的 gateway 条目——移除/开关/adopt 均受保护                                                       |
+| `matches_resource` | `str \| None`    | 等价的已注册 `mcp_server` 资源，由 application 层填充                                                      |
+
+配套工具：`parse_entries`、`remove_entry`、`set_entry_enabled`（仅 TOML）、
+`secret_env_keys`（TOKEN/SECRET/PASSWORD/API_KEY/CREDENTIAL/AUTHORIZATION
+模式）以及 `to_transport_config`（条目 → `mcp_server` 传输配置，密钥键移入
+`credential_refs` 供 adopt 使用）。畸形文件抛出 `AgentConfigParseError`，
+列表视图将其降级为一条 `parse_errors` 而非整体失败（FR-030）。
+
+### Agent Plugin (`domain/agent/plugin_state.py` —— `PluginInfo` / `MarketplaceInfo`)
+
+一个已安装的 plugin，id 为 `<name>@<marketplace>`。Codex 的状态在
+`config.toml`（`[plugins."…"]` + `[marketplaces.*]`，可读，plugins 表可写）。
+Claude Code 的状态分布在内部清单文件 `installed_plugins.json` /
+`known_marketplaces.json`（只读输入——Coffer 绝不写它们）与文档化的写入面
+`settings.json` `enabledPlugins` 之间。
+
+| 字段          | 类型   | 说明                                                |
+| ------------- | ------ | ----------------------------------------------------- |
+| `id`          | `str`  | `<name>@<marketplace>`（按最后一个 `@` 拆分）       |
+| `name`        | `str`  |                                                     |
+| `marketplace` | `str`  |                                                     |
+| `enabled`     | `bool` | 配置无显式标志时默认 `True`                          |
+| `installed`   | `bool` | 是否出现在安装清单中；仅存于 settings 的孤儿为 `False` |
+
+`MarketplaceInfo` 携带 `name`、`source_type`、`source`（只读）。HTTP 视图
+（`PluginView`）用 `cache_present`（plugin 的缓存目录是否在磁盘上）替代
+`installed`——不做任何修复（FR-031）。
+
+### `AgentMcpEntryService` (`application/agent/mcp_entry_service.py`)
+
+| 方法                                                              | 用途                                                                                                                                                                            |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `list_entries(name)`                                              | 解析该 agent 类型所有承载 MCP 的文件；标注 `is_coffer` 与 `matches_resource`；收集逐文件的 `parse_errors`。                                                                     |
+| `set_enabled(name, entry, enabled, actor)`                        | 就地切换 `enabled` 标志（仅 codex `config.toml`——claude_code → `McpEntryToggleUnsupported` → 422）。`coffer` 条目 → `McpEntryProtected`。                                       |
+| `remove_entry(name, entry, source=None, actor)`                   | 从来源文件移除条目（原子 + `.bak`）；当 claude_code 在两个文件中都有同名条目时由 `source` 消歧（否则 `McpEntrySourceAmbiguous`）；audit `agent_mcp_entry_removed`。             |
+| `adopt(name, entry, source=None, new_name=None, secrets=None, actor)` | FR-028 升级：疑似密钥键必须映射到 keychain 引用（`AdoptSecretUnresolved` 列出未解析的键）；注册 `mcp_server` 资源 → 验证可回读 → 移除来源条目，之后任何失败都会回滚；audit `agent_mcp_entry_adopted`。 |
+
+### `AgentPluginService` (`application/agent/plugin_service.py`)
+
+| 方法                                  | 用途                                                                                                                                |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------|
+| `list_plugins(name)`                    | 按类型解析 plugin + marketplace 状态；从文档化的缓存目录计算 `cache_present`；收集 `parse_errors`。                                 |
+| `set_enabled(name, plugin_id, enabled, actor)` | 只写文档化的面（codex `config.toml` 条目 / claude_code `settings.json` `enabledPlugins`）；audit `agent_plugin_toggled`。      |
+| `uninstall(name, plugin_id, actor)`     | 仅 codex：移除 `[plugins."…"]` 条目并删除缓存目录；claude_code → `PluginUninstallUnsupported` → 422；audit `agent_plugin_uninstalled`。 |
+
 ### `ConfigFileStorePort`（Protocol，定义在 application）
 
 application 层接口；具体实现位于 `infrastructure/agent/config_file_store.py`
@@ -200,6 +315,10 @@ application 层接口；具体实现位于 `infrastructure/agent/config_file_sto
 - `stat(path) -> FileStat | None` —— 大小 + mtime，不存在时为 `None`。
 - `write_text_atomic(path, text) -> None` —— 临时文件 + `os.replace`；若目标存在，
   先复制到 `<path>.bak`；按需创建父目录。
+- `list_dir(root) -> list[DirEntryInfo] | None` —— `root` 下常规 `.md` 文件的
+  递归列表（跳过 symlink 文件，按 relpath 排序）；`root` 不是目录时为 `None`。
+- `delete_with_backup(path) -> bool` —— 先把内容复制到 `<path>.bak`，再删除文件。
+- `fingerprint(text) -> str` —— 支撑 FR-036 过期检查的内容指纹。
 
 ## Kind 装配 (`backend/coffer/application/agent/kind.py`)
 

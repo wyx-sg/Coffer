@@ -89,10 +89,13 @@ coffer agent config ls claude-code
 coffer agent config ls claude-code --json
 ```
 
-| Agent       | key                                              |
-| ----------- | ------------------------------------------------ |
-| Claude Code | `settings`、`settings_local`、`global`、`memory` |
-| Codex       | `config`、`memory`                               |
+| Agent       | key                                                                 |
+| ----------- | -------------------------------------------------------------------- |
+| Claude Code | `settings`、`settings_local`、`global`、`instructions`、`subagents` |
+| Codex       | `config`、`instructions`、`hooks`                                   |
+
+（`instructions` 是人工撰写的指令文件——`CLAUDE.md` / `AGENTS.md`。
+`subagents` 是一个**目录**条目；见下文「编辑目录型配置条目」。）
 
 打印某个文件的内容：
 
@@ -114,8 +117,75 @@ coffer agent config edit claude-code settings --from-file ./new-settings.json
 ```
 
 保存时，Coffer 会按文件格式校验内容（畸形的 `json`/`toml` 会被拒绝、磁盘文件保持
-不变），原子写入，并保留上一版本的 `.bak`，使错误的编辑可恢复。桌面端的配置文件
-标签页提供同样的编辑 + 保存，外加一个编辑器内查找/替换便利功能。
+不变），原子写入，并保留上一版本的 `.bak`，使错误的编辑可恢复。如果文件在你读取
+之后已在磁盘上被改动，保存会被拒绝，编辑器会提供重新加载，而不是悄悄覆盖。桌面端
+的配置文件标签页提供同样的编辑 + 保存，外加一个编辑器内查找/替换便利功能。
+
+## 编辑目录型配置条目
+
+有些配置条目是文件目录而非单个文件——Claude Code 的 `subagents` 条目
+（`~/.claude/agents/`，每个个人 subagent 一个 Markdown 文件）。列出、写入与
+删除单个子文件：
+
+```bash
+coffer agent config files claude-code subagents          # 列出子文件
+coffer agent config write claude-code subagents reviewer.md --from-file ./reviewer.md
+echo "..." | coffer agent config write claude-code subagents reviewer.md
+coffer agent config rm claude-code subagents reviewer.md
+```
+
+子路径在任何磁盘访问之前都会被校验（不允许 `..`、绝对路径，仅限 `.md`）；
+写入会按需创建文件，并享有同一套原子写入 + `.bak` 安全网；删除会把先前内容
+保留为 `.bak`。
+
+## 查看并 adopt agent 自己的 MCP 条目
+
+除了 Coffer 的一键条目之外，MCP 标签页（与 CLI）还会显示 agent 自身文件中
+配置的每一个 MCP server——从文件实时派生，绝不复制：
+
+```bash
+coffer agent mcp entries claude-code
+coffer agent mcp entries claude-code --json
+```
+
+每个条目显示其名称、来源文件、传输方式、格式定义了开关时的 `enabled` 标志
+（Codex），以及 Coffer 中是否已注册了等价的 `mcp_server` 资源。env/header 的
+值绝不离开 daemon——只列出键名。
+
+就地移除或开关一个条目（文件会保留 `.bak`）：
+
+```bash
+coffer agent mcp remove-entry claude-code my-server
+coffer agent mcp toggle-entry codex my-server --disabled   # 仅 Codex
+```
+
+把一个直连条目 **adopt** 进 Coffer，改为通过 gateway 服务所有 agent。疑似密钥
+的 env/header 键必须映射到 keychain 引用——值进入操作系统 keychain，绝不进入
+Coffer 的数据库：
+
+```bash
+coffer agent mcp adopt claude-code my-server --secret API_KEY=coffer/mcp/my-server/api_key
+```
+
+Coffer 先注册 `mcp_server` 资源、验证它可以回读，然后才从 agent 的文件中移除
+该条目；任何失败都会回滚，你绝不会丢失一个可用的条目。名称冲突时错误会给出
+建议名——用 `--name <suggested>` 重试。
+
+## 开关或卸载 plugin
+
+Plugins 标签页（与 CLI）列出 agent 已安装的 plugin，按 marketplace 分组：
+
+```bash
+coffer agent plugin list codex
+coffer agent plugin disable codex my-plugin@my-marketplace
+coffer agent plugin enable codex my-plugin@my-marketplace
+coffer agent plugin uninstall codex my-plugin@my-marketplace   # 仅 Codex
+```
+
+开关只写文档化的配置面（Codex 条目的 `enabled` 字段；Claude Code
+`settings.json` 中的 `enabledPlugins` 映射）——绝不写 agent 的内部状态文件。
+`uninstall` 会移除 Codex 的配置条目及其缓存目录；Claude Code 的卸载需要
+agent 自己的工具（`claude plugin`），因此 Coffer 提供禁用外加一条提示。
 
 ## 把 Coffer 的 MCP 安装到某个 agent
 

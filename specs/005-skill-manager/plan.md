@@ -151,6 +151,22 @@ frontend/src/i18n/locales/{en,zh}.json     # skill strings appended
 - **Git availability on user machines**: v1 requires `git` on PATH. Future enhancement: bundle libgit2-bindings.
 - **SKILL.md frontmatter rename** on update: rebuilding every symlink atomically requires careful ordering on Windows (junction must be removed before re-created). Plan covers this in unit tests.
 
+## Workspace amendment (delivered on `feature/agent-workspace`)
+
+The spec.md workspace amendment (FR-022..FR-026) added the unmanaged-skill
+scan and the follow-master-library policy. New modules per layer:
+
+- **Domain**: `skill/scan.py` (pure `classify` of scan entries into `UnmanagedSkill` results — managed links and dot-entries excluded, foreign links flagged and never adoptable); `agent/scan.py` (spec 004's tree: `scan_locations` per agent type — kept there because it depends on `AgentType`, which `domain/skill` must not import, Contract 5c).
+- **Infrastructure**: `skill/workspace_scan.py` (filesystem walk of the scan locations into `ScanEntry` values).
+- **Application**: `skill/unmanaged_ops.py` (list/adopt/delete unmanaged, FR-022..FR-024), `skill/follow_ops.py` (FR-025 follow reconciliation on flag/exclusion/skill-set changes), and `skill/binding_ops.py` (per-agent enable/disable split out of `service.py` for the file-size cap) — all free functions in the `lifecycle_ops.py` style.
+- **Surfaces**: `http/agent_unmanaged_skill_routes.py` (`/agents/{name}/unmanaged-skills*`); CLI `coffer skill unmanaged|adopt|rm-unmanaged` (in `skill_cmd.py`) and `coffer agent follow --on/--off --exclude` (in `agent_workspace_cmd.py`; the policy fields ride spec 004's `PATCH /agents/{name}`).
+- **Frontend**: `AgentSkillsTab` v2 — follow switch with exclusion-mode per-skill toggles, unmanaged-skills section with adopt/delete, foreign-link and degraded-binding badges.
+
+New audit events: `skill_adopted`, `skill_unmanaged_deleted`,
+`skill_autobind_skipped`, `skill_relinked`. No schema change — the scan is
+derived at request time and the follow policy lives on the agent resource's
+config (spec 004).
+
 ## Open items deferred to future specs
 
 - agentskills.io marketplace browsing UI.
