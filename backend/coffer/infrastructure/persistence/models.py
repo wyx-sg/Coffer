@@ -16,6 +16,7 @@ from sqlalchemy import (
     CheckConstraint,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -76,3 +77,16 @@ class RetentionPolicyModel(Base):
             name="ck_retention_positive_or_null",
         ),
     )
+
+
+class CredentialModel(Base):
+    """Fernet-encrypted secret values. Plaintext NEVER lands in this table —
+    only ciphertext produced by EncryptedCredentialStore. Timestamps are ISO-8601
+    strings written by the sync store (stdlib sqlite3, not the async ORM)."""
+
+    __tablename__ = "credentials"
+
+    ref: Mapped[str] = mapped_column(String, primary_key=True)
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
