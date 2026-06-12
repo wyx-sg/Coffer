@@ -20,9 +20,17 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from coffer.application.audit_service import AuditService
+from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
+from coffer.domain.errors import CredentialInUse
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_actor, get_audit_service, get_credential_store
+from coffer.surfaces.http.dependencies import (
+    get_actor,
+    get_audit_service,
+    get_credential_store,
+    get_resource_service,
+)
+from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.schemas import (
     CredentialExistsOut,
     CredentialGetOut,
@@ -106,9 +114,21 @@ async def delete_secret(
     ref: str,
     store: Any = Depends(get_credential_store),  # noqa: B008
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> Response:
-    """Remove `ref` from the credential store. Idempotent — absent is fine."""
+    """Remove `ref` from the credential store. Idempotent — absent is fine.
+
+    Refuses with 409 CREDENTIAL_IN_USE when a resource config still references
+    this credential: deleting it would silently break that channel / model /
+    mcp_server, whose config only keeps the credential ref. The 409 names the
+    citing resources so the user knows what to detach first.
+    """
+    citations = await resources.find_credential_citations(ref)
+    if citations:
+        names = [str(c) for c in citations]
+        exc = CredentialInUse(ref, names)
+        return error_response(exc.code, str(exc), {"references": names})
     store.delete(ref)
     await audit.record(
         AuditEventType.CREDENTIAL_DELETED.value,

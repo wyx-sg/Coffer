@@ -95,3 +95,19 @@ describe("ConversationList archive", () => {
     expect(screen.getByRole("tab", { name: /archived/i })).toHaveAttribute("aria-selected", "true");
   });
 });
+
+describe("ConversationListItem keyboard reachability", () => {
+  // The row action buttons are hover-only (opacity-0 group-hover:opacity-100),
+  // which makes them invisible — and thus effectively unreachable — for keyboard
+  // users. They must also reveal on keyboard focus, so each carries
+  // focus-visible:opacity-100 (the button itself) and group-focus-within:opacity-100
+  // (any sibling focused within the row).
+  test("hover-only action buttons reveal on focus, not just hover", () => {
+    renderList([conv("1", "Keep me")]);
+    for (const name of [/^rename$/i, /^archive$/i, /^delete$/i]) {
+      const btn = screen.getByRole("button", { name });
+      expect(btn.className).toContain("focus-visible:opacity-100");
+      expect(btn.className).toContain("group-focus-within:opacity-100");
+    }
+  });
+});

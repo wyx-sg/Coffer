@@ -5,6 +5,7 @@ import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
 
 vi.mock("@/lib/hooks/useDaemon", () => ({
   useDaemonStatus: vi.fn(),
+  useDaemonOutOfDate: vi.fn(() => ({ data: false })),
 }));
 
 vi.mock("@/lib/tauri", () => ({
@@ -13,8 +14,9 @@ vi.mock("@/lib/tauri", () => ({
   getDaemonInfo: vi.fn(),
 }));
 
-const { useDaemonStatus } = await import("@/lib/hooks/useDaemon");
+const { useDaemonStatus, useDaemonOutOfDate } = await import("@/lib/hooks/useDaemon");
 const useDaemonStatusMock = vi.mocked(useDaemonStatus);
+const useDaemonOutOfDateMock = vi.mocked(useDaemonOutOfDate);
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -26,9 +28,27 @@ describe("DaemonOfflineBanner", () => {
     useDaemonStatusMock.mockReturnValue({
       isError: false,
       error: null,
+      data: { version: "0.1.1" },
     } as never);
+    useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
     const { container } = render(wrap(<DaemonOfflineBanner />));
     expect(container.firstChild).toBeNull();
+  });
+
+  test("surfaces an out-of-date banner when the daemon version is stale, even though it is reachable", () => {
+    // Daemon responds fine (no query error) but reports an older version than
+    // the app expects — a stale detached daemon the new app reused (P2).
+    useDaemonStatusMock.mockReturnValue({
+      isError: false,
+      error: null,
+      data: { version: "0.1.0" },
+    } as never);
+    useDaemonOutOfDateMock.mockReturnValue({ data: true } as never);
+    render(wrap(<DaemonOfflineBanner />));
+    expect(screen.getByText(/out of date/i)).toBeInTheDocument();
+    // It reuses the recovery affordance (Reload in browser mode) rather than
+    // a separate auto-kill path.
+    expect(screen.getByTestId("daemon-banner-reload")).toBeInTheDocument();
   });
 
   test("shows the banner when the status query errors", () => {
@@ -101,6 +121,7 @@ describe("DaemonOfflineBanner (Tauri restart branch)", () => {
     }));
     vi.doMock("@/lib/hooks/useDaemon", () => ({
       useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
+      useDaemonOutOfDate: () => ({ data: false }),
     }));
 
     const { DaemonOfflineBanner: ReloadedBanner } = await import("./DaemonOfflineBanner");
@@ -126,6 +147,7 @@ describe("DaemonOfflineBanner (Tauri restart branch)", () => {
     }));
     vi.doMock("@/lib/hooks/useDaemon", () => ({
       useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
+      useDaemonOutOfDate: () => ({ data: false }),
     }));
 
     const { DaemonOfflineBanner: ReloadedBanner } = await import("./DaemonOfflineBanner");
@@ -153,6 +175,7 @@ describe("DaemonOfflineBanner (Tauri restart branch)", () => {
     }));
     vi.doMock("@/lib/hooks/useDaemon", () => ({
       useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
+      useDaemonOutOfDate: () => ({ data: false }),
     }));
 
     // Same module registry as the component under test, so getApiClient()
@@ -191,6 +214,7 @@ describe("DaemonOfflineBanner (Tauri restart branch)", () => {
     }));
     vi.doMock("@/lib/hooks/useDaemon", () => ({
       useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
+      useDaemonOutOfDate: () => ({ data: false }),
     }));
 
     const { DaemonOfflineBanner: ReloadedBanner } = await import("./DaemonOfflineBanner");

@@ -1,5 +1,7 @@
 # Data Model — 008 Agent Chat
 
+> 中文版: [data-model.zh.md](./data-model.zh.md)
+
 Entities, ports, the frozen agent-platform contract, SQLite schema, and event
 types for the chat platform and the built-in agent. Conversations / messages /
 models are **not** Resources.

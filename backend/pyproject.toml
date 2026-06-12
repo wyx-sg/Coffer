@@ -69,8 +69,6 @@ dev = [
     "import-linter>=2.0; python_version != '3.14' or sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "pre-commit>=4.6.0",
     "pytest-cov>=7.1.0",
-    "pip-tools>=7.5.3",
-    "asgi-lifespan>=2.1",
     "pyinstaller>=6.0",
 ]
 
@@ -114,7 +112,6 @@ markers = [
     "acceptance(spec, scenario): tags a test as covering a spec.md acceptance scenario",
     "benchmark: performance benchmark; only runs when COFFER_RUN_BENCHMARKS=1",
     "timeout(seconds): per-test wall-clock cap enforced by pytest-timeout",
-    "engine: real-engine integration test; only runs when COFFER_RUN_ENGINE_TESTS=1",
 ]
 
 [tool.importlinter]

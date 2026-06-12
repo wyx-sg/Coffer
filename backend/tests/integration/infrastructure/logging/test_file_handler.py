@@ -50,6 +50,38 @@ def test_file_handler_attaches_on_configure(
     assert handler.backupCount == 3, "Expected 3 backup files"
 
 
+def test_configure_logging_is_idempotent_for_file_handler(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Calling configure_logging() repeatedly must not stack duplicate file
+    handlers on the root logger.
+
+    The daemon (and tests) may call configure_logging() more than once; each
+    call previously appended another RotatingFileHandler, so every log line
+    was written N times and N file descriptors leaked. The attach must be
+    idempotent: exactly one RotatingFileHandler regardless of call count.
+    """
+    monkeypatch.setenv("COFFER_LOG_DIR", str(tmp_path))
+
+    root = logging.getLogger()
+    # Start from a clean slate so prior tests don't skew the count.
+    for h in list(root.handlers):
+        if isinstance(h, logging.handlers.RotatingFileHandler):
+            root.removeHandler(h)
+            h.close()
+
+    configure_logging()
+    configure_logging()
+    configure_logging()
+
+    file_handlers = [
+        h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)
+    ]
+    assert len(file_handlers) == 1, (
+        f"configure_logging() stacked {len(file_handlers)} file handlers; expected 1"
+    )
+
+
 def test_file_handler_writes_to_coffer_log_dir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

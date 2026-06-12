@@ -97,17 +97,25 @@ def test_main_refuses_to_start_when_a_daemon_is_already_live(
         started_at=datetime.now(tz=UTC),
         binary_path="/fake/coffer-daemon",
     )
-    monkeypatch.setattr(bootstrap, "live_daemon", lambda: existing)
+    # acquire_or_existing returns (existing, None) under the spawn lock when a
+    # daemon is already live — entry.main must treat a None socket as "exit".
+    monkeypatch.setattr(bootstrap, "acquire_or_existing", lambda: (existing, None))
 
     ran: list[bool] = []
     monkeypatch.setattr(entry.uvicorn, "run", lambda *a, **k: ran.append(True))
-    monkeypatch.setattr(
-        bootstrap,
-        "acquire",
-        lambda: (_ for _ in ()).throw(AssertionError("acquire must not run")),
-    )
     monkeypatch.setattr(entry, "_install_signal_handlers", lambda: None)
 
     entry.main()  # must return cleanly
 
     assert ran == [], "uvicorn.run must NOT be called when a daemon is already live"
+
+
+def test_entry_does_not_import_the_knowledge_engine() -> None:
+    """entry.py is the frozen daemon entrypoint; importing the knowledge engine
+    here would pull sqlite-vec into the daemon layer and break engine
+    confinement. vec availability is reported via /daemon/status instead."""
+    import pathlib
+
+    src = pathlib.Path(entry.__file__).read_text()
+    assert "vec_index" not in src
+    assert "--check-vec" not in src

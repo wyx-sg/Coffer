@@ -84,6 +84,8 @@ export function KnowledgeBaseDetailPage() {
           docs={kb.docsQuery.data}
           selectedId={kb.selectedId}
           isLoading={kb.docsQuery.isPending}
+          isLoadingMore={kb.docsQuery.isFetching}
+          onLoadMore={kb.loadMoreDocuments}
           onSelect={kb.selectDoc}
         />
         <KnowledgeBaseDocViewer

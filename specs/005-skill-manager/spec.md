@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feature/skill-manager`
 **Created**: 2026-05-22
-**Status**: Draft
+**Status**: Accepted
 **Input**: User description: "Coffer manages portable AI skills using the open AgentSkills standard (agentskills.io). One canonical store lives at `~/.coffer/skills/`; per-agent visibility is a directory symlink/junction into the `skills/` subfolder of each agent's config directory. Users can import skills from local paths or fetch them from public Git repositories, then enable or disable each skill per registered agent. v1 supports Claude Code and Codex CLI as sync targets (each registered as a Resource of kind `agent` per spec 004-agent-registry)."
 
 ## User Scenarios & Testing

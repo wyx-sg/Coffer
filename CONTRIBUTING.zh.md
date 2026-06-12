@@ -42,6 +42,22 @@ make verify               # unit + integration + contract (skip e2e)
 make verify-all           # everything
 ```
 
+## 锁文件
+
+`backend/uv.lock` 是后端依赖版本的唯一事实来源。它由 [uv](https://docs.astral.sh/uv/) 从 `backend/pyproject.toml` 生成，把每个传递依赖都钉到确切的版本 + 哈希。
+
+- **CI 与发布以 frozen 方式安装。** `.github/workflows/ci.yml` 与 `release.yml` 跑 `uv sync --frozen`，它只安装 `uv.lock` 里的确切版本，并在锁文件与 `pyproject.toml` 不同步时失败。正是这一点让打 tag 的发布产物可复现 —— 它们永远不会按 `pyproject.toml` 里的 `>=` 下界来构建。
+- **`pyproject.toml` 声明下界；`uv.lock` 钉版本。** 在 `pyproject.toml`（人类可读的约束）里改依赖；绝不手改 `uv.lock`。
+- **改依赖后刷新锁文件。** 在 `pyproject.toml` 里新增、升级或移除依赖后，运行：
+
+  ```bash
+  make lock        # = uv lock --project backend
+  ```
+
+  把更新后的 `uv.lock` 与 `pyproject.toml` 的改动放在同一次提交里。如果某个 PR 的锁文件与 `pyproject.toml` 漂移，CI 的 frozen 安装会拒绝它。
+
+- **本地安装**（`make install`）走的是 editable 的 `pip install`，所以日常开发不需要 uv。只有刷新锁文件这一步以及 CI/发布安装才走 uv。
+
 ## 安全
 
 不要在公开 issue 里报告安全问题。见 [`SECURITY.md`](./SECURITY.md)。

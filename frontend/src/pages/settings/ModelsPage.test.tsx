@@ -1,6 +1,6 @@
 // pages/settings/ModelsPage.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ModelsPage } from "./ModelsPage";
@@ -101,6 +101,43 @@ describe("ModelsPage", () => {
     // enable toggle.
     expect(screen.getByText("Embedding")).toBeInTheDocument();
     expect(screen.getByRole("switch")).toBeInTheDocument();
+  });
+
+  test("a single delete click does NOT delete — it opens a confirm dialog first", async () => {
+    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    modelsApiMock.remove.mockResolvedValue(undefined);
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Claude Sonnet")).toBeInTheDocument());
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+    });
+
+    // The confirm dialog is shown and nothing has been deleted yet.
+    await waitFor(() => expect(screen.getByText("Delete model?")).toBeInTheDocument());
+    expect(modelsApiMock.remove).not.toHaveBeenCalled();
+  });
+
+  test("confirming the dialog deletes the model", async () => {
+    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    modelsApiMock.remove.mockResolvedValue(undefined);
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Claude Sonnet")).toBeInTheDocument());
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+    });
+    await waitFor(() => screen.getByText("Delete model?"));
+
+    const dialog = screen.getByRole("dialog");
+    const confirmBtn = within(dialog).getByRole("button", { name: /^delete$/i });
+    act(() => {
+      fireEvent.click(confirmBtn);
+    });
+
+    await waitFor(() => expect(modelsApiMock.remove).toHaveBeenCalledWith("model-1"));
   });
 
   test("opens add model dialog on Add model click", async () => {

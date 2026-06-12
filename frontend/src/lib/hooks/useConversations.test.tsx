@@ -25,6 +25,20 @@ vi.mock("@/lib/api/chat", () => ({
   },
 }));
 
+// onError → toast is the default for every mutation (agents/frontend.md §5):
+// a failed mutation must announce itself, not fail silently. Spy the toast.
+const errorToast = vi.fn();
+vi.mock("@/components/ui/toast", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/ui/toast")>();
+  return {
+    ...actual,
+    useToast: () => ({
+      toast: { error: errorToast, success: vi.fn(), info: vi.fn() },
+      dismiss: vi.fn(),
+    }),
+  };
+});
+
 const { chatApi } = await import("@/lib/api/chat");
 const chatApiMock = chatApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
@@ -238,5 +252,41 @@ describe("useDeleteConversation", () => {
 
     expect(chatApiMock.deleteConversation).toHaveBeenCalledWith("conv-1");
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+
+  test("toasts an error when the delete fails (not silent)", async () => {
+    chatApiMock.deleteConversation.mockRejectedValue(new Error("server down"));
+
+    const { result } = renderHook(() => useDeleteConversation(), {
+      wrapper: makeWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync("conv-1").catch(() => {});
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(errorToast).toHaveBeenCalledTimes(1);
+    expect(errorToast).toHaveBeenCalledWith(expect.stringContaining("server down"));
+  });
+});
+
+describe("conversation mutation error toasts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("rename failure surfaces a toast", async () => {
+    chatApiMock.updateConversation.mockRejectedValue(new Error("rename boom"));
+
+    const { result } = renderHook(() => useRenameConversation(), {
+      wrapper: makeWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({ id: "conv-1", title: "x" }).catch(() => {});
+    });
+
+    await waitFor(() => expect(errorToast).toHaveBeenCalledWith(expect.stringContaining("rename boom")));
   });
 });

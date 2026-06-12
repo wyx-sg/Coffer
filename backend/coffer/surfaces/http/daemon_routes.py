@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
+import coffer
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
@@ -37,6 +38,29 @@ router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
 # Lives here (the reader) so app.py stays under the 400-line guideline and
 # daemon_routes no longer needs a circular import of app at request time.
 _DaemonPhase = Literal["starting", "ready", "draining"]
+
+_vec_available_cache: bool | None = None
+
+
+def _vec_available() -> bool:
+    """Whether sqlite-vec's vec0 extension loads in this process (cached once).
+
+    Function-local import keeps the knowledge engine out of this module's
+    import graph (Contract 6) — surfaces may reach knowledge, but only lazily.
+    Availability is fixed for a process lifetime, so we probe once.
+    """
+    global _vec_available_cache
+    if _vec_available_cache is None:
+        try:
+            from coffer.infrastructure.knowledge.vec_index import VecIndex
+
+            probe = VecIndex(":memory:", dimensions=None, kind="_probe", resource_name="_probe")
+            _vec_available_cache = bool(probe.available())
+        except Exception:
+            _vec_available_cache = False
+    return _vec_available_cache
+
+
 _DAEMON_PHASE: _DaemonPhase = "starting"
 
 
@@ -122,10 +146,15 @@ async def get_status(
             upstream_summary = None
     return DaemonStatusOut(
         status=phase,
-        version="0.1.0",
+        # Sourced from the installed package metadata (coffer.__version__),
+        # never a hardcoded literal — so a new app and an old detached daemon
+        # it reuses report different versions and the skew is detectable
+        # client-side (P2) instead of silently passing.
+        version=coffer.__version__,
         started_at=_STARTED_AT,
         port=_PORT,
         upstream_summary=upstream_summary,
+        vec_available=_vec_available(),
     )
 
 

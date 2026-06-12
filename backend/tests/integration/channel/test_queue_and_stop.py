@@ -94,6 +94,63 @@ async def test_stop_command_interrupts_the_running_turn(env: ChannelEnv) -> None
     assert not any(t.startswith("echo:") for t in adapter.texts())
 
 
+async def test_stop_after_new_interrupts_the_still_draining_turn(env: ChannelEnv) -> None:
+    # A turn is running on conversation A; /new rebinds the peer to a fresh
+    # conversation B while A is still draining. /stop must interrupt the turn
+    # that is actually running (A), not the idle bound conversation (B) — and
+    # it must not falsely claim "Stopping…" against B.
+    gated = GatedAdapter()
+    env.provider.adapter = gated
+    resource, adapter = await env.paired_channel()
+
+    await env.processor.on_message(inbound("tg", "owner", "long job"))
+    await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    running_conversation = peer.active_conversation_id
+    assert running_conversation is not None
+    assert running_conversation in active_turns()
+
+    await env.processor.on_message(inbound("tg", "owner", "/new"))
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    fresh_conversation = peer.active_conversation_id
+    assert fresh_conversation is not None
+    assert fresh_conversation != running_conversation
+    # The fresh conversation has no turn — interrupting it would be a no-op.
+    assert fresh_conversation not in active_turns()
+    assert running_conversation in active_turns()
+
+    await env.processor.on_message(inbound("tg", "owner", "/stop"))
+
+    assert "⏹ Stopping…" in adapter.texts()
+    # The turn that was actually running is the one that gets stopped.
+    await wait_until(lambda: running_conversation not in active_turns())
+    assert not any(t.startswith("echo:") for t in adapter.texts())
+
+
+async def test_unbind_mid_turn_interrupts_the_draining_turn(env: ChannelEnv) -> None:
+    # A config disable / shutdown unbinds the channel mid-turn. Cancelling only
+    # the renderer leaves the orchestrator turn running: its reply lands in the
+    # web UI while the bot goes silent. Unbind must interrupt the live turn.
+    gated = GatedAdapter()
+    env.provider.adapter = gated
+    resource, _adapter = await env.paired_channel()
+
+    await env.processor.on_message(inbound("tg", "owner", "long job"))
+    await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    running_conversation = peer.active_conversation_id
+    assert running_conversation is not None
+    assert running_conversation in active_turns()
+
+    env.processor.unbind(resource.name)
+
+    # The live turn is interrupted instead of completing undelivered.
+    await wait_until(lambda: running_conversation not in active_turns())
+
+
 @pytest.mark.acceptance(spec="009-channels", scenario="messages during a turn are queued in order")
 async def test_messages_sent_mid_turn_run_as_consecutive_turns_in_order(env: ChannelEnv) -> None:
     gated = GatedAdapter()

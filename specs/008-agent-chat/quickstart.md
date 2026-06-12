@@ -1,5 +1,7 @@
 # Quickstart — Coffer Agent Chat
 
+> 中文版: [quickstart.zh.md](./quickstart.zh.md)
+
 The Chat page lets you talk to **Coffer Assistant** — Coffer's built-in agent.
 The agent can use everything in your vault: your MCP server tools, your memory
 stores, your knowledge bases, and your skills.
@@ -41,7 +43,7 @@ Ask it something that needs your vault, for example:
 
 > What do my memory notes say about OAuth?
 
-The agent calls the matching tool (`coffer__search_memory`, `coffer__kb_search`,
+The agent calls the matching tool (`coffer__recall`, `coffer__search_knowledge`,
 `coffer__load_skill`, or any of your MCP server tools). Each call shows up in the
 thread as an inline card you can expand to see the inputs and result.
 

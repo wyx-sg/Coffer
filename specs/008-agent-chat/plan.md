@@ -1,5 +1,7 @@
 # Implementation Plan: 008 — Agent Chat
 
+> 中文版: [plan.zh.md](./plan.zh.md)
+
 **Branch**: `feature/agent-chat`
 **Spec**: [./spec.md](./spec.md)
 **Status**: Draft

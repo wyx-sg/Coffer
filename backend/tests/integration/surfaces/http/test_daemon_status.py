@@ -24,7 +24,12 @@ async def test_status_returns_ready(tmp_path, monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "ready"
-    assert body["version"] == "0.1.0"
+    # Version is sourced from the installed package metadata, not a hardcoded
+    # literal, so a freshly-built app and the daemon it reuses never disagree
+    # silently (P2: undetectable version skew).
+    from coffer import __version__
+
+    assert body["version"] == __version__
     assert "started_at" in body
     assert "port" in body
 

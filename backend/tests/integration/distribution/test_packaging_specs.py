@@ -81,6 +81,22 @@ def _collect_submodules_args(tree: ast.AST) -> set[str]:
     return args
 
 
+def _collect_data_files_args(tree: ast.AST) -> set[str]:
+    """Return the first-positional-arg string for every collect_data_files() call."""
+    args: set[str] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "collect_data_files"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            args.add(node.args[0].value)
+    return args
+
+
 def _collect_hidden_string_literals(tree: ast.AST) -> set[str]:
     """Return string literals appearing inside list/tuple constructors at
     module scope. Used to verify hidden imports like 'anyio._backends._asyncio'.
@@ -266,6 +282,44 @@ def test_daemon_spec_ships_migrations_directory() -> None:
         "daemon spec must include the migrations data tuple "
         f"({migrations_src!r}, {migrations_dst!r}) in datas"
     )
+
+
+def test_daemon_spec_collects_sqlite_vec_data_files() -> None:
+    """The daemon spec MUST call collect_data_files('sqlite_vec'). sqlite-vec
+    ships its loadable native extension (vec0.dylib / vec0.so / vec0.dll) as
+    *package data*, not a Python submodule — collect_submodules() alone never
+    captures it. Without this, a frozen build loses the vec0 extension and
+    vector retrieval silently degrades to keyword-only (VecIndex.available()
+    swallows the load failure)."""
+    tree = _parse_spec(_REPO / "backend" / "coffer-daemon.spec")
+    data_pkgs = _collect_data_files_args(tree)
+    assert "sqlite_vec" in data_pkgs, (
+        "daemon spec must call collect_data_files('sqlite_vec') so the frozen "
+        "build ships sqlite-vec's loadable vec0 extension; without it vector "
+        "retrieval silently degrades to keyword-only in packaged builds"
+    )
+
+
+def test_daemon_spec_includes_kb_memory_chat_hidden_imports() -> None:
+    """The hidden-imports list predates specs 006 (knowledge base), 007
+    (memory), and 008 (agent chat), whose runtime deps are imported LAZILY
+    (inside functions) so PyInstaller's static analysis misses them. Declare
+    them explicitly so a frozen daemon can convert documents, embed, run the
+    vector index, and drive the built-in chat agent.
+
+    Each of these is a real lazy importer in the codebase:
+      * sqlite_vec  — infrastructure/knowledge/vec_index.py
+      * markitdown  — infrastructure/knowledge/converters/markitdown_converter.py
+      * openai      — infrastructure/knowledge/embeddings.py
+      * langgraph / langchain — infrastructure/chat/*
+    """
+    tree = _parse_spec(_REPO / "backend" / "coffer-daemon.spec")
+    submodules = _collect_submodules_args(tree)
+    for pkg in ("sqlite_vec", "markitdown", "openai", "langgraph", "langchain"):
+        assert pkg in submodules, (
+            f"daemon spec must collect_submodules({pkg!r}) — it is imported "
+            "lazily by specs 006/007/008 code and PyInstaller misses it statically"
+        )
 
 
 def test_shim_spec_includes_anyio_backend_hidden_import() -> None:
@@ -478,6 +532,15 @@ def test_smoke_test_bundle_script_present_and_invokes_shim() -> None:
         )
     assert any("[[:space:]]" in ln for ln in grep_lines), (
         "smoke_test_bundle.sh must use whitespace-tolerant matching for the JSON-RPC reply"
+    )
+
+    # A frozen build that drops sqlite-vec's vec0 extension silently degrades
+    # vector retrieval to keyword-only (VecIndex.available() swallows the load
+    # failure). The smoke test must probe vec availability against the bundled
+    # daemon so that regression reds the build instead of shipping quietly.
+    assert "vec" in contents.lower() and "available" in contents.lower(), (
+        "smoke_test_bundle.sh must probe sqlite-vec availability so a frozen "
+        "build that lost the vec0 extension fails the smoke test"
     )
 
     if os.environ.get("COFFER_RUN_SMOKE") != "1":

@@ -3,7 +3,7 @@
 > English: [spec.md](./spec.md)
 
 **Feature Branch**: `feature/002-mcp-gateway-web` (PR #23，建立在 `feature/mcp-gateway` 之上)
-**Status**: Draft
+**Status**: Accepted
 **Input**: 001-mcp-gateway 的 UI 以功能骨架的形式交付：裸 tailwind 默认值、ad-hoc 间距、没有首次使用引导。本 spec 把这个骨架升级为一个真正的产品壳——一套连贯的视觉语言、一个建立在单一统一概念（每一种被管理的实体都是一种 _resource kind_）之上的信息架构，以及让首次访客（而不是绕过鉴权的 Playwright fixture）就能用上 gateway 的端到端流程。
 
 **Scope note**: Coffer 的 spec 按后端/前端切分。`001-mcp-gateway` 拥有 daemon、MCP gateway、REST API 与 CLI。**本 spec 拥有 web UI**——视觉语言、信息架构、国际化。**这是一份在 001 之上的纯 UI 重设计**：不新增任何后端，所以数据模型仍住在 `specs/001-mcp-gateway/data-model.md`，本目录不另设 `tasks.md` 追踪。配套文档见 [`plan.md`](./plan.md) 与 [`quickstart.md`](./quickstart.md)。

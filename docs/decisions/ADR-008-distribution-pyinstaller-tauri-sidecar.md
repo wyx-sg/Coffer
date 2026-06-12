@@ -57,6 +57,17 @@ Concrete choices:
   `specs/001-mcp-gateway/research.md`.
 - Alembic migrations ship as data files inside the daemon binary so
   first-launch can run `upgrade head` against a fresh DB.
+- sqlite-vec's loadable native extension (`vec0.dylib`/`.so`/`.dll`) ships
+  as a data file too (`collect_data_files("sqlite_vec")`) — it is package
+  data, not a Python submodule, so `collect_submodules` alone misses it.
+  Without it a frozen build loses the vec0 extension and vector retrieval
+  silently degrades to keyword-only (`VecIndex.available()` swallows the
+  load failure). The KB/memory/chat deps added by specs 006/007/008
+  (`sqlite_vec`, `markitdown`, `openai`, `langgraph`, `langchain`) are
+  imported lazily, so they are pinned in `hiddenimports` for the same
+  reason. The bundle smoke test (`scripts/smoke_test_bundle.sh`) probes
+  `coffer-daemon --check-vec` so a build that lost the extension fails
+  instead of shipping quietly.
 - The shim binary deliberately excludes server-side heavy dependencies
   (FastAPI, uvicorn, SQLAlchemy, Alembic, structlog) to keep its size
   manageable — the shim talks to the daemon over loopback HTTP and only

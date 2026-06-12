@@ -126,7 +126,7 @@ def mcp_adopt(
     secret: list[str] = typer.Option(  # noqa: B008 — typer option declaration
         [],
         "--secret",
-        help="KEY=KEYCHAIN_REF mapping for a secret-like env/header key (repeatable).",
+        help="KEY=CREDENTIAL_REF mapping for a secret-like env/header key (repeatable).",
     ),
 ) -> None:
     """Adopt an MCP entry into Coffer as a managed mcp_server resource."""
@@ -134,7 +134,7 @@ def mcp_adopt(
     for item in secret:
         key, sep, ref = item.partition("=")
         if not sep or not key or not ref:
-            typer.echo(f"--secret must be KEY=KEYCHAIN_REF, got {item!r}", err=True)
+            typer.echo(f"--secret must be KEY=CREDENTIAL_REF, got {item!r}", err=True)
             raise typer.Exit(2)
         secrets[key] = ref
     body: dict[str, Any] = {}
@@ -151,7 +151,7 @@ def mcp_adopt(
         envelope = r.json().get("error", {}) if r.status_code >= 400 else {}
         if r.status_code == 422 and envelope.get("code") == "ADOPT_SECRET_UNRESOLVED":
             typer.echo(envelope.get("message", "secret keys unresolved"), err=True)
-            typer.echo("hint: pass --secret KEY=KEYCHAIN_REF for each key listed above", err=True)
+            typer.echo("hint: pass --secret KEY=CREDENTIAL_REF for each key listed above", err=True)
             raise typer.Exit(6)
         if r.status_code == 409:
             typer.echo(envelope.get("message", "name conflict"), err=True)

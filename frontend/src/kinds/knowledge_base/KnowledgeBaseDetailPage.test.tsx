@@ -181,6 +181,41 @@ describe("KnowledgeBaseDetailPage", () => {
     expect(await screen.findByText("needle")).toBeVisible();
   });
 
+  test("shows a load-more affordance and fetches the next page when over the page size", async () => {
+    // 100 docs loaded, but the KB has 150 — the cap must not silently hide the
+    // rest. A "Load more" button shows the loaded/total split and, on click,
+    // re-queries with a larger limit so the remaining docs become reachable.
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      ...DOC,
+      id: `d${i}`,
+      title: `doc-${i}`,
+    }));
+    const page2 = Array.from({ length: 150 }, (_, i) => ({
+      ...DOC,
+      id: `d${i}`,
+      title: `doc-${i}`,
+    }));
+    vi.mocked(api.listDocuments).mockImplementation(async (_kb, limit) =>
+      (limit ?? 0) > 100 ? { documents: page2, total: 150 } : { documents: page1, total: 150 },
+    );
+    vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
+      document_count: 150,
+      chunk_count: 3,
+      indexed_modes: ["keyword", "grep"],
+      disk_bytes: 264,
+    });
+    vi.mocked(api.getKnowledgeBase).mockResolvedValue(KB);
+
+    renderPage();
+    const loadMore = await screen.findByRole("button", { name: /showing 100 of 150/i });
+    expect(loadMore).toBeVisible();
+    expect(await screen.findByText("doc-99")).toBeVisible();
+
+    fireEvent.click(loadMore);
+    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 200, 0));
+    expect(await screen.findByText("doc-149")).toBeVisible();
+  });
+
   test("a duplicate upload surfaces an inline error", async () => {
     seedBaseQueries();
     vi.mocked(api.ingestDocument).mockRejectedValue(new ApiError("INGEST_REJECTED", "duplicate"));

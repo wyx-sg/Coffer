@@ -1,12 +1,15 @@
 // frontend/src/lib/hooks/useConversations.ts — TanStack Query bindings for conversations.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
+import { translateApiError } from "@/lib/api/errors";
 import {
   chatApi,
   type Conversation,
   type ConversationCreate,
   type ConversationPatch,
 } from "@/lib/api/chat";
+import { useToast } from "@/components/ui/toast";
 
 export const CONVERSATIONS_KEY = ["conversations"] as const;
 
@@ -16,6 +19,13 @@ export function conversationKey(id: string) {
 
 export function messagesKey(conversationId: string) {
   return ["messages", conversationId] as const;
+}
+
+/** Shared onError → toast handler — a failed mutation must never be silent. */
+function useConversationToastError() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return (error: unknown) => toast.error(translateApiError(t, error));
 }
 
 // ---------------------------------------------------------------------------
@@ -53,16 +63,19 @@ export function useConversation(id: string) {
 
 export function useCreateConversation() {
   const qc = useQueryClient();
+  const onError = useConversationToastError();
   return useMutation({
     mutationFn: (body: ConversationCreate | undefined) => chatApi.createConversation(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },
+    onError,
   });
 }
 
 export function useRenameConversation() {
   const qc = useQueryClient();
+  const onError = useConversationToastError();
   return useMutation({
     mutationFn: (vars: { id: string; title: string }) =>
       chatApi.updateConversation(vars.id, { title: vars.title }),
@@ -70,11 +83,13 @@ export function useRenameConversation() {
       qc.setQueryData(conversationKey(updated.id), updated);
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },
+    onError,
   });
 }
 
 export function useSetConversationModel() {
   const qc = useQueryClient();
+  const onError = useConversationToastError();
   return useMutation({
     mutationFn: (vars: { id: string; model_id: string | null }) =>
       chatApi.updateConversation(vars.id, { model_id: vars.model_id }),
@@ -82,11 +97,13 @@ export function useSetConversationModel() {
       qc.setQueryData(conversationKey(updated.id), updated);
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },
+    onError,
   });
 }
 
 export function useUpdateConversation() {
   const qc = useQueryClient();
+  const onError = useConversationToastError();
   return useMutation({
     mutationFn: (vars: { id: string; patch: ConversationPatch }) =>
       chatApi.updateConversation(vars.id, vars.patch),
@@ -94,11 +111,13 @@ export function useUpdateConversation() {
       qc.setQueryData(conversationKey(updated.id), updated);
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },
+    onError,
   });
 }
 
 export function useDeleteConversation() {
   const qc = useQueryClient();
+  const onError = useConversationToastError();
   return useMutation({
     mutationFn: (id: string) => chatApi.deleteConversation(id),
     onSuccess: (_data, id) => {
@@ -106,18 +125,21 @@ export function useDeleteConversation() {
       qc.removeQueries({ queryKey: messagesKey(id) });
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },
+    onError,
   });
 }
 
 /** Archive (move to the archived list) or restore. Both lists are refreshed. */
 function useArchiveMutation(fn: (id: string) => Promise<Conversation>) {
   const qc = useQueryClient();
+  const onError = useConversationToastError();
   return useMutation({
     mutationFn: fn,
     onSuccess: (updated: Conversation) => {
       qc.setQueryData(conversationKey(updated.id), updated);
       void qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },
+    onError,
   });
 }
 

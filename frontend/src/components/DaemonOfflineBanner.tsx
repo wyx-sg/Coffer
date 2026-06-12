@@ -4,7 +4,7 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
 import { resetApiClient } from "@/lib/api/client";
 import { setDaemonConnection } from "@/lib/auth";
-import { useDaemonStatus } from "@/lib/hooks/useDaemon";
+import { useDaemonOutOfDate, useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { getDaemonInfo, isTauri, restartDaemon } from "@/lib/tauri";
@@ -26,7 +26,12 @@ import { getDaemonInfo, isTauri, restartDaemon } from "@/lib/tauri";
  */
 export function DaemonOfflineBanner() {
   const { t } = useTranslation();
-  const { error, isError } = useDaemonStatus();
+  const { data: status, error, isError } = useDaemonStatus();
+  // Version skew (P2): the daemon answers fine but reports a different version
+  // than this app build expects — i.e. the app reused a stale daemon a previous
+  // app version left detached. Surface the same restart affordance; don't
+  // auto-kill it.
+  const { data: isOutOfDate } = useDaemonOutOfDate(status?.version);
   const qc = useQueryClient();
   // useMutation owns the in-flight / error state and dedups double-clicks,
   // so the banner doesn't hand-roll a restarting/restartError pair.
@@ -57,7 +62,10 @@ export function DaemonOfflineBanner() {
     onSuccess: () => qc.invalidateQueries(),
   });
 
-  if (!isError) return null;
+  // The daemon is out of date when it's reachable (no query error) but reports
+  // a stale version. Skew only matters while the daemon is actually answering.
+  const isStale = !isError && isOutOfDate === true;
+  if (!isError && !isStale) return null;
 
   const code = error instanceof ApiError ? error.code : "DAEMON_OFFLINE";
   const isAuthGap = code === "UNAUTHENTICATED" || code === "DAEMON_NOT_READY";
@@ -72,16 +80,24 @@ export function DaemonOfflineBanner() {
       variant="destructive"
       className="mb-6 border-status-warn/40 bg-status-warn/5 text-foreground"
       data-testid="daemon-banner"
-      data-banner-code={code}
+      data-banner-code={isStale ? "DAEMON_OUT_OF_DATE" : code}
     >
       <AlertCircle className="size-4 text-status-warn" />
       <AlertTitle className="font-serif text-base">
-        {isAuthGap ? t("daemon.offline.notReadyTitle") : t("daemon.offline.title")}
+        {isStale
+          ? t("daemon.offline.outOfDateTitle")
+          : isAuthGap
+            ? t("daemon.offline.notReadyTitle")
+            : t("daemon.offline.title")}
       </AlertTitle>
       <AlertDescription>
         <p className="mb-3 text-foreground/80">
-          {isAuthGap ? t("daemon.offline.notReadyBody") : t("daemon.offline.body")}
-          {!isAuthGap && error instanceof Error ? ` (${error.message})` : null}
+          {isStale
+            ? t("daemon.offline.outOfDateBody")
+            : isAuthGap
+              ? t("daemon.offline.notReadyBody")
+              : t("daemon.offline.body")}
+          {!isStale && !isAuthGap && error instanceof Error ? ` (${error.message})` : null}
         </p>
         {isTauri() ? (
           <div className="space-y-2">

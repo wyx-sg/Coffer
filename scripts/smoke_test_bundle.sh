@@ -195,6 +195,35 @@ fi
 echo "==> daemon ready on port $PORT"
 
 # ---------------------------------------------------------------------------
+# Step 1b: sqlite-vec vec0 extension probe
+#
+# A frozen build that failed to bundle sqlite-vec's loadable native extension
+# (vec0.dylib / vec0.so / vec0.dll) would silently degrade vector retrieval to
+# keyword-only — VecIndex.available() swallows the load failure at runtime, so
+# nothing crashes; vector search just stops working. The RUNNING frozen daemon
+# reports whether it could load vec0 as `vec_available` on /daemon/status, so we
+# assert it here. This fails the smoke test instead of shipping a quietly-
+# degraded bundle.
+# ---------------------------------------------------------------------------
+
+echo "==> probing sqlite-vec vec0 extension via /daemon/status (vec_available)"
+STATUS_JSON="$(curl -sf "http://127.0.0.1:$PORT/api/v1/daemon/status" 2>&1)" || {
+    echo "FAIL: could not read /daemon/status to probe vec availability" >&2
+    exit 7
+}
+echo "$STATUS_JSON"
+case "$STATUS_JSON" in
+    *'"vec_available":true'*|*'"vec_available": true'*) : ;;
+    *)
+        echo "FAIL: bundled daemon cannot load the sqlite-vec vec0 extension" >&2
+        echo "      (frozen build lost vector retrieval — it would silently fall" >&2
+        echo "       back to keyword-only; see collect_data_files('sqlite_vec') in" >&2
+        echo "       backend/coffer-daemon.spec)" >&2
+        exit 7
+        ;;
+esac
+
+# ---------------------------------------------------------------------------
 # Step 2: Shim JSON-RPC initialize
 #
 # Send a minimal MCP initialize request and capture the first output line.

@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useModels, useCreateModel, useUpdateModel, useDeleteModel } from "@/lib/hooks/useModels";
 import { ModelForm } from "@/components/settings/ModelForm";
 import { EmbeddingSettings } from "./EmbeddingSettings";
@@ -24,6 +25,9 @@ export function ModelsPage() {
   const deleteModel = useDeleteModel();
 
   const [editTarget, setEditTarget] = useState<Model | null | "new">(null);
+  // Delete is destructive and irreversible, so it goes through a styled
+  // confirmation dialog rather than firing on a single click.
+  const [deleteTarget, setDeleteTarget] = useState<Model | null>(null);
 
   const handleClose = () => {
     setEditTarget(null);
@@ -104,7 +108,7 @@ export function ModelsPage() {
                   variant="ghost"
                   size="sm"
                   className="size-7 p-0 hover:text-destructive"
-                  onClick={() => deleteModel.mutate(m.id)}
+                  onClick={() => setDeleteTarget(m)}
                   disabled={deleteModel.isPending}
                   aria-label={t("common.delete")}
                 >
@@ -142,6 +146,22 @@ export function ModelsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={t("settings.models.deleteTitle")}
+        description={t("settings.models.deleteConfirm", {
+          name: deleteTarget?.display_name ?? "",
+        })}
+        confirmLabel={deleteModel.isPending ? t("common.deleting") : t("common.delete")}
+        pending={deleteModel.isPending}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteModel.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
+          }
+        }}
+      />
 
       {/* Embedding + chunking is model configuration too, so it lives on the
           same page, separated from the chat-model list above. */}

@@ -8,10 +8,15 @@ from httpx import ASGITransport, AsyncClient
 
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEntry
+from coffer.domain.resource import ResourceRef
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.credential_routes import router as credential_router
-from coffer.surfaces.http.dependencies import get_audit_service, get_credential_store
+from coffer.surfaces.http.dependencies import (
+    get_audit_service,
+    get_credential_store,
+    get_resource_service,
+)
 
 
 class _FakeCredentialStore:
@@ -46,7 +51,24 @@ class _FakeAuditRepo:
         return list(self.entries)
 
 
-def _build_app(fake: _FakeCredentialStore, audit_repo: _FakeAuditRepo | None = None) -> FastAPI:
+class _FakeResourceService:
+    """Stand-in for ResourceService.find_credential_citations.
+
+    Maps credential ref -> citing resource refs; absent refs cite nothing.
+    """
+
+    def __init__(self, citations: dict[str, list[ResourceRef]] | None = None) -> None:
+        self.citations = citations or {}
+
+    async def find_credential_citations(self, credential_ref: str) -> list[ResourceRef]:
+        return list(self.citations.get(credential_ref, []))
+
+
+def _build_app(
+    fake: _FakeCredentialStore,
+    audit_repo: _FakeAuditRepo | None = None,
+    resources: _FakeResourceService | None = None,
+) -> FastAPI:
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(credential_router)
@@ -54,6 +76,8 @@ def _build_app(fake: _FakeCredentialStore, audit_repo: _FakeAuditRepo | None = N
     audit_repo = audit_repo or _FakeAuditRepo()
     audit_svc = AuditService(audit_repo)  # type: ignore[arg-type]
     app.dependency_overrides[get_audit_service] = lambda: audit_svc
+    resources = resources or _FakeResourceService()
+    app.dependency_overrides[get_resource_service] = lambda: resources
     set_active_token("test-token")
     return app
 
@@ -197,6 +221,67 @@ async def test_delete_credential_removes_value() -> None:
     assert delete_events[1].details == {"ref": "nonexistent.REF"}
     # Actor falls back to "api" when X-Coffer-Actor header is absent.
     assert all(e.actor == "api" for e in delete_events)
+
+
+@pytest.mark.asyncio
+async def test_delete_referenced_credential_returns_409_with_citations() -> None:
+    """Deleting a credential that a resource config still references must be
+    refused with 409 and the citing resource names — otherwise the deletion
+    silently breaks that channel / model / mcp_server. The secret must remain
+    in the store and the deletion must NOT be audited.
+    """
+    fake = _FakeCredentialStore()
+    fake.store["channel/tg/bot-token"] = "123:abc"
+    audit_repo = _FakeAuditRepo()
+    resources = _FakeResourceService(
+        {
+            "channel/tg/bot-token": [
+                ResourceRef("channel", "my-bot"),
+                ResourceRef("mcp_server", "github"),
+            ]
+        }
+    )
+    transport = ASGITransport(_build_app(fake, audit_repo, resources))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        r = await c.delete("/api/v1/credentials/channel/tg/bot-token")
+        assert r.status_code == 409
+        body = r.json()
+        assert body["error"]["code"] == "CREDENTIAL_IN_USE"
+        # The citing resources are named so the user knows what to detach.
+        refs = body["error"]["details"]["references"]
+        assert "channel:my-bot" in refs
+        assert "mcp_server:github" in refs
+    # The credential must survive the refused delete.
+    assert fake.store["channel/tg/bot-token"] == "123:abc"
+    # A refused delete is not a lifecycle change — nothing audited.
+    assert [e for e in audit_repo.entries if e.event_type == "credential_deleted"] == []
+
+
+@pytest.mark.asyncio
+async def test_delete_unreferenced_credential_still_returns_204() -> None:
+    """The in-use guard must not regress the happy path: an unreferenced
+    credential still deletes with 204 and is audited.
+    """
+    fake = _FakeCredentialStore()
+    fake.store["github.GITHUB_TOKEN"] = "ghp_secret"
+    audit_repo = _FakeAuditRepo()
+    resources = _FakeResourceService()  # nothing cites anything
+    transport = ASGITransport(_build_app(fake, audit_repo, resources))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        r = await c.delete("/api/v1/credentials/github.GITHUB_TOKEN")
+        assert r.status_code == 204
+    assert "github.GITHUB_TOKEN" not in fake.store
+    deletes = [e for e in audit_repo.entries if e.event_type == "credential_deleted"]
+    assert len(deletes) == 1
+    assert deletes[0].details == {"ref": "github.GITHUB_TOKEN"}
 
 
 @pytest.mark.asyncio

@@ -9,8 +9,14 @@ import {
 import { SearchInput } from "@/components/SearchInput";
 import { TimeRangePicker } from "@/components/TimeRangePicker";
 
-/** Actor options shown in the filter (besides "all"). */
-export const ACTORS = ["ui", "cli", "api", "system"] as const;
+/**
+ * Actor options shown in the filter (besides "all"). Covers both the
+ * request-origin actors derived from the `X-Coffer-Actor` header (`ui`/`cli`/
+ * `api`) and the domain actors the backend records directly on audit rows
+ * (`user`/`agent`/`channel` — see `audit_service.record(actor=…)`), plus the
+ * daemon's own `system`. Each value has an `audit.actor.<value>` label.
+ */
+const ACTORS = ["ui", "cli", "api", "system", "user", "agent", "channel"] as const;
 
 export interface AuditFiltersState {
   /** Free-text query, matched client-side against each entry. */

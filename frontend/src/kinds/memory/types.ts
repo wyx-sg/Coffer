@@ -9,6 +9,16 @@ export type RetrievalMode = "grep" | "keyword" | "vector";
 export type Scope = "global" | "project";
 
 /**
+ * Who authored a memory fact. Mirrors the backend spec enum
+ * `coffer.domain.memory.fact.Actor` (`Literal["agent", "user"]`, spec 007 FR-007):
+ * a fact is written either by an agent at runtime or by the user through a
+ * surface. This is the fact-authorship vocabulary — distinct from the broader
+ * audit-log actor vocabulary (request origins `ui`/`cli`/`api` plus the domain
+ * actors `user`/`agent`/`channel`/`system`) rendered via `audit.actor.*`.
+ */
+export type MemoryActor = "agent" | "user";
+
+/**
  * Sentinel `project_id` used for installation-global resources (C01). A memory
  * store whose `project_id` equals this ULID is the global store; any other
  * value identifies a per-project store. Mirrors the backend's
@@ -91,7 +101,7 @@ export interface FactOut {
   description: string;
   text: string;
   type?: string | null;
-  actor: "agent" | "user";
+  actor: MemoryActor;
   origin_session_id?: string | null;
   path?: string;
   created_at: string;

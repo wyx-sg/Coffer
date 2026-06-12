@@ -101,8 +101,17 @@ coffer channel notify my-telegram "nightly build finished ✅"
 
 REST: `POST /api/v1/channels/my-telegram/notify {"text": "..."}`.
 
+UI: the channel detail page has a **Send test message** card — type a line and
+push it to the paired peer (the natural way to confirm delivery right after
+pairing). It stays disabled until the channel is paired.
+
 ## Day-to-day
 
+- **Edit** a channel from its detail page (**Edit channel**): change the bound
+  agent, or rotate a secret (Telegram bot token / SeaTalk app secret +
+  signing secret). A rotated secret is written back to the same credential
+  reference, so the binding and pairing are untouched; leave a secret field
+  blank to keep the current value.
 - **Disable** a channel to stop its traffic instantly (polling halts, events
   are refused); **enable** to resume. The adapter state shows in
   `coffer channel status` and on the Channels page.

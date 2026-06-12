@@ -4,7 +4,7 @@
 
 **Feature Branch**: `feature/skill-manager`
 **Created**: 2026-05-22
-**Status**: Draft
+**Status**: Accepted
 **Input**: 用户描述：「Coffer 用开放的 AgentSkills 标准（agentskills.io）管理可移植的 AI skill。一份规范副本放在 `~/.coffer/skills/` 下；每个 agent 的可见性通过指向其配置目录下 `skills/` 子文件夹的目录 symlink/junction 实现。用户可以从本地路径导入 skill，或从公开 Git 仓库拉取，然后按 agent 启用或禁用每个 skill。v1 支持 Claude Code 与 Codex CLI 作为同步目标（每个 agent 是 spec 004-agent-registry 中 kind 为 `agent` 的 Resource）。」
 
 ## 用户场景与测试

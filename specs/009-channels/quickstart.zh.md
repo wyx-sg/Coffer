@@ -101,8 +101,15 @@ coffer channel notify my-telegram "nightly build finished ✅"
 
 REST：`POST /api/v1/channels/my-telegram/notify {"text": "..."}`。
 
+UI：渠道详情页有一张 **Send test message** 卡片——输入一行文字即可推送给已
+配对的对端（配对后用来确认投递最自然的方式）。在渠道完成配对前它保持禁用。
+
 ## 日常运维
 
+- **编辑**：在渠道详情页（**Edit channel**）更换绑定的 Agent，或轮换密钥
+  （Telegram 机器人 token / SeaTalk app secret + signing secret）。轮换后的
+  密钥会写回同一个凭据引用，因此绑定与配对不受影响；密钥字段留空则保留当前
+  值。
 - **Disable** 一个 channel 可立即切断其流量（轮询停止、事件被拒收）；
   **enable** 恢复。adapter 状态显示在 `coffer channel status` 与
   Channels 页面上。

@@ -59,13 +59,30 @@ owns its lifecycle.
   responsibility on the bootstrapper is mitigated by daemon not exiting on
   bootstrapper exit.
 - Race condition possible if two clients detect absence and spawn
-  simultaneously. Mitigated by `flock` on `daemon.json` during write and by
-  the daemon refusing to start if a valid `daemon.json` already exists with a
-  live PID.
+  simultaneously. Mitigated by an exclusive `flock` on `~/.coffer/daemon.lock`
+  held across the freshly-spawned daemon's whole probe+bind+write critical
+  section (`bootstrap.acquire_or_existing`): under the lock it probes
+  `live_daemon()` and binds a port + writes `daemon.json` only if none is live,
+  so two near-simultaneous spawns are serialised — the loser observes the
+  winner and exits cleanly instead of binding a second port and clobbering
+  `daemon.json` (which would orphan the winner). On shutdown the daemon's
+  `release()` only unlinks `daemon.json` when it still records its own PID, so
+  an orphaned daemon can never delete the live one's discovery file. (On
+  Windows, which lacks `fcntl`, the lock degrades to a no-op and the
+  `live_daemon()` refusal plus the atomic `os.replace` remain the guard.)
 - Auto-spawn of a long-lived process from a child entry point (the shim) is
   unusual — users on Windows in particular may see a brief command window.
   Mitigated by detaching with `subprocess.CREATE_NO_WINDOW` on Windows and
   `os.setsid()` on POSIX.
+- Because the daemon outlives the app, a freshly-installed app version can
+  reuse an **older** detached daemon that's still listening — a silent version
+  skew. Mitigated by **detection, not auto-update**: the daemon reports its
+  package version (`coffer.__version__`) on `GET /api/v1/daemon/status`, and
+  the desktop app compares it against the version this build expects (the Tauri
+  `daemon_version_matches` command, sourced from `CARGO_PKG_VERSION`). On
+  mismatch the existing daemon-offline banner shows a "daemon out of date —
+  restart it" affordance reusing the manual restart path; Coffer never
+  auto-kills the running daemon.
 
 **Operational follow-on**
 
@@ -108,3 +125,23 @@ file with everything in it is simpler than splitting state.
   than falling back to `python -m coffer_daemon`. This ensures the correct
   binary is used regardless of whether Coffer was installed from a prebuilt
   release archive or from a source checkout.
+- **2026-06-13** — Version-skew detection: the daemon now reports its package
+  version on `GET /api/v1/daemon/status`, and the desktop app surfaces a manual
+  "daemon out of date — restart it" banner when a reused detached daemon's
+  version differs from the app build's expected version. Detection + manual
+  restart only; no auto-update, no auto-kill.
+- **2026-06-13** — Spawn-race hardening (the `flock` this ADR always
+  documented, now actually implemented). The freshly-spawned daemon's
+  probe+bind+write now runs under an exclusive `flock` on
+  `~/.coffer/daemon.lock` (`bootstrap.acquire_or_existing`), closing the
+  check-then-act gap in which two near-simultaneous auto-spawns each bound a
+  port and the loser's `os.replace` orphaned the winner. `release()` became
+  PID-checked — it unlinks `daemon.json` only when the file still records its
+  own PID, so an orphan's exit can't delete the live daemon's discovery file.
+  `coffer daemon start` now keys off `live_daemon()` (a real status probe) so a
+  stale `daemon.json` triggers a respawn instead of a false "already running";
+  `coffer daemon stop` cmdline-verifies the recorded PID is a Coffer daemon
+  before sending `SIGTERM` (a recycled PID is no longer signalled). The desktop
+  app's detect-or-spawn liveness check switched from a bare TCP connect to an
+  HTTP `GET /api/v1/daemon/status` 200 probe, so a port-squatter on a crashed
+  daemon's recorded port no longer false-positives as a live daemon.

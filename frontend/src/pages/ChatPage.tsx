@@ -135,7 +135,7 @@ export function ChatPage() {
         )}
       </div>
 
-      {c.createError && (
+      {c.createError ? (
         <div
           role="alert"
           className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive shadow-md"
@@ -149,7 +149,7 @@ export function ChatPage() {
             {t("common.dismiss")}
           </button>
         </div>
-      )}
+      ) : null}
 
       <ConfirmDialog
         open={c.deletingId !== null}

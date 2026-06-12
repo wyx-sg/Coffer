@@ -55,19 +55,17 @@ with your OS autostart mechanism:
 Go to the [GitHub Releases page](https://github.com/wyx-sg/Coffer/releases) and download
 the file for your platform:
 
-| Platform                          | File                              |
-| --------------------------------- | --------------------------------- |
-| macOS, Apple silicon (M-series)   | `Coffer_<version>_aarch64.dmg`    |
-| Linux x64 (AppImage, recommended) | `Coffer_<version>_amd64.AppImage` |
-| Linux x64 (deb)                   | `coffer_<version>_amd64.deb`      |
+| Platform                        | File                                    |
+| ------------------------------- | --------------------------------------- |
+| macOS, Apple silicon (M-series) | `Coffer_<version>_aarch64-unsigned.dmg` |
 
-Each download has a `.sha256` sibling for verification.
+Coffer ships macOS (Apple Silicon) builds only. The `-unsigned` suffix marks the
+DMG as not yet notarised (see [macOS Gatekeeper](#macos-gatekeeper) below). Verify
+the download against the release's `SHA256SUMS` file.
 
 ### Install
 
 - **macOS**: open the DMG and drag **Coffer.app** to `/Applications`.
-- **Linux (AppImage)**: `chmod +x Coffer_<version>_amd64.AppImage`, then run it.
-- **Linux (deb)**: `sudo apt install ./coffer_<version>_amd64.deb`.
 
 ### macOS Gatekeeper
 
@@ -106,9 +104,9 @@ If the shim's target directory is not yet on `PATH`, Coffer shows a one-time pro
 
 For headless servers or machines where you do not want the Desktop app, download the
 **CLI-only** archive (`coffer-cli-<triple>.tar.gz`) from the same Releases page. It
-contains just `coffer-daemon` and `coffer-mcp-shim` — extract, run the daemon, put the
-shim on `PATH`,
-and point your MCP clients at it.
+contains `coffer` (management CLI), `coffer-daemon`, and `coffer-mcp-shim` — extract,
+put them on `PATH`, and point your MCP clients at the shim (the daemon auto-spawns on
+first use).
 
 ## Next steps
 

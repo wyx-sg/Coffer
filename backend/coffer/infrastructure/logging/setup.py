@@ -58,6 +58,18 @@ def _attach_file_handler() -> None:
         return  # Can't write — give up silently rather than crash
 
     log_path = log_dir / "daemon.log"
+    # Idempotent attach: configure_logging() may run more than once (daemon
+    # boot + tests). Stacking another handler at the same path would duplicate
+    # every log line and leak a file descriptor per call, so bail if one is
+    # already wired to this daemon.log.
+    root = logging.getLogger()
+    target = str(log_path)
+    for existing in root.handlers:
+        if isinstance(
+            existing, logging.handlers.RotatingFileHandler
+        ) and existing.baseFilename == os.path.abspath(target):
+            return
+
     handler = logging.handlers.RotatingFileHandler(
         log_path,
         maxBytes=10 * 1024 * 1024,  # 10 MB

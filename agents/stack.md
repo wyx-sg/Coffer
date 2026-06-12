@@ -56,7 +56,7 @@ CI gate (lands when first feature spec lands): `make verify-contract` rejects PR
 make install                       # one-time setup
 make dev                           # backend on :8000
 .venv/bin/uvicorn coffer.main:app --reload --port 8000   # backend only
-make lint / make test / make format / make verify
+make lint / make verify-unit / make format / make verify
 ```
 
 ## E2E — TypeScript / Playwright

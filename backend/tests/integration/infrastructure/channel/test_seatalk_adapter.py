@@ -72,6 +72,21 @@ async def test_platform_error_raises_channel_send_failed(fake_seatalk: FakeSeaTa
     assert len(fake_seatalk.single_chat_calls) == 1  # non-retryable: no retry
 
 
+async def test_non_json_upstream_surfaces_as_channel_send_failed(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    # A gateway 502 returns an HTML page, not the Open API JSON envelope. The
+    # raw json() would raise JSONDecodeError (NOT an httpx.HTTPError), escaping
+    # the ChannelSendFailed contract; the adapter must translate it.
+    fake_seatalk.html_error_sends = 1
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        with pytest.raises(ChannelSendFailed):
+            await adapter.send_text("emp-1", "hi")
+    finally:
+        await adapter.stop()
+
+
 async def test_approval_prompt_sends_interactive_card_with_callback_buttons(
     fake_seatalk: FakeSeaTalk,
 ) -> None:

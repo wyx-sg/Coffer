@@ -1,7 +1,7 @@
 # Feature Specification: UI Shell & Visual Language
 
 **Feature Branch**: `feature/002-mcp-gateway-web` (PR #23 on top of `feature/mcp-gateway`)
-**Status**: Draft
+**Status**: Accepted
 **Input**: The 001-mcp-gateway UI shipped as a functional skeleton: bare tailwind defaults, ad-hoc spacing, no first-run onboarding. This spec turns the skeleton into a real product shell — a coherent visual language, an information architecture built on a single unifying concept (every managed entity is a _resource kind_), and the end-to-end flows that make the gateway usable for a first-time visitor (not just for Playwright fixtures that bypass auth).
 
 **Scope note**: Coffer's specs are split along the backend/frontend line. `001-mcp-gateway` owns the daemon, MCP gateway, REST API, and CLI. **This spec owns the web UI** — the visual language, the information architecture, and internationalisation. This is a **pure UI redesign on top of 001**: it adds no new backend, so the data model lives in `specs/001-mcp-gateway/data-model.md` and no separate `tasks.md` tracker is kept here. See [`plan.md`](./plan.md) and [`quickstart.md`](./quickstart.md) for the companion docs.

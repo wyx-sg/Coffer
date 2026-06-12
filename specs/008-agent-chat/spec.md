@@ -1,5 +1,7 @@
 # Feature Specification: Agent Chat
 
+> 中文版: [spec.zh.md](./spec.zh.md)
+
 **Feature Branch**: `feature/agent-chat`
 **Created**: 2026-05-22
 **Status**: Draft
@@ -118,7 +120,7 @@ that completes without error and is still visible after reload.
 
 The user asks the built-in agent something that needs their own data ("what do
 my notes say about OAuth?"). The agent calls tools through Coffer's MCP
-gateway — upstream MCP server tools, `coffer__search_memory`, `coffer__kb_search`,
+gateway — upstream MCP server tools, `coffer__recall`, `coffer__search_knowledge`,
 `coffer__load_skill` — and each call appears in the message stream as an inline,
 expandable card showing the tool name, status, inputs, and result.
 
@@ -126,7 +128,7 @@ expandable card showing the tool name, status, inputs, and result.
 rather than a generic chat box — it dogfoods the vault.
 
 **Independent Test**: With a memory store holding a known record, ask the agent a
-question answerable only from that record; observe a `coffer__search_memory`
+question answerable only from that record; observe a `coffer__recall`
 tool-call card in the stream and an answer grounded in the record.
 
 **Covering scenarios**:
@@ -373,7 +375,7 @@ referenced by at least one test marked
 
 - **Given** a memory store containing a record that answers a question,
 - **When** the user asks that question,
-- **Then** the turn includes a `coffer__search_memory` tool call rendered as an
+- **Then** the turn includes a `coffer__recall` tool call rendered as an
   inline expandable card, and the answer is grounded in the record.
 
 ### Scenario: skills are reachable as tools
@@ -701,7 +703,7 @@ referenced by at least one test marked
 - The application shell from spec 002-ui-shell — sidebar IA, layout, routing,
   design system, and the Settings layout — is in place; the Chat page and the
   Settings → Models page render within that shell.
-- Memory and knowledge-base tools (`coffer__search_memory`, `coffer__kb_search`,
+- Memory and knowledge-base tools (`coffer__recall`, `coffer__search_knowledge`,
   and siblings) already exist as gateway built-in tools from specs 005–006; this
   spec consumes them and does not redefine them.
 - The built-in agent's agentic loop is implemented with the LangGraph framework

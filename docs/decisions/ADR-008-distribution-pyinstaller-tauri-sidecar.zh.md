@@ -55,6 +55,14 @@ Coffer 有三个可运行入口：长生命周期的 `coffer-daemon`、按 MCP �
   显式钉住。隐藏导入清单记录于 `specs/001-mcp-gateway/research.md`。
 - Alembic 迁移作为数据文件随 daemon 二进制一同打包，以便首次启动时对全新
   DB 跑 `upgrade head`。
+- sqlite-vec 的可加载原生扩展（`vec0.dylib`/`.so`/`.dll`）同样作为数据文件
+  打包（`collect_data_files("sqlite_vec")`）—— 它是包数据而非 Python 子模块，
+  仅靠 `collect_submodules` 会遗漏。一旦缺失，冻结构建就丢掉 vec0 扩展，向量
+  检索会静默降级为仅关键词（`VecIndex.available()` 吞掉了加载失败）。specs
+  006/007/008 引入的 KB/记忆/对话依赖（`sqlite_vec`、`markitdown`、`openai`、
+  `langgraph`、`langchain`）都是惰性导入，出于同样原因钉进 `hiddenimports`。
+  bundle 冒烟测试（`scripts/smoke_test_bundle.sh`）会探测
+  `coffer-daemon --check-vec`，使丢失扩展的构建直接失败，而不是悄悄发布。
 - shim 二进制刻意排除 daemon 端的重依赖（FastAPI、uvicorn、SQLAlchemy、
   Alembic、structlog）以保持体积可控 —— shim 只通过 loopback HTTP 与
   daemon 通信，所需仅是 `httpx`。
