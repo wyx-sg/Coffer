@@ -134,7 +134,9 @@ function StoreProjectionRow({ store, agent }: { store: MemoryStoreOut; agent: Ag
           aria-label={t("agents.memoryTab.toggleAria", { store: store.name })}
         />
       </div>
-      {isProjected ? <StoreFacts store={store.name} /> : null}
+      {/* Show the store's memories whether or not it is projected — Coffer is
+          the source of truth, so the agent's memories live here regardless. */}
+      <StoreFacts store={store.name} />
     </li>
   );
 }
