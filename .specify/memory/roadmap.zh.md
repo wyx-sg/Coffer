@@ -18,7 +18,7 @@
 | 006 | **Knowledge Base** ([spec](../../specs/006-knowledge-base/spec.md))           | 已采纳 — 代码已随 PR #55 合并 (知识基底的 KB 面，[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md))                                                                                     |
 | 007 | **Memory** ([spec](../../specs/007-memory/spec.md))                           | 已采纳 — 代码已随 PR #55/#58 合并 (跨 agent 共享、原生的 memory，[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) + [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)) |
 | 008 | **Agent Chat** ([spec](../../specs/008-agent-chat/spec.md))                   | 已采纳 — 代码已随 PR #57 合并            |
-| 009 | **Channels** ([spec](../../specs/009-channels/spec.md))                       | 已草拟 — 实现中 ([ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)) |
+| 009 | **Channels** ([spec](../../specs/009-channels/spec.md))                       | 已接受 — 代码已随 PR #59 合并 ([ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)) |
 
 ## 明确不做的事 (当前规范范围内)
 
