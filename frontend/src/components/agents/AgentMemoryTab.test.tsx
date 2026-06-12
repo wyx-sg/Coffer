@@ -1,19 +1,28 @@
 // frontend/src/components/agents/AgentMemoryTab.test.tsx
 //
-// The "Memory" tab on the agent detail page lists each memory store and toggles
-// whether it is projected into this agent. We mock the projection hooks so the
-// component renders deterministically and assert the establish/remove wiring +
-// the projection status display.
+// The "Memory" tab on the agent detail page renders memory stores as a compact
+// DataTable (like the Skills/MCP tabs): each row shows scope + projection state
+// and a projection Switch; clicking a row navigates to the store's detail page
+// (/memory/:name) while flipping the Switch toggles projection WITHOUT
+// navigating. We mock the projection hooks so the component renders
+// deterministically and assert the table + establish/remove wiring.
 
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AgentMemoryTab } from "./AgentMemoryTab";
 import type { AgentOut } from "@/lib/api/agents";
 
 const establishMutate = vi.fn();
 const removeMutate = vi.fn();
+const navigateMock = vi.fn();
+
+vi.mock("react-router-dom", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-router-dom")>()),
+  useNavigate: () => navigateMock,
+}));
 
 vi.mock("@/lib/hooks/useMemoryProjections", () => ({
   useMemoryStores: vi.fn(),
@@ -23,12 +32,6 @@ vi.mock("@/lib/hooks/useMemoryProjections", () => ({
 }));
 const hooks = await import("@/lib/hooks/useMemoryProjections");
 
-// A projected store lists its facts inline (the agent's current memories).
-vi.mock("@/kinds/memory/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/kinds/memory/api")>()),
-  listFacts: vi.fn(async () => ({ facts: [], total: 0 })),
-}));
-
 // The native-memory discovery banner: default to "nothing unmanaged".
 vi.mock("@/lib/api/nativeMemory", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/nativeMemory")>()),
@@ -37,7 +40,11 @@ vi.mock("@/lib/api/nativeMemory", async (importOriginal) => ({
 
 function wrap({ children }: PropsWithChildren) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 const AGENT: AgentOut = {
@@ -82,7 +89,7 @@ function stubStores(stores: unknown[] = [STORE]) {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentMemoryTab", () => {
-  test("lists stores and shows 'not projected' when no projection exists", () => {
+  test("renders a store row and shows 'not projected' when no projection exists", () => {
     stubStores();
     vi.mocked(hooks.useMemoryProjections).mockReturnValue({
       data: [],
@@ -90,13 +97,26 @@ describe("AgentMemoryTab", () => {
     } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
 
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    // "global" appears twice (store name + scope badge).
-    expect(screen.getAllByText("global").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("row", { name: /global/i })).toBeInTheDocument();
     expect(screen.getByText(/not projected/i)).toBeInTheDocument();
     expect(screen.getByRole("switch")).not.toBeChecked();
   });
 
-  test("toggling on establishes a projection for this agent", () => {
+  test("clicking a store row navigates to its memory detail page", () => {
+    stubStores();
+    vi.mocked(hooks.useMemoryProjections).mockReturnValue({
+      data: [],
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
+
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
+    fireEvent.click(screen.getByRole("row", { name: /global/i }));
+    expect(navigateMock).toHaveBeenCalledWith("/memory/global", {
+      state: { backTo: "/agents/claude", backLabel: "claude" },
+    });
+  });
+
+  test("toggling the projection Switch establishes a projection WITHOUT navigating", () => {
     stubStores();
     vi.mocked(hooks.useMemoryProjections).mockReturnValue({
       data: [],
@@ -106,9 +126,11 @@ describe("AgentMemoryTab", () => {
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("switch"));
     expect(establishMutate).toHaveBeenCalledWith({ agentRef: "claude" });
+    // Flipping the switch must not trigger the row's navigate-to-detail click.
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  test("shows projection status and toggling off removes it", () => {
+  test("shows projection mode/target and toggling off removes it", () => {
     stubStores();
     vi.mocked(hooks.useMemoryProjections).mockReturnValue({
       data: [
@@ -130,43 +152,7 @@ describe("AgentMemoryTab", () => {
     expect(sw).toBeChecked();
     fireEvent.click(sw);
     expect(removeMutate).toHaveBeenCalledWith("claude");
-  });
-
-  test("a projected store lists its facts (the agent's current memories)", async () => {
-    const memApi = await import("@/kinds/memory/api");
-    vi.mocked(memApi.listFacts).mockResolvedValue({
-      facts: [
-        {
-          id: "f1",
-          store_name: "global",
-          scope: "global",
-          name: "pkg-manager",
-          description: "",
-          text: "uses pnpm not npm",
-          type: "user",
-          actor: "agent",
-          created_at: "2026-05-29T00:00:00Z",
-          updated_at: "2026-05-29T00:00:00Z",
-        },
-      ],
-      total: 1,
-    });
-    stubStores();
-    vi.mocked(hooks.useMemoryProjections).mockReturnValue({
-      data: [
-        {
-          agent_ref: "claude",
-          projection_mode: "SYMLINK",
-          target_path: "/home/u/.claude/projects/x/memory",
-          native_memory_disabled: false,
-        },
-      ],
-      isPending: false,
-    } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
-
-    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    expect(await screen.findByText("pkg-manager")).toBeInTheDocument();
-    expect(screen.getByText(/uses pnpm not npm/)).toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   test("project-scoped store passes its project_root when establishing", () => {
@@ -196,6 +182,6 @@ describe("AgentMemoryTab", () => {
     expect(sw).toBeDisabled();
     fireEvent.click(sw);
     expect(establishMutate).not.toHaveBeenCalled();
-    expect(screen.getByText(/no known root/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/no known root/i).length).toBeGreaterThanOrEqual(1);
   });
 });

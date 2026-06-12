@@ -15,6 +15,27 @@ vi.mock("@/lib/api/models", () => ({
   },
 }));
 
+// The page now also renders the embedding/chunking config below the model
+// list, which reads its config through this hook — mock the network boundary.
+vi.mock("@/lib/hooks/useEmbeddingConfig", () => ({
+  useEmbeddingConfig: vi.fn(() => ({
+    data: {
+      enabled: false,
+      provider: "local",
+      model: "",
+      base_url: null,
+      credential_ref: null,
+      dimensions: 768,
+      default_chunk_size: 512,
+      default_chunk_overlap: 64,
+      updated_at: null,
+    },
+    isPending: false,
+    error: null,
+  })),
+  useUpdateEmbeddingConfig: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+}));
+
 const { modelsApi } = await import("@/lib/api/models");
 const modelsApiMock = modelsApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
@@ -68,6 +89,18 @@ describe("ModelsPage", () => {
       expect(screen.getByText("Claude Sonnet")).toBeInTheDocument(),
     );
     expect(screen.getByText(/anthropic/i)).toBeInTheDocument();
+  });
+
+  test("renders the embedding/chunking section below the model list", async () => {
+    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText("Claude Sonnet")).toBeInTheDocument(),
+    );
+    // The merged embedding config card renders on the same page, with its
+    // enable toggle.
+    expect(screen.getByText("Embedding")).toBeInTheDocument();
+    expect(screen.getByRole("switch")).toBeInTheDocument();
   });
 
   test("opens add model dialog on Add model click", async () => {

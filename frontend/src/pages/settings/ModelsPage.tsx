@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { useModels, useCreateModel, useUpdateModel, useDeleteModel } from "@/lib/hooks/useModels";
 import { ModelForm } from "@/components/settings/ModelForm";
+import { EmbeddingSettings } from "./EmbeddingSettings";
 import { translateApiError } from "@/lib/api/errors";
 import type { Model } from "@/lib/api/models";
 
@@ -141,6 +142,12 @@ export function ModelsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Embedding + chunking is model configuration too, so it lives on the
+          same page, separated from the chat-model list above. */}
+      <div className="border-t border-border pt-6">
+        <EmbeddingSettings />
+      </div>
     </div>
   );
 }

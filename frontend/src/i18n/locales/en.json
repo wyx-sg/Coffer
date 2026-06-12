@@ -306,8 +306,7 @@
       "security": "Security",
       "app": "App",
       "about": "About",
-      "embedding": "Embedding & chunking",
-      "models": "Models"
+      "models": "Models & Embedding"
     },
     "general": {
       "title": "Display",
@@ -470,6 +469,12 @@
     "register": "Register",
     "addManual": "Add manually",
     "detectedHeading": "Detected agents",
+    "builtin": {
+      "heading": "Built-in agent",
+      "badge": "Built-in",
+      "description": "Coffer's own assistant — chat in the app without installing a CLI agent.",
+      "startChat": "Start chatting"
+    },
     "namePlaceholder": "Leave blank to use the default for this type",
     "folderPicker": {
       "browse": "Browse…",
@@ -522,7 +527,8 @@
         "claudeUninstallHint": "Use the claude plugin CLI to fully uninstall",
         "empty": "No plugins installed",
         "parseError": "Failed to parse config — this file is read-only",
-        "marketplace": "Marketplace"
+        "marketplace": "Marketplace",
+        "searchPlaceholder": "Search plugins"
       },
       "mcp": {
         "gatewayTitle": "Via Coffer gateway",
@@ -540,7 +546,8 @@
         "removeDuplicate": "Remove duplicate",
         "parseError": "Failed to parse config — this file is read-only",
         "empty": "No direct MCP servers",
-        "adoptSuccess": "Adopted {{name}} — now served to all agents via the gateway"
+        "adoptSuccess": "Adopted {{name}} — now served to all agents via the gateway",
+        "searchPlaceholder": "Search servers"
       },
       "memory": "Memory"
     },
@@ -553,6 +560,8 @@
       "merged": "Pre-existing native files were merged into the store first.",
       "missingProjectRoot": "This project store has no known root yet, so it can't be projected.",
       "toggleAria": "Toggle projection of {{store}} into this agent",
+      "colProjection": "Projection",
+      "colEnabled": "Projected",
       "facts": "Memories ({{count}})",
       "factsEmpty": "No memories yet.",
       "nativeDiscovered": "Found {{count}} memories Claude Code wrote natively across {{projects}} project(s) that Coffer is not managing yet.",
@@ -588,6 +597,15 @@
       "memoryBlockNotice": "This file contains a Coffer memory-projection block managed by the memory feature",
       "directoryHint": "This is a directory — select a file inside it, or create a new one.",
       "emptyDir": "No files yet.",
+      "desc": {
+        "settings": "Project-level Claude Code settings: permissions, model, and hooks.",
+        "settings_local": "Personal overrides layered on top of the shared settings; not committed.",
+        "global": "Claude Code's global state and user-scope MCP servers (~/.claude.json).",
+        "instructions": "Instructions auto-loaded into every session in this directory.",
+        "subagents": "Custom subagent definitions, one Markdown file per subagent.",
+        "config": "Codex CLI configuration: model, providers, and tool settings.",
+        "hooks": "Lifecycle hooks that run commands around Codex events."
+      },
       "find": {
         "toggle": "Find / Replace",
         "find": "Find",

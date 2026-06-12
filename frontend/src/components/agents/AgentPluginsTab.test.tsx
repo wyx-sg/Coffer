@@ -111,6 +111,29 @@ describe("AgentPluginsTab", () => {
     expect(screen.getByText(/registry\.npmjs\.org/)).toBeInTheDocument();
   });
 
+  test("per-marketplace search filters rows by plugin name", async () => {
+    // Two plugins in the same marketplace so the search has something to hide.
+    const PLUGIN_C = {
+      id: "npm:@scope/plugin-c",
+      name: "plugin-c",
+      marketplace: "npm",
+      enabled: true,
+      cache_present: true,
+    };
+    stub({ items: [PLUGIN_A, PLUGIN_C], marketplaces: [MARKETPLACES[0]] });
+    renderTab();
+
+    expect(await screen.findByText("plugin-a")).toBeInTheDocument();
+    expect(screen.getByText("plugin-c")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Search plugins"), {
+      target: { value: "plugin-c" },
+    });
+
+    expect(screen.getByText("plugin-c")).toBeInTheDocument();
+    expect(screen.queryByText("plugin-a")).not.toBeInTheDocument();
+  });
+
   test("toggle Switch calls the API with the plugin id and new enabled flag", async () => {
     stub();
     renderTab();

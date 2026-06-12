@@ -22,6 +22,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -140,11 +141,14 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
 
   return (
     <div className="space-y-6">
-      {/* A. Via Coffer gateway */}
-      <AgentGatewayMcpSection agentName={agentName} />
+      {/* A. Via Coffer gateway — its own Card so the two stacked tables read
+          as distinct blocks. */}
+      <Card className="space-y-3 p-4">
+        <AgentGatewayMcpSection agentName={agentName} />
+      </Card>
 
       {/* B. Direct servers (the agent's own config entries) */}
-      <section className="space-y-3">
+      <Card className="space-y-3 p-4">
         <h3 className="text-sm font-medium text-muted-foreground">
           {t("agents.workspace.mcp.directTitle")}
         </h3>
@@ -173,10 +177,14 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
             rows={directEntries}
             columns={directColumns}
             rowKey={(e) => `${e.source}:${e.name}`}
+            search={{
+              accessor: (e) => e.name,
+              placeholder: t("agents.workspace.mcp.searchPlaceholder"),
+            }}
             emptyMessage={t("agents.workspace.mcp.empty")}
           />
         )}
-      </section>
+      </Card>
 
       {adoptTarget && (
         <AgentAdoptMcpDialog

@@ -10,6 +10,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -129,13 +130,17 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
           rows={items}
           columns={columns}
           rowKey={(p) => p.id}
+          search={{
+            accessor: (p) => p.name,
+            placeholder: t("agents.workspace.pluginsTab.searchPlaceholder"),
+          }}
           emptyMessage={t("agents.workspace.pluginsTab.empty")}
         />
       ) : (
         Array.from(grouped.entries()).map(([marketplaceName, rows]) => {
           const mp = marketplaceMap.get(marketplaceName);
           return (
-            <section key={marketplaceName} className="space-y-3">
+            <Card key={marketplaceName} className="space-y-3 p-4">
               <h3 className="text-sm font-medium text-muted-foreground">
                 {t("agents.workspace.pluginsTab.marketplace")}: {marketplaceName}
                 {mp?.source ? (
@@ -146,9 +151,13 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
                 rows={rows}
                 columns={columns}
                 rowKey={(p) => p.id}
+                search={{
+                  accessor: (p) => p.name,
+                  placeholder: t("agents.workspace.pluginsTab.searchPlaceholder"),
+                }}
                 emptyMessage={t("agents.workspace.pluginsTab.empty")}
               />
-            </section>
+            </Card>
           );
         })
       )}
