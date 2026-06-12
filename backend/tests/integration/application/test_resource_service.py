@@ -174,7 +174,7 @@ async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
             kinds=kinds,
             repo=SqlAlchemyResourceRepo(sm),
             audit=audit,
-            keyring=_FakeKeyring(present=set()),
+            credentials=_FakeKeyring(present=set()),
         )
         with pytest.raises(CredentialMissing):
             await svc_missing.register(
@@ -186,7 +186,7 @@ async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
             kinds=kinds,
             repo=SqlAlchemyResourceRepo(sm),
             audit=audit,
-            keyring=_FakeKeyring(present={"k1"}),
+            credentials=_FakeKeyring(present={"k1"}),
         )
         await svc_ok.register(
             kind="vault",

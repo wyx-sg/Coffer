@@ -262,7 +262,7 @@ async def test_resource_create_enforces_name_pattern(tmp_path):
 
 
 class _StubKeyring:
-    """Minimal KeyringPort stand-in for register-time credential probing."""
+    """Minimal CredentialStorePort stand-in for register-time credential probing."""
 
     def __init__(self, store: dict[str, str] | None = None) -> None:
         self.store: dict[str, str] = dict(store or {})
@@ -292,7 +292,7 @@ async def _client_with_mcp_kind(tmp_path, keyring: _StubKeyring):
     kinds = {"mcp_server": make_mcp_kind({})}
     repo = SqlAlchemyResourceRepo(sm)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    svc = ResourceService(kinds=kinds, repo=repo, audit=audit, keyring=keyring)
+    svc = ResourceService(kinds=kinds, repo=repo, audit=audit, credentials=keyring)
 
     app = FastAPI()
     err_handlers.register(app)

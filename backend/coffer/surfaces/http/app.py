@@ -180,7 +180,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Wired so register/update_config can probe credential_refs against
         # the keychain BEFORE persisting (spec edge case: missing credential
         # must fail registration with a named ref, no partial state).
-        keyring=KeyringAdapter(),
+        credentials=KeyringAdapter(),
     )
     registry = build_prunable_registry()
     retention_svc = RetentionService(
