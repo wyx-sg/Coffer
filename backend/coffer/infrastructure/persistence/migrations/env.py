@@ -29,6 +29,9 @@ from coffer.infrastructure.memory import (
 from coffer.infrastructure.persistence import models  # noqa: F401 — kind-agnostic models
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas
+from coffer.infrastructure.sync import (
+    persistence as _sync_persistence,  # noqa: F401 — sync_config/sync_state models
+)
 
 cfg = context.config
 if cfg.config_file_name is not None:

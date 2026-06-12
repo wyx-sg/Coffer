@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0016"
+HEAD_REVISION = "0017"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -34,7 +34,8 @@ HEAD_REVISION = "0016"
 # absolute git-root it was provisioned from. 0015 adds ``channel_peers``
 # (spec 009-channels: the paired owner of a messaging channel); 0016 adds the
 # ``credentials`` table for the Fernet-encrypted secret store (envelope
-# encryption). The ``documents_fts_*`` shadow tables FTS5 creates under the
+# encryption); 0017 adds ``sync_config`` + ``sync_state`` for multi-machine
+# sync (spec 010). The ``documents_fts_*`` shadow tables FTS5 creates under the
 # hood are excluded — the assertions speak to the logical schema.
 EXPECTED_TABLES = {
     "resources",
@@ -55,6 +56,8 @@ EXPECTED_TABLES = {
     "chat_messages",
     "chat_models",
     "channel_peers",
+    "sync_config",
+    "sync_state",
 }
 
 # FTS5 creates these shadow tables for ``documents_fts``; they are an
@@ -142,6 +145,11 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
+    # 0017 -> 0016: drops sync_config + sync_state (spec 010 multi-machine sync).
+    command.downgrade(cfg, "0016")
+    assert "sync_config" not in _user_tables(db_path)
+    assert "sync_state" not in _user_tables(db_path)
+
     # 0016 -> 0015: drops credentials (encrypted credential store).
     command.downgrade(cfg, "0015")
     assert "credentials" not in _user_tables(db_path)
@@ -160,13 +168,20 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     with sqlite3.connect(db_path) as conn:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
     assert "archived_at" not in cols
-    assert _user_tables(db_path) == EXPECTED_TABLES - {"credentials", "channel_peers"}
+    assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "credentials",
+        "channel_peers",
+        "sync_config",
+        "sync_state",
+    }
 
     # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
     command.downgrade(cfg, "0011")
     assert _user_tables(db_path) == EXPECTED_TABLES - {
         "credentials",
         "channel_peers",
+        "sync_config",
+        "sync_state",
         "conversations",
         "chat_messages",
         "chat_models",
@@ -205,6 +220,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert _user_tables(db_path) == EXPECTED_TABLES - {
         "credentials",
         "channel_peers",
+        "sync_config",
+        "sync_state",
         "embedding_config",
         "conversations",
         "chat_messages",
