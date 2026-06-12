@@ -70,28 +70,45 @@ acceptance("007-memory", "clear a memory scope", async ({ page }) => {
   expect(storeResp.status).toBe(200);
 });
 
-// Spec 007 §User Story 5 — at least one mutation must travel THROUGH the UI
-// (the walk above provisions state via REST for robustness; this one pins the
-// frontend↔backend wiring of the add-fact form itself).
+// Spec 007 §User Story 5 — a fact is added (memory is AI-authored: the agent
+// writes via the MCP `remember` tool / API, the wire behind the UI & CLI). This
+// pins that an added fact surfaces in the UI and that the human-correction path
+// (edit through the real DOM) is wired frontend↔backend.
 acceptance("007-memory", "user adds a fact", async ({ page }) => {
+  const { token, port } = readDaemonToken();
   const factText = `e2e ui fact ${Date.now().toString(36)}`;
 
   try {
+    // The fact is authored programmatically (the agent's `remember`).
+    const add = await fetch(`http://127.0.0.1:${port}/api/v1/memory_stores/global/facts`, {
+      method: "POST",
+      headers: {
+        "X-Coffer-Token": token,
+        "X-Coffer-Actor": "agent",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text: factText, name: "e2e-fact" }),
+    });
+    expect(add.status).toBe(201);
+
     // Navigate /memory → the global store's detail page via the stores table.
     await page.goto("/memory");
     await page.getByText("global", { exact: true }).first().click();
-    await expect(page.getByRole("heading", { name: "Add fact" })).toBeVisible();
 
-    // Fill the form and submit through the real DOM.
-    await page.locator("#fact-body").fill(factText);
-    await page.getByRole("button", { name: "Add fact" }).click();
-
-    // The fact appears in the list without a reload.
+    // The fact shows in the tree; select it and confirm the body renders.
+    await page.getByText("e2e-fact", { exact: true }).first().click();
     await expect(page.getByText(factText).first()).toBeVisible();
+
+    // Human correction: edit it through the real DOM.
+    await page.getByRole("button", { name: "Edit" }).click();
+    const editor = page.locator("textarea");
+    await expect(editor).toHaveValue(factText);
+    await editor.fill(`${factText} edited`);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText(`${factText} edited`).first()).toBeVisible();
   } finally {
     // Clear the scope even on failure so reruns against a reused daemon stay
     // isolated (safe under workers:1 — nothing else shares the store mid-run).
-    const { token, port } = readDaemonToken();
     await fetch(`http://127.0.0.1:${port}/api/v1/memory_stores/global/facts`, {
       method: "DELETE",
       headers: { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e" },
