@@ -15,6 +15,7 @@ only — secret values never appear in the audit log.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -56,7 +57,9 @@ async def set_secret(
     actor: str = Depends(get_actor),
 ) -> Response:
     """Store `value` under `ref` in the encrypted credential store."""
-    store.set(body.ref, body.value)
+    # to_thread: the store write blocks on SQLite's busy_timeout; on the
+    # event loop it would freeze the coroutine holding the write lock.
+    await asyncio.to_thread(store.set, body.ref, body.value)
     await audit.record(
         AuditEventType.CREDENTIAL_SET.value,
         actor=actor,
@@ -129,7 +132,9 @@ async def delete_secret(
         names = [str(c) for c in citations]
         exc = CredentialInUse(ref, names)
         return error_response(exc.code, str(exc), {"references": names})
-    store.delete(ref)
+    # to_thread: the sync store write blocks on SQLite's busy_timeout, which on
+    # the event loop would deadlock against the loop's own aiosqlite writer.
+    await asyncio.to_thread(store.delete, ref)
     await audit.record(
         AuditEventType.CREDENTIAL_DELETED.value,
         actor=actor,

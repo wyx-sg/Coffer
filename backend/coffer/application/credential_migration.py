@@ -11,6 +11,7 @@ retried on the next startup.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable
 from contextlib import suppress
 from typing import Any, Protocol
@@ -53,17 +54,21 @@ async def migrate_legacy_keychain(
         if store.get(ref) is not None:
             return
         try:
-            value = legacy.get(ref)
+            # to_thread: keychain reads can block on user prompts.
+            value = await asyncio.to_thread(legacy.get, ref)
         except CredentialLocked:
             return
         if value is None:
             return
-        store.set(ref, value)
+        # to_thread: the store write blocks on SQLite's busy_timeout; on the
+        # event loop it would freeze the coroutine holding the write lock,
+        # turning a wait into a guaranteed deadlock.
+        await asyncio.to_thread(store.set, ref, value)
         # The value is now safely in the store; a CredentialLocked here just
         # leaves a harmless keychain copy behind — suppress and continue
         # (it never needs retrying, the store already holds the ref).
         with suppress(CredentialLocked):
-            legacy.delete(ref)
+            await asyncio.to_thread(legacy.delete, ref)
         await audit.record(
             AuditEventType.CREDENTIAL_MIGRATED.value,
             actor="system",
