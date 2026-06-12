@@ -25,8 +25,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from alembic import command
-from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 
 from coffer.application.agent.kind import make_agent_kind
@@ -37,7 +35,6 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import DatabaseSchemaTooNew
 from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
@@ -88,6 +85,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
 from coffer.surfaces.http.memory import router as memory_router
+from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.projection_routes import router as projection_router
 from coffer.surfaces.http.projection_wiring import wire_projection
 from coffer.surfaces.http.resource_routes import router as resource_router
@@ -112,51 +110,6 @@ def _daemon_json_path() -> pathlib.Path:
     return pathlib.Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "daemon.json"
 
 
-def _alembic_config() -> AlembicConfig:
-    cfg = AlembicConfig(
-        str(
-            pathlib.Path(__file__).resolve().parent.parent.parent
-            / "infrastructure/persistence/migrations/alembic.ini"
-        )
-    )
-    return cfg
-
-
-def _guard_schema_not_newer(cfg: AlembicConfig) -> None:
-    """Fail fast when the on-disk DB was migrated by a newer/divergent build.
-
-    If the DB's current Alembic revision is not in this build's migration
-    tree (e.g. the DB was created by a feature branch whose migrations this
-    release doesn't ship), ``upgrade head`` raises an opaque "Can't locate
-    revision identified by ..." and the daemon dies during lifespan startup
-    with no actionable message. Detect that here and raise a clear error.
-
-    A fresh DB (no ``alembic_version`` row) reports ``None`` and is fine.
-    """
-    from alembic.runtime.migration import MigrationContext
-    from alembic.script import ScriptDirectory
-    from sqlalchemy import create_engine
-
-    known = {rev.revision for rev in ScriptDirectory.from_config(cfg).walk_revisions()}
-    sync_url = _db_url().replace("sqlite+aiosqlite://", "sqlite://")
-    engine = create_engine(sync_url)
-    try:
-        with engine.connect() as conn:
-            current = MigrationContext.configure(conn).get_current_revision()
-    finally:
-        engine.dispose()
-    if current is not None and current not in known:
-        raise DatabaseSchemaTooNew(current=current, db_path=_db_url())
-
-
-def _run_migrations() -> None:
-    """Run Alembic upgrade head synchronously. Caller is expected to be off
-    the request path (lifespan startup)."""
-    cfg = _alembic_config()
-    _guard_schema_not_newer(cfg)
-    command.upgrade(cfg, "head")
-
-
 _logger = logging.getLogger(__name__)
 
 # Daemon lifecycle phase — updated by the lifespan.
@@ -177,7 +130,7 @@ def set_daemon_phase(phase: _DaemonPhase) -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Run migrations BEFORE building services so they have a schema to talk to.
-    await asyncio.get_running_loop().run_in_executor(None, _run_migrations)
+    await asyncio.get_running_loop().run_in_executor(None, run_migrations, _db_url())
 
     # Sweep orphans from a previous (potentially crashed) daemon run BEFORE
     # starting any new upstreams. Best-effort; failures don't block startup.

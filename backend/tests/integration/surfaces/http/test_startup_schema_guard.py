@@ -15,9 +15,9 @@ import sqlite3
 import pytest
 
 from coffer.domain.errors import DatabaseSchemaTooNew
-from coffer.surfaces.http.app import _alembic_config, _guard_schema_not_newer
+from coffer.surfaces.http.migrations_runner import _alembic_config, _guard_schema_not_newer
 
-HEAD_REVISION = "0005"  # mirrors test_migrations_roundtrip.HEAD_REVISION
+HEAD_REVISION = "0013"  # mirrors test_migrations_roundtrip.HEAD_REVISION
 
 
 def _stamp(db_path: pathlib.Path, revision: str) -> None:
@@ -41,7 +41,7 @@ def test_future_revision_raises(tmp_path: pathlib.Path, monkeypatch: pytest.Monk
     _point_db_at(monkeypatch, db)
 
     with pytest.raises(DatabaseSchemaTooNew) as exc:
-        _guard_schema_not_newer(_alembic_config())
+        _guard_schema_not_newer(_alembic_config(), f"sqlite+aiosqlite:///{db}")
     assert exc.value.current == "9999"
     assert str(db) in str(exc.value)
 
@@ -54,7 +54,7 @@ def test_known_head_revision_passes(
     _point_db_at(monkeypatch, db)
 
     # Must not raise — head is a known revision.
-    _guard_schema_not_newer(_alembic_config())
+    _guard_schema_not_newer(_alembic_config(), f"sqlite+aiosqlite:///{db}")
 
 
 def test_fresh_db_passes(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -63,4 +63,4 @@ def test_fresh_db_passes(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
     _point_db_at(monkeypatch, db)
 
     # Must not raise — a fresh DB migrates cleanly from base.
-    _guard_schema_not_newer(_alembic_config())
+    _guard_schema_not_newer(_alembic_config(), f"sqlite+aiosqlite:///{db}")

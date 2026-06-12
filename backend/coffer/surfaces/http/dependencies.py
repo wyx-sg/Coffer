@@ -14,6 +14,33 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 
+# Agent-chat (spec 008) providers live in their own module; re-export them so
+# the long-standing surfaces.http.dependencies.get_chat_service paths keep working.
+from coffer.surfaces.http.chat.dependencies import (
+    get_agent_registry as get_agent_registry,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    get_chat_service as get_chat_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    get_model_service as get_model_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    get_turn_orchestrator as get_turn_orchestrator,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_agent_registry as set_agent_registry,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_chat_service as set_chat_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_model_service as set_model_service,
+)
+from coffer.surfaces.http.chat.dependencies import (
+    set_turn_orchestrator as set_turn_orchestrator,
+)
+
 # X-Coffer-Actor accepts any short identifier. Canonical values: "cli", "api",
 # "ui", "system". Tests use prefixed identifiers like "e2e-mcp"; downstream
 # integrations may add their own. Length-and-charset bounded to keep audit
@@ -356,61 +383,6 @@ def get_project_root_repo() -> Any:
     return _project_root_repo
 
 
-# --- agent chat (spec 008) dependency providers ---
-# Typed as Any to avoid importing chat-specific modules from kind-agnostic core
-# (Contract 6). Concrete types are enforced at call sites in the chat route modules.
-
-_chat_service: Any | None = None
-
-
-def set_chat_service(svc: Any) -> None:
-    global _chat_service
-    _chat_service = svc
-
-
-def get_chat_service() -> Any:
-    if _chat_service is None:
-        raise RuntimeError("chat service not initialised")
-    return _chat_service
-
-
-_model_service: Any | None = None
-
-
-def set_model_service(svc: Any) -> None:
-    global _model_service
-    _model_service = svc
-
-
-def get_model_service() -> Any:
-    if _model_service is None:
-        raise RuntimeError("model service not initialised")
-    return _model_service
-
-
-_turn_orchestrator: Any | None = None
-
-
-def set_turn_orchestrator(orchestrator: Any) -> None:
-    global _turn_orchestrator
-    _turn_orchestrator = orchestrator
-
-
-def get_turn_orchestrator() -> Any:
-    if _turn_orchestrator is None:
-        raise RuntimeError("turn orchestrator not initialised")
-    return _turn_orchestrator
-
-
-_agent_registry: Any | None = None
-
-
-def set_agent_registry(registry: Any) -> None:
-    global _agent_registry
-    _agent_registry = registry
-
-
-def get_agent_registry() -> Any:
-    if _agent_registry is None:
-        raise RuntimeError("agent registry not initialised")
-    return _agent_registry
+# Agent-chat (spec 008) dependency providers are re-exported from
+# surfaces/http/chat/dependencies.py (see the import at the top of this module),
+# which keeps this kind-agnostic core under its file-size budget.
