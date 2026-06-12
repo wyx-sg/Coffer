@@ -423,6 +423,14 @@ referenced by at least one test marked
 - **Then** each operation persists and the history list reflects it; a deleted
   conversation and its messages are removed.
 
+### Scenario: archive and restore a conversation
+
+- **Given** a conversation in the active history list,
+- **When** the user archives it,
+- **Then** it leaves the default (active) list, appears in the archived list,
+  and is not destroyed; restoring it returns it to the active list. Archiving a
+  conversation that does not exist is rejected.
+
 ### Scenario: composer locked during a streaming turn
 
 - **Given** a turn is streaming,
@@ -529,6 +537,10 @@ referenced by at least one test marked
   conversations; a new conversation MUST receive an auto-generated title derived
   from its first message; deleting a conversation MUST also tear down its agent's
   per-conversation state through the registry.
+- **FR-016a**: Users MUST be able to archive a conversation and restore it. An
+  archived conversation is excluded from the default (active) list, retrievable
+  through an archived listing, and not destroyed; archiving is reversible and
+  distinct from deletion. The conversation history MUST be searchable by title.
 - **FR-017**: A message MUST store its role and an ordered list of content blocks
   of types `text`, `tool_use`, and `tool_result`; assistant messages MUST also
   store token usage and the model that produced them when the agent reports one.

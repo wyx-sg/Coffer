@@ -53,8 +53,12 @@ class ConversationModel(Base):
     model_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
-    __table_args__ = (Index("idx_conversations_updated", "updated_at"),)
+    __table_args__ = (
+        Index("idx_conversations_updated", "updated_at"),
+        Index("idx_conversations_archived", "archived_at"),
+    )
 
 
 class MessageModel(Base):
@@ -119,6 +123,7 @@ class ConversationRepo:
             model_id=row.model_id,
             created_at=_tz(row.created_at),
             updated_at=_tz(row.updated_at),
+            archived_at=_tz(row.archived_at) if row.archived_at else None,
         )
 
     async def create(self, conversation: Conversation) -> Conversation:
@@ -142,10 +147,16 @@ class ConversationRepo:
             row = (await session.execute(stmt)).scalar_one_or_none()
             return self._to_domain(row) if row else None
 
-    async def list(self) -> list[Conversation]:
-        """Return all conversations, newest first (by ``updated_at`` desc)."""
+    async def list(self, *, archived: bool = False) -> list[Conversation]:
+        """Conversations newest first. ``archived=False`` (default) returns active
+        threads only; ``archived=True`` returns the archived ones."""
         async with self._sm() as session:
             stmt = select(ConversationModel).order_by(ConversationModel.updated_at.desc())
+            stmt = stmt.where(
+                ConversationModel.archived_at.isnot(None)
+                if archived
+                else ConversationModel.archived_at.is_(None)
+            )
             rows = (await session.execute(stmt)).scalars().all()
             return [self._to_domain(r) for r in rows]
 
@@ -180,6 +191,23 @@ class ConversationRepo:
                 update(ConversationModel)
                 .where(ConversationModel.id == conversation_id)
                 .values(model_id=model_id)
+                .returning(ConversationModel)
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                raise ConversationNotFound(conversation_id)
+            await session.commit()
+            return self._to_domain(row)
+
+    async def set_archived(
+        self, conversation_id: str, archived_at: datetime | None
+    ) -> Conversation:
+        """Archive (``archived_at`` = a timestamp) or restore (``None``)."""
+        async with self._sm() as session:
+            stmt = (
+                update(ConversationModel)
+                .where(ConversationModel.id == conversation_id)
+                .values(archived_at=archived_at)
                 .returning(ConversationModel)
             )
             row = (await session.execute(stmt)).scalar_one_or_none()

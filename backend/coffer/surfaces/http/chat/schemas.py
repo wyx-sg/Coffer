@@ -83,6 +83,7 @@ class ConversationOut(BaseModel):
     model_id: str | None
     created_at: datetime
     updated_at: datetime
+    archived_at: datetime | None = None
 
 
 class ConversationListOut(BaseModel):

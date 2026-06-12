@@ -53,8 +53,9 @@ class FakeConversationRepo:
     async def get(self, conversation_id: str) -> Conversation | None:
         return self._store.get(conversation_id)
 
-    async def list(self) -> list[Conversation]:
-        return sorted(self._store.values(), key=lambda c: c.updated_at, reverse=True)
+    async def list(self, *, archived: bool = False) -> list[Conversation]:
+        rows = [c for c in self._store.values() if (c.archived_at is not None) == archived]
+        return sorted(rows, key=lambda c: c.updated_at, reverse=True)
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation:
         conv = self._store[conversation_id]
@@ -69,6 +70,14 @@ class FakeConversationRepo:
     async def set_model(self, conversation_id: str, model_id: str | None) -> Conversation:
         conv = self._store[conversation_id]
         updated = dataclasses.replace(conv, model_id=model_id)
+        self._store[conversation_id] = updated
+        return updated
+
+    async def set_archived(
+        self, conversation_id: str, archived_at: datetime | None
+    ) -> Conversation:
+        conv = self._store[conversation_id]
+        updated = dataclasses.replace(conv, archived_at=archived_at)
         self._store[conversation_id] = updated
         return updated
 

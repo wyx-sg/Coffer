@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0011"
+HEAD_REVISION = "0012"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -138,7 +138,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
-    # 0011 -> 0010: drops embedding_config + the chat tables.
+    # 0011 -> 0010: drops embedding_config + the chat tables (renumbered below).
     command.downgrade(cfg, "0010")
     assert "embedding_config" not in _user_tables(db_path)
 

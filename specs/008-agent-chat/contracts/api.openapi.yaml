@@ -33,6 +33,14 @@ paths:
       summary: List conversations, newest first
       operationId: listConversations
       tags: [chat]
+      parameters:
+        - name: archived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: >
+            When true, returns archived conversations; the default lists active
+            (non-archived) conversations only.
       responses:
         '200':
           description: OK
@@ -109,6 +117,40 @@ paths:
       responses:
         '204':
           description: No Content
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/chat/conversations/{id}/archive:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    post:
+      summary: Archive a conversation (hide from the active list, keep restorable)
+      operationId: archiveConversation
+      tags: [chat]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/chat/conversations/{id}/unarchive:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    post:
+      summary: Restore an archived conversation into the active list
+      operationId: unarchiveConversation
+      tags: [chat]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationOut'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -353,6 +395,11 @@ components:
         model_id: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        archived_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null for an active conversation; the instant it was archived otherwise.
 
     ConversationListOut:
       type: object

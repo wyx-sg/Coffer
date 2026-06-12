@@ -42,8 +42,8 @@ class ConversationRepo(Protocol):
 
     async def get(self, conversation_id: str) -> Conversation | None: ...
 
-    async def list(self) -> list[Conversation]:
-        """Return all conversations, newest first (by ``updated_at`` desc)."""
+    async def list(self, *, archived: bool = False) -> list[Conversation]:
+        """Conversations newest first; active when ``archived`` is False."""
         ...
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation: ...
@@ -53,6 +53,10 @@ class ConversationRepo(Protocol):
         ...
 
     async def set_model(self, conversation_id: str, model_id: str | None) -> Conversation: ...
+
+    async def set_archived(
+        self, conversation_id: str, archived_at: datetime | None
+    ) -> Conversation: ...
 
     async def delete(self, conversation_id: str) -> None: ...
 
@@ -169,9 +173,9 @@ class ChatService:
         )
         return result
 
-    async def list_conversations(self) -> list[Conversation]:
-        """Return all conversations, newest first."""
-        return await self._conversations.list()
+    async def list_conversations(self, *, archived: bool = False) -> list[Conversation]:
+        """Conversations newest first; active threads only unless ``archived``."""
+        return await self._conversations.list(archived=archived)
 
     async def get_conversation(self, conversation_id: str) -> Conversation:
         """Return a conversation by id; raises ``ConversationNotFound`` if absent."""
@@ -199,6 +203,32 @@ class ChatService:
         """Override (or clear) the model for a conversation."""
         await self.get_conversation(conversation_id)  # existence check
         return await self._conversations.set_model(conversation_id, model_id)
+
+    async def archive_conversation(
+        self, conversation_id: str, *, actor: str = "user"
+    ) -> Conversation:
+        """Archive a conversation: hide it from the default list, keep it restorable."""
+        await self.get_conversation(conversation_id)  # existence check
+        result = await self._conversations.set_archived(conversation_id, datetime.now(tz=UTC))
+        await self._audit.record(
+            AuditEventType.CONVERSATION_ARCHIVED.value,
+            actor=actor,
+            details={"conversation_id": conversation_id},
+        )
+        return result
+
+    async def unarchive_conversation(
+        self, conversation_id: str, *, actor: str = "user"
+    ) -> Conversation:
+        """Restore an archived conversation back into the active list."""
+        await self.get_conversation(conversation_id)  # existence check
+        result = await self._conversations.set_archived(conversation_id, None)
+        await self._audit.record(
+            AuditEventType.CONVERSATION_UNARCHIVED.value,
+            actor=actor,
+            details={"conversation_id": conversation_id},
+        )
+        return result
 
     async def delete_conversation(
         self,

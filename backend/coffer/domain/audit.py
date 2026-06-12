@@ -57,6 +57,8 @@ class AuditEventType(StrEnum):
     # spec 008-agent-chat
     CONVERSATION_CREATED = "conversation_created"
     CONVERSATION_DELETED = "conversation_deleted"
+    CONVERSATION_ARCHIVED = "conversation_archived"
+    CONVERSATION_UNARCHIVED = "conversation_unarchived"
     CHAT_TURN_COMPLETED = "chat_turn_completed"
     MODEL_CREATED = "model_created"
     MODEL_UPDATED = "model_updated"

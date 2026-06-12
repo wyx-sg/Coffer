@@ -238,6 +238,30 @@ async def test_delete_conversation(tmp_path):  # type: ignore[no-untyped-def]
         await engine.dispose()
 
 
+async def test_archive_hides_from_default_list_and_restore_brings_it_back(tmp_path):  # type: ignore[no-untyped-def]
+    engine, conv_repo, _ = await _setup(tmp_path)
+    try:
+        c = await conv_repo.create(_conv())
+        assert c.archived_at is None
+        assert [x.id for x in await conv_repo.list()] == [c.id]
+
+        # Archive: gone from the active list, present in the archived list.
+        from datetime import UTC, datetime
+
+        archived = await conv_repo.set_archived(c.id, datetime.now(tz=UTC))
+        assert archived.archived_at is not None
+        assert await conv_repo.list() == []
+        assert [x.id for x in await conv_repo.list(archived=True)] == [c.id]
+
+        # Restore: back in the active list, gone from archived.
+        restored = await conv_repo.set_archived(c.id, None)
+        assert restored.archived_at is None
+        assert [x.id for x in await conv_repo.list()] == [c.id]
+        assert await conv_repo.list(archived=True) == []
+    finally:
+        await engine.dispose()
+
+
 # ---------------------------------------------------------------------------
 # Message tests
 # ---------------------------------------------------------------------------

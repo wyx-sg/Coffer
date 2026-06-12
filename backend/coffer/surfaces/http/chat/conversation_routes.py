@@ -59,6 +59,7 @@ def _conv_out(conv: Conversation) -> ConversationOut:
         model_id=conv.model_id,
         created_at=conv.created_at,
         updated_at=conv.updated_at,
+        archived_at=conv.archived_at,
     )
 
 
@@ -129,10 +130,12 @@ async def list_agents(
 
 @router.get("/conversations", response_model=ConversationListOut)
 async def list_conversations(
+    archived: bool = False,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
 ) -> ConversationListOut:
-    """List all conversations, newest first."""
-    convs = await svc.list_conversations()
+    """List conversations, newest first. ``?archived=true`` returns the archived
+    threads; the default lists active ones only."""
+    convs = await svc.list_conversations(archived=archived)
     return ConversationListOut(conversations=[_conv_out(c) for c in convs])
 
 
@@ -190,6 +193,26 @@ async def update_conversation(
     if set_model:
         conv = await svc.set_conversation_model(id, model_id=body.model_id)
 
+    return _conv_out(conv)
+
+
+@router.post("/conversations/{id}/archive", response_model=ConversationOut)
+async def archive_conversation(
+    id: str,
+    svc: ChatService = Depends(get_chat_service),  # noqa: B008
+) -> ConversationOut:
+    """Archive a conversation — hidden from the default list, still restorable."""
+    conv = await svc.archive_conversation(id)
+    return _conv_out(conv)
+
+
+@router.post("/conversations/{id}/unarchive", response_model=ConversationOut)
+async def unarchive_conversation(
+    id: str,
+    svc: ChatService = Depends(get_chat_service),  # noqa: B008
+) -> ConversationOut:
+    """Restore an archived conversation back into the active list."""
+    conv = await svc.unarchive_conversation(id)
     return _conv_out(conv)
 
 

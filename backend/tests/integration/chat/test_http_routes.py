@@ -138,6 +138,41 @@ def test_conversation_crud_roundtrip() -> None:
     set_active_token(None)
 
 
+@pytest.mark.acceptance(spec="008-agent-chat", scenario="archive and restore a conversation")
+def test_archive_and_unarchive_filter_the_list() -> None:
+    chat_svc, model_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, model_svc, orchestrator)
+    set_active_token(_TOKEN)
+
+    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
+        conv_id = client.post("/api/v1/chat/conversations").json()["id"]
+
+        # Active by default; archived list empty.
+        assert len(client.get("/api/v1/chat/conversations").json()["conversations"]) == 1
+        assert client.get("/api/v1/chat/conversations?archived=true").json()["conversations"] == []
+
+        # Archive → leaves the active list, appears in the archived list.
+        resp = client.post(f"/api/v1/chat/conversations/{conv_id}/archive")
+        assert resp.status_code == 200
+        assert resp.json()["archived_at"] is not None
+        assert client.get("/api/v1/chat/conversations").json()["conversations"] == []
+        archived = client.get("/api/v1/chat/conversations?archived=true").json()["conversations"]
+        assert [c["id"] for c in archived] == [conv_id]
+
+        # Unarchive → back to active.
+        resp = client.post(f"/api/v1/chat/conversations/{conv_id}/unarchive")
+        assert resp.status_code == 200
+        assert resp.json()["archived_at"] is None
+        active = client.get("/api/v1/chat/conversations").json()["conversations"]
+        assert [c["id"] for c in active] == [conv_id]
+
+        # Archiving a missing conversation → 404.
+        resp = client.post("/api/v1/chat/conversations/nope/archive")
+        assert resp.status_code == 404
+
+    set_active_token(None)
+
+
 def test_get_conversation_not_found_returns_404() -> None:
     chat_svc, model_svc, orchestrator = _make_services()
     app = _build_app(chat_svc, model_svc, orchestrator)
