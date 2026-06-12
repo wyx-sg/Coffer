@@ -28,6 +28,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/agents" replace /> },
       { path: "chat", element: <ChatPage /> },
+      { path: "chat/:id", element: <ChatPage /> },
       { path: "mcp-servers", element: <ResourcesPage /> },
       { path: "mcp-servers/:kind/:name", element: <ResourceDetailPage /> },
       // Legacy route — this surface used to live at /resources. Keep old

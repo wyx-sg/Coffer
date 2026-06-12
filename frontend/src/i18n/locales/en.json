@@ -865,13 +865,17 @@
       "toggleAria": "Toggle tool call {{name}}"
     },
     "newConversation": {
-      "title": "New conversation",
-      "agentHint": "Choose which agent this conversation will talk to.",
       "agent": "Agent",
       "model": "Model",
       "noModels": "No models yet — add one in Settings → Models first.",
-      "create": "Start conversation",
       "unavailable": "unavailable"
+    },
+    "draft": {
+      "guide": "Message {{agent}} to start a new conversation."
+    },
+    "delete": {
+      "title": "Delete this conversation?",
+      "body": "This conversation and all of its messages will be permanently removed."
     },
     "approval": {
       "title": "Approval required",

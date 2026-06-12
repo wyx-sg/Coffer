@@ -1,13 +1,12 @@
 // pages/ChatPage.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ChatPage } from "./ChatPage";
 import type { Conversation } from "@/lib/api/chat";
 import type { Model } from "@/lib/api/models";
 
-// Mock the hooks to isolate the page component.
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
     listConversations: vi.fn(),
@@ -16,16 +15,12 @@ vi.mock("@/lib/api/chat", () => ({
     updateConversation: vi.fn(),
     deleteConversation: vi.fn(),
     listMessages: vi.fn(),
+    listAgents: vi.fn(),
   },
 }));
 
 vi.mock("@/lib/api/models", () => ({
-  modelsApi: {
-    list: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    remove: vi.fn(),
-  },
+  modelsApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
 
 vi.mock("@/lib/chat/streamClient", () => ({
@@ -34,7 +29,6 @@ vi.mock("@/lib/chat/streamClient", () => ({
 
 const { chatApi } = await import("@/lib/api/chat");
 const { modelsApi } = await import("@/lib/api/models");
-
 const chatApiMock = chatApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const modelsApiMock = modelsApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
@@ -59,12 +53,20 @@ const makeModel = (overrides?: Partial<Model>): Model => ({
   ...overrides,
 });
 
-function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+function renderPage(initialPath = "/chat") {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  chatApiMock.listAgents = vi.fn().mockResolvedValue({
+    agents: [{ agent_key: "builtin", display_name: "Coffer Assistant", available: true }],
+  });
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialPath]}>
       <QueryClientProvider client={qc}>
-        <ChatPage />
+        <Routes>
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat/:id" element={<ChatPage />} />
+        </Routes>
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -79,79 +81,81 @@ describe("ChatPage", () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     modelsApiMock.list.mockResolvedValue({ models: [] });
     renderPage();
-    // History panel header
     expect(await screen.findByText("Conversations")).toBeInTheDocument();
   });
 
-  test("shows no-model empty state when conversation selected has no model AND no models configured", async () => {
-    const conv = makeConv({ model_id: null });
-    chatApiMock.listConversations.mockResolvedValue({ conversations: [conv] });
-    modelsApiMock.list.mockResolvedValue({ models: [] });
-    chatApiMock.listMessages = vi.fn().mockResolvedValue({ messages: [] });
-    renderPage();
-
-    // Click on the conversation
-    const item = await screen.findByText("Test Conv");
-    item.click();
-
-    await waitFor(() =>
-      expect(screen.getByText("No model configured")).toBeInTheDocument(),
-    );
-  });
-
-  test("does NOT show no-model empty state when conversation has model_id null but models are configured (I2)", async () => {
-    // FR-016: a conversation with model_id=null uses the default model — it is valid.
-    const conv = makeConv({ model_id: null });
-    chatApiMock.listConversations.mockResolvedValue({ conversations: [conv] });
+  test("bare /chat shows the draft surface (composer), not a modal", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
-    chatApiMock.listMessages = vi.fn().mockResolvedValue({ messages: [] });
-    renderPage();
-
-    // Click on the conversation
-    const item = await screen.findByText("Test Conv");
-    item.click();
-
-    // Empty state must NOT appear when models exist
-    await waitFor(() =>
-      expect(screen.queryByText("No model configured")).not.toBeInTheDocument(),
-    );
+    renderPage("/chat");
+    // Draft guide + composer are present; no "Start conversation" dialog button.
+    expect(await screen.findByText(/start a new conversation/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /start conversation/i })).not.toBeInTheDocument();
   });
 
-  test("shows 'select or create' prompt when no conversation active", async () => {
+  test("draft with no models shows the no-model empty state", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     modelsApiMock.list.mockResolvedValue({ models: [] });
-    renderPage();
+    renderPage("/chat");
+    expect(await screen.findByText("No model configured")).toBeInTheDocument();
+  });
+
+  test("/chat/:id opens that conversation's thread (URL-addressable)", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
+    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderPage("/chat/conv-1");
+    // The thread's empty prompt (not the draft guide) appears for a real conv.
     await waitFor(() =>
-      expect(
-        screen.getByText(/select a conversation or start a new one/i),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/send a message to start the conversation/i)).toBeInTheDocument(),
     );
   });
 
-  test("renders conversation list items", async () => {
-    chatApiMock.listConversations.mockResolvedValue({
-      conversations: [makeConv(), makeConv({ id: "conv-2", title: "Second Chat" })],
-    });
+  test("sending the first message in the draft creates a conversation", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
-    renderPage();
-    expect(await screen.findByText("Test Conv")).toBeInTheDocument();
-    expect(await screen.findByText("Second Chat")).toBeInTheDocument();
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
+    renderPage("/chat");
+
+    const composer = await screen.findByRole("textbox", { name: /message input/i });
+    fireEvent.change(composer, { target: { value: "hello there" } });
+    fireEvent.keyDown(composer, { key: "Enter", shiftKey: false });
+
+    await waitFor(() =>
+      expect(chatApiMock.createConversation).toHaveBeenCalledWith({
+        agent_key: "builtin",
+        agent_config: { model_id: "model-1" },
+      }),
+    );
+  });
+
+  test("deleting a conversation asks for confirmation first", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
+    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderPage("/chat/conv-1");
+
+    // Reveal the row's delete control and click it.
+    const delBtn = await screen.findByRole("button", { name: /delete/i });
+    fireEvent.click(delBtn);
+
+    // A confirm dialog appears; the API is NOT called until confirmed.
+    expect(await screen.findByText(/delete this conversation\?/i)).toBeInTheDocument();
+    expect(chatApiMock.deleteConversation).not.toHaveBeenCalled();
   });
 
   test("surfaces an error when creating a conversation fails", async () => {
-    const { fireEvent } = await import("@testing-library/react");
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
     chatApiMock.createConversation.mockRejectedValue(new Error("boom"));
+    renderPage("/chat");
 
-    renderPage();
+    const composer = await screen.findByRole("textbox", { name: /message input/i });
+    fireEvent.change(composer, { target: { value: "hi" } });
+    fireEvent.keyDown(composer, { key: "Enter", shiftKey: false });
 
-    // Open the new-conversation dialog and confirm.
-    const openButtons = await screen.findAllByRole("button", { name: /new chat/i });
-    fireEvent.click(openButtons[0]);
-    fireEvent.click(await screen.findByRole("button", { name: /start conversation/i }));
-
-    // The failure must be surfaced, not silently swallowed.
     expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
 });
