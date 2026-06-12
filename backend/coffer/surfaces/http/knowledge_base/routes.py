@@ -89,7 +89,7 @@ async def list_kbs(
     out = []
     for r in resources:
         try:
-            count = int((await kb_svc.metrics(kb_name=r.name)).get("document_count", 0))
+            count = cast(int, (await kb_svc.metrics(kb_name=r.name)).get("document_count", 0))
         except Exception:
             count = 0
         out.append(_to_kb_out(r, document_count=count))

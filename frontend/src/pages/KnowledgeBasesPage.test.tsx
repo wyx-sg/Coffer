@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
 import { KnowledgeBasesPage } from "./KnowledgeBasesPage";
+import type { KnowledgeBaseOut } from "@/kinds/knowledge_base/api";
 
 vi.mock("@/kinds/knowledge_base/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/kinds/knowledge_base/api")>()),
@@ -30,13 +31,13 @@ function wrap() {
   );
 }
 
-const KB = {
+const KB: KnowledgeBaseOut = {
   ref: "knowledge_base:designs",
   kind: "knowledge_base",
   name: "designs",
   description: "design notes",
   config: {
-    enabled_modes: ["keyword", "grep"],
+    enabled_modes: ["keyword", "grep"] as ("keyword" | "grep" | "vector")[],
     default_mode: "keyword",
     chunk_size: 1000,
     chunk_overlap: 100,
@@ -44,9 +45,10 @@ const KB = {
     embedding: null,
   },
   enabled: true,
+  document_count: 3,
   created_at: "2026-05-29T00:00:00Z",
   updated_at: "2026-05-29T00:00:00Z",
-};
+} as unknown as KnowledgeBaseOut;
 
 describe("KnowledgeBasesPage", () => {
   test("renders the loading state while the query is pending", () => {

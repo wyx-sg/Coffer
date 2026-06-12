@@ -88,7 +88,7 @@ async def _store_out(r: Resource, roots: object, mem_svc: MemoryService) -> Memo
     scope, _ = _scope_of(r.name)
     project_root = None if scope == "global" else await roots.get(r.name)  # type: ignore[attr-defined]
     try:
-        fact_count = int((await mem_svc.metrics(store_name=r.name)).get("fact_count", 0))
+        fact_count = cast(int, (await mem_svc.metrics(store_name=r.name)).get("fact_count", 0))
     except Exception:
         fact_count = 0
     out = _to_store_out(r, project_root=project_root)
