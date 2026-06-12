@@ -30,8 +30,9 @@ from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config_files import FileStat, spec_for
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import PluginNotFound, PluginUninstallUnsupported, ResourceNotFound
+from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
+from coffer.domain.workspace_errors import PluginNotFound, PluginUninstallUnsupported
 
 pytestmark = pytest.mark.asyncio
 

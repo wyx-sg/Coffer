@@ -36,12 +36,14 @@ from coffer.infrastructure.skill.sync_engine import SyncEngine
 from coffer.infrastructure.skill.workspace_scan import WorkspaceScan
 from coffer.surfaces.http.dependencies import (
     set_agent_config_file_service,
-    set_agent_mcp_entry_service,
     set_agent_mcp_service,
-    set_agent_plugin_service,
     set_agent_service,
     set_auto_detect_service,
     set_skill_service,
+)
+from coffer.surfaces.http.workspace_dependencies import (
+    set_agent_mcp_entry_service,
+    set_agent_plugin_service,
 )
 
 if TYPE_CHECKING:

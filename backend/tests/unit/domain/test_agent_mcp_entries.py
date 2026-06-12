@@ -6,7 +6,7 @@ import pytest
 
 from coffer.domain.agent import mcp_entries as me
 from coffer.domain.agent.config_files import ConfigFileFormat
-from coffer.domain.errors import AgentConfigParseError, McpEntryNotFound
+from coffer.domain.workspace_errors import AgentConfigParseError, McpEntryNotFound
 
 CLAUDE_JSON = (
     '{"mcpServers": {"coffer": {"command": "/bin/coffer-mcp-shim"}, '

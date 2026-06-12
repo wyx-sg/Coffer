@@ -41,8 +41,9 @@ from coffer.domain.agent.config_files import (
     validate_content,
 )
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import ConfigFileNotAllowed, ConfigFileStale
+from coffer.domain.errors import ConfigFileNotAllowed
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.workspace_errors import ConfigFileStale
 
 # Prefix of the managed memory-projection block marker (spec 007 owns the full
 # format); the editor only needs to KNOW the block is present, never parse it.

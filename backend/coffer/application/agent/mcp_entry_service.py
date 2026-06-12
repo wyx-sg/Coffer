@@ -40,16 +40,16 @@ from coffer.domain.agent.mcp_entries import (
 )
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
+from coffer.domain.errors import ConfigFileNotAllowed
+from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.workspace_errors import (
     AdoptSecretUnresolved,
     AgentConfigParseError,
-    ConfigFileNotAllowed,
     McpEntryNotFound,
     McpEntryProtected,
     McpEntrySourceAmbiguous,
     McpEntryToggleUnsupported,
 )
-from coffer.domain.resource import Resource, ResourceRef
 
 # Which allowlisted config-file keys hold each type's MCP servers.
 _MCP_SOURCE_KEYS: dict[AgentType, list[str]] = {

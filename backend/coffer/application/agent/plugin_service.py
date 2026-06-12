@@ -38,12 +38,12 @@ from coffer.domain.agent.plugin_state import (
 )
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
+from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.workspace_errors import (
     AgentConfigParseError,
     PluginNotFound,
     PluginUninstallUnsupported,
 )
-from coffer.domain.resource import Resource, ResourceRef
 
 
 class _AgentLookup(Protocol):

@@ -335,7 +335,7 @@ def test_adopt_failure_rolls_back(tmp_path, monkeypatch, fake_keyring):
 
         # Force the config-file removal write (the step AFTER resource
         # registration) to fail with the spec's example error.
-        from coffer.domain.errors import ConfigFileStale
+        from coffer.domain.workspace_errors import ConfigFileStale
 
         def _stale(self, path, text):
             raise ConfigFileStale("config")

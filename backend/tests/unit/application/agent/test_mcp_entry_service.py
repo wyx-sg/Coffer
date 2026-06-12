@@ -34,16 +34,15 @@ from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config_files import FileStat, spec_for
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
+from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
+from coffer.domain.mcp.server_config import MCPServerConfig
+from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.workspace_errors import (
     AdoptSecretUnresolved,
     McpEntryProtected,
     McpEntrySourceAmbiguous,
     McpEntryToggleUnsupported,
-    ResourceAlreadyExists,
-    ResourceNotFound,
 )
-from coffer.domain.mcp.server_config import MCPServerConfig
-from coffer.domain.resource import Resource, ResourceRef
 
 pytestmark = pytest.mark.asyncio
 

@@ -21,11 +21,8 @@ from typing import Any
 import tomlkit
 
 from coffer.domain.agent.config_files import ConfigFileFormat
-from coffer.domain.errors import (
-    AgentConfigParseError,
-    ConfigFileFormatInvalid,
-    McpEntryNotFound,
-)
+from coffer.domain.errors import ConfigFileFormatInvalid
+from coffer.domain.workspace_errors import AgentConfigParseError, McpEntryNotFound
 
 COFFER_SERVER_KEY = "coffer"
 _SECRET_KEY_RE = re.compile(

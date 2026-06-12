@@ -141,7 +141,7 @@ export interface UnmanagedSkillsResponse {
   items: UnmanagedSkillOut[];
 }
 
-async function call<T>(
+export async function call<T>(
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
@@ -173,7 +173,7 @@ async function call<T>(
 // Agent names and config-file keys are interpolated into URL paths; encode them
 // so a name/key with URL-significant characters can't malform or misroute the
 // request (defence in depth — the daemon also constrains names server-side).
-const enc = encodeURIComponent;
+export const enc = encodeURIComponent;
 
 export const agentsApi = {
   list: () => call<AgentListOut>("GET", "/agents"),
@@ -270,39 +270,3 @@ export const agentsApi = {
       `/agents/${enc(name)}/unmanaged-skills/${enc(skill)}?location=${encodeURIComponent(location)}`,
     ),
 };
-
-export interface NativeMemoryProject {
-  slug: string;
-  memory_dir: string;
-  fact_count: number;
-  managed: boolean;
-}
-
-export interface NativeMemoryOut {
-  projects: NativeMemoryProject[];
-  unmanaged_fact_count: number;
-}
-
-export async function getAgentNativeMemory(name: string): Promise<NativeMemoryOut> {
-  return call<NativeMemoryOut>("GET", `/agents/${enc(name)}/native-memory`);
-}
-
-export interface NativeMemoryImportItem {
-  slug: string;
-  fact_count: number;
-  status: string; // imported | skipped_undecodable | skipped_managed | error
-  project_root: string | null;
-  store_name: string | null;
-  backup_dir: string | null;
-  detail: string | null;
-}
-
-export interface NativeMemoryImportOut {
-  items: NativeMemoryImportItem[];
-  imported: number;
-  skipped: number;
-}
-
-export async function importAgentNativeMemory(name: string): Promise<NativeMemoryImportOut> {
-  return call<NativeMemoryImportOut>("POST", `/agents/${enc(name)}/native-memory/import`);
-}

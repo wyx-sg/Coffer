@@ -306,36 +306,6 @@ def get_agent_mcp_service() -> Any:
     return _agent_mcp_service
 
 
-_agent_mcp_entry_service: Any | None = None
-_agent_plugin_service: Any | None = None
-
-
-def set_agent_mcp_entry_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _agent_mcp_entry_service
-    _agent_mcp_entry_service = svc
-
-
-def get_agent_mcp_entry_service() -> Any:
-    """FastAPI Depends() target — actual type is AgentMcpEntryService."""
-    if _agent_mcp_entry_service is None:
-        raise RuntimeError("agent MCP-entry service not initialised")
-    return _agent_mcp_entry_service
-
-
-def set_agent_plugin_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _agent_plugin_service
-    _agent_plugin_service = svc
-
-
-def get_agent_plugin_service() -> Any:
-    """FastAPI Depends() target — actual type is AgentPluginService."""
-    if _agent_plugin_service is None:
-        raise RuntimeError("agent plugin service not initialised")
-    return _agent_plugin_service
-
-
 def get_fs_browse_service() -> Any:
     """FastAPI Depends() target — actual type is FsBrowseService.
 

@@ -32,8 +32,9 @@ from coffer.application.agent.config_file_service import (
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config_files import DirEntryInfo, FileStat
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import ConfigFileNotAllowed, ConfigFileStale
+from coffer.domain.errors import ConfigFileNotAllowed
 from coffer.domain.resource import Resource
+from coffer.domain.workspace_errors import ConfigFileStale
 
 pytestmark = pytest.mark.asyncio
 

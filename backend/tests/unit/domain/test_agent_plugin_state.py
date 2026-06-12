@@ -3,7 +3,7 @@ import json
 import pytest
 
 from coffer.domain.agent import plugin_state as ps
-from coffer.domain.errors import AgentConfigParseError, PluginNotFound
+from coffer.domain.workspace_errors import AgentConfigParseError, PluginNotFound
 
 CODEX_TOML = """
 [marketplaces.openai-curated]

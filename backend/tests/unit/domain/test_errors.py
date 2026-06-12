@@ -1,4 +1,4 @@
-import coffer.domain.errors as derr
+import coffer.domain.workspace_errors as derr
 from coffer.domain.errors import (
     CofferError,
     ConfigValidationError,

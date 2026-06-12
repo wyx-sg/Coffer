@@ -23,12 +23,12 @@ from coffer.domain.agent.plugin_state import MarketplaceInfo
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
-from coffer.surfaces.http.dependencies import (
+from coffer.surfaces.http.dependencies import get_agent_service
+from coffer.surfaces.http.errors import error_response
+from coffer.surfaces.http.workspace_dependencies import (
     get_agent_mcp_entry_service,
     get_agent_plugin_service,
-    get_agent_service,
 )
-from coffer.surfaces.http.errors import error_response
 
 router = APIRouter(
     prefix="/api/v1/agents",

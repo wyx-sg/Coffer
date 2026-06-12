@@ -17,11 +17,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import UnmanagedSkillInvalid, UnmanagedSkillNotFound
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.skill.scan import UnmanagedSkill, classify
 from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import ValidationOk, validate_skill_folder
+from coffer.domain.workspace_errors import UnmanagedSkillInvalid, UnmanagedSkillNotFound
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService

@@ -24,13 +24,9 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.scan import scan_locations
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
-    ResourceAlreadyExists,
-    ResourceNotFound,
-    UnmanagedSkillInvalid,
-    UnmanagedSkillNotFound,
-)
+from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.resource import Resource
+from coffer.domain.workspace_errors import UnmanagedSkillInvalid, UnmanagedSkillNotFound
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
