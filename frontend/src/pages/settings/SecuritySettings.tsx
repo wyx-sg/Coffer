@@ -48,7 +48,7 @@ export function SecuritySettings() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <Label>{t("settings.security.masterKey.toggle")}</Label>
+            <Label htmlFor="master-key-keychain">{t("settings.security.masterKey.toggle")}</Label>
             <p className="text-xs text-muted-foreground">
               {isKeychain
                 ? t("settings.security.masterKey.keychainNote")
@@ -56,6 +56,7 @@ export function SecuritySettings() {
             </p>
           </div>
           <Switch
+            id="master-key-keychain"
             checked={isKeychain}
             disabled={update.isPending}
             onCheckedChange={(checked) => {
