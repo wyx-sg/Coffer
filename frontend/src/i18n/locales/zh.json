@@ -414,6 +414,7 @@
       "notReadyBody": "Coffer 的后台服务暂时还连不上。它通常会自动启动——请刷新页面；若问题仍未解决，请重启 Coffer。",
       "restart": "重启守护进程",
       "restarting": "重启中…",
+      "reconnectFailed": "守护进程已重启，但应用未能重新连接：{{message}}。请退出并重新打开 Coffer。",
       "reload": "重新加载"
     }
   },
@@ -942,7 +943,15 @@
     },
     "thread": {
       "empty": "发送消息开始对话。",
-      "selectOrCreate": "选择一个对话或新建一个。"
+      "selectOrCreate": "选择一个对话或新建一个。",
+      "notFoundTitle": "未找到该对话",
+      "notFoundBody": "它可能已被删除，或者链接已失效。",
+      "notFoundCta": "开始新对话"
+    },
+    "archivedThread": {
+      "notice": "该对话已归档。",
+      "restore": "恢复以继续对话",
+      "restoring": "恢复中…"
     },
     "composer": {
       "placeholder": "发消息给 Coffer 助手…（Enter 发送，Shift+Enter 换行）",

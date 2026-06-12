@@ -62,14 +62,20 @@ Coffer 有三个可运行入口：长生命周期的 `coffer-daemon`、按 MCP �
   PyInstaller 产出的二进制通过 `tauri.conf.json` 的 `bundle.externalBin`
   接入；外壳通过 `~/.coffer/daemon.json` ([ADR-006](ADR-006-daemon-detect-or-spawn.md)) 发现 daemon，而不是
   直接拉起，这样同一对二进制也能被 CLI 与外部 MCP 客户端复用。
-- 每次启动，桌面应用把 `coffer-mcp-shim` 部署到稳定的用户可写 PATH 目录，
-  使 MCP 客户端可以解析 `command: coffer-mcp-shim` 配置：macOS / Linux：
-  `~/.coffer/bin/coffer-mcp-shim`；Windows：
-  `%LOCALAPPDATA%\Coffer\bin\coffer-mcp-shim.exe`（`%LOCALAPPDATA%` 未
-  设时退回 `%USERPROFILE%\Coffer\bin\`）。POSIX 路径与 [ADR-006](ADR-006-daemon-detect-or-spawn.md)
-  里的 `~/.coffer/daemon.json` 共处一处，简化用户心智模型（"Coffer 的所有
+- 每次启动，桌面应用把 `coffer-mcp-shim` 与 `coffer-daemon` 都部署到稳定
+  的用户可写 PATH 目录，使 MCP 客户端可以解析 `command: coffer-mcp-shim`
+  配置：macOS / Linux：`~/.coffer/bin/`；Windows：
+  `%LOCALAPPDATA%\Coffer\bin\`（`%LOCALAPPDATA%` 未设时退回
+  `%USERPROFILE%\Coffer\bin\`）。daemon 与 shim 共处一处是因为冻结态
+  shim 的 detect-or-spawn（[ADR-006](ADR-006-daemon-detect-or-spawn.md)）
+  会探测同目录的 `coffer-daemon` —— 若只部署 shim，重启后（桌面应用未
+  运行、autostart 关闭）MCP 客户端拉起 shim 时将无 daemon 可启。POSIX
+  路径与 [ADR-006](ADR-006-daemon-detect-or-spawn.md) 里的
+  `~/.coffer/daemon.json` 共处一处，简化用户心智模型（"Coffer 的所有
   东西都在 `~/.coffer/` 之下"）。如果该目录尚未在 `PATH` 上，首次启动会
-  弹一次提示。
+  弹一次提示。作为对早期"仅部署 shim"版本的兜底，冻结态 spawn 解析在
+  macOS 上还会最后探测已安装 bundle 内的 daemon
+  （`/Applications/Coffer.app/Contents/MacOS/coffer-daemon`）。
 - macOS Apple 公证暂缓（需要付费 Apple Developer 账号）。macOS 用户首次
   启动时手动 `xattr -d com.apple.quarantine /Applications/Coffer.app`
   解除隔离。在 secrets 就位之后启用签名 + 公证的步骤见
@@ -208,6 +214,13 @@ Coffer 有三个可运行入口：长生命周期的 `coffer-daemon`、按 MCP �
   `https://wyx-sg.github.io/Coffer/` 提供）安装到 `~/.coffer/bin`；脚本同时
   自动将 `~/.coffer/bin` 添加到 `PATH`。支持的环境变量覆盖：
   `COFFER_INSTALL_DIR`、`COFFER_VERSION`、`COFFER_NO_MODIFY_PATH`。
+- **2026-06-12** —— 桌面部署现在把**两个** sidecar 都发到用户 bin 目录：
+  `coffer-daemon` 与 `coffer-mcp-shim` 一起复制到 `~/.coffer/bin/`
+  （沿用同一套幂等的原子替换 + 版本哨兵逻辑），使冻结态 shim 的
+  ADR-006 同目录探测在重启后能找到可自启的 daemon。冻结态 spawn 解析
+  另外新增一个仅 macOS 的最终探测
+  `/Applications/Coffer.app/Contents/MacOS/coffer-daemon`，覆盖旧版
+  桌面构建只部署了 shim 的情况。
 - **2026-06-05** —— 发布范围收窄为**仅 macOS（Apple Silicon）**。Linux 与
   Windows 的 Tauri bundle 目标（`deb` / `appimage` / `msi` / `nsis`）以及
   Linux 的 release matrix leg 从未端到端验证过,因此从 `release.yml` 和

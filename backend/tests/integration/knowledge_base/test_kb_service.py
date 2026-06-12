@@ -219,6 +219,27 @@ async def test_delete_document_removes_files_and_rows(kb) -> None:
     assert (await kb.service.search(kb_name="kb1", query="grape", top_k=5)).passages == ()
 
 
+async def test_same_file_in_two_kbs_keeps_both_searchable(kb) -> None:
+    """Doc ids are content-addressed (sha256[:16] of the file), so the same
+    file in two KBs shares one id. The second ingest must not corrupt the first
+    KB's index, and deleting the doc from one KB must not wipe the other's
+    chunks (P0: cross-KB chunk-id collision)."""
+    await kb.create_kb("kb1")
+    await kb.create_kb("kb2")
+    payload = b"# Mango\n\nshared mango facts"
+    doc1 = await _ingest(kb, "kb1", "mango.md", payload)
+    doc2 = await _ingest(kb, "kb2", "mango.md", payload)
+    assert doc1.id == doc2.id  # content-addressed: same file => same doc id
+
+    assert (await kb.service.search(kb_name="kb1", query="mango", top_k=5)).passages
+    assert (await kb.service.search(kb_name="kb2", query="mango", top_k=5)).passages
+
+    await kb.service.delete_document(kb_name="kb2", document_id=doc2.id, actor="user")
+    assert (await kb.service.search(kb_name="kb1", query="mango", top_k=5)).passages
+    assert (await kb.service.search(kb_name="kb2", query="mango", top_k=5)).passages == ()
+    assert await kb.documents.count_chunks("knowledge_base", "kb1") >= 1
+
+
 @pytest.mark.acceptance(
     spec="006-knowledge-base", scenario="delete a knowledge base cleans up files and index"
 )

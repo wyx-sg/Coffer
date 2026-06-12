@@ -62,25 +62,29 @@ pub fn run() {
         .setup(|app| {
             tray::build_tray(&app.handle())?;
 
-            // Auto-deploy the bundled shim binary to the user's PATH on every
-            // startup. Idempotent (skips when fresh per shim_needs_copy).
+            // Auto-deploy the bundled shim + daemon binaries to the user's
+            // PATH on every startup. Idempotent (skips when fresh per
+            // shim_needs_copy). Co-locating the daemon lets the frozen shim's
+            // detect-or-spawn find its sibling after a reboot (ADR-006).
             // Best-effort — log and continue on failure; users can fall back
             // to the manual "Deploy shim" button in Daemon settings.
-            // `deploy_shim_to_user_path` does synchronous blocking fs work
+            // `deploy_sidecars_to_user_path` does synchronous blocking fs work
             // (metadata/read/copy), so run it on a blocking thread rather than
             // an async worker to keep the tokio runtime responsive.
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn_blocking(move || {
-                match shim::deploy_shim_to_user_path(app_handle) {
-                    Ok(result) => {
-                        if result.deployed {
-                            log::info!("shim auto-deployed to {}", result.path);
-                        } else {
-                            log::debug!("shim already current at {}", result.path);
+                match shim::deploy_sidecars_to_user_path(app_handle) {
+                    Ok(results) => {
+                        for result in results {
+                            if result.deployed {
+                                log::info!("sidecar auto-deployed to {}", result.path);
+                            } else {
+                                log::debug!("sidecar already current at {}", result.path);
+                            }
                         }
                     }
                     Err(e) => {
-                        log::warn!("shim auto-deploy failed: {}", e);
+                        log::warn!("sidecar auto-deploy failed: {}", e);
                     }
                 }
             });

@@ -13,6 +13,7 @@ to keyword without touching this code path.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 
 from sqlalchemy import bindparam, text
@@ -23,8 +24,28 @@ from coffer.infrastructure.knowledge.models import ChunkModel
 from coffer.infrastructure.knowledge.vec_index import VecIndex
 
 
+def store_scope(kind: str, resource_name: str) -> str:
+    """12-hex digest namespacing chunk ids per ``(kind, resource_name)`` store.
+
+    Document ids are content-addressed, so the same file ingested into two
+    stores repeats its document id; a bare ``<doc-id>:<position>`` chunk id
+    would collide across stores (``chunks.id`` is the PK and ``documents_fts``
+    has no ``kind`` column), letting the second store steal the first store's
+    chunk + FTS rows. The digest prefix keeps chunk ids globally unique. Keep
+    in sync with migration 0017, which rekeys pre-existing rows.
+    """
+    return hashlib.sha1(f"{kind}\x00{resource_name}".encode()).hexdigest()[:12]
+
+
 class SqliteKnowledgeIndex:
-    """chunk + FTS5 (+ optional vec) index over the unified tables."""
+    """chunk + FTS5 (+ optional vec) index over the unified tables.
+
+    Chunk/FTS rows are keyed ``'<store-scope>:<doc-id>:<position>'`` (globally
+    unique, see ``store_scope``). The sqlite-vec rows keep the bare
+    ``'<doc-id>:<position>'`` id: the vec table is already per-store (named by
+    kind + resource), so bare ids are unambiguous there and existing vec rows
+    survive the 0017 rekey without a rebuild.
+    """
 
     def __init__(
         self,
@@ -37,7 +58,11 @@ class SqliteKnowledgeIndex:
         self._sm = sm
         self._kind = kind
         self._resource = resource_name
+        self._scope = store_scope(kind, resource_name)
         self._vec = vec
+
+    def _chunk_id(self, document_id: str, position: int) -> str:
+        return f"{self._scope}:{document_id}:{position}"
 
     # --- writes -------------------------------------------------------------
 
@@ -50,17 +75,19 @@ class SqliteKnowledgeIndex:
         # Delete + insert in ONE transaction: a two-commit replace would let a
         # concurrent upsert interleave between them (PK IntegrityError /
         # duplicated FTS rows) and let a concurrent search see the document
-        # vanish mid-replace.
+        # vanish mid-replace. Everything is scoped to THIS store: the same
+        # document_id may live in other stores (content-addressed ids).
         async with self._sm() as session:
-            old_ids = [
-                r[0]
-                for r in (
-                    await session.execute(
-                        text("SELECT id FROM chunks WHERE document_id = :d"),
-                        {"d": document_id},
-                    )
-                ).all()
-            ]
+            old = (
+                await session.execute(
+                    text(
+                        "SELECT id, position FROM chunks WHERE document_id = :d "
+                        "AND kind = :kind AND resource_name = :rn"
+                    ),
+                    {"d": document_id, "kind": self._kind, "rn": self._resource},
+                )
+            ).all()
+            old_ids = [str(r.id) for r in old]
             if old_ids:
                 await session.execute(
                     text("DELETE FROM documents_fts WHERE chunk_id IN :ids").bindparams(
@@ -69,11 +96,14 @@ class SqliteKnowledgeIndex:
                     {"ids": old_ids},
                 )
                 await session.execute(
-                    text("DELETE FROM chunks WHERE document_id = :d"),
-                    {"d": document_id},
+                    text(
+                        "DELETE FROM chunks WHERE document_id = :d "
+                        "AND kind = :kind AND resource_name = :rn"
+                    ),
+                    {"d": document_id, "kind": self._kind, "rn": self._resource},
                 )
             for position, chunk in enumerate(chunks):
-                chunk_id = f"{document_id}:{position}"
+                chunk_id = self._chunk_id(document_id, position)
                 session.add(
                     ChunkModel(
                         id=chunk_id,
@@ -91,16 +121,18 @@ class SqliteKnowledgeIndex:
                     {"text": chunk, "rn": self._resource, "cid": chunk_id},
                 )
             await session.commit()
-        if self._vec is not None and old_ids:
+        # Vec rows keep the bare '<doc-id>:<position>' id (per-store table).
+        old_vec_ids = [f"{document_id}:{int(r.position)}" for r in old]
+        if self._vec is not None and old_vec_ids:
             if vectors is None:
                 # No fresh vectors for the new text: stale embeddings must not
                 # survive a re-chunk (they'd describe the OLD content).
-                await self._vec.delete(old_ids)
+                await self._vec.delete(old_vec_ids)
             else:
                 # The upsert below overwrites surviving ids; only remove extras
                 # (e.g. the chunk count shrank).
                 new_ids = {f"{document_id}:{p}" for p in range(len(chunks))}
-                await self._vec.delete([cid for cid in old_ids if cid not in new_ids])
+                await self._vec.delete([cid for cid in old_vec_ids if cid not in new_ids])
         if vectors is not None and self._vec is not None and self._vec.available():
             rows = [
                 (f"{document_id}:{position}", vector) for position, vector in enumerate(vectors)
@@ -109,16 +141,19 @@ class SqliteKnowledgeIndex:
         return len(chunks)
 
     async def delete_chunks(self, document_id: str) -> None:
+        # Scoped to THIS store: the same document_id may live in other stores
+        # (content-addressed ids); deleting here must not wipe theirs.
         async with self._sm() as session:
-            ids = [
-                r[0]
-                for r in (
-                    await session.execute(
-                        text("SELECT id FROM chunks WHERE document_id = :d"),
-                        {"d": document_id},
-                    )
-                ).all()
-            ]
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT id, position FROM chunks WHERE document_id = :d "
+                        "AND kind = :kind AND resource_name = :rn"
+                    ),
+                    {"d": document_id, "kind": self._kind, "rn": self._resource},
+                )
+            ).all()
+            ids = [str(r.id) for r in rows]
             if ids:
                 await session.execute(
                     text("DELETE FROM documents_fts WHERE chunk_id IN :ids").bindparams(
@@ -127,12 +162,16 @@ class SqliteKnowledgeIndex:
                     {"ids": ids},
                 )
                 await session.execute(
-                    text("DELETE FROM chunks WHERE document_id = :d"),
-                    {"d": document_id},
+                    text(
+                        "DELETE FROM chunks WHERE document_id = :d "
+                        "AND kind = :kind AND resource_name = :rn"
+                    ),
+                    {"d": document_id, "kind": self._kind, "rn": self._resource},
                 )
                 await session.commit()
-        if self._vec is not None and ids:
-            await self._vec.delete(ids)
+        if self._vec is not None and rows:
+            # Vec rows keep the bare '<doc-id>:<position>' id (per-store table).
+            await self._vec.delete([f"{document_id}:{int(r.position)}" for r in rows])
 
     async def drop_store(self) -> None:
         """Drop this store's per-store vector table (store-level cleanup).
@@ -190,8 +229,10 @@ class SqliteKnowledgeIndex:
         knn = await self._vec.knn(vector, top_k)
         if not knn:
             return []
+        # KNN ids are the bare '<doc-id>:<position>' (per-store vec table);
+        # chunk/FTS rows are keyed by the store-scoped id.
         order = {cid: rank for rank, (cid, _dist) in enumerate(knn)}
-        ids = list(order)
+        ids = [f"{self._scope}:{cid}" for cid in order]
         async with self._sm() as session:
             rows = (
                 await session.execute(
@@ -216,8 +257,8 @@ class SqliteKnowledgeIndex:
                 document_id=str(r.document_id),
                 title=str(r.title or ""),
                 text=str(r.text or ""),
-                # smaller distance ⇒ higher score
-                score=1.0 / (1.0 + float(dist.get(str(r.chunk_id), 0.0))),
+                # smaller distance ⇒ higher score (dist is keyed by bare ids)
+                score=1.0 / (1.0 + float(dist.get(f"{r.document_id}:{r.position}", 0.0))),
                 position=int(r.position),
             )
             for r in rows

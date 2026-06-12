@@ -9,6 +9,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   useConversations,
   useArchivedConversations,
+  useConversation,
   useCreateConversation,
   useRenameConversation,
   useDeleteConversation,
@@ -47,7 +48,21 @@ export function useChatController() {
   const archiveConv = useArchiveConversation();
   const unarchiveConv = useUnarchiveConversation();
 
-  const activeConv = conversations.find((c) => c.id === routeId) ?? null;
+  // Resolve the open conversation from the active list, the archived list,
+  // or — when neither has it (archived deep-link, archived list not loaded) —
+  // a by-id fetch. An archived or unknown id must never silently fall through
+  // to the draft surface, where typing would create a NEW conversation.
+  const listedConv =
+    conversations.find((c) => c.id === routeId) ??
+    archivedConversations.find((c) => c.id === routeId) ??
+    null;
+  const needsLookup = !!routeId && !convLoading && !listedConv;
+  const lookup = useConversation(needsLookup && routeId ? routeId : "");
+  const activeConv = listedConv ?? (needsLookup ? (lookup.data ?? null) : null);
+  const activeLoading =
+    !!routeId && !activeConv && (convLoading || (needsLookup && lookup.isPending));
+  const activeNotFound = !!routeId && !activeConv && !activeLoading;
+  const activeArchived = !!activeConv?.archived_at;
   const activeAgent = activeConv
     ? agents.find((a) => a.agent_key === activeConv.agent_key)
     : undefined;
@@ -125,6 +140,11 @@ export function useChatController() {
     models,
     agents,
     activeConv,
+    // Route-id resolution state: still resolving / definitively unknown.
+    activeLoading,
+    activeNotFound,
+    // True when the open conversation is archived (rendered read-only).
+    activeArchived,
     activeAgent,
     turn,
     effectiveDraft,
@@ -155,5 +175,6 @@ export function useChatController() {
     confirmArchive,
     archivePending: archiveConv.isPending,
     restoreConversation: (id: string) => unarchiveConv.mutate(id),
+    restorePending: unarchiveConv.isPending,
   };
 }

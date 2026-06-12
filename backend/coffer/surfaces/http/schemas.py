@@ -212,6 +212,7 @@ class CredentialSetIn(BaseModel):
         ),
     )
     value: str = Field(
+        min_length=1,
         max_length=8192,
         description="The secret value.",
     )

@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
 
@@ -10,6 +10,7 @@ vi.mock("@/lib/hooks/useDaemon", () => ({
 vi.mock("@/lib/tauri", () => ({
   isTauri: () => false,
   restartDaemon: vi.fn(),
+  getDaemonInfo: vi.fn(),
 }));
 
 const { useDaemonStatus } = await import("@/lib/hooks/useDaemon");
@@ -80,12 +81,23 @@ describe("DaemonOfflineBanner", () => {
 // so the lib/tauri mock can be re-installed without leaking into the other
 // tests above.
 describe("DaemonOfflineBanner (Tauri restart branch)", () => {
+  afterEach(() => {
+    // The recovery flow writes the Tauri-injected globals; clean them so
+    // they can't leak auth state into other tests.
+    const w = window as unknown as Record<string, unknown>;
+    delete w.__COFFER_BASE_URL__;
+    delete w.__COFFER_TOKEN__;
+  });
+
   test("renders a Restart button that invokes restartDaemon when clicked", async () => {
     vi.resetModules();
     const restartDaemonMock = vi.fn().mockResolvedValue({ pid: 123, started: true });
     vi.doMock("@/lib/tauri", () => ({
       isTauri: () => true,
       restartDaemon: restartDaemonMock,
+      getDaemonInfo: vi
+        .fn()
+        .mockResolvedValue({ baseUrl: "http://127.0.0.1:9001/api/v1", token: "tok" }),
     }));
     vi.doMock("@/lib/hooks/useDaemon", () => ({
       useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
@@ -110,6 +122,7 @@ describe("DaemonOfflineBanner (Tauri restart branch)", () => {
     vi.doMock("@/lib/tauri", () => ({
       isTauri: () => true,
       restartDaemon: restartDaemonMock,
+      getDaemonInfo: vi.fn(),
     }));
     vi.doMock("@/lib/hooks/useDaemon", () => ({
       useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
@@ -123,5 +136,74 @@ describe("DaemonOfflineBanner (Tauri restart branch)", () => {
     // The rejection propagates through restartDaemon().catch(), which
     // writes restartError to state and renders the error text.
     expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
+  });
+
+  test("a successful restart re-fetches daemon info, swaps the token, resets the API client, and refetches all queries", async () => {
+    vi.resetModules();
+    const restartDaemonMock = vi.fn().mockResolvedValue({ pid: 123, started: true });
+    // The daemon mints a NEW token on every start — the recovery flow must
+    // pick it up, or every request 401s until the app is relaunched (P0-5).
+    const getDaemonInfoMock = vi
+      .fn()
+      .mockResolvedValue({ baseUrl: "http://127.0.0.1:9042/api/v1", token: "fresh-token" });
+    vi.doMock("@/lib/tauri", () => ({
+      isTauri: () => true,
+      restartDaemon: restartDaemonMock,
+      getDaemonInfo: getDaemonInfoMock,
+    }));
+    vi.doMock("@/lib/hooks/useDaemon", () => ({
+      useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
+    }));
+
+    // Same module registry as the component under test, so getApiClient()
+    // identity tells us whether the memoised client was really dropped.
+    const clientMod = await import("@/lib/api/client");
+    const staleClient = clientMod.getApiClient();
+
+    const { DaemonOfflineBanner: ReloadedBanner } = await import("./DaemonOfflineBanner");
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    render(<QueryClientProvider client={qc}>{<ReloadedBanner />}</QueryClientProvider>);
+
+    fireEvent.click(screen.getByRole("button", { name: /restart/i }));
+
+    const w = window as unknown as Record<string, unknown>;
+    await waitFor(() => expect(w.__COFFER_TOKEN__).toBe("fresh-token"));
+    expect(w.__COFFER_BASE_URL__).toBe("http://127.0.0.1:9042/api/v1");
+    expect(getDaemonInfoMock).toHaveBeenCalledOnce();
+    // The memoised client captured the old base URL — it must be rebuilt.
+    expect(clientMod.getApiClient()).not.toBe(staleClient);
+    // EVERY cached query carries responses fetched with the revoked token,
+    // not just daemon/status — the whole cache refetches.
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith());
+  });
+
+  test("when the daemon restarts but reconnecting fails, a distinct reconnect error is shown and the stale auth is untouched", async () => {
+    vi.resetModules();
+    const restartDaemonMock = vi.fn().mockResolvedValue({ pid: 123, started: true });
+    const getDaemonInfoMock = vi
+      .fn()
+      .mockRejectedValue(new Error("coffer-daemon did not become ready within 15s"));
+    vi.doMock("@/lib/tauri", () => ({
+      isTauri: () => true,
+      restartDaemon: restartDaemonMock,
+      getDaemonInfo: getDaemonInfoMock,
+    }));
+    vi.doMock("@/lib/hooks/useDaemon", () => ({
+      useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
+    }));
+
+    const { DaemonOfflineBanner: ReloadedBanner } = await import("./DaemonOfflineBanner");
+    render(wrap(<ReloadedBanner />));
+
+    fireEvent.click(screen.getByRole("button", { name: /restart/i }));
+
+    // Distinct copy from a plain restart failure: the daemon DID restart,
+    // but the app could not fetch its new credentials.
+    expect(await screen.findByText(/restarted, but/i)).toBeInTheDocument();
+    expect(screen.getByText(/did not become ready/)).toBeInTheDocument();
+    // The injected globals stay untouched on the failure path.
+    const w = window as unknown as Record<string, unknown>;
+    expect(w.__COFFER_TOKEN__).toBeUndefined();
   });
 });

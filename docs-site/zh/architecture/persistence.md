@@ -89,7 +89,7 @@ Coffer 写入的完整文件集合：
 | `~/.coffer/coffer.db`      | SQLite 数据库（WAL 模式）——事实记录方            |
 | `~/.coffer/daemon.json`    | Daemon PID、端口和 bearer token（权限位 `0600`） |
 | `~/.coffer/logs/`          | `structlog` 输出的结构化 JSON 日志文件           |
-| `~/.coffer/bin/`           | 由桌面应用部署的 `coffer-mcp-shim` 二进制文件    |
+| `~/.coffer/bin/`           | 由桌面应用部署的 `coffer-mcp-shim` 与 `coffer-daemon` 二进制文件 |
 | `~/.coffer/backups/`       | 按时间点的 SQLite 备份副本                       |
 | `~/.coffer/upstream-pids/` | 用于会话追踪的每个上游子进程的 PID 文件          |
 

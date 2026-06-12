@@ -627,6 +627,7 @@ components:
           description: Reference key the secret is stored under.
         value:
           type: string
+          minLength: 1
           maxLength: 8192
           description: The secret value. Persisted Fernet-encrypted; audit rows carry the ref only.
 

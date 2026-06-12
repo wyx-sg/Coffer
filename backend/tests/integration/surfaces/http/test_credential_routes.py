@@ -239,3 +239,19 @@ async def test_malformed_refs_are_rejected() -> None:
             r = await c.post("/api/v1/credentials", json={"ref": bad, "value": "v"})
             assert r.status_code == 422, bad
     assert fake.store == {}
+
+
+@pytest.mark.asyncio
+async def test_empty_value_is_rejected() -> None:
+    """An empty secret never reaches the store — a SeaTalk signing secret of
+    "" would collapse the callback MAC to sha256(body)."""
+    fake = _FakeCredentialStore()
+    transport = ASGITransport(_build_app(fake, _FakeAuditRepo()))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        r = await c.post("/api/v1/credentials", json={"ref": "channel/st/signing", "value": ""})
+        assert r.status_code == 422
+    assert fake.store == {}

@@ -2,10 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
+import { resetApiClient } from "@/lib/api/client";
+import { setDaemonConnection } from "@/lib/auth";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { isTauri, restartDaemon } from "@/lib/tauri";
+import { getDaemonInfo, isTauri, restartDaemon } from "@/lib/tauri";
 
 /**
  * Shown above every page when /api/v1/daemon/status fails. Two flavours:
@@ -27,12 +29,32 @@ export function DaemonOfflineBanner() {
   const { error, isError } = useDaemonStatus();
   const qc = useQueryClient();
   // useMutation owns the in-flight / error state and dedups double-clicks,
-  // so the banner doesn't hand-roll a restarting/restartError pair. On a
-  // successful restart, re-check status immediately so the banner clears
-  // without waiting for the 30s poll.
+  // so the banner doesn't hand-roll a restarting/restartError pair.
   const restart = useMutation({
-    mutationFn: () => restartDaemon(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["daemon", "status"] }),
+    mutationFn: async () => {
+      const result = await restartDaemon();
+      // The daemon mints a fresh token on every start, so the credentials
+      // injected at launch are now revoked. Re-fetch the connection info
+      // from the Tauri shell (get_daemon_info waits for the new daemon to
+      // publish daemon.json and listen) and swap it in before any query
+      // refetches — otherwise every request 401s until the app relaunches.
+      try {
+        const info = await getDaemonInfo();
+        setDaemonConnection(info.baseUrl, info.token);
+        resetApiClient();
+      } catch (e) {
+        // Distinct failure: the daemon DID restart but we couldn't fetch
+        // its new credentials — tell the user to relaunch rather than
+        // implying the restart itself failed.
+        const message = e instanceof Error ? e.message : String(e);
+        throw new Error(t("daemon.offline.reconnectFailed", { message }));
+      }
+      return result;
+    },
+    // The token changed, so every cached query (not just daemon/status)
+    // was fetched with the revoked credentials — refetch the whole cache
+    // so the app recovers in place.
+    onSuccess: () => qc.invalidateQueries(),
   });
 
   if (!isError) return null;

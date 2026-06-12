@@ -108,6 +108,7 @@ class MemoryService:
             notify=self._notify_change,
             fact_path=fact_path,
             store_ref=store_ref_fn,
+            embedding_resolver=embedding_resolver,
         )
         self._recall = RecallDeps(
             reconciler=reconciler,
@@ -386,13 +387,10 @@ class MemoryService:
             return await self.resolve_scope(scope=MemoryScope.GLOBAL, cwd=None)
         return project_resolved_for_store(store_name, self._store_dir)
 
-    def _read_fact(self, store_dir: Path, fact_id: str) -> FactFile:
-        return read_fact(store_dir, fact_id)
-
     async def _store_fact(self, store_name: str, fact_id: str) -> tuple[ResolvedScope, FactFile]:
         """Validate the store, resolve it, and read one fact off-loop."""
         resolved = await self.resolved_store(store_name)
-        ff = await asyncio.to_thread(self._read_fact, resolved.store_dir, fact_id)
+        ff = await asyncio.to_thread(read_fact, resolved.store_dir, fact_id)
         return resolved, ff
 
 

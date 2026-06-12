@@ -21,9 +21,12 @@ On every launch the Desktop app:
 1. **Detects or spawns the daemon** — it reads `~/.coffer/daemon.json` to find a running
    daemon. If none is reachable, it spawns `coffer-daemon` as a detached background process
    that survives the Desktop window closing.
-2. **Deploys the shim** — idempotently copies the bundled `coffer-mcp-shim` to a stable
-   user-writable PATH location:
-   - macOS / Linux: `~/.coffer/bin/coffer-mcp-shim`
+2. **Deploys the shim + daemon** — idempotently copies the bundled `coffer-mcp-shim` and
+   `coffer-daemon` to a stable user-writable PATH location:
+   - macOS / Linux: `~/.coffer/bin/`
+
+   Co-locating the daemon lets the shim auto-spawn it after a reboot, even when the
+   Desktop app isn't running.
 3. **Shows a system-tray icon** — always present while the app is running.
 
 Closing the main window **hides** it to the tray; the daemon stays alive and your MCP

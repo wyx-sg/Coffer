@@ -19,8 +19,12 @@ Tauri 窗口内渲染。
 
 1. **检测或拉起守护进程** —— 读取 `~/.coffer/daemon.json` 查找正在运行的守护进程。
    若不可达，则以脱离父进程的方式拉起 `coffer-daemon`，使其在桌面窗口关闭后继续存活。
-2. **部署 shim** —— 幂等地把内嵌的 `coffer-mcp-shim` 复制到稳定的用户可写 PATH 目录：
-   - macOS / Linux：`~/.coffer/bin/coffer-mcp-shim`
+2. **部署 shim + daemon** —— 幂等地把内嵌的 `coffer-mcp-shim` 与 `coffer-daemon`
+   复制到稳定的用户可写 PATH 目录：
+   - macOS / Linux：`~/.coffer/bin/`
+
+   daemon 与 shim 同目录部署，使得重启后即便桌面应用没在运行，shim 也能自动拉起
+   daemon。
 3. **显示系统托盘图标** —— 应用运行期间始终存在。
 
 用 OS 关闭键关掉主窗口只会把窗口**隐藏**到托盘；守护进程仍存活，MCP 客户端继续

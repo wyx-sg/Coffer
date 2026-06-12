@@ -414,6 +414,7 @@
       "notReadyBody": "Coffer's background service isn't reachable yet. It usually starts on its own — reload this page, and if the problem continues, restart Coffer.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
+      "reconnectFailed": "The daemon restarted, but the app could not reconnect to it: {{message}}. Quit and reopen Coffer.",
       "reload": "Reload"
     }
   },
@@ -942,7 +943,15 @@
     },
     "thread": {
       "empty": "Send a message to start the conversation.",
-      "selectOrCreate": "Select a conversation or start a new one."
+      "selectOrCreate": "Select a conversation or start a new one.",
+      "notFoundTitle": "Conversation not found",
+      "notFoundBody": "It may have been deleted, or the link may be stale.",
+      "notFoundCta": "Start a new chat"
+    },
+    "archivedThread": {
+      "notice": "This conversation is archived.",
+      "restore": "Restore to continue",
+      "restoring": "Restoring…"
     },
     "composer": {
       "placeholder": "Message Coffer Assistant… (Enter to send, Shift+Enter for new line)",

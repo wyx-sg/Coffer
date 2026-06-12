@@ -105,6 +105,105 @@ def test_frozen_falls_back_to_path_when_no_sibling(
 
 
 # --------------------------------------------------------------------------- #
+# Frozen path — macOS app-bundle fallback                                       #
+# --------------------------------------------------------------------------- #
+
+
+def test_frozen_darwin_falls_back_to_app_bundle_daemon(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """When the shim was deployed alone (no sibling, nothing on PATH) on macOS,
+    fall back to the daemon bundled inside the installed Coffer.app so frozen
+    auto-spawn still works after a reboot."""
+    fake_exe = tmp_path / "coffer-mcp-shim"
+    bundle_daemon = tmp_path / "Coffer.app" / "Contents" / "MacOS" / "coffer-daemon"
+    bundle_daemon.parent.mkdir(parents=True)
+    bundle_daemon.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(fake_exe))
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr("coffer.infrastructure.daemon.spawn.shutil.which", lambda _n: None)
+    monkeypatch.setattr(
+        "coffer.infrastructure.daemon.spawn._MACOS_APP_BUNDLE_DAEMON", bundle_daemon
+    )
+
+    cmd = daemon_spawn_command()
+
+    assert cmd == [str(bundle_daemon)]
+
+
+def test_frozen_darwin_prefers_sibling_over_app_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The co-located sibling still wins over the app-bundle fallback."""
+    fake_exe = tmp_path / "coffer-mcp-shim"
+    sibling = tmp_path / "coffer-daemon"
+    sibling.write_text("#!/bin/sh\n")
+    bundle_daemon = tmp_path / "Coffer.app" / "Contents" / "MacOS" / "coffer-daemon"
+    bundle_daemon.parent.mkdir(parents=True)
+    bundle_daemon.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(fake_exe))
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr("coffer.infrastructure.daemon.spawn.shutil.which", lambda _n: None)
+    monkeypatch.setattr(
+        "coffer.infrastructure.daemon.spawn._MACOS_APP_BUNDLE_DAEMON", bundle_daemon
+    )
+
+    cmd = daemon_spawn_command()
+
+    assert cmd == [str(sibling.resolve())]
+
+
+def test_frozen_non_darwin_ignores_app_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The app-bundle probe is macOS-only: on Linux a present bundle path is
+    ignored and the sibling best-effort path is returned."""
+    fake_exe = tmp_path / "coffer-mcp-shim"
+    bundle_daemon = tmp_path / "Coffer.app" / "Contents" / "MacOS" / "coffer-daemon"
+    bundle_daemon.parent.mkdir(parents=True)
+    bundle_daemon.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(fake_exe))
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr("coffer.infrastructure.daemon.spawn.shutil.which", lambda _n: None)
+    monkeypatch.setattr(
+        "coffer.infrastructure.daemon.spawn._MACOS_APP_BUNDLE_DAEMON", bundle_daemon
+    )
+
+    cmd = daemon_spawn_command()
+
+    expected = str((tmp_path / "coffer-daemon").resolve())
+    assert cmd == [expected]
+
+
+def test_frozen_darwin_no_bundle_returns_sibling_best_effort(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """With no sibling, nothing on PATH, and no installed Coffer.app, the
+    sibling path is still returned as the best-effort error surface."""
+    fake_exe = tmp_path / "coffer-mcp-shim"
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(fake_exe))
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr("coffer.infrastructure.daemon.spawn.shutil.which", lambda _n: None)
+    monkeypatch.setattr(
+        "coffer.infrastructure.daemon.spawn._MACOS_APP_BUNDLE_DAEMON",
+        tmp_path / "missing" / "coffer-daemon",
+    )
+
+    cmd = daemon_spawn_command()
+
+    expected = str((tmp_path / "coffer-daemon").resolve())
+    assert cmd == [expected]
+
+
+# --------------------------------------------------------------------------- #
 # Frozen path — Windows                                                         #
 # --------------------------------------------------------------------------- #
 

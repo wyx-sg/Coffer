@@ -89,7 +89,7 @@ The full set of files Coffer writes:
 | `~/.coffer/coffer.db`      | SQLite database (WAL mode) — the system of record      |
 | `~/.coffer/daemon.json`    | Daemon PID, port, and bearer token (mode `0600`)       |
 | `~/.coffer/logs/`          | Structured JSON log files from `structlog`             |
-| `~/.coffer/bin/`           | `coffer-mcp-shim` binary deployed by the desktop app   |
+| `~/.coffer/bin/`           | `coffer-mcp-shim` + `coffer-daemon` binaries deployed by the desktop app |
 | `~/.coffer/backups/`       | Point-in-time SQLite backup copies                     |
 | `~/.coffer/upstream-pids/` | Per-upstream subprocess PID files for session tracking |
 

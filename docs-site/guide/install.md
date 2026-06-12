@@ -137,7 +137,8 @@ Or right-click the app and pick **Open** for a one-time bypass.
 On first launch, the Desktop app:
 
 1. Starts the daemon on a free port (default 8000) and writes `~/.coffer/daemon.json`.
-2. Deploys `coffer-mcp-shim` to `~/.coffer/bin/` so MCP clients can find it.
+2. Deploys `coffer-mcp-shim` and `coffer-daemon` to `~/.coffer/bin/` so MCP clients can
+   find the shim — and the shim can auto-spawn the daemon even when the app isn't running.
 3. Opens the Web UI in the main window.
 
 Connect your MCP client:

@@ -21,6 +21,12 @@ import shutil
 import sys
 from pathlib import Path
 
+#: Where the macOS desktop bundle stages its `coffer-daemon` sidecar
+#: (Tauri `externalBin` → `Coffer.app/Contents/MacOS/`). The install location
+#: is stable: the DMG instructs users to drag the app into /Applications.
+#: Module-level so tests can monkeypatch it.
+_MACOS_APP_BUNDLE_DAEMON = Path("/Applications/Coffer.app/Contents/MacOS/coffer-daemon")
+
 
 def daemon_spawn_command() -> list[str]:
     """Return the subprocess command to spawn the Coffer daemon.
@@ -35,9 +41,14 @@ def daemon_spawn_command() -> list[str]:
            ``sys.executable`` — the CLI-tarball layout, where the installer
            co-locates all three binaries in ``~/.coffer/bin``;
         2. ``coffer-daemon`` on ``PATH`` (``shutil.which``) — covers separate
-           installs and any layout where the bin dir is exported.
+           installs and any layout where the bin dir is exported;
+        3. macOS only: the daemon staged inside the installed desktop bundle
+           (``/Applications/Coffer.app/Contents/MacOS/coffer-daemon``) —
+           covers a shim deployed by an older desktop build that did not yet
+           co-locate the daemon in ``~/.coffer/bin`` (e.g. after a reboot
+           with the app not running and autostart off).
 
-      The first candidate that exists wins. If neither exists, the sibling
+      The first candidate that exists wins. If none exists, the sibling
       path is returned as a best effort so the caller surfaces a single,
       clear "failed to spawn daemon" error pointing at the log. (In the
       desktop app the Tauri shell is the daemon's lifecycle manager and spawns
@@ -53,6 +64,8 @@ def daemon_spawn_command() -> list[str]:
         on_path = shutil.which(name)
         if on_path:
             return [on_path]
+        if sys.platform == "darwin" and _MACOS_APP_BUNDLE_DAEMON.is_file():
+            return [str(_MACOS_APP_BUNDLE_DAEMON)]
         return [str(sibling)]
 
     return [sys.executable, "-m", "coffer.infrastructure.daemon.entry"]
