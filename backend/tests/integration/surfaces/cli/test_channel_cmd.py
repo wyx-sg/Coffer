@@ -125,7 +125,7 @@ def channel_daemon(tmp_path, monkeypatch):
         kinds={"channel": make_channel_kind()},
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
-        keyring=keyring,
+        credentials=keyring,
     )
     peers = ChannelPeerRepo(sm)
     pairing = PairingManager()

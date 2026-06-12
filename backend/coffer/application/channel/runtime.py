@@ -205,8 +205,8 @@ class ChannelRuntime:
             for name, (_rid, config) in desired.items():
                 if config.get("channel_type") == "seatalk":
                     refs[name] = str(config.get("signing_secret_ref", ""))
-        # Touch the OS keychain only when the desired ref-set changed (or the
-        # listener died): a steady state must not poll the keychain every tick
+        # Touch the credential store only when the desired ref-set changed (or
+        # the listener died): a steady state must not poll the store every tick
         # (macOS can answer with authorization prompts).
         if refs == self._listener_refs and (not refs or self._listener.running()):
             return

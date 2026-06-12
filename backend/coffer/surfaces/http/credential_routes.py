@@ -97,7 +97,6 @@ async def get_secret(
     return CredentialGetOut(value=value)
 
 
-
 @router.delete(
     "/{ref:path}",
     status_code=status.HTTP_204_NO_CONTENT,

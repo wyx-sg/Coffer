@@ -11,7 +11,7 @@ import sqlite3
 import stat
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
@@ -32,6 +32,22 @@ from coffer.surfaces.http.schemas import (
 # used by _get_optional_resource_service below.
 
 router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
+
+# Daemon lifecycle phase — written by app.py's lifespan, read by /status.
+# Lives here (the reader) so app.py stays under the 400-line guideline and
+# daemon_routes no longer needs a circular import of app at request time.
+_DaemonPhase = Literal["starting", "ready", "draining"]
+_DAEMON_PHASE: _DaemonPhase = "starting"
+
+
+def get_daemon_phase() -> _DaemonPhase:
+    return _DAEMON_PHASE
+
+
+def set_daemon_phase(phase: _DaemonPhase) -> None:
+    global _DAEMON_PHASE
+    _DAEMON_PHASE = phase
+
 
 _STARTED_AT = datetime.now(tz=UTC)
 _PORT = 8000  # set by composition root
@@ -72,8 +88,6 @@ async def get_status(
     resource_service: ResourceService | None = Depends(_get_optional_resource_service),  # noqa: B008
     health_repo: Any | None = Depends(_get_optional_health_repo),  # noqa: B008
 ) -> DaemonStatusOut:
-    from coffer.surfaces.http.app import get_daemon_phase  # avoid circular at import time
-
     phase = get_daemon_phase()
     upstream_summary: UpstreamSummary | None = None
     if resource_service is not None:

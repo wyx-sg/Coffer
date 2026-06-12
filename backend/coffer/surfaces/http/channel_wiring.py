@@ -8,7 +8,7 @@ controller, and the reconciling runtime. Must run AFTER ``wire_chat``.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
 
@@ -64,7 +64,8 @@ def wire_channel_kind(
 
     # Production injects the EncryptedCredentialStore; None (tests) falls back
     # to the OS keychain adapter, which resolves nothing unless seeded.
-    resolver = CredentialResolver(credential_store if credential_store is not None else KeyringAdapter())
+    store = credential_store if credential_store is not None else KeyringAdapter()
+    resolver = CredentialResolver(store)
 
     async def materialize(refs: dict[str, str]) -> dict[str, str]:
         # The store read is blocking (CODE-034) — never call it on the event loop.

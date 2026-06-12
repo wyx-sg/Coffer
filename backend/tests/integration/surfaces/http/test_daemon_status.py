@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from coffer.surfaces.http.app import create_app, set_daemon_phase
+from coffer.surfaces.http.app import create_app
+from coffer.surfaces.http.daemon_routes import set_daemon_phase
 
 
 @pytest.mark.acceptance(spec="001-mcp-gateway", scenario="daemon status reflects ready state")

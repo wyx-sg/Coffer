@@ -1,24 +1,33 @@
 """Credential-store DI singletons and startup bootstrap.
 
-Owns the ``_credential_store`` / ``_master_key_manager`` provider pairs and
-``init_credential_store``, which resolves the Fernet master key, builds the
-encrypted store, and publishes both DI singletons.  Kept separate from
-``dependencies.py`` to keep both files under the 400-line guideline.
+Owns the ``_credential_store`` / ``_master_key_manager`` provider pairs,
+``init_credential_store`` (resolves the Fernet master key, builds the
+encrypted store, publishes both DI singletons) and
+``run_legacy_keychain_migration`` (best-effort one-time move of pre-0.2
+OS-keychain secrets into the store).  Kept separate from ``dependencies.py``
+and ``app.py`` to keep all three under the 400-line guideline.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import pathlib
 from typing import Any
 
 from sqlalchemy import text as _sa_text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from coffer.application.credential_migration import (
+    gather_extra_credential_refs,
+    migrate_legacy_keychain,
+)
 from coffer.domain.credential_errors import MasterKeyMissing
+from coffer.infrastructure.chat.model_persistence import ChatModelRepo
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
+from coffer.infrastructure.persistence.repos import SqlAlchemyResourceRepo
 
 _credential_store: Any | None = None
 
@@ -84,3 +93,36 @@ async def init_credential_store(
     set_credential_store(credential_store)
     set_master_key_manager(master_key_manager)
     return credential_store
+
+
+_logger = logging.getLogger(__name__)
+
+
+async def run_legacy_keychain_migration(
+    kinds: dict[str, Any],
+    sm: Any,
+    credential_store: Any,
+    audit: Any,
+    embedding_config_svc: Any,
+) -> None:
+    """One-time move of legacy OS-keychain secrets into the encrypted store.
+
+    No-op once migrated.  Best-effort: failures must not block startup.
+    Non-resource owners (chat models + the global embedding config) cite
+    refs too; gathering happens inside the same guard so it can't block
+    startup either.
+    """
+    try:
+        extra_refs = await gather_extra_credential_refs(ChatModelRepo(sm), embedding_config_svc)
+        moved = await migrate_legacy_keychain(
+            kinds,
+            SqlAlchemyResourceRepo(sm),
+            KeyringAdapter(),
+            credential_store,
+            audit,
+            extra_refs=extra_refs,
+        )
+        if moved:
+            _logger.info("credential_migration.completed", extra={"moved": moved})
+    except Exception:
+        _logger.exception("credential_migration.failed")

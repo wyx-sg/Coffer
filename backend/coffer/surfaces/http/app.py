@@ -26,7 +26,6 @@ import os
 import pathlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Literal
 
 from fastapi import FastAPI
 
@@ -34,18 +33,12 @@ from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
-from coffer.application.credential_migration import (
-    gather_extra_credential_refs,
-    migrate_legacy_keychain,
-)
 from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
-from coffer.infrastructure.chat.model_persistence import ChatModelRepo
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
 from coffer.infrastructure.logging.setup import configure_logging
@@ -76,7 +69,10 @@ from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.model_routes import router as chat_model_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
-from coffer.surfaces.http.credential_composition import init_credential_store
+from coffer.surfaces.http.credential_composition import (
+    init_credential_store,
+    run_legacy_keychain_migration,
+)
 from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
@@ -120,30 +116,11 @@ def _db_url() -> str:
     )
 
 
-def _db_path() -> pathlib.Path:
-    """Filesystem path of the SQLite DB (master.key lives alongside it)."""
-    return pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
-
-
 def _daemon_json_path() -> pathlib.Path:
     return pathlib.Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "daemon.json"
 
 
 _logger = logging.getLogger(__name__)
-
-# Daemon lifecycle phase — updated by the lifespan.
-# Readable by daemon_routes.get_status to report real phase.
-_DaemonPhase = Literal["starting", "ready", "draining"]
-_DAEMON_PHASE: _DaemonPhase = "starting"
-
-
-def get_daemon_phase() -> _DaemonPhase:
-    return _DAEMON_PHASE
-
-
-def set_daemon_phase(phase: _DaemonPhase) -> None:
-    global _DAEMON_PHASE
-    _DAEMON_PHASE = phase
 
 
 @asynccontextmanager
@@ -163,7 +140,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine_with_pragmas(_db_url())
     sm = session_maker(engine)
 
-    credential_store = await init_credential_store(engine, _db_path())
+    credential_store = await init_credential_store(
+        engine, pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
+    )
 
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resource_svc = ResourceService(
@@ -263,23 +242,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     channel_runtime = wire_channel_kind(app, resource_svc, audit, sm, credential_store)
 
     # One-time move of legacy OS-keychain secrets into the encrypted store
-    # (no-op once migrated). Best-effort: failures must not block startup.
-    try:
-        # Non-resource owners (chat models + global embedding config) cite
-        # refs too; gather inside this try so it can't block startup.
-        extra_refs = await gather_extra_credential_refs(ChatModelRepo(sm), embedding_config_svc)
-        moved = await migrate_legacy_keychain(
-            app.state.kinds,
-            SqlAlchemyResourceRepo(sm),
-            KeyringAdapter(),
-            credential_store,
-            audit,
-            extra_refs=extra_refs,
-        )
-        if moved:
-            _logger.info("credential_migration.completed", extra={"moved": moved})
-    except Exception:
-        _logger.exception("credential_migration.failed")
+    # (best-effort; see credential_composition for the mechanics).
+    await run_legacy_keychain_migration(
+        app.state.kinds, sm, credential_store, audit, embedding_config_svc
+    )
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -317,14 +283,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.mcp_session_reaper_task = reaper_task
 
     # FR-014: record daemon lifecycle audit events; T3: set lifecycle phase
-    set_daemon_phase("ready")
+    daemon_routes.set_daemon_phase("ready")
     with contextlib.suppress(Exception):
         await audit.record(AuditEventType.DAEMON_STARTED.value, actor="system")
 
     try:
         yield
     finally:
-        set_daemon_phase("draining")
+        daemon_routes.set_daemon_phase("draining")
         with contextlib.suppress(Exception):
             await audit.record(AuditEventType.DAEMON_STOPPED.value, actor="system")
         worker.stop()
