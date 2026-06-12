@@ -23,6 +23,7 @@ class AuditEventType(StrEnum):
     DAEMON_STOPPED = "daemon_stopped"
     TOKEN_ROTATED = "token_rotated"
     RETENTION_UPDATED = "retention_updated"
+    EMBEDDING_CONFIG_UPDATED = "embedding_config_updated"
     BACKUP_CREATED = "backup_created"
     KEYCHAIN_SET = "keychain_set"
     KEYCHAIN_READ = "keychain_read"

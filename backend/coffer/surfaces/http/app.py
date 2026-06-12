@@ -32,6 +32,7 @@ from fastapi import FastAPI
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
@@ -48,6 +49,7 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
+    SqlAlchemyEmbeddingConfigRepo,
     SqlAlchemyResourceRepo,
     SqlAlchemyRetentionRepo,
 )
@@ -66,9 +68,11 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
     set_audit_service,
+    set_embedding_config_service,
     set_resource_service,
     set_retention_service,
 )
+from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.keychain_routes import router as keychain_router
 from coffer.surfaces.http.knowledge_base import router as kb_router
@@ -195,10 +199,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         audit=audit,
     )
     await retention_svc.initialize_defaults()
+    embedding_config_svc = EmbeddingConfigService(
+        repo=SqlAlchemyEmbeddingConfigRepo(sm),
+        audit=audit,
+    )
 
     set_resource_service(resource_svc)
     set_audit_service(audit)
     set_retention_service(retention_svc)
+    set_embedding_config_service(embedding_config_svc)
 
     # Wire up agent + skill kinds (specs 004-agent-registry, 005-skill-manager).
     # The helper builds both in lockstep so the cross-kind on_delete hook (agent
@@ -326,6 +335,7 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(resource_router)
     app.include_router(audit_router)
     app.include_router(retention_router)
+    app.include_router(embedding_router)
     app.include_router(keychain_router)
     # Agent + skill kind routes (specs 004-agent-registry, 005-skill-manager)
     app.include_router(agent_router)

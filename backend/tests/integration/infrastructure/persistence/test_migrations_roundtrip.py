@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0010"
+HEAD_REVISION = "0011"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -47,6 +47,7 @@ EXPECTED_TABLES = {
     "documents_fts",
     "memory_projection_bindings",
     "memory_store_project_roots",
+    "embedding_config",
 }
 
 # FTS5 creates these shadow tables for ``documents_fts``; they are an
@@ -134,6 +135,10 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
+    # 0011 -> 0010: drops embedding_config (global embedding singleton).
+    command.downgrade(cfg, "0010")
+    assert "embedding_config" not in _user_tables(db_path)
+
     # 0009 -> 0008: drops memory_store_project_roots (spec 007-memory project root).
     command.downgrade(cfg, "0008")
     assert "memory_store_project_roots" not in _user_tables(db_path)
@@ -161,6 +166,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # 0004 -> 0003: index-only revision, table set otherwise unchanged.
     command.downgrade(cfg, "0003")
     assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "embedding_config",
         "memory_store_project_roots",
         "memory_projection_bindings",
         "skill_agent_bindings",

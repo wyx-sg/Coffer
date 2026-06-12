@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import Header, HTTPException, status
 
 from coffer.application.audit_service import AuditService
+from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
@@ -83,6 +84,22 @@ def get_retention_service() -> RetentionService:
     if _retention_service is None:
         raise RuntimeError("retention service not initialised")
     return _retention_service
+
+
+_embedding_config_service: EmbeddingConfigService | None = None
+
+
+def set_embedding_config_service(svc: EmbeddingConfigService) -> None:
+    """Called by the composition root once on startup."""
+    global _embedding_config_service
+    _embedding_config_service = svc
+
+
+def get_embedding_config_service() -> EmbeddingConfigService:
+    """FastAPI Depends() target."""
+    if _embedding_config_service is None:
+        raise RuntimeError("embedding config service not initialised")
+    return _embedding_config_service
 
 
 # Factory type: (session_id: str) -> <MCPGatewaySession>.
