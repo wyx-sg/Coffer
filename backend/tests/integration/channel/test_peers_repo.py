@@ -1,0 +1,126 @@
+"""ChannelPeerRepo CRUD over real SQLite + the channel_peers migration."""
+
+from __future__ import annotations
+
+import pathlib
+import sqlite3
+from datetime import UTC, datetime
+
+from alembic import command
+from alembic.config import Config as AlembicConfig
+
+from coffer.application.channel.ports import ChannelPeer
+
+from .conftest import ChannelEnv
+
+# ---------------------------------------------------------------------------
+# Repo CRUD (schema from Base.metadata, FK pragma on)
+# ---------------------------------------------------------------------------
+
+
+def _peer(resource_id: int, chat_id: str = "chat-1") -> ChannelPeer:
+    return ChannelPeer(
+        resource_id=resource_id,
+        chat_id=chat_id,
+        display_name="Owner",
+        paired_at=datetime.now(tz=UTC),
+        active_conversation_id=None,
+    )
+
+
+async def test_upsert_then_get_roundtrips_the_peer(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.peers.upsert(_peer(resource.id))
+
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    assert peer.resource_id == resource.id
+    assert peer.chat_id == "chat-1"
+    assert peer.display_name == "Owner"
+    assert peer.paired_at.tzinfo is not None  # UTC re-attached on read-back
+    assert peer.active_conversation_id is None
+
+
+async def test_upsert_replaces_the_existing_binding(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.peers.upsert(_peer(resource.id, chat_id="chat-1"))
+    await env.peers.upsert(_peer(resource.id, chat_id="chat-2"))
+
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    assert peer.chat_id == "chat-2"  # re-pair replaced, not duplicated
+
+
+async def test_set_active_conversation_updates_and_clears(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.peers.upsert(_peer(resource.id))
+
+    await env.peers.set_active_conversation(resource.id, "conv-9")
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    assert peer.active_conversation_id == "conv-9"
+
+    await env.peers.set_active_conversation(resource.id, None)
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    assert peer.active_conversation_id is None
+
+
+async def test_get_unknown_resource_returns_none(env: ChannelEnv) -> None:
+    assert await env.peers.get(99999) is None
+
+
+# ---------------------------------------------------------------------------
+# Migration 20260612_0015 (same alembic harness as the persistence tests)
+# ---------------------------------------------------------------------------
+
+_ALEMBIC_INI = (
+    pathlib.Path(__file__).resolve().parents[3]
+    / "coffer"
+    / "infrastructure"
+    / "persistence"
+    / "migrations"
+    / "alembic.ini"
+)
+
+
+def test_migration_0015_creates_channel_peers(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    db_path = tmp_path / "migrate.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    assert _ALEMBIC_INI.is_file(), f"alembic.ini not found at {_ALEMBIC_INI}"
+    cfg = AlembicConfig(str(_ALEMBIC_INI))
+
+    command.upgrade(cfg, "head")
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(channel_peers)")}
+        assert columns == {
+            "id",
+            "resource_id",
+            "chat_id",
+            "display_name",
+            "paired_at",
+            "active_conversation_id",
+        }
+        fks = conn.execute("PRAGMA foreign_key_list(channel_peers)").fetchall()
+        assert len(fks) == 1
+        # (id, seq, table, from, to, on_update, on_delete, match)
+        assert fks[0][2] == "resources"
+        assert fks[0][3] == "resource_id"
+        assert fks[0][6] == "CASCADE"
+        indexes = {row[1] for row in conn.execute("PRAGMA index_list(channel_peers)")}
+        assert "idx_channel_peers_resource" in indexes
+    finally:
+        conn.close()
+
+    # The downgrade tears the table back out (reversible chain).
+    command.downgrade(cfg, "0014")
+    conn = sqlite3.connect(str(db_path))
+    try:
+        tables = {
+            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        assert "channel_peers" not in tables
+    finally:
+        conn.close()

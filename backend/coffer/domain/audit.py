@@ -63,6 +63,10 @@ class AuditEventType(StrEnum):
     MODEL_CREATED = "model_created"
     MODEL_UPDATED = "model_updated"
     MODEL_DELETED = "model_deleted"
+    # spec 009-channels
+    CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
+    CHANNEL_PAIRED = "channel_paired"
+    CHANNEL_NOTIFY_SENT = "channel_notify_sent"
 
 
 @dataclass

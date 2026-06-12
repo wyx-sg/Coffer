@@ -48,6 +48,7 @@
     "collapse": "折叠侧边栏",
     "expand": "展开侧边栏",
     "agents": "Agent",
+    "channels": "渠道",
     "audit": "审计日志",
     "chat": "对话"
   },
@@ -421,7 +422,10 @@
     "BAD_REQUEST": "请求格式有误，已被拒绝。",
     "NOT_FOUND": "未找到。",
     "FORBIDDEN": "无权限执行此操作。",
-    "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经注册过一个 agent 了。"
+    "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经注册过一个 agent 了。",
+    "CHANNEL_NOT_PAIRED": "该渠道还没有配对的账号",
+    "CHANNEL_NOT_RUNNING": "渠道适配器未在运行",
+    "CHANNEL_SEND_FAILED": "向 IM 平台发送失败"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -907,5 +911,85 @@
       "allow": "允许",
       "deny": "拒绝"
     }
+  },
+  "channels": {
+    "title": "消息渠道",
+    "subtitle": "把你常用的 IM 账号（Telegram、SeaTalk）接到你的 agent 上。",
+    "add": "添加渠道",
+    "loadFailed": "加载渠道失败",
+    "searchPlaceholder": "搜索渠道…",
+    "noMatches": "没有匹配的渠道。",
+    "backToChannels": "返回渠道列表",
+    "paired": "已配对",
+    "notPaired": "未配对",
+    "types": {
+      "telegram": "Telegram",
+      "seatalk": "SeaTalk"
+    },
+    "cols": {
+      "name": "名称",
+      "type": "类型",
+      "agent": "默认 agent",
+      "state": "状态",
+      "paired": "配对"
+    },
+    "welcome": {
+      "title": "在你常用的 IM 里和 agent 对话",
+      "body": "一个渠道把一个 Telegram 机器人或 SeaTalk 应用接入 Coffer 的对话平台。与你自己的账号配对后，给机器人发消息即可与 agent 对话——回复、审批和通知都会送达 IM 聊天里。",
+      "featureChat": {
+        "title": "随处对话",
+        "body": "消息会进入一条普通会话；agent 的回复原路返回 IM 聊天。"
+      },
+      "featurePair": {
+        "title": "只配对给你",
+        "body": "一次性配对码把渠道绑定到你的账号；陌生人会被静默忽略。"
+      },
+      "featureNotify": {
+        "title": "推送通知",
+        "body": "Coffer 可以主动向已配对的所有者推送消息——无需任何入站消息。"
+      }
+    },
+    "dialog": {
+      "title": "添加渠道",
+      "subtitle": "密钥保存在 Coffer 的凭据库中；渠道配置只保存引用。",
+      "type": "类型",
+      "name": "名称",
+      "botToken": "Bot token",
+      "appId": "App ID",
+      "appSecret": "App Secret",
+      "signingSecret": "Signing Secret",
+      "telegramHint": "BotFather 给你的机器人 token。",
+      "seatalkHint": "来自 SeaTalk 开放平台应用的 App ID、App Secret 和 Signing Secret。",
+      "created": "渠道 {{name}} 已注册"
+    },
+    "status": {
+      "title": "状态",
+      "adapter": "适配器",
+      "running": "运行中",
+      "stopped": "已停止",
+      "peer": "已配对账号",
+      "chatId": "Chat ID",
+      "pairedAt": "配对时间",
+      "conversation": "活跃会话",
+      "none": "暂无活跃会话",
+      "pendingPairing": "有一个配对码尚未使用。"
+    },
+    "pairing": {
+      "title": "配对",
+      "instruction": "生成配对码后，用你自己的账号把它发给机器人。发送者将成为该渠道唯一的所有者——重新配对会替换之前的绑定。",
+      "generate": "生成配对码",
+      "generating": "生成中…",
+      "copy": "复制",
+      "copied": "已复制",
+      "expires": "{{time}} 过期（仅可使用一次）。"
+    },
+    "callback": {
+      "title": "SeaTalk 回调",
+      "endpoint": "回调地址",
+      "listener": "监听进程",
+      "hint": "用隧道工具（cloudflared、ngrok）指向该地址，并把公网 URL 注册到 SeaTalk 开放平台。"
+    },
+    "deleteTitle": "删除渠道",
+    "deleteConfirm": "确定删除渠道“{{name}}”？其适配器将停止，配对关系也会被移除。"
   }
 }

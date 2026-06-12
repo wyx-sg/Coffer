@@ -14,6 +14,9 @@ from sqlalchemy.engine import Connection
 from coffer.infrastructure.agent import (
     projection_persistence as _agent_projection,  # noqa: F401 — projection-binding model
 )
+from coffer.infrastructure.channel import (
+    persistence as _channel_persistence,  # noqa: F401 — channel_peers model
+)
 from coffer.infrastructure.knowledge import (  # noqa: F401 — unified documents/chunks ORM + FTS5 DDL
     ddl as _knowledge_ddl,
 )

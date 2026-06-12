@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from coffer.application.audit_service import AuditService
-from coffer.application.mcp.credential_resolver import CredentialResolver
+from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.supervisor import (
     SubprocessSupervisor,
     UpstreamHealth,

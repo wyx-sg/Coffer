@@ -9,6 +9,7 @@ import {
   Library,
   PanelLeftClose,
   PanelLeftOpen,
+  Radio,
   ScrollText,
   Server,
   Settings as SettingsIcon,
@@ -58,6 +59,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
       { to: "/agents", labelKey: "nav.agents", icon: Bot, end: true },
+      { to: "/channels", labelKey: "nav.channels", icon: Radio, end: true },
     ],
   },
   {
