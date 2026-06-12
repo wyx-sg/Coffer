@@ -14,7 +14,7 @@
 
 > 本地优先 (local-first) 的 AI agent 保险库。一个地方统一管理你的 MCP 服务器。
 
-Coffer 是一个守护进程 (daemon) + CLI，它把上游 (upstream) MCP 服务器聚合起来，再通过一个统一、带命名空间的接口重新暴露给各类 MCP 客户端（Claude Code、Codex）。配置一次，所有客户端看到的工具完全一致。它还内置一个 **agent 注册表 (agent registry)** —— 检测并注册你本地的 AI 编码 agent、在应用内编辑它们的配置文件，并一键把 Coffer 自己的 MCP 服务器安装到任意 agent 中。所有状态都保存在你自己的机器上 —— 没有云账号，没有厂商锁定。
+Coffer 是一个守护进程 (daemon) + CLI，它把上游 (upstream) MCP 服务器聚合起来，再通过一个统一、带命名空间的接口重新暴露给各类 MCP 客户端（Claude Code、Codex）。配置一次，所有客户端看到的工具完全一致。它还内置一个 **agent 注册表 (agent registry)** —— 检测并注册你本地的 AI 编码 agent、在应用内编辑它们的配置文件，并一键把 Coffer 自己的 MCP 服务器安装到任意 agent 中。在多台机器上用 Coffer？它还能**同步你的仓库** —— 知识、记忆、已注册资源，以及（仅密文的）凭证 —— 通过一个你自己掌控的 git 仓库在多机间同步；加密密钥绝不离开你的机器。所有状态都保存在你自己的机器上 —— 没有云账号，没有厂商锁定。
 
 📖 **文档站点：** https://wyx-sg.github.io/Coffer/
 

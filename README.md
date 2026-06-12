@@ -14,7 +14,7 @@
 
 > Local-first AI agent vault. Manage all your MCP servers from one place.
 
-Coffer is a daemon + CLI that aggregates upstream MCP servers and re-exposes them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools. It also keeps an **agent registry** — detect and register your local AI coding agents, edit their config files in-app, and one-click install Coffer's own MCP server into any of them. All state lives on your machine — no cloud accounts, no vendor lock-in.
+Coffer is a daemon + CLI that aggregates upstream MCP servers and re-exposes them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools. It also keeps an **agent registry** — detect and register your local AI coding agents, edit their config files in-app, and one-click install Coffer's own MCP server into any of them. Run Coffer on more than one machine? It can **sync your vault** — knowledge, memory, registered resources, and (ciphertext-only) credentials — across them through a git repository you own; the encryption key never leaves your machines. All state lives on your machine — no cloud accounts, no vendor lock-in.
 
 📖 **Documentation site:** https://wyx-sg.github.io/Coffer/
 
