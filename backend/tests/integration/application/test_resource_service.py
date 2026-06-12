@@ -365,7 +365,7 @@ async def test_kb_and_memory_credential_extractors_probe_missing_refs(tmp_path):
     repo = SqlAlchemyResourceRepo(sm)
     try:
         svc_missing = ResourceService(
-            kinds=kinds, repo=repo, audit=audit, keyring=_FakeKeyring(present=set())
+            kinds=kinds, repo=repo, audit=audit, credentials=_FakeKeyring(present=set())
         )
         with pytest.raises(CredentialMissing):
             await svc_missing.register(
@@ -380,7 +380,7 @@ async def test_kb_and_memory_credential_extractors_probe_missing_refs(tmp_path):
             await svc_missing.get(ResourceRef("memory", "global"))
 
         svc_ok = ResourceService(
-            kinds=kinds, repo=repo, audit=audit, keyring=_FakeKeyring(present={"openai-key"})
+            kinds=kinds, repo=repo, audit=audit, credentials=_FakeKeyring(present={"openai-key"})
         )
         await svc_ok.register(kind="knowledge_base", name="kb1", config=kb_config, actor="cli")
         await svc_ok.register(kind="memory", name="global", config=mem_config, actor="cli")
