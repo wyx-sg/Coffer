@@ -5,8 +5,10 @@
 // component renders deterministically and assert the establish/remove wiring +
 // the projection status display.
 
+import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AgentMemoryTab } from "./AgentMemoryTab";
 import type { AgentOut } from "@/lib/api/agents";
 
@@ -20,6 +22,17 @@ vi.mock("@/lib/hooks/useMemoryProjections", () => ({
   useRemoveProjection: vi.fn(() => ({ mutate: removeMutate, isPending: false, error: null })),
 }));
 const hooks = await import("@/lib/hooks/useMemoryProjections");
+
+// A projected store lists its facts inline (the agent's current memories).
+vi.mock("@/kinds/memory/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/kinds/memory/api")>()),
+  listFacts: vi.fn(async () => ({ facts: [], total: 0 })),
+}));
+
+function wrap({ children }: PropsWithChildren) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
 
 const AGENT: AgentOut = {
   name: "claude",
@@ -70,7 +83,7 @@ describe("AgentMemoryTab", () => {
       isPending: false,
     } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
 
-    render(<AgentMemoryTab agent={AGENT} />);
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     // "global" appears twice (store name + scope badge).
     expect(screen.getAllByText("global").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/not projected/i)).toBeInTheDocument();
@@ -84,7 +97,7 @@ describe("AgentMemoryTab", () => {
       isPending: false,
     } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
 
-    render(<AgentMemoryTab agent={AGENT} />);
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("switch"));
     expect(establishMutate).toHaveBeenCalledWith({ agentRef: "claude" });
   });
@@ -103,7 +116,7 @@ describe("AgentMemoryTab", () => {
       isPending: false,
     } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
 
-    render(<AgentMemoryTab agent={AGENT} />);
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     expect(screen.getByText("SYMLINK")).toBeInTheDocument();
     expect(screen.getByText("/home/u/.claude/projects/x/memory")).toBeInTheDocument();
 
@@ -113,6 +126,43 @@ describe("AgentMemoryTab", () => {
     expect(removeMutate).toHaveBeenCalledWith("claude");
   });
 
+  test("a projected store lists its facts (the agent's current memories)", async () => {
+    const memApi = await import("@/kinds/memory/api");
+    vi.mocked(memApi.listFacts).mockResolvedValue({
+      facts: [
+        {
+          id: "f1",
+          store_name: "global",
+          scope: "global",
+          name: "pkg-manager",
+          description: "",
+          text: "uses pnpm not npm",
+          type: "user",
+          actor: "agent",
+          created_at: "2026-05-29T00:00:00Z",
+          updated_at: "2026-05-29T00:00:00Z",
+        },
+      ],
+      total: 1,
+    });
+    stubStores();
+    vi.mocked(hooks.useMemoryProjections).mockReturnValue({
+      data: [
+        {
+          agent_ref: "claude",
+          projection_mode: "SYMLINK",
+          target_path: "/home/u/.claude/projects/x/memory",
+          native_memory_disabled: false,
+        },
+      ],
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
+
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
+    expect(await screen.findByText("pkg-manager")).toBeInTheDocument();
+    expect(screen.getByText(/uses pnpm not npm/)).toBeInTheDocument();
+  });
+
   test("project-scoped store passes its project_root when establishing", () => {
     stubStores([PROJECT_STORE]);
     vi.mocked(hooks.useMemoryProjections).mockReturnValue({
@@ -120,7 +170,7 @@ describe("AgentMemoryTab", () => {
       isPending: false,
     } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
 
-    render(<AgentMemoryTab agent={AGENT} />);
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("switch"));
     expect(establishMutate).toHaveBeenCalledWith({
       agentRef: "claude",
@@ -135,7 +185,7 @@ describe("AgentMemoryTab", () => {
       isPending: false,
     } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
 
-    render(<AgentMemoryTab agent={AGENT} />);
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     const sw = screen.getByRole("switch");
     expect(sw).toBeDisabled();
     fireEvent.click(sw);

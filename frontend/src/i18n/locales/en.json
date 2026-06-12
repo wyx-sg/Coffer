@@ -452,7 +452,9 @@
       "nativeDisabled": "Native memory disabled to prevent a divergent copy.",
       "merged": "Pre-existing native files were merged into the store first.",
       "missingProjectRoot": "This project store has no known root yet, so it can't be projected.",
-      "toggleAria": "Toggle projection of {{store}} into this agent"
+      "toggleAria": "Toggle projection of {{store}} into this agent",
+      "facts": "Memories ({{count}})",
+      "factsEmpty": "No memories yet."
     },
     "configDirOverride": "Config directory (optional)",
     "configDirPlaceholder": "Leave blank for the default (~/.claude)",

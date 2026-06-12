@@ -452,7 +452,9 @@
       "nativeDisabled": "已禁用原生记忆，以避免产生分叉副本。",
       "merged": "已先将原有的原生文件合并进记忆库。",
       "missingProjectRoot": "该项目记忆库尚无已知根目录，无法投影。",
-      "toggleAria": "切换将 {{store}} 投影到该 agent"
+      "toggleAria": "切换将 {{store}} 投影到该 agent",
+      "facts": "记忆（{{count}}）",
+      "factsEmpty": "暂无记忆。"
     },
     "configDirOverride": "配置目录（可选）",
     "configDirPlaceholder": "留空则使用默认目录（~/.claude）",
