@@ -273,12 +273,17 @@ class AgentMcpEntryService:
         """Best-effort removal of keychain entries written by a failed adopt."""
         import contextlib
 
-        for ref in refs.values():
-            with contextlib.suppress(Exception):
-                # to_thread: the store write blocks on SQLite's busy_timeout;
-                # on the loop it would freeze the very coroutine holding the
-                # write lock, turning a wait into a guaranteed deadlock.
-                await asyncio.to_thread(self._credentials.delete, ref)
+        def _delete_all() -> None:
+            for ref in refs.values():
+                with contextlib.suppress(Exception):
+                    self._credentials.delete(ref)
+
+        # One to_thread for the whole rollback: the store write blocks on
+        # SQLite's busy_timeout, which on the loop would freeze the very
+        # coroutine holding the write lock (guaranteed deadlock) — and a
+        # single thread, once started, runs to completion even if the
+        # awaiting task is cancelled, so the rollback stays atomic.
+        await asyncio.to_thread(_delete_all)
 
     async def adopt(
         self,
@@ -316,9 +321,27 @@ class AgentMcpEntryService:
             k: r for k, r in provided.items() if k in parsed_entry.env or k in parsed_entry.headers
         }
 
-        for key, ref in applicable.items():
-            value = parsed_entry.env[key] if key in parsed_entry.env else parsed_entry.headers[key]
-            await asyncio.to_thread(self._credentials.set, ref, value)
+        def _write_secrets() -> None:
+            import contextlib
+
+            written: list[str] = []
+            try:
+                for key, ref in applicable.items():
+                    env, headers = parsed_entry.env, parsed_entry.headers
+                    value = env[key] if key in env else headers[key]
+                    self._credentials.set(ref, value)
+                    written.append(ref)
+            except Exception:
+                # Don't orphan the refs already written before the failure.
+                for ref in written:
+                    with contextlib.suppress(Exception):
+                        self._credentials.delete(ref)
+                raise
+
+        # One to_thread for all writes: off the loop (SQLite busy-wait would
+        # deadlock against the loop's own writer) and atomic under task
+        # cancellation — the thread runs to completion once started.
+        await asyncio.to_thread(_write_secrets)
 
         config = {"transport": to_transport_config(parsed_entry, applicable)}
         try:

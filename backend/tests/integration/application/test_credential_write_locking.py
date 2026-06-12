@@ -127,21 +127,18 @@ def _make_db(tmp_path: pathlib.Path) -> pathlib.Path:
     return db_path
 
 
-def _inflight_writer(db_path: pathlib.Path, lock_held: asyncio.Event):
-    async def writer() -> None:
-        # Open write transaction on the same DB; the commit below only runs
-        # if the event loop is still advancing while the credential write
-        # under test waits for the lock.
-        async with aiosqlite.connect(db_path) as wconn:
-            await wconn.execute(
-                "INSERT INTO credentials (ref, ciphertext, created_at, updated_at) "
-                "VALUES ('inflight', X'00', 't', 't')"
-            )
-            lock_held.set()
-            await asyncio.sleep(0.2)
-            await wconn.commit()
-
-    return writer()
+async def _inflight_writer(db_path: pathlib.Path, lock_held: asyncio.Event) -> None:
+    # Open write transaction on the same DB; the commit below only runs
+    # if the event loop is still advancing while the credential write
+    # under test waits for the lock.
+    async with aiosqlite.connect(db_path) as wconn:
+        await wconn.execute(
+            "INSERT INTO credentials (ref, ciphertext, created_at, updated_at) "
+            "VALUES ('inflight', X'00', 't', 't')"
+        )
+        lock_held.set()
+        await asyncio.sleep(0.2)
+        await wconn.commit()
 
 
 async def test_adopt_credential_write_survives_inflight_async_writer(
