@@ -4,14 +4,17 @@
 //
 // Covers the reachable user path without a live LLM:
 //   1. Navigate to Chat; the sidebar entry and history panel render.
-//   2. The new-conversation dialog: an agent picker + per-agent config.
-//   3. Creating a conversation through the dialog adds it to the history.
-//   4. With no model configured, the no-model empty state is shown.
+//   2. The draft surface: clicking "+" opens a blank draft whose top bar offers
+//      the agent + model selectors (no modal dialog).
+//   3. Sending the first message in the draft creates the conversation and adds
+//      it to the history list.
+//   4. With no model configured, the draft shows the no-model empty state.
 //   5. Settings → Models is reachable.
-//   6. With a model configured, the composer is present and enabled.
+//   6. With a model configured, the draft composer is present and enabled.
 //
-// A real streamed reply needs a live LLM credential, which the e2e daemon
-// does not have; the streaming path is covered at the integration tier.
+// A real streamed reply needs a live LLM credential, which the e2e daemon does
+// not have; the streaming path is covered at the integration tier. Sending the
+// first message still creates the conversation even when the turn then errors.
 
 import { expect, type Page } from "@playwright/test";
 import { acceptance } from "./_acceptance";
@@ -67,13 +70,17 @@ async function deleteModel(modelId: string): Promise<void> {
   }
 }
 
-/** Open the new-conversation dialog and confirm it with the default agent. */
-async function startConversationViaDialog(page: Page): Promise<void> {
+/** New flow: clicking "+" opens a blank draft; sending the first message is
+ *  what creates the conversation. Requires a model so the composer renders. */
+async function createConversationViaDraft(page: Page): Promise<void> {
   await page.getByRole("button", { name: /new chat/i }).first().click();
-  const confirm = page.getByRole("button", { name: /start conversation/i });
-  await expect(confirm).toBeVisible({ timeout: 5_000 });
-  await confirm.click();
-  await expect(confirm).toHaveCount(0, { timeout: 5_000 });
+  const composer = page.getByRole("textbox", { name: /message input/i });
+  await expect(composer).toBeVisible({ timeout: 5_000 });
+  await composer.fill("hello from e2e");
+  await composer.press("Enter");
+  // The conversation is created (and appears in the history) even though the
+  // turn then errors without a live LLM.
+  await expect(page.getByRole("option").first()).toBeVisible({ timeout: 10_000 });
 }
 
 // ---------------------------------------------------------------------------
@@ -81,18 +88,22 @@ async function startConversationViaDialog(page: Page): Promise<void> {
 // ---------------------------------------------------------------------------
 
 acceptance("008-agent-chat", "manage conversations", async ({ page }) => {
-  await page.goto("/");
+  const modelId = await registerOllamaModel(`e2e-manage-${Date.now()}`);
+  try {
+    await page.goto("/");
 
-  // The "Chat" sidebar entry exists and navigates to /chat.
-  await page.getByRole("link", { name: /^Chat$/i }).first().click();
-  await expect(page).toHaveURL(/\/chat/);
-  await expect(page.getByText("Conversations", { exact: true })).toBeVisible({
-    timeout: 10_000,
-  });
+    // The "Chat" sidebar entry exists and navigates to /chat.
+    await page.getByRole("link", { name: /^Chat$/i }).first().click();
+    await expect(page).toHaveURL(/\/chat/);
+    await expect(page.getByText("Conversations", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
 
-  // Creating a conversation through the dialog adds it to the history list.
-  await startConversationViaDialog(page);
-  await expect(page.getByRole("option").first()).toBeVisible({ timeout: 5_000 });
+    // Sending the first message in the draft adds a conversation to the history.
+    await createConversationViaDraft(page);
+  } finally {
+    await deleteModel(modelId);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -108,21 +119,11 @@ acceptance(
       timeout: 10_000,
     });
 
-    // Open the new-conversation dialog — it offers an agent picker.
-    await page.getByRole("button", { name: /new chat/i }).first().click();
-    await expect(
-      page.getByRole("heading", { name: "New conversation" }),
-    ).toBeVisible({ timeout: 5_000 });
-
-    // The built-in agent is offered.
-    await expect(page.getByText("Coffer Assistant").first()).toBeVisible();
-
-    // Confirming creates the conversation.
-    await page.getByRole("button", { name: /start conversation/i }).click();
-    await expect(
-      page.getByRole("button", { name: /start conversation/i }),
-    ).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByRole("option").first()).toBeVisible({ timeout: 5_000 });
+    // The draft surface offers an agent picker in its top bar (no modal).
+    // The built-in agent is offered and selected by default.
+    await expect(page.getByText("Coffer Assistant").first()).toBeVisible({
+      timeout: 5_000,
+    });
   },
 );
 
@@ -138,10 +139,8 @@ acceptance("008-agent-chat", "no-model empty state", async ({ page }) => {
     timeout: 10_000,
   });
 
-  // Create a conversation through the dialog; with no model configured the
-  // thread must show the actionable no-model empty state.
-  await startConversationViaDialog(page);
-
+  // With no model configured, the draft surface shows the actionable no-model
+  // empty state rather than a composer.
   await expect(page.getByText("No model configured")).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText("Go to Settings → Models")).toBeVisible();
   await expect(page.getByText(/INTERNAL_ERROR/)).toHaveCount(0);
@@ -163,7 +162,7 @@ acceptance("008-agent-chat", "register a model provider", async ({ page }) => {
 
 // ---------------------------------------------------------------------------
 // Scenario: send a message and receive a streamed reply
-// (limited — no live LLM; verifies the UI reaches the ready-to-send state)
+// (limited — no live LLM; verifies the draft reaches the ready-to-send state)
 // ---------------------------------------------------------------------------
 
 acceptance(
@@ -177,10 +176,8 @@ acceptance(
         timeout: 10_000,
       });
 
-      // With a model configured, a new conversation shows an enabled composer.
-      await startConversationViaDialog(page);
-
-      const composer = page.getByRole("textbox", { name: /message/i });
+      // With a model configured, the draft shows an enabled composer.
+      const composer = page.getByRole("textbox", { name: /message input/i });
       await expect(composer).toBeVisible({ timeout: 5_000 });
       await expect(composer).toBeEnabled();
     } finally {
