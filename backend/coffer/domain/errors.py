@@ -60,7 +60,7 @@ class CredentialMissing(CofferError):  # noqa: N818
     code = "CREDENTIAL_MISSING"
 
     def __init__(self, ref: str) -> None:
-        super().__init__(f"credential not found in keychain: {ref}")
+        super().__init__(f"credential not found in the credential store: {ref}")
         self.ref = ref
 
 

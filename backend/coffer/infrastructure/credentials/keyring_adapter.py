@@ -1,8 +1,9 @@
 """KeyringAdapter — the only file in the codebase that imports `keyring`.
 
-Per Coffer constitution: all secret material lives in the OS keychain.
-Code elsewhere uses credential refs (string keys); this adapter is the
-sole bridge to the actual keychain.
+Secrets themselves live Fernet-encrypted in the coffer DB (see
+encrypted_store.py); the OS keychain is used only for the opt-in
+master-key storage (master_key.py) and as the read-side source when
+migrating legacy pre-0.2 keychain entries into the encrypted store.
 
 Importlinter contracts 3 and 4 forbid every other module from importing
 `keyring`; only `coffer.infrastructure.credentials.*` is allowed.

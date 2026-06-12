@@ -202,7 +202,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     if master_key is None:
         raise MasterKeyMissing(str(db_path.parent / "master.key"))
-    credential_store = EncryptedCredentialStore(db_path=db_path, key=master_key)
+    try:
+        credential_store = EncryptedCredentialStore(db_path=db_path, key=master_key)
+    except ValueError as e:
+        # A present-but-corrupt key (e.g. truncated file) must fail loudly and
+        # name its location — regenerating over live ciphertext is never safe.
+        raise MasterKeyMissing(str(db_path.parent / "master.key")) from e
     set_credential_store(credential_store)
     set_master_key_manager(master_key_manager)
 
