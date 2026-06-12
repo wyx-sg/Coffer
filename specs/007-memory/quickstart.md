@@ -49,6 +49,16 @@ For Claude, keep auto-memory **on** — the symlinked dir _is_ the canonical sto
 
 Content outside the markers is never touched; re-rendering is idempotent. If Claude's memory dir already has real files when you bind a project, Coffer **merges** them into the canonical store first, then replaces the dir with a symlink — nothing is overwritten.
 
+### Taking over existing native memory
+
+Claude Code may have written memory natively long before Coffer was installed (one `~/.claude/projects/<slug>/memory/` dir per project). The agent **Memory** tab discovers these (`GET /api/v1/agents/{name}/native-memory`) and, with one **Take over** click, imports them all (`POST /api/v1/agents/{name}/native-memory/import`):
+
+- each project's `<slug>` is decoded back to a real project root by walking the filesystem (the slug encoding is lossy, so an undecodable slug is reported and left untouched — never guessed);
+- the original `memory/` dir is copied to `memory.bak-<timestamp>` beside it before anything is touched;
+- the project's canonical store is provisioned (keyed by git-root, matching how a later `remember` from that repo resolves) and a SYMLINK projection is established (the merge-first step above moves the existing facts in).
+
+The result lists each project's outcome (`imported` / `skipped_undecodable` / `error`) with its store name and backup path. Re-running is idempotent — already-managed (symlinked) dirs are skipped.
+
 Adding a new agent is one `AgentMemoryAdapter`; the memory substrate is untouched.
 
 ## CLI

@@ -49,6 +49,16 @@ coffer__recall("how do we deploy?")
 
 标记之外的内容绝不被触碰；重渲染是幂等的。若你绑定项目时 Claude 的记忆目录已有真实文件，Coffer 先把它们 **合并** 进规范化 store，再把该目录替换为 symlink —— 不覆盖任何内容。
 
+### 接管已有的原生记忆
+
+Claude Code 可能早在装 Coffer 之前就已原生写入记忆（每个项目一个 `~/.claude/projects/<slug>/memory/` 目录）。agent 的 **记忆** 标签页会发现它们（`GET /api/v1/agents/{name}/native-memory`），点一下 **接管** 即可全部导入（`POST /api/v1/agents/{name}/native-memory/import`）：
+
+- 每个项目的 `<slug>` 通过遍历文件系统反解回真实的项目根目录（slug 编码是有损的，因此无法反解的 slug 会被报告并原样保留 —— 绝不臆测）；
+- 在动任何东西之前，原始 `memory/` 目录会先被复制为同级的 `memory.bak-<时间戳>`；
+- 为该项目预置规范化 store（按 git-root 取键，与之后从该仓库 `remember` 的解析方式一致），并建立 SYMLINK 投影（上面的「合并优先」会把已有事实迁入）。
+
+返回结果会列出每个项目的处置（`imported` / `skipped_undecodable` / `error`）及其 store 名与备份路径。重复运行是幂等的 —— 已被管理（已 symlink）的目录会被跳过。
+
 新增一个 agent 就是一个 `AgentMemoryAdapter`；memory 底座不动。
 
 ## CLI

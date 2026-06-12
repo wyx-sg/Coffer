@@ -498,7 +498,10 @@
       "toggleAria": "切换将 {{store}} 投影到该 agent",
       "facts": "记忆（{{count}}）",
       "factsEmpty": "暂无记忆。",
-      "nativeDiscovered": "发现 Claude Code 在 {{projects}} 个项目里原生写入的 {{count}} 条记忆,尚未被 Coffer 接管。"
+      "nativeDiscovered": "发现 Claude Code 在 {{projects}} 个项目里原生写入的 {{count}} 条记忆,尚未被 Coffer 接管。",
+      "takeOver": "接管",
+      "takingOver": "接管中…",
+      "takeOverDone": "已接管 {{imported}} 个项目,跳过 {{skipped}} 个。原始记忆已在各记忆目录旁备份。"
     },
     "configDirOverride": "配置目录（可选）",
     "configDirPlaceholder": "留空则使用默认目录（~/.claude）",

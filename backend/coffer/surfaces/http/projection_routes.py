@@ -9,6 +9,7 @@ OpenAPI.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response, status
@@ -26,6 +27,31 @@ router = APIRouter(
     tags=["projection"],
     dependencies=[Depends(require_token)],
 )
+
+# A second router under /api/v1/agents for the native-memory TAKEOVER. It lives
+# here (composition root) rather than in agent_routes because it bridges agent +
+# memory, which agent_routes may not import (cross-kind Contract 5b).
+agent_native_router = APIRouter(
+    prefix="/api/v1/agents",
+    tags=["projection"],
+    dependencies=[Depends(require_token)],
+)
+
+
+class NativeMemoryImportItemOut(BaseModel):
+    slug: str
+    fact_count: int
+    status: str
+    project_root: str | None = None
+    store_name: str | None = None
+    backup_dir: str | None = None
+    detail: str | None = None
+
+
+class NativeMemoryImportOut(BaseModel):
+    items: list[NativeMemoryImportItemOut]
+    imported: int
+    skipped: int
 
 
 # The projection service is composition-root state; held module-local so the
@@ -122,3 +148,22 @@ async def remove_projection(
 
         raise HTTPException(status_code=404, detail="projection not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@agent_native_router.post("/{name}/native-memory/import", response_model=NativeMemoryImportOut)
+async def import_native_memory(
+    name: str,
+    svc: ProjectionService = Depends(get_projection_service),  # noqa: B008
+) -> NativeMemoryImportOut:
+    """Take over the agent's unmanaged native memory (Claude Code only).
+
+    Each takeover backs the original dir up to ``memory.bak-<timestamp>`` before
+    symlinking, so the user's facts are never at risk. Non-Claude agents and
+    undecodable slugs are no-ops/reported, never guessed."""
+    suffix = datetime.now(tz=UTC).strftime("%Y%m%d%H%M%S")
+    result = await svc.take_over_claude_native_memory(agent_ref=name, backup_suffix=suffix)
+    return NativeMemoryImportOut(
+        items=[NativeMemoryImportItemOut(**vars(i)) for i in result.items],
+        imported=result.imported,
+        skipped=result.skipped,
+    )

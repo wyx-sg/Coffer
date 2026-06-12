@@ -147,3 +147,23 @@ export interface NativeMemoryOut {
 export async function getAgentNativeMemory(name: string): Promise<NativeMemoryOut> {
   return call<NativeMemoryOut>("GET", `/agents/${enc(name)}/native-memory`);
 }
+
+export interface NativeMemoryImportItem {
+  slug: string;
+  fact_count: number;
+  status: string; // imported | skipped_undecodable | skipped_managed | error
+  project_root: string | null;
+  store_name: string | null;
+  backup_dir: string | null;
+  detail: string | null;
+}
+
+export interface NativeMemoryImportOut {
+  items: NativeMemoryImportItem[];
+  imported: number;
+  skipped: number;
+}
+
+export async function importAgentNativeMemory(name: string): Promise<NativeMemoryImportOut> {
+  return call<NativeMemoryImportOut>("POST", `/agents/${enc(name)}/native-memory/import`);
+}
