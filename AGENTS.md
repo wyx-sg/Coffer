@@ -10,7 +10,7 @@ Operating manual for AI agents (Claude Code, Codex, Cursor, future ones) enterin
 | ------------------- | ----------------------------------------------------------------------------- |
 | **Project**         | Coffer — local-first AI agent vault. Single-user. OSS-bound.                  |
 | **Methodology**     | Spec-Driven Development (SDD) with Speckit.                                   |
-| **Languages**       | Python 3.12+ (backend).                                                       |
+| **Languages**       | Python 3.12+ (backend); TypeScript / React (frontend).                        |
 | **Source of truth** | `.specify/memory/constitution.md` (principles); `specs/` (product contracts). |
 | **Default branch**  | `main`.                                                                       |
 | **License**         | MIT.                                                                          |
@@ -25,6 +25,7 @@ In order:
    - [`agents/sdd.md`](./agents/sdd.md) — spec folder layout, acceptance scenarios, end-to-end deliverable rule.
    - [`agents/workflow.md`](./agents/workflow.md) — branches, Conventional Commits, AI signatures, PR flow, merge policy.
    - [`agents/stack.md`](./agents/stack.md) — backend (Python / FastAPI / SQLite). Includes file-size limits, layered-architecture import rules, wire-contract rule.
+   - [`agents/frontend.md`](./agents/frontend.md) — frontend (React / TypeScript / Vite). State management, API layer, query keys, hooks, design-system and i18n conventions.
    - [`agents/testing.md`](./agents/testing.md) — 4 test tiers (unit / integration / contract / e2e), acceptance markers, mocking philosophy.
 4. The relevant **`specs/<NNN>-<short-name>/spec.md`** — for any spec-touching work.
 
