@@ -13,8 +13,10 @@
 | 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | Accepted — code in review (PR #28)                 |
 | 004 | **Agent Registry** ([spec](../../specs/004-agent-registry/spec.md))           | Accepted — code merged                             |
 | 005 | **Skill Manager** ([spec](../../specs/005-skill-manager/spec.md))             | Accepted — code merged                             |
-| 006 | **Knowledge Base** ([spec](../../specs/006-knowledge-base/spec.md))           | Accepted — redesign in development (feature/kb-memory-redesign; KB face of the knowledge substrate, [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md))                                                                 |
-| 007 | **Memory** ([spec](../../specs/007-memory/spec.md))                           | Accepted — redesign in development (feature/kb-memory-redesign; shared agent-native memory, [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) + [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)) |
+| 006 | **Knowledge Base** ([spec](../../specs/006-knowledge-base/spec.md))           | Accepted — code merged in PR #55 (KB face of the knowledge substrate, [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md))                                                                |
+| 007 | **Memory** ([spec](../../specs/007-memory/spec.md))                           | Accepted — code merged in PRs #55/#58 (shared agent-native memory, [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) + [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)) |
+| 008 | **Agent Chat** ([spec](../../specs/008-agent-chat/spec.md))                   | Accepted — code merged in PR #57                   |
+| 009 | **Channels** ([spec](../../specs/009-channels/spec.md))                       | Drafted — in implementation ([ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)) |
 
 ## Explicit non-goals (current spec)
 

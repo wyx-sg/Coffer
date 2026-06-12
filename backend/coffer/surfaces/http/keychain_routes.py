@@ -52,7 +52,20 @@ async def set_secret(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/{ref}", response_model=KeychainGetOut)
+@router.get("/{ref:path}/exists", response_model=KeychainExistsOut)
+async def secret_exists(
+    ref: str,
+    keyring: KeyringAdapter = Depends(get_keyring),  # noqa: B008
+) -> KeychainExistsOut:
+    """Report whether a secret is stored under `ref`.
+
+    Presence only — the value never crosses the API for this check, so no
+    audit event is recorded (nothing sensitive is read out).
+    """
+    return KeychainExistsOut(present=keyring.get(ref) is not None)
+
+
+@router.get("/{ref:path}", response_model=KeychainGetOut)
 async def get_secret(
     ref: str,
     keyring: KeyringAdapter = Depends(get_keyring),  # noqa: B008
@@ -75,21 +88,8 @@ async def get_secret(
     return KeychainGetOut(value=value)
 
 
-@router.get("/{ref}/exists", response_model=KeychainExistsOut)
-async def secret_exists(
-    ref: str,
-    keyring: KeyringAdapter = Depends(get_keyring),  # noqa: B008
-) -> KeychainExistsOut:
-    """Report whether a secret is stored under `ref`.
-
-    Presence only — the value never crosses the API for this check, so no
-    audit event is recorded (nothing sensitive is read out).
-    """
-    return KeychainExistsOut(present=keyring.get(ref) is not None)
-
-
 @router.delete(
-    "/{ref}",
+    "/{ref:path}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )

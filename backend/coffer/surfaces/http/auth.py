@@ -15,6 +15,11 @@ def set_active_token(token: str | None) -> None:
     _ACTIVE_TOKEN = token
 
 
+def get_active_token() -> str | None:
+    """Current API token (None before the daemon is ready)."""
+    return _ACTIVE_TOKEN
+
+
 def require_token(x_coffer_token: str | None = Header(default=None)) -> None:
     """FastAPI dependency — raises 401 on bad/missing token, 503 if unset."""
     if _ACTIVE_TOKEN is None:
