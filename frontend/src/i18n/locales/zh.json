@@ -669,7 +669,14 @@
       "editAria": "编辑 {{title}} 的 Markdown",
       "deleteConfirm": "删除文档 {{title}}？此操作不可撤销。",
       "loadFailed": "加载该知识库失败。",
-      "empty": "还没有文档。上传任意格式的文件以填充该知识库。"
+      "empty": "还没有文档。上传任意格式的文件以填充该知识库。",
+      "back": "返回知识库",
+      "docBadge": "{{count}} 个文档",
+      "chunkBadge": "{{count}} 个分块",
+      "edit": "编辑",
+      "save": "保存",
+      "cancel": "取消",
+      "selectDocument": "在左侧选择一个文档以预览或编辑。"
     },
     "settings": {
       "title": "知识库设置",

@@ -669,7 +669,14 @@
       "editAria": "Edit Markdown for {{title}}",
       "deleteConfirm": "Delete document {{title}}? This cannot be undone.",
       "loadFailed": "Failed to load this knowledge base.",
-      "empty": "No documents yet. Upload a file of any format to populate this knowledge base."
+      "empty": "No documents yet. Upload a file of any format to populate this knowledge base.",
+      "back": "Back to knowledge bases",
+      "docBadge": "{{count}} documents",
+      "chunkBadge": "{{count}} chunks",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "selectDocument": "Select a document on the left to preview or edit it."
     },
     "settings": {
       "title": "Knowledge base settings",
