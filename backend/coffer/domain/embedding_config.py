@@ -32,6 +32,8 @@ class GlobalEmbeddingConfig:
     base_url: str | None
     credential_ref: str | None
     dimensions: int
+    default_chunk_size: int
+    default_chunk_overlap: int
     updated_at: datetime
 
     def is_active(self) -> bool:

@@ -39,6 +39,8 @@ export function EmbeddingSettings() {
   const [dimensions, setDimensions] = useState(768);
   const [baseUrl, setBaseUrl] = useState("");
   const [credentialRef, setCredentialRef] = useState("");
+  const [chunkSize, setChunkSize] = useState(512);
+  const [chunkOverlap, setChunkOverlap] = useState(64);
 
   // Seed the form from the loaded config once it arrives.
   useEffect(() => {
@@ -49,6 +51,8 @@ export function EmbeddingSettings() {
     setDimensions(data.dimensions);
     setBaseUrl(data.base_url ?? "");
     setCredentialRef(data.credential_ref ?? "");
+    setChunkSize(data.default_chunk_size);
+    setChunkOverlap(data.default_chunk_overlap);
   }, [data]);
 
   if (isPending) {
@@ -76,6 +80,8 @@ export function EmbeddingSettings() {
       dimensions,
       base_url: baseUrl.trim() || null,
       credential_ref: credentialRef.trim() || null,
+      default_chunk_size: chunkSize,
+      default_chunk_overlap: chunkOverlap,
     });
   };
 
@@ -142,6 +148,33 @@ export function EmbeddingSettings() {
             ) : null}
           </div>
         ) : null}
+
+        <div className="space-y-3 border-t border-border pt-4">
+          <div>
+            <Label>{t("settings.embedding.chunkingTitle")}</Label>
+            <p className="text-xs text-muted-foreground">{t("settings.embedding.chunkingHint")}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="emb-chunk-size">{t("settings.embedding.chunkSize")}</Label>
+              <Input
+                id="emb-chunk-size"
+                type="number"
+                value={chunkSize}
+                onChange={(e) => setChunkSize(Number(e.target.value) || 0)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="emb-chunk-overlap">{t("settings.embedding.chunkOverlap")}</Label>
+              <Input
+                id="emb-chunk-overlap"
+                type="number"
+                value={chunkOverlap}
+                onChange={(e) => setChunkOverlap(Number(e.target.value) || 0)}
+              />
+            </div>
+          </div>
+        </div>
 
         {update.error ? (
           <p className="text-sm text-destructive" role="alert">

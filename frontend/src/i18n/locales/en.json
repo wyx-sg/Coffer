@@ -292,7 +292,7 @@
       "data": "Data",
       "app": "App",
       "about": "About",
-      "embedding": "Embedding",
+      "embedding": "Embedding & chunking",
       "models": "Models"
     },
     "general": {
@@ -357,7 +357,11 @@
       "dimensions": "Dimensions",
       "baseUrl": "Base URL (optional)",
       "credential": "Credential reference",
-      "credentialHint": "Keychain entry name (not the key itself)"
+      "credentialHint": "Keychain entry name (not the key itself)",
+      "chunkingTitle": "Chunking defaults",
+      "chunkingHint": "Default chunk size/overlap for NEW knowledge bases. Each knowledge base can override these in its settings.",
+      "chunkSize": "Chunk size",
+      "chunkOverlap": "Chunk overlap"
     },
     "models": {
       "title": "Models",

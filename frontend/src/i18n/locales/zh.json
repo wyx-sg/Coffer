@@ -292,7 +292,7 @@
       "data": "数据",
       "app": "应用",
       "about": "关于",
-      "embedding": "向量模型",
+      "embedding": "向量与分块",
       "models": "模型"
     },
     "general": {
@@ -357,7 +357,11 @@
       "dimensions": "维度",
       "baseUrl": "Base URL（可选）",
       "credential": "凭证引用",
-      "credentialHint": "keychain 条目名（不是密钥本身）"
+      "credentialHint": "keychain 条目名（不是密钥本身）",
+      "chunkingTitle": "分块默认值",
+      "chunkingHint": "新建知识库的默认分块大小/重叠。每个知识库可在自己的设置里覆盖。",
+      "chunkSize": "分块大小",
+      "chunkOverlap": "分块重叠"
     },
     "models": {
       "title": "模型",
