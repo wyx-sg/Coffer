@@ -51,6 +51,9 @@ class ConversationModel(Base):
     agent_key: Mapped[str] = mapped_column(String, nullable=False, default="builtin")
     title: Mapped[str] = mapped_column(String, nullable=False)
     model_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Provider-owned per-conversation JSON state (CLI agents keep cwd + the
+    # upstream session id here); NULL = none. See ConversationRepo.*_agent_config.
+    agent_config: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
@@ -198,6 +201,30 @@ class ConversationRepo:
                 raise ConversationNotFound(conversation_id)
             await session.commit()
             return self._to_domain(row)
+
+    async def get_agent_config(self, conversation_id: str) -> dict[str, Any]:
+        """Read the provider-owned config blob (``{}`` when unset/missing)."""
+        async with self._sm() as session:
+            row = await session.get(ConversationModel, conversation_id)
+            if row is None:
+                raise ConversationNotFound(conversation_id)
+            if not row.agent_config:
+                return {}
+            parsed = json.loads(row.agent_config)
+            return parsed if isinstance(parsed, dict) else {}
+
+    async def set_agent_config(self, conversation_id: str, config: dict[str, Any]) -> None:
+        """Replace the provider-owned config blob for a conversation."""
+        async with self._sm() as session:
+            stmt = (
+                update(ConversationModel)
+                .where(ConversationModel.id == conversation_id)
+                .values(agent_config=json.dumps(config))
+            )
+            result = await session.execute(stmt)
+            if result.rowcount == 0:
+                raise ConversationNotFound(conversation_id)
+            await session.commit()
 
     async def set_archived(
         self, conversation_id: str, archived_at: datetime | None

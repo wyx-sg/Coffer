@@ -125,8 +125,10 @@ export function ChatPage() {
             models={c.models}
             agentKey={c.effectiveDraft.agentKey}
             modelId={c.effectiveDraft.modelId}
+            cwd={c.effectiveDraft.cwd}
             onAgentChange={c.setDraftAgent}
             onModelChange={c.setDraftModel}
+            onCwdChange={c.setDraftCwd}
             onSend={c.sendDraft}
             creating={c.creating}
           />

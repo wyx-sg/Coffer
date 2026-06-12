@@ -16,6 +16,8 @@ Frozen dataclass — domain stays pure.
 | `agent_key` | `str` | which agent the thread talks to; default `"builtin"` |
 | `title` | `str` | auto-generated from the first user message; user-editable |
 | `model_id` | `str \| None` | `chat_models.id` override; `None` → default model. Built-in agent's per-conversation model storage. |
+| `agent_config` | `str \| None` (JSON) | Provider-owned per-conversation state (Alembic `0018`). CLI agents store `{cwd, session_id, permission_mode?}` here; the built-in agent stores nothing (it uses `model_id`). Read/written via `ConversationRepo.get_agent_config` / `set_agent_config`. |
+| `archived_at` | `datetime \| None` | `None` = active; a timestamp = archived (Alembic `0013`). Drives the active/archived filter and the two-stage retention lifecycle. |
 | `created_at` / `updated_at` | `datetime` | UTC; `updated_at` bumped on each new message |
 
 ### `Message` (`domain/chat/message.py`)
@@ -144,13 +146,16 @@ Existing: `ConversationNotFound` (404), `ModelNotFound` (404), `ModelRejected`
 
 ## SQLite schema
 
-**No migration.** The platform refactor adds no columns — `conversations`
-already has `agent_key`; the built-in agent's only per-conversation config is
-the existing `model_id` column. A future provider that needs persistent config
-brings its own table; the `init_conversation` seam keeps that change local.
+The platform refactor itself added no columns — the built-in agent's only
+per-conversation config is the existing `model_id` column. The CLI agents,
+needing per-conversation working directory + session state, added the generic
+`conversations.agent_config` JSON column (Alembic `0018`) through the same
+`init_conversation` seam, exactly the "a future provider brings its own
+persistent config" extension point the platform anticipated — no change to the
+chat surface or the wire contract.
 
-Existing tables (Alembic revision `0005`): `conversations`, `chat_messages`,
-`chat_models` — unchanged.
+Tables: `conversations` (Alembic `0005`; `archived_at` `0013`; `agent_config`
+`0018`), `chat_messages`, `chat_models`.
 
 ## Cascade & integrity rules
 

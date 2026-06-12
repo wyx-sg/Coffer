@@ -999,10 +999,13 @@
       "agent": "Agent",
       "model": "Model",
       "noModels": "No models yet — add one in Settings → Models first.",
-      "unavailable": "unavailable"
+      "unavailable": "unavailable",
+      "workdir": "Working directory",
+      "workdirPlaceholder": "/path/to/your/project"
     },
     "draft": {
-      "guide": "Message {{agent}} to start a new conversation."
+      "guide": "Message {{agent}} to start a new conversation.",
+      "workdirNeeded": "Enter a working directory above to start chatting with {{agent}}."
     },
     "delete": {
       "title": "Delete this conversation?",

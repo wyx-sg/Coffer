@@ -29,9 +29,11 @@ export function useChatController() {
   const [showArchived, setShowArchived] = useState(false);
   // Draft top-bar selection (agent + model) before the conversation exists;
   // null until the user touches a selector — defaults are derived below.
-  const [draftConfig, setDraftConfig] = useState<{ agentKey: string; modelId: string | null } | null>(
-    null,
-  );
+  const [draftConfig, setDraftConfig] = useState<{
+    agentKey: string;
+    modelId: string | null;
+    cwd: string;
+  } | null>(null);
   // After creating from the draft, the first message is sent once the turn hook
   // re-binds to the new conversation id (see effect below).
   const [pendingFirst, setPendingFirst] = useState<{ convId: string; text: string } | null>(null);
@@ -84,10 +86,11 @@ export function useChatController() {
   const effectiveDraft = draftConfig ?? {
     agentKey: agents.find((a) => a.available)?.agent_key ?? "builtin",
     modelId: defaultModelId,
+    cwd: "",
   };
 
   const startDraft = () => {
-    setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId: defaultModelId });
+    setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId: defaultModelId, cwd: "" });
     navigate("/chat");
   };
 
@@ -97,10 +100,17 @@ export function useChatController() {
   };
 
   const sendDraft = (text: string) => {
+    // The built-in agent is configured by model; CLI agents by working directory.
+    const agentConfig =
+      effectiveDraft.agentKey === "builtin"
+        ? effectiveDraft.modelId
+          ? { model_id: effectiveDraft.modelId }
+          : {}
+        : { cwd: effectiveDraft.cwd.trim() };
     createConv.mutate(
       {
         agent_key: effectiveDraft.agentKey,
-        agent_config: effectiveDraft.modelId ? { model_id: effectiveDraft.modelId } : {},
+        agent_config: agentConfig,
       },
       {
         onSuccess: (created) => {
@@ -149,9 +159,15 @@ export function useChatController() {
     turn,
     effectiveDraft,
     setDraftAgent: (agentKey: string) =>
-      setDraftConfig({ agentKey, modelId: effectiveDraft.modelId }),
+      setDraftConfig({ agentKey, modelId: effectiveDraft.modelId, cwd: effectiveDraft.cwd }),
     setDraftModel: (modelId: string | null) =>
-      setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId }),
+      setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId, cwd: effectiveDraft.cwd }),
+    setDraftCwd: (cwd: string) =>
+      setDraftConfig({
+        agentKey: effectiveDraft.agentKey,
+        modelId: effectiveDraft.modelId,
+        cwd,
+      }),
     startDraft,
     selectConversation,
     sendDraft,

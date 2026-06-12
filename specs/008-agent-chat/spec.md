@@ -24,16 +24,21 @@ It delivers two things at once:
    is reached only through that registry, so adding another kind of agent is a
    new registry entry, not a change to the chat page, the persistence layer, or
    the REST/SSE contract.
-2. **One agent on that platform.** Coffer's built-in general-purpose agent,
+2. **Agents on that platform.** Coffer's built-in general-purpose agent,
    "Coffer Assistant" — an in-process agentic loop, driven by the user's own
    MCP servers, skills, memory, and knowledge bases through Coffer's MCP
-   gateway, on a user-configured LLM provider.
+   gateway, on a user-configured LLM provider — **plus** two CLI-backed agents,
+   **Claude Code** and **Codex**, each driven by its installed command-line tool
+   in a working directory the user picks per conversation. The CLI agents are
+   what keep the seam honest: they are real second and third providers, not a
+   promise, and they prove that adding an agent is one registry entry with no
+   change to the chat surface, persistence, or the wire contract.
 
-The platform pieces and the built-in agent are co-delivered because a platform
-with no agent cannot be exercised, and an agent with no platform cannot be
-reached. Every platform capability that the built-in agent does not itself
-need — the approval channel above all — still ships complete and is proven
-end-to-end, so the seam is real on the day it lands rather than a promise.
+The platform pieces and its agents are co-delivered because a platform with no
+agent cannot be exercised, and an agent with no platform cannot be reached.
+Every platform capability that the built-in agent does not itself need — the
+approval channel above all — still ships complete and is proven end-to-end, so
+the seam is real on the day it lands rather than a promise.
 
 ## User Scenarios & Testing
 
@@ -491,14 +496,26 @@ referenced by at least one test marked
 - **FR-005**: An agent is addressed for a turn through an **agent adapter** that
   is self-contained: given only the conversation history and an approval
   channel, it yields a stream of typed turn events. The adapter carries its own
-  model, tools, and configuration; the orchestrator MUST NOT inject them. v1
-  ships exactly one agent — the built-in agent — behind this seam.
+  model, tools, and configuration; the orchestrator MUST NOT inject them. The
+  platform ships three agents behind this seam — the built-in agent plus two
+  CLI-backed agents (Claude Code, Codex) — so the seam is validated by real
+  additional providers, not a single occupant.
+- **FR-005a**: System MUST ship CLI-backed agent providers for Claude Code and
+  Codex. Each is configured per conversation by a working directory (its
+  `agent_config.cwd`), which MUST be an existing directory or the configuration
+  is rejected. A CLI agent's availability MUST reflect whether its command-line
+  binary is resolvable on the daemon's PATH; an unavailable agent is listed but
+  not selectable. A CLI turn MUST run the tool in that directory, stream its
+  line-delimited JSON output mapped onto the platform's turn events, and persist
+  the upstream session id so the next turn continues the same session. v1 runs
+  the CLI under its own permission mode (no per-call approval bridging yet).
 
 **Built-in agent & agentic loop**
 
-- **FR-006**: System MUST ship exactly one built-in general-purpose agent,
-  "Coffer Assistant", defined in code (identity, system prompt, default
-  behaviour). v1 provides no creation, editing, or deletion of agents.
+- **FR-006**: System MUST ship a built-in general-purpose agent, "Coffer
+  Assistant", defined in code (identity, system prompt, default behaviour).
+  Agents are defined in code and registered at startup; there is no creation,
+  editing, or deletion of agents through the API.
 - **FR-007**: System MUST run the built-in agent as an in-process agentic loop:
   call the selected LLM, execute any requested tools, feed results back, and
   repeat until the model yields a final answer or a bound is hit.

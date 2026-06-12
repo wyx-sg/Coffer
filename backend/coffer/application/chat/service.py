@@ -54,6 +54,14 @@ class ConversationRepo(Protocol):
 
     async def set_model(self, conversation_id: str, model_id: str | None) -> Conversation: ...
 
+    async def get_agent_config(self, conversation_id: str) -> dict[str, Any]:
+        """Provider-owned per-conversation JSON state (``{}`` when unset)."""
+        ...
+
+    async def set_agent_config(self, conversation_id: str, config: dict[str, Any]) -> None:
+        """Replace the provider-owned per-conversation JSON state."""
+        ...
+
     async def set_archived(
         self, conversation_id: str, archived_at: datetime | None
     ) -> Conversation: ...
