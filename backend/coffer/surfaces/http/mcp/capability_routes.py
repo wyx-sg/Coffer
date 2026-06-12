@@ -17,7 +17,6 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
 from coffer.domain.resource import ResourceRef
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -30,6 +29,7 @@ from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
     get_capability_discovery,
+    get_credential_store,
     get_health_repo,
     get_invocation_repo,
     get_preferences_repo,
@@ -344,8 +344,7 @@ async def test_mcp_server(
     resource = await resource_service.get(ResourceRef("mcp_server", name))
     config = MCPServerConfig.model_validate(resource.config)
 
-    keyring_adapter = KeyringAdapter()
-    resolver = CredentialResolver(keyring_adapter)
+    resolver = CredentialResolver(get_credential_store())
 
     start = time.monotonic()
     try:

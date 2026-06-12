@@ -1,10 +1,13 @@
 """SC-010: secret values must never appear in the DB, logs, or any persisted
 artefact.
 
-Drives a representative session with a unique sentinel value stored in the
-in-memory keychain, then greps every persistable surface for the sentinel.
-Zero occurrences are required — any hit fails the test with a precise pointer
-to the surface where the leak was found.
+Drives a representative session with a unique sentinel value written into the
+Fernet-encrypted credential store (the same store the composition root wires),
+then greps every persistable surface for the sentinel. Zero plaintext
+occurrences are required — any hit fails the test with a precise pointer to the
+surface where the leak was found. Because the secret now lives encrypted in the
+``credentials`` table, the SQLite-bytes grep is REAL coverage: it proves the
+ciphertext column never exposes plaintext while the value still round-trips.
 """
 
 from __future__ import annotations
@@ -17,8 +20,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
-import keyring
 import pytest
+from cryptography.fernet import Fernet
 
 from coffer.application.audit_service import AuditService
 from coffer.application.mcp.credential_resolver import CredentialResolver
@@ -29,7 +32,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.logging.setup import _attach_file_handler
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
@@ -45,7 +48,6 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
-from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[2] / "fixtures" / "fake_mcp_server.py"
 
@@ -57,10 +59,6 @@ async def test_secret_value_never_in_db_or_logs(
 ) -> None:
     # Unique sentinel — unguessable, collision-resistant for this test run.
     sentinel = f"COFFER_LEAK_SENTINEL_{secrets.token_hex(16)}"
-
-    # Install in-memory keyring and store the sentinel under a ref key.
-    install_in_memory_keyring(monkeypatch)
-    keyring.set_password("coffer", "leak-test-ref", sentinel)
 
     # Redirect coffer log files to a temp dir so we can grep them cleanly, and
     # actually attach the rotating file handler so a daemon.log is produced —
@@ -99,6 +97,15 @@ async def test_secret_value_never_in_db_or_logs(
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
+
+    # Write the sentinel through the Fernet-encrypted store — exactly the path
+    # the composition root uses. The plaintext is encrypted into the
+    # `credentials` table; only the in-memory decrypt below ever sees it as
+    # cleartext, so the DB-bytes grep further down is real coverage.
+    credential_store = EncryptedCredentialStore(db_path=db_path, key=Fernet.generate_key())
+    credential_store.set("leak-test-ref", sentinel)
+    assert credential_store.get("leak-test-ref") == sentinel  # round-trips
+
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     rsvc = ResourceService(
         kinds={
@@ -156,7 +163,7 @@ async def test_secret_value_never_in_db_or_logs(
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        credential_resolver=CredentialResolver(credential_store),
         retry_delays=(),
     )
     prefs = MCPCapabilityPreferenceRepo(sm)

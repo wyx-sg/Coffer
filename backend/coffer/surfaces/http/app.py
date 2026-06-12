@@ -28,16 +28,20 @@ from typing import Literal
 from alembic import command
 from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
+from sqlalchemy import text as _sa_text
 
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
+from coffer.application.credential_migration import migrate_legacy_keychain
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import DatabaseSchemaTooNew
+from coffer.domain.errors import DatabaseSchemaTooNew, MasterKeyMissing
 from coffer.domain.resource import Kind
+from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
 from coffer.infrastructure.logging.setup import configure_logging
@@ -66,6 +70,8 @@ from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
     set_audit_service,
+    set_credential_store,
+    set_master_key_manager,
     set_resource_service,
     set_retention_service,
 )
@@ -88,6 +94,11 @@ def _db_url() -> str:
         "COFFER_DB_URL",
         f"sqlite+aiosqlite:///{pathlib.Path.home()}/.coffer/coffer.db",
     )
+
+
+def _db_path() -> pathlib.Path:
+    """Filesystem path of the SQLite DB (master.key lives alongside it)."""
+    return pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
 
 
 def _daemon_json_path() -> pathlib.Path:
@@ -173,15 +184,37 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine_with_pragmas(_db_url())
     sm = session_maker(engine)
 
+    # Envelope encryption: resolve the Fernet master key (file first, then
+    # keychain), build the encrypted store, and replace every KeyringAdapter
+    # injection point. Creating a brand-new key is only legal while the
+    # credentials table is empty — otherwise existing ciphertext would be
+    # silently undecryptable, so we fail loudly instead.
+    db_path = _db_path()
+    master_key_manager = MasterKeyManager(
+        key_path=db_path.parent / "master.key", keyring=KeyringAdapter()
+    )
+    async with engine.connect() as conn:
+        ciphertext_rows = (
+            await conn.execute(_sa_text("SELECT COUNT(*) FROM credentials"))
+        ).scalar_one()
+    master_key = await asyncio.get_running_loop().run_in_executor(
+        None, lambda: master_key_manager.resolve(allow_create=ciphertext_rows == 0)
+    )
+    if master_key is None:
+        raise MasterKeyMissing(str(db_path.parent / "master.key"))
+    credential_store = EncryptedCredentialStore(db_path=db_path, key=master_key)
+    set_credential_store(credential_store)
+    set_master_key_manager(master_key_manager)
+
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resource_svc = ResourceService(
         kinds=app.state.kinds,
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
         # Wired so register/update_config can probe credential_refs against
-        # the keychain BEFORE persisting (spec edge case: missing credential
-        # must fail registration with a named ref, no partial state).
-        credentials=KeyringAdapter(),
+        # the encrypted store BEFORE persisting (spec edge case: missing
+        # credential must fail registration with a named ref, no partial state).
+        credentials=credential_store,
     )
     registry = build_prunable_registry()
     retention_svc = RetentionService(
@@ -203,7 +236,24 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     wire_agent_and_skill_kinds(app, resource_svc, audit, sm)
 
     # Wire up MCP-specific plumbing
-    process_supervisor, session_supervisors = wire_mcp_kind(app, resource_svc, audit, sm)
+    process_supervisor, session_supervisors = wire_mcp_kind(
+        app, resource_svc, audit, sm, credential_store
+    )
+
+    # One-time move of legacy OS-keychain secrets into the encrypted store
+    # (no-op once migrated). Best-effort: failures must not block startup.
+    try:
+        moved = await migrate_legacy_keychain(
+            app.state.kinds,
+            SqlAlchemyResourceRepo(sm),
+            KeyringAdapter(),
+            credential_store,
+            audit,
+        )
+        if moved:
+            _logger.info("credential_migration.completed", extra={"moved": moved})
+    except Exception:
+        _logger.exception("credential_migration.failed")
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
