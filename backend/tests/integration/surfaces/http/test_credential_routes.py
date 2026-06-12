@@ -197,3 +197,45 @@ async def test_delete_credential_removes_value() -> None:
     assert delete_events[1].details == {"ref": "nonexistent.REF"}
     # Actor falls back to "api" when X-Coffer-Actor header is absent.
     assert all(e.actor == "api" for e in delete_events)
+
+
+@pytest.mark.asyncio
+async def test_slash_separated_refs_round_trip() -> None:
+    """Channel credentials use slash-separated refs (e.g. channel/tg/bot-token);
+    the body pattern must accept them and the {ref:path} routes must round-trip
+    set -> exists -> get -> delete without mangling the path."""
+    fake = _FakeCredentialStore()
+    transport = ASGITransport(_build_app(fake, _FakeAuditRepo()))
+    ref = "channel/tg/bot-token"
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        r = await c.post("/api/v1/credentials", json={"ref": ref, "value": "123:abc"})
+        assert r.status_code == 204
+        r = await c.get(f"/api/v1/credentials/{ref}/exists")
+        assert r.status_code == 200
+        assert r.json() == {"present": True}
+        r = await c.get(f"/api/v1/credentials/{ref}")
+        assert r.status_code == 200
+        assert r.json() == {"value": "123:abc"}
+        r = await c.delete(f"/api/v1/credentials/{ref}")
+        assert r.status_code == 204
+    assert ref not in fake.store
+
+
+@pytest.mark.asyncio
+async def test_malformed_refs_are_rejected() -> None:
+    """Leading/trailing/double slashes never reach the store."""
+    fake = _FakeCredentialStore()
+    transport = ASGITransport(_build_app(fake, _FakeAuditRepo()))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        for bad in ("/leading", "trailing/", "a//b"):
+            r = await c.post("/api/v1/credentials", json={"ref": bad, "value": "v"})
+            assert r.status_code == 422, bad
+    assert fake.store == {}

@@ -505,7 +505,7 @@ paths:
         - name: ref
           in: path
           required: true
-          schema: { type: string, pattern: "^[A-Za-z0-9_.-]+$" }
+          schema: { type: string, pattern: "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$" }
       responses:
         "200":
           description: The stored secret value (decrypted in memory, never logged).
@@ -522,7 +522,7 @@ paths:
         - name: ref
           in: path
           required: true
-          schema: { type: string, pattern: "^[A-Za-z0-9_.-]+$" }
+          schema: { type: string, pattern: "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$" }
       responses:
         "204":
           description: Secret removed (or already absent).
@@ -537,7 +537,7 @@ paths:
         - name: ref
           in: path
           required: true
-          schema: { type: string, pattern: "^[A-Za-z0-9_.-]+$" }
+          schema: { type: string, pattern: "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$" }
       responses:
         "200":
           description: Presence flag.
@@ -623,7 +623,7 @@ components:
         ref:
           type: string
           minLength: 1
-          pattern: "^[A-Za-z0-9_.-]+$"
+          pattern: "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
           description: Reference key the secret is stored under.
         value:
           type: string

@@ -205,8 +205,11 @@ class CredentialSetIn(BaseModel):
 
     ref: str = Field(
         min_length=1,
-        pattern=r"^[A-Za-z0-9_.-]+$",
-        description="Reference key the secret is stored under.",
+        pattern=r"^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+        description=(
+            "Reference key the secret is stored under. Slash-separated "
+            "segments are allowed (e.g. channel/tg/bot-token)."
+        ),
     )
     value: str = Field(
         max_length=8192,
