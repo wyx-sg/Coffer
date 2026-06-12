@@ -182,6 +182,86 @@ def rm(
     typer.echo(f"removed: skill:{name}")
 
 
+@app.command("unmanaged")
+def unmanaged(
+    agent: str = typer.Argument(..., help="Agent name."),
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """List skill-shaped folders in the agent's workspace that Coffer doesn't manage."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get(f"/agents/{agent}/unmanaged-skills")
+        if r.status_code == 404:
+            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
+            raise typer.Exit(4)
+        r.raise_for_status()
+    items = r.json()["items"]
+    if output_json:
+        typer.echo(_json.dumps(items, indent=2))
+        return
+    table = Table(title=f"Unmanaged skills — {agent}")
+    for col in ("Name", "Location", "Valid", "Reason"):
+        table.add_column(col)
+    for it in items:
+        table.add_row(
+            it["name"],
+            it["location"],
+            "✓" if it["valid"] else "✗",
+            it["reason"] or "—",
+        )
+    _console.print(table)
+
+
+@app.command("adopt")
+def adopt(
+    agent: str = typer.Argument(..., help="Agent name."),
+    skill: str = typer.Argument(..., help="Unmanaged skill folder name."),
+    location: str = typer.Option(
+        "skills", "--location", help="Where the folder was discovered: skills | agents_dir."
+    ),
+) -> None:
+    """Adopt an unmanaged skill folder into the Coffer master store."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(
+            f"/agents/{agent}/unmanaged-skills/{skill}/adopt",
+            json={"location": location},
+        )
+        if r.status_code == 404:
+            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
+            raise typer.Exit(4)
+        if r.status_code >= 400:
+            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
+            raise typer.Exit(2)
+    typer.echo(f"adopted: skill:{r.json()['name']}")
+
+
+@app.command("rm-unmanaged")
+def rm_unmanaged(
+    agent: str = typer.Argument(..., help="Agent name."),
+    skill: str = typer.Argument(..., help="Unmanaged skill folder name."),
+    location: str = typer.Option(
+        "skills", "--location", help="Where the folder was discovered: skills | agents_dir."
+    ),
+    force: bool = typer.Option(False, "--force", "-f"),
+) -> None:
+    """Delete an unmanaged skill folder from the agent's workspace (from disk)."""
+    if not force and not typer.confirm(
+        f"Really delete unmanaged skill {skill!r} from agent:{agent}?"
+    ):
+        raise typer.Exit(1)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.delete(f"/agents/{agent}/unmanaged-skills/{skill}", params={"location": location})
+        if r.status_code == 404:
+            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
+            raise typer.Exit(4)
+        if r.status_code >= 400:
+            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
+            raise typer.Exit(2)
+    typer.echo(f"deleted: unmanaged skill {skill} (agent:{agent})")
+
+
 @app.command("verify")
 def verify(
     output_json: bool = typer.Option(False, "--json"),

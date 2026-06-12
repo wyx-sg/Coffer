@@ -121,7 +121,19 @@ def test_config_ls_json(agent_config_cli):
     result = _runner.invoke(cli_app, ["agent", "config", "ls", "cc", "--json"])
     assert result.exit_code == 0, result.output
     items = json.loads(result.output)
-    assert [i["key"] for i in items] == ["settings", "settings_local", "global", "memory"]
+    # v2 allowlist for claude_code: file entries + the subagents directory entry.
+    assert [i["key"] for i in items] == [
+        "settings",
+        "settings_local",
+        "global",
+        "instructions",
+        "subagents",
+    ]
+    by_key = {i["key"]: i for i in items}
+    assert by_key["settings"]["kind"] == "file"
+    assert by_key["subagents"]["kind"] == "directory"
+    # Directory entries carry a `files` listing (null while the dir is absent).
+    assert "files" in by_key["subagents"]
 
 
 def test_config_cat_reads_existing_file(agent_config_cli):
@@ -214,6 +226,76 @@ def test_config_edit_from_file_malformed_exit2_unchanged(agent_config_cli):
     # File untouched.
     assert settings.read_text(encoding="utf-8") == '{"theme": "light"}'
     assert not (tmp_path / ".claude" / "settings.json.bak").exists()
+
+
+# ---------------------------------------------------------------------------
+# agent config files / write / rm (directory entries)
+# ---------------------------------------------------------------------------
+
+
+def test_config_files_write_and_rm_roundtrip(agent_config_cli):
+    """`config write` creates a child file, `files` lists it, `rm` deletes it."""
+    tmp_path, _shim = agent_config_cli
+    src = tmp_path / "reviewer.md"
+    src.write_text("# Reviewer\n", encoding="utf-8")
+
+    r = _runner.invoke(
+        cli_app,
+        ["agent", "config", "write", "cc", "subagents", "reviewer.md", "--from-file", str(src)],
+    )
+    assert r.exit_code == 0, r.output
+    assert "saved: subagents/reviewer.md" in r.output
+    assert (tmp_path / ".claude" / "agents" / "reviewer.md").read_text(
+        encoding="utf-8"
+    ) == "# Reviewer\n"
+
+    r = _runner.invoke(cli_app, ["agent", "config", "files", "cc", "subagents", "--json"])
+    assert r.exit_code == 0, r.output
+    files = json.loads(r.output)
+    assert [f["relpath"] for f in files] == ["reviewer.md"]
+
+    r = _runner.invoke(
+        cli_app, ["agent", "config", "rm", "cc", "subagents", "reviewer.md", "--force"]
+    )
+    assert r.exit_code == 0, r.output
+    assert not (tmp_path / ".claude" / "agents" / "reviewer.md").exists()
+
+    r = _runner.invoke(cli_app, ["agent", "config", "files", "cc", "subagents", "--json"])
+    assert json.loads(r.output) == []
+
+
+def test_config_write_from_stdin(agent_config_cli):
+    """Without --from-file the content is read from stdin."""
+    tmp_path, _shim = agent_config_cli
+    r = _runner.invoke(
+        cli_app,
+        ["agent", "config", "write", "cc", "subagents", "helper.md"],
+        input="# Helper\n",
+    )
+    assert r.exit_code == 0, r.output
+    assert (tmp_path / ".claude" / "agents" / "helper.md").read_text(
+        encoding="utf-8"
+    ) == "# Helper\n"
+
+
+def test_config_files_non_directory_key_exit6(agent_config_cli):
+    """`config files` on a plain file entry is rejected with exit 6."""
+    r = _runner.invoke(cli_app, ["agent", "config", "files", "cc", "settings"])
+    assert r.exit_code == 6, r.output
+
+
+def test_config_rm_without_force_aborts(agent_config_cli):
+    """Without --force the prompt aborts and the child file survives."""
+    tmp_path, _shim = agent_config_cli
+    child = tmp_path / ".claude" / "agents" / "keep.md"
+    child.parent.mkdir(parents=True, exist_ok=True)
+    child.write_text("# Keep\n", encoding="utf-8")
+
+    r = _runner.invoke(
+        cli_app, ["agent", "config", "rm", "cc", "subagents", "keep.md"], input="n\n"
+    )
+    assert r.exit_code == 1
+    assert child.exists()
 
 
 def test_mcp_install_status_uninstall(agent_config_cli):

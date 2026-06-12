@@ -153,6 +153,21 @@ frontend/src/i18n/locales/{en,zh}.json     # skill 文案追加
 - **用户机上 Git 可用性**：v1 要求 `PATH` 上有 `git`。未来可考虑打包 libgit2-bindings。
 - **更新时 SKILL.md frontmatter 改名**：原子重建所有 symlink 需要小心 Windows 上 junction 必须先删后建的顺序；方案在单测里覆盖。
 
+## Workspace 修订（在 `feature/agent-workspace` 上交付）
+
+spec.md 的 workspace 修订（FR-022..FR-026）新增了未托管 skill 扫描与
+follow-master-library 策略。各层新增模块：
+
+- **Domain**：`skill/scan.py`（纯函数 `classify`，把扫描条目分类为 `UnmanagedSkill` 结果——托管链接与点条目被排除，foreign link 被标记且永不可 adopt）；`agent/scan.py`（属 spec 004 的目录树：按 agent 类型的 `scan_locations`——放在那里是因为它依赖 `AgentType`，而 `domain/skill` 不得 import 它，Contract 5c）。
+- **Infrastructure**：`skill/workspace_scan.py`（把扫描位置的文件系统遍历成 `ScanEntry` 值）。
+- **Application**：`skill/unmanaged_ops.py`（未托管的 list/adopt/delete，FR-022..FR-024）、`skill/follow_ops.py`（FR-025 follow 调和：开关/排除项/skill 集合变化时触发）、以及 `skill/binding_ops.py`（逐 agent 启用/禁用从 `service.py` 拆出以满足文件大小上限）——全部为 `lifecycle_ops.py` 风格的自由函数。
+- **Surfaces**：`http/agent_unmanaged_skill_routes.py`（`/agents/{name}/unmanaged-skills*`）；CLI `coffer skill unmanaged|adopt|rm-unmanaged`（位于 `skill_cmd.py`）与 `coffer agent follow --on/--off --exclude`（位于 `agent_workspace_cmd.py`；策略字段经由 spec 004 的 `PATCH /agents/{name}`）。
+- **前端**：`AgentSkillsTab` v2——follow 开关与排除模式下的逐 skill 切换、带 adopt/删除的未托管 skill 区块、foreign-link 与降级 binding 徽标。
+
+新增 audit 事件：`skill_adopted`、`skill_unmanaged_deleted`、
+`skill_autobind_skipped`、`skill_relinked`。无 schema 变更——扫描在请求时
+派生，follow 策略存于 agent 资源的 config（spec 004）。
+
 ## 留给后续规范的开放项
 
 - agentskills.io marketplace 浏览 UI。

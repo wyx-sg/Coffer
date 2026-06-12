@@ -82,3 +82,20 @@ def test_legacy_auto_detected_key_tolerated():
 def test_unknown_type_rejected():
     with pytest.raises(ValidationError):
         AgentConfig.model_validate({"type": "nonesuch"})
+
+
+def test_follow_defaults_and_roundtrip() -> None:
+    cfg = AgentConfig(type=AgentType.CODEX)
+    assert cfg.follow_all_skills is True  # preserves pre-amendment auto-bind trust mode
+    assert cfg.skill_exclusions == []
+    cfg2 = AgentConfig.model_validate(
+        {"type": "codex", "follow_all_skills": False, "skill_exclusions": ["frontend-slides"]}
+    )
+    assert cfg2.follow_all_skills is False
+    assert cfg2.skill_exclusions == ["frontend-slides"]
+
+
+def test_follow_fields_survive_model_dump() -> None:
+    cfg = AgentConfig.model_validate({"type": "codex", "skill_exclusions": ["a"]})
+    dumped = cfg.model_dump()
+    assert dumped["follow_all_skills"] is True and dumped["skill_exclusions"] == ["a"]

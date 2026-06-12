@@ -14,6 +14,14 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentConfigFile: vi.fn(() => ({ data: undefined, isPending: false })),
   useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
   useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+  // Stubs for the Plugins tab.
+  useAgentPlugins: vi.fn(() => ({
+    data: { items: [], marketplaces: [], parse_errors: [] },
+    isPending: false,
+    error: null,
+  })),
+  useTogglePlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useUninstallPlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 const hooks = await import("@/lib/hooks/useAgents");
 const useAgentMock = vi.mocked(hooks.useAgent);
@@ -53,18 +61,19 @@ function renderAt() {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentDetailPage", () => {
-  test("renders the header, the Overview/Skills/MCP/Config tabs, and the overview by default", () => {
+  test("renders the header, the Overview/Skills/MCP/Plugins/Memory/Config tabs, and the overview by default", () => {
     mockAgentLoaded();
 
     renderAt();
 
     expect(screen.getByRole("heading", { name: "cur" })).toBeInTheDocument();
 
-    // Overview, Skills, MCP servers, and Config files tabs exist; the
-    // not-yet-built asset categories (Subagents/Memory) do not.
+    // Overview, Skills, MCP servers, Plugins, Memory, and Config files tabs
+    // exist; the not-yet-built asset category (Subagents) does not.
     expect(screen.getByRole("tab", { name: /overview/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^skills$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /mcp servers/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^plugins$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^memory$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /config files/i })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /subagents & commands/i })).not.toBeInTheDocument();
@@ -88,6 +97,20 @@ describe("AgentDetailPage", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /edit agent/i })).toBeInTheDocument();
+  });
+
+  test("plugins tab trigger is present between MCP servers and Config files", () => {
+    mockAgentLoaded();
+
+    renderAt();
+
+    const tabs = screen.getAllByRole("tab");
+    const names = tabs.map((t) => t.textContent?.trim());
+    const mcpIdx = names.findIndex((n) => /mcp servers/i.test(n ?? ""));
+    const pluginsIdx = names.findIndex((n) => /^plugins$/i.test(n ?? ""));
+    const configIdx = names.findIndex((n) => /config files/i.test(n ?? ""));
+    expect(pluginsIdx).toBeGreaterThan(mcpIdx);
+    expect(pluginsIdx).toBeLessThan(configIdx);
   });
 
   test("shows a not-found message when the agent fails to load", () => {

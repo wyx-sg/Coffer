@@ -7,6 +7,8 @@
 
 > **Note on agent types.** v1 covers exactly two products: **Claude Code** (`claude_code`) and **OpenAI Codex** (`codex`). Each spans its CLI _and_ its app/IDE form because they read one shared config directory — Claude Code uses `~/.claude/`, Codex uses `~/.codex/`. The separate **Claude Desktop** chat app (its own `~/Library/Application Support/Claude/` config) and **Cursor** are out of scope for v1; either would be added later as its own agent type with its own config allowlist.
 
+> **Workspace amendment.** Stories 9–12 extend the registry into the agent's real on-disk workspace: the MCP servers actually configured in the agent's own files, the agent's installed plugins, and directory-type config entries. The guiding principle is **ingest → hub → deliver**: anything shareable found in an agent's workspace can be adopted into Coffer's hub (the MCP gateway, the master skill store of spec 005) and delivered back to any agent, instead of living as per-agent one-off config. All writes go through each agent's documented configuration paths only; internal state files are read, never written.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Discover installed agents and choose which to add (Priority: P1)
@@ -142,6 +144,75 @@ The user wants their agent (Claude Code, Codex) to actually use Coffer. From the
 
 ---
 
+### User Story 9 — See and manage the agent's real MCP servers (Priority: P2)
+
+The agent's MCP servers tab today can only say whether Coffer's own shim is installed. The user wants to see what their agent **actually** has configured: every MCP server entry in the agent's own config files — for Claude Code from both `~/.claude.json` `mcpServers` and `settings.json` `mcpServers`, for Codex from `config.toml` `[mcp_servers.*]`. Each entry shows its transport (stdio command or HTTP URL), which file it came from, and (Codex only — the format defines a per-entry flag) its enabled state. The user can remove an entry or toggle a Codex entry's flag; Coffer's own `coffer` entry is rendered specially and managed by the existing install/uninstall actions.
+
+**Why this priority**: The current tab shows the same Coffer-global list for every agent, which is misleading. Showing the agent's real configuration is the prerequisite for every other MCP-management action.
+
+**Independent Test**: Register a `codex` agent whose `config.toml` carries several `[mcp_servers.*]` entries; open the MCP tab; observe exactly those entries with transports and enabled flags; remove one and observe it gone from the file (with a `.bak` kept); toggle another and observe its `enabled` flag flipped in place.
+
+**Covering scenarios**:
+
+- list an agent's real MCP entries
+- remove a direct MCP entry
+- toggle a Codex MCP entry's enabled flag
+- reject toggling a Claude Code MCP entry
+- degrade to read-only when MCP config is unparseable
+
+---
+
+### User Story 10 — Adopt a direct MCP server into Coffer (Priority: P2)
+
+A direct MCP entry in one agent benefits that agent alone. The user clicks "Adopt into Coffer" on a direct entry: Coffer registers it as an `mcp_server` resource (so it is served to **every** agent through the gateway) and removes the now-redundant direct entry from the agent's config. If the entry's environment carries secret-looking values, Coffer routes them into the OS keychain and stores references only. If an equivalent resource already exists, Coffer offers to just remove the duplicate direct entry.
+
+**Why this priority**: This is the ingest half of Coffer's hub-and-spoke model — the single action that turns scattered per-agent config into shared, gateway-served resources.
+
+**Independent Test**: With a `codex` agent carrying a direct stdio entry, adopt it; observe a new `mcp_server` resource registered, the direct entry removed from `config.toml`, and the gateway serving the upstream's tools to all agents.
+
+**Covering scenarios**:
+
+- adopt a direct MCP entry into Coffer
+- reject adoption on resource name conflict
+- require keychain mapping for secret-like env values
+- adoption failure leaves agent config untouched
+
+---
+
+### User Story 11 — Manage the agent's plugins (Priority: P2)
+
+Both supported agents have a file-backed plugin system. The user opens the agent's Plugins tab and sees every installed plugin grouped by marketplace, with its enabled state and whether its on-disk cache is present. They can enable/disable any plugin, and uninstall a Codex plugin. All writes go through each agent's documented configuration surface — the Codex `[plugins."<name>@<marketplace>"]` `enabled` field, the Claude Code `enabledPlugins` map in `settings.json` — never through the agents' internal state files. Installing new plugins and managing marketplaces stay with the agent's own tooling.
+
+**Why this priority**: Plugins are real, persistent agent configuration that today is invisible to Coffer. Visibility plus the cheap, safe writes (toggle, Codex uninstall) cover the recurring needs; installation is left where it already works.
+
+**Independent Test**: Register a `codex` agent with plugins configured; open the Plugins tab; observe the plugins grouped by marketplace with enabled state; disable one and observe `enabled = false` written to `config.toml`; uninstall one and observe its config entry and cache directory gone.
+
+**Covering scenarios**:
+
+- list an agent's plugins with enabled state
+- toggle a plugin's enabled state
+- uninstall a Codex plugin
+- reject uninstalling a Claude Code plugin
+- flag a plugin whose cache is missing
+
+---
+
+### User Story 12 — Manage directory-type config entries (Priority: P2)
+
+Some agent configuration is a directory of prose files, not a single file — Claude Code's `agents/` directory holds one Markdown file per personal subagent. The user expands such an entry in the config-files tab, sees its files, opens one to edit, creates a new one, or deletes one — with the same validation, atomic-write, and `.bak` safety net as single-file entries. The allowlist also gains Codex's `hooks.json`, and the `memory` key is renamed `instructions` (CLAUDE.md / AGENTS.md are human-authored instructions, not agent-written memory).
+
+**Why this priority**: Subagent definitions are exactly the kind of shareable prose the hub model wants visible first, adoptable later; today they are invisible.
+
+**Covering scenarios**:
+
+- list a directory config entry's files
+- create a file inside a directory entry
+- delete a file inside a directory entry
+- reject directory file paths outside the entry
+- reject stale config-file writes
+
+---
+
 ### Edge Cases
 
 - **Discovery on a second scan**: Already-registered types are not offered as candidates; discovery never duplicates existing entries.
@@ -156,6 +227,14 @@ The user wants their agent (Claude Code, Codex) to actually use Coffer. From the
 - **Coffer MCP uninstall when not installed**: No-op success; status reports `not_installed`.
 - **`coffer-mcp-shim` binary cannot be resolved**: Install rejected with a clear error naming the missing binary; nothing is written to the agent's config.
 - **Folder browse outside the home directory**: The daemon-backed folder browser lists subdirectories of any readable directory the user navigates to; it never returns file contents. An unreadable or non-existent path returns an error, not a partial listing.
+- **Agent config file fails to parse**: The affected facet (MCP entries, plugins) shows an explicit parse-error state and degrades to read-only; other facets and tabs are unaffected. Write operations against the broken file are rejected until it parses again.
+- **Same MCP entry name in both Claude Code source files**: Both entries are listed, each labelled with its source file; remove/adopt requests carry the source so the right one is edited.
+- **Coffer's own `coffer` MCP entry**: Never adoptable, never listed as a plain direct entry — it is the gateway's install state, managed by Story 8's install/uninstall.
+- **Adoption requested for an entry equivalent to an existing resource**: Coffer reports the match (`matches_resource`) and offers removing the redundant direct entry instead of creating a duplicate resource.
+- **Plugin configured but cache directory missing**: Listed with `cache_present=false` so the user sees the drift; Coffer does not attempt repair (reinstalling is the agent's own tooling).
+- **The agent's own process rewrites a config file between Coffer's read and write**: The write is rejected as stale (fingerprint mismatch, 409); the user re-reads and retries. The `.bak` of every Coffer write keeps the prior content recoverable in the reverse race.
+- **Instructions file contains the spec-007 memory-projection managed block**: The editor surfaces that the block is owned by the memory feature; editing outside the block is unrestricted.
+- **`~/.codex/auth.json` and other credential/state files**: Never enter any allowlist or listing; plugin and MCP parsing never reads them.
 
 ## Acceptance Scenarios
 
@@ -263,7 +342,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 - **Given** a registered `claude_code` agent,
 - **When** the user lists its config files,
-- **Then** Coffer returns the curated set for the type — `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md` — each with its resolved path, format, and an `exists` flag (with size + modified time when present).
+- **Then** Coffer returns the curated set for the type — `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md` (key `instructions`), and the `agents/` directory entry — each with its resolved path, format, and an `exists` flag (with size + modified time when present).
 
 ### Scenario: read an existing config file
 
@@ -325,6 +404,120 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user invokes the equivalent `coffer agent config …` / `coffer agent mcp …` CLI subcommands,
 - **Then** each subcommand calls the corresponding REST endpoint and produces equivalent state, and read subcommands accept `--json`.
 
+### Scenario: list an agent's real MCP entries
+
+- **Given** a registered `codex` agent whose `config.toml` defines several `[mcp_servers.*]` entries including `coffer`,
+- **When** the user lists the agent's MCP entries,
+- **Then** Coffer returns every entry with its name, source file, transport (stdio command or HTTP URL), and `enabled` flag, marks the `coffer` entry `is_coffer=true`, and stores nothing — the listing is derived from the file at read time.
+
+### Scenario: remove a direct MCP entry
+
+- **Given** a registered agent with a direct (non-Coffer) MCP entry,
+- **When** the user removes that entry (carrying the source file for a `claude_code` agent),
+- **Then** the entry is deleted from exactly its source file via an atomic write with a `.bak` of the prior content, an `agent_mcp_entry_removed` audit entry is recorded, and the next listing no longer shows it.
+
+### Scenario: toggle a Codex MCP entry's enabled flag
+
+- **Given** a registered `codex` agent with an enabled direct MCP entry,
+- **When** the user disables that entry,
+- **Then** the entry's `enabled` field is rewritten in place in `config.toml` (atomic + `.bak`), and the listing reflects the new state.
+
+### Scenario: reject toggling a Claude Code MCP entry
+
+- **Given** a registered `claude_code` agent with a direct MCP entry,
+- **When** the user attempts to toggle that entry's enabled state,
+- **Then** the request is rejected with `unprocessable_entity` (422) and an explanatory error code — the Claude Code format has no per-entry enabled flag — and no file is touched.
+
+### Scenario: degrade to read-only when MCP config is unparseable
+
+- **Given** a registered agent whose MCP-bearing config file contains invalid JSON/TOML,
+- **When** the user lists the agent's MCP entries,
+- **Then** Coffer reports a parse-error state naming the file and the parser error instead of failing the request, and rejects entry-level writes against that file until it parses again.
+
+### Scenario: adopt a direct MCP entry into Coffer
+
+- **Given** a registered agent with a direct stdio MCP entry whose name collides with no existing resource,
+- **When** the user adopts the entry,
+- **Then** Coffer first registers an equivalent `mcp_server` resource (schema-validated, audited), verifies it reads back, then removes the direct entry from the agent's config (atomic + `.bak`), records an `agent_mcp_entry_adopted` audit entry, and the upstream is now served to all agents through the gateway.
+
+### Scenario: reject adoption on resource name conflict
+
+- **Given** an `mcp_server` resource already exists with the same name as a direct entry,
+- **When** the user adopts that entry without renaming,
+- **Then** the request is rejected with `conflict` (409) carrying a suggested alternative name, no resource is created, and the agent's config is untouched.
+
+### Scenario: require keychain mapping for secret-like env values
+
+- **Given** a direct MCP entry whose environment contains a value under a secret-like key (e.g. `API_TOKEN`),
+- **When** the user adopts the entry without supplying a keychain mapping for that key,
+- **Then** the request is rejected with a response listing the unresolved keys; when the mapping is supplied, the secret is stored in the OS keychain via the daemon and the created resource config carries a reference, never the value.
+
+### Scenario: adoption failure leaves agent config untouched
+
+- **Given** an adoption attempt that fails after resource registration (e.g. the config-file write is rejected as stale),
+- **When** the operation aborts,
+- **Then** the created resource is rolled back, the agent's config file is byte-identical to before the attempt, and the failure is reported with a specific error code.
+
+### Scenario: list an agent's plugins with enabled state
+
+- **Given** a registered `codex` agent whose `config.toml` defines `[marketplaces.*]` and `[plugins."<name>@<marketplace>"]` entries with cache directories present,
+- **When** the user lists the agent's plugins,
+- **Then** Coffer returns every plugin with its `<name>@<marketplace>` id, enabled state, marketplace grouping, and `cache_present=true`, deriving everything from the documented files at read time.
+
+### Scenario: toggle a plugin's enabled state
+
+- **Given** a registered agent with an enabled plugin,
+- **When** the user disables it,
+- **Then** only the documented location is written — the Codex entry's `enabled` field, or the Claude Code `enabledPlugins` map in `settings.json` — internal plugin state files are byte-identical before and after, and an `agent_plugin_toggled` audit entry is recorded.
+
+### Scenario: uninstall a Codex plugin
+
+- **Given** a registered `codex` agent with an installed plugin,
+- **When** the user uninstalls it,
+- **Then** the `[plugins."…"]` entry is removed from `config.toml` (atomic + `.bak`), the plugin's cache directory under `~/.codex/plugins/cache/` is deleted, and an `agent_plugin_uninstalled` audit entry is recorded.
+
+### Scenario: reject uninstalling a Claude Code plugin
+
+- **Given** a registered `claude_code` agent with an installed plugin,
+- **When** the user attempts to uninstall it,
+- **Then** the request is rejected with `unprocessable_entity` (422) and error code `PLUGIN_UNINSTALL_UNSUPPORTED`, and nothing is written — full uninstall requires the agent's own tooling.
+
+### Scenario: flag a plugin whose cache is missing
+
+- **Given** a `codex` agent whose `config.toml` references a plugin with no cache directory on disk,
+- **When** the user lists the agent's plugins,
+- **Then** that plugin is listed with `cache_present=false` and no repair is attempted.
+
+### Scenario: list a directory config entry's files
+
+- **Given** a registered `claude_code` agent whose `agents/` directory contains Markdown subagent files (possibly nested),
+- **When** the user lists that config entry,
+- **Then** Coffer returns the entry with `kind=directory` and its files (entry-relative path, size, modified time); a missing directory lists as `exists=false` with no files and is not created by the read.
+
+### Scenario: create a file inside a directory entry
+
+- **Given** a registered `claude_code` agent with an `agents/` directory entry,
+- **When** the user writes content to a new `.md` file path inside the entry,
+- **Then** the file is created via the atomic-write machinery, an `agent_config_file_written` audit entry is recorded, and the next listing includes it.
+
+### Scenario: delete a file inside a directory entry
+
+- **Given** a directory entry containing a file,
+- **When** the user deletes that file,
+- **Then** the file is removed with its prior content preserved as `.bak`, an `agent_config_file_deleted` audit entry is recorded, and the next listing no longer shows it.
+
+### Scenario: reject directory file paths outside the entry
+
+- **Given** a registered agent with a directory config entry,
+- **When** the user addresses a child path containing `..`, an absolute path, or a non-`.md` extension,
+- **Then** the request is rejected before any filesystem access with `not_found` (404) for containment violations or `unprocessable_entity` (422) for a disallowed extension.
+
+### Scenario: reject stale config-file writes
+
+- **Given** a config file (or directory child) read by the user, then modified on disk by another process,
+- **When** the user writes back content carrying the fingerprint from the earlier read,
+- **Then** the write is rejected with `conflict` (409) and the on-disk file is unchanged; re-reading yields a fresh fingerprint that allows the write.
+
 ## Requirements
 
 ### Functional Requirements
@@ -348,7 +541,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 **Config files**
 
-- **FR-013**: Each supported agent type MUST define a curated allowlist of config files, each entry carrying a stable `key`, a display name, a resolved absolute path, and a `format` (`json`, `toml`, `markdown`, or `text`). For v1: Claude Code → `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md`; Codex → `config.toml`, `AGENTS.md`.
+- **FR-013**: Each supported agent type MUST define a curated allowlist of config files, each entry carrying a stable `key`, a display name, a resolved absolute path, and a `format` (`json`, `toml`, `markdown`, or `text`). Claude Code → `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md` (key `instructions`), and the `agents/` directory entry (FR-034); Codex → `config.toml`, `AGENTS.md` (key `instructions`), and `hooks.json`. The former `memory` key is renamed `instructions` — these files are human-authored instructions, distinct from agent-written memory (spec 007's domain).
 - **FR-014**: Users MUST be able to list an agent's config files with, for each, its key, display name, path, format, and existence (plus size and modified time when the file exists).
 - **FR-015**: Users MUST be able to read the content of any allowlisted config file. A file that does not exist reads as empty content with `exists=false` and is not created by the read.
 - **FR-016**: Users MUST be able to write (save) the content of any allowlisted config file. The content MUST be validated against the file's `format` before any write; malformed `json`/`toml` MUST be rejected (`unprocessable_entity`, 422) and the on-disk file left unchanged. `markdown`/`text` files accept any content.
@@ -362,14 +555,36 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **FR-021**: Users MUST be able to uninstall Coffer's MCP, removing the `coffer` entry from the agent's MCP config. Uninstalling when not installed is a no-op success.
 - **FR-022**: Install and uninstall MUST reuse the atomic-write + `.bak` machinery from FR-017 and record an audit entry (`agent_mcp_installed` / `agent_mcp_uninstalled`).
 
+**Agent MCP entries (workspace amendment)**
+
+- **FR-025**: System MUST parse and list the MCP server entries configured in the agent's own files — for `claude_code` from both `~/.claude.json` `mcpServers` and `settings.json` `mcpServers` (each entry labelled with its source file); for `codex` from `config.toml` `[mcp_servers.*]`. Each entry carries name, source, transport (stdio command or HTTP URL), the `enabled` flag where the format defines one (Codex), `is_coffer` for Coffer's own gateway entry, and `matches_resource` naming an equivalent registered `mcp_server` resource when one exists. Entries are derived at read time, never stored.
+- **FR-026**: Users MUST be able to remove a direct MCP entry. Removal edits only the entry's source file (disambiguated by the caller for `claude_code` when both files carry the name), reuses the FR-017 atomic-write + `.bak` machinery, and records an `agent_mcp_entry_removed` audit entry. The `coffer` entry is not removable through this operation — it is managed by FR-019/FR-021.
+- **FR-027**: Users MUST be able to toggle a Codex entry's `enabled` flag in place. For `claude_code`, whose format has no per-entry flag, the toggle is rejected with `unprocessable_entity` (422) and an explanatory error code.
+- **FR-028**: Users MUST be able to adopt a direct MCP entry into Coffer. Adoption (a) registers the entry as an `mcp_server` resource through the standard resource flow (schema validation + audit), (b) verifies the resource reads back, then (c) removes the source entry per FR-026 — strictly in that order. Any failure stops the operation, rolls back a created resource, and leaves the agent's config byte-identical; audited as `agent_mcp_entry_adopted` on success. A name collision with an existing resource is rejected with `conflict` (409) carrying a suggested alternative; an entry equivalent to an existing resource is reported via `matches_resource` so the user can remove the duplicate instead. The `coffer` entry is never adoptable.
+- **FR-029**: Adoption MUST NOT persist secret values into resource config. When an entry's environment carries values under secret-like keys (`TOKEN`, `KEY`, `SECRET`, `PASSWORD` patterns), the adopt request MUST supply a keychain mapping for each flagged key or be rejected with the unresolved keys listed. Mapped values are stored in the OS keychain through the daemon (per the credentials invariant); the resource config carries references only.
+- **FR-030**: When an agent config file cannot be parsed, the affected facet MUST degrade to an explicit parse-error state (file path + parser error) without failing the surrounding view, and entry-level writes against that file MUST be rejected until it parses again.
+
+**Plugins (workspace amendment)**
+
+- **FR-031**: System MUST list an agent's installed plugins with enabled state, grouped by marketplace. For `codex` the listing derives from `config.toml` (`[plugins."<name>@<marketplace>"]`, `[marketplaces.*]`) plus presence of the documented cache directory `~/.codex/plugins/cache/<marketplace>/<plugin>/`; for `claude_code` the inventory derives read-only from `~/.claude/plugins/installed_plugins.json` and `known_marketplaces.json`, with enabled state from `settings.json` `enabledPlugins`. A plugin configured without its cache is flagged `cache_present=false`; no repair is attempted.
+- **FR-032**: Users MUST be able to enable/disable a plugin. Writes touch only the documented locations — the Codex entry's `enabled` field; the Claude Code `enabledPlugins` map in `settings.json` — and MUST never write the agents' internal state files. Audited as `agent_plugin_toggled`.
+- **FR-033**: Users MUST be able to uninstall a `codex` plugin: the `[plugins."…"]` entry is removed from `config.toml` and the plugin's cache directory is deleted; audited as `agent_plugin_uninstalled`. Uninstall for `claude_code` is rejected with `unprocessable_entity` (422) and error code `PLUGIN_UNINSTALL_UNSUPPORTED` — full uninstall requires the agent's own tooling; the UI offers disable plus a hint instead. Plugin installation and marketplace management are not provided by Coffer; both remain with the agent's own tooling.
+
+**Directory config entries (workspace amendment)**
+
+- **FR-034**: A config-file allowlist entry MAY be a **directory entry** (`kind=directory`): it resolves to a directory and lists its files (entry-relative path, size, modified time) instead of carrying content. v1 directory entries: Claude Code `agents/` (one Markdown file per personal subagent, nested paths allowed). A missing directory lists as `exists=false` with no files; the read never creates it.
+- **FR-035**: Users MUST be able to read, write (create-on-write), and delete individual files inside a directory entry. Child paths are validated server-side before any filesystem access: they MUST resolve inside the entry's directory (no `..`, no absolute paths, no symlink escape) and carry the `.md` extension. Writes reuse FR-017's machinery; deletion preserves the prior content as `.bak`. Audited as `agent_config_file_written` / `agent_config_file_deleted`.
+- **FR-036**: Config-file reads (single files and directory children) MUST return a content fingerprint; writes MUST carry it back and are rejected with `conflict` (409) when the on-disk content changed since the read, leaving the file untouched.
+- **FR-037**: When an instructions file contains the managed memory-projection block defined by spec 007, the editor MUST surface that the block is owned by the memory feature. The marker format is defined by spec 007; this spec only requires the notice.
+
 **Surfaces**
 
-- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write, and Coffer-MCP install/uninstall/status — MUST be available through (a) the REST API, (b) the `coffer agent ...` CLI, and (c) the desktop Agents page.
+- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, and plugin list/toggle/uninstall — MUST be available through (a) the REST API, (b) the `coffer agent ...` CLI, and (c) the desktop Agents page.
 - **FR-010**: The CLI MUST support `--json` for machine-readable output on every read operation.
 
 **Observability**
 
-- **FR-011**: System MUST record an audit entry for every lifecycle event: agent created, updated, removed; config file written (`agent_config_file_written`); Coffer MCP installed/uninstalled. (Agents have no enable/disable concept; discovery is read-only — neither emits an audit event.)
+- **FR-011**: System MUST record an audit entry for every lifecycle event: agent created, updated, removed; config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). (Agents have no enable/disable concept; discovery and all workspace listings are read-only — none emits an audit event.)
 - **FR-012**: System MUST expose a read-only discovery operation listing installed-but-unregistered agents as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer agent detect` CLI, and the desktop Agents page.
 
 **Config-directory picker**
@@ -384,6 +599,9 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **Agent Candidate**: A discovered installed-but-unregistered agent — `type`, `display_name`, `config_dir` (the type's default config directory), `default_skill_dir`, and `suggested_name`. Derived at scan time, never stored; the user confirms a candidate to register it.
 - **Config File**: A curated, allowlisted file belonging to an agent type, identified by a stable `key`. Carries a display name, a resolved absolute path, a `format` (`json` / `toml` / `markdown` / `text`), and (when present) size and modified time. Read/written by key, never by arbitrary path. Not persisted in SQLite — the file on disk is the source of truth.
 - **Coffer MCP Install Status**: Derived (not stored) state for an agent: whether a `coffer` MCP-server entry is present in that agent's MCP config file.
+- **Agent MCP Entry**: A derived (never stored) view of one MCP server configured in the agent's own files — name, source file, transport, `enabled` (Codex), `is_coffer`, `matches_resource`. The file is the source of truth; Coffer reads, edits, removes, or adopts entries but keeps no copy.
+- **Agent Plugin**: A derived (never stored) view of one installed plugin — id (`<name>@<marketplace>`), marketplace, enabled state, `cache_present`. Enabled state lives in each agent's documented config surface; the inventory files of Claude Code are read-only inputs.
+- **Directory Config Entry**: An allowlisted config entry that resolves to a directory of files rather than a single file. Children are addressed by validated entry-relative paths; the directory on disk is the source of truth.
 
 ## Success Criteria
 
@@ -396,13 +614,18 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **SC-005**: No `config_dir` value ever permits writing outside the directory itself (path-traversal check); validated by a dedicated security test.
 - **SC-006**: A user can open, edit, and save an agent's `settings.json` (Claude Code) or `config.toml` (Codex) from both the desktop app and the CLI; a malformed save is rejected with the file left unchanged, and a `.bak` of the prior version is kept on a successful save.
 - **SC-007**: A user can install Coffer's MCP into a freshly-registered agent in one click and, after restarting that agent, the agent lists Coffer's aggregated tools; re-installing never duplicates the entry, and uninstall removes it.
+- **SC-008**: The MCP tab lists exactly the entries present in the agent's real config files, and adopting a direct entry completes the full round trip — resource registered, gateway serving it, direct entry gone — in one user action plus at most one confirmation.
+- **SC-009**: Plugin toggles change only the documented config surface: a test asserts the agents' internal state files are byte-identical before and after every toggle.
+- **SC-010**: No directory-entry operation can read or write a path outside its entry's directory; validated by dedicated security tests covering `..` traversal, absolute paths, symlink escape, and disallowed extensions.
 
 ## Assumptions
 
 - The user runs Coffer on their own machine; there is no multi-tenant or remote-access requirement.
 - v1's two supported agent types (`claude_code`, `codex`) cover the user's installed agents; adding a new type (e.g. the Claude Desktop chat app, Cursor, Gemini CLI) is a future-spec change that adds another enum value, install-marker scanner, and config-file allowlist.
 - Each supported agent's CLI and app/IDE form read one shared config directory (`~/.claude/` for Claude Code, `~/.codex/` for Codex), so Coffer manages one config set per agent.
-- Config files are surfaced as raw text the user can edit and save (with a `.bak` safety net); an in-editor find / replace is a UI convenience. Structured per-field editing and managing the MCP-server list inside `~/.claude.json` beyond the one-click Coffer entry are out of scope for v1. The credential/state file `~/.codex/auth.json` is intentionally excluded from the allowlist.
+- Config files are surfaced as raw text the user can edit and save (with a `.bak` safety net); an in-editor find / replace is a UI convenience. The raw editor is the escape hatch for the long tail; recurring structured needs graduate into facets (MCP entries, plugins) per the workspace amendment. The credential/state file `~/.codex/auth.json` is intentionally excluded from the allowlist.
+- The agents' internal state files (`~/.claude.json` beyond its `mcpServers` map, `~/.claude/plugins/*.json`, Codex's `[marketplaces.*]` / `[hooks.state.*]` / `[projects.*]` tables) are read as inputs where needed and never written by the workspace facets; the documented configuration surfaces verified against each vendor's docs are the only write targets. In practice (verified on a real machine) user-scope Claude Code MCP servers live in `~/.claude.json` `mcpServers` and may also appear in `settings.json` `mcpServers` — both are parsed.
+- Workspace facets follow the ingest → hub → deliver principle: shareable content found in an agent's workspace is adoptable into Coffer's hub (MCP gateway here; the master skill store via spec 005's companion amendment) rather than managed as per-agent one-offs. Cross-machine sharing of the hub itself is a future spec (and constitutional amendment); these facets are designed so their state serializes to declarative manifests when that lands.
 - Agents store their skill libraries on the local filesystem under `<config_dir>/skills`. Web-only agents (e.g., claude.ai) are out of scope for v1 and require a future spec to add API-based sync.
 - The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec 001-mcp-gateway are in place.
 - The application shell from spec 002-ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place. The desktop Agents page renders within that shell at `/agents` as a **dedicated top-level nav entry** (a sibling of the Resources and System groups, **not** nested under Resources — agents are consumers of vault assets, not assets themselves). Agent resources do not appear in the kind-agnostic resources/MCP browser, which lists only kinds that register a resource-card UI.

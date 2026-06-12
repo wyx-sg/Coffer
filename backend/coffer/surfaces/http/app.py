@@ -56,6 +56,8 @@ from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_config_routes import router as agent_config_router
 from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
+from coffer.surfaces.http.agent_unmanaged_skill_routes import router as agent_unmanaged_skill_router
+from coffer.surfaces.http.agent_workspace_routes import router as agent_workspace_router
 from coffer.surfaces.http.app_mcp_composition import (
     build_prunable_registry,
     reaper_kwargs_from_env,
@@ -369,6 +371,8 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     # Agent + skill kind routes (specs 004-agent-registry, 005-skill-manager)
     app.include_router(agent_router)
     app.include_router(agent_config_router)
+    app.include_router(agent_workspace_router)
+    app.include_router(agent_unmanaged_skill_router)
     app.include_router(fs_router)
     app.include_router(skill_router)
     # KB router (spec 006-knowledge-base)

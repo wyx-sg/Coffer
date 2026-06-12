@@ -22,6 +22,10 @@ security:
 tags:
   - name: skills
     description: Managed AgentSkills folders
+  - name: agents
+    description: >-
+      Per-agent workspace skill operations (unmanaged scan / adopt / delete);
+      mounted under /agents/{name} but owned by this spec (FR-022..FR-024).
 
 paths:
   /skills:
@@ -249,6 +253,113 @@ paths:
               schema: { $ref: "#/components/schemas/DriftReport" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /agents/{name}/unmanaged-skills:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Agent name (kind `agent`, spec 004).
+    get:
+      tags: [agents]
+      operationId: listUnmanagedSkills
+      summary: List skill-shaped folders in the agent's workspace that Coffer doesn't manage
+      description: |
+        Read-only scan of the agent's skill locations — `<config_dir>/skills`
+        for both types, plus `~/.agents/skills` for codex — derived at request
+        time, never stored (FR-022). Coffer-managed links (symlinks resolving
+        inside `~/.coffer/skills/`) and dot-entries such as Codex's `.system`
+        are excluded. Symlinks pointing outside the master store are listed
+        with `foreign_link=true` and are never adoptable.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/UnmanagedSkillOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/unmanaged-skills/{skill}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: skill
+        required: true
+        schema: { type: string }
+        description: Unmanaged skill folder name as reported by the scan.
+    delete:
+      tags: [agents]
+      operationId: deleteUnmanagedSkill
+      summary: Delete an unmanaged skill folder from the agent's workspace
+      description: |
+        Removes only that entry from disk — never master content or bindings
+        (FR-024). Audited as `skill_unmanaged_deleted`.
+      parameters:
+        - in: query
+          name: location
+          required: true
+          schema: { type: string, enum: [skills, agents_dir] }
+          description: Where the folder was discovered, as reported by the scan.
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/unmanaged-skills/{skill}/adopt:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: skill
+        required: true
+        schema: { type: string }
+    post:
+      tags: [agents]
+      operationId: adoptUnmanagedSkill
+      summary: Adopt an unmanaged skill folder into the Coffer master store
+      description: |
+        Validates the folder, moves it to `~/.coffer/skills/<name>/`,
+        registers the `skill` resource, delivers the managed link to
+        `<config_dir>/skills/<name>`, and records an enabled binding for the
+        agent — in that order (FR-023). Adopting from `~/.agents/skills`
+        consolidates: the original folder there is removed and the link lands
+        in `<config_dir>/skills`. Any failure before registration leaves the
+        original folder unmoved. Audited as `skill_adopted`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UnmanagedAdoptRequest" }
+      responses:
+        "201":
+          description: Adopted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillRefOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422":
+          description: >-
+            Invalid skill folder (`UNMANAGED_SKILL_INVALID`) or a foreign
+            symlink, which is never adoptable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+
 components:
   securitySchemes:
     cofferToken:
@@ -429,6 +540,52 @@ components:
       required: [root]
       properties:
         root: { $ref: "#/components/schemas/SkillFileNodeOut" }
+
+    UnmanagedSkillOut:
+      type: object
+      required: [name, path, location, valid, reason, foreign_link]
+      description: >-
+        A skill-shaped entry found in an agent's skill locations that Coffer
+        does not manage — derived at scan time, never stored.
+      properties:
+        name: { type: string, description: "Folder name." }
+        path: { type: string, description: "Absolute path on disk." }
+        location:
+          type: string
+          enum: [skills, agents_dir]
+          description: >-
+            Which scan location the entry was found in: `skills` =
+            `<config_dir>/skills`; `agents_dir` = the agent product's
+            secondary standard location (today: Codex's `~/.agents/skills`).
+        valid:
+          type: boolean
+          description: "Whether the folder passes AgentSkills validation (FR-004)."
+        reason:
+          type: string
+          nullable: true
+          description: "Validation failure reason when `valid` is false; null otherwise."
+        foreign_link:
+          type: boolean
+          description: >-
+            True for symlinks whose target resolves outside the master store;
+            surfaced to the user but never adoptable (origin is unknown).
+
+    UnmanagedAdoptRequest:
+      type: object
+      required: [location]
+      additionalProperties: false
+      properties:
+        location:
+          type: string
+          enum: [skills, agents_dir]
+          description: Where the folder was discovered, as reported by the scan.
+
+    SkillRefOut:
+      type: object
+      required: [name]
+      properties:
+        name:
+          { type: string, description: "Name of the adopted skill resource." }
 
     SkillFileContentOut:
       type: object

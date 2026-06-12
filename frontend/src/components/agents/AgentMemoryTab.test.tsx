@@ -30,8 +30,8 @@ vi.mock("@/kinds/memory/api", async (importOriginal) => ({
 }));
 
 // The native-memory discovery banner: default to "nothing unmanaged".
-vi.mock("@/lib/api/agents", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api/agents")>()),
+vi.mock("@/lib/api/nativeMemory", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/nativeMemory")>()),
   getAgentNativeMemory: vi.fn(async () => ({ projects: [], unmanaged_fact_count: 0 })),
 }));
 

@@ -55,6 +55,56 @@ coffer skill enable my-skill --agent codex
 
 如果目标位置已经有别的东西（普通文件或非 Coffer 的 symlink），操作会被拒绝，除非加 `--force`。`--force` 会先把既有目标备份到 `<path>.coffer-backup-<timestamp>`，再创建 link。
 
+## Follow 主库
+
+默认情况下，每个 agent 都 **follow** 主库：你导入或拉取的每个 skill 会被自动
+投递，新注册的 skill 无需任何额外操作即会出现。可按 agent 关闭（或重新打开）：
+
+```bash
+coffer agent follow codex --off
+coffer agent follow codex --on
+```
+
+following 期间，禁用单个 skill 会把它加入该 agent 的**排除列表**而不是改动
+binding；用可重复的 `--exclude` 显式设置整个列表（列表整体替换）：
+
+```bash
+coffer agent follow codex --on --exclude my-skill --exclude another-skill
+```
+
+关闭 follow 会把当前已投递的 skill 保留为显式的逐 skill binding，所以什么都
+不会消失——你只是切换到手工 `enable`/`disable` 管理。桌面应用中 agent 的
+Skills 标签页上有同一个开关。
+
+## Adopt Coffer 尚未管理的 skill
+
+如果 agent 的 skill 文件夹里有手工放置的 skill（手工复制或由其他工具安装），
+Coffer 可以列出并 adopt 它们。扫描覆盖两个 agent 类型的
+`<config_dir>/skills`，外加 Codex 的 `~/.agents/skills`：
+
+```bash
+coffer skill unmanaged claude-code
+coffer skill unmanaged claude-code --json
+```
+
+Coffer 托管的链接与 Codex 的 `.system` 之类的内部条目绝不会出现。指向 Coffer
+主库之外的 symlink 会作为 foreign link 列出——只呈现、永不可 adopt（来源
+未知）。
+
+把一个合法条目 adopt 进主库（它会被校验、移动到 `~/.coffer/skills/<name>/`、
+注册，并作为托管链接重新投递给该 agent）：
+
+```bash
+coffer skill adopt claude-code my-skill --location skills
+```
+
+或者把不想要的条目从 agent workspace 中删除（仅磁盘——绝不动主库内容或
+binding）：
+
+```bash
+coffer skill rm-unmanaged claude-code my-skill --location skills
+```
+
 ## 更新 Git 源 skill
 
 ```bash

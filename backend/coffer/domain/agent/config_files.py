@@ -38,6 +38,13 @@ class ConfigFileFormat(StrEnum):
     TEXT = "text"
 
 
+class ConfigFileKind(StrEnum):
+    """Whether an allowlist entry is a single file or a directory of files."""
+
+    FILE = "file"
+    DIRECTORY = "directory"
+
+
 @dataclass(frozen=True)
 class ConfigFileSpec:
     """One allowlisted config file for an agent type."""
@@ -46,12 +53,24 @@ class ConfigFileSpec:
     display_name: str
     path: pathlib.Path
     format: ConfigFileFormat
+    # For DIRECTORY entries, `format` describes the CHILD files (e.g. the .md
+    # subagent definitions), not the directory itself.
+    kind: ConfigFileKind = ConfigFileKind.FILE
 
 
 @dataclass(frozen=True)
 class FileStat:
     """Filesystem metadata for an existing file (size in bytes + mtime)."""
 
+    size: int
+    modified_at: datetime
+
+
+@dataclass(frozen=True)
+class DirEntryInfo:
+    """One child file of a directory-type config entry."""
+
+    relpath: str  # POSIX-style, relative to the directory root
     size: int
     modified_at: datetime
 
@@ -87,7 +106,17 @@ def config_files_for(
                 "global", "Global config", _home() / ".claude.json", ConfigFileFormat.JSON
             ),
             ConfigFileSpec(
-                "memory", "User memory (CLAUDE.md)", cfg / "CLAUDE.md", ConfigFileFormat.MARKDOWN
+                "instructions",
+                "User instructions (CLAUDE.md)",
+                cfg / "CLAUDE.md",
+                ConfigFileFormat.MARKDOWN,
+            ),
+            ConfigFileSpec(
+                "subagents",
+                "Subagents (agents/)",
+                cfg / "agents",
+                ConfigFileFormat.MARKDOWN,
+                kind=ConfigFileKind.DIRECTORY,
             ),
         )
     if agent_type is AgentType.CODEX:
@@ -96,10 +125,13 @@ def config_files_for(
                 "config", "Config (config.toml)", cfg / "config.toml", ConfigFileFormat.TOML
             ),
             ConfigFileSpec(
-                "memory",
+                "instructions",
                 "Global instructions (AGENTS.md)",
                 cfg / "AGENTS.md",
                 ConfigFileFormat.MARKDOWN,
+            ),
+            ConfigFileSpec(
+                "hooks", "Hooks (hooks.json)", cfg / "hooks.json", ConfigFileFormat.JSON
             ),
         )
     raise AssertionError(f"unhandled AgentType: {agent_type!r}")  # pragma: no cover
@@ -117,6 +149,27 @@ def spec_for(
         if spec.key == key:
             return spec
     raise ConfigFileNotAllowed(agent_type.value, key)
+
+
+def validate_child_relpath(root: pathlib.Path, relpath: str) -> pathlib.Path:
+    """Resolve `relpath` under `root` for a directory-type entry.
+
+    Pure path math — no filesystem access (symlink escape is re-checked at
+    I/O time by the store). Rejects traversal, absolute paths, backslashes,
+    hidden segments, and any extension other than lowercase `.md` (exact:
+    `.MD` is rejected so one name can't alias two keys on case-insensitive
+    filesystems). Redundant separators (`a//b.md`) normalise away.
+    """
+    if not root.is_absolute():
+        raise ValueError(f"directory-entry root must be absolute, got {root}")
+    if not relpath or "\\" in relpath:
+        raise ConfigFileNotAllowed("child", relpath or "<empty>")
+    p = pathlib.PurePosixPath(relpath)
+    if p.is_absolute() or ".." in p.parts or any(part.startswith(".") for part in p.parts):
+        raise ConfigFileNotAllowed("child", relpath)
+    if p.suffix != ".md":
+        raise ConfigFileFormatInvalid("markdown", f"only .md files are allowed, got {relpath!r}")
+    return root / pathlib.Path(*p.parts)
 
 
 def validate_content(fmt: ConfigFileFormat, text: str) -> None:
