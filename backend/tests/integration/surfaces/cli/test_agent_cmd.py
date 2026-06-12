@@ -396,3 +396,259 @@ def test_agent_detect_lists_candidates_marker_present(agent_cli_daemon):
     listed = _runner.invoke(cli_app, ["agent", "list", "--json"])
     assert listed.exit_code == 0, listed.output
     assert json.loads(listed.output) == []
+
+
+# ---------------------------------------------------------------------------
+# agent follow
+# ---------------------------------------------------------------------------
+
+
+def test_agent_follow_off_with_exclusions(agent_cli_daemon):
+    """`follow --off --exclude x` PATCHes the policy; `show --json` reflects it."""
+    config_dir = agent_cli_daemon / "cfg"
+    config_dir.mkdir()
+    _runner.invoke(
+        cli_app, ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)]
+    )
+
+    r = _runner.invoke(
+        cli_app, ["agent", "follow", "cur", "--off", "--exclude", "x", "--exclude", "y"]
+    )
+    assert r.exit_code == 0, r.output
+    assert "follow_all_skills=off" in r.output
+
+    show = _runner.invoke(cli_app, ["agent", "show", "cur", "--json"])
+    data = json.loads(show.output)
+    assert data["follow_all_skills"] is False
+    assert data["skill_exclusions"] == ["x", "y"]
+
+    # `--on` without --exclude leaves the exclusion list untouched.
+    r = _runner.invoke(cli_app, ["agent", "follow", "cur", "--on"])
+    assert r.exit_code == 0, r.output
+    data = json.loads(_runner.invoke(cli_app, ["agent", "show", "cur", "--json"]).output)
+    assert data["follow_all_skills"] is True
+    assert data["skill_exclusions"] == ["x", "y"]
+
+
+def test_agent_follow_not_found(agent_cli_daemon):
+    r = _runner.invoke(cli_app, ["agent", "follow", "ghost", "--off"])
+    assert r.exit_code == 4
+
+
+# ---------------------------------------------------------------------------
+# agent mcp entries / plugin (workspace, via the full app)
+# ---------------------------------------------------------------------------
+
+_SECRET_VALUE = "supersecret-value-31337"
+
+_CODEX_CONFIG = f"""\
+[mcp_servers.fetcher]
+command = "uvx"
+args = ["mcp-fetch"]
+
+[mcp_servers.fetcher.env]
+API_TOKEN = "{_SECRET_VALUE}"
+
+[marketplaces.m1]
+source_type = "git"
+source = "https://example.com/m1.git"
+
+[plugins."p1@m1"]
+enabled = true
+
+[plugins."p2@m1"]
+enabled = false
+"""
+
+
+def _extract_json(output: str) -> str:
+    """Skip alembic INFO log lines emitted by the in-process app lifespan."""
+    lines = output.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if line and line[0] in "[{":
+            return "".join(lines[i:])
+    return output
+
+
+@pytest.fixture
+def workspace_cli(tmp_path, monkeypatch):
+    """Full in-process app (create_app) with a registered codex agent ``cx``.
+
+    Same bootstrap as test_skill_cmd.py: the lifespan stays open for the whole
+    test (CLI verbs use ``with c:`` which must not tear the app down), and the
+    OS keychain is faked class-wide so adopt never touches the real keyring.
+    """
+    from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+    from coffer.surfaces.http.app import create_app
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    monkeypatch.setenv("COFFER_PORT_RANGE_START", "59650")
+    monkeypatch.setenv("COFFER_PORT_RANGE_END", "59659")
+
+    keyring: dict[str, str] = {}
+    monkeypatch.setattr(KeyringAdapter, "get", lambda self, ref: keyring.get(ref))
+    monkeypatch.setattr(
+        KeyringAdapter, "set", lambda self, ref, value: keyring.__setitem__(ref, value)
+    )
+    monkeypatch.setattr(KeyringAdapter, "delete", lambda self, ref: keyring.pop(ref, None))
+
+    codex_dir = tmp_path / ".codex"
+    codex_dir.mkdir()
+    (codex_dir / "config.toml").write_text(_CODEX_CONFIG, encoding="utf-8")
+    # Cache dir present for p1 only — p2 must list cache_present=False.
+    (codex_dir / "plugins" / "cache" / "m1" / "p1").mkdir(parents=True)
+
+    app = create_app()
+    set_active_token(_TOKEN)
+    info = DaemonInfo(
+        version=1, pid=1, port=59650, token=_TOKEN, started_at=dt.now(tz=UTC), binary_path="/t"
+    )
+    fake_client = TestClient(
+        app,
+        base_url="http://localhost/api/v1",
+        headers={"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "cli"},
+        raise_server_exceptions=False,
+    )
+    fake_client.__enter__()
+
+    class _PersistentClient:
+        """Proxy so the CLI's ``with c:`` block does NOT close the app."""
+
+        def __init__(self, inner: TestClient) -> None:
+            self._inner = inner
+
+        def __enter__(self):  # type: ignore[no-untyped-def]
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return None
+
+        def __getattr__(self, item):  # type: ignore[no-untyped-def]
+            return getattr(self._inner, item)
+
+    monkeypatch.setattr(
+        _cli_client, "client_or_exit", lambda: (_PersistentClient(fake_client), info)
+    )
+
+    r = _runner.invoke(cli_app, ["agent", "add", "codex", "--name", "cx"])
+    assert r.exit_code == 0, r.output
+
+    yield tmp_path, keyring
+
+    fake_client.__exit__(None, None, None)
+    set_active_token(None)
+
+
+def test_mcp_entries_list_json_and_table(workspace_cli):
+    """`agent mcp entries --json` lists entries; secret VALUES never appear."""
+    r = _runner.invoke(cli_app, ["agent", "mcp", "entries", "cx", "--json"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(_extract_json(r.output))
+    assert body["parse_errors"] == []
+    by_name = {e["name"]: e for e in body["items"]}
+    fetcher = by_name["fetcher"]
+    assert fetcher["source"] == "config"
+    assert fetcher["transport"] == "stdio"
+    assert fetcher["secret_keys"] == ["API_TOKEN"]
+    assert _SECRET_VALUE not in r.output
+
+    r = _runner.invoke(cli_app, ["agent", "mcp", "entries", "cx"])
+    assert r.exit_code == 0, r.output
+    assert "fetcher" in r.output
+
+
+def test_mcp_toggle_entry(workspace_cli):
+    r = _runner.invoke(cli_app, ["agent", "mcp", "toggle-entry", "cx", "fetcher", "--disabled"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(
+        _extract_json(_runner.invoke(cli_app, ["agent", "mcp", "entries", "cx", "--json"]).output)
+    )
+    by_name = {e["name"]: e for e in body["items"]}
+    assert by_name["fetcher"]["enabled"] is False
+
+
+def test_mcp_remove_entry_force_and_prompt(workspace_cli):
+    # Without --force the prompt aborts and the entry survives.
+    r = _runner.invoke(cli_app, ["agent", "mcp", "remove-entry", "cx", "fetcher"], input="n\n")
+    assert r.exit_code == 1
+    body = json.loads(
+        _extract_json(_runner.invoke(cli_app, ["agent", "mcp", "entries", "cx", "--json"]).output)
+    )
+    assert "fetcher" in [e["name"] for e in body["items"]]
+
+    r = _runner.invoke(cli_app, ["agent", "mcp", "remove-entry", "cx", "fetcher", "--force"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(
+        _extract_json(_runner.invoke(cli_app, ["agent", "mcp", "entries", "cx", "--json"]).output)
+    )
+    assert "fetcher" not in [e["name"] for e in body["items"]]
+
+
+def test_mcp_adopt_with_secret(workspace_cli):
+    """`mcp adopt --secret KEY=REF` adopts the entry into a managed resource."""
+    _tmp, keyring = workspace_cli
+    # Without the secret mapping: exit 6 plus the --secret hint.
+    r = _runner.invoke(cli_app, ["agent", "mcp", "adopt", "cx", "fetcher"])
+    assert r.exit_code == 6, r.output
+    assert "API_TOKEN" in r.output
+    assert "--secret" in r.output
+
+    ref = "mcp.fetcher.API_TOKEN"
+    r = _runner.invoke(
+        cli_app, ["agent", "mcp", "adopt", "cx", "fetcher", "--secret", f"API_TOKEN={ref}"]
+    )
+    assert r.exit_code == 0, r.output
+    assert "adopted: mcp_server:fetcher" in r.output
+    # The secret value landed in the (fake) keychain, keyed by the ref.
+    assert keyring[ref] == _SECRET_VALUE
+
+
+def test_mcp_adopt_bad_secret_syntax_exit2(workspace_cli):
+    r = _runner.invoke(
+        cli_app, ["agent", "mcp", "adopt", "cx", "fetcher", "--secret", "MISSING_EQUALS"]
+    )
+    assert r.exit_code == 2, r.output
+
+
+def test_plugin_list_disable_uninstall(workspace_cli):
+    r = _runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(_extract_json(r.output))
+    by_id = {p["id"]: p for p in body["items"]}
+    assert by_id["p1@m1"]["enabled"] is True
+    assert by_id["p1@m1"]["cache_present"] is True
+    assert by_id["p2@m1"]["cache_present"] is False
+    assert [m["name"] for m in body["marketplaces"]] == ["m1"]
+
+    # Table path renders without crashing and shows the marketplace line.
+    r = _runner.invoke(cli_app, ["agent", "plugin", "list", "cx"])
+    assert r.exit_code == 0, r.output
+    assert "p1@m1" in r.output
+    assert "marketplace: m1" in r.output
+
+    r = _runner.invoke(cli_app, ["agent", "plugin", "disable", "cx", "p1@m1"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(
+        _extract_json(_runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"]).output)
+    )
+    assert {p["id"]: p for p in body["items"]}["p1@m1"]["enabled"] is False
+
+    # Uninstall without --force prompts and aborts.
+    r = _runner.invoke(cli_app, ["agent", "plugin", "uninstall", "cx", "p2@m1"], input="n\n")
+    assert r.exit_code == 1
+    r = _runner.invoke(cli_app, ["agent", "plugin", "uninstall", "cx", "p2@m1", "--force"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(
+        _extract_json(_runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"]).output)
+    )
+    assert "p2@m1" not in [p["id"] for p in body["items"]]
+
+
+def test_plugin_enable(workspace_cli):
+    r = _runner.invoke(cli_app, ["agent", "plugin", "enable", "cx", "p2@m1"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(
+        _extract_json(_runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"]).output)
+    )
+    assert {p["id"]: p for p in body["items"]}["p2@m1"]["enabled"] is True

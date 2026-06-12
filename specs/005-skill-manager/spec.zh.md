@@ -151,6 +151,42 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 ---
 
+### User Story 10 —— 呈现并收编非托管 skill（优先级 P2）
+
+agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、其他工具安装的 skill。今天这些是不可见的：agent 的 Skills tab 只列出 Coffer 托管的 binding。用户打开该 tab，将额外看到在 agent 的 skill 位置发现的**非托管** skill——两种类型都扫 `<config_dir>/skills`，Codex 另加 `~/.agents/skills`（Codex 同样读取的较新标准位置）。Coffer 托管的链接与 Codex 的 `.system` 内部条目被排除。对每个非托管 skill，用户可以**收编**（搬入主库、原位留下托管链接使 agent 继续可见、并记录 binding）或删除。
+
+**为什么是这个优先级**：hub 模型只有在既有资产能流入时才成立。收编就是 User Story 1 的导入，变成一键且就地完成。
+
+**独立可测**：把一个合法 skill 文件夹放进已注册 agent 的 `skills/` 目录；打开该 agent 的 Skills tab；观察它被列为非托管；收编它；验证主库副本存在于 `~/.coffer/skills/<name>/`、原路径现在是托管 symlink、且存在一行 binding。
+
+**代表性场景**：
+
+- list unmanaged skills across an agent's skill locations
+- adopt an unmanaged skill into the master store
+- reject adopting an invalid or conflicting unmanaged skill
+- delete an unmanaged skill
+- exclude managed links and system entries from the unmanaged scan
+
+---
+
+### User Story 11 —— 跟随主库（优先级 P2）
+
+逐 skill binding 精确但繁琐：每个新 skill 都要逐个 agent 启用。用户打开某 agent 的**「跟随主库」**开关；从此主库中的每个 skill 都自动投递到该 agent——新 skill 注册即出现、被删除的 skill 即消失——并配一份按 agent 的排除列表应对少数不想要的。不跟随的 agent 维持逐 skill binding 模式。关闭跟随时，当前已投递的集合保留为显式 binding，不会有任何东西凭空消失。
+
+**为什么是这个优先级**：这是 skill 版的「配置一次、共享全部」——MCP 网关「一个条目服务全部」模型在文件系统侧的对应物。
+
+**独立可测**：对一个 agent 在主库有三个 skill 时开启跟随；验证三条链接存在；注册第四个 skill；验证其链接无需额外操作即出现；排除一个 skill；验证其链接被移除而其余保留。
+
+**代表性场景**：
+
+- enable follow-all and deliver every master skill
+- auto-deliver new skills to following agents
+- auto-remove deleted skills from following agents
+- exclude a skill from a following agent
+- disable follow-all preserving current bindings
+
+---
+
 ### Edge Cases
 
 - **导入时 skill 重名**：拒绝；用户必须先在 SKILL.md frontmatter 里改名再试。
@@ -163,6 +199,10 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 - **用户从某 agent 的 `config_dir/skills` 文件夹内删除一个由 Coffer 管理的文件**：同样会作用到 master；下次 `verify` 会标记其他 agent 上对应 link 是否仍能一致解析。
 - **移除一个还带 skill binding 的 agent（spec 004）**：spec 004 定义了 agent kind 的 `on_delete` 接缝；the 005-skill-manager spec 在组装根处提供 `cleanup_bindings_for_agent` 回调，先清掉该 agent 的所有 binding 与 symlink，再删掉 agent 行本身。
 - **agent 的 `config_dir` 在外部被移走或删除**：下一次同步操作会暴露失败；`verify` 报告受影响的 binding；用户通过更新 agent 的 `config_dir` 或移除该 agent 来处置。
+- **`~/.agents/skills` 与其他工具共用**：扫描列出所见内容，只把 Coffer 自己的链接归为托管；其余一律算非托管。删除永远是用户的显式动作——Coffer 绝不替别的工具做垃圾回收。
+- **非托管条目是指向主库之外的 symlink**：列为非托管但不可收编（收编会搬走别人的事实来源）；用户可手动处理链接目标，或删除该链接。
+- **非托管 skill 没有合法 SKILL.md**：以 `valid=false` 及原因列出；可删除，但在通过校验之前不可收编。
+- **开启跟随时目标路径已存在同名的非 Coffer 文件夹**：该 skill 报告为冲突（与 FR-011 同规则）而不被覆盖；主库其余部分照常投递。
 
 ## Acceptance Scenarios
 
@@ -282,6 +322,66 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 - **When** 用户请求一个解析后位于 master 文件夹之外的路径（`..` 穿越、绝对路径或越界 symlink）的文件内容，
 - **Then** 请求在任何文件被读取前以 `400` 错误拒绝，且不返回任何内容。
 
+### Scenario: list unmanaged skills across an agent's skill locations（列出 agent 各 skill 位置的非托管 skill）
+
+- **Given** 一个已注册 `codex` agent，`<config_dir>/skills` 下有一条 Coffer 托管链接与一个手工拷贝的 skill 文件夹，`~/.agents/skills` 下另有一个 skill 文件夹，
+- **When** 用户列出该 agent 的非托管 skill，
+- **Then** Coffer 恰好返回两个手工放置的 skill——各带名称、路径、位置与来自 SKILL.md 校验的 `valid` 标志——并排除托管链接。
+
+### Scenario: adopt an unmanaged skill into the master store（把非托管 skill 收编进主库）
+
+- **Given** 一个 SKILL.md 合法、名称与主库不冲突的非托管 skill 文件夹，
+- **When** 用户收编它，
+- **Then** Coffer 按 FR-004 校验、把文件夹搬到 `~/.coffer/skills/<name>/`、注册 `skill` 资源、把原路径替换为托管链接、为该 agent 记录一条 binding 并审计此次收编——任何失败都让原文件夹原地原样不动。
+
+### Scenario: reject adopting an invalid or conflicting unmanaged skill（拒绝收编不合法或冲突的非托管 skill）
+
+- **Given** 一个缺合法 SKILL.md、或与既有主库 skill 重名、或是指向主库之外 symlink 的非托管条目，
+- **When** 用户尝试收编它，
+- **Then** 请求按原因以特定错误拒绝（不合法：`unprocessable_entity` 422；重名：`conflict` 409；外部链接：`unprocessable_entity` 422），且不搬移、不注册、不建链接。
+
+### Scenario: delete an unmanaged skill（删除非托管 skill）
+
+- **Given** agent skill 位置中的一个非托管 skill 文件夹，
+- **When** 用户删除它（显式、经确认的动作），
+- **Then** 该文件夹从磁盘移除并写一条审计记录，主库内容与 binding 不被触碰。
+
+### Scenario: exclude managed links and system entries from the unmanaged scan（非托管扫描排除托管链接与系统条目）
+
+- **Given** 某 agent 的 skill 目录同时包含 Coffer 托管链接与（Codex 的）`.system` 条目，
+- **When** 用户列出非托管 skill，
+- **Then** 托管链接与 `.system` 条目都不出现在结果中。
+
+### Scenario: enable follow-all and deliver every master skill（开启跟随并投递主库全部 skill）
+
+- **Given** 一个尚未跟随的已注册 agent，主库中有三个 skill，
+- **When** 用户开启该 agent 的跟随主库开关，
+- **Then** 同步引擎把三个 skill 全部投递给该 agent（链接 + binding 行），该 agent 的有效集合等于主库减去其（空的）排除列表。
+
+### Scenario: auto-deliver new skills to following agents（向跟随中的 agent 自动投递新 skill）
+
+- **Given** 一个已开启跟随的 agent，
+- **When** 主库注册一个新 skill（导入、拉取或收编），
+- **Then** daemon 无需用户进一步操作即把它投递给该 agent。
+
+### Scenario: auto-remove deleted skills from following agents（从跟随中的 agent 自动移除已删除 skill）
+
+- **Given** 一个已开启跟随、且有一个已投递 skill 的 agent，
+- **When** 该 skill 从主库被移除，
+- **Then** 该 agent 的链接与 binding 作为移除的一部分被清理。
+
+### Scenario: exclude a skill from a following agent（在跟随中的 agent 上排除一个 skill）
+
+- **Given** 一个已开启跟随、且有一个已投递 skill 的 agent，
+- **When** 用户为该 agent 排除该 skill，
+- **Then** 其链接与 binding 被移除，该 skill 进入该 agent 的排除列表，且后续主库变化在排除解除之前绝不重新投递它。
+
+### Scenario: disable follow-all preserving current bindings（关闭跟随并保留现有 binding）
+
+- **Given** 一个已开启跟随、且有若干已投递 skill 的 agent，
+- **When** 用户关闭跟随开关，
+- **Then** 每个当前已投递的 skill 都保留为显式逐 skill binding 且链接完好，后续主库新增不再自动投递。
+
 ## Requirements
 
 ### Functional Requirements
@@ -320,6 +420,17 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 - **FR-015**：系统必须提供 `verify` 操作，对每条已启用 binding 比对其磁盘目标，并按 drift 类别（missing link、tampered link、missing master、orphan master）报告与建议处置方式。
 - **FR-016**：系统不得自动修复 drift；修复必须由用户显式触发。
 
+**非托管 skill（工作区增补）**
+
+- **FR-022**：系统必须扫描已注册 agent 的 skill 位置——两种类型的 `<config_dir>/skills`，`codex` 另加 `~/.agents/skills`——并列出**非托管**条目：一切既不是 Coffer 托管链接（目标解析在 `~/.coffer/skills/` 之内的链接）也不是 Codex `.system` 条目的内容。每个结果携带名称、路径、位置与 `valid` 标志（FR-004 校验），不合法时附原因。扫描只读，在请求时派生。
+- **FR-023**：用户必须能收编一个合法的非托管 skill。收编按 FR-004 校验文件夹、搬到 `~/.coffer/skills/<name>/`、注册 `skill` 资源、投递托管链接（FR-009）、并为该 agent 记录一条启用的 binding——按此顺序，注册之前的任何失败都让原文件夹不被搬动、不被改变（注册之后主库副本即为权威；投递失败会如实暴露并经 binding 重试，绝不回滚资源）。托管链接始终投递到该 agent 的规范投递位置 `<config_dir>/skills/<name>`：从 `<config_dir>/skills` 收编时原路径就地替换；从 `~/.agents/skills` 收编时则做归并——该处原文件夹被移除、链接落在 `<config_dir>/skills`（Codex 两个位置都读取，agent 仍然可见该 skill）。重名以 `conflict`（409）拒绝；不合法文件夹与指向主库之外的 symlink 以 `unprocessable_entity`（422）拒绝。以收编事件审计。
+- **FR-024**：用户必须能以显式、经确认的动作删除一个非托管条目。删除只从磁盘移除该条目，绝不动主库内容或 binding，并写入审计。
+
+**跟随主库（工作区增补）**
+
+- **FR-025**：每个 agent 必须携带一个跟随主库标志与一份按 agent 的 skill 排除列表（存于 agent 资源的 config，spec 004）。跟随期间，agent 的有效 skill 集合是整个主库减去其排除项；同步引擎必须在标志变化、skill 注册或移除、以及排除列表变化时执行对账投递。目标路径冲突遵循 FR-011（报告、绝不覆盖）。关闭标志必须把当前已投递的 skill 保留为显式逐 skill binding。该标志对新注册的 agent 默认开启，与增补前的自动绑定行为一致。
+- **FR-026**：非托管 skill 与跟随操作必须可通过 REST API、`coffer agent skill …` / `coffer skill …` CLI（读取支持 `--json`）、以及桌面应用中该 agent 的 Skills tab 完成。
+
 **生命周期**
 
 - **FR-017**：移除一个 skill 必须移除每个 agent 的 symlink、级联删除 binding、删除 master 文件夹，并以快照方式写入审计。
@@ -340,6 +451,8 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 - **Skill Source**：判别式记录（`local_import` 或 `git`），描述 skill 来源。Git 包含 URL、ref、可选 subpath；本地导入仅含原始路径作 provenance 用。
 - **Skill–Agent Binding**：连接一个 skill Resource 与一个 agent Resource（kind `agent`，按 spec 004）的一行；带 `enabled` 标志与最近 link path。磁盘上的 symlink 是 live 表达；binding 是持久化表达。
 - **Drift Report**：`verify` 返回的瞬时结构，列出每条与磁盘不一致的 binding，附 drift 类型与建议处置方式。
+- **Unmanaged Skill（非托管 skill）**：在 agent skill 位置发现的、Coffer 不管理的 skill 形条目的派生（绝不存储）视图——名称、路径、位置、`valid` 标志。文件系统是事实来源；收编或删除是仅有的两种变更。
+- **Follow Policy（跟随策略）**：按 agent 的状态（标志 + 排除列表，按 spec 004 存于 agent 资源 config），声明该 agent 接收整个主库。binding 仍是持久化的投递记录；策略驱动同步引擎的对账。
 
 ## Success Criteria
 
@@ -353,6 +466,8 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 - **SC-006**：本规范每一个 Acceptance Scenario 都至少被一个带 `acceptance(spec="005-skill-manager", scenario="…")` 的测试覆盖，`make verify-acceptance` 报告 0 个未覆盖 scenario。
 - **SC-007**：全套 `make verify` 在本地与 CI 通过；`make verify-all`（含 e2e）在 macOS 与 Linux 通过；Windows 在 junction 模式与 copy-fallback 模式下分别通过。
 - **SC-008**：除用户显式拉取已知公开 URL 的情形外，SKILL.md 内容永不离开用户机器；由集成测试中的网络出站扫描自动验证。
+- **SC-009**：开启跟随后，新注册的 skill 在 5 秒内投递到跟随中的 agent，除注册本身外无需任何用户操作。
+- **SC-010**：在托管链接与手工放置 skill 混杂的机器上，非托管扫描恰好列出手工放置的条目——零托管链接、零 `.system` 条目——由基于构造 fixture 树的集成测试验证。
 
 ## Assumptions
 
@@ -363,4 +478,6 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 - v1 仅支持公开 Git URL；需鉴权的上游 skill 源留给后续工作。
 - 本地导入的 skill 是时间点拷贝；原路径仅用于追溯，不用于同步。
 - Windows 用户的文件系统支持目录 junction；FAT32 与网络共享降级为 copy 模式。
+- 两种 agent 类型的投递位置维持 `<config_dir>/skills`。Codex 还会读取 `~/.agents/skills`（其较新的标准位置），并把 `<config_dir>/skills` 视为向后兼容的 legacy 位置——非托管扫描覆盖两处；迁移 Coffer 的投递目标是一项已记录、延后到未来变更的决策。
+- 跟随主库标志与排除列表存于 agent 资源的 config（spec 004 的 schema）；其投递语义由本 spec 拥有。
 - v2 将探索：marketplace 浏览（agentskills.io API）、agent 间的 skill 推荐、项目级 skill（仓库内 `.claude/skills/`）、通过 credential ref 支持私有 Git 源。

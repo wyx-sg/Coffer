@@ -149,6 +149,42 @@ Every import, fetch, enable, disable, update, and remove is auditable.
 
 ---
 
+### User Story 10 — Surface and adopt unmanaged skills (Priority: P2)
+
+Agents accumulate skills Coffer never delivered — hand-copied folders, skills installed by other tools. Today these are invisible: the agent's Skills tab lists only Coffer-managed bindings. The user opens the tab and additionally sees the **unmanaged** skills found in the agent's skill locations — `<config_dir>/skills` for both types, plus `~/.agents/skills` for Codex (the newer standard location Codex also reads). Coffer-managed links and Codex's `.system` internal entries are excluded. For each unmanaged skill the user can **adopt** it (move it into the master store, leave a managed link in its place so the agent keeps seeing it, and record a binding) or delete it.
+
+**Why this priority**: The hub model only works if existing assets can flow into it. Adoption is User Story 1's import, made one-click and in-place.
+
+**Independent Test**: Place a valid skill folder in a registered agent's `skills/` directory; open the agent's Skills tab; observe it listed as unmanaged; adopt it; verify the master copy exists at `~/.coffer/skills/<name>/`, the original path is now a managed symlink, and a binding row exists.
+
+**Covering scenarios**:
+
+- list unmanaged skills across an agent's skill locations
+- adopt an unmanaged skill into the master store
+- reject adopting an invalid or conflicting unmanaged skill
+- delete an unmanaged skill
+- exclude managed links and system entries from the unmanaged scan
+
+---
+
+### User Story 11 — Follow the master library (Priority: P2)
+
+Per-skill bindings are precise but chatty: every new skill must be enabled agent by agent. The user flips a per-agent **"follow the master library"** switch; from then on, every skill in the master store is delivered to that agent automatically — new skills appear on registration, removed skills disappear — with a per-agent exclusion list for the rare opt-outs. Per-skill bindings remain the mode for agents that don't follow. Turning follow off keeps the currently delivered set as explicit bindings, so nothing vanishes by surprise.
+
+**Why this priority**: This is "configure once, share everything" for skills — the filesystem counterpart of the MCP gateway's one-entry-serves-all model.
+
+**Independent Test**: Enable follow for an agent with three master skills; verify three links exist; register a fourth skill; verify its link appears without further action; exclude one skill; verify its link is removed while the rest stay.
+
+**Covering scenarios**:
+
+- enable follow-all and deliver every master skill
+- auto-deliver new skills to following agents
+- auto-remove deleted skills from following agents
+- exclude a skill from a following agent
+- disable follow-all preserving current bindings
+
+---
+
 ### Edge Cases
 
 - **Skill name collision on import**: Rejected; user must rename via SKILL.md frontmatter and retry.
@@ -161,6 +197,10 @@ Every import, fetch, enable, disable, update, and remove is auditable.
 - **User deletes a Coffer-managed file from inside an agent's `config_dir/skills` folder**: Master is affected (same reason); next `verify` flags any other agents whose links no longer resolve consistently.
 - **Removing an agent (per spec 004) while it has skill bindings**: Spec 004 defines the agent kind's `on_delete` seam; the 005-skill-manager spec supplies the `cleanup_bindings_for_agent` callback at the composition root, so removing an agent first cleans up that agent's bindings and any associated symlinks before the agent row is deleted.
 - **Agent's `config_dir` is moved or removed externally**: The next sync operation surfaces the failure; `verify` reports the affected bindings; user remediates by updating the agent's `config_dir` or removing the agent.
+- **`~/.agents/skills` is shared with other tools**: The scan lists what it finds and classifies only Coffer's own links as managed; everything else is unmanaged. Deletion is always an explicit user action — Coffer never garbage-collects another tool's skills.
+- **Unmanaged entry is a symlink pointing outside the master store**: Listed as unmanaged-but-not-adoptable (adopting would move someone else's source of truth); the user can follow the link's target manually or delete the link.
+- **Unmanaged skill without a valid SKILL.md**: Listed with `valid=false` and the reason; it can be deleted but not adopted until it validates.
+- **Follow-all enabled while a target path holds a non-Coffer folder of the same name**: That skill is reported as a conflict (same rule as FR-011) instead of being overwritten; the rest of the master store is delivered normally.
 
 ## Acceptance Scenarios
 
@@ -280,6 +320,66 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user requests file contents for a path that resolves outside the master folder (`..` traversal, an absolute path, or an escaping symlink),
 - **Then** the request is rejected with a `400` error before any file is read, and no content is returned.
 
+### Scenario: list unmanaged skills across an agent's skill locations
+
+- **Given** a registered `codex` agent with one Coffer-managed link in `<config_dir>/skills`, one hand-copied skill folder there, and another skill folder in `~/.agents/skills`,
+- **When** the user lists the agent's unmanaged skills,
+- **Then** Coffer returns exactly the two hand-placed skills — each with name, path, location, and a `valid` flag from SKILL.md validation — and excludes the managed link.
+
+### Scenario: adopt an unmanaged skill into the master store
+
+- **Given** an unmanaged skill folder with a valid SKILL.md whose name collides with no master skill,
+- **When** the user adopts it,
+- **Then** Coffer validates it per FR-004, moves the folder to `~/.coffer/skills/<name>/`, registers the `skill` resource, replaces the original path with the managed link, records a binding for that agent, and audits the adoption — and on any failure the original folder is left exactly where and as it was.
+
+### Scenario: reject adopting an invalid or conflicting unmanaged skill
+
+- **Given** an unmanaged entry that lacks a valid SKILL.md, collides with an existing master skill's name, or is a symlink pointing outside the master store,
+- **When** the user attempts to adopt it,
+- **Then** the request is rejected with a reason-specific error (invalid: `unprocessable_entity` 422; name conflict: `conflict` 409; foreign link: `unprocessable_entity` 422), and nothing is moved, registered, or linked.
+
+### Scenario: delete an unmanaged skill
+
+- **Given** an unmanaged skill folder in an agent's skill location,
+- **When** the user deletes it (an explicit, confirmed action),
+- **Then** the folder is removed from disk, an audit entry is recorded, and no master content or binding is touched.
+
+### Scenario: exclude managed links and system entries from the unmanaged scan
+
+- **Given** an agent's skill directory containing Coffer-managed links and (for Codex) a `.system` entry,
+- **When** the user lists unmanaged skills,
+- **Then** neither the managed links nor the `.system` entry appear in the result.
+
+### Scenario: enable follow-all and deliver every master skill
+
+- **Given** a registered agent not yet following, and three skills in the master store,
+- **When** the user enables the agent's follow-master-library switch,
+- **Then** the sync engine delivers all three skills to the agent (links + binding rows) and the agent's effective set equals the master store minus its (empty) exclusion list.
+
+### Scenario: auto-deliver new skills to following agents
+
+- **Given** an agent with follow enabled,
+- **When** a new skill is registered in the master store (import, fetch, or adoption),
+- **Then** the daemon delivers it to that agent without further user action.
+
+### Scenario: auto-remove deleted skills from following agents
+
+- **Given** an agent with follow enabled and a delivered skill,
+- **When** that skill is removed from the master store,
+- **Then** the agent's link and binding are cleaned up as part of the removal.
+
+### Scenario: exclude a skill from a following agent
+
+- **Given** an agent with follow enabled and a delivered skill,
+- **When** the user excludes that skill for this agent,
+- **Then** its link and binding are removed, the skill joins the agent's exclusion list, and later master changes never re-deliver it until the exclusion is lifted.
+
+### Scenario: disable follow-all preserving current bindings
+
+- **Given** an agent with follow enabled and several delivered skills,
+- **When** the user disables the follow switch,
+- **Then** every currently delivered skill remains as an explicit per-skill binding with its link intact, and subsequent master-store additions are no longer auto-delivered.
+
 ## Requirements
 
 ### Functional Requirements
@@ -318,6 +418,17 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **FR-015**: System MUST provide a `verify` operation that compares each enabled binding to its on-disk target and reports drift categories (missing link, tampered link, missing master, orphan master) with suggested remedies.
 - **FR-016**: System MUST NOT automatically remediate drift; remediation requires an explicit user action.
 
+**Unmanaged skills (workspace amendment)**
+
+- **FR-022**: System MUST scan a registered agent's skill locations — `<config_dir>/skills` for both types, plus `~/.agents/skills` for `codex` — and list **unmanaged** entries: everything that is not a Coffer-managed link (a link whose target resolves inside `~/.coffer/skills/`) and not Codex's `.system` entry. Each result carries name, path, location, and a `valid` flag (FR-004 validation) with the failure reason when invalid. The scan is read-only and derived at request time.
+- **FR-023**: Users MUST be able to adopt a valid unmanaged skill. Adoption validates the folder per FR-004, moves it to `~/.coffer/skills/<name>/`, registers the `skill` resource, delivers the managed link (FR-009), and records an enabled binding for that agent — in that order, with any failure before registration leaving the original folder unmoved and unchanged (after registration the master copy is authoritative; a delivery failure is surfaced and retried via the binding, never rolled back). The managed link is always delivered to the agent's canonical delivery location `<config_dir>/skills/<name>`: adopting from `<config_dir>/skills` replaces the original path in place, while adopting from `~/.agents/skills` consolidates — the original folder there is removed and the link lands in `<config_dir>/skills` (Codex reads both locations, so the agent keeps seeing the skill). Name collisions are rejected with `conflict` (409); invalid folders and symlinks pointing outside the master store are rejected with `unprocessable_entity` (422). Audited as an adoption event.
+- **FR-024**: Users MUST be able to delete an unmanaged entry as an explicit, confirmed action. Deletion removes only that entry from disk, never master content or bindings, and is audited.
+
+**Follow the master library (workspace amendment)**
+
+- **FR-025**: Each agent MUST carry a follow-master-library flag and a per-agent skill exclusion list (stored on the agent resource's config, spec 004). While following, the agent's effective skill set is the entire master store minus its exclusions; the sync engine MUST reconcile deliveries when the flag changes, when a skill is registered or removed, and when the exclusion list changes. Conflicts at target paths follow FR-011 (report, never overwrite). Disabling the flag MUST preserve the currently delivered skills as explicit per-skill bindings. The flag defaults to enabled for newly registered agents, matching the pre-amendment auto-bind behavior.
+- **FR-026**: Unmanaged-skill and follow operations MUST be available through the REST API, the `coffer agent skill …` / `coffer skill …` CLI (with `--json` on reads), and the agent's Skills tab in the desktop app.
+
 **Lifecycle**
 
 - **FR-017**: Removing a skill MUST remove every enabled per-agent symlink, cascade-delete bindings, delete the master folder, and audit the removal with a snapshot.
@@ -338,6 +449,8 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **Skill Source**: A discriminated record (`local_import` or `git`) capturing where the skill came from. For Git, it includes URL, ref, and optional subpath. For local imports, it includes the original path for informational purposes only.
 - **Skill–Agent Binding**: A row joining one skill Resource and one agent Resource (kind `agent`, per spec 004), with an `enabled` flag and last-link-path metadata. Symlink existence on disk is the live representation; binding state is the persistent representation.
 - **Drift Report**: An ephemeral structure produced by `verify` listing each binding whose on-disk target disagrees with the binding state, categorized by drift type with a suggested remedy.
+- **Unmanaged Skill**: A derived (never stored) view of a skill-shaped entry found in an agent's skill locations that Coffer does not manage — name, path, location, `valid` flag. The filesystem is the source of truth; adoption or deletion are the only mutations.
+- **Follow Policy**: Per-agent state (flag + exclusion list, stored on the agent resource's config per spec 004) declaring that the agent receives the entire master store. Bindings remain the persistent delivery record; the policy drives the sync engine's reconciliation.
 
 ## Success Criteria
 
@@ -351,6 +464,8 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **SC-006**: Every Acceptance Scenario in this spec is covered by at least one test marked `acceptance(spec="005-skill-manager", scenario="…")`, and `make verify-acceptance` reports zero uncovered scenarios.
 - **SC-007**: The full `make verify` suite passes locally and in CI; `make verify-all` (adding e2e) passes on macOS and Linux; Windows tests pass for both junction mode and copy-fallback mode.
 - **SC-008**: No SKILL.md content ever leaves the user's machine except where the user explicitly fetches a known public URL; verified by an automated network-egress scan during integration tests.
+- **SC-009**: With follow enabled, a newly registered skill is delivered to the following agent within 5 seconds, with no user action beyond the registration itself.
+- **SC-010**: On a machine with a mix of managed links and hand-placed skills, the unmanaged scan lists exactly the hand-placed entries — zero managed links, zero `.system` entries — verified by integration tests over a constructed fixture tree.
 
 ## Assumptions
 
@@ -361,4 +476,6 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - v1 supports public Git URLs only; authenticated upstream skill sources are future work.
 - Local-imported skills are point-in-time copies; the source path is recorded for traceability, not for sync.
 - Windows users have directory-junction support on their filesystem; FAT32 and network shares fall back to copy mode.
+- Delivery stays at `<config_dir>/skills` for both agent types. Codex additionally reads `~/.agents/skills` (its newer standard location) and treats `<config_dir>/skills` as a backward-compatible legacy location — the unmanaged scan covers both; migrating Coffer's delivery target is a recorded decision deferred to a future change.
+- The follow-master-library flag and exclusion list live on the agent resource's config (spec 004's schema); this spec owns their delivery semantics.
 - v2 will explore: marketplace browsing (agentskills.io API), agent-to-agent skill recommendations, project-local skills (`.claude/skills/` in repo), and private Git sources via credential refs.

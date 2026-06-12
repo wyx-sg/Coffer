@@ -168,15 +168,17 @@ paths:
         name: key
         required: true
         schema: { type: string }
-        description: Allowlisted config-file key (e.g. settings, global, memory, config).
+        description: Allowlisted config-file key (e.g. settings, global, instructions, config).
     get:
       tags: [agents]
       operationId: readAgentConfigFile
       summary: Read one config file's content
       description: |
-        Returns the file's text content, format, and existence. A file that
-        does not exist returns empty content with `exists=false` and is not
-        created. A key outside the agent type's allowlist returns 404.
+        Returns the file's text content, format, existence, and a content
+        fingerprint for optimistic-concurrency writes (FR-036). A file that
+        does not exist returns empty content with `exists=false` and
+        `fingerprint=""` and is not created. A key outside the agent type's
+        allowlist returns 404.
       responses:
         "200":
           description: OK
@@ -194,8 +196,11 @@ paths:
         atomically (temp file + rename), keeping a `.bak` of the prior content.
         Malformed `json`/`toml` content returns 422 and leaves the on-disk file
         unchanged. A key outside the agent type's allowlist returns 404 and
-        performs no filesystem access. Records an `agent_config_file_written`
-        audit entry on success. Returns the refreshed metadata view.
+        performs no filesystem access. When `expected_fingerprint` is supplied
+        and the on-disk content changed since the read, the write is rejected
+        with 409 (`CONFIG_FILE_STALE`) and the file is left untouched (FR-036).
+        Records an `agent_config_file_written` audit entry on success. Returns
+        the refreshed metadata view.
       requestBody:
         required: true
         content:
@@ -207,6 +212,288 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ConfigFileInfo" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{name}/config-files/{key}/files/{relpath}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: key
+        required: true
+        schema: { type: string }
+        description: Allowlisted directory-entry key (e.g. subagents).
+      - in: path
+        name: relpath
+        required: true
+        schema: { type: string }
+        description: >-
+          Entry-relative POSIX path of the child file (nested paths allowed,
+          e.g. `review/security.md`). Validated server-side before any
+          filesystem access: no `..`, no absolute paths, no backslashes, no
+          hidden segments, `.md` extension required (FR-035). An invalid path
+          returns 404 or 422 without touching disk.
+    get:
+      tags: [agents]
+      operationId: readAgentConfigDirFile
+      summary: Read one child file of a directory config entry
+      description: |
+        Returns the child file's text content, format, existence, and content
+        fingerprint, like the single-file read. A child that does not exist
+        returns empty content with `exists=false` and is not created.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigFileContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    put:
+      tags: [agents]
+      operationId: writeAgentConfigDirFile
+      summary: Save (create-on-write) one child file of a directory config entry
+      description: |
+        Same machinery as the single-file write: format validation, atomic
+        write + `.bak`, optional `expected_fingerprint` (stale → 409), audited
+        as `agent_config_file_written`. A missing child file is created
+        (create-on-write), including intermediate subdirectories.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfigFileWrite" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigFileInfo" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: deleteAgentConfigDirFile
+      summary: Delete one child file of a directory config entry
+      description: |
+        Removes the child file from disk, preserving the prior content as
+        `<path>.bak`. Audited as `agent_config_file_deleted`. Deleting a child
+        that does not exist returns 404.
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{name}/mcp-entries:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentMcpEntries
+      summary: List the MCP server entries in the agent's own config files
+      description: |
+        Derived at read time from the agent's MCP-bearing config files
+        (claude_code: `~/.claude.json` + `settings.json` `mcpServers`; codex:
+        `config.toml` `[mcp_servers.*]`) — nothing is stored (FR-025). Env and
+        header VALUES never cross HTTP: each entry exposes key names only,
+        plus which keys look secret-like. A file that fails to parse degrades
+        to an entry in `parse_errors` instead of failing the view (FR-030).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpEntriesOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/mcp-entries/{entry}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: entry
+        required: true
+        schema: { type: string }
+        description: MCP entry name as it appears in the agent's config file.
+    patch:
+      tags: [agents]
+      operationId: toggleAgentMcpEntry
+      summary: Enable or disable one MCP entry in place (Codex only)
+      description: |
+        Sets the entry's `enabled` flag in `config.toml` (FR-027). For
+        `claude_code`, whose format has no per-entry flag, the toggle is
+        rejected with 422 (`MCP_ENTRY_TOGGLE_UNSUPPORTED`). The `coffer`
+        entry is protected (422, `MCP_ENTRY_PROTECTED`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/McpEntryPatch" }
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: deleteAgentMcpEntry
+      summary: Remove one MCP entry from the agent's config file
+      description: |
+        Edits only the entry's source file with the atomic-write + `.bak`
+        machinery and records an `agent_mcp_entry_removed` audit entry
+        (FR-026). When the same name exists in several files (claude_code),
+        the `source` query parameter disambiguates; omitting it then is
+        rejected with 422 (`MCP_ENTRY_SOURCE_AMBIGUOUS`). The `coffer` entry
+        is not removable here (422, `MCP_ENTRY_PROTECTED`) — it is managed by
+        the `/mcp-install` operations.
+      parameters:
+        - in: query
+          name: source
+          required: false
+          schema: { type: string }
+          description: Config-file key the entry lives in, when ambiguous.
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{name}/mcp-entries/{entry}/adopt:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: entry
+        required: true
+        schema: { type: string }
+    post:
+      tags: [agents]
+      operationId: adoptAgentMcpEntry
+      summary: Adopt a direct MCP entry into Coffer as a managed mcp_server resource
+      description: |
+        Registers the entry as an `mcp_server` resource, verifies the resource
+        reads back, then removes the source entry — strictly in that order;
+        any failure rolls back a created resource and leaves the agent's
+        config byte-identical (FR-028). Secret-looking env/header keys MUST be
+        mapped to keychain refs via `secrets`, or the request is rejected with
+        422 (`ADOPT_SECRET_UNRESOLVED`) listing the unresolved keys; mapped
+        values go into the OS keychain, never into resource config (FR-029).
+        A name collision returns 409 with `details.suggested_name`. The
+        `coffer` entry is never adoptable. Audited as
+        `agent_mcp_entry_adopted`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/McpEntryAdopt" }
+      responses:
+        "201":
+          description: Adopted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdoptedResource" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >-
+            Name collision with an existing mcp_server resource; the error
+            envelope's `details.suggested_name` carries a suggested
+            alternative.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{name}/plugins:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentPlugins
+      summary: List the agent's installed plugins and known marketplaces
+      description: |
+        Derived at read time, never stored (FR-031). For `codex` the listing
+        comes from `config.toml` (`[plugins.*]`, `[marketplaces.*]`) plus
+        presence of the documented cache directory; for `claude_code` the
+        inventory is read-only from `installed_plugins.json` /
+        `known_marketplaces.json`, with enabled state from `settings.json`
+        `enabledPlugins`. Parse failures degrade to `parse_errors` (FR-030).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginsOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/plugins/{pluginId}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: pluginId
+        required: true
+        schema: { type: string }
+        description: Plugin id, `<name>@<marketplace>`.
+    patch:
+      tags: [agents]
+      operationId: toggleAgentPlugin
+      summary: Enable or disable a plugin
+      description: |
+        Writes only the documented config surface — the Codex entry's
+        `enabled` field in `config.toml`; the Claude Code `enabledPlugins`
+        map in `settings.json` — and never the agents' internal state files
+        (FR-032). Audited as `agent_plugin_toggled`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PluginPatch" }
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: uninstallAgentPlugin
+      summary: Uninstall a plugin (Codex only)
+      description: |
+        Removes the `[plugins."…"]` entry from `config.toml` and deletes the
+        plugin's cache directory; audited as `agent_plugin_uninstalled`
+        (FR-033). For `claude_code` the operation is rejected with 422
+        (`PLUGIN_UNINSTALL_UNSUPPORTED`) — full uninstall requires the
+        agent's own tooling.
+      responses:
+        "204":
+          description: No Content
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
@@ -331,10 +618,30 @@ components:
       properties:
         config_dir: { type: string }
         description: { type: string, nullable: true }
+        follow_all_skills:
+          type: boolean
+          description: >-
+            Follow-master-library policy flag (spec 005 FR-025). Fields absent
+            from the PATCH body are preserved unchanged.
+        skill_exclusions:
+          type: array
+          items: { type: string }
+          description: >-
+            Skill names excluded from delivery while following. Replaces the
+            whole list when present.
 
     AgentOut:
       type: object
-      required: [name, type, config_dir, created_at, updated_at]
+      required:
+        [
+          name,
+          type,
+          config_dir,
+          follow_all_skills,
+          skill_exclusions,
+          created_at,
+          updated_at,
+        ]
       properties:
         name: { type: string }
         type: { $ref: "#/components/schemas/AgentType" }
@@ -344,6 +651,13 @@ components:
             description: "Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills.",
           }
         description: { type: string, nullable: true }
+        follow_all_skills:
+          type: boolean
+          description: "Follow-master-library policy flag (spec 005 FR-025). Defaults to true for newly registered agents."
+        skill_exclusions:
+          type: array
+          items: { type: string }
+          description: "Skill names excluded from delivery while following."
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -386,18 +700,39 @@ components:
       enum: [json, toml, markdown, text]
       description: Validation/format of a config file.
 
+    ConfigFileKind:
+      type: string
+      enum: [file, directory]
+      description: >-
+        Whether an allowlist entry is a single file or a directory of files
+        (FR-034). For directory entries, `format` describes the CHILD files.
+
+    DirChild:
+      type: object
+      required: [relpath, size, modified_at]
+      description: One child file of a directory-type config entry.
+      properties:
+        relpath:
+          {
+            type: string,
+            description: "POSIX path relative to the entry's directory root.",
+          }
+        size: { type: integer }
+        modified_at: { type: string, format: date-time }
+
     ConfigFileInfo:
       type: object
-      required: [key, display_name, path, format, exists]
+      required: [key, display_name, path, format, kind, exists]
       properties:
         key:
           {
             type: string,
-            description: "Stable allowlist key (e.g. settings, global, memory, config).",
+            description: "Stable allowlist key (e.g. settings, global, instructions, subagents, config, hooks).",
           }
         display_name: { type: string }
         path: { type: string, description: "Resolved absolute path." }
         format: { $ref: "#/components/schemas/ConfigFileFormat" }
+        kind: { $ref: "#/components/schemas/ConfigFileKind" }
         exists: { type: boolean }
         size:
           type: integer
@@ -408,10 +743,18 @@ components:
           format: date-time
           nullable: true
           description: "Last-modified time when the file exists; null otherwise."
+        files:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/DirChild" }
+          description: >-
+            Child files for kind=directory entries (recursive `.md` listing,
+            sorted by relpath); null for kind=file entries. A missing
+            directory lists as exists=false with no files.
 
     ConfigFileContent:
       type: object
-      required: [key, format, exists, content]
+      required: [key, format, exists, content, fingerprint, memory_block]
       properties:
         key: { type: string }
         format: { $ref: "#/components/schemas/ConfigFileFormat" }
@@ -419,6 +762,17 @@ components:
         content:
           type: string
           description: "File text; empty string when the file does not exist."
+        fingerprint:
+          type: string
+          description: >-
+            Content fingerprint for optimistic-concurrency writes (FR-036);
+            empty string when the file does not exist.
+        memory_block:
+          type: boolean
+          description: >-
+            True when the file contains the managed memory-projection block
+            marker owned by spec 007 (FR-037) — the editor surfaces a notice,
+            never parses the block.
 
     ConfigFileWrite:
       type: object
@@ -427,6 +781,176 @@ components:
         content:
           type: string
           description: "New file text. Validated against the file's format before writing."
+        expected_fingerprint:
+          type: string
+          nullable: true
+          description: >-
+            Fingerprint from the prior read. When supplied and the on-disk
+            content changed since, the write is rejected with 409
+            (`CONFIG_FILE_STALE`) and the file is left untouched (FR-036).
+
+    ParseError:
+      type: object
+      required: [source, path, error]
+      description: >-
+        One agent config file that failed to parse — the facet degrades to
+        this explicit state instead of failing the view (FR-030).
+      properties:
+        source: { type: string, description: "Allowlist key of the file." }
+        path: { type: string, description: "Resolved absolute path." }
+        error: { type: string, description: "Parser error message." }
+
+    McpEntry:
+      type: object
+      required:
+        [
+          name,
+          source,
+          transport,
+          command,
+          args,
+          env_keys,
+          secret_keys,
+          url,
+          header_keys,
+          enabled,
+          is_coffer,
+          matches_resource,
+        ]
+      description: >-
+        One MCP server entry as configured in the agent's own file — derived
+        at read time, never stored. Env/header VALUES never cross HTTP; only
+        key names are exposed.
+      properties:
+        name: { type: string }
+        source:
+          { type: string, description: "Allowlist key of the source file." }
+        transport: { type: string, enum: [stdio, http] }
+        command: { type: string, nullable: true }
+        args:
+          type: array
+          items: { type: string }
+        env_keys:
+          type: array
+          items: { type: string }
+          description: "Env variable KEY NAMES only (sorted); values stay on disk."
+        secret_keys:
+          type: array
+          items: { type: string }
+          description: >-
+            Env/header key names that look secret-like (TOKEN, SECRET,
+            PASSWORD, API_KEY, CREDENTIAL, AUTHORIZATION patterns). These must
+            be mapped to keychain refs on adopt.
+        url: { type: string, nullable: true }
+        header_keys:
+          type: array
+          items: { type: string }
+          description: "HTTP header KEY NAMES only (sorted); values stay on disk."
+        enabled:
+          type: boolean
+          nullable: true
+          description: >-
+            Per-entry enabled flag where the format defines one (Codex);
+            null for claude_code, whose format has no per-entry flag.
+        is_coffer:
+          type: boolean
+          description: "True for Coffer's own gateway entry (protected)."
+        matches_resource:
+          type: string
+          nullable: true
+          description: >-
+            Name of an equivalent registered mcp_server resource, when one
+            exists — the user can remove the duplicate instead of adopting.
+
+    McpEntriesOut:
+      type: object
+      required: [items, parse_errors]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/McpEntry" }
+        parse_errors:
+          type: array
+          items: { $ref: "#/components/schemas/ParseError" }
+
+    McpEntryPatch:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean }
+
+    McpEntryAdopt:
+      type: object
+      additionalProperties: false
+      properties:
+        source:
+          type: string
+          nullable: true
+          description: "Config-file key the entry lives in, when ambiguous."
+        new_name:
+          type: string
+          nullable: true
+          description: "Register the resource under this name instead (e.g. after a 409)."
+        secrets:
+          type: object
+          nullable: true
+          additionalProperties: { type: string }
+          description: >-
+            Maps secret-looking env/header KEY names to keychain refs; the
+            VALUES go into the OS keychain server-side, never into the
+            resource config (FR-029).
+
+    AdoptedResource:
+      type: object
+      required: [kind, name]
+      properties:
+        kind: { type: string, example: mcp_server }
+        name: { type: string }
+
+    Plugin:
+      type: object
+      required: [id, name, marketplace, enabled, cache_present]
+      description: One installed plugin — derived at read time, never stored.
+      properties:
+        id: { type: string, description: "`<name>@<marketplace>`." }
+        name: { type: string }
+        marketplace: { type: string }
+        enabled: { type: boolean }
+        cache_present:
+          type: boolean
+          description: >-
+            Whether the plugin's cache directory is present on disk; false
+            flags a configured-without-cache plugin (no repair is attempted).
+
+    Marketplace:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        source_type: { type: string, nullable: true }
+        source: { type: string, nullable: true }
+
+    PluginsOut:
+      type: object
+      required: [items, marketplaces, parse_errors]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Plugin" }
+        marketplaces:
+          type: array
+          items: { $ref: "#/components/schemas/Marketplace" }
+        parse_errors:
+          type: array
+          items: { $ref: "#/components/schemas/ParseError" }
+
+    PluginPatch:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean }
 
     McpInstallStatus:
       type: object
@@ -500,12 +1024,14 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorOut" }
     Conflict:
-      description: Duplicate name within the agent kind
+      description: >-
+        Duplicate name within the agent kind, or a stale config-file write
+        (`CONFIG_FILE_STALE` — the on-disk content changed since the read)
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorOut" }
     UnprocessableEntity:
-      description: Validation failure (config_dir not writable, privileged path, unknown type, ...)
+      description: Validation failure (config_dir not writable, privileged path, unknown type, malformed content, unsupported toggle/uninstall, protected/ambiguous MCP entry, unresolved adopt secrets, unparseable config file, ...)
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorOut" }

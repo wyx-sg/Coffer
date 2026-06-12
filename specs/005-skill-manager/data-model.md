@@ -81,6 +81,53 @@ String-valued enum.
 | `missing_master`        | binding refers to a master folder that's gone | re-import or re-fetch                 |
 | `orphan_master`         | master folder on disk has no DB record        | adopt or remove                       |
 
+### Unmanaged Skill (`domain/skill/scan.py` + `domain/agent/scan.py`) — workspace amendment
+
+A derived (never stored) view of a skill-shaped entry found in an agent's
+skill locations that Coffer does not manage (FR-022). The filesystem is the
+source of truth; adoption or deletion are the only mutations.
+
+`scan_locations(agent_type, config_dir)` lives in `domain/agent/scan.py`
+(it depends on `AgentType`, which `domain/skill` must not import — Contract
+5c) and returns the ordered directories to scan: `<config_dir>/skills` for
+both types, plus `~/.agents/skills` for `codex`. The infrastructure layer
+(`infrastructure/skill/workspace_scan.py`) walks them into `ScanEntry` values
+(name, path, `is_dir`, `link_target`), and the pure `classify` in
+`domain/skill/scan.py` turns those into `UnmanagedSkill` results:
+
+- entries that are Coffer-managed links (symlink resolving inside
+  `~/.coffer/skills/`) are excluded;
+- dot-entries (e.g. Codex's `.system`) and plain files are silently excluded;
+- symlinks pointing outside the master store are listed with
+  `foreign_link=True` and are never adoptable;
+- plain directories are listed and adoptable.
+
+Surfaced fields (`UnmanagedView` in `application/skill/unmanaged_ops.py`):
+
+| Field          | Type          | Notes                                                                       |
+| -------------- | ------------- | ---------------------------------------------------------------------------- |
+| `name`         | `str`         | folder name                                                                 |
+| `path`         | `str`         | absolute path on disk                                                       |
+| `location`     | `str`         | `"skills"` (`<config_dir>/skills`) or `"agents_dir"` (`~/.agents/skills`)   |
+| `valid`        | `bool`        | passes AgentSkills validation (FR-004)                                      |
+| `reason`       | `str \| None` | validation failure reason when invalid                                      |
+| `foreign_link` | `bool`        | symlink targeting outside the master store — surfaced, never adoptable      |
+
+### Follow Policy (stored on the agent resource's config, spec 004) — workspace amendment
+
+Per-agent skill-delivery policy (FR-025): `follow_all_skills: bool` (default
+`True`, preserving the pre-amendment trust mode) plus `skill_exclusions:
+list[str]`. The fields live on `AgentConfig` (spec 004's schema, updatable via
+`PATCH /agents/{name}` / `coffer agent follow`); this spec owns their delivery
+semantics. While following, the agent's effective skill set is the entire
+master store minus its exclusions; bindings remain the persistent delivery
+record. `application/skill/follow_ops.py` reconciles deliveries when the flag
+flips, when a skill is registered or removed, and when the exclusion list
+changes; disabling the flag preserves the currently delivered skills as
+explicit per-skill bindings. The policy is read through an injected
+`agent_skill_policy_resolver` so skill code never imports agent-kind code
+(Contract 5c).
+
 ## SQLite schema additions
 
 Migration `20260526_0005_skill_tables.py` (revision `0005`, down_revision `0004`) adds the skill binding table. Agents themselves live in the shared `resources` tables, so spec 004 needs no dedicated agent-tables migration.
@@ -118,6 +165,15 @@ Add to `AuditEventType`:
 | `skill_bound`          | Per-agent binding enabled (symlink created)                      |
 | `skill_unbound`        | Per-agent binding disabled (symlink removed)                     |
 | `skill_drift_detected` | `verify` op reported drift (count + categories in details)       |
+
+The workspace amendment adds:
+
+| Value                     | When emitted                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| `skill_adopted`           | An unmanaged skill folder was adopted into the master store (FR-023)          |
+| `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (FR-024)      |
+| `skill_autobind_skipped`  | Auto-bind / follow reconciliation skipped an agent (e.g. target conflict; best-effort) |
+| `skill_relinked`          | An enabled binding's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
 
 Skill **removal** has no dedicated event — deleting a skill goes through
 `ResourceService.delete`, which emits the generic `resource_deleted` event
@@ -173,6 +229,18 @@ Per-agent symlink targets land at:
 | `verify() -> DriftReport`                                      | Walk every enabled binding; classify drift per `DriftKind`.                                                                    |
 | `remove(ref, actor) -> None`                                   | Cascade-cleanup symlinks, delete master, delegate to `ResourceService.delete`.                                                 |
 | `cleanup_bindings_for_agent(agent_ref) -> None`                | Called by spec 004's `agent.on_delete` hook; removes all bindings + symlinks for that agent.                                   |
+
+Workspace-amendment additions (implemented as free functions in
+`unmanaged_ops.py` / `follow_ops.py`, with `binding_ops.py` split out of
+`service.py` for the per-agent enable/disable flow — all conceptually private
+to the skill subpackage, same style as `lifecycle_ops.py`):
+
+| Method                                                          | Purpose                                                                                                                          |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------|
+| `list_unmanaged(agent_name) -> list[UnmanagedView]`             | FR-022 read-only scan over the agent's skill locations (see Unmanaged Skill above).                                              |
+| `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-023: validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
+| `delete_unmanaged(agent_name, skill_name, location, actor) -> None` | FR-024: delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                 |
+| follow reconciliation (`follow_ops.py`)                         | FR-025: reconcile deliveries on flag/exclusion changes and on skill register/remove; disabling preserves delivered skills as explicit bindings. |
 
 ### File viewer (`application/skill/file_ops.py`)
 

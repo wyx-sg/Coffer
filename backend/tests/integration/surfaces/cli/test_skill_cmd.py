@@ -364,3 +364,63 @@ def test_skill_rm_without_force_aborts(skill_cli_daemon):
     assert r.exit_code == 1
     show = _runner.invoke(cli_app, ["skill", "show", "rm-2"])
     assert show.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# skill unmanaged / adopt / rm-unmanaged
+# ---------------------------------------------------------------------------
+
+
+def test_skill_unmanaged_list_json(skill_cli_daemon):
+    """`skill unmanaged --json` lists skill-shaped folders Coffer doesn't manage."""
+    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    _write_skill_folder(skills_dir / "loose-skill", name="loose-skill")
+
+    r = _runner.invoke(cli_app, ["skill", "unmanaged", "cur", "--json"])
+    assert r.exit_code == 0, r.output
+    items = json.loads(_extract_json(r.output))
+    assert len(items) == 1
+    assert items[0]["name"] == "loose-skill"
+    assert items[0]["valid"] is True
+    assert items[0]["location"] == "skills"
+
+    # Table path renders without crashing.
+    r = _runner.invoke(cli_app, ["skill", "unmanaged", "cur"])
+    assert r.exit_code == 0, r.output
+    assert "loose-skill" in r.output
+
+
+def test_skill_unmanaged_agent_not_found(skill_cli_daemon):
+    r = _runner.invoke(cli_app, ["skill", "unmanaged", "ghost"])
+    assert r.exit_code == 4, r.output
+
+
+def test_skill_adopt_unmanaged(skill_cli_daemon):
+    """`skill adopt` moves the folder into the master store and binds it."""
+    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    _write_skill_folder(skills_dir / "adopt-me", name="adopt-me")
+
+    r = _runner.invoke(cli_app, ["skill", "adopt", "cur", "adopt-me", "--location", "skills"])
+    assert r.exit_code == 0, r.output
+    assert "adopted: skill:adopt-me" in r.output
+
+    # The skill is now managed (visible in `skill show`) and no longer unmanaged.
+    show = _runner.invoke(cli_app, ["skill", "show", "adopt-me"])
+    assert show.exit_code == 0, show.output
+    r = _runner.invoke(cli_app, ["skill", "unmanaged", "cur", "--json"])
+    assert json.loads(_extract_json(r.output)) == []
+
+
+def test_skill_rm_unmanaged(skill_cli_daemon):
+    """`skill rm-unmanaged` prompts without --force; --force deletes from disk."""
+    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    folder = _write_skill_folder(skills_dir / "junk-skill", name="junk-skill")
+
+    r = _runner.invoke(cli_app, ["skill", "rm-unmanaged", "cur", "junk-skill"], input="n\n")
+    assert r.exit_code == 1
+    assert folder.exists()
+
+    r = _runner.invoke(cli_app, ["skill", "rm-unmanaged", "cur", "junk-skill", "--force"])
+    assert r.exit_code == 0, r.output
+    assert "deleted" in r.output
+    assert not folder.exists()

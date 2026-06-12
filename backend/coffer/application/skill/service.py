@@ -10,9 +10,10 @@ from __future__ import annotations
 import contextlib
 import logging
 import pathlib
+import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
@@ -21,11 +22,11 @@ from coffer.application.skill.ports import (
     SkillBindingRepoPort,
     SourceFetcherPort,
     SyncEnginePort,
+    WorkspaceScanPort,
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
     SkillValidationError,
-    TargetConflict,
     UpdateNotSupported,
 )
 from coffer.domain.resource import Resource, ResourceRef
@@ -38,6 +39,9 @@ from coffer.domain.skill.validator import (
     validate_skill_folder,
 )
 
+if TYPE_CHECKING:
+    from coffer.application.skill.unmanaged_ops import UnmanagedView
+
 logger = logging.getLogger(__name__)
 
 # Type for the agent skill_dir resolver injected by the composition root.
@@ -45,6 +49,16 @@ logger = logging.getLogger(__name__)
 # directory. Defined as a Callable so SkillService doesn't import agent-kind
 # modules (Contract 5).
 AgentSkillDirResolver = Callable[[Resource], pathlib.Path]
+
+# Resolver for an agent's ordered unmanaged-skill scan locations (FR-022).
+# Built at the composition root from AgentConfig +
+# coffer.domain.agent.scan.scan_locations — same Contract 5 seam as above.
+AgentScanLocationsResolver = Callable[[Resource], list[pathlib.Path]]
+
+# Resolver for an agent's follow policy (FR-025): returns
+# ``(follow_all_skills, skill_exclusions)``. Built at the composition root
+# from AgentConfig — same Contract 5 seam as above.
+AgentSkillPolicyResolver = Callable[[Resource], tuple[bool, list[str]]]
 
 
 @dataclass(frozen=True)
@@ -68,6 +82,10 @@ class SkillService:
         sync_engine: SyncEnginePort,
         agent_skill_dir_resolver: AgentSkillDirResolver,
         size_limit_bytes: int = 50 * 1024 * 1024,
+        workspace_scan: WorkspaceScanPort | None = None,
+        agent_scan_locations_resolver: AgentScanLocationsResolver | None = None,
+        agent_skill_policy_resolver: AgentSkillPolicyResolver | None = None,
+        rmtree: Callable[[pathlib.Path], None] = shutil.rmtree,
     ) -> None:
         self._rs = resource_service
         self._audit = audit
@@ -77,6 +95,15 @@ class SkillService:
         self._sync = sync_engine
         self._resolve_agent_skill_dir = agent_skill_dir_resolver
         self._size_limit = size_limit_bytes
+        # Unmanaged-skill discovery deps (FR-022). Optional only so existing
+        # construction sites keep working until the composition root wires
+        # them; the unmanaged_* methods guard against missing config.
+        self._workspace_scan = workspace_scan
+        self._resolve_agent_scan_locations = agent_scan_locations_resolver
+        # Follow-policy resolver (FR-025). Optional: an unwired context falls
+        # back to (True, []) — the pre-amendment trust-mode auto-bind.
+        self._agent_skill_policy_resolver = agent_skill_policy_resolver
+        self._rmtree = rmtree
 
     # ---------- imports ----------
 
@@ -168,107 +195,45 @@ class SkillService:
         force: bool = False,
         actor: str = "api",
     ) -> BindingState:
-        from coffer.application.skill.lifecycle_ops import infer_link_mode
+        """Deliver a skill to an agent (link + binding row). Delegates to
+        ``binding_ops`` to keep this module under the size limit."""
+        from coffer.application.skill.binding_ops import enable_skill_for_agent
 
-        skill = await self._rs.get(ResourceRef("skill", skill_name))
-        agent = await self._rs.get(ResourceRef("agent", agent_name))
-        target_dir = self._resolve_agent_skill_dir(agent)
-        link_path = target_dir / skill_name
-        master = self._store.paths_for(skill_name).folder
-
-        # The mode recorded on any prior binding — needed so a copy-fallback
-        # target (a real directory by design) isn't misread as drift.
-        prior = await self._bindings.find(skill_id=skill.id, agent_id=agent.id)
-        prior_mode = prior.link_mode if prior else None
-
-        # Resolve target conflicts.
-        if link_path.exists() or link_path.is_symlink():
-            status = self._sync.classify_target(
-                link=link_path, expected_master=master, link_mode=prior_mode
-            )
-            if status.drift is None:
-                # Already linked correctly — idempotent. Record the mode that
-                # actually exists on disk (not a SYMLINK assumption) so a
-                # junction/copy-fallback isn't mislabelled when no prior row
-                # existed.
-                return await self._bindings.upsert(
-                    skill_id=skill.id,
-                    agent_id=agent.id,
-                    enabled=True,
-                    last_linked_at=datetime.now(tz=UTC),
-                    last_link_path=str(link_path),
-                    link_mode=prior_mode or infer_link_mode(link_path),
-                )
-            if not force:
-                raise TargetConflict(str(link_path), status.drift.value)
-            # Backup + remove. Microseconds in the suffix, plus a uniquifying
-            # counter, so colliding force=True enables (same microsecond, a
-            # retry, or a pre-existing backup) never clobber an earlier backup.
-            stamp = int(datetime.now(tz=UTC).timestamp() * 1_000_000)
-            backup = link_path.with_name(f"{link_path.name}.coffer-backup-{stamp}")
-            counter = 0
-            while backup.exists() or backup.is_symlink():
-                counter += 1
-                backup = link_path.with_name(f"{link_path.name}.coffer-backup-{stamp}-{counter}")
-            link_path.rename(backup)
-
-        # Ensure the agent's skill_dir parent is in place.
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        mode = self._sync.make_directory_link(target=master, link=link_path)
-        binding = await self._bindings.upsert(
-            skill_id=skill.id,
-            agent_id=agent.id,
-            enabled=True,
-            last_linked_at=datetime.now(tz=UTC),
-            last_link_path=str(link_path),
-            link_mode=mode,
+        return await enable_skill_for_agent(
+            service=self, skill_name=skill_name, agent_name=agent_name, force=force, actor=actor
         )
-        await self._audit.record(
-            AuditEventType.SKILL_BOUND.value,
-            ref=ResourceRef("skill", skill_name),
-            actor=actor,
-            details={
-                "agent": agent_name,
-                "link": str(link_path),
-                "mode": mode.value,
-            },
-        )
-        return binding
 
     async def disable_for(
         self, *, skill_name: str, agent_name: str, actor: str = "api"
     ) -> BindingState:
-        skill = await self._rs.get(ResourceRef("skill", skill_name))
-        agent = await self._rs.get(ResourceRef("agent", agent_name))
-        existing = await self._bindings.find(skill_id=skill.id, agent_id=agent.id)
-        if existing is None:
-            # Nothing was ever bound — disabling is a no-op. Don't write a
-            # phantom disabled row or a spurious SKILL_UNBOUND audit event.
-            return BindingState(
-                skill_resource_id=skill.id,
-                agent_resource_id=agent.id,
-                enabled=False,
-            )
-        if existing.last_link_path:
-            with contextlib.suppress(OSError):
-                self._sync.remove_directory_link(
-                    pathlib.Path(existing.last_link_path), link_mode=existing.link_mode
-                )
-        binding = await self._bindings.upsert(
-            skill_id=skill.id,
-            agent_id=agent.id,
-            enabled=False,
-            last_link_path=None,
-            link_mode=None,
+        """Remove a skill's link for an agent and disable the binding row."""
+        from coffer.application.skill.binding_ops import disable_skill_for_agent
+
+        return await disable_skill_for_agent(
+            service=self, skill_name=skill_name, agent_name=agent_name, actor=actor
         )
-        await self._audit.record(
-            AuditEventType.SKILL_UNBOUND.value,
-            ref=ResourceRef("skill", skill_name),
-            actor=actor,
-            details={"agent": agent_name},
-        )
-        return binding
+
+    # ---------- follow-master-library (FR-025) ----------
+
+    def _resolve_agent_skill_policy(self, agent: Resource) -> tuple[bool, list[str]]:
+        """(follow_all_skills, skill_exclusions) for an agent resource.
+
+        Unwired contexts default to ``(True, [])`` — the pre-amendment
+        trust-mode auto-bind behavior.
+        """
+        if self._agent_skill_policy_resolver is None:
+            return (True, [])
+        return self._agent_skill_policy_resolver(agent)
+
+    async def apply_follow_for_agent(self, agent_name: str, *, actor: str = "system") -> None:
+        """Reconcile an agent's deliveries with its follow policy.
+
+        Wired as the agent kind's on-skill-policy-changed hook (and invoked
+        after registration). See ``follow_ops`` for semantics.
+        """
+        from coffer.application.skill.follow_ops import apply_follow_for_agent
+
+        await apply_follow_for_agent(service=self, agent_name=agent_name, actor=actor)
 
     async def verify(self) -> DriftReport:
         from coffer.application.skill.verify_ops import verify_drift
@@ -320,6 +285,50 @@ class SkillService:
         from coffer.application.skill.lifecycle_ops import relink_agent_skills
 
         await relink_agent_skills(service=self, agent_name=agent_name, actor=actor)
+
+    # ---------- unmanaged skills (FR-022) ----------
+
+    def _require_unmanaged_deps(self) -> None:
+        if self._workspace_scan is None or self._resolve_agent_scan_locations is None:
+            raise RuntimeError(
+                "SkillService was constructed without workspace_scan / "
+                "agent_scan_locations_resolver — the composition root must "
+                "provide both for unmanaged-skill operations"
+            )
+
+    async def list_unmanaged(self, agent_name: str) -> list[UnmanagedView]:
+        from coffer.application.skill.unmanaged_ops import list_unmanaged
+
+        self._require_unmanaged_deps()
+        return await list_unmanaged(service=self, agent_name=agent_name)
+
+    async def adopt_unmanaged(
+        self, *, agent_name: str, skill_name: str, location: str, actor: str = "api"
+    ) -> Resource:
+        from coffer.application.skill.unmanaged_ops import adopt_unmanaged
+
+        self._require_unmanaged_deps()
+        return await adopt_unmanaged(
+            service=self,
+            agent_name=agent_name,
+            skill_name=skill_name,
+            location=location,
+            actor=actor,
+        )
+
+    async def delete_unmanaged(
+        self, *, agent_name: str, skill_name: str, location: str, actor: str = "api"
+    ) -> None:
+        from coffer.application.skill.unmanaged_ops import delete_unmanaged
+
+        self._require_unmanaged_deps()
+        await delete_unmanaged(
+            service=self,
+            agent_name=agent_name,
+            skill_name=skill_name,
+            location=location,
+            actor=actor,
+        )
 
     # ---------- helpers ----------
 

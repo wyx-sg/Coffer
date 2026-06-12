@@ -13,11 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
-import {
-  getAgentNativeMemory,
-  importAgentNativeMemory,
-  type AgentOut,
-} from "@/lib/api/agents";
+import type { AgentOut } from "@/lib/api/agents";
+import { getAgentNativeMemory, importAgentNativeMemory } from "@/lib/api/nativeMemory";
 import { listFacts, type MemoryStoreOut } from "@/kinds/memory/api";
 import {
   useEstablishProjection,

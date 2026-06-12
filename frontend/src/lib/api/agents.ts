@@ -17,6 +17,8 @@ export interface ConfigFileInfo {
   exists: boolean;
   size: number | null;
   modified_at: string | null;
+  kind?: string;
+  files?: { relpath: string; size: number; modified_at: string }[] | null;
 }
 
 export interface ConfigFileListOut {
@@ -28,6 +30,8 @@ export interface ConfigFileContent {
   format: ConfigFileFormat;
   exists: boolean;
   content: string;
+  fingerprint?: string;
+  memory_block?: boolean;
 }
 
 export interface McpInstallStatus {
@@ -42,6 +46,8 @@ export interface AgentOut {
   description: string | null;
   created_at: string;
   updated_at: string;
+  follow_all_skills?: boolean;
+  skill_exclusions?: string[];
 }
 
 export interface AgentListOut {
@@ -60,6 +66,8 @@ export interface AgentCreate {
 export interface AgentPatch {
   config_dir?: string | null;
   description?: string | null;
+  follow_all_skills?: boolean;
+  skill_exclusions?: string[];
 }
 
 export interface AgentCandidate {
@@ -74,7 +82,66 @@ export interface AgentCandidatesOut {
   candidates: AgentCandidate[];
 }
 
-async function call<T>(
+export interface McpEntryOut {
+  name: string;
+  source: string;
+  transport: "stdio" | "http";
+  command: string | null;
+  args: string[];
+  env_keys: string[];
+  secret_keys: string[];
+  url: string | null;
+  header_keys: string[];
+  enabled: boolean | null;
+  is_coffer: boolean;
+  matches_resource: string | null;
+}
+
+export interface McpEntriesResponse {
+  items: McpEntryOut[];
+  parse_errors: { source: string; path: string; error: string }[];
+}
+
+export interface AdoptMcpEntryBody {
+  source?: string;
+  new_name?: string;
+  secrets?: Record<string, string>;
+}
+
+export interface PluginOut {
+  id: string;
+  name: string;
+  marketplace: string;
+  enabled: boolean;
+  cache_present: boolean;
+}
+
+export interface MarketplaceOut {
+  name: string;
+  source_type: string | null;
+  source: string | null;
+}
+
+export interface PluginsResponse {
+  items: PluginOut[];
+  marketplaces: MarketplaceOut[];
+  parse_errors: unknown[];
+}
+
+export interface UnmanagedSkillOut {
+  name: string;
+  path: string;
+  location: string;
+  valid: boolean;
+  reason: string | null;
+  foreign_link: boolean;
+}
+
+export interface UnmanagedSkillsResponse {
+  items: UnmanagedSkillOut[];
+}
+
+export async function call<T>(
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
@@ -97,6 +164,7 @@ async function call<T>(
     throw new ApiError(
       err?.code ?? "INTERNAL_ERROR",
       err?.message ?? `request failed: ${r.status}`,
+      err?.details,
     );
   }
   return data as T;
@@ -105,7 +173,7 @@ async function call<T>(
 // Agent names and config-file keys are interpolated into URL paths; encode them
 // so a name/key with URL-significant characters can't malform or misroute the
 // request (defence in depth — the daemon also constrains names server-side).
-const enc = encodeURIComponent;
+export const enc = encodeURIComponent;
 
 export const agentsApi = {
   list: () => call<AgentListOut>("GET", "/agents"),
@@ -122,48 +190,83 @@ export const agentsApi = {
     call<ConfigFileContent>("GET", `/agents/${enc(name)}/config-files/${enc(key)}`),
   // Atomic write (a `.bak` of the prior content is kept). Returns the refreshed
   // metadata view. Malformed JSON/TOML is rejected server-side (422) and the
-  // on-disk file is left unchanged.
-  writeConfigFile: (name: string, key: string, content: string) =>
-    call<ConfigFileInfo>("PUT", `/agents/${enc(name)}/config-files/${enc(key)}`, { content }),
+  // on-disk file is left unchanged. When `expected_fingerprint` is supplied,
+  // the server rejects the write with 409 CONFIG_FILE_STALE if the file
+  // changed on disk since that fingerprint was read (stale-write protection).
+  writeConfigFile: (
+    name: string,
+    key: string,
+    body: { content: string; expected_fingerprint?: string },
+  ) => call<ConfigFileInfo>("PUT", `/agents/${enc(name)}/config-files/${enc(key)}`, body),
 
   mcpStatus: (name: string) => call<McpInstallStatus>("GET", `/agents/${enc(name)}/mcp-install`),
   mcpInstall: (name: string) => call<McpInstallStatus>("POST", `/agents/${enc(name)}/mcp-install`),
   mcpUninstall: (name: string) =>
     call<McpInstallStatus>("DELETE", `/agents/${enc(name)}/mcp-install`),
+
+  // MCP entries (specs 004/005 workspace amendment)
+  mcpEntries: (name: string) => call<McpEntriesResponse>("GET", `/agents/${enc(name)}/mcp-entries`),
+  toggleMcpEntry: (name: string, entry: string, enabled: boolean) =>
+    call<void>("PATCH", `/agents/${enc(name)}/mcp-entries/${enc(entry)}`, { enabled }),
+  removeMcpEntry: (name: string, entry: string, source?: string) => {
+    const qs = source ? `?source=${encodeURIComponent(source)}` : "";
+    return call<void>("DELETE", `/agents/${enc(name)}/mcp-entries/${enc(entry)}${qs}`);
+  },
+  adoptMcpEntry: (name: string, entry: string, body: AdoptMcpEntryBody) =>
+    call<{ kind: string; name: string }>(
+      "POST",
+      `/agents/${enc(name)}/mcp-entries/${enc(entry)}/adopt`,
+      body,
+    ),
+
+  // Plugins (specs 004/005 workspace amendment)
+  plugins: (name: string) => call<PluginsResponse>("GET", `/agents/${enc(name)}/plugins`),
+  togglePlugin: (name: string, id: string, enabled: boolean) =>
+    call<void>("PATCH", `/agents/${enc(name)}/plugins/${encodeURIComponent(id)}`, { enabled }),
+  uninstallPlugin: (name: string, id: string) =>
+    call<void>("DELETE", `/agents/${enc(name)}/plugins/${encodeURIComponent(id)}`),
+
+  // Config-file child (per-file inside a directory-backed config key)
+  readConfigChild: (name: string, key: string, relpath: string) => {
+    const encodedRelpath = relpath.split("/").map(encodeURIComponent).join("/");
+    return call<ConfigFileContent>(
+      "GET",
+      `/agents/${enc(name)}/config-files/${enc(key)}/files/${encodedRelpath}`,
+    );
+  },
+  writeConfigChild: (
+    name: string,
+    key: string,
+    relpath: string,
+    body: { content: string; expected_fingerprint?: string },
+  ) => {
+    const encodedRelpath = relpath.split("/").map(encodeURIComponent).join("/");
+    return call<ConfigFileInfo>(
+      "PUT",
+      `/agents/${enc(name)}/config-files/${enc(key)}/files/${encodedRelpath}`,
+      body,
+    );
+  },
+  deleteConfigChild: (name: string, key: string, relpath: string) => {
+    const encodedRelpath = relpath.split("/").map(encodeURIComponent).join("/");
+    return call<void>(
+      "DELETE",
+      `/agents/${enc(name)}/config-files/${enc(key)}/files/${encodedRelpath}`,
+    );
+  },
+
+  // Unmanaged skills (specs 004/005 workspace amendment)
+  unmanagedSkills: (name: string) =>
+    call<UnmanagedSkillsResponse>("GET", `/agents/${enc(name)}/unmanaged-skills`),
+  adoptUnmanagedSkill: (name: string, skill: string, location: string) =>
+    call<{ name: string }>(
+      "POST",
+      `/agents/${enc(name)}/unmanaged-skills/${enc(skill)}/adopt`,
+      { location },
+    ),
+  deleteUnmanagedSkill: (name: string, skill: string, location: string) =>
+    call<void>(
+      "DELETE",
+      `/agents/${enc(name)}/unmanaged-skills/${enc(skill)}?location=${encodeURIComponent(location)}`,
+    ),
 };
-
-export interface NativeMemoryProject {
-  slug: string;
-  memory_dir: string;
-  fact_count: number;
-  managed: boolean;
-}
-
-export interface NativeMemoryOut {
-  projects: NativeMemoryProject[];
-  unmanaged_fact_count: number;
-}
-
-export async function getAgentNativeMemory(name: string): Promise<NativeMemoryOut> {
-  return call<NativeMemoryOut>("GET", `/agents/${enc(name)}/native-memory`);
-}
-
-export interface NativeMemoryImportItem {
-  slug: string;
-  fact_count: number;
-  status: string; // imported | skipped_undecodable | skipped_managed | error
-  project_root: string | null;
-  store_name: string | null;
-  backup_dir: string | null;
-  detail: string | null;
-}
-
-export interface NativeMemoryImportOut {
-  items: NativeMemoryImportItem[];
-  imported: number;
-  skipped: number;
-}
-
-export async function importAgentNativeMemory(name: string): Promise<NativeMemoryImportOut> {
-  return call<NativeMemoryImportOut>("POST", `/agents/${enc(name)}/native-memory/import`);
-}

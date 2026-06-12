@@ -73,6 +73,46 @@ frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `S
 | `missing_master`        | binding 指向的 master 文件夹已不在  | 重新导入或拉取               |
 | `orphan_master`         | 磁盘上有 master 但 DB 无记录        | 收编或移除                   |
 
+### 未托管 skill (`domain/skill/scan.py` + `domain/agent/scan.py`) —— workspace 修订
+
+在 agent 的 skill 位置中发现的、Coffer 不管理的 skill 形态条目的派生视图
+（从不存储，FR-022）。文件系统是事实来源；adopt 与删除是仅有的两种变更。
+
+`scan_locations(agent_type, config_dir)` 位于 `domain/agent/scan.py`
+（它依赖 `AgentType`，而 `domain/skill` 不得 import 它——Contract 5c），
+返回按序扫描的目录：两个类型的 `<config_dir>/skills`，外加 `codex` 的
+`~/.agents/skills`。infrastructure 层（`infrastructure/skill/workspace_scan.py`）
+把它们遍历成 `ScanEntry` 值（name、path、`is_dir`、`link_target`），再由
+`domain/skill/scan.py` 中的纯函数 `classify` 转成 `UnmanagedSkill` 结果：
+
+- Coffer 托管的链接（解析到 `~/.coffer/skills/` 内的 symlink）被排除；
+- 点条目（如 Codex 的 `.system`）与普通文件被静默排除；
+- 指向主库之外的 symlink 以 `foreign_link=True` 列出，且永不可 adopt；
+- 普通目录被列出且可 adopt。
+
+对外暴露的字段（`application/skill/unmanaged_ops.py` 中的 `UnmanagedView`）：
+
+| 字段           | 类型          | 说明                                                                  |
+| -------------- | ------------- | ----------------------------------------------------------------------- |
+| `name`         | `str`         | 文件夹名                                                              |
+| `path`         | `str`         | 磁盘绝对路径                                                          |
+| `location`     | `str`         | `"skills"`（`<config_dir>/skills`）或 `"agents_dir"`（`~/.agents/skills`） |
+| `valid`        | `bool`        | 是否通过 AgentSkills 校验（FR-004）                                   |
+| `reason`       | `str \| None` | 不合法时的失败原因                                                    |
+| `foreign_link` | `bool`        | 指向主库之外的 symlink——呈现给用户但永不可 adopt                      |
+
+### Follow 策略（存于 agent 资源的 config，spec 004）—— workspace 修订
+
+逐 agent 的 skill 投递策略（FR-025）：`follow_all_skills: bool`（默认
+`True`，保持修订前的 trust mode）加 `skill_exclusions: list[str]`。字段位于
+`AgentConfig`（spec 004 的 schema，经 `PATCH /agents/{name}` / `coffer agent
+follow` 更新）；本 spec 负责其投递语义。following 期间，agent 的有效 skill
+集合是整个主库减去其排除项；binding 仍是持久的投递记录。
+`application/skill/follow_ops.py` 在开关翻转、skill 注册或移除、排除列表
+变化时调和投递；关闭开关会把当前已投递的 skill 保留为显式的逐 skill
+binding。策略通过注入的 `agent_skill_policy_resolver` 读取，skill 代码绝不
+import agent-kind 代码（Contract 5c）。
+
 ## SQLite schema 增量
 
 迁移 `20260526_0005_skill_tables.py`（revision `0005`，down_revision `0004`）新增 skill 绑定表。agent 本身存在共享的 `resources` 表里，因此 spec 004 不需要专门的 agent-tables 迁移。
@@ -110,6 +150,15 @@ frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `S
 | `skill_bound`          | 按 agent 启用 binding（创建 symlink）       |
 | `skill_unbound`        | 按 agent 禁用 binding（移除 symlink）       |
 | `skill_drift_detected` | `verify` 报告 drift（details 含计数与类别） |
+
+workspace 修订新增：
+
+| 值                        | 触发时机                                                                  |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `skill_adopted`           | 一个未托管 skill 文件夹被 adopt 进主库（FR-023）                          |
+| `skill_unmanaged_deleted` | 一个未托管 skill 文件夹被从 agent workspace 中删除（FR-024）              |
+| `skill_autobind_skipped`  | 自动绑定 / follow 调和跳过某个 agent（如目标冲突；尽力而为）              |
+| `skill_relinked`          | 某个已启用 binding 的托管链接在新投递路径上被重建（如 `config_dir` 变更后） |
 
 skill **删除** 没有专门的事件——删除一个 skill 走 `ResourceService.delete`，
 它发出通用的 `resource_deleted` 事件（`details` 含删除前快照），与任何其他
@@ -160,6 +209,17 @@ resource kind 一样。
 | `verify() -> DriftReport`                                      | 遍历每条已启用 binding，按 `DriftKind` 分类 drift。                                                      |
 | `remove(ref, actor) -> None`                                   | 级联清理 symlink、删除 master，委派 `ResourceService.delete`。                                           |
 | `cleanup_bindings_for_agent(agent_ref) -> None`                | 由 spec 004 的 `agent.on_delete` 钩子调用；移除该 agent 的所有 binding 与 symlink。                      |
+
+workspace 修订的新增能力（以自由函数实现于 `unmanaged_ops.py` /
+`follow_ops.py`；逐 agent 启用/禁用流程拆分到 `binding_ops.py` 以满足文件
+大小上限——风格同 `lifecycle_ops.py`，概念上都是 skill 子包私有）：
+
+| 方法                                                            | 用途                                                                                     |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------|
+| `list_unmanaged(agent_name) -> list[UnmanagedView]`             | FR-022 对 agent skill 位置的只读扫描（见上文「未托管 skill」）。                         |
+| `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-023：校验 → 移动到 `~/.coffer/skills/<name>/` → 注册 → 把托管链接投递到 `<config_dir>/skills/<name>` → 为该 agent 记录已启用的 binding；audit `skill_adopted`。 |
+| `delete_unmanaged(agent_name, skill_name, location, actor) -> None` | FR-024：仅从磁盘删除该文件夹；audit `skill_unmanaged_deleted`。                      |
+| follow 调和（`follow_ops.py`）                                  | FR-025：在开关/排除项/skill 集合变化时调和投递；关闭开关时把已投递的 skill 保留为显式 binding。 |
 
 ### 文件查看器（`application/skill/file_ops.py`）
 

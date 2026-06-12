@@ -158,9 +158,22 @@ agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files
 - **`~/.claude.json` 重序列化** —— 安装 MCP 条目会用 stdlib `json`（`indent=2`）重序列化整个 JSON 文件，产生较大 diff。可接受且可经 `.bak` 恢复；已记录。
 - **TOML 格式** —— Codex `config.toml` 的编辑用 `tomlkit` 以保留用户的注释/排版，而非整体重序列化。
 
+## Workspace 修订（在 `feature/agent-workspace` 上交付）
+
+spec.md 的 workspace 修订（FR-025..FR-037）把 agent 详情页变成了完整的
+workspace。各层新增模块：
+
+- **Domain**：`agent/mcp_entries.py`（MCP 条目的解析/移除/开关 + 密钥键检测 + adopt 传输映射）、`agent/plugin_state.py`（Codex/Claude plugin + marketplace 解析，只写文档化的面）、`agent/scan.py`（按类型的 skill 扫描位置，供 spec 005 的未托管扫描使用）以及 `config_files.py` v2（`ConfigFileKind` 目录条目、`instructions` 更名、`subagents`/`hooks` 条目、`validate_child_relpath`）。
+- **Application**：`agent/mcp_entry_service.py`（list/toggle/remove/adopt，密钥经 keychain 路由、注册优先并可回滚）、`agent/plugin_service.py`（list/toggle/Codex 卸载 + 缓存处理）、`config_file_service.py` v2（目录子文件读/写/删、内容指纹与 `ConfigFileStale` → 409、memory-block 提示）。
+- **Surfaces**：`http/agent_workspace_routes.py`（`/agents/{name}/mcp-entries*`、`/agents/{name}/plugins*`）、`agent_config_routes.py` v2（`/config-files/{key}/files/{relpath}` GET/PUT/DELETE + 指纹字段）、`agent_routes.py`（AgentPatch/AgentOut 的 follow 策略字段）；CLI `cli/agent_workspace_cmd.py` 挂接到 `agent_cmd.py` 的既有 typer 上（`coffer agent mcp entries|remove-entry|toggle-entry|adopt`、`coffer agent plugin list|enable|disable|uninstall`、`coffer agent config files|write|rm`、`coffer agent follow`）。
+- **前端**：agent 详情标签页 `AgentMcpServersTab`（gateway + 直连条目、adopt 对话框）、`AgentPluginsTab`，以及 `AgentConfigFilesEditor` v2（目录子文件、过期写入防护、memory-block 提示）。
+
+新增 audit 事件：`agent_config_file_deleted`、`agent_mcp_entry_removed`、
+`agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled`。
+无存储变更——每个 workspace 面都在读取时从 agent 自己的文件派生。
+
 ## 延期至后续 spec 的开放项
 
 - agent **类型**扩展超出 v1 的两种（Claude Desktop 聊天应用、Cursor、Gemini CLI、GitHub Copilot）—— 每个增加一个 enum 值、扫描器与配置文件 allowlist。
-- **结构化 MCP-server 管理**（`~/.claude.json` 内，超出一键 Coffer 条目之外）—— 专门的后续 surface，而非原始文件编辑。
 - agent **健康检查**（注册路径上的安装是否仍存在）—— 单独 spec。
 - agent **作为 MCP peer**（把另一个 agent 通过 Coffer MCP 网关暴露为可调用工具）—— 探索性。

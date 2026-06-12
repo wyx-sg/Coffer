@@ -32,9 +32,9 @@ from coffer.infrastructure.persistence.engine import create_async_engine_with_pr
 
 cfg = context.config
 if cfg.config_file_name is not None:
-    # disable_existing_loggers=False: migrations run inside the daemon's
-    # lifespan — the default True silently kills every already-created
-    # application logger (e.g. chat turn logging) for the process lifetime.
+    # disable_existing_loggers=False: fileConfig's default (True) silently
+    # disables every already-imported application logger when the daemon runs
+    # migrations at startup, swallowing e.g. the chat turn-error WARNING.
     fileConfig(cfg.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata

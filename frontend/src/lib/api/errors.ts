@@ -7,6 +7,7 @@ export class ApiError extends Error {
   constructor(
     public readonly code: string,
     public readonly envelopeMessage: string,
+    public readonly details?: unknown,
   ) {
     super(envelopeMessage);
     this.name = "ApiError";

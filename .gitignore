@@ -60,7 +60,7 @@ dmypy.json
 .pyre/
 
 # --- Node / Frontend ---
-node_modules/
+node_modules
 .npm/
 .yarn/
 yarn-error.log

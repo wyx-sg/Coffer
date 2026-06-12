@@ -157,9 +157,23 @@ save control and an in-editor find / replace convenience.
 - **`~/.claude.json` reserialization** — installing the MCP entry reserializes the whole JSON file (stdlib `json`, `indent=2`), producing a large diff. Acceptable and recoverable via `.bak`; documented.
 - **TOML formatting** — Codex `config.toml` edits use `tomlkit` to preserve the user's comments/layout rather than reserializing.
 
+## Workspace amendment (delivered on `feature/agent-workspace`)
+
+The spec.md workspace amendment (FR-025..FR-037) turned the agent detail page
+into a full workspace. New modules per layer:
+
+- **Domain**: `agent/mcp_entries.py` (parse/remove/toggle MCP entries + secret-key detection + adopt transport mapping), `agent/plugin_state.py` (Codex/Claude plugin + marketplace parsing, documented-surface-only writes), `agent/scan.py` (per-type skill scan locations for spec 005's unmanaged scan), and `config_files.py` v2 (`ConfigFileKind` directory entries, `instructions` rename, `subagents`/`hooks` entries, `validate_child_relpath`).
+- **Application**: `agent/mcp_entry_service.py` (list/toggle/remove/adopt with keychain-routed secrets and registration-first rollback), `agent/plugin_service.py` (list/toggle/Codex-uninstall + cache handling), `config_file_service.py` v2 (directory children read/write/delete, content fingerprints with `ConfigFileStale` → 409, memory-block notice).
+- **Surfaces**: `http/agent_workspace_routes.py` (`/agents/{name}/mcp-entries*`, `/agents/{name}/plugins*`), `agent_config_routes.py` v2 (`/config-files/{key}/files/{relpath}` GET/PUT/DELETE + fingerprint fields), `agent_routes.py` (AgentPatch/AgentOut follow-policy fields); CLI `cli/agent_workspace_cmd.py` attached onto `agent_cmd.py`'s typers (`coffer agent mcp entries|remove-entry|toggle-entry|adopt`, `coffer agent plugin list|enable|disable|uninstall`, `coffer agent config files|write|rm`, `coffer agent follow`).
+- **Frontend**: agent detail tabs `AgentMcpServersTab` (gateway + direct entries, adopt dialog), `AgentPluginsTab`, and `AgentConfigFilesEditor` v2 (directory children, stale-write guard, memory-block notice).
+
+New audit events: `agent_config_file_deleted`, `agent_mcp_entry_removed`,
+`agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled`.
+No storage changes — every workspace facet is derived from the agent's own
+files at read time.
+
 ## Open items deferred to future specs
 
 - Agent **type** extension beyond v1's two (Claude Desktop chat app, Cursor, Gemini CLI, GitHub Copilot) — each adds an enum value, scanner, and config-file allowlist.
-- **Structured MCP-server management** inside `~/.claude.json` (beyond the one-click Coffer entry) — a dedicated future surface, not raw-file editing.
 - Agent **health check** (is the install still present at the registered path) — separate spec.
 - Agent **as MCP peer** (expose another agent as a callable tool through Coffer's MCP gateway) — exploratory.

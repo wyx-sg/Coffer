@@ -18,10 +18,14 @@ from contextlib import AbstractAsyncContextManager
 from typing import Any, Protocol
 
 from coffer.domain.skill.binding import BindingState, LinkMode
+from coffer.domain.skill.scan import ScanEntry
 
 
 class MasterStorePort(Protocol):
     """Per-OS canonical skill folder store under ``~/.coffer/skills/``."""
+
+    @property
+    def root(self) -> pathlib.Path: ...
 
     def ensure_root(self) -> None: ...
 
@@ -81,6 +85,17 @@ class SourceFetcherPort(Protocol):
         git_ref: str,
         git_subpath: str = "",
     ) -> AbstractAsyncContextManager[pathlib.Path]: ...
+
+
+class WorkspaceScanPort(Protocol):
+    """Directory scanning for unmanaged-skill discovery (FR-022).
+
+    Builds ``ScanEntry`` values from one agent skill location; the pure
+    classification (managed vs. unmanaged vs. foreign) happens in
+    ``coffer.domain.skill.scan.classify``.
+    """
+
+    def scan_dir(self, root: pathlib.Path) -> list[ScanEntry]: ...
 
 
 class SyncEnginePort(Protocol):
