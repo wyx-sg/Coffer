@@ -11,30 +11,25 @@ from coffer.domain.sync.manifest import SCHEMA_VERSION, Manifest
 from coffer.domain.sync.models import SyncConfig, SyncState, SyncStatus
 
 
-def test_manifest_create_uses_current_schema_version() -> None:
-    m = Manifest.create(machine_id="m1", coffer_version="0.4.0", kinds=["mcp_server", "channel"])
-    assert m.schema_version == SCHEMA_VERSION
+def test_manifest_defaults_to_current_schema_version() -> None:
+    assert Manifest().schema_version == SCHEMA_VERSION
 
 
-def test_manifest_to_dict_sorts_kinds_deterministically() -> None:
-    a = Manifest.create(machine_id="m", coffer_version="v", kinds=["channel", "agent"])
-    b = Manifest.create(machine_id="m", coffer_version="v", kinds=["agent", "channel"])
-    assert a.to_dict() == b.to_dict()
-    assert a.to_dict()["kinds"] == ["agent", "channel"]
+def test_manifest_is_machine_independent() -> None:
+    # Byte-identical on every machine so it never becomes a merge conflict.
+    assert Manifest().to_dict() == {"schema_version": SCHEMA_VERSION}
 
 
 def test_manifest_round_trip() -> None:
-    m = Manifest.create(machine_id="m1", coffer_version="0.4.0", kinds=["skill"])
+    m = Manifest(schema_version=SCHEMA_VERSION)
     assert Manifest.from_dict(m.to_dict()) == m
 
 
 def test_manifest_from_dict_rejects_malformed() -> None:
     with pytest.raises(SyncSerializationError):
-        Manifest.from_dict({"schema_version": 1, "machine_id": "m"})
+        Manifest.from_dict({})
     with pytest.raises(SyncSerializationError):
-        Manifest.from_dict(
-            {"schema_version": 1, "machine_id": "m", "coffer_version": "v", "kinds": "skill"}
-        )
+        Manifest.from_dict({"schema_version": "not-an-int"})
 
 
 def test_sync_config_is_operational() -> None:

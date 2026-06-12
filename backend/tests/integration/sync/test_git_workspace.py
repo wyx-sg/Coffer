@@ -87,7 +87,7 @@ def test_conflicting_edits_detected_then_resolved(tmp_path) -> None:  # type: ig
 
 def test_workspace_manifest_and_docs_round_trip(tmp_path) -> None:  # type: ignore[no-untyped-def]
     ws = Workspace(tmp_path / "ws")
-    manifest = Manifest.create(machine_id="m1", coffer_version="0.4.0", kinds=["mcp_server"])
+    manifest = Manifest()
     ws.write_manifest(manifest)
     assert ws.read_manifest() == manifest
 

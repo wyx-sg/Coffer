@@ -82,7 +82,12 @@ class GitRepo:
         rev = self._run("rev-parse", "--verify", "--quiet", "FETCH_HEAD", check=False)
         if rev.returncode != 0 or not rev.stdout.strip():
             return PullOutcome()
-        merge = self._run("merge", "--no-edit", "FETCH_HEAD", check=False)
+        # A fresh `git init` workspace shares no history with an existing remote;
+        # allow that first merge to combine the two roots (same-name files still
+        # conflict normally).
+        merge = self._run(
+            "merge", "--no-edit", "--allow-unrelated-histories", "FETCH_HEAD", check=False
+        )
         if merge.returncode != 0:
             conflicts = self.conflicted_paths()
             if conflicts:

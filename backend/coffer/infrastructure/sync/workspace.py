@@ -21,11 +21,9 @@ import yaml
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.manifest import Manifest
 from coffer.domain.sync.serialization import ResourceDoc, parse_resource_doc
-from coffer.infrastructure.knowledge.paths import knowledge_root, memory_root
+from coffer.infrastructure.sync.paths import mirrored_trees as _default_mirrored_trees
 
 _MANIFEST = "manifest.json"
-_KNOWLEDGE = "knowledge"
-_MEMORY = "memory"
 _RESOURCES = "resources"
 _CREDENTIALS = "credentials"
 
@@ -43,23 +41,29 @@ def _replace_tree(src: pathlib.Path, dst: pathlib.Path) -> None:
 class Workspace:
     """Implements ``application.sync.ports.WorkspacePort`` structurally."""
 
-    def __init__(self, root: pathlib.Path) -> None:
+    def __init__(
+        self,
+        root: pathlib.Path,
+        trees: Sequence[tuple[str, pathlib.Path]] | None = None,
+    ) -> None:
         self._root = root
+        # The file-backed trees to mirror. Injectable so each machine (and each
+        # test) can point at its own live roots instead of the process-global
+        # ``$COFFER_*_ROOT`` defaults.
+        self._trees = list(trees) if trees is not None else _default_mirrored_trees()
 
     # --- live trees <-> workspace -----------------------------------------
 
     def mirror_trees_out(self) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
-        _replace_tree(knowledge_root(), self._root / _KNOWLEDGE)
-        _replace_tree(memory_root(), self._root / _MEMORY)
+        for subdir, live_root in self._trees:
+            _replace_tree(live_root, self._root / subdir)
 
     def mirror_trees_in(self) -> None:
-        ws_knowledge = self._root / _KNOWLEDGE
-        ws_memory = self._root / _MEMORY
-        if ws_knowledge.exists():
-            _replace_tree(ws_knowledge, knowledge_root())
-        if ws_memory.exists():
-            _replace_tree(ws_memory, memory_root())
+        for subdir, live_root in self._trees:
+            ws_tree = self._root / subdir
+            if ws_tree.exists():
+                _replace_tree(ws_tree, live_root)
 
     # --- manifest ----------------------------------------------------------
 
