@@ -99,3 +99,58 @@ async def test_kinds_without_extractor_are_ignored() -> None:
     legacy, store, audit = _FakeStore(), _FakeStore(), _FakeAudit()
     repo = _FakeRepo([_Resource("agent", {"anything": True})])
     assert await migrate_legacy_keychain(_mcp_kinds(), repo, legacy, store, audit) == 0
+
+
+async def test_extra_refs_are_migrated_and_audited() -> None:
+    legacy, store, audit = _FakeStore(), _FakeStore(), _FakeAudit()
+    legacy.store["chat-key"] = "abc"
+    legacy.store["embed-key"] = "xyz"
+    repo = _FakeRepo([])  # no resources — refs come only from extra_refs
+    moved = await migrate_legacy_keychain(
+        _mcp_kinds(), repo, legacy, store, audit, extra_refs=["chat-key", "embed-key"]
+    )
+    assert moved == 2
+    assert store.store == {"chat-key": "abc", "embed-key": "xyz"}
+    assert legacy.store == {}
+    assert audit.events == [
+        ("credential_migrated", {"ref": "chat-key"}),
+        ("credential_migrated", {"ref": "embed-key"}),
+    ]
+
+
+async def test_extra_refs_already_in_store_are_skipped() -> None:
+    legacy, store, audit = _FakeStore(), _FakeStore(), _FakeAudit()
+    legacy.store["chat-key"] = "stale"
+    store.store["chat-key"] = "current"
+    repo = _FakeRepo([])
+    moved = await migrate_legacy_keychain(
+        _mcp_kinds(), repo, legacy, store, audit, extra_refs=["chat-key"]
+    )
+    assert moved == 0
+    assert store.store["chat-key"] == "current"
+    assert legacy.store["chat-key"] == "stale"  # untouched — never overwrite
+    assert audit.events == []
+
+
+async def test_extra_refs_falsy_and_duplicates_handled() -> None:
+    legacy, store, audit = _FakeStore(), _FakeStore(), _FakeAudit()
+    legacy.store["gh-token"] = "s3cret"
+    legacy.store["chat-key"] = "abc"
+    # The resource and extra_refs both cite "gh-token"; extra_refs also
+    # repeats "chat-key" and includes falsy ("", None) entries.
+    repo = _FakeRepo(
+        [_Resource("mcp_server", {"transport": {"credential_refs": {"GH": "gh-token"}}})]
+    )
+    moved = await migrate_legacy_keychain(
+        _mcp_kinds(),
+        repo,
+        legacy,
+        store,
+        audit,
+        extra_refs=["gh-token", "chat-key", "chat-key", "", None],  # type: ignore[list-item]
+    )
+    # "gh-token" migrated once (resource), "chat-key" migrated once (deduped),
+    # falsy entries ignored.
+    assert moved == 2
+    assert store.store == {"gh-token": "s3cret", "chat-key": "abc"}
+    assert [e[1]["ref"] for e in audit.events] == ["gh-token", "chat-key"]

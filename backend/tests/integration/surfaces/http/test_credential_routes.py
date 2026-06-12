@@ -26,6 +26,9 @@ class _FakeCredentialStore:
     def get(self, ref: str) -> str | None:
         return self.store.get(ref)
 
+    def exists(self, ref: str) -> bool:
+        return ref in self.store
+
     def delete(self, ref: str) -> None:
         self.store.pop(ref, None)
 

@@ -87,10 +87,11 @@ async def secret_exists(
 ) -> CredentialExistsOut:
     """Report whether a secret is stored under `ref`.
 
-    Presence only — the value never crosses the API for this check, so no
-    audit event is recorded (nothing sensitive is read out).
+    Presence only — the value is never decrypted or read out for this check,
+    so no audit event is recorded and a corrupt (undecryptable) row can't
+    500 the probe; it still reports present.
     """
-    return CredentialExistsOut(present=store.get(ref) is not None)
+    return CredentialExistsOut(present=store.exists(ref))
 
 
 @router.delete(

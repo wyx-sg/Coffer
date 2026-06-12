@@ -3,7 +3,7 @@
 Extracted from `app.py` so that file stays under the project's 400-LOC ceiling.
 ``build_substrate`` constructs the shared knowledge substrate ONCE per process
 (unified ``DocumentRepo``, the ``SqliteKnowledgeIndex`` factory, the converter
-registry, the cached ``make_embedder`` factory bound to the keychain, ripgrep,
+registry, the cached ``make_embedder`` factory bound to the encrypted credential store, ripgrep,
 the retrieval facade + reindexer); each `wire_<kind>` function takes it,
 constructs the kind's service, registers the kind into ``app.state.kinds`` and
 its built-in tools into the shared registry.

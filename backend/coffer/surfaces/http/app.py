@@ -33,13 +33,17 @@ from fastapi import FastAPI
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
-from coffer.application.credential_migration import migrate_legacy_keychain
+from coffer.application.credential_migration import (
+    gather_extra_credential_refs,
+    migrate_legacy_keychain,
+)
 from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
+from coffer.infrastructure.chat.model_persistence import ChatModelRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
@@ -254,12 +258,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # One-time move of legacy OS-keychain secrets into the encrypted store
     # (no-op once migrated). Best-effort: failures must not block startup.
     try:
+        # Non-resource owners (chat models + global embedding config) cite
+        # refs too; gather inside this try so it can't block startup.
+        extra_refs = await gather_extra_credential_refs(ChatModelRepo(sm), embedding_config_svc)
         moved = await migrate_legacy_keychain(
             app.state.kinds,
             SqlAlchemyResourceRepo(sm),
             KeyringAdapter(),
             credential_store,
             audit,
+            extra_refs=extra_refs,
         )
         if moved:
             _logger.info("credential_migration.completed", extra={"moved": moved})

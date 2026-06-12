@@ -57,6 +57,17 @@ class EncryptedCredentialStore:
                 (ref, ciphertext, now, now),
             )
 
+    def exists(self, ref: str) -> bool:
+        """Presence probe that never decrypts (so a corrupt row can't raise).
+
+        Reads only existence of the row, not the ciphertext, so a credential
+        whose ciphertext no longer decrypts with the current master key still
+        reports present.
+        """
+        with closing(self._connect()) as conn:
+            row = conn.execute("SELECT 1 FROM credentials WHERE ref = ?", (ref,)).fetchone()
+        return row is not None
+
     def delete(self, ref: str) -> None:
         with closing(self._connect()) as conn, conn:
             conn.execute("DELETE FROM credentials WHERE ref = ?", (ref,))

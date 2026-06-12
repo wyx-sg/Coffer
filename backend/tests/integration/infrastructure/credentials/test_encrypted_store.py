@@ -75,3 +75,22 @@ def test_wrong_key_raises_credential_unreadable(db_path: pathlib.Path) -> None:
     other = EncryptedCredentialStore(db_path=db_path, key=Fernet.generate_key())
     with pytest.raises(CredentialUnreadable):
         other.get("ref")
+
+
+def test_exists_true_for_present(store: EncryptedCredentialStore) -> None:
+    store.set("ref", "v")
+    assert store.exists("ref") is True
+
+
+def test_exists_false_for_missing(store: EncryptedCredentialStore) -> None:
+    assert store.exists("nope") is False
+
+
+def test_exists_does_not_decrypt_corrupt_row(db_path: pathlib.Path) -> None:
+    # A row written under one key is undecryptable under another: exists()
+    # must report present (no decrypt) while get() raises CredentialUnreadable.
+    EncryptedCredentialStore(db_path=db_path, key=Fernet.generate_key()).set("ref", "v")
+    other = EncryptedCredentialStore(db_path=db_path, key=Fernet.generate_key())
+    assert other.exists("ref") is True
+    with pytest.raises(CredentialUnreadable):
+        other.get("ref")
