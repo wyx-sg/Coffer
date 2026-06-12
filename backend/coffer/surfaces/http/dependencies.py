@@ -238,37 +238,15 @@ def get_health_repo() -> Any:
     return _health_repo
 
 
-_credential_store: Any | None = None
-
-
-def set_credential_store(store: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _credential_store
-    _credential_store = store
-
-
-def get_credential_store() -> Any:
-    """FastAPI Depends() target — actual type is EncryptedCredentialStore."""
-    if _credential_store is None:
-        raise RuntimeError("credential store not initialised")
-    return _credential_store
-
-
-_master_key_manager: Any | None = None
-
-
-def set_master_key_manager(manager: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _master_key_manager
-    _master_key_manager = manager
-
-
-def get_master_key_manager() -> Any:
-    """FastAPI Depends() target — actual type is MasterKeyManager."""
-    if _master_key_manager is None:
-        raise RuntimeError("master key manager not initialised")
-    return _master_key_manager
-
+# Credential-store DI singletons: re-exported from credential_composition (split
+# for the file-size limit) so the long-standing dependencies.get_credential_store
+# / get_master_key_manager import paths keep working.
+from coffer.surfaces.http.credential_composition import (  # noqa: E402, I001
+    get_credential_store as get_credential_store,
+    get_master_key_manager as get_master_key_manager,
+    set_credential_store as set_credential_store,
+    set_master_key_manager as set_master_key_manager,
+)
 
 # --- Agent kind-specific dependency providers (spec 004-agent-registry) ---
 

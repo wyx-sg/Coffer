@@ -12,6 +12,9 @@ MCP-specific composition (upstream factory, session supervisors,
 prunable registry, reaper env knobs) lives in
 :mod:`coffer.surfaces.http.app_mcp_composition` to keep this file under
 the 400-line guideline.
+
+Credential-store DI singletons and the master-key bootstrap live in
+:mod:`coffer.surfaces.http.credential_composition` for the same reason.
 """
 
 from __future__ import annotations
@@ -26,7 +29,6 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI
-from sqlalchemy import text as _sa_text
 
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
@@ -37,11 +39,8 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import MasterKeyMissing
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
 from coffer.infrastructure.logging.setup import configure_logging
@@ -70,14 +69,13 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.model_routes import router as chat_model_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
+from coffer.surfaces.http.credential_composition import init_credential_store
 from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
     get_mcp_session_factory,
     set_audit_service,
-    set_credential_store,
     set_embedding_config_service,
-    set_master_key_manager,
     set_resource_service,
     set_retention_service,
 )
@@ -158,32 +156,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine_with_pragmas(_db_url())
     sm = session_maker(engine)
 
-    # Envelope encryption: resolve the Fernet master key (file first, then
-    # keychain), build the encrypted store, and replace every KeyringAdapter
-    # injection point. Creating a brand-new key is only legal while the
-    # credentials table is empty — otherwise existing ciphertext would be
-    # silently undecryptable, so we fail loudly instead.
-    db_path = _db_path()
-    master_key_manager = MasterKeyManager(
-        key_path=db_path.parent / "master.key", keyring=KeyringAdapter()
-    )
-    async with engine.connect() as conn:
-        ciphertext_rows = (
-            await conn.execute(_sa_text("SELECT COUNT(*) FROM credentials"))
-        ).scalar_one()
-    master_key = await asyncio.get_running_loop().run_in_executor(
-        None, lambda: master_key_manager.resolve(allow_create=ciphertext_rows == 0)
-    )
-    if master_key is None:
-        raise MasterKeyMissing(str(db_path.parent / "master.key"))
-    try:
-        credential_store = EncryptedCredentialStore(db_path=db_path, key=master_key)
-    except ValueError as e:
-        # A present-but-corrupt key (e.g. truncated file) must fail loudly and
-        # name its location — regenerating over live ciphertext is never safe.
-        raise MasterKeyMissing(str(db_path.parent / "master.key")) from e
-    set_credential_store(credential_store)
-    set_master_key_manager(master_key_manager)
+    credential_store = await init_credential_store(engine, _db_path())
 
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resource_svc = ResourceService(
