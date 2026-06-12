@@ -744,7 +744,9 @@
       "deleteConfirm": "Delete fact {{name}}? This cannot be undone.",
       "editAria": "Edit fact {{name}}",
       "loadFailed": "Failed to load this memory store.",
-      "empty": "No facts yet."
+      "empty": "No facts yet.",
+      "back": "Back to memory stores",
+      "factBadge": "{{count}} facts"
     },
     "welcome": {
       "title": "Your shared agent memory",

@@ -1,9 +1,9 @@
 // frontend/src/kinds/memory/MemoryStoreDetailPage.tsx
 //
-// Memory store detail surface (spec 007 redesign): metrics header, a recall box
-// with a keyword/vector mode toggle, an add-fact form (name/description/body/
-// type), and a fact list with inline edit, delete, and "Clear all". No
-// llm_provider anywhere — facts are written directly.
+// Memory store detail surface (spec 007 redesign): a back link + header (scope
+// + metric badges + an "Add fact" button that opens a dialog), a recall box
+// with a keyword/vector mode toggle, and a fact list with inline edit, delete,
+// and "Clear all". No llm_provider anywhere — facts are written directly.
 //
 // This page is the composing container: it owns all state, queries, and
 // mutations, and delegates rendering to cohesive child panels.
@@ -17,6 +17,7 @@ import {
   addFact,
   clearFacts,
   deleteFact,
+  getMemoryStore,
   getMemoryStoreMetrics,
   listFacts,
   recall,
@@ -24,9 +25,9 @@ import {
   type RecallResponse,
   type RetrievalMode,
 } from "./api";
-import { MemoryAddFactForm } from "./MemoryAddFactForm";
+import { MemoryAddFactDialog } from "./MemoryAddFactDialog";
+import { MemoryDetailHeader } from "./MemoryDetailHeader";
 import { MemoryFactList } from "./MemoryFactList";
-import { MemoryMetricsHeader } from "./MemoryMetricsHeader";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 
 export function MemoryStoreDetailPage() {
@@ -39,7 +40,8 @@ export function MemoryStoreDetailPage() {
   const [mode, setMode] = useState<RetrievalMode>("keyword");
   const [recallResult, setRecallResult] = useState<RecallResponse | null>(null);
 
-  // Add-fact form
+  // Add-fact dialog
+  const [addOpen, setAddOpen] = useState(false);
   const [text, setText] = useState("");
   const [factName, setFactName] = useState("");
   const [factDescription, setFactDescription] = useState("");
@@ -61,6 +63,12 @@ export function MemoryStoreDetailPage() {
     enabled: Boolean(store),
   });
 
+  const storeQuery = useQuery({
+    queryKey: ["memory-store", store],
+    queryFn: () => getMemoryStore(store),
+    enabled: Boolean(store),
+  });
+
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["memory-facts", store] });
     void qc.invalidateQueries({ queryKey: ["memory-metrics", store] });
@@ -79,6 +87,7 @@ export function MemoryStoreDetailPage() {
       setFactName("");
       setFactDescription("");
       setFactType("");
+      setAddOpen(false);
       invalidate();
     },
   });
@@ -114,7 +123,31 @@ export function MemoryStoreDetailPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <MemoryMetricsHeader store={store} metrics={metricsQuery.data} />
+      <MemoryDetailHeader
+        store={store}
+        storeResource={storeQuery.data}
+        metrics={metricsQuery.data}
+        onAddFact={() => setAddOpen(true)}
+      />
+
+      <MemoryAddFactDialog
+        open={addOpen}
+        onOpenChange={(o) => {
+          if (!o) add.reset();
+          setAddOpen(o);
+        }}
+        text={text}
+        name={factName}
+        description={factDescription}
+        type={factType}
+        error={add.error}
+        isPending={add.isPending}
+        onTextChange={setText}
+        onNameChange={setFactName}
+        onDescriptionChange={setFactDescription}
+        onTypeChange={setFactType}
+        onSubmit={() => add.mutate()}
+      />
 
       {loadError ? (
         <p className="text-sm text-destructive" role="alert">
@@ -133,20 +166,6 @@ export function MemoryStoreDetailPage() {
         onQueryChange={setQuery}
         onModeChange={setMode}
         onRecall={() => recallM.mutate()}
-      />
-
-      <MemoryAddFactForm
-        text={text}
-        name={factName}
-        description={factDescription}
-        type={factType}
-        error={add.error}
-        isPending={add.isPending}
-        onTextChange={setText}
-        onNameChange={setFactName}
-        onDescriptionChange={setFactDescription}
-        onTypeChange={setFactType}
-        onSubmit={() => add.mutate()}
       />
 
       <MemoryFactList

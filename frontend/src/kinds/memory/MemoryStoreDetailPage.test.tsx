@@ -12,8 +12,10 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ApiError } from "@/lib/api/errors";
 import { MemoryStoreDetailPage } from "./MemoryStoreDetailPage";
 
-vi.mock("./api", () => ({
+vi.mock("./api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api")>()),
   listFacts: vi.fn(),
+  getMemoryStore: vi.fn(),
   getMemoryStoreMetrics: vi.fn(),
   addFact: vi.fn(),
   updateFact: vi.fn(),
@@ -52,6 +54,28 @@ function renderPage() {
 function stubLists() {
   vi.mocked(api.listFacts).mockResolvedValue({ facts: [FACT], total: 1 });
   vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 1, disk_bytes: 50 });
+  vi.mocked(api.getMemoryStore).mockResolvedValue({
+    ref: "memory:global",
+    kind: "memory",
+    name: "global",
+    scope: "global",
+    project_id: "0".repeat(26),
+    project_root: null,
+    description: null,
+    config: {
+      retrieval_modes: ["grep", "keyword"],
+      default_mode: "keyword",
+      embedding_provider: null,
+      embedding_model: null,
+      embedding_base_url: null,
+      embedding_credential_ref: null,
+      embedding_dimensions: 768,
+      max_fact_chars: 8192,
+    },
+    enabled: true,
+    created_at: "2026-05-29T00:00:00Z",
+    updated_at: "2026-05-29T00:00:00Z",
+  });
 }
 
 afterEach(() => vi.clearAllMocks());
@@ -88,11 +112,15 @@ describe("MemoryStoreDetailPage", () => {
     vi.mocked(api.addFact).mockResolvedValue(FACT);
 
     renderPage();
+    // Add fact is now a dialog: click the header button to open it.
+    fireEvent.click(await screen.findByRole("button", { name: /add fact/i }));
     fireEvent.change(await screen.findByLabelText(/^name/i), { target: { value: "deploy" } });
     fireEvent.change(screen.getByLabelText(/^type/i), { target: { value: "project" } });
     fireEvent.change(screen.getByLabelText(/^description/i), { target: { value: "how it ships" } });
     fireEvent.change(screen.getByLabelText(/^fact$/i), { target: { value: "make release" } });
-    fireEvent.click(screen.getByRole("button", { name: /add fact/i }));
+    // The dialog's submit button (the second "Add fact" — the first opened it).
+    const addButtons = screen.getAllByRole("button", { name: /add fact/i });
+    fireEvent.click(addButtons[addButtons.length - 1]);
 
     await waitFor(() =>
       expect(api.addFact).toHaveBeenCalledWith("global", {
