@@ -12,7 +12,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
 from starlette.testclient import TestClient
 
 from coffer.surfaces.http.app import create_app

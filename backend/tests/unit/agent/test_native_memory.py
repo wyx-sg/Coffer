@@ -49,7 +49,7 @@ def test_scan_missing_projects_dir_returns_empty(tmp_path):
 
 
 def test_decode_claude_slug_round_trips_via_filesystem(tmp_path):
-    from coffer.application.agent.native_memory import decode_claude_slug, _full_slug
+    from coffer.application.agent.native_memory import _full_slug, decode_claude_slug
 
     # Build a real path with a dotted + underscored component.
     proj = tmp_path / "my.proj" / "sub_dir"
