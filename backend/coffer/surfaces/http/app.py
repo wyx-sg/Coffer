@@ -31,6 +31,8 @@ from fastapi import FastAPI
 
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
+from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
@@ -47,6 +49,7 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
+    SqlAlchemyEmbeddingConfigRepo,
     SqlAlchemyResourceRepo,
     SqlAlchemyRetentionRepo,
 )
@@ -65,11 +68,14 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
     set_audit_service,
+    set_embedding_config_service,
     set_resource_service,
     set_retention_service,
 )
+from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.keychain_routes import router as keychain_router
+from coffer.surfaces.http.knowledge_base import router as kb_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
@@ -77,9 +83,13 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
+from coffer.surfaces.http.memory import router as memory_router
+from coffer.surfaces.http.projection_routes import router as projection_router
+from coffer.surfaces.http.projection_wiring import wire_projection
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.skill_routes import router as skill_router
+from coffer.surfaces.http.wiring import build_substrate, wire_kb_kind, wire_memory_kind
 
 
 def _db_url() -> str:
@@ -189,10 +199,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         audit=audit,
     )
     await retention_svc.initialize_defaults()
+    embedding_config_svc = EmbeddingConfigService(
+        repo=SqlAlchemyEmbeddingConfigRepo(sm),
+        audit=audit,
+    )
 
     set_resource_service(resource_svc)
     set_audit_service(audit)
     set_retention_service(retention_svc)
+    set_embedding_config_service(embedding_config_svc)
 
     # Wire up agent + skill kinds (specs 004-agent-registry, 005-skill-manager).
     # The helper builds both in lockstep so the cross-kind on_delete hook (agent
@@ -201,8 +216,50 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # discovery + confirm (no auto-registration on startup).
     wire_agent_and_skill_kinds(app, resource_svc, audit, sm)
 
-    # Wire up MCP-specific plumbing
-    process_supervisor, session_supervisors = wire_mcp_kind(app, resource_svc, audit, sm)
+    # Build the shared built-in tool registry; each kind contributes its tools.
+    builtin_tools = BuiltinToolRegistry()
+
+    # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
+    # into `builtin_tools` so the gateway can expose them.
+    # One substrate per process: KB + memory share the DocumentRepo,
+    # retrieval facade and reindexer (per KnowledgeRetrieval's contract).
+    substrate = build_substrate(sm)
+
+    # Embedding is global: KB + memory resolve the current config at index/recall
+    # time so a Settings change applies without a daemon restart.
+    async def _resolve_embedding() -> object:
+        return (await embedding_config_svc.get()).to_embedding_config()
+
+    wire_kb_kind(
+        app,
+        resource_svc,
+        audit,
+        sm,
+        builtin_tools,
+        substrate=substrate,
+        embedding_resolver=_resolve_embedding,  # type: ignore[arg-type]
+    )
+    # Wire up Memory plumbing (spec 007). Registers the memory built-in tools.
+    memory_service = wire_memory_kind(
+        app,
+        resource_svc,
+        audit,
+        sm,
+        builtin_tools,
+        substrate=substrate,
+        embedding_resolver=_resolve_embedding,  # type: ignore[arg-type]
+    )
+
+    # Wire the composition-root projection service (bridges memory + agent so
+    # neither kind imports the other — Contract 5e). Re-renders established
+    # projections whenever the memory store changes.
+    wire_projection(app, sm, memory_service, audit=audit)
+
+    # Wire up MCP-specific plumbing (after other kinds so the gateway picks
+    # their built-in tools).
+    process_supervisor, session_supervisors = wire_mcp_kind(
+        app, resource_svc, audit, sm, builtin_tools
+    )
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -267,6 +324,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Close per-/mcp/-session state in the protocol routes
         with contextlib.suppress(Exception):
             await shutdown_all_sessions()
+        # KB / Memory services hold no long-lived handles (the substrate is
+        # session-maker-bound + lazy), so only the shared engine needs disposal.
         await engine.dispose()
         set_active_token(None)
 
@@ -296,14 +355,21 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(resource_router)
     app.include_router(audit_router)
     app.include_router(retention_router)
+    app.include_router(embedding_router)
     app.include_router(keychain_router)
     # Agent + skill kind routes (specs 004-agent-registry, 005-skill-manager)
     app.include_router(agent_router)
     app.include_router(agent_config_router)
     app.include_router(fs_router)
     app.include_router(skill_router)
+    # KB router (spec 006-knowledge-base)
+    app.include_router(kb_router)
     # MCP-specific routers
     app.include_router(mcp_protocol_router)
     app.include_router(mcp_capability_router)
     app.include_router(mcp_invocation_router)
+    # Memory router (spec 007-memory)
+    app.include_router(memory_router)
+    # Memory projection router (spec 007-memory; bridges memory + agent)
+    app.include_router(projection_router)
     return app

@@ -1,0 +1,170 @@
+// frontend/src/kinds/memory/MemoryStoreDetailPage.tsx
+//
+// Memory store detail surface (spec 007 redesign): a back link + header (scope
+// + metric badges + Clear all), a recall box, and a fact TREE on the left with
+// a rendered preview/editor on the right (mirrors the KB detail page). Memory
+// is AI-authored — agents write via the MCP `remember` tool; the UI lets humans
+// CORRECT existing facts (edit the Markdown / delete), not add new ones.
+import { useState } from "react";
+import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { translateApiError } from "@/lib/api/errors";
+import {
+  clearFacts,
+  deleteFact,
+  getMemoryStore,
+  getMemoryStoreMetrics,
+  listFacts,
+  recall,
+  updateFact,
+  type FactOut,
+  type RecallResponse,
+  type RetrievalMode,
+} from "./api";
+import { MemoryDetailHeader } from "./MemoryDetailHeader";
+import { MemoryFactTree } from "./MemoryFactTree";
+import { MemoryFactViewer } from "./MemoryFactViewer";
+import { MemoryRecallPanel } from "./MemoryRecallPanel";
+
+export function MemoryStoreDetailPage() {
+  const { t } = useTranslation();
+  const store = useParams<{ name: string }>().name ?? "";
+  const qc = useQueryClient();
+
+  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<RetrievalMode>("keyword");
+  const [recallResult, setRecallResult] = useState<RecallResponse | null>(null);
+
+  const [selected, setSelected] = useState<FactOut | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState("");
+
+  const factsQuery = useQuery({
+    queryKey: ["memory-facts", store],
+    queryFn: () => listFacts(store, 100, 0),
+    enabled: Boolean(store),
+  });
+  const metricsQuery = useQuery({
+    queryKey: ["memory-metrics", store],
+    queryFn: () => getMemoryStoreMetrics(store),
+    enabled: Boolean(store),
+  });
+  const storeQuery = useQuery({
+    queryKey: ["memory-store", store],
+    queryFn: () => getMemoryStore(store),
+    enabled: Boolean(store),
+  });
+
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ["memory-facts", store] });
+    void qc.invalidateQueries({ queryKey: ["memory-metrics", store] });
+  };
+
+  // Keep the selected fact in sync with the freshly-loaded list.
+  const liveSelected = selected
+    ? (factsQuery.data?.facts.find((f) => f.id === selected.id) ?? null)
+    : null;
+
+  const del = useMutation({
+    mutationFn: (id: string) => deleteFact(store, id),
+    onSuccess: () => {
+      setSelected(null);
+      setEditing(false);
+      invalidate();
+    },
+  });
+  const upd = useMutation({
+    mutationFn: (input: { id: string; text: string }) =>
+      updateFact(store, input.id, { text: input.text }),
+    onSuccess: () => {
+      setEditing(false);
+      setEditText("");
+      invalidate();
+    },
+  });
+  const recallM = useMutation({
+    mutationFn: () => recall(store, query, { topK: 5, mode }),
+    onSuccess: (data) => setRecallResult(data),
+  });
+  const clear = useMutation({
+    mutationFn: () => clearFacts(store),
+    onSuccess: () => {
+      setSelected(null);
+      invalidate();
+    },
+  });
+
+  const selectFact = (f: FactOut) => {
+    setSelected(f);
+    setEditing(false);
+  };
+  const confirmDelete = () => {
+    if (!liveSelected) return;
+    if (window.confirm(t("memory.detail.deleteConfirm", { name: liveSelected.name || "fact" }))) {
+      del.mutate(liveSelected.id);
+    }
+  };
+  const confirmClear = () => {
+    if (window.confirm(t("memory.detail.clearConfirm", { store }))) clear.mutate();
+  };
+
+  const loadError = factsQuery.error ?? metricsQuery.error;
+
+  return (
+    <div className="space-y-6 p-6">
+      <MemoryDetailHeader
+        store={store}
+        storeResource={storeQuery.data}
+        metrics={metricsQuery.data}
+        isClearPending={clear.isPending}
+        onClearAll={confirmClear}
+      />
+
+      {loadError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {translateApiError(t, loadError)}
+        </p>
+      ) : null}
+
+      <MemoryRecallPanel
+        query={query}
+        mode={mode}
+        result={recallResult}
+        error={recallM.error}
+        isPending={recallM.isPending}
+        onQueryChange={setQuery}
+        onModeChange={setMode}
+        onRecall={() => recallM.mutate()}
+      />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(220px,300px)_1fr]">
+        <MemoryFactTree
+          facts={factsQuery.data}
+          selectedId={liveSelected?.id ?? null}
+          isLoading={factsQuery.isPending}
+          onSelect={selectFact}
+        />
+        <MemoryFactViewer
+          fact={liveSelected ?? undefined}
+          editing={editing}
+          editText={editText}
+          isEditPending={upd.isPending}
+          isDeletePending={del.isPending}
+          onStartEdit={() => {
+            setEditText(liveSelected?.text ?? "");
+            setEditing(true);
+          }}
+          onEditTextChange={setEditText}
+          onSave={() => liveSelected && upd.mutate({ id: liveSelected.id, text: editText })}
+          onCancel={() => {
+            setEditing(false);
+            setEditText("");
+          }}
+          onDelete={confirmDelete}
+        />
+      </div>
+    </div>
+  );
+}

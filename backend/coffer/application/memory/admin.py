@@ -1,0 +1,131 @@
+"""Store-level admin operations for ``MemoryService`` — provision / rebuild /
+teardown.
+
+Extracted from ``service.py`` to keep that file under the project's 400-LOC
+ceiling. Free functions over injected collaborators, like ``writes``/
+``queries``; the service passes its own bound methods as the callables.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
+import shutil
+from collections.abc import Awaitable, Callable
+
+from coffer.application.knowledge.retrieval import (
+    EmbeddingResolver,
+    KnowledgeRetrieval,
+    no_embedding,
+)
+from coffer.application.memory.ports import MemoryDocumentRepo
+from coffer.application.memory.scope import GLOBAL_STORE_NAME, is_valid_store_name
+from coffer.application.memory.sync import MemoryReconciler
+from coffer.domain.errors import (
+    MemoryStoreNotFound,
+    ResourceAlreadyExists,
+    ResourceNotFound,
+)
+from coffer.domain.knowledge.document import KIND_MEMORY
+from coffer.domain.knowledge.retrieval import StoreRef
+from coffer.domain.memory.config import MemoryStoreConfig
+from coffer.domain.memory.scope import ResolvedScope
+from coffer.domain.resource import ResourceRef
+
+_logger = logging.getLogger(__name__)
+
+#: ``store_name -> config`` (validates the store exists).
+ConfigFn = Callable[[str], Awaitable[MemoryStoreConfig]]
+#: ``store_name -> ResolvedScope``.
+ResolvedForFn = Callable[[str], Awaitable[ResolvedScope]]
+#: ``store_name, project_id -> StoreRef``.
+StoreRefFn = Callable[[str, str], StoreRef]
+
+
+async def ensure_store(
+    *,
+    resources: object,
+    provision_global: Callable[[], Awaitable[object]],
+    store_name: str,
+) -> None:
+    """Provision a store's Resource if absent (surfaces address stores by
+    name). The global store auto-provisions on first REST access; a
+    ``project-<ulid>`` store is provisioned directly (no cwd needed). An
+    arbitrary name is rejected (404) — it must never manufacture a Resource."""
+    if not is_valid_store_name(store_name):
+        raise MemoryStoreNotFound(store_name)
+    ref = ResourceRef(kind=KIND_MEMORY, name=store_name)
+    try:
+        await resources.get(ref)  # type: ignore[attr-defined]
+        return
+    except ResourceNotFound:
+        pass
+    if store_name == GLOBAL_STORE_NAME:
+        await provision_global()
+        return
+    # suppress: concurrent first access — another request provisioned it first.
+    with contextlib.suppress(ResourceAlreadyExists):
+        await resources.register(  # type: ignore[attr-defined]
+            kind=KIND_MEMORY,
+            name=store_name,
+            config=MemoryStoreConfig().model_dump(mode="json"),
+            actor="system",
+        )
+
+
+async def reindex_store(
+    *,
+    get_config: ConfigFn,
+    resolved_for: ResolvedForFn,
+    store_ref: StoreRefFn,
+    reconciler: MemoryReconciler,
+    store_name: str,
+    config: MemoryStoreConfig | None = None,
+    embedding_resolver: EmbeddingResolver = no_embedding,
+) -> None:
+    """Force-rebuild a store's index under ``config`` (defaults to the stored
+    config). Called by the kind's ``on_update_config`` hook so toggling vector
+    re-embeds facts written before the change — the sha no-op gate would
+    otherwise leave the new vec table empty forever. Embedding is global."""
+    cfg = config if config is not None else await get_config(store_name)
+    resolved = await resolved_for(store_name)
+    ref = store_ref(store_name, resolved.project_id)
+    embedding = await embedding_resolver() if cfg.vector_enabled else None
+    await reconciler.reconcile(store=ref, embedding=embedding, force=True)
+
+
+async def cleanup_store(
+    *,
+    get_config: ConfigFn,
+    resolved_for: ResolvedForFn,
+    store_ref: StoreRefFn,
+    documents: MemoryDocumentRepo,
+    retrieval: KnowledgeRetrieval,
+    reconciler: MemoryReconciler,
+    store_name: str,
+) -> None:
+    """Drop a store's rows, vec table and on-disk dir (the on_delete hook).
+
+    Runs under the reconciler's per-store lock so a concurrent recall's
+    reconcile cannot scan the dir mid-teardown and re-insert rows for the
+    deleted store."""
+    config = await get_config(store_name)
+    resolved = await resolved_for(store_name)
+    async with reconciler.lock_for(store_name):
+        await documents.delete_resource(KIND_MEMORY, store_name)
+        # Drop the per-store sqlite-vec table too (lives outside the async
+        # session → leaks across a same-name re-create otherwise — finding #6).
+        # Maintenance mode (dimensions=None) drops whatever width exists; the
+        # global embedding dimension is irrelevant to teardown.
+        _ = config  # retained for signature symmetry; embedding is global now
+        try:
+            await retrieval.drop_store(store_ref(store_name, resolved.project_id), dimensions=None)
+        except Exception:
+            _logger.warning(
+                "memory.cleanup.drop_vec_store_failed",
+                extra={"store": store_name},
+                exc_info=True,
+            )
+        if resolved.store_dir.exists():
+            await asyncio.to_thread(shutil.rmtree, resolved.store_dir, ignore_errors=True)

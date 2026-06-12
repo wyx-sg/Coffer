@@ -11,8 +11,17 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy.engine import Connection
 
+from coffer.infrastructure.agent import (
+    projection_persistence as _agent_projection,  # noqa: F401 — projection-binding model
+)
+from coffer.infrastructure.knowledge import (  # noqa: F401 — unified documents/chunks ORM + FTS5 DDL
+    ddl as _knowledge_ddl,
+)
 from coffer.infrastructure.mcp import (
     persistence as _mcp_persistence,  # noqa: F401 — kind-specific models
+)
+from coffer.infrastructure.memory import (
+    project_root_repo as _memory_project_roots,  # noqa: F401 — store→project-root model
 )
 from coffer.infrastructure.persistence import models  # noqa: F401 — kind-agnostic models
 from coffer.infrastructure.persistence.base import Base

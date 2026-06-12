@@ -65,6 +65,7 @@ describe("AgentDetailPage", () => {
     expect(screen.getByRole("tab", { name: /overview/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^skills$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /mcp servers/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^memory$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /config files/i })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /subagents & commands/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /memory & rules/i })).not.toBeInTheDocument();

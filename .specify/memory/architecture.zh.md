@@ -42,6 +42,18 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 | `mcp_server` | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md)       | 一个已注册的上游 (upstream) MCP 服务器。承载传输配置、凭据引用以及网关 (gateway) 所需的逐服务器策略。 |
 | `agent`      | [004-agent-registry](../../specs/004-agent-registry/spec.md) | 一个已注册的编码 agent（如 Claude Code）。承载其配置目录以及 Coffer-MCP 的安装状态。                  |
 | `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。                                  |
+| `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | 共享知识基底的 **KB 面**。任意格式上传 → 转成 markdown（经一个 `MarkdownConverter` 端口做 any-format→markdown，默认 MarkItDown），`docs/<doc-id>.md` 即事实 + `raw/` 作出处。agent 只读；grep / FTS5 / sqlite-vec 检索。见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)。 |
+| `memory`         | [007-memory](../../specs/007-memory/spec.md)                 | 同一基底的 **memory 面**。逐条 `<slug>.md` + 重新生成的 `MEMORY.md` 即事实，两层作用域（global 哨兵 + per-project ULID）。经 MCP 读写 + 原生投影（Claude symlink / Codex 托管块）跨 agent 共享 —— 一个规范 store，不分叉。见 [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)。    |
+
+`knowledge_base` 与 `memory` 是**同一个知识基底 (knowledge substrate)** 的两副
+面孔：**落盘的 markdown 文件是事实源；SQLite 是可重建索引**（`coffer reindex`
+据文件重建）。检索分 `grep`（直接扫原始文件）/ `keyword`（FTS5 + `bm25()`）/
+`vector`（sqlite-vec，opt-in，embedding 经一个可配置的 OpenAI 兼容客户端）。格式
+converter 藏在 infrastructure 的一个 `MarkdownConverter` 端口背后；逐 agent 的投影
+adapter 落在 agent 层（memory 从不撰写 L1 配置）。基底、检索与投影的决策见
+[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) 与
+[ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)；它们取代了
+LlamaIndex（ADR-010）与 mem0（ADR-011）两个引擎。
 
 ## 代码布局 (Code layout)
 
@@ -97,12 +109,12 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 
 ## 接口面 (Surfaces)
 
-| Surface                        | 进程                    | 角色                                                                                             |
-| ------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| REST API                       | daemon                  | 管理面 (management plane)：`/api/v1/*`。Token + CORS 鉴权。                                      |
-| MCP protocol                   | daemon                  | `/mcp` HTTP/SSE 端点，承载 MCP JSON-RPC。                                                        |
-| CLI (`coffer …`)               | 短生命周期子进程        | 通过 loopback HTTP 调用 daemon。                                                                 |
-| Stdio shim (`coffer-mcp-shim`) | 每个 MCP 客户端会话一份 | `stdin/stdout ↔ daemon HTTP/SSE` 转发器；检测 daemon，否则拉起。                                |
+| Surface                        | 进程                    | 角色                                                              |
+| ------------------------------ | ----------------------- | ----------------------------------------------------------------- |
+| REST API                       | daemon                  | 管理面 (management plane)：`/api/v1/*`。Token + CORS 鉴权。       |
+| MCP protocol                   | daemon                  | `/mcp` HTTP/SSE 端点，承载 MCP JSON-RPC。                         |
+| CLI (`coffer …`)               | 短生命周期子进程        | 通过 loopback HTTP 调用 daemon。                                  |
+| Stdio shim (`coffer-mcp-shim`) | 每个 MCP 客户端会话一份 | `stdin/stdout ↔ daemon HTTP/SSE` 转发器；检测 daemon，否则拉起。 |
 
 ## 进程 (Processes)
 
@@ -123,15 +135,23 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
   的版本创建)，启动会以 `DB_SCHEMA_TOO_NEW` 明确报错并快速失败，而非抛出晦涩的
   Alembic 错误。
 - JSON 字段以 `TEXT` 存储，在 application 层边界由 Pydantic 校验。
-- 数据库文件、daemon 发现文件、日志与每个上游的 PID 文件都收纳在
-  `~/.coffer/` 下，便于单点备份。
+- **知识基底索引就在同一个 `coffer.db` 里：** SQLite **FTS5**
+  （常规 FTS5 表，chunk 文本在索引内部存一份，`bm25()` 关键词排序）+
+  **sqlite-vec**（对 chunk embedding 做向量 KNN）。没有独立的
+  chroma / LlamaIndex / mem0 store —— `~/.coffer/knowledge/`
+  与 `~/.coffer/memory/` 下的 markdown 文件才是事实；DB（含 FTS 索引）可据其重建
+  （[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)）。
+- 数据库文件、daemon 发现文件、日志、knowledge/memory 文件树与每个上游的 PID 文件
+  都收纳在 `~/.coffer/` 下，便于单点备份。
 
 ## 跨层关注点 (Cross-cutting concerns)
 
-| 关注点   | 位置                                                                          | 备注                                                                                 |
-| -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| 凭据     | `infrastructure/credentials/keyring_adapter.py`                               | 唯一可 import `keyring` 的文件。**daemon 是唯一 keychain 所有者**:所有 surface(桌面、CLI、shim)都通过 daemon 的 `/api/v1/keychain` 路由访问 keychain —— CLI 不在进程内直接访问(spec 006)。配置里只放 ref；在上游进程拉起时按需物化；永不落盘。 |
-| 审计     | `domain/audit.py` + `application/audit_service.py` + `audit_log` 表           | 覆盖每一次资源生命周期变更。必须带 actor (cli / api / ui / system)。                 |
-| 保留策略 | `application/retention_service.py` + `retention_policies` 表 + asyncio worker | 每个日志类表注册为 `PrunableTable`；中央注册表强制执行 SQL allowlist。               |
-| 错误     | `domain/errors.py` + FastAPI 全局处理器                                       | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。   |
-| 日志     | `structlog` 以 JSON-per-line 写入 `~/.coffer/logs/`                           | 通过 contextvar 实现按请求级别的 trace ID。                                          |
+| 关注点      | 位置                                                                          | 备注                                                                                                                                                                                                                                           |
+| ----------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 凭据        | `infrastructure/credentials/keyring_adapter.py`                               | 唯一可 import `keyring` 的文件。**daemon 是唯一 keychain 所有者**:所有 surface(桌面、CLI、shim)都通过 daemon 的 `/api/v1/keychain` 路由访问 keychain —— CLI 不在进程内直接访问(spec 006)。配置里只放 ref；在上游进程拉起时按需物化；永不落盘。 |
+| 审计        | `domain/audit.py` + `application/audit_service.py` + `audit_log` 表           | 覆盖每一次资源生命周期变更。必须带 actor (cli / api / ui / system)。                                                                                                                                                                           |
+| 保留策略    | `application/retention_service.py` + `retention_policies` 表 + asyncio worker | 每个日志类表注册为 `PrunableTable`；中央注册表强制执行 SQL allowlist。                                                                                                                                                                         |
+| 错误        | `domain/errors.py` + FastAPI 全局处理器                                       | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。                                                                                                                                                             |
+| 日志        | `structlog` 以 JSON-per-line 写入 `~/.coffer/logs/`                           | 通过 contextvar 实现按请求级别的 trace ID。                                                                                                                                                                                                    |
+| Converter   | `MarkdownConverter` 端口 + 逐格式 adapter，落在 `infrastructure/`             | 唯一 import converter 库的地方（文本/源码走 passthrough、csv 走专用转换器、其余走 MarkItDown；新引擎可按格式插拔）。any-format → markdown。                                                                                                                                            |
+| Memory 投影 | `AgentMemoryAdapter`，落在 **agent 层**（随 agent driver）                    | 把那个唯一的规范 memory store 投影进原生位置（`SYMLINK` / `RENDER` / `NONE`）；由它持有 L1 文件改动，使 memory 与 agent 无关（[ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)）。                                        |

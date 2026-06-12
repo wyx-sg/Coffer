@@ -312,3 +312,86 @@ async def test_delete_unknown_resource_raises(tmp_path):
     with pytest.raises(ResourceNotFound):
         await svc.delete(ResourceRef("fake_kind", "nope"), actor="cli")
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_kb_and_memory_credential_extractors_probe_missing_refs(tmp_path):
+    """The KB kind (nested ``embedding.credential_ref``) and memory kind (flat
+    ``embedding_credential_ref``) supply credential extractors; a missing
+    keychain entry must fail register/PATCH BEFORE any DB write (rebase
+    follow-up: the extractors previously executed in zero tests)."""
+    from coffer.application.knowledge_base.kind import make_kb_kind
+    from coffer.application.memory.kind import make_memory_kind
+    from coffer.domain.errors import CredentialMissing, ResourceNotFound
+    from coffer.domain.resource import ResourceRef
+
+    class _FakeKeyring:
+        def __init__(self, present: set[str]) -> None:
+            self._present = present
+
+        def get(self, ref: str) -> str | None:
+            return "value" if ref in self._present else None
+
+    # The extractor functions never touch the wrapped service, so the kinds can
+    # be built without one for register-time probing.
+    kinds = {
+        "knowledge_base": make_kb_kind(None),  # type: ignore[arg-type]
+        "memory": make_memory_kind(None),  # type: ignore[arg-type]
+    }
+    kb_config = {
+        "enabled_modes": ["keyword", "grep", "vector"],
+        "default_mode": "keyword",
+        "embedding": {
+            "provider": "openai",
+            "model": "text-embedding-3-small",
+            "dimensions": 1536,
+            "credential_ref": "openai-key",
+        },
+    }
+    mem_config = {
+        "retrieval_modes": ["grep", "keyword", "vector"],
+        "default_mode": "keyword",
+        "embedding_provider": "openai",
+        "embedding_model": "text-embedding-3-small",
+        "embedding_dimensions": 1536,
+        "embedding_credential_ref": "openai-key",
+    }
+
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+    audit = AuditService(SqlAlchemyAuditRepo(sm))
+    repo = SqlAlchemyResourceRepo(sm)
+    try:
+        svc_missing = ResourceService(
+            kinds=kinds, repo=repo, audit=audit, keyring=_FakeKeyring(present=set())
+        )
+        with pytest.raises(CredentialMissing):
+            await svc_missing.register(
+                kind="knowledge_base", name="kb1", config=kb_config, actor="cli"
+            )
+        with pytest.raises(CredentialMissing):
+            await svc_missing.register(kind="memory", name="global", config=mem_config, actor="cli")
+        # Nothing was written.
+        with pytest.raises(ResourceNotFound):
+            await svc_missing.get(ResourceRef("knowledge_base", "kb1"))
+        with pytest.raises(ResourceNotFound):
+            await svc_missing.get(ResourceRef("memory", "global"))
+
+        svc_ok = ResourceService(
+            kinds=kinds, repo=repo, audit=audit, keyring=_FakeKeyring(present={"openai-key"})
+        )
+        await svc_ok.register(kind="knowledge_base", name="kb1", config=kb_config, actor="cli")
+        await svc_ok.register(kind="memory", name="global", config=mem_config, actor="cli")
+
+        # PATCH introducing a missing ref is rejected before the DB write too.
+        bad_kb = {**kb_config, "embedding": {**kb_config["embedding"], "credential_ref": "nope"}}
+        with pytest.raises(CredentialMissing):
+            await svc_ok.update_config(
+                ResourceRef("knowledge_base", "kb1"), new_config=bad_kb, actor="cli"
+            )
+        unchanged = await svc_ok.get(ResourceRef("knowledge_base", "kb1"))
+        assert unchanged.config["embedding"]["credential_ref"] == "openai-key"
+    finally:
+        await engine.dispose()

@@ -39,6 +39,20 @@ Currently registered kinds:
 | `mcp_server` | [001-mcp-gateway](../../specs/001-mcp-gateway/spec.md)       | A registered upstream MCP server. Carries transport configuration, credential references, and the per-server policies the gateway needs. |
 | `agent`      | [004-agent-registry](../../specs/004-agent-registry/spec.md) | A registered coding agent (e.g. Claude Code). Carries its config directory and the Coffer-MCP install state.                             |
 | `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories.                                                     |
+| `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | **KB face** of the shared knowledge substrate. Any-format upload → converted to markdown (any-format→markdown via a `MarkdownConverter` port, MarkItDown default), `docs/<doc-id>.md` = truth + `raw/` provenance. Agent-read-only; grep / FTS5 / sqlite-vec retrieval. See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md).                  |
+| `memory`         | [007-memory](../../specs/007-memory/spec.md)                 | **memory face** of the same substrate. Per-fact `<slug>.md` + regenerated `MEMORY.md` = truth, two-layer scope (global sentinel + per-project ULID). Shared across agents via MCP read/write + native projection (Claude symlink / Codex managed block) — one canonical store, no divergence. See [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md). |
+
+`knowledge_base` and `memory` are two faces of **one knowledge substrate**:
+**markdown files on disk are the source of truth; SQLite is a rebuildable index**
+(`coffer reindex` reconstructs it from the files). Retrieval is `grep` (raw
+files) / `keyword` (FTS5 + `bm25()`) / `vector` (sqlite-vec, opt-in, embeddings
+via a configurable OpenAI-compatible client). Format converters sit behind a
+`MarkdownConverter` port in infrastructure; per-agent projection adapters live in
+the agent layer (memory never authors L1 config). The substrate, retrieval, and
+projection decisions are in
+[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) and
+[ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md); they
+supersede the LlamaIndex (ADR-010) and mem0 (ADR-011) engines.
 
 ## Code layout
 
@@ -96,12 +110,12 @@ importing kind modules (Contract 6).
 
 ## Surfaces
 
-| Surface                        | Process                | Role                                                                                                                       |
-| ------------------------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| REST API                       | daemon                 | Management plane: `/api/v1/*`. Token + CORS authenticated.                                                                 |
-| MCP protocol                   | daemon                 | `/mcp` HTTP/SSE endpoint speaking MCP JSON-RPC.                                                                            |
-| CLI (`coffer …`)               | short-lived child      | Calls daemon over loopback HTTP.                                                                                           |
-| Stdio shim (`coffer-mcp-shim`) | per MCP-client session | `stdin/stdout ↔ daemon HTTP/SSE` forwarder; detect-or-spawn daemon.                                                       |
+| Surface                        | Process                | Role                                                                 |
+| ------------------------------ | ---------------------- | -------------------------------------------------------------------- |
+| REST API                       | daemon                 | Management plane: `/api/v1/*`. Token + CORS authenticated.           |
+| MCP protocol                   | daemon                 | `/mcp` HTTP/SSE endpoint speaking MCP JSON-RPC.                      |
+| CLI (`coffer …`)               | short-lived child      | Calls daemon over loopback HTTP.                                     |
+| Stdio shim (`coffer-mcp-shim`) | per MCP-client session | `stdin/stdout ↔ daemon HTTP/SSE` forwarder; detect-or-spawn daemon. |
 
 ## Processes
 
@@ -122,15 +136,24 @@ token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or
   with `DB_SCHEMA_TOO_NEW` instead of an opaque Alembic error.
 - JSON fields stored as `TEXT` validated by Pydantic at the application
   boundary.
-- The database file plus daemon discovery file, logs, and per-upstream PID
-  files all live under `~/.coffer/` for a single backup target.
+- **Knowledge substrate index in the same `coffer.db`:** SQLite **FTS5**
+  (a regular FTS5 table storing the chunk text once inside its index, `bm25()`
+  keyword ranking) + **sqlite-vec** (vector KNN over chunk embeddings). No
+  separate chroma / LlamaIndex / mem0 store — markdown files under
+  `~/.coffer/knowledge/` and `~/.coffer/memory/` are the truth; the DB
+  (including the FTS index) is rebuildable from them ([ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)).
+- The database file plus daemon discovery file, logs, the knowledge/memory file
+  trees, and per-upstream PID files all live under `~/.coffer/` for a single
+  backup target.
 
 ## Cross-cutting concerns
 
-| Concern     | Location                                                                         | Notes                                                                                                        |
-| ----------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Credentials | `infrastructure/credentials/keyring_adapter.py`                                  | Only file allowed to import `keyring`. The **daemon is the sole keychain owner**: every surface (desktop, CLI, shim) reaches the keychain through the daemon's `/api/v1/keychain` routes — the CLI never accesses it in-process (spec 006). Refs in config; materialized at upstream-spawn time; never persisted. |
-| Audit       | `domain/audit.py` + `application/audit_service.py` + `audit_log` table           | Every resource lifecycle change. Actor (cli / api / ui / system) required.                                   |
-| Retention   | `application/retention_service.py` + `retention_policies` table + asyncio worker | Each log-style table registers as a `PrunableTable`; central registry enforces SQL allowlist.                |
-| Errors      | `domain/errors.py` + FastAPI global handlers                                     | Uniform `{error: {code, message, details}}` envelope; `X-Coffer-Trace` header for correlation.               |
-| Logging     | `structlog` JSON-per-line to `~/.coffer/logs/`                                   | Per-request trace IDs via contextvar.                                                                        |
+| Concern           | Location                                                                         | Notes                                                                                                                                                                                                                                                                                                             |
+| ----------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Credentials       | `infrastructure/credentials/keyring_adapter.py`                                  | Only file allowed to import `keyring`. The **daemon is the sole keychain owner**: every surface (desktop, CLI, shim) reaches the keychain through the daemon's `/api/v1/keychain` routes — the CLI never accesses it in-process (spec 006). Refs in config; materialized at upstream-spawn time; never persisted. |
+| Audit             | `domain/audit.py` + `application/audit_service.py` + `audit_log` table           | Every resource lifecycle change. Actor (cli / api / ui / system) required.                                                                                                                                                                                                                                        |
+| Retention         | `application/retention_service.py` + `retention_policies` table + asyncio worker | Each log-style table registers as a `PrunableTable`; central registry enforces SQL allowlist.                                                                                                                                                                                                                     |
+| Errors            | `domain/errors.py` + FastAPI global handlers                                     | Uniform `{error: {code, message, details}}` envelope; `X-Coffer-Trace` header for correlation.                                                                                                                                                                                                                    |
+| Logging           | `structlog` JSON-per-line to `~/.coffer/logs/`                                   | Per-request trace IDs via contextvar.                                                                                                                                                                                                                                                                             |
+| Converters        | `MarkdownConverter` port + per-format adapters in `infrastructure/`              | Only place importing converter libs (passthrough for text/code, csv converter, MarkItDown for the rest; new engines pluggable per format). any-format → markdown.                                                                                                                                                                                                      |
+| Memory projection | `AgentMemoryAdapter` in the **agent layer** (with the agent driver)              | Projects the one canonical memory store into native locations (`SYMLINK` / `RENDER` / `NONE`); owns the L1 file mutations so memory stays agent-agnostic ([ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)).                                                                                 |

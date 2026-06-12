@@ -76,3 +76,23 @@ class RetentionPolicyModel(Base):
             name="ck_retention_positive_or_null",
         ),
     )
+
+
+class EmbeddingConfigModel(Base):
+    """The single, global embedding configuration (one row, ``id`` pinned to 1).
+
+    Embedding is installation-wide, not per-resource: every KB and memory store
+    that enables vector retrieval shares this config."""
+
+    __tablename__ = "embedding_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    provider: Mapped[str | None] = mapped_column(String, nullable=True)
+    model: Mapped[str | None] = mapped_column(String, nullable=True)
+    base_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    credential_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    dimensions: Mapped[int] = mapped_column(Integer, nullable=False, default=768)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+    __table_args__ = (CheckConstraint("id = 1", name="ck_embedding_config_singleton"),)
