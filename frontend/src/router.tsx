@@ -14,6 +14,7 @@ import { AuditLogPage } from "./pages/audit/AuditLogPage";
 import { SettingsLayout } from "./pages/settings/SettingsLayout";
 import { GeneralSettings } from "./pages/settings/GeneralSettings";
 import { DataSettings } from "./pages/settings/DataSettings";
+import { EmbeddingSettings } from "./pages/settings/EmbeddingSettings";
 import { AppSettings } from "./pages/settings/AppSettings";
 import { AboutPage } from "./pages/settings/AboutPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
           },
           { path: "general", element: <GeneralSettings /> },
           { path: "data", element: <DataSettings /> },
+          { path: "embedding", element: <EmbeddingSettings /> },
           { path: "app", element: <AppSettings /> },
           { path: "about", element: <AboutPage /> },
         ],

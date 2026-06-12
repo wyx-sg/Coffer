@@ -50,7 +50,7 @@ export function KnowledgeBaseSearchBar({
 
   return (
     <section className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex max-w-2xl flex-wrap items-center gap-2">
         <Select value={mode} onValueChange={(v) => onModeChange(v as RetrievalMode)}>
           <SelectTrigger className="w-32" aria-label={t("knowledgeBases.detail.mode")}>
             <SelectValue />

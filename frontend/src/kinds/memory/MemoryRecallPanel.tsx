@@ -34,7 +34,7 @@ export function MemoryRecallPanel({
   return (
     <section className="space-y-2">
       <h2 className="text-lg font-medium">{t("memory.detail.recall")}</h2>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex max-w-2xl flex-wrap gap-2">
         <select
           aria-label={t("memory.detail.mode")}
           className="rounded-md border border-input bg-background px-3 py-2 text-sm"

@@ -289,7 +289,8 @@
       "general": "General",
       "data": "Data",
       "app": "App",
-      "about": "About"
+      "about": "About",
+      "embedding": "Embedding"
     },
     "general": {
       "title": "Display",
@@ -338,6 +339,18 @@
         "license": "License",
         "source": "Source"
       }
+    },
+    "embedding": {
+      "title": "Embedding",
+      "description": "One global embedding model powers vector search across every knowledge base and memory store. Turn it off to use keyword and grep only.",
+      "enabled": "Enable vector embedding",
+      "enabledHint": "When off, all stores fall back to keyword/grep.",
+      "provider": "Provider",
+      "model": "Model",
+      "dimensions": "Dimensions",
+      "baseUrl": "Base URL (optional)",
+      "credential": "Credential reference",
+      "credentialHint": "Keychain entry name (not the key itself)"
     }
   },
   "daemon": {
@@ -684,7 +697,8 @@
       "title": "Knowledge base settings",
       "description": "Update chunking and embedding for this knowledge base. Reindex afterwards to apply chunking changes to existing documents.",
       "chunkSize": "Chunk size",
-      "chunkOverlap": "Chunk overlap"
+      "chunkOverlap": "Chunk overlap",
+      "vectorHint": "Add meaning-based vector retrieval for this knowledge base (keyword + grep are always on). The embedding model is configured globally in Settings → Embedding."
     },
     "welcome": {
       "title": "Manage your knowledge bases",

@@ -289,7 +289,8 @@
       "general": "通用",
       "data": "数据",
       "app": "应用",
-      "about": "关于"
+      "about": "关于",
+      "embedding": "向量模型"
     },
     "general": {
       "title": "显示",
@@ -338,6 +339,18 @@
         "license": "许可证",
         "source": "源代码"
       }
+    },
+    "embedding": {
+      "title": "向量模型（Embedding）",
+      "description": "一份全局向量模型为所有知识库和记忆库的向量检索提供支持。关闭后将只使用关键词和 grep。",
+      "enabled": "启用向量 embedding",
+      "enabledHint": "关闭后所有库回退到关键词/grep。",
+      "provider": "提供方",
+      "model": "模型",
+      "dimensions": "维度",
+      "baseUrl": "Base URL（可选）",
+      "credential": "凭证引用",
+      "credentialHint": "keychain 条目名（不是密钥本身）"
     }
   },
   "daemon": {
@@ -684,7 +697,8 @@
       "title": "知识库设置",
       "description": "更新该知识库的分块与 embedding 配置。修改分块后请重建索引，以应用到已有文档。",
       "chunkSize": "分块大小",
-      "chunkOverlap": "分块重叠"
+      "chunkOverlap": "分块重叠",
+      "vectorHint": "为该知识库启用基于含义的向量检索（关键词与 grep 始终开启）。向量模型在「设置 → 向量模型」中统一配置。"
     },
     "welcome": {
       "title": "管理你的知识库",

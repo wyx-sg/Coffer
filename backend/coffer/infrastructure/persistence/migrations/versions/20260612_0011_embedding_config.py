@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0011"
@@ -25,20 +24,24 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "embedding_config",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("provider", sa.String(), nullable=True),
-        sa.Column("model", sa.String(), nullable=True),
-        sa.Column("base_url", sa.String(), nullable=True),
-        sa.Column("credential_ref", sa.String(), nullable=True),
-        sa.Column("dimensions", sa.Integer(), nullable=False, server_default=sa.text("768")),
-        sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("id", name="pk_embedding_config"),
-        sa.CheckConstraint("id = 1", name="ck_embedding_config_singleton"),
+    # Idempotent (IF NOT EXISTS): a DB that was stamped at 0011 without the
+    # table actually landing (a partial/interrupted migration) self-heals on
+    # the next ``stamp 0010 && upgrade head`` instead of 500-ing forever.
+    op.execute(
+        "CREATE TABLE IF NOT EXISTS embedding_config ("
+        "id INTEGER NOT NULL, "
+        "enabled BOOLEAN NOT NULL DEFAULT 0, "
+        "provider VARCHAR, "
+        "model VARCHAR, "
+        "base_url VARCHAR, "
+        "credential_ref VARCHAR, "
+        "dimensions INTEGER NOT NULL DEFAULT 768, "
+        "updated_at TIMESTAMP NOT NULL, "
+        "CONSTRAINT pk_embedding_config PRIMARY KEY (id), "
+        "CONSTRAINT ck_embedding_config_singleton CHECK (id = 1)"
+        ")"
     )
 
 
 def downgrade() -> None:
-    op.drop_table("embedding_config")
+    op.execute("DROP TABLE IF EXISTS embedding_config")
