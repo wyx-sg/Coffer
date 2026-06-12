@@ -29,6 +29,12 @@ vi.mock("@/kinds/memory/api", async (importOriginal) => ({
   listFacts: vi.fn(async () => ({ facts: [], total: 0 })),
 }));
 
+// The native-memory discovery banner: default to "nothing unmanaged".
+vi.mock("@/lib/api/agents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/agents")>()),
+  getAgentNativeMemory: vi.fn(async () => ({ projects: [], unmanaged_fact_count: 0 })),
+}));
+
 function wrap({ children }: PropsWithChildren) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;

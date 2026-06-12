@@ -467,7 +467,8 @@
       "missingProjectRoot": "This project store has no known root yet, so it can't be projected.",
       "toggleAria": "Toggle projection of {{store}} into this agent",
       "facts": "Memories ({{count}})",
-      "factsEmpty": "No memories yet."
+      "factsEmpty": "No memories yet.",
+      "nativeDiscovered": "Found {{count}} memories Claude Code wrote natively across {{projects}} project(s) that Coffer is not managing yet."
     },
     "configDirOverride": "Config directory (optional)",
     "configDirPlaceholder": "Leave blank for the default (~/.claude)",

@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
-import type { AgentOut } from "@/lib/api/agents";
+import { getAgentNativeMemory, type AgentOut } from "@/lib/api/agents";
 import { listFacts, type MemoryStoreOut } from "@/kinds/memory/api";
 import {
   useEstablishProjection,
@@ -141,6 +141,26 @@ function StoreProjectionRow({ store, agent }: { store: MemoryStoreOut; agent: Ag
   );
 }
 
+function NativeMemoryBanner({ agent }: { agent: AgentOut }) {
+  const { t } = useTranslation();
+  const native = useQuery({
+    queryKey: ["agent-native-memory", agent.name],
+    queryFn: () => getAgentNativeMemory(agent.name),
+  });
+  const count = native.data?.unmanaged_fact_count ?? 0;
+  if (count === 0) return null;
+  return (
+    <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+      <p>
+        {t("agents.memoryTab.nativeDiscovered", {
+          count,
+          projects: (native.data?.projects ?? []).filter((p) => !p.managed).length,
+        })}
+      </p>
+    </div>
+  );
+}
+
 export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const stores = useMemoryStores();
@@ -151,6 +171,8 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
         <h3 className="text-sm font-medium text-muted-foreground">{t("agents.memoryTab.title")}</h3>
         <p className="text-xs text-muted-foreground">{t("agents.memoryTab.subtitle")}</p>
       </div>
+
+      <NativeMemoryBanner agent={agent} />
 
       {stores.isPending ? (
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>

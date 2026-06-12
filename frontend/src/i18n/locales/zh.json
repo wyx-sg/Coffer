@@ -467,7 +467,8 @@
       "missingProjectRoot": "该项目记忆库尚无已知根目录，无法投影。",
       "toggleAria": "切换将 {{store}} 投影到该 agent",
       "facts": "记忆（{{count}}）",
-      "factsEmpty": "暂无记忆。"
+      "factsEmpty": "暂无记忆。",
+      "nativeDiscovered": "发现 Claude Code 在 {{projects}} 个项目里原生写入的 {{count}} 条记忆,尚未被 Coffer 接管。"
     },
     "configDirOverride": "配置目录（可选）",
     "configDirPlaceholder": "留空则使用默认目录（~/.claude）",

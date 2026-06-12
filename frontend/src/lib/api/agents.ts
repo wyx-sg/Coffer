@@ -131,3 +131,19 @@ export const agentsApi = {
   mcpUninstall: (name: string) =>
     call<McpInstallStatus>("DELETE", `/agents/${enc(name)}/mcp-install`),
 };
+
+export interface NativeMemoryProject {
+  slug: string;
+  memory_dir: string;
+  fact_count: number;
+  managed: boolean;
+}
+
+export interface NativeMemoryOut {
+  projects: NativeMemoryProject[];
+  unmanaged_fact_count: number;
+}
+
+export async function getAgentNativeMemory(name: string): Promise<NativeMemoryOut> {
+  return call<NativeMemoryOut>("GET", `/agents/${enc(name)}/native-memory`);
+}
