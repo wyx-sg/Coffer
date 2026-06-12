@@ -715,7 +715,8 @@
         "title": "Reachable by agents",
         "body": "Agents search and fetch documents through Coffer's built-in MCP tools."
       }
-    }
+    },
+    "deleteConfirm": "Delete knowledge base \"{{name}}\"? Its documents and index are removed. This cannot be undone."
   },
   "memory": {
     "title": "Memory",
@@ -779,6 +780,7 @@
         "title": "Reachable by agents",
         "body": "Add, recall, and curate facts through Coffer's built-in MCP tools."
       }
-    }
+    },
+    "deleteStoreConfirm": "Delete memory store \"{{name}}\"? Its facts are removed. This cannot be undone."
   }
 }

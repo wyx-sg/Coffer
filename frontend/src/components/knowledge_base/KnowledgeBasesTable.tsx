@@ -4,8 +4,11 @@
 // description, and a modes column shows the enabled retrieval modes.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Trash2 } from "lucide-react";
 
 import { DataTable, type Column } from "@/components/DataTable";
+import { Button } from "@/components/ui/button";
+import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import type { ResourceOut } from "@/lib/components/kindRegistry";
 
 function modesOf(row: ResourceOut): string[] {
@@ -19,6 +22,7 @@ function modesOf(row: ResourceOut): string[] {
 export function KnowledgeBasesTable({ items }: { items: ResourceOut[] }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const del = useDeleteResource();
 
   const columns: Column<ResourceOut>[] = [
     {
@@ -46,6 +50,27 @@ export function KnowledgeBasesTable({ items }: { items: ResourceOut[] }) {
       key: "description",
       header: t("knowledgeBases.cols.description"),
       cell: (r) => <span className="text-muted-foreground">{r.description || "—"}</span>,
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "text-right",
+      cell: (r) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm(t("knowledgeBases.deleteConfirm", { name: r.name }))) {
+              del.mutate({ kind: "knowledge_base", name: r.name });
+            }
+          }}
+          aria-label={t("common.delete")}
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      ),
     },
   ];
 

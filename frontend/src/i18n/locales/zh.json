@@ -715,7 +715,8 @@
         "title": "可被 agent 访问",
         "body": "agent 通过 Coffer 内置的 MCP 工具检索并获取文档。"
       }
-    }
+    },
+    "deleteConfirm": "删除知识库「{{name}}」？其文档与索引都会被移除，此操作不可撤销。"
   },
   "memory": {
     "title": "记忆",
@@ -779,6 +780,7 @@
         "title": "可被 agent 访问",
         "body": "通过 Coffer 内置的 MCP 工具增改、回忆并整理事实。"
       }
-    }
+    },
+    "deleteStoreConfirm": "删除记忆库「{{name}}」？其中的事实都会被移除，此操作不可撤销。"
   }
 }
