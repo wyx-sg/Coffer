@@ -263,7 +263,7 @@ def wire_chat(
     # 4. Credential resolver: resolve a credential ref → raw API key from the
     #    encrypted credential store.
     def _credential_resolver(ref: str) -> str:
-        value = credential_store.get(ref)
+        value: str | None = credential_store.get(ref)
         if value is None:
             # A domain error so a missing/revoked key surfaces as a mapped 400
             # (CREDENTIAL_MISSING) and the conversation stays usable, rather
