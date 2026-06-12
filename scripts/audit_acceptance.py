@@ -170,14 +170,18 @@ def _scan_python_file(
                 )
                 visit(child, cls_skipped)
             elif isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
-                pair: tuple[str, str] | None = None
+                # A test may stack several acceptance decorators (one per
+                # scenario it covers) — record every one, not just the last.
+                pairs: list[tuple[str, str]] = []
                 fn_skipped = scope_skipped
                 for dec in child.decorator_list:
                     if isinstance(dec, ast.Call):
-                        pair = _extract_acceptance_call(dec) or pair
+                        found = _extract_acceptance_call(dec)
+                        if found is not None:
+                            pairs.append(found)
                     if _is_unconditional_skip(dec):
                         fn_skipped = True
-                if pair is not None:
+                for pair in pairs:
                     markers.add(pair)
                     if fn_skipped:
                         dead.append((pair[0], pair[1], f"{py.relative_to(REPO_ROOT)}::{child.name}"))

@@ -16,8 +16,8 @@ from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_service import AgentMcpService
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
-from coffer.application.resource_service import ResourceService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.resource_service import ResourceService
 from coffer.application.skill.builtin_tools import register_skill_builtin_tools
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService

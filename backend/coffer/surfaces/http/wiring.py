@@ -15,7 +15,6 @@ import asyncio
 import logging
 import os
 from collections.abc import Callable
-
 from typing import TYPE_CHECKING, Any, cast
 
 from coffer.application.builtin_tools import BuiltinToolRegistry
@@ -37,8 +36,8 @@ from coffer.application.memory.kind import make_memory_kind
 from coffer.application.memory.scope import ScopeResolver
 from coffer.application.memory.service import MemoryService
 from coffer.application.memory.sync import MemoryReconciler
-from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.errors import CredentialMissing
+from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.infrastructure.chat.builtin_provider import BuiltinAgentProvider
 from coffer.infrastructure.chat.gateway_tool_provider import GatewayToolProvider
 from coffer.infrastructure.chat.langgraph_agent import DEFAULT_RECURSION_LIMIT

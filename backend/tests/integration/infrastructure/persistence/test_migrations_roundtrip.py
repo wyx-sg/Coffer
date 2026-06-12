@@ -48,6 +48,9 @@ EXPECTED_TABLES = {
     "memory_projection_bindings",
     "memory_store_project_roots",
     "embedding_config",
+    "conversations",
+    "chat_messages",
+    "chat_models",
 }
 
 # FTS5 creates these shadow tables for ``documents_fts``; they are an
@@ -135,7 +138,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
-    # 0011 -> 0010: drops embedding_config (global embedding singleton).
+    # 0011 -> 0010: drops embedding_config + the chat tables.
     command.downgrade(cfg, "0010")
     assert "embedding_config" not in _user_tables(db_path)
 
@@ -167,6 +170,9 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.downgrade(cfg, "0003")
     assert _user_tables(db_path) == EXPECTED_TABLES - {
         "embedding_config",
+        "conversations",
+        "chat_messages",
+        "chat_models",
         "memory_store_project_roots",
         "memory_projection_bindings",
         "skill_agent_bindings",

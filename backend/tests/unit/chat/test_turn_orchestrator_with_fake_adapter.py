@@ -187,6 +187,26 @@ async def test_happy_path_emits_audit_event() -> None:
     assert any(e.event_type == "chat_turn_completed" for e in audit_repo.entries)
 
 
+@pytest.mark.acceptance(spec="008-agent-chat", scenario="token usage and audit")
+@pytest.mark.asyncio
+async def test_completed_turn_records_token_usage_and_agent_audit() -> None:
+    scripted: list[AgentEvent] = [
+        TextDelta(text="done"),
+        TurnDone(prompt_tokens=12, completion_tokens=6, stop_reason="end_turn"),
+    ]
+    orchestrator, _, msg_repo, audit_repo, _ = make_orchestrator(scripted)
+    conv = await orchestrator._chat.create_conversation()
+
+    queue = await orchestrator.start_turn(conv.id, "ping")
+    await drain_queue(queue)
+
+    assistant = msg_repo.all_messages()[1]
+    assert assistant.prompt_tokens == 12
+    assert assistant.completion_tokens == 6
+    completed = next(e for e in audit_repo.entries if e.event_type == "chat_turn_completed")
+    assert completed.actor == "agent"
+
+
 @pytest.mark.asyncio
 async def test_history_passed_to_adapter_includes_the_user_message() -> None:
     adapter = FakeAgentAdapter(

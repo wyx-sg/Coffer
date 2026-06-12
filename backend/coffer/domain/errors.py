@@ -1,7 +1,4 @@
-"""Domain-level error hierarchy.
-
-Surfaces map these to HTTP status codes via FastAPI exception handlers.
-"""
+"""Domain-level error hierarchy; surfaces map these to HTTP status codes."""
 
 from __future__ import annotations
 
@@ -389,9 +386,8 @@ class EmbeddingUnavailable(CofferError):  # noqa: N818
         self.detail = detail
 
 
-# --- agent chat (spec 008) — re-exported from coffer.domain.chat.errors ------
-# The classes live in their own module for the file-size limit; importing them
-# here keeps the long-standing ``coffer.domain.errors.X`` paths working.
+# agent chat (spec 008): re-exported from coffer.domain.chat.errors (split for
+# the file-size limit) so the coffer.domain.errors.X import paths keep working.
 from coffer.domain.chat.errors import (  # noqa: E402, I001
     AgentConfigRejected as AgentConfigRejected,
     ApprovalNotFound as ApprovalNotFound,

@@ -716,7 +716,6 @@ def test_send_message_streams_turn_error_event() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="token usage and audit")
 @pytest.mark.acceptance(spec="008-agent-chat", scenario="reply survives a restart")
 def test_send_message_streams_and_persists_assistant_message() -> None:
     """After a successful SSE turn, GET /conversations/{id}/messages must return
