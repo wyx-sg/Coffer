@@ -338,13 +338,14 @@ async def test_mcp_server(
     name: str,
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
+    credential_store: Any = Depends(get_credential_store),  # noqa: B008
 ) -> McpTestResultOut:
     """Open a transient upstream session, run MCP initialize, return health info.
     Persists the result to mcp_server_health so GET /status reflects it."""
     resource = await resource_service.get(ResourceRef("mcp_server", name))
     config = MCPServerConfig.model_validate(resource.config)
 
-    resolver = CredentialResolver(get_credential_store())
+    resolver = CredentialResolver(credential_store)
 
     start = time.monotonic()
     try:

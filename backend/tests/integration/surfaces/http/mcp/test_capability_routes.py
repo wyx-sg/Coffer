@@ -40,6 +40,7 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import (
     get_audit_service,
     get_capability_discovery,
+    get_credential_store,
     get_health_repo,
     get_invocation_repo,
     get_preferences_repo,
@@ -76,6 +77,19 @@ def _stdio_config_with_resources_prompts(
     if prompts:
         args += ["--prompts", *prompts]
     return {"transport": {"type": "stdio", "command": sys.executable, "args": args}}
+
+
+class _InMemoryCredentialStore:
+    """Empty credential store — capability tests register servers without credential_refs."""
+
+    def get(self, ref: str) -> str | None:
+        return None
+
+    def set(self, ref: str, value: str) -> None:  # pragma: no cover - unused
+        pass
+
+    def delete(self, ref: str) -> None:  # pragma: no cover - unused
+        pass
 
 
 async def _build_app(
@@ -139,6 +153,7 @@ async def _build_app(
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
     app.dependency_overrides[get_health_repo] = lambda: health_repo
+    app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
 
     return app, engine, rsvc, prefs_repo, supervisor
 
@@ -282,6 +297,7 @@ async def test_list_capabilities_tools_only_upstream_method_not_found(
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
     app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(sm)
+    app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
 
     transport = ASGITransport(app=app)
     try:
@@ -620,6 +636,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
     app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(sm)
+    app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
 
     transport_transport = ASGITransport(app=app)
     try:
@@ -701,6 +718,7 @@ async def test_enable_capability_creates_audit_event(
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
     app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(sm)
+    app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
 
     transport = ASGITransport(app=app)
     try:
@@ -986,6 +1004,7 @@ async def test_test_endpoint_http_transport(
         app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
         app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
         app.dependency_overrides[get_health_repo] = lambda: health_repo
+        app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
 
         transport_obj = ASGITransport(app=app)
         try:
