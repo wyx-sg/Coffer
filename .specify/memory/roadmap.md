@@ -13,6 +13,8 @@
 | 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | Accepted — code in review (PR #28)                 |
 | 004 | **Agent Registry** ([spec](../../specs/004-agent-registry/spec.md))           | Accepted — code merged                             |
 | 005 | **Skill Manager** ([spec](../../specs/005-skill-manager/spec.md))             | Accepted — code merged                             |
+| 006 | **Knowledge Base** ([spec](../../specs/006-knowledge-base/spec.md))           | Accepted — redesign in development (feature/kb-memory-redesign; KB face of the knowledge substrate, [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md))                                                                 |
+| 007 | **Memory** ([spec](../../specs/007-memory/spec.md))                           | Accepted — redesign in development (feature/kb-memory-redesign; shared agent-native memory, [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) + [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)) |
 
 ## Explicit non-goals (current spec)
 

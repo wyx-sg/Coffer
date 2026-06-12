@@ -1,0 +1,223 @@
+// frontend/src/components/agents/AgentMemoryTab.tsx
+// "Memory" tab on the agent detail page: lists each memory store (global +
+// per-project) and lets the user toggle whether this store is PROJECTED into
+// this agent's native memory location (symlink for Claude Code, a managed
+// AGENTS.md block for Codex). When a store is projected, the facts it holds are
+// listed inline — these ARE the agent's current memories (Coffer manages Claude
+// Code / Codex memory, so this is the single source of truth). Resource pages
+// manage the store; the agent page binds it — matching the skills tab.
+import { useTranslation } from "react-i18next";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { translateApiError } from "@/lib/api/errors";
+import {
+  getAgentNativeMemory,
+  importAgentNativeMemory,
+  type AgentOut,
+} from "@/lib/api/agents";
+import { listFacts, type MemoryStoreOut } from "@/kinds/memory/api";
+import {
+  useEstablishProjection,
+  useMemoryProjections,
+  useMemoryStores,
+  useRemoveProjection,
+} from "@/lib/hooks/useMemoryProjections";
+
+function StoreFacts({ store }: { store: string }) {
+  const { t } = useTranslation();
+  const facts = useQuery({
+    queryKey: ["memory-facts", store],
+    queryFn: () => listFacts(store, 100, 0),
+  });
+
+  if (facts.isPending) {
+    return <p className="px-3 pb-2 text-xs text-muted-foreground">{t("common.loading")}</p>;
+  }
+  if (facts.error) {
+    return (
+      <p className="px-3 pb-2 text-xs text-destructive">{translateApiError(t, facts.error)}</p>
+    );
+  }
+  const items = facts.data?.facts ?? [];
+  if (items.length === 0) {
+    return (
+      <p className="px-3 pb-2 text-xs text-muted-foreground">{t("agents.memoryTab.factsEmpty")}</p>
+    );
+  }
+  return (
+    <div className="px-3 pb-2">
+      <p className="mb-1 text-xs font-medium text-muted-foreground">
+        {t("agents.memoryTab.facts", { count: facts.data?.total ?? items.length })}
+      </p>
+      <ul className="space-y-1">
+        {items.map((f) => (
+          <li key={f.id} className="rounded bg-secondary/50 px-2 py-1 text-xs">
+            <span className="font-medium">{f.name || f.text.slice(0, 40)}</span>
+            {f.name ? <span className="text-muted-foreground"> — {f.text}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function StoreProjectionRow({ store, agent }: { store: MemoryStoreOut; agent: AgentOut }) {
+  const { t } = useTranslation();
+  const projections = useMemoryProjections(store.name);
+  const establish = useEstablishProjection(store.name);
+  const remove = useRemoveProjection(store.name);
+
+  const projection = (projections.data ?? []).find((p) => p.agent_ref === agent.name);
+  const isProjected = Boolean(projection);
+
+  // A project-scoped store's projection must be anchored under its project root
+  // (007 contract). The global store needs no root. When a project store has no
+  // known root we can't form a well-specified request, so disable the toggle.
+  const isProjectScope = store.scope === "project";
+  const projectRoot = store.project_root ?? null;
+  const missingProjectRoot = isProjectScope && !projectRoot;
+
+  const pending = establish.isPending || remove.isPending;
+
+  const handleToggle = (checked: boolean) => {
+    if (checked) {
+      if (missingProjectRoot) return;
+      establish.mutate(
+        isProjectScope ? { agentRef: agent.name, projectRoot } : { agentRef: agent.name },
+      );
+    } else {
+      remove.mutate(agent.name);
+    }
+  };
+
+  return (
+    <li className="flex flex-col">
+      <div className="flex items-start justify-between gap-3 p-3">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium">{store.name}</span>
+            <Badge variant="secondary">{store.scope}</Badge>
+            {projection ? <Badge variant="outline">{projection.projection_mode}</Badge> : null}
+          </div>
+          {projection ? (
+            <div className="space-y-0.5 text-xs text-muted-foreground">
+              <div className="font-mono break-all">{projection.target_path}</div>
+              {projection.native_memory_disabled ? (
+                <div>{t("agents.memoryTab.nativeDisabled")}</div>
+              ) : null}
+              {projection.merged_existing ? <div>{t("agents.memoryTab.merged")}</div> : null}
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">
+              {t("agents.memoryTab.notProjected")}
+            </div>
+          )}
+          {missingProjectRoot ? (
+            <p className="text-xs text-muted-foreground">
+              {t("agents.memoryTab.missingProjectRoot")}
+            </p>
+          ) : null}
+          {establish.error ? (
+            <p className="text-xs text-destructive">{translateApiError(t, establish.error)}</p>
+          ) : null}
+          {remove.error ? (
+            <p className="text-xs text-destructive">{translateApiError(t, remove.error)}</p>
+          ) : null}
+        </div>
+        <Switch
+          checked={isProjected}
+          onCheckedChange={handleToggle}
+          disabled={pending || projections.isPending || (missingProjectRoot && !isProjected)}
+          title={
+            missingProjectRoot && !isProjected
+              ? t("agents.memoryTab.missingProjectRoot")
+              : undefined
+          }
+          aria-label={t("agents.memoryTab.toggleAria", { store: store.name })}
+        />
+      </div>
+      {/* Show the store's memories whether or not it is projected — Coffer is
+          the source of truth, so the agent's memories live here regardless. */}
+      <StoreFacts store={store.name} />
+    </li>
+  );
+}
+
+function NativeMemoryBanner({ agent }: { agent: AgentOut }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const native = useQuery({
+    queryKey: ["agent-native-memory", agent.name],
+    queryFn: () => getAgentNativeMemory(agent.name),
+  });
+  const takeover = useMutation({
+    mutationFn: () => importAgentNativeMemory(agent.name),
+    onSuccess: () => {
+      // The takeover provisions stores + projections and flips dirs to managed;
+      // refresh every view that reflects that state.
+      void qc.invalidateQueries({ queryKey: ["agent-native-memory", agent.name] });
+      void qc.invalidateQueries({ queryKey: ["memory-stores"] });
+      void qc.invalidateQueries({ queryKey: ["memory-projections"] });
+      void qc.invalidateQueries({ queryKey: ["memory-facts"] });
+    },
+  });
+  const count = native.data?.unmanaged_fact_count ?? 0;
+  if (count === 0) return null;
+  const projects = (native.data?.projects ?? []).filter((p) => !p.managed).length;
+  return (
+    <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <p>{t("agents.memoryTab.nativeDiscovered", { count, projects })}</p>
+        <Button size="sm" onClick={() => takeover.mutate()} disabled={takeover.isPending}>
+          {takeover.isPending
+            ? t("agents.memoryTab.takingOver")
+            : t("agents.memoryTab.takeOver")}
+        </Button>
+      </div>
+      {takeover.error ? (
+        <p className="text-xs text-destructive">{translateApiError(t, takeover.error)}</p>
+      ) : null}
+      {takeover.data ? (
+        <p className="text-xs text-muted-foreground">
+          {t("agents.memoryTab.takeOverDone", {
+            imported: takeover.data.imported,
+            skipped: takeover.data.skipped,
+          })}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
+  const { t } = useTranslation();
+  const stores = useMemoryStores();
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium text-muted-foreground">{t("agents.memoryTab.title")}</h3>
+        <p className="text-xs text-muted-foreground">{t("agents.memoryTab.subtitle")}</p>
+      </div>
+
+      <NativeMemoryBanner agent={agent} />
+
+      {stores.isPending ? (
+        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+      ) : stores.error ? (
+        <p className="text-sm text-destructive">{translateApiError(t, stores.error)}</p>
+      ) : (stores.data ?? []).length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("agents.memoryTab.empty")}</p>
+      ) : (
+        <ul className="divide-y rounded border">
+          {(stores.data ?? []).map((store) => (
+            <StoreProjectionRow key={store.name} store={store} agent={agent} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

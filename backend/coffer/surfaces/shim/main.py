@@ -45,6 +45,25 @@ _DAEMON_BOOT_TIMEOUT = 10  # seconds
 _STDIN_READ_LIMIT = 64 * 1024 * 1024  # 64 MiB
 
 
+#: MCP-reserved extension key the daemon reads the launch cwd from.
+_CWD_META_KEY = "coffer/cwd"
+
+
+def _inject_cwd(envelope: dict[str, Any]) -> None:
+    """Stamp the shim's launch cwd into an ``initialize`` envelope's
+    ``params._meta`` so the daemon can resolve the per-project memory scope."""
+    params = envelope.get("params")
+    if not isinstance(params, dict):
+        params = {}
+        envelope["params"] = params
+    meta = params.get("_meta")
+    if not isinstance(meta, dict):
+        meta = {}
+        params["_meta"] = meta
+    with contextlib.suppress(OSError):
+        meta[_CWD_META_KEY] = os.getcwd()
+
+
 def _setup_shim_log() -> None:
     """Send our diagnostic log to a file (NOT stdout — that's the MCP wire)."""
     try:
@@ -182,6 +201,13 @@ class _Bridge:
             except _json.JSONDecodeError as e:
                 _logger.warning("shim.bad_json_from_stdin", extra={"error": str(e)})
                 continue
+            # FR-004: report the agent's launch cwd at session handshake so the
+            # daemon can resolve the per-project memory store. We tuck it into
+            # the ``initialize`` params under ``_meta`` (an MCP-reserved
+            # extension key) so it rides the existing handshake without a custom
+            # method; the gateway threads it into memory built-in tool calls.
+            if envelope.get("method") == "initialize":
+                _inject_cwd(envelope)
             _logger.info(
                 "shim.in method=%s id=%s",
                 envelope.get("method"),

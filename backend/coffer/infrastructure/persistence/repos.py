@@ -11,11 +11,13 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from coffer.domain.audit import AuditEntry
+from coffer.domain.embedding_config import SINGLETON_ID, GlobalEmbeddingConfig
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.retention import RetentionPolicy
 from coffer.infrastructure.persistence.models import (
     AuditLogModel,
+    EmbeddingConfigModel,
     ResourceModel,
     RetentionPolicyModel,
 )
@@ -211,6 +213,9 @@ class SqlAlchemyAuditRepo:
 _PRUNABLE_TABLE_ALLOWLIST: dict[str, set[str]] = {
     "audit_log": {"timestamp"},
     "mcp_invocations": {"timestamp"},
+    # Conversations prune whole threads by last activity; their messages are
+    # deleted alongside (see delete_older_than's conversations special-case).
+    "conversations": {"updated_at"},
 }
 
 
@@ -302,6 +307,17 @@ class SqlAlchemyRetentionRepo:
                 f"table/column not in allowlist: ({table!r}, {timestamp_column!r})"
             )
         async with self._sm() as session:
+            if table == "conversations":
+                # A conversation owns its messages; pruning a thread must take
+                # them with it (chat_messages has no DB-level cascade), so delete
+                # the messages of the to-be-pruned threads first, in the same txn.
+                await session.execute(
+                    text(
+                        "DELETE FROM chat_messages WHERE conversation_id IN "
+                        f"(SELECT id FROM conversations WHERE {timestamp_column} < :cutoff)"
+                    ),
+                    {"cutoff": cutoff},
+                )
             stmt = text(f"DELETE FROM {table} WHERE {timestamp_column} < :cutoff")
             result = await session.execute(stmt, {"cutoff": cutoff})
             await session.commit()
@@ -312,3 +328,62 @@ class SqlAlchemyRetentionRepo:
             stmt = select(RetentionPolicyModel).where(RetentionPolicyModel.table_name == table_name)
             row = (await session.execute(stmt)).scalar_one_or_none()
             return row is not None
+
+
+def _embedding_to_domain(row: EmbeddingConfigModel) -> GlobalEmbeddingConfig:
+    return GlobalEmbeddingConfig(
+        enabled=bool(row.enabled),
+        provider=row.provider,
+        model=row.model,
+        base_url=row.base_url,
+        credential_ref=row.credential_ref,
+        dimensions=row.dimensions,
+        default_chunk_size=row.default_chunk_size,
+        default_chunk_overlap=row.default_chunk_overlap,
+        updated_at=row.updated_at.replace(tzinfo=UTC) if row.updated_at else datetime.now(tz=UTC),
+    )
+
+
+class SqlAlchemyEmbeddingConfigRepo:
+    """Concrete repo for the singleton ``embedding_config`` row."""
+
+    def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+        self._sm = sm
+
+    async def get(self) -> GlobalEmbeddingConfig | None:
+        async with self._sm() as session:
+            stmt = select(EmbeddingConfigModel).where(EmbeddingConfigModel.id == SINGLETON_ID)
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            return _embedding_to_domain(row) if row is not None else None
+
+    async def set(
+        self,
+        *,
+        enabled: bool,
+        provider: str | None,
+        model: str | None,
+        base_url: str | None,
+        credential_ref: str | None,
+        dimensions: int,
+        default_chunk_size: int,
+        default_chunk_overlap: int,
+    ) -> GlobalEmbeddingConfig:
+        async with self._sm() as session:
+            stmt = select(EmbeddingConfigModel).where(EmbeddingConfigModel.id == SINGLETON_ID)
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            now = datetime.now(tz=UTC)
+            if row is None:
+                row = EmbeddingConfigModel(id=SINGLETON_ID, updated_at=now)
+                session.add(row)
+            row.enabled = enabled
+            row.provider = provider
+            row.model = model
+            row.base_url = base_url
+            row.credential_ref = credential_ref
+            row.dimensions = dimensions
+            row.default_chunk_size = default_chunk_size
+            row.default_chunk_overlap = default_chunk_overlap
+            row.updated_at = now
+            await session.commit()
+            await session.refresh(row)
+            return _embedding_to_domain(row)

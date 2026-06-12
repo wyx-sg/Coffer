@@ -71,14 +71,18 @@ section that future readers most often want — don't skip it.>
 
 ## Index
 
-| ADR                                                      | Title                                                                    | Status   |
-| -------------------------------------------------------- | ------------------------------------------------------------------------ | -------- |
-| [001](ADR-001-resource-framework-upfront.md)             | Resource framework designed upfront, not after the second feature        | Accepted |
-| [002](ADR-002-code-layout-layer-first.md)                | Code layout: layer-first with kind subdirectories                        | Accepted |
-| [003](ADR-003-resource-identifier-format.md)             | Resource identifier format: `<kind>:<name>`, not URN                     | Accepted |
-| [004](ADR-004-capability-state-model.md)                 | MCP capability state: preferences in DB, list live-queried from upstream | Accepted |
-| [005](ADR-005-session-subprocess-model.md)               | One upstream subprocess set per downstream client session                | Accepted |
-| [006](ADR-006-daemon-detect-or-spawn.md)                 | Daemon detect-or-spawn pattern; daemon outlives any single client        | Accepted |
-| [007](ADR-007-everything-is-a-resource-kind.md)          | Information architecture: every managed entity is a resource kind        | Accepted |
-| [008](ADR-008-distribution-pyinstaller-tauri-sidecar.md) | Distribution: PyInstaller-bundled daemon + shim as Tauri sidecars        | Accepted |
-| [009](ADR-009-cross-platform-skill-delivery.md)          | Cross-platform skill delivery: symlink / junction / copy-fallback        | Accepted |
+| ADR                                                      | Title                                                                                       | Status                                                                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [001](ADR-001-resource-framework-upfront.md)             | Resource framework designed upfront, not after the second feature                           | Accepted                                                                                                      |
+| [002](ADR-002-code-layout-layer-first.md)                | Code layout: layer-first with kind subdirectories                                           | Accepted                                                                                                      |
+| [003](ADR-003-resource-identifier-format.md)             | Resource identifier format: `<kind>:<name>`, not URN                                        | Accepted                                                                                                      |
+| [004](ADR-004-capability-state-model.md)                 | MCP capability state: preferences in DB, list live-queried from upstream                    | Accepted                                                                                                      |
+| [005](ADR-005-session-subprocess-model.md)               | One upstream subprocess set per downstream client session                                   | Accepted                                                                                                      |
+| [006](ADR-006-daemon-detect-or-spawn.md)                 | Daemon detect-or-spawn pattern; daemon outlives any single client                           | Accepted                                                                                                      |
+| [007](ADR-007-everything-is-a-resource-kind.md)          | Information architecture: every managed entity is a resource kind                           | Accepted                                                                                                      |
+| [008](ADR-008-distribution-pyinstaller-tauri-sidecar.md) | Distribution: PyInstaller-bundled daemon + shim as Tauri sidecars                           | Accepted                                                                                                      |
+| [009](ADR-009-cross-platform-skill-delivery.md)          | Cross-platform skill delivery: symlink / junction / copy-fallback                           | Accepted                                                                                                      |
+| [010](ADR-010-llamaindex-rag-engine.md)                  | RAG engine: LlamaIndex behind an application port                                           | Superseded by [012](ADR-012-files-as-truth-sqlite-retrieval.md)                                               |
+| [011](ADR-011-mem0-memory-engine.md)                     | Memory engine: mem0 behind an application port                                              | Superseded by [012](ADR-012-files-as-truth-sqlite-retrieval.md), [013](ADR-013-agent-native-shared-memory.md) |
+| [012](ADR-012-files-as-truth-sqlite-retrieval.md)        | Retrieval stack: markdown files as truth, SQLite FTS5 + sqlite-vec, configurable embeddings | Accepted                                                                                                      |
+| [013](ADR-013-agent-native-shared-memory.md)             | Agent-native shared memory projection                                                       | Accepted                                                                                                      |

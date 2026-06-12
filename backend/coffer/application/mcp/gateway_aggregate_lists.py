@@ -29,7 +29,12 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from coffer.application.mcp.discovery import CapabilityDiscovery
-from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
+from coffer.domain.errors import (
+    CredentialLocked,
+    CredentialMissing,
+    UpstreamTimeout,
+    UpstreamUnavailable,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -52,7 +57,16 @@ async def _one(
     try:
         result = await asyncio.wait_for(fetcher(server), timeout=PER_SERVER_LIST_TIMEOUT)
         await ensure_subscribed(server)
-    except (UpstreamUnavailable, UpstreamTimeout, TimeoutError) as e:
+    except (
+        UpstreamUnavailable,
+        UpstreamTimeout,
+        TimeoutError,
+        # Unresolvable credentials (locked OS keychain, missing ref) surface
+        # when the fetch cold-spawns the upstream; they are that server's
+        # problem alone and must not take down the whole aggregate.
+        CredentialLocked,
+        CredentialMissing,
+    ) as e:
         _logger.warning(failure_event, extra={"server": server, "error": str(e)})
         return None
     return result

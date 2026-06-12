@@ -15,6 +15,8 @@ export interface KindUIModule {
   Card: ComponentType<{ resource: ResourceOut }>;
   /** Optional kind-specific detail page (receives the name from route params). */
   DetailPage?: ComponentType<{ name: string }>;
+  /** Optional route path for the kind's "add new" page (e.g. "/resources/knowledge_base/new"). */
+  addPath?: string;
 }
 
 const _registry: Map<string, KindUIModule> = new Map();

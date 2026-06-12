@@ -10,7 +10,7 @@ Coffer 项目的 AI 代理操作手册（Claude Code、Codex、Cursor 及未来�
 | ------------ | ----------------------------------------------------------------- |
 | **项目**     | Coffer —— 本地优先的 AI agent 保险箱。单用户。坚定开源。          |
 | **方法论**   | 基于 Speckit 的规格驱动开发（SDD, Spec-Driven Development）。     |
-| **语言栈**   | Python 3.12+（后端）。                                            |
+| **语言栈**   | Python 3.12+（后端）；TypeScript / React（前端）。               |
 | **真理来源** | `.specify/memory/constitution.md`（原则）；`specs/`（产品契约）。 |
 | **默认分支** | `main`。                                                          |
 | **许可证**   | MIT。                                                             |
@@ -25,6 +25,7 @@ Coffer 项目的 AI 代理操作手册（Claude Code、Codex、Cursor 及未来�
    - [`agents/sdd.md`](./agents/sdd.md) —— spec 目录布局、验收场景、端到端可交付规则。
    - [`agents/workflow.md`](./agents/workflow.md) —— 分支、Conventional Commits、AI 署名、PR 流程、合并策略。
    - [`agents/stack.md`](./agents/stack.md) —— 后端（Python / FastAPI / SQLite）。包含文件大小限制、分层架构导入规则、wire-contract 规则。
+   - [`agents/frontend.md`](./agents/frontend.md) —— 前端（React / TypeScript / Vite）。状态管理、API 层、query key、hooks、设计系统与 i18n 规范。
    - [`agents/testing.md`](./agents/testing.md) —— 四层测试（unit / integration / contract / e2e）、验收标记、mocking 原则。
 4. 涉及 spec 的工作时，阅读对应的 **`specs/<NNN>-<short-name>/spec.md`**。
 

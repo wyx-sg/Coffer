@@ -4,6 +4,9 @@ import { useTranslation } from "react-i18next";
 import {
   Bot,
   Boxes,
+  Brain,
+  MessageSquare,
+  Library,
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
@@ -52,13 +55,18 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.agents",
-    items: [{ to: "/agents", labelKey: "nav.agents", icon: Bot, end: true }],
+    items: [
+      { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
+      { to: "/agents", labelKey: "nav.agents", icon: Bot, end: true },
+    ],
   },
   {
     labelKey: "nav.group.resources",
     items: [
       { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server, end: true },
       { to: "/skills", labelKey: "nav.skills", icon: Sparkles, end: true },
+      { to: "/knowledge-bases", labelKey: "nav.knowledgeBases", icon: Library, end: true },
+      { to: "/memory", labelKey: "nav.memory", icon: Brain, end: true },
     ],
   },
   {

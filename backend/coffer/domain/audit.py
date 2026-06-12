@@ -23,6 +23,7 @@ class AuditEventType(StrEnum):
     DAEMON_STOPPED = "daemon_stopped"
     TOKEN_ROTATED = "token_rotated"
     RETENTION_UPDATED = "retention_updated"
+    EMBEDDING_CONFIG_UPDATED = "embedding_config_updated"
     BACKUP_CREATED = "backup_created"
     # legacy rows — pre-encrypted-store (≤0.1.x); kept so old audit rows stay renderable
     KEYCHAIN_SET = "keychain_set"
@@ -48,6 +49,26 @@ class AuditEventType(StrEnum):
     SKILL_AUTOBIND_SKIPPED = "skill_autobind_skipped"
     SKILL_RELINKED = "skill_relinked"
     SKILL_DRIFT_DETECTED = "skill_drift_detected"
+    # spec 006-knowledge-base
+    KB_DOCUMENT_INGESTED = "kb_document_ingested"
+    KB_DOCUMENT_UPDATED = "kb_document_updated"
+    KB_DOCUMENT_DELETED = "kb_document_deleted"
+    KB_REINDEXED = "kb_reindexed"
+    # memory kind (spec 007)
+    MEMORY_ADDED = "memory_added"
+    MEMORY_UPDATED = "memory_updated"
+    MEMORY_DELETED = "memory_deleted"
+    MEMORY_CLEARED = "memory_cleared"
+    MEMORY_PROJECTED = "memory_projected"
+    # spec 008-agent-chat
+    CONVERSATION_CREATED = "conversation_created"
+    CONVERSATION_DELETED = "conversation_deleted"
+    CONVERSATION_ARCHIVED = "conversation_archived"
+    CONVERSATION_UNARCHIVED = "conversation_unarchived"
+    CHAT_TURN_COMPLETED = "chat_turn_completed"
+    MODEL_CREATED = "model_created"
+    MODEL_UPDATED = "model_updated"
+    MODEL_DELETED = "model_deleted"
 
 
 @dataclass

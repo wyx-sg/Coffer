@@ -52,7 +52,7 @@ def _audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]
 
 
 def _extract_credential_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
-    """Return ``{key: keychain_ref}`` for ``config`` using the kind's extractor.
+    """Return ``{key: credential_ref}`` for ``config`` using the kind's extractor.
 
     Kinds without a ``credential_ref_extractor`` declare no credentials and are
     not probed.
@@ -188,6 +188,13 @@ class ResourceService:
         # ref that does not exist in the credential store, fail before the DB write.
         self._probe_credentials(kind_def, validated)
         before = await self.get(ref)
+        # Per-kind cross-version hook (e.g. ``knowledge_base``/``memory``
+        # force a re-index/re-embed when chunk or embedding config changed).
+        # May raise ``ConfigValidationError`` to reject the update.
+        if kind_def.on_update_config is not None:
+            hook_result = kind_def.on_update_config(ref, before.config, validated)
+            if inspect.isawaitable(hook_result):
+                await hook_result
         updated = await self._repo.update_config(ref, validated, description)
         await self._audit.record(
             AuditEventType.RESOURCE_UPDATED.value,

@@ -1,15 +1,8 @@
-"""Domain-level error hierarchy.
-
-Surfaces map these to HTTP status codes via FastAPI exception handlers.
-"""
+"""Domain-level error hierarchy; surfaces map these to HTTP status codes."""
 
 from __future__ import annotations
 
-
-class CofferError(Exception):
-    """Root of every domain-raised exception."""
-
-    code: str = "INTERNAL_ERROR"
+from coffer.domain.error_base import CofferError as CofferError
 
 
 class ResourceNotFound(CofferError):  # noqa: N818
@@ -272,3 +265,159 @@ class DatabaseSchemaTooNew(CofferError):  # noqa: N818
         )
         self.current = current
         self.db_path = db_path
+
+
+# --- knowledge_base kind (spec 006) -----------------------------------------
+
+
+class KBNotFound(CofferError):  # noqa: N818
+    code = "KB_NOT_FOUND"
+
+    def __init__(self, kb_name: str) -> None:
+        super().__init__(f"knowledge base not found: {kb_name!r}")
+        self.kb_name = kb_name
+
+
+class DocumentNotFound(CofferError):  # noqa: N818
+    code = "DOCUMENT_NOT_FOUND"
+
+    def __init__(self, kb_name: str, document_id: str) -> None:
+        super().__init__(f"document not found: {kb_name}:{document_id}")
+        self.kb_name = kb_name
+        self.document_id = document_id
+
+
+class IngestRejected(CofferError):  # noqa: N818
+    code = "INGEST_REJECTED"
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+class EngineUnavailable(CofferError):  # noqa: N818
+    """A converter library, sqlite-vec, or an embedding provider needed for the
+    requested operation is unavailable. The caller degrades (vector→keyword) or
+    surfaces a clear per-format error; the daemon stays up."""
+
+    code = "ENGINE_UNAVAILABLE"
+
+    def __init__(self, engine: str, detail: str) -> None:
+        super().__init__(f"{engine} engine unavailable: {detail}")
+        self.engine = engine
+        self.detail = detail
+
+
+class ReconversionBlocked(CofferError):  # noqa: N818
+    """Re-converting a document whose ``source_mode == 'edited'`` is refused so
+    hand edits are not clobbered; re-uploading a new source resets it."""
+
+    code = "RECONVERSION_BLOCKED"
+
+    def __init__(self, kb_name: str, document_id: str) -> None:
+        super().__init__(
+            f"cannot re-convert edited document {kb_name}:{document_id}; "
+            "upload a new source file to reset source_mode to 'converted'"
+        )
+        self.kb_name = kb_name
+        self.document_id = document_id
+
+
+class GrepPatternInvalid(CofferError):  # noqa: N818
+    """ripgrep rejected the pattern (exit code 2, e.g. invalid regex). Maps to
+    400 — without this an rg failure masquerades as 'no matches'."""
+
+    code = "GREP_PATTERN_INVALID"
+
+    def __init__(self, pattern: str, detail: str) -> None:
+        super().__init__(f"grep pattern rejected: {detail}")
+        self.pattern = pattern
+        self.detail = detail
+
+
+class SearchModeInvalid(CofferError):  # noqa: N818
+    """An explicit search mode the store cannot serve. Maps to 400.
+
+    Raised for ``mode="grep"`` on the passage-search endpoint (grep has its own
+    endpoint) and for an explicit mode the store has not enabled — instead of a
+    silent rewrite. ``vector`` is the one exception: it degrades to keyword with
+    a flagged fallback per the spec.
+    """
+
+    code = "SEARCH_MODE_INVALID"
+
+    def __init__(self, mode: str, reason: str) -> None:
+        super().__init__(f"search mode {mode!r} rejected: {reason}")
+        self.mode = mode
+        self.reason = reason
+
+
+# --- memory kind (spec 007) -------------------------------------------------
+
+
+class MemoryStoreNotFound(CofferError):  # noqa: N818
+    code = "MEMORY_STORE_NOT_FOUND"
+
+    def __init__(self, store_name: str) -> None:
+        super().__init__(f"memory store not found: {store_name!r}")
+        self.store_name = store_name
+
+
+class MemoryNotFound(CofferError):  # noqa: N818
+    code = "MEMORY_NOT_FOUND"
+
+    def __init__(self, store_name: str, memory_id: str) -> None:
+        super().__init__(f"memory not found: {store_name}:{memory_id}")
+        self.store_name = store_name
+        self.memory_id = memory_id
+
+
+class MemoryRejected(CofferError):  # noqa: N818
+    code = "MEMORY_REJECTED"
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+class ScopeUnresolved(CofferError):  # noqa: N818
+    """``scope=project`` was requested but the agent's cwd is not inside a git
+    project, so no project ULID can be resolved. ``scope=global`` still works."""
+
+    code = "SCOPE_UNRESOLVED"
+
+    def __init__(self, cwd: str) -> None:
+        super().__init__(
+            f"cannot resolve a project memory scope: {cwd!r} is not inside a git "
+            "project; use scope='global' instead"
+        )
+        self.cwd = cwd
+
+
+class EmbeddingUnavailable(CofferError):  # noqa: N818
+    """No embedding provider is configured / the provider failed to load.
+
+    Never raised to the user for recall: ``vector`` degrades to ``keyword`` and
+    flags the fallback. Used internally by the retrieval port to signal the
+    degrade path.
+    """
+
+    code = "EMBEDDING_UNAVAILABLE"
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(f"embedding unavailable: {detail}")
+        self.detail = detail
+
+
+# agent chat (spec 008): re-exported from coffer.domain.chat.errors (split for
+# the file-size limit) so the coffer.domain.errors.X import paths keep working.
+from coffer.domain.chat.errors import (  # noqa: E402, I001
+    AgentConfigRejected as AgentConfigRejected,
+    ApprovalNotFound as ApprovalNotFound,
+    ConversationNotFound as ConversationNotFound,
+    ModelNotFound as ModelNotFound,
+    ModelRejected as ModelRejected,
+    NoModelConfigured as NoModelConfigured,
+    TurnInProgress as TurnInProgress,
+    UnknownAgent as UnknownAgent,
+)

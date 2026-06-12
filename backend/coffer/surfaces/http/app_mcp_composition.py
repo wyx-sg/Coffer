@@ -23,6 +23,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
+from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.mcp.credential_resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
@@ -55,6 +56,7 @@ def wire_mcp_kind(
     audit: AuditService,
     sm: object,
     credential_store: Any,
+    builtin_tools: BuiltinToolRegistry | None = None,
 ) -> tuple[SubprocessSupervisor, dict[str, SubprocessSupervisor]]:
     """Build and wire all MCP-specific plumbing into the app.
 
@@ -117,6 +119,7 @@ def wire_mcp_kind(
             preferences=prefs_repo,
             invocations=inv_repo,
             on_dispose=_drop_supervisor,
+            builtin_tools=builtin_tools,
         )
 
     # 6. Set ALL the MCP dependency providers
@@ -148,6 +151,17 @@ def build_prunable_registry() -> PrunableRegistry:
             default_retention_days=30,
             display_name="MCP Invocations",
             description="MCP tool/resource/prompt invocation log.",
+        )
+    )
+    registry.register(
+        PrunableTable(
+            name="conversations",
+            timestamp_column="updated_at",
+            # None = keep forever until the user sets a retention window; chat
+            # threads are user content, so retention is opt-in, never a surprise.
+            default_retention_days=None,
+            display_name="Chat Conversations",
+            description="Chat threads and their messages, pruned by last activity.",
         )
     )
     return registry

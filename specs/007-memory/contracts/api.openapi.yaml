@@ -1,0 +1,643 @@
+openapi: 3.0.3
+info:
+  title: Coffer — Memory API
+  version: 0.2.0
+  description: |
+    REST surface for the `memory` resource kind (redesign). Spec 007.
+
+    Memory is the memory face of Coffer's unified knowledge substrate. Facts are
+    per-fact markdown files (the source of truth) plus a regenerated MEMORY.md
+    index, stored under ~/.coffer/memory/{global,projects/<ulid>}. Two scopes:
+    global (project_id = WORKSPACE_GLOBAL_PROJECT_ID sentinel) and per-project
+    (project_id = project ULID). No LLM runs at write time. Retrieval reuses the
+    shared engine (grep / keyword FTS5+BM25 / vector sqlite-vec).
+
+    All routes are loopback-only and require the daemon's auth token in the
+    `X-Coffer-Token` header (token from `~/.coffer/daemon.json`). All error
+    responses use the app-wide envelope `{ "error": { code, message, details } }`.
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Local daemon (default port; actual port read from daemon.json)
+
+security:
+  - cofferToken: []
+
+paths:
+  /api/v1/memory_stores:
+    get:
+      summary: List memory stores (one per scope)
+      operationId: listMemoryStores
+      tags: [memory_stores]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryStoreListOut"
+
+  /api/v1/memory_stores/{name}:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    get:
+      summary: Get one memory store
+      operationId: getMemoryStore
+      tags: [memory_stores]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryStoreOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      summary: Update mutable config (retrieval modes, embedding, max_fact_chars)
+      operationId: updateMemoryStore
+      tags: [memory_stores]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemoryStoreConfigPatch"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryStoreOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory_stores/{name}/metrics:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    get:
+      summary: Memory store metrics
+      operationId: getMemoryStoreMetrics
+      tags: [memory_stores]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryStoreMetrics"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory_stores/{name}/facts:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+
+    post:
+      summary: Add a fact (writes canonical markdown, regenerates MEMORY.md, indexes)
+      description: >
+        Well-formed store names (`global` / `project-<26-char id>`) lazily
+        provision the store on first write; any other name is 404 (a POST must
+        never manufacture a store under an arbitrary name).
+      operationId: addFact
+      tags: [facts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FactCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: >
+            Fact rejected (`MEMORY_REJECTED`: empty / too_long) or schema-level
+            request validation failure (`CONFIG_INVALID`) — both carry the
+            standard error envelope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+    get:
+      summary: List facts in the store
+      operationId: listFacts
+      tags: [facts]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactListOut"
+
+    delete:
+      summary: Clear every fact in the store (store Resource preserved)
+      operationId: clearFacts
+      tags: [facts]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cleared]
+                properties:
+                  cleared: { type: integer }
+
+  /api/v1/memory_stores/{name}/facts/{fact_id}:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+      - in: path
+        name: fact_id
+        required: true
+        schema: { type: string }
+
+    get:
+      summary: Get a fact (frontmatter + body)
+      operationId: getFact
+      tags: [facts]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      summary: Edit a fact's text (rewrites markdown, reindexes, regenerates MEMORY.md)
+      operationId: updateFact
+      tags: [facts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FactUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Fact rejected (empty / too_long)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+    delete:
+      summary: Forget a fact (deletes markdown, removes index rows, regenerates MEMORY.md)
+      operationId: forgetFact
+      tags: [facts]
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory_stores/{name}/recall:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    post:
+      summary: Recall facts (lazy reindex-on-read, then search)
+      operationId: recall
+      tags: [recall]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecallRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecallResponse"
+        "404":
+          description: >
+            Memory store not found (`MEMORY_STORE_NOT_FOUND`) — e.g. a
+            never-provisioned project store.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: >
+            Schema-level request validation failure (`CONFIG_INVALID`
+            envelope).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/memory_stores/{name}/projections:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    get:
+      summary: List projections of this store into bound agents
+      operationId: listProjections
+      tags: [projection]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectionListOut"
+
+    post:
+      summary: Establish (or refresh) a projection into an agent's native location
+      description: |
+        Dispatches on the agent's AgentMemoryAdapter.projection_mode
+        (SYMLINK | RENDER | NONE). For SYMLINK, existing native files are merged
+        into the canonical store before the directory is replaced by a symlink.
+        For RENDER, a marker-fenced managed block is written idempotently and
+        native memory is disabled. NONE is a no-op.
+      operationId: establishProjection
+      tags: [projection]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectionRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectionOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory_stores/{name}/projections/{agent_ref}:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+      - in: path
+        name: agent_ref
+        required: true
+        schema: { type: string }
+    delete:
+      summary: Remove a projection (restore symlink target / strip managed block)
+      operationId: removeProjection
+      tags: [projection]
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  parameters:
+    StoreName:
+      in: path
+      name: name
+      required: true
+      description: Memory store name (a scope store; e.g. the global store or a project store).
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    Scope:
+      type: string
+      enum: [global, project]
+      description: |
+        global → project_id = WORKSPACE_GLOBAL_PROJECT_ID sentinel
+        (00000000000000000000000000); project → project_id = project ULID.
+
+    RetrievalMode:
+      type: string
+      enum: [grep, keyword, vector]
+
+    MemoryStoreConfig:
+      type: object
+      required: [retrieval_modes, default_mode, embedding_dimensions, max_fact_chars]
+      properties:
+        retrieval_modes:
+          type: array
+          items: { $ref: "#/components/schemas/RetrievalMode" }
+          default: [grep, keyword]
+        default_mode:
+          $ref: "#/components/schemas/RetrievalMode"
+        embedding_provider: { type: string, nullable: true }
+        embedding_model: { type: string, nullable: true, example: bge-m3 }
+        embedding_base_url: { type: string, nullable: true }
+        embedding_credential_ref: { type: string, nullable: true }
+        embedding_dimensions:
+          type: integer
+          minimum: 1
+          maximum: 8192
+          default: 768
+          description: Width of the per-store vector table (vector mode only).
+        max_fact_chars:
+          type: integer
+          minimum: 64
+          maximum: 32768
+          default: 8192
+
+    MemoryStoreConfigPatch:
+      type: object
+      description: Only mutable fields. All fields optional.
+      properties:
+        retrieval_modes:
+          type: array
+          items: { $ref: "#/components/schemas/RetrievalMode" }
+        default_mode:
+          $ref: "#/components/schemas/RetrievalMode"
+        embedding_provider: { type: string, nullable: true }
+        embedding_model: { type: string, nullable: true }
+        embedding_base_url: { type: string, nullable: true }
+        embedding_credential_ref: { type: string, nullable: true }
+        embedding_dimensions: { type: integer, minimum: 1, maximum: 8192 }
+        max_fact_chars: { type: integer, minimum: 64, maximum: 32768 }
+
+    MemoryStoreOut:
+      type: object
+      required:
+        [
+          ref,
+          name,
+          kind,
+          scope,
+          project_id,
+          config,
+          enabled,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        ref: { type: string }
+        kind: { type: string, example: memory }
+        name: { type: string }
+        scope: { $ref: "#/components/schemas/Scope" }
+        project_id:
+          type: string
+          description: WORKSPACE_GLOBAL sentinel or project ULID.
+        project_root:
+          type: string
+          nullable: true
+          description: |
+            Absolute git-root the project store was provisioned from. Null for
+            the global store (and for project stores provisioned before the root
+            was tracked).
+        description: { type: string, nullable: true }
+        config:
+          $ref: "#/components/schemas/MemoryStoreConfig"
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    MemoryStoreListOut:
+      type: object
+      required: [memory_stores]
+      properties:
+        memory_stores:
+          type: array
+          items:
+            $ref: "#/components/schemas/MemoryStoreOut"
+
+    MemoryStoreMetrics:
+      type: object
+      required: [fact_count, disk_bytes]
+      properties:
+        fact_count: { type: integer }
+        disk_bytes: { type: integer }
+
+    FactCreate:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 32768
+          description: The fact (markdown body).
+        name:
+          {
+            type: string,
+            nullable: true,
+            description: Frontmatter name; derived from text if omitted.,
+          }
+        description:
+          {
+            type: string,
+            nullable: true,
+            description: Frontmatter one-line description.,
+          }
+        type:
+          type: string
+          nullable: true
+          example: project
+          description: metadata.type (project / feedback / reference / user / ...).
+
+    FactUpdate:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 32768 }
+        name: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        type: { type: string, nullable: true }
+
+    FactOut:
+      type: object
+      required:
+        [
+          id,
+          store_name,
+          scope,
+          name,
+          description,
+          text,
+          actor,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string, description: Document id (ULID). }
+        store_name: { type: string }
+        scope: { $ref: "#/components/schemas/Scope" }
+        name: { type: string }
+        description: { type: string }
+        text: { type: string, description: Markdown body. }
+        type: { type: string, nullable: true }
+        actor: { type: string, enum: [agent, user] }
+        origin_session_id: { type: string, nullable: true }
+        path:
+          { type: string, description: Canonical .md path (source of truth). }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    FactListOut:
+      type: object
+      required: [facts, total]
+      properties:
+        facts:
+          type: array
+          items:
+            $ref: "#/components/schemas/FactOut"
+        total: { type: integer }
+
+    RecallRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string, minLength: 1, maxLength: 4096 }
+        scope:
+          type: string
+          enum: [global, project, both]
+          default: both
+          description: >
+            `project` = the named store only, `global` = the global store
+            only, `both` (default) = the named store + the global store
+            merged by reciprocal rank fusion.
+        mode:
+          $ref: "#/components/schemas/RetrievalMode"
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+
+    RecallHit:
+      type: object
+      required: [id, text, score, source, time]
+      properties:
+        id: { type: string }
+        text: { type: string }
+        score: { type: number, format: float }
+        source:
+          type: string
+          description: Scope + canonical path of the source fact file.
+        time: { type: string, format: date-time }
+
+    RecallResponse:
+      type: object
+      required: [hits, mode]
+      properties:
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecallHit"
+        mode:
+          $ref: "#/components/schemas/RetrievalMode"
+        fallback:
+          type: boolean
+          default: false
+          description: True when vector was requested but degraded to keyword (embedding unconfigured).
+
+    ProjectionRequest:
+      type: object
+      required: [agent_ref]
+      properties:
+        agent_ref:
+          type: string
+          description: Identifier of the bound agent (selects the AgentMemoryAdapter).
+        project_root:
+          type: string
+          nullable: true
+          description: |
+            Absolute project root for a SYMLINK projection of a project store
+            (locates the agent's native per-project memory dir). Omitted for the
+            global store / RENDER adapters.
+
+    ProjectionOut:
+      type: object
+      required:
+        [agent_ref, projection_mode, target_path, native_memory_disabled]
+      properties:
+        agent_ref: { type: string }
+        projection_mode:
+          type: string
+          enum: [SYMLINK, RENDER, NONE]
+        target_path:
+          type: string
+          description: Native location the adapter owns (symlink path or managed-block file).
+        native_memory_disabled:
+          type: boolean
+          description: True when the agent's native memory was disabled to prevent a divergent copy.
+        merged_existing:
+          type: boolean
+          default: false
+          description: True when pre-existing native files were merged into the canonical store first.
+
+    ProjectionListOut:
+      type: object
+      required: [projections]
+      properties:
+        projections:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectionOut"
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: |
+                Stable error code, e.g. MEMORY_NOT_FOUND, MEMORY_REJECTED,
+                SCOPE_UNRESOLVED, RESOURCE_NOT_FOUND, VALIDATION_ERROR.
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true
+              nullable: true

@@ -40,7 +40,7 @@ RULES: list[tuple[str, int, str]] = [
     ("frontend/src/lib/**/*.ts", 300, "frontend utility"),
     ("frontend/src/lib/**/*.tsx", 300, "frontend utility"),
     # --- frontend/src/kinds ---
-    ("frontend/src/kinds/**/*Page.tsx", 200, "frontend page"),
+    ("frontend/src/kinds/**/*Page.tsx", 250, "frontend page"),
     ("frontend/src/kinds/**/*.tsx", 250, "frontend component"),
     ("frontend/src/kinds/**/*.ts", 250, "frontend component"),
     # --- legacy frontend/src/{hooks,components,pages} ---

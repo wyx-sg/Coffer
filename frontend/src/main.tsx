@@ -8,6 +8,7 @@ import { registerFrontendKinds } from "./kinds";
 import { isTauri, getDaemonInfo } from "./lib/tauri";
 import "./i18n"; // Side-effect import; initialises i18next before render
 import "./index.css";
+import "highlight.js/styles/github.css"; // Code-block syntax theme (chat markdown)
 
 // In the desktop app the daemon's port + token aren't known at build time, and
 // the bundled frontend can't read ~/.coffer/daemon.json itself. Ask the Tauri

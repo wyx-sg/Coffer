@@ -24,3 +24,22 @@ export function formatDateTime(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso;
   return formatLocalDateTime(d);
 }
+
+/**
+ * Humanize a byte count as "B / KB / MB / GB" (binary, base-1024). Bytes stay
+ * exact; larger units show one decimal (e.g. 1536 -> "1.5 KB"). Locale-
+ * independent on purpose. Negative / non-finite input falls back to "0 B".
+ */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  // Bytes are whole; larger units show one decimal, trimming a trailing ".0".
+  const text = unit === 0 ? String(Math.round(value)) : value.toFixed(1).replace(/\.0$/, "");
+  return `${text} ${units[unit]}`;
+}

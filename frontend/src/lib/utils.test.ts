@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cn, formatDateTime } from "./utils";
+import { cn, formatBytes, formatDateTime } from "./utils";
 
 describe("cn", () => {
   it("joins multiple class names with spaces", () => {
@@ -33,5 +33,26 @@ describe("formatDateTime", () => {
 
   it("returns the raw input on an empty string", () => {
     expect(formatDateTime("")).toBe("");
+  });
+});
+
+describe("formatBytes", () => {
+  it("shows whole bytes under 1 KB", () => {
+    expect(formatBytes(0)).toBe("0 B");
+    expect(formatBytes(512)).toBe("512 B");
+    expect(formatBytes(1023)).toBe("1023 B");
+  });
+
+  it("humanizes KB / MB / GB with one decimal, trimming '.0'", () => {
+    expect(formatBytes(1024)).toBe("1 KB");
+    expect(formatBytes(1536)).toBe("1.5 KB");
+    expect(formatBytes(1024 * 1024)).toBe("1 MB");
+    expect(formatBytes(1024 * 1024 * 1024)).toBe("1 GB");
+  });
+
+  it("falls back to '0 B' for negative or non-finite input", () => {
+    expect(formatBytes(-5)).toBe("0 B");
+    expect(formatBytes(NaN)).toBe("0 B");
+    expect(formatBytes(Infinity)).toBe("0 B");
   });
 });

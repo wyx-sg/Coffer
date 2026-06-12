@@ -4,6 +4,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import func, select
 
+from coffer.infrastructure.chat import (
+    persistence as _chat_persistence,  # noqa: F401 (registers chat tables on Base.metadata)
+)
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -122,6 +125,51 @@ async def test_delete_older_than_basic(tmp_path):
     async with sm() as s:
         remaining = (await s.execute(select(func.count()).select_from(AuditLogModel))).scalar_one()
     assert remaining == 3
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_delete_older_than_conversations_cascades_to_messages(tmp_path):
+    """Pruning old conversations also removes their messages (no orphan rows)."""
+    from sqlalchemy import text
+
+    repo, engine = await _repo(tmp_path)
+    sm = session_maker(engine)
+    now = datetime(2026, 5, 20, tzinfo=UTC)
+    old = now - timedelta(days=40)
+    recent = now - timedelta(days=1)
+
+    async with sm() as s:
+        # One stale thread (2 messages) and one recent thread (1 message).
+        conv_sql = (
+            "INSERT INTO conversations "
+            "(id, agent_key, title, model_id, created_at, updated_at) "
+            "VALUES (:id, 'builtin', 't', NULL, :ts, :ts)"
+        )
+        msg_sql = (
+            "INSERT INTO chat_messages "
+            "(id, conversation_id, seq, role, content, status, created_at) "
+            "VALUES (:id, :cid, :seq, 'user', '[]', 'complete', :ts)"
+        )
+        for cid, ts, nmsg in [("old", old, 2), ("new", recent, 1)]:
+            await s.execute(text(conv_sql), {"id": cid, "ts": ts})
+            for seq in range(nmsg):
+                await s.execute(
+                    text(msg_sql),
+                    {"id": f"{cid}-{seq}", "cid": cid, "seq": seq, "ts": ts},
+                )
+        await s.commit()
+
+    cutoff = now - timedelta(days=7)
+    deleted = await repo.delete_older_than("conversations", "updated_at", cutoff)
+    assert deleted == 1  # only the stale conversation
+
+    async with sm() as s:
+        convs = (await s.execute(text("SELECT id FROM conversations"))).scalars().all()
+        msgs = (await s.execute(text("SELECT conversation_id FROM chat_messages"))).scalars().all()
+    assert set(convs) == {"new"}
+    # The stale thread's messages are gone; the recent thread's remain.
+    assert set(msgs) == {"new"}
     await engine.dispose()
 
 

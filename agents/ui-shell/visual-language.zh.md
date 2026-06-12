@@ -43,9 +43,12 @@
 
 ## 组合规则
 
-- 从 `frontend/src/lib/components/` 里的 shadcn 基础件搭界面，不要为每个页面发明新的包装。
-- 空 / 加载 / 错误态是一等公民——绝不允许界面在数据加载时没有内容。复用 `frontend/src/lib/empty-state/` 中的 `EmptyState` 与 `WelcomeCard`。
-- 状态类显示（daemon offline、capability disabled）走 `status.*` token，不挑裸色。
+- 从 `frontend/src/components/ui/` 里的 shadcn 基础件搭界面，不要为每个页面发明新的包装。
+- 空 / 加载 / 错误态是一等公民——绝不允许界面在数据加载时没有内容。每个界面自带空/加载/错误处理
+  （如 `components/chat/ChatEmptyState.tsx`）；目前还没有共享的 `EmptyState` 基础件——当第二个功能
+  需要同样形状时再抽一个出来。
+- 状态类显示（daemon offline、capability disabled、工具调用健康度）走 `status.*` token，不要用裸
+  `green/amber/emerald` 调色板类。字号用内置 scale（`text-sm`/`text-xs`/…），绝不用逐组件的 `text-[Npx]`。
 
 ## 不确定时
 
