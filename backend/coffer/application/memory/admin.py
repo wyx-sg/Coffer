@@ -14,7 +14,11 @@ import logging
 import shutil
 from collections.abc import Awaitable, Callable
 
-from coffer.application.knowledge.retrieval import KnowledgeRetrieval
+from coffer.application.knowledge.retrieval import (
+    EmbeddingResolver,
+    KnowledgeRetrieval,
+    no_embedding,
+)
 from coffer.application.memory.ports import MemoryDocumentRepo
 from coffer.application.memory.scope import GLOBAL_STORE_NAME, is_valid_store_name
 from coffer.application.memory.sync import MemoryReconciler
@@ -78,16 +82,16 @@ async def reindex_store(
     reconciler: MemoryReconciler,
     store_name: str,
     config: MemoryStoreConfig | None = None,
+    embedding_resolver: EmbeddingResolver = no_embedding,
 ) -> None:
     """Force-rebuild a store's index under ``config`` (defaults to the stored
-    config). Called by the kind's ``on_update_config`` hook so that enabling
-    vector (or changing the embedding model) re-embeds facts written before
-    the change — the sha no-op gate would otherwise leave the new vec table
-    empty forever."""
+    config). Called by the kind's ``on_update_config`` hook so toggling vector
+    re-embeds facts written before the change — the sha no-op gate would
+    otherwise leave the new vec table empty forever. Embedding is global."""
     cfg = config if config is not None else await get_config(store_name)
     resolved = await resolved_for(store_name)
     ref = store_ref(store_name, resolved.project_id)
-    embedding = cfg.to_embedding_config() if cfg.vector_enabled else None
+    embedding = await embedding_resolver() if cfg.vector_enabled else None
     await reconciler.reconcile(store=ref, embedding=embedding, force=True)
 
 
@@ -112,9 +116,11 @@ async def cleanup_store(
         await documents.delete_resource(KIND_MEMORY, store_name)
         # Drop the per-store sqlite-vec table too (lives outside the async
         # session → leaks across a same-name re-create otherwise — finding #6).
-        dims = config.embedding_dimensions if config.vector_enabled else None
+        # Maintenance mode (dimensions=None) drops whatever width exists; the
+        # global embedding dimension is irrelevant to teardown.
+        _ = config  # retained for signature symmetry; embedding is global now
         try:
-            await retrieval.drop_store(store_ref(store_name, resolved.project_id), dimensions=dims)
+            await retrieval.drop_store(store_ref(store_name, resolved.project_id), dimensions=None)
         except Exception:
             _logger.warning(
                 "memory.cleanup.drop_vec_store_failed",

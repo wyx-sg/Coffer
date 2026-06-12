@@ -47,22 +47,17 @@ class MemoryStoreConfig(BaseModel):
         if not seen:
             raise ValueError("retrieval_modes must list at least one retrieval mode")
         object.__setattr__(self, "retrieval_modes", seen)
-        if "vector" in seen and not (self.embedding_provider and self.embedding_model):
-            raise ValueError(
-                "embedding_provider and embedding_model are required when "
-                "'vector' is in retrieval_modes"
-            )
         if self.default_mode not in seen:
             raise ValueError(f"default_mode {self.default_mode!r} is not in retrieval_modes {seen}")
         return self
 
     @property
     def vector_enabled(self) -> bool:
-        return (
-            "vector" in self.retrieval_modes
-            and bool(self.embedding_provider)
-            and bool(self.embedding_model)
-        )
+        # Embedding is GLOBAL now (not per-store): a store opts into vector by
+        # listing the mode; whether vector actually indexes depends on the
+        # global embedding config being active. The legacy ``embedding_*``
+        # fields are accepted but ignored.
+        return "vector" in self.retrieval_modes
 
     def to_embedding_config(self) -> EmbeddingConfig | None:
         """Project the flat fields onto the shared ``EmbeddingConfig`` (or None

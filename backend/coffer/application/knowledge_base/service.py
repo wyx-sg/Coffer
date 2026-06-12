@@ -23,7 +23,11 @@ import asyncio
 
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.reindex import Reindexer
-from coffer.application.knowledge.retrieval import KnowledgeRetrieval
+from coffer.application.knowledge.retrieval import (
+    EmbeddingResolver,
+    KnowledgeRetrieval,
+    no_embedding,
+)
 from coffer.application.knowledge_base.pipeline import KBPipeline
 from coffer.application.knowledge_base.pipeline_helpers import (
     DocumentRepoPort,
@@ -65,6 +69,7 @@ class KnowledgeBaseService:
         reindexer: Reindexer,
         audit: AuditService,
         paths: KBPaths,
+        embedding_resolver: EmbeddingResolver = no_embedding,
     ) -> None:
         self._resources = resource_service
         self._documents = documents
@@ -72,12 +77,14 @@ class KnowledgeBaseService:
         self._reindexer = reindexer
         self._audit = audit
         self._paths = paths
+        self._resolve_embedding = embedding_resolver
         self._pipeline = KBPipeline(
             documents=documents,
             converters=converters,
             retrieval=retrieval,
             reindexer=reindexer,
             paths=paths,
+            embedding_resolver=embedding_resolver,
         )
 
     # ----- KB-level -----
@@ -259,12 +266,13 @@ class KnowledgeBaseService:
         # passage engine's keyword mode (grep is not a passage mode).
         if chosen == "grep":
             chosen = "keyword"
+        embedding = await self._resolve_embedding() if config.vector_enabled else None
         return await self._retrieval.search(
             self._store_ref(kb_name),
             query,
             mode=chosen,
             top_k=top_k,
-            embedding=config.embedding if config.vector_enabled else None,
+            embedding=embedding,
         )
 
     async def grep(self, *, kb_name: str, pattern: str, max_matches: int = 200) -> GrepResult:

@@ -12,7 +12,11 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from coffer.application.knowledge.retrieval import KnowledgeRetrieval
+from coffer.application.knowledge.retrieval import (
+    EmbeddingResolver,
+    KnowledgeRetrieval,
+    no_embedding,
+)
 from coffer.application.memory.ports import MemoryDocumentRepo
 from coffer.application.memory.scope import GLOBAL_STORE_NAME
 from coffer.application.memory.service_helpers import (
@@ -70,6 +74,8 @@ class RecallDeps:
     get_config: ConfigFn
     store_name_for: StoreNameFn
     store_ref: StoreRefFn
+    # Resolves the GLOBAL embedding config (embedding is no longer per-store).
+    embedding_resolver: EmbeddingResolver = no_embedding
 
 
 async def recall_spanning(
@@ -232,7 +238,7 @@ async def recall_store_with_mode(
     embedding configured) — never raising for the degrade path. ``grep`` is
     served for real: ripgrep over the store's fact files (FR-008) — essential
     for content FTS5 cannot tokenize (e.g. CJK)."""
-    embedding = config.to_embedding_config() if config.vector_enabled else None
+    embedding = await deps.embedding_resolver() if config.vector_enabled else None
     await deps.reconciler.reconcile(store=store_ref, embedding=embedding)
     chosen = mode or config.default_mode
     # A ``vector`` request the store cannot serve (vector not enabled / no
@@ -258,7 +264,7 @@ async def recall_store_with_mode(
         query,
         mode=chosen,
         top_k=top_k,
-        embedding=config.to_embedding_config(),
+        embedding=embedding,
     )
 
     async def _get_doc(fact_id: str):  # type: ignore[no-untyped-def]

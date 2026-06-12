@@ -3,7 +3,6 @@
 import pytest
 from pydantic import ValidationError
 
-from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge_base.config import KnowledgeBaseConfig
 from coffer.domain.memory.config import MemoryStoreConfig
 from coffer.infrastructure.knowledge.frontmatter import (
@@ -20,22 +19,10 @@ def test_kb_config_defaults() -> None:
     assert c.vector_enabled is False
 
 
-def test_kb_vector_requires_embedding() -> None:
-    with pytest.raises(ValidationError, match="embedding is required"):
-        KnowledgeBaseConfig(enabled_modes=["keyword", "vector"])
-
-
-def test_kb_vector_with_embedding_ok() -> None:
-    c = KnowledgeBaseConfig(
-        enabled_modes=["keyword", "vector"],
-        embedding=EmbeddingConfig(
-            provider="openai",
-            model="text-embedding-3-small",
-            credential_ref="ref",
-            dimensions=1536,
-        ),
-    )
-    assert c.vector_enabled is True
+def test_kb_vector_enabled_by_mode_only() -> None:
+    # Embedding is GLOBAL now: listing the mode enables vector; no per-KB
+    # embedding config is required.
+    assert KnowledgeBaseConfig(enabled_modes=["keyword", "vector"]).vector_enabled is True
 
 
 def test_kb_overlap_bound() -> None:
@@ -56,9 +43,9 @@ def test_memory_config_defaults_no_llm() -> None:
     assert not hasattr(c, "llm_provider")
 
 
-def test_memory_vector_requires_embedding_fields() -> None:
-    with pytest.raises(ValidationError, match="embedding_provider"):
-        MemoryStoreConfig(retrieval_modes=["keyword", "vector"])
+def test_memory_vector_enabled_by_mode_only() -> None:
+    # Embedding is GLOBAL now: listing the mode enables vector.
+    assert MemoryStoreConfig(retrieval_modes=["keyword", "vector"]).vector_enabled is True
 
 
 def test_memory_to_embedding_config() -> None:

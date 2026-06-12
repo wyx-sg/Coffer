@@ -15,7 +15,11 @@ from typing import TYPE_CHECKING, cast
 
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.knowledge.reindex import Reindexer
-from coffer.application.knowledge.retrieval import KnowledgeRetrieval
+from coffer.application.knowledge.retrieval import (
+    EmbeddingResolver,
+    KnowledgeRetrieval,
+    no_embedding,
+)
 from coffer.application.knowledge_base.builtin_tools import register_kb_builtin_tools
 from coffer.application.knowledge_base.kind import make_kb_kind
 from coffer.application.knowledge_base.service import KnowledgeBaseService
@@ -123,6 +127,7 @@ def wire_kb_kind(
     sm: object,
     builtin_tools: BuiltinToolRegistry,
     substrate: tuple[DocumentRepo, KnowledgeRetrieval, Reindexer] | None = None,
+    embedding_resolver: EmbeddingResolver = no_embedding,
 ) -> KnowledgeBaseService:
     """Wire the ``knowledge_base`` kind (spec 006) into the app."""
     documents, retrieval, reindexer = substrate or build_substrate(sm)  # type: ignore[arg-type]
@@ -136,6 +141,7 @@ def wire_kb_kind(
         reindexer=reindexer,
         audit=audit,
         paths=paths,
+        embedding_resolver=embedding_resolver,
     )
     app.state.kinds["knowledge_base"] = make_kb_kind(kb_service)
     set_kb_service(kb_service)
@@ -150,6 +156,7 @@ def wire_memory_kind(
     sm: object,
     builtin_tools: BuiltinToolRegistry,
     substrate: tuple[DocumentRepo, KnowledgeRetrieval, Reindexer] | None = None,
+    embedding_resolver: EmbeddingResolver = no_embedding,
 ) -> MemoryService:
     """Wire the ``memory`` kind (spec 007) into the app."""
     documents, retrieval, reindexer = substrate or build_substrate(sm)  # type: ignore[arg-type]
@@ -172,6 +179,7 @@ def wire_memory_kind(
         audit=audit,
         store_dir=paths.memory_store_dir,
         fact_path=paths.fact_path,
+        embedding_resolver=embedding_resolver,
     )
     app.state.kinds["memory"] = make_memory_kind(memory_service)
     set_memory_service(memory_service)

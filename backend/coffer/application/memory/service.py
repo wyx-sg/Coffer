@@ -1,12 +1,10 @@
 """MemoryService — orchestration for the ``memory`` kind (spec 007).
 
 Memory is the writable face of the shared knowledge substrate: per-fact markdown
-files under ``~/.coffer/memory/{global,projects/<ulid>}/`` are the source of
-truth, with a regenerated ``MEMORY.md`` index. No LLM at write time. Retrieval
-reuses the KB engine with lazy reindex-on-read. The mutation pipeline
-(``writes``), recall (``recall``), scan reads (``queries``), store admin
-(``admin``), name ⇄ scope plumbing (``stores``) and pure helpers
-(``service_helpers``) live in sibling modules to keep this file focused.
+files are the source of truth, with a regenerated ``MEMORY.md`` index. No LLM at
+write time; retrieval reuses the KB engine with lazy reindex-on-read. Mutation
+(``writes``), recall, scan reads (``queries``), admin, scope plumbing
+(``stores``) and helpers live in sibling modules to keep this file focused.
 """
 
 from __future__ import annotations
@@ -18,7 +16,11 @@ from functools import partial
 from pathlib import Path
 
 from coffer.application.audit_service import AuditService
-from coffer.application.knowledge.retrieval import KnowledgeRetrieval
+from coffer.application.knowledge.retrieval import (
+    EmbeddingResolver,
+    KnowledgeRetrieval,
+    no_embedding,
+)
 from coffer.application.memory import admin
 from coffer.application.memory.ports import MemoryDocumentRepo
 from coffer.application.memory.queries import (
@@ -86,6 +88,7 @@ class MemoryService:
         store_dir: StoreDirFn,
         fact_path: FactPathFn,
         on_change: OnChangeFn | None = None,
+        embedding_resolver: EmbeddingResolver = no_embedding,
     ) -> None:
         self._resources = resource_service
         self._documents = documents
@@ -95,8 +98,8 @@ class MemoryService:
         self._audit = audit
         self._store_dir = store_dir
         self._fact_path = fact_path
-        # Composition-root hook: re-render native projections after a write.
-        self._on_change = on_change
+        self._resolve_embedding = embedding_resolver  # global embedding config
+        self._on_change = on_change  # post-write projection re-render hook
         # Bundle the collaborators the write + recall orchestrators need.
         store_ref_fn = partial(build_store_ref_for, store_dir=store_dir)
         self._writes = WriteDeps(
@@ -113,6 +116,7 @@ class MemoryService:
             get_config=self.get_store_config,
             store_name_for=store_name_for,
             store_ref=store_ref_fn,
+            embedding_resolver=embedding_resolver,
         )
 
     def set_on_change(self, hook: OnChangeFn | None) -> None:
@@ -358,6 +362,7 @@ class MemoryService:
             reconciler=self._reconciler,
             store_name=store_name,
             config=config,
+            embedding_resolver=self._resolve_embedding,
         )
 
     async def cleanup_store(self, store_name: str) -> None:

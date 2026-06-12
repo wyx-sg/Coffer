@@ -1,17 +1,10 @@
 """The KB any-format→Markdown ingest/edit/reindex pipeline.
 
-Extracted from ``service.py`` so the orchestration service stays thin and no
-single method runs long. The pipeline owns the multi-step write paths:
-
-- ``ingest``: size check → source dedup → convert → clean → frontmatter →
-  write ``docs/<id>.md`` + ``raw/<id>.<ext>`` → reindex.
-- ``edit``: replace markdown body → ``source_mode=edited`` → reindex.
-- ``reconvert``: re-run conversion from ``raw/`` (caller gates on source_mode).
-- ``reindex_scan``: rescan ``docs/`` and re-index each changed file.
-- ``delete`` / ``cleanup``: remove files + index rows (+ rmtree on KB delete).
-
-All filesystem work is offloaded to worker threads; the index/embedding work
-goes through the shared ``KnowledgeRetrieval`` + ``Reindexer``.
+Extracted from ``service.py`` so the orchestration service stays thin. The
+pipeline owns the multi-step write paths (ingest / edit / reconvert /
+reindex_scan / delete / cleanup): any-format upload → Markdown on disk → index.
+Filesystem work is offloaded to worker threads; index/embedding work goes
+through the shared ``KnowledgeRetrieval`` + ``Reindexer``.
 """
 
 from __future__ import annotations
@@ -26,7 +19,11 @@ from pathlib import Path
 
 from coffer.application.knowledge.locks import StoreLocks
 from coffer.application.knowledge.reindex import Reindexer
-from coffer.application.knowledge.retrieval import KnowledgeRetrieval
+from coffer.application.knowledge.retrieval import (
+    EmbeddingResolver,
+    KnowledgeRetrieval,
+    no_embedding,
+)
 from coffer.application.knowledge_base.pipeline_helpers import (
     DocumentRepoPort,
     KBPaths,
@@ -63,14 +60,16 @@ class KBPipeline:
         retrieval: KnowledgeRetrieval,
         reindexer: Reindexer,
         paths: KBPaths,
+        embedding_resolver: EmbeddingResolver = no_embedding,
     ) -> None:
         self._documents = documents
         self._converters = converters
         self._retrieval = retrieval
         self._reindexer = reindexer
         self._paths = paths
-        # Serializes write paths per KB: concurrent ingest/edit/reindex on one
-        # store must not interleave their index batches or duplicate embeds.
+        self._resolve_embedding = embedding_resolver  # global embedding config
+        # Serializes write paths per KB so concurrent ingest/edit/reindex on one
+        # store don't interleave index batches or duplicate embeds.
         self._locks = StoreLocks()
 
     def _lock(self, kb_name: str) -> asyncio.Lock:
@@ -362,18 +361,18 @@ class KBPipeline:
         Returns ``(changed, degraded)`` — ``changed`` is whether the content was
         (re)indexed; ``degraded`` is whether an embed was requested but the
         provider was unavailable (indexed keyword-only, retried next scan)."""
+        embedding = await self._resolve_embedding() if config.vector_enabled else None
         index = self._retrieval.index_for(
             self._store_ref(kb_name),
-            dimensions=config.embedding.dimensions if config.embedding else None,
+            dimensions=embedding.dimensions if embedding else None,
         )
-        # Canonicalize the body so the on-disk round-trip (frontmatter adds a
-        # trailing newline; ``body_of`` strips the fence) hashes identically to
+        # Canonicalize the body so the on-disk round-trip hashes identically to
         # the freshly-ingested body — otherwise reindex never reaches a no-op.
         outcome = await self._reindexer.reindex(
             index=index,
             markdown=markdown.strip(),
             previous_sha=previous_sha,
-            embedding=config.embedding if config.vector_enabled else None,
+            embedding=embedding,
             doc_id=doc.id,
             chunker=chunker_for(config),
         )

@@ -145,6 +145,12 @@ async def mem(tmp_path: pathlib.Path, monkeypatch):
         project_ulid=project_ulid,
         store_dir=paths.memory_store_dir,
     )
+
+    async def _resolver() -> EmbeddingConfig:
+        # Embedding is global now; the fixture supplies a fixed config so the
+        # fake embedder/vec index (width 32) drives vector tests.
+        return EmbeddingConfig(provider="local", model="fake-model", dimensions=32)
+
     service = MemoryService(
         resource_service=resources,
         documents=documents,
@@ -154,6 +160,7 @@ async def mem(tmp_path: pathlib.Path, monkeypatch):
         audit=audit,
         store_dir=paths.memory_store_dir,
         fact_path=paths.fact_path,
+        embedding_resolver=_resolver,
     )
     # Register the memory kind so auto-provision (resources.register) works.
     resources._kinds["memory"] = make_memory_kind(service)  # type: ignore[attr-defined]

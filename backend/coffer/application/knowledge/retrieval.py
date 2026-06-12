@@ -14,6 +14,7 @@ its own imports and the importlinter engine-confinement contract holds.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Protocol, runtime_checkable
 
 from coffer.domain.errors import EngineUnavailable
@@ -38,6 +39,17 @@ class IndexFactory(Protocol):
     def __call__(
         self, kind: str, resource_name: str, *, dimensions: int | None
     ) -> KnowledgeIndex: ...
+
+
+#: Resolves the CURRENT global embedding config (embedding is no longer
+#: per-resource), or ``None`` when vector is globally disabled/unconfigured.
+#: Read at index/recall time so a Settings change applies without a restart.
+EmbeddingResolver = Callable[[], Awaitable["EmbeddingConfig | None"]]
+
+
+async def no_embedding() -> EmbeddingConfig | None:
+    """Default resolver: vector disabled (keyword-only)."""
+    return None
 
 
 @runtime_checkable

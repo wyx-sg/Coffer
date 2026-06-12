@@ -137,6 +137,11 @@ async def kb(tmp_path: pathlib.Path, monkeypatch):
     )
     reindexer = Reindexer(embedder_factory=fake_embedder_factory)
 
+    async def _resolver() -> EmbeddingConfig:
+        # Embedding is global now; the fixture supplies a fixed config so the
+        # fake embedder/vec index (width 32) drives vector tests.
+        return EmbeddingConfig(provider="local", model="fake-model", dimensions=32)
+
     service = KnowledgeBaseService(
         resource_service=None,  # set below (circular: kind needs service)
         documents=documents,
@@ -145,6 +150,7 @@ async def kb(tmp_path: pathlib.Path, monkeypatch):
         reindexer=reindexer,
         audit=audit,
         paths=paths,
+        embedding_resolver=_resolver,
     )
     kinds = {"knowledge_base": make_kb_kind(service)}
     resources = ResourceService(kinds, SqlAlchemyResourceRepo(sm), audit)

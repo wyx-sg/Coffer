@@ -224,10 +224,30 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # One substrate per process: KB + memory share the DocumentRepo,
     # retrieval facade and reindexer (per KnowledgeRetrieval's contract).
     substrate = build_substrate(sm)
-    wire_kb_kind(app, resource_svc, audit, sm, builtin_tools, substrate=substrate)
+
+    # Embedding is global: KB + memory resolve the current config at index/recall
+    # time so a Settings change applies without a daemon restart.
+    async def _resolve_embedding() -> object:
+        return (await embedding_config_svc.get()).to_embedding_config()
+
+    wire_kb_kind(
+        app,
+        resource_svc,
+        audit,
+        sm,
+        builtin_tools,
+        substrate=substrate,
+        embedding_resolver=_resolve_embedding,  # type: ignore[arg-type]
+    )
     # Wire up Memory plumbing (spec 007). Registers the memory built-in tools.
     memory_service = wire_memory_kind(
-        app, resource_svc, audit, sm, builtin_tools, substrate=substrate
+        app,
+        resource_svc,
+        audit,
+        sm,
+        builtin_tools,
+        substrate=substrate,
+        embedding_resolver=_resolve_embedding,  # type: ignore[arg-type]
     )
 
     # Wire the composition-root projection service (bridges memory + agent so

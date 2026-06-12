@@ -49,9 +49,6 @@ class KnowledgeBaseConfig(BaseModel):
         if not seen:
             raise ValueError("enabled_modes must list at least one retrieval mode")
         object.__setattr__(self, "enabled_modes", seen)
-        # ``vector`` enabled requires an embedding config.
-        if "vector" in seen and self.embedding is None:
-            raise ValueError("embedding is required when 'vector' is in enabled_modes")
         # The default mode must be enabled.
         if self.default_mode not in seen:
             raise ValueError(f"default_mode {self.default_mode!r} is not in enabled_modes {seen}")
@@ -59,4 +56,8 @@ class KnowledgeBaseConfig(BaseModel):
 
     @property
     def vector_enabled(self) -> bool:
-        return "vector" in self.enabled_modes and self.embedding is not None
+        # Embedding is GLOBAL now (not per-KB): a KB opts into vector by listing
+        # the mode; whether vector actually indexes depends on the global
+        # embedding config being active. The legacy ``embedding`` field is
+        # accepted but ignored.
+        return "vector" in self.enabled_modes
