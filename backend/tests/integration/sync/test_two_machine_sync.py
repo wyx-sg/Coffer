@@ -22,6 +22,7 @@ from coffer.application.sync.config_service import SyncConfigService
 from coffer.application.sync.exporter import SyncExporter
 from coffer.application.sync.importer import SyncImporter
 from coffer.application.sync.service import SyncService
+from coffer.application.sync.worker import SyncWorker
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.domain.sync.models import SyncStatus
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
@@ -75,6 +76,7 @@ class Machine:
     root: Path
     resources: ResourceService
     service: SyncService
+    config_svc: SyncConfigService
     workspace: Workspace
     master_key: MasterKeyManager
     db_path: Path
@@ -133,6 +135,7 @@ async def _make_machine(name: str, root: Path, remote: Path, *, create_key: bool
         root=root,
         resources=resources,
         service=service,
+        config_svc=config_svc,
         workspace=workspace,
         master_key=master_key,
         db_path=db_path,
@@ -148,6 +151,8 @@ async def remote(tmp_path):  # type: ignore[no-untyped-def]
 
 
 @pytest.mark.acceptance(spec="010-sync", scenario="round-trip vault state to a second machine")
+@pytest.mark.acceptance(spec="010-sync", scenario="locked credentials before key bootstrap")
+@pytest.mark.acceptance(spec="010-sync", scenario="master key never enters the medium")
 async def test_round_trip_and_credential_bootstrap(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
     a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
     # A has a resource, a knowledge file, and a credential.
@@ -209,6 +214,29 @@ async def test_conflict_then_resolve(tmp_path, remote) -> None:  # type: ignore[
     assert resolved.status is SyncStatus.CLEAN
     got = await b.resources.get(ResourceRef("mcp_server", "confluence"))
     assert got.config == {"value": "A2"}
+
+
+@pytest.mark.acceptance(spec="010-sync", scenario="auto-sync converges after a change")
+async def test_auto_sync_converges(tmp_path, remote) -> None:  # type: ignore[no-untyped-def]
+    a = await _make_machine("A", tmp_path / "A", remote, create_key=True)
+    b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
+    # Enable auto-sync on both; interval 0 so each tick is due immediately.
+    for m in (a, b):
+        await m.config_svc.update_config(
+            remote=str(remote), enabled=True, auto=True,
+            interval_seconds=30, branch="main", actor="test",
+        )
+    a_worker = SyncWorker(a.service, a.config_svc)
+    b_worker = SyncWorker(b.service, b.config_svc)
+
+    # A registers a resource; its worker tick pushes it.
+    await a.resources.register("mcp_server", "shared", {"value": "auto"}, "test")
+    await a_worker._maybe_sync()
+
+    # B's worker tick pulls and imports it — no manual command on either side.
+    await b_worker._maybe_sync()
+    got = await b.resources.get(ResourceRef("mcp_server", "shared"))
+    assert got.config == {"value": "auto"}
 
 
 @pytest.mark.acceptance(spec="010-sync", scenario="only shared state syncs")
