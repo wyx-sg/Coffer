@@ -270,6 +270,14 @@ class TurnOrchestrator:
                     final_done = event
                 elif isinstance(event, TurnError):
                     error_event = event
+                    # The SSE event disappears with the client connection;
+                    # leave a server-side trace for post-hoc debugging.
+                    log.warning(
+                        "Turn for conversation %s ended with %s: %s",
+                        conversation_id,
+                        event.code,
+                        event.message,
+                    )
                 # TurnStarted / ApprovalRequest: forwarded only, not message content.
 
             await self._finalize_assistant_message(

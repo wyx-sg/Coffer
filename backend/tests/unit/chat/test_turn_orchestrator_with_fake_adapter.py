@@ -294,6 +294,26 @@ async def test_turn_error_persists_failed_message() -> None:
     assert assistants[0].status == "failed"
 
 
+@pytest.mark.asyncio
+async def test_turn_error_is_logged_server_side(caplog: pytest.LogCaptureFixture) -> None:
+    """A turn that ends in a TurnError must leave a server-side log trace —
+    the SSE event alone disappears with the client connection."""
+    scripted: list[AgentEvent] = [
+        TurnStarted(),
+        TurnError(code="PROVIDER_ERROR", message="API rate limit exceeded"),
+    ]
+    orchestrator, _, _, _, _ = make_orchestrator(scripted)
+    conv = await orchestrator._chat.create_conversation()
+
+    with caplog.at_level("WARNING", logger="coffer.application.chat.turn_orchestrator"):
+        queue = await orchestrator.start_turn(conv.id, "test")
+        await drain_queue(queue)
+
+    records = [r for r in caplog.records if "PROVIDER_ERROR" in r.getMessage()]
+    assert records, "expected a WARNING log naming the turn error code"
+    assert "API rate limit exceeded" in records[0].getMessage()
+
+
 # ---------------------------------------------------------------------------
 # cancel_turn (delete path — discard)
 # ---------------------------------------------------------------------------

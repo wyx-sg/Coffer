@@ -17,7 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { streamChatTurn, type AgentEvent, type ApprovalRequestEvent } from "@/lib/chat/streamClient";
 import { chatApi, type ContentBlock } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
-import { messagesKey } from "./useConversations";
+import { CONVERSATIONS_KEY, messagesKey } from "./useConversations";
 
 // ---------------------------------------------------------------------------
 // State types
@@ -133,6 +133,9 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
           setIsStreaming(false);
           setPendingApproval(null);
         }
+        // The first turn renames the conversation server-side (auto-title);
+        // refresh the list whether the turn succeeded or failed.
+        void qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
       }
     },
     [conversationId, isStreaming, qc],

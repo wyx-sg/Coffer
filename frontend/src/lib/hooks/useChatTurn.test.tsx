@@ -413,4 +413,24 @@ describe("useChatTurn", () => {
 
     expect(chatApiMock.interruptTurn).toHaveBeenCalledWith("conv-9");
   });
+
+  test("invalidates the conversations list when a turn ends, so the auto-generated title appears", async () => {
+    streamChatTurnMock.mockImplementation(async function* () {
+      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+    });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["conversations"] });
+  });
 });
