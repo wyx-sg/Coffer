@@ -22,38 +22,36 @@ export function KnowledgeBaseDocTree({ docs, selectedId, isLoading, onSelect }: 
   const items = docs?.documents ?? [];
 
   return (
-    <aside className="rounded-md border border-border">
-      <div className="border-b border-border px-3 py-2 text-sm font-medium">
+    <aside className="space-y-1">
+      <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {t("knowledgeBases.detail.documents")}
-        {docs ? <span className="ml-1 text-muted-foreground">({docs.total})</span> : null}
-      </div>
+        {docs ? <span className="ml-1 normal-case">({docs.total})</span> : null}
+      </p>
       {isLoading ? (
-        <p className="px-3 py-3 text-sm text-muted-foreground">{t("common.loading")}</p>
+        <p className="px-1 text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : items.length === 0 ? (
-        <p className="px-3 py-3 text-sm text-muted-foreground">
-          {t("knowledgeBases.detail.empty")}
-        </p>
+        <p className="px-1 text-sm text-muted-foreground">{t("knowledgeBases.detail.empty")}</p>
       ) : (
-        <ul className="max-h-[60vh] overflow-y-auto py-1">
+        <ul className="max-h-[60vh] space-y-0.5 overflow-y-auto">
           {items.map((d) => (
             <li key={d.id}>
               <button
                 type="button"
                 onClick={() => onSelect(d.id)}
                 className={cn(
-                  "flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-secondary",
-                  selectedId === d.id && "bg-secondary",
+                  "flex w-full items-center gap-1.5 rounded-md py-1.5 pl-2 pr-2 text-left text-sm transition-colors",
+                  selectedId === d.id
+                    ? "bg-primary/10 text-primary"
+                    : "hover:bg-secondary hover:text-foreground",
                 )}
               >
-                <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{d.title}</span>
-                  <Badge variant="outline" className="mt-0.5 text-[10px]">
-                    {t(`knowledgeBases.sourceMode.${d.source_mode}`, {
-                      defaultValue: d.source_mode,
-                    })}
+                <FileText className="size-4 shrink-0 opacity-70" />
+                <span className="min-w-0 flex-1 truncate">{d.title}</span>
+                {d.source_mode === "edited" ? (
+                  <Badge variant="outline" className="shrink-0 text-[10px]">
+                    {t("knowledgeBases.sourceMode.edited", { defaultValue: "edited" })}
                   </Badge>
-                </span>
+                ) : null}
               </button>
             </li>
           ))}

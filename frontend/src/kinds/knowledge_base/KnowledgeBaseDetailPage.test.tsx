@@ -126,8 +126,10 @@ describe("KnowledgeBaseDetailPage", () => {
 
     const tree = screen.getByRole("complementary");
     fireEvent.click(await within(tree).findByText("Deploys"));
-    expect(await screen.findByText(/# Deploys/)).toBeVisible();
+    // Viewing renders the Markdown: the body text is shown (the raw "# " is gone).
+    expect(await screen.findByText("body")).toBeVisible();
 
+    // Editing drops back to the raw Markdown source in a textarea.
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     const textarea = await screen.findByDisplayValue(/# Deploys/);
     fireEvent.change(textarea, { target: { value: "# Deploys\n\nedited" } });

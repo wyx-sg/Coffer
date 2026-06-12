@@ -9,6 +9,7 @@ import { Pencil, RefreshCw, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Markdown } from "@/components/Markdown";
 import { translateApiError } from "@/lib/api/errors";
 import type { DocumentDetailOut } from "./api";
 
@@ -118,6 +119,7 @@ export function KnowledgeBaseDocViewer({
       ) : null}
 
       {editing ? (
+        // Editing drops back to the raw Markdown source.
         <textarea
           value={editText}
           onChange={(e) => onEditTextChange(e.target.value)}
@@ -125,9 +127,10 @@ export function KnowledgeBaseDocViewer({
           spellCheck={false}
         />
       ) : (
-        <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-sm">
-          {doc.markdown}
-        </pre>
+        // Viewing renders the Markdown.
+        <div className="max-h-[60vh] overflow-auto p-4">
+          <Markdown>{doc.markdown}</Markdown>
+        </div>
       )}
     </div>
   );
