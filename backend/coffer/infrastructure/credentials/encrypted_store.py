@@ -7,6 +7,11 @@ register-time probing call this from sync code paths. WAL mode (set by
 the async engine) makes concurrent sync readers safe; busy_timeout
 matches the engine's PRAGMA suite.
 
+Async callers MUST dispatch writes (set/delete) via ``asyncio.to_thread``:
+the busy-wait blocks its thread, and on the event loop that freezes the
+aiosqlite coroutine holding the write lock — its commit can never run, so
+the wait becomes a deadlock that always exhausts busy_timeout.
+
 Plaintext exists only in memory between decrypt and the spawn that
 consumes it. The ciphertext column never reaches logs or audit rows.
 """
