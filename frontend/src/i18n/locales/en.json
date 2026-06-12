@@ -836,6 +836,8 @@
       "title": "Conversations",
       "new": "New chat",
       "empty": "No conversations yet",
+      "search": "Search conversations",
+      "noMatches": "No matching conversations",
       "ariaLabel": "Conversation history",
       "rename": "Rename",
       "renameAria": "Rename conversation",

@@ -1,8 +1,12 @@
 // components/chat/ConversationList.tsx
-// Collapsible history column listing all conversations.
+// Collapsible history column listing all conversations, with title search.
+// Search filters the already-loaded list client-side — fine for a local-first
+// single-user vault; server-side search is the scale path if lists grow large.
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SearchInput } from "@/components/SearchInput";
 import type { Conversation } from "@/lib/api/chat";
 import { ConversationListItem } from "./ConversationListItem";
 
@@ -26,6 +30,12 @@ export function ConversationList({
   onDelete,
 }: Props) {
   const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+
+  const trimmed = query.trim().toLowerCase();
+  const filtered = trimmed
+    ? conversations.filter((c) => c.title.toLowerCase().includes(trimmed))
+    : conversations;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -44,6 +54,18 @@ export function ConversationList({
         </Button>
       </div>
 
+      {conversations.length > 0 && (
+        <div className="border-b border-border px-2 py-2">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            ariaLabel={t("chat.history.search")}
+            placeholder={t("chat.history.search")}
+            className="[&_input]:h-8 [&_input]:text-xs"
+          />
+        </div>
+      )}
+
       <div
         className="flex-1 overflow-y-auto px-2 py-2"
         role="listbox"
@@ -59,7 +81,12 @@ export function ConversationList({
             {t("chat.history.empty")}
           </p>
         )}
-        {conversations.map((conv) => (
+        {!loading && conversations.length > 0 && filtered.length === 0 && (
+          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+            {t("chat.history.noMatches")}
+          </p>
+        )}
+        {filtered.map((conv) => (
           <ConversationListItem
             key={conv.id}
             conversation={conv}
