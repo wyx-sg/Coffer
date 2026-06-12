@@ -11,7 +11,6 @@ from fastapi import Header, HTTPException, status
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 
 # X-Coffer-Actor accepts any short identifier. Canonical values: "cli", "api",
 # "ui", "system". Tests use prefixed identifiers like "e2e-mcp"; downstream
@@ -195,9 +194,20 @@ def get_health_repo() -> Any:
     return _health_repo
 
 
-def get_keyring() -> KeyringAdapter:
-    """FastAPI Depends() target — the keychain bridge is stateless."""
-    return KeyringAdapter()
+_credential_store: Any | None = None
+
+
+def set_credential_store(store: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _credential_store
+    _credential_store = store
+
+
+def get_credential_store() -> Any:
+    """FastAPI Depends() target — actual type is EncryptedCredentialStore."""
+    if _credential_store is None:
+        raise RuntimeError("credential store not initialised")
+    return _credential_store
 
 
 # --- Agent kind-specific dependency providers (spec 004-agent-registry) ---

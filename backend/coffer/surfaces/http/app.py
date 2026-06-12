@@ -62,6 +62,7 @@ from coffer.surfaces.http.app_mcp_composition import (
 )
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
     set_audit_service,
@@ -69,7 +70,6 @@ from coffer.surfaces.http.dependencies import (
     set_retention_service,
 )
 from coffer.surfaces.http.fs_routes import router as fs_router
-from coffer.surfaces.http.keychain_routes import router as keychain_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
@@ -296,7 +296,7 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(resource_router)
     app.include_router(audit_router)
     app.include_router(retention_router)
-    app.include_router(keychain_router)
+    app.include_router(credential_router)
     # Agent + skill kind routes (specs 004-agent-registry, 005-skill-manager)
     app.include_router(agent_router)
     app.include_router(agent_config_router)

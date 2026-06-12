@@ -193,11 +193,15 @@ class InvocationListOut(BaseModel):
     invocations: list[InvocationOut]
 
 
-# --- Keychain ---
+# --- Credentials ---
 
 
-class KeychainSetIn(BaseModel):
-    """Request body for storing a secret in the OS keychain."""
+class CredentialSetIn(BaseModel):
+    """Request body for storing a secret in the credential store.
+
+    Secrets are Fernet-encrypted into the coffer DB; only ciphertext is
+    persisted; audit rows carry the ref only.
+    """
 
     ref: str = Field(
         min_length=1,
@@ -210,16 +214,24 @@ class KeychainSetIn(BaseModel):
     )
 
 
-class KeychainExistsOut(BaseModel):
+class CredentialExistsOut(BaseModel):
     """Presence-only response — never carries the secret value."""
 
     present: bool = Field(description="Whether a secret is stored under the ref.")
 
 
-class KeychainGetOut(BaseModel):
-    """Secret-value response for an explicit read."""
+class CredentialGetOut(BaseModel):
+    """Secret-value response for an explicit read from the credential store."""
 
     value: str = Field(description="The stored secret value.")
+
+
+# Backward-compat aliases — used by the OpenAPI yaml (still named Keychain*)
+# and any callers that haven't migrated yet (≤0.1.x).  Remove once the yaml
+# and all callers are updated.
+KeychainSetIn = CredentialSetIn
+KeychainExistsOut = CredentialExistsOut
+KeychainGetOut = CredentialGetOut
 
 
 # --- MCP capability enable/disable body ---

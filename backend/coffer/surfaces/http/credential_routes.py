@@ -1,32 +1,37 @@
-# backend/coffer/surfaces/http/keychain_routes.py
-"""/api/v1/keychain — write secrets into the OS keychain.
+# backend/coffer/surfaces/http/credential_routes.py
+"""/api/v1/credentials — read and write secrets in the encrypted credential store.
 
-The UI uses this when importing MCP server JSON: any plaintext secret in
-the pasted `env` is lifted into the keychain here, so it never lands in
-Coffer's database — the resource config only keeps a credential ref.
+Secrets are Fernet-encrypted into the coffer DB; only ciphertext is persisted;
+audit rows carry the ref only — secret values never appear in the audit log.
 
-Every lifecycle change is audited (FR-014). The audit row records the
-`ref` only — secret values never appear in the audit log.
+The UI uses this when importing MCP server JSON: any plaintext secret in the
+pasted `env` is lifted into the credential store here, so it never lands in
+Coffer's resource config unencrypted — the resource config only keeps a
+credential ref.
+
+Every lifecycle change is audited (FR-014). The audit row records the `ref`
+only — secret values never appear in the audit log.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEventType
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_actor, get_audit_service, get_keyring
+from coffer.surfaces.http.dependencies import get_actor, get_audit_service, get_credential_store
 from coffer.surfaces.http.schemas import (
-    KeychainExistsOut,
-    KeychainGetOut,
-    KeychainSetIn,
+    CredentialExistsOut,
+    CredentialGetOut,
+    CredentialSetIn,
 )
 
 router = APIRouter(
-    prefix="/api/v1/keychain",
-    tags=["keychain"],
+    prefix="/api/v1/credentials",
+    tags=["credentials"],
     dependencies=[Depends(require_token)],
 )
 
@@ -37,55 +42,55 @@ router = APIRouter(
     response_class=Response,
 )
 async def set_secret(
-    body: KeychainSetIn,
-    keyring: KeyringAdapter = Depends(get_keyring),  # noqa: B008
+    body: CredentialSetIn,
+    store: Any = Depends(get_credential_store),  # noqa: B008
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> Response:
-    """Store `value` under `ref` in the OS keychain."""
-    keyring.set(body.ref, body.value)
+    """Store `value` under `ref` in the encrypted credential store."""
+    store.set(body.ref, body.value)
     await audit.record(
-        AuditEventType.KEYCHAIN_SET.value,
+        AuditEventType.CREDENTIAL_SET.value,
         actor=actor,
         details={"ref": body.ref},
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/{ref}", response_model=KeychainGetOut)
+@router.get("/{ref}", response_model=CredentialGetOut)
 async def get_secret(
     ref: str,
-    keyring: KeyringAdapter = Depends(get_keyring),  # noqa: B008
+    store: Any = Depends(get_credential_store),  # noqa: B008
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
-) -> KeychainGetOut:
+) -> CredentialGetOut:
     """Return the secret value stored under `ref`.
 
     Reading a value out is audited (ref only — the value never reaches the
     audit row), so explicit secret reads leave a trail. 404 when absent.
     """
-    value = keyring.get(ref)
+    value = store.get(ref)
     if value is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     await audit.record(
-        AuditEventType.KEYCHAIN_READ.value,
+        AuditEventType.CREDENTIAL_READ.value,
         actor=actor,
         details={"ref": ref},
     )
-    return KeychainGetOut(value=value)
+    return CredentialGetOut(value=value)
 
 
-@router.get("/{ref}/exists", response_model=KeychainExistsOut)
+@router.get("/{ref}/exists", response_model=CredentialExistsOut)
 async def secret_exists(
     ref: str,
-    keyring: KeyringAdapter = Depends(get_keyring),  # noqa: B008
-) -> KeychainExistsOut:
+    store: Any = Depends(get_credential_store),  # noqa: B008
+) -> CredentialExistsOut:
     """Report whether a secret is stored under `ref`.
 
     Presence only — the value never crosses the API for this check, so no
     audit event is recorded (nothing sensitive is read out).
     """
-    return KeychainExistsOut(present=keyring.get(ref) is not None)
+    return CredentialExistsOut(present=store.get(ref) is not None)
 
 
 @router.delete(
@@ -95,14 +100,14 @@ async def secret_exists(
 )
 async def delete_secret(
     ref: str,
-    keyring: KeyringAdapter = Depends(get_keyring),  # noqa: B008
+    store: Any = Depends(get_credential_store),  # noqa: B008
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> Response:
-    """Remove `ref` from the OS keychain. Idempotent — absent is fine."""
-    keyring.delete(ref)
+    """Remove `ref` from the credential store. Idempotent — absent is fine."""
+    store.delete(ref)
     await audit.record(
-        AuditEventType.KEYCHAIN_DELETED.value,
+        AuditEventType.CREDENTIAL_DELETED.value,
         actor=actor,
         details={"ref": ref},
     )

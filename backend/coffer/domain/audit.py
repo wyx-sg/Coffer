@@ -24,9 +24,15 @@ class AuditEventType(StrEnum):
     TOKEN_ROTATED = "token_rotated"
     RETENTION_UPDATED = "retention_updated"
     BACKUP_CREATED = "backup_created"
+    # legacy rows — pre-encrypted-store (≤0.1.x); kept so old audit rows stay renderable
     KEYCHAIN_SET = "keychain_set"
     KEYCHAIN_READ = "keychain_read"
     KEYCHAIN_DELETED = "keychain_deleted"
+    CREDENTIAL_SET = "credential_set"
+    CREDENTIAL_READ = "credential_read"
+    CREDENTIAL_DELETED = "credential_deleted"
+    CREDENTIAL_MIGRATED = "credential_migrated"
+    MASTER_KEY_RELOCATED = "master_key_relocated"
     # spec 004-agent-registry
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"

@@ -26,6 +26,7 @@ _PROVIDERS = [
     ("_preferences_repo", deps.get_preferences_repo, deps.set_preferences_repo),
     ("_invocation_repo", deps.get_invocation_repo, deps.set_invocation_repo),
     ("_health_repo", deps.get_health_repo, deps.set_health_repo),
+    ("_credential_store", deps.get_credential_store, deps.set_credential_store),
 ]
 
 
@@ -64,14 +65,3 @@ def test_setter_then_getter_returns_value(attr, getter, setter, _reset_globals):
     assert getter() is sentinel
     # The setter must have written the named module global, not a copy.
     assert getattr(deps, attr) is sentinel
-
-
-def test_get_keyring_is_stateless_and_returns_adapter():
-    """get_keyring needs no setter — it constructs a fresh stateless adapter."""
-    from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
-
-    k1 = deps.get_keyring()
-    k2 = deps.get_keyring()
-    assert isinstance(k1, KeyringAdapter)
-    # Stateless: a fresh instance each call (no singleton caching).
-    assert k1 is not k2

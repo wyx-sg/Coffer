@@ -9,7 +9,7 @@ suite:
 - CODE-018 — token rotation tmp file never exists with mode wider than 0600
 - CODE-023 — Pydantic validation failures do not echo per-field input back
 - CODE-024 — CORS origin allowlist is env-driven
-- CODE-025 — KeychainSetIn.value is bounded at 8192 bytes
+- CODE-025 — CredentialSetIn.value is bounded at 8192 bytes
 - SPEC-005 — X-Coffer-Actor header is respected and validated
 """
 
@@ -103,14 +103,14 @@ def test_cors_origins_dev_flag_includes_vite(monkeypatch: pytest.MonkeyPatch) ->
 # CODE-025 ------------------------------------------------------------------- #
 
 
-def test_keychain_set_in_bounds_value() -> None:
+def test_credential_set_in_bounds_value() -> None:
     from pydantic import ValidationError
 
-    from coffer.surfaces.http.schemas import KeychainSetIn
+    from coffer.surfaces.http.schemas import CredentialSetIn
 
-    KeychainSetIn(ref="ok", value="x" * 8192)  # boundary
+    CredentialSetIn(ref="ok", value="x" * 8192)  # boundary
     with pytest.raises(ValidationError):
-        KeychainSetIn(ref="ok", value="x" * 8193)
+        CredentialSetIn(ref="ok", value="x" * 8193)
 
 
 # SPEC-005 ------------------------------------------------------------------- #
