@@ -24,7 +24,7 @@ interface ServerPlan {
 
 /**
  * Turn a parsed JSON server into a Coffer config plus the list of
- * keychain writes to perform. Pure (no network) — so the config is fully
+ * credential writes to perform. Pure (no network) — so the config is fully
  * built before any side effect runs. Secret env vars become
  * `credential_refs`; non-secret values stay inline — in `env` for stdio,
  * in `headers` for http (HttpTransport has no `env` field), mirroring how
@@ -64,10 +64,10 @@ async function registerResource(name: string, config: Record<string, unknown>): 
   if (error) throwApiError(error, "INTERNAL_ERROR", "register failed");
 }
 
-async function writeKeychain(ref: string, value: string): Promise<void> {
+async function writeCredential(ref: string, value: string): Promise<void> {
   const client = getApiClient();
-  const { error } = await client.POST("/keychain", { body: { ref, value } });
-  if (error) throwApiError(error, "INTERNAL_ERROR", "keychain write failed");
+  const { error } = await client.POST("/credentials", { body: { ref, value } });
+  if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
 }
 
 /**
@@ -90,8 +90,8 @@ async function rollbackResource(name: string): Promise<void> {
 /**
  * "Add MCP server" modal — paste the standard `mcpServers` JSON, review
  * which env values are secrets, and import a batch. Each server is
- * registered before its secrets are written to the keychain, so a failed
- * registration leaves nothing orphaned.
+ * registered before its secrets are written to the encrypted credential
+ * store, so a failed registration leaves nothing orphaned.
  */
 export function AddMcpServerDialog() {
   const { t } = useTranslation();
@@ -116,19 +116,19 @@ export function AddMcpServerDialog() {
         const { config, secrets } = planServer(srv);
         let registered = false;
         try {
-          // Register first, then write the keychain — a failed
-          // registration leaves no orphaned keychain entries.
+          // Register first, then write to the encrypted credential store —
+          // a failed registration leaves no orphaned credential entries.
           await registerResource(srv.name, config);
           registered = true;
           for (const s of secrets) {
-            await writeKeychain(s.ref, s.value);
+            await writeCredential(s.ref, s.value);
           }
           createdRef.current.add(srv.name);
           created.push(srv.name);
         } catch (e) {
           // Secret write failed after registration — roll the resource
           // back so we don't leave a Coffer server pointing at a
-          // credential ref that was never stored in the keychain.
+          // credential ref that was never stored in the encrypted store.
           if (registered) {
             await rollbackResource(srv.name);
           }

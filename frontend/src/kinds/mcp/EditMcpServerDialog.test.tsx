@@ -156,8 +156,8 @@ describe("EditMcpServerDialog", () => {
       expect(patchMock).toHaveBeenCalled();
     });
 
-    // Keychain POST should NOT be called (value is empty)
-    expect(postMock).not.toHaveBeenCalledWith("/keychain", expect.anything());
+    // Credential store POST should NOT be called (value is empty)
+    expect(postMock).not.toHaveBeenCalledWith("/credentials", expect.anything());
 
     // PATCH body should still contain the original ref for GITHUB_TOKEN
     const patchArgs = patchMock.mock.calls[0];
@@ -198,15 +198,15 @@ describe("EditMcpServerDialog", () => {
       expect(patchMock).toHaveBeenCalled();
     });
 
-    // Keychain write must happen before resource PATCH
-    const keychainIdx = callOrder.indexOf("POST:/keychain");
+    // Credential store write must happen before resource PATCH
+    const keychainIdx = callOrder.indexOf("POST:/credentials");
     const patchIdx = callOrder.findIndex((c) => c.startsWith("PATCH:"));
     expect(keychainIdx).toBeGreaterThanOrEqual(0);
     expect(patchIdx).toBeGreaterThanOrEqual(0);
     expect(keychainIdx).toBeLessThan(patchIdx);
 
-    // Keychain payload has the correct ref and value
-    const keychainCall = postMock.mock.calls.find((c) => c[0] === "/keychain");
+    // Credential store payload has the correct ref and value
+    const keychainCall = postMock.mock.calls.find((c) => c[0] === "/credentials");
     expect(keychainCall?.[1].body).toEqual({
       ref: "gh.GITHUB_TOKEN",
       value: "new-secret-token",

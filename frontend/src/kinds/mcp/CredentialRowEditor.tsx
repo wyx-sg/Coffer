@@ -13,7 +13,7 @@ export interface CredRow {
   name: string;
   /** New value to write; "" = keep the existing one. */
   value: string;
-  /** Existing keychain ref, or null for a freshly added row. */
+  /** Existing credential store ref, or null for a freshly added row. */
   originalRef: string | null;
   /** The env-var name this row loaded with, or null for a new row. Used to
    *  detect a rename that needs the secret re-entered. */

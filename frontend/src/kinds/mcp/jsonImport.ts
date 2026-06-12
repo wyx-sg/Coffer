@@ -10,8 +10,8 @@ const SECRET_NAME_RE = /token|secret|pass|pwd|key|cred|auth/i;
  * Values that *look* like a secret regardless of the var name. Mirrors the
  * backend's `_SECRET_PATTERNS` (server_config.py) so a secret-valued var
  * with an innocuous name (e.g. `SLACK_URL: "Bearer xoxb-…"`) is steered into
- * the keychain in the review step instead of being POSTed inline and
- * rejected with a CONFIG_INVALID the user can't easily action.
+ * the encrypted credential store in the review step instead of being POSTed
+ * inline and rejected with a CONFIG_INVALID the user can't easily action.
  */
 const SECRET_VALUE_RE = /^(?:Bearer\s+|ghp_|gho_|github_pat_|sk-|xox[abp]-|eyJ[A-Za-z0-9_-]{20,})/;
 

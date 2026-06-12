@@ -183,7 +183,7 @@
       "env": "环境变量",
       "noEnv": "无环境变量",
       "secret": "密钥",
-      "secretHint": "标记为「密钥」的值会存进系统钥匙串,其余留在配置里。",
+      "secretHint": "标记为 Secret 的值会加密存入 Coffer 本地数据库；其余保留在配置中。",
       "errInvalidJson": "这不是合法的 JSON。",
       "errNoServers": "没找到 MCP 服务器。需要 {\"mcpServers\": {…}} 格式。",
       "errBadServer": "服务器「{{name}}」需要 \"command\"(stdio)或 \"url\"(http)。",
@@ -203,7 +203,7 @@
       "removeCredential": "删除凭证",
       "credentialKeep": "留空 = 保持不变",
       "credentialNew": "密钥值",
-      "credentialHint": "凭证值会存进系统钥匙串。移除某个凭证会同时删除它的钥匙串条目。",
+      "credentialHint": "凭证值会加密存入 Coffer 本地数据库；移除凭证会删除对应的存储条目。",
       "errRenameNeedsValue": "重命名「{{name}}」需要重新输入密钥值。"
     }
   },
@@ -239,6 +239,11 @@
       "backup_created": "创建了备份",
       "keychain_set": "保存了一个凭证",
       "keychain_deleted": "删除了一个凭证",
+      "credential_set": "已存储凭证",
+      "credential_read": "已读取凭证",
+      "credential_deleted": "已删除凭证",
+      "credential_migrated": "凭证已从系统 keychain 迁移",
+      "master_key_relocated": "主密钥存储位置已变更",
       "agent_config_file_written": "编辑了 {{resource}} 配置（{{key}}）",
       "agent_mcp_installed": "已把 Coffer MCP 安装到 {{resource}}",
       "agent_mcp_uninstalled": "已从 {{resource}} 移除 Coffer MCP"
@@ -258,7 +263,12 @@
       "retention_updated": "保留策略变更",
       "backup_created": "创建备份",
       "keychain_set": "保存凭证",
-      "keychain_deleted": "删除凭证"
+      "keychain_deleted": "删除凭证",
+      "credential_set": "已存储凭证",
+      "credential_read": "已读取凭证",
+      "credential_deleted": "已删除凭证",
+      "credential_migrated": "凭证已从系统 keychain 迁移",
+      "master_key_relocated": "主密钥存储位置已变更"
     },
     "capType": {
       "tool": "工具",
@@ -357,7 +367,7 @@
       "dimensions": "维度",
       "baseUrl": "Base URL（可选）",
       "credential": "凭证引用",
-      "credentialHint": "keychain 条目名（不是密钥本身）",
+      "credentialHint": "凭证存储条目名（不是密钥本身）",
       "chunkingTitle": "分块默认值",
       "chunkingHint": "新建知识库的默认分块大小/重叠。每个知识库可在自己的设置里覆盖。",
       "chunkSize": "分块大小",
