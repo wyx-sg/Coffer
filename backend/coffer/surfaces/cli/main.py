@@ -7,10 +7,12 @@ import typer
 from coffer.surfaces.cli import (
     agent_cmd,
     audit_cmd,
+    chat_cmd,
     daemon_cmd,
     keychain_cmd,
     knowledge_base_cmd,
     memory_cmd,
+    model_cmd,
     resource_cmd,
     retention_cmd,
     skill_cmd,
@@ -45,6 +47,8 @@ app.add_typer(agent_cmd.app, name="agent")
 app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(knowledge_base_cmd.app, name="kb")
 app.add_typer(memory_cmd.app, name="memory")
+app.add_typer(chat_cmd.app, name="chat")
+app.add_typer(model_cmd.app, name="model")
 
 
 def run() -> None:

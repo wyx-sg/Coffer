@@ -5,6 +5,7 @@ import {
   Bot,
   Boxes,
   Brain,
+  MessageSquare,
   Library,
   PanelLeftClose,
   PanelLeftOpen,
@@ -54,7 +55,10 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.agents",
-    items: [{ to: "/agents", labelKey: "nav.agents", icon: Bot, end: true }],
+    items: [
+      { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
+      { to: "/agents", labelKey: "nav.agents", icon: Bot, end: true },
+    ],
   },
   {
     labelKey: "nav.group.resources",

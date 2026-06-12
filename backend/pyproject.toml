@@ -33,6 +33,12 @@ dependencies = [
     "markitdown>=0.0.1",
     "sqlite-vec>=0.1.1",
     "openai>=1.40",
+    # spec 008 — agent chat: built-in LangGraph multi-LLM agent.
+    "langgraph>=1.2",
+    "langchain>=1.3",
+    "langchain-anthropic>=1.4",
+    "langchain-openai>=1.2",
+    "langchain-ollama>=1.1",
 ]
 
 [project.optional-dependencies]
@@ -463,4 +469,31 @@ forbidden_modules = [
     "mem0",
     "chromadb",
     "sentence_transformers",
+]
+
+# Contract 9: langgraph + langchain* confined to infrastructure/chat (spec 008).
+# Domain + application MUST NOT import these SDKs; all other infrastructure
+# packages MUST NOT either. The composition root (surfaces/http/app.py +
+# surfaces/http/wiring.py) instantiates LangGraphBuiltinAgent via wire_chat.
+[[tool.importlinter.contracts]]
+name = "LangGraph and LangChain confined to infrastructure/chat"
+type = "forbidden"
+source_modules = [
+    "coffer.domain",
+    "coffer.application",
+    "coffer.infrastructure.mcp",
+    "coffer.infrastructure.knowledge",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence",
+    "coffer.infrastructure.credentials",
+    "coffer.infrastructure.daemon",
+    "coffer.infrastructure.logging",
+]
+forbidden_modules = [
+    "langgraph",
+    "langchain",
+    "langchain_core",
+    "langchain_anthropic",
+    "langchain_openai",
+    "langchain_ollama",
 ]

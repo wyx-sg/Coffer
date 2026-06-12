@@ -54,6 +54,13 @@ class AuditEventType(StrEnum):
     MEMORY_DELETED = "memory_deleted"
     MEMORY_CLEARED = "memory_cleared"
     MEMORY_PROJECTED = "memory_projected"
+    # spec 008-agent-chat
+    CONVERSATION_CREATED = "conversation_created"
+    CONVERSATION_DELETED = "conversation_deleted"
+    CHAT_TURN_COMPLETED = "chat_turn_completed"
+    MODEL_CREATED = "model_created"
+    MODEL_UPDATED = "model_updated"
+    MODEL_DELETED = "model_deleted"
 
 
 @dataclass

@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
+import { ChatPage } from "./pages/ChatPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { SkillDetailPage } from "./pages/SkillDetailPage";
 import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
@@ -17,6 +18,7 @@ import { DataSettings } from "./pages/settings/DataSettings";
 import { EmbeddingSettings } from "./pages/settings/EmbeddingSettings";
 import { AppSettings } from "./pages/settings/AppSettings";
 import { AboutPage } from "./pages/settings/AboutPage";
+import { ModelsPage } from "./pages/settings/ModelsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 export const router = createBrowserRouter([
@@ -25,6 +27,7 @@ export const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { index: true, element: <Navigate to="/agents" replace /> },
+      { path: "chat", element: <ChatPage /> },
       { path: "mcp-servers", element: <ResourcesPage /> },
       { path: "mcp-servers/:kind/:name", element: <ResourceDetailPage /> },
       // Legacy route — this surface used to live at /resources. Keep old
@@ -54,6 +57,7 @@ export const router = createBrowserRouter([
             element: <Navigate to="/settings/general" replace />,
           },
           { path: "general", element: <GeneralSettings /> },
+          { path: "models", element: <ModelsPage /> },
           { path: "data", element: <DataSettings /> },
           { path: "embedding", element: <EmbeddingSettings /> },
           { path: "app", element: <AppSettings /> },

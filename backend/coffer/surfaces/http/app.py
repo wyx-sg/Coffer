@@ -65,8 +65,12 @@ from coffer.surfaces.http.app_mcp_composition import (
 )
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
+from coffer.surfaces.http.chat.model_routes import router as chat_model_router
+from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
+    get_mcp_session_factory,
     set_audit_service,
     set_embedding_config_service,
     set_resource_service,
@@ -89,7 +93,12 @@ from coffer.surfaces.http.projection_wiring import wire_projection
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.skill_routes import router as skill_router
-from coffer.surfaces.http.wiring import build_substrate, wire_kb_kind, wire_memory_kind
+from coffer.surfaces.http.wiring import (
+    build_substrate,
+    wire_chat,
+    wire_kb_kind,
+    wire_memory_kind,
+)
 
 
 def _db_url() -> str:
@@ -209,15 +218,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     set_retention_service(retention_svc)
     set_embedding_config_service(embedding_config_svc)
 
+    # Build the shared built-in tool registry; each kind contributes its tools.
+    # Created before kind wiring so skill/KB/memory can all register into it.
+    builtin_tools = BuiltinToolRegistry()
+
     # Wire up agent + skill kinds (specs 004-agent-registry, 005-skill-manager).
     # The helper builds both in lockstep so the cross-kind on_delete hook (agent
     # deletion cascades into skill binding cleanup) can reference both services,
     # and so app.py stays under the 400-line guideline. Agent detection stays
-    # discovery + confirm (no auto-registration on startup).
-    wire_agent_and_skill_kinds(app, resource_svc, audit, sm)
-
-    # Build the shared built-in tool registry; each kind contributes its tools.
-    builtin_tools = BuiltinToolRegistry()
+    # discovery + confirm (no auto-registration on startup). Passing
+    # builtin_tools registers the skill tools (list_skills / load_skill) so the
+    # built-in chat agent can reach them through the gateway (spec 008).
+    wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools)
 
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
     # into `builtin_tools` so the gateway can expose them.
@@ -260,6 +272,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     process_supervisor, session_supervisors = wire_mcp_kind(
         app, resource_svc, audit, sm, builtin_tools
     )
+
+    # Wire the chat feature (spec 008). Must come AFTER all other wiring so the
+    # coffer-builtin-agent gateway session sees the fully-populated
+    # BuiltinToolRegistry (KB + memory + skill + MCP tools). The session factory
+    # is the one wire_mcp_kind registered via set_mcp_session_factory.
+    chat_gateway_session = wire_chat(audit, sm, get_mcp_session_factory())
+    # The chat session's supervisor stays registered in session_supervisors so
+    # the mcp_server on_delete hook evicts its upstream connections too; shutdown
+    # disposes the chat session first (its on_dispose deregisters the entry), so
+    # the supervisor loop never double-disposes it (dispose() is idempotent).
+    app.state.mcp_session_supervisors = session_supervisors
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -314,6 +337,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         if _inv_repo is not None:
             with contextlib.suppress(Exception):
                 await _inv_repo.stop()
+        # Dispose the built-in agent's chat gateway session first (best-effort);
+        # its on_dispose callback removes its entry from session_supervisors.
+        with contextlib.suppress(Exception):
+            await chat_gateway_session.dispose()
         # Dispose MCP supervisors (best-effort)
         with contextlib.suppress(Exception):
             await process_supervisor.dispose()
@@ -372,4 +399,8 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.include_router(memory_router)
     # Memory projection router (spec 007-memory; bridges memory + agent)
     app.include_router(projection_router)
+    # Agent chat routers (spec 008)
+    app.include_router(chat_conversation_router)
+    app.include_router(chat_turn_router)
+    app.include_router(chat_model_router)
     return app

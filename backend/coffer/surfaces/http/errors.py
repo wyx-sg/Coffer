@@ -67,6 +67,15 @@ _STATUS: dict[str, int] = {
     "MEMORY_REJECTED": 422,  # empty / too-long fact rejected at the boundary
     "SCOPE_UNRESOLVED": 400,
     "EMBEDDING_UNAVAILABLE": 503,
+    # agent chat (spec 008)
+    "CONVERSATION_NOT_FOUND": 404,
+    "MODEL_NOT_FOUND": 404,
+    "MODEL_REJECTED": 400,
+    "NO_MODEL_CONFIGURED": 409,
+    "TURN_IN_PROGRESS": 409,
+    "UNKNOWN_AGENT": 400,
+    "AGENT_CONFIG_REJECTED": 400,
+    "APPROVAL_NOT_FOUND": 409,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a

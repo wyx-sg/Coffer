@@ -47,7 +47,8 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "agents": "Agents",
-    "audit": "Audit log"
+    "audit": "Audit log",
+    "chat": "Chat"
   },
   "resources": {
     "title": "MCP servers",
@@ -290,7 +291,8 @@
       "data": "Data",
       "app": "App",
       "about": "About",
-      "embedding": "Embedding"
+      "embedding": "Embedding",
+      "models": "Models"
     },
     "general": {
       "title": "Display",
@@ -351,6 +353,25 @@
       "baseUrl": "Base URL (optional)",
       "credential": "Credential reference",
       "credentialHint": "Keychain entry name (not the key itself)"
+    },
+    "models": {
+      "title": "Models",
+      "subtitle": "AI model configurations used by Coffer Assistant.",
+      "add": "Add model",
+      "addTitle": "Add model",
+      "editTitle": "Edit model",
+      "empty": "No models configured yet. Add one to start chatting.",
+      "default": "Default",
+      "displayName": "Display name",
+      "displayNamePlaceholder": "e.g. Claude 3.5 Sonnet",
+      "provider": "Provider",
+      "modelId": "Model ID",
+      "modelIdPlaceholder": "e.g. claude-3-5-sonnet-20241022",
+      "credentialRef": "Credential reference",
+      "credentialRefPlaceholder": "e.g. ANTHROPIC_API_KEY",
+      "baseUrl": "Base URL",
+      "baseUrlPlaceholder": "e.g. http://localhost:11434",
+      "setDefault": "Set as default"
     }
   },
   "daemon": {
@@ -788,5 +809,74 @@
       }
     },
     "deleteStoreConfirm": "Delete memory store \"{{name}}\"? Its facts are removed. This cannot be undone."
+  },
+  "chat": {
+    "title": "Chat",
+    "thinking": "Thinking…",
+    "emptyState": {
+      "title": "No model configured",
+      "body": "You need to add at least one model before you can start chatting.",
+      "cta": "Go to Settings → Models"
+    },
+    "agent": {
+      "cofferAssistant": "Coffer Assistant"
+    },
+    "message": {
+      "failed": "This response did not complete.",
+      "tokens": "{{prompt}} in · {{completion}} out"
+    },
+    "modelBar": {
+      "model": "Model",
+      "noModel": "No model",
+      "noModels": "No models configured",
+      "selectAria": "Select model"
+    },
+    "history": {
+      "title": "Conversations",
+      "new": "New chat",
+      "empty": "No conversations yet",
+      "ariaLabel": "Conversation history",
+      "rename": "Rename",
+      "renameAria": "Rename conversation",
+      "delete": "Delete",
+      "collapse": "Collapse history",
+      "expand": "Expand history"
+    },
+    "thread": {
+      "empty": "Send a message to start the conversation.",
+      "selectOrCreate": "Select a conversation or start a new one."
+    },
+    "composer": {
+      "placeholder": "Message Coffer Assistant… (Enter to send, Shift+Enter for new line)",
+      "ariaLabel": "Message input",
+      "send": "Send",
+      "stop": "Stop",
+      "streaming": "Waiting for response…"
+    },
+    "toolCard": {
+      "unknown": "unknown tool",
+      "running": "running",
+      "done": "done",
+      "error": "error",
+      "input": "Input",
+      "result": "Result",
+      "errorLabel": "Error",
+      "toggleAria": "Toggle tool call {{name}}"
+    },
+    "newConversation": {
+      "title": "New conversation",
+      "agentHint": "Choose which agent this conversation will talk to.",
+      "agent": "Agent",
+      "model": "Model",
+      "noModels": "No models yet — add one in Settings → Models first.",
+      "create": "Start conversation",
+      "unavailable": "unavailable"
+    },
+    "approval": {
+      "title": "Approval required",
+      "tool": "Tool",
+      "allow": "Allow",
+      "deny": "Deny"
+    }
   }
 }
