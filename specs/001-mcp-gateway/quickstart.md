@@ -57,13 +57,13 @@ prints the discovered tools (e.g. `read_file`, `write_file`,
 Add an HTTP MCP server (with credentials) the same way:
 
 ```bash
-coffer keychain set github-token "ghp_xxxxxxxxxxxx"
+coffer credentials set github-token "ghp_xxxxxxxxxxxx"
 coffer mcp add github --http https://api.github.com/mcp \
   --credential "Authorization=Bearer ${github-token}"
 ```
 
-(Credentials live in the OS keychain; only the keychain ref is persisted in
-coffer's config.)
+(Secrets are stored as ciphertext in coffer's encrypted credential store; only
+the credential ref is persisted in coffer's config.)
 
 ## Wire Coffer into your MCP client
 
@@ -147,11 +147,11 @@ coffer retention set audit_log --forever
 ### Update a credential
 
 ```bash
-coffer keychain set github-token "<new value>"
+coffer credentials set github-token "<new value>"
 ```
 
-(No need to update the server config — it already references the keychain key
-by name.)
+(No need to update the server config — it already references the credential
+by ref.)
 
 ## Troubleshooting
 

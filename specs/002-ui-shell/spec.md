@@ -63,7 +63,7 @@ A developer opens the web UI for the first time. They have never registered a se
 
 A developer who already uses Coffer for MCP gateway aggregation wants the routine flows — registering a server, watching its health, browsing tools, toggling capabilities, viewing invocations — to look and feel like a real product, not a scaffold. Headings are typographically distinct; spacing is consistent; per-server pages have a primary "what is this server doing?" view before the per-tool toggles; empty / error / loading states are first-class. The Tools, Resources, and Prompts tabs are uniform — each carries the same search box, status filter, and per-row enable toggle, and keeps that chrome even when the upstream exposes none of that kind (the empty state renders inside the table, not as a bare card). The server list carries a search box, a status filter, and a client-side pager so a large vault stays navigable. The Invocations tab lists each call; expanding a row reveals its raw log — the invocation's full underlying JSON record, pretty-printed in a monospace, scrollable block — mirroring the audit log's expand behavior.
 
-"Add MCP server" is a modal where the user pastes the standard `mcpServers` JSON (one or many servers at once) — the same block every MCP server's README provides. A review step lets them confirm which `env` values are secrets; those are lifted into the OS keychain rather than stored in the config.
+"Add MCP server" is a modal where the user pastes the standard `mcpServers` JSON (one or many servers at once) — the same block every MCP server's README provides. A review step lets them confirm which `env` values are secrets; those are lifted into the encrypted credential store (only their refs kept in the config) rather than stored as plaintext in the config.
 
 **Why this priority**: Spec 001 delivered the backend correctness but the UI shipped as bare tailwind defaults. The user-visible bar for "the MCP gateway is done" is the UI passing a real user (not a Playwright fixture).
 
@@ -152,7 +152,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 - **Given** the user opens the "Add MCP server" dialog from the resources list
 - **When** they paste the standard `mcpServers` JSON and confirm the review step
-- **Then** the app posts each server to `/api/v1/resources`, then writes any secret env values to `/api/v1/keychain` (register-first ordering avoids orphan keychain entries when registration fails)
+- **Then** the app posts each server to `/api/v1/resources`, then writes any secret env values to `/api/v1/credentials` (register-first ordering avoids orphan credential entries when registration fails)
 - **And** on success the dialog closes and (for a single server) the app navigates to `/mcp-servers/mcp_server/<name>` showing the Overview tab
 - **And** the new server appears on the resources list with health "unknown" then "healthy" within 10 seconds
 
@@ -280,7 +280,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **Given** the user opens the "Add MCP server" dialog
 - **When** they paste a payload that is not valid JSON (or a valid JSON document that does not match the `mcpServers` shape) and submit
 - **Then** the dialog stays open and renders a readable error explaining what is wrong (parse error location for malformed JSON, or the failing field for shape-mismatch)
-- **And** no request is sent to `/api/v1/resources` or `/api/v1/keychain`
+- **And** no request is sent to `/api/v1/resources` or `/api/v1/credentials`
 - **And** the dialog never shows the literal text "unexpected error" or `INTERNAL_ERROR`
 
 ---

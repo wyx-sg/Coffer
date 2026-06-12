@@ -33,7 +33,7 @@ See [./spec.md](./spec.md) for the user-visible contract and the
 | **Target Platforms**                          | macOS arm64+x64 (universal), Windows x64, Linux x64+arm64                                                                                                                                                                |
 | **Project Type**                              | CLI + daemon + stdio shim (multi-process local-first)                                                                                                                                                                   |
 | **Performance Goals**                         | Per [spec.md](./spec.md) SC-003: ≤ 50 ms gateway overhead per tool call (median, 100-call sample). Daemon ready in ≤ 5 s from cold start.                                                                                |
-| **Constraints**                               | Local-first (127.0.0.1 only); credentials in OS keychain only; layered architecture (importlinter contracts 1–6); file size ≤ 400 LOC (backend).                                                  |
+| **Constraints**                               | Local-first (127.0.0.1 only); secrets as Fernet ciphertext in the encrypted credential store (master key file-default / keychain opt-in); layered architecture (importlinter contracts 1–6); file size ≤ 400 LOC (backend).                                                  |
 | **Scale / Scope**                             | Single user; ≤ 3 concurrent MCP clients; ≤ 30 registered MCP servers; ≤ 100 capabilities per server.                                                                                                                     |
 
 ## Constitution Check
@@ -46,7 +46,7 @@ See [./spec.md](./spec.md) for the user-visible contract and the
 | **Languages**                             | ✅         | Python 3.12 + TypeScript 5 (e2e) only.                                                                                                                                   |
 | **Architecture: layered**                 | ✅         | importlinter contracts 1–4 already in `backend/pyproject.toml`; this plan adds contracts 5–6 (cross-kind isolation, kind-agnostic core boundary).                         |
 | **Persistence: SQLite for control plane** | ✅         | All state in `coffer.db`. No file-backed user content in this spec (no `Memory` kind yet).                                                                                |
-| **Credentials: keychain only**            | ✅         | `infrastructure/credentials/keyring_adapter.py` is the sole `keyring` importer. Resource configs hold only credential **refs** (string keys).                             |
+| **Credentials: encrypted store**          | ✅         | Secrets are Fernet ciphertext in the `credentials` table; `infrastructure/credentials/` is the sole `keyring` importer (master key + legacy migration). Resource configs hold only credential **refs** (string keys).                             |
 | **Network defaults: loopback-only**       | ✅         | FastAPI binds `127.0.0.1`. CORS allowlist closes browser-CSRF surface. No outbound public-internet calls in v0 except to user-configured upstream HTTP MCP servers.       |
 
 **Resource framework upfront** (ADR-001) was evaluated against the constitution's
@@ -140,7 +140,7 @@ backend/coffer/
 │   │   ├── audit_routes.py               # /api/v1/audit
 │   │   ├── retention_routes.py           # /api/v1/retention/*
 │   │   ├── daemon_routes.py              # /api/v1/daemon/*
-│   │   ├── keychain_routes.py            # /api/v1/keychain/* (write, audited read, exists, delete)
+│   │   ├── credential_routes.py          # /api/v1/credentials/* (write, audited read, exists, delete)
 │   │   └── mcp/
 │   │       ├── capability_routes.py      # capability list / enable / disable / refresh / test
 │   │       ├── invocation_routes.py      # invocation log query
@@ -154,7 +154,7 @@ backend/coffer/
 │   │   ├── resource_cmd.py               # coffer resource ...
 │   │   ├── audit_cmd.py                  # coffer audit ...
 │   │   ├── retention_cmd.py              # coffer retention ...
-│   │   ├── keychain_cmd.py               # coffer keychain set/get/list/delete ...
+│   │   ├── credentials_cmd.py            # coffer credentials set/get/list/delete/storage ...
 │   │   └── mcp.py                        # coffer mcp ... (kind subcommand group)
 │   └── shim/
 │       └── main.py                       # coffer-mcp-shim entry
@@ -196,7 +196,7 @@ Register the `mcp_server` kind. Implement `MCPGatewaySession`,
 `SubprocessSupervisor`, `CapabilityDiscovery`, the `/mcp` JSON-RPC endpoint,
 the `coffer-mcp-shim` binary, and the `coffer mcp …` CLI subcommands. Per-tool
 enable/disable lands here too (US2 is a P1 in the spec; both user stories
-share the same code paths so we implement them together). The keychain
+share the same code paths so we implement them together). The credential
 management endpoints (FR-011) land in this phase as well — write, audited
 read, exists, and delete — so HTTP MCP servers can reference credentials
 end-to-end.
@@ -210,7 +210,7 @@ suite).
 
 ### Phase 4 — User Story 3 (P2): CLI completeness (parity with REST)
 
-Many CLI subcommands already land in Phase 2 (`resource`, `daemon`, `keychain`)
+Many CLI subcommands already land in Phase 2 (`resource`, `daemon`, `credentials`)
 and Phase 3 (`mcp`). Phase 4 fills in gaps from those two phases — typically
 `--json` output flags, `--verbose` traceback rendering, and the per-error-class
 exit codes that scripts depend on.

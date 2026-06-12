@@ -32,7 +32,7 @@ DevPilot-style OpenAI-compatible provider abstraction (one `AsyncOpenAI` client 
 | `provider`       | `str`         | `"openai"`, `"openrouter"`, `"voyage"`, `"jina"`, `"gemini"`, `"azure"`, `"dashscope"`, `"ollama"`, `"lmstudio"`, or `"local"` (fastembed). |
 | `model`          | `str`         | Embedding model id, e.g. `text-embedding-3-small`, `bge-m3`.                                                                                |
 | `base_url`       | `str \| None` | OpenAI-compatible endpoint; `None` for the provider default; ignored for `local`.                                                           |
-| `credential_ref` | `str \| None` | Keychain ref (never plaintext); `None` for `local` / keyless endpoints. Optional fallback to the LLM credential ref.                        |
+| `credential_ref` | `str \| None` | Encrypted-store ref (never plaintext); `None` for `local` / keyless endpoints. Optional fallback to the LLM credential ref.                 |
 | `dimensions`     | `int`         | Vector width; fixes the `vec_chunks` column. Re-embedding on a width change rebuilds the vec table.                                         |
 
 ### `Document` (`domain/knowledge/document.py`)

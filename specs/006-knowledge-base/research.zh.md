@@ -61,7 +61,7 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 
 **问题**：用哪个 embedding 模型，怎么配置？
 
-**决策**：一个**用户可配置、OpenAI 兼容的 provider 抽象**（DevPilot 风格：一个 `AsyncOpenAI` 客户端 + 可换 `base_url`）。per-KB 的 `EmbeddingConfig`：`provider`、`model`、`base_url`、`credential_ref`（keychain ref，绝不明文）、`dimensions`。经同一个 `.embeddings.create` 可达的 provider：OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope 及本地 Ollama / LM Studio；外加 in-process **`local`** provider（fastembed）做零服务器离线 embedding。
+**决策**：一个**用户可配置、OpenAI 兼容的 provider 抽象**（DevPilot 风格：一个 `AsyncOpenAI` 客户端 + 可换 `base_url`）。per-KB 的 `EmbeddingConfig`：`provider`、`model`、`base_url`、`credential_ref`（加密存储 ref，绝不明文）、`dimensions`。经同一个 `.embeddings.create` 可达的 provider：OpenAI / OpenRouter / Voyage / Jina / Gemini / Azure / DashScope 及本地 Ollama / LM Studio；外加 in-process **`local`** provider（fastembed）做零服务器离线 embedding。
 
 - **默认检索是 `keyword`+`grep`**（零配置、离线）。vector 可选 —— 用户无需选模型或下载任何东西就能得到可用的 KB。
 - **embedding 模型可变。** 改它会重新 embedding 语料（文件即真相，重导便宜）。无不可变锁 —— 修掉了原规范「想换模型就重建 KB」的摩擦。

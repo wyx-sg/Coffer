@@ -47,9 +47,14 @@ plan.
 - **Persistence.** SQLite is the system of record for control-plane state.
   Bulk user content (when introduced per spec) is stored as files on the
   local file system; indexed on demand.
-- **Credentials.** Only the credential module may access the OS keychain via
-  `keyring`. All other code uses credential refs. No secret material reaches
-  the database in plaintext.
+- **Credentials.** Secrets live **only** as Fernet ciphertext in the
+  `credentials` table; plaintext exists in memory solely between decrypt and
+  the spawn/header-injection that consumes it. The Fernet master key is
+  managed exclusively by `coffer.infrastructure.credentials` — a `0600` file
+  beside the DB by default, the OS keychain via `keyring` when opted in.
+  `keyring` import stays confined to that module. All other code uses
+  credential refs. No secret plaintext reaches the database, logs, audit, or
+  any structured event.
 - **Network defaults.** Loopback-only. Outbound HTTP, when introduced, goes
   through a SSRF-guarded client. Public-reachable surfaces, when introduced,
   run as a separate process limited to signed callback paths.
@@ -82,4 +87,4 @@ Architectural Constraints, or to a Quality Gate requires:
 constitutional principles or constraints it affects, and explain why the
 change respects (or formally amends) them.
 
-**Version**: 0.1.0
+**Version**: 0.2.0

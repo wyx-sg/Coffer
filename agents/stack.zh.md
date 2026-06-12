@@ -12,7 +12,8 @@ Coffer 后端用 Python 3.12+。
 - **FastAPI** 提供 HTTP surface
 - **Pydantic v2** 用于模型与校验
 - **SQLite** 通过 **SQLAlchemy 2 (async)** + **`aiosqlite`**（唯一的数据访问路径）
-- **`keyring`** 接 OS keychain（仅用于凭据）
+- **`cryptography`**（Fernet）用于信封加密的凭据存储
+- **`keyring`** 接 OS keychain（仅凭据模块——主密钥 opt-in + legacy 迁移）
 - **`anyio`** + `asyncio` 用于异步与子进程管理
 
 功能相关的库（如 MCP SDK）由第一个需要它的 spec 引入，不在此预装。

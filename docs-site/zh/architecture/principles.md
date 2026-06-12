@@ -44,7 +44,7 @@ MIT 许可证、治理规则、贡献流程、Conventional Commits，必须从 v
 
 **仅监听 loopback。** 守护进程的 HTTP 服务器绑定到 `127.0.0.1`，不接受来自任何其他接口的连接。一旦需要对公网暴露任何接口面，必须以独立进程运行，并仅限于经过签名校验的回调路径。
 
-**凭据永不进入数据库。** 操作系统钥匙串（仅通过 `infrastructure/credentials/keyring_adapter.py` 访问）是唯一的凭据存储。SQLite 数据库只保存凭据引用——指向钥匙串条目的不透明标识符——从不保存密钥本身。其他任何代码模块均不得直接 `import keyring`。
+**密钥明文永不进入数据库。** 密钥只以 Fernet 密文形式存于 `credentials` 表（envelope 加密）；SQLite 数据库只保存凭据引用——不透明标识符——以及密文，从不保存明文。明文仅在解密与拉起子进程/注入 header（消费密钥处）之间存在于内存。Fernet 主密钥由 `infrastructure/credentials/` 独占管理（默认为 DB 旁的 `0600` 文件，opt-in 时存于操作系统钥匙串），它是唯一被允许 import `keyring` 的位置。其他任何代码模块均不得直接 `import keyring`。
 
 **每个上游工具都有命名空间。** 通过 Coffer MCP 接口面暴露的工具以 `<server-name>__<tool-name>` 的形式出现（例如 `filesystem__read_file`）。这个命名空间是稳定且确定性的：以相同名称注册的同一个上游，无论哪个客户端连接，始终产生相同的工具命名空间。
 

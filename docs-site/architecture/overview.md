@@ -1,7 +1,7 @@
 # System Overview
 
 ::: tip Mental model
-Coffer is a long-lived local daemon that aggregates N upstream MCP servers into one namespaced surface. Register a server once; every MCP client (Claude Code, Codex, Cursor) connects to the same daemon and sees the same set of tools, with names like `filesystem__read_file`. All state lives locally in SQLite and the OS keychain. The daemon binds to `127.0.0.1` only — nothing is reachable from outside your machine.
+Coffer is a long-lived local daemon that aggregates N upstream MCP servers into one namespaced surface. Register a server once; every MCP client (Claude Code, Codex, Cursor) connects to the same daemon and sees the same set of tools, with names like `filesystem__read_file`. All state lives locally in SQLite (secrets as Fernet ciphertext), with a single master key in a `0600` file beside the DB (OS keychain opt-in). The daemon binds to `127.0.0.1` only — nothing is reachable from outside your machine.
 :::
 
 ## System topology
@@ -23,7 +23,7 @@ flowchart TD
         DESKTOP["Desktop app\n(Tauri 2 / Rust + WebView)"]
         DAEMON["coffer-daemon\nFastAPI · auto-port\n/api/v1  /mcp"]
         DB[("SQLite\n~/.coffer/coffer.db")]
-        KC[("OS Keychain\ncredential refs")]
+        MK[("master.key 0600\nor OS Keychain (opt-in)")]
     end
 
     subgraph upstream["Upstream MCP Servers"]
@@ -40,7 +40,7 @@ flowchart TD
     WEBUI -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
     DESKTOP -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
     DAEMON --- DB
-    DAEMON --- KC
+    DAEMON --- MK
     DAEMON -->|"stdio subprocess\nper session"| S1
     DAEMON -->|"stdio subprocess\nper session"| S2
     DAEMON -->|"stdio subprocess\nper session"| SN
@@ -57,8 +57,8 @@ flowchart TD
 | Desktop app                    | Native process (Tauri 2, Rust + WebView)         | Embeds the Web UI in a native desktop window. Communicates with the daemon via REST.                                                                                |
 | REST API (`/api/v1`)           | HTTP surface on daemon                           | Management plane: CRUD for resources, audit log, settings. Token + CORS authenticated.                                                                              |
 | MCP endpoint (`/mcp`)          | HTTP/SSE surface on daemon                       | MCP JSON-RPC endpoint. This is what the shim connects to. Forwards namespaced tool calls to upstream subprocesses.                                                  |
-| SQLite (`~/.coffer/coffer.db`) | Persistent store                                 | Control-plane state: resource registrations, capability preferences, audit log, retention policies. WAL mode, single writer.                                        |
-| OS Keychain                    | Credential store                                 | Actual secrets. The daemon holds only credential refs in the DB; secrets are materialized from the keychain at upstream spawn time.                                 |
+| SQLite (`~/.coffer/coffer.db`) | Persistent store                                 | Control-plane state: resource registrations, capability preferences, audit log, retention policies, and secrets as Fernet ciphertext in the `credentials` table. WAL mode, single writer. |
+| `master.key` / OS Keychain     | Master-key store                                 | The single Fernet master key. Default: a `0600` `~/.coffer/master.key` file beside the DB; OS keychain is an opt-in. Secrets are decrypted with it and materialized into the upstream env / headers at spawn time. |
 | `~/.coffer/daemon.json`        | Discovery file (mode 0600)                       | PID + port + token. Written by the daemon on startup; read by shim and CLI to locate a running daemon.                                                              |
 
 ## Authentication model
@@ -92,7 +92,7 @@ The pages that follow each explore one slice of the system in depth:
 | [Surfaces](/architecture/surfaces)                     | REST API, MCP endpoint, CLI, Web UI, Desktop                              |
 | [Request lifecycle](/architecture/request-lifecycle)   | End-to-end trace of a tool call from client to upstream                   |
 | [Persistence](/architecture/persistence)               | SQLite schema, WAL, Alembic, JSON field handling                          |
-| [Security](/architecture/security)                     | Token auth, keychain isolation, SSRF guard, loopback enforcement          |
+| [Security](/architecture/security)                     | Token auth, encrypted credential store, SSRF guard, loopback enforcement   |
 | [Observability](/architecture/observability)           | Structured logging, trace IDs, audit log, retention                       |
 | [Distribution](/architecture/distribution)             | Package layout, install, platform support                                 |
 

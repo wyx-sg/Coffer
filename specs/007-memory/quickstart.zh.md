@@ -112,7 +112,7 @@ coffer memory unbind project-01J… my-claude
 默认检索是 keyword + grep —— 零配置、离线、语言无关。要启用 vector recall，在 store 上配置 embedding provider：
 
 ```bash
-coffer keychain set embed-key
+coffer credentials set embed-key
 coffer memory configure project-01J… \
     --enable-vector \
     --provider openai \

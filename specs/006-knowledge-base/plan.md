@@ -34,7 +34,7 @@ This redesign **drops LlamaIndex** and the per-corpus persist dirs, and shares i
 | **Languages**             | ✅         | Python 3.12 + TS 5 only.                                                                                                                                                                                    |
 | **Architecture: layered** | ✅         | Converters + vector/embedding engines confined to `infrastructure/`; new importlinter clauses (below).                                                                                                      |
 | **Persistence**           | ✅         | SQLite control plane + derived index; bulk content (Markdown + raw) as files — matches the constitution's files-on-disk rule.                                                                               |
-| **Credentials**           | ✅         | Embedding credentials via keychain refs only (`embedding_credential_ref`); no plaintext in the DB.                                                                                                          |
+| **Credentials**           | ✅         | Embedding credentials via encrypted-store refs only (`embedding_credential_ref`); secrets are ciphertext, no plaintext in the DB.                                                                            |
 | **Network defaults**      | ✅         | Loopback REST; outbound embedding calls go through the SSRF-guarded client.                                                                                                                                 |
 
 ## Project Structure

@@ -29,7 +29,7 @@ daemon 使用配置为 JSON 输出的 `structlog`，将日志写入 `~/.coffer/l
 
 日志文件位于 `~/.coffer/logs/`。轮换由 Python 的 `logging.handlers.RotatingFileHandler` 处理（按大小轮换：每个文件最大 10 MB，保留 3 个备份文件）。日志与数据库一样，都在 `~/.coffer/` 的备份范围内。
 
-日志行永远不包含密钥材料。密钥被限制在操作系统钥匙串中，从不作为日志字段传递——因此不需要也不存在任何清理处理器。structlog 管道依次为：`merge_contextvars`、`add_log_level`、`TimeStamper`、`_add_trace_id`、`JSONRenderer`。
+日志行永远不包含密钥材料。密钥只以密文形式存于凭据存储中，其明文从不作为日志字段传递——因此不需要也不存在任何清理处理器。structlog 管道依次为：`merge_contextvars`、`add_log_level`、`TimeStamper`、`_add_trace_id`、`JSONRenderer`。
 
 ## 链路追踪关联
 

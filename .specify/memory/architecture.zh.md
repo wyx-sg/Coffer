@@ -79,7 +79,7 @@ backend/coffer/
 │   └── fs/                      # 文件系统浏览服务
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (统一元数据)
-│   ├── credentials/              # 钥匙串适配器——唯一被允许 import `keyring` 的位置
+│   ├── credentials/              # 加密凭据存储 + 主密钥——唯一被允许 import `keyring` 的位置
 │   ├── daemon/                   # pid_lock、端口分配
 │   ├── mcp/                      # 子进程、HTTP 上游客户端
 │   ├── agent/                   # agent 配置文件存储
@@ -148,7 +148,7 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 
 | 关注点      | 位置                                                                          | 备注                                                                                                                                                                                                                                           |
 | ----------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 凭据        | `infrastructure/credentials/keyring_adapter.py`                               | 唯一可 import `keyring` 的文件。**daemon 是唯一 keychain 所有者**:所有 surface(桌面、CLI、shim)都通过 daemon 的 `/api/v1/keychain` 路由访问 keychain —— CLI 不在进程内直接访问(spec 006)。配置里只放 ref；在上游进程拉起时按需物化；永不落盘。 |
+| 凭据        | `infrastructure/credentials/`(`encrypted_store.py`、`master_key.py`、`keyring_adapter.py`） | 密钥只以 Fernet 密文形式存于 `credentials` 表；主密钥（默认 `0600` 文件，opt-in 时存于操作系统钥匙串）与 legacy 迁移是唯一的 `keyring` 使用方。**daemon 是唯一凭据存储所有者**:所有 surface(桌面、CLI、shim)都通过 daemon 的 `/api/v1/credentials` 路由访问密钥，并通过 `/api/v1/settings/credentials` 切换主密钥存储位置 —— CLI 不在进程内直接访问存储(spec 006)。配置里只放 ref；在上游进程拉起时按需物化（解密）；明文永不落盘。 |
 | 审计        | `domain/audit.py` + `application/audit_service.py` + `audit_log` 表           | 覆盖每一次资源生命周期变更。必须带 actor (cli / api / ui / system)。                                                                                                                                                                           |
 | 保留策略    | `application/retention_service.py` + `retention_policies` 表 + asyncio worker | 每个日志类表注册为 `PrunableTable`；中央注册表强制执行 SQL allowlist。                                                                                                                                                                         |
 | 错误        | `domain/errors.py` + FastAPI 全局处理器                                       | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。                                                                                                                                                             |

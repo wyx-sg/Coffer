@@ -92,7 +92,7 @@ convenience on the same column).
 
 The built-in agent's loop is LangGraph `create_react_agent`; LLM clients are
 built through LangChain's provider packages (`anthropic`, `openai`, `ollama`);
-credentials are keychain references resolved at runtime. The agent consumes
+credentials are encrypted-store references resolved (decrypted) at runtime. The agent consumes
 Coffer's MCP gateway in-process via one `MCPGatewaySession`
 (`coffer-builtin-agent`). All LangGraph/LangChain imports stay confined to
 `infrastructure/chat` (Contract 9). These decisions are carried forward

@@ -230,5 +230,5 @@ containment 通过解析每个候选路径并要求其位于解析后的 master 
 
 - 全部 HTTP 仅 loopback。
 - Git 拉取经 SSRF guard URL 谓词（拒绝 loopback / RFC1918 / link-local）。
-- v1 无 keychain 条目（skill 源不带鉴权）。
+- v1 无凭据存储条目（skill 源不带鉴权）。
 - 文件大小上限：每个 skill 文件夹总计 50 MB，由 `validate_skill_folder` 强制。该上限是 `SkillService` 构造函数默认值（`size_limit_bytes`）；目前尚未接到配置文件，因此 v1 始终使用硬编码的 50 MB。

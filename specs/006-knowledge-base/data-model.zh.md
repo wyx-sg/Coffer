@@ -32,7 +32,7 @@ DevPilot 风格的 OpenAI 兼容 provider 抽象（一个 `AsyncOpenAI` 客户�
 | `provider`       | `str`         | `"openai"`、`"openrouter"`、`"voyage"`、`"jina"`、`"gemini"`、`"azure"`、`"dashscope"`、`"ollama"`、`"lmstudio"`，或 `"local"`（fastembed）。 |
 | `model`          | `str`         | embedding 模型 id，如 `text-embedding-3-small`、`bge-m3`。                                                                                     |
 | `base_url`       | `str \| None` | OpenAI 兼容端点；`None` 用 provider 默认值；`local` 时忽略。                                                                                    |
-| `credential_ref` | `str \| None` | keychain 引用（绝不明文）；`local` / 免 key 端点用 `None`。可选回退到 LLM 凭据引用。                                                            |
+| `credential_ref` | `str \| None` | 加密存储引用（绝不明文）；`local` / 免 key 端点用 `None`。可选回退到 LLM 凭据引用。                                                            |
 | `dimensions`     | `int`         | 向量宽度；决定 `vec_chunks` 的列宽。宽度变化时重新 embedding 会重建 vec 表。                                                                    |
 
 ### `Document` (`domain/knowledge/document.py`)

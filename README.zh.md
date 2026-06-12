@@ -129,7 +129,7 @@ backend/              Python daemon + CLI + shim
   coffer/
     domain/           pure types + business rules (no I/O)
     application/      services + orchestration
-    infrastructure/   DB, MCP transports, keychain, daemon discovery
+    infrastructure/   DB, MCP transports, encrypted credential store, daemon discovery
     surfaces/         HTTP (FastAPI) + CLI (Typer) + stdio shim
 specs/                Speckit specs (one per feature)
 docs/decisions/       Architectural Decision Records (ADRs)
@@ -155,7 +155,7 @@ ADRs：[docs/decisions/](docs/decisions/)。
 - **Conventional Commits**（必须遵守）—— 见 [agents/workflow.md](agents/workflow.md)
 - **Spec-driven development**（规格驱动开发）—— 每个功能从 `specs/<id>/` 下的 spec 开始 —— 见 [agents/sdd.md](agents/sdd.md)
 - **架构契约** —— 6 条 importlinter 契约必须保持绿色（定义在 [backend/pyproject.toml](backend/pyproject.toml)）
-- **凭据 (credentials)** —— 所有 secret 必须走 `coffer.infrastructure.credentials.keyring_adapter`，绝不允许以明文落到 DB
+- **凭据 (credentials)** —— secret 只以 Fernet 密文形式经 `coffer.infrastructure.credentials` 存于 `credentials` 表；明文绝不落到 DB、日志或审计
 
 ---
 

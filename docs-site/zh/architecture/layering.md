@@ -42,11 +42,11 @@ application 层使用 infrastructure 和 surfaces 来编排 domain 实体。它�
 
 ### infrastructure/
 
-infrastructure 层包含所有执行外部 I/O 的代码：SQLAlchemy ORM 模型与 Alembic 迁移（`infrastructure/persistence/`）、操作系统钥匙串适配器（`infrastructure/credentials/keyring_adapter.py`——整个代码库中唯一允许 import `keyring` 的地方）、daemon 发现工具类（`infrastructure/daemon/`），以及 MCP 上游传输实现（`infrastructure/mcp/`——stdio 上游的子进程管理，以及 HTTP 传输上游的 HTTP 客户端）。
+infrastructure 层包含所有执行外部 I/O 的代码：SQLAlchemy ORM 模型与 Alembic 迁移（`infrastructure/persistence/`）、加密凭据存储与主密钥管理器（`infrastructure/credentials/`——整个代码库中唯一允许 import `keyring` 的地方）、daemon 发现工具类（`infrastructure/daemon/`），以及 MCP 上游传输实现（`infrastructure/mcp/`——stdio 上游的子进程管理，以及 HTTP 传输上游的 HTTP 客户端）。
 
 infrastructure 在组装入口处注入到系统中，不被 domain 或 application 代码直接 import。应用层服务以注入依赖的方式接收 infrastructure 对象。这意味着可以将真实的 SQLAlchemy repository 替换为测试替身（内存字典或 SQLite `:memory:` 数据库），而无需更改任何 application 或 domain 代码。
 
-钥匙串适配器值得特别说明：它是整个代码库中唯一可以 import `keyring` 的文件。所有其他代码通过不透明的字符串引用访问凭据。这种单点访问规则使「凭据不会到达任何其他层」这一要求可以被机械性地验证。
+凭据模块值得特别说明：`infrastructure/credentials/` 是整个代码库中唯一可以 import `keyring` 的位置（现已收窄到主密钥与 legacy 迁移）。所有其他代码通过不透明的字符串引用访问凭据。这种单点访问规则使「密钥材料不会到达任何其他层」这一要求可以被机械性地验证。
 
 ### surfaces/
 
@@ -74,11 +74,11 @@ surfaces 层将外部协议适配为应用层调用。它包含 FastAPI 应用�
 
 这些规则不是建议性的。它们由 CI 中两个互补的机制强制执行：
 
-**importlinter 契约** —— 声明于 `backend/pyproject.toml`，这些契约定义了禁止的 import 对，作为 `make verify` 的一部分运行。契约违规会使构建失败，并给出精确命名违规 import 链的错误。强制执行两族规则：分层方向（四层层次结构）和跨 kind 隔离（禁止 `domain/mcp` import `domain/other_kind`）。「只有 `keyring_adapter.py` 可以 import `keyring`」规则作为 importlinter 契约（`backend/pyproject.toml` 中的 Contract 4）强制执行。
+**importlinter 契约** —— 声明于 `backend/pyproject.toml`，这些契约定义了禁止的 import 对，作为 `make verify` 的一部分运行。契约违规会使构建失败，并给出精确命名违规 import 链的错误。强制执行两族规则：分层方向（四层层次结构）和跨 kind 隔离（禁止 `domain/mcp` import `domain/other_kind`）。「只有 `infrastructure/credentials/` 可以 import `keyring`」规则作为 importlinter 契约（`backend/pyproject.toml` 中的 Contract 4）强制执行。
 
 **`scripts/check_*.py`** —— 补充性 Python 脚本，强制执行 importlinter 无法以简单 import 图表达的架构规则，例如「跨层公共模块只在第二个 feature 之后才抽取」规则。
 
-两者都在每个 PR 上运行。组合意味着任何违反四层契约或单一钥匙串访问规则的 import 在合并前就会被发现，而不是在代码审查中才被发现。
+两者都在每个 PR 上运行。组合意味着任何违反四层契约或单一凭据访问规则的 import 在合并前就会被发现，而不是在代码审查中才被发现。
 
 ## 代码布局（ADR-002）
 
@@ -98,7 +98,7 @@ backend/coffer/
 │   └── mcp/                      # MCP 专用应用层服务
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic（统一元数据）
-│   ├── credentials/              # 钥匙串适配器——唯一被允许 import `keyring` 的位置
+│   ├── credentials/              # 加密凭据存储 + 主密钥——唯一被允许 import `keyring` 的位置
 │   ├── daemon/                   # pid_lock、端口分配
 │   └── mcp/                      # 子进程传输、HTTP 上游客户端
 └── surfaces/

@@ -83,10 +83,10 @@ You can paste one server or many at once. Click **Review**. The dialog
 walks you through one screen per server so you can:
 
 - Confirm the server name.
-- Mark which `env` values are secrets. Secrets are written to the OS
-  keychain (`/api/v1/keychain`) rather than the resource config. The
-  ordering is **register first, then write secrets to the keychain** so
-  that a failed registration never leaves orphan keychain entries (see
+- Mark which `env` values are secrets. Secrets are encrypted into the
+  credential store (`/api/v1/credentials`) rather than the resource config. The
+  ordering is **register first, then write secrets to the store** so
+  that a failed registration never leaves orphan credential entries (see
   the spec scenario).
 
 Click **Add** to finish. On success the dialog closes and (for a single

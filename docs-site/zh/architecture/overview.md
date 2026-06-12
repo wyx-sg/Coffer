@@ -1,7 +1,7 @@
 # 系统总览
 
 ::: tip 核心模型
-Coffer 是一个长生命周期的本地守护进程，将 N 个上游 MCP 服务器聚合为一个命名空间化的统一接口面。注册一次，所有 MCP 客户端（Claude Code、Codex、Cursor）连接同一个守护进程，看到相同的工具集，工具名形如 `filesystem__read_file`。所有状态本地存储于 SQLite 和操作系统钥匙串。守护进程仅绑定到 `127.0.0.1`——外部机器无法访问。
+Coffer 是一个长生命周期的本地守护进程，将 N 个上游 MCP 服务器聚合为一个命名空间化的统一接口面。注册一次，所有 MCP 客户端（Claude Code、Codex、Cursor）连接同一个守护进程，看到相同的工具集，工具名形如 `filesystem__read_file`。所有状态本地存储于 SQLite（密钥以 Fernet 密文形式存储），唯一的主密钥存于 DB 旁的 `0600` 文件（操作系统钥匙串为 opt-in）。守护进程仅绑定到 `127.0.0.1`——外部机器无法访问。
 :::
 
 ## 系统拓扑
@@ -23,7 +23,7 @@ flowchart TD
         DESKTOP["Desktop 应用\n（Tauri 2 / Rust + WebView）"]
         DAEMON["coffer-daemon\nFastAPI · 自动端口\n/api/v1  /mcp"]
         DB[("SQLite\n~/.coffer/coffer.db")]
-        KC[("操作系统钥匙串\n凭据引用")]
+        MK[("master.key 0600\n或操作系统钥匙串（opt-in）")]
     end
 
     subgraph upstream["上游 MCP 服务器"]
@@ -40,7 +40,7 @@ flowchart TD
     WEBUI -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
     DESKTOP -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
     DAEMON --- DB
-    DAEMON --- KC
+    DAEMON --- MK
     DAEMON -->|"stdio 子进程\n每会话独立"| S1
     DAEMON -->|"stdio 子进程\n每会话独立"| S2
     DAEMON -->|"stdio 子进程\n每会话独立"| SN
@@ -57,8 +57,8 @@ flowchart TD
 | Desktop 应用                    | 原生进程（Tauri 2，Rust + WebView）       | 将 Web UI 内嵌在原生桌面窗口中。通过 REST 与守护进程通信。                                                         |
 | REST API（`/api/v1`）           | 守护进程上的 HTTP 接口面                  | 管理面：资源 CRUD、审计日志、设置。Token + CORS 鉴权。                                                             |
 | MCP 端点（`/mcp`）              | 守护进程上的 HTTP/SSE 接口面              | MCP JSON-RPC 端点。shim 连接此处。将命名空间化的工具调用转发给上游子进程。                                         |
-| SQLite（`~/.coffer/coffer.db`） | 持久化存储                                | 控制面状态：资源注册、能力偏好、审计日志、保留策略。WAL 模式，单写入者。                                           |
-| 操作系统钥匙串                  | 凭据存储                                  | 实际密钥。守护进程在 DB 中只保存凭据引用；密钥在上游进程拉起时按需从钥匙串物化。                                   |
+| SQLite（`~/.coffer/coffer.db`） | 持久化存储                                | 控制面状态：资源注册、能力偏好、审计日志、保留策略，以及 `credentials` 表中以 Fernet 密文形式存储的密钥。WAL 模式，单写入者。 |
+| `master.key` / 操作系统钥匙串   | 主密钥存储                                | 唯一的 Fernet 主密钥。默认：DB 旁的 `0600` `~/.coffer/master.key` 文件；操作系统钥匙串为 opt-in。密钥用它解密，并在上游进程拉起时物化进上游 env / header。 |
 | `~/.coffer/daemon.json`         | 发现文件（权限 0600）                     | PID + 端口 + token。守护进程启动时写入；shim 和 CLI 读取此文件以定位运行中的守护进程。                             |
 
 ## 鉴权模型
@@ -92,7 +92,7 @@ flowchart TD
 | [Surfaces](/zh/architecture/surfaces)                | REST API、MCP 端点、CLI、Web UI、Desktop         |
 | [请求全链路](/zh/architecture/request-lifecycle)     | 工具调用从客户端到上游的端到端追踪               |
 | [持久化](/zh/architecture/persistence)               | SQLite schema、WAL、Alembic、JSON 字段处理       |
-| [安全](/zh/architecture/security)                    | Token 鉴权、钥匙串隔离、SSRF 防护、loopback 强制 |
+| [安全](/zh/architecture/security)                    | Token 鉴权、加密凭据存储、SSRF 防护、loopback 强制 |
 | [可观测性](/zh/architecture/observability)           | 结构化日志、trace ID、审计日志、保留策略         |
 | [分发](/zh/architecture/distribution)                | 包结构、安装方式、平台支持                       |
 

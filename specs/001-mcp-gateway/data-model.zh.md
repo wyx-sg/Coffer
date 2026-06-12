@@ -89,9 +89,12 @@ frozen dataclass。一个资源 kind 的纯描述符。只属于 domain——不
 | `"token_rotated"`         | `POST /api/v1/daemon/rotate-token` 之后          |
 | `"retention_updated"`     | retention policy 变更时                          |
 | `"backup_created"`        | `POST /api/v1/daemon/backup` 之后                |
-| `"keychain_set"`          | `POST /api/v1/keychain` 存储 secret 之后         |
-| `"keychain_read"`         | `GET /api/v1/keychain/{ref}` 读取 secret 之后    |
-| `"keychain_deleted"`      | `DELETE /api/v1/keychain/{ref}` 删除 secret 之后 |
+| `"credential_set"`        | `POST /api/v1/credentials` 存储 secret 之后      |
+| `"credential_read"`       | `GET /api/v1/credentials/{ref}` 读取 secret 之后 |
+| `"credential_deleted"`    | `DELETE /api/v1/credentials/{ref}` 删除 secret 之后 |
+| `"credential_migrated"`   | 每个 ref：legacy 钥匙串密钥迁入存储时            |
+| `"master_key_relocated"`  | `PUT /api/v1/settings/credentials` 迁移主密钥之后 |
+| `"keychain_set"` / `"keychain_read"` / `"keychain_deleted"` | _Legacy_（信封加密之前）；对历史记录仍可渲染 |
 
 ### `RetentionPolicy` (`domain/retention.py`)
 
@@ -129,7 +132,7 @@ Pydantic `BaseModel`。Discriminator 值：`"stdio"`。
 | `command`         | `str`              | 可执行文件，例如 `"npx"`                                   |
 | `args`            | `list[str]`        | 默认 `[]`                                                  |
 | `env`             | `dict[str, str]`   | 静态 env，绝不含 secret；若值长得像 token（按正则）即被拒  |
-| `credential_refs` | `dict[str, str]`   | 把 `env_var_name → keychain_ref_key` 映射；在 spawn 时解析 |
+| `credential_refs` | `dict[str, str]`   | 把 `env_var_name → ref`（指向加密凭据存储）映射；在 spawn 时解析（解密） |
 | `cwd`             | `str \| None`      | 可选工作目录                                               |
 
 ### `HttpTransport` (`domain/mcp/server_config.py`)
@@ -141,7 +144,7 @@ Pydantic `BaseModel`。Discriminator 值：`"http"`。
 | `type`            | `Literal["http"]`  | discriminator                            |
 | `url`             | `pydantic.HttpUrl` | 上游 MCP HTTP/SSE 端点                   |
 | `headers`         | `dict[str, str]`   | 静态 header；与 `env` 同样的 secret 正则 |
-| `credential_refs` | `dict[str, str]`   | 把 `header_name → keychain_ref_key` 映射 |
+| `credential_refs` | `dict[str, str]`   | 把 `header_name → ref`（指向加密凭据存储）映射 |
 
 ### `MCPServerConfig` (`domain/mcp/server_config.py`)
 

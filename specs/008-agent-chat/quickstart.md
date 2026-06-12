@@ -15,20 +15,21 @@ The built-in agent needs an LLM. Open **Settings → Models** and add one:
 | Ollama (local) | model id (e.g. `llama3.1`) + base URL (e.g. `http://localhost:11434`) |
 
 The first model you add becomes the default. A cloud model references its API
-key by a keychain reference; store the key itself first, then register the
+key by a credential reference; store the key itself first, then register the
 model that points at it. From the command line:
 
 ```bash
-# 1. Store the API key in your OS keychain under a reference name.
-coffer keychain set anthropic-api-key        # reads the secret from stdin
+# 1. Store the API key in the encrypted credential store under a reference name.
+coffer credentials set anthropic-api-key     # reads the secret from stdin
 # 2. Register a model that resolves its credential from that reference.
 coffer model add --name "Sonnet" --provider anthropic \
   --model claude-sonnet-4-6 --credential-ref anthropic-api-key
 coffer model list --json
 ```
 
-API keys are stored in your OS keychain as credential references — never in
-Coffer's database.
+API keys are stored as ciphertext in Coffer's encrypted credential store, with
+only the credential reference in the model config — the plaintext key never
+touches the database.
 
 ## 2. Start chatting
 

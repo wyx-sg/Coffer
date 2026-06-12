@@ -41,9 +41,11 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 | `token_rotated`                              | `POST /api/v1/daemon/rotate-token` 之后         |
 | `retention_updated`                          | 保留策略发生变更时                              |
 | `backup_created`                             | `POST /api/v1/daemon/backup` 之后               |
-| `keychain_set` / `keychain_deleted`          | 钥匙串写入或删除之后                            |
+| `credential_set` / `credential_read` / `credential_deleted` | 加密凭据存储中写入 / 读取 / 删除之后           |
+| `credential_migrated`                        | 每个 ref：legacy 钥匙串密钥迁入存储时           |
+| `master_key_relocated`                       | 主密钥在文件与钥匙串存储之间迁移之后            |
 
-注意，`keychain_set` 和 `keychain_deleted` 都会被审计——密钥被存储或删除这一*事实*会被记录下来。密钥值本身永远不会出现在 `details` payload 中。
+注意，`credential_set` 和 `credential_deleted` 都会被审计——密钥被存储或删除这一*事实*会被记录下来。密钥值本身永远不会出现在 `details` payload 中。（legacy 的 `keychain_set` / `keychain_deleted` 事件类型对历史记录仍可渲染。）
 
 ## 调用日志：什么流量经过了网关
 

@@ -30,7 +30,7 @@
 | **Target Platforms**                    | macOS arm64+x64 (universal), Windows x64, Linux x64+arm64                                                                                                                                                         |
 | **Project Type**                        | CLI + daemon + stdio shim（多进程 local-first）                                                                                                                                                                     |
 | **Performance Goals**                   | 按 [spec.md](./spec.md) SC-003：每次工具调用网关开销 ≤ 50 ms（100 次采样的中位数）。daemon 冷启动 ≤ 5 s 进入 ready。                                                                                              |
-| **Constraints**                         | Local-first（仅 127.0.0.1）；凭据仅存 OS keychain；分层架构（importlinter contracts 1–6）；单文件 ≤ 400 LOC（后端）。                                                                                 |
+| **Constraints**                         | Local-first（仅 127.0.0.1）；密钥以 Fernet 密文形式存于加密凭据存储（主密钥文件默认 / 钥匙串 opt-in）；分层架构（importlinter contracts 1–6）；单文件 ≤ 400 LOC（后端）。                                                                                 |
 | **Scale / Scope**                       | 单用户；并发 MCP 客户端 ≤ 3；注册 MCP 服务器 ≤ 30；单服务器能力数 ≤ 100。                                                                                                                                         |
 
 ## Constitution Check
@@ -43,7 +43,7 @@
 | **Languages**                             | ✅         | 仅 Python 3.12 + TypeScript 5 (e2e)。                                                                                                     |
 | **Architecture: layered**                 | ✅         | importlinter contracts 1–4 已在 `backend/pyproject.toml`；本计划新增 contracts 5–6（cross-kind 隔离，kind-agnostic 核心边界）。           |
 | **Persistence: SQLite for control plane** | ✅         | 所有状态进 `coffer.db`。本 spec 无文件型用户内容（暂无 `Memory` kind）。                                                                  |
-| **Credentials: keychain only**            | ✅         | `infrastructure/credentials/keyring_adapter.py` 是 `keyring` 的唯一引入点。Resource 配置只持有凭据**引用**（字符串 key）。                |
+| **Credentials: 加密存储**                 | ✅         | 密钥以 Fernet 密文形式存于 `credentials` 表；`infrastructure/credentials/` 是 `keyring` 的唯一引入点（主密钥 + legacy 迁移）。Resource 配置只持有凭据**引用**（字符串 key）。                |
 | **Network defaults: loopback-only**       | ✅         | FastAPI 绑定 `127.0.0.1`。CORS 白名单堵住浏览器 CSRF。v0 不发起公网出站，除用户自行配置的上游 HTTP MCP 服务器外。                         |
 
 **Resource framework upfront**（ADR-001）针对宪法 "Cross-cutting modules are
@@ -135,7 +135,7 @@ backend/coffer/
 │   │   ├── audit_routes.py               # /api/v1/audit
 │   │   ├── retention_routes.py           # /api/v1/retention/*
 │   │   ├── daemon_routes.py              # /api/v1/daemon/*
-│   │   ├── keychain_routes.py            # /api/v1/keychain/* (写入、带审计的读取、exists、删除)
+│   │   ├── credential_routes.py          # /api/v1/credentials/* (写入、带审计的读取、exists、删除)
 │   │   └── mcp/
 │   │       ├── capability_routes.py
 │   │       ├── invocation_routes.py
@@ -149,7 +149,7 @@ backend/coffer/
 │   │   ├── resource_cmd.py               # coffer resource ...
 │   │   ├── audit_cmd.py                  # coffer audit ...
 │   │   ├── retention_cmd.py              # coffer retention ...
-│   │   ├── keychain_cmd.py               # coffer keychain set/get/list/delete ...
+│   │   ├── credentials_cmd.py            # coffer credentials set/get/list/delete/storage ...
 │   │   └── mcp.py                        # coffer mcp ... (kind 子命令组)
 │   └── shim/
 │       └── main.py                       # coffer-mcp-shim 入口
@@ -188,7 +188,7 @@ composition root 脚手架、Typer composition root 脚手架。尚无业务逻�
 `SubprocessSupervisor`、`CapabilityDiscovery`、`/mcp` JSON-RPC 端点、
 `coffer-mcp-shim` 二进制以及 `coffer mcp …` CLI 子命令。按工具的启用/禁用
 （US2）也在这里落地——它们与 US1 共享同一代码路径，因此一起实现。
-keychain 管理端点（FR-011）也在本阶段落地——写入、带审计的读取、exists
+credential 管理端点（FR-011）也在本阶段落地——写入、带审计的读取、exists
 与删除——以便 HTTP MCP 服务器可以端到端引用凭据。
 
 **Done when:** User Story 1 与 User Story 2 的 acceptance scenario 在
@@ -199,7 +199,7 @@ keychain 管理端点（FR-011）也在本阶段落地——写入、带审计�
 
 ### Phase 4 — User Story 3 (P2)：CLI 完备性（与 REST 对齐）
 
-很多 CLI 子命令在 Phase 2（`resource`、`daemon`、`keychain`）和 Phase 3
+很多 CLI 子命令在 Phase 2（`resource`、`daemon`、`credentials`）和 Phase 3
 （`mcp`）已经落地。Phase 4 补两阶段留下的缺口——通常是 `--json` 输出开关、
 `--verbose` traceback 渲染，以及脚本所依赖的按错误类别返回的退出码。
 

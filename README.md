@@ -131,7 +131,7 @@ backend/              Python daemon + CLI + shim
   coffer/
     domain/           pure types + business rules (no I/O)
     application/      services + orchestration
-    infrastructure/   DB, MCP transports, keychain, daemon discovery
+    infrastructure/   DB, MCP transports, encrypted credential store, daemon discovery
     surfaces/         HTTP (FastAPI) + CLI (Typer) + stdio shim
 specs/                Speckit specs (one per feature)
 docs/decisions/       Architectural Decision Records (ADRs)
@@ -157,7 +157,7 @@ ADRs: [docs/decisions/](docs/decisions/).
 - **Conventional Commits** required — see [agents/workflow.md](agents/workflow.md)
 - **Spec-driven development** — every feature starts with a spec under `specs/<id>/` — see [agents/sdd.md](agents/sdd.md)
 - **Architecture contracts** — 6 importlinter contracts must stay green (defined in [backend/pyproject.toml](backend/pyproject.toml))
-- **Credentials** — all secrets go through `coffer.infrastructure.credentials.keyring_adapter`; never reach the DB in plaintext
+- **Credentials** — secrets are stored only as Fernet ciphertext in the `credentials` table via `coffer.infrastructure.credentials`; plaintext never reaches the DB, logs, or audit
 
 ---
 

@@ -42,11 +42,11 @@ Application services receive their infrastructure dependencies as constructor ar
 
 ### infrastructure/
 
-The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the OS keychain adapter (`infrastructure/credentials/keyring_adapter.py` — the single place in the entire codebase allowed to import `keyring`), daemon discovery utilities (`infrastructure/daemon/`), and the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams).
+The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the encrypted credential store and master-key manager (`infrastructure/credentials/` — the single place in the entire codebase allowed to import `keyring`), daemon discovery utilities (`infrastructure/daemon/`), and the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams).
 
 Infrastructure is wired into the system at the composition root, not imported by domain or application code. Application services receive infrastructure objects as injected dependencies. This means you can swap the real SQLAlchemy repository for a test double (an in-memory dictionary or a SQLite `:memory:` database) without changing a line of application or domain code.
 
-The keychain adapter deserves special mention: it is the only file in the entire codebase that may import `keyring`. All other code accesses credentials via opaque string references. This single-point-of-access rule is what makes it mechanically verifiable that credentials never reach any other layer.
+The credential module deserves special mention: `infrastructure/credentials/` is the only location in the entire codebase that may import `keyring` (now confined to the master key and the legacy migration). All other code accesses credentials via opaque string references. This single-point-of-access rule is what makes it mechanically verifiable that secret material never reaches any other layer.
 
 ### surfaces/
 
@@ -74,11 +74,11 @@ The "extract cross-cutting modules only when a second feature needs them" rule (
 
 These rules are not advisory. They are enforced by two complementary mechanisms in CI:
 
-**importlinter contracts** — declared in `backend/pyproject.toml`, these contracts define the forbidden import pairs and are run as part of `make verify`. A contract violation fails the build with a precise error naming the forbidden import chain. Two families of rules are enforced: layered direction (the four-layer hierarchy) and cross-kind isolation (no `domain/mcp` importing `domain/other_kind`). The "only `keyring_adapter.py` may import `keyring`" rule is enforced as an importlinter contract (Contract 4 in `backend/pyproject.toml`).
+**importlinter contracts** — declared in `backend/pyproject.toml`, these contracts define the forbidden import pairs and are run as part of `make verify`. A contract violation fails the build with a precise error naming the forbidden import chain. Two families of rules are enforced: layered direction (the four-layer hierarchy) and cross-kind isolation (no `domain/mcp` importing `domain/other_kind`). The "only `infrastructure/credentials/` may import `keyring`" rule is enforced as an importlinter contract (Contract 4 in `backend/pyproject.toml`).
 
 **`scripts/check_*.py`** — supplementary Python scripts that enforce architectural rules that importlinter cannot express as simple import graphs, such as the "no cross-cutting extraction before the second feature" rule.
 
-Both are run on every PR. The combination means that any import that violates the four-layer contract or the single-keychain-access rule is caught before merge, not discovered in a code review.
+Both are run on every PR. The combination means that any import that violates the four-layer contract or the single-credential-access rule is caught before merge, not discovered in a code review.
 
 ## Code layout (ADR-002)
 
@@ -98,7 +98,7 @@ backend/coffer/
 │   └── mcp/                      # MCP-specific application services
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
-│   ├── credentials/              # keychain adapter — only place importing `keyring`
+│   ├── credentials/              # encrypted credential store + master key — only place importing `keyring`
 │   ├── daemon/                   # pid_lock, port allocation
 │   └── mcp/                      # subprocess transport, HTTP upstream client
 └── surfaces/

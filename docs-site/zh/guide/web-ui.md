@@ -70,8 +70,8 @@ JSON 块 —— 一次可粘贴一台或多台：
 }
 ```
 
-Review 步骤让你标记哪些 `env` 值是 secret；这些值会写入 OS keychain，不存在
-resource 配置中。
+Review 步骤让你标记哪些 `env` 值是 secret；这些值会加密进 Coffer 的凭据存储
+（resource 配置里只保留它们的 ref），而非以明文存在 resource 配置中。
 
 在服务器详情页可切换以下标签：
 
