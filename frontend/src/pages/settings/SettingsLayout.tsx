@@ -7,6 +7,7 @@ import {
   Info,
   Laptop,
   Settings,
+  ShieldCheck,
   SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
@@ -45,6 +46,11 @@ const APP_ITEM: Item = {
   labelKey: "settings.tabs.app",
   icon: Laptop,
 };
+const SECURITY_ITEM: Item = {
+  to: "/settings/security",
+  labelKey: "settings.tabs.security",
+  icon: ShieldCheck,
+};
 const ABOUT_ITEM: Item = {
   to: "/settings/about",
   labelKey: "settings.tabs.about",
@@ -56,8 +62,8 @@ export function SettingsLayout() {
   // The App tab (launch-at-login) is desktop-only — it is hidden in the
   // browser, where those Tauri capabilities don't exist.
   const items: Item[] = isTauri()
-    ? [GENERAL_ITEM, MODELS_ITEM, EMBEDDING_ITEM, DATA_ITEM, APP_ITEM, ABOUT_ITEM]
-    : [GENERAL_ITEM, MODELS_ITEM, EMBEDDING_ITEM, DATA_ITEM, ABOUT_ITEM];
+    ? [GENERAL_ITEM, MODELS_ITEM, EMBEDDING_ITEM, DATA_ITEM, SECURITY_ITEM, APP_ITEM, ABOUT_ITEM]
+    : [GENERAL_ITEM, MODELS_ITEM, EMBEDDING_ITEM, DATA_ITEM, SECURITY_ITEM, ABOUT_ITEM];
 
   return (
     <div className="space-y-8">

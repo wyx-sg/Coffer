@@ -300,6 +300,7 @@
     "tabs": {
       "general": "General",
       "data": "Data",
+      "security": "Security",
       "app": "App",
       "about": "About",
       "embedding": "Embedding & chunking",
@@ -372,6 +373,15 @@
       "chunkingHint": "Default chunk size/overlap for NEW knowledge bases. Each knowledge base can override these in its settings.",
       "chunkSize": "Chunk size",
       "chunkOverlap": "Chunk overlap"
+    },
+    "security": {
+      "masterKey": {
+        "title": "Credential encryption",
+        "description": "Secrets are always encrypted into Coffer's local database. This controls where the encryption master key lives.",
+        "fileNote": "Master key: file beside the database (no keychain prompts).",
+        "keychainNote": "Master key: OS keychain (may prompt once per daemon start).",
+        "toggle": "Store master key in OS keychain"
+      }
     },
     "models": {
       "title": "Models",

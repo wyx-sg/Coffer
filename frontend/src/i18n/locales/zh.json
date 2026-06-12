@@ -300,6 +300,7 @@
     "tabs": {
       "general": "通用",
       "data": "数据",
+      "security": "安全",
       "app": "应用",
       "about": "关于",
       "embedding": "向量与分块",
@@ -372,6 +373,15 @@
       "chunkingHint": "新建知识库的默认分块大小/重叠。每个知识库可在自己的设置里覆盖。",
       "chunkSize": "分块大小",
       "chunkOverlap": "分块重叠"
+    },
+    "security": {
+      "masterKey": {
+        "title": "凭证加密",
+        "description": "密钥始终加密存储在 Coffer 本地数据库中；此处控制加密主密钥的存放位置。",
+        "fileNote": "主密钥：数据库旁的文件（无 keychain 弹窗）。",
+        "keychainNote": "主密钥：系统 keychain（每次 daemon 启动可能弹窗一次）。",
+        "toggle": "将主密钥存入系统 keychain"
+      }
     },
     "models": {
       "title": "模型",
