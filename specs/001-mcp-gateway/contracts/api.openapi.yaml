@@ -627,6 +627,7 @@ components:
           description: Reference key the secret is stored under.
         value:
           type: string
+          minLength: 1
           maxLength: 8192
           description: The secret value. Persisted Fernet-encrypted; audit rows carry the ref only.
 
@@ -1028,6 +1029,12 @@ components:
             enabled: { type: integer }
             healthy: { type: integer }
             unhealthy: { type: integer }
+        vec_available:
+          type: boolean
+          description: >-
+            Whether sqlite-vec's vec0 extension loaded in this daemon process.
+            False in a frozen build that lost the native lib (vector retrieval
+            degrades to keyword-only); asserted by the bundle smoke test.
 
     BackupResultOut:
       type: object

@@ -39,6 +39,15 @@ describe("SettingsLayout (browser mode)", () => {
     expect(screen.queryByRole("link", { name: /^Daemon$/ })).not.toBeInTheDocument();
   });
 
+  test("folds embedding into the Models tab — no standalone Embedding tab", () => {
+    render(wrap());
+    // The embedding/chunking config now lives under the Models tab, so there
+    // is no longer a separate Embedding nav item.
+    expect(screen.queryByRole("link", { name: /Embedding & chunking/ })).not.toBeInTheDocument();
+    // The Models tab label reflects the merged concerns.
+    expect(screen.getByRole("link", { name: /Models & Embedding/ })).toBeInTheDocument();
+  });
+
   test("renders the active pane and swaps content when another tab is clicked", () => {
     render(wrap("/settings/data"));
     expect(screen.getByTestId("pane-data")).toBeInTheDocument();

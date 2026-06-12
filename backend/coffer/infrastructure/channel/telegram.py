@@ -228,7 +228,18 @@ class TelegramAdapter:
             response = await self._client.post(f"{self._base}/{method}", json=params)
         except httpx.HTTPError as e:
             raise ChannelSendFailed(self._name, type(e).__name__) from e
-        payload = response.json()
+        try:
+            payload = response.json()
+        except ValueError as e:
+            # A gateway 502/503 returns an HTML page, not the Bot API JSON
+            # envelope — json() raises (a JSONDecodeError is NOT an
+            # httpx.HTTPError), so surface it as the channel error contract.
+            raise ChannelSendFailed(
+                self._name,
+                f"{method}: non-JSON response ({response.status_code})",
+                api_rejected=True,
+                status=response.status_code,
+            ) from e
         if not isinstance(payload, dict) or not payload.get("ok", False):
             description = ""
             if isinstance(payload, dict):

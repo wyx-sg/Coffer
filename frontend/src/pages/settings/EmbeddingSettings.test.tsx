@@ -2,6 +2,11 @@
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  createMemoryRouter,
+  Navigate,
+  RouterProvider,
+} from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EmbeddingSettings } from "./EmbeddingSettings";
 
@@ -60,5 +65,23 @@ describe("EmbeddingSettings", () => {
         expect.objectContaining({ enabled: true, model: "bge-m3", dimensions: 1024 }),
       ),
     );
+  });
+});
+
+describe("legacy /settings/embedding redirect", () => {
+  test("redirects the old embedding route to the merged Models page", async () => {
+    const router = createMemoryRouter(
+      [
+        { path: "/settings/models", element: <div>models page</div> },
+        {
+          path: "/settings/embedding",
+          element: <Navigate to="/settings/models" replace />,
+        },
+      ],
+      { initialEntries: ["/settings/embedding"] },
+    );
+    render(<RouterProvider router={router} />);
+    await waitFor(() => expect(screen.getByText("models page")).toBeInTheDocument());
+    expect(router.state.location.pathname).toBe("/settings/models");
   });
 });

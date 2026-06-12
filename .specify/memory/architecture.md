@@ -41,7 +41,7 @@ Currently registered kinds:
 | `skill`      | [005-skill-manager](../../specs/005-skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories. The workspace amendment adds an unmanaged-skill scan (adopt hand-placed skills into the master store) and a per-agent follow-master-library policy (flag + exclusions on the agent's config) that the sync engine reconciles. |
 | `knowledge_base` | [006-knowledge-base](../../specs/006-knowledge-base/spec.md) | **KB face** of the shared knowledge substrate. Any-format upload → converted to markdown (any-format→markdown via a `MarkdownConverter` port, MarkItDown default), `docs/<doc-id>.md` = truth + `raw/` provenance. Agent-read-only; grep / FTS5 / sqlite-vec retrieval. See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md).                  |
 | `memory`         | [007-memory](../../specs/007-memory/spec.md)                 | **memory face** of the same substrate. Per-fact `<slug>.md` + regenerated `MEMORY.md` = truth, two-layer scope (global sentinel + per-project ULID). Shared across agents via MCP read/write + native projection (Claude symlink / Codex managed block) — one canonical store, no divergence. See [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md). |
-| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | A messaging-channel binding (Telegram, SeaTalk). Carries transport config + credential refs and a default agent; a paired owner chats with chat-platform agents from the IM app, answers approval prompts, and receives notifications. Thin adapters over the spec-008 seams ([ADR-015](../../docs/decisions/ADR-014-channel-adapter-framework.md)).                       |
+| `channel`        | [009-channels](../../specs/009-channels/spec.md)             | A messaging-channel binding (Telegram, SeaTalk). Carries transport config + credential refs and a default agent; a paired owner chats with chat-platform agents from the IM app, answers approval prompts, and receives notifications. Thin adapters over the spec-008 seams ([ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)).                       |
 
 `knowledge_base` and `memory` are two faces of **one knowledge substrate**:
 **markdown files on disk are the source of truth; SQLite is a rebuildable index**
@@ -96,16 +96,18 @@ backend/coffer/
 ```
 
 Composition root (`surfaces/http/app.py`, `surfaces/cli/main.py`) explicitly
-wires each kind — no global registry, no import side effects. Each kind's
-`make_*_kind()` factory (e.g. `make_mcp_kind`, `make_agent_kind`,
-`make_skill_kind`) returns a frozen `Kind` (`domain/resource.py`), and the
-composition root populates the per-app `app.state.kinds` dict
-(`kind_name → Kind`) directly: `app_mcp_composition.py` sets `"mcp_server"`,
-and `agent_skill_wiring.py` sets `"agent"` and `"skill"`. `ResourceService`
-reads that dict for kind-agnostic dispatch. The surface-layer artefacts a kind
-contributes (HTTP routers, Typer groups) are carried by the `KindModule`
-dataclass (`domain/kind_module.py`), which references them via `Any`-typed
-fields so the domain layer never imports them.
+wires each of the six kinds — no global registry, no import side effects. Each
+kind's `make_*_kind()` factory (`make_mcp_kind`, `make_agent_kind`,
+`make_skill_kind`, `make_kb_kind`, `make_memory_kind`, `make_channel_kind`)
+returns a frozen `Kind` (`domain/resource.py`), and the composition root
+populates the per-app `app.state.kinds` dict (`kind_name → Kind`) directly:
+`app_mcp_composition.py` sets `"mcp_server"`, `agent_skill_wiring.py` sets
+`"agent"` and `"skill"`, `wiring.py` sets `"knowledge_base"` and `"memory"`,
+and `channel_wiring.py` sets `"channel"`. `ResourceService` reads that dict
+for kind-agnostic dispatch. The surface-layer
+artefacts a kind contributes (HTTP routers, Typer groups) are carried by the
+`KindModule` dataclass (`domain/kind_module.py`), which references them via
+`Any`-typed fields so the domain layer never imports them.
 
 FastAPI dependency providers (`surfaces/http/dependencies.py`) are plain
 module-level `set_*` / `get_*` pairs over module-global singletons — the
@@ -131,7 +133,7 @@ importing kind modules (Contract 6).
 - **Stdio shim** — short-lived; lifecycle bound to one MCP client process.
 - **Callback listener** — daemon-spawned child serving only signed channel
   callback paths on `127.0.0.1:<callback-port>`; runs while any SeaTalk
-  channel is enabled (spec 009, [ADR-015](../../docs/decisions/ADR-014-channel-adapter-framework.md)).
+  channel is enabled (spec 009, [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)).
 
 Both discover the daemon through `~/.coffer/daemon.json` (PID + port +
 token, mode `0600`). See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.md).

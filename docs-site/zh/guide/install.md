@@ -130,7 +130,8 @@ codesign --force --deep --sign - /Applications/Coffer.app
 首次启动时，桌面应用会：
 
 1. 在空闲端口（默认 8000）启动守护进程，并写出 `~/.coffer/daemon.json`。
-2. 将 `coffer-mcp-shim` 部署到 `~/.coffer/bin/`，使 MCP 客户端能找到它。
+2. 将 `coffer-mcp-shim` 与 `coffer-daemon` 部署到 `~/.coffer/bin/`，使 MCP 客户端能找到
+   shim —— 即使应用没在运行，shim 也能自动拉起 daemon。
 3. 在主窗口中打开 Web UI。
 
 接入 MCP 客户端：

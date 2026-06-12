@@ -161,6 +161,21 @@ async def test_send_failure_after_plain_retry_raises(fake_telegram: FakeTelegram
     assert len(fake_telegram.calls_for("sendMessage")) == 2
 
 
+async def test_non_json_upstream_surfaces_as_channel_send_failed(
+    fake_telegram: FakeTelegram,
+) -> None:
+    # A gateway 502 returns an HTML page, not the Bot API JSON envelope. The
+    # raw json() would raise JSONDecodeError (NOT an httpx.HTTPError), escaping
+    # the ChannelSendFailed contract; the adapter must translate it.
+    fake_telegram.html_error_sends = 1
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        with pytest.raises(ChannelSendFailed):
+            await adapter.send_text("555", "hi")
+    finally:
+        await adapter.stop()
+
+
 async def test_outbound_methods_map_to_bot_api_calls(fake_telegram: FakeTelegram) -> None:
     adapter = make_telegram_adapter(fake_telegram)
     try:

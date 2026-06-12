@@ -1,7 +1,7 @@
 # Feature Specification: Desktop Shell & Distribution
 
 **Feature Branch**: `feature/003-mcp-gateway-desktop` (on top of `feature/002-mcp-gateway-web`)
-**Status**: Draft
+**Status**: Accepted
 **Input**: 002-ui-shell delivered the web UI and explicitly deferred two acceptance scenarios from spec 002's User Story 5 (desktop shell): launch-at-login and close-to-tray. This spec owns those scenarios and the Tauri desktop wrapper + distribution pipeline that makes them work.
 
 **Scope note**: Coffer's user-facing UI lives in 002-ui-shell (web shell, visual language, information architecture). This spec adds the **desktop wrapper** — Tauri 2 shell, daemon supervision, tray icon, autostart plugin, PyInstaller sidecar packaging, and a notarisation-ready macOS release pipeline (actual code-signing / notarisation is deferred until an Apple Developer ID is available; the workflow ships unsigned bundles until then). It introduces no new resource kinds and no new UI screens; the web UI from 002 renders inside the Tauri window with the desktop-only `AppSettings` component activating behind the `isTauri()` guard that 002 already wired up.

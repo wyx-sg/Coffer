@@ -91,7 +91,7 @@ export function ConversationListItem({
         <Button
           variant="ghost"
           size="sm"
-          className="size-5 shrink-0 p-0 opacity-0 group-hover:opacity-100"
+          className="size-5 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             onRestore();
@@ -105,7 +105,7 @@ export function ConversationListItem({
           <Button
             variant="ghost"
             size="sm"
-            className="size-5 shrink-0 p-0 opacity-0 group-hover:opacity-100"
+            className="size-5 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               setDraft(conversation.title);
@@ -119,7 +119,7 @@ export function ConversationListItem({
             <Button
               variant="ghost"
               size="sm"
-              className="size-5 shrink-0 p-0 opacity-0 group-hover:opacity-100"
+              className="size-5 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
               onClick={(e) => {
                 e.stopPropagation();
                 onArchive();
@@ -134,7 +134,7 @@ export function ConversationListItem({
       <Button
         variant="ghost"
         size="sm"
-        className="size-5 shrink-0 p-0 opacity-0 group-hover:opacity-100 hover:text-destructive"
+        className="size-5 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 hover:text-destructive"
         onClick={(e) => {
           e.stopPropagation();
           onDelete();

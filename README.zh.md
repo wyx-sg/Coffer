@@ -12,9 +12,18 @@
   <img alt="平台" src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-macOS-555">
 </p>
 
-> 本地优先 (local-first) 的 AI agent 保险库。一个地方统一管理你的 MCP 服务器。
+> 本地优先 (local-first) 的 AI agent 保险库。一个地方统一管理你的 AI agent 所触及的一切。
 
-Coffer 是一个守护进程 (daemon) + CLI，它把上游 (upstream) MCP 服务器聚合起来，再通过一个统一、带命名空间的接口重新暴露给各类 MCP 客户端（Claude Code、Codex）。配置一次，所有客户端看到的工具完全一致。它还内置一个 **agent 注册表 (agent registry)** —— 检测并注册你本地的 AI 编码 agent、在应用内编辑它们的配置文件，并一键把 Coffer 自己的 MCP 服务器安装到任意 agent 中。所有状态都保存在你自己的机器上 —— 没有云账号，没有厂商锁定。
+Coffer 是一个守护进程 (daemon) + CLI + 桌面应用，它为你机器上的每个 AI agent 提供一个安全、共享的统一接口。所有状态都保存在你自己的机器上 —— 没有云账号，没有厂商锁定。Coffer 管理的每一类东西都是一种 **resource kind**：
+
+- **MCP 服务器** —— 把上游 (upstream) MCP 服务器聚合起来，再通过一个统一、带命名空间的接口重新暴露给各类 MCP 客户端（Claude Code、Codex）。配置一次，所有客户端看到的工具完全一致。
+- **Agents** —— 检测并注册你本地的 AI 编码 agent、在应用内编辑它们的配置文件，并一键把 Coffer 自己的 MCP 服务器安装到任意 agent 中。
+- **Skills** —— 维护一个 agent skill 包的主库，把它们投递到一个或多个 agent 的 skill 目录，并做漂移 (drift) 校正。
+- **知识库 (Knowledge base)** —— 放入任意格式的文档（自动转换为 markdown），让 agent 通过 grep / 关键词 / 向量检索取用。
+- **Memory** —— 一个跨 agent（Claude / Codex）共享的、agent-native 的唯一权威 memory 存储，可经 MCP 读写。
+- **Channels** —— 从 Telegram 或 SeaTalk 与内置 agent 聊天、回应审批提示，并在手机上接收通知。
+
+内置的 **chat** 平台与 Web/桌面 UI 把它们串起来：与 Coffer agent 对话、浏览并管理每一种 kind，并实时观察 invocation。
 
 📖 **文档站点：** https://wyx-sg.github.io/Coffer/
 
@@ -34,12 +43,12 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 从 [Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载安装包：
 
-| 平台                  | 文件                              |
-| --------------------- | --------------------------------- |
-| macOS Apple silicon   | `Coffer_<version>_aarch64.dmg`    |
+| 平台                  | 文件                                    |
+| --------------------- | --------------------------------------- |
+| macOS Apple silicon   | `Coffer_<version>_aarch64-unsigned.dmg` |
 
-Coffer 目前只发布 macOS（Apple Silicon）版本。每份文件都有一个 `.sha256`
-邻居文件可供校验。
+Coffer 目前只发布 macOS（Apple Silicon）版本。`-unsigned` 后缀表示该 DMG
+尚未公证（见下文）。请用 release 的 `SHA256SUMS` 文件校验下载。
 
 > **macOS（未签名）：** 构建未签名（公证待完成），首次打开时 macOS 可能提示 Coffer「已损坏」
 > （并非真的损坏——此时右键「打开」无效）。清除隔离标记：

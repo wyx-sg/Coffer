@@ -196,3 +196,94 @@ async def test_prune_unknown_table_rejected(tmp_path):
     with pytest.raises(UnknownPrunableTable):
         await svc.prune(table_name="nope")
     await engine.dispose()
+
+
+def _conversation_lifecycle_tables():
+    return (
+        PrunableTable(
+            name="conversations_archive",
+            timestamp_column="updated_at",
+            default_retention_days=7,
+            display_name="Auto-archive Idle Chats",
+            description="Archive conversations with no new message for N days.",
+            action="archive",
+            target_table="conversations",
+            archive_set_column="archived_at",
+        ),
+        PrunableTable(
+            name="conversations",
+            timestamp_column="archived_at",
+            default_retention_days=30,
+            display_name="Delete Archived Chats",
+            description="Delete archived conversations N days after archival.",
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_prune_runs_conversation_archive_then_delete_lifecycle(tmp_path):
+    from sqlalchemy import text
+
+    svc, sm, engine = await _service(tmp_path, extra_tables=_conversation_lifecycle_tables())
+    await svc.initialize_defaults()  # archive=7, delete=30 from registry defaults
+
+    now = datetime(2026, 5, 20, tzinfo=UTC)
+    conv_sql = (
+        "INSERT INTO conversations "
+        "(id, agent_key, title, model_id, created_at, updated_at, archived_at) "
+        "VALUES (:id, 'builtin', 't', NULL, :ts, :ts, :arch)"
+    )
+    async with sm() as s:
+        # idle 10 days, never archived -> should be archived by the sweep
+        await s.execute(
+            text(conv_sql), {"id": "idle", "ts": now - timedelta(days=10), "arch": None}
+        )
+        # active 1 day -> untouched
+        await s.execute(
+            text(conv_sql), {"id": "active", "ts": now - timedelta(days=1), "arch": None}
+        )
+        # archived 40 days ago -> should be deleted
+        await s.execute(
+            text(conv_sql),
+            {"id": "stale", "ts": now - timedelta(days=60), "arch": now - timedelta(days=40)},
+        )
+        await s.commit()
+
+    result = await svc.prune(now=now)
+    assert result["conversations_archive"] == 1  # idle thread archived
+    assert result["conversations"] == 1  # stale archived thread deleted
+
+    async with sm() as s:
+        rows = dict((await s.execute(text("SELECT id, archived_at FROM conversations"))).all())
+    assert set(rows) == {"idle", "active"}  # stale deleted
+    assert rows["idle"] is not None  # archived this run
+    assert rows["active"] is None
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_conversation_archive_disabled_when_days_none(tmp_path):
+    from sqlalchemy import text
+
+    svc, sm, engine = await _service(tmp_path, extra_tables=_conversation_lifecycle_tables())
+    await svc.initialize_defaults()
+    await svc.set_retention("conversations_archive", None, actor="cli")  # turn auto-archive off
+
+    now = datetime(2026, 5, 20, tzinfo=UTC)
+    async with sm() as s:
+        await s.execute(
+            text(
+                "INSERT INTO conversations "
+                "(id, agent_key, title, model_id, created_at, updated_at, archived_at) "
+                "VALUES ('idle', 'builtin', 't', NULL, :ts, :ts, NULL)"
+            ),
+            {"ts": now - timedelta(days=99)},
+        )
+        await s.commit()
+
+    result = await svc.prune(now=now)
+    assert result["conversations_archive"] == 0  # disabled
+    async with sm() as s:
+        arch = (await s.execute(text("SELECT archived_at FROM conversations"))).scalar_one()
+    assert arch is None  # never archived
+    await engine.dispose()

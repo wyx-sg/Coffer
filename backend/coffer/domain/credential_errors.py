@@ -13,6 +13,26 @@ class CredentialMissing(CofferError):  # noqa: N818
         self.ref = ref
 
 
+class CredentialInUse(CofferError):  # noqa: N818
+    """A credential cannot be deleted while a resource config still references it.
+
+    Carries the human-readable refs of the citing resources (e.g.
+    ``channel:my-bot``, ``mcp_server:github``) so the surface can tell the user
+    which resources to detach before the credential can be removed.
+    """
+
+    code = "CREDENTIAL_IN_USE"
+
+    def __init__(self, ref: str, references: list[str]) -> None:
+        joined = ", ".join(references)
+        super().__init__(
+            f"credential {ref!r} is referenced by: {joined}; "
+            "detach or delete those resources before deleting the credential"
+        )
+        self.ref = ref
+        self.references = references
+
+
 class CredentialLocked(CofferError):  # noqa: N818
     code = "CREDENTIAL_LOCKED"
 

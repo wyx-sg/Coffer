@@ -6,6 +6,7 @@ import App from "./App";
 import { queryClient } from "./lib/queryClient";
 import { registerFrontendKinds } from "./kinds";
 import { isTauri, getDaemonInfo } from "./lib/tauri";
+import { setDaemonConnection } from "./lib/auth";
 import "./i18n"; // Side-effect import; initialises i18next before render
 import "./index.css";
 import "highlight.js/styles/github.css"; // Code-block syntax theme (chat markdown)
@@ -21,9 +22,7 @@ async function injectDaemonInfo(): Promise<void> {
   if (!isTauri()) return;
   try {
     const info = await getDaemonInfo();
-    const w = window as unknown as Record<string, unknown>;
-    w.__COFFER_BASE_URL__ = info.baseUrl;
-    w.__COFFER_TOKEN__ = info.token;
+    setDaemonConnection(info.baseUrl, info.token);
   } catch (e) {
     console.error("Coffer: could not get daemon info from the desktop shell", e);
   }

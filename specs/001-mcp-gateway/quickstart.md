@@ -168,9 +168,13 @@ by ref.)
 
 ```text
 ~/.coffer/
-├── coffer.db              # SQLite — your config, audit, invocation log
+├── coffer.db              # SQLite — the rebuildable INDEX over the file trees
 ├── coffer.db-wal          # WAL
 ├── coffer.db-shm          # WAL shared memory
+├── knowledge/             # system of record: KB markdown trees
+├── memory/                # system of record: memory markdown trees
+├── skills/                # system of record: managed skill folders
+├── master.key             # Fernet key that decrypts the credential ciphertext
 ├── daemon.json            # daemon discovery: pid + port + token (mode 0600)
 ├── logs/
 │   ├── daemon.log         # structured JSON, one line per event
@@ -179,5 +183,25 @@ by ref.)
 └── upstream-pids/         # for orphan-subprocess cleanup
 ```
 
-To take a clean backup, run `coffer daemon backup` (the file copy is safe
-under WAL mode; the SQLite online-backup API handles consistency).
+### Backup & restore
+
+The markdown trees (`knowledge/`, `memory/`, `skills/`) are the system of
+record; `coffer.db` is a rebuildable index over them. Two backup levels:
+
+- `coffer daemon backup` writes a self-consistent SQLite copy of `coffer.db`
+  alone under `backups/` while the daemon runs — handy for snapshotting the
+  index, but it does NOT capture the file trees.
+- `coffer backup <dest>` is the full **vault** backup: it copies `coffer.db`
+  AND every file tree into `<dest>`. `coffer restore <dest>` verifies the
+  backup and re-places the db + trees into `~/.coffer/`, so a fresh machine
+  comes back to life. The restored `coffer.db` is already a consistent index;
+  pass `coffer restore <dest> --reindex` to rebuild it from the trees anyway.
+
+**Master-key policy.** `coffer backup` EXCLUDES `master.key` by default, so the
+backup is safe to copy off-machine — bundling the Fernet key next to the
+ciphertext it unlocks would defeat the encryption. A restored vault works for
+everything except *reading* previously-stored credentials; re-place
+`master.key` at `~/.coffer/master.key` or re-enter the secrets with
+`coffer credentials set`. Pass `coffer backup <dest> --include-master-key` to
+bundle the key (after a printed warning) — only into storage you trust as much
+as the live key.

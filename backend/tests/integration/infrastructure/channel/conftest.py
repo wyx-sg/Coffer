@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 import pytest
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import ApprovalClick, InboundMessage
@@ -64,6 +64,7 @@ class FakeTelegram:
         self.reject_html_sends = 0  # reject sendMessage with parse_mode=HTML N times
         self.reject_all_sends = 0  # reject any sendMessage N times
         self.fail_get_updates = 0  # answer getUpdates with HTTP 500 N times
+        self.html_error_sends = 0  # answer sendMessage with a non-JSON HTML body N times
         self._next_message_id = 100
         self.app = FastAPI()
         self.app.post("/bot{token}/{method}")(self._handle)
@@ -81,6 +82,13 @@ class FakeTelegram:
                 batch = []
             return JSONResponse(content={"ok": True, "result": batch})
         if method == "sendMessage":
+            if self.html_error_sends > 0:
+                # A gateway returns a 502 HTML page, not the Bot API JSON
+                # envelope — response.json() would raise JSONDecodeError.
+                self.html_error_sends -= 1
+                return HTMLResponse(
+                    status_code=502, content="<html><body>502 Bad Gateway</body></html>"
+                )
             if self.reject_all_sends > 0:
                 self.reject_all_sends -= 1
                 return JSONResponse(
@@ -111,6 +119,7 @@ class FakeSeaTalk:
         self.single_chat_calls: list[tuple[dict[str, Any], str]] = []  # (body, Authorization)
         self.typing_calls: list[dict[str, Any]] = []
         self.scripted: list[tuple[int, dict[str, Any]]] = []  # popped per single_chat call
+        self.html_error_sends = 0  # answer single_chat with a non-JSON HTML body N times
         self._next_message_id = 0
         self.app = FastAPI()
         self.app.post("/auth/app_access_token")(self._token)
@@ -127,6 +136,13 @@ class FakeSeaTalk:
     async def _single_chat(self, request: Request) -> JSONResponse:
         body: dict[str, Any] = await request.json()
         self.single_chat_calls.append((body, request.headers.get("Authorization", "")))
+        if self.html_error_sends > 0:
+            # A gateway returns a 502 HTML page, not the Open API JSON
+            # envelope — response.json() would raise JSONDecodeError.
+            self.html_error_sends -= 1
+            return HTMLResponse(
+                status_code=502, content="<html><body>502 Bad Gateway</body></html>"
+            )
         if self.scripted:
             status, payload = self.scripted.pop(0)
             return JSONResponse(status_code=status, content=payload)

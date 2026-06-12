@@ -86,6 +86,15 @@ describe("MessageThread", () => {
     );
   });
 
+  test("a CLI agent conversation renders without any model (CLI agents need no model)", async () => {
+    // CLI agents (Claude Code, Codex) are configured by a working directory, so
+    // a zero-model vault must NOT blank their thread with the no-model state.
+    chatApiMock.listMessages = vi.fn().mockResolvedValue({ messages: [] });
+    renderThread({ conversation: { ...BASE_CONV, agent_key: "claude_code" }, models: [] });
+    await waitFor(() => expect(chatApiMock.listMessages).toHaveBeenCalled());
+    expect(screen.queryByText("No model configured")).not.toBeInTheDocument();
+  });
+
   test("renders user messages right-aligned", async () => {
     chatApiMock.listMessages.mockResolvedValue({
       messages: [makeMsg({ role: "user", content: [{ type: "text", text: "Hey there" }] })],
@@ -185,6 +194,56 @@ describe("MessageThread", () => {
     await waitFor(() => expect(screen.getByText("live text")).toBeInTheDocument());
     // Exactly one in-progress bubble: the live one; the fetched placeholder is filtered.
     expect(screen.queryAllByText(/thinking/i)).toHaveLength(0);
+  });
+
+  test("renders the just-sent user message echo while the reply streams", async () => {
+    // P0-4: the prompt must be visible immediately, not only after the next
+    // messages fetch.
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderThread({
+      isStreaming: true,
+      liveMessage: { userText: "my question", text: "replying", toolBlocks: [], streaming: true },
+    });
+    await waitFor(() => expect(screen.getByText("my question")).toBeInTheDocument());
+    expect(screen.getByText("replying")).toBeInTheDocument();
+  });
+
+  test("does not duplicate the echo once the persisted user message is fetched", async () => {
+    // A mid-turn refetch returns the persisted user row — the fetched row
+    // wins and the optimistic echo is suppressed.
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [
+        makeMsg({ role: "user", content: [{ type: "text", text: "earlier question" }] }),
+        makeMsg({
+          id: "msg-2",
+          seq: 2,
+          role: "assistant",
+          content: [{ type: "text", text: "earlier answer" }],
+        }),
+        makeMsg({ id: "msg-3", seq: 3, role: "user", content: [{ type: "text", text: "my question" }] }),
+        makeMsg({ id: "msg-4", seq: 4, role: "assistant", status: "streaming", content: [] }),
+      ],
+    });
+    renderThread({
+      isStreaming: true,
+      liveMessage: { userText: "my question", text: "", toolBlocks: [], streaming: true },
+    });
+    await waitFor(() => expect(screen.getByText("earlier answer")).toBeInTheDocument());
+    expect(screen.getAllByText("my question")).toHaveLength(1);
+  });
+
+  test("readOnly hides the composer and shows a restore call-to-action", async () => {
+    // P0-3: archived conversations open read-only; restoring re-enables chat.
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [makeMsg({ content: [{ type: "text", text: "old message" }] })],
+    });
+    const onRestore = vi.fn();
+    renderThread({ readOnly: true, onRestore });
+    await waitFor(() => expect(screen.getByText("old message")).toBeInTheDocument());
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByText("This conversation is archived.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /restore/i }));
+    expect(onRestore).toHaveBeenCalled();
   });
 
   test("shows the agent's display name from props, not a hardcoded one", async () => {

@@ -30,7 +30,7 @@ help:
 	@echo "  make lint                  ruff + mypy + eslint + tsc + import-linter + file/response_model checks"
 	@echo "  make format                ruff format + prettier"
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
-	@echo "  make lock                  regenerate backend/requirements-dev.lock from pyproject.toml"
+	@echo "  make lock                  refresh backend/uv.lock from pyproject.toml (the install lockfile)"
 	@echo ""
 	@echo "  Desktop (Tauri; needs Rust toolchain, see CONTRIBUTING.md):"
 	@echo "  make desktop-dev           run frontend + backend + Tauri window in dev mode"
@@ -188,16 +188,18 @@ coverage:
 		cd $(FRONTEND) && npx vitest run --coverage; \
 	fi
 
-# Regenerate the snapshot lockfile from pyproject.toml's dev extras.
-# The lockfile is not enforced at install time (see CONTRIBUTING.md);
-# it's a snapshot of "what versions worked when these tests last passed."
-# --no-emit-index-url / --no-emit-trusted-host keep developer-local pip
-# configs (corporate mirrors, etc.) out of the committed lockfile.
+# Refresh the install lockfile (backend/uv.lock) from backend/pyproject.toml.
+# uv.lock is the single source of truth for dependency versions: CI and the
+# release workflow install from it FROZEN (`uv sync --frozen`) so tagged
+# artifacts are reproducible. See the "Lockfile" section in CONTRIBUTING.md.
+# Run this whenever you add/bump/remove a dependency in pyproject.toml, then
+# commit the updated uv.lock alongside the pyproject change.
 lock:
-	$(PY) -m piptools compile --extra dev --quiet --strip-extras \
-		--no-emit-index-url --no-emit-trusted-host \
-		--output-file $(BACKEND)/requirements-dev.lock \
-		$(BACKEND)/pyproject.toml
+	@command -v uv >/dev/null 2>&1 || { \
+		echo "lock: uv not found — install it (https://docs.astral.sh/uv/) to refresh uv.lock"; \
+		exit 1; \
+	}
+	uv lock --project $(BACKEND)
 
 # Run backend (:8000) + frontend (:5173) in parallel for browser dev.
 #

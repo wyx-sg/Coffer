@@ -48,17 +48,17 @@ def test_memory_vector_enabled_by_mode_only() -> None:
     assert MemoryStoreConfig(retrieval_modes=["keyword", "vector"]).vector_enabled is True
 
 
-def test_memory_to_embedding_config() -> None:
+def test_memory_legacy_embedding_fields_accepted_but_inert() -> None:
+    # The legacy flat ``embedding_*`` fields still parse (CLI/HTTP keep them on
+    # the wire) but no longer drive anything — embedding resolves globally.
     c = MemoryStoreConfig(
         retrieval_modes=["keyword", "vector"],
         embedding_provider="local",
         embedding_model="bge-m3",
         embedding_dimensions=1024,
     )
-    ec = c.to_embedding_config()
-    assert ec is not None
-    assert ec.provider == "local"
-    assert ec.dimensions == 1024
+    assert c.embedding_dimensions == 1024
+    assert not hasattr(c, "to_embedding_config")
 
 
 def test_frontmatter_roundtrip() -> None:

@@ -1,6 +1,10 @@
-//! Shim-deploy: copy the bundled `coffer-mcp-shim` sidecar binary into a
-//! user-writable directory on app startup so it's on the user's PATH after
-//! they add `~/.coffer/bin` (macOS/Linux) or the equivalent on Windows.
+//! Sidecar-deploy: copy the bundled `coffer-mcp-shim` AND `coffer-daemon`
+//! binaries into a user-writable directory on app startup so they're on the
+//! user's PATH after they add `~/.coffer/bin` (macOS/Linux) or the equivalent
+//! on Windows. Deploying the daemon next to the shim matters for the frozen
+//! auto-spawn path: when an MCP client launches the shim after a reboot (app
+//! not running), the shim resolves `coffer-daemon` as its sibling (ADR-006)
+//! — a shim-only deploy would leave that probe with nothing to find.
 //!
 //! Split out of `lib.rs` to keep the top-level entry-point file under the
 //! project's 400-line cap (see `agents/stack.md`).
@@ -11,12 +15,11 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager};
 
-/// Result of a single shim-deploy attempt, returned to the JS layer when
-/// the relevant Tauri command is invoked (currently only consumed by tests
-/// and logging — the JS `ShimDeployCard` was removed).
+/// Result of a single sidecar-deploy attempt (currently only consumed by
+/// tests and logging — the JS `ShimDeployCard` was removed).
 #[derive(serde::Serialize)]
-pub struct ShimDeployResult {
-    /// Absolute path to the deployed shim binary on the user's system.
+pub struct SidecarDeployResult {
+    /// Absolute path to the deployed binary on the user's system.
     pub path: String,
     /// `true` if we actually copied (first install or upgrade); `false` if
     /// the target already matched the bundled binary and no copy was needed.
@@ -28,15 +31,16 @@ pub struct ShimDeployResult {
 /// (same-size binary) are detected and force a re-copy.
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Returns the user-writable destination for the MCP shim binary.
+/// Returns the user-writable destination for a deployed sidecar binary
+/// named `exe_base` (no `.exe` suffix — appended here on Windows).
 ///
-/// - macOS / Linux: `~/.coffer/bin/coffer-mcp-shim`
-/// - Windows:       `%LOCALAPPDATA%\coffer\bin\coffer-mcp-shim.exe`
-pub fn shim_user_path() -> PathBuf {
+/// - macOS / Linux: `~/.coffer/bin/<exe_base>`
+/// - Windows:       `%LOCALAPPDATA%\coffer\bin\<exe_base>.exe`
+pub fn user_bin_path(exe_base: &str) -> PathBuf {
     let exe_name = if cfg!(target_os = "windows") {
-        "coffer-mcp-shim.exe"
+        format!("{exe_base}.exe")
     } else {
-        "coffer-mcp-shim"
+        exe_base.to_string()
     };
 
     // Windows lives under %LOCALAPPDATA%\coffer (no leading dot); POSIX uses
@@ -71,8 +75,8 @@ pub fn shim_user_path() -> PathBuf {
 /// itself and its parent to cover older layouts and Linux/Windows. On Windows
 /// the caller's name(s) plus a `.exe` variant are both tried in each location.
 ///
-/// Shared by `bundled_shim_path` and `daemon::bundled_daemon_path` so the two
-/// sidecar probes can never diverge again.
+/// Shared by `deploy_sidecars_to_user_path` and `daemon::bundled_daemon_path`
+/// so the sidecar probes can never diverge again.
 pub fn resolve_sidecar(app: &AppHandle, exe_names: &[&str]) -> Result<PathBuf, String> {
     let resource_dir = app
         .path()
@@ -121,16 +125,11 @@ pub fn resolve_sidecar(app: &AppHandle, exe_names: &[&str]) -> Result<PathBuf, S
     ))
 }
 
-/// Locate the `coffer-mcp-shim` sidecar that was bundled alongside this
-/// application. Thin wrapper over [`resolve_sidecar`].
-pub fn bundled_shim_path(app: &AppHandle) -> Result<PathBuf, String> {
-    resolve_sidecar(app, &["coffer-mcp-shim"])
-}
-
-/// Path to the version sentinel that sits next to the deployed shim.
-pub fn shim_version_sentinel_path() -> PathBuf {
-    let mut p = shim_user_path();
-    p.set_file_name(".coffer-mcp-shim.version");
+/// Path to the version sentinel that sits next to a deployed sidecar binary
+/// named `exe_base` (e.g. `.coffer-mcp-shim.version` for `coffer-mcp-shim`).
+pub fn version_sentinel_path(exe_base: &str) -> PathBuf {
+    let mut p = user_bin_path(exe_base);
+    p.set_file_name(format!(".{exe_base}.version"));
     p
 }
 
@@ -215,35 +214,52 @@ pub fn atomic_replace(bundled: &PathBuf, target: &PathBuf) -> Result<(), String>
     })
 }
 
-/// Copy the bundled `coffer-mcp-shim` binary into `~/.coffer/bin/` (or the
-/// Windows equivalent), making it available on the user's PATH once they
-/// add that directory.  Staleness is decided by `shim_needs_copy()` — see
-/// its doc-comment for the full rule. The replace itself is atomic (see
-/// `atomic_replace`).
-pub fn deploy_shim_to_user_path(app: AppHandle) -> Result<ShimDeployResult, String> {
-    let bundled = bundled_shim_path(&app)?;
-    let target = shim_user_path();
-    let sentinel = shim_version_sentinel_path();
-
+/// Deploy one bundled binary to its user-path `target`: create the parent
+/// directory, decide staleness via `shim_needs_copy()` (see its doc-comment
+/// for the full rule), copy with `atomic_replace`, and refresh the version
+/// `sentinel`. Returns whether a copy actually happened. Split from
+/// [`deploy_sidecars_to_user_path`] so the filesystem logic is unit-testable
+/// without an `AppHandle`.
+pub fn deploy_binary(
+    bundled: &PathBuf,
+    target: &PathBuf,
+    sentinel: &PathBuf,
+) -> Result<bool, String> {
     // Ensure destination directory exists.
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
     }
 
-    let needs_copy = shim_needs_copy(&target, &bundled, &sentinel);
+    let needs_copy = shim_needs_copy(target, bundled, sentinel);
 
     if needs_copy {
-        atomic_replace(&bundled, &target)?;
+        atomic_replace(bundled, target)?;
 
         // Best-effort: write/refresh the version sentinel. Failure here is
         // not fatal — we'll just re-copy on the next launch.
-        let _ = fs::write(&sentinel, APP_VERSION);
+        let _ = fs::write(sentinel, APP_VERSION);
     }
 
-    Ok(ShimDeployResult {
-        path: target.to_string_lossy().into_owned(),
-        deployed: needs_copy,
-    })
+    Ok(needs_copy)
+}
+
+/// Copy the bundled `coffer-mcp-shim` AND `coffer-daemon` binaries into
+/// `~/.coffer/bin/` (or the Windows equivalent). The shim is what MCP
+/// clients invoke once the directory is on PATH; the co-located daemon is
+/// what the frozen shim's detect-or-spawn resolves as its sibling (ADR-006),
+/// so auto-spawn works even when the desktop app isn't running.
+pub fn deploy_sidecars_to_user_path(app: AppHandle) -> Result<Vec<SidecarDeployResult>, String> {
+    let mut results = Vec::new();
+    for name in ["coffer-mcp-shim", "coffer-daemon"] {
+        let bundled = resolve_sidecar(&app, &[name])?;
+        let target = user_bin_path(name);
+        let deployed = deploy_binary(&bundled, &target, &version_sentinel_path(name))?;
+        results.push(SidecarDeployResult {
+            path: target.to_string_lossy().into_owned(),
+            deployed,
+        });
+    }
+    Ok(results)
 }
 
 #[cfg(test)]
@@ -346,7 +362,7 @@ mod tests {
     #[test]
     #[cfg(not(target_os = "windows"))]
     fn shim_user_path_uses_dot_coffer_on_posix() {
-        let p = shim_user_path();
+        let p = user_bin_path("coffer-mcp-shim");
         let s = p.to_string_lossy();
         assert!(s.contains("/.coffer/bin/"), "POSIX path should use ~/.coffer/bin: {s}");
         assert!(s.ends_with("coffer-mcp-shim"), "POSIX exe name: {s}");
@@ -355,7 +371,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "windows")]
     fn shim_user_path_uses_no_dot_coffer_on_windows() {
-        let p = shim_user_path();
+        let p = user_bin_path("coffer-mcp-shim");
         let s = p.to_string_lossy();
         assert!(s.contains(r"\coffer\bin\"), "Windows path should use coffer (no dot): {s}");
         assert!(!s.contains(r"\.coffer\"), "Windows path must not contain .coffer: {s}");
@@ -363,9 +379,79 @@ mod tests {
     }
 
     #[test]
+    fn daemon_user_path_sits_in_same_bin_dir_as_shim() {
+        let daemon = user_bin_path("coffer-daemon");
+        let shim = user_bin_path("coffer-mcp-shim");
+        assert_eq!(daemon.parent(), shim.parent(), "both binaries share ~/.coffer/bin");
+        let expected = if cfg!(target_os = "windows") {
+            "coffer-daemon.exe"
+        } else {
+            "coffer-daemon"
+        };
+        assert_eq!(daemon.file_name().unwrap().to_string_lossy(), expected);
+    }
+
+    #[test]
+    fn daemon_sentinel_sits_next_to_daemon() {
+        let daemon = user_bin_path("coffer-daemon");
+        let sentinel = version_sentinel_path("coffer-daemon");
+        assert_eq!(daemon.parent(), sentinel.parent(), "sentinel must be in same dir as daemon");
+        assert_eq!(
+            sentinel.file_name().unwrap().to_string_lossy(),
+            ".coffer-daemon.version"
+        );
+    }
+
+    #[test]
+    fn deploy_binary_copies_creates_dir_and_writes_sentinel() {
+        let d = TmpDir::new();
+        let bundled = d.path("bundled");
+        write(&bundled, "DAEMON-BINARY");
+        // Nested target exercises the create_dir_all branch.
+        let target = d.path("bin").join("coffer-daemon");
+        let sentinel = d.path("bin").join(".coffer-daemon.version");
+
+        let deployed = deploy_binary(&bundled, &target, &sentinel).expect("deploy");
+
+        assert!(deployed, "first deploy must copy");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "DAEMON-BINARY");
+        assert_eq!(fs::read_to_string(&sentinel).unwrap().trim(), APP_VERSION);
+    }
+
+    #[test]
+    fn deploy_binary_is_idempotent_when_current() {
+        let d = TmpDir::new();
+        let bundled = d.path("bundled");
+        write(&bundled, "DAEMON-BINARY");
+        let target = d.path("coffer-daemon");
+        let sentinel = d.path(".coffer-daemon.version");
+
+        assert!(deploy_binary(&bundled, &target, &sentinel).expect("first deploy"));
+        let second = deploy_binary(&bundled, &target, &sentinel).expect("second deploy");
+
+        assert!(!second, "matching size + version + mtime must skip the copy");
+    }
+
+    #[test]
+    fn deploy_binary_redeploys_on_version_drift() {
+        let d = TmpDir::new();
+        let bundled = d.path("bundled");
+        write(&bundled, "DAEMON-BINARY");
+        let target = d.path("coffer-daemon");
+        let sentinel = d.path(".coffer-daemon.version");
+
+        assert!(deploy_binary(&bundled, &target, &sentinel).expect("first deploy"));
+        write(&sentinel, "0.0.0-stale");
+
+        let redeployed = deploy_binary(&bundled, &target, &sentinel).expect("redeploy");
+        assert!(redeployed, "a stale version sentinel must force a re-copy");
+        assert_eq!(fs::read_to_string(&sentinel).unwrap().trim(), APP_VERSION);
+    }
+
+    #[test]
     fn sentinel_path_sits_next_to_shim() {
-        let shim = shim_user_path();
-        let sentinel = shim_version_sentinel_path();
+        let shim = user_bin_path("coffer-mcp-shim");
+        let sentinel = version_sentinel_path("coffer-mcp-shim");
         assert_eq!(shim.parent(), sentinel.parent(), "sentinel must be in same dir as shim");
         assert_eq!(
             sentinel.file_name().unwrap().to_string_lossy(),

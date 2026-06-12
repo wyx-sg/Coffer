@@ -85,12 +85,65 @@ pub fn read_daemon_info() -> Option<(u16, String)> {
     Some((parse_daemon_port(&raw)?, parse_daemon_token(&raw)?))
 }
 
-/// Best-effort check: is a daemon already listening on `127.0.0.1:<port>`?
+/// Best-effort check: is *anything* listening on `127.0.0.1:<port>`?
+///
+/// This is a bare TCP connect, so it cannot tell a Coffer daemon apart from a
+/// port-squatter. Use it ONLY where "the socket is gone" is the question —
+/// e.g. [`wait_for_port_free`] after a shutdown. For "is a live Coffer daemon
+/// here?" use [`daemon_responds_ok`], which does an HTTP status probe.
 pub fn daemon_is_listening(port: u16) -> bool {
     use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
     use std::time::Duration;
     let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
     TcpStream::connect_timeout(&addr.into(), Duration::from_millis(250)).is_ok()
+}
+
+/// Pure check: does an HTTP response head start with a `200` status line?
+/// Split out so the liveness probe's accept/reject decision is unit-testable
+/// without a socket. Accepts HTTP/1.0 and HTTP/1.1.
+fn http_status_is_ok(response_head: &str) -> bool {
+    let first = response_head.lines().next().unwrap_or("");
+    first.starts_with("HTTP/1.1 200") || first.starts_with("HTTP/1.0 200")
+}
+
+/// Liveness probe: does a *Coffer daemon* answer `GET /api/v1/daemon/status`
+/// with a 200 on `127.0.0.1:<port>`?
+///
+/// Replaces the bare-TCP `daemon_is_listening` for detect-or-spawn: a TCP
+/// connect false-positives on any process squatting the recorded port (after
+/// a daemon crash, an unrelated listener can land there), which would wrongly
+/// report "daemon already running" and skip the respawn. The status endpoint
+/// is auth-exempt, so no token is needed. Raw HTTP/1.1 over `TcpStream` — not
+/// worth an HTTP-client dependency for one loopback GET.
+pub fn daemon_responds_ok(port: u16) -> bool {
+    use std::io::{Read, Write};
+    use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
+    use std::time::Duration;
+
+    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr.into(), Duration::from_millis(250))
+    else {
+        return false;
+    };
+    if stream
+        .set_write_timeout(Some(Duration::from_millis(500)))
+        .and_then(|_| stream.set_read_timeout(Some(Duration::from_millis(500))))
+        .is_err()
+    {
+        return false;
+    }
+    let req = format!(
+        "GET /api/v1/daemon/status HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\
+         Connection: close\r\n\r\n"
+    );
+    if stream.write_all(req.as_bytes()).is_err() {
+        return false;
+    }
+    let mut buf = [0u8; 64];
+    let Ok(n) = stream.read(&mut buf) else {
+        return false;
+    };
+    http_status_is_ok(&String::from_utf8_lossy(&buf[..n]))
 }
 
 /// Ask the running daemon to shut itself down via its token-gated
@@ -193,7 +246,7 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     // no-op, so "Restart daemon" did nothing exactly when a user would
     // reach for it (a wedged-but-listening daemon).
     if let Some((port, token)) = read_daemon_info() {
-        if daemon_is_listening(port) {
+        if daemon_responds_ok(port) {
             request_daemon_shutdown(port, &token)?;
             if !wait_for_port_free(port, Duration::from_secs(8)) {
                 return Err(format!(
@@ -216,6 +269,115 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     Ok(RestartResult { pid, started: true })
 }
 
+/// Sentinel wrapped around `$PATH` in the login-shell probe output so the
+/// value survives any chatter a user's shell profile prints to stdout.
+#[cfg(unix)]
+const PATH_PROBE_MARKER: &str = "__COFFER_PATH__";
+
+/// Extract the marker-delimited `$PATH` value from login-shell probe output.
+/// Returns `None` when the markers are missing/unpaired or the value is empty
+/// — callers treat that as "probe failed" and fall back.
+#[cfg(unix)]
+fn extract_marked_path(output: &str) -> Option<String> {
+    let start = output.find(PATH_PROBE_MARKER)? + PATH_PROBE_MARKER.len();
+    let end = output[start..].find(PATH_PROBE_MARKER)? + start;
+    let path = output[start..end].trim();
+    if path.is_empty() {
+        None
+    } else {
+        Some(path.to_string())
+    }
+}
+
+/// Ask the user's login shell for its `$PATH` (`$SHELL -lc`, so Homebrew /
+/// nvm / pyenv exports in `~/.zprofile` etc. apply). Polls `try_wait` up to
+/// `timeout` and kills the child on expiry rather than blocking the caller
+/// on a hung profile. Returns `None` on any failure — callers fall back.
+#[cfg(unix)]
+fn login_shell_path(timeout: std::time::Duration) -> Option<String> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::time::Instant;
+
+    let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+    let probe = format!("printf '%s%s%s' '{m}' \"$PATH\" '{m}'", m = PATH_PROBE_MARKER);
+    let mut child = Command::new(&shell)
+        .args(["-lc", &probe])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => break,
+            Ok(Some(_)) => return None,
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(50)),
+            Err(_) => return None,
+        }
+    }
+
+    let mut out = String::new();
+    child.stdout.take()?.read_to_string(&mut out).ok()?;
+    extract_marked_path(&out)
+}
+
+/// Merge PATH sources for the daemon spawn, preserving order and deduping:
+/// login-shell entries first, then the current process's entries, then
+/// well-known tool dirs (Homebrew, `/usr/local/bin`, `~/.local/bin`,
+/// `~/.cargo/bin`) as a safety net for when the login-shell probe fails.
+/// Pure so it's unit-testable; empty segments are skipped.
+#[cfg(unix)]
+fn merged_spawn_path(
+    login_path: Option<&str>,
+    current_path: Option<&str>,
+    home: Option<&str>,
+) -> String {
+    fn push_unique(entries: &mut Vec<String>, dir: &str) {
+        if !dir.is_empty() && !entries.iter().any(|e| e == dir) {
+            entries.push(dir.to_string());
+        }
+    }
+
+    let mut entries: Vec<String> = Vec::new();
+    for source in [login_path, current_path].into_iter().flatten() {
+        for dir in source.split(':') {
+            push_unique(&mut entries, dir);
+        }
+    }
+    for dir in ["/opt/homebrew/bin", "/usr/local/bin"] {
+        push_unique(&mut entries, dir);
+    }
+    if let Some(home) = home {
+        for sub in [".local/bin", ".cargo/bin"] {
+            push_unique(&mut entries, &format!("{home}/{sub}"));
+        }
+    }
+    entries.join(":")
+}
+
+/// The PATH the spawned daemon should run with. The login-shell probe is
+/// cached for the app's lifetime (`OnceLock`) — it costs a shell startup, and
+/// the login PATH doesn't change while the app runs.
+#[cfg(unix)]
+fn daemon_spawn_path() -> String {
+    static LOGIN_PATH: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    let login =
+        LOGIN_PATH.get_or_init(|| login_shell_path(std::time::Duration::from_secs(3)));
+    merged_spawn_path(
+        login.as_deref(),
+        env::var("PATH").ok().as_deref(),
+        env::var("HOME").ok().as_deref(),
+    )
+}
+
 /// Spawn the bundled `coffer-daemon` detached from the app (so it survives
 /// app exit) and return its PID. Shared by `restart_daemon` and
 /// `get_daemon_info`; the caller owns detect-or-spawn / rate-limit policy.
@@ -227,6 +389,13 @@ fn spawn_daemon_detached(app: &AppHandle) -> Result<u32, String> {
     cmd.stdout(Stdio::null())
         .stderr(Stdio::null())
         .stdin(Stdio::null());
+
+    // A Finder/Dock-launched .app inherits the minimal GUI PATH
+    // (/usr/bin:/bin:/usr/sbin:/sbin), so the daemon — and the npx/uvx MCP
+    // upstreams it spawns from that environment — would fail ENOENT. Hand the
+    // daemon the user's login-shell PATH merged with well-known tool dirs.
+    #[cfg(unix)]
+    cmd.env("PATH", daemon_spawn_path());
 
     #[cfg(unix)]
     {
@@ -260,6 +429,42 @@ fn spawn_daemon_detached(app: &AppHandle) -> Result<u32, String> {
     Ok(pid)
 }
 
+/// The version this app build expects the daemon to report. Sourced from the
+/// crate version (`Cargo.toml`) at compile time, never a hardcoded literal —
+/// so a freshly-installed app and an old detached daemon it reuses cannot
+/// silently disagree (P2: undetectable version skew).
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Whether a running daemon's reported `version` is compatible with the
+/// version this app build `expected`. Pure so it's unit-testable.
+///
+/// Compatibility is exact string match: the app and its bundled daemon ship
+/// together, so any difference means the app is talking to a stale daemon
+/// (typically one a previous app version left detached and listening). An
+/// empty/absent daemon version is treated as a mismatch — we can't confirm it
+/// matches, so we surface the "restart it" affordance rather than assume.
+pub fn version_is_compatible(expected: &str, daemon: &str) -> bool {
+    !daemon.is_empty() && expected == daemon
+}
+
+/// Expose this app build's expected daemon version to the web UI (shown in the
+/// version-skew banner copy so the user sees what the app expected).
+#[tauri::command]
+pub fn get_app_version() -> String {
+    APP_VERSION.to_string()
+}
+
+/// Whether the running daemon's reported version matches what this app build
+/// expects. The web UI passes the `version` from `/api/v1/daemon/status`; on
+/// `false` it surfaces a "daemon out of date — restart it" banner (reusing the
+/// existing restart affordance rather than auto-killing the daemon). The
+/// comparison lives here so the single source of truth for "compatible" is the
+/// app build's own `APP_VERSION`, not a literal duplicated in the frontend.
+#[tauri::command]
+pub fn daemon_version_matches(daemon_version: String) -> bool {
+    version_is_compatible(APP_VERSION, &daemon_version)
+}
+
 /// Daemon connection info handed to the web UI inside the desktop app.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -285,19 +490,21 @@ pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
         token,
     };
 
-    // Fast path: a daemon is already running and reachable.
+    // Fast path: a *Coffer daemon* is already running and answering. An HTTP
+    // status probe (not a bare TCP connect) so a port-squatter on the recorded
+    // port can't false-positive us into reusing a dead daemon's stale info.
     if let Some((port, token)) = read_daemon_info() {
-        if daemon_is_listening(port) {
+        if daemon_responds_ok(port) {
             return Ok(ready(port, token));
         }
     }
 
-    // Cold start: spawn the bundled daemon, then poll until it's listening.
+    // Cold start: spawn the bundled daemon, then poll until it answers status.
     spawn_daemon_detached(&app)?;
     let deadline = Instant::now() + Duration::from_secs(15);
     while Instant::now() < deadline {
         if let Some((port, token)) = read_daemon_info() {
-            if daemon_is_listening(port) {
+            if daemon_responds_ok(port) {
                 return Ok(ready(port, token));
             }
         }
@@ -361,6 +568,75 @@ mod tests {
     }
 
     #[test]
+    fn http_status_is_ok_accepts_200_lines() {
+        assert!(http_status_is_ok("HTTP/1.1 200 OK\r\n\r\n"));
+        assert!(http_status_is_ok("HTTP/1.0 200 OK\r\n"));
+    }
+
+    #[test]
+    fn http_status_is_ok_rejects_non_200_and_garbage() {
+        assert!(!http_status_is_ok("HTTP/1.1 404 Not Found\r\n\r\n"));
+        assert!(!http_status_is_ok("HTTP/1.1 503 Service Unavailable\r\n"));
+        // A port-squatter that isn't speaking HTTP at all.
+        assert!(!http_status_is_ok("garbage bytes from a non-http listener"));
+        assert!(!http_status_is_ok(""));
+    }
+
+    /// daemon_responds_ok issues GET /api/v1/daemon/status and treats a 200 as
+    /// "a live Coffer daemon is here". Driven against an in-test TCP listener.
+    #[test]
+    fn daemon_responds_ok_true_on_200_status() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let handle = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().expect("accept");
+            let mut buf = [0u8; 1024];
+            let n = sock.read(&mut buf).expect("read");
+            let req = String::from_utf8_lossy(&buf[..n]).into_owned();
+            sock.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .expect("write");
+            req
+        });
+
+        assert!(daemon_responds_ok(port));
+        let req = handle.join().expect("server thread");
+        assert!(req.starts_with("GET /api/v1/daemon/status HTTP/1.1\r\n"), "{req}");
+    }
+
+    /// A port-squatter that answers non-200 (or non-HTTP) is NOT a live daemon
+    /// — the bare-TCP probe would false-positive here, the HTTP probe rejects.
+    #[test]
+    fn daemon_responds_ok_false_on_non_200_squatter() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().expect("accept");
+            let mut buf = [0u8; 1024];
+            let _ = sock.read(&mut buf);
+            let _ = sock.write_all(b"HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+        });
+
+        assert!(!daemon_responds_ok(port));
+    }
+
+    #[test]
+    fn daemon_responds_ok_false_when_nothing_listens() {
+        use std::net::TcpListener;
+        // Grab then release a port so nothing is listening on it.
+        let port = {
+            let l = TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap().port()
+        };
+        assert!(!daemon_responds_ok(port));
+    }
+
+    #[test]
     fn wait_for_port_free_returns_true_when_nothing_listens() {
         use std::net::TcpListener;
         // Grab a free port, then release it so nothing is listening.
@@ -411,6 +687,69 @@ mod tests {
         assert_eq!(parse_daemon_token(r#"{ "token" :   "abc123" }"#).as_deref(), Some("abc123"));
     }
 
+    // --- daemon-spawn PATH (P0-6): a Finder/Dock-launched .app inherits the
+    // minimal GUI PATH, so the daemon (and its npx/uvx MCP upstreams) needs
+    // the user's login-shell PATH merged back in before spawn. ---
+
+    #[cfg(unix)]
+    #[test]
+    fn merged_spawn_path_puts_login_shell_entries_first() {
+        let merged = merged_spawn_path(
+            Some("/opt/homebrew/bin:/usr/bin"),
+            Some("/usr/bin:/bin"),
+            None,
+        );
+        assert_eq!(merged, "/opt/homebrew/bin:/usr/bin:/bin:/usr/local/bin");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn merged_spawn_path_without_login_shell_appends_well_known_dirs() {
+        let merged = merged_spawn_path(None, Some("/usr/bin:/bin"), Some("/Users/u"));
+        assert_eq!(
+            merged,
+            "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin:/Users/u/.local/bin:/Users/u/.cargo/bin"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn merged_spawn_path_dedupes_keeping_first_occurrence() {
+        let merged = merged_spawn_path(
+            Some("/usr/local/bin:/usr/bin"),
+            Some("/usr/bin:/usr/local/bin:/bin"),
+            None,
+        );
+        assert_eq!(merged, "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn merged_spawn_path_skips_empty_segments() {
+        let merged = merged_spawn_path(Some(":/usr/bin::"), None, None);
+        assert_eq!(merged, "/usr/bin:/opt/homebrew/bin:/usr/local/bin");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extract_marked_path_ignores_profile_chatter() {
+        let out = format!("welcome banner\n{m}/a:/b{m}\ntrailing", m = PATH_PROBE_MARKER);
+        assert_eq!(extract_marked_path(&out).as_deref(), Some("/a:/b"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extract_marked_path_missing_or_unpaired_markers_is_none() {
+        assert_eq!(extract_marked_path("/usr/bin:/bin"), None);
+        assert_eq!(extract_marked_path(&format!("{PATH_PROBE_MARKER}/usr/bin")), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extract_marked_path_empty_value_is_none() {
+        assert_eq!(extract_marked_path(&format!("{m}  {m}", m = PATH_PROBE_MARKER)), None);
+    }
+
     #[test]
     fn rate_limited_within_interval() {
         let prev = Instant::now();
@@ -428,5 +767,49 @@ mod tests {
     #[test]
     fn not_rate_limited_on_first_call() {
         assert!(!restart_is_rate_limited(None, Instant::now(), Duration::from_secs(5)));
+    }
+
+    // --- version skew (P2): the app must detect when it has reused an old
+    // detached daemon whose reported version differs from what this build
+    // expects, so it can surface a manual "restart it" prompt. ---
+
+    #[test]
+    fn version_is_compatible_when_versions_match() {
+        assert!(version_is_compatible("0.1.1", "0.1.1"));
+    }
+
+    #[test]
+    fn version_is_incompatible_when_daemon_is_older() {
+        // The classic skew: a new app build reuses a daemon a previous app
+        // version left running.
+        assert!(!version_is_compatible("0.1.1", "0.1.0"));
+    }
+
+    #[test]
+    fn version_is_incompatible_when_daemon_is_newer() {
+        assert!(!version_is_compatible("0.1.1", "0.2.0"));
+    }
+
+    #[test]
+    fn version_is_incompatible_when_daemon_version_is_empty() {
+        // A daemon that didn't report a version can't be confirmed current —
+        // treat it as a mismatch so the affordance still shows.
+        assert!(!version_is_compatible("0.1.1", ""));
+    }
+
+    #[test]
+    fn get_app_version_returns_the_crate_version() {
+        // Sourced from CARGO_PKG_VERSION, not a hardcoded literal.
+        assert_eq!(get_app_version(), env!("CARGO_PKG_VERSION"));
+        assert!(!get_app_version().is_empty());
+    }
+
+    #[test]
+    fn daemon_version_matches_compares_against_this_app_build() {
+        // The command the web UI calls: true only when the daemon reports
+        // exactly this build's version.
+        assert!(daemon_version_matches(APP_VERSION.to_string()));
+        assert!(!daemon_version_matches("0.0.0-stale".to_string()));
+        assert!(!daemon_version_matches(String::new()));
     }
 }

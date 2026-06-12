@@ -6,6 +6,7 @@
     "dismiss": "关闭",
     "edit": "编辑",
     "loading": "加载中…",
+    "loadMore": "加载更多（已显示 {{loaded}} / {{total}}）",
     "enabled": "已启用",
     "disabled": "已禁用",
     "saving": "保存中…",
@@ -248,7 +249,45 @@
       "master_key_relocated": "主密钥存储位置已变更",
       "agent_config_file_written": "编辑了 {{resource}} 配置（{{key}}）",
       "agent_mcp_installed": "已把 Coffer MCP 安装到 {{resource}}",
-      "agent_mcp_uninstalled": "已从 {{resource}} 移除 Coffer MCP"
+      "agent_mcp_uninstalled": "已从 {{resource}} 移除 Coffer MCP",
+      "agent_config_file_deleted": "删除了 {{resource}} 配置（{{key}}）",
+      "agent_mcp_entry_removed": "从 {{resource}} 移除了一个 MCP 条目",
+      "agent_mcp_entry_adopted": "将一个 MCP 条目纳管到 {{resource}}",
+      "agent_plugin_toggled": "切换了 {{resource}} 上的一个插件",
+      "agent_plugin_uninstalled": "从 {{resource}} 卸载了一个插件",
+      "embedding_config_updated": "更新了向量嵌入配置",
+      "skill_imported": "导入了技能 {{resource}}",
+      "skill_fetched": "从来源拉取了技能 {{resource}}",
+      "skill_updated": "更新了技能 {{resource}}",
+      "skill_update_noop": "技能 {{resource}} 已是最新",
+      "skill_renamed": "重命名了技能 {{resource}}",
+      "skill_bound": "将技能 {{resource}} 绑定到 {{key}}",
+      "skill_unbound": "将技能 {{resource}} 从 {{key}} 解绑",
+      "skill_autobind_skipped": "跳过了技能 {{resource}} 的自动绑定",
+      "skill_relinked": "重新链接了技能 {{resource}}",
+      "skill_drift_detected": "检测到技能 {{resource}} 的偏移",
+      "skill_adopted": "纳管了技能 {{resource}}",
+      "skill_unmanaged_deleted": "删除了未纳管技能 {{resource}}",
+      "kb_document_ingested": "向 {{resource}} 摄入了一个文档",
+      "kb_document_updated": "更新了 {{resource}} 中的一个文档",
+      "kb_document_deleted": "从 {{resource}} 删除了一个文档",
+      "kb_reindexed": "重建了 {{resource}} 的索引",
+      "memory_added": "向 {{resource}} 添加了一条记忆",
+      "memory_updated": "更新了 {{resource}} 中的一条记忆",
+      "memory_deleted": "从 {{resource}} 删除了一条记忆",
+      "memory_cleared": "清空了 {{resource}} 中的所有记忆",
+      "memory_projected": "将 {{resource}} 投射到某个智能体",
+      "conversation_created": "开始了一段对话",
+      "conversation_deleted": "删除了一段对话",
+      "conversation_archived": "归档了一段对话",
+      "conversation_unarchived": "取消归档了一段对话",
+      "chat_turn_completed": "完成了一轮对话",
+      "model_created": "添加了模型 {{resource}}",
+      "model_updated": "更新了模型 {{resource}}",
+      "model_deleted": "移除了模型 {{resource}}",
+      "channel_pairing_issued": "为 {{resource}} 签发了配对码",
+      "channel_paired": "完成了 {{resource}} 渠道的配对",
+      "channel_notify_sent": "发送了一条 {{resource}} 通知"
     },
     "eventLabel": {
       "resource_created": "注册服务器",
@@ -282,7 +321,10 @@
       "ui": "用户",
       "cli": "命令行",
       "api": "API",
-      "system": "Coffer"
+      "system": "Coffer",
+      "user": "用户",
+      "agent": "智能体",
+      "channel": "渠道"
     },
     "timeRange": {
       "1h": "最近 1 小时",
@@ -306,8 +348,7 @@
       "security": "安全",
       "app": "应用",
       "about": "关于",
-      "embedding": "向量与分块",
-      "models": "模型"
+      "models": "模型与向量"
     },
     "general": {
       "title": "显示",
@@ -333,9 +374,13 @@
           "name": "MCP 调用记录",
           "description": "MCP 工具 / 资源 / 提示词的调用日志。"
         },
+        "conversations_archive": {
+          "name": "自动归档闲置对话",
+          "description": "超过设定天数没有新消息的对话将被自动归档。"
+        },
         "conversations": {
-          "name": "聊天对话",
-          "description": "聊天会话及其消息，按最后活动时间清理。"
+          "name": "删除已归档对话",
+          "description": "对话归档后超过设定天数将被删除（连同其消息）。"
         }
       }
     },
@@ -392,6 +437,8 @@
       "add": "添加模型",
       "addTitle": "添加模型",
       "editTitle": "编辑模型",
+      "deleteTitle": "删除模型？",
+      "deleteConfirm": "删除模型「{{name}}」？此操作不可撤销。",
       "empty": "尚未配置任何模型。请添加一个以开始对话。",
       "default": "默认",
       "displayName": "显示名称",
@@ -412,8 +459,11 @@
       "body": "Coffer 守护进程停止响应。能力列表、工具调用和注册操作将一直失败，直到它重新启动。",
       "notReadyTitle": "守护进程未启动",
       "notReadyBody": "Coffer 的后台服务暂时还连不上。它通常会自动启动——请刷新页面；若问题仍未解决，请重启 Coffer。",
+      "outOfDateTitle": "守护进程版本过旧",
+      "outOfDateBody": "当前应用复用了上一个版本残留的旧后台服务。请重启守护进程，使应用与守护进程运行同一版本。",
       "restart": "重启守护进程",
       "restarting": "重启中…",
+      "reconnectFailed": "守护进程已重启，但应用未能重新连接：{{message}}。请退出并重新打开 Coffer。",
       "reload": "重新加载"
     }
   },
@@ -434,6 +484,7 @@
     "CREDENTIAL_MISSING": "所需凭证在凭证存储中不存在",
     "CREDENTIAL_UNREADABLE": "存储的凭证无法用当前主密钥解密",
     "CREDENTIAL_LOCKED": "操作系统密钥环已锁定",
+    "CREDENTIAL_IN_USE": "该凭证仍被其他资源引用，请先解除引用再删除。",
     "UPSTREAM_UNAVAILABLE": "上游服务器不可达",
     "UPSTREAM_TIMEOUT": "上游服务器响应超时",
     "UNKNOWN_PRUNABLE_TABLE": "未知的保留表",
@@ -448,7 +499,50 @@
     "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经注册过一个 agent 了。",
     "CHANNEL_NOT_PAIRED": "该渠道还没有配对的账号",
     "CHANNEL_NOT_RUNNING": "渠道适配器未在运行",
-    "CHANNEL_SEND_FAILED": "向 IM 平台发送失败"
+    "CHANNEL_SEND_FAILED": "向 IM 平台发送失败",
+    "GENERIC_CREATE_NOT_ALLOWED": "该类型不支持直接创建",
+    "MASTER_KEY_MISSING": "主密钥缺失，Coffer 无法解密已存储的密钥",
+    "DB_SCHEMA_TOO_NEW": "该数据库由更新版本的 Coffer 写入，请升级后再打开。",
+    "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
+    "FS_PATH_NOT_BROWSABLE": "该路径无法浏览",
+    "SKILL_DIR_NOT_WRITABLE": "技能目录不可写",
+    "CONFIG_FILE_NOT_ALLOWED": "该配置文件不适用于此 agent",
+    "CONFIG_FILE_STALE": "配置文件在你加载后已被磁盘上的改动覆盖，请重新加载后重试。",
+    "AGENT_CONFIG_PARSE_ERROR": "无法解析该 agent 的配置文件",
+    "AGENT_CONFIG_REJECTED": "该 agent 配置被拒绝",
+    "UNKNOWN_AGENT": "未知的 agent",
+    "MCP_ENTRY_NOT_FOUND": "未找到该 MCP 条目",
+    "MCP_ENTRY_TOGGLE_UNSUPPORTED": "该 MCP 条目不支持启用或停用",
+    "MCP_ENTRY_PROTECTED": "该 MCP 条目受保护，无法修改",
+    "MCP_ENTRY_SOURCE_AMBIGUOUS": "该 MCP 条目的来源存在歧义，请指定具体来源",
+    "PLUGIN_NOT_FOUND": "未找到该插件",
+    "PLUGIN_UNINSTALL_UNSUPPORTED": "该插件不支持卸载",
+    "UNMANAGED_SKILL_NOT_FOUND": "未找到该未纳管技能",
+    "UNMANAGED_SKILL_INVALID": "该技能目录不是有效的技能",
+    "SKILL_INVALID": "该技能无效",
+    "SKILL_NAME_MISMATCH": "技能名称与其目录不一致",
+    "SOURCE_FETCH_FAILED": "无法从来源拉取",
+    "SSRF_BLOCKED": "出于安全考虑，该 URL 已被拦截",
+    "TARGET_CONFLICT": "目标位置已存在一个技能",
+    "UPDATE_NOT_SUPPORTED": "该技能无法从其来源更新",
+    "KB_NOT_FOUND": "未找到知识库",
+    "DOCUMENT_NOT_FOUND": "未找到文档",
+    "INGEST_REJECTED": "文档在摄入过程中被拒绝",
+    "ENGINE_UNAVAILABLE": "检索引擎不可用",
+    "RECONVERSION_BLOCKED": "重建索引正在进行中",
+    "SEARCH_MODE_INVALID": "不支持的检索模式",
+    "GREP_PATTERN_INVALID": "无效的 grep 模式",
+    "MEMORY_STORE_NOT_FOUND": "未找到记忆库",
+    "MEMORY_NOT_FOUND": "未找到记忆",
+    "MEMORY_REJECTED": "记忆被拒绝（为空或过长）",
+    "SCOPE_UNRESOLVED": "无法解析记忆的作用域",
+    "EMBEDDING_UNAVAILABLE": "向量嵌入模型不可用",
+    "CONVERSATION_NOT_FOUND": "未找到对话",
+    "MODEL_NOT_FOUND": "未找到模型",
+    "MODEL_REJECTED": "模型配置被拒绝",
+    "NO_MODEL_CONFIGURED": "尚未配置模型，请先添加一个再开始对话。",
+    "TURN_IN_PROGRESS": "该对话已有一轮正在进行中",
+    "APPROVAL_NOT_FOUND": "该审批请求已不在待处理状态"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -469,6 +563,12 @@
     "register": "注册",
     "addManual": "手动添加",
     "detectedHeading": "检测到的 agent",
+    "builtin": {
+      "heading": "内置 Agent",
+      "badge": "内置",
+      "description": "Coffer 自带的助手——无需安装 CLI agent 即可在应用内对话。",
+      "startChat": "开始对话"
+    },
     "namePlaceholder": "留空则按类型使用默认名称",
     "folderPicker": {
       "browse": "浏览…",
@@ -521,7 +621,8 @@
         "claudeUninstallHint": "完全卸载请使用 claude plugin 命令",
         "empty": "没有已安装的插件",
         "parseError": "配置解析失败，该文件降级只读",
-        "marketplace": "Marketplace"
+        "marketplace": "Marketplace",
+        "searchPlaceholder": "搜索插件"
       },
       "mcp": {
         "gatewayTitle": "经 Coffer 网关",
@@ -539,7 +640,8 @@
         "removeDuplicate": "移除重复条目",
         "parseError": "配置解析失败，该文件降级只读",
         "empty": "没有直连 MCP server",
-        "adoptSuccess": "已收编 {{name}}，现经网关服务于所有 agent"
+        "adoptSuccess": "已收编 {{name}}，现经网关服务于所有 agent",
+        "searchPlaceholder": "搜索 server"
       },
       "memory": "记忆"
     },
@@ -552,6 +654,8 @@
       "merged": "已先将原有的原生文件合并进记忆库。",
       "missingProjectRoot": "该项目记忆库尚无已知根目录，无法投影。",
       "toggleAria": "切换将 {{store}} 投影到该 agent",
+      "colProjection": "投影",
+      "colEnabled": "已投影",
       "facts": "记忆（{{count}}）",
       "factsEmpty": "暂无记忆。",
       "nativeDiscovered": "发现 Claude Code 在 {{projects}} 个项目里原生写入的 {{count}} 条记忆,尚未被 Coffer 接管。",
@@ -587,6 +691,15 @@
       "memoryBlockNotice": "此文件包含 Coffer 记忆投影区块，该区块由记忆功能管理",
       "directoryHint": "这是一个目录——请选择其中的文件，或新建一个。",
       "emptyDir": "暂无文件。",
+      "desc": {
+        "settings": "项目级 Claude Code 设置：权限、模型与钩子。",
+        "settings_local": "叠加在共享设置之上的个人覆盖项；不提交到仓库。",
+        "global": "Claude Code 的全局状态及用户级 MCP 服务器（~/.claude.json）。",
+        "instructions": "在该目录下每个会话都会自动加载的指令。",
+        "subagents": "自定义子智能体定义，每个子智能体一个 Markdown 文件。",
+        "config": "Codex CLI 配置：模型、供应商与工具设置。",
+        "hooks": "围绕 Codex 事件运行命令的生命周期钩子。"
+      },
       "find": {
         "toggle": "查找/替换",
         "find": "查找",
@@ -871,7 +984,9 @@
       "factBodyPlaceholder": "用 Markdown 写下这条事实…",
       "facts": "事实",
       "clearAll": "清空全部",
+      "clearTitle": "清空全部事实？",
       "clearConfirm": "清空 {{store}} 中的全部事实？此操作不可撤销。",
+      "deleteTitle": "删除事实？",
       "deleteConfirm": "删除事实 {{name}}？此操作不可撤销。",
       "editAria": "编辑事实 {{name}}",
       "loadFailed": "加载该记忆库失败。",
@@ -938,11 +1053,22 @@
       "viewArchived": "查看归档",
       "backToActive": "返回活跃",
       "archivedTitle": "已归档",
-      "archivedEmpty": "没有已归档的对话"
+      "archivedEmpty": "没有已归档的对话",
+      "filterLabel": "筛选对话",
+      "filterActive": "活跃",
+      "filterArchived": "归档"
     },
     "thread": {
       "empty": "发送消息开始对话。",
-      "selectOrCreate": "选择一个对话或新建一个。"
+      "selectOrCreate": "选择一个对话或新建一个。",
+      "notFoundTitle": "未找到该对话",
+      "notFoundBody": "它可能已被删除，或者链接已失效。",
+      "notFoundCta": "开始新对话"
+    },
+    "archivedThread": {
+      "notice": "该对话已归档。",
+      "restore": "恢复以继续对话",
+      "restoring": "恢复中…"
     },
     "composer": {
       "placeholder": "发消息给 Coffer 助手…（Enter 发送，Shift+Enter 换行）",
@@ -965,10 +1091,13 @@
       "agent": "Agent",
       "model": "模型",
       "noModels": "尚无模型 —— 请先到「设置 → 模型」添加。",
-      "unavailable": "不可用"
+      "unavailable": "不可用",
+      "workdir": "工作目录",
+      "workdirPlaceholder": "/你的/项目/路径"
     },
     "draft": {
-      "guide": "给 {{agent}} 发消息，开始新对话。"
+      "guide": "给 {{agent}} 发消息，开始新对话。",
+      "workdirNeeded": "在上方填写工作目录后，即可与 {{agent}} 对话。"
     },
     "delete": {
       "title": "删除此对话？",
@@ -1035,6 +1164,28 @@
       "telegramHint": "BotFather 给你的机器人 token。",
       "seatalkHint": "来自 SeaTalk 开放平台应用的 App ID、App Secret 和 Signing Secret。",
       "created": "渠道 {{name}} 已注册"
+    },
+    "edit": {
+      "title": "编辑渠道",
+      "subtitle": "更换绑定的 Agent 或轮换密钥。密钥字段留空则保留当前值。",
+      "agent": "默认 Agent",
+      "agentHint": "该渠道上的新会话将使用此 Agent。",
+      "newBotToken": "新的机器人 token",
+      "newAppSecret": "新的 App Secret",
+      "newSigningSecret": "新的 Signing Secret",
+      "rotatePlaceholder": "留空则保留当前值",
+      "rotateHint": "存入 Coffer 凭据库；沿用现有引用。",
+      "save": "保存修改",
+      "saved": "渠道 {{name}} 已更新"
+    },
+    "test": {
+      "send": "发送测试消息",
+      "sending": "发送中…",
+      "title": "发送测试消息",
+      "subtitle": "向已配对的对端推送一条临时消息，确认投递正常。",
+      "placeholder": "来自 Coffer 的测试消息",
+      "sent": "测试消息已发送",
+      "needsPeer": "请先完成配对——当前还没有可通知的对端。"
     },
     "status": {
       "title": "状态",

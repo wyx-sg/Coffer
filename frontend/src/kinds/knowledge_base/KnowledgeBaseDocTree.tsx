@@ -14,12 +14,25 @@ interface Props {
   docs: DocumentListOut | undefined;
   selectedId: string | null;
   isLoading: boolean;
+  /** Fetching an additional page (the "Load more" footer is in flight). */
+  isLoadingMore?: boolean;
+  /** Fetch the next page; only rendered when more docs remain than are loaded. */
+  onLoadMore?: () => void;
   onSelect: (documentId: string) => void;
 }
 
-export function KnowledgeBaseDocTree({ docs, selectedId, isLoading, onSelect }: Props) {
+export function KnowledgeBaseDocTree({
+  docs,
+  selectedId,
+  isLoading,
+  isLoadingMore = false,
+  onLoadMore,
+  onSelect,
+}: Props) {
   const { t } = useTranslation();
   const items = docs?.documents ?? [];
+  const total = docs?.total ?? items.length;
+  const hasMore = items.length < total;
 
   return (
     <aside className="space-y-1">
@@ -55,6 +68,20 @@ export function KnowledgeBaseDocTree({ docs, selectedId, isLoading, onSelect }: 
               </button>
             </li>
           ))}
+          {hasMore && onLoadMore ? (
+            <li>
+              <button
+                type="button"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+                className="mt-1 w-full rounded-md py-1.5 text-center text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
+              >
+                {isLoadingMore
+                  ? t("common.loading")
+                  : t("common.loadMore", { loaded: items.length, total })}
+              </button>
+            </li>
+          ) : null}
         </ul>
       )}
     </aside>

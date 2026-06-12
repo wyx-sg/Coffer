@@ -23,11 +23,16 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
   useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
+vi.mock("@/lib/hooks/useChatAgents", () => ({
+  useChatAgents: vi.fn(),
+}));
 const hooks = await import("@/lib/hooks/useAgents");
 const useAgentsMock = vi.mocked(hooks.useAgents);
 const useAgentCandidatesMock = vi.mocked(hooks.useAgentCandidates);
 const useRegisterAgentMock = vi.mocked(hooks.useRegisterAgent);
 const useRemoveAgentMock = vi.mocked(hooks.useRemoveAgent);
+const chatHooks = await import("@/lib/hooks/useChatAgents");
+const useChatAgentsMock = vi.mocked(chatHooks.useChatAgents);
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -60,6 +65,10 @@ function stubHooks(opts: { data?: unknown; isPending?: boolean; error?: unknown 
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof hooks.useRemoveAgent>);
+  // By default the chat-agents call surfaces the built-in assistant.
+  useChatAgentsMock.mockReturnValue({
+    data: [{ agent_key: "builtin", display_name: "Coffer Assistant", available: true }],
+  } as unknown as ReturnType<typeof chatHooks.useChatAgents>);
 }
 
 afterEach(() => vi.clearAllMocks());
@@ -119,5 +128,24 @@ describe("AgentsPage", () => {
     });
     render(<AgentsPage />, { wrapper: wrap(null) });
     expect(screen.getByText(/failed to load agents/i)).toBeInTheDocument();
+  });
+
+  test("surfaces the built-in Coffer Assistant with a link to /chat", () => {
+    stubHooks({ data: [] });
+    render(<AgentsPage />, { wrapper: wrap(null) });
+    expect(screen.getByText("Coffer Assistant")).toBeInTheDocument();
+    const startChat = screen.getByRole("link", { name: /start chatting/i });
+    expect(startChat).toHaveAttribute("href", "/chat");
+  });
+
+  test("omits the built-in section when the chat-agents call fails", () => {
+    stubHooks({ data: [] });
+    useChatAgentsMock.mockReturnValue({
+      data: undefined,
+    } as unknown as ReturnType<typeof chatHooks.useChatAgents>);
+    render(<AgentsPage />, { wrapper: wrap(null) });
+    expect(screen.queryByText("Coffer Assistant")).not.toBeInTheDocument();
+    // The rest of the page still renders.
+    expect(screen.getByRole("heading", { name: /^agents$/i })).toBeInTheDocument();
   });
 });

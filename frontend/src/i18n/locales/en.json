@@ -6,6 +6,7 @@
     "dismiss": "Dismiss",
     "edit": "Edit",
     "loading": "Loading…",
+    "loadMore": "Load more (showing {{loaded}} of {{total}})",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "saving": "Saving…",
@@ -248,7 +249,45 @@
       "master_key_relocated": "Master key storage changed",
       "agent_config_file_written": "Edited {{resource}} config ({{key}})",
       "agent_mcp_installed": "Installed Coffer MCP into {{resource}}",
-      "agent_mcp_uninstalled": "Removed Coffer MCP from {{resource}}"
+      "agent_mcp_uninstalled": "Removed Coffer MCP from {{resource}}",
+      "agent_config_file_deleted": "Deleted {{resource}} config ({{key}})",
+      "agent_mcp_entry_removed": "Removed an MCP entry from {{resource}}",
+      "agent_mcp_entry_adopted": "Adopted an MCP entry into {{resource}}",
+      "agent_plugin_toggled": "Toggled a plugin on {{resource}}",
+      "agent_plugin_uninstalled": "Uninstalled a plugin from {{resource}}",
+      "embedding_config_updated": "Updated the embedding configuration",
+      "skill_imported": "Imported skill {{resource}}",
+      "skill_fetched": "Fetched skill {{resource}} from source",
+      "skill_updated": "Updated skill {{resource}}",
+      "skill_update_noop": "Skill {{resource}} already up to date",
+      "skill_renamed": "Renamed skill {{resource}}",
+      "skill_bound": "Bound skill {{resource}} to {{key}}",
+      "skill_unbound": "Unbound skill {{resource}} from {{key}}",
+      "skill_autobind_skipped": "Skipped auto-binding skill {{resource}}",
+      "skill_relinked": "Re-linked skill {{resource}}",
+      "skill_drift_detected": "Detected drift in skill {{resource}}",
+      "skill_adopted": "Adopted skill {{resource}}",
+      "skill_unmanaged_deleted": "Deleted unmanaged skill {{resource}}",
+      "kb_document_ingested": "Ingested a document into {{resource}}",
+      "kb_document_updated": "Updated a document in {{resource}}",
+      "kb_document_deleted": "Deleted a document from {{resource}}",
+      "kb_reindexed": "Reindexed {{resource}}",
+      "memory_added": "Added a memory to {{resource}}",
+      "memory_updated": "Updated a memory in {{resource}}",
+      "memory_deleted": "Deleted a memory from {{resource}}",
+      "memory_cleared": "Cleared all memories in {{resource}}",
+      "memory_projected": "Projected {{resource}} into an agent",
+      "conversation_created": "Started a conversation",
+      "conversation_deleted": "Deleted a conversation",
+      "conversation_archived": "Archived a conversation",
+      "conversation_unarchived": "Unarchived a conversation",
+      "chat_turn_completed": "Completed a chat turn",
+      "model_created": "Added model {{resource}}",
+      "model_updated": "Updated model {{resource}}",
+      "model_deleted": "Removed model {{resource}}",
+      "channel_pairing_issued": "Issued a pairing code for {{resource}}",
+      "channel_paired": "Paired the {{resource}} channel",
+      "channel_notify_sent": "Sent a {{resource}} notification"
     },
     "eventLabel": {
       "resource_created": "Server registered",
@@ -282,7 +321,10 @@
       "ui": "User",
       "cli": "CLI",
       "api": "API",
-      "system": "Coffer"
+      "system": "Coffer",
+      "user": "User",
+      "agent": "Agent",
+      "channel": "Channel"
     },
     "timeRange": {
       "1h": "Last 1 hour",
@@ -306,8 +348,7 @@
       "security": "Security",
       "app": "App",
       "about": "About",
-      "embedding": "Embedding & chunking",
-      "models": "Models"
+      "models": "Models & Embedding"
     },
     "general": {
       "title": "Display",
@@ -333,9 +374,13 @@
           "name": "MCP invocations",
           "description": "MCP tool/resource/prompt invocation log."
         },
+        "conversations_archive": {
+          "name": "Auto-archive idle chats",
+          "description": "Archive conversations with no new message for this many days."
+        },
         "conversations": {
-          "name": "Chat conversations",
-          "description": "Chat threads and their messages, pruned by last activity."
+          "name": "Delete archived chats",
+          "description": "Delete archived conversations this many days after archival (with their messages)."
         }
       }
     },
@@ -392,6 +437,8 @@
       "add": "Add model",
       "addTitle": "Add model",
       "editTitle": "Edit model",
+      "deleteTitle": "Delete model?",
+      "deleteConfirm": "Delete model \"{{name}}\"? This cannot be undone.",
       "empty": "No models configured yet. Add one to start chatting.",
       "default": "Default",
       "displayName": "Display name",
@@ -412,8 +459,11 @@
       "body": "The coffer daemon stopped responding. Capability lists, tool calls, and registrations will fail until it restarts.",
       "notReadyTitle": "Daemon not running",
       "notReadyBody": "Coffer's background service isn't reachable yet. It usually starts on its own — reload this page, and if the problem continues, restart Coffer.",
+      "outOfDateTitle": "Daemon out of date",
+      "outOfDateBody": "This app reused an older background service left running from a previous version. Restart the daemon so the app and daemon run the same version.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
+      "reconnectFailed": "The daemon restarted, but the app could not reconnect to it: {{message}}. Quit and reopen Coffer.",
       "reload": "Reload"
     }
   },
@@ -434,6 +484,7 @@
     "CREDENTIAL_MISSING": "Required credential is missing from the credential store",
     "CREDENTIAL_UNREADABLE": "Stored credential could not be decrypted with the current master key",
     "CREDENTIAL_LOCKED": "The OS keychain is locked",
+    "CREDENTIAL_IN_USE": "This credential is still referenced by other resources. Detach them before deleting it.",
     "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable",
     "UPSTREAM_TIMEOUT": "Upstream server did not respond in time",
     "UNKNOWN_PRUNABLE_TABLE": "Unknown retention table",
@@ -448,7 +499,50 @@
     "AGENT_CONFIG_DIR_REGISTERED": "An agent for this config directory is already registered.",
     "CHANNEL_NOT_PAIRED": "This channel has no paired peer yet",
     "CHANNEL_NOT_RUNNING": "The channel adapter is not running",
-    "CHANNEL_SEND_FAILED": "Delivery to the IM platform failed"
+    "CHANNEL_SEND_FAILED": "Delivery to the IM platform failed",
+    "GENERIC_CREATE_NOT_ALLOWED": "This kind can't be created directly",
+    "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets",
+    "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
+    "PRIVILEGED_PATH": "That path is privileged and can't be used here",
+    "FS_PATH_NOT_BROWSABLE": "That path can't be browsed",
+    "SKILL_DIR_NOT_WRITABLE": "The skills directory isn't writable",
+    "CONFIG_FILE_NOT_ALLOWED": "That config file isn't allowed for this agent",
+    "CONFIG_FILE_STALE": "The config file changed on disk since you loaded it. Reload and retry.",
+    "AGENT_CONFIG_PARSE_ERROR": "The agent's config file couldn't be parsed",
+    "AGENT_CONFIG_REJECTED": "The agent configuration was rejected",
+    "UNKNOWN_AGENT": "Unknown agent",
+    "MCP_ENTRY_NOT_FOUND": "MCP entry not found",
+    "MCP_ENTRY_TOGGLE_UNSUPPORTED": "This MCP entry can't be enabled or disabled",
+    "MCP_ENTRY_PROTECTED": "This MCP entry is protected and can't be changed",
+    "MCP_ENTRY_SOURCE_AMBIGUOUS": "The MCP entry's source is ambiguous — specify which one",
+    "PLUGIN_NOT_FOUND": "Plugin not found",
+    "PLUGIN_UNINSTALL_UNSUPPORTED": "This plugin can't be uninstalled",
+    "UNMANAGED_SKILL_NOT_FOUND": "Unmanaged skill not found",
+    "UNMANAGED_SKILL_INVALID": "That skill folder isn't a valid skill",
+    "SKILL_INVALID": "The skill is invalid",
+    "SKILL_NAME_MISMATCH": "The skill's name doesn't match its folder",
+    "SOURCE_FETCH_FAILED": "Couldn't fetch from the source",
+    "SSRF_BLOCKED": "That URL was blocked for safety",
+    "TARGET_CONFLICT": "A skill already exists at the target location",
+    "UPDATE_NOT_SUPPORTED": "This skill can't be updated from its source",
+    "KB_NOT_FOUND": "Knowledge base not found",
+    "DOCUMENT_NOT_FOUND": "Document not found",
+    "INGEST_REJECTED": "The document was rejected during ingestion",
+    "ENGINE_UNAVAILABLE": "The retrieval engine is unavailable",
+    "RECONVERSION_BLOCKED": "Reindexing is already in progress",
+    "SEARCH_MODE_INVALID": "Unsupported search mode",
+    "GREP_PATTERN_INVALID": "Invalid grep pattern",
+    "MEMORY_STORE_NOT_FOUND": "Memory store not found",
+    "MEMORY_NOT_FOUND": "Memory not found",
+    "MEMORY_REJECTED": "The memory was rejected (empty or too long)",
+    "SCOPE_UNRESOLVED": "The memory scope couldn't be resolved",
+    "EMBEDDING_UNAVAILABLE": "The embedding model is unavailable",
+    "CONVERSATION_NOT_FOUND": "Conversation not found",
+    "MODEL_NOT_FOUND": "Model not found",
+    "MODEL_REJECTED": "The model configuration was rejected",
+    "NO_MODEL_CONFIGURED": "No model is configured yet. Add one to start chatting.",
+    "TURN_IN_PROGRESS": "A turn is already in progress in this conversation",
+    "APPROVAL_NOT_FOUND": "That approval request is no longer pending"
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -469,6 +563,12 @@
     "register": "Register",
     "addManual": "Add manually",
     "detectedHeading": "Detected agents",
+    "builtin": {
+      "heading": "Built-in agent",
+      "badge": "Built-in",
+      "description": "Coffer's own assistant — chat in the app without installing a CLI agent.",
+      "startChat": "Start chatting"
+    },
     "namePlaceholder": "Leave blank to use the default for this type",
     "folderPicker": {
       "browse": "Browse…",
@@ -521,7 +621,8 @@
         "claudeUninstallHint": "Use the claude plugin CLI to fully uninstall",
         "empty": "No plugins installed",
         "parseError": "Failed to parse config — this file is read-only",
-        "marketplace": "Marketplace"
+        "marketplace": "Marketplace",
+        "searchPlaceholder": "Search plugins"
       },
       "mcp": {
         "gatewayTitle": "Via Coffer gateway",
@@ -539,7 +640,8 @@
         "removeDuplicate": "Remove duplicate",
         "parseError": "Failed to parse config — this file is read-only",
         "empty": "No direct MCP servers",
-        "adoptSuccess": "Adopted {{name}} — now served to all agents via the gateway"
+        "adoptSuccess": "Adopted {{name}} — now served to all agents via the gateway",
+        "searchPlaceholder": "Search servers"
       },
       "memory": "Memory"
     },
@@ -552,6 +654,8 @@
       "merged": "Pre-existing native files were merged into the store first.",
       "missingProjectRoot": "This project store has no known root yet, so it can't be projected.",
       "toggleAria": "Toggle projection of {{store}} into this agent",
+      "colProjection": "Projection",
+      "colEnabled": "Projected",
       "facts": "Memories ({{count}})",
       "factsEmpty": "No memories yet.",
       "nativeDiscovered": "Found {{count}} memories Claude Code wrote natively across {{projects}} project(s) that Coffer is not managing yet.",
@@ -587,6 +691,15 @@
       "memoryBlockNotice": "This file contains a Coffer memory-projection block managed by the memory feature",
       "directoryHint": "This is a directory — select a file inside it, or create a new one.",
       "emptyDir": "No files yet.",
+      "desc": {
+        "settings": "Project-level Claude Code settings: permissions, model, and hooks.",
+        "settings_local": "Personal overrides layered on top of the shared settings; not committed.",
+        "global": "Claude Code's global state and user-scope MCP servers (~/.claude.json).",
+        "instructions": "Instructions auto-loaded into every session in this directory.",
+        "subagents": "Custom subagent definitions, one Markdown file per subagent.",
+        "config": "Codex CLI configuration: model, providers, and tool settings.",
+        "hooks": "Lifecycle hooks that run commands around Codex events."
+      },
       "find": {
         "toggle": "Find / Replace",
         "find": "Find",
@@ -871,7 +984,9 @@
       "factBodyPlaceholder": "Write the fact in Markdown…",
       "facts": "Facts",
       "clearAll": "Clear all",
+      "clearTitle": "Clear all facts?",
       "clearConfirm": "Clear all facts in {{store}}? This cannot be undone.",
+      "deleteTitle": "Delete fact?",
       "deleteConfirm": "Delete fact {{name}}? This cannot be undone.",
       "editAria": "Edit fact {{name}}",
       "loadFailed": "Failed to load this memory store.",
@@ -938,11 +1053,22 @@
       "viewArchived": "View archived",
       "backToActive": "Back to active",
       "archivedTitle": "Archived",
-      "archivedEmpty": "No archived conversations"
+      "archivedEmpty": "No archived conversations",
+      "filterLabel": "Filter conversations",
+      "filterActive": "Active",
+      "filterArchived": "Archived"
     },
     "thread": {
       "empty": "Send a message to start the conversation.",
-      "selectOrCreate": "Select a conversation or start a new one."
+      "selectOrCreate": "Select a conversation or start a new one.",
+      "notFoundTitle": "Conversation not found",
+      "notFoundBody": "It may have been deleted, or the link may be stale.",
+      "notFoundCta": "Start a new chat"
+    },
+    "archivedThread": {
+      "notice": "This conversation is archived.",
+      "restore": "Restore to continue",
+      "restoring": "Restoring…"
     },
     "composer": {
       "placeholder": "Message Coffer Assistant… (Enter to send, Shift+Enter for new line)",
@@ -965,10 +1091,13 @@
       "agent": "Agent",
       "model": "Model",
       "noModels": "No models yet — add one in Settings → Models first.",
-      "unavailable": "unavailable"
+      "unavailable": "unavailable",
+      "workdir": "Working directory",
+      "workdirPlaceholder": "/path/to/your/project"
     },
     "draft": {
-      "guide": "Message {{agent}} to start a new conversation."
+      "guide": "Message {{agent}} to start a new conversation.",
+      "workdirNeeded": "Enter a working directory above to start chatting with {{agent}}."
     },
     "delete": {
       "title": "Delete this conversation?",
@@ -1035,6 +1164,28 @@
       "telegramHint": "The token BotFather gave you for the bot.",
       "seatalkHint": "App ID, App Secret, and Signing Secret from the SeaTalk Open Platform app.",
       "created": "Channel {{name}} registered"
+    },
+    "edit": {
+      "title": "Edit channel",
+      "subtitle": "Change the bound agent or rotate a secret. Leave a secret field blank to keep the current value.",
+      "agent": "Default agent",
+      "agentHint": "New conversations on this channel start on this agent.",
+      "newBotToken": "New bot token",
+      "newAppSecret": "New app secret",
+      "newSigningSecret": "New signing secret",
+      "rotatePlaceholder": "Leave blank to keep current",
+      "rotateHint": "Stored in Coffer's credential store; the existing reference is reused.",
+      "save": "Save changes",
+      "saved": "Channel {{name}} updated"
+    },
+    "test": {
+      "send": "Send test message",
+      "sending": "Sending…",
+      "title": "Send test message",
+      "subtitle": "Push a one-off message to the paired peer to confirm delivery works.",
+      "placeholder": "Test message from Coffer",
+      "sent": "Test message sent",
+      "needsPeer": "Pair the channel first — there is no peer to notify yet."
     },
     "status": {
       "title": "Status",

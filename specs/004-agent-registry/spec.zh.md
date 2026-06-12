@@ -4,7 +4,7 @@
 
 **Feature Branch**: `feature/004-agent-registry`
 **Created**: 2026-05-22
-**Status**: Draft
+**Status**: Accepted
 **Input**: 用户描述：「管理 Coffer 已知的本地安装 AI agent，让后续功能（skills、memory、knowledge base）能向它们投递资产。每个 agent 都是 kind-agnostic Resource 框架（由 spec 001-mcp-gateway 引入）下 kind 为 `agent` 的一种 Resource。v1 支持两种 agent 类型：Claude Code 与 OpenAI Codex——每种都同时涵盖其 CLI 与桌面/IDE 形态，因为它们共享同一份磁盘配置。除注册 agent 外，用户还能查看并编辑每个 agent 的已知配置文件，并一键把 Coffer 自己的 MCP server 安装到某个 agent 上。」
 
 > **关于 agent 类型的说明。** v1 恰好涵盖两个产品：**Claude Code**（`claude_code`）与 **OpenAI Codex**（`codex`）。每种都同时覆盖其 CLI _与_ app/IDE 形态，因为它们读取同一个共享配置目录——Claude Code 用 `~/.claude/`，Codex 用 `~/.codex/`。独立的 **Claude Desktop** 聊天应用（拥有自己的 `~/Library/Application Support/Claude/` 配置）与 **Cursor** 不在 v1 范围内；将来若要支持，会作为各自独立的 agent 类型、带各自的配置文件 allowlist 加入。

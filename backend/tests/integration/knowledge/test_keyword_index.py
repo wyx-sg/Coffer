@@ -79,6 +79,33 @@ async def test_keyword_search_scopes_by_kind(substrate) -> None:
 
 
 @pytest.mark.asyncio
+async def test_same_document_id_in_two_stores_does_not_collide(substrate) -> None:
+    """Document ids are content-addressed, so the same file ingested into two
+    stores repeats its id. Indexing the second store must not steal/re-tag the
+    first store's chunk + FTS rows, and deleting the document from one store
+    must not wipe the other's index (P0: cross-KB chunk-id collision)."""
+    await substrate.repo.upsert_document(_doc("dd", "kb1", "One"))
+    await substrate.repo.upsert_document(_doc("dd", "kb2", "Two"))
+    idx1 = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    idx2 = substrate.index(KIND_KNOWLEDGE_BASE, "kb2")
+    await idx1.upsert_chunks("dd", ["shared mango content"], None)
+    await idx2.upsert_chunks("dd", ["shared mango content"], None)
+
+    kb1_hits = await idx1.keyword_search("kb1", "mango", top_k=5)
+    kb2_hits = await idx2.keyword_search("kb2", "mango", top_k=5)
+    assert {h.document_id for h in kb1_hits} == {"dd"}
+    assert {h.document_id for h in kb2_hits} == {"dd"}
+    assert {h.title for h in kb1_hits} == {"One"}
+    assert {h.title for h in kb2_hits} == {"Two"}
+
+    # Deleting the shared document from kb2 must leave kb1's index intact.
+    await idx2.delete_chunks("dd")
+    kb1_after = await idx1.keyword_search("kb1", "mango", top_k=5)
+    assert {h.document_id for h in kb1_after} == {"dd"}
+    assert await idx2.keyword_search("kb2", "mango", top_k=5) == []
+
+
+@pytest.mark.asyncio
 async def test_reindex_replaces_chunks(substrate) -> None:
     await substrate.repo.upsert_document(_doc("d1", "kb1", "A"))
     idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")

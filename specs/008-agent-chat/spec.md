@@ -1,5 +1,7 @@
 # Feature Specification: Agent Chat
 
+> 中文版: [spec.zh.md](./spec.zh.md)
+
 **Feature Branch**: `feature/agent-chat`
 **Created**: 2026-05-22
 **Status**: Draft
@@ -24,16 +26,21 @@ It delivers two things at once:
    is reached only through that registry, so adding another kind of agent is a
    new registry entry, not a change to the chat page, the persistence layer, or
    the REST/SSE contract.
-2. **One agent on that platform.** Coffer's built-in general-purpose agent,
+2. **Agents on that platform.** Coffer's built-in general-purpose agent,
    "Coffer Assistant" — an in-process agentic loop, driven by the user's own
    MCP servers, skills, memory, and knowledge bases through Coffer's MCP
-   gateway, on a user-configured LLM provider.
+   gateway, on a user-configured LLM provider — **plus** two CLI-backed agents,
+   **Claude Code** and **Codex**, each driven by its installed command-line tool
+   in a working directory the user picks per conversation. The CLI agents are
+   what keep the seam honest: they are real second and third providers, not a
+   promise, and they prove that adding an agent is one registry entry with no
+   change to the chat surface, persistence, or the wire contract.
 
-The platform pieces and the built-in agent are co-delivered because a platform
-with no agent cannot be exercised, and an agent with no platform cannot be
-reached. Every platform capability that the built-in agent does not itself
-need — the approval channel above all — still ships complete and is proven
-end-to-end, so the seam is real on the day it lands rather than a promise.
+The platform pieces and its agents are co-delivered because a platform with no
+agent cannot be exercised, and an agent with no platform cannot be reached.
+Every platform capability that the built-in agent does not itself need — the
+approval channel above all — still ships complete and is proven end-to-end, so
+the seam is real on the day it lands rather than a promise.
 
 ## User Scenarios & Testing
 
@@ -113,7 +120,7 @@ that completes without error and is still visible after reload.
 
 The user asks the built-in agent something that needs their own data ("what do
 my notes say about OAuth?"). The agent calls tools through Coffer's MCP
-gateway — upstream MCP server tools, `coffer__search_memory`, `coffer__kb_search`,
+gateway — upstream MCP server tools, `coffer__recall`, `coffer__search_knowledge`,
 `coffer__load_skill` — and each call appears in the message stream as an inline,
 expandable card showing the tool name, status, inputs, and result.
 
@@ -121,7 +128,7 @@ expandable card showing the tool name, status, inputs, and result.
 rather than a generic chat box — it dogfoods the vault.
 
 **Independent Test**: With a memory store holding a known record, ask the agent a
-question answerable only from that record; observe a `coffer__search_memory`
+question answerable only from that record; observe a `coffer__recall`
 tool-call card in the stream and an answer grounded in the record.
 
 **Covering scenarios**:
@@ -368,7 +375,7 @@ referenced by at least one test marked
 
 - **Given** a memory store containing a record that answers a question,
 - **When** the user asks that question,
-- **Then** the turn includes a `coffer__search_memory` tool call rendered as an
+- **Then** the turn includes a `coffer__recall` tool call rendered as an
   inline expandable card, and the answer is grounded in the record.
 
 ### Scenario: skills are reachable as tools
@@ -491,14 +498,26 @@ referenced by at least one test marked
 - **FR-005**: An agent is addressed for a turn through an **agent adapter** that
   is self-contained: given only the conversation history and an approval
   channel, it yields a stream of typed turn events. The adapter carries its own
-  model, tools, and configuration; the orchestrator MUST NOT inject them. v1
-  ships exactly one agent — the built-in agent — behind this seam.
+  model, tools, and configuration; the orchestrator MUST NOT inject them. The
+  platform ships three agents behind this seam — the built-in agent plus two
+  CLI-backed agents (Claude Code, Codex) — so the seam is validated by real
+  additional providers, not a single occupant.
+- **FR-005a**: System MUST ship CLI-backed agent providers for Claude Code and
+  Codex. Each is configured per conversation by a working directory (its
+  `agent_config.cwd`), which MUST be an existing directory or the configuration
+  is rejected. A CLI agent's availability MUST reflect whether its command-line
+  binary is resolvable on the daemon's PATH; an unavailable agent is listed but
+  not selectable. A CLI turn MUST run the tool in that directory, stream its
+  line-delimited JSON output mapped onto the platform's turn events, and persist
+  the upstream session id so the next turn continues the same session. v1 runs
+  the CLI under its own permission mode (no per-call approval bridging yet).
 
 **Built-in agent & agentic loop**
 
-- **FR-006**: System MUST ship exactly one built-in general-purpose agent,
-  "Coffer Assistant", defined in code (identity, system prompt, default
-  behaviour). v1 provides no creation, editing, or deletion of agents.
+- **FR-006**: System MUST ship a built-in general-purpose agent, "Coffer
+  Assistant", defined in code (identity, system prompt, default behaviour).
+  Agents are defined in code and registered at startup; there is no creation,
+  editing, or deletion of agents through the API.
 - **FR-007**: System MUST run the built-in agent as an in-process agentic loop:
   call the selected LLM, execute any requested tools, feed results back, and
   repeat until the model yields a final answer or a bound is hit.
@@ -540,12 +559,15 @@ referenced by at least one test marked
 - **FR-016a**: Users MUST be able to archive a conversation and restore it. An
   archived conversation is excluded from the default (active) list, retrievable
   through an archived listing, and not destroyed; archiving is reversible and
-  distinct from deletion. The conversation history MUST be searchable by title.
-- **FR-016b**: Conversations MUST be a retention-managed store: the user can set
-  a retention window for chat conversations under Settings → Data, after which
-  the retention worker prunes conversations (and their messages) older than the
-  window by last activity. The default is keep-forever — chat content is never
-  auto-deleted until the user opts in.
+  distinct from deletion. The conversation history MUST be searchable by title,
+  and the active/archived views MUST be switchable from an in-list filter.
+- **FR-016b**: Conversations MUST follow a two-stage, retention-managed lifecycle,
+  both windows configurable under Settings → Data: (1) the retention worker
+  auto-archives conversations with no new message for the auto-archive window
+  (default 7 days), and (2) deletes archived conversations (and their messages)
+  the configured number of days after they were archived (default 30 days).
+  Either window may be set to keep-forever to disable that stage; auto-archiving
+  is reversible (the user can restore) and only deletion is destructive.
 - **FR-017**: A message MUST store its role and an ordered list of content blocks
   of types `text`, `tool_use`, and `tool_result`; assistant messages MUST also
   store token usage and the model that produced them when the agent reports one.
@@ -681,7 +703,7 @@ referenced by at least one test marked
 - The application shell from spec 002-ui-shell — sidebar IA, layout, routing,
   design system, and the Settings layout — is in place; the Chat page and the
   Settings → Models page render within that shell.
-- Memory and knowledge-base tools (`coffer__search_memory`, `coffer__kb_search`,
+- Memory and knowledge-base tools (`coffer__recall`, `coffer__search_knowledge`,
   and siblings) already exist as gateway built-in tools from specs 005–006; this
   spec consumes them and does not redefine them.
 - The built-in agent's agentic loop is implemented with the LangGraph framework

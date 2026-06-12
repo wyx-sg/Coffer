@@ -3,7 +3,7 @@
 > English: [spec.md](./spec.md)
 
 **Feature Branch**: `feature/003-mcp-gateway-desktop`（在 `feature/002-mcp-gateway-web` 之上）
-**Status**: Draft
+**Status**: Accepted
 **Input**：002-ui-shell 交付了 Web UI，但明确把 spec 002 的 User Story 5（桌面外壳）的两个验收场景 —— 登录时启动（launch-at-login）与关闭到托盘（close-to-tray）—— 延期到本规范。本规范承接这两个场景，并交付让它们工作的 Tauri 桌面包装与分发流水线。
 
 **范围说明**：Coffer 的用户可见 UI 由 002-ui-shell 拥有（Web 外壳、视觉语言、信息架构）。本规范新增的是**桌面包装层** —— Tauri 2 外壳、daemon 监管、托盘图标、autostart 插件、PyInstaller sidecar 打包、以及一条「公证就绪」的 macOS 发布流水线（实际签名 / 公证延期到有 Apple Developer ID 之后；在此之前流水线发布的是未签名 bundle）。它不引入任何新的 resource kind，也不引入任何新的 UI 屏幕；来自 002 的 Web UI 在 Tauri 窗口中渲染，桌面专用的 `AppSettings` 组件透过 002 已经接好的 `isTauri()` 守卫激活。

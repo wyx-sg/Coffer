@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feature/004-agent-registry`
 **Created**: 2026-05-22
-**Status**: Draft
+**Status**: Accepted
 **Input**: User description: "Manage which locally-installed AI agents Coffer knows about, so later features (skills, memory, knowledge bases) can deliver assets to them. Each agent is a Resource of kind `agent` in the kind-agnostic Resource framework introduced by spec 001-mcp-gateway. v1 supports two agent types: Claude Code and OpenAI Codex — each covering both its CLI and its desktop/IDE form, which share one on-disk config. Beyond registering agents, the user can view and edit each agent's known config files and install Coffer's own MCP server into an agent with one click."
 
 > **Note on agent types.** v1 covers exactly two products: **Claude Code** (`claude_code`) and **OpenAI Codex** (`codex`). Each spans its CLI _and_ its app/IDE form because they read one shared config directory — Claude Code uses `~/.claude/`, Codex uses `~/.codex/`. The separate **Claude Desktop** chat app (its own `~/Library/Application Support/Claude/` config) and **Cursor** are out of scope for v1; either would be added later as its own agent type with its own config allowlist.

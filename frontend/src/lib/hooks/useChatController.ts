@@ -9,6 +9,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   useConversations,
   useArchivedConversations,
+  useConversation,
   useCreateConversation,
   useRenameConversation,
   useDeleteConversation,
@@ -28,9 +29,11 @@ export function useChatController() {
   const [showArchived, setShowArchived] = useState(false);
   // Draft top-bar selection (agent + model) before the conversation exists;
   // null until the user touches a selector — defaults are derived below.
-  const [draftConfig, setDraftConfig] = useState<{ agentKey: string; modelId: string | null } | null>(
-    null,
-  );
+  const [draftConfig, setDraftConfig] = useState<{
+    agentKey: string;
+    modelId: string | null;
+    cwd: string;
+  } | null>(null);
   // After creating from the draft, the first message is sent once the turn hook
   // re-binds to the new conversation id (see effect below).
   const [pendingFirst, setPendingFirst] = useState<{ convId: string; text: string } | null>(null);
@@ -47,7 +50,21 @@ export function useChatController() {
   const archiveConv = useArchiveConversation();
   const unarchiveConv = useUnarchiveConversation();
 
-  const activeConv = conversations.find((c) => c.id === routeId) ?? null;
+  // Resolve the open conversation from the active list, the archived list,
+  // or — when neither has it (archived deep-link, archived list not loaded) —
+  // a by-id fetch. An archived or unknown id must never silently fall through
+  // to the draft surface, where typing would create a NEW conversation.
+  const listedConv =
+    conversations.find((c) => c.id === routeId) ??
+    archivedConversations.find((c) => c.id === routeId) ??
+    null;
+  const needsLookup = !!routeId && !convLoading && !listedConv;
+  const lookup = useConversation(needsLookup && routeId ? routeId : "");
+  const activeConv = listedConv ?? (needsLookup ? (lookup.data ?? null) : null);
+  const activeLoading =
+    !!routeId && !activeConv && (convLoading || (needsLookup && lookup.isPending));
+  const activeNotFound = !!routeId && !activeConv && !activeLoading;
+  const activeArchived = !!activeConv?.archived_at;
   const activeAgent = activeConv
     ? agents.find((a) => a.agent_key === activeConv.agent_key)
     : undefined;
@@ -69,10 +86,11 @@ export function useChatController() {
   const effectiveDraft = draftConfig ?? {
     agentKey: agents.find((a) => a.available)?.agent_key ?? "builtin",
     modelId: defaultModelId,
+    cwd: "",
   };
 
   const startDraft = () => {
-    setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId: defaultModelId });
+    setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId: defaultModelId, cwd: "" });
     navigate("/chat");
   };
 
@@ -82,10 +100,17 @@ export function useChatController() {
   };
 
   const sendDraft = (text: string) => {
+    // The built-in agent is configured by model; CLI agents by working directory.
+    const agentConfig =
+      effectiveDraft.agentKey === "builtin"
+        ? effectiveDraft.modelId
+          ? { model_id: effectiveDraft.modelId }
+          : {}
+        : { cwd: effectiveDraft.cwd.trim() };
     createConv.mutate(
       {
         agent_key: effectiveDraft.agentKey,
-        agent_config: effectiveDraft.modelId ? { model_id: effectiveDraft.modelId } : {},
+        agent_config: agentConfig,
       },
       {
         onSuccess: (created) => {
@@ -125,13 +150,24 @@ export function useChatController() {
     models,
     agents,
     activeConv,
+    // Route-id resolution state: still resolving / definitively unknown.
+    activeLoading,
+    activeNotFound,
+    // True when the open conversation is archived (rendered read-only).
+    activeArchived,
     activeAgent,
     turn,
     effectiveDraft,
     setDraftAgent: (agentKey: string) =>
-      setDraftConfig({ agentKey, modelId: effectiveDraft.modelId }),
+      setDraftConfig({ agentKey, modelId: effectiveDraft.modelId, cwd: effectiveDraft.cwd }),
     setDraftModel: (modelId: string | null) =>
-      setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId }),
+      setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId, cwd: effectiveDraft.cwd }),
+    setDraftCwd: (cwd: string) =>
+      setDraftConfig({
+        agentKey: effectiveDraft.agentKey,
+        modelId: effectiveDraft.modelId,
+        cwd,
+      }),
     startDraft,
     selectConversation,
     sendDraft,
@@ -155,5 +191,6 @@ export function useChatController() {
     confirmArchive,
     archivePending: archiveConv.isPending,
     restoreConversation: (id: string) => unarchiveConv.mutate(id),
+    restorePending: unarchiveConv.isPending,
   };
 }

@@ -1,4 +1,14 @@
-"""Daemon bootstrap: allocate port + generate token + write/remove daemon.json."""
+"""Daemon bootstrap: allocate port + generate token + write/remove daemon.json.
+
+ADR-006 (detect-or-spawn) calls for a ``flock`` held while a freshly-spawned
+daemon decides whether to bind. :func:`acquire_or_existing` is that critical
+section: it takes an exclusive lock on ``~/.coffer/daemon.lock`` and, under it,
+probes :func:`live_daemon`, and only if none is live binds a port and writes
+``daemon.json``. Serialising probe+bind+write closes the check-then-act race in
+which two near-simultaneous auto-spawns each pass the probe, each bind a
+different free port, and the second's atomic ``os.replace`` clobbers
+``daemon.json`` — orphaning the first daemon.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +17,8 @@ import os
 import secrets
 import socket
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -21,8 +33,50 @@ _DAEMON_JSON_VERSION = 1
 _LIVENESS_PROBE_TIMEOUT: float = 2.0
 
 
+def _coffer_dir() -> Path:
+    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer"
+
+
 def _daemon_json_path() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "daemon.json"
+    return _coffer_dir() / "daemon.json"
+
+
+def _spawn_lock_path() -> Path:
+    return _coffer_dir() / "daemon.lock"
+
+
+@contextmanager
+def _spawn_lock() -> Iterator[int]:
+    """Hold an exclusive ``flock`` on ``~/.coffer/daemon.lock`` for the body.
+
+    ADR-006: this is the lock that serialises the probe+bind+write critical
+    section so two racing auto-spawns can't both bind. On Windows (no
+    ``fcntl``) the lock degrades to a no-op — the daemon's own
+    ``live_daemon`` refusal in ``acquire_or_existing`` plus the atomic
+    ``os.replace`` remain as the last line of defence there.
+
+    Yields the held lockfile fd; the lock is released (and the fd closed) on
+    exit. The lockfile itself is intentionally left on disk between runs — a
+    flock is advisory and tied to the open fd, not the file's existence.
+    """
+    lock_path = _spawn_lock_path()
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - Windows fallback
+        try:
+            yield fd
+        finally:
+            os.close(fd)
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield fd
+    finally:
+        with contextlib.suppress(OSError):
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
 
 
 def live_daemon() -> DaemonInfo | None:
@@ -34,7 +88,9 @@ def live_daemon() -> DaemonInfo | None:
     refuses to start a duplicate when one is already serving. Without this
     guard, two near-simultaneous auto-spawns (CLI + shim, or two clients) each
     bind a different free port and the second's ``os.replace`` clobbers
-    daemon.json — orphaning the first daemon.
+    daemon.json — orphaning the first daemon. The probe runs under the spawn
+    lock (see :func:`acquire_or_existing`) so the decision is atomic with the
+    bind that follows it.
 
     Confirmation hits the auth-exempt ``/daemon/status`` endpoint (the same
     probe the shim's ``_wait_for_daemon`` uses), NOT a bare TCP connect: after
@@ -72,6 +128,11 @@ def acquire() -> tuple[DaemonInfo, socket.socket]:
     pass its fd to the server (uvicorn ``fd=sock.fileno()``) so the port is
     never released between publishing ``daemon.json`` and the server binding.
     The caller closes ``sock`` when the server stops.
+
+    Prefer :func:`acquire_or_existing`, which wraps this in the ADR-006 spawn
+    lock together with the duplicate-daemon probe. ``acquire`` is kept as the
+    lock-free primitive (and is called by ``acquire_or_existing`` while the
+    lock is held).
     """
     start, end = _port_range()
     sock = bind_free_socket(start=start, end=end)
@@ -89,8 +150,41 @@ def acquire() -> tuple[DaemonInfo, socket.socket]:
     return info, sock
 
 
+def acquire_or_existing() -> tuple[DaemonInfo, socket.socket | None]:
+    """ADR-006 spawn critical section, under the exclusive spawn lock.
+
+    Under ``~/.coffer/daemon.lock``:
+      1. probe :func:`live_daemon`;
+      2. if a daemon is already live, return ``(its info, None)`` WITHOUT
+         binding a second port (so daemon.json is never clobbered);
+      3. otherwise :func:`acquire` a port + write daemon.json and return
+         ``(info, sock)`` with the held socket.
+
+    Holding the lock across probe+bind+write is what closes the
+    check-then-act race that orphans daemons; the caller passes the returned
+    socket's fd to uvicorn (when non-None) or exits cleanly (when None).
+    """
+    with _spawn_lock():
+        existing = live_daemon()
+        if existing is not None:
+            return existing, None
+        return acquire()
+
+
 def release() -> None:
-    """Best-effort removal of daemon.json on shutdown."""
+    """Remove daemon.json on shutdown — but ONLY if it still records our pid.
+
+    A daemon orphaned by a racing spawn (its daemon.json already clobbered to
+    point at the winner) must not delete the *live* daemon's discovery file on
+    its way out. We read the pid first and unlink only when it is ours; an
+    absent or malformed file is left untouched.
+    """
     path = _daemon_json_path()
+    try:
+        info = read(path)
+    except (FileNotFoundError, ValueError, KeyError, OSError):
+        return  # absent or malformed → nothing we can prove is ours
+    if info.pid != os.getpid():
+        return  # belongs to another (live) daemon — do not clobber
     with contextlib.suppress(OSError):
         path.unlink(missing_ok=True)

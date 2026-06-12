@@ -27,11 +27,15 @@ into `~/.coffer/bin`:
 - **`coffer-daemon`** — the long-lived background process that aggregates upstream MCP servers
 - **`coffer-mcp-shim`** — the stdio bridge that MCP clients (Claude Code, Cursor, …) talk to
 
-### macOS / Linux
+### macOS (Apple Silicon)
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
+
+Coffer ships macOS (Apple Silicon) builds only. On Linux or Intel macOS the
+installer stops with a friendly message pointing at the
+[from-source install](#from-source-developers).
 
 The script adds `~/.coffer/bin` to your `PATH` automatically (shell profile). Open a new
 terminal — all three binaries are available.
@@ -50,11 +54,7 @@ Every release publishes a `SHA256SUMS` file. The installer verifies the download
 To check manually:
 
 ```sh
-# macOS
 shasum -a 256 -c SHA256SUMS
-
-# Linux
-sha256sum -c SHA256SUMS
 ```
 
 ### Post-install: connect an MCP client
@@ -95,24 +95,21 @@ required. Recommended for workstation use.
 Go to the [GitHub Releases page](https://github.com/wyx-sg/Coffer/releases/latest) and pick
 the file for your platform:
 
-| Platform                          | File                              |
-| --------------------------------- | --------------------------------- |
-| macOS Apple silicon (M-series)    | `Coffer_<version>_aarch64.dmg`    |
-| Linux x64 (AppImage, recommended) | `Coffer_<version>_amd64.AppImage` |
-| Linux x64 (deb)                   | `coffer_<version>_amd64.deb`      |
+| Platform                        | File                                    |
+| ------------------------------- | --------------------------------------- |
+| macOS Apple silicon (M-series)  | `Coffer_<version>_aarch64-unsigned.dmg` |
 
-Each file has a `.sha256` sibling. Verify before running:
+Coffer ships macOS (Apple Silicon) builds only. The `-unsigned` suffix marks
+the DMG as not yet notarised (see [macOS Gatekeeper](#macos-gatekeeper-unsigned-notarisation-pending)).
+Verify the download against the release's `SHA256SUMS` file before running:
 
 ```sh
-# macOS / Linux
-shasum -a 256 -c SHA256SUMS   # or sha256sum -c SHA256SUMS on Linux
+shasum -a 256 -c SHA256SUMS
 ```
 
 ### Install
 
 - **macOS**: Open the DMG, drag **Coffer.app** to `/Applications`.
-- **Linux (AppImage)**: `chmod +x Coffer_<version>_amd64.AppImage`, then run it.
-- **Linux (deb)**: `sudo apt install ./coffer_<version>_amd64.deb`.
 
 ### macOS Gatekeeper (unsigned — notarisation pending)
 
@@ -137,7 +134,8 @@ Or right-click the app and pick **Open** for a one-time bypass.
 On first launch, the Desktop app:
 
 1. Starts the daemon on a free port (default 8000) and writes `~/.coffer/daemon.json`.
-2. Deploys `coffer-mcp-shim` to `~/.coffer/bin/` so MCP clients can find it.
+2. Deploys `coffer-mcp-shim` and `coffer-daemon` to `~/.coffer/bin/` so MCP clients can
+   find the shim — and the shim can auto-spawn the daemon even when the app isn't running.
 3. Opens the Web UI in the main window.
 
 Connect your MCP client:

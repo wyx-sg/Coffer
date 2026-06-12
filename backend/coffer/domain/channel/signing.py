@@ -16,6 +16,12 @@ def seatalk_signature(body: bytes, signing_secret: str) -> str:
 
 
 def verify_seatalk_signature(body: bytes, signing_secret: str, signature: str) -> bool:
-    """Constant-time comparison of the presented signature."""
+    """Constant-time comparison of the presented signature.
+
+    An empty secret would collapse the MAC to ``sha256(body)`` — computable by
+    anyone — so it never verifies; neither does an empty signature.
+    """
+    if not signing_secret or not signature.strip():
+        return False
     expected = seatalk_signature(body, signing_secret)
     return hmac.compare_digest(expected, signature.strip().lower())

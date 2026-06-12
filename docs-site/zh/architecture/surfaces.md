@@ -97,7 +97,7 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 
 **生命周期。** 桌面应用应用 detect-or-spawn 模式：启动时读取 `daemon.json`；如果守护进程已在运行，则连接；如果没有，则将 `coffer-daemon` 作为分离进程启动（POSIX 上的 `setsid`）并等待 `daemon.json` 出现。关闭主窗口会将其隐藏到系统托盘——守护进程保持运行。从托盘选择「退出」退出桌面进程。守护进程在桌面应用退出时的命运取决于是否还有其他入口点（shim、CLI）仍在使用它；分离的守护进程在桌面应用退出后继续存活。
 
-桌面应用还在每次启动时将捆绑的 `coffer-mcp-shim` 二进制文件幂等地部署到稳定的用户可写 PATH 目录（macOS 和 Linux 上的 `~/.coffer/bin/`），使用大小不匹配启发式来检测升级。这确保了在第一次桌面启动后 `coffer-mcp-shim` 始终在 PATH 上，而无需用户手动编辑 shell 配置文件。
+桌面应用还在每次启动时将捆绑的 `coffer-mcp-shim` 与 `coffer-daemon` 二进制文件幂等地部署到稳定的用户可写 PATH 目录（macOS 和 Linux 上的 `~/.coffer/bin/`），使用大小/mtime/版本哨兵的过期检查来检测升级。这确保了在第一次桌面启动后 `coffer-mcp-shim` 始终在 PATH 上——其 detect-or-spawn 也能找到同目录的 `coffer-daemon`——而无需用户手动编辑 shell 配置文件。
 
 **安全边界。** 与 Web UI 相同：每个 API 调用携带 `X-Coffer-Token`，仅限 loopback 的守护进程，本地用户账号信任边界。桌面应用将 `coffer-daemon` 和 `coffer-mcp-shim` 捆绑为 PyInstaller sidecar——运行时不依赖系统 Python。
 

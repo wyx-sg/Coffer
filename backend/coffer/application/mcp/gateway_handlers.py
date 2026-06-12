@@ -14,6 +14,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
+import mcp.types as mcp_types
+from mcp import McpError
+
 from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
@@ -58,6 +61,26 @@ def _safe_error_summary(e: BaseException) -> str:
     if isinstance(e, CofferError):
         return f"{type(e).__name__}: {e}"
     return type(e).__name__
+
+
+def _is_transport_failure(e: BaseException) -> bool:
+    """True when an upstream request failure should self-heal by evicting the
+    connection (transport/process death), False when the upstream answered.
+
+    A well-formed ``McpError`` is a protocol-level JSON-RPC error: the request
+    reached the upstream, the tool ran, and it returned an error result. The
+    connection is healthy — evicting it would kill+respawn a perfectly good
+    server on every tool that returns an error.
+
+    The one exception is the SDK's ``CONNECTION_CLOSED`` (-32000) McpError: the
+    SDK raises that when the transport itself died mid-request (a crashed
+    subprocess, a dropped pipe), so despite being an McpError it IS a transport
+    failure and must self-heal. Everything that is not an McpError (a raw pipe
+    error, a dead-process exception) is likewise a transport failure.
+    """
+    if isinstance(e, McpError):
+        return e.error.code == mcp_types.CONNECTION_CLOSED
+    return True
 
 
 async def check_capability_enabled(
@@ -175,13 +198,17 @@ async def _invoke(
     except Exception as e:
         status = "error"
         error_msg = _safe_error_summary(e)
-        # Evict the broken connection so the next call triggers a respawn.
-        await supervisor.evict(server_name)
-        # Discard the subscription so _ensure_subscribed re-registers the
-        # callback on the fresh connection spawned by the next call.
-        if on_evict is not None:
-            with contextlib.suppress(Exception):
-                on_evict(server_name)
+        # Only self-heal on a transport/process failure. A well-formed McpError
+        # means the tool ran and returned an error result over a healthy
+        # connection — evicting it would needlessly kill+respawn a good server.
+        if _is_transport_failure(e):
+            # Evict the broken connection so the next call triggers a respawn.
+            await supervisor.evict(server_name)
+            # Discard the subscription so _ensure_subscribed re-registers the
+            # callback on the fresh connection spawned by the next call.
+            if on_evict is not None:
+                with contextlib.suppress(Exception):
+                    on_evict(server_name)
         raise
     finally:
         duration_ms = int((clock() - started).total_seconds() * 1000)

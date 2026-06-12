@@ -325,8 +325,8 @@ describe("useChatTurn", () => {
     act(() => {
       void result.current.send("hi");
     });
-    await waitFor(() => expect(result.current.isStreaming).toBe(true));
-    expect(result.current.liveMessage?.text).toBe("partial A");
+    await waitFor(() => expect(result.current.liveMessage?.text).toBe("partial A"));
+    expect(result.current.isStreaming).toBe(true);
 
     // Switch to a different conversation while conv-A is still streaming.
     act(() => {
@@ -412,6 +412,62 @@ describe("useChatTurn", () => {
     });
 
     expect(chatApiMock.interruptTurn).toHaveBeenCalledWith("conv-9");
+  });
+
+  test("send() exposes the just-sent user text as an optimistic echo while the turn streams", async () => {
+    // P0-4: without the echo, the prompt is invisible until the next messages
+    // fetch — the reply streams to a question the user cannot see.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    streamChatTurnMock.mockImplementation(async function* () {
+      yield { event: "turn_start", data: {} };
+      await gate;
+      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+    });
+
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    let sendPromise!: Promise<void>;
+    act(() => {
+      sendPromise = result.current.send("what is OAuth?");
+    });
+
+    // The prompt is part of the live state before any reply token arrives.
+    await waitFor(() => expect(result.current.liveMessage?.userText).toBe("what is OAuth?"));
+
+    release();
+    await act(async () => {
+      await sendPromise;
+    });
+    expect(result.current.liveMessage).toBeNull();
+  });
+
+  test("turn_error refetches messages so the persisted user message and failed turn appear", async () => {
+    // P0-4: the messages query was only invalidated on stream success, so a
+    // failed turn left the persisted user message + failed row hidden.
+    streamChatTurnMock.mockImplementation(async function* () {
+      yield { event: "turn_start", data: {} };
+      yield { event: "turn_error", data: { code: "MODEL_ERROR", message: "provider failed" } };
+    });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.error).toBeInstanceOf(ApiError);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["messages", "conv-1"] });
+    // The live bubble is dropped — the persisted failed row is authoritative.
+    expect(result.current.liveMessage).toBeNull();
   });
 
   test("invalidates the conversations list when a turn ends, so the auto-generated title appears", async () => {

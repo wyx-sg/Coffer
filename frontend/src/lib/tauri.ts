@@ -67,3 +67,18 @@ export async function restartDaemon(): Promise<RestartResult> {
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<RestartResult>("restart_daemon");
 }
+
+/**
+ * Whether the running daemon's reported version matches the version this app
+ * build expects. The desktop app bundles its daemon, so a mismatch means the
+ * app is talking to a stale daemon a previous app version left detached and
+ * listening (P2: version skew). Returns `true` outside Tauri (browser dev),
+ * where there is no app/daemon pairing to check.
+ */
+export async function daemonVersionMatches(daemonVersion: string): Promise<boolean> {
+  if (!isTauri()) {
+    return true;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<boolean>("daemon_version_matches", { daemonVersion });
+}

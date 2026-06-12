@@ -1,5 +1,7 @@
 # Research — 008 Agent Chat
 
+> 中文版: [research.zh.md](./research.zh.md)
+
 Design decisions for the chat platform and the built-in agent. The first four
 items are the platform-seam decisions of this revision; the rest record the
 still-standing decisions of the built-in agent.

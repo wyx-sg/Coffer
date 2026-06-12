@@ -95,7 +95,7 @@ acceptance("008-agent-chat", "manage conversations", async ({ page }) => {
     // The "Chat" sidebar entry exists and navigates to /chat.
     await page.getByRole("link", { name: /^Chat$/i }).first().click();
     await expect(page).toHaveURL(/\/chat/);
-    await expect(page.getByText("Conversations", { exact: true })).toBeVisible({
+    await expect(page.getByRole("tab", { name: /^Active$/i })).toBeVisible({
       timeout: 10_000,
     });
 
@@ -115,7 +115,7 @@ acceptance(
   "choose an agent when starting a conversation",
   async ({ page }) => {
     await page.goto("/chat");
-    await expect(page.getByText("Conversations", { exact: true })).toBeVisible({
+    await expect(page.getByRole("tab", { name: /^Active$/i })).toBeVisible({
       timeout: 10_000,
     });
 
@@ -135,7 +135,7 @@ acceptance("008-agent-chat", "no-model empty state", async ({ page }) => {
   await deleteAllModels();
 
   await page.goto("/chat");
-  await expect(page.getByText("Conversations", { exact: true })).toBeVisible({
+  await expect(page.getByRole("tab", { name: /^Active$/i })).toBeVisible({
     timeout: 10_000,
   });
 
@@ -172,7 +172,7 @@ acceptance(
     const modelId = await registerOllamaModel(`e2e-stream-${Date.now()}`);
     try {
       await page.goto("/chat");
-      await expect(page.getByText("Conversations", { exact: true })).toBeVisible({
+      await expect(page.getByRole("tab", { name: /^Active$/i })).toBeVisible({
         timeout: 10_000,
       });
 

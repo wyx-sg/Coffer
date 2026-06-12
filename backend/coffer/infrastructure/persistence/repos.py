@@ -7,23 +7,24 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy.exc
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from coffer.domain.audit import AuditEntry
 from coffer.domain.embedding_config import SINGLETON_ID, GlobalEmbeddingConfig
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.domain.retention import RetentionPolicy
 from coffer.infrastructure.persistence.models import (
     AuditLogModel,
     EmbeddingConfigModel,
     ResourceModel,
-    RetentionPolicyModel,
 )
 from coffer.infrastructure.persistence.retention import UnknownPrunableTable  # re-export
+from coffer.infrastructure.persistence.retention_repo import (
+    SqlAlchemyRetentionRepo,  # re-export (split out for file-size budget)
+)
 
-__all__ = ["UnknownPrunableTable"]
+__all__ = ["SqlAlchemyRetentionRepo", "UnknownPrunableTable"]
 
 
 def _to_domain(row: ResourceModel) -> Resource:
@@ -200,134 +201,6 @@ class SqlAlchemyAuditRepo:
             stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
             return [_audit_to_domain(r) for r in rows]
-
-
-# === SqlAlchemyRetentionRepo (T024) ===
-
-
-# Allowlists for delete_older_than. The keys are tables that may be pruned;
-# the values are the only timestamp-column names allowed for that table.
-# These are populated by the application layer through registration; for
-# now, the kind-agnostic core seeds the audit_log entry, and Phase 3 will
-# add `mcp_invocations`.
-_PRUNABLE_TABLE_ALLOWLIST: dict[str, set[str]] = {
-    "audit_log": {"timestamp"},
-    "mcp_invocations": {"timestamp"},
-    # Conversations prune whole threads by last activity; their messages are
-    # deleted alongside (see delete_older_than's conversations special-case).
-    "conversations": {"updated_at"},
-}
-
-
-def _retention_to_domain(row: RetentionPolicyModel) -> RetentionPolicy:
-    return RetentionPolicy(
-        table_name=row.table_name,
-        retention_days=row.retention_days,
-        last_pruned_at=row.last_pruned_at.replace(tzinfo=UTC)
-        if row.last_pruned_at is not None
-        else None,
-        last_pruned_rows=row.last_pruned_rows,
-        updated_at=row.updated_at.replace(tzinfo=UTC) if row.updated_at else datetime.now(tz=UTC),
-    )
-
-
-class SqlAlchemyRetentionRepo:
-    """Concrete RetentionRepo against the `retention_policies` table.
-
-    `delete_older_than` validates table+column against
-    `_PRUNABLE_TABLE_ALLOWLIST` before constructing any SQL. Never accepts
-    user-supplied table names — only values registered at composition root.
-    """
-
-    def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
-        self._sm = sm
-
-    async def get(self, table_name: str) -> RetentionPolicy:
-        async with self._sm() as session:
-            stmt = select(RetentionPolicyModel).where(RetentionPolicyModel.table_name == table_name)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is None:
-                raise UnknownPrunableTable(f"no retention policy registered for {table_name!r}")
-            return _retention_to_domain(row)
-
-    async def list(self) -> list[RetentionPolicy]:
-        async with self._sm() as session:
-            rows = (await session.execute(select(RetentionPolicyModel))).scalars().all()
-            return [_retention_to_domain(r) for r in rows]
-
-    async def upsert(self, table_name: str, retention_days: int | None) -> None:
-        async with self._sm() as session:
-            stmt = select(RetentionPolicyModel).where(RetentionPolicyModel.table_name == table_name)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            now = datetime.now(tz=UTC)
-            if row is None:
-                session.add(
-                    RetentionPolicyModel(
-                        table_name=table_name,
-                        retention_days=retention_days,
-                        last_pruned_at=None,
-                        last_pruned_rows=0,
-                        updated_at=now,
-                    )
-                )
-            else:
-                row.retention_days = retention_days
-                row.updated_at = now
-            await session.commit()
-
-    async def update_retention(self, table_name: str, retention_days: int | None) -> None:
-        async with self._sm() as session:
-            stmt = select(RetentionPolicyModel).where(RetentionPolicyModel.table_name == table_name)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is None:
-                raise UnknownPrunableTable(f"no retention policy registered for {table_name!r}")
-            row.retention_days = retention_days
-            row.updated_at = datetime.now(tz=UTC)
-            await session.commit()
-
-    async def touch_pruned(self, table_name: str, rows: int) -> None:
-        async with self._sm() as session:
-            stmt = select(RetentionPolicyModel).where(RetentionPolicyModel.table_name == table_name)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is None:
-                raise UnknownPrunableTable(f"no retention policy registered for {table_name!r}")
-            row.last_pruned_at = datetime.now(tz=UTC)
-            row.last_pruned_rows = rows
-            await session.commit()
-
-    async def delete_older_than(
-        self,
-        table: str,
-        timestamp_column: str,
-        cutoff: datetime,
-    ) -> int:
-        allowed_columns = _PRUNABLE_TABLE_ALLOWLIST.get(table)
-        if allowed_columns is None or timestamp_column not in allowed_columns:
-            raise UnknownPrunableTable(
-                f"table/column not in allowlist: ({table!r}, {timestamp_column!r})"
-            )
-        async with self._sm() as session:
-            if table == "conversations":
-                # A conversation owns its messages; pruning a thread must take
-                # them with it (chat_messages has no DB-level cascade), so delete
-                # the messages of the to-be-pruned threads first, in the same txn.
-                await session.execute(
-                    text(
-                        "DELETE FROM chat_messages WHERE conversation_id IN "
-                        f"(SELECT id FROM conversations WHERE {timestamp_column} < :cutoff)"
-                    ),
-                    {"cutoff": cutoff},
-                )
-            stmt = text(f"DELETE FROM {table} WHERE {timestamp_column} < :cutoff")
-            result = await session.execute(stmt, {"cutoff": cutoff})
-            await session.commit()
-            return int(result.rowcount or 0)
-
-    async def exists(self, table_name: str) -> bool:
-        async with self._sm() as session:
-            stmt = select(RetentionPolicyModel).where(RetentionPolicyModel.table_name == table_name)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            return row is not None
 
 
 def _embedding_to_domain(row: EmbeddingConfigModel) -> GlobalEmbeddingConfig:

@@ -1,12 +1,13 @@
 // frontend/src/pages/ChannelDetailPage.tsx — one channel's operating surface
-// (spec 009, User Stories 2 + 8): enable/disable + delete in the header
+// (spec 009, User Stories 2 + 8): edit / enable-disable / delete in the header
 // (mirrors McpServerDetailPage), a live status card (adapter, paired peer),
-// the pairing-code generator, and — for SeaTalk — the callback endpoint to
-// point a tunnel at. Status auto-refreshes while the page is open.
+// the pairing-code generator, a send-test-message card wired to the notify
+// capability, and — for SeaTalk — the callback endpoint to point a tunnel at.
+// Status auto-refreshes while the page is open.
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,15 @@ import {
   ChannelCallbackCard,
   ChannelPairingCard,
   ChannelStatusCard,
+  ChannelTestMessageCard,
 } from "@/kinds/channel/ChannelDetailCards";
-import { useChannelStatus, useIssuePairingCode, CHANNEL_KIND } from "@/lib/hooks/useChannels";
+import { EditChannelDialog } from "@/kinds/channel/EditChannelDialog";
+import {
+  useChannelStatus,
+  useIssuePairingCode,
+  useNotifyChannel,
+  CHANNEL_KIND,
+} from "@/lib/hooks/useChannels";
 import {
   useDeleteResource,
   useDisableResource,
@@ -35,10 +43,12 @@ export function ChannelDetailPage() {
   // (or an adapter restart) shows up without a manual refresh.
   const { data: status } = useChannelStatus(name, { poll: true });
   const pairing = useIssuePairingCode(name);
+  const notify = useNotifyChannel(name);
   const enable = useEnableResource();
   const disable = useDisableResource();
   const del = useDeleteResource();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   if (isPending) {
     return (
@@ -95,6 +105,14 @@ export function ChannelDetailPage() {
           <Button
             size="sm"
             variant="outline"
+            onClick={() => setEditOpen(true)}
+            aria-label={t("channels.edit.title")}
+          >
+            <Pencil className="mr-1.5 size-3.5" /> {t("common.edit")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             onClick={() => setDeleteOpen(true)}
             aria-label={t("channels.deleteTitle")}
             className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
@@ -128,6 +146,14 @@ export function ChannelDetailPage() {
       </div>
 
       {status?.callback ? <ChannelCallbackCard callback={status.callback} /> : null}
+
+      <ChannelTestMessageCard
+        hasPeer={status?.peer != null}
+        isPending={notify.isPending}
+        onSend={(text) => notify.mutate(text)}
+      />
+
+      <EditChannelDialog open={editOpen} onOpenChange={setEditOpen} resource={resource} />
 
       <ConfirmDialog
         open={deleteOpen}

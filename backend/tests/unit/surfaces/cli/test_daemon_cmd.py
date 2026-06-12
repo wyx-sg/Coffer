@@ -66,20 +66,16 @@ def test_daemon_start_writes_pid_and_echoes(
     assert popen_args["cmd"][1:] == ["-m", "coffer.infrastructure.daemon.entry"]
 
 
-def test_daemon_start_short_circuits_when_already_running(
+def test_daemon_start_short_circuits_when_a_live_daemon_answers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """If daemon.json exists at start time, `daemon start` exits 0 with the
-    'already running' notice without invoking Popen."""
-    home = _setup_home(tmp_path, monkeypatch)
-    daemon_json = home / ".coffer" / "daemon.json"
-    daemon_json.parent.mkdir(parents=True, exist_ok=True)
-    daemon_json.write_text("{}")
+    """If a LIVE daemon answers (live_daemon() is not None), `daemon start`
+    exits 0 with the 'already running' notice without invoking Popen."""
+    _setup_home(tmp_path, monkeypatch)
 
-    invoked = {"popen": False}
+    monkeypatch.setattr(daemon_cmd.bootstrap, "live_daemon", lambda: _fake_info())
 
     def _bad_popen(*args: Any, **kwargs: Any) -> None:
-        invoked["popen"] = True
         raise AssertionError("Popen must not be invoked when daemon already running")
 
     monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _bad_popen)
@@ -88,7 +84,41 @@ def test_daemon_start_short_circuits_when_already_running(
         daemon_cmd.start()
     assert excinfo.value.exit_code == 0
     assert "already running" in capsys.readouterr().out
-    assert invoked["popen"] is False
+
+
+def test_daemon_start_respawns_over_stale_daemon_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A stale daemon.json (file present but no daemon answering) must NOT be
+    treated as 'already running': start() must spawn a fresh daemon. This is
+    the P1-1 fix — `daemon start` keys off live_daemon(), not file presence."""
+    home = _setup_home(tmp_path, monkeypatch)
+    daemon_json = home / ".coffer" / "daemon.json"
+    daemon_json.parent.mkdir(parents=True, exist_ok=True)
+    # Stale file left by a crashed daemon — present, but nothing is serving.
+    daemon_json.write_text(json.dumps({"port": 9999, "token": "t", "pid": 1, "version": 1}))
+
+    monkeypatch.setattr(daemon_cmd.bootstrap, "live_daemon", lambda: None)
+
+    spawned = {"popen": False}
+
+    class _FakeProc:
+        pid = 7777
+
+        def kill(self) -> None:
+            pass
+
+    def _fake_popen(cmd: list[str], **kwargs: Any) -> _FakeProc:
+        spawned["popen"] = True
+        # Child rewrites daemon.json with its own pid.
+        daemon_json.write_text(json.dumps({"port": 9998, "token": "t2", "pid": 7777, "version": 1}))
+        return _FakeProc()
+
+    monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _fake_popen)
+
+    daemon_cmd.start()
+    assert spawned["popen"] is True, "stale daemon.json must trigger a respawn"
+    assert "daemon started" in capsys.readouterr().out
 
 
 def test_daemon_start_fails_when_child_never_writes_daemon_json(
@@ -137,12 +167,13 @@ def _fake_info(port: int = 9000, pid: int = 5555) -> DaemonInfo:
 def test_daemon_stop_sends_sigterm_and_succeeds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """stop() resolves discover() -> info, sends SIGTERM to info.pid, then
-    waits for daemon.json to be removed."""
+    """stop() resolves discover() -> info, verifies the pid IS a coffer daemon,
+    sends SIGTERM to info.pid, then waits for daemon.json to be removed."""
     _setup_home(tmp_path, monkeypatch)
 
     info = _fake_info()
     monkeypatch.setattr(daemon_cmd._cli_client, "discover", lambda: info)
+    monkeypatch.setattr(daemon_cmd, "_pid_is_coffer_daemon", lambda pid: True)
 
     signals_sent: list[tuple[int, int]] = []
 
@@ -158,6 +189,33 @@ def test_daemon_stop_sends_sigterm_and_succeeds(
     assert signals_sent == [(info.pid, signal.SIGTERM)]
 
 
+def test_daemon_stop_does_not_sigterm_an_unverified_pid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """P1-1: if the recorded pid is NOT a coffer daemon (PID recycled onto an
+    unrelated process), stop() must NOT SIGTERM it. It cleans up the stale
+    daemon.json instead and reports the mismatch."""
+    home = _setup_home(tmp_path, monkeypatch)
+    daemon_json = home / ".coffer" / "daemon.json"
+    daemon_json.parent.mkdir(parents=True, exist_ok=True)
+    daemon_json.write_text("{}")
+
+    info = _fake_info()
+    monkeypatch.setattr(daemon_cmd._cli_client, "discover", lambda: info)
+    # The pid now belongs to some unrelated process.
+    monkeypatch.setattr(daemon_cmd, "_pid_is_coffer_daemon", lambda pid: False)
+
+    def _must_not_kill(pid: int, sig: int) -> None:
+        raise AssertionError("must NOT SIGTERM an unverified pid")
+
+    monkeypatch.setattr(daemon_cmd.os, "kill", _must_not_kill)
+
+    daemon_cmd.stop()
+    out = capsys.readouterr().out
+    assert "not a coffer daemon" in out.lower() or "stale" in out.lower()
+    assert not daemon_json.exists(), "stale daemon.json must be cleaned up"
+
+
 def test_daemon_stop_handles_already_gone_pid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -170,6 +228,7 @@ def test_daemon_stop_handles_already_gone_pid(
 
     info = _fake_info()
     monkeypatch.setattr(daemon_cmd._cli_client, "discover", lambda: info)
+    monkeypatch.setattr(daemon_cmd, "_pid_is_coffer_daemon", lambda pid: True)
 
     def _gone(pid: int, sig: int) -> None:
         raise ProcessLookupError
@@ -203,6 +262,7 @@ def test_daemon_stop_reports_failure_if_daemon_json_lingers(
     """If the daemon never removes daemon.json after SIGTERM, stop() exits 1."""
     _setup_home(tmp_path, monkeypatch)
     monkeypatch.setattr(daemon_cmd._cli_client, "discover", lambda: _fake_info())
+    monkeypatch.setattr(daemon_cmd, "_pid_is_coffer_daemon", lambda pid: True)
     monkeypatch.setattr(daemon_cmd.os, "kill", lambda pid, sig: None)
     monkeypatch.setattr(daemon_cmd, "_wait_for_daemon_json_gone", lambda path, timeout: False)
 

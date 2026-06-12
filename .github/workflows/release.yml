@@ -5,6 +5,13 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# One release run per tag. cancel-in-progress is false: a release that is
+# midway through publishing assets must not be killed by a re-trigger — let it
+# finish (the publish step is idempotent via --clobber).
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write # needed to attach artifacts to a GitHub Release
 
@@ -33,6 +40,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Frozen install from backend/uv.lock (same lockfile as CI), so the
+      # binaries shipped in a tagged release are built against the exact pinned
+      # dependency versions — reproducible, not the `>=` floors in pyproject.
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
@@ -55,14 +70,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.triple }}-cargo-
 
-      - name: install backend (includes pyinstaller via dev extras)
+      - name: install backend (frozen; includes pyinstaller via dev extras)
         shell: bash
-        run: |
-          python -m venv .venv
-          # Invoke pip as `python -m pip` (the recommended form). Quote the
-          # extras so bash doesn't glob `[dev]`.
-          .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install -e './backend[dev]'
+        # UV_PROJECT_ENVIRONMENT pins the venv to the repo-root .venv that
+        # build_binaries.sh probes ($REPO_ROOT/.venv/bin/python); --extra dev
+        # pulls pyinstaller. --frozen installs the exact backend/uv.lock pins.
+        env:
+          UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/.venv
+        run: uv sync --frozen --extra dev --project backend
 
       - name: install frontend deps
         working-directory: frontend

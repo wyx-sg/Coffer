@@ -23,7 +23,7 @@ Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "memory"`. 
 
 The embedding model is **mutable** — changing it re-embeds the store (files are truth). No immutability lock.
 
-The shape difference vs spec 006 is deliberate: 007 keeps the embedding fields **flat** so the memory surface stays a thin form, while 006 nests them in an `EmbeddingConfig` object (`MemoryStoreConfig.to_embedding_config()` projects the flat fields onto the shared object). Likewise the recall response's `fallback` is a **boolean** in 007 — recall spans multiple stores, so a single fallback-mode string is ill-defined — whereas 006's single-store search reports a nullable mode enum (`fallback: "keyword" | null`).
+The shape difference vs spec 006 is deliberate: 007 keeps the embedding fields **flat** so the memory surface stays a thin form, while 006 nests them in an `EmbeddingConfig` object. Since the global-embedding redesign the flat fields are legacy — accepted on the wire for compatibility but ignored; indexing and recall both resolve the **global** embedding config. Likewise the recall response's `fallback` is a **boolean** in 007 — recall spans multiple stores, so a single fallback-mode string is ill-defined — whereas 006's single-store search reports a nullable mode enum (`fallback: "keyword" | null`).
 
 ### `MemoryFact` (`domain/memory/fact.py`)
 
@@ -119,7 +119,8 @@ CREATE INDEX idx_documents_kind_res_time ON documents(kind, resource_name, updat
 CREATE INDEX idx_documents_project ON documents(project_id);
 
 CREATE TABLE chunks (
-    id           TEXT PRIMARY KEY,              -- '<doc-id>:<position>'
+    id           TEXT PRIMARY KEY,              -- '<store-scope>:<doc-id>:<position>'
+    -- store-scope = 12-hex digest of (kind, resource_name); keeps ids unique across stores
     document_id  TEXT NOT NULL,                 -- app-level cascade (not a FK; KB+memory share the table)
     kind         TEXT NOT NULL,
     resource_name TEXT NOT NULL,
@@ -136,7 +137,8 @@ CREATE VIRTUAL TABLE documents_fts USING fts5(
 -- sqlite-vec virtual table (only when a vector mode is enabled); created lazily
 -- per store at the configured width.
 CREATE VIRTUAL TABLE vec_chunks USING vec0(
-    chunk_id TEXT PRIMARY KEY, embedding FLOAT[<dim>]
+    chunk_id TEXT PRIMARY KEY,                  -- bare '<doc-id>:<position>' (the table itself is per-store)
+    embedding FLOAT[<dim>]
 );
 ```
 

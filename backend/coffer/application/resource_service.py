@@ -8,6 +8,7 @@ BEFORE persistence; a hook that raises aborts the deletion.
 
 from __future__ import annotations
 
+import builtins
 import inspect
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -167,6 +168,31 @@ class ResourceService:
         if r is None:
             raise ResourceNotFound(ref.kind, ref.name)
         return r
+
+    async def find_credential_citations(self, credential_ref: str) -> builtins.list[ResourceRef]:
+        """Return the refs of every resource whose config cites ``credential_ref``.
+
+        A credential lives in the encrypted store and is referenced only by its
+        ref from resource config (a channel's bot token, an mcp_server's auth
+        header, a model's API key). Deleting the credential out from under a
+        live resource silently breaks it, so the credential-delete route calls
+        this first and refuses (409) when the list is non-empty. Each kind that
+        stores secrets supplies a ``credential_ref_extractor``; kinds without
+        one cite nothing and are skipped.
+
+        (The return type is spelled ``builtins.list`` because this class also
+        defines a ``list`` method, which shadows the builtin in annotations
+        appearing after it in the class body.)
+        """
+        citing: builtins.list[ResourceRef] = []
+        for resource in await self._repo.list():
+            kind_def = self._kinds.get(resource.kind)
+            if kind_def is None:
+                continue
+            refs = _extract_credential_refs(kind_def, resource.config).values()
+            if credential_ref in refs:
+                citing.append(resource.ref)
+        return citing
 
     async def update_config(
         self,

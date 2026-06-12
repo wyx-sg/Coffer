@@ -44,14 +44,15 @@ Add the following secrets under **Settings → Secrets and variables → Actions
 
 ### 3. Configure Tauri to sign the bundle
 
-**Add** a `macOS` key under `bundle` in `desktop/tauri.conf.json` (or
-update its `signingIdentity` if the key already exists):
+**Add** a `macOS` key under `bundle` in `desktop/tauri.conf.json` (the `bundle`
+block already exists — it currently has no `macOS` key):
 
 ```json
 {
   "bundle": {
     "macOS": {
-      "signingIdentity": null
+      "signingIdentity": null,
+      "entitlements": "entitlements.plist"
     }
   }
 }
@@ -60,26 +61,34 @@ update its `signingIdentity` if the key already exists):
 Tauri reads `APPLE_SIGNING_IDENTITY` from the environment when
 `signingIdentity` is `null` (Tauri 2 default behavior with env override).
 Set it to the literal string only if the env var approach fails for your Tauri
-version.
+version. The `entitlements` path wires the hardened-runtime entitlements that
+already ship at `desktop/entitlements.plist` — they are required because the
+bundled `coffer-daemon` / `coffer-mcp-shim` PyInstaller sidecars need
+`disable-library-validation` and `allow-unsigned-executable-memory` to run
+under the hardened runtime that notarisation mandates.
 
-### 4. Flip the disabled step in release.yml
+### 4. Add the codesign + notarize step to release.yml
 
-In `.github/workflows/release.yml`, change:
+`.github/workflows/release.yml` does **not** ship a disabled signing step today
+— the `bundle` job carries only a comment block (between `install Tauri CLI` and
+`cargo tauri build`) explaining that signing is deferred so the unused
+`APPLE_*` secrets don't surface in repo-secret audits. To enable signing,
+replace that comment block with the step below.
 
-```yaml
-- name: codesign + notarize (disabled — no Apple Developer ID yet)
-  if: false
-```
+Signing spans two points in the job, in this order:
 
-to:
+1. **Before `cargo tauri build`** (where the comment block sits today): import
+   the certificate into a temporary keychain so the build can sign the `.app`.
+   `cargo tauri build` reads `APPLE_SIGNING_IDENTITY` from the environment and
+   code-signs the `.app` (with the entitlements from step 3) during the bundle
+   phase, so add the step-5 `env:` block to the `cargo tauri build` step too.
+2. **After `collect artifacts (macOS)`** (where the `.dmg` exists): notarise and
+   staple it. Also drop the `-unsigned` rename in that collect step once builds
+   are signed.
 
-```yaml
-- name: codesign + notarize
-  if: startsWith(matrix.os, 'macos')
-```
-
-Then replace the placeholder `run:` body with the actual codesign + notarize
-commands below.
+The combined step in step 5 keeps both halves together for readability; split
+the keychain-import lines (before build) from the `notarytool` loop (after
+collect) to honour that ordering.
 
 ### 5. Full codesign + notarize step
 

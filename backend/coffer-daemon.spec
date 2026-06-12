@@ -23,6 +23,20 @@ hidden = (
     # that fails to trace them still ships a working daemon.
     + collect_submodules("tomlkit")
     + collect_submodules("yaml")
+    # KB/memory/chat deps (specs 006/007/008). These are imported LAZILY
+    # (inside functions) so the daemon ships even when an extra is missing —
+    # which is exactly why PyInstaller's static analysis cannot trace them.
+    # Declare them explicitly so a frozen build can convert documents, embed,
+    # run the sqlite-vec vector index, and drive the built-in chat agent.
+    #   sqlite_vec — knowledge/vec_index.py (also needs its data files below)
+    #   markitdown — knowledge/converters/markitdown_converter.py
+    #   openai     — knowledge/embeddings.py
+    #   langgraph / langchain — chat/*
+    + collect_submodules("sqlite_vec")
+    + collect_submodules("markitdown")
+    + collect_submodules("openai")
+    + collect_submodules("langgraph")
+    + collect_submodules("langchain")
     + [
         # Anyio sniffio backend
         "anyio._backends._asyncio",
@@ -40,6 +54,12 @@ datas = (
         ),
     ]
     + collect_data_files("mcp", include_py_files=False)
+    # sqlite-vec ships its loadable native extension (vec0.dylib / vec0.so /
+    # vec0.dll) as PACKAGE DATA, not a Python submodule — collect_submodules
+    # above never captures it. Without this the frozen daemon cannot load the
+    # vec0 extension and vector retrieval silently degrades to keyword-only
+    # (VecIndex.available() swallows the load failure).
+    + collect_data_files("sqlite_vec")
 )
 
 a = Analysis(
