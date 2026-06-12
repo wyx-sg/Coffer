@@ -32,10 +32,10 @@ export function ApprovalCard({ approval, onDecide, disabled = false }: Props) {
   };
 
   return (
-    <div className="border-t border-amber-500/40 bg-amber-500/10 px-4 py-3">
+    <div className="border-t border-status-warn/40 bg-status-warn/10 px-4 py-3">
       <div className="flex items-start gap-2">
         <ShieldAlert
-          className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
+          className="mt-0.5 size-4 shrink-0 text-status-warn"
           aria-hidden
         />
         <div className="flex-1 space-y-2 text-sm">
@@ -44,7 +44,7 @@ export function ApprovalCard({ approval, onDecide, disabled = false }: Props) {
             {t("chat.approval.tool")}:{" "}
             <span className="font-mono text-foreground">{approval.tool_name}</span>
           </p>
-          <pre className="max-h-40 overflow-auto rounded bg-background p-2 text-[11px] leading-relaxed">
+          <pre className="max-h-40 overflow-auto rounded bg-background p-2 text-xs leading-relaxed">
             {JSON.stringify(approval.tool_input, null, 2)}
           </pre>
           <div className="flex gap-2">

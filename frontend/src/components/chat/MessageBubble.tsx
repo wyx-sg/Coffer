@@ -84,7 +84,7 @@ export function MessageBubble({ message, live }: Props) {
           <p className="px-4 text-xs text-destructive">{t("chat.message.failed")}</p>
         )}
         {showTokens && (
-          <p className="px-4 text-[11px] text-muted-foreground">
+          <p className="px-4 text-xs text-muted-foreground">
             {t("chat.message.tokens", {
               prompt: promptTokens ?? 0,
               completion: completionTokens ?? 0,

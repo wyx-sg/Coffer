@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { chatApi } from "@/lib/api/chat";
 import { messagesKey } from "@/lib/hooks/useConversations";
+import { isNearBottom } from "@/lib/chat/scroll";
 import type { LiveMessage, PendingApproval } from "@/lib/hooks/useChatTurn";
 import type { Conversation } from "@/lib/api/chat";
 import type { Model } from "@/lib/api/models";
@@ -55,6 +56,11 @@ export function MessageThread({
 }: Props) {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Follow the stream only while the user is at the bottom; if they scroll up
+  // to read history, new tokens must not yank them back down. Seeded true so
+  // the first render lands at the latest message.
+  const followRef = useRef(true);
   // I2: Drive no-model empty state from whether ANY model is configured,
   // not from the conversation's model_id (which is NULL when using the default).
   const hasModel = models.length > 0;
@@ -80,9 +86,13 @@ export function MessageThread({
     ? (data ?? []).filter((m) => m.status !== "streaming")
     : (data ?? []);
 
-  // Auto-scroll to bottom when messages or live content changes.
+  // Auto-scroll to bottom when messages or live content changes — but only if
+  // the user is already near the bottom (followRef), so reading history during
+  // a stream isn't interrupted.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (followRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [data, liveMessage]);
 
   if (!hasModel) {
@@ -110,7 +120,13 @@ export function MessageThread({
         showModelSelector={showModelSelector}
       />
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div
+        ref={scrollRef}
+        onScroll={() => {
+          if (scrollRef.current) followRef.current = isNearBottom(scrollRef.current);
+        }}
+        className="flex-1 overflow-y-auto px-4 py-4"
+      >
         {isPending && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {t("common.loading")}

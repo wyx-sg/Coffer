@@ -32,17 +32,17 @@ export function ToolCallCard({ toolUse, toolResult }: Props) {
         aria-label={t("chat.toolCard.toggleAria", { name: toolUse.tool_name })}
       >
         <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="flex-1 truncate font-mono text-[11px]">
+        <span className="flex-1 truncate font-mono text-xs">
           {toolUse.tool_name ?? t("chat.toolCard.unknown")}
         </span>
         <span
           className={cn(
-            "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+            "rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide",
             !hasResult
               ? "bg-muted text-muted-foreground"
               : isError
                 ? "bg-destructive/10 text-destructive"
-                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                : "bg-status-ok/10 text-status-ok",
           )}
         >
           {!hasResult
@@ -65,7 +65,7 @@ export function ToolCallCard({ toolUse, toolResult }: Props) {
               <div className="mb-1 font-semibold text-muted-foreground">
                 {t("chat.toolCard.input")}
               </div>
-              <pre className="overflow-x-auto rounded bg-background p-2 text-[11px] leading-relaxed">
+              <pre className="overflow-x-auto rounded bg-background p-2 text-xs leading-relaxed">
                 {JSON.stringify(toolUse.tool_input, null, 2)}
               </pre>
             </div>
@@ -77,7 +77,7 @@ export function ToolCallCard({ toolUse, toolResult }: Props) {
               </div>
               <pre
                 className={cn(
-                  "overflow-x-auto rounded p-2 text-[11px] leading-relaxed",
+                  "overflow-x-auto rounded p-2 text-xs leading-relaxed",
                   isError
                     ? "bg-destructive/5 text-destructive"
                     : "bg-background",
