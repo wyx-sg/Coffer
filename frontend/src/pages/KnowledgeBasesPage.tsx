@@ -13,11 +13,19 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { translateApiError } from "@/lib/api/errors";
-import { useResources } from "@/lib/hooks/useResources";
+import { useQuery } from "@tanstack/react-query";
+import { listKnowledgeBases } from "@/kinds/knowledge_base/api";
 
 export function KnowledgeBasesPage() {
   const { t } = useTranslation();
-  const { data: items, isPending, error, refetch } = useResources("knowledge_base");
+  // Dedicated /knowledge_bases list (carries document_count for the table),
+  // not the generic /resources list.
+  const {
+    data: items,
+    isPending,
+    error,
+    refetch,
+  } = useQuery({ queryKey: ["knowledge-bases"], queryFn: listKnowledgeBases });
   const [showAdd, setShowAdd] = useState(false);
   const hasItems = (items ?? []).length > 0;
 

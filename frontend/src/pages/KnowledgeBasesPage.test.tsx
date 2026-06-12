@@ -12,12 +12,12 @@ import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
 import { KnowledgeBasesPage } from "./KnowledgeBasesPage";
 
-vi.mock("@/lib/hooks/useResources", () => ({
-  useResources: vi.fn(),
-  useResource: vi.fn(),
+vi.mock("@/kinds/knowledge_base/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/kinds/knowledge_base/api")>()),
+  listKnowledgeBases: vi.fn(),
 }));
-const hooks = await import("@/lib/hooks/useResources");
-const useResourcesMock = vi.mocked(hooks.useResources);
+const api = await import("@/kinds/knowledge_base/api");
+const listMock = vi.mocked(api.listKnowledgeBases);
 
 afterEach(() => vi.clearAllMocks());
 
@@ -49,57 +49,32 @@ const KB = {
 };
 
 describe("KnowledgeBasesPage", () => {
-  test("renders the loading state while resources are pending", () => {
-    useResourcesMock.mockReturnValue({
-      data: undefined,
-      isPending: true,
-      error: null,
-      refetch: vi.fn(),
-    } as unknown as ReturnType<typeof hooks.useResources>);
-
+  test("renders the loading state while the query is pending", () => {
+    listMock.mockReturnValue(new Promise(() => {}) as Promise<never>);
     render(<KnowledgeBasesPage />, { wrapper: wrap() });
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
-  test("renders the welcome panel when no knowledge bases exist (no header CTA)", () => {
-    useResourcesMock.mockReturnValue({
-      data: [],
-      isPending: false,
-      error: null,
-      refetch: vi.fn(),
-    } as unknown as ReturnType<typeof hooks.useResources>);
-
+  test("renders the welcome panel when no knowledge bases exist (no header CTA)", async () => {
+    listMock.mockResolvedValue([]);
     render(<KnowledgeBasesPage />, { wrapper: wrap() });
-    expect(screen.getByText(/manage your knowledge bases/i)).toBeInTheDocument();
+    expect(await screen.findByText(/manage your knowledge bases/i)).toBeInTheDocument();
   });
 
-  test("renders the populated table and the header Add action opens the dialog", () => {
-    useResourcesMock.mockReturnValue({
-      data: [KB],
-      isPending: false,
-      error: null,
-      refetch: vi.fn(),
-    } as unknown as ReturnType<typeof hooks.useResources>);
-
+  test("renders the populated table and the header Add action opens the dialog", async () => {
+    listMock.mockResolvedValue([KB]);
     render(<KnowledgeBasesPage />, { wrapper: wrap() });
-    expect(screen.getByText("designs")).toBeInTheDocument();
+    expect(await screen.findByText("designs")).toBeInTheDocument();
     expect(screen.getByText("design notes")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /new knowledge base/i }));
-    // The create dialog opens with its name field.
     expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
   });
 
-  test("renders an error card when the resources query fails", () => {
-    useResourcesMock.mockReturnValue({
-      data: undefined,
-      isPending: false,
-      error: new Error("HTTP 500"),
-      refetch: vi.fn(),
-    } as unknown as ReturnType<typeof hooks.useResources>);
-
+  test("renders an error card when the query fails", async () => {
+    listMock.mockRejectedValue(new Error("HTTP 500"));
     render(<KnowledgeBasesPage />, { wrapper: wrap() });
-    expect(screen.getByText("Failed to load knowledge bases")).toBeInTheDocument();
+    expect(await screen.findByText("Failed to load knowledge bases")).toBeInTheDocument();
     expect(screen.getByText("HTTP 500")).toBeInTheDocument();
   });
 });

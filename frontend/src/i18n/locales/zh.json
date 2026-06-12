@@ -648,7 +648,8 @@
     "cols": {
       "name": "名称",
       "mode": "检索",
-      "description": "描述"
+      "description": "描述",
+      "docs": "文档数"
     },
     "dialog": {
       "title": "新建知识库",
@@ -733,7 +734,8 @@
     "cols": {
       "name": "名称",
       "scope": "范围",
-      "description": "描述"
+      "description": "描述",
+      "facts": "事实数"
     },
     "scope": {
       "global": "全局",

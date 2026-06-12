@@ -648,7 +648,8 @@
     "cols": {
       "name": "Name",
       "mode": "Retrieval",
-      "description": "Description"
+      "description": "Description",
+      "docs": "Documents"
     },
     "dialog": {
       "title": "New knowledge base",
@@ -733,7 +734,8 @@
     "cols": {
       "name": "Name",
       "scope": "Scope",
-      "description": "Description"
+      "description": "Description",
+      "facts": "Facts"
     },
     "scope": {
       "global": "Global",

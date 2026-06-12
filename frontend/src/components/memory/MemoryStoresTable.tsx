@@ -43,6 +43,12 @@ export function MemoryStoresTable({ items }: { items: MemoryStoreOut[] }) {
       ),
     },
     {
+      key: "facts",
+      header: t("memory.cols.facts"),
+      className: "tabular-nums",
+      cell: (r) => <span className="text-muted-foreground">{r.fact_count ?? 0}</span>,
+    },
+    {
       key: "description",
       header: t("memory.cols.description"),
       cell: (r) => <span className="text-muted-foreground">{r.description || "—"}</span>,

@@ -4,14 +4,15 @@
 // description, and a modes column shows the enabled retrieval modes.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
 import { DataTable, type Column } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
-import type { ResourceOut } from "@/lib/components/kindRegistry";
+import type { KnowledgeBaseOut } from "@/kinds/knowledge_base/api";
 
-function modesOf(row: ResourceOut): string[] {
+function modesOf(row: KnowledgeBaseOut): string[] {
   const modes = (row.config as { enabled_modes?: unknown } | undefined)?.enabled_modes;
   if (Array.isArray(modes) && modes.length > 0) {
     return modes.filter((m): m is string => typeof m === "string");
@@ -19,12 +20,13 @@ function modesOf(row: ResourceOut): string[] {
   return ["keyword", "grep"];
 }
 
-export function KnowledgeBasesTable({ items }: { items: ResourceOut[] }) {
+export function KnowledgeBasesTable({ items }: { items: KnowledgeBaseOut[] }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const del = useDeleteResource();
 
-  const columns: Column<ResourceOut>[] = [
+  const columns: Column<KnowledgeBaseOut>[] = [
     {
       key: "name",
       header: t("knowledgeBases.cols.name"),
@@ -47,6 +49,12 @@ export function KnowledgeBasesTable({ items }: { items: ResourceOut[] }) {
       ),
     },
     {
+      key: "docs",
+      header: t("knowledgeBases.cols.docs"),
+      className: "tabular-nums",
+      cell: (r) => <span className="text-muted-foreground">{r.document_count ?? 0}</span>,
+    },
+    {
       key: "description",
       header: t("knowledgeBases.cols.description"),
       cell: (r) => <span className="text-muted-foreground">{r.description || "—"}</span>,
@@ -63,7 +71,10 @@ export function KnowledgeBasesTable({ items }: { items: ResourceOut[] }) {
           onClick={(e) => {
             e.stopPropagation();
             if (window.confirm(t("knowledgeBases.deleteConfirm", { name: r.name }))) {
-              del.mutate({ kind: "knowledge_base", name: r.name });
+              del.mutate(
+                { kind: "knowledge_base", name: r.name },
+                { onSuccess: () => qc.invalidateQueries({ queryKey: ["knowledge-bases"] }) },
+              );
             }
           }}
           aria-label={t("common.delete")}

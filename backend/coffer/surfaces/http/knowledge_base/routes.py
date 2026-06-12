@@ -66,7 +66,7 @@ def _actor(x_coffer_actor: str | None = Header(default=None)) -> str:
     return x_coffer_actor or "api"
 
 
-def _to_kb_out(r: Resource) -> KnowledgeBaseOut:
+def _to_kb_out(r: Resource, *, document_count: int = 0) -> KnowledgeBaseOut:
     return KnowledgeBaseOut(
         ref=str(r.ref),
         kind=r.kind,
@@ -74,6 +74,7 @@ def _to_kb_out(r: Resource) -> KnowledgeBaseOut:
         description=r.description,
         config=KnowledgeBaseConfig.model_validate(r.config),
         enabled=r.enabled,
+        document_count=document_count,
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
@@ -82,9 +83,17 @@ def _to_kb_out(r: Resource) -> KnowledgeBaseOut:
 @router.get("", response_model=KnowledgeBaseListOut)
 async def list_kbs(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
+    kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
 ) -> KnowledgeBaseListOut:
     resources = await svc.list(kind=KIND_KNOWLEDGE_BASE)
-    return KnowledgeBaseListOut(knowledge_bases=[_to_kb_out(r) for r in resources])
+    out = []
+    for r in resources:
+        try:
+            count = int((await kb_svc.metrics(kb_name=r.name)).get("document_count", 0))
+        except Exception:
+            count = 0
+        out.append(_to_kb_out(r, document_count=count))
+    return KnowledgeBaseListOut(knowledge_bases=out)
 
 
 @router.post("", response_model=KnowledgeBaseOut, status_code=status.HTTP_201_CREATED)

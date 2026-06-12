@@ -48,6 +48,8 @@ class KnowledgeBaseOut(BaseModel):
     description: str | None = None
     config: KnowledgeBaseConfig
     enabled: bool
+    # Number of documents in the KB (shown in the knowledge-bases table).
+    document_count: int = 0
     created_at: datetime
     updated_at: datetime
 

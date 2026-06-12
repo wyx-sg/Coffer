@@ -83,11 +83,17 @@ def _to_store_out(r: Resource, *, project_root: str | None = None) -> MemoryStor
     )
 
 
-async def _store_out(r: Resource, roots: object) -> MemoryStoreOut:
-    """``_to_store_out`` plus the persisted project root (global → ``None``)."""
+async def _store_out(r: Resource, roots: object, mem_svc: MemoryService) -> MemoryStoreOut:
+    """``_to_store_out`` plus the persisted project root + fact count."""
     scope, _ = _scope_of(r.name)
     project_root = None if scope == "global" else await roots.get(r.name)  # type: ignore[attr-defined]
-    return _to_store_out(r, project_root=project_root)
+    try:
+        fact_count = int((await mem_svc.metrics(store_name=r.name)).get("fact_count", 0))
+    except Exception:
+        fact_count = 0
+    out = _to_store_out(r, project_root=project_root)
+    out.fact_count = fact_count
+    return out
 
 
 # --- stores -----------------------------------------------------------------
@@ -103,7 +109,7 @@ async def list_stores(
     # install lists it (the per-project stores appear once an agent uses them).
     await mem_svc.ensure_store(GLOBAL_STORE_NAME)
     rs = await svc.list(kind=KIND_MEMORY)
-    return MemoryStoreListOut(memory_stores=[await _store_out(r, roots) for r in rs])
+    return MemoryStoreListOut(memory_stores=[await _store_out(r, roots, mem_svc) for r in rs])
 
 
 @router.get("/{name}", response_model=MemoryStoreOut)
@@ -119,7 +125,7 @@ async def get_store(
         r = await svc.get(ResourceRef(KIND_MEMORY, name))
     except ResourceNotFound as exc:
         raise MemoryStoreNotFound(name) from exc
-    return await _store_out(r, roots)
+    return await _store_out(r, roots, mem_svc)
 
 
 @router.patch("/{name}", response_model=MemoryStoreOut)
@@ -127,6 +133,7 @@ async def update_store(
     name: str,
     body: MemoryStoreConfigPatch,
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
+    mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     actor: Actor = Depends(_actor),  # noqa: B008
     roots: object = Depends(get_project_root_repo),
 ) -> MemoryStoreOut:
@@ -144,7 +151,7 @@ async def update_store(
         new_config=validated.model_dump(mode="json"),
         actor=actor,
     )
-    return await _store_out(updated, roots)
+    return await _store_out(updated, roots, mem_svc)
 
 
 @router.get("/{name}/metrics", response_model=MemoryStoreMetrics)

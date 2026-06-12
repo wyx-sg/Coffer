@@ -82,6 +82,8 @@ class MemoryStoreOut(BaseModel):
     description: str | None = None
     config: MemoryStoreConfigOut
     enabled: bool
+    # Number of facts currently in the store (shown in the stores table).
+    fact_count: int = 0
     created_at: datetime
     updated_at: datetime
 

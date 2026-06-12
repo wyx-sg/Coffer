@@ -68,6 +68,8 @@ export interface MemoryStoreOut {
   description: string | null;
   config: MemoryStoreConfigOut;
   enabled: boolean;
+  /** Number of facts in the store (shown in the stores table). */
+  fact_count?: number;
   created_at: string;
   updated_at: string;
 }

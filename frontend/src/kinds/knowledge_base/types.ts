@@ -30,8 +30,14 @@ export interface KnowledgeBaseOut {
   description: string | null;
   config: KnowledgeBaseConfigOut;
   enabled: boolean;
+  /** Number of documents in the KB (shown in the knowledge-bases table). */
+  document_count?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface KnowledgeBaseListOut {
+  knowledge_bases: KnowledgeBaseOut[];
 }
 
 export type SourceMode = "converted" | "edited";

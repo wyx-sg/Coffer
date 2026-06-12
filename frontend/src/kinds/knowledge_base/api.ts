@@ -74,6 +74,12 @@ export async function createKnowledgeBase(payload: {
   return (await r.json()) as KnowledgeBaseOut;
 }
 
+export async function listKnowledgeBases(): Promise<KnowledgeBaseOut[]> {
+  const r = await fetch(`${getCofferBaseUrl()}/knowledge_bases`, { headers: headers() });
+  await checkOk(r);
+  return ((await r.json()) as { knowledge_bases: KnowledgeBaseOut[] }).knowledge_bases;
+}
+
 export async function getKnowledgeBase(name: string): Promise<KnowledgeBaseOut> {
   const r = await fetch(resourceBase(name), { headers: headers() });
   await checkOk(r);
