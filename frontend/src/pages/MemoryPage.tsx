@@ -8,23 +8,22 @@
 // the table's scope column needs (the generic row has neither, so every store
 // would mislabel as "Unknown").
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 import { BrainCircuit } from "lucide-react";
 
 import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
 import { MemoryStoresTable } from "@/components/memory/MemoryStoresTable";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { listMemoryStores } from "@/kinds/memory/api";
+import { useMemoryStores } from "@/lib/hooks/useMemoryProjections";
 import { translateApiError } from "@/lib/api/errors";
 
 export function MemoryPage() {
   const { t } = useTranslation();
-  const { data, isPending, error } = useQuery({
-    queryKey: ["memory-stores"],
-    queryFn: listMemoryStores,
-  });
-  const items = data?.memory_stores ?? [];
+  // Shared hook: caches the store ARRAY under ["memory-stores"]. The agent
+  // Memory tab reads the same key, so the page must not register a second
+  // query there returning a different shape (that collision crashed the tab).
+  const { data, isPending, error } = useMemoryStores();
+  const items = data ?? [];
   const hasItems = items.length > 0;
 
   return (
