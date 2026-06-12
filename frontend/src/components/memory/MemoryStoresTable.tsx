@@ -7,22 +7,21 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
-import { deriveScope } from "@/kinds/memory/api";
-import type { ResourceOut } from "@/lib/components/kindRegistry";
+import { deriveScope, type MemoryStoreOut } from "@/kinds/memory/api";
 
-export function MemoryStoresTable({ items }: { items: ResourceOut[] }) {
+export function MemoryStoresTable({ items }: { items: MemoryStoreOut[] }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  // Derive scope from project_id vs the WORKSPACE_GLOBAL sentinel (or an
-  // explicit scope) rather than silently defaulting to "global". Render an
-  // explicit "unknown" label when neither signal is present.
-  const scopeLabel = (row: ResourceOut): string => {
-    const scope = deriveScope(row as Parameters<typeof deriveScope>[0]);
+  // The dedicated `/memory_stores` rows carry an explicit `scope`; fall back to
+  // deriving it from project_id vs the WORKSPACE_GLOBAL sentinel, and only show
+  // "unknown" when neither signal is present (never silently default to global).
+  const scopeLabel = (row: MemoryStoreOut): string => {
+    const scope = deriveScope(row);
     return scope ? t(`memory.scope.${scope}`) : t("memory.scope.unknown");
   };
 
-  const columns: Column<ResourceOut>[] = [
+  const columns: Column<MemoryStoreOut>[] = [
     {
       key: "name",
       header: t("memory.cols.name"),

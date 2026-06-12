@@ -1,9 +1,10 @@
 // frontend/src/pages/MemoryPage.test.tsx — TEST26-014
 //
 // MemoryPage mirrors SkillsPage: PageHeader + welcome panel (empty) / DataTable
-// (populated), with a modal add dialog. We mock `useResources` so the page
-// renders deterministically and assert the loading/empty/populated/error
-// states.
+// (populated). It loads from the DEDICATED `/memory_stores` endpoint (not the
+// generic `/resources` list) because only that endpoint carries the typed
+// `scope`/`project_id` the table's scope column needs — the generic resource
+// row has neither, so it would mislabel every store as "Unknown".
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -11,102 +12,91 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
 import { MemoryPage } from "./MemoryPage";
-import { registerFrontendKinds } from "@/kinds";
+import type { MemoryStoreListOut, MemoryStoreOut } from "@/kinds/memory/api";
 
-// Register the memory kind UI module up-front so the KindResourcePage
-// dispatch can find a Card to render. Without this, ResourceListView
-// renders an "unregistered kind" placeholder.
-registerFrontendKinds();
-
-vi.mock("@/lib/hooks/useResources", () => ({
-  useResources: vi.fn(),
-  useResource: vi.fn(),
+// Partial mock: stub only the network call; keep the real `deriveScope` the
+// table uses to classify the scope column.
+vi.mock("@/kinds/memory/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/kinds/memory/api")>()),
+  listMemoryStores: vi.fn(),
 }));
-const hooks = await import("@/lib/hooks/useResources");
-const useResourcesMock = vi.mocked(hooks.useResources);
-
-// Mock the per-kind mutation hooks used by the Card so toggling the
-// switch doesn't try to talk to a real backend during the populated test.
-vi.mock("@/lib/hooks/useResourceMutations", () => ({
-  useEnableResource: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
-  useDisableResource: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
-}));
+const api = await import("@/kinds/memory/api");
+const listMemoryStoresMock = vi.mocked(api.listMemoryStores);
 
 afterEach(() => vi.clearAllMocks());
 
-function wrap(ui: React.ReactNode) {
+function wrap() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return ({ children }: PropsWithChildren) => (
     <QueryClientProvider client={qc}>
-      <MemoryRouter>{children ?? ui}</MemoryRouter>
+      <MemoryRouter>{children}</MemoryRouter>
     </QueryClientProvider>
   );
 }
 
-describe("MemoryPage", () => {
-  test("renders the loading state while resources are pending", () => {
-    useResourcesMock.mockReturnValue({
-      data: undefined,
-      isPending: true,
-      error: null,
-    } as unknown as ReturnType<typeof hooks.useResources>);
+// Mirrors the real `/memory_stores` payload: top-level `scope` + `project_id`,
+// NOT inside `config` (the bug: the generic /resources row omits both).
+const GLOBAL_STORE: MemoryStoreOut = {
+  ref: "memory:global",
+  kind: "memory",
+  name: "global",
+  scope: "global",
+  project_id: "00000000000000000000000000",
+  project_root: null,
+  description: "Global agent memory",
+  config: {
+    retrieval_modes: ["grep", "keyword"],
+    default_mode: "keyword",
+    embedding_provider: null,
+    embedding_model: null,
+    embedding_base_url: null,
+    embedding_credential_ref: null,
+    embedding_dimensions: 768,
+    max_fact_chars: 8192,
+  },
+  enabled: true,
+  created_at: "2026-05-29T00:00:00Z",
+  updated_at: "2026-05-29T00:00:00Z",
+};
 
-    render(<MemoryPage />, { wrapper: wrap(null) });
+function resolveWith(stores: MemoryStoreOut[]) {
+  listMemoryStoresMock.mockResolvedValue({ memory_stores: stores } as MemoryStoreListOut);
+}
+
+describe("MemoryPage", () => {
+  test("renders the loading state while stores are pending", () => {
+    listMemoryStoresMock.mockReturnValue(new Promise(() => {}) as Promise<MemoryStoreListOut>);
+    render(<MemoryPage />, { wrapper: wrap() });
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
-  test("renders the empty state (no Add CTA — stores are auto-provisioned)", () => {
-    useResourcesMock.mockReturnValue({
-      data: [],
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof hooks.useResources>);
-
-    render(<MemoryPage />, { wrapper: wrap(null) });
-    // The welcome panel explains the surface; there is no "New memory store" action.
-    expect(screen.getByText(/your shared agent memory/i)).toBeInTheDocument();
+  test("renders the empty state (no Add CTA — stores are auto-provisioned)", async () => {
+    resolveWith([]);
+    render(<MemoryPage />, { wrapper: wrap() });
+    expect(await screen.findByText(/your shared agent memory/i)).toBeInTheDocument();
     expect(screen.queryByText(/new memory store/i)).not.toBeInTheDocument();
   });
 
-  test("renders the populated list when memory stores exist", () => {
-    useResourcesMock.mockReturnValue({
-      data: [
-        {
-          ref: "memory:prefs",
-          kind: "memory",
-          name: "prefs",
-          description: "coding preferences",
-          config: {
-            scope: "global",
-            retrieval_modes: ["grep", "keyword"],
-            default_mode: "keyword",
-            max_fact_chars: 8192,
-          },
-          enabled: true,
-          created_at: "2026-05-29T00:00:00Z",
-          updated_at: "2026-05-29T00:00:00Z",
-        },
-      ],
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof hooks.useResources>);
-
-    render(<MemoryPage />, { wrapper: wrap(null) });
-    // The DataTable renders a row per store (name shown; the row navigates on click).
-    expect(screen.getByText("prefs")).toBeInTheDocument();
+  test("renders the populated list when memory stores exist", async () => {
+    resolveWith([GLOBAL_STORE]);
+    render(<MemoryPage />, { wrapper: wrap() });
+    expect(await screen.findByText("global")).toBeInTheDocument();
   });
 
-  test("renders an error card when the resources query fails", () => {
-    useResourcesMock.mockReturnValue({
-      data: undefined,
-      isPending: false,
-      error: new Error("HTTP 500"),
-    } as unknown as ReturnType<typeof hooks.useResources>);
+  test("labels the global store's scope as Global, not Unknown", async () => {
+    // The real /memory_stores payload carries a top-level `scope`; the table
+    // must surface it instead of the indeterminate "Unknown" fallback (which
+    // is what the scope-less generic /resources row produced — the bug).
+    resolveWith([GLOBAL_STORE]);
+    render(<MemoryPage />, { wrapper: wrap() });
+    expect(await screen.findByText("Global")).toBeInTheDocument();
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
+  });
 
-    render(<MemoryPage />, { wrapper: wrap(null) });
-    // The error card shows the `memory.loadFailed` title plus the message
-    // produced by translateApiError (a plain Error surfaces its message).
-    expect(screen.getByText("Failed to load memory stores")).toBeInTheDocument();
+  test("renders an error card when the stores query fails", async () => {
+    listMemoryStoresMock.mockRejectedValue(new Error("HTTP 500"));
+    render(<MemoryPage />, { wrapper: wrap() });
+    expect(await screen.findByText("Failed to load memory stores")).toBeInTheDocument();
     expect(screen.getByText("HTTP 500")).toBeInTheDocument();
   });
 });

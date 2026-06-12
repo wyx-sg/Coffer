@@ -28,9 +28,13 @@ export const WORKSPACE_GLOBAL_PROJECT_ID = "00000000000000000000000000";
 export function deriveScope(source: {
   scope?: unknown;
   project_id?: unknown;
-  config?: { scope?: unknown; project_id?: unknown } | null;
+  // `unknown` so any caller's config shape (the typed MemoryStoreConfigOut, a
+  // generic ResourceOut config, a test fixture) is accepted; read defensively.
+  config?: unknown;
 }): Scope | null {
-  const cfg = source.config ?? undefined;
+  const cfg = (source.config ?? undefined) as
+    | { scope?: unknown; project_id?: unknown }
+    | undefined;
   const explicit = source.scope ?? cfg?.scope;
   if (explicit === "global" || explicit === "project") return explicit;
   const projectId = source.project_id ?? cfg?.project_id;
