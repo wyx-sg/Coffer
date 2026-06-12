@@ -2,7 +2,7 @@
 
 Drop-in replacement for KeyringAdapter (same get/set/delete shape, plus
 count()). Deliberately uses stdlib sqlite3 with a short-lived connection
-per call so the sync KeyringPort contract survives: materialize() and
+per call so the sync CredentialStorePort contract survives: materialize() and
 register-time probing call this from sync code paths. WAL mode (set by
 the async engine) makes concurrent sync readers safe; busy_timeout
 matches the engine's PRAGMA suite.
