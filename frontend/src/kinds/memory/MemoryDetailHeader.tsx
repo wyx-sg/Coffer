@@ -5,7 +5,7 @@
 // "Add fact" action on the right (the form lives in a dialog). Presentational.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,10 +16,17 @@ interface Props {
   store: string;
   storeResource: MemoryStoreOut | undefined;
   metrics: MemoryStoreMetrics | undefined;
-  onAddFact: () => void;
+  isClearPending: boolean;
+  onClearAll: () => void;
 }
 
-export function MemoryDetailHeader({ store, storeResource, metrics, onAddFact }: Props) {
+export function MemoryDetailHeader({
+  store,
+  storeResource,
+  metrics,
+  isClearPending,
+  onClearAll,
+}: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const scope = storeResource ? deriveScope(storeResource) : null;
@@ -50,8 +57,14 @@ export function MemoryDetailHeader({ store, storeResource, metrics, onAddFact }:
             ) : null}
           </div>
         </div>
-        <Button size="sm" onClick={onAddFact}>
-          <Plus className="mr-1.5 size-3.5" /> {t("memory.detail.addFact")}
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+          onClick={onClearAll}
+          disabled={isClearPending || (metrics?.fact_count ?? 0) === 0}
+        >
+          <Trash2 className="mr-1.5 size-3.5" /> {t("memory.detail.clearAll")}
         </Button>
       </div>
     </header>

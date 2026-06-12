@@ -763,7 +763,10 @@
       "loadFailed": "加载该记忆库失败。",
       "empty": "还没有事实。",
       "back": "返回记忆库",
-      "factBadge": "{{count}} 条事实"
+      "factBadge": "{{count}} 条事实",
+      "selectFact": "在左侧选择一条记忆以预览或编辑。",
+      "untitled": "（无标题）",
+      "actorUser": "已编辑"
     },
     "welcome": {
       "title": "你的共享 agent 记忆",

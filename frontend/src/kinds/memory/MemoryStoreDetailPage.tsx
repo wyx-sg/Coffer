@@ -1,12 +1,10 @@
 // frontend/src/kinds/memory/MemoryStoreDetailPage.tsx
 //
 // Memory store detail surface (spec 007 redesign): a back link + header (scope
-// + metric badges + an "Add fact" button that opens a dialog), a recall box
-// with a keyword/vector mode toggle, and a fact list with inline edit, delete,
-// and "Clear all". No llm_provider anywhere — facts are written directly.
-//
-// This page is the composing container: it owns all state, queries, and
-// mutations, and delegates rendering to cohesive child panels.
+// + metric badges + Clear all), a recall box, and a fact TREE on the left with
+// a rendered preview/editor on the right (mirrors the KB detail page). Memory
+// is AI-authored — agents write via the MCP `remember` tool; the UI lets humans
+// CORRECT existing facts (edit the Markdown / delete), not add new ones.
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -14,7 +12,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { translateApiError } from "@/lib/api/errors";
 import {
-  addFact,
   clearFacts,
   deleteFact,
   getMemoryStore,
@@ -22,33 +19,26 @@ import {
   listFacts,
   recall,
   updateFact,
+  type FactOut,
   type RecallResponse,
   type RetrievalMode,
 } from "./api";
-import { MemoryAddFactDialog } from "./MemoryAddFactDialog";
 import { MemoryDetailHeader } from "./MemoryDetailHeader";
-import { MemoryFactList } from "./MemoryFactList";
+import { MemoryFactTree } from "./MemoryFactTree";
+import { MemoryFactViewer } from "./MemoryFactViewer";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 
 export function MemoryStoreDetailPage() {
   const { t } = useTranslation();
-  const params = useParams<{ name: string }>();
-  const store = params.name ?? "";
+  const store = useParams<{ name: string }>().name ?? "";
   const qc = useQueryClient();
 
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<RetrievalMode>("keyword");
   const [recallResult, setRecallResult] = useState<RecallResponse | null>(null);
 
-  // Add-fact dialog
-  const [addOpen, setAddOpen] = useState(false);
-  const [text, setText] = useState("");
-  const [factName, setFactName] = useState("");
-  const [factDescription, setFactDescription] = useState("");
-  const [factType, setFactType] = useState("");
-
-  // Inline edit
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<FactOut | null>(null);
+  const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState("");
 
   const factsQuery = useQuery({
@@ -56,13 +46,11 @@ export function MemoryStoreDetailPage() {
     queryFn: () => listFacts(store, 100, 0),
     enabled: Boolean(store),
   });
-
   const metricsQuery = useQuery({
     queryKey: ["memory-metrics", store],
     queryFn: () => getMemoryStoreMetrics(store),
     enabled: Boolean(store),
   });
-
   const storeQuery = useQuery({
     queryKey: ["memory-store", store],
     queryFn: () => getMemoryStore(store),
@@ -74,51 +62,54 @@ export function MemoryStoreDetailPage() {
     void qc.invalidateQueries({ queryKey: ["memory-metrics", store] });
   };
 
-  const add = useMutation({
-    mutationFn: () =>
-      addFact(store, {
-        text: text.trim(),
-        name: factName.trim() || null,
-        description: factDescription.trim() || null,
-        type: factType.trim() || null,
-      }),
-    onSuccess: () => {
-      setText("");
-      setFactName("");
-      setFactDescription("");
-      setFactType("");
-      setAddOpen(false);
-      invalidate();
-    },
-  });
+  // Keep the selected fact in sync with the freshly-loaded list.
+  const liveSelected = selected
+    ? (factsQuery.data?.facts.find((f) => f.id === selected.id) ?? null)
+    : null;
 
   const del = useMutation({
     mutationFn: (id: string) => deleteFact(store, id),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setSelected(null);
+      setEditing(false);
+      invalidate();
+    },
   });
-
   const upd = useMutation({
     mutationFn: (input: { id: string; text: string }) =>
       updateFact(store, input.id, { text: input.text }),
     onSuccess: () => {
-      setEditingId(null);
+      setEditing(false);
       setEditText("");
       invalidate();
     },
   });
-
   const recallM = useMutation({
     mutationFn: () => recall(store, query, { topK: 5, mode }),
     onSuccess: (data) => setRecallResult(data),
   });
-
   const clear = useMutation({
     mutationFn: () => clearFacts(store),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setSelected(null);
+      invalidate();
+    },
   });
 
-  // Surface failure of the primary list/metrics queries (e.g. a 404 store)
-  // instead of rendering blank sections.
+  const selectFact = (f: FactOut) => {
+    setSelected(f);
+    setEditing(false);
+  };
+  const confirmDelete = () => {
+    if (!liveSelected) return;
+    if (window.confirm(t("memory.detail.deleteConfirm", { name: liveSelected.name || "fact" }))) {
+      del.mutate(liveSelected.id);
+    }
+  };
+  const confirmClear = () => {
+    if (window.confirm(t("memory.detail.clearConfirm", { store }))) clear.mutate();
+  };
+
   const loadError = factsQuery.error ?? metricsQuery.error;
 
   return (
@@ -127,34 +118,14 @@ export function MemoryStoreDetailPage() {
         store={store}
         storeResource={storeQuery.data}
         metrics={metricsQuery.data}
-        onAddFact={() => setAddOpen(true)}
-      />
-
-      <MemoryAddFactDialog
-        open={addOpen}
-        onOpenChange={(o) => {
-          if (!o) add.reset();
-          setAddOpen(o);
-        }}
-        text={text}
-        name={factName}
-        description={factDescription}
-        type={factType}
-        error={add.error}
-        isPending={add.isPending}
-        onTextChange={setText}
-        onNameChange={setFactName}
-        onDescriptionChange={setFactDescription}
-        onTypeChange={setFactType}
-        onSubmit={() => add.mutate()}
+        isClearPending={clear.isPending}
+        onClearAll={confirmClear}
       />
 
       {loadError ? (
         <p className="text-sm text-destructive" role="alert">
           {translateApiError(t, loadError)}
         </p>
-      ) : factsQuery.isPending || metricsQuery.isPending ? (
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : null}
 
       <MemoryRecallPanel
@@ -168,27 +139,32 @@ export function MemoryStoreDetailPage() {
         onRecall={() => recallM.mutate()}
       />
 
-      <MemoryFactList
-        store={store}
-        facts={factsQuery.data}
-        editingId={editingId}
-        editText={editText}
-        isClearPending={clear.isPending}
-        isUpdatePending={upd.isPending}
-        isDeletePending={del.isPending}
-        onClearAll={() => clear.mutate()}
-        onStartEdit={(f) => {
-          setEditingId(f.id);
-          setEditText(f.text);
-        }}
-        onDelete={(id) => del.mutate(id)}
-        onEditTextChange={setEditText}
-        onSaveEdit={(id) => upd.mutate({ id, text: editText })}
-        onCancelEdit={() => {
-          setEditingId(null);
-          setEditText("");
-        }}
-      />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(220px,300px)_1fr]">
+        <MemoryFactTree
+          facts={factsQuery.data}
+          selectedId={liveSelected?.id ?? null}
+          isLoading={factsQuery.isPending}
+          onSelect={selectFact}
+        />
+        <MemoryFactViewer
+          fact={liveSelected ?? undefined}
+          editing={editing}
+          editText={editText}
+          isEditPending={upd.isPending}
+          isDeletePending={del.isPending}
+          onStartEdit={() => {
+            setEditText(liveSelected?.text ?? "");
+            setEditing(true);
+          }}
+          onEditTextChange={setEditText}
+          onSave={() => liveSelected && upd.mutate({ id: liveSelected.id, text: editText })}
+          onCancel={() => {
+            setEditing(false);
+            setEditText("");
+          }}
+          onDelete={confirmDelete}
+        />
+      </div>
     </div>
   );
 }

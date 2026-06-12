@@ -763,7 +763,10 @@
       "loadFailed": "Failed to load this memory store.",
       "empty": "No facts yet.",
       "back": "Back to memory stores",
-      "factBadge": "{{count}} facts"
+      "factBadge": "{{count}} facts",
+      "selectFact": "Select a memory on the left to preview or edit it.",
+      "untitled": "(untitled)",
+      "actorUser": "edited"
     },
     "welcome": {
       "title": "Your shared agent memory",

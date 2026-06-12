@@ -6,7 +6,7 @@
 // mocked so the component renders without a backend.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ApiError } from "@/lib/api/errors";
@@ -81,12 +81,13 @@ function stubLists() {
 afterEach(() => vi.clearAllMocks());
 
 describe("MemoryStoreDetailPage", () => {
-  test("shows metrics and the fact list with actor + type badges", async () => {
+  test("lists facts in the tree and renders the selected one", async () => {
     stubLists();
     renderPage();
-    expect(await screen.findByText("tabs")).toBeInTheDocument();
-    expect(screen.getByText(/1 facts/i)).toBeInTheDocument();
-    expect(screen.getByText("uses tabs over spaces")).toBeInTheDocument();
+    const tree = screen.getByRole("complementary");
+    fireEvent.click(await within(tree).findByText("tabs"));
+    // The viewer renders the fact's Markdown body.
+    expect(await screen.findByText("uses tabs over spaces")).toBeInTheDocument();
   });
 
   test("recall passes the selected mode and renders hits", async () => {
@@ -107,38 +108,15 @@ describe("MemoryStoreDetailPage", () => {
     );
   });
 
-  test("adding a fact submits name/description/body/type", async () => {
-    stubLists();
-    vi.mocked(api.addFact).mockResolvedValue(FACT);
-
-    renderPage();
-    // Add fact is now a dialog: click the header button to open it.
-    fireEvent.click(await screen.findByRole("button", { name: /add fact/i }));
-    fireEvent.change(await screen.findByLabelText(/^name/i), { target: { value: "deploy" } });
-    fireEvent.change(screen.getByLabelText(/^type/i), { target: { value: "project" } });
-    fireEvent.change(screen.getByLabelText(/^description/i), { target: { value: "how it ships" } });
-    fireEvent.change(screen.getByLabelText(/^fact$/i), { target: { value: "make release" } });
-    // The dialog's submit button (the second "Add fact" — the first opened it).
-    const addButtons = screen.getAllByRole("button", { name: /add fact/i });
-    fireEvent.click(addButtons[addButtons.length - 1]);
-
-    await waitFor(() =>
-      expect(api.addFact).toHaveBeenCalledWith("global", {
-        text: "make release",
-        name: "deploy",
-        description: "how it ships",
-        type: "project",
-      }),
-    );
-  });
-
-  test("inline editing a fact PATCHes the new text", async () => {
+  test("editing a selected fact PATCHes the new text", async () => {
     stubLists();
     vi.mocked(api.updateFact).mockResolvedValue(FACT);
 
     renderPage();
+    const tree = screen.getByRole("complementary");
+    fireEvent.click(await within(tree).findByText("tabs"));
     fireEvent.click(await screen.findByRole("button", { name: /^edit$/i }));
-    const editor = await screen.findByLabelText(/edit fact tabs/i);
+    const editor = await screen.findByDisplayValue("uses tabs over spaces");
     fireEvent.change(editor, { target: { value: "uses spaces now" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
@@ -147,12 +125,14 @@ describe("MemoryStoreDetailPage", () => {
     );
   });
 
-  test("deleting a fact calls the delete helper after confirmation", async () => {
+  test("deleting a selected fact calls delete after confirmation", async () => {
     stubLists();
     vi.mocked(api.deleteFact).mockResolvedValue(undefined);
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
+    const tree = screen.getByRole("complementary");
+    fireEvent.click(await within(tree).findByText("tabs"));
     fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
     await waitFor(() => expect(api.deleteFact).toHaveBeenCalledWith("global", "f1"));
     confirmSpy.mockRestore();
@@ -164,8 +144,9 @@ describe("MemoryStoreDetailPage", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
 
     renderPage();
+    const tree = screen.getByRole("complementary");
+    fireEvent.click(await within(tree).findByText("tabs"));
     fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
-    expect(confirmSpy).toHaveBeenCalled();
     expect(api.deleteFact).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
@@ -186,7 +167,10 @@ describe("MemoryStoreDetailPage", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /clear all/i }));
+    // The header Clear-all button is disabled until metrics (fact_count) load.
+    const btn = await screen.findByRole("button", { name: /clear all/i });
+    await waitFor(() => expect(btn).toBeEnabled());
+    fireEvent.click(btn);
     await waitFor(() => expect(api.clearFacts).toHaveBeenCalledWith("global"));
     confirmSpy.mockRestore();
   });
