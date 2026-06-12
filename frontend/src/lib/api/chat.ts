@@ -46,6 +46,8 @@ export interface Conversation {
   model_id: string | null;
   created_at: string;
   updated_at: string;
+  /** Null for an active conversation; an ISO timestamp once archived. */
+  archived_at?: string | null;
 }
 
 export interface ConversationListOut {
@@ -126,11 +128,17 @@ export const chatApi = {
   listAgents: () => call<AgentListOut>("GET", "/chat/agents"),
 
   // Conversations
-  listConversations: () =>
-    call<ConversationListOut>("GET", "/chat/conversations"),
+  listConversations: (archived = false) =>
+    call<ConversationListOut>("GET", `/chat/conversations?archived=${archived}`),
 
   createConversation: (body?: ConversationCreate) =>
     call<Conversation>("POST", "/chat/conversations", body ?? {}),
+
+  archiveConversation: (id: string) =>
+    call<Conversation>("POST", `/chat/conversations/${id}/archive`),
+
+  unarchiveConversation: (id: string) =>
+    call<Conversation>("POST", `/chat/conversations/${id}/unarchive`),
 
   getConversation: (id: string) =>
     call<Conversation>("GET", `/chat/conversations/${id}`),

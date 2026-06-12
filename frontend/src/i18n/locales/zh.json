@@ -843,7 +843,13 @@
       "renameAria": "重命名对话",
       "delete": "删除",
       "collapse": "折叠历史面板",
-      "expand": "展开历史面板"
+      "expand": "展开历史面板",
+      "restore": "恢复",
+      "archive": "归档",
+      "viewArchived": "查看归档",
+      "backToActive": "返回活跃",
+      "archivedTitle": "已归档",
+      "archivedEmpty": "没有已归档的对话"
     },
     "thread": {
       "empty": "发送消息开始对话。",
@@ -878,6 +884,11 @@
     "delete": {
       "title": "删除此对话？",
       "body": "此对话及其所有消息将被永久删除。"
+    },
+    "archive": {
+      "title": "归档此对话？",
+      "body": "它将被移入归档，你可以随时恢复。",
+      "confirm": "归档"
     },
     "approval": {
       "title": "需要审批",

@@ -13,18 +13,32 @@ const conv = (id: string, title: string): Conversation => ({
   updated_at: "2026-01-01T00:00:00Z",
 });
 
-function renderList(conversations: Conversation[]) {
-  return render(
+function renderList(
+  conversations: Conversation[],
+  overrides: Partial<React.ComponentProps<typeof ConversationList>> = {},
+) {
+  const handlers = {
+    onToggleView: vi.fn(),
+    onArchive: vi.fn(),
+    onRestore: vi.fn(),
+  };
+  render(
     <ConversationList
       conversations={conversations}
       activeId={null}
       loading={false}
+      view="active"
+      onToggleView={handlers.onToggleView}
       onSelect={vi.fn()}
       onCreate={vi.fn()}
       onRename={vi.fn()}
       onDelete={vi.fn()}
+      onArchive={handlers.onArchive}
+      onRestore={handlers.onRestore}
+      {...overrides}
     />,
   );
+  return handlers;
 }
 
 describe("ConversationList search", () => {
@@ -52,5 +66,26 @@ describe("ConversationList search", () => {
   test("hides the search box when there are no conversations at all", () => {
     renderList([]);
     expect(screen.queryByRole("textbox", { name: /search conversations/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("ConversationList archive", () => {
+  test("active view exposes an archive action per row", () => {
+    const { onArchive } = renderList([conv("1", "Keep me")]);
+    fireEvent.click(screen.getByRole("button", { name: /^archive$/i }));
+    expect(onArchive).toHaveBeenCalledWith("1");
+  });
+
+  test("the view-toggle switches to archived", () => {
+    const { onToggleView } = renderList([conv("1", "A")]);
+    fireEvent.click(screen.getByRole("button", { name: /view archived/i }));
+    expect(onToggleView).toHaveBeenCalledOnce();
+  });
+
+  test("archived view exposes a restore action and a back link", () => {
+    const { onRestore } = renderList([conv("1", "Old chat")], { view: "archived" });
+    fireEvent.click(screen.getByRole("button", { name: /restore/i }));
+    expect(onRestore).toHaveBeenCalledWith("1");
+    expect(screen.getByRole("button", { name: /back to active/i })).toBeInTheDocument();
   });
 });

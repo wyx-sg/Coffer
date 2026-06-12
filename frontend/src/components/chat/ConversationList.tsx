@@ -4,7 +4,7 @@
 // single-user vault; server-side search is the scale path if lists grow large.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { Plus, Archive, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/SearchInput";
 import type { Conversation } from "@/lib/api/chat";
@@ -14,23 +14,33 @@ interface Props {
   conversations: Conversation[];
   activeId: string | null;
   loading: boolean;
+  /** Which list is shown: the active threads or the archived ones. */
+  view: "active" | "archived";
+  onToggleView: () => void;
   onSelect: (id: string) => void;
   onCreate: () => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onArchive: (id: string) => void;
+  onRestore: (id: string) => void;
 }
 
 export function ConversationList({
   conversations,
   activeId,
   loading,
+  view,
+  onToggleView,
   onSelect,
   onCreate,
   onRename,
   onDelete,
+  onArchive,
+  onRestore,
 }: Props) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
+  const archivedView = view === "archived";
 
   const trimmed = query.trim().toLowerCase();
   const filtered = trimmed
@@ -41,17 +51,19 @@ export function ConversationList({
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {t("chat.history.title")}
+          {archivedView ? t("chat.history.archivedTitle") : t("chat.history.title")}
         </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="size-7 p-0"
-          onClick={onCreate}
-          aria-label={t("chat.history.new")}
-        >
-          <Plus className="size-4" />
-        </Button>
+        {!archivedView && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="size-7 p-0"
+            onClick={onCreate}
+            aria-label={t("chat.history.new")}
+          >
+            <Plus className="size-4" />
+          </Button>
+        )}
       </div>
 
       {conversations.length > 0 && (
@@ -81,6 +93,11 @@ export function ConversationList({
             {t("chat.history.empty")}
           </p>
         )}
+        {!loading && conversations.length === 0 && archivedView && (
+          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+            {t("chat.history.archivedEmpty")}
+          </p>
+        )}
         {!loading && conversations.length > 0 && filtered.length === 0 && (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">
             {t("chat.history.noMatches")}
@@ -94,8 +111,22 @@ export function ConversationList({
             onSelect={() => onSelect(conv.id)}
             onRename={(title) => onRename(conv.id, title)}
             onDelete={() => onDelete(conv.id)}
+            onArchive={archivedView ? undefined : () => onArchive(conv.id)}
+            onRestore={archivedView ? () => onRestore(conv.id) : undefined}
           />
         ))}
+      </div>
+
+      <div className="border-t border-border p-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-full justify-start gap-2 text-xs text-muted-foreground"
+          onClick={onToggleView}
+        >
+          {archivedView ? <ArrowLeft className="size-3.5" /> : <Archive className="size-3.5" />}
+          {archivedView ? t("chat.history.backToActive") : t("chat.history.viewArchived")}
+        </Button>
       </div>
     </div>
   );

@@ -8,10 +8,13 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import {
   useConversations,
+  useArchivedConversations,
   useCreateConversation,
   useRenameConversation,
   useDeleteConversation,
   useSetConversationModel,
+  useArchiveConversation,
+  useUnarchiveConversation,
 } from "@/lib/hooks/useConversations";
 import { useModels } from "@/lib/hooks/useModels";
 import { useChatAgents } from "@/lib/hooks/useChatAgents";
@@ -21,6 +24,8 @@ export function useChatController() {
   const navigate = useNavigate();
   const { id: routeId } = useParams<{ id?: string }>();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   // Draft top-bar selection (agent + model) before the conversation exists;
   // null until the user touches a selector — defaults are derived below.
   const [draftConfig, setDraftConfig] = useState<{ agentKey: string; modelId: string | null } | null>(
@@ -31,12 +36,16 @@ export function useChatController() {
   const [pendingFirst, setPendingFirst] = useState<{ convId: string; text: string } | null>(null);
 
   const { data: conversations = [], isPending: convLoading } = useConversations();
+  const { data: archivedConversations = [], isPending: archivedLoading } =
+    useArchivedConversations(showArchived);
   const { data: models = [] } = useModels();
   const { data: agents = [] } = useChatAgents();
   const createConv = useCreateConversation();
   const renameConv = useRenameConversation();
   const deleteConv = useDeleteConversation();
   const setModel = useSetConversationModel();
+  const archiveConv = useArchiveConversation();
+  const unarchiveConv = useUnarchiveConversation();
 
   const activeConv = conversations.find((c) => c.id === routeId) ?? null;
   const activeAgent = activeConv
@@ -99,6 +108,17 @@ export function useChatController() {
     });
   };
 
+  const confirmArchive = () => {
+    if (!archivingId) return;
+    const id = archivingId;
+    archiveConv.mutate(id, {
+      onSuccess: () => {
+        setArchivingId(null);
+        if (routeId === id) navigate("/chat");
+      },
+    });
+  };
+
   return {
     conversations,
     convLoading,
@@ -125,5 +145,15 @@ export function useChatController() {
     requestDelete: setDeletingId,
     confirmDelete,
     deletePending: deleteConv.isPending,
+    // Archive / restore
+    showArchived,
+    toggleView: () => setShowArchived((v) => !v),
+    listConversations: showArchived ? archivedConversations : conversations,
+    listLoading: showArchived ? archivedLoading : convLoading,
+    archivingId,
+    requestArchive: setArchivingId,
+    confirmArchive,
+    archivePending: archiveConv.isPending,
+    restoreConversation: (id: string) => unarchiveConv.mutate(id),
   };
 }

@@ -44,13 +44,17 @@ export function ChatPage() {
           </Button>
         </div>
         <ConversationList
-          conversations={c.conversations}
+          conversations={c.listConversations}
           activeId={c.activeConv?.id ?? null}
-          loading={c.convLoading}
+          loading={c.listLoading}
+          view={c.showArchived ? "archived" : "active"}
+          onToggleView={c.toggleView}
           onSelect={c.selectConversation}
           onCreate={c.startDraft}
           onRename={c.renameConversation}
           onDelete={c.requestDelete}
+          onArchive={c.requestArchive}
+          onRestore={c.restoreConversation}
         />
       </div>
 
@@ -127,6 +131,17 @@ export function ChatPage() {
         confirmLabel={c.deletePending ? t("common.deleting") : t("common.delete")}
         pending={c.deletePending}
         onConfirm={c.confirmDelete}
+      />
+
+      <ConfirmDialog
+        open={c.archivingId !== null}
+        onOpenChange={(o) => !o && c.requestArchive(null)}
+        title={t("chat.archive.title")}
+        description={t("chat.archive.body")}
+        confirmLabel={t("chat.archive.confirm")}
+        variant="default"
+        pending={c.archivePending}
+        onConfirm={c.confirmArchive}
       />
     </div>
   );

@@ -14,6 +14,8 @@ vi.mock("@/lib/api/chat", () => ({
     getConversation: vi.fn(),
     updateConversation: vi.fn(),
     deleteConversation: vi.fn(),
+    archiveConversation: vi.fn(),
+    unarchiveConversation: vi.fn(),
     listMessages: vi.fn(),
     listAgents: vi.fn(),
   },

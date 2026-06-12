@@ -843,7 +843,13 @@
       "renameAria": "Rename conversation",
       "delete": "Delete",
       "collapse": "Collapse history",
-      "expand": "Expand history"
+      "expand": "Expand history",
+      "restore": "Restore",
+      "archive": "Archive",
+      "viewArchived": "View archived",
+      "backToActive": "Back to active",
+      "archivedTitle": "Archived",
+      "archivedEmpty": "No archived conversations"
     },
     "thread": {
       "empty": "Send a message to start the conversation.",
@@ -878,6 +884,11 @@
     "delete": {
       "title": "Delete this conversation?",
       "body": "This conversation and all of its messages will be permanently removed."
+    },
+    "archive": {
+      "title": "Archive this conversation?",
+      "body": "It will be moved to the archive. You can restore it anytime.",
+      "confirm": "Archive"
     },
     "approval": {
       "title": "Approval required",

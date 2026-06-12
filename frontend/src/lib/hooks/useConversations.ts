@@ -22,10 +22,20 @@ export function messagesKey(conversationId: string) {
 // Queries
 // ---------------------------------------------------------------------------
 
+export const ARCHIVED_CONVERSATIONS_KEY = [...CONVERSATIONS_KEY, "archived"] as const;
+
 export function useConversations() {
   return useQuery({
     queryKey: CONVERSATIONS_KEY,
-    queryFn: async () => (await chatApi.listConversations()).conversations,
+    queryFn: async () => (await chatApi.listConversations(false)).conversations,
+  });
+}
+
+export function useArchivedConversations(enabled = true) {
+  return useQuery({
+    queryKey: ARCHIVED_CONVERSATIONS_KEY,
+    queryFn: async () => (await chatApi.listConversations(true)).conversations,
+    enabled,
   });
 }
 
@@ -97,4 +107,24 @@ export function useDeleteConversation() {
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },
   });
+}
+
+/** Archive (move to the archived list) or restore. Both lists are refreshed. */
+function useArchiveMutation(fn: (id: string) => Promise<Conversation>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (updated: Conversation) => {
+      qc.setQueryData(conversationKey(updated.id), updated);
+      void qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
+    },
+  });
+}
+
+export function useArchiveConversation() {
+  return useArchiveMutation(chatApi.archiveConversation);
+}
+
+export function useUnarchiveConversation() {
+  return useArchiveMutation(chatApi.unarchiveConversation);
 }
