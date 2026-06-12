@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0012"
+HEAD_REVISION = "0013"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -138,7 +138,27 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
-    # 0011 -> 0010: drops embedding_config + the chat tables (renumbered below).
+    # 0013 added conversations.archived_at (spec 008 archive); it exists at head.
+    with sqlite3.connect(db_path) as conn:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
+    assert "archived_at" in cols
+
+    # 0013 -> 0012: drops conversations.archived_at (column-only, no table change).
+    command.downgrade(cfg, "0012")
+    with sqlite3.connect(db_path) as conn:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
+    assert "archived_at" not in cols
+    assert _user_tables(db_path) == EXPECTED_TABLES
+
+    # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
+    command.downgrade(cfg, "0011")
+    assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "conversations",
+        "chat_messages",
+        "chat_models",
+    }
+
+    # 0011 -> 0010: drops embedding_config (global embedding singleton).
     command.downgrade(cfg, "0010")
     assert "embedding_config" not in _user_tables(db_path)
 
