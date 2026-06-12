@@ -104,8 +104,8 @@ class _ResourcePort(Protocol):
     async def delete(self, ref: ResourceRef, actor: str) -> None: ...
 
 
-class _KeyringPort(Protocol):
-    """Write-only slice of the keychain adapter (secrets flow IN, never out)."""
+class _CredentialStorePort(Protocol):
+    """Write-only slice of the credential store (secrets flow IN, never out)."""
 
     def set(self, ref: str, value: str) -> None: ...
 
@@ -136,13 +136,13 @@ class AgentMcpEntryService:
         audit: AuditService,
         store: ConfigFileStorePort,
         resource_service: _ResourcePort,
-        keyring: _KeyringPort,
+        credentials: _CredentialStorePort,
     ) -> None:
         self._agents = agent_service
         self._audit = audit
         self._store = store
         self._rs = resource_service
-        self._keyring = keyring
+        self._credentials = credentials
 
     async def _config_for(self, name: str) -> AgentConfig:
         # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
@@ -274,7 +274,7 @@ class AgentMcpEntryService:
 
         for ref in refs.values():
             with contextlib.suppress(Exception):
-                self._keyring.delete(ref)
+                self._credentials.delete(ref)
 
     async def adopt(
         self,
@@ -288,9 +288,9 @@ class AgentMcpEntryService:
     ) -> Resource:
         """Promote a config-file entry into a registered ``mcp_server`` resource.
 
-        ``secrets`` maps secret-looking env/header KEY names to keychain refs;
+        ``secrets`` maps secret-looking env/header KEY names to credential refs;
         every flagged key must be mapped (``AdoptSecretUnresolved`` otherwise).
-        Secret VALUES go straight into the keychain and into
+        Secret VALUES go straight into the credential store and into
         ``credential_refs`` — never into the resource config, audit log, or
         any log line. Register + verify happen BEFORE the source entry is
         removed; a failure after registration deletes the new resource so the
@@ -305,7 +305,7 @@ class AgentMcpEntryService:
 
         # Narrow the caller-supplied mapping to keys that actually appear in the
         # entry's env or headers.  A key absent from both would still end up in
-        # credential_refs (via to_transport_config) while the keychain entry it
+        # credential_refs (via to_transport_config) while the stored secret it
         # references was never written — dangling reference.
         provided = secrets or {}
         applicable = {
@@ -314,7 +314,7 @@ class AgentMcpEntryService:
 
         for key, ref in applicable.items():
             value = parsed_entry.env[key] if key in parsed_entry.env else parsed_entry.headers[key]
-            self._keyring.set(ref, value)
+            self._credentials.set(ref, value)
 
         config = {"transport": to_transport_config(parsed_entry, applicable)}
         try:

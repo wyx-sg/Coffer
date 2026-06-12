@@ -242,7 +242,7 @@ async def svc(store, audit_svc, rs, keyring) -> AgentMcpEntryService:
         audit=audit_svc,
         store=store,
         resource_service=rs,
-        keyring=keyring,
+        credentials=keyring,
     )
 
 

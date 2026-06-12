@@ -184,7 +184,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # discovery + confirm (no auto-registration on startup). Passing
     # builtin_tools registers the skill tools (list_skills / load_skill) so the
     # built-in chat agent can reach them through the gateway (spec 008).
-    wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools)
+    wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools, credential_store)
 
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
     # into `builtin_tools` so the gateway can expose them.
