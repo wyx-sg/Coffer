@@ -19,6 +19,7 @@ import { GeneralSettings } from "./pages/settings/GeneralSettings";
 import { DataSettings } from "./pages/settings/DataSettings";
 import { AppSettings } from "./pages/settings/AppSettings";
 import { SecuritySettings } from "./pages/settings/SecuritySettings";
+import { SyncSettings } from "./pages/settings/SyncSettings";
 import { AboutPage } from "./pages/settings/AboutPage";
 import { ModelsPage } from "./pages/settings/ModelsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -67,6 +68,7 @@ export const router = createBrowserRouter([
           // Legacy route — embedding/chunking config merged into the Models
           // page. Keep old bookmarks and links working by redirecting.
           { path: "embedding", element: <Navigate to="/settings/models" replace /> },
+          { path: "sync", element: <SyncSettings /> },
           { path: "security", element: <SecuritySettings /> },
           { path: "app", element: <AppSettings /> },
           { path: "about", element: <AboutPage /> },

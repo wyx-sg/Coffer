@@ -19,6 +19,7 @@
 | 007 | **Memory** ([spec](../../specs/007-memory/spec.md))                           | 已采纳 — 代码已随 PR #55/#58 合并 (跨 agent 共享、原生的 memory，[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) + [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)) |
 | 008 | **Agent Chat** ([spec](../../specs/008-agent-chat/spec.md))                   | 已采纳 — 代码已随 PR #57 合并            |
 | 009 | **Channels** ([spec](../../specs/009-channels/spec.md))                       | 已接受 — 代码已随 PR #59 合并 ([ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)) |
+| 010 | **多机同步** ([spec](../../specs/010-sync/spec.md))                            | 已接受 — 通过用户自有 git 仓库同步仓库状态 ([ADR-016](../../docs/decisions/ADR-016-multi-machine-sync.md))；由章程 0.3.0 对原则 1 的修订解禁 |
 
 ## 明确不做的事 (当前规范范围内)
 
@@ -27,7 +28,6 @@
 
 - **macOS Apple 公证 (notarisation)** — 需要付费的 Apple Developer 账号；
   当前用户首次启动时手动解除 quarantine。等账号到位再补。
-- **多机同步** — 章程禁止云端事实记录方；如需放开，必须走章程修订。
 - **网关侧的流式进度转发 (Streaming progress forwarding through the
   gateway)** — 主流 MCP gateway 都不做这件事；本规范与生态保持一致
   (透传 token + 重置超时，不主动转发)。

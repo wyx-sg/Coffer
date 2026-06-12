@@ -94,6 +94,14 @@ _STATUS: dict[str, int] = {
     "CHANNEL_NOT_PAIRED": 409,
     "CHANNEL_NOT_RUNNING": 409,
     "CHANNEL_SEND_FAILED": 502,
+    # sync (spec 010)
+    "SYNC_NOT_CONFIGURED": 409,
+    "SYNC_IN_PROGRESS": 409,
+    "SYNC_CONFLICT": 409,
+    "SYNC_WORKSPACE_TOO_NEW": 409,
+    "SYNC_GIT_FAILED": 502,
+    "SYNC_SERIALIZATION_INVALID": 422,
+    "MASTER_KEY_FILE_INVALID": 422,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a

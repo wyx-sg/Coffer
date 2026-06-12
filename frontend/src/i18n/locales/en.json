@@ -348,7 +348,8 @@
       "security": "Security",
       "app": "App",
       "about": "About",
-      "models": "Models & Embedding"
+      "models": "Models & Embedding",
+      "sync": "Sync"
     },
     "general": {
       "title": "Display",
@@ -451,6 +452,35 @@
       "baseUrl": "Base URL",
       "baseUrlPlaceholder": "e.g. http://localhost:11434",
       "setDefault": "Set as default"
+    },
+    "sync": {
+      "title": "Multi-machine sync",
+      "description": "Keep this vault in sync across your machines using a git repository you own. The master key never travels through git — bring it to each new machine once, out-of-band.",
+      "remote": "Git remote (yours)",
+      "branch": "Branch",
+      "enable": "Enable sync",
+      "auto": "Auto-sync in the background",
+      "interval": "Auto-sync interval (seconds)",
+      "syncNow": "Sync now",
+      "status": "Status",
+      "lastSync": "last sync",
+      "conflicts": "Conflicts to resolve",
+      "resolveOurs": "Keep this machine's version",
+      "resolveTheirs": "Keep the remote version",
+      "lockedHint": "Credentials present but locked: {{refs}} — import the master key to unlock.",
+      "masterKey": "Master key (out-of-band)",
+      "masterKeyHint": "Export this machine's key to a file and move it to another machine over a channel you trust, then import it there. Never put it in the sync repo.",
+      "keyPath": "Local key file path",
+      "exportKey": "Export key",
+      "importKey": "Import key",
+      "statuses": {
+        "unconfigured": "Not configured",
+        "clean": "In sync",
+        "syncing": "Syncing…",
+        "conflicted": "Conflicted",
+        "error": "Error",
+        "credentials_locked": "Credentials locked"
+      }
     }
   },
   "daemon": {

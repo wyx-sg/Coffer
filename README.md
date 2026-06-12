@@ -23,6 +23,8 @@ Coffer is a daemon + CLI + desktop app that gives every AI agent on your machine
 - **Memory** — one canonical, agent-native memory store shared across agents (Claude / Codex), readable and writable over MCP.
 - **Channels** — chat with a built-in agent from Telegram or SeaTalk, answer approval prompts, and receive notifications from your phone.
 
+Run Coffer on more than one machine? **Multi-machine sync** keeps one vault consistent across them through a git repository you own — knowledge, memory, resources, and ciphertext-only credentials travel; the encryption key never leaves your machines.
+
 A built-in **chat** platform and Web/desktop UI tie them together: talk to a Coffer agent, browse and curate every kind, and watch invocations live.
 
 📖 **Documentation site:** https://wyx-sg.github.io/Coffer/

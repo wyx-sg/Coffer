@@ -1,0 +1,224 @@
+openapi: 3.0.3
+info:
+  title: Coffer — Sync API
+  version: 0.1.0
+  description: >
+    REST surface for multi-machine sync (spec 010). Sync is a cross-cutting
+    service, not a resource kind, so it has its own endpoints rather than riding
+    /resources. All paths require the loopback bearer token. The master key is
+    never returned over the network except via the explicit, audited
+    key-export endpoint that writes it to a local file path.
+
+servers:
+  - url: http://127.0.0.1:8000
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/sync/config:
+    get:
+      summary: Get sync configuration
+      operationId: getSyncConfig
+      tags: [sync]
+      responses:
+        '200':
+          description: Current sync config
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncConfigOut' }
+    put:
+      summary: Update sync configuration
+      operationId: putSyncConfig
+      tags: [sync]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SyncConfigIn' }
+      responses:
+        '200':
+          description: Updated config
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncConfigOut' }
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/v1/sync/status:
+    get:
+      summary: Get last-run sync status
+      operationId: getSyncStatus
+      tags: [sync]
+      responses:
+        '200':
+          description: Current sync state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncStatusOut' }
+
+  /api/v1/sync/run:
+    post:
+      summary: Trigger a sync run (export -> pull -> push -> import)
+      operationId: runSync
+      tags: [sync]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SyncRunIn' }
+      responses:
+        '200':
+          description: Run completed (possibly into conflicted/locked state)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncStatusOut' }
+        '409':
+          description: Sync not configured or already running
+          $ref: '#/components/responses/Conflict'
+
+  /api/v1/sync/resolve:
+    post:
+      summary: Resolve conflicting paths
+      operationId: resolveSync
+      tags: [sync]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SyncResolveIn' }
+      responses:
+        '200':
+          description: Conflict resolved; resulting status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncStatusOut' }
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/v1/sync/key/export:
+    post:
+      summary: Export this machine's master key to a local file (out-of-band transfer)
+      operationId: exportMasterKey
+      tags: [sync]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KeyExportIn' }
+      responses:
+        '200':
+          description: Key written to the given local path
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyOpOut' }
+
+  /api/v1/sync/key/import:
+    post:
+      summary: Import a master key from a local file onto this machine
+      operationId: importMasterKey
+      tags: [sync]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KeyImportIn' }
+      responses:
+        '200':
+          description: Key installed; resulting status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncStatusOut' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  responses:
+    ValidationError:
+      description: Invalid request body
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Conflicting state
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    SyncConfigIn:
+      type: object
+      properties:
+        remote: { type: string, nullable: true }
+        enabled: { type: boolean }
+        auto: { type: boolean }
+        interval_seconds: { type: integer, minimum: 30 }
+        branch: { type: string }
+    SyncConfigOut:
+      type: object
+      required: [enabled, auto, interval_seconds, branch]
+      properties:
+        remote: { type: string, nullable: true }
+        enabled: { type: boolean }
+        auto: { type: boolean }
+        interval_seconds: { type: integer }
+        branch: { type: string }
+        updated_at: { type: string }
+    SyncStatusOut:
+      type: object
+      required: [status, conflict_paths, locked_refs]
+      properties:
+        status:
+          type: string
+          enum: [unconfigured, clean, syncing, conflicted, error, credentials_locked]
+        last_sync_at: { type: string, nullable: true }
+        last_error: { type: string, nullable: true }
+        conflict_paths:
+          type: array
+          items: { type: string }
+        locked_refs:
+          type: array
+          items: { type: string }
+    SyncRunIn:
+      type: object
+      properties:
+        push: { type: boolean, description: "Push after a clean merge (default true)" }
+        pull: { type: boolean, description: "Pull before pushing (default true)" }
+    SyncResolveIn:
+      type: object
+      required: [strategy]
+      properties:
+        strategy:
+          type: string
+          enum: [ours, theirs, resolved]
+        paths:
+          type: array
+          items: { type: string }
+          description: "Paths to resolve; empty means all conflicting paths"
+    KeyExportIn:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, description: "Local filesystem path to write the key to" }
+    KeyImportIn:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, description: "Local filesystem path to read the key from" }
+    KeyOpOut:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }

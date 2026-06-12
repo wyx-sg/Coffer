@@ -17,6 +17,7 @@
 | 007 | **Memory** ([spec](../../specs/007-memory/spec.md))                           | Accepted — code merged in PRs #55/#58 (shared agent-native memory, [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) + [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)) |
 | 008 | **Agent Chat** ([spec](../../specs/008-agent-chat/spec.md))                   | Accepted — code merged in PR #57                   |
 | 009 | **Channels** ([spec](../../specs/009-channels/spec.md))                       | Accepted — code merged in PR #59 ([ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)) |
+| 010 | **Multi-Machine Sync** ([spec](../../specs/010-sync/spec.md))                 | Accepted — sync vault state over the user's own git repo ([ADR-016](../../docs/decisions/ADR-016-multi-machine-sync.md)); enabled by the constitution 0.3.0 amendment to Principle I |
 
 ## Explicit non-goals (current spec)
 
@@ -25,8 +26,6 @@ reviewers do not mistake their absence for an oversight.
 
 - **macOS Apple notarisation** — requires a paid Apple Developer account; users
   clear quarantine manually on first launch. Add when the account is set up.
-- **Multi-machine sync** — the constitution forbids cloud system-of-record;
-  revisit only via a constitutional amendment.
 - **Streaming progress forwarding through the gateway** — no mainstream MCP
   gateway does this; this spec matches the ecosystem (token passthrough +
   timeout reset, no active forward).

@@ -18,6 +18,26 @@ providers only — they never become the system of record for any vault state.
 The HTTP API binds to `127.0.0.1`. Replicating user-state to a vendor-
 controlled cloud requires a constitutional amendment.
 
+**Exception — user-controlled sync medium.** Synchronising vault state to a
+**user-owned, user-controlled medium** (e.g. the user's own git repository) is
+permitted, provided **all** of the following hold:
+
+1. **No new system of record.** Every participating machine holds the full
+   vault state; the medium serves only as transport and history. It never
+   becomes the sole or authoritative system of record — wipe the medium and
+   each machine still has its complete vault.
+2. **Ciphertext-only secrets.** Any credential material that leaves a machine
+   does so only as Fernet ciphertext. The encryption master key **never** leaves
+   the machine through the sync medium; it is bootstrapped onto each machine
+   out-of-band.
+3. **User opt-in and ownership.** Sync is off by default and points at a remote
+   the user supplies and controls. Coffer ships no hosted/vendor sync endpoint;
+   doing so would still require a further amendment.
+
+This exception does not weaken the prohibition on vendor-controlled clouds as a
+system of record; it authorises only user-owned transport that satisfies the
+three conditions above.
+
 ### II. Spec-as-Truth (Spec-Driven Development)
 
 Specifications under `specs/` are the canonical product contract. Every PR
@@ -87,4 +107,17 @@ Architectural Constraints, or to a Quality Gate requires:
 constitutional principles or constraints it affects, and explain why the
 change respects (or formally amends) them.
 
-**Version**: 0.2.0
+**Version**: 0.3.0
+
+> **0.3.0 amendment (spec 010-sync).** Added the *user-controlled sync medium*
+> exception to Principle I, authorising multi-machine sync over a user-owned
+> git repository under three conditions (no new system of record, ciphertext-
+> only secrets, user opt-in/ownership). Motivation: enable a single user to
+> keep one vault consistent across their own machines without ceding local-
+> first guarantees. Current behaviour: multi-machine sync was an explicit
+> non-goal. Proposed behaviour: permitted under the bounded exception above.
+> Downstream impact: new spec 010-sync (sync engine, CLI/HTTP surfaces, daemon
+> auto-sync worker); no change to credential-at-rest or loopback-binding rules.
+> Alternatives considered: peer-to-peer (Syncthing-style) and user-owned object
+> storage — rejected in favour of git for built-in history, diff, and merge.
+> Decision recorded by the project owner.

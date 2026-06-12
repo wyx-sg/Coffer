@@ -23,6 +23,8 @@ Coffer 是一个守护进程 (daemon) + CLI + 桌面应用，它为你机器上�
 - **Memory** —— 一个跨 agent（Claude / Codex）共享的、agent-native 的唯一权威 memory 存储，可经 MCP 读写。
 - **Channels** —— 从 Telegram 或 SeaTalk 与内置 agent 聊天、回应审批提示，并在手机上接收通知。
 
+在多台机器上用 Coffer？**多机同步**通过一个你自己掌控的 git 仓库让一个仓库在多机间保持一致 —— 知识、记忆、资源，以及仅密文的凭证都会同步；加密密钥绝不离开你的机器。
+
 内置的 **chat** 平台与 Web/桌面 UI 把它们串起来：与 Coffer agent 对话、浏览并管理每一种 kind，并实时观察 invocation。
 
 📖 **文档站点：** https://wyx-sg.github.io/Coffer/

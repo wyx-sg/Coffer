@@ -54,55 +54,35 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.surfaces.http import cors, daemon_routes
 from coffer.surfaces.http import errors as err_handlers
-from coffer.surfaces.http.agent_config_routes import router as agent_config_router
-from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
-from coffer.surfaces.http.agent_unmanaged_skill_routes import router as agent_unmanaged_skill_router
-from coffer.surfaces.http.agent_workspace_routes import router as agent_workspace_router
 from coffer.surfaces.http.app_mcp_composition import (
     build_prunable_registry,
     reaper_kwargs_from_env,
     wire_mcp_kind,
 )
-from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.channel_routes import router as channel_router
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
-from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
-from coffer.surfaces.http.chat.model_routes import router as chat_model_router
-from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
     run_legacy_keychain_migration,
 )
-from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
+    get_master_key_manager,
     get_mcp_session_factory,
     set_audit_service,
     set_embedding_config_service,
     set_resource_service,
     set_retention_service,
 )
-from coffer.surfaces.http.embedding_routes import router as embedding_router
-from coffer.surfaces.http.fs_routes import router as fs_router
-from coffer.surfaces.http.knowledge_base import router as kb_router
-from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
-from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
-from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
-from coffer.surfaces.http.memory import router as memory_router
 from coffer.surfaces.http.migrations_runner import run_migrations
-from coffer.surfaces.http.projection_routes import agent_native_router
-from coffer.surfaces.http.projection_routes import router as projection_router
 from coffer.surfaces.http.projection_wiring import wire_projection
-from coffer.surfaces.http.resource_routes import router as resource_router
-from coffer.surfaces.http.retention_routes import router as retention_router
-from coffer.surfaces.http.settings_routes import router as settings_router
-from coffer.surfaces.http.skill_routes import router as skill_router
+from coffer.surfaces.http.routing import include_all_routers
+from coffer.surfaces.http.sync_wiring import start_sync, stop_sync
 from coffer.surfaces.http.wiring import (
     build_substrate,
     wire_chat,
@@ -142,9 +122,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine_with_pragmas(_db_url())
     sm = session_maker(engine)
 
-    credential_store = await init_credential_store(
-        engine, pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
-    )
+    db_path = pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
+    credential_store = await init_credential_store(engine, db_path)
 
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resource_svc = ResourceService(
@@ -271,6 +250,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retention_worker = worker
     app.state.retention_worker_task = worker_task
 
+    # Multi-machine sync (spec 010); worker is inert until the user enables it.
+    start_sync(app, resource_svc, audit, sm, db_path, get_master_key_manager())
+
     # Channel adapter reconciler (spec 009). Started after the daemon token is
     # published so the callback listener can be spawned with valid loopback
     # credentials on its first tick.
@@ -296,6 +278,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(Exception):
             await audit.record(AuditEventType.DAEMON_STOPPED.value, actor="system")
         worker.stop()
+        await stop_sync(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an
         # in-flight tick cannot resurrect adapters dispose() just stopped;
@@ -364,35 +347,5 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app.state.kinds.setdefault("channel", make_channel_kind())
     cors.install(app)
     err_handlers.register(app)
-    app.include_router(daemon_routes.router)
-    app.include_router(resource_router)
-    app.include_router(audit_router)
-    app.include_router(retention_router)
-    app.include_router(credential_router)
-    app.include_router(settings_router)
-    app.include_router(embedding_router)
-    # Agent + skill kind routes (specs 004-agent-registry, 005-skill-manager)
-    app.include_router(agent_router)
-    app.include_router(agent_config_router)
-    app.include_router(agent_workspace_router)
-    app.include_router(agent_unmanaged_skill_router)
-    app.include_router(fs_router)
-    app.include_router(skill_router)
-    # KB router (spec 006-knowledge-base)
-    app.include_router(kb_router)
-    # MCP-specific routers
-    app.include_router(mcp_protocol_router)
-    app.include_router(mcp_capability_router)
-    app.include_router(mcp_invocation_router)
-    # Memory router (spec 007-memory)
-    app.include_router(memory_router)
-    # Memory projection router (spec 007-memory; bridges memory + agent)
-    app.include_router(projection_router)
-    app.include_router(agent_native_router)
-    # Agent chat routers (spec 008)
-    app.include_router(chat_conversation_router)
-    app.include_router(chat_turn_router)
-    app.include_router(chat_model_router)
-    # Channel routes (spec 009)
-    app.include_router(channel_router)
+    include_all_routers(app)
     return app

@@ -348,7 +348,8 @@
       "security": "安全",
       "app": "应用",
       "about": "关于",
-      "models": "模型与向量"
+      "models": "模型与向量",
+      "sync": "同步"
     },
     "general": {
       "title": "显示",
@@ -451,6 +452,35 @@
       "baseUrl": "Base URL",
       "baseUrlPlaceholder": "例：http://localhost:11434",
       "setDefault": "设为默认"
+    },
+    "sync": {
+      "title": "多机同步",
+      "description": "通过你自己的 git 仓库在多台机器间保持此仓库同步。master key 绝不经过 git——首次接入每台新机器时用带外通道带过去一次。",
+      "remote": "Git remote（你自己的）",
+      "branch": "分支",
+      "enable": "启用同步",
+      "auto": "后台自动同步",
+      "interval": "自动同步间隔（秒）",
+      "syncNow": "立即同步",
+      "status": "状态",
+      "lastSync": "上次同步",
+      "conflicts": "待解决的冲突",
+      "resolveOurs": "保留本机版本",
+      "resolveTheirs": "保留远端版本",
+      "lockedHint": "凭证已存在但被锁定：{{refs}}——导入 master key 后解锁。",
+      "masterKey": "Master key（带外）",
+      "masterKeyHint": "把本机的 key 导出到文件，通过你信任的通道带到另一台机器再导入。切勿放进同步仓库。",
+      "keyPath": "本地 key 文件路径",
+      "exportKey": "导出 key",
+      "importKey": "导入 key",
+      "statuses": {
+        "unconfigured": "未配置",
+        "clean": "已同步",
+        "syncing": "同步中…",
+        "conflicted": "有冲突",
+        "error": "错误",
+        "credentials_locked": "凭证已锁定"
+      }
     }
   },
   "daemon": {

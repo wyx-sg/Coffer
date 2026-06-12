@@ -5,6 +5,7 @@ import {
   Database,
   Info,
   Laptop,
+  RefreshCw,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
@@ -35,6 +36,11 @@ const DATA_ITEM: Item = {
   labelKey: "settings.tabs.data",
   icon: Database,
 };
+const SYNC_ITEM: Item = {
+  to: "/settings/sync",
+  labelKey: "settings.tabs.sync",
+  icon: RefreshCw,
+};
 const APP_ITEM: Item = {
   to: "/settings/app",
   labelKey: "settings.tabs.app",
@@ -56,8 +62,8 @@ export function SettingsLayout() {
   // The App tab (launch-at-login) is desktop-only — it is hidden in the
   // browser, where those Tauri capabilities don't exist.
   const items: Item[] = isTauri()
-    ? [GENERAL_ITEM, MODELS_ITEM, DATA_ITEM, SECURITY_ITEM, APP_ITEM, ABOUT_ITEM]
-    : [GENERAL_ITEM, MODELS_ITEM, DATA_ITEM, SECURITY_ITEM, ABOUT_ITEM];
+    ? [GENERAL_ITEM, MODELS_ITEM, DATA_ITEM, SYNC_ITEM, SECURITY_ITEM, APP_ITEM, ABOUT_ITEM]
+    : [GENERAL_ITEM, MODELS_ITEM, DATA_ITEM, SYNC_ITEM, SECURITY_ITEM, ABOUT_ITEM];
 
   return (
     <div className="space-y-8">

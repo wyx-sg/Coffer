@@ -81,6 +81,13 @@ class AuditEventType(StrEnum):
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"
     CHANNEL_NOTIFY_SENT = "channel_notify_sent"
+    # spec 010-sync
+    SYNC_CONFIG_UPDATED = "sync_config_updated"
+    SYNC_COMPLETED = "sync_completed"
+    SYNC_CONFLICTED = "sync_conflicted"
+    SYNC_RESOLVED = "sync_resolved"
+    MASTER_KEY_EXPORTED = "master_key_exported"
+    MASTER_KEY_IMPORTED = "master_key_imported"
 
 
 @dataclass
