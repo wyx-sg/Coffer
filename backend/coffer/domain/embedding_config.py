@@ -47,7 +47,7 @@ class GlobalEmbeddingConfig:
         if provider not in EMBEDDING_PROVIDERS:
             return None
         return EmbeddingConfig(
-            provider=provider,  # type: ignore[arg-type]
+            provider=provider,
             model=self.model or "",
             base_url=self.base_url,
             credential_ref=self.credential_ref,
