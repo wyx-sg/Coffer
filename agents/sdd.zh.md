@@ -41,7 +41,7 @@ specs/<NNN>-<short-name>/
 - `specs/<NNN>/spec.md`（及其 `spec.zh.md` 对照）——用户可见的契约与验收场景。
 - `specs/<NNN>/contracts/api.openapi.yaml`——线上契约；增删/重命名端点与 schema 以匹配代码。
 - `specs/<NNN>/data-model.md`、`plan.md`、`quickstart.md`（及各自的 `.zh.md` 对照）——实体、计划与用法说明。
-- 改动触及的跨切面文档：相关的 `docs/decisions/` ADR、`.specify/memory/architecture.md`，以及受影响的 `agents/*` 约定或 `agents/ui-shell/` 规格。
+- 改动触及的跨切面文档：相关的 `docs/decisions/` ADR、`.specify/memory/architecture.md`，以及受影响的 `agents/*` 约定（如 `agents/visual-language.md`）。
 
 每个 prose `.md` 都有 `.zh.md` 对照，必须在同一个 commit 中一并更新（仅 `tasks.md` 与 OpenAPI YAML 例外）。验收审计（`scripts/audit_acceptance.py`，由 `make verify` 运行）把每个 `spec.md` 场景名绑定到测试标记，所以重命名/新增/删除场景时，也要同步更新其 `@pytest.mark.acceptance(... scenario=...)` / `acceptance(...)` 标记。纯重构、或没有契约影响的纯前端改动无需改 spec——但只要行为、端点、schema 或 IA 变了，文档就要随之改动。
 

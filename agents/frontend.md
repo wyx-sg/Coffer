@@ -6,7 +6,7 @@ Coffer's frontend is the desktop app's web surface (`frontend/`), rendered in
 the Tauri shell in production and the Vite dev server (`make dev`) in
 development. This file is the engineering convention for that surface — the
 counterpart to [`stack.md`](./stack.md) (backend) and
-[`ui-shell/visual-language.md`](./ui-shell/visual-language.md) (visual design).
+[`visual-language.md`](./visual-language.md) (visual design).
 Read it before touching `frontend/src`.
 
 If this file and the code disagree, the code that matches the **canonical**
@@ -146,7 +146,7 @@ return useMutation({
   `ApprovalCard` currently bypass this — fix on touch.)
 - **Type scale only** — `text-sm`/`text-xs`/… never `text-[11px]`. Radius from
   the prescribed set (`rounded-lg` cards, `rounded-md` controls, `rounded-sm`
-  chips). See [`ui-shell/visual-language.md`](./ui-shell/visual-language.md).
+  chips). See [`visual-language.md`](./visual-language.md).
 - **Light-only.** Do not add `dark:` variants — there is no dark token set; they
   are dead styles.
 - Keep files focused; a component growing past a few hundred lines is a signal to
