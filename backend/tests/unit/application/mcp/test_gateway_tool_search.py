@@ -1,5 +1,6 @@
 # backend/tests/unit/application/mcp/test_gateway_tool_search.py
 import pytest
+
 from coffer.application.mcp.gateway_tool_search import (
     TOOL_SEARCH_NAME,
     execute_tool_search,
