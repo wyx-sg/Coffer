@@ -87,3 +87,11 @@ line. No master key, no plaintext, no metadata beyond the ref (the filename).
 
 `~/.coffer/logs/`, `coffer.db`, `daemon.json`, PID/port files, and the master
 key file/keychain entry.
+
+## Derived indexes (excluded + regenerated)
+
+Files that are *regenerated* from the source-of-truth files are excluded from
+the mirror — they differ per machine, so syncing them would cause spurious
+same-path conflicts. The memory store's `MEMORY.md` index is the current case:
+the per-fact `<slug>.md` files sync, and `MEMORY.md` is rebuilt from the merged
+facts on import. The set lives in `infrastructure/sync/workspace.DERIVED_INDEX_NAMES`.

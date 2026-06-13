@@ -86,3 +86,10 @@ diff 频繁变动）。导入时按 `<kind>:<name>` 对资源执行 upsert；wor
 
 `~/.coffer/logs/`、`coffer.db`、`daemon.json`、PID/端口文件，以及主密钥
 文件 / keychain 条目。
+
+## 派生索引（排除并重建）
+
+由「事实源文件」重新生成的派生文件会被排除出镜像——它们逐机不同，若同步会
+造成同路径的伪冲突。当前的例子是 memory store 的 `MEMORY.md` 索引：逐条
+`<slug>.md` 事实文件照常同步，`MEMORY.md` 在导入后由合并后的事实文件重建。
+排除集合见 `infrastructure/sync/workspace.DERIVED_INDEX_NAMES`。
