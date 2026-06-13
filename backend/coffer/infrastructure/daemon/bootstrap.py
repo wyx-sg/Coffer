@@ -4,10 +4,18 @@ ADR-006 (detect-or-spawn) calls for a ``flock`` held while a freshly-spawned
 daemon decides whether to bind. :func:`acquire_or_existing` is that critical
 section: it takes an exclusive lock on ``~/.coffer/daemon.lock`` and, under it,
 probes :func:`live_daemon`, and only if none is live binds a port and writes
-``daemon.json``. Serialising probe+bind+write closes the check-then-act race in
-which two near-simultaneous auto-spawns each pass the probe, each bind a
-different free port, and the second's atomic ``os.replace`` clobbers
-``daemon.json`` — orphaning the first daemon.
+``daemon.json``.
+
+Crucially the lock is held PAST the ``daemon.json`` write — until the
+freshly-spawned daemon is actually serving HTTP. :func:`acquire_or_existing`
+returns a ``release`` callable that the daemon entrypoint invokes only once
+uvicorn is listening. Serialising probe+bind+write+**announce-ready** closes the
+check-then-act race in which two near-simultaneous auto-spawns each pass the
+probe, each bind a different free port, and the second's atomic ``os.replace``
+clobbers ``daemon.json`` — orphaning the first daemon. Releasing the lock the
+instant daemon.json was written (rather than at serving) left a sub-second boot
+window in which a racing spawn ran :func:`live_daemon`, got ``None`` (the port
+is bound but not yet answering ``/daemon/status``), and bound a second port.
 """
 
 from __future__ import annotations
@@ -17,7 +25,7 @@ import os
 import secrets
 import socket
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +36,15 @@ from coffer.infrastructure.daemon.pid_lock import DaemonInfo, read, write
 from coffer.infrastructure.daemon.port_alloc import bind_free_socket
 
 _DAEMON_JSON_VERSION = 1
+
+#: Releases the spawn lock. Returned by :func:`acquire_or_existing`; the daemon
+#: entrypoint calls it once the server is serving HTTP. Idempotent.
+ReleaseSpawnLock = Callable[[], None]
+
+
+def _noop_release() -> None:
+    """A release callable for paths that never held (or already freed) the lock."""
+
 
 # How long to wait when probing whether an existing daemon is reachable.
 _LIVENESS_PROBE_TIMEOUT: float = 2.0
@@ -45,19 +62,18 @@ def _spawn_lock_path() -> Path:
     return _coffer_dir() / "daemon.lock"
 
 
-@contextmanager
-def _spawn_lock() -> Iterator[int]:
-    """Hold an exclusive ``flock`` on ``~/.coffer/daemon.lock`` for the body.
+def _acquire_spawn_lock() -> int:
+    """Open ``~/.coffer/daemon.lock`` and take an exclusive ``flock``; return fd.
 
-    ADR-006: this is the lock that serialises the probe+bind+write critical
-    section so two racing auto-spawns can't both bind. On Windows (no
-    ``fcntl``) the lock degrades to a no-op — the daemon's own
+    ADR-006: this is the lock that serialises the probe+bind+write+announce
+    critical section so two racing auto-spawns can't both bind. The caller MUST
+    eventually free it via :func:`_release_spawn_lock`. On Windows (no
+    ``fcntl``) the lock degrades to a bare open fd — the daemon's own
     ``live_daemon`` refusal in ``acquire_or_existing`` plus the atomic
     ``os.replace`` remain as the last line of defence there.
 
-    Yields the held lockfile fd; the lock is released (and the fd closed) on
-    exit. The lockfile itself is intentionally left on disk between runs — a
-    flock is advisory and tied to the open fd, not the file's existence.
+    The lockfile itself is intentionally left on disk between runs — a flock is
+    advisory and tied to the open fd, not the file's existence.
     """
     lock_path = _spawn_lock_path()
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -65,18 +81,42 @@ def _spawn_lock() -> Iterator[int]:
     try:
         import fcntl
     except ImportError:  # pragma: no cover - Windows fallback
-        try:
-            yield fd
-        finally:
-            os.close(fd)
-        return
+        return fd
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
-        yield fd
-    finally:
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _release_spawn_lock(fd: int) -> None:
+    """Release the ``flock`` and close ``fd`` (best-effort; safe if already gone)."""
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - Windows fallback
+        pass
+    else:
         with contextlib.suppress(OSError):
             fcntl.flock(fd, fcntl.LOCK_UN)
+    with contextlib.suppress(OSError):
         os.close(fd)
+
+
+@contextmanager
+def _spawn_lock() -> Iterator[int]:
+    """Scoped form of the spawn lock: hold it for the body, release on exit.
+
+    Used where the critical section is fully contained in a ``with`` block.
+    :func:`acquire_or_existing` instead holds the lock past its own return (it
+    must stay held until the daemon is serving), so it uses the acquire/release
+    primitives directly rather than this context manager.
+    """
+    fd = _acquire_spawn_lock()
+    try:
+        yield fd
+    finally:
+        _release_spawn_lock(fd)
 
 
 def live_daemon() -> DaemonInfo | None:
@@ -150,25 +190,46 @@ def acquire() -> tuple[DaemonInfo, socket.socket]:
     return info, sock
 
 
-def acquire_or_existing() -> tuple[DaemonInfo, socket.socket | None]:
+def acquire_or_existing() -> tuple[DaemonInfo, socket.socket | None, ReleaseSpawnLock]:
     """ADR-006 spawn critical section, under the exclusive spawn lock.
 
-    Under ``~/.coffer/daemon.lock``:
-      1. probe :func:`live_daemon`;
-      2. if a daemon is already live, return ``(its info, None)`` WITHOUT
-         binding a second port (so daemon.json is never clobbered);
-      3. otherwise :func:`acquire` a port + write daemon.json and return
-         ``(info, sock)`` with the held socket.
+    Takes ``~/.coffer/daemon.lock`` and then:
+      1. probes :func:`live_daemon`;
+      2. if a daemon is already live, releases the lock and returns
+         ``(its info, None, no-op release)`` WITHOUT binding a second port (so
+         daemon.json is never clobbered);
+      3. otherwise :func:`acquire` a port + write daemon.json and returns
+         ``(info, sock, release)`` — **with the lock STILL held**. The caller
+         passes the socket's fd to uvicorn and invokes ``release`` only once the
+         server is actually serving HTTP.
 
-    Holding the lock across probe+bind+write is what closes the
-    check-then-act race that orphans daemons; the caller passes the returned
-    socket's fd to uvicorn (when non-None) or exits cleanly (when None).
+    Holding the lock across probe+bind+write **and on past the return, until the
+    daemon is serving**, is what closes the boot-window race that orphans
+    daemons: a racing auto-spawn that wakes mid-boot blocks on the still-held
+    lock (rather than probing a bound-but-not-serving port, getting ``None``,
+    and binding a second port). The returned ``release`` is idempotent, so the
+    entrypoint can also call it from a ``finally`` without double-freeing.
     """
-    with _spawn_lock():
+    fd = _acquire_spawn_lock()
+    released = False
+
+    def _release() -> None:
+        nonlocal released
+        if released:
+            return
+        released = True
+        _release_spawn_lock(fd)
+
+    try:
         existing = live_daemon()
         if existing is not None:
-            return existing, None
-        return acquire()
+            _release()
+            return existing, None, _noop_release
+        info, sock = acquire()
+    except BaseException:
+        _release()
+        raise
+    return info, sock, _release
 
 
 def release() -> None:

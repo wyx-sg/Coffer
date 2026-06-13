@@ -31,7 +31,12 @@ A built-in **chat** platform and Web/desktop UI tie them together: talk to a Cof
 
 ## Download & install
 
-### One-line CLI install (macOS)
+> **No tagged release yet.** The prebuilt binaries, the one-line installer, and
+> the desktop DMG below ship with Coffer's first tagged release and are not yet
+> published — those links will 404 until then. For now, **[install from
+> source](#install-from-source-developers)** (below) is the working path.
+
+### One-line CLI install (macOS) — _from the first release_
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
@@ -41,7 +46,7 @@ Installs three binaries — `coffer` (management CLI), `coffer-daemon`, `coffer-
 `~/.coffer/bin`. **The daemon auto-starts on first use — no manual start step.** Environment
 overrides: `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
 
-### Desktop app (most users)
+### Desktop app (most users) — _from the first release_
 
 Download the installer from [Releases](https://github.com/wyx-sg/Coffer/releases/latest):
 

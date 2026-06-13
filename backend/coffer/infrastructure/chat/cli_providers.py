@@ -6,10 +6,10 @@ stores the working directory in ``agent_config``; ``build_adapter`` constructs a
 reports whether the CLI binary is on PATH.
 
 The dialects encode each product's argv shape and line-delimited JSON output.
-The Claude Code stream-json schema is stable and fully mapped. The Codex
-``exec --json`` schema is mapped on a best-effort basis and is pending
-real-CLI verification; unrecognized lines are ignored rather than failing the
-turn, and tests pin the assumed shapes.
+Both are verified against the real CLIs: the Claude Code stream-json schema and
+the Codex ``exec --json`` schema (codex-cli 0.125.0) are each mapped from
+captured output and pinned by fixtures in ``test_cli_agent.py``. Unrecognized
+lines are ignored rather than failing the turn.
 """
 
 from __future__ import annotations
@@ -135,7 +135,30 @@ class ClaudeCodeDialect:
 
 
 class CodexDialect:
-    """Argv + ``codex exec --json`` parsing (best-effort; pending verification)."""
+    """Argv + ``codex exec --json`` parsing.
+
+    Verified against codex-cli 0.125.0. The event stream is flat JSONL — there
+    is no ``msg`` envelope — with these line types:
+
+      ``{"type":"thread.started","thread_id":"<uuid>"}``   — the session id
+      ``{"type":"turn.started"}``                          — ignored
+      ``{"type":"item.started","item":{...}}``             — ignored (see below)
+      ``{"type":"item.completed","item":{...}}``           — text / tool content
+      ``{"type":"turn.completed","usage":{...}}``          — terminal success
+      ``{"type":"error","message":"..."}`` and
+      ``{"type":"turn.failed","error":{"message":"..."}}`` — terminal failure
+
+    Content is carried ONLY on ``item.completed`` — ``item.started`` repeats the
+    same item id with partial data — so we map completions and ignore starts;
+    that is the de-dup that stops a tool call or message from being emitted
+    twice. A ``command_execution`` / ``file_change`` completion carries both the
+    call AND its result (exit code + output / the changed paths), so each maps
+    to a ``ToolCall`` followed by a ``ToolResult``.
+
+    Resume uses the ``codex exec resume <session_id>`` subcommand, which replays
+    ``thread.started`` with the SAME ``thread_id`` so the session id stays
+    stable across turns.
+    """
 
     binary = "codex"
 
@@ -147,43 +170,69 @@ class CodexDialect:
         return [self.binary, "exec", "--json", prompt]
 
     def parse(self, line: dict[str, Any], state: ParseState) -> list[AgentEvent]:
-        # Codex nests its payload under "msg" (older) or emits flat "item"/"type"
-        # events (newer). Handle both shapes; ignore anything unrecognized.
-        inner = line.get("msg")
-        msg: dict[str, Any] = inner if isinstance(inner, dict) else line
-        kind = msg.get("type")
-        thread = line.get("thread_id") or msg.get("thread_id") or msg.get("session_id")
-        if thread:
-            state.session_id = str(thread)
-        if kind in ("agent_message", "agent_message_delta"):
-            text = msg.get("message") or msg.get("text") or msg.get("delta") or ""
-            return [TextDelta(text=str(text))] if text else []
+        kind = line.get("type")
+        if kind == "thread.started":
+            thread = line.get("thread_id")
+            if thread:
+                state.session_id = str(thread)
+            return []
         if kind == "item.completed":
-            # Only the terminal item.completed carries content; emitting on
-            # item.started too would duplicate every text block and tool call.
-            return self._item(msg.get("item") or {}, state)
-        if kind in ("turn.completed", "task_complete", "turn_complete"):
-            return self._complete(msg, state)
+            return self._item(line.get("item") or {}, state)
+        if kind == "turn.completed":
+            return self._complete(line, state)
         if kind in ("error", "turn.failed"):
-            state.terminal_emitted = True
-            return [TurnError(code="cli_error", message=str(msg.get("message") or "codex error"))]
+            return self._error(line, state)
         return []
 
     def _item(self, item: dict[str, Any], state: ParseState) -> list[AgentEvent]:
         itype = item.get("type")
-        if itype == "agent_message" and item.get("text"):
-            return [TextDelta(text=str(item["text"]))]
-        if itype in ("command_execution", "tool_call", "function_call"):
-            tid = str(item.get("id", item.get("call_id", "")))
-            name = str(item.get("name") or item.get("command") or "command")
-            state.tool_names[tid] = name
-            return [ToolCall(tool_use_id=tid, tool_name=name, tool_input=item.get("input") or {})]
+        if itype == "agent_message":
+            text = item.get("text")
+            return [TextDelta(text=str(text))] if text else []
+        if itype == "command_execution":
+            return self._command(item, state)
+        if itype == "file_change":
+            return self._file_change(item, state)
         return []
 
-    def _complete(self, msg: dict[str, Any], state: ParseState) -> list[AgentEvent]:
-        usage = msg.get("usage") or {}
-        state.prompt_tokens = usage.get("input_tokens") or usage.get("prompt_tokens")
-        state.completion_tokens = usage.get("output_tokens") or usage.get("completion_tokens")
+    def _command(self, item: dict[str, Any], state: ParseState) -> list[AgentEvent]:
+        tid = str(item.get("id", ""))
+        command = str(item.get("command", ""))
+        state.tool_names[tid] = "shell"
+        call = ToolCall(tool_use_id=tid, tool_name="shell", tool_input={"command": command})
+        exit_code = item.get("exit_code")
+        output = str(item.get("aggregated_output", ""))
+        if exit_code not in (0, None):
+            result = ToolResult(
+                tool_use_id=tid,
+                tool_name="shell",
+                output=None,
+                error=output or f"command exited with code {exit_code}",
+            )
+        else:
+            result = ToolResult(
+                tool_use_id=tid,
+                tool_name="shell",
+                output={"output": output, "exit_code": exit_code},
+                error=None,
+            )
+        return [call, result]
+
+    def _file_change(self, item: dict[str, Any], state: ParseState) -> list[AgentEvent]:
+        tid = str(item.get("id", ""))
+        changes = item.get("changes") or []
+        state.tool_names[tid] = "file_change"
+        return [
+            ToolCall(tool_use_id=tid, tool_name="file_change", tool_input={"changes": changes}),
+            ToolResult(
+                tool_use_id=tid, tool_name="file_change", output={"changes": changes}, error=None
+            ),
+        ]
+
+    def _complete(self, line: dict[str, Any], state: ParseState) -> list[AgentEvent]:
+        usage = line.get("usage") or {}
+        state.prompt_tokens = usage.get("input_tokens")
+        state.completion_tokens = usage.get("output_tokens")
         state.terminal_emitted = True
         return [
             TurnDone(
@@ -192,6 +241,20 @@ class CodexDialect:
                 stop_reason="end_turn",
             )
         ]
+
+    def _error(self, line: dict[str, Any], state: ParseState) -> list[AgentEvent]:
+        # codex emits BOTH an `error` and a `turn.failed` for one failure; emit
+        # a single TurnError. `error` carries a top-level `message`; `turn.failed`
+        # nests it under `error.message`.
+        if state.terminal_emitted:
+            return []
+        state.terminal_emitted = True
+        message = line.get("message")
+        if message is None:
+            nested = line.get("error")
+            if isinstance(nested, dict):
+                message = nested.get("message")
+        return [TurnError(code="cli_error", message=str(message or "codex error"))]
 
 
 # ---------------------------------------------------------------------------
