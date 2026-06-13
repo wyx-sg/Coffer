@@ -21,6 +21,10 @@ Coffer ships a checked-in control layer so the agent-facing harness is enforced,
 
 The hooks and settings are pinned by `backend/tests/integration/harness/`, which subprocess the real scripts with synthetic stdin. They run under `make verify-integration`, so the harness tests itself.
 
+## Eval harness (Layer D)
+
+Non-deterministic AI behaviour — retrieval quality and tool-routing — is measured under [`evals/`](../evals/README.md): `make eval` (local, deterministic) and `make eval-routing` (needs a local LLM). It is the regression net for prompt / model / retrieval changes; see [ADR-017](../docs/decisions/ADR-017-industrial-grade-harness-in-layers.md) for the layer model.
+
 ## Conventions
 
 - Hooks are Python (no `jq` dependency; the project guarantees Python 3.12). A hook must never break the agent — on any error it exits 0 with no decision.

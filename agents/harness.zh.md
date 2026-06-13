@@ -21,6 +21,10 @@ Coffer 提交了一套 checked-in 的控制层，让 agent-facing harness 被强
 
 hooks 与 settings 由 `backend/tests/integration/harness/` 钉住：subprocess 跑真脚本、喂合成 stdin。它们在 `make verify-integration` 下运行，harness 自测。
 
+## Eval harness（Layer D）
+
+非确定性的 AI 行为——检索质量与工具路由——在 [`evals/`](../evals/README.md) 下评测：`make eval`（本地、确定性）与 `make eval-routing`（需本地 LLM）。它是 prompt / 模型 / 检索改动的回归网；层次模型见 [ADR-017](../docs/decisions/ADR-017-industrial-grade-harness-in-layers.zh.md)。
+
 ## 约定
 
 - hooks 用 Python（免 `jq` 依赖；项目保证 Python 3.12）。hook 绝不能弄坏 agent —— 任何异常都 exit 0、不下决定。

@@ -1,0 +1,8 @@
+{"request": "What do you remember about my deployment preferences?", "expected_tool": "recall"}
+{"request": "Please save that I prefer dark mode in all my tools.", "expected_tool": "remember"}
+{"request": "Find passages in my notes that explain Kafka ISR and the high watermark.", "expected_tool": "search_knowledge"}
+{"request": "Search my knowledge base for the exact string TODO(security).", "expected_tool": "grep_knowledge"}
+{"request": "Which skills can I use right now?", "expected_tool": "list_skills"}
+{"request": "Load the pql-generator skill so you can write a query.", "expected_tool": "load_skill"}
+{"request": "Which knowledge bases do I have registered?", "expected_tool": "list_knowledge_bases"}
+{"request": "Open the document at kb1/intro.md and show me its contents.", "expected_tool": "read_document"}
