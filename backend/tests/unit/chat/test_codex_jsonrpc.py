@@ -199,3 +199,40 @@ async def test_interleaved_response_request_notification() -> None:
     write_backs = [f for f in writer.frames if f.get("id") == 7 and "result" in f]
     assert write_backs and write_backs[0]["result"] == {"decision": "decline"}
     await client.close()
+
+
+async def test_eof_event_set_on_natural_eof() -> None:
+    """``rpc.eof`` fires when the reader signals natural EOF (empty bytes)."""
+    reader = FakeReader()
+    writer = FakeWriter()
+    client = CodexRpcClient(reader, writer)
+    client.start()
+
+    # Sanity: not yet set while the read loop is waiting.
+    assert not client.eof.is_set()
+
+    # Feed EOF.
+    reader.close()
+    await asyncio.wait_for(client.eof.wait(), timeout=1.0)
+    assert client.eof.is_set()
+
+
+async def test_eof_event_set_on_close_without_start() -> None:
+    """``rpc.eof`` fires after ``close()`` even when ``start()`` was never called."""
+    reader = FakeReader()
+    writer = FakeWriter()
+    client = CodexRpcClient(reader, writer)
+    # Deliberately do NOT call start().
+    await client.close()
+    assert client.eof.is_set()
+
+
+async def test_eof_event_set_on_close_while_running() -> None:
+    """``rpc.eof`` fires when ``close()`` cancels a running read loop."""
+    reader = FakeReader()
+    writer = FakeWriter()
+    client = CodexRpcClient(reader, writer)
+    client.start()
+    # Loop is blocked waiting for a line — close() must cancel it and set eof.
+    await client.close()
+    assert client.eof.is_set()

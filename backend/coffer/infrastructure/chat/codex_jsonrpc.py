@@ -68,8 +68,19 @@ class CodexRpcClient:
         self._read_task: asyncio.Task[None] | None = None
         self._handler_tasks: set[asyncio.Task[None]] = set()
         self._write_lock = asyncio.Lock()
+        self._eof = asyncio.Event()
 
     # -- lifecycle ---------------------------------------------------------
+
+    @property
+    def eof(self) -> asyncio.Event:
+        """Event that is set when the inbound read loop has fully terminated.
+
+        Set on all termination paths: normal EOF, exception, and :meth:`close`.
+        Waiters can use ``await rpc.eof.wait()`` to detect peer stream end without
+        reaching into private attributes.
+        """
+        return self._eof
 
     def start(self) -> None:
         """Spin up the inbound read loop (idempotent)."""
@@ -87,6 +98,9 @@ class CodexRpcClient:
             task.cancel()
         self._handler_tasks.clear()
         self._fail_pending(RuntimeError("codex rpc client closed"))
+        # Guarantee _eof is set even if start() was never called so that any
+        # waiter on eof.wait() does not hang after close().
+        self._eof.set()
 
     # -- outbound ----------------------------------------------------------
 
@@ -143,6 +157,7 @@ class CodexRpcClient:
             _logger.warning("codex_jsonrpc.read_loop_failed", exc_info=True)
         finally:
             self._fail_pending(RuntimeError("codex rpc stream ended"))
+            self._eof.set()
 
     def _dispatch(self, raw: bytes) -> None:
         try:

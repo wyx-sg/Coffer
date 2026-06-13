@@ -564,6 +564,54 @@ async def test_file_change_approval_joins_changes_by_item_id():
     assert server.approval_replies["fc-1"] == {"decision": "accept"}
 
 
+@pytest.mark.asyncio
+async def test_file_change_approval_prefers_approval_id_as_request_id():
+    """When the fileChange request params include ``approvalId``, it takes precedence."""
+    changes = [{"path": "b.py", "kind": "add"}]
+    frames = [
+        _Frame(
+            "turn/start",
+            "item/started",
+            {
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "item": {"id": "fc-2", "type": "fileChange", "changes": changes},
+            },
+        ),
+        # approvalId is distinct from itemId — the adapter must use approvalId.
+        _Frame(
+            "turn/start",
+            "item/fileChange/requestApproval",
+            {
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "itemId": "fc-2",
+                "approvalId": "appr-fc-42",
+            },
+            request_method=True,
+        ),
+        _Frame(
+            "turn/start",
+            "turn/completed",
+            {"threadId": "thread-1", "turn": {"id": "turn-1"}},
+        ),
+    ]
+    server = FakeCodexAppServer(frames=frames)
+    factory = _Factory(server)
+    adapter = _adapter(factory)
+    channel = ApprovalChannel()
+
+    events = await asyncio.wait_for(
+        _drive_with_decision(adapter, channel, ApprovalDecision(behavior="allow")),
+        timeout=5,
+    )
+    reqs = [e for e in events if isinstance(e, ApprovalRequest)]
+    assert len(reqs) == 1
+    assert reqs[0].request_id == "appr-fc-42"
+    assert reqs[0].tool_input == {"changes": changes}
+    assert server.approval_replies["appr-fc-42"] == {"decision": "accept"}
+
+
 # ---------------------------------------------------------------------------
 # T4 — cancellation
 # ---------------------------------------------------------------------------
@@ -633,6 +681,55 @@ async def test_stream_end_without_terminal_synthesizes_turn_done():
     await asyncio.wait_for(drive(), timeout=5)
     terminals = [e for e in out if isinstance(e, TurnDone)]
     assert len(terminals) == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_end_without_terminal_no_pending_task_warning(recwarn: Any) -> None:
+    """EOF-without-terminal path must not leak pending futures.
+
+    The pump is cancelled at session close; the old ``_notifications_until_eof``
+    leaked the in-flight ``nxt`` future and asyncio emitted a
+    "Task was destroyed but it is pending!" warning.  With the fix the warning
+    must not appear.
+    """
+    import warnings
+
+    server = FakeCodexAppServer(
+        frames=[
+            _Frame(
+                "turn/start",
+                "item/agentMessage/delta",
+                {"itemId": "i1", "delta": "bye"},
+            )
+        ]
+    )
+    factory = _Factory(server)
+    adapter = _adapter(factory)
+
+    stream = await adapter.run_turn(history=_user_turn("hi"), approvals=_NoApprovals())
+    out: list[Any] = []
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+
+        async def drive() -> None:
+            async for ev in stream:
+                out.append(ev)
+                if isinstance(ev, TextDelta):
+                    server.server_to_client.close()
+
+        await asyncio.wait_for(drive(), timeout=5)
+        # Allow the event loop to run one more iteration so any GC-triggered
+        # "Task destroyed but pending" warnings have a chance to surface.
+        await asyncio.sleep(0)
+
+    terminals = [e for e in out if isinstance(e, TurnDone)]
+    assert len(terminals) == 1
+
+    pending_warnings = [
+        w for w in caught if "Task was destroyed but it is pending" in str(w.message)
+    ]
+    assert pending_warnings == [], f"Unexpected pending-task warnings: {pending_warnings}"
 
 
 # ---------------------------------------------------------------------------
