@@ -1,9 +1,11 @@
 """Tool-search eval — measures the coffer__search_tools ranker offline.
 
 Scores the pure keyword ranker (``coffer.domain.mcp.tool_search.rank_tools``)
-over a labelled set of intent → expected-tool cases, using the same tool
-catalogue the agent would see. Fully local, deterministic, free — no LLM, so it
-runs in the default ``make eval`` path alongside the retrieval suite.
+over a labelled set of intent → expected-tool cases against an upstream-shaped
+catalogue (``<server>__<tool>`` names with near-duplicates across servers) — the
+same kind of aggregated catalogue the live tool ranks. Fully local,
+deterministic, free — no LLM, so it runs in the default ``make eval`` path
+alongside the retrieval suite.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from evals.metrics import mrr, recall_at_k
 
 def run_tool_search_eval(*, top_k: int = 3) -> dict:
     """Run the tool-search ranking suite; return a scorecard dict."""
-    catalog = load_jsonl("tool_catalog.jsonl")
+    catalog = load_jsonl("tool_search_catalog.jsonl")
     queries = load_jsonl("tool_search.jsonl")
     catalogue = [(t["name"], t["description"]) for t in catalog]
     names = [t["name"] for t in catalog]

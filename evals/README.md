@@ -56,10 +56,12 @@ embedding model, so it is fully deterministic and free.
 ranker that lifts aggregation tool-overload (spec 001 /
 [ADR-018](../docs/decisions/ADR-018-tool-retrieval-for-overload.md)). It runs the
 `datasets/tool_search.jsonl` intent queries through the same pure BM25-lite
-ranker the gateway uses and scores **recall@k** and **MRR** over the tool
-catalogue — does the right upstream tool land in the top-k? The ranker is pure,
-deterministic, and local (no model), so this suite runs in the default
-`python -m evals.run` alongside retrieval.
+ranker the gateway uses and scores **recall@k** and **MRR** over an
+upstream-shaped catalogue (`datasets/tool_search_catalog.jsonl` — `<server>__<tool>`
+names with near-duplicates across servers, the kind of aggregated catalogue the
+live tool actually ranks) — does the right upstream tool land in the top-k? The
+ranker is pure, deterministic, and local (no model), so this suite runs in the
+default `python -m evals.run` alongside retrieval.
 
 **Tool routing** (`routing_eval.py`) — gives the model the tool catalogue
 (`datasets/tool_catalog.jsonl`) plus a user request and asks for the single best
