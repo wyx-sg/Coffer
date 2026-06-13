@@ -14,7 +14,9 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 HOOKS_DIR = REPO_ROOT / ".claude" / "hooks"
 
 
-def run_hook(script_name: str, payload: dict, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+def run_hook(
+    script_name: str, payload: dict, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run a hook script with `payload` as JSON on stdin, return the completed process."""
     script = HOOKS_DIR / script_name
     return subprocess.run(
