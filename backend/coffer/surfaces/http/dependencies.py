@@ -390,3 +390,6 @@ def get_project_root_repo() -> Any:
 # Agent-chat (spec 008) dependency providers are re-exported from
 # surfaces/http/chat/dependencies.py (see the import at the top of this module),
 # which keeps this kind-agnostic core under its file-size budget.
+
+# Transcript-distillation (Spec 007 extension — ADR-020) dependency providers
+# are in coffer.surfaces.http.distill.state (extracted to keep this file ≤400 lines).

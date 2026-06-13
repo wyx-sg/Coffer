@@ -232,6 +232,64 @@ memory 的所有写路径（remember、update、用户编辑、惰性 reindex �
 | `"memory_cleared"`   | 清空一个 scope 后                          |
 | `"memory_projected"` | 建立/刷新一个投影后                        |
 
+## 对话记录提炼（Spec 007 扩展）
+
+对话记录提炼是 memory 事实的一个**生产者** —— 它复用现有的 `MemoryFact` 底座（不新增表，不新增资源 kind）。
+
+### 洞察类型
+
+一次 LLM 调用返回一个洞察数组，每条洞察的 `type` 取自封闭词汇表：
+
+| `type` | 含义 |
+| --- | --- |
+| `decision` | 会话中做出的蓄意架构或实现决策。 |
+| `gotcha` | 会话中发现的非显然陷阱、失效模式或约束。 |
+| `convention` | 项目特定的实践或风格规范，今后应当遵循。 |
+| `todo` | 会话中未解决的显式行动项或悬而未决的问题。 |
+
+每条洞察成为一个 `MemoryFact`，`actor="agent"`（由自动化提炼写入，非人工），`type` 存于 `metadata.type`。
+
+### 出处 —— `origin_session_id`
+
+每条提炼出的事实在事实 frontmatter 与 `documents.metadata` 里都携带 `origin_session_id`（对话记录的 session id）。这使自动化来源可审计：用户可查看是哪个 session 产生了某条事实，必要时可删除或修正它。
+
+提炼洞察的事实 frontmatter 示例：
+
+```markdown
+---
+name: use-make-release-for-tagging
+description: Always tag and push via make release; never git push --tags directly.
+metadata:
+  type: decision
+  actor: agent
+origin_session_id: 01JXYZ…
+created_at: 2026-06-14T08:00:00+00:00
+updated_at: 2026-06-14T08:00:00+00:00
+---
+
+Always tag and push via `make release`. The Makefile target is atomic — it
+tags and pushes in one step. Running `git push --tags` directly bypasses the
+release checks and can leave the repo in a half-tagged state.
+```
+
+### LLM 调用前必须抹除的不变量
+
+原始 `.jsonl` 记录**绝不落盘**，也不会出现在事实正文里。LLM 调用前：
+
+- 所有 `tool_use` 与 `tool_result` 块被丢弃。
+- assistant 回复中嵌入的文件内容片段与命令输出被丢弃。
+- 常见 secret 模式（API key、token、PEM block）经正则抹除器删除。
+- 长片段被截断。
+
+只有抹除后的自然语言文本（用户 + 助手的散文部分）发送给 LLM。只有提炼出的洞察文本写入事实 store。原始记录与抹除中间体均不存储于 `~/.coffer/` 的任何位置。
+
+Coffer 读取 `~/.claude/projects/` 与 `~/.codex/sessions/`，但在此流程中**绝不写入它们** —— Spec 004 的只读不变量得到完整保留。
+
+### 审计
+
+提炼复用现有的 memory 写入路径：每条写入的事实都会触发 `memory_added` 事件，并带上其
+`origin_session_id`。不会发出提炼专属的审计事件。
+
 ## 线上契约（REST）
 
 位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall），外加投影端点（list/establish/remove）。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。

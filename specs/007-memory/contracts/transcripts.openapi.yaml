@@ -1,0 +1,223 @@
+openapi: 3.0.3
+info:
+  title: Coffer — Transcript Distillation API
+  version: 0.1.0
+  description: |
+    REST surface for transcript distillation (Spec 007 extension — ADR-020).
+
+    Reads a registered coding-agent's local chat transcripts, distils durable
+    insights via an LLM, and writes those insights as project-scoped Coffer
+    memory facts. Only natural-language conversation text reaches the LLM; tool
+    payloads and secrets are scrubbed before distillation and never persisted.
+
+    All routes are loopback-only and require the daemon's auth token in the
+    `X-Coffer-Token` header. All error responses use the app-wide envelope
+    `{ "error": { code, message, details } }`.
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Local daemon (default port; actual port read from daemon.json)
+
+security:
+  - cofferToken: []
+
+paths:
+  /api/v1/agents/{name}/transcripts:
+    parameters:
+      - $ref: "#/components/parameters/AgentName"
+    get:
+      summary: List transcript sessions for an agent
+      operationId: listTranscripts
+      tags: [transcripts]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptSessionListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/agents/{name}/transcripts/distill:
+    parameters:
+      - $ref: "#/components/parameters/AgentName"
+    post:
+      summary: Distil a transcript session into Coffer memory facts
+      operationId: distillTranscript
+      tags: [transcripts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DistillRequest"
+      responses:
+        "200":
+          description: OK — insights extracted (and facts written unless dry_run)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DistillResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  parameters:
+    AgentName:
+      in: path
+      name: name
+      required: true
+      description: Registered agent name (slug; e.g. "claude-code").
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Validation failed or unsupported agent type
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: Agent or transcript session not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Conflict:
+      description: |
+        Conflict — e.g. no model configured (NO_MODEL_CONFIGURED).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    TranscriptSessionSummary:
+      type: object
+      required: [session_id, message_count]
+      properties:
+        session_id:
+          type: string
+          description: Unique session identifier derived from the transcript file.
+        project_path:
+          type: string
+          nullable: true
+          description: Absolute path to the project the session was recorded in.
+        message_count:
+          type: integer
+          description: Number of conversation turns (user + assistant messages).
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the first message in the session, if available.
+
+    TranscriptSessionListResponse:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TranscriptSessionSummary"
+
+    DistillRequest:
+      type: object
+      properties:
+        session_id:
+          type: string
+          nullable: true
+          description: |
+            Distil a specific session by id. Mutually exclusive with
+            project_path; at least one must be provided.
+        project_path:
+          type: string
+          nullable: true
+          description: |
+            Distil the most-recent session for this project path.
+        model_id:
+          type: string
+          nullable: true
+          description: Override the default model for this distillation run.
+        dry_run:
+          type: boolean
+          default: false
+          description: |
+            If true, return insights without writing memory facts.
+            fact_ids will be an empty array.
+
+    InsightOut:
+      type: object
+      required: [name, description, body, type]
+      properties:
+        name:
+          type: string
+          description: Short title for the insight (used as the memory fact name).
+        description:
+          type: string
+          description: One-line summary.
+        body:
+          type: string
+          description: Full markdown body of the distilled insight.
+        type:
+          type: string
+          enum: [decision, gotcha, convention, todo]
+          description: |
+            Insight category:
+            - decision — architectural or design choice with rationale
+            - gotcha — a failed approach or trap to avoid
+            - convention — naming/style/tool standards
+            - todo — an open item surfaced from the conversation
+
+    DistillResponse:
+      type: object
+      required: [insights, fact_ids]
+      properties:
+        insights:
+          type: array
+          items:
+            $ref: "#/components/schemas/InsightOut"
+          description: Distilled insights extracted from the transcript.
+        fact_ids:
+          type: array
+          items:
+            type: string
+          description: |
+            IDs of created memory facts (one per insight). Empty when
+            dry_run=true or when no insights were extracted.
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code:
+              type: string
+              description: |
+                Machine-readable error code. Distillation-specific codes:
+                UNSUPPORTED_AGENT_TYPE, TRANSCRIPT_SESSION_NOT_FOUND,
+                NO_MODEL_CONFIGURED. Generic: RESOURCE_NOT_FOUND, BAD_REQUEST.
+            message:
+              type: string
+              description: Human-readable error description.
+            details:
+              type: object
+              additionalProperties: true
+              description: Optional machine-readable details (e.g. reason).

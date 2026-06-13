@@ -94,6 +94,9 @@ _STATUS: dict[str, int] = {
     "CHANNEL_NOT_PAIRED": 409,
     "CHANNEL_NOT_RUNNING": 409,
     "CHANNEL_SEND_FAILED": 502,
+    # transcript distillation (spec 007 extension — ADR-020)
+    "UNSUPPORTED_AGENT_TYPE": 400,
+    "TRANSCRIPT_SESSION_NOT_FOUND": 404,
     # sync (spec 010)
     "SYNC_NOT_CONFIGURED": 409,
     "SYNC_IN_PROGRESS": 409,

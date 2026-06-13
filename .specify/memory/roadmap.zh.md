@@ -16,7 +16,7 @@
 | 004 | **Agent Registry** ([spec](../../specs/004-agent-registry/spec.md))           | 已采纳 — 代码已合并                       |
 | 005 | **Skill Manager** ([spec](../../specs/005-skill-manager/spec.md))             | 已采纳 — 代码已合并                       |
 | 006 | **Knowledge Base** ([spec](../../specs/006-knowledge-base/spec.md))           | 已采纳 — 代码已随 PR #55 合并 (知识基底的 KB 面，[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md))                                                                                     |
-| 007 | **Memory** ([spec](../../specs/007-memory/spec.md))                           | 已采纳 — 代码已随 PR #55/#58 合并 (跨 agent 共享、原生的 memory，[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) + [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)) |
+| 007 | **Memory** ([spec](../../specs/007-memory/spec.md))                           | 已采纳 — 代码已随 PR #55/#58 合并 (跨 agent 共享、原生的 memory，[ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) + [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)) · **扩展进行中：** transcript distillation —— 只读摄取本地 agent 对话记录 → LLM 提炼 → memory 事实；不分配新 spec 编号（[ADR-020](../../docs/decisions/ADR-020-transcript-distillation.zh.md)） |
 | 008 | **Agent Chat** ([spec](../../specs/008-agent-chat/spec.md))                   | 已采纳 — 代码已随 PR #57 合并            |
 | 009 | **Channels** ([spec](../../specs/009-channels/spec.md))                       | 已接受 — 代码已随 PR #59 合并 ([ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)) |
 | 010 | **多机同步** ([spec](../../specs/010-sync/spec.md))                            | 已接受 — 通过用户自有 git 仓库同步仓库状态 ([ADR-016](../../docs/decisions/ADR-016-multi-machine-sync.md))；由章程 0.3.0 对原则 1 的修订解禁 |

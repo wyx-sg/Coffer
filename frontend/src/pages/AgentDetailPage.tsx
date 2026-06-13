@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
 import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEditor";
+import { AgentConversationsTab } from "@/components/agents/AgentConversationsTab";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
 import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
@@ -122,6 +123,7 @@ export function AgentDetailPage() {
           <TabsTrigger value="mcpServers">{t("agents.workspace.mcpServers")}</TabsTrigger>
           <TabsTrigger value="plugins">{t("agents.workspace.plugins")}</TabsTrigger>
           <TabsTrigger value="memory">{t("agents.workspace.memory")}</TabsTrigger>
+          <TabsTrigger value="conversations">{t("agents.workspace.conversations")}</TabsTrigger>
           <TabsTrigger value="config">{t("agents.workspace.config")}</TabsTrigger>
         </TabsList>
 
@@ -152,6 +154,10 @@ export function AgentDetailPage() {
 
         <TabsContent value="memory" className="pt-6">
           <AgentMemoryTab agent={agent} />
+        </TabsContent>
+
+        <TabsContent value="conversations" className="pt-6">
+          <AgentConversationsTab name={name} />
         </TabsContent>
 
         <TabsContent value="config" className="pt-6">

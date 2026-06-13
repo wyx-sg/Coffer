@@ -141,6 +141,86 @@ coffer memory configure project-01J… \
 
 markdown 文件是真相源；`coffer.db` 随时可从它们重建。
 
+## 对话记录提炼（Spec 007 扩展）
+
+agent 的本地聊天记录包含了工程决策、项目约定、踩过的坑以及未了结的待办事项，但这些内容从未被显式记录为事实条目。对话记录提炼 (transcript distillation) 会读取这些会话内容，抹除其中的 secret 与工具调用负载，然后通过一次 LLM 调用提炼出持久化洞察，并将它们写入项目作用域的 memory store —— 从而立即可通过 `recall` 访问，并随 Spec 010 跨机同步。
+
+原始记录**绝不落盘**。只有提炼后的事实文本才会进入 store。
+
+### 第一步 —— 用 `--dry-run` 预览
+
+```bash
+# 列出某个已注册 agent 的可用会话。
+coffer transcript list my-claude
+
+# 预览将会写入的内容，但不实际提交。
+coffer transcript distill my-claude \
+    --session 01JXYZ… \
+    --project /path/to/my-project \
+    --dry-run
+```
+
+示例输出：
+
+```
+Insights (3):
+  [decision]    Use make release for tagging
+    Always tag and push via `make release`; never `git push --tags` directly — the Makefile target is atomic.
+  [gotcha]      DB migration divergence between branches
+    Switching branches with divergent Alembic lineages breaks the shared coffer.db; delete the DB and let the daemon recreate it.
+  [convention]  Bilingual docs rule applies only to human-readable prose
+    Tool-scaffolding templates (.speckit etc.) are exempt from the bilingual .zh.md requirement.
+(dry-run: nothing was written to memory)
+```
+
+### 第二步 —— 正式运行
+
+```bash
+coffer transcript distill my-claude \
+    --session 01JXYZ… \
+    --project /path/to/my-project
+```
+
+示例输出：
+
+```
+Insights (3):
+  [decision]   Use make release for tagging
+    …
+  [gotcha]     DB migration divergence between branches
+    …
+  [convention] Bilingual docs rule applies only to human-readable prose
+    …
+Created 3 fact(s):
+  01JABC…
+  01JDEF…
+  01JGHI…
+```
+
+每条事实写入项目 store 时携带 `actor="agent"` 以及设置为对话记录 session id 的 `origin_session_id`。
+
+### 第三步 —— 用 `recall` 查看提炼出的事实
+
+```bash
+# 从项目 store 召回（用 `coffer memory list` 查看真实的 store 名）。
+coffer memory recall project-01J… "deployment tagging"
+```
+
+同样的事实也可以通过 MCP 从任何已注册的 agent 访问：
+
+```text
+coffer__recall("deployment tagging", scope="project")
+```
+
+### 选项
+
+| Flag | 说明 |
+| --- | --- |
+| `--session ID` | 提炼指定 session；省略则提炼该项目的所有 session。 |
+| `--project PATH` | 只处理 project path 匹配 PATH 的 session。 |
+| `--model ID` | 覆盖用于提炼的 LLM 模型。 |
+| `--dry-run` | 预览洞察，不写入任何事实。 |
+
 ## Limits
 
 - 事实文本：1–8192 字符（每 store 可配置到 32 768）。

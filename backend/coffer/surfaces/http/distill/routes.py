@@ -1,0 +1,116 @@
+"""/api/v1/agents/{name}/transcripts routes (Spec 007 extension — ADR-020).
+
+Transcript-distillation surface: lists a registered agent's transcript sessions
+and distils a selected session into Coffer memory facts via the LLM.
+
+Domain errors are translated to the standard ``{error:{code,message,details}}``
+envelope. The ``X-Coffer-Token`` / ``require_token`` guard and the
+``X-Coffer-Actor`` header convention mirror sibling routers.
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends
+
+from coffer.application.distill.service import (
+    NoModelConfiguredError,
+    TranscriptDistillationService,
+)
+from coffer.domain.distill.locations import UnsupportedAgentTypeError
+from coffer.domain.errors import ResourceNotFound
+from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.distill.schemas import (
+    DistillRequest,
+    DistillResponse,
+    InsightOut,
+    TranscriptSessionListResponse,
+    TranscriptSessionSummary,
+)
+from coffer.surfaces.http.distill.state import get_distill_service
+from coffer.surfaces.http.errors import error_response
+
+router = APIRouter(
+    prefix="/api/v1/agents",
+    tags=["transcripts"],
+    dependencies=[Depends(require_token)],
+)
+
+
+@router.get(
+    "/{name}/transcripts",
+    response_model=TranscriptSessionListResponse,
+)
+async def list_transcripts(
+    name: str,
+    svc: TranscriptDistillationService = Depends(get_distill_service),  # noqa: B008
+) -> TranscriptSessionListResponse:
+    """List all transcript sessions for the named agent."""
+    try:
+        sessions = await svc.list_sessions(agent_name=name)
+    except ResourceNotFound:
+        return error_response("RESOURCE_NOT_FOUND", f"agent {name!r} not found")  # type: ignore[return-value]
+    except UnsupportedAgentTypeError as exc:
+        return error_response(  # type: ignore[return-value]
+            "UNSUPPORTED_AGENT_TYPE",
+            f"agent type not supported for transcript listing: {exc}",
+        )
+    return TranscriptSessionListResponse(
+        sessions=[
+            TranscriptSessionSummary(
+                session_id=s.session_id,
+                project_path=s.project_path,
+                message_count=s.message_count,
+                started_at=s.started_at,
+            )
+            for s in sessions
+        ]
+    )
+
+
+@router.post(
+    "/{name}/transcripts/distill",
+    response_model=DistillResponse,
+)
+async def distill_transcript(
+    name: str,
+    body: DistillRequest,
+    svc: TranscriptDistillationService = Depends(get_distill_service),  # noqa: B008
+) -> DistillResponse:
+    """Distil a transcript session into Coffer memory facts."""
+    try:
+        result = await svc.distill(
+            agent_name=name,
+            session_id=body.session_id,
+            project_path=body.project_path,
+            model_id=body.model_id,
+            dry_run=body.dry_run,
+        )
+    except ResourceNotFound:
+        return error_response("RESOURCE_NOT_FOUND", f"agent {name!r} not found")  # type: ignore[return-value]
+    except UnsupportedAgentTypeError as exc:
+        return error_response(  # type: ignore[return-value]
+            "UNSUPPORTED_AGENT_TYPE",
+            f"agent type not supported for distillation: {exc}",
+        )
+    except NoModelConfiguredError as exc:
+        return error_response("NO_MODEL_CONFIGURED", str(exc))  # type: ignore[return-value]
+    except KeyError as exc:
+        return error_response(  # type: ignore[return-value]
+            "TRANSCRIPT_SESSION_NOT_FOUND",
+            f"transcript session not found: {exc}",
+        )
+    except ValueError as exc:
+        return error_response("BAD_REQUEST", str(exc))  # type: ignore[return-value]
+
+    return DistillResponse(
+        insights=[
+            InsightOut(
+                name=i.name,
+                description=i.description,
+                body=i.body,
+                type=i.type,
+            )
+            for i in result.insights
+        ],
+        fact_ids=result.facts,
+    )
