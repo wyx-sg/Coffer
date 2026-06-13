@@ -104,6 +104,8 @@ class FakeSdkSession:
         self.connected_prompt: str | None = None
         self.interrupted = False
         self.disconnected = False
+        # Tracks the spawned approval task so tests can await it after the stream.
+        self.approval_task: asyncio.Task[None] | None = None
 
     async def connect(self, prompt: str) -> None:
         self.connected_prompt = prompt
@@ -115,9 +117,19 @@ class FakeSdkSession:
             if self._approval is not None and idx == self._approval.after_index:
                 assert can_use_tool is not None, "adapter must wire can_use_tool"
                 ctx = _FakeContext(self._approval.tool_use_id)
-                self._approval.result = await can_use_tool(
-                    self._approval.tool_name, self._approval.tool_input, ctx
-                )
+                # Mirror the real SDK: fire the approval callback in its own task
+                # so it runs concurrently with the message stream (the drain loop
+                # must handle the ApprovalRequest event while can_use_tool awaits).
+                approval = self._approval  # capture for closure
+
+                async def _run_approval(
+                    a: _ApprovalScript = approval, c: _FakeContext = ctx
+                ) -> None:
+                    a.result = await can_use_tool(a.tool_name, a.tool_input, c)
+
+                self.approval_task = asyncio.create_task(_run_approval())
+                # Yield control so the task is dispatched before the next message.
+                await asyncio.sleep(0)
             if self._block_after is not None and idx == self._block_after:
                 # Hang so the consuming turn can be cancelled at a known point.
                 await asyncio.sleep(3600)
@@ -367,6 +379,9 @@ async def test_approval_allow_relays_to_permission_result_allow():
         return out
 
     events = await asyncio.wait_for(drive(), timeout=5)
+    # Await the approval task so its result is visible before asserting.
+    if factory.session and factory.session.approval_task is not None:
+        await factory.session.approval_task
 
     reqs = [e for e in events if isinstance(e, ApprovalRequest)]
     assert len(reqs) == 1
@@ -397,6 +412,9 @@ async def test_approval_deny_relays_to_permission_result_deny():
         return out
 
     events = await asyncio.wait_for(drive(), timeout=5)
+    # Await the approval task so its result is visible before asserting.
+    if factory.session and factory.session.approval_task is not None:
+        await factory.session.approval_task
 
     reqs = [e for e in events if isinstance(e, ApprovalRequest)]
     assert len(reqs) == 1
@@ -423,6 +441,9 @@ async def test_approval_without_tool_use_id_synthesizes_request_id():
         return out
 
     events = await asyncio.wait_for(drive(), timeout=5)
+    # Await the approval task so its result is visible before asserting.
+    if factory.session and factory.session.approval_task is not None:
+        await factory.session.approval_task
     reqs = [e for e in events if isinstance(e, ApprovalRequest)]
     assert len(reqs) == 1
     assert reqs[0].request_id  # a synthesized id is present
@@ -479,3 +500,96 @@ async def test_stream_end_without_terminal_synthesizes_turn_done():
     terminals = [e for e in events if isinstance(e, (TurnDone, TurnError))]
     assert len(terminals) == 1
     assert isinstance(terminals[0], TurnDone)
+
+
+# ---------------------------------------------------------------------------
+# Pump error — exactly one terminal (issue #1)
+# ---------------------------------------------------------------------------
+
+
+class _ErrorSdkSession:
+    """A fake SDK session whose ``receive_messages`` raises mid-stream."""
+
+    def __init__(self, options: ClaudeAgentOptions) -> None:
+        self.options = options
+        self.connected_prompt: str | None = None
+        self.disconnected = False
+
+    async def connect(self, prompt: str) -> None:
+        self.connected_prompt = prompt
+
+    async def receive_messages(self) -> AsyncIterator[Any]:
+        yield SystemMessage(subtype="init", data={"session_id": "err-sess"})
+        raise RuntimeError("SDK stream exploded")
+        yield  # make this an async generator
+
+    async def interrupt(self) -> None:
+        pass
+
+    async def disconnect(self) -> None:
+        self.disconnected = True
+
+
+@pytest.mark.asyncio
+async def test_pump_error_yields_exactly_one_terminal_turn_error():
+    """A mid-stream pump exception must emit exactly one TurnError and NO
+    trailing TurnDone (the double-terminal bug in the original code)."""
+    session: _ErrorSdkSession | None = None
+
+    def factory(options: ClaudeAgentOptions) -> _ErrorSdkSession:
+        nonlocal session
+        session = _ErrorSdkSession(options)
+        return session
+
+    adapter = ClaudeSdkAgentAdapter(
+        cwd="/tmp",
+        resume_session=None,
+        extra={},
+        session_factory=factory,
+        on_session=_dummy_sink,
+    )
+    events = await _collect(adapter, _user_turn("go"), _NoApprovals())
+    terminals = [e for e in events if isinstance(e, (TurnDone, TurnError))]
+    assert len(terminals) == 1, f"expected 1 terminal, got {len(terminals)}: {terminals}"
+    assert isinstance(terminals[0], TurnError)
+    assert terminals[0].code == "sdk_stream_error"
+    assert "exploded" in terminals[0].message
+    assert session is not None
+    assert session.disconnected is True
+
+
+# ---------------------------------------------------------------------------
+# env forwarding (issue #2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_adapter_forwards_env_to_options():
+    """env passed to the ctor must appear in the ClaudeAgentOptions."""
+    factory = _Factory(_basic_messages())
+    env = {"MY_VAR": "hello"}
+    adapter = ClaudeSdkAgentAdapter(
+        cwd="/tmp",
+        resume_session=None,
+        extra={},
+        session_factory=factory,
+        on_session=_dummy_sink,
+        env=env,
+    )
+    await _collect(adapter, _user_turn("hi"), _NoApprovals())
+    assert factory.last_options is not None
+    assert factory.last_options.env == env
+
+
+@pytest.mark.asyncio
+async def test_adapter_omits_env_from_options_when_none():
+    """When env is not provided to the adapter, the options.env must be the
+    ClaudeAgentOptions default (empty dict) — i.e., we must not pass env=None
+    explicitly, which would override the SDK default."""
+    factory = _Factory(_basic_messages())
+    adapter = _adapter(factory)  # no env kwarg
+    await _collect(adapter, _user_turn("hi"), _NoApprovals())
+    assert factory.last_options is not None
+    # ClaudeAgentOptions.env defaults to {} via default_factory=dict.
+    # When self._env is None we skip the kwarg entirely, so the default applies.
+    assert factory.last_options.env == {}

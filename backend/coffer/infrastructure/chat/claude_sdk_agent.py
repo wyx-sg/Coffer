@@ -195,6 +195,11 @@ def _result(msg: ResultMessage, state: ParseState) -> list[AgentEvent]:
                 message=str(msg.result or msg.subtype or "claude sdk error"),
             )
         ]
+    if msg.subtype is None:
+        _logger.warning(
+            "claude_sdk_agent.result_subtype_none",
+            extra={"session_id": state.session_id, "stop_reason": msg.stop_reason},
+        )
     return [
         TurnDone(
             prompt_tokens=state.prompt_tokens,
@@ -255,8 +260,9 @@ class ClaudeSdkAgentAdapter:
         history: Sequence[Message],
         approvals: ApprovalGate,
     ) -> AsyncIterator[AgentEvent]:
-        # Match the platform's ``async def -> AsyncIterator`` seam: return the
-        # async generator rather than being one (cli_agent does the same).
+        # Match the platform's ``async def -> AsyncIterator`` seam: delegate to
+        # ``_stream`` so the coroutine machinery runs at yield points rather than
+        # at the ``await run_turn(...)`` call site (cli_agent does the same).
         return self._stream(history, approvals)
 
     async def _persist_session(self, state: ParseState) -> None:
@@ -304,13 +310,16 @@ class ClaudeSdkAgentAdapter:
         # ``permission_mode`` the user set — they have opted out of the relay
         # and accept that those tools run without per-call approval.
         permission_mode = cast(PermissionMode, self._extra.get("permission_mode") or "default")
-        return ClaudeAgentOptions(
+        opts = ClaudeAgentOptions(
             cwd=self._cwd,
             resume=self._resume,
             permission_mode=permission_mode,
             model=self._extra.get("model"),
             can_use_tool=can_use_tool,
         )
+        if self._env is not None:
+            opts.env = self._env
+        return opts
 
     async def _stream(
         self, history: Sequence[Message], approvals: ApprovalGate
@@ -326,7 +335,6 @@ class ClaudeSdkAgentAdapter:
 
         options = self._build_options(approvals, queue)
         session = self._session_factory(options)
-        await session.connect(prompt)
 
         async def pump() -> None:
             # Map streamed SDK messages onto the queue; the can_use_tool closure
@@ -342,11 +350,14 @@ class ClaudeSdkAgentAdapter:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # surface pump failures as a terminal error
+                state.terminal_emitted = True
                 await queue.put(TurnError(code="sdk_stream_error", message=str(exc)))
             await queue.put(_SENTINEL)
 
-        pump_task = asyncio.create_task(pump())
+        pump_task: asyncio.Task[None] | None = None
         try:
+            await session.connect(prompt)
+            pump_task = asyncio.create_task(pump())
             while True:
                 item = await queue.get()
                 if item is _SENTINEL:
@@ -361,9 +372,10 @@ class ClaudeSdkAgentAdapter:
             await self._persist_session(state)
             raise
         finally:
-            pump_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await pump_task
+            if pump_task is not None:
+                pump_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await pump_task
             with contextlib.suppress(Exception):
                 await session.disconnect()
 
