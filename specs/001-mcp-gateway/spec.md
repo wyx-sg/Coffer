@@ -75,6 +75,38 @@ The developer wants to see what happened — when a server was added, when a too
 
 ---
 
+### User Story 5 — Find the right tool under aggregation overload (Priority: P2)
+
+Once a developer has registered many upstream servers, the aggregated surface can exceed 150 tools. A coding agent's tool-selection accuracy degrades sharply past ~30–50 tools, so dumping the whole catalogue into every request both wastes context tokens and makes the agent pick wrong. The developer wants the agent to *search* the live aggregated catalogue for the few tools that match its current intent and call them directly, instead of reasoning over the entire list.
+
+**Why this priority**: Aggregation is only useful if the agent can still choose well at scale; this turns "I installed 30 servers" from a liability back into leverage. It builds on the core gateway (User Story 1) without changing how any upstream tool is exposed or called.
+
+**Independent Test**: Register enough servers that the aggregated catalogue is large, then from an MCP client call `coffer__search_tools` with an intent query and a `top_k`; observe at most `top_k` ranked upstream tool schemas come back, the agent calls one of them by its `<server>__<tool>` name, and the call routes to the originating upstream as usual.
+
+**Covering scenarios**:
+
+- search the aggregated catalogue for matching tools
+
+The behaviour and rationale are recorded in [ADR-018](../../docs/decisions/ADR-018-tool-retrieval-for-overload.md).
+
+#### `coffer__search_tools` — built-in tool-retrieval
+
+`coffer__search_tools` is a Coffer-built-in tool, always advertised in `tools/list` alongside Coffer's other `coffer__` built-ins. It mitigates aggregation tool-overload by ranking the **live** aggregated upstream catalogue against an intent query and returning the top-k **real** upstream tool schemas, which the agent then calls directly. It is a retrieval primitive — it returns schemas, it does **not** select-and-invoke on the agent's behalf.
+
+Contract:
+
+```
+coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
+  -> { tools: [{ name, description, inputSchema, score }], total_searched: N }
+```
+
+- Ranking is a pure, deterministic, local keyword ranker (BM25-lite over each tool's name + description, with name tokens weighted higher). No LLM, no embeddings, no network.
+- Results are **upstream-only**: Coffer's own `coffer__` built-in tools are excluded, since they are not the overload source.
+- Each returned `name` is the same `<server>__<tool>` namespaced identifier the agent would call directly; routing is unchanged.
+- The invocation is recorded in the invocation log like any other gateway call.
+
+---
+
 ### Edge Cases
 
 These cases are tracked by integration tests, not by the acceptance audit, except where promoted to `## Acceptance Scenarios` below (currently: tool-name collision, daemon port conflict).
@@ -206,6 +238,12 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **Given** the audit and invocation logs grow over time,
 - **When** the user sets a retention period for a log (in days, or "keep forever"),
 - **Then** entries older than that period are removed by the next periodic cleanup, and the change itself is audited.
+
+### Scenario: search the aggregated catalogue for matching tools
+
+- **Given** N upstream tools are aggregated and healthy through coffer,
+- **When** an agent calls `coffer__search_tools` with an intent query and a `top_k`,
+- **Then** it receives at most `top_k` ranked real upstream tool schemas (upstream-only, with Coffer's own `coffer__` built-ins excluded), each named `<server>__<tool>`, the response reports `total_searched`, and the gateway records the invocation.
 
 ### Scenario: CLI returns non-zero exit on daemon unreachable
 
