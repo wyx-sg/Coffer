@@ -105,11 +105,15 @@ export function RowSelectCell({
   checked,
   ariaLabel,
   onToggle,
+  selectable = true,
 }: {
   checked: boolean;
   ariaLabel: string;
   onToggle: () => void;
+  /** When false, render a spacer cell (no checkbox) to keep columns aligned. */
+  selectable?: boolean;
 }) {
+  if (!selectable) return <TableCell className="w-10" />;
   return (
     <TableCell className="py-3" onClick={(e) => e.stopPropagation()}>
       <Checkbox checked={checked} aria-label={ariaLabel} onChange={onToggle} />

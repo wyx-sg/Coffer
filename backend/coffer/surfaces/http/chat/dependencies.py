@@ -40,6 +40,20 @@ def get_model_service() -> Any:
     return _model_service
 
 
+_introspection_service: Any | None = None
+
+
+def set_introspection_service(svc: Any) -> None:
+    global _introspection_service
+    _introspection_service = svc
+
+
+def get_introspection_service() -> Any:
+    if _introspection_service is None:
+        raise RuntimeError("introspection service not initialised")
+    return _introspection_service
+
+
 _turn_orchestrator: Any | None = None
 
 

@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import { useEmbeddingConfig, useUpdateEmbeddingConfig } from "@/lib/hooks/useEmbeddingConfig";
+import { ProviderModelField } from "@/components/settings/ProviderModelField";
 
 const PROVIDERS = [
   "local",
@@ -118,10 +119,14 @@ export function EmbeddingSettings() {
                 ))}
               </select>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="emb-model">{t("settings.embedding.model")}</Label>
-              <Input id="emb-model" value={model} onChange={(e) => setModel(e.target.value)} />
-            </div>
+            <ProviderModelField
+              provider={provider}
+              baseUrl={baseUrl.trim() || null}
+              credentialRef={credentialRef.trim() || null}
+              model={model}
+              onModelChange={setModel}
+              kind="embedding"
+            />
             <div className="space-y-1">
               <Label htmlFor="emb-dims">{t("settings.embedding.dimensions")}</Label>
               <Input

@@ -314,6 +314,64 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/v1/models/list-models:
+    post:
+      summary: List the models a provider exposes (for the model picker)
+      operationId: listProviderModels
+      tags: [models]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider]
+              properties:
+                provider: { type: string }
+                base_url: { type: string, nullable: true }
+                credential_ref: { type: string, nullable: true }
+      responses:
+        '200':
+          description: Models (empty + message when none could be listed)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [models, message]
+                properties:
+                  models: { type: array, items: { type: string } }
+                  message: { type: string }
+
+  /api/v1/models/test-connection:
+    post:
+      summary: Probe a chat provider with a minimal request
+      operationId: testModelConnection
+      tags: [models]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, model]
+              properties:
+                provider: { type: string }
+                model: { type: string }
+                base_url: { type: string, nullable: true }
+                credential_ref: { type: string, nullable: true }
+      responses:
+        '200':
+          description: Result (ok=true/false + humanized message), nothing persisted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, message]
+                properties:
+                  ok: { type: boolean }
+                  message: { type: string }
+                  detail: { type: object, additionalProperties: true }
+
 components:
   securitySchemes:
     bearerAuth:

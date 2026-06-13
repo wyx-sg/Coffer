@@ -348,7 +348,7 @@
       "security": "安全",
       "app": "应用",
       "about": "关于",
-      "models": "模型与向量",
+      "models": "模型",
       "sync": "同步"
     },
     "general": {
@@ -451,7 +451,11 @@
       "credentialRefPlaceholder": "例：ANTHROPIC_API_KEY",
       "baseUrl": "Base URL",
       "baseUrlPlaceholder": "例：http://localhost:11434",
-      "setDefault": "设为默认"
+      "setDefault": "设为默认",
+      "llmTitle": "LLM 模型",
+      "fetchModels": "拉取模型",
+      "testConnection": "测试连接",
+      "fetchedCount": "已拉取 {{count}} 个模型——选择或手填"
     },
     "sync": {
       "title": "多机同步",
@@ -480,7 +484,8 @@
         "conflicted": "有冲突",
         "error": "错误",
         "credentials_locked": "凭证已锁定"
-      }
+      },
+      "keyExported": "key 已写入 {{path}}"
     }
   },
   "daemon": {
@@ -597,7 +602,19 @@
       "heading": "内置 Agent",
       "badge": "内置",
       "description": "Coffer 自带的助手——无需安装 CLI agent 即可在应用内对话。",
-      "startChat": "开始对话"
+      "tagline": "Coffer 自带的助手——无需安装 CLI agent 即可在应用内对话。",
+      "detail": {
+        "modelTitle": "模型",
+        "usesModel": "运行所用模型：",
+        "noModel": "尚未配置模型——请在 设置 → 模型 中设置。",
+        "configureModels": "配置模型",
+        "skillsTitle": "Skills",
+        "skillsNote": "助手可按需加载的主库 skill。",
+        "mcpTitle": "MCP 服务器",
+        "mcpNote": "这些已注册 MCP 服务器的工具会聚合给助手使用。",
+        "none": "暂无。",
+        "disabled": "已禁用"
+      }
     },
     "namePlaceholder": "留空则按类型使用默认名称",
     "folderPicker": {

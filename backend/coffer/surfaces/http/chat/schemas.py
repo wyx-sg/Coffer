@@ -199,3 +199,37 @@ class ModelListOut(BaseModel):
     """List of configured models."""
 
     models: list[ModelOut]
+
+
+# --- provider introspection (test connection + list models) ----------------
+
+
+class TestConnectionIn(BaseModel):
+    provider: str
+    model: str
+    credential_ref: str | None = None
+    base_url: str | None = None
+
+
+class ListModelsIn(BaseModel):
+    provider: str
+    credential_ref: str | None = None
+    base_url: str | None = None
+
+
+class TestResultOut(BaseModel):
+    ok: bool
+    message: str
+    detail: dict[str, object] = {}
+
+
+class ProviderModelsOut(BaseModel):
+    models: list[str]
+    message: str = ""
+
+
+class EmbeddingTestIn(BaseModel):
+    provider: str
+    model: str
+    credential_ref: str | None = None
+    base_url: str | None = None

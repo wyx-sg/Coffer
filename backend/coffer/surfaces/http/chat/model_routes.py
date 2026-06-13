@@ -8,13 +8,19 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Response, status
 
 from coffer.application.chat.model_service import ModelService
+from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.chat.model import ModelConfig
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.chat.dependencies import get_introspection_service
 from coffer.surfaces.http.chat.schemas import (
+    ListModelsIn,
     ModelCreate,
     ModelListOut,
     ModelOut,
     ModelPatch,
+    ProviderModelsOut,
+    TestConnectionIn,
+    TestResultOut,
 )
 from coffer.surfaces.http.dependencies import get_model_service
 
@@ -105,3 +111,33 @@ async def delete_model(
     """Remove a model config.  Returns 404 if not found."""
     await svc.delete(id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- provider introspection ------------------------------------------------
+
+
+@router.post("/list-models", response_model=ProviderModelsOut)
+async def list_provider_models(
+    body: ListModelsIn,
+    svc: ModelIntrospectionService = Depends(get_introspection_service),  # noqa: B008
+) -> ProviderModelsOut:
+    """List the models a provider exposes (empty + message → enter manually)."""
+    result = await svc.list_models(
+        provider=body.provider, base_url=body.base_url, credential_ref=body.credential_ref
+    )
+    return ProviderModelsOut(models=result.models, message=result.message)
+
+
+@router.post("/test-connection", response_model=TestResultOut)
+async def test_connection(
+    body: TestConnectionIn,
+    svc: ModelIntrospectionService = Depends(get_introspection_service),  # noqa: B008
+) -> TestResultOut:
+    """Probe a chat provider with a minimal request; 200 with ok=true/false."""
+    result = await svc.test_connection(
+        provider=body.provider,
+        model=body.model,
+        base_url=body.base_url,
+        credential_ref=body.credential_ref,
+    )
+    return TestResultOut(ok=result.ok, message=result.message, detail=result.detail)

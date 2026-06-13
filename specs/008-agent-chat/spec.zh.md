@@ -418,6 +418,18 @@ agent 使用哪一个。
 - **When** 回合结束，
 - **Then** 助手消息记录 token 用量且审计日志包含该已完成回合，actor 为 `agent`。
 
+### 场景：list a provider's models
+
+- **Given** 用户在新增/编辑模型并填好了 provider（以及该 provider 需要的 base URL / 凭证 ref），
+- **When** 拉取该 provider 的模型，
+- **Then** Coffer 返回该 provider 暴露的模型 id 供选择；若列不到则返回空列表 + 提示，用户仍可手填 model id。
+
+### 场景：test a model connection
+
+- **Given** 一个模型的 provider、model id 以及（需要时的）凭证 ref，
+- **When** 用户测试连接，
+- **Then** Coffer 向 provider 发一个最小请求并报告成功或人性化的失败信息，且不持久化任何内容。
+
 ## 需求
 
 ### 功能需求

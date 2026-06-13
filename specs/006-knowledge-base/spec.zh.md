@@ -193,6 +193,13 @@
 - **When** the user opens its detail view (UI or `coffer kb describe`),
 - **Then** they see document count, chunk count, the indexed retrieval modes, and the on-disk byte size of `knowledge/<name>/`.
 
+### Scenario: test an embedding model
+
+- **Given** an embedding provider, model id, and (where required) credential ref,
+- **When** the user tests the embedding model,
+- **Then** Coffer requests one embedding and reports success with the returned
+  vector dimension, or a humanized failure message, without persisting anything.
+
 > **延后到未来的测试工作**（frontend Playwright + 全 CLI e2e）：通过桌面 app 创建 / 上传 / 检索 / 删除 KB；CLI 覆盖每一个桌面操作；CLI 检索 / grep 返回机器可读 JSON。此处列出仅为完整性；`make verify-acceptance` 不对其门禁。
 
 ## Requirements

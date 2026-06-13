@@ -36,6 +36,7 @@ from coffer.application.memory.kind import make_memory_kind
 from coffer.application.memory.scope import ScopeResolver
 from coffer.application.memory.service import MemoryService
 from coffer.application.memory.sync import MemoryReconciler
+from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.infrastructure.chat.builtin_provider import BuiltinAgentProvider
@@ -54,6 +55,8 @@ from coffer.infrastructure.knowledge.sqlite_index import SqliteKnowledgeIndex
 from coffer.infrastructure.knowledge.vec_index import VecIndex
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
 from coffer.infrastructure.memory.scope_fs import git_root, project_ulid
+from coffer.infrastructure.providers.provider_introspector import ProviderIntrospector
+from coffer.surfaces.http.chat.dependencies import set_introspection_service
 from coffer.surfaces.http.dependencies import (
     set_agent_registry,
     set_chat_service,
@@ -312,9 +315,15 @@ def wire_chat(
 
     loop.create_task(_sweep())  # noqa: RUF006
 
-    # 8. Register dependency providers.
+    # 8. Provider introspection (test-connection + list-models). The OpenAI-
+    #    compatible client + SSRF guard live in the infrastructure adapter; the
+    #    service resolves credential refs to keys server-side.
+    introspection_svc = ModelIntrospectionService(ProviderIntrospector(), _credential_resolver)
+
+    # 9. Register dependency providers.
     set_chat_service(chat_svc)
     set_model_service(model_svc)
+    set_introspection_service(introspection_svc)
     set_turn_orchestrator(orchestrator)
     set_agent_registry(registry)
 
