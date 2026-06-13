@@ -144,6 +144,11 @@ class _CapabilitySpec:
     method: str  # upstream JSON-RPC method
     build_request: Callable[[str, dict[str, Any]], dict[str, Any]]  # (orig, params) -> req
     coerce: Callable[[Any], dict[str, Any]]
+    # tools/call results carry an in-band ``isError`` flag (per the MCP spec): a
+    # tool that fails returns a well-formed result with ``isError: True`` rather
+    # than raising. resources/read and prompts/get have no such flag. Only the
+    # tool spec inspects the coerced result to record an honest ``error`` status.
+    detects_inband_error: bool = False
 
 
 async def _invoke(
@@ -190,7 +195,16 @@ async def _invoke(
     error_msg: str | None = None
     try:
         result = await conn.request(spec.method, spec.build_request(original, params))
-        return spec.coerce(result)
+        coerced = spec.coerce(result)
+        # An in-band tool error (CallToolResult.isError) does not raise — the
+        # connection is healthy, but the tool failed. Record an honest `error`
+        # status so the invocation log distinguishes success from failure. The
+        # error text is upstream-controlled (may echo secrets), so persist only
+        # a fixed Coffer-authored marker, never the result content (SC-010).
+        if spec.detects_inband_error and isinstance(coerced, dict) and coerced.get("isError"):
+            status = "error"
+            error_msg = "upstream tool returned an error result (isError)"
+        return coerced
     except UpstreamTimeout as e:
         status = "timeout"
         error_msg = _safe_error_summary(e)
@@ -288,6 +302,7 @@ _TOOL_SPEC = _CapabilitySpec(
         "arguments": params.get("arguments", {}),
     },
     coerce=coerce_call_result,
+    detects_inband_error=True,
 )
 
 _RESOURCE_SPEC = _CapabilitySpec(
