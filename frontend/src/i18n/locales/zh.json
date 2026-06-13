@@ -348,7 +348,7 @@
       "security": "安全",
       "app": "应用",
       "about": "关于",
-      "models": "模型与向量",
+      "models": "模型",
       "sync": "同步"
     },
     "general": {
@@ -451,7 +451,11 @@
       "credentialRefPlaceholder": "例：ANTHROPIC_API_KEY",
       "baseUrl": "Base URL",
       "baseUrlPlaceholder": "例：http://localhost:11434",
-      "setDefault": "设为默认"
+      "setDefault": "设为默认",
+      "llmTitle": "LLM 模型",
+      "fetchModels": "拉取模型",
+      "testConnection": "测试连接",
+      "fetchedCount": "已拉取 {{count}} 个模型——选择或手填"
     },
     "sync": {
       "title": "多机同步",

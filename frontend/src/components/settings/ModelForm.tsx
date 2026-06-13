@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { translateApiError } from "@/lib/api/errors";
 import type { Model, ModelCreate, ModelPatch, ModelProvider } from "@/lib/api/models";
+import { ProviderModelField } from "./ProviderModelField";
 import { modelSchema } from "./modelSchema";
 import type { ModelFormValues } from "./modelSchema";
 
@@ -78,10 +79,7 @@ export function ModelForm({ existing, onSubmit, onCancel, submitError }: Props) 
 
       <div className="grid gap-1.5">
         <Label htmlFor="provider">{t("settings.models.provider")}</Label>
-        <Select
-          value={provider}
-          onValueChange={(v) => setValue("provider", v as ModelProvider)}
-        >
+        <Select value={provider} onValueChange={(v) => setValue("provider", v as ModelProvider)}>
           <SelectTrigger id="provider" aria-label={t("settings.models.provider")}>
             <SelectValue />
           </SelectTrigger>
@@ -96,15 +94,15 @@ export function ModelForm({ existing, onSubmit, onCancel, submitError }: Props) 
       </div>
 
       <div className="grid gap-1.5">
-        <Label htmlFor="model">{t("settings.models.modelId")}</Label>
-        <Input
-          id="model"
-          {...register("model")}
-          placeholder={t("settings.models.modelIdPlaceholder")}
+        <ProviderModelField
+          provider={provider}
+          baseUrl={watch("base_url")?.trim() || null}
+          credentialRef={watch("credential_ref")?.trim() || null}
+          model={watch("model")}
+          onModelChange={(v) => setValue("model", v)}
+          kind="chat"
         />
-        {errors.model && (
-          <p className="text-xs text-destructive">{errors.model.message}</p>
-        )}
+        {errors.model && <p className="text-xs text-destructive">{errors.model.message}</p>}
       </div>
 
       {needsCredential && (
@@ -126,9 +124,7 @@ export function ModelForm({ existing, onSubmit, onCancel, submitError }: Props) 
             {...register("base_url")}
             placeholder={t("settings.models.baseUrlPlaceholder")}
           />
-          {errors.base_url && (
-            <p className="text-xs text-destructive">{errors.base_url.message}</p>
-          )}
+          {errors.base_url && <p className="text-xs text-destructive">{errors.base_url.message}</p>}
         </div>
       )}
 
@@ -142,9 +138,7 @@ export function ModelForm({ existing, onSubmit, onCancel, submitError }: Props) 
       </div>
 
       {submitError && (
-        <p className="text-sm text-destructive">
-          {translateApiError(t, submitError)}
-        </p>
+        <p className="text-sm text-destructive">{translateApiError(t, submitError)}</p>
       )}
 
       <div className="flex justify-end gap-2 pt-2">

@@ -348,7 +348,7 @@
       "security": "Security",
       "app": "App",
       "about": "About",
-      "models": "Models & Embedding",
+      "models": "Models",
       "sync": "Sync"
     },
     "general": {
@@ -451,7 +451,11 @@
       "credentialRefPlaceholder": "e.g. ANTHROPIC_API_KEY",
       "baseUrl": "Base URL",
       "baseUrlPlaceholder": "e.g. http://localhost:11434",
-      "setDefault": "Set as default"
+      "setDefault": "Set as default",
+      "llmTitle": "LLM models",
+      "fetchModels": "Fetch models",
+      "testConnection": "Test connection",
+      "fetchedCount": "{{count}} models fetched — pick one or type your own"
     },
     "sync": {
       "title": "Multi-machine sync",
