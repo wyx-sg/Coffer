@@ -31,7 +31,11 @@ Coffer 是一个守护进程 (daemon) + CLI + 桌面应用，它为你机器上�
 
 ## 下载与安装
 
-### 一行命令安装（macOS）
+> **尚无打 tag 的 release。** 下面的预构建二进制、一行安装脚本和桌面 DMG 会随 Coffer
+> 的首个 tagged release 一起发布，目前尚未提供 —— 在那之前这些链接会 404。现在请先
+> **[从源码安装](#从源码安装开发者)**（见下文），这是当前可用的安装方式。
+
+### 一行命令安装（macOS）—— _随首个 release 提供_
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
@@ -41,7 +45,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 `~/.coffer/bin`。**守护进程首次使用时自动启动，无需手动执行启动命令。** 环境变量覆盖：
 `COFFER_INSTALL_DIR`、`COFFER_VERSION`、`COFFER_NO_MODIFY_PATH`。
 
-### 桌面应用（大多数用户）
+### 桌面应用（大多数用户）—— _随首个 release 提供_
 
 从 [Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载安装包：
 

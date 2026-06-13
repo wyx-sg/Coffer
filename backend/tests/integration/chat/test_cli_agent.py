@@ -8,6 +8,7 @@ availability via an injected ``which``.
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime
@@ -22,6 +23,7 @@ from coffer.infrastructure.chat.cli_agent import CliAgentAdapter
 from coffer.infrastructure.chat.cli_providers import (
     ClaudeCodeDialect,
     ClaudeCodeProvider,
+    CodexDialect,
     CodexProvider,
 )
 from coffer.infrastructure.chat.persistence import ConversationRepo
@@ -104,6 +106,73 @@ CLAUDE_STREAM = [
     '{"type":"result","subtype":"success","session_id":"sess-1","result":"done",'
     '"usage":{"input_tokens":12,"output_tokens":7}}',
 ]
+
+
+def _codex_lines(*objs: dict) -> list[str]:
+    """Render captured codex event objects back to the JSONL the CLI emits."""
+    return [json.dumps(o) for o in objs]
+
+
+# Real `codex exec --json` output captured from codex-cli 0.125.0. The stream is
+# flat JSONL: thread.started (carries thread_id), turn.started, item.started /
+# item.completed (content only on completion), turn.completed (usage), and on
+# failure both an `error` and a `turn.failed`. Frozen here as the dialect's
+# contract so a future codex output change is caught by these tests.
+CODEX_HELLO = _codex_lines(
+    {"type": "thread.started", "thread_id": "019ebef7-14cb-7aa1-aa58-d3d66d709467"},
+    {"type": "turn.started"},
+    {"type": "item.completed", "item": {"id": "item_0", "type": "agent_message", "text": "pong"}},
+    {
+        "type": "turn.completed",
+        "usage": {
+            "input_tokens": 24855,
+            "cached_input_tokens": 2432,
+            "output_tokens": 19,
+            "reasoning_output_tokens": 12,
+        },
+    },
+)
+
+# A turn that runs one shell command then replies. The command's item.completed
+# carries BOTH the command and its result (exit_code + aggregated_output); its
+# item.started repeats the same id with partial data and must be ignored.
+_CODEX_CMD = "/bin/zsh -lc 'echo coffer-tool-test'"
+CODEX_COMMAND = _codex_lines(
+    {"type": "thread.started", "thread_id": "019ebef8-2b1d-7380-bc0e-139e489a414b"},
+    {"type": "turn.started"},
+    {
+        "type": "item.started",
+        "item": {
+            "id": "item_0",
+            "type": "command_execution",
+            "command": _CODEX_CMD,
+            "aggregated_output": "",
+            "exit_code": None,
+            "status": "in_progress",
+        },
+    },
+    {
+        "type": "item.completed",
+        "item": {
+            "id": "item_0",
+            "type": "command_execution",
+            "command": _CODEX_CMD,
+            "aggregated_output": "coffer-tool-test\n",
+            "exit_code": 0,
+            "status": "completed",
+        },
+    },
+    {"type": "item.completed", "item": {"id": "item_1", "type": "agent_message", "text": "done"}},
+    {
+        "type": "turn.completed",
+        "usage": {
+            "input_tokens": 49925,
+            "cached_input_tokens": 26880,
+            "output_tokens": 34,
+            "reasoning_output_tokens": 0,
+        },
+    },
+)
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +268,153 @@ async def test_empty_prompt_is_rejected():
 
 async def _dummy_sink(sid: str) -> None:
     return None
+
+
+# ---------------------------------------------------------------------------
+# Codex dialect — verified against real `codex exec --json` output
+# ---------------------------------------------------------------------------
+
+
+def _codex_adapter(lines: list[str], on_session=_dummy_sink, **kw):  # type: ignore[no-untyped-def]
+    return CliAgentAdapter(
+        dialect=CodexDialect(),
+        cwd="/tmp",
+        resume_session=None,
+        extra={},
+        spawn=_spawner(lines, **kw),
+        on_session=on_session,
+    )
+
+
+@pytest.mark.asyncio
+async def test_codex_stream_maps_to_events_and_saves_session():
+    saved: list[str] = []
+
+    async def on_session(sid: str) -> None:
+        saved.append(sid)
+
+    adapter = _codex_adapter(CODEX_HELLO, on_session=on_session)
+    events = await _collect(adapter, _user_turn("ping"))
+
+    assert type(events[0]).__name__ == "TurnStarted"
+    deltas = [e.text for e in events if isinstance(e, TextDelta)]
+    assert deltas == ["pong"], "agent_message item maps to assistant text"
+    done = events[-1]
+    assert isinstance(done, TurnDone)
+    # usage maps input_tokens/output_tokens (cached/reasoning are ignored).
+    assert (done.prompt_tokens, done.completion_tokens) == (24855, 19)
+    # thread.started's thread_id is the session id, persisted for --resume.
+    assert saved == ["019ebef7-14cb-7aa1-aa58-d3d66d709467"]
+
+
+@pytest.mark.asyncio
+async def test_codex_command_execution_emits_one_tool_call_and_result():
+    adapter = _codex_adapter(CODEX_COMMAND)
+    events = await _collect(adapter, _user_turn("run echo"))
+
+    calls = [e for e in events if isinstance(e, ToolCall)]
+    results = [e for e in events if isinstance(e, ToolResult)]
+    # item.started must NOT also produce a call — content is only on completion.
+    assert len(calls) == 1, "the command's item.started must not duplicate the tool call"
+    assert calls[0].tool_name == "shell"
+    assert calls[0].tool_input == {"command": _CODEX_CMD}
+    # The completed command carries its own result — emitted as a ToolResult.
+    assert len(results) == 1
+    assert results[0].error is None
+    assert results[0].output == {"output": "coffer-tool-test\n", "exit_code": 0}
+    deltas = [e.text for e in events if isinstance(e, TextDelta)]
+    assert deltas == ["done"]
+
+
+@pytest.mark.asyncio
+async def test_codex_failed_command_maps_to_tool_error():
+    """A non-zero exit_code (status 'failed') maps the command's result to a
+    ToolResult error, not a success output."""
+    lines = _codex_lines(
+        {"type": "thread.started", "thread_id": "t-fail"},
+        {
+            "type": "item.completed",
+            "item": {
+                "id": "item_0",
+                "type": "command_execution",
+                "command": "/bin/zsh -lc 'ls /no/such/coffer-xyz'",
+                "aggregated_output": "ls: /no/such/coffer-xyz: No such file or directory\n",
+                "exit_code": 1,
+                "status": "failed",
+            },
+        },
+        {"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}},
+    )
+    events = await _collect(_codex_adapter(lines), _user_turn("bad ls"))
+
+    results = [e for e in events if isinstance(e, ToolResult)]
+    assert len(results) == 1
+    assert results[0].output is None
+    assert results[0].error is not None and "No such file" in results[0].error
+
+
+@pytest.mark.asyncio
+async def test_codex_file_change_emits_tool_call_and_result():
+    lines = _codex_lines(
+        {"type": "thread.started", "thread_id": "t-fc"},
+        {
+            "type": "item.completed",
+            "item": {
+                "id": "item_2",
+                "type": "file_change",
+                "changes": [{"path": "/tmp/x.txt", "kind": "add"}],
+                "status": "completed",
+            },
+        },
+        {"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}},
+    )
+    events = await _collect(_codex_adapter(lines), _user_turn("write a file"))
+
+    calls = [e for e in events if isinstance(e, ToolCall)]
+    results = [e for e in events if isinstance(e, ToolResult)]
+    assert len(calls) == 1 and calls[0].tool_name == "file_change"
+    assert calls[0].tool_input == {"changes": [{"path": "/tmp/x.txt", "kind": "add"}]}
+    assert len(results) == 1 and results[0].error is None
+    assert results[0].output == {"changes": [{"path": "/tmp/x.txt", "kind": "add"}]}
+
+
+@pytest.mark.asyncio
+async def test_codex_failed_turn_emits_a_single_turn_error():
+    """codex emits BOTH an `error` and a `turn.failed` for one failure — the
+    dialect must emit exactly ONE TurnError, not two terminal events."""
+    msg = "The 'no-such-model' model is not supported"
+    lines = _codex_lines(
+        {"type": "thread.started", "thread_id": "t-err"},
+        {"type": "turn.started"},
+        {"type": "error", "message": msg},
+        {"type": "turn.failed", "error": {"message": msg}},
+    )
+    events = await _collect(_codex_adapter(lines, code=1), _user_turn("use bad model"))
+
+    errors = [e for e in events if isinstance(e, TurnError)]
+    assert len(errors) == 1, "the error + turn.failed pair must yield one TurnError"
+    assert errors[0].code == "cli_error"
+    assert "not supported" in errors[0].message
+
+
+def test_codex_build_argv_fresh_and_resume():
+    """Verified argv shape: `codex exec --json <prompt>`, and resume is
+    `codex exec resume <session_id> --json <prompt>`."""
+    dialect = CodexDialect()
+    assert dialect.build_argv("hi", resume_session=None, extra={}) == [
+        "codex",
+        "exec",
+        "--json",
+        "hi",
+    ]
+    assert dialect.build_argv("hi", resume_session="sid-1", extra={}) == [
+        "codex",
+        "exec",
+        "resume",
+        "sid-1",
+        "--json",
+        "hi",
+    ]
 
 
 # ---------------------------------------------------------------------------

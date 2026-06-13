@@ -55,13 +55,20 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
   「daemon 不随引导者退出而退出」予以缓解。
 - 如果两个客户端同时探测到缺失并同时 spawn，存在竞态。缓解方式：在
   `~/.coffer/daemon.lock` 上持有一把排他 `flock`，覆盖刚拉起的 daemon 的整个
-  「探测 + 绑定 + 写入」临界区（`bootstrap.acquire_or_existing`）：持锁期间先探测
-  `live_daemon()`，仅当无存活 daemon 时才绑定端口并写入 `daemon.json`，因此两个
-  几乎同时的 spawn 被串行化 —— 败者会观察到胜者并干净退出，而不会绑定第二个端口、
-  覆盖 `daemon.json`（那会把胜者变成孤儿）。关闭时 daemon 的 `release()` 只在
-  `daemon.json` 仍记录着自己 PID 时才删除它，因此孤儿 daemon 永远不会删掉存活
-  daemon 的发现文件。（Windows 没有 `fcntl`，此锁退化为 no-op，由 `live_daemon()`
-  的拒绝启动与原子 `os.replace` 充当兜底。）
+  「探测 + 绑定 + 写入」临界区，**并在绑定之后继续持有，直到 daemon 真正在提供
+  HTTP 服务**（`bootstrap.acquire_or_existing`）：持锁期间先探测 `live_daemon()`，
+  仅当无存活 daemon 时才绑定端口并写入 `daemon.json`，随后**仍然持锁** ——
+  `acquire_or_existing` 返回一个 `release` 回调，由 daemon 入口在 uvicorn 报告已开
+  始服务（`Server.started`）后才调用。这正是串行化得以严丝合缝的关键：因为
+  `live_daemon()` 用 HTTP `GET /api/v1/daemon/status` 探测确认存活（而非裸端口
+  检查），一个已绑定但尚未服务的端口会被判定为**未**存活。倘若锁在写完
+  `daemon.json` 的瞬间就释放，竞争的 spawn 可能在那不到一秒的启动窗口里醒来，探测
+  到尚未服务的胜者、得到 `None`、于是绑定第二个端口 —— 把胜者变成孤儿。把锁持有到
+  开始服务为止，意味着败者会一直阻塞在锁上，直到胜者能应答 `/daemon/status`，随后
+  观察到它并干净退出。关闭时 daemon 的 `release()` 只在 `daemon.json` 仍记录着自己
+  PID 时才删除它，因此孤儿 daemon 永远不会删掉存活 daemon 的发现文件。（Windows
+  没有 `fcntl`，此锁退化为 no-op，由 `live_daemon()` 的拒绝启动与原子 `os.replace`
+  充当兜底。）
 - 由子入口（shim）自动拉起一个长生存周期进程并不常见 —— 尤其在 Windows
   上用户可能短暂看到命令窗口。缓解方式：Windows 上以
   `subprocess.CREATE_NO_WINDOW` 分离；POSIX 上使用 `os.setsid()`。
@@ -122,3 +129,11 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
   detect-or-spawn 存活性检查从裸 TCP 连接改为 HTTP `GET /api/v1/daemon/status`
   的 200 探测，因此占用了崩溃 daemon 所记录端口的「占座进程」不再被误判为存活
   daemon。
+- **2026-06-13** —— 关闭启动窗口。spawn `flock` 现在会持有到写完 `daemon.json`
+  之后、直到 daemon 真正在提供 HTTP 服务为止：`acquire_or_existing` 返回一个
+  `release` 回调，由入口在 uvicorn 报告 `Server.started` 后才调用。此前锁在写完
+  `daemon.json` 的瞬间就释放，留下一个不到一秒的窗口 —— 竞争的自动 spawn 会探测
+  到已绑定但尚未服务的端口、从 `live_daemon()` 得到 `None`、于是绑定第二个端口，把
+  胜者变成孤儿。并发测试也已修正为驱动一个真实的「已绑定但尚未服务」的 socket
+  （并把释放锁与「正在服务」绑定），而不再把「`daemon.json` 存在」当作存活 ——
+  那恰恰掩盖了这个窗口。

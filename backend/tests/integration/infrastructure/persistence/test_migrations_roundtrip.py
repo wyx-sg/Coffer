@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0019"
+HEAD_REVISION = "0020"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -148,9 +148,9 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
-    # head (0019) -> 0016: drops sync_config + sync_state (spec 010); the
-    # intervening 0017 (chunk-id rekey) and 0018 (conversation agent-config
-    # column) add no tables.
+    # head (0020) -> 0016: drops sync_config + sync_state (spec 010); the
+    # intervening 0017 (chunk-id rekey), 0018 (conversation agent-config
+    # column) and 0020 (conversation-retention reset) add no tables.
     command.downgrade(cfg, "0016")
     assert "sync_config" not in _user_tables(db_path)
     assert "sync_state" not in _user_tables(db_path)
@@ -336,6 +336,138 @@ def test_db_stamped_by_pre_redesign_branch_is_repaired(tmp_path, monkeypatch):
     # And the repair is idempotent for fresh DBs: a second upgrade is a no-op.
     command.upgrade(cfg, "head")
     assert {"documents", "chunks", "documents_fts"} <= _user_tables(db_path)
+
+
+def _seed_retention(db_path: pathlib.Path, table_name: str, retention_days: int | None) -> None:
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            "INSERT INTO retention_policies "
+            "(table_name, retention_days, last_pruned_at, last_pruned_rows, updated_at) "
+            "VALUES (?, ?, ?, 0, ?)",
+            (
+                table_name,
+                retention_days,
+                "2026-05-01T00:00:00+00:00",  # a stale prune timestamp under old meaning
+                "2026-05-01T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _retention_row(db_path: pathlib.Path, table_name: str):
+    conn = sqlite3.connect(str(db_path))
+    try:
+        return conn.execute(
+            "SELECT retention_days, last_pruned_at, last_pruned_rows "
+            "FROM retention_policies WHERE table_name = ?",
+            (table_name,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+
+def test_migration_0020_resets_legacy_single_stage_conversation_retention(tmp_path, monkeypatch):
+    """A pre-two-stage install has a `conversations` retention row whose value
+    meant "delete idle threads by updated_at" and NO `conversations_archive`
+    row. After the flip to archived_at that row would be silently reinterpreted.
+    0020 repairs it: resets `conversations` to the new delete default (30,
+    measured by archived_at) and seeds the archive stage (7), and an ACTIVE
+    thread (archived_at IS NULL) is never deleted under the new semantics."""
+    db_path = tmp_path / "legacy_retention.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0019")
+    # Legacy single-stage row: user had set "delete chats idle 14 days" (the old
+    # updated_at meaning). No conversations_archive row exists yet.
+    _seed_retention(db_path, "conversations", 14)
+    # An active thread last touched long ago — under the OLD updated_at meaning
+    # it was a delete candidate; under the NEW archived_at meaning it must not be.
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            "INSERT INTO conversations (id, agent_key, title, created_at, updated_at, archived_at) "
+            "VALUES ('c-active', 'builtin', 'old active', "
+            "'2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00', NULL)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    command.upgrade(cfg, "head")
+
+    conv = _retention_row(db_path, "conversations")
+    archive = _retention_row(db_path, "conversations_archive")
+    assert conv is not None and conv[0] == 30, "delete stage reset to the new default"
+    assert conv[1] is None and conv[2] == 0, "stale prune bookkeeping cleared (clock changed)"
+    assert archive is not None and archive[0] == 7, "archive stage seeded with its default"
+
+    # Active threads (archived_at IS NULL) survive a delete-by-archived_at sweep.
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute("DELETE FROM conversations WHERE archived_at < '2030-01-01T00:00:00+00:00'")
+        conn.commit()
+        survivors = {r[0] for r in conn.execute("SELECT id FROM conversations")}
+    finally:
+        conn.close()
+    assert "c-active" in survivors, "an active conversation must not be mis-deleted on upgrade"
+
+
+def test_migration_0020_keeps_disabled_conversation_retention_disabled(tmp_path, monkeypatch):
+    """If the legacy install had conversation retention DISABLED (NULL), the
+    upgrade must not silently re-enable deletion: both new stages stay NULL."""
+    db_path = tmp_path / "disabled_retention.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0019")
+    _seed_retention(db_path, "conversations", None)  # disabled
+
+    command.upgrade(cfg, "head")
+
+    conv = _retention_row(db_path, "conversations")
+    archive = _retention_row(db_path, "conversations_archive")
+    assert conv is not None and conv[0] is None, "delete stage stays disabled"
+    assert archive is not None and archive[0] is None, "archive stage seeded disabled too"
+
+
+def test_migration_0020_is_noop_when_already_two_stage(tmp_path, monkeypatch):
+    """An install already on the two-stage model (both rows present, possibly
+    user-customised) must be left untouched — no clobbering of a deliberate
+    value."""
+    db_path = tmp_path / "two_stage.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0019")
+    _seed_retention(db_path, "conversations", 45)  # custom new-semantics value
+    _seed_retention(db_path, "conversations_archive", 10)
+
+    command.upgrade(cfg, "head")
+
+    assert _retention_row(db_path, "conversations")[0] == 45, "custom delete value preserved"
+    assert _retention_row(db_path, "conversations_archive")[0] == 10, "custom archive value kept"
+
+
+def test_migration_0020_is_noop_on_fresh_db_with_no_retention_rows(tmp_path, monkeypatch):
+    """Retention rows are seeded at runtime, not by migrations — so on a fresh
+    `upgrade head` 0020 finds no `conversations` row and does nothing (no crash,
+    no spurious rows)."""
+    db_path = tmp_path / "fresh.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "head")
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM retention_policies").fetchone()[0]
+    finally:
+        conn.close()
+    assert count == 0, "no retention rows are conjured on a fresh install"
 
 
 def test_migration_0017_rekeys_chunk_ids_per_store(tmp_path, monkeypatch):
