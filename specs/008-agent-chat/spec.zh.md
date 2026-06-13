@@ -375,6 +375,17 @@ agent 使用哪一个。
   完成；在 deny 时回调解析为 `PermissionResultDeny`（携带拒绝消息），且回合也以
   `TurnDone` 干净完成。
 
+### 场景：app-server 驱动的 Codex 的逐工具审批中转
+
+- **Given** 一个由 app-server 支持的 Codex provider 驱动的回合，其中 Codex 在回合
+  进行中发送 `item/commandExecution/requestApproval` 或
+  `item/fileChange/requestApproval` 请求，
+- **When** 平台发出一个 `ApprovalRequest` 事件，且用户通过平台审批通道提交 allow
+  或 deny 决策，
+- **Then** 在 allow 时 adapter 向 Codex 写回 `{decision: "accept"}`，回合继续并以
+  `TurnDone` 完成；在 deny 时 adapter 向 Codex 写回 `{decision: "decline"}`，回合
+  也以 `TurnDone` 干净完成。
+
 ### 场景：停止一个正在运行的回合
 
 - **Given** 一个正在流式输出的回合，
@@ -470,8 +481,12 @@ agent 使用哪一个。
   上游 session id 以便下一个回合延续同一 session。Claude Code 通过 Claude Agent
   SDK 驱动：每个 `can_use_tool` 权限回调都桥接至平台的人工审批通道
   （`can_use_tool` → `ApprovalRequest` 事件 → allow/deny 决策 → SDK 结果），
-  从而每次调用的工具审批对 SDK 支持的 Claude Code 端到端工作。Codex 在它自己的
-  CLI 权限模式下运行。
+  从而每次调用的工具审批对 SDK 支持的 Claude Code 端到端工作。Codex 通过
+  `codex app-server`（stdio 上的 JSON-RPC 2.0，NDJSON 帧）驱动：服务端→客户端
+  审批请求（`item/commandExecution/requestApproval` 与
+  `item/fileChange/requestApproval`）桥接至同一人工审批通道（allow → `"accept"`
+  决策，deny → `"decline"` 决策），从而逐工具审批对 app-server 支持的 Codex 通过
+  与 Claude Code 相同的平台通道端到端工作。
 
 **内置 agent 与 agentic 循环**
 
