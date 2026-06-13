@@ -427,6 +427,18 @@ referenced by at least one test marked
   `PermissionResultDeny` (carrying the denial message) and the turn also
   completes cleanly with `TurnDone`.
 
+### Scenario: per-tool approval relay works for app-server-backed Codex
+
+- **Given** a turn driven by the app-server-backed Codex provider, where Codex
+  sends an `item/commandExecution/requestApproval` or
+  `item/fileChange/requestApproval` request mid-turn,
+- **When** the platform emits an `ApprovalRequest` event and the user submits an
+  allow or deny decision through the platform's approval channel,
+- **Then** on allow the adapter writes `{decision: "accept"}` back to Codex and
+  the turn proceeds and completes with `TurnDone`; on deny the adapter writes
+  `{decision: "decline"}` back to Codex and the turn also completes cleanly
+  with `TurnDone`.
+
 ### Scenario: stop a running turn
 
 - **Given** a turn that is streaming,
@@ -530,7 +542,7 @@ referenced by at least one test marked
   platform ships three agents behind this seam — the built-in agent plus two
   CLI-backed agents (Claude Code, Codex) — so the seam is validated by real
   additional providers, not a single occupant.
-- **FR-005a**: System MUST ship CLI-backed agent providers for Claude Code and
+- **FR-005a**: System MUST ship subprocess-backed agent providers for Claude Code and
   Codex. Each is configured per conversation by a working directory (its
   `agent_config.cwd`), which MUST be an existing directory or the configuration
   is rejected. A CLI agent's availability MUST reflect whether its command-line
@@ -542,7 +554,12 @@ referenced by at least one test marked
   callback is bridged through the platform's human-approval channel
   (`can_use_tool` → `ApprovalRequest` event → allow/deny decision → SDK result),
   so per-call tool approval works end-to-end for SDK-backed Claude Code. Codex
-  runs under its own CLI permission mode.
+  is driven via `codex app-server` (JSON-RPC 2.0 over stdio, NDJSON-framed):
+  server→client approval requests (`item/commandExecution/requestApproval` and
+  `item/fileChange/requestApproval`) are bridged through the same
+  human-approval channel (allow → `"accept"` decision, deny → `"decline"`
+  decision), so per-tool approval works end-to-end for app-server-backed Codex
+  through the same platform channel Claude Code uses.
 
 **Built-in agent & agentic loop**
 
