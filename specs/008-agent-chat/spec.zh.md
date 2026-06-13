@@ -165,6 +165,7 @@ local-first、SQLite-as-record 立场。
 - allow 一个请求让 agent 运行该工具并结束回合
 - deny 一个请求把拒绝作为工具结果返回给 agent
 - 一个针对未知或已决请求的审批决策被拒绝
+- per-tool approval relay works for SDK-backed Claude Code
 
 ---
 
@@ -366,6 +367,14 @@ agent 使用哪一个。
 - **When** 用户 deny 它，
 - **Then** 拒绝作为该工具的结果被递交给 agent 且回合在不运行该工具的情况下完成。
 
+### Scenario: per-tool approval relay works for SDK-backed Claude Code
+
+- **Given** 一个由 SDK 支持的 Claude Code provider 驱动的回合，其中工具调用请求审批，
+- **When** `can_use_tool` 回调触发，且用户通过平台审批通道提交 allow 或 deny 决策，
+- **Then** 在 allow 时 SDK 回调解析为 `PermissionResultAllow` 且回合以 `TurnDone`
+  完成；在 deny 时回调解析为 `PermissionResultDeny`（携带拒绝消息），且回合也以
+  `TurnDone` 干净完成。
+
 ### 场景：停止一个正在运行的回合
 
 - **Given** 一个正在流式输出的回合，
@@ -458,8 +467,11 @@ agent 使用哪一个。
   目录，否则配置被拒绝。一个 CLI agent 的可用性 MUST 反映其命令行二进制是否可在
   守护进程的 PATH 上解析；一个不可用的 agent 被列出但不可选。一个 CLI 回合 MUST
   在该目录中运行该工具、把它的行分隔 JSON 输出流式映射到平台的回合事件，并持久化
-  上游 session id 以便下一个回合延续同一 session。v1 在它自己的权限模式下运行
-  CLI（尚无每次调用的审批桥接）。
+  上游 session id 以便下一个回合延续同一 session。Claude Code 通过 Claude Agent
+  SDK 驱动：每个 `can_use_tool` 权限回调都桥接至平台的人工审批通道
+  （`can_use_tool` → `ApprovalRequest` 事件 → allow/deny 决策 → SDK 结果），
+  从而每次调用的工具审批对 SDK 支持的 Claude Code 端到端工作。Codex 在它自己的
+  CLI 权限模式下运行。
 
 **内置 agent 与 agentic 循环**
 
@@ -607,7 +619,8 @@ agent 使用哪一个。
   仅在测试中使用的第二 provider 演示。
 - **SC-008**：人工审批通道端到端工作 —— 一个发出审批请求的 agent 回合暂停，决策
   端点递交用户的答复，且回合继续 —— 且一个正在运行的回合可被停止并保留其部分输出;
-  两者都由验收测试证明。
+  两者都由验收测试证明。审批通道额外由一个真实 provider（SDK 支持的 Claude Code）
+  而非仅脚本化假对象来行使，确认每次调用的工具审批对生产 agent adapter 端到端工作。
 
 ## 假设
 

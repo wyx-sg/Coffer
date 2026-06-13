@@ -170,7 +170,7 @@ def _reset_active_turns() -> Any:
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="008-agent-chat",
-    scenario="an agent turn pauses for human approval",
+    scenario="per-tool approval relay works for SDK-backed Claude Code",
 )
 async def test_sdk_approval_allow_via_orchestrator(tmp_path: Any) -> None:
     """Allow path: the turn proceeds after the human grants permission.
@@ -238,7 +238,7 @@ async def test_sdk_approval_allow_via_orchestrator(tmp_path: Any) -> None:
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="008-agent-chat",
-    scenario="a denied tool call is reported to the agent",
+    scenario="per-tool approval relay works for SDK-backed Claude Code",
 )
 async def test_sdk_approval_deny_via_orchestrator(tmp_path: Any) -> None:
     """Deny path: the denial is delivered to the SDK callback and the turn completes.
