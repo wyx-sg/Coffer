@@ -61,15 +61,24 @@ owns its lifecycle.
 - Race condition possible if two clients detect absence and spawn
   simultaneously. Mitigated by an exclusive `flock` on `~/.coffer/daemon.lock`
   held across the freshly-spawned daemon's whole probe+bind+write critical
-  section (`bootstrap.acquire_or_existing`): under the lock it probes
-  `live_daemon()` and binds a port + writes `daemon.json` only if none is live,
-  so two near-simultaneous spawns are serialised — the loser observes the
-  winner and exits cleanly instead of binding a second port and clobbering
-  `daemon.json` (which would orphan the winner). On shutdown the daemon's
-  `release()` only unlinks `daemon.json` when it still records its own PID, so
-  an orphaned daemon can never delete the live one's discovery file. (On
-  Windows, which lacks `fcntl`, the lock degrades to a no-op and the
-  `live_daemon()` refusal plus the atomic `os.replace` remain the guard.)
+  section **and on past the bind, until the daemon is actually serving HTTP**
+  (`bootstrap.acquire_or_existing`): under the lock it probes `live_daemon()`
+  and binds a port + writes `daemon.json` only if none is live, then keeps the
+  lock held — `acquire_or_existing` returns a `release` callable that the
+  daemon entrypoint invokes only once uvicorn reports it is serving
+  (`Server.started`). This is what makes the serialisation airtight: because
+  `live_daemon()` confirms liveness with an HTTP `GET /api/v1/daemon/status`
+  probe (not a bare port check), a port that is bound but not yet serving reads
+  as **not** live. Had the lock dropped the instant `daemon.json` was written,
+  a racing spawn could wake in that sub-second boot window, probe the
+  not-yet-serving winner, get `None`, and bind a second port — orphaning the
+  winner. Holding the lock until serving means the loser instead blocks on the
+  lock until the winner answers `/daemon/status`, then observes it and exits
+  cleanly. On shutdown the daemon's `release()` only unlinks `daemon.json` when
+  it still records its own PID, so an orphaned daemon can never delete the live
+  one's discovery file. (On Windows, which lacks `fcntl`, the lock degrades to
+  a no-op and the `live_daemon()` refusal plus the atomic `os.replace` remain
+  the guard.)
 - Auto-spawn of a long-lived process from a child entry point (the shim) is
   unusual — users on Windows in particular may see a brief command window.
   Mitigated by detaching with `subprocess.CREATE_NO_WINDOW` on Windows and
@@ -145,3 +154,13 @@ file with everything in it is simpler than splitting state.
   app's detect-or-spawn liveness check switched from a bare TCP connect to an
   HTTP `GET /api/v1/daemon/status` 200 probe, so a port-squatter on a crashed
   daemon's recorded port no longer false-positives as a live daemon.
+- **2026-06-13** — Boot-window close. The spawn `flock` is now held past the
+  `daemon.json` write, until the daemon is actually serving HTTP:
+  `acquire_or_existing` returns a `release` callable that the entrypoint
+  invokes only once uvicorn reports `Server.started`. Previously the lock
+  dropped the moment `daemon.json` was written, leaving a sub-second window in
+  which a racing auto-spawn probed the bound-but-not-yet-serving port, got
+  `None` from `live_daemon()`, and bound a second port — orphaning the winner.
+  The concurrency test was corrected to drive a real bound-but-not-serving
+  socket (and tie lock-release to *serving*) instead of treating
+  "`daemon.json` exists" as liveness, which had masked the window.

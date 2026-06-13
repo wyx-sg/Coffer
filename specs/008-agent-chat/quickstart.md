@@ -68,6 +68,31 @@ coffer chat                       # interactive multi-turn session
 
 CLI conversations are the same conversations the desktop app shows.
 
+## Conversation retention (and an upgrade note)
+
+Conversations follow a two-stage lifecycle, both windows configurable under
+**Settings → Data**:
+
+1. **Auto-archive idle chats** — a conversation with no new message for the
+   auto-archive window (default **7 days**) is archived (it leaves the active
+   list but is not destroyed).
+2. **Delete archived chats** — an archived conversation (and its messages) is
+   deleted the configured number of days **after it was archived** (default
+   **30 days**).
+
+Either window can be set to *off* to disable that stage. Active conversations
+(never archived) are never deleted by the delete stage.
+
+> **Upgrade note (behaviour change).** Earlier builds deleted conversations by
+> *last activity* (a single stage). The lifecycle is now the two-stage model
+> above: the delete window is measured from *archival*, not last activity, and
+> the separate auto-archive window was added. On upgrade, a legacy single-stage
+> retention setting is reset to the new defaults (archive 7 days + delete 30
+> days); a setting you had **disabled** stays disabled. If you previously
+> customised conversation retention, re-check **Settings → Data** after
+> upgrading. This is safe: the new delete stage only ever removes *archived*
+> threads, so no active conversation is deleted by the change.
+
 ## What happens behind the scenes
 
 - Conversations and messages are rows in Coffer's SQLite database — not
