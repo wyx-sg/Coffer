@@ -148,7 +148,7 @@ route and the build logs a warning (so the gap is visible, never silent).
 ## 5. Visual language
 
 Reuse the **"Coffer warm"** visual language from spec 002
-(`frontend/src/index.css`, `agents/ui-shell/visual-language.md`) so the site
+(`frontend/src/index.css`, `agents/visual-language.md`) so the site
 matches the product:
 
 - **Palette:** cream paper background `#FAF9F5`, near-black ink `#1F1B17`, clay
