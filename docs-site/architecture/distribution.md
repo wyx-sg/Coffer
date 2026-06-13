@@ -29,17 +29,27 @@ This developer path is well-documented and remains the primary contribution path
 
 ## PyInstaller: standalone binaries
 
-For end-user distribution, `make bundle-binaries` (driven by `scripts/build_binaries.sh`) runs PyInstaller on the current host against three spec files:
+For end-user distribution, `make bundle-binaries` (driven by `scripts/build_binaries.sh`) runs PyInstaller on the current host against these spec files:
 
-| Spec file                      | Output binary          | Includes                                                                                            |
-| ------------------------------ | ---------------------- | --------------------------------------------------------------------------------------------------- |
-| `backend/coffer-daemon.spec`   | `dist/coffer-daemon`   | FastAPI, SQLAlchemy 2 / aiosqlite, Pydantic 2, `mcp`, `keyring`, Alembic, structlog, Typer, uvicorn |
-| `backend/coffer-mcp-shim.spec` | `dist/coffer-mcp-shim` | `httpx` only (shim is a thin loopback forwarder)                                                    |
-| `backend/coffer.spec`          | `dist/coffer`          | the management CLI (Typer app)                                                                      |
+| Spec file                      | Output binary          | Includes                                                                                                                                                                                                                  |
+| ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/coffer-daemon.spec`   | `dist/coffer-daemon`   | FastAPI, SQLAlchemy 2 / aiosqlite, Pydantic 2, `mcp`, `keyring`, Alembic, structlog, Typer, uvicorn, `tomlkit` / `yaml` (agent config editing), `sqlite_vec` (+ its native `vec0` loadable-extension data file), `markitdown`, `openai`, and the chat-agent stack (`langchain*` / `langgraph`) |
+| `backend/coffer-mcp-shim.spec` | `dist/coffer-mcp-shim` | `httpx` only (shim is a thin loopback forwarder)                                                                                                                                                                          |
+| `backend/coffer.spec`          | `dist/coffer`          | the management CLI (Typer app)                                                                                                                                                                                            |
+
+::: warning Pending: the `coffer-callback` sidecar
+A fourth process — the SeaTalk callback listener (`surfaces/callback/`, spawned by the daemon while a SeaTalk channel is enabled) — is **not yet a build target**. In source/dev runs the daemon spawns it as `python -m coffer.surfaces.callback`; in a frozen build `listener_spawn.py` expects a `coffer-callback` sibling next to the daemon binary and raises *"frozen build is missing the coffer-callback sibling binary"* if it is absent. Adding `backend/coffer-callback.spec` and wiring it into `build_binaries.sh` (so the frozen bundles ship the sidecar) is a known packaging item, tracked against spec 009-channels.
+:::
 
 PyInstaller bundles the Python interpreter, all dependencies, and the application code into a single-file executable. The user runs `coffer-daemon` directly; no `python` command, no `venv`, no `pip`. The shim binary is deliberately lean — it excludes all server-side dependencies because the shim only needs `httpx` to forward requests to the daemon over loopback HTTP. MCP clients that re-spawn the shim every session benefit from the shorter cold-start time a smaller binary provides.
 
 Alembic migration files ship as data files inside the daemon binary via PyInstaller's `datas` mechanism. On first launch, the daemon runs `alembic upgrade head` against a fresh database before accepting connections — the end-user gets correct schema creation with no separate step.
+
+The daemon binary also bundles the heavier knowledge/memory/chat dependencies (specs 006/007/008): `sqlite_vec` for the vector index, `markitdown` for document conversion, `openai` for embeddings, and the `langchain*` / `langgraph` chat-agent stack. These are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, embed, run vector retrieval, and drive the built-in chat agent.
+
+::: warning Bundle verification — sqlite-vec native extension
+`sqlite-vec` ships its loadable native extension (`vec0.dylib` / `vec0.so` / `vec0.dll`) as **package data**, not a Python submodule, so `collect_submodules` never captures it — `coffer-daemon.spec` adds it via `collect_data_files("sqlite_vec")`. If this data file is missing from a frozen build, the daemon cannot load the `vec0` extension and vector retrieval silently degrades to keyword-only (`VecIndex.available()` swallows the load failure). The release smoke test must therefore treat "the bundled daemon can load `vec0`" as an explicit bundle-verification item (per [ADR-012](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval) and [ADR-008](/reference/adr/ADR-008-distribution-pyinstaller-tauri-sidecar)).
+:::
 
 ::: tip Why PyInstaller, not alternatives
 Two alternatives were explicitly considered and rejected for v0:
@@ -59,6 +69,7 @@ A `coffer-cli-<triple>` archive — `.tar.gz` (macOS and Linux) — containing:
 - `coffer` (the management CLI)
 - `coffer-daemon` (standalone executable)
 - `coffer-mcp-shim` (standalone executable)
+- `coffer-callback` (the SeaTalk callback-listener sidecar — pending; see the packaging note above) once it becomes a build target
 - A SHA-256 checksum file
 
 This tier targets headless servers, CI environments, and developers who want the standalone binaries without a desktop app. The user extracts the archive, runs `coffer-daemon`, places `coffer-mcp-shim` on their `PATH`, and points MCP clients at the shim. No Tauri, no GUI, no desktop integration.
@@ -67,7 +78,7 @@ This tier targets headless servers, CI environments, and developers who want the
 
 A platform-native installer (DMG on macOS, AppImage and `.deb` on Linux) that embeds:
 
-- The same `coffer-daemon` and `coffer-mcp-shim` PyInstaller binaries as **Tauri sidecars**
+- The `coffer-daemon` and `coffer-mcp-shim` PyInstaller binaries as **Tauri sidecars** (and `coffer-callback` once it is a build target — see the packaging note above)
 - The Tauri 2 desktop shell (Rust + WebView)
 - The web UI from spec 002
 
@@ -87,7 +98,7 @@ The desktop shell does more than wrap the web UI in a window. Key responsibiliti
 
 - macOS / Linux: `~/.coffer/bin/coffer-mcp-shim`
 
-A size-comparison heuristic handles upgrades: if the on-disk binary has the same byte count as the bundled binary, it is left untouched (no-op on repeated launches). A different size triggers an atomic replace. This means users who upgrade Coffer via a new DMG or package automatically get the updated shim on next launch, without manual PATH management.
+A staleness check handles upgrades: the on-disk binary is compared against the bundled one on **size + mtime + a version sentinel**, and is left untouched when they match (no-op on repeated launches). Any mismatch triggers an atomic replace. This means users who upgrade Coffer via a new DMG or package automatically get the updated shim on next launch, without manual PATH management.
 
 **Tray icon.** The desktop app runs as a system tray icon after the main window is closed. Closing the window hides it; the daemon and tray remain. The tray menu provides: Open (restore the window), Restart daemon, and Quit (which calls `app.exit()` and actually terminates the process).
 

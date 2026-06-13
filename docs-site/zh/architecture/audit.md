@@ -8,7 +8,7 @@
 
 ## 这解决了什么问题
 
-一个开发者注册了二十个 MCP 服务器，同时从 Claude Code、Codex 和自定义脚本向它们委托工具调用。没有问责记录，甚至连基本的治理问题也变得不透明：「`filesystem__write_file` 工具是我还是 UI 禁用的？」「下午 2 点 Claude Code 调用的是哪个服务器的工具，结果如何？」「这个服务器的配置上次是什么时候变更的？」审计日志和调用日志能回答这些问题，而无需用户运行独立的监控栈。
+一个开发者注册了一批 MCP 服务器、导入了技能、构建了知识库、积累了记忆、运行着聊天会话、配对了通知通道，并把这一切跨机器同步——这些操作由 Claude Code、Codex、UI 和自定义脚本驱动，常常同时进行。没有问责记录，甚至连基本的治理问题也变得不透明：「`filesystem__write_file` 工具是我还是 UI 禁用的？」「下午 2 点 Claude Code 调用的是哪个服务器的工具，结果如何？」「这个服务器的配置上次是什么时候变更的？」「凭据上次是什么时候轮换的，主密钥是什么时候迁移的？」审计日志和调用日志能回答这些问题，而无需用户运行独立的监控栈。
 
 Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数据库或日志管理 SaaS。所有记录都留在本机，并在 `~/.coffer/` 的备份范围内。
 
@@ -27,7 +27,9 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 
 `actor` 字段值得特别关注。每个接口面都会显式设置它：Typer CLI 在向 daemon 的 HTTP 调用中传递 `X-Coffer-Actor: cli`；REST API 客户端可以设置 `X-Coffer-Actor: api` 或 `X-Coffer-Actor: ui`；如果 header 缺失，daemon 默认为 `"api"`。daemon 自身会为自动化操作（如保留策略清理）发出 `system` 事件。这意味着审计日志能准确反映一次变更是交互式发起的、程序化发起的，还是自动触发的。
 
-`AuditEventType`（定义在 `domain/audit.py`）的完整事件类型集合：
+`AuditEventType`（定义在 `domain/audit.py`）的完整事件类型集合，按领域分组：
+
+**资源与能力：**
 
 | 事件                                         | 触发时机                                        |
 | -------------------------------------------- | ----------------------------------------------- |
@@ -37,13 +39,92 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 | `resource_deleted`                           | `delete` 之后；`details` 中包含删除前的配置快照 |
 | `capability_first_seen`                      | 发现服务时首次看到该能力                        |
 | `capability_enabled` / `capability_disabled` | 用户切换能力状态时                              |
-| `daemon_started` / `daemon_stopped`          | daemon 启动 / 优雅关闭时                        |
-| `token_rotated`                              | `POST /api/v1/daemon/rotate-token` 之后         |
-| `retention_updated`                          | 保留策略发生变更时                              |
-| `backup_created`                             | `POST /api/v1/daemon/backup` 之后               |
-| `credential_set` / `credential_read` / `credential_deleted` | 加密凭据存储中写入 / 读取 / 删除之后           |
-| `credential_migrated`                        | 每个 ref：legacy 钥匙串密钥迁入存储时           |
-| `master_key_relocated`                       | 主密钥在文件与钥匙串存储之间迁移之后            |
+
+**Daemon：**
+
+| 事件                                | 触发时机                                |
+| ----------------------------------- | --------------------------------------- |
+| `daemon_started` / `daemon_stopped` | daemon 启动 / 优雅关闭时                |
+| `token_rotated`                     | `POST /api/v1/daemon/rotate-token` 之后 |
+| `retention_updated`                 | 保留策略发生变更时                      |
+| `backup_created`                    | `POST /api/v1/daemon/backup` 之后       |
+
+**凭据与主密钥：**
+
+| 事件                                                        | 触发时机                                  |
+| ----------------------------------------------------------- | ----------------------------------------- |
+| `credential_set` / `credential_read` / `credential_deleted` | 加密凭据存储中写入 / 读取 / 删除之后       |
+| `credential_migrated`                                       | 每个 ref：legacy 钥匙串密钥迁入存储时      |
+| `master_key_relocated`                                      | 主密钥在文件与钥匙串存储之间迁移之后       |
+| `master_key_exported` / `master_key_imported`               | 主密钥向 / 从另一台机器的带外传输          |
+| `keychain_set` / `keychain_read` / `keychain_deleted`       | legacy（加密存储之前）事件，为历史行保留可渲染性 |
+
+**Embedding：**
+
+| 事件                       | 触发时机                          |
+| -------------------------- | --------------------------------- |
+| `embedding_config_updated` | embedding 提供方/模型变更时       |
+
+**Agent 工作区：**
+
+| 事件                                                      | 触发时机                                        |
+| --------------------------------------------------------- | ----------------------------------------------- |
+| `agent_config_file_written` / `agent_config_file_deleted` | agent 配置文件被写入 / 删除时                   |
+| `agent_mcp_installed` / `agent_mcp_uninstalled`           | MCP 条目被安装到 / 从 agent 卸载时              |
+| `agent_mcp_entry_removed` / `agent_mcp_entry_adopted`     | MCP 条目被从 agent 移除 / 被 agent 接管时       |
+| `agent_plugin_toggled` / `agent_plugin_uninstalled`       | agent 插件被切换 / 卸载时                       |
+
+**技能：**
+
+| 事件                                        | 触发时机                                       |
+| ------------------------------------------- | ---------------------------------------------- |
+| `skill_imported` / `skill_fetched`          | 技能被本地导入 / 从来源拉取时                  |
+| `skill_updated` / `skill_update_noop`       | 技能更新生效 / 为空操作时                      |
+| `skill_renamed`                             | 技能被重命名时                                 |
+| `skill_bound` / `skill_unbound`             | 技能被绑定到 / 从 agent 解绑时                 |
+| `skill_autobind_skipped`                    | autobind 被跳过时                              |
+| `skill_relinked`                            | 技能链接被修复时                               |
+| `skill_drift_detected`                      | 检测到磁盘上的内容与受管技能产生漂移时         |
+| `skill_adopted` / `skill_unmanaged_deleted` | 未受管技能被接管 / 散落技能被删除时            |
+
+**知识库：**
+
+| 事件                                                                  | 触发时机                            |
+| --------------------------------------------------------------------- | ----------------------------------- |
+| `kb_document_ingested` / `kb_document_updated` / `kb_document_deleted` | KB 文档被摄取 / 更新 / 删除时        |
+| `kb_reindexed`                                                        | `coffer kb reindex` 重建索引之后    |
+
+**记忆：**
+
+| 事件                                                 | 触发时机                              |
+| ---------------------------------------------------- | ------------------------------------- |
+| `memory_added` / `memory_updated` / `memory_deleted` | 记忆 fact 被添加 / 更新 / 删除时       |
+| `memory_cleared`                                     | 记忆 store 被清空时                   |
+| `memory_projected`                                   | 记忆被投影到 agent/项目时             |
+
+**聊天、会话与模型：**
+
+| 事件                                                 | 触发时机                              |
+| ---------------------------------------------------- | ------------------------------------- |
+| `conversation_created` / `conversation_deleted`      | 会话被创建 / 删除时                   |
+| `conversation_archived` / `conversation_unarchived`  | 会话被归档 / 取消归档时               |
+| `chat_turn_completed`                                | 一次聊天回合完成之后                  |
+| `model_created` / `model_updated` / `model_deleted`  | 聊天模型定义被创建 / 更新 / 删除时     |
+
+**通道：**
+
+| 事件                                        | 触发时机                              |
+| ------------------------------------------- | ------------------------------------- |
+| `channel_pairing_issued` / `channel_paired` | 通道配对码被签发 / 对端完成配对时     |
+| `channel_notify_sent`                       | 向已配对通道发送通知时                |
+
+**同步：**
+
+| 事件                                | 触发时机                              |
+| ----------------------------------- | ------------------------------------- |
+| `sync_config_updated`               | 同步配置发生变更时                    |
+| `sync_completed`                    | 一次同步运行完成之后                  |
+| `sync_conflicted` / `sync_resolved` | 同步运行发生冲突 / 冲突被解决时       |
 
 注意，`credential_set` 和 `credential_deleted` 都会被审计——密钥被存储或删除这一*事实*会被记录下来。密钥值本身永远不会出现在 `details` payload 中。（legacy 的 `keychain_set` / `keychain_deleted` 事件类型对历史记录仍可渲染。）
 
@@ -97,12 +178,14 @@ PrunableTable(
 
 ### retention_policies 表
 
-每个已注册的可剪裁表对应一行。daemon 首次启动时的默认值：
+每个已注册的可剪裁策略对应一行。daemon 首次启动时的默认值：
 
-| 数据表            | 默认值 |
-| ----------------- | ------ |
-| `audit_log`       | 365 天 |
-| `mcp_invocations` | 30 天  |
+| 策略                    | 动作                               | 默认值 |
+| ----------------------- | ---------------------------------- | ------ |
+| `audit_log`             | 删除早于窗口的行                   | 365 天 |
+| `mcp_invocations`       | 删除早于窗口的行                   | 30 天  |
+| `conversations_archive` | 自动归档闲置达到指定天数的会话     | 7 天   |
+| `conversations`         | 在归档后达到指定天数时删除已归档会话 | 30 天 |
 
 用户可以通过 `PATCH /api/v1/retention/{table_name}` 修改任意一个。将 `retention_days` 设置为 `null` 表示「永久保留」。零值被禁止。变更会以 `retention_updated` 记录在审计日志中。
 

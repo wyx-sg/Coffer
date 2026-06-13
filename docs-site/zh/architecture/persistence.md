@@ -6,9 +6,9 @@
 
 ## 这解决了什么问题
 
-Coffer 是一个本地优先的开发者工具：用户沉淀下来的 AI 资产——已注册的 MCP 服务器、能力偏好、审计历史——必须在不依赖任何云服务的情况下可读可写。这个约束要求持久化层必须是自包含的、零配置的，并且可以简单地备份。
+Coffer 是一个本地优先的开发者工具：用户沉淀下来的 AI 资产——已注册的 MCP 服务器、能力偏好、审计历史、知识库、记忆、聊天会话、通道以及同步状态——必须在不依赖任何云服务的情况下可读可写。这个约束要求持久化层必须是自包含的、零配置的，并且可以简单地备份。
 
-答案是 SQLite。`~/.coffer/coffer.db` 中的单个文件是所有控制面状态的事实记录方 (system of record)。不需要安装独立的数据库服务进程，不需要调优连接池，daemon 与存储之间也没有网络跳转。用户的数据就是他们的文件。
+答案是两层结构。`~/.coffer/coffer.db` 中的单个 SQLite 文件是所有控制面状态的事实记录方 (system of record)。批量用户内容——知识库文档和记忆 fact——以 markdown 文件的形式存放于本地文件系统（事实源）；SQLite 在其之上承载一个可重建的检索索引（ADR-012）。不需要安装独立的数据库服务进程，不需要调优连接池，daemon 与存储之间也没有网络跳转。用户的数据就是他们的文件。
 
 ## 为什么选择 SQLite 而非 Postgres
 
@@ -49,7 +49,7 @@ kind 特定的配置以 `TEXT` 列（`resources` 表中的 `config_json`）存�
 
 ## Alembic 迁移
 
-Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移历史位于 `backend/coffer/infrastructure/persistence/migrations/` 下的单一迁移序列。Spec 001 随附四个修订版本（三个建表修订版本加一个审计索引）：
+Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移历史位于 `backend/coffer/infrastructure/persistence/migrations/` 下的单一迁移序列。随着各个 spec 陆续落地，已累积了二十个修订版本（`0001` 到 `0020`）——每个需要新表的 spec 都会新增一个修订版本，而不是修改已有的。前三个搭建起 MCP 控制面：
 
 | 修订版本 | 文件                                 | 创建内容                                        |
 | -------- | ------------------------------------ | ----------------------------------------------- |
@@ -57,20 +57,83 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`、`mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-在 daemon 首次启动时，`alembic upgrade head` 会在 HTTP 服务开始接受连接之前运行。由于 Alembic 迁移作为数据文件被打包进 PyInstaller daemon 二进制文件，最终用户的安装在首次启动时也能正确创建 schema，无需单独的迁移步骤。
+后续修订版本陆续加入了 skill、knowledge、memory、embedding 配置、chat、channel、credentials 和 sync 等表（以及若干索引和数据修复修订版本），止于 `0020`。在 daemon 首次启动时，`alembic upgrade head` 会在 HTTP 服务开始接受连接之前运行。由于 Alembic 迁移作为数据文件被打包进 PyInstaller daemon 二进制文件，最终用户的安装在首次启动时也能正确创建 schema，无需单独的迁移步骤。
 
 ## 数据库表概览
 
-应用所有四个修订版本后存在的六张表，按用途分组：
+应用所有修订版本后存在的表，按领域分组：
 
-| 数据表                       | 用途                                                                                                                                                       |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `resources`                  | 所有用户管理资源的与 kind 无关的注册表。每个已注册的 MCP 服务器（或未来的其他 kind）对应一行。包含 `kind`、`name`、`config_json`、`enabled` 标志和时间戳。 |
-| `audit_log`                  | 所有资源或能力生命周期变更的仅追加历史记录。记录事件类型、actor、resource ref、时间戳和结构化 JSON payload。                                               |
-| `retention_policies`         | 每个可剪裁表对应一行，记录配置的保留窗口（天数或永久保留）以及最近一次剪裁的元数据。                                                                       |
-| `mcp_capability_preferences` | 持久化用户对每个已注册 MCP 服务器的逐能力启用/禁用决策。在上游重启和 schema 变更后依然有效。resource 删除时级联删除。                                      |
-| `mcp_invocations`            | 网关中每次工具、资源和提示词调用的时序日志：服务器名称、能力键、耗时、状态、会话 ID。永远不存储参数或返回内容。                                            |
-| `mcp_server_health`          | 每个已注册 MCP 服务器的最新健康状态（`healthy` / `failing` / `unknown`），在每次健康检查时写入。                                                           |
+**核心（与 kind 无关）：**
+
+| 数据表               | 用途                                                                                                                                                       |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resources`          | 所有用户管理资源的与 kind 无关的注册表。每个已注册的 MCP 服务器（或未来的其他 kind）对应一行。包含 `kind`、`name`、`config_json`、`enabled` 标志和时间戳。 |
+| `audit_log`          | 所有资源或能力生命周期变更的仅追加历史记录。记录事件类型、actor、resource ref、时间戳和结构化 JSON payload。                                               |
+| `retention_policies` | 每个可剪裁表对应一行，记录配置的保留窗口（天数或永久保留）以及最近一次剪裁的元数据。                                                                       |
+
+**MCP 网关：**
+
+| 数据表                       | 用途                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `mcp_capability_preferences` | 持久化用户对每个已注册 MCP 服务器的逐能力启用/禁用决策。在上游重启和 schema 变更后依然有效。resource 删除时级联删除。 |
+| `mcp_invocations`            | 网关中每次工具、资源和提示词调用的时序日志：服务器名称、能力键、耗时、状态、会话 ID。永远不存储参数或返回内容。 |
+| `mcp_server_health`          | 每个已注册 MCP 服务器的最新健康状态（`healthy` / `failing` / `unknown`），在每次健康检查时写入。              |
+
+**凭据与 embedding：**
+
+| 数据表             | 用途                                                                                                                                                  |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `credentials`      | 信封加密的密钥存储：每个密钥在到达 SQLite 之前都用主密钥进行 Fernet 加密。明文永远不会落盘。参阅[安全](/zh/architecture/security)和 ADR-015。 |
+| `embedding_config` | 检索索引所使用的当前 embedding 提供方/模型配置。                                                                                                     |
+
+**知识基底 (substrate)：**
+
+| 数据表          | 用途                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------- |
+| `documents`     | 每个知识库/记忆文档对应一行，与磁盘上的 markdown 文件相互映射。                        |
+| `chunks`        | 检索流水线从 markdown 切分出的逐文档 chunk 行。                                        |
+| `documents_fts` | 支撑对 chunk 文本进行关键词搜索的 FTS5 虚拟表。                                        |
+| _sqlite-vec_    | 每个 store 一个 `vec0` 虚拟表（按 store 惰性创建，以 kind + 维度命名），保存 chunk embedding 用于向量搜索。 |
+
+**记忆 (memory)：**
+
+| 数据表                       | 用途                                                          |
+| ---------------------------- | ------------------------------------------------------------ |
+| `memory_projection_bindings` | 记录某个记忆 store 被投影到哪个 agent/项目。                  |
+| `memory_store_project_roots` | 将记忆项目 store 映射到其磁盘上的项目根目录。                 |
+
+**聊天 (chat)：**
+
+| 数据表          | 用途                                                    |
+| --------------- | ------------------------------------------------------- |
+| `conversations` | 每个聊天会话对应一行，包含归档/保留时间戳。             |
+| `chat_messages` | 每个会话中的消息。随会话一同级联删除。                  |
+| `chat_models`   | 用户配置的聊天模型定义。                                |
+
+**通道 (channel)：**
+
+| 数据表          | 用途                                                |
+| --------------- | --------------------------------------------------- |
+| `channel_peers` | 已配对的通知通道对端（例如 Telegram / SeaTalk）。   |
+
+**技能 (skill)：**
+
+| 数据表                 | 用途                                          |
+| ---------------------- | --------------------------------------------- |
+| `skill_agent_bindings` | 记录哪些技能绑定到哪些 agent 工作区。          |
+
+**同步 (sync)：**
+
+| 数据表        | 用途                                                       |
+| ------------- | ---------------------------------------------------------- |
+| `sync_config` | 用户的多机同步配置（远端、分支、开关）。                   |
+| `sync_state`  | 上次同步的记账信息（commit ref、冲突状态）。               |
+
+## 文件即事实源，SQLite 是可重建的索引（ADR-012）
+
+上述控制面表是其行的事实记录方。**知识基底**则不同：`~/.coffer/knowledge/` 和 `~/.coffer/memory/` 下的 markdown 文件才是事实源，而 SQLite 检索索引（`documents` / `chunks` / `documents_fts` FTS5 表以及每个 store 的 sqlite-vec 虚拟表）是这些文件的一个**完全可重建**的投影。
+
+这消除了双事实源问题：如果索引损坏、丢失或经历了 schema 迁移，它会从文件重新生成。`coffer kb reindex` 会从磁盘上的 markdown 重建它。备份就是一棵目录树；损坏恢复就是一次 reindex。
 
 ## 级联与完整性规则
 
@@ -88,6 +151,10 @@ Coffer 写入的完整文件集合：
 | -------------------------- | ------------------------------------------------ |
 | `~/.coffer/coffer.db`      | SQLite 数据库（WAL 模式）——事实记录方            |
 | `~/.coffer/daemon.json`    | Daemon PID、端口和 bearer token（权限位 `0600`） |
+| `~/.coffer/master.key`     | 凭据存储主密钥（默认文件存储；可选钥匙串）。参阅[安全](/zh/architecture/security)。 |
+| `~/.coffer/knowledge/`     | 以 markdown 形式存放的知识库文档——由 SQLite 索引的事实源 |
+| `~/.coffer/memory/`        | 以 markdown 形式存放的记忆 fact——由 SQLite 索引的事实源 |
+| `~/.coffer/sync/`          | 镜像各文件树、用于多机同步的 git 工作树          |
 | `~/.coffer/logs/`          | `structlog` 输出的结构化 JSON 日志文件           |
 | `~/.coffer/bin/`           | 由桌面应用部署的 `coffer-mcp-shim` 与 `coffer-daemon` 二进制文件 |
 | `~/.coffer/backups/`       | 按时间点的 SQLite 备份副本                       |
@@ -99,12 +166,14 @@ Coffer 写入的完整文件集合：
 
 daemon 启动时的 `RetentionService.initialize_defaults()` 调用会在 `retention_policies` 表行不存在时进行初始化。这些种子值在组装入口 (composition root) 定义，而非在迁移文件中，这样后续规范引入的新可剪裁表无需新的迁移修订即可注册各自的默认值：
 
-| 数据表            | 默认保留期 |
-| ----------------- | ---------- |
-| `audit_log`       | 365 天     |
-| `mcp_invocations` | 30 天      |
+| 策略                    | 动作                                       | 默认保留期 |
+| ----------------------- | ------------------------------------------ | ---------- |
+| `audit_log`             | 删除早于窗口的行                           | 365 天     |
+| `mcp_invocations`       | 删除早于窗口的行                           | 30 天      |
+| `conversations_archive` | 自动归档闲置达到指定天数的会话             | 7 天       |
+| `conversations`         | 在归档后达到指定天数时删除已归档会话（连同其消息） | 30 天 |
 
-两者均可通过 `PATCH /api/v1/retention/{table_name}` 或等效的 CLI 命令由用户修改；变更本身会被审计。
+会话遵循两阶段生命周期：闲置线程先被自动归档，已归档线程稍后被删除。任意策略均可通过 `PATCH /api/v1/retention/{table_name}` 或等效的 CLI 命令由用户修改；变更本身会被审计。
 
 ## 另请参阅
 

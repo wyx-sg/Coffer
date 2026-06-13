@@ -3,10 +3,10 @@
 ::: warning Security invariants
 These rules are non-negotiable and apply to the entire codebase. They are enforced by importlinter contracts, integration tests, and the architecture itself — not just by convention.
 
-1. **Loopback-only binding.** The HTTP API binds exclusively to `127.0.0.1`. Any public-reachable surface (if ever introduced) runs as a separate process limited to signed callback paths.
+1. **Loopback-only binding.** The HTTP API binds exclusively to `127.0.0.1`. Any public-reachable surface runs as a separate process limited to signed callback paths — concretely, the SeaTalk callback listener (see [Channels & the public-reachable surface](#channels-the-public-reachable-surface)).
 2. **Secret plaintext never persists.** Secrets are stored only as Fernet ciphertext in the `credentials` table; configuration stores credential _references_, not values. Plaintext exists in memory solely between decrypt and the spawn/header injection that consumes it — never in SQLite as plaintext, logs, audit, or any structured event. The Fernet master key is managed exclusively by `infrastructure/credentials/`, the only place permitted to import `keyring`.
 3. **Token + CORS on the REST API.** Every management API call requires the `X-Coffer-Token` header. The daemon token lives in `~/.coffer/daemon.json` at mode `0600`.
-4. **Outbound HTTP will be SSRF-guarded when introduced.** The constitution requires that outbound HTTP calls — when the daemon makes them (e.g., to HTTP-transport MCP servers) — go through a SSRF-guarded client. This is a forward-looking invariant: the current implementation uses the MCP SDK's httpx client with no IP filtering. A hardened SSRF-guarded wrapper is planned. Public-reachable surfaces, when introduced, run as a separate process limited to signed callback paths.
+4. **Outbound HTTP has real paths today; SSRF-guarding is still scoped to the HTTP-transport MCP client.** The daemon makes outbound calls now — embeddings to OpenAI-compatible providers, `git push` for sync, and the Telegram/SeaTalk APIs (raw httpx to fixed hosts). The constitution requires that outbound HTTP go through a SSRF-guarded client; the gap that remains is the HTTP-transport MCP client, which still uses the MCP SDK's httpx client with no IP filtering. A hardened SSRF-guarded wrapper is planned for that client. Public-reachable surfaces run as a separate process limited to signed callback paths.
    :::
 
 ## Threat model and trust boundaries
@@ -44,7 +44,7 @@ Secrets are stored as **Fernet ciphertext** in the `credentials` table of `~/.co
 
 Envelope encryption means there is exactly one piece of secret material outside the database: the Fernet **master key**. It lives in **exactly one** of two places:
 
-- **`~/.coffer/master.key`** — a `0600` file beside the database. This is the **default**: zero keychain prompts. (Why: macOS pins keychain ACLs to the binary's cdhash, so every rebuild of the unsigned daemon re-prompted for every secret. A file-backed master key removes the prompts entirely. See [ADR-015](/reference/decisions/ADR-015-envelope-encrypted-credential-store).)
+- **`~/.coffer/master.key`** — a `0600` file beside the database. This is the **default**: zero keychain prompts. (Why: macOS pins keychain ACLs to the binary's cdhash, so every rebuild of the unsigned daemon re-prompted for every secret. A file-backed master key removes the prompts entirely. See [ADR-015](/reference/adr/ADR-015-envelope-encrypted-credential-store).)
 - **The OS keychain** (service `coffer`, ref `master-key`) — opt-in hardening via **Settings → Security** or `coffer credentials storage --set keychain`. macOS may prompt once per daemon start. This is the mode that defends against offline exfiltration of `~/.coffer/`.
 
 Resolution is **file-first**: the daemon looks for the file before the keychain. This makes relocation **crash-safe** — `relocate` moves only the master key and removes the old copy **last**, so an interrupted move always resolves back to a working state. The ciphertext in the `credentials` table is never touched by a relocation (the key moves; the data stays); switching storage modes does not re-encrypt.
@@ -65,6 +65,26 @@ Before envelope encryption, secrets lived directly in the OS keychain. On startu
 
 The `StdioTransport` config schema has a second layer of defence: its `env` field runs a regex check on every static environment variable value and rejects any value that looks like a token or secret (matches the token-detection regex). This catches cases where a user accidentally pastes a secret literal into the static `env` map instead of using `credential_refs`.
 
+## Channels & the public-reachable surface
+
+The loopback-only invariant says a public-reachable surface runs as a separate process limited to signed callback paths. The **SeaTalk callback listener** is the concrete instantiation of that rule (spec 009, [ADR-014](/reference/adr/ADR-014-channel-adapter-framework)). SeaTalk delivers events only by public webhook, so it is the one place Coffer accepts inbound traffic that originated off the machine — and it does so through a process the daemon never lets the network reach.
+
+- **Separate process, never the daemon.** The listener is a daemon-spawned child that runs only while a SeaTalk channel is enabled. It serves exactly one route, `POST /seatalk/{channel}`, on a loopback port (default `8787`, overridable via `COFFER_CALLBACK_PORT`). It holds no other state and can reach nothing but the daemon. The daemon itself stays loopback-only — it is never exposed.
+- **Signature verification.** Every callback POST carries a `Signature` header that SeaTalk computes as `sha256(raw_body + signing_secret)` (lowercase hex). The listener recomputes the same digest from the raw body and the channel's signing secret and compares it in constant time (`hmac.compare_digest`). An empty secret or empty signature never verifies — an empty secret would collapse the MAC to `sha256(body)`, computable by anyone. The platform's `event_verification` challenge is answered inline; every other valid event is forwarded to the daemon over loopback carrying the daemon token.
+- **The tunnel is the user's, the exposure is the listener's.** The user points a tunnel (cloudflared/ngrok) at the listener's loopback port. Only that one signed callback path is reachable from the internet; the management API and MCP endpoint are not on the tunnel at all.
+- **Single-owner binding via pairing code.** A channel is bound to exactly one owner through an 8-character single-use pairing code (unambiguous alphabet, 1-hour TTL, bounded guesses, memory-only) issued from the UI/CLI and sent to the bot from the owner's account. Everyone else is ignored silently; re-pairing replaces the binding. There is no user-id-entry path — pairing also proves the transport round-trip.
+
+Secrets reach the listener the same way upstream MCP subprocesses get theirs: the signing secrets, the daemon URL, and the daemon token are injected into the child's environment at spawn, never written to disk. The spawn is recorded in the upstream-pids directory so a daemon crash leaves nothing behind — the startup orphan sweep reaps it. A daemon-token rotation respawns the listener (the token is baked into the child's env).
+
+## Sync security
+
+Multi-machine sync ([ADR-016](/reference/adr/ADR-016-multi-machine-sync)) moves vault state between machines through **a git repository the user owns**. Its security rests on keeping the secret material out of that medium entirely:
+
+- **Ciphertext only over the medium.** Credentials are exported as Fernet ciphertext blobs and travel through git as ciphertext — the git repo only ever holds undecryptable data. Even if the remote is a hosted GitHub repo, the vendor only ever holds ciphertext.
+- **The master key never enters the medium.** The Fernet master key is bootstrapped onto each machine **out-of-band**, via `coffer sync key export/import` — never committed, never pushed. This is what keeps the constitutional argument clean: the sync medium is not a system of record for any decryptable secret.
+- **`credentials_locked` until the key is present.** A machine that has pulled ciphertext but does not yet have the matching master key reports `credentials_locked` and refuses to spawn the affected resources. It never silently fails decryption.
+- **Git runs as a subprocess with ambient credentials.** Outbound git is a real network egress, but it respects the loopback-only posture: git runs as a subprocess using the user's own ambient git credentials, not Coffer's HTTP client. Coffer never injects or stores the git remote's credentials.
+
 ## Token authentication
 
 At daemon startup, the daemon generates a 256-bit URL-safe random token (`secrets.token_urlsafe(32)`), writes `{"pid": ..., "port": ..., "token": "<token>"}` to `~/.coffer/daemon.json` with mode `0600`, and sets the active token via a FastAPI dependency (`require_token`) that is applied per-router.
@@ -81,13 +101,18 @@ The daemon configures CORS to reject cross-origin requests from browser contexts
 
 In production, the allowed origins are the Tauri desktop shell's `tauri://localhost` and `http://tauri.localhost`. The Vite dev-server origins (`http://localhost:5173` and `http://127.0.0.1:5173`) are added only when `COFFER_DEV_CORS=1`. The entire list can be overridden via `COFFER_CORS_ORIGINS`. Credentials are never allowed (`allow_credentials=False`) — auth is the `X-Coffer-Token` header alone. Origins not in the allowlist receive a CORS rejection from the browser before the token check even runs — defence in depth against the browser-based attack vector.
 
-## Outbound HTTP: current state and planned hardening
+## Outbound HTTP: real paths and planned hardening
 
-When the daemon connects to an HTTP-transport MCP server, it currently uses the MCP SDK's `create_mcp_http_client` (backed by `httpx`) with no IP-range filtering. There is no SSRF guard in place today.
+The daemon makes outbound HTTP calls today. The real outbound paths are:
 
-The constitution states this as a forward-looking invariant: outbound HTTP calls, **when introduced**, must go through a SSRF-guarded client. Implementing that guard — rejecting connections to loopback, RFC 1918 private ranges, and link-local addresses after DNS resolution — is planned hardening, not yet shipped.
+- **Embeddings** to OpenAI-compatible providers (an `AsyncOpenAI` client with the `base_url` swapped per provider) when building the knowledge index.
+- **`git push`** for sync — but this runs as a git subprocess with the user's ambient git credentials, not through Coffer's HTTP client (see [Sync security](#sync-security)).
+- **The Telegram and SeaTalk APIs** for channels — raw httpx to fixed, well-known hosts.
+- **HTTP-transport MCP servers**, via the MCP SDK's `create_mcp_http_client` (backed by `httpx`).
 
-For stdio-transport servers, there is no outbound HTTP at all — the daemon spawns a subprocess and communicates over the process's stdin/stdout. The subprocess's environment is controlled (no secret literals) and its working directory is pinned by the `cwd` config field.
+The constitution requires outbound HTTP to go through a SSRF-guarded client. The channel and provider clients reach fixed, well-known hosts; the open gap is the **HTTP-transport MCP client**, where the target host comes from user-registered config and the MCP SDK's httpx client applies no IP-range filtering. Implementing that guard for the MCP client — rejecting connections to loopback, RFC 1918 private ranges, and link-local addresses after DNS resolution — is planned hardening, not yet shipped.
+
+For stdio-transport MCP servers, there is no outbound HTTP at all — the daemon spawns a subprocess and communicates over the process's stdin/stdout. The subprocess's environment is controlled (no secret literals) and its working directory is pinned by the `cwd` config field.
 
 ## See also
 

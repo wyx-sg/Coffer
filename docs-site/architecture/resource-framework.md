@@ -4,7 +4,18 @@ The Resource framework is Coffer's core abstraction. Understanding it is the key
 
 ## Everything is a resource kind
 
-Every user-managed entity in Coffer is a **Resource**, identified by a stable string of the form `<kind>:<name>`. Today, two kinds are registered: `mcp_server` and `agent` (a registered local AI coding agent). Future kinds — prompt libraries, tool policies, credential sets — will plug into the same framework without modifying it.
+Every user-managed entity in Coffer is a **Resource**, identified by a stable string of the form `<kind>:<name>`. Six kinds are registered today:
+
+| Kind             | Spec                                                   | Description                                                                                                       |
+| ---------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `mcp_server`     | [001-mcp-gateway](/reference/specs/001-mcp-gateway/spec)         | A registered upstream MCP server: transport config, credential references, and the per-server gateway policies.  |
+| `agent`          | [004-agent-registry](/reference/specs/004-agent-registry/spec)   | A registered local AI coding agent (e.g. Claude Code): its config directory, Coffer-MCP install state, and derived workspace facets. |
+| `skill`          | [005-skill-manager](/reference/specs/005-skill-manager/spec)     | A master skill bundle Coffer delivers into one or more agents' skill directories.                                |
+| `knowledge_base` | [006-knowledge-base](/reference/specs/006-knowledge-base/spec)   | KB face of the shared knowledge substrate: any-format upload → markdown truth + grep / FTS5 / vector retrieval.  |
+| `memory`         | [007-memory](/reference/specs/007-memory/spec)                   | memory face of the same substrate: per-fact markdown + regenerated `MEMORY.md`, shared across agents.            |
+| `channel`        | [009-channels](/reference/specs/009-channels/spec)               | A messaging-channel binding (Telegram, SeaTalk): transport config, credential refs, and a default agent.         |
+
+`knowledge_base` and `memory` are two faces of **one knowledge substrate** — markdown files on disk are the source of truth and SQLite is a rebuildable index ([ADR-012](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)). New kinds plug into the same framework without modifying it. The encrypted credential store and multi-machine sync are deliberately **cross-cutting concerns, not kinds**: they serve every kind rather than being managed entities in their own right.
 
 The framework provides four things, and only four things:
 
@@ -25,7 +36,7 @@ The constitution normally defers cross-cutting abstractions until a second featu
 
 The framework spans every layer: domain entities, database schema, audit table, retention framework, surface routing (REST API sub-routers, CLI subcommand groups). If this abstraction had been designed as an `mcp_server`-specific implementation in the first spec and then extracted when a second kind arrived, the refactoring cost would not be a modest extraction — it would require re-modeling the audit table, the surface routing, and the retention framework simultaneously. The "second feature" refactor would be a substantial, risky migration, not a clean module move.
 
-The alternative of building per-kind silos with no shared abstraction was also rejected: with four or more kinds planned with high confidence, building identity + lifecycle + audit + surface CRUD four separate times would produce more code and more drift than one framework.
+The alternative of building per-kind silos with no shared abstraction was also rejected: with multiple kinds planned with high confidence (six are registered today), building identity + lifecycle + audit + surface CRUD separately for each would produce more code and more drift than one framework.
 
 The consequence is that the first spec (`001-mcp-gateway`) carries the framework's abstraction overhead with only one concrete kind to justify it. This is accepted as a known cost, explicitly balanced against the avoided refactor.
 
