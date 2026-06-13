@@ -7,7 +7,7 @@ FRONTEND := frontend
 	verify verify-all \
 	verify-unit verify-integration verify-contract verify-e2e verify-acceptance verify-desktop verify-benchmark \
 	coverage lock \
-	eval eval-routing \
+	eval eval-routing eval-curate \
 	desktop-dev desktop-build \
 	bundle-binaries \
 	frontend-codegen \
@@ -33,6 +33,7 @@ help:
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
 	@echo "  make eval                  AI eval harness: retrieval suite (local) + baseline gate"
 	@echo "  make eval-routing          + tool-routing suite (needs a local LLM, e.g. ollama)"
+	@echo "  make eval-curate           curate captured traces into golden cases (ARGS=--dry-run)"
 	@echo "  make lock                  refresh backend/uv.lock from pyproject.toml (the install lockfile)"
 	@echo ""
 	@echo "  Desktop (Tauri; needs Rust toolchain, see CONTRIBUTING.md):"
@@ -185,6 +186,9 @@ eval:
 
 eval-routing:
 	$(PY) -m evals.run --routing
+
+eval-curate:
+	$(PY) -m evals.curate $(ARGS)
 
 # Coverage on demand. No threshold gates are wired yet — thresholds need
 # empirical data from real feature code. When ready, add `--cov-fail-under=N`
