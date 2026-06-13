@@ -29,8 +29,7 @@ def main() -> int:
     in_worktree = "/worktrees/" in git_dir or ".git/worktrees" in git_dir
 
     lines = [
-        f"Coffer session — branch: {branch}"
-        + (" (worktree)" if in_worktree else ""),
+        f"Coffer session — branch: {branch}" + (" (worktree)" if in_worktree else ""),
         f"Uncommitted changes: {dirty_count} file(s).",
         "Session protocol: confirm scope, work in small committable chunks, run `make verify` (or /coffer-verify) before opening a PR. See agents/harness.md.",
     ]
