@@ -165,7 +165,7 @@ local-first、SQLite-as-record 立场。
 - allow 一个请求让 agent 运行该工具并结束回合
 - deny 一个请求把拒绝作为工具结果返回给 agent
 - 一个针对未知或已决请求的审批决策被拒绝
-- per-tool approval relay works for SDK-backed Claude Code
+- SDK 驱动的 Claude Code 的逐工具审批中转正常工作
 
 ---
 
@@ -367,7 +367,7 @@ agent 使用哪一个。
 - **When** 用户 deny 它，
 - **Then** 拒绝作为该工具的结果被递交给 agent 且回合在不运行该工具的情况下完成。
 
-### Scenario: per-tool approval relay works for SDK-backed Claude Code
+### 场景：SDK 驱动的 Claude Code 的逐工具审批中转
 
 - **Given** 一个由 SDK 支持的 Claude Code provider 驱动的回合，其中工具调用请求审批，
 - **When** `can_use_tool` 回调触发，且用户通过平台审批通道提交 allow 或 deny 决策，

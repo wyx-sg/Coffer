@@ -521,7 +521,6 @@ class _ErrorSdkSession:
     async def receive_messages(self) -> AsyncIterator[Any]:
         yield SystemMessage(subtype="init", data={"session_id": "err-sess"})
         raise RuntimeError("SDK stream exploded")
-        yield  # make this an async generator
 
     async def interrupt(self) -> None:
         pass

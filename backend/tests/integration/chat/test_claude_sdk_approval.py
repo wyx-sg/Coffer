@@ -55,7 +55,7 @@ from coffer.infrastructure.persistence.engine import (
 # Re-use the fully-fledged FakeSdkSession + scripting helpers from the
 # adapter-level unit tests (the task brief explicitly allows this).
 from tests.integration.chat.test_claude_sdk_agent import (
-    FakeSdkSession,  # noqa: F401 — imported for side-effects (type re-export)
+    FakeSdkSession,  # noqa: F401
     _ApprovalScript,
     _Factory,
 )
