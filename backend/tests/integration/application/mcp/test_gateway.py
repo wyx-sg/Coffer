@@ -1191,6 +1191,77 @@ async def test_mcp_error_does_not_evict_healthy_upstream(
 
 
 @pytest.mark.asyncio
+async def test_inband_iserror_result_is_recorded_as_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An upstream that returns a well-formed CallToolResult with ``isError:
+    True`` does NOT raise — ``conn.request`` returns normally and the tool error
+    is in-band (per the MCP spec). The invocation log must still record this as
+    ``error``, not ``ok``: a ``status=ok`` row for a failed tool call is
+    dishonest and makes the log useless as a capture source for the eval
+    flywheel. The healthy connection must NOT be evicted, and the isError result
+    is still relayed to the caller unchanged.
+    """
+    from coffer.application.mcp.gateway_handlers import handle_tools_call
+
+    rsvc, prefs, inv, engine = await _build_simple_harness_with_supervisor(
+        tmp_path,
+        monkeypatch,
+        db_name="inband_err.db",
+        server_name="fs",
+        transport={
+            "type": "stdio",
+            "command": sys.executable,
+            "args": [str(_FAKE), "--tools", "stub"],
+        },
+        supervisor=None,
+    )
+
+    err_conn = AsyncMock()
+    err_conn.request.return_value = {
+        "content": [{"type": "text", "text": "tool said no"}],
+        "isError": True,
+    }
+    evicted: list[str] = []
+
+    class _SpySup:
+        async def get_or_spawn(self, name: str) -> object:
+            return err_conn
+
+        async def evict(self, name: str) -> None:
+            evicted.append(name)
+
+    async def _noop_subscribe(name: str) -> None:
+        pass
+
+    try:
+        result = await handle_tools_call(
+            {"name": "fs__stub", "arguments": {}},
+            resources=rsvc,
+            supervisor=_SpySup(),  # type: ignore[arg-type]
+            prefs=prefs,
+            invocations=inv,
+            session_id="t",
+            clock=lambda: datetime.now(tz=UTC),
+            ensure_subscribed=_noop_subscribe,
+        )
+
+        # The isError result is relayed unchanged — Coffer is a pass-through proxy.
+        assert result["isError"] is True
+
+        # The healthy upstream must survive — an in-band tool error is not a
+        # transport failure.
+        assert evicted == [], f"in-band isError must not evict; evicted={evicted}"
+
+        # The honesty fix: the row must be `error`, never `ok`.
+        rows = await inv.query(resource_name="fs")
+        statuses = [r.status for r in rows]
+        assert statuses == ["error"], f"expected one error row, got {statuses}"
+    finally:
+        await _safe_dispose(engine)
+
+
+@pytest.mark.asyncio
 async def test_transport_drop_still_evicts_for_self_heal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
