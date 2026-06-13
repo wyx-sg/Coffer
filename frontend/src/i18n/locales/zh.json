@@ -598,9 +598,15 @@
     "register": "注册",
     "addManual": "手动添加",
     "detectedHeading": "检测到的 agent",
+    "managedSectionTitle": "受管 agents",
+    "noManagedAgents": "尚未注册任何编码 agent。点击「添加 agent」来检测并注册 Claude Code 或 Codex。",
     "builtin": {
       "heading": "内置 Agent",
+      "sectionTitle": "内置 agent",
       "badge": "内置",
+      "runsOn": "运行于 {{model}}",
+      "startChat": "开始对话",
+      "details": "详情",
       "description": "Coffer 自带的助手——无需安装 CLI agent 即可在应用内对话。",
       "tagline": "Coffer 自带的助手——无需安装 CLI agent 即可在应用内对话。",
       "detail": {
@@ -1140,7 +1146,8 @@
       "noModels": "尚无模型 —— 请先到「设置 → 模型」添加。",
       "unavailable": "不可用",
       "workdir": "工作目录",
-      "workdirPlaceholder": "/你的/项目/路径"
+      "workdirPlaceholder": "/你的/项目/路径",
+      "recent": "最近的目录"
     },
     "draft": {
       "guide": "给 {{agent}} 发消息，开始新对话。",

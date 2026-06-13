@@ -20,37 +20,19 @@ import type { AgentOut } from "@/lib/api/agents";
 import { useRemoveAgent } from "@/lib/hooks/useAgents";
 import { useSkills } from "@/lib/hooks/useSkills";
 
-// The built-in agent is not a registry agent (no config_dir / delete / MCP
-// status), so it rides the same table as a pinned, non-selectable row marked
-// ``builtin`` and special-cased per cell. It links to /agents/builtin.
-type Row = AgentOut & { builtin?: boolean };
+// Managed coding agents only (Claude Code / Codex). The built-in Coffer
+// Assistant is NOT a registry agent — no config_dir / config files / MCP
+// install / delete — so it lives in its own BuiltinAgentSection rather than as
+// a special-cased row here, keeping this table's columns uniform.
+type Row = AgentOut;
 
-export function AgentTable({
-  agents,
-  builtin,
-}: {
-  agents: AgentOut[];
-  builtin?: { display_name: string } | null;
-}) {
+export function AgentTable({ agents }: { agents: AgentOut[] }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const remove = useRemoveAgent();
   const skills = useSkills();
 
-  const rows: Row[] = builtin
-    ? [
-        // Synthetic, special-cased row: not a real AgentOut (type "builtin" is
-        // outside the registry union), so cast through unknown.
-        {
-          name: builtin.display_name,
-          type: "builtin",
-          config_dir: "",
-          description: t("agents.builtin.tagline"),
-          builtin: true,
-        } as unknown as Row,
-        ...agents,
-      ]
-    : agents;
+  const rows: Row[] = agents;
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
   const [deletingName, setDeletingName] = useState<string | null>(null);
 
@@ -77,22 +59,12 @@ export function AgentTable({
     {
       key: "type",
       header: t("agents.type"),
-      cell: (a) =>
-        a.builtin ? (
-          <Badge variant="secondary">{t("agents.builtin.badge")}</Badge>
-        ) : (
-          <span className="text-muted-foreground">{a.type}</span>
-        ),
+      cell: (a) => <span className="text-muted-foreground">{a.type}</span>,
     },
     {
       key: "config_dir",
       header: t("agents.configDir"),
-      cell: (a) =>
-        a.builtin ? (
-          <span className="text-muted-foreground">—</span>
-        ) : (
-          <span className="font-mono text-xs">{a.config_dir}</span>
-        ),
+      cell: (a) => <span className="font-mono text-xs">{a.config_dir}</span>,
     },
     {
       key: "description",
@@ -105,43 +77,33 @@ export function AgentTable({
       key: "coffer_skills",
       header: t("agents.cofferSkills"),
       className: "whitespace-nowrap",
-      cell: (a) => (
-        <Badge variant="secondary">
-          {a.builtin ? (skills.data?.length ?? 0) : (cofferSkillCounts.get(a.name) ?? 0)}
-        </Badge>
-      ),
+      cell: (a) => <Badge variant="secondary">{cofferSkillCounts.get(a.name) ?? 0}</Badge>,
     },
     {
       key: "mcp",
       header: t("agents.mcp.title"),
       className: "whitespace-nowrap",
-      cell: (a) =>
-        a.builtin ? (
-          <span className="text-muted-foreground">—</span>
-        ) : (
-          <AgentMcpStatusBadge name={a.name} />
-        ),
+      cell: (a) => <AgentMcpStatusBadge name={a.name} />,
     },
     {
       key: "actions",
       header: "",
       className: "text-right",
-      cell: (a) =>
-        a.builtin ? null : (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-destructive"
-            aria-label={t("agents.deleteAria", { name: a.name })}
-            disabled={remove.isPending}
-            onClick={(e) => {
-              e.stopPropagation();
-              setDeletingName(a.name);
-            }}
-          >
-            <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
-          </Button>
-        ),
+      cell: (a) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-destructive"
+          aria-label={t("agents.deleteAria", { name: a.name })}
+          disabled={remove.isPending}
+          onClick={(e) => {
+            e.stopPropagation();
+            setDeletingName(a.name);
+          }}
+        >
+          <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
+        </Button>
+      ),
     },
   ];
 
@@ -163,14 +125,13 @@ export function AgentTable({
       <DataTable
         rows={rows}
         columns={columns}
-        rowKey={(a) => (a.builtin ? "builtin" : a.name)}
-        isSelectable={(a) => !a.builtin}
+        rowKey={(a) => a.name}
         search={{
           accessor: (a) => `${a.name} ${a.type} ${a.config_dir}`,
           placeholder: t("agents.searchPlaceholder"),
         }}
         filters={filters}
-        onRowClick={(a) => navigate(a.builtin ? "/agents/builtin" : `/agents/${a.name}`)}
+        onRowClick={(a) => navigate(`/agents/${a.name}`)}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
           ariaSelectRow: (a) => `${t("common.bulk.selectRow")}: ${a.name}`,
