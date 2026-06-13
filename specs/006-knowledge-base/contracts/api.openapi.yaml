@@ -360,6 +360,36 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/embedding/test:
+    post:
+      summary: Probe an embedding provider (reports the returned vector dimension)
+      operationId: testEmbedding
+      tags: [embedding]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, model]
+              properties:
+                provider: { type: string }
+                model: { type: string }
+                base_url: { type: string, nullable: true }
+                credential_ref: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Result (ok + dimension on success), nothing persisted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, message]
+                properties:
+                  ok: { type: boolean }
+                  message: { type: string }
+                  detail: { type: object, additionalProperties: true }
+
 components:
   securitySchemes:
     cofferToken:
