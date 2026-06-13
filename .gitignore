@@ -196,3 +196,7 @@ desktop/binaries/coffer-*
 build/
 dist/
 *.spec.lock
+
+# Opt-in eval-capture sink (ADR-019) — a local dev artefact, never committed.
+*eval-capture*.jsonl
+evals/captured/

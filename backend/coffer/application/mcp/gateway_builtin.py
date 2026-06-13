@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX, BuiltinToolRegistry
+from coffer.application.eval_capture import record_tool_search
 from coffer.application.mcp.gateway_handlers import _safe_error_summary
 from coffer.application.mcp.gateway_tool_search import (
     execute_tool_search,
@@ -165,7 +166,12 @@ async def dispatch_tool_search(
     """Run ``coffer__search_tools`` over ``aggregated_tools``; log + wrap."""
     started = clock()
     try:
-        result = execute_tool_search(params.get("arguments") or {}, aggregated_tools)
+        args = params.get("arguments") or {}
+        result = execute_tool_search(args, aggregated_tools)
+        # Capture the (intent -> ranked tools) shape for the eval flywheel.
+        # Best-effort and opt-in (ADR-019); a no-op unless COFFER_EVAL_CAPTURE is
+        # set. ``query`` is a validated non-empty str by the time we get here.
+        record_tool_search(args["query"], [t["name"] for t in result["tools"]])
         duration_ms = int((clock() - started).total_seconds() * 1000)
         await _log(
             invocations,

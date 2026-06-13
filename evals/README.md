@@ -83,6 +83,33 @@ model on demand:
 A small local model gets some cases wrong — an honest score; point
 `COFFER_EVAL_*` at a stronger model and the harness tracks the gain.
 
+## Capturing real usage (the flywheel)
+
+Hand-authored cases are a floor, not the goal. The eval **flywheel**
+([ADR-019](../docs/decisions/ADR-019-close-the-eval-flywheel.md)) grows the
+dataset from how Coffer is actually used. Capture is **opt-in and off by
+default** — set `COFFER_EVAL_CAPTURE` for the daemon (or any process that serves
+the gateway) and it records the eval-relevant *shape* of real interactions:
+
+```bash
+export COFFER_EVAL_CAPTURE=1                       # -> ~/.coffer/eval-capture.jsonl
+# or point it at an explicit path:
+export COFFER_EVAL_CAPTURE=/tmp/coffer-capture.jsonl
+```
+
+Each `coffer__search_tools` call appends one JSONL line — the query the agent
+asked and the ranked tool names that came back:
+
+```json
+{"kind": "tool_search", "query": "open the budget sheet", "results": ["sheets__open", "sheets__read"]}
+```
+
+Only this shape is recorded — never tool arguments or result content (that stays
+out of any Coffer store; SC-010 / the roadmap no-payloads rule). The capture file
+is the local, gitignored handoff to curation: the curate CLI (next slice) turns
+these lines into labelled `datasets/*.jsonl` golden cases. Capture writes nothing
+unless the env var is set, so it is safe to leave wired in.
+
 ## Extending
 
 - **Add cases:** append lines to the relevant `datasets/*.jsonl`, then
