@@ -77,7 +77,8 @@ class CodexSubprocessSession:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
-        assert proc.stdin is not None and proc.stdout is not None
+        if proc.stdin is None or proc.stdout is None:
+            raise RuntimeError("codex app-server subprocess has no stdin/stdout pipe")
         self._proc = proc
         self._rpc = CodexRpcClient(proc.stdout, proc.stdin)
         self._rpc.start()

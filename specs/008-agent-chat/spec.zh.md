@@ -473,7 +473,7 @@ agent 使用哪一个。
   携带它自己的模型、工具与配置；orchestrator MUST NOT 注入它们。平台在此接缝背后
   交付三个 agent —— 内置 agent 加两个 CLI 支持的 agent（Claude Code、Codex）——
   因此接缝由真实的额外 provider 验证，而非一个单一占用者。
-- **FR-005a**：System MUST 交付 Claude Code 与 Codex 的 CLI 支持的 agent provider。
+- **FR-005a**：System MUST 交付面向 Claude Code 与 Codex 的子进程支持的 agent provider。
   每个由一个工作目录（其 `agent_config.cwd`）按对话配置，该目录 MUST 是一个存在的
   目录，否则配置被拒绝。一个 CLI agent 的可用性 MUST 反映其命令行二进制是否可在
   守护进程的 PATH 上解析；一个不可用的 agent 被列出但不可选。一个 CLI 回合 MUST

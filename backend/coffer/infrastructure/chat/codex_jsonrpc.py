@@ -2,7 +2,7 @@
 
 ``codex app-server`` speaks **newline-delimited JSON** (NDJSON) over stdin/stdout
 — one JSON object per line, ``\\n``-terminated, in both directions (empirically
-verified against codex-cli 0.125.0; see ``codex-approval-relay.plan.md`` §A). This
+verified against codex-cli 0.125.0 (``codex app-server generate-json-schema``)). This
 is *not* the LSP ``Content-Length`` framing.
 
 The client drives that wire behind an injected reader/writer seam so turns are

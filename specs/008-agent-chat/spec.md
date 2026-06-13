@@ -542,7 +542,7 @@ referenced by at least one test marked
   platform ships three agents behind this seam — the built-in agent plus two
   CLI-backed agents (Claude Code, Codex) — so the seam is validated by real
   additional providers, not a single occupant.
-- **FR-005a**: System MUST ship CLI-backed agent providers for Claude Code and
+- **FR-005a**: System MUST ship subprocess-backed agent providers for Claude Code and
   Codex. Each is configured per conversation by a working directory (its
   `agent_config.cwd`), which MUST be an existing directory or the configuration
   is rejected. A CLI agent's availability MUST reflect whether its command-line

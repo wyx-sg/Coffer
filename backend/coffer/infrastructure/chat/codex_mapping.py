@@ -3,8 +3,8 @@
 The Codex analog of ``claude_sdk_agent.map_sdk_message``: each streamed
 server→client notification ``(method, params)`` becomes zero or more
 ``AgentEvent``s, threaded through a mutable :class:`CodexParseState` (mirrors
-``cli_agent.ParseState``). Protocol shapes are taken verbatim from
-``codex-approval-relay.plan.md`` §A (codex-cli 0.125.0).
+``cli_agent.ParseState``). Protocol shapes verified empirically against codex-cli 0.125.0
+(``codex app-server generate-json-schema``).
 
 Mapping rules (§A):
 
