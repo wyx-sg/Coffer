@@ -105,10 +105,23 @@ asked and the ranked tool names that came back:
 ```
 
 Only this shape is recorded — never tool arguments or result content (that stays
-out of any Coffer store; SC-010 / the roadmap no-payloads rule). The capture file
-is the local, gitignored handoff to curation: the curate CLI (next slice) turns
-these lines into labelled `datasets/*.jsonl` golden cases. Capture writes nothing
-unless the env var is set, so it is safe to leave wired in.
+out of any Coffer store; SC-010 / the roadmap no-payloads rule). Capture writes
+nothing unless the env var is set, so it is safe to leave wired in.
+
+**Curate captured traces into golden cases:**
+
+```bash
+make eval-curate                 # label captures from the default sink
+make eval-curate ARGS=--dry-run  # preview the cases without writing
+python -m evals.curate --input /tmp/coffer-capture.jsonl
+```
+
+`curate` reads the sink, drops any query already covered by
+`datasets/tool_search.jsonl` (and collapses in-batch duplicates), and for each
+new query shows the tools that came back so you can mark which were actually
+relevant (`1,3` / `all` / `none` / `skip`). Confirmed cases are appended to the
+dataset tagged `"source": "captured"`. Then `make eval` scores against the grown
+dataset — the dataset ratchets up from real usage instead of staying hand-authored.
 
 ## Extending
 
