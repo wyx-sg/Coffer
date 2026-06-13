@@ -40,7 +40,8 @@ from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.infrastructure.chat.builtin_provider import BuiltinAgentProvider
-from coffer.infrastructure.chat.cli_providers import ClaudeCodeProvider, CodexProvider
+from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
+from coffer.infrastructure.chat.cli_providers import CodexProvider
 from coffer.infrastructure.chat.gateway_tool_provider import GatewayToolProvider
 from coffer.infrastructure.chat.langgraph_agent import DEFAULT_RECURSION_LIMIT
 from coffer.infrastructure.chat.model_persistence import ChatModelRepo
@@ -289,7 +290,7 @@ def wire_chat(
     registry.register(builtin_provider, display_name="Coffer Assistant")
     # CLI-backed agents: each is one more register() call, no platform change.
     # They surface in the picker only when their binary is on PATH (availability()).
-    registry.register(ClaudeCodeProvider(conversations=conv_repo), display_name="Claude Code")
+    registry.register(ClaudeSdkProvider(conversations=conv_repo), display_name="Claude Code")
     registry.register(CodexProvider(conversations=conv_repo), display_name="Codex")
 
     # 6. Application services + the agent-agnostic turn orchestrator.

@@ -186,6 +186,7 @@ turn finish. Repeat with Deny; observe the agent receive the denial.
 - allowing a request lets the agent run the tool and finish the turn
 - denying a request returns the denial to the agent as the tool result
 - an approval decision for an unknown or already-decided request is rejected
+- per-tool approval relay works for SDK-backed Claude Code
 
 ---
 
@@ -415,6 +416,17 @@ referenced by at least one test marked
 - **Then** the denial is delivered to the agent as the tool's result and the
   turn completes without running the tool.
 
+### Scenario: per-tool approval relay works for SDK-backed Claude Code
+
+- **Given** a turn driven by the SDK-backed Claude Code provider that requests a
+  tool call requiring approval,
+- **When** the `can_use_tool` callback fires and the user submits an allow or
+  deny decision through the platform's approval channel,
+- **Then** on allow the SDK callback resolves to `PermissionResultAllow` and the
+  turn completes with `TurnDone`; on deny the callback resolves to
+  `PermissionResultDeny` (carrying the denial message) and the turn also
+  completes cleanly with `TurnDone`.
+
 ### Scenario: stop a running turn
 
 - **Given** a turn that is streaming,
@@ -525,8 +537,12 @@ referenced by at least one test marked
   binary is resolvable on the daemon's PATH; an unavailable agent is listed but
   not selectable. A CLI turn MUST run the tool in that directory, stream its
   line-delimited JSON output mapped onto the platform's turn events, and persist
-  the upstream session id so the next turn continues the same session. v1 runs
-  the CLI under its own permission mode (no per-call approval bridging yet).
+  the upstream session id so the next turn continues the same session. Claude
+  Code is driven via the Claude Agent SDK: each `can_use_tool` permission
+  callback is bridged through the platform's human-approval channel
+  (`can_use_tool` → `ApprovalRequest` event → allow/deny decision → SDK result),
+  so per-call tool approval works end-to-end for SDK-backed Claude Code. Codex
+  runs under its own CLI permission mode.
 
 **Built-in agent & agentic loop**
 
@@ -706,7 +722,10 @@ referenced by at least one test marked
 - **SC-008**: The human-approval channel works end-to-end — an agent turn that
   emits an approval request pauses, the decision endpoint delivers the user's
   answer, and the turn continues — and a running turn can be stopped with its
-  partial output preserved; both are proven by acceptance tests.
+  partial output preserved; both are proven by acceptance tests. The approval
+  channel is additionally exercised by a real provider (SDK-backed Claude Code),
+  not only a scripted fake, confirming that per-call tool approval works
+  end-to-end for production agent adapters.
 
 ## Assumptions
 
