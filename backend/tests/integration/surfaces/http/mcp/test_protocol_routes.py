@@ -187,7 +187,7 @@ async def test_post_initialize_then_tools_list_in_same_session(
         headers={"Mcp-Session-Id": session_id},
     )
     assert r.status_code == 200
-    names = {t["name"] for t in r.json()["result"]["tools"]}
+    names = {t["name"] for t in r.json()["result"]["tools"] if not t["name"].startswith("coffer__")}
     assert names == {"fs__read_file", "fs__write_file"}
 
 

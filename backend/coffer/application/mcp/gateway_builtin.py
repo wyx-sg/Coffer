@@ -13,6 +13,10 @@ from typing import Any
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX, BuiltinToolRegistry
 from coffer.application.mcp.gateway_handlers import _safe_error_summary
+from coffer.application.mcp.gateway_tool_search import (
+    execute_tool_search,
+    tool_search_descriptor,
+)
 from coffer.application.mcp.ports import MCPInvocationRepoPort
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.capability import MCPInvocation
@@ -134,3 +138,54 @@ async def _log(
         )
     except Exception:
         _logger.debug("mcp.gateway.builtin_invocation_log_failed", exc_info=True)
+
+
+def append_builtin_tools(tools: list[dict[str, Any]], builtin: BuiltinToolRegistry) -> None:
+    """Append Coffer's own built-in tools + the tool-search meta-tool to a
+    ``tools/list`` result (kept here so the gateway session stays small)."""
+    for bt in builtin.list():
+        tools.append(
+            {
+                "name": f"{COFFER_TOOL_PREFIX}{bt.name}",
+                "description": bt.description,
+                "inputSchema": bt.input_schema,
+            }
+        )
+    tools.append(tool_search_descriptor())
+
+
+async def dispatch_tool_search(
+    *,
+    params: dict[str, Any],
+    aggregated_tools: list[dict[str, Any]],
+    invocations: MCPInvocationRepoPort,
+    session_id: str,
+    clock: Callable[[], datetime],
+) -> dict[str, Any]:
+    """Run ``coffer__search_tools`` over ``aggregated_tools``; log + wrap."""
+    started = clock()
+    try:
+        result = execute_tool_search(params.get("arguments") or {}, aggregated_tools)
+        duration_ms = int((clock() - started).total_seconds() * 1000)
+        await _log(
+            invocations,
+            "search_tools",
+            started,
+            duration_ms,
+            status="ok",
+            error_message=None,
+            session_id=session_id,
+        )
+        return _to_call_tool_result(result)
+    except Exception as exc:
+        duration_ms = int((clock() - started).total_seconds() * 1000)
+        await _log(
+            invocations,
+            "search_tools",
+            started,
+            duration_ms,
+            status="error",
+            error_message=_safe_error_summary(exc)[:200],
+            session_id=session_id,
+        )
+        return {"content": [{"type": "text", "text": _tool_error_text(exc)}], "isError": True}

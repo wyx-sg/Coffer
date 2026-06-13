@@ -8,7 +8,7 @@
 
 | #   | Spec                                                                          | Status                                             |
 | --- | ----------------------------------------------------------------------------- | -------------------------------------------------- |
-| 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md))                 | Accepted — code merged in PR #14                   |
+| 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md))                 | Accepted — code merged in PR #14; amended with `coffer__search_tools` tool-retrieval for aggregation overload ([ADR-018](../../docs/decisions/ADR-018-tool-retrieval-for-overload.md)) |
 | 002 | **UI Shell & Visual Language** ([spec](../../specs/002-ui-shell/spec.md))     | Accepted — code merged in PR #23                   |
 | 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | Accepted — code merged in PR #28                   |
 | 004 | **Agent Registry** ([spec](../../specs/004-agent-registry/spec.md))           | Accepted — code merged                             |
@@ -41,6 +41,7 @@ reviewers do not mistake their absence for an oversight.
 ## Cross-cutting decisions
 
 - [ADR-007: everything is a resource kind](../../docs/decisions/ADR-007-everything-is-a-resource-kind.md) — sidebar / IA architecture decision shared across all UI specs.
+- [ADR-018: tool retrieval for aggregation overload](../../docs/decisions/ADR-018-tool-retrieval-for-overload.md) — the `coffer__search_tools` retrieval primitive that amends spec 001.
 
 ## How this file grows
 

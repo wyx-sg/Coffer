@@ -295,7 +295,9 @@ def test_tools_list_round_trip(running_daemon: tuple) -> None:
         )
         reply = _read_reply(proc)
         assert reply["id"] == 2
-        names = {t["name"] for t in reply["result"]["tools"]}
+        names = {
+            t["name"] for t in reply["result"]["tools"] if not t["name"].startswith("coffer__")
+        }
         assert names == {"fs__read_file"}
     finally:
         proc.stdin.close()  # type: ignore[union-attr]

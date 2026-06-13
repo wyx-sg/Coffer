@@ -10,7 +10,7 @@
 
 | #   | Spec                                                                          | 状态                                     |
 | --- | ----------------------------------------------------------------------------- | ---------------------------------------- |
-| 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md))                 | 已采纳 — 代码已随 PR #14 合并            |
+| 001 | **MCP Gateway** ([spec](../../specs/001-mcp-gateway/spec.md))                 | 已采纳 — 代码已随 PR #14 合并；新增 `coffer__search_tools` 工具检索以应对聚合过载 ([ADR-018](../../docs/decisions/ADR-018-tool-retrieval-for-overload.zh.md)) |
 | 002 | **UI Shell 与视觉语言** ([spec](../../specs/002-ui-shell/spec.md))            | 已采纳 — 代码已随 PR #23 合并            |
 | 003 | **MCP Gateway Desktop** ([spec](../../specs/003-mcp-gateway-desktop/spec.md)) | 已采纳 — 代码已随 PR #28 合并            |
 | 004 | **Agent Registry** ([spec](../../specs/004-agent-registry/spec.md))           | 已采纳 — 代码已合并                       |
@@ -43,6 +43,7 @@
 ## 跨规范决策 (Cross-cutting decisions)
 
 - [ADR-007：一切皆 resource kind](../../docs/decisions/ADR-007-everything-is-a-resource-kind.md) — 各 UI 规范共享的侧栏 / IA 架构决策。
+- [ADR-018：面向聚合过载的工具检索](../../docs/decisions/ADR-018-tool-retrieval-for-overload.zh.md) — 修订 spec 001 的 `coffer__search_tools` 检索原语。
 
 ## 本文件如何生长
 

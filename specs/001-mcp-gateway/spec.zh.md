@@ -77,6 +77,38 @@
 
 ---
 
+### User Story 5 — Find the right tool under aggregation overload (Priority: P2)
+
+当开发者注册了许多上游服务器后，聚合后的工具面可能超过 150 个工具。一个 coding agent 的工具选择准确率会在约 30–50 个工具之后急剧下降，因此把整份目录塞进每一次请求既浪费上下文 token，又让 agent 选错。开发者希望 agent 能在实时聚合目录中**搜索**出与当前意图匹配的少数几个工具并直接调用它们，而不是在整张列表上推理。
+
+**Why this priority**: 只有当 agent 在规模化后仍能选得好，聚合才有意义；这把「装了 30 台服务器」从负担重新变回杠杆。它建立在核心网关（User Story 1）之上，不改变任何上游工具的暴露或调用方式。
+
+**Independent Test**: 注册足够多的服务器使聚合目录变大，然后从一个 MCP 客户端用一个意图查询和一个 `top_k` 调用 `coffer__search_tools`；观察返回最多 `top_k` 个排序后的上游工具 schema，agent 用其 `<server>__<tool>` 名称调用其中之一，且该调用照常路由到对应上游。
+
+**Covering scenarios**:
+
+- search the aggregated catalogue for matching tools
+
+具体行为与理据记录在 [ADR-018](../../docs/decisions/ADR-018-tool-retrieval-for-overload.zh.md)。
+
+#### `coffer__search_tools` —— 内置的工具检索
+
+`coffer__search_tools` 是 Coffer 的内置工具，始终与 Coffer 的其他 `coffer__` 内置工具一起在 `tools/list` 中通告。它通过对**实时**聚合的上游目录按意图查询排序、返回 top-k 个**真实**的上游工具 schema 来缓解聚合带来的工具过载，agent 随后直接调用它们。它是一个检索原语 (retrieval primitive)——它返回 schema，**不会**代替 agent 去选择并调用。
+
+契约 (Contract):
+
+```
+coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
+  -> { tools: [{ name, description, inputSchema, score }], total_searched: N }
+```
+
+- 排序是一个纯粹、确定、本地的关键词排序器（在每个工具的 name + description 上做 BM25-lite，name token 权重更高）。无 LLM、无 embedding、无网络。
+- 结果**仅含上游**：Coffer 自己的 `coffer__` 内置工具被排除，因为它们不是过载的来源。
+- 返回的每个 `name` 就是 agent 会直接调用的 `<server>__<tool>` 带命名空间标识符；路由不变。
+- 这次调用像任何其他网关调用一样被记入 invocation 日志。
+
+---
+
 ### Edge Cases
 
 下列情况由集成测试覆盖，不参与 acceptance 审计；除非被「提升」到下文的 `## Acceptance Scenarios`（目前已提升的：tool-name collision、daemon port conflict）。
@@ -208,6 +240,12 @@
 - **Given** audit 与 invocation 日志随时间持续增长,
 - **When** 用户为某个日志设置保留期（天数，或 "keep forever"）,
 - **Then** 早于该保留期的条目会在下一次周期性清理中被删除，且这次设置变更本身也会被审计。
+
+### Scenario: search the aggregated catalogue for matching tools
+
+- **Given** 有 N 个上游工具通过 coffer 聚合并 healthy,
+- **When** 一个 agent 用一个意图查询和一个 `top_k` 调用 `coffer__search_tools`,
+- **Then** 它收到最多 `top_k` 个排序后的真实上游工具 schema（仅含上游，排除 Coffer 自己的 `coffer__` 内置工具），每个命名为 `<server>__<tool>`，响应中带有 `total_searched`，且网关记录这次 invocation。
 
 ### Scenario: CLI returns non-zero exit on daemon unreachable
 

@@ -1,0 +1,14 @@
+{"query": "open a new bug report in our github repository", "expected": ["github__create_issue"]}
+{"query": "create a jira ticket for this task", "expected": ["jira__create_issue"]}
+{"query": "find a function in the github source code", "expected": ["github__search_code"]}
+{"query": "open a pull request on github for review", "expected": ["github__create_pull_request"]}
+{"query": "post an update to the team slack channel", "expected": ["slack__post_message"]}
+{"query": "look through slack message history for an earlier discussion", "expected": ["slack__search_messages"]}
+{"query": "add a comment to an existing jira ticket", "expected": ["jira__add_comment"]}
+{"query": "search my google drive for a document", "expected": ["gdrive__search_files"]}
+{"query": "read the contents of a google drive document", "expected": ["gdrive__read_file"]}
+{"query": "list the events on my google calendar this week", "expected": ["calendar__list_events"]}
+{"query": "schedule a new meeting on my calendar", "expected": ["calendar__create_event"]}
+{"query": "compose and send an email through gmail", "expected": ["gmail__send_message"]}
+{"query": "search across my notion pages and databases", "expected": ["notion__search"]}
+{"query": "create a new page in notion", "expected": ["notion__create_page"]}

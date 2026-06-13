@@ -16,6 +16,7 @@ not a limitation: point it at a stronger model whenever you need to.
 evals/
 ├── metrics.py         # pure ranking metrics: recall@k, precision@k, MRR
 ├── retrieval_eval.py  # builds a real SQLite index, runs golden queries -> recall@k/MRR
+├── tool_search_eval.py # ranks the tool catalogue with the coffer__search_tools ranker -> recall@k/MRR
 ├── routing_eval.py    # samples a pluggable model k× to pick a tool; accuracy + pass^k
 ├── run.py             # runner: scorecard + regression gate vs baselines
 ├── datasets/          # golden data (corpus, queries, tool catalog, routing cases)
@@ -26,14 +27,14 @@ evals/
 ## Run it
 
 ```bash
-make eval            # retrieval suite (local, deterministic) + baseline gate
+make eval            # retrieval + tool-search suites (local, deterministic) + baseline gate
 make eval-routing    # also the tool-routing suite (needs a model endpoint; Ollama by default)
 ```
 
 Under the hood:
 
 ```bash
-python -m evals.run                    # retrieval only
+python -m evals.run                    # retrieval + tool-search (no model)
 python -m evals.run --routing          # + routing
 python -m evals.run --update-baseline  # record current scores as the new floor
 ```
@@ -43,13 +44,24 @@ same command is the gate. Run it on demand (and after changing prompts, the tool
 catalog, or the retrieval stack), not on every CI push — the routing suite needs
 a model and is intentionally out of the core `make verify`.
 
-## The two suites
+## The suites
 
 **Retrieval** (`retrieval_eval.py`) — ingests `datasets/corpus.jsonl` into a
 throwaway copy of Coffer's real `SqliteKnowledgeIndex`, runs the
 `datasets/retrieval.jsonl` queries through `keyword_search`, and scores
 **recall@k** and **MRR** at the document level. Keyword/FTS mode needs no
 embedding model, so it is fully deterministic and free.
+
+**Tool search** (`tool_search_eval.py`) — measures the `coffer__search_tools`
+ranker that lifts aggregation tool-overload (spec 001 /
+[ADR-018](../docs/decisions/ADR-018-tool-retrieval-for-overload.md)). It runs the
+`datasets/tool_search.jsonl` intent queries through the same pure BM25-lite
+ranker the gateway uses and scores **recall@k** and **MRR** over an
+upstream-shaped catalogue (`datasets/tool_search_catalog.jsonl` — `<server>__<tool>`
+names with near-duplicates across servers, the kind of aggregated catalogue the
+live tool actually ranks) — does the right upstream tool land in the top-k? The
+ranker is pure, deterministic, and local (no model), so this suite runs in the
+default `python -m evals.run` alongside retrieval.
 
 **Tool routing** (`routing_eval.py`) — gives the model the tool catalogue
 (`datasets/tool_catalog.jsonl`) plus a user request and asks for the single best
