@@ -1,0 +1,8 @@
+{"name": "search_knowledge", "description": "Semantic and keyword search across the user's knowledge bases; returns the most relevant passages for a natural-language query."}
+{"name": "grep_knowledge", "description": "Exact substring / regex search across knowledge-base files; use when the user wants a literal string or pattern, not semantic relevance."}
+{"name": "recall", "description": "Retrieve relevant stored memories about the user or project (preferences, facts, decisions)."}
+{"name": "remember", "description": "Persist a new memory fact about the user or project for later recall."}
+{"name": "list_skills", "description": "List the skills currently available to load."}
+{"name": "load_skill", "description": "Load a specific named skill's full instructions into context."}
+{"name": "list_knowledge_bases", "description": "List the knowledge bases registered in Coffer."}
+{"name": "read_document", "description": "Read one specific knowledge-base document by its id or path."}

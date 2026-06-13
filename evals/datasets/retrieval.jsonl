@@ -1,0 +1,10 @@
+{"query": "how do consumer groups track their offset", "expected": ["kafka"]}
+{"query": "in-sync replicas and the high watermark", "expected": ["kafka"]}
+{"query": "cache eviction policy LRU when memory is full", "expected": ["redis"]}
+{"query": "RDB snapshot versus append-only file persistence", "expected": ["redis"]}
+{"query": "MVCC readers do not block writers and vacuum dead tuples", "expected": ["postgres"]}
+{"query": "build an image from a Dockerfile with layers", "expected": ["docker"]}
+{"query": "scheduler places pods onto nodes", "expected": ["k8s"]}
+{"query": "negotiate a cipher suite and verify the certificate", "expected": ["tls"]}
+{"query": "authorization code flow with PKCE for public clients", "expected": ["oauth"]}
+{"query": "rebase commits onto a new base for linear history", "expected": ["git"]}

@@ -1,0 +1,7 @@
+{
+  "primary": {
+    "name": "accuracy",
+    "value": 0.5833
+  },
+  "tolerance": 0.1
+}

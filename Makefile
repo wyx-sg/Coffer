@@ -7,6 +7,7 @@ FRONTEND := frontend
 	verify verify-all \
 	verify-unit verify-integration verify-contract verify-e2e verify-acceptance verify-desktop verify-benchmark \
 	coverage lock \
+	eval eval-routing \
 	desktop-dev desktop-build \
 	bundle-binaries \
 	frontend-codegen \
@@ -30,6 +31,8 @@ help:
 	@echo "  make lint                  ruff + mypy + eslint + tsc + import-linter + file/response_model checks"
 	@echo "  make format                ruff format + prettier"
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
+	@echo "  make eval                  AI eval harness: retrieval suite (local) + baseline gate"
+	@echo "  make eval-routing          + tool-routing suite (needs a local LLM, e.g. ollama)"
 	@echo "  make lock                  refresh backend/uv.lock from pyproject.toml (the install lockfile)"
 	@echo ""
 	@echo "  Desktop (Tauri; needs Rust toolchain, see CONTRIBUTING.md):"
@@ -107,8 +110,8 @@ verify-desktop:
 lint:
 	$(PY) scripts/check_file_sizes.py
 	$(PY) scripts/check_response_models.py
-	$(PY) -m ruff check $(BACKEND)
-	$(PY) -m ruff format --check $(BACKEND)
+	$(PY) -m ruff check $(BACKEND) evals
+	$(PY) -m ruff format --check $(BACKEND) evals
 	$(PY) -m mypy --config-file $(BACKEND)/pyproject.toml $(BACKEND)/coffer
 	.venv/bin/lint-imports --config $(BACKEND)/pyproject.toml
 	@if [ -d $(FRONTEND)/node_modules ]; then \
@@ -172,9 +175,16 @@ verify-e2e:
 	fi
 
 format:
-	$(PY) -m ruff format $(BACKEND)
-	$(PY) -m ruff check --fix $(BACKEND)
+	$(PY) -m ruff format $(BACKEND) evals
+	$(PY) -m ruff check --fix $(BACKEND) evals
 	@if [ -d $(FRONTEND)/node_modules ]; then cd $(FRONTEND) && npm run format; fi
+
+eval:
+	$(PY) -m pytest evals/tests -q
+	$(PY) -m evals.run
+
+eval-routing:
+	$(PY) -m evals.run --routing
 
 # Coverage on demand. No threshold gates are wired yet — thresholds need
 # empirical data from real feature code. When ready, add `--cov-fail-under=N`
