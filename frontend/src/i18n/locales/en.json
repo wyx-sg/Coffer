@@ -484,7 +484,8 @@
         "conflicted": "Conflicted",
         "error": "Error",
         "credentials_locked": "Credentials locked"
-      }
+      },
+      "keyExported": "Key written to {{path}}"
     }
   },
   "daemon": {

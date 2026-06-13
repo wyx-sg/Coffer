@@ -484,7 +484,8 @@
         "conflicted": "有冲突",
         "error": "错误",
         "credentials_locked": "凭证已锁定"
-      }
+      },
+      "keyExported": "key 已写入 {{path}}"
     }
   },
   "daemon": {
