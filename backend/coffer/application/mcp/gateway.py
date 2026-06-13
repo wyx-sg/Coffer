@@ -31,7 +31,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from coffer.application.builtin_tools import (
-    COFFER_TOOL_PREFIX,
     BuiltinToolRegistry,
 )
 from coffer.application.mcp.discovery import CapabilityDiscovery
@@ -40,7 +39,11 @@ from coffer.application.mcp.gateway_aggregate_lists import (
     list_resources_across,
     list_tools_across,
 )
-from coffer.application.mcp.gateway_builtin import dispatch_builtin_tool
+from coffer.application.mcp.gateway_builtin import (
+    append_builtin_tools,
+    dispatch_builtin_tool,
+    dispatch_tool_search,
+)
 from coffer.application.mcp.gateway_handlers import (
     handle_prompts_get,
     handle_resources_read,
@@ -56,6 +59,7 @@ from coffer.application.mcp.gateway_server_requests import (
     build_list_roots_callback,
     build_sampling_callback,
 )
+from coffer.application.mcp.gateway_tool_search import TOOL_SEARCH_NAME
 from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
@@ -230,15 +234,7 @@ class MCPGatewaySession:
         result = await list_tools_across(
             self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
         )
-        # Append Coffer's own built-in tools (spec 006: search_knowledge_base, ...).
-        for bt in self._builtin.list():
-            result["tools"].append(
-                {
-                    "name": f"{COFFER_TOOL_PREFIX}{bt.name}",
-                    "description": bt.description,
-                    "inputSchema": bt.input_schema,
-                }
-            )
+        append_builtin_tools(result["tools"], self._builtin)
         return result
 
     async def _handle_resources_list(self) -> dict[str, Any]:
@@ -263,6 +259,17 @@ class MCPGatewaySession:
 
     async def _handle_tools_call(self, params: dict[str, Any]) -> Any:
         name = str(params.get("name") or "")
+        if name == TOOL_SEARCH_NAME:
+            listed = await list_tools_across(
+                self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
+            )
+            return await dispatch_tool_search(
+                params=params,
+                aggregated_tools=listed["tools"],
+                invocations=self._invocations,
+                session_id=self.id,
+                clock=self._clock,
+            )
         if self._builtin.is_builtin(name):
             params = self._inject_session_cwd(name, params)
             return await dispatch_builtin_tool(

@@ -163,7 +163,7 @@ async def test_tools_list_aggregates_two_servers(
     )
     try:
         result = await session.handle_request("tools/list")
-        names = {t["name"] for t in result["tools"]}
+        names = {t["name"] for t in result["tools"] if not t["name"].startswith("coffer__")}
         assert names == {"fs__read_file", "fs__write_file", "gh__create_issue"}
     finally:
         await session.dispose()
@@ -510,8 +510,8 @@ async def test_concurrent_sessions_are_isolated(
             session_b.handle_request("tools/list"),
         )
 
-        names_a = {t["name"] for t in result_a["tools"]}
-        names_b = {t["name"] for t in result_b["tools"]}
+        names_a = {t["name"] for t in result_a["tools"] if not t["name"].startswith("coffer__")}
+        names_b = {t["name"] for t in result_b["tools"] if not t["name"].startswith("coffer__")}
         expected = {"fs__read_file", "fs__write_file", "gh__create_issue"}
 
         assert names_a == expected, f"Session A got wrong tools: {names_a}"
@@ -659,7 +659,9 @@ async def test_upstream_list_change_forwarded_to_client(
     try:
         # Populate the cache and subscribe to notifications.
         initial = await session.handle_request("tools/list")
-        initial_names = {t["name"] for t in initial["tools"]}
+        initial_names = {
+            t["name"] for t in initial["tools"] if not t["name"].startswith("coffer__")
+        }
         assert initial_names == {"mut__a", "mut__b"}
 
         # Trigger the upstream tool call that fires send_tool_list_changed().
@@ -683,7 +685,9 @@ async def test_upstream_list_change_forwarded_to_client(
         # (b) A subsequent tools/list reflects the mutated (shrunk) set.
         # The gateway invalidated its cache on the notification, so it re-queries.
         updated = await session.handle_request("tools/list")
-        updated_names = {t["name"] for t in updated["tools"]}
+        updated_names = {
+            t["name"] for t in updated["tools"] if not t["name"].startswith("coffer__")
+        }
         # After list_changed_fired, the fake server drops tool "a".
         assert updated_names == {"mut__b"}, f"Expected only mut__b, got {updated_names}"
     finally:
