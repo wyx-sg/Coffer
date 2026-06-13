@@ -4,7 +4,7 @@
 // for a CLI agent) are chosen here in the top bar; sending the first message is
 // what actually creates the conversation (see ChatPage.handleDraftSend).
 import { useTranslation } from "react-i18next";
-import { Bot } from "lucide-react";
+import { Bot, History } from "lucide-react";
 
 import {
   Select,
@@ -14,6 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FolderPicker } from "@/components/agents/FolderPicker";
 import type { AgentInfo } from "@/lib/api/chat";
 import type { Model } from "@/lib/api/models";
 import { Composer } from "./Composer";
@@ -26,6 +29,8 @@ interface Props {
   modelId: string | null;
   /** Working directory for a CLI agent (Claude Code / Codex). */
   cwd: string;
+  /** Recently-used working directories, most-recent first. */
+  recentCwds?: string[];
   onAgentChange: (agentKey: string) => void;
   onModelChange: (modelId: string | null) => void;
   onCwdChange: (cwd: string) => void;
@@ -40,6 +45,7 @@ export function DraftThread({
   agentKey,
   modelId,
   cwd,
+  recentCwds = [],
   onAgentChange,
   onModelChange,
   onCwdChange,
@@ -82,7 +88,7 @@ export function DraftThread({
         </div>
 
         {isCli ? (
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">
               {t("chat.newConversation.workdir")}
             </span>
@@ -91,8 +97,43 @@ export function DraftThread({
               onChange={(e) => onCwdChange(e.target.value)}
               placeholder={t("chat.newConversation.workdirPlaceholder")}
               aria-label={t("chat.newConversation.workdir")}
-              className="h-7 w-72 font-mono text-xs"
+              className="h-7 w-64 font-mono text-xs"
             />
+            {recentCwds.length > 0 && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="size-7 shrink-0 p-0"
+                    aria-label={t("chat.newConversation.recent")}
+                  >
+                    <History className="size-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72 p-1">
+                  <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                    {t("chat.newConversation.recent")}
+                  </p>
+                  <ul>
+                    {recentCwds.map((p) => (
+                      <li key={p}>
+                        <button
+                          type="button"
+                          onClick={() => onCwdChange(p)}
+                          className="block w-full truncate rounded px-2 py-1.5 text-left font-mono text-xs hover:bg-accent"
+                          title={p}
+                        >
+                          {p}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </PopoverContent>
+              </Popover>
+            )}
+            <FolderPicker value={cwd || null} onChange={onCwdChange} />
           </div>
         ) : (
           hasModel && (

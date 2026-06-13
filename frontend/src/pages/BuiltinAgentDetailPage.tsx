@@ -6,7 +6,7 @@
 // skills it can load, and the registered MCP servers whose tools it aggregates.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, MessageSquare, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,24 +36,42 @@ export function BuiltinAgentDetailPage() {
         {t("agents.detail.back")}
       </Button>
 
-      <div className="flex items-center gap-3">
-        <div className="rounded-lg bg-primary/10 p-2">
-          <Sparkles className="size-5 text-primary" strokeWidth={1.75} />
+      {/* Identity header with a primary Start-chat action — the built-in agent
+          is the one you actually talk to, so chatting is the main affordance. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card/40 p-4">
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-primary/10 p-2.5">
+            <Sparkles className="size-6 text-primary" strokeWidth={1.75} />
+          </div>
+          <div>
+            <h1 className="flex items-center gap-2 text-xl font-semibold">
+              {name}
+              <Badge variant="secondary">{t("agents.builtin.badge")}</Badge>
+            </h1>
+            <p className="text-sm text-muted-foreground">{t("agents.builtin.tagline")}</p>
+          </div>
         </div>
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold">
-            {name}
-            <Badge variant="secondary">{t("agents.builtin.badge")}</Badge>
-          </h1>
-          <p className="text-sm text-muted-foreground">{t("agents.builtin.tagline")}</p>
-        </div>
+        <Button onClick={() => navigate("/chat")}>
+          <MessageSquare className="mr-1.5 size-4" />
+          {t("agents.builtin.startChat")}
+        </Button>
       </div>
 
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">{t("agents.workspace.overview")}</TabsTrigger>
-          <TabsTrigger value="skills">{t("agents.workspace.skills")}</TabsTrigger>
-          <TabsTrigger value="mcp">{t("agents.mcp.title")}</TabsTrigger>
+          <TabsTrigger value="skills" className="gap-1.5">
+            {t("agents.workspace.skills")}
+            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+              {skills.length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="mcp" className="gap-1.5">
+            {t("agents.mcp.title")}
+            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+              {mcpServers.length}
+            </Badge>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="pt-4">

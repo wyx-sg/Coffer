@@ -20,6 +20,7 @@ import {
 import { useModels } from "@/lib/hooks/useModels";
 import { useChatAgents } from "@/lib/hooks/useChatAgents";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
+import { getRecentCwds, lastCwd, pushRecentCwd } from "@/lib/chatCwd";
 
 export function useChatController() {
   const navigate = useNavigate();
@@ -83,14 +84,17 @@ export function useChatController() {
   }, [pendingFirst, activeConv?.id, turn]);
 
   const defaultModelId = models.find((m) => m.is_default)?.id ?? models[0]?.id ?? null;
+  // Pre-fill a CLI agent's working directory with the last one used, so the
+  // draft isn't an empty "type a path" field (the recents come from chatCwd).
+  const defaultCwd = lastCwd() ?? "";
   const effectiveDraft = draftConfig ?? {
     agentKey: agents.find((a) => a.available)?.agent_key ?? "builtin",
     modelId: defaultModelId,
-    cwd: "",
+    cwd: defaultCwd,
   };
 
   const startDraft = () => {
-    setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId: defaultModelId, cwd: "" });
+    setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId: defaultModelId, cwd: defaultCwd });
     navigate("/chat");
   };
 
@@ -101,12 +105,15 @@ export function useChatController() {
 
   const sendDraft = (text: string) => {
     // The built-in agent is configured by model; CLI agents by working directory.
+    const isCli = effectiveDraft.agentKey !== "builtin";
     const agentConfig =
       effectiveDraft.agentKey === "builtin"
         ? effectiveDraft.modelId
           ? { model_id: effectiveDraft.modelId }
           : {}
         : { cwd: effectiveDraft.cwd.trim() };
+    // Remember a CLI agent's working directory so the next draft defaults to it.
+    if (isCli) pushRecentCwd(effectiveDraft.cwd);
     createConv.mutate(
       {
         agent_key: effectiveDraft.agentKey,
@@ -158,6 +165,7 @@ export function useChatController() {
     activeAgent,
     turn,
     effectiveDraft,
+    recentCwds: getRecentCwds(),
     setDraftAgent: (agentKey: string) =>
       setDraftConfig({ agentKey, modelId: effectiveDraft.modelId, cwd: effectiveDraft.cwd }),
     setDraftModel: (modelId: string | null) =>

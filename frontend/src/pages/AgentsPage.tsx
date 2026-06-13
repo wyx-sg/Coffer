@@ -5,6 +5,7 @@ import { Bot, Plus } from "lucide-react";
 
 import { AgentAddDialog } from "@/components/agents/AgentAddDialog";
 import { AgentTable } from "@/components/agents/AgentTable";
+import { BuiltinAgentSection } from "@/components/agents/BuiltinAgentSection";
 import { AgentWelcomePanel } from "@/components/agents/AgentWelcomePanel";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -63,7 +64,26 @@ export function AgentsPage() {
       ) : (agents ?? []).length === 0 && !builtin ? (
         <AgentWelcomePanel onAddAgent={() => setShowAdd(true)} />
       ) : (
-        <AgentTable agents={agents ?? []} builtin={builtin} />
+        // The built-in agent and the managed coding agents have entirely
+        // different shapes, so they get separate sections rather than one mixed
+        // table.
+        <div className="space-y-6">
+          {builtin && <BuiltinAgentSection builtin={builtin} />}
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              {t("agents.managedSectionTitle")}
+            </h2>
+            {(agents ?? []).length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  {t("agents.noManagedAgents")}
+                </CardContent>
+              </Card>
+            ) : (
+              <AgentTable agents={agents ?? []} />
+            )}
+          </section>
+        </div>
       )}
     </div>
   );

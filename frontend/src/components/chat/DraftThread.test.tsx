@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { DraftThread } from "./DraftThread";
 import type { AgentInfo } from "@/lib/api/chat";
@@ -24,21 +25,24 @@ const models: Model[] = [
 function renderDraft(overrides: Partial<React.ComponentProps<typeof DraftThread>> = {}) {
   const onSend = vi.fn();
   const onCwdChange = vi.fn();
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <MemoryRouter>
-      <DraftThread
-        agents={agents}
-        models={models}
-        agentKey="builtin"
-        modelId="m1"
-        cwd=""
-        onAgentChange={vi.fn()}
-        onModelChange={vi.fn()}
-        onCwdChange={onCwdChange}
-        onSend={onSend}
-        {...overrides}
-      />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <DraftThread
+          agents={agents}
+          models={models}
+          agentKey="builtin"
+          modelId="m1"
+          cwd=""
+          onAgentChange={vi.fn()}
+          onModelChange={vi.fn()}
+          onCwdChange={onCwdChange}
+          onSend={onSend}
+          {...overrides}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
   return { onSend, onCwdChange };
 }
@@ -82,5 +86,28 @@ describe("DraftThread", () => {
   test("a CLI agent with a cwd shows the composer", () => {
     renderDraft({ agents: cliAgents, agentKey: "claude_code", cwd: "/home/me/project" });
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
+  });
+
+  test("a CLI agent offers a folder Browse button next to the path field", () => {
+    renderDraft({ agents: cliAgents, agentKey: "claude_code", cwd: "" });
+    expect(screen.getByRole("button", { name: /browse/i })).toBeInTheDocument();
+  });
+
+  test("recent directories are offered and picking one sets the cwd", () => {
+    const { onCwdChange } = renderDraft({
+      agents: cliAgents,
+      agentKey: "claude_code",
+      cwd: "",
+      recentCwds: ["/home/me/alpha", "/home/me/beta"],
+    });
+    // Open the recents popover and pick one.
+    fireEvent.click(screen.getByRole("button", { name: /recent directories/i }));
+    fireEvent.click(screen.getByText("/home/me/beta"));
+    expect(onCwdChange).toHaveBeenCalledWith("/home/me/beta");
+  });
+
+  test("no recents control when there is no history", () => {
+    renderDraft({ agents: cliAgents, agentKey: "claude_code", cwd: "", recentCwds: [] });
+    expect(screen.queryByRole("button", { name: /recent directories/i })).not.toBeInTheDocument();
   });
 });

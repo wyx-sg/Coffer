@@ -598,9 +598,15 @@
     "register": "Register",
     "addManual": "Add manually",
     "detectedHeading": "Detected agents",
+    "managedSectionTitle": "Managed agents",
+    "noManagedAgents": "No coding agents registered yet. Use Add agent to detect and register Claude Code or Codex.",
     "builtin": {
       "heading": "Built-in agent",
+      "sectionTitle": "Built-in agent",
       "badge": "Built-in",
+      "runsOn": "Runs on {{model}}",
+      "startChat": "Start chat",
+      "details": "Details",
       "description": "Coffer's own assistant — chat in the app without installing a CLI agent.",
       "tagline": "Coffer's own assistant — chat in the app without installing a CLI agent.",
       "detail": {
@@ -1140,7 +1146,8 @@
       "noModels": "No models yet — add one in Settings → Models first.",
       "unavailable": "unavailable",
       "workdir": "Working directory",
-      "workdirPlaceholder": "/path/to/your/project"
+      "workdirPlaceholder": "/path/to/your/project",
+      "recent": "Recent directories"
     },
     "draft": {
       "guide": "Message {{agent}} to start a new conversation.",

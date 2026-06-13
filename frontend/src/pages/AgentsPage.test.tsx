@@ -88,7 +88,7 @@ acceptance("004-agent-registry", "desktop app agents page", async () => {
   });
   render(<AgentsPage />, { wrapper: wrap(null) });
   // Title + table cell render.
-  expect(screen.getByRole("heading", { name: /agents/i })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: /^agents$/i })).toBeInTheDocument();
   expect(screen.getByText("cur")).toBeInTheDocument();
   // There's a single "Add agent" button (no standalone Detect button).
   expect(screen.queryByRole("button", { name: /detect/i })).not.toBeInTheDocument();
@@ -134,14 +134,16 @@ describe("AgentsPage", () => {
     expect(screen.getByText(/failed to load agents/i)).toBeInTheDocument();
   });
 
-  test("surfaces the built-in Coffer Assistant as a pinned table row (no start-chat)", () => {
+  test("renders the built-in Coffer Assistant in its own section, separate from managed agents", () => {
     stubHooks({ data: [] });
     render(<AgentsPage />, { wrapper: wrap(null) });
-    // Built-in now rides the agents table as a row, marked Built-in, with no
-    // delete and no standalone "start chatting" launcher.
+    // The built-in agent is its own section (distinct shape from the managed
+    // coding agents), marked Built-in, with a Start chat action.
     expect(screen.getByText("Coffer Assistant")).toBeInTheDocument();
-    expect(screen.getByText(/built-in/i)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /start chatting/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Built-in")).toBeInTheDocument(); // the badge
+    expect(screen.getByRole("button", { name: /start chat/i })).toBeInTheDocument();
+    // With no managed agents, the managed section shows its empty message.
+    expect(screen.getByText(/no coding agents registered yet/i)).toBeInTheDocument();
   });
 
   test("omits the built-in section when the chat-agents call fails", () => {
