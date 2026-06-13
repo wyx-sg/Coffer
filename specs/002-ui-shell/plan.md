@@ -111,7 +111,7 @@ frontend/src/
 
 frontend/
 ├── vite.config.ts                         # dev-only token-injection plugin (reads daemon.json)
-├── tailwind.config.js                     # visual-language tokens (see agents/ui-shell/visual-language.md)
+├── tailwind.config.js                     # visual-language tokens (see agents/visual-language.md)
 └── components.json                        # shadcn config
 ```
 
@@ -134,7 +134,7 @@ and [ADR-002](../../docs/decisions/ADR-002-code-layout-layer-first.md).
 
 The Tailwind config (`frontend/tailwind.config.js`) is the single source of
 truth for spacing, typography, and colour tokens. See
-[`agents/ui-shell/visual-language.md`](../../agents/ui-shell/visual-language.md)
+[`agents/visual-language.md`](../../agents/visual-language.md)
 for the catalogue and the conventions agents should follow when adding new
 screens.
 
@@ -227,6 +227,6 @@ smoke, language QA pass.
 - Resource framework: [ADR-001](../../docs/decisions/ADR-001-resource-framework-upfront.md)
 - Backend contract (consumed, not owned): [`specs/001-mcp-gateway/contracts/api.openapi.yaml`](../001-mcp-gateway/contracts/api.openapi.yaml)
 - Backend data model (consumed, not owned): [`specs/001-mcp-gateway/data-model.md`](../001-mcp-gateway/data-model.md)
-- Visual-language reference: [`agents/ui-shell/visual-language.md`](../../agents/ui-shell/visual-language.md)
+- Visual-language reference: [`agents/visual-language.md`](../../agents/visual-language.md)
 - Architecture overview: [`.specify/memory/architecture.md`](../../.specify/memory/architecture.md)
 - Constitution: [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md)

@@ -96,7 +96,7 @@ frontend/src/
 
 frontend/
 ├── vite.config.ts                         # dev 专用的 token 注入插件 (读 daemon.json)
-├── tailwind.config.js                     # 视觉语言 token（详见 agents/ui-shell/visual-language.md）
+├── tailwind.config.js                     # 视觉语言 token（详见 agents/visual-language.md）
 └── components.json                        # shadcn 配置
 ```
 
@@ -114,7 +114,7 @@ frontend/
 
 ### 视觉语言
 
-Tailwind 配置 (`frontend/tailwind.config.js`) 是 spacing、typography、color token 的唯一事实来源。详情与添加新界面时 agent 应遵循的约定见 [`agents/ui-shell/visual-language.md`](../../agents/ui-shell/visual-language.md)。
+Tailwind 配置 (`frontend/tailwind.config.js`) 是 spacing、typography、color token 的唯一事实来源。详情与添加新界面时 agent 应遵循的约定见 [`agents/visual-language.md`](../../agents/visual-language.md)。
 
 ### 国际化
 
@@ -177,6 +177,6 @@ Acceptance 审计、`make verify`、`make verify-e2e`、跨浏览器手动冒烟
 - Resource 框架: [ADR-001](../../docs/decisions/ADR-001-resource-framework-upfront.md)
 - 后端契约（消费，不持有）: [`specs/001-mcp-gateway/contracts/api.openapi.yaml`](../001-mcp-gateway/contracts/api.openapi.yaml)
 - 后端数据模型（消费，不持有）: [`specs/001-mcp-gateway/data-model.md`](../001-mcp-gateway/data-model.md)
-- 视觉语言参考: [`agents/ui-shell/visual-language.md`](../../agents/ui-shell/visual-language.md)
+- 视觉语言参考: [`agents/visual-language.md`](../../agents/visual-language.md)
 - 架构概览: [`.specify/memory/architecture.md`](../../.specify/memory/architecture.md)
 - 章程: [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md)

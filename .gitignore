@@ -185,6 +185,9 @@ desktop/.cargo/
 docs/superpowers/
 .superpowers/
 
+# Local-only intermediate reports (full-codebase reviews, audits) — keep out of the repo
+/FULL-REVIEW-*.md
+
 # Bundled sidecar binaries (built by `make bundle-binaries`)
 desktop/binaries/coffer-daemon-*
 desktop/binaries/coffer-mcp-shim-*

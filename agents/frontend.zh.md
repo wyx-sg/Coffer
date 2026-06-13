@@ -5,7 +5,7 @@
 Coffer 的前端是桌面应用的 Web 界面（`frontend/`）：生产环境跑在 Tauri 壳里，
 开发环境跑在 Vite dev server（`make dev`）。本文件是这层界面的工程规范——与
 [`stack.md`](./stack.md)（后端）、
-[`ui-shell/visual-language.md`](./ui-shell/visual-language.md)（视觉设计）并列。
+[`visual-language.md`](./visual-language.md)（视觉设计）并列。
 动 `frontend/src` 之前先读它。
 
 若本文件与代码不一致：以符合下文「canonical（标准）」一列的代码为准，修掉离群者。
@@ -128,7 +128,7 @@ return useMutation({
   调色板类。（`statusColors.ts`、`ToolCallCard`、`ApprovalCard` 现在绕过了——动到就修。）
 - **只用 type scale**——`text-sm`/`text-xs`/…，绝不 `text-[11px]`。圆角用规定集合
   （卡片 `rounded-lg`、控件 `rounded-md`、chip `rounded-sm`）。见
-  [`ui-shell/visual-language.md`](./ui-shell/visual-language.md)。
+  [`visual-language.md`](./visual-language.md)。
 - **仅亮色。** 不要加 `dark:` 变体——没有暗色 token 集,它们是死样式。
 - 文件保持聚焦；组件涨过几百行就是该拆分的信号。一个文件一个组件，测试同目录（§8）。
 
