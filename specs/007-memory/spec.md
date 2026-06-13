@@ -81,6 +81,47 @@ The developer wants to see and correct what agents remember: browse facts per sc
 
 ---
 
+### User Story 6 — Distil insights from an agent's past conversations into shared memory (Priority: P2)
+
+The developer has been working on a project with Claude Code for weeks. Many
+engineering decisions, failed approaches, and project conventions were
+discussed and settled in those sessions, but never explicitly recorded as
+memory facts. The developer runs `coffer transcript distill claude_code
+--project /repo` (or clicks "Distil to memory" in the Coffer UI). Coffer
+reads the local `.jsonl` transcript files, scrubs tool payloads and secrets,
+asks an LLM to extract durable insights, and writes them as project-scoped
+memory facts. From that point on, any agent — including Codex on a second
+machine — can recall those facts through `coffer__recall`, because memory is
+shared (Spec 007) and synced (Spec 010). No raw transcript content is ever
+stored or transmitted. When the transcript's working directory resolves to a
+git project, the extracted facts are written project-scoped to that project's
+memory store; when the path is not inside a git work-tree, facts fall back to
+the global memory store.
+
+**Why this priority**: Agents accumulate institutional knowledge in local
+transcripts that is otherwise siloed per-session and inaccessible to other
+agents. Distillation is the least-invasive mechanism to surface that
+knowledge: it produces standard memory facts, inheriting cross-agent sharing
+and multi-machine sync for free. It is P2 (not P1) because the core shared
+memory flow (Stories 1–3) must work first — distillation is additive on top
+of it. See [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.md)
+for the full decision rationale and rejected alternatives.
+
+**Independent Test**: From a project with at least one Claude Code or Codex
+transcript under the agent's config dir, run
+`coffer transcript distill <agent> --project <path> --dry-run` and observe
+at least one insight printed without any fact being written to disk. Then run
+without `--dry-run` and confirm via `coffer memory recall <store> "<topic>"`
+that at least one distilled fact is now retrievable, carries
+`actor="agent"` and a non-empty `origin_session_id`, and contains no tool
+payloads, file contents, or secret-like strings.
+
+**Covering scenarios**:
+
+- distill transcript to memory
+
+---
+
 ### User Story 5 — Inspect and reset memory (Priority: P3)
 
 The developer wants to know how much memory has accumulated per scope and to clear a scope without deleting the store.
@@ -225,6 +266,20 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **Given** a memory store with no embedding provider configured,
 - **When** `coffer__recall` is called with `mode=vector`,
 - **Then** the call returns keyword results and flags the fallback in the response (never an error).
+
+### Scenario: distill-transcript-to-memory
+
+- **Given** a registered agent with at least one local transcript `.jsonl` file
+  containing natural-language conversation turns,
+- **When** `POST /api/v1/agents/{name}/transcripts/distill` is called (or
+  `coffer transcript distill <agent>` in the CLI) with `dry_run=false`,
+- **Then** the transcript is read, tool payloads and secrets are scrubbed before
+  the LLM call, the LLM returns structured insights, and each insight is written
+  as a project-scoped memory fact with `actor="agent"`,
+  `origin_session_id=<transcript session id>`, and `type` ∈
+  `{decision, gotcha, convention, todo}`; no raw transcript content appears in
+  any persisted fact; `coffer__recall` subsequently returns the new facts; and
+  when `dry_run=true`, insights are returned but nothing is written to disk.
 
 > **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, desktop edit-in-place, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
 

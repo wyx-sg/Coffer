@@ -141,6 +141,86 @@ For bilingual content, a local provider (`fastembed` with `bge-m3`) or a cloud m
 
 The markdown files are the source of truth; `coffer.db` can be rebuilt from them at any time.
 
+## Transcript distillation (Spec 007 extension)
+
+An agent's local chat transcripts contain engineering decisions, project conventions, failed approaches, and open todos that were never explicitly recorded as facts. Transcript distillation reads those sessions, scrubs secrets and tool payloads, distils durable insights via a one-shot LLM call, and writes them into the project-scoped memory store — where they are instantly available via `recall` and synced across machines (Spec 010).
+
+The raw transcript is **never persisted**. Only the distilled fact text reaches the store.
+
+### Step 1 — preview with `--dry-run`
+
+```bash
+# List sessions available for a registered agent.
+coffer transcript list my-claude
+
+# Preview what would be written without committing anything.
+coffer transcript distill my-claude \
+    --session 01JXYZ… \
+    --project /path/to/my-project \
+    --dry-run
+```
+
+Sample output:
+
+```
+Insights (3):
+  [decision]    Use make release for tagging
+    Always tag and push via `make release`; never `git push --tags` directly — the Makefile target is atomic.
+  [gotcha]      DB migration divergence between branches
+    Switching branches with divergent Alembic lineages breaks the shared coffer.db; delete the DB and let the daemon recreate it.
+  [convention]  Bilingual docs rule applies only to human-readable prose
+    Tool-scaffolding templates (.speckit etc.) are exempt from the bilingual .zh.md requirement.
+(dry-run: nothing was written to memory)
+```
+
+### Step 2 — real run
+
+```bash
+coffer transcript distill my-claude \
+    --session 01JXYZ… \
+    --project /path/to/my-project
+```
+
+Sample output:
+
+```
+Insights (3):
+  [decision]   Use make release for tagging
+    …
+  [gotcha]     DB migration divergence between branches
+    …
+  [convention] Bilingual docs rule applies only to human-readable prose
+    …
+Created 3 fact(s):
+  01JABC…
+  01JDEF…
+  01JGHI…
+```
+
+Each fact is written to the project store with `actor="agent"` and `origin_session_id` set to the transcript session id.
+
+### Step 3 — surface the distilled facts with `recall`
+
+```bash
+# Recall from the project store (substitute your real store name from `coffer memory list`).
+coffer memory recall project-01J… "deployment tagging"
+```
+
+The same facts are accessible over MCP from any registered agent:
+
+```text
+coffer__recall("deployment tagging", scope="project")
+```
+
+### Options
+
+| Flag | Description |
+| --- | --- |
+| `--session ID` | Distil a specific session; omit to distil all sessions for the project. |
+| `--project PATH` | Filter to sessions whose project path matches PATH. |
+| `--model ID` | Override the LLM model used for distillation. |
+| `--dry-run` | Preview insights without writing any facts. |
+
 ## Limits
 
 - Fact text: 1–8192 chars (configurable per store up to 32 768).

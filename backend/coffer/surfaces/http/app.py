@@ -38,6 +38,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
+from coffer.domain.errors import CredentialMissing
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
@@ -67,14 +68,17 @@ from coffer.surfaces.http.credential_composition import (
     run_legacy_keychain_migration,
 )
 from coffer.surfaces.http.dependencies import (
+    get_agent_service,
     get_invocation_repo_optional,
     get_master_key_manager,
     get_mcp_session_factory,
+    get_model_service,
     set_audit_service,
     set_embedding_config_service,
     set_resource_service,
     set_retention_service,
 )
+from coffer.surfaces.http.distill_wiring import wire_distill
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
@@ -217,6 +221,21 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # disposes the chat session first (its on_dispose deregisters the entry), so
     # the supervisor loop never double-disposes it (dispose() is idempotent).
     app.state.mcp_session_supervisors = session_supervisors
+
+    # Wire transcript distillation (extends spec 007 Memory; see ADR-020). Needs
+    # memory, agent, and model services — all registered above by their wire_* calls.
+    def _distill_credential_resolver(ref: str) -> str:
+        value: str | None = credential_store.get(ref)
+        if value is None:
+            raise CredentialMissing(ref)
+        return value
+
+    wire_distill(
+        memory_service=memory_service,
+        agent_service=get_agent_service(),
+        model_svc=get_model_service(),
+        credential_resolver=_distill_credential_resolver,
+    )
 
     # Wire the channel kind (spec 009) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.

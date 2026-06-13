@@ -232,6 +232,65 @@ When a vector-enabled store's embed degrades (embedding provider unavailable), t
 | `"memory_cleared"`   | After clearing a scope                     |
 | `"memory_projected"` | After establishing/refreshing a projection |
 
+## Transcript distillation (Spec 007 extension)
+
+Transcript distillation is a **producer of memory facts** — it uses the existing `MemoryFact` substrate (no new tables, no new resource kind).
+
+### Insight types
+
+The one-shot LLM call returns a JSON array of insights, each with a `type` drawn from a closed vocabulary:
+
+| `type` | Meaning |
+| --- | --- |
+| `decision` | A deliberate architectural or implementation choice made during the session. |
+| `gotcha` | A non-obvious failure mode, trap, or constraint discovered during the session. |
+| `convention` | A project-specific practice or style rule that should be followed going forward. |
+| `todo` | An explicit action item or open question that was not resolved in the session. |
+
+Each insight becomes a `MemoryFact` with `actor="agent"` (written by automated distillation, not by a human) and the `type` stored in `metadata.type`.
+
+### Provenance — `origin_session_id`
+
+Every distilled fact carries `origin_session_id` (the transcript's session id) in the fact frontmatter and in `documents.metadata`. This makes the automated origin auditable: a user can see which session produced a given fact and, if needed, delete or correct it.
+
+Example fact frontmatter for a distilled insight:
+
+```markdown
+---
+name: use-make-release-for-tagging
+description: Always tag and push via make release; never git push --tags directly.
+metadata:
+  type: decision
+  actor: agent
+origin_session_id: 01JXYZ…
+created_at: 2026-06-14T08:00:00+00:00
+updated_at: 2026-06-14T08:00:00+00:00
+---
+
+Always tag and push via `make release`. The Makefile target is atomic — it
+tags and pushes in one step. Running `git push --tags` directly bypasses the
+release checks and can leave the repo in a half-tagged state.
+```
+
+### Scrub-before-LLM invariant
+
+The raw `.jsonl` transcript is **never persisted** and never reaches the fact body. Before the LLM call:
+
+- All `tool_use` and `tool_result` blocks are dropped.
+- File-content passages and command output embedded in assistant turns are dropped.
+- Common secret patterns (API keys, tokens, PEM blocks) are redacted by a regex scrubber.
+- Long blobs are truncated.
+
+Only scrubbed natural-language text (user + assistant prose) is sent to the LLM. Only the distilled insight text is written to the fact store. Neither the raw transcript nor the scrubbed intermediate text is stored anywhere in `~/.coffer/`.
+
+Coffer reads `~/.claude/projects/` and `~/.codex/sessions/` but **never writes to them** in this flow — Spec 004's read-only invariant is fully preserved.
+
+### Audit
+
+Distillation reuses the existing memory write path: the `memory_added` event fires
+for each individual fact written, carrying its `origin_session_id`. No
+distillation-specific audit event is emitted.
+
 ## Wire contract (REST)
 
 Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall) plus projection endpoints (list/establish/remove). The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.

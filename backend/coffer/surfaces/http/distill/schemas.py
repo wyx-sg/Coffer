@@ -1,0 +1,57 @@
+"""Pydantic schemas matching specs/007-memory/contracts/transcripts.openapi.yaml.
+
+Hand-written to mirror the OpenAPI wire contract (wire-contract rule).
+All models use full type hints with ``from __future__ import annotations``.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+
+class TranscriptSessionSummary(BaseModel):
+    """Summary of a single transcript session (list view)."""
+
+    session_id: str
+    project_path: str | None = None
+    message_count: int
+    started_at: datetime | None = None
+
+
+class TranscriptSessionListResponse(BaseModel):
+    """Response for GET /api/v1/agents/{name}/transcripts."""
+
+    sessions: list[TranscriptSessionSummary]
+
+
+class DistillRequest(BaseModel):
+    """Request body for POST /api/v1/agents/{name}/transcripts/distill."""
+
+    session_id: str | None = Field(default=None, description="Distil a specific session.")
+    project_path: str | None = Field(
+        default=None,
+        description="Distil the most-recent session for this project path.",
+    )
+    model_id: str | None = Field(default=None, description="Override the default model.")
+    dry_run: bool = Field(
+        default=False,
+        description="If true, return insights without writing memory facts.",
+    )
+
+
+class InsightOut(BaseModel):
+    """A single distilled insight returned by the distill endpoint."""
+
+    name: str
+    description: str
+    body: str
+    type: str  # InsightType value (decision | gotcha | convention | todo)
+
+
+class DistillResponse(BaseModel):
+    """Response for POST /api/v1/agents/{name}/transcripts/distill."""
+
+    insights: list[InsightOut]
+    fact_ids: list[str]

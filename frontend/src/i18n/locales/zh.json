@@ -696,7 +696,21 @@
         "adoptSuccess": "已收编 {{name}}，现经网关服务于所有 agent",
         "searchPlaceholder": "搜索 server"
       },
-      "memory": "记忆"
+      "memory": "记忆",
+      "conversations": "对话记录"
+    },
+    "conversationsTab": {
+      "title": "对话历史",
+      "subtitle": "该 agent 的本地对话记录。蒸馏一条会话，将持久洞察提取并写入共享记忆。",
+      "empty": "该 agent 暂无对话记录。",
+      "colProject": "项目",
+      "colMessages": "消息数",
+      "colStarted": "开始时间",
+      "distill": "蒸馏到记忆",
+      "distilling": "蒸馏中…",
+      "distilledCount": "已蒸馏 {{count}} 条洞察到记忆。",
+      "noInsights": "本次会话中未找到持久洞察。",
+      "distillAria": "将会话 {{session}} 蒸馏到记忆"
     },
     "memoryTab": {
       "title": "记忆投影",

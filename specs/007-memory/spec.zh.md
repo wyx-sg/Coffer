@@ -81,6 +81,20 @@
 
 ---
 
+### User Story 6 —— 将 agent 历史对话中的洞察提炼进共享 memory（优先级 P2）
+
+开发者已用 Claude Code 在某个项目上工作了数周。那些会话中讨论并确定了大量工程决策、失败路径和项目约定，但从未被显式记录为 memory 事实。开发者运行 `coffer transcript distill claude_code --project /repo`（或在 Coffer UI 中点击「提炼进 memory」）。Coffer 读取本地 `.jsonl` 对话记录文件，清洗工具调用载荷和密钥，请 LLM 提取耐久性洞察，并将它们写为项目作用域的 memory 事实。此后，任何 agent —— 包括第二台机器上的 Codex —— 都能通过 `coffer__recall` 召回这些事实，因为 memory 是共享的（Spec 007）且已同步（Spec 010）。原始对话内容从不被存储或传输。当对话记录的工作目录能解析到某个 git 项目时，提取的事实写入该项目作用域的记忆 store；若路径不在任何 git 工作树内，则回退写入全局记忆 store。
+
+**为什么是这个优先级**：agent 在本地对话记录中积累了机构知识，这些知识原本孤立于每个会话、对其他 agent 不可见。提炼是挖掘这些知识最无侵入性的机制：它产出标准 memory 事实，免费继承跨 agent 共享和多机同步能力。它是 P2 而非 P1，因为核心共享 memory 流程（Story 1–3）必须先就位 —— 提炼是在其之上叠加的能力。完整决策依据和被否决的备选方案见 [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.zh.md)。
+
+**独立可测**：在某个 agent 配置目录下至少有一条 Claude Code 或 Codex 对话记录的项目里，运行 `coffer transcript distill <agent> --project <path> --dry-run`，观察到至少一条洞察被打印出来，但没有任何事实被写入磁盘。然后不带 `--dry-run` 再运行，通过 `coffer memory recall <store> "<topic>"` 确认：至少一条提炼事实现在可被召回，携带 `actor="agent"` 和非空的 `origin_session_id`，且不包含工具调用载荷、文件内容或疑似密钥的字符串。
+
+**代表性场景**：
+
+- distill transcript to memory
+
+---
+
 ### User Story 5 —— 查看并重置记忆（优先级 P3）
 
 开发者想知道每个作用域累积了多少记忆，并能在不删除 store 的前提下清空某个作用域。
@@ -225,6 +239,12 @@
 - **Given** 一个未配置 embedding provider 的记忆 store，
 - **When** 用 `mode=vector` 调 `coffer__recall`，
 - **Then** 调用返回 keyword 结果并在响应里标注此次回退（绝不报错）。
+
+### Scenario: distill-transcript-to-memory
+
+- **Given** 一个已注册的 agent，且其本地对话记录目录下至少有一个含自然语言对话轮次的 `.jsonl` 文件，
+- **When** 调用 `POST /api/v1/agents/{name}/transcripts/distill`（或 CLI 中的 `coffer transcript distill <agent>`），且 `dry_run=false`，
+- **Then** 对话记录被读取，工具调用载荷和密钥在 LLM 调用前被清洗，LLM 返回结构化洞察，每条洞察被写为项目作用域的 memory 事实，携带 `actor="agent"`、`origin_session_id=<对话记录会话 id>`，且 `type` ∈ `{decision, gotcha, convention, todo}`；任何已持久化事实中均不出现原始对话内容；`coffer__recall` 此后返回这些新事实；当 `dry_run=true` 时，洞察被返回但不向磁盘写入任何内容。
 
 > **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：桌面记忆列表按作用域展示、桌面就地编辑、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
 

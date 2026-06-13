@@ -696,7 +696,21 @@
         "adoptSuccess": "Adopted {{name}} — now served to all agents via the gateway",
         "searchPlaceholder": "Search servers"
       },
-      "memory": "Memory"
+      "memory": "Memory",
+      "conversations": "Conversations"
+    },
+    "conversationsTab": {
+      "title": "Transcript sessions",
+      "subtitle": "Local chat transcripts from this agent. Distil a session to extract durable insights into shared memory.",
+      "empty": "No conversations found for this agent.",
+      "colProject": "Project",
+      "colMessages": "Messages",
+      "colStarted": "Started",
+      "distill": "Distill to memory",
+      "distilling": "Distilling…",
+      "distilledCount": "Distilled {{count}} insight(s) to memory.",
+      "noInsights": "No durable insights found in this session.",
+      "distillAria": "Distill session {{session}} to memory"
     },
     "memoryTab": {
       "title": "Memory projection",
