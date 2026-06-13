@@ -18,10 +18,11 @@ import sys
 from evals._io import BASELINES
 from evals.retrieval_eval import run_retrieval_eval
 from evals.routing_eval import run_routing_eval
+from evals.tool_search_eval import run_tool_search_eval
 
 # Per-suite regression tolerance. Retrieval is deterministic (tight); routing
 # rides on a small LLM so it gets more slack.
-_TOLERANCE = {"retrieval": 0.01, "routing": 0.10}
+_TOLERANCE = {"retrieval": 0.01, "routing": 0.10, "tool_search": 0.05}
 
 
 def _baseline_path(suite: str):
@@ -83,7 +84,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--top-k", type=int, default=3)
     args = parser.parse_args(argv)
 
-    reports: list[dict] = [asyncio.run(run_retrieval_eval(top_k=args.top_k))]
+    reports: list[dict] = [
+        asyncio.run(run_retrieval_eval(top_k=args.top_k)),
+        run_tool_search_eval(top_k=args.top_k),
+    ]
 
     if args.routing:
         routing = run_routing_eval()

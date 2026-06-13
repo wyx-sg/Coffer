@@ -1,0 +1,8 @@
+{"query": "find relevant passages in my notes about a topic", "expected": ["search_knowledge"]}
+{"query": "search for an exact literal string or regex pattern in the docs", "expected": ["grep_knowledge"]}
+{"query": "what do I remember about the user's preferences and past decisions", "expected": ["recall"]}
+{"query": "persist a new fact about the user for later", "expected": ["remember"]}
+{"query": "list the skills currently available to load", "expected": ["list_skills"]}
+{"query": "load a specific named skill's full instructions", "expected": ["load_skill"]}
+{"query": "list the knowledge bases registered in coffer", "expected": ["list_knowledge_bases"]}
+{"query": "read one specific knowledge base document by its id", "expected": ["read_document"]}
