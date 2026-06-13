@@ -3,10 +3,10 @@
 ::: warning 安全不变量
 以下规则不可妥协，适用于整个代码库。它们由 importlinter 契约、集成测试和架构本身强制执行，而不仅仅是约定俗成。
 
-1. **仅监听 loopback。** HTTP API 只绑定到 `127.0.0.1`。任何面向公网的接口面（如未来引入）必须以独立进程运行，并仅限于经过签名校验的回调路径。
+1. **仅监听 loopback。** HTTP API 只绑定到 `127.0.0.1`。任何面向公网的接口面必须以独立进程运行，并仅限于经过签名校验的回调路径——具体来说就是 SeaTalk 回调监听器（见 [通道与面向公网的接口面](#通道与面向公网的接口面)）。
 2. **密钥明文永不落盘。** 密钥只以 Fernet 密文形式存于 `credentials` 表；配置只存储凭据的 _引用_，而不是凭据值本身。明文仅在解密与拉起子进程/注入 header（消费密钥处）之间短暂存在于内存——永不以明文进入 SQLite、日志、审计或任何结构化事件。Fernet 主密钥由 `infrastructure/credentials/` 独占管理，它是唯一被允许 import `keyring` 的位置。
 3. **REST API 启用 Token + CORS 鉴权。** 每次管理 API 调用都需要 `X-Coffer-Token` header。daemon token 存储在权限位为 `0600` 的 `~/.coffer/daemon.json` 中。
-4. **出站 HTTP 在引入时将经过 SSRF 防护。** 章程要求：当 daemon 发起出站 HTTP 调用时（例如连接 HTTP 传输的 MCP 服务器），必须经过具备 SSRF 防护的客户端。这是一条前瞻性不变量：当前实现使用 MCP SDK 的 httpx 客户端，没有 IP 范围过滤。受保护的 SSRF 防护封装器已列入计划，尚未实装。面向公网的接口面（如未来引入）必须以独立进程运行，并仅限于经过签名校验的回调路径。
+4. **出站 HTTP 如今已有真实路径；SSRF 防护的缺口仅限于 HTTP 传输的 MCP 客户端。** daemon 如今已会发起出站调用——向 OpenAI 兼容的供应商请求 embeddings、为 sync 执行 `git push`、以及调用 Telegram/SeaTalk API（用裸 httpx 访问固定主机）。章程要求出站 HTTP 必须经过具备 SSRF 防护的客户端；目前仅剩的缺口是 HTTP 传输的 MCP 客户端，它仍使用 MCP SDK 的 httpx 客户端，没有 IP 范围过滤。针对该客户端的受保护 SSRF 防护封装器已列入计划。面向公网的接口面必须以独立进程运行，并仅限于经过签名校验的回调路径。
    :::
 
 ## 威胁模型与信任边界
@@ -44,7 +44,7 @@ daemon 的 FastAPI 应用将其 HTTP 服务器绑定到 `127.0.0.1`，而非 `0.
 
 envelope 加密意味着数据库之外只剩唯一一份密钥材料：Fernet **主密钥**。它**恰好**存在于以下两个位置之一：
 
-- **`~/.coffer/master.key`** —— 数据库旁的 `0600` 文件。这是**默认**：零钥匙串弹窗。（原因：macOS 把钥匙串 ACL 绑定到二进制的 cdhash，因此每次重新构建未签名 daemon 都会对每个密钥重新弹窗。文件背书的主密钥彻底消除了弹窗。见 [ADR-015](/zh/reference/decisions/ADR-015-envelope-encrypted-credential-store)。）
+- **`~/.coffer/master.key`** —— 数据库旁的 `0600` 文件。这是**默认**：零钥匙串弹窗。（原因：macOS 把钥匙串 ACL 绑定到二进制的 cdhash，因此每次重新构建未签名 daemon 都会对每个密钥重新弹窗。文件背书的主密钥彻底消除了弹窗。见 [ADR-015](/zh/reference/adr/ADR-015-envelope-encrypted-credential-store)。）
 - **操作系统钥匙串**（service `coffer`，ref `master-key`）—— 通过 **设置 → 安全** 或 `coffer credentials storage --set keychain` opt-in 的加固。macOS 每次 daemon 启动可能弹窗一次。这是防范 `~/.coffer/` 离线窃取的模式。
 
 解析采用 **file-first**：daemon 先找文件，再找钥匙串。这让迁移**崩溃安全**——`relocate` 只移动主密钥，并**最后**删除旧副本，因此被中断的迁移总能解析回一个可用状态。迁移永不触碰 `credentials` 表中的密文（密钥搬家，数据不动）；切换存储模式不会重新加密。
@@ -65,6 +65,26 @@ envelope 加密意味着数据库之外只剩唯一一份密钥材料：Fernet *
 
 `StdioTransport` 配置 schema 还有第二道防线：其 `env` 字段对每个静态环境变量的值执行正则检测，并拒绝任何看起来像 token 或密钥的值（匹配 token 检测正则）。这能捕获用户不小心将明文密钥粘贴进静态 `env` map 而非使用 `credential_refs` 的情况。
 
+## 通道与面向公网的接口面
+
+仅监听 loopback 的不变量规定：面向公网的接口面必须以独立进程运行，并仅限于经过签名校验的回调路径。**SeaTalk 回调监听器**就是该规则的具体实现（spec 009，[ADR-014](/zh/reference/adr/ADR-014-channel-adapter-framework)）。SeaTalk 只通过公网 webhook 投递事件，因此它是 Coffer 唯一接收来自机器外部入站流量的地方——而它是通过一个 daemon 永不让网络触及的进程来完成的。
+
+- **独立进程，永远不是 daemon。** 监听器是 daemon 拉起的子进程，仅在某个 SeaTalk 通道启用时运行。它只服务一条路由 `POST /seatalk/{channel}`，监听一个 loopback 端口（默认 `8787`，可通过 `COFFER_CALLBACK_PORT` 覆盖）。它不持有任何其他状态，除了 daemon 之外什么都触及不到。daemon 自身始终仅监听 loopback——永不暴露。
+- **签名校验。** 每个回调 POST 都携带一个 `Signature` header，由 SeaTalk 按 `sha256(raw_body + signing_secret)`（小写十六进制）计算。监听器用原始 body 和该通道的签名密钥重新计算同样的摘要，并以常量时间（`hmac.compare_digest`）比较。空密钥或空签名永不通过校验——空密钥会让 MAC 退化为 `sha256(body)`，任何人都能算出。平台的 `event_verification` 挑战在原地应答；其他每个有效事件都携带 daemon token 经 loopback 转发给 daemon。
+- **隧道是用户的，暴露面是监听器的。** 用户把隧道（cloudflared/ngrok）指向监听器的 loopback 端口。从公网只能触及这一条经过签名校验的回调路径；管理 API 和 MCP 端点根本不在隧道上。
+- **通过配对码实现单一所有者绑定。** 一个通道通过一个 8 字符一次性配对码（无歧义字母表、1 小时 TTL、有限猜测次数、仅存于内存）绑定到恰好一个所有者，该码由 UI/CLI 签发，并由所有者的账号发送给机器人。其他任何人都被静默忽略；重新配对会替换绑定。不存在直接输入 user-id 的路径——配对同时也证明了传输层的往返通路。
+
+密钥到达监听器的方式与上游 MCP 子进程获取密钥的方式相同：签名密钥、daemon URL 和 daemon token 在拉起时注入子进程的环境，永不落盘。拉起记录在 upstream-pids 目录中，因此 daemon 崩溃不会遗留任何东西——启动时的孤儿清扫会将其回收。daemon token 轮换会重新拉起监听器（token 在拉起时已烘焙进子进程的环境）。
+
+## Sync 安全
+
+多机 sync（[ADR-016](/zh/reference/adr/ADR-016-multi-machine-sync)）通过**一个用户自己拥有的 git 仓库**在机器之间搬运 vault 状态。其安全性建立在把密钥材料完全排除在该介质之外：
+
+- **介质上只有密文。** 凭据以 Fernet 密文 blob 形式导出，并以密文形式通过 git 流转——git 仓库始终只持有无法解密的数据。即使远端是托管的 GitHub 仓库，供应商也始终只持有密文。
+- **主密钥永不进入介质。** Fernet 主密钥通过 `coffer sync key export/import` **带外**引导到每台机器——永不提交、永不推送。这正是让宪章论证保持干净的原因：sync 介质不是任何可解密密钥的系统记录。
+- **密钥就位前处于 `credentials_locked`。** 一台已拉取密文但尚未拿到配套主密钥的机器会报告 `credentials_locked`，并拒绝拉起受影响的资源。它永不静默地解密失败。
+- **git 以子进程运行，使用环境中的凭据。** 出站 git 是真实的网络出口，但它遵循仅监听 loopback 的姿态：git 以子进程运行，使用用户自己环境中的 git 凭据，而非 Coffer 的 HTTP 客户端。Coffer 永不注入或存储 git 远端的凭据。
+
 ## Token 鉴权
 
 daemon 启动时通过 `secrets.token_urlsafe(32)` 生成一个 256 位 URL 安全随机 token，将 `{"pid": ..., "port": ..., "token": "<token>"}` 以 `0600` 权限写入 `~/.coffer/daemon.json`，并通过 FastAPI 依赖项（`require_token`）按路由器强制执行 `X-Coffer-Token` header。
@@ -81,13 +101,18 @@ daemon 配置 CORS 以拒绝浏览器上下文中的跨域请求。由于 HTTP A
 
 生产环境中，允许的来源是 Tauri 桌面 shell 的 `tauri://localhost` 和 `http://tauri.localhost`。仅当 `COFFER_DEV_CORS=1` 时才会添加 Vite 开发服务器来源（`http://localhost:5173` 和 `http://127.0.0.1:5173`）。整个列表可通过 `COFFER_CORS_ORIGINS` 覆盖。凭据始终不被允许（`allow_credentials=False`）——鉴权仅依赖 `X-Coffer-Token` header。不在允许列表中的来源在浏览器层面就会收到 CORS 拒绝，甚至在 token 检测运行之前——对浏览器端攻击向量的纵深防御。
 
-## 出站 HTTP：当前状态与计划中的加固
+## 出站 HTTP：真实路径与计划中的加固
 
-当 daemon 连接到 HTTP 传输的 MCP 服务器时，目前使用 MCP SDK 的 `create_mcp_http_client`（基于 `httpx`），没有 IP 范围过滤。目前尚未实装 SSRF 防护。
+daemon 如今已会发起出站 HTTP 调用。真实的出站路径包括：
 
-章程将其定义为一条前瞻性不变量：出站 HTTP 调用**在引入时**必须经过具备 SSRF 防护的客户端。实现该防护——在 DNS 解析后拒绝连接到 loopback、RFC 1918 私有范围和链路本地地址——是计划中的加固措施，尚未实装。
+- 构建知识索引时，向 OpenAI 兼容的供应商请求 **embeddings**（一个 `AsyncOpenAI` 客户端，按供应商切换 `base_url`）。
+- 为 sync 执行 **`git push`**——但这是以 git 子进程运行，使用用户环境中的 git 凭据，而非 Coffer 的 HTTP 客户端（见 [Sync 安全](#sync-安全)）。
+- 为通道调用 **Telegram 与 SeaTalk API**——用裸 httpx 访问固定的、众所周知的主机。
+- **HTTP 传输的 MCP 服务器**，经由 MCP SDK 的 `create_mcp_http_client`（基于 `httpx`）。
 
-对于 stdio 传输的服务器，根本不存在出站 HTTP——daemon 直接拉起一个子进程并通过进程的 stdin/stdout 通信。子进程的环境受到控制（不含明文密钥），其工作目录由配置中的 `cwd` 字段固定。
+章程要求出站 HTTP 必须经过具备 SSRF 防护的客户端。通道与供应商客户端访问的是固定的、众所周知的主机；尚未弥合的缺口是 **HTTP 传输的 MCP 客户端**——其目标主机来自用户注册的配置，而 MCP SDK 的 httpx 客户端没有 IP 范围过滤。为该 MCP 客户端实现该防护——在 DNS 解析后拒绝连接到 loopback、RFC 1918 私有范围和链路本地地址——是计划中的加固措施，尚未实装。
+
+对于 stdio 传输的 MCP 服务器，根本不存在出站 HTTP——daemon 直接拉起一个子进程并通过进程的 stdin/stdout 通信。子进程的环境受到控制（不含明文密钥），其工作目录由配置中的 `cwd` 字段固定。
 
 ## 另请参阅
 

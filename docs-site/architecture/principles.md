@@ -8,7 +8,9 @@ Modern AI development involves many MCP servers — file systems, databases, web
 
 The result is credential sprawl, config drift between clients, and an identity problem: the `read_file` tool in Claude Code may or may not be the same as `read_file` in Cursor. There is no single point of control.
 
-Coffer's answer is a long-lived local daemon that registers upstream MCP servers once, exposes all of them through a single namespaced surface (every tool appears as `<server-name>__<tool-name>`), and handles all client connections through that one point. Configure once; every client sees the same tools, the same names, the same policies.
+Coffer's answer to this slice is a long-lived local daemon that registers upstream MCP servers once, exposes all of them through a single namespaced surface (every tool appears as `<server-name>__<tool-name>`), and handles all client connections through that one point. Configure once; every client sees the same tools, the same names, the same policies.
+
+The MCP gateway, though, is only one capability of a broader vault. Coffer is a local-first AI agent vault: the same daemon and the same kind-agnostic Resource framework also manage registered coding agents, master skill bundles, a knowledge-base and memory substrate, and messaging channels — six resource kinds in all — plus cross-cutting chat, channels, and multi-machine sync. The principles below govern the whole vault, with the gateway as the founding kind rather than the entire system.
 
 ## The three principles
 
@@ -20,11 +22,13 @@ The Coffer constitution establishes three non-negotiable principles. Everything 
 All user data lives on the user's machine. Cloud services are LLM and tool providers only — they never become the system of record for any vault state.
 :::
 
-Every vault asset — registered server configs, credential references, audit logs, capability preferences — stays on your device. The HTTP API binds exclusively to `127.0.0.1`. There is no sync, no backup to a vendor cloud, no telemetry leaving the machine without the user's explicit action.
+Every vault asset — registered server configs, credential references, audit logs, capability preferences — stays on your device. The HTTP API binds exclusively to `127.0.0.1`. No backup to a vendor cloud and no telemetry leave the machine without the user's explicit action.
 
 "Local-first" does not mean "no network": calling a remote LLM API or invoking a cloud-hosted MCP tool is entirely expected. The constraint is about **where state lives**, not about whether the network is used. The daemon can make outbound HTTP calls to LLM providers; it simply cannot make your vault state visible to a third party without a constitutional amendment.
 
-Replicating user state to a vendor-controlled cloud requires a formal constitutional amendment — an explicit, recorded decision, not a silent configuration change.
+Replicating user state to a **vendor-controlled** cloud as a system of record requires a formal constitutional amendment — an explicit, recorded decision, not a silent configuration change.
+
+**Sync exception (constitution v0.3.0).** Multi-machine sync is permitted under a bounded exception to this principle, added in constitution v0.3.0 alongside spec 010. Sync runs only over a **user-owned, user-controlled** medium (the user's own git repository); every participating machine keeps the full vault, so the medium is transport and history, never a new system of record. Secrets travel as Fernet **ciphertext only** — the master key never crosses the sync medium and is bootstrapped onto each machine out-of-band. Sync is **opt-in** and points at a remote the user supplies. See [ADR-016](/reference/adr/ADR-016-multi-machine-sync).
 
 ### II. Spec-as-Truth (Spec-Driven Development)
 
@@ -56,9 +60,9 @@ Understanding scope is as important as understanding capabilities.
 
 **Not a cloud service.** There is no hosted Coffer, no SaaS plan, no account required. The daemon is a process on your machine.
 
-**Not a multi-machine sync solution.** Synchronizing vault state across machines is explicitly out of scope under the current constitution. It would require replicating user state to a network location, which conflicts with Local-First. Adding it requires a constitutional amendment.
+**Not a hosted sync service.** Coffer does sync vault state across machines (spec 010), but only over a medium the user owns and controls — their own git repository — under the v0.3.0 sync exception above. Coffer ships no hosted or vendor sync endpoint; offering one would still require a further constitutional amendment.
 
-**Not an LLM.** Coffer does not generate, execute, or reason about tool outputs. It is a gateway: it routes MCP protocol messages between clients and upstream servers, applies namespace transformations, enforces capability preferences, and records audit events.
+**Not a model provider.** Coffer is not itself an LLM and does not host one. The MCP gateway routes protocol messages without reasoning about tool outputs, and the in-process LangGraph chat agent (spec 008) does invoke LLMs to converse — but those models are external providers Coffer calls, never models Coffer ships or trains. Coffer orchestrates models and tools; it is not the model.
 
 **Not a firewall or security boundary.** Coffer applies capability-level enable/disable policies (per ADR-004), but it is a developer tool running as the user's own process — it does not sandbox upstream server code or enforce OS-level access control.
 

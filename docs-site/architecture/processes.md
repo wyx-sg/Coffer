@@ -1,8 +1,8 @@
 # Daemon & Processes
 
-Coffer is built around a clear separation of concerns between processes: one long-lived daemon that owns all state, short-lived entry points that talk to it, and per-session subprocess trees for upstream MCP servers.
+Coffer is built around a clear separation of concerns between processes: one long-lived daemon that owns all state, short-lived entry points that talk to it, per-session subprocess trees for upstream MCP servers, and — while a SeaTalk channel is enabled — a daemon-spawned callback listener for inbound webhooks.
 
-## The three process roles
+## The process roles
 
 ### coffer-daemon
 
@@ -11,7 +11,7 @@ The daemon is the system's center of gravity. It is a FastAPI application bound 
 - Is the **single SQLite writer**. No other process opens the database for writes. This makes WAL-mode isolation trivially correct and eliminates the class of bugs caused by concurrent schema modifications.
 - Owns all in-memory session state for connected MCP clients.
 - Spawns and supervises upstream MCP server subprocesses (one set per connected client session — see [Upstream session model](#upstream-session-model) below).
-- Persists control-plane state: resource registrations, capability preferences, audit log, retention policies.
+- Persists all control-plane and vault state: resource registrations, capability preferences, audit log, retention policies, the encrypted credential store, the knowledge/memory index, chat conversations and turns, channel bindings, and sync state.
 - Does **not** auto-shutdown. The daemon keeps running until `coffer daemon stop` or a system shutdown. This is intentional: the daemon's job is to outlive any single client or CLI invocation.
 
 ### stdio shim (coffer-mcp-shim)
@@ -27,6 +27,23 @@ The shim is a lightweight bridge process, one per MCP client session. Its entire
 ### coffer CLI
 
 The CLI (`coffer …`) is a short-lived child process. Users invoke it for management tasks: registering servers, listing tools, checking status. It calls the daemon over loopback HTTP, carrying the `X-Coffer-Token` from `~/.coffer/daemon.json`, and exits after each command. Like the shim, it uses detect-or-spawn to ensure a daemon is running before issuing its request.
+
+### callback listener (coffer-callback)
+
+The callback listener is a daemon-spawned child process that exists only to accept inbound SeaTalk webhooks (spec 009, [ADR-014](/reference/adr/ADR-014-channel-adapter-framework)). Unlike the shim and CLI — which the user (or an MCP client) starts — the listener is spawned and supervised by the daemon itself. It:
+
+- Runs **only while a SeaTalk channel is enabled**. The channel reconciler starts it when the first SeaTalk channel comes up and stops it when the last one goes away.
+- Serves exactly one route, `POST /seatalk/{channel}`, on a loopback port (default `8787`, overridable via `COFFER_CALLBACK_PORT`). It holds no other state and can reach nothing but the daemon.
+- Verifies each callback's SeaTalk signature, answers the platform's verification handshake, and forwards valid events to the daemon over loopback carrying the daemon token. The user points a tunnel (cloudflared/ngrok) at the listener's port; the daemon itself stays loopback-only.
+- Gets its signing secrets, the daemon URL, and the daemon token injected into its environment at spawn (the upstream-subprocess pattern — secrets land only in the child's env, never on disk). Its spawn is recorded in `~/.coffer/upstream-pids/` so a daemon crash leaves nothing behind: the startup orphan sweep reaps it. A daemon-token rotation respawns the listener.
+
+## Supervised background workers
+
+Beyond the subprocesses above, the daemon runs several in-process background workers — supervised asyncio tasks, not separate processes — that keep vault state converging without any user action:
+
+- **Retention worker.** Prunes log-style tables (audit log, invocation log) according to the configured retention policies.
+- **Channel adapter reconciler** ([ADR-014](/reference/adr/ADR-014-channel-adapter-framework)). On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful.
+- **Sync worker** ([ADR-016](/reference/adr/ADR-016-multi-machine-sync)), **opt-in and off by default.** Modeled on the retention worker, it adds debounced push-on-change plus interval pull for users who want hands-off multi-machine convergence. `coffer sync` remains the explicit, predictable default.
 
 ## Detect-or-spawn (ADR-006)
 

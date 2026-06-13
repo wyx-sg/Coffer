@@ -17,12 +17,29 @@ const guideEn = [
       { text: 'Introduction', link: '/guide/introduction' },
       { text: 'Download & install', link: '/guide/install' },
       { text: 'Getting Started', link: '/guide/getting-started' },
+      { text: 'Concepts', link: '/guide/concepts' },
+    ],
+  },
+  {
+    text: 'Using the vault',
+    items: [
       { text: 'Register an MCP server', link: '/guide/register-server' },
-      { text: 'Agents', link: '/guide/agents' },
       { text: 'Connect a client', link: '/guide/connect-client' },
+      { text: 'Agents', link: '/guide/agents' },
+      { text: 'Chat', link: '/guide/chat' },
+      { text: 'Skills', link: '/guide/skills' },
+      { text: 'Knowledge bases', link: '/guide/knowledge-base' },
+      { text: 'Memory', link: '/guide/memory' },
+      { text: 'Channels', link: '/guide/channels' },
+      { text: 'Multi-machine sync', link: '/guide/sync' },
+      { text: 'Credentials', link: '/guide/credentials' },
+    ],
+  },
+  {
+    text: 'Apps',
+    items: [
       { text: 'Web UI', link: '/guide/web-ui' },
       { text: 'Desktop app', link: '/guide/desktop' },
-      { text: 'Concepts', link: '/guide/concepts' },
     ],
   },
 ]
@@ -65,12 +82,29 @@ const guideZh = [
       { text: '介绍', link: '/zh/guide/introduction' },
       { text: '下载与安装', link: '/zh/guide/install' },
       { text: '快速开始', link: '/zh/guide/getting-started' },
+      { text: '核心概念', link: '/zh/guide/concepts' },
+    ],
+  },
+  {
+    text: '使用保险库',
+    items: [
       { text: '注册 MCP server', link: '/zh/guide/register-server' },
-      { text: 'Agents', link: '/zh/guide/agents' },
       { text: '接入客户端', link: '/zh/guide/connect-client' },
+      { text: 'Agents', link: '/zh/guide/agents' },
+      { text: '对话', link: '/zh/guide/chat' },
+      { text: '技能', link: '/zh/guide/skills' },
+      { text: '知识库', link: '/zh/guide/knowledge-base' },
+      { text: '记忆', link: '/zh/guide/memory' },
+      { text: '渠道', link: '/zh/guide/channels' },
+      { text: '多机同步', link: '/zh/guide/sync' },
+      { text: '凭证', link: '/zh/guide/credentials' },
+    ],
+  },
+  {
+    text: '应用',
+    items: [
       { text: 'Web UI', link: '/zh/guide/web-ui' },
       { text: '桌面应用', link: '/zh/guide/desktop' },
-      { text: '核心概念', link: '/zh/guide/concepts' },
     ],
   },
 ]
@@ -108,7 +142,7 @@ const contribZh = [
 export default withMermaid(
   defineConfig({
     title: 'Coffer',
-    description: 'Local-first AI agent vault — manage all your MCP servers from one place.',
+    description: 'Local-first AI agent vault — one secure, shared interface for every AI agent on your machine: MCP tools, skills, knowledge, memory, chat, channels, and sync.',
     base: '/Coffer/',
     cleanUrls: true,
     lastUpdated: true,

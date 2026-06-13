@@ -29,17 +29,27 @@ daemon 直接作为 Python 进程运行：`coffer daemon start` 调用已安装�
 
 ## PyInstaller：独立二进制文件
 
-对于面向最终用户的分发，`make bundle-binaries`（由 `scripts/build_binaries.sh` 驱动）在当前主机上针对三个 spec 文件运行 PyInstaller：
+对于面向最终用户的分发，`make bundle-binaries`（由 `scripts/build_binaries.sh` 驱动）在当前主机上针对以下 spec 文件运行 PyInstaller：
 
-| Spec 文件                      | 输出二进制文件         | 包含内容                                                                                            |
-| ------------------------------ | ---------------------- | --------------------------------------------------------------------------------------------------- |
-| `backend/coffer-daemon.spec`   | `dist/coffer-daemon`   | FastAPI、SQLAlchemy 2 / aiosqlite、Pydantic 2、`mcp`、`keyring`、Alembic、structlog、Typer、uvicorn |
-| `backend/coffer-mcp-shim.spec` | `dist/coffer-mcp-shim` | 仅 `httpx`（shim 是一个轻量级 loopback 转发器）                                                     |
-| `backend/coffer.spec`          | `dist/coffer`          | 管理 CLI（Typer 应用）                                                                              |
+| Spec 文件                      | 输出二进制文件         | 包含内容                                                                                                                                                                                                                  |
+| ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/coffer-daemon.spec`   | `dist/coffer-daemon`   | FastAPI、SQLAlchemy 2 / aiosqlite、Pydantic 2、`mcp`、`keyring`、Alembic、structlog、Typer、uvicorn、`tomlkit` / `yaml`（agent 配置编辑）、`sqlite_vec`（及其原生 `vec0` 可加载扩展数据文件）、`markitdown`、`openai`，以及对话 agent 栈（`langchain*` / `langgraph`） |
+| `backend/coffer-mcp-shim.spec` | `dist/coffer-mcp-shim` | 仅 `httpx`（shim 是一个轻量级 loopback 转发器）                                                                                                                                                                          |
+| `backend/coffer.spec`          | `dist/coffer`          | 管理 CLI（Typer 应用）                                                                                                                                                                                                  |
+
+::: warning 待办:`coffer-callback` 边车
+第四个进程 —— SeaTalk 回调监听器(`surfaces/callback/`,在任何 SeaTalk channel 启用期间由 daemon 启动)—— **目前还不是构建目标**。在源码/开发运行中,daemon 以 `python -m coffer.surfaces.callback` 启动它;在 frozen 构建里,`listener_spawn.py` 期望 daemon 二进制旁有一个 `coffer-callback` 同级文件,缺失时会抛出 *"frozen build is missing the coffer-callback sibling binary"*。新增 `backend/coffer-callback.spec` 并接入 `build_binaries.sh`(让 frozen 包发布该边车)是一个已知的打包待办项,挂在 spec 009-channels 下。
+:::
 
 PyInstaller 将 Python 解释器、所有依赖以及应用程序代码打包成单个可执行文件。用户直接运行 `coffer-daemon`，不需要 `python` 命令，不需要 `venv`，不需要 `pip`。shim 二进制文件刻意保持精简——它不包含任何服务端依赖，因为 shim 只需要 `httpx` 来通过 loopback HTTP 向 daemon 转发请求。每次会话都重新拉起 shim 的 MCP 客户端受益于更小二进制文件带来的更短冷启动时间。
 
 Alembic 迁移文件通过 PyInstaller 的 `datas` 机制作为数据文件打包进 daemon 二进制文件。首次启动时，daemon 在接受连接之前对新数据库运行 `alembic upgrade head`——最终用户无需任何额外步骤即可完成正确的 schema 创建。
+
+daemon 二进制文件还捆绑了较重的知识/记忆/对话依赖（spec 006/007/008）：用于向量索引的 `sqlite_vec`、用于文档转换的 `markitdown`、用于嵌入的 `openai`，以及 `langchain*` / `langgraph` 对话 agent 栈。这些依赖在函数内部惰性 import，因此 PyInstaller 的静态分析无法追踪它们——`coffer-daemon.spec` 将它们显式声明为隐藏 import，使冻结后的 daemon 能够转换文档、生成嵌入、运行向量检索并驱动内置对话 agent。
+
+::: warning 捆绑验证——sqlite-vec 原生扩展
+`sqlite-vec` 以**包数据**而非 Python 子模块的形式分发其可加载原生扩展（`vec0.dylib` / `vec0.so` / `vec0.dll`），因此 `collect_submodules` 永远捕获不到它——`coffer-daemon.spec` 通过 `collect_data_files("sqlite_vec")` 加入它。如果冻结构建缺失该数据文件，daemon 将无法加载 `vec0` 扩展，向量检索会静默降级为仅关键字（`VecIndex.available()` 吞掉加载失败）。因此发布冒烟测试必须把「捆绑的 daemon 能加载 `vec0`」作为一个显式的捆绑验证项（按 [ADR-012](/zh/reference/adr/ADR-012-files-as-truth-sqlite-retrieval) 与 [ADR-008](/zh/reference/adr/ADR-008-distribution-pyinstaller-tauri-sidecar)）。
+:::
 
 ::: tip 为什么选择 PyInstaller 而非其他方案
 有两个替代方案被明确考虑并在 v0 阶段被否决：
@@ -59,6 +69,7 @@ Alembic 迁移文件通过 PyInstaller 的 `datas` 机制作为数据文件打�
 - `coffer`（管理 CLI）
 - `coffer-daemon`（独立可执行文件）
 - `coffer-mcp-shim`（独立可执行文件）
+- `coffer-callback`(SeaTalk 回调监听器边车 —— 待办,见上方打包说明)在其成为构建目标后
 - SHA-256 校验和文件
 
 此层级面向无界面服务器、CI 环境以及想要独立二进制文件而不需要桌面应用的开发者。用户解压压缩包，运行 `coffer-daemon`，将 `coffer-mcp-shim` 放到 `PATH` 上，然后将 MCP 客户端指向 shim。无需 Tauri，无需 GUI，无需桌面集成。
@@ -67,7 +78,7 @@ Alembic 迁移文件通过 PyInstaller 的 `datas` 机制作为数据文件打�
 
 一个平台原生安装程序（macOS 上为 DMG，Linux 上为 AppImage 和 `.deb`），内嵌：
 
-- 同一对 `coffer-daemon` 和 `coffer-mcp-shim` PyInstaller 二进制文件，作为 **Tauri 边车**
+- `coffer-daemon` 和 `coffer-mcp-shim` PyInstaller 二进制文件,作为 **Tauri 边车**(以及 `coffer-callback`,在其成为构建目标后 —— 见上方打包说明)
 - Tauri 2 桌面 shell（Rust + WebView）
 - 来自 spec 002 的 Web UI
 
@@ -87,7 +98,7 @@ Tauri 边车机制（`desktop/tauri.conf.json` 中的 `bundle.externalBin`）是
 
 - macOS / Linux：`~/.coffer/bin/coffer-mcp-shim`
 
-一个大小比较启发式方法处理升级：如果磁盘上的二进制文件与捆绑包中的二进制文件字节数相同，则保持不变（重复启动时的无操作）。不同的大小触发原子替换。这意味着通过新 DMG 或安装包升级 Coffer 的用户，在下次启动时会自动获得更新后的 shim，无需手动管理 PATH。
+一个陈旧性检查处理升级：将磁盘上的二进制文件与捆绑的二进制文件按**大小 + mtime + 一个版本哨兵**进行比较，匹配时保持不变（重复启动时的无操作）。任一项不匹配都会触发原子替换。这意味着通过新 DMG 或安装包升级 Coffer 的用户，在下次启动时会自动获得更新后的 shim，无需手动管理 PATH。
 
 **系统托盘图标。** 主窗口关闭后，桌面应用以系统托盘图标运行。关闭窗口会将其隐藏；daemon 和托盘仍然存在。托盘菜单提供：打开（恢复窗口）、重启 daemon 和退出（调用 `app.exit()` 真正终止进程）。
 

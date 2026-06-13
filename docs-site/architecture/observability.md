@@ -4,7 +4,7 @@ For the audit trail and invocation records (who did what, who called what), see 
 
 ## The problem this solves
 
-A developer registers twenty MCP servers and delegates tool calls to them from Claude Code, Codex, and a custom script — all simultaneously. Without operational observability, diagnosing live problems becomes opaque: "Why is this server suddenly returning errors?" "What exactly happened during that failing request?" Structured logs and trace correlation answer these questions without requiring the user to run a separate monitoring stack.
+A developer runs a busy vault: a couple dozen MCP servers, chat conversations against several agents, a connected messaging channel, and periodic sync runs — all in flight at once. Without operational observability, diagnosing live problems becomes opaque: "Why is this server suddenly returning errors?" "What exactly happened during that failing request, chat turn, or sync run?" Structured logs and trace correlation answer these questions without requiring the user to run a separate monitoring stack.
 
 Coffer's approach is deliberately lean: structured local logs, not a metrics pipeline. All observability stays on-device and within the `~/.coffer/` backup footprint.
 
@@ -34,6 +34,8 @@ Log lines never contain secret material. Secrets live only as ciphertext in the 
 ## Trace correlation
 
 Every HTTP response from the daemon carries an `X-Coffer-Trace` header with a request-scoped UUID. This UUID appears in the daemon's structured logs for that request, in any audit entries produced during the request, and in any invocation records from that request. Correlation is mechanical: take the trace ID from the error response and grep `~/.coffer/logs/` for it.
+
+The same structured-logging and trace-id correlation now spans the rest of the vault too — chat turns, channel events, and sync runs all flow through the same `contextvar`-propagated trace IDs and land in the same JSON log lines.
 
 ::: tip CLI usage
 When running `coffer` with the `--verbose` flag, the CLI prints the `X-Coffer-Trace` ID alongside the human-readable error. For scripted workflows that need to correlate CLI output with daemon logs, this is the handle.

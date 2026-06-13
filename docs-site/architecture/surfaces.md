@@ -13,13 +13,30 @@ All surfaces sit on top of the same `coffer-daemon` process. The daemon is a Fas
 
 Every surface communicates with the daemon over loopback HTTP, reading the port and token from `~/.coffer/daemon.json` (mode `0600`, owner-readable only). No surface has its own persistent state — they are stateless entry points into the daemon's stateful core.
 
-The six surfaces are described below using a consistent template: **What it is · Which process · Transport · Lifecycle · Security boundary**.
+The surfaces are described below using a consistent template: **What it is · Which process · Transport · Lifecycle · Security boundary**.
 
 ---
 
 ## REST API
 
-**What it is.** The management plane. This is the HTTP JSON API through which all resource management operations are performed: registering, listing, updating, enabling, disabling, and deleting MCP servers; reading and modifying capability preferences; viewing audit and invocation logs; managing retention policies; rotating the daemon auth token; and initiating database backups. The REST API is the canonical interface — the CLI, Web UI, and Desktop all call it.
+**What it is.** The management plane. This is the HTTP JSON API through which every resource-kind and cross-cutting operation is performed. It is organized into route groups under `/api/v1/`, one family per kind plus the shared concerns:
+
+| Route group                       | Covers                                                              |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `/resources`                      | Kind-agnostic resource CRUD, enable/disable, lifecycle.            |
+| `/resources/mcp_server`           | MCP capability preferences and invocation logs.                   |
+| `/agents`                         | Agent registry, config files, workspace facets, memory projection. |
+| `/skills`                         | Skill master store and per-agent bindings.                        |
+| `/knowledge_bases`                | KB documents, upload, reindex, retrieval.                         |
+| `/memory_stores`                  | Memory facts, scopes, and native projection.                      |
+| `/channels`                       | Channel bindings (Telegram, SeaTalk), pairing.                    |
+| `/chat`, `/models`                | Chat conversations/turns and the model catalog.                   |
+| `/credentials`, `/settings`       | Encrypted credential store; settings incl. `/settings/credentials` (master-key storage) and `/embedding` config. |
+| `/sync`                           | Multi-machine sync runs and config.                               |
+| `/fs`                             | Filesystem browse helper for config pickers.                      |
+| `/audit`, `/retention`, `/daemon` | Audit log, retention policies, daemon token/backup operations.    |
+
+The REST API is the canonical interface — the CLI, Web UI, and Desktop all call it.
 
 **Which process.** The daemon (`coffer-daemon`). The REST API is embedded in the FastAPI application and is inseparable from the daemon process.
 
@@ -47,7 +64,13 @@ The six surfaces are described below using a consistent template: **What it is �
 
 ## CLI (`coffer …`)
 
-**What it is.** The command-line management interface. Every management operation available through the REST API is also available as a `coffer` subcommand: `coffer mcp add`, `coffer mcp list`, `coffer mcp tool list`, `coffer mcp tool enable/disable`, `coffer audit`, `coffer retention`, `coffer daemon start/stop/status`. The CLI is Coffer's primary interface for scripted workflows, dotfile-based setup, and remote (headless) machines where a browser is not available. Every subcommand supports `--json` output for machine-readable integration.
+**What it is.** The command-line management interface. Every management operation available through the REST API is also available as a `coffer` subcommand, grouped to mirror the kinds and cross-cutting concerns:
+
+- **Per-kind groups:** `coffer mcp`, `coffer agent`, `coffer skill`, `coffer kb`, `coffer memory`, `coffer channel`.
+- **Cross-cutting groups:** `coffer credentials`, `coffer sync`, `coffer chat`, `coffer model`.
+- **Kind-agnostic / operational groups:** `coffer resource`, `coffer audit`, `coffer retention`, `coffer daemon`, plus top-level `coffer backup` / `coffer restore` (the latter taking `--reindex` to rebuild the knowledge index). Reindexing a single knowledge base is `coffer kb reindex`.
+
+Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `coffer audit`, `coffer daemon start/stop/status`. The CLI is Coffer's primary interface for scripted workflows, dotfile-based setup, and remote (headless) machines where a browser is not available. Every subcommand supports `--json` output for machine-readable integration.
 
 **Which process.** A short-lived child process. The CLI is an independent Python process, installed on `PATH` as a console script entry point (`coffer`). It exits after executing one command. It does not stay running between invocations.
 
@@ -73,9 +96,23 @@ The six surfaces are described below using a consistent template: **What it is �
 
 ---
 
+## Callback Listener
+
+**What it is.** The only public-reachable surface. It is a separate signed-callback process that receives inbound webhooks from chat platforms — concretely `POST /seatalk/{channel}` — verifies each request's SeaTalk signature against the channel's signing secret, answers the `event_verification` challenge, and forwards genuine events to the daemon for the channel runtime to handle. It exists because SeaTalk pushes events to a URL rather than letting Coffer long-poll (the model Telegram uses), so a reachable HTTP endpoint is required (spec 009, [ADR-014](/reference/adr/ADR-014-channel-adapter-framework)).
+
+**Which process.** A daemon-spawned child process, deliberately separate from the daemon. It runs only while at least one SeaTalk channel is enabled. Keeping it out of the main daemon means the public-reachable code path is a small, isolated surface that handles signature verification before anything reaches the stateful core.
+
+**Transport.** HTTP on `127.0.0.1:<callback-port>`, serving only the signed callback paths. The listener itself binds to loopback; reachability from SeaTalk's servers is provided by a **user-run tunnel** the owner stands up out-of-band — Coffer never opens a public port itself.
+
+**Lifecycle.** Spawned by the daemon when a SeaTalk channel is enabled; torn down when the last SeaTalk channel is disabled. Its lifetime is bound to channel state, not to any client session.
+
+**Security boundary.** Unlike the loopback surfaces, this one accepts traffic that originates off-machine, so its trust boundary is the **per-channel SeaTalk signature**: every request body is verified with `verify_seatalk_signature` against the channel's secret before it is forwarded, and unsigned or mis-signed requests are rejected. The `X-Coffer-Token` is not the gate here — the signature is.
+
+---
+
 ## Web UI
 
-**What it is.** The browser-based management interface, specified in [spec 002](/reference/specs/002-ui-shell/spec). The Web UI provides a visual equivalent of every CLI management operation: registering MCP servers via JSON import, browsing server health and capability lists, toggling tools/resources/prompts on/off, viewing the audit log and invocation history, and configuring retention policies. The information architecture reflects the resource-kind model: the sidebar shows `Resources` (MCP servers, and future kinds as they ship) and `System` (Observability, Settings). No "coming soon" placeholders appear.
+**What it is.** The browser-based management interface, specified in [spec 002](/reference/specs/002-ui-shell/spec). The Web UI provides a visual equivalent of every CLI management operation: registering MCP servers via JSON import, browsing server health and capability lists, toggling tools/resources/prompts on/off, viewing the audit log and invocation history, and configuring retention policies. The information architecture reflects the resource-kind model: the sidebar shows `Resources` (the shipped kinds — MCP servers, Agents, Skills, Knowledge Bases, Memory, Channels), `Chat` for talking to agents directly, and `System` (Observability, and Settings with its Security and Models sub-sections). No "coming soon" placeholders appear — a kind only appears once it works.
 
 **Which process.** A browser process. In production, the built frontend is embedded by the Tauri desktop shell (`frontendDist` in `tauri.conf.json`); the browser process is logically separate from the daemon. In development, a Vite dev server runs at `http://localhost:5173`. All data is fetched from the daemon's REST API.
 
@@ -113,6 +150,7 @@ The desktop app also idempotently deploys the bundled `coffer-mcp-shim` and `cof
 | MCP endpoint   | Daemon            | — (is the daemon)          | System / manual     | Daemon lifetime     |
 | CLI (`coffer`) | Short-lived child | Loopback HTTP              | User / shell        | Per-command         |
 | Stdio shim     | Per-session       | HTTP/SSE                   | MCP client          | MCP client session  |
+| Callback listener | Daemon-spawned child | Loopback HTTP (forwards to daemon) | Daemon (on SeaTalk enable) | While a SeaTalk channel is enabled |
 | Web UI         | Browser tab       | Loopback HTTP (REST)       | User / browser      | Browser tab session |
 | Desktop app    | Native process    | Loopback HTTP (REST + MCP) | User / OS autostart | Until tray quit     |
 

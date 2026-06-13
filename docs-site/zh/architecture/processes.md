@@ -1,8 +1,8 @@
 # 守护进程与进程模型
 
-Coffer 围绕进程职责的清晰分离而构建：一个持有全部状态的长生命周期守护进程，与它通信的短生命周期入口点，以及为上游 MCP 服务器按会话建立的子进程树。
+Coffer 围绕进程职责的清晰分离而构建：一个持有全部状态的长生命周期守护进程，与它通信的短生命周期入口点，为上游 MCP 服务器按会话建立的子进程树，以及——在 SeaTalk 通道启用时——一个由守护进程拉起、用于接收入站 webhook 的回调监听器。
 
-## 三种进程角色
+## 进程角色
 
 ### coffer-daemon
 
@@ -11,7 +11,7 @@ Coffer 围绕进程职责的清晰分离而构建：一个持有全部状态的�
 - 是**唯一的 SQLite 写入者**。没有其他进程以写模式打开数据库。这使 WAL 模式的隔离正确性成为显然，并消除了并发 schema 修改引发的一整类 bug。
 - 持有已连接 MCP 客户端的全部内存会话状态。
 - 为上游 MCP 服务器拉起并监管子进程（每个已连接的客户端会话一套独立的子进程——详见下方[上游会话模型](#上游会话模型-adr-005)）。
-- 持久化控制面状态：资源注册、能力偏好、审计日志、保留策略。
+- 持久化全部控制面与 vault 状态：资源注册、能力偏好、审计日志、保留策略、加密凭据存储、知识/记忆索引、chat 会话与 turn、通道绑定，以及 sync 状态。
 - **不**自动关闭。守护进程持续运行，直到执行 `coffer daemon stop` 或系统关机。这是有意为之：守护进程的职责就是比任何单个客户端或 CLI 调用活得更久。
 
 ### stdio shim（coffer-mcp-shim）
@@ -27,6 +27,23 @@ shim 是一个轻量级桥接进程，每个 MCP 客户端会话一份。它的�
 ### coffer CLI
 
 CLI（`coffer …`）是一个短生命周期的子进程。用户用它执行管理任务：注册服务器、列出工具、检查状态。它通过 loopback HTTP 调用守护进程，携带来自 `~/.coffer/daemon.json` 的 `X-Coffer-Token`，每条命令执行完后退出。与 shim 一样，它在发出请求前使用 detect-or-spawn 确保守护进程正在运行。
+
+### 回调监听器（coffer-callback）
+
+回调监听器是守护进程拉起的子进程，唯一存在目的是接收入站 SeaTalk webhook（spec 009，[ADR-014](/zh/reference/adr/ADR-014-channel-adapter-framework)）。与由用户（或 MCP 客户端）启动的 shim 和 CLI 不同，监听器由守护进程自己拉起并监管。它：
+
+- **仅在某个 SeaTalk 通道启用时运行**。通道协调器在第一个 SeaTalk 通道上线时启动它，并在最后一个下线时停止它。
+- 只服务一条路由 `POST /seatalk/{channel}`，监听一个 loopback 端口（默认 `8787`，可通过 `COFFER_CALLBACK_PORT` 覆盖）。它不持有任何其他状态，除了守护进程之外什么都触及不到。
+- 校验每个回调的 SeaTalk 签名，应答平台的验证握手，并把有效事件携带 daemon token 经 loopback 转发给守护进程。用户把隧道（cloudflared/ngrok）指向监听器的端口；守护进程自身始终仅监听 loopback。
+- 其签名密钥、daemon URL 和 daemon token 在拉起时注入其环境（上游子进程模式——密钥只落在子进程的环境中，永不落盘）。其拉起记录在 `~/.coffer/upstream-pids/` 中，因此守护进程崩溃不会遗留任何东西：启动时的孤儿清扫会将其回收。daemon token 轮换会重新拉起监听器。
+
+## 受监管的后台 worker
+
+除上述子进程外，守护进程还运行若干进程内后台 worker——它们是受监管的 asyncio 任务，而非独立进程——在无需任何用户操作的情况下让 vault 状态持续收敛：
+
+- **保留 worker。** 按配置的保留策略修剪日志型表（审计日志、调用日志）。
+- **通道适配器协调器**（[ADR-014](/zh/reference/adr/ADR-014-channel-adapter-framework)）。每个 tick 它都会把已启用的通道资源与运行中的适配器做 diff，并启动/停止/重启以保持一致——并随 SeaTalk 通道集合启动或停止回调监听器。REST/CLI/UI 永不直接启动或停止适配器；协调器持有全部运行时状态转换，从而让状态保持真实。
+- **Sync worker**（[ADR-016](/zh/reference/adr/ADR-016-multi-machine-sync)），**opt-in 且默认关闭。** 它以保留 worker 为蓝本，为希望免手动多机收敛的用户增加去抖的「变更即推送」加间隔拉取。`coffer sync` 仍是显式、可预期的默认方式。
 
 ## Detect-or-spawn（ADR-006）
 

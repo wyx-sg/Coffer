@@ -22,7 +22,7 @@ Arrows show the allowed import direction. `surfaces` may import `application`; `
 
 ### domain/
 
-The domain layer contains the kind-agnostic entities and protocols that define what Coffer manages at the conceptual level. This includes `resource.py` (the Resource entity, `ResourceRef`, kind protocol interfaces), `audit.py` (the `AuditEvent` value object), `errors.py` (the canonical error hierarchy), and the `mcp/` subdirectory for MCP-specific value objects (tool schemas, capability descriptors, session state models).
+The domain layer contains the kind-agnostic entities and protocols that define what Coffer manages at the conceptual level. This includes `resource.py` (the Resource entity, `ResourceRef`, kind protocol interfaces), `kind_module.py` (the `KindModule` carrier used by the composition root), `audit.py` (the `AuditEvent` value object), `errors.py` (the canonical error hierarchy), and one subdirectory per kind for that kind's value objects — `mcp/` (tool schemas, capability descriptors, session state models), `agent/`, `skill/`, `channel/`, `knowledge/`, `knowledge_base/`, `memory/`, `chat/`, and `sync/`.
 
 ::: warning Absolute invariant
 `domain/` may NOT import from `infrastructure/`, `surfaces/`, or any external SDK. No SQLAlchemy, no FastAPI, no `keyring`, no `httpx` — none of these appear anywhere in the domain layer. If a domain entity needs to validate a URL, it uses Python's standard library. If it needs to represent a credential, it holds a string reference, not a keychain handle.
@@ -32,7 +32,7 @@ This restriction is not just architectural taste — it is what makes the domain
 
 ### application/
 
-The application layer orchestrates domain entities with infrastructure and surfaces. It defines the services that implement Coffer's use cases: `resource_service.py` for kind-agnostic CRUD (create/read/update/enable/disable/delete for resources of any kind), `audit_service.py` for recording lifecycle events, `retention_service.py` for the background log-pruning worker, and `application/mcp/` for MCP-specific application services (session management, capability curation, invocation recording).
+The application layer orchestrates domain entities with infrastructure and surfaces. It defines the services that implement Coffer's use cases: `resource_service.py` for kind-agnostic CRUD (create/read/update/enable/disable/delete for resources of any kind), `audit_service.py` for recording lifecycle events, `retention_service.py` for the background log-pruning worker, and one subdirectory per kind — `application/mcp/` (session management, capability curation, invocation recording), `application/agent/`, `application/skill/`, `application/channel/`, `application/knowledge/`, `application/knowledge_base/`, `application/memory/`, and `application/chat/` (the `TurnOrchestrator`, approvals, and turn history). Alongside the kinds sit cross-cutting service slices that are **not** kinds: `application/sync/` (multi-machine sync), `application/credentials/` (the shared `CredentialResolver`), and `application/fs/` (filesystem-browse).
 
 Application services receive their infrastructure dependencies as constructor arguments (repositories, keychain adapters, upstream clients) — they do not instantiate them. This is the dependency-inversion pattern: the application layer defines what it needs (via interfaces or protocol classes in `domain/`), and the composition root provides the concrete implementation.
 
@@ -42,7 +42,7 @@ Application services receive their infrastructure dependencies as constructor ar
 
 ### infrastructure/
 
-The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the encrypted credential store and master-key manager (`infrastructure/credentials/` — the single place in the entire codebase allowed to import `keyring`), daemon discovery utilities (`infrastructure/daemon/`), and the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams).
+The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the encrypted credential store and master-key manager (`infrastructure/credentials/` — the single place in the entire codebase allowed to import `keyring`), daemon discovery utilities (`infrastructure/daemon/`), the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams), and per-kind I/O modules: `infrastructure/agent/` (agent config-file store), `infrastructure/skill/` (master store, source fetcher, sync engine), `infrastructure/channel/` (Telegram/SeaTalk transports, peer repo, render), `infrastructure/knowledge/` (document converters, FTS5, the sqlite-vec index, embeddings), `infrastructure/knowledge_base/`, `infrastructure/memory/`, and `infrastructure/chat/` (the in-process LangGraph agent, the gateway tool provider, and the CLI-agent subprocess drivers). The cross-cutting `infrastructure/sync/` slice (the git-repo sync workspace) is not a kind.
 
 Infrastructure is wired into the system at the composition root, not imported by domain or application code. Application services receive infrastructure objects as injected dependencies. This means you can swap the real SQLAlchemy repository for a test double (an in-memory dictionary or a SQLite `:memory:` database) without changing a line of application or domain code.
 
@@ -50,7 +50,7 @@ The credential module deserves special mention: `infrastructure/credentials/` is
 
 ### surfaces/
 
-The surfaces layer adapts external protocols to application calls. It contains the FastAPI application (`surfaces/http/`), the Typer CLI (`surfaces/cli/`), and the stdio shim entry point (`surfaces/shim/`). Surfaces are thin: they parse requests, call application services, and format responses. They contain no business logic.
+The surfaces layer adapts external protocols to application calls. It contains the FastAPI application (`surfaces/http/`), the Typer CLI (`surfaces/cli/`), the stdio shim entry point (`surfaces/shim/`), and the channel callback listener (`surfaces/callback/` — the `coffer-callback` process that receives SeaTalk webhooks). Surfaces are thin: they parse requests, call application services, and format responses. They contain no business logic.
 
 The two composition roots — `surfaces/http/app.py` for the daemon's HTTP server, and `surfaces/cli/main.py` for the CLI — are the only places where all four layers meet. Each kind is registered explicitly at the composition root via a `KindModule` dataclass, which bundles together the kind's domain entities, application services, infrastructure implementations, and surface route/command handlers. There is no global kind registry and no import-time side effects. Adding a new kind means creating its subdirectories in each layer and adding one `KindModule` registration at the composition root.
 
@@ -87,20 +87,47 @@ The layer-first layout is specified by [ADR-002](/reference/adr/ADR-002-code-lay
 ```
 backend/coffer/
 ├── domain/                       # kind-agnostic entities + kind protocol
-│   ├── resource.py
+│   ├── resource.py               # Resource, Kind, ResourceRef
+│   ├── kind_module.py            # KindModule composition-root carrier
 │   ├── audit.py
 │   ├── errors.py
-│   └── mcp/                      # MCP-specific value objects
+│   ├── mcp/                      # MCP-specific value objects
+│   ├── agent/                    # agent config value objects
+│   ├── skill/                    # skill value objects
+│   ├── channel/                  # channel config, envelopes, signing
+│   ├── knowledge/                # knowledge-base value objects
+│   ├── knowledge_base/           # KB collection value objects
+│   ├── memory/                   # memory value objects
+│   ├── chat/                     # chat turn / message value objects
+│   └── sync/                     # sync value objects
 ├── application/
 │   ├── resource_service.py       # kind-agnostic CRUD; takes kinds dict
 │   ├── audit_service.py
 │   ├── retention_service.py
-│   └── mcp/                      # MCP-specific application services
+│   ├── mcp/                      # MCP-specific application services
+│   ├── agent/                    # agent services + make_agent_kind
+│   ├── skill/                    # skill services + make_skill_kind
+│   ├── channel/                  # adapter protocol, pairing, inbound runtime
+│   ├── knowledge/                # KB ingest + retrieval services
+│   ├── knowledge_base/           # KB collection services
+│   ├── memory/                   # recall/remember services
+│   ├── chat/                     # TurnOrchestrator, approvals, history
+│   ├── sync/                     # cross-cutting — multi-machine sync (not a kind)
+│   ├── credentials/              # cross-cutting — CredentialResolver (refs → secrets)
+│   └── fs/                       # cross-cutting — filesystem-browse service
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
-│   ├── credentials/              # encrypted credential store + master key — only place importing `keyring`
 │   ├── daemon/                   # pid_lock, port allocation
-│   └── mcp/                      # subprocess transport, HTTP upstream client
+│   ├── mcp/                      # subprocess transport, HTTP upstream client
+│   ├── agent/                    # agent config-file store
+│   ├── skill/                    # master store, source fetcher, sync engine
+│   ├── channel/                  # telegram/seatalk transports, peer repo, render
+│   ├── knowledge/                # converters, FTS5, sqlite-vec index, embeddings
+│   ├── knowledge_base/           # KB collection store
+│   ├── memory/                   # memory file store + projection
+│   ├── chat/                     # LangGraph agent, gateway tool provider, CLI agents
+│   ├── sync/                     # cross-cutting — git-repo sync workspace (not a kind)
+│   └── credentials/              # cross-cutting — encrypted credential store + master key — only place importing `keyring`
 └── surfaces/
     ├── http/
     │   ├── app.py                # composition root — wires all KindModules
@@ -110,10 +137,13 @@ backend/coffer/
     │   ├── main.py               # composition root — Typer wiring
     │   ├── resource_cmd.py
     │   └── mcp.py
+    ├── callback/                 # coffer-callback channel listener (separate process)
     └── shim/                     # coffer-mcp-shim stdio entry point
 ```
 
-Within each layer, the root files are kind-agnostic. Kind-specific code lives under named subdirectories (`domain/mcp/`, `application/mcp/`, etc.). When a new kind arrives, its directories appear at each layer without altering the kind-agnostic root files.
+Within each layer, the root files are kind-agnostic. Kind-specific code lives under named subdirectories — `mcp/`, `agent/`, `skill/`, `channel/`, `knowledge/`, `knowledge_base/`, `memory/`, `chat/` — one per kind, mirrored across `domain/`, `application/`, `infrastructure/`, and (where the kind has a surface) `surfaces/`. When a new kind arrives, its directories appear at each layer without altering the kind-agnostic root files.
+
+A handful of slices are **cross-cutting, not kinds**: `application/sync/` + `infrastructure/sync/` (multi-machine sync over a user-owned git repo), `application/credentials/` + `infrastructure/credentials/` (credential resolution and the encrypted store), and `application/fs/` (filesystem-browse). These follow the same layering rules as kinds but are not registered as `KindModule`s — they are shared services used across kinds.
 
 ### Why layer-first, not feature-first (vertical slices)?
 

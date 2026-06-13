@@ -4,7 +4,18 @@ Resource 框架是 Coffer 的核心抽象。理解它，是理解系统如何随
 
 ## 一切皆资源 kind
 
-Coffer 中每一个由用户管理的实体都是一个 **Resource（资源）**，由形如 `<kind>:<name>` 的稳定字符串标识。当前已注册两个 kind：`mcp_server` 和 `agent`（一个已注册的本地 AI 编码助手）。未来的 kind——提示词库、工具策略、凭据集——都将接入同一个框架，无需对框架本身做任何修改。
+Coffer 中每一个由用户管理的实体都是一个 **Resource（资源）**，由形如 `<kind>:<name>` 的稳定字符串标识。当前已注册六个 kind：
+
+| Kind             | 规范                                                   | 说明                                                                                             |
+| ---------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `mcp_server`     | [001-mcp-gateway](/zh/reference/specs/001-mcp-gateway/spec)       | 一个已注册的上游 MCP 服务器：传输配置、凭据引用，以及网关所需的各服务器策略。                     |
+| `agent`          | [004-agent-registry](/zh/reference/specs/004-agent-registry/spec) | 一个已注册的本地 AI 编码助手（如 Claude Code）：其配置目录、Coffer-MCP 安装状态及派生的工作区切面。 |
+| `skill`          | [005-skill-manager](/zh/reference/specs/005-skill-manager/spec)   | 一个主技能包，Coffer 将其分发到一个或多个 agent 的技能目录中。                                    |
+| `knowledge_base` | [006-knowledge-base](/zh/reference/specs/006-knowledge-base/spec) | 共享知识基底的 KB 面：任意格式上传 → markdown 真相 + grep / FTS5 / 向量检索。                     |
+| `memory`         | [007-memory](/zh/reference/specs/007-memory/spec)                 | 同一基底的 memory 面：按事实的 markdown + 重新生成的 `MEMORY.md`，在各 agent 间共享。             |
+| `channel`        | [009-channels](/zh/reference/specs/009-channels/spec)             | 一个消息通道绑定（Telegram、SeaTalk）：传输配置、凭据引用和一个默认 agent。                       |
+
+`knowledge_base` 和 `memory` 是**同一个知识基底**的两个面——磁盘上的 markdown 文件是真相之源，SQLite 是可重建的索引（[ADR-012](/zh/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)）。新的 kind 接入同一个框架，无需对框架本身做任何修改。加密凭据存储和多机同步是刻意设计的**跨切面关注点，而非 kind**：它们服务于每一个 kind，本身并不是被管理的实体。
 
 框架提供四件事，且仅此四件：
 
@@ -25,7 +36,7 @@ Resource 框架不统一调用语义。每个 kind 自行定义其能力的使�
 
 框架横跨每一层：domain 实体、数据库 schema、审计表、保留框架、接口面路由（REST API 子路由、CLI 子命令组）。如果这个抽象在第一个规范中被设计为 `mcp_server` 的专用实现，然后等第二个 kind 到来时再抽取，重构成本将不是简单的模块移动——它需要同时重建审计表、接口面路由和保留框架。「第二个 feature」时的重构将是一次重大且高风险的迁移，而非干净的模块分离。
 
-构建各 kind 独立孤岛、没有共享抽象的替代方案同样被拒绝：已经有四个及以上 kind 在高置信度的规划中，分别构建四份身份 + 生命周期 + 审计 + 接口面 CRUD，将产生更多代码和更大的漂移风险。
+构建各 kind 独立孤岛、没有共享抽象的替代方案同样被拒绝：已经有多个 kind 在高置信度的规划中（当前已注册六个），为每个 kind 分别构建身份 + 生命周期 + 审计 + 接口面 CRUD，将产生更多代码和更大的漂移风险。
 
 结果是第一个规范（`001-mcp-gateway`）在只有一个具体 kind 的情况下承担了框架的抽象开销。这被接受为已知的成本，明确以避免未来重构为收益来平衡。
 

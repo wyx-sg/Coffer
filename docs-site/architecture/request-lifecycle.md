@@ -1,10 +1,14 @@
 # Request Lifecycle
 
 ::: tip Mental model
-A tool call in Coffer follows a simple three-hop path: MCP client → daemon → upstream server. The two complexities are at the entry (the shim translates stdio to HTTP/SSE) and at the dispatch (the namespace resolver splits `filesystem__read_file` into server `filesystem` + tool `read_file`). Everything else is straightforward JSON-RPC forwarding. If you understand the namespace split and the per-session subprocess model, you understand the full lifecycle.
+Coffer now serves **several** request lifecycles, not one. The original — and still the load-bearing — path is the **MCP `tools/call`** lifecycle: MCP client → daemon → upstream server, with the shim translating stdio to HTTP/SSE at the entry and the namespace resolver splitting `filesystem__read_file` into server `filesystem` + tool `read_file` at dispatch. Alongside it run an **agent-chat turn** lifecycle, a **channel-inbound** lifecycle, and a **knowledge/memory retrieval** lifecycle. This page walks the MCP path in full detail first, then sketches the other three.
 :::
 
-## Three-step summary
+## MCP tool-call lifecycle
+
+This is one of Coffer's request lifecycles — the MCP gateway path. The remaining three are summarised at the end of the page.
+
+### Three-step summary
 
 1. **Arrival.** A tool call arrives at the daemon's `/mcp` HTTP/SSE endpoint, either directly (from the shim bridging an MCP client's stdio) or from any process with a valid `X-Coffer-Token`. The call is a JSON-RPC 2.0 `tools/call` request with a namespaced tool name, e.g. `{"method": "tools/call", "params": {"name": "filesystem__read_file", "arguments": {...}}}`.
 
@@ -185,6 +189,40 @@ A complete round-trip as seen at the shim's stdin/stdout boundary:
 
 The daemon adds no wrapper or extra fields to the upstream's success result. The error structure follows JSON-RPC 2.0 with Coffer-specific negative codes in the -32000 range.
 
+## Agent-chat-turn lifecycle
+
+The chat surface drives a different lifecycle: instead of forwarding a single JSON-RPC call to an upstream, it runs a multi-step **agent turn** that may itself call several of Coffer's own gateway tools before producing a reply. This path is specified by [spec 008](/reference/specs/008-agent-chat/spec).
+
+1. **Turn start.** A chat client (web UI or a channel) posts a user message. The `TurnOrchestrator` (`application/chat/turn_orchestrator.py`) creates or resumes the conversation, persists the user turn, and starts streaming.
+
+2. **In-process agent.** For the built-in agent, the orchestrator drives an in-process LangGraph agent (`infrastructure/chat/langgraph_agent.py`). The agent's tools are Coffer's own gateway tools, exposed to the model through the gateway tool provider (`infrastructure/chat/gateway_tool_provider.py`) — so the chat agent can call the same aggregated MCP capabilities that an external MCP client would, in-process and without a shim.
+
+3. **Approval bridging.** When the agent wants to run a tool that requires confirmation, the LangGraph run is paused at an interrupt and an approval request is streamed to the client. The client resolves it via `submit_approval`; `interrupt_turn` cancels an in-flight turn. The orchestrator translates these into LangGraph resume/cancel signals.
+
+4. **Streaming back.** Tokens, tool-call events, and approval prompts stream to the client over SSE as the run progresses; the final assistant turn is persisted on completion.
+
+**CLI-agent variant.** Instead of the in-process LangGraph agent, a chat agent may drive an **external coding-agent subprocess** (Claude Code or Codex) through `infrastructure/chat/cli_agent.py` and `infrastructure/chat/cli_providers.py`. The orchestrator seam is identical — same turn persistence, same approval and streaming contract — but the model loop runs in the external CLI process rather than in-process.
+
+## Channel-inbound lifecycle
+
+Messaging channels (Telegram, SeaTalk) deliver user messages into the **same `TurnOrchestrator` seam** as the web UI — a channel turn is indistinguishable from a UI turn once it reaches the orchestrator. The inbound transport differs per platform (per [ADR-014](/reference/adr/ADR-014-channel-adapter-framework)):
+
+- **SeaTalk (webhook).** SeaTalk delivers events only by public webhook. A separate **callback-listener process** (`coffer-callback`, spawned by the daemon while any SeaTalk channel is enabled) serves `POST /seatalk/{channel}` on a loopback port. It answers the platform's verification challenge, verifies the request signature (`sha256(body + signing_secret)`), normalises the event, and forwards it to the daemon — which feeds it into the orchestrator.
+
+- **Telegram (long-poll).** Telegram inbound runs as a long-poll loop inside the daemon (no public endpoint), normalising each update into the same inbound shape before it reaches the orchestrator.
+
+Progress is rendered from the agent's capabilities, not the adapter type: Telegram streams progress by editing one message, SeaTalk degrades to ack-then-final.
+
+## Knowledge / memory retrieval lifecycle
+
+Retrieval requests (KB search, and the `recall` / `remember` memory tools) follow a lifecycle anchored in [ADR-012](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval): **markdown files are the source of truth**, and `coffer.db` holds only a derived index.
+
+- **`grep`** — ripgrep over the raw files (zero index, language-agnostic).
+- **keyword** — SQLite **FTS5** with `MATCH … ORDER BY bm25()`.
+- **vector** — **sqlite-vec** KNN over chunk embeddings (opt-in; embeddings come from a user-configurable OpenAI-compatible endpoint).
+
+A KB search fuses the enabled engines and returns ranked chunks; `recall` reads from the memory store and `remember` writes a fact file, after which the derived FTS5/vec index is regenerated from the files. Because files are truth, the index can always be rebuilt and the user can diff/grep/edit content with ordinary tools.
+
 ---
 
-**See also:** [Spec 001: MCP Gateway](/reference/specs/001-mcp-gateway/spec), [ADR-005: Session subprocess model](/reference/adr/ADR-005-session-subprocess-model)
+**See also:** [Spec 001: MCP Gateway](/reference/specs/001-mcp-gateway/spec), [ADR-005: Session subprocess model](/reference/adr/ADR-005-session-subprocess-model), [Spec 008: Agent chat](/reference/specs/008-agent-chat/spec), [ADR-014: Channel adapter framework](/reference/adr/ADR-014-channel-adapter-framework), [ADR-012: Files as truth, SQLite retrieval](/reference/adr/ADR-012-files-as-truth-sqlite-retrieval)

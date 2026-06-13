@@ -8,7 +8,7 @@ For operational observability (structured logs, trace correlation, error envelop
 
 ## The problem this solves
 
-A developer registers twenty MCP servers and delegates tool calls to them from Claude Code, Codex, and a custom script — all simultaneously. Without accountability records, answering even basic governance questions becomes opaque: "Who disabled the `filesystem__write_file` tool — me or the UI?" "Which server's tool did Claude Code call at 2pm, and what was the outcome?" "When was this server's config last changed?" The audit log and invocation log answer these questions without requiring the user to run a separate monitoring stack.
+A developer registers a fleet of MCP servers, imports skills, builds knowledge bases, accumulates memory, runs chat conversations, pairs notification channels, and syncs it all across machines — driven from Claude Code, Codex, the UI, and custom scripts, often simultaneously. Without accountability records, answering even basic governance questions becomes opaque: "Who disabled the `filesystem__write_file` tool — me or the UI?" "Which server's tool did Claude Code call at 2pm, and what was the outcome?" "When was this server's config last changed?" "When was a credential last rotated, or the master key relocated?" The audit log and invocation log answer these questions without requiring the user to run a separate monitoring stack.
 
 Coffer's approach is deliberately lean: a pair of local database tables, not a time-series database or a log-management SaaS. All records stay on-device and within the `~/.coffer/` backup footprint.
 
@@ -27,7 +27,9 @@ Every change to any resource or capability is written to the `audit_log` table b
 
 The actor field deserves particular attention. Every surface sets it explicitly: the Typer CLI passes `X-Coffer-Actor: cli` in its HTTP calls to the daemon; REST API clients can set `X-Coffer-Actor: api` or `X-Coffer-Actor: ui`; if the header is absent, the daemon defaults to `"api"`. The daemon itself emits `system` events for automated operations like retention cleanup. This means the audit log provides an accurate picture of whether a change was initiated interactively, programmatically, or automatically.
 
-The full set of audited event types (defined as `AuditEventType` in `domain/audit.py`):
+The full set of audited event types (defined as `AuditEventType` in `domain/audit.py`), grouped by domain:
+
+**Resource & capability:**
 
 | Event                                        | Trigger                                                            |
 | -------------------------------------------- | ------------------------------------------------------------------ |
@@ -37,13 +39,92 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `resource_deleted`                           | After `delete`; includes a pre-delete config snapshot in `details` |
 | `capability_first_seen`                      | When discovery sees a capability for the first time                |
 | `capability_enabled` / `capability_disabled` | When user toggles a capability                                     |
-| `daemon_started` / `daemon_stopped`          | At daemon startup / graceful shutdown                              |
-| `token_rotated`                              | After `POST /api/v1/daemon/rotate-token`                           |
-| `retention_updated`                          | When a retention policy is changed                                 |
-| `backup_created`                             | After `POST /api/v1/daemon/backup`                                 |
-| `credential_set` / `credential_read` / `credential_deleted` | After a write / read / delete in the encrypted credential store    |
-| `credential_migrated`                        | Per ref, when a legacy keychain secret is migrated into the store  |
-| `master_key_relocated`                       | After the master key moves between file and keychain storage       |
+
+**Daemon:**
+
+| Event                               | Trigger                                  |
+| ----------------------------------- | ---------------------------------------- |
+| `daemon_started` / `daemon_stopped` | At daemon startup / graceful shutdown    |
+| `token_rotated`                     | After `POST /api/v1/daemon/rotate-token` |
+| `retention_updated`                 | When a retention policy is changed       |
+| `backup_created`                    | After `POST /api/v1/daemon/backup`       |
+
+**Credentials & master key:**
+
+| Event                                                       | Trigger                                                           |
+| ----------------------------------------------------------- | ---------------------------------------------------------------- |
+| `credential_set` / `credential_read` / `credential_deleted` | After a write / read / delete in the encrypted credential store  |
+| `credential_migrated`                                       | Per ref, when a legacy keychain secret is migrated into the store |
+| `master_key_relocated`                                      | After the master key moves between file and keychain storage     |
+| `master_key_exported` / `master_key_imported`               | Out-of-band master-key transfer to / from another machine        |
+| `keychain_set` / `keychain_read` / `keychain_deleted`       | Legacy (pre-encrypted-store) events, kept renderable for old rows |
+
+**Embedding:**
+
+| Event                      | Trigger                                     |
+| -------------------------- | ------------------------------------------- |
+| `embedding_config_updated` | When the embedding provider/model is changed |
+
+**Agent workspace:**
+
+| Event                                              | Trigger                                          |
+| -------------------------------------------------- | ------------------------------------------------ |
+| `agent_config_file_written` / `agent_config_file_deleted` | When an agent config file is written / deleted   |
+| `agent_mcp_installed` / `agent_mcp_uninstalled`    | When an MCP entry is installed / uninstalled into an agent |
+| `agent_mcp_entry_removed` / `agent_mcp_entry_adopted` | When an MCP entry is removed from / adopted by an agent |
+| `agent_plugin_toggled` / `agent_plugin_uninstalled` | When an agent plugin is toggled / uninstalled    |
+
+**Skill:**
+
+| Event                                            | Trigger                                                  |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| `skill_imported` / `skill_fetched`               | When a skill is imported locally / fetched from a source |
+| `skill_updated` / `skill_update_noop`            | When a skill update applies / is a no-op                 |
+| `skill_renamed`                                  | When a skill is renamed                                  |
+| `skill_bound` / `skill_unbound`                  | When a skill is bound to / unbound from an agent         |
+| `skill_autobind_skipped`                         | When autobind is skipped                                 |
+| `skill_relinked`                                 | When a skill link is repaired                            |
+| `skill_drift_detected`                           | When on-disk drift from the managed skill is detected    |
+| `skill_adopted` / `skill_unmanaged_deleted`      | When an unmanaged skill is adopted / a stray is deleted  |
+
+**Knowledge base:**
+
+| Event                                                      | Trigger                                        |
+| --------------------------------------------------------- | ---------------------------------------------- |
+| `kb_document_ingested` / `kb_document_updated` / `kb_document_deleted` | When a KB document is ingested / updated / deleted |
+| `kb_reindexed`                                            | After `coffer kb reindex` rebuilds the index   |
+
+**Memory:**
+
+| Event                                                    | Trigger                                                |
+| -------------------------------------------------------- | ------------------------------------------------------ |
+| `memory_added` / `memory_updated` / `memory_deleted`     | When a memory fact is added / updated / deleted        |
+| `memory_cleared`                                         | When a memory store is cleared                         |
+| `memory_projected`                                       | When memory is projected into an agent/project         |
+
+**Chat, conversation & model:**
+
+| Event                                                    | Trigger                                                |
+| -------------------------------------------------------- | ------------------------------------------------------ |
+| `conversation_created` / `conversation_deleted`          | When a conversation is created / deleted               |
+| `conversation_archived` / `conversation_unarchived`      | When a conversation is archived / unarchived           |
+| `chat_turn_completed`                                    | After a chat turn completes                            |
+| `model_created` / `model_updated` / `model_deleted`      | When a chat model definition is created / updated / deleted |
+
+**Channel:**
+
+| Event                                                    | Trigger                                                |
+| -------------------------------------------------------- | ------------------------------------------------------ |
+| `channel_pairing_issued` / `channel_paired`              | When a channel pairing code is issued / a peer pairs   |
+| `channel_notify_sent`                                    | When a notification is sent to a paired channel        |
+
+**Sync:**
+
+| Event                                                    | Trigger                                                |
+| -------------------------------------------------------- | ------------------------------------------------------ |
+| `sync_config_updated`                                    | When the sync configuration is changed                 |
+| `sync_completed`                                         | After a sync run finishes                              |
+| `sync_conflicted` / `sync_resolved`                      | When a sync run conflicts / a conflict is resolved     |
 
 Note that `credential_set` and `credential_deleted` are audited — the _fact_ that a secret was stored or removed is recorded. The secret value itself is never in the `details` payload. (The legacy `keychain_set` / `keychain_deleted` event types remain renderable for historical rows.)
 
@@ -97,14 +178,16 @@ PrunableTable(
 
 ### The retention_policies table
 
-One row per registered prunable table. Default values seeded at first daemon startup:
+One row per registered prunable policy. Default values seeded at first daemon startup:
 
-| Table             | Default  |
-| ----------------- | -------- |
-| `audit_log`       | 365 days |
-| `mcp_invocations` | 30 days  |
+| Policy                  | Action                                     | Default  |
+| ----------------------- | ------------------------------------------ | -------- |
+| `audit_log`             | Delete rows older than the window          | 365 days |
+| `mcp_invocations`       | Delete rows older than the window          | 30 days  |
+| `conversations_archive` | Auto-archive chats idle for this many days | 7 days   |
+| `conversations`         | Delete archived chats this many days after archival | 30 days |
 
-The user can change either via `PATCH /api/v1/retention/{table_name}`. Setting `retention_days` to `null` means "keep forever". Zero is forbidden. The change is audited as `retention_updated`.
+The user can change any via `PATCH /api/v1/retention/{table_name}`. Setting `retention_days` to `null` means "keep forever". Zero is forbidden. The change is audited as `retention_updated`.
 
 ### The background worker
 

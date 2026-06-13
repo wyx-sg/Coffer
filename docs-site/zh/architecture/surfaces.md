@@ -13,13 +13,30 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 
 每个接口面都通过 loopback HTTP 与守护进程通信，从 `~/.coffer/daemon.json`（权限 `0600`，仅 owner 可读）读取端口和 token。没有任何接口面持有自己的持久化状态——它们是进入守护进程有状态内核的无状态入口点。
 
-以下六个接口面均采用统一模板描述：**它是什么 · 所在进程 · 传输方式 · 生命周期 · 安全边界**。
+以下各接口面均采用统一模板描述：**它是什么 · 所在进程 · 传输方式 · 生命周期 · 安全边界**。
 
 ---
 
 ## REST API
 
-**它是什么。** 管理面。这是执行所有资源管理操作的 HTTP JSON API：注册、列出、更新、启用、禁用和删除 MCP 服务器；读取和修改能力偏好；查看审计日志和调用日志；管理保留策略；轮换守护进程认证 token；发起数据库备份。REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
+**它是什么。** 管理面。这是执行每一种资源 kind 及跨切面操作的 HTTP JSON API。它在 `/api/v1/` 下按路由组组织，每个 kind 一个家族，加上共享关注点：
+
+| 路由组                            | 涵盖内容                                                            |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `/resources`                      | 与 kind 无关的资源 CRUD、启用/禁用、生命周期。                     |
+| `/resources/mcp_server`           | MCP 能力偏好与调用日志。                                           |
+| `/agents`                         | Agent 注册表、配置文件、工作区切面、memory 投影。                  |
+| `/skills`                         | 技能主存储与各 agent 的绑定。                                      |
+| `/knowledge_bases`                | KB 文档、上传、重建索引、检索。                                    |
+| `/memory_stores`                  | Memory 事实、scope 与原生投影。                                    |
+| `/channels`                       | 通道绑定（Telegram、SeaTalk）、配对。                             |
+| `/chat`、`/models`                | Chat 会话/轮次与模型目录。                                        |
+| `/credentials`、`/settings`       | 加密凭据存储；设置含 `/settings/credentials`（主密钥存储）与 `/embedding` 配置。 |
+| `/sync`                           | 多机同步运行与配置。                                              |
+| `/fs`                             | 用于配置选择器的文件系统浏览辅助。                                |
+| `/audit`、`/retention`、`/daemon` | 审计日志、保留策略、守护进程 token/备份操作。                     |
+
+REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
 
 **所在进程。** 守护进程（`coffer-daemon`）。REST API 嵌入在 FastAPI 应用中，与守护进程不可分割。
 
@@ -47,7 +64,13 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 
 ## CLI（`coffer …`）
 
-**它是什么。** 命令行管理接口。通过 REST API 可用的每个管理操作也可以作为 `coffer` 子命令使用：`coffer mcp add`、`coffer mcp list`、`coffer mcp tool list`、`coffer mcp tool enable/disable`、`coffer audit`、`coffer retention`、`coffer daemon start/stop/status`。CLI 是 Coffer 用于脚本化工作流、基于 dotfile 的配置和没有浏览器的远程（无头）机器的主要接口。每个子命令都支持 `--json` 输出，以便机器可读集成。
+**它是什么。** 命令行管理接口。通过 REST API 可用的每个管理操作也可以作为 `coffer` 子命令使用，按 kind 与跨切面关注点分组：
+
+- **各 kind 分组：** `coffer mcp`、`coffer agent`、`coffer skill`、`coffer kb`、`coffer memory`、`coffer channel`。
+- **跨切面分组：** `coffer credentials`、`coffer sync`、`coffer chat`、`coffer model`。
+- **与 kind 无关 / 运维分组：** `coffer resource`、`coffer audit`、`coffer retention`、`coffer daemon`，以及顶级的 `coffer backup` / `coffer restore`（后者带 `--reindex` 以重建知识索引）。重建单个知识库的索引是 `coffer kb reindex`。
+
+典型命令读作 `coffer mcp add`、`coffer mcp tool enable/disable`、`coffer audit`、`coffer daemon start/stop/status`。CLI 是 Coffer 用于脚本化工作流、基于 dotfile 的配置和没有浏览器的远程（无头）机器的主要接口。每个子命令都支持 `--json` 输出，以便机器可读集成。
 
 **所在进程。** 短生命周期子进程。CLI 是一个独立的 Python 进程，作为控制台脚本入口点（`coffer`）安装到 `PATH` 上。执行一条命令后退出。在两次调用之间不保持运行。
 
@@ -73,9 +96,23 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 
 ---
 
+## 回调监听器（Callback Listener）
+
+**它是什么。** 唯一可被公网访问的接口面。它是一个独立的签名回调进程，接收来自聊天平台的入站 webhook——具体为 `POST /seatalk/{channel}`——以该通道的签名密钥校验每个请求的 SeaTalk 签名，回应 `event_verification` 挑战，并将真实事件转发给守护进程，由通道运行时处理。它之所以存在，是因为 SeaTalk 将事件推送到一个 URL，而不是让 Coffer 长轮询（Telegram 采用的模型），因此需要一个可达的 HTTP 端点（规约 009，[ADR-014](/zh/reference/adr/ADR-014-channel-adapter-framework)）。
+
+**所在进程。** 一个由守护进程启动的子进程，刻意与守护进程分离。它仅在至少有一个 SeaTalk 通道启用时运行。将其置于主守护进程之外，意味着可被公网访问的代码路径是一个小而隔离的接口面，在任何流量到达有状态内核之前先完成签名校验。
+
+**传输方式。** 在 `127.0.0.1:<callback-port>` 上的 HTTP，仅提供签名回调路径。监听器本身绑定到 loopback；来自 SeaTalk 服务器的可达性由 owner 在带外自建的**用户隧道**提供——Coffer 自己从不开放公网端口。
+
+**生命周期。** 当某个 SeaTalk 通道启用时由守护进程启动；当最后一个 SeaTalk 通道禁用时拆除。其生命周期绑定于通道状态，而非任何客户端会话。
+
+**安全边界。** 与 loopback 接口面不同，这一个接受源自机外的流量，因此其信任边界是**各通道的 SeaTalk 签名**：每个请求体在被转发前都以该通道的密钥经 `verify_seatalk_signature` 校验，未签名或签名错误的请求一律拒绝。这里的关卡不是 `X-Coffer-Token`——而是签名。
+
+---
+
 ## Web UI
 
-**它是什么。** 基于浏览器的管理界面，由[规约 002](/zh/reference/specs/002-ui-shell/spec) 规定。Web UI 提供与每个 CLI 管理操作等价的可视化操作：通过 JSON 导入注册 MCP 服务器、浏览服务器健康状态和能力列表、开/关工具/资源/提示、查看审计日志和调用历史，以及配置保留策略。信息架构反映了资源 kind 模型：侧边栏显示 `Resources`（MCP 服务器以及未来出现的 kind）和 `System`（可观测性、设置）。不显示任何「即将推出」的占位符。
+**它是什么。** 基于浏览器的管理界面，由[规约 002](/zh/reference/specs/002-ui-shell/spec) 规定。Web UI 提供与每个 CLI 管理操作等价的可视化操作：通过 JSON 导入注册 MCP 服务器、浏览服务器健康状态和能力列表、开/关工具/资源/提示、查看审计日志和调用历史，以及配置保留策略。信息架构反映了资源 kind 模型：侧边栏显示 `Resources`（已上线的 kind——MCP 服务器、Agents、Skills、Knowledge Bases、Memory、Channels）、用于直接与 agent 对话的 `Chat`，以及 `System`（可观测性，及带 Security 和 Models 子区的设置）。不显示任何「即将推出」的占位符——一个 kind 只有真正可用后才会出现。
 
 **所在进程。** 浏览器进程。在生产环境中，构建好的前端由 Tauri 桌面 shell 内嵌（`tauri.conf.json` 中的 `frontendDist`）；浏览器进程与守护进程在逻辑上是分离的。在开发模式下，Vite 开发服务器运行在 `http://localhost:5173`。所有数据都从守护进程的 REST API 获取。
 
@@ -113,6 +150,7 @@ Coffer 的每个接口面都是通向同一底层守护进程的入口点。守�
 | MCP 端点        | 守护进程         | —（即守护进程本身）         | 系统 / 手动             | 守护进程生命周期 |
 | CLI（`coffer`） | 短生命周期子进程 | Loopback HTTP               | 用户 / shell            | 每条命令         |
 | Stdio shim      | 每会话一个       | HTTP/SSE                    | MCP 客户端              | MCP 客户端会话   |
+| 回调监听器      | 守护进程启动的子进程 | Loopback HTTP（转发给守护进程） | 守护进程（SeaTalk 启用时） | 有 SeaTalk 通道启用期间 |
 | Web UI          | 浏览器标签页     | Loopback HTTP（REST）       | 用户 / 浏览器           | 浏览器标签页会话 |
 | 桌面应用        | 原生进程         | Loopback HTTP（REST + MCP） | 用户 / 操作系统自动启动 | 直到从托盘退出   |
 
