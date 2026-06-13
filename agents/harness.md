@@ -15,7 +15,6 @@ Coffer ships a checked-in control layer so the agent-facing harness is enforced,
 
 ## Skills
 
-- `/coffer-verify` — runs `make verify` and reports honestly. Use before opening a PR.
 - `/coffer-spec` — scaffolds a new SDD spec (see `agents/sdd.md`).
 
 ## How it is tested

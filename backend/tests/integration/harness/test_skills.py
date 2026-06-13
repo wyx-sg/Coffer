@@ -9,7 +9,7 @@ import pytest
 from .conftest import REPO_ROOT
 
 SKILLS_DIR = REPO_ROOT / ".claude" / "skills"
-EXPECTED = {"coffer-verify", "coffer-spec"}
+EXPECTED = {"coffer-spec"}
 
 
 def _frontmatter(md: Path) -> dict:

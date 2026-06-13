@@ -15,7 +15,6 @@ Coffer 提交了一套 checked-in 的控制层，让 agent-facing harness 被强
 
 ## Skills
 
-- `/coffer-verify` —— 跑 `make verify` 并如实汇报。开 PR 前用。
 - `/coffer-spec` —— 起一个 SDD spec（见 `agents/sdd.md`）。
 
 ## 怎么测
