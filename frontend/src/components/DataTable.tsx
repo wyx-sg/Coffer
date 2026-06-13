@@ -7,22 +7,11 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { DataTableToolbar } from "@/components/DataTableToolbar";
-import {
-  BulkBar,
-  RowSelectCell,
-  SelectAllHeadCell,
-  useTableSelection,
-} from "@/components/DataTableSelection";
+import { DataTableHead } from "@/components/DataTableHead";
+import { BulkBar, RowSelectCell, useTableSelection } from "@/components/DataTableSelection";
 import { Pagination } from "@/components/Pagination";
 import { useDefaultPageSize } from "@/lib/preferences";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 export interface Column<T> {
@@ -64,9 +53,7 @@ interface Props<T> {
   getRowDetail?: (row: T) => ReactNode;
   /** When set, a leading checkbox column + bulk action bar are rendered. */
   selection?: TableSelection<T>;
-  /** When set, rows for which this returns false are not selectable (no
-   *  checkbox; excluded from select-all and bulk actions). Default: all
-   *  selectable. Used to pin a non-deletable row (e.g. the built-in agent). */
+  /** Rows returning false get no checkbox + are excluded from bulk (default: all). */
   isSelectable?: (row: T) => boolean;
   pageSize?: number;
   emptyMessage: string;
@@ -122,9 +109,9 @@ export function DataTable<T>({
   const safePage = Math.min(page, pageCount);
   const pageRows = filtered.slice((safePage - 1) * size, safePage * size);
 
-  // Select-all spans the whole filtered set (across pages), not just this page,
-  // and only the selectable rows (a pinned row may opt out via isSelectable).
-  const filteredKeys = filtered.filter((r) => (isSelectable ? isSelectable(r) : true)).map(rowKey);
+  const canSelect = (r: T) => (isSelectable ? isSelectable(r) : true);
+  // Select-all spans the whole filtered set (across pages), selectable rows only.
+  const filteredKeys = filtered.filter(canSelect).map(rowKey);
   const allSelected = filteredKeys.length > 0 && filteredKeys.every((k) => sel.keys.has(k));
   const someSelected = !allSelected && filteredKeys.some((k) => sel.keys.has(k));
   const hasToolbar = Boolean(search) || filters.length > 0;
@@ -161,24 +148,15 @@ export function DataTable<T>({
 
       <div className="rounded-md border bg-card">
         <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              {selection ? (
-                <SelectAllHeadCell
-                  checked={allSelected}
-                  indeterminate={someSelected}
-                  ariaLabel={selection.ariaSelectAll}
-                  onToggle={() => sel.setMany(filteredKeys, !allSelected)}
-                />
-              ) : null}
-              {expandable ? <TableHead className="h-10 w-8" /> : null}
-              {columns.map((c) => (
-                <TableHead key={c.key} className={cn("h-10", c.className)}>
-                  {c.header}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
+          <DataTableHead
+            columns={columns}
+            hasSelection={Boolean(selection)}
+            expandable={expandable}
+            allSelected={allSelected}
+            someSelected={someSelected}
+            ariaSelectAll={selection?.ariaSelectAll}
+            onToggleAll={() => sel.setMany(filteredKeys, !allSelected)}
+          />
           <TableBody>
             {pageRows.length === 0 ? (
               <TableRow className="hover:bg-transparent">
@@ -204,15 +182,12 @@ export function DataTable<T>({
                       }
                     >
                       {selection ? (
-                        isSelectable && !isSelectable(row) ? (
-                          <TableCell className="w-10" />
-                        ) : (
-                          <RowSelectCell
-                            checked={sel.keys.has(key)}
-                            ariaLabel={selection.ariaSelectRow(row)}
-                            onToggle={() => sel.toggle(key)}
-                          />
-                        )
+                        <RowSelectCell
+                          selectable={canSelect(row)}
+                          checked={sel.keys.has(key)}
+                          ariaLabel={selection.ariaSelectRow(row)}
+                          onToggle={() => sel.toggle(key)}
+                        />
                       ) : null}
                       {expandable ? (
                         <TableCell className="py-3 pr-0 text-muted-foreground">
