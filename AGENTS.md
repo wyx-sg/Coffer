@@ -27,6 +27,7 @@ In order:
    - [`agents/stack.md`](./agents/stack.md) — backend (Python / FastAPI / SQLite). Includes file-size limits, layered-architecture import rules, wire-contract rule.
    - [`agents/frontend.md`](./agents/frontend.md) — frontend (React / TypeScript / Vite). State management, API layer, query keys, hooks, design-system and i18n conventions.
    - [`agents/testing.md`](./agents/testing.md) — 4 test tiers (unit / integration / contract / e2e), acceptance markers, mocking philosophy.
+   - [`agents/harness.md`](./agents/harness.md) — agent control layer: `.claude/` hooks, permissions, and repo skills.
 4. The relevant **`specs/<NNN>-<short-name>/spec.md`** — for any spec-touching work.
 
 If sources disagree: **constitution wins.** Flag inconsistency to the user.
