@@ -51,9 +51,9 @@ describe("EmbeddingSettings", () => {
   test("hides provider/model until embedding is enabled", () => {
     seed({ enabled: false });
     render(<EmbeddingSettings />, { wrapper: wrap });
-    expect(screen.queryByLabelText(/^model$/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/model id/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("switch"));
-    expect(screen.getByLabelText(/^model$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/model id/i)).toBeInTheDocument();
   });
 
   test("saving PUTs the global embedding config", async () => {

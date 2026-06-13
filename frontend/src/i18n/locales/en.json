@@ -602,7 +602,19 @@
       "heading": "Built-in agent",
       "badge": "Built-in",
       "description": "Coffer's own assistant — chat in the app without installing a CLI agent.",
-      "startChat": "Start chatting"
+      "tagline": "Coffer's own assistant — chat in the app without installing a CLI agent.",
+      "detail": {
+        "modelTitle": "Model",
+        "usesModel": "Runs on model:",
+        "noModel": "No model configured yet — set one under Settings → Models.",
+        "configureModels": "Configure models",
+        "skillsTitle": "Skills",
+        "skillsNote": "The master skills the assistant can load on demand.",
+        "mcpTitle": "MCP servers",
+        "mcpNote": "Tools from these registered MCP servers are aggregated for the assistant.",
+        "none": "None yet.",
+        "disabled": "disabled"
+      }
     },
     "namePlaceholder": "Leave blank to use the default for this type",
     "folderPicker": {

@@ -112,8 +112,12 @@ describe("AgentsPage", () => {
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
-  test("renders the welcome panel when no agents exist", () => {
+  test("renders the welcome panel when no agents and no built-in exist", () => {
     stubHooks({ data: [] });
+    // Welcome panel only when truly empty — no registry agents AND no built-in.
+    useChatAgentsMock.mockReturnValue({
+      data: undefined,
+    } as unknown as ReturnType<typeof chatHooks.useChatAgents>);
     render(<AgentsPage />, { wrapper: wrap(null) });
     expect(screen.getByText(/manage your local ai agents/i)).toBeInTheDocument();
     // The welcome panel offers the single "Add agent" next step (no standalone
@@ -130,12 +134,14 @@ describe("AgentsPage", () => {
     expect(screen.getByText(/failed to load agents/i)).toBeInTheDocument();
   });
 
-  test("surfaces the built-in Coffer Assistant with a link to /chat", () => {
+  test("surfaces the built-in Coffer Assistant as a pinned table row (no start-chat)", () => {
     stubHooks({ data: [] });
     render(<AgentsPage />, { wrapper: wrap(null) });
+    // Built-in now rides the agents table as a row, marked Built-in, with no
+    // delete and no standalone "start chatting" launcher.
     expect(screen.getByText("Coffer Assistant")).toBeInTheDocument();
-    const startChat = screen.getByRole("link", { name: /start chatting/i });
-    expect(startChat).toHaveAttribute("href", "/chat");
+    expect(screen.getByText(/built-in/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /start chatting/i })).not.toBeInTheDocument();
   });
 
   test("omits the built-in section when the chat-agents call fails", () => {

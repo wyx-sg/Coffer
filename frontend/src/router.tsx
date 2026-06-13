@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
+import { BuiltinAgentDetailPage } from "./pages/BuiltinAgentDetailPage";
 import { ChatPage } from "./pages/ChatPage";
 import { ChannelsPage } from "./pages/ChannelsPage";
 import { ChannelDetailPage } from "./pages/ChannelDetailPage";
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
       // bookmarks and links working by redirecting to the renamed path.
       { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
       { path: "agents", element: <AgentsPage /> },
+      { path: "agents/builtin", element: <BuiltinAgentDetailPage /> },
       { path: "agents/:name", element: <AgentDetailPage /> },
       { path: "channels", element: <ChannelsPage /> },
       { path: "channels/:name", element: <ChannelDetailPage /> },

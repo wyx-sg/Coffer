@@ -64,6 +64,10 @@ interface Props<T> {
   getRowDetail?: (row: T) => ReactNode;
   /** When set, a leading checkbox column + bulk action bar are rendered. */
   selection?: TableSelection<T>;
+  /** When set, rows for which this returns false are not selectable (no
+   *  checkbox; excluded from select-all and bulk actions). Default: all
+   *  selectable. Used to pin a non-deletable row (e.g. the built-in agent). */
+  isSelectable?: (row: T) => boolean;
   pageSize?: number;
   emptyMessage: string;
 }
@@ -77,6 +81,7 @@ export function DataTable<T>({
   onRowClick,
   getRowDetail,
   selection,
+  isSelectable,
   pageSize,
   emptyMessage,
 }: Props<T>) {
@@ -117,8 +122,9 @@ export function DataTable<T>({
   const safePage = Math.min(page, pageCount);
   const pageRows = filtered.slice((safePage - 1) * size, safePage * size);
 
-  // Select-all spans the whole filtered set (across pages), not just this page.
-  const filteredKeys = filtered.map(rowKey);
+  // Select-all spans the whole filtered set (across pages), not just this page,
+  // and only the selectable rows (a pinned row may opt out via isSelectable).
+  const filteredKeys = filtered.filter((r) => (isSelectable ? isSelectable(r) : true)).map(rowKey);
   const allSelected = filteredKeys.length > 0 && filteredKeys.every((k) => sel.keys.has(k));
   const someSelected = !allSelected && filteredKeys.some((k) => sel.keys.has(k));
   const hasToolbar = Boolean(search) || filters.length > 0;
@@ -198,11 +204,15 @@ export function DataTable<T>({
                       }
                     >
                       {selection ? (
-                        <RowSelectCell
-                          checked={sel.keys.has(key)}
-                          ariaLabel={selection.ariaSelectRow(row)}
-                          onToggle={() => sel.toggle(key)}
-                        />
+                        isSelectable && !isSelectable(row) ? (
+                          <TableCell className="w-10" />
+                        ) : (
+                          <RowSelectCell
+                            checked={sel.keys.has(key)}
+                            ariaLabel={selection.ariaSelectRow(row)}
+                            onToggle={() => sel.toggle(key)}
+                          />
+                        )
                       ) : null}
                       {expandable ? (
                         <TableCell className="py-3 pr-0 text-muted-foreground">
