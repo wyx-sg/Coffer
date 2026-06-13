@@ -27,13 +27,24 @@ _MANIFEST = "manifest.json"
 _RESOURCES = "resources"
 _CREDENTIALS = "credentials"
 
+#: Files that are *regenerated* from the source-of-truth files and must NOT be
+#: synced — they differ per machine (e.g. memory's ``MEMORY.md`` index lists
+#: that machine's facts), so syncing them causes spurious same-path conflicts.
+#: They are excluded from the mirror and rebuilt on import (see SyncImporter's
+#: post_import hook).
+DERIVED_INDEX_NAMES = frozenset({"MEMORY.md"})
 
-def _replace_tree(src: pathlib.Path, dst: pathlib.Path) -> None:
-    """Make ``dst`` an exact copy of ``src`` (empty when ``src`` is absent)."""
+
+def _replace_tree(
+    src: pathlib.Path, dst: pathlib.Path, exclude: frozenset[str] = frozenset()
+) -> None:
+    """Make ``dst`` a copy of ``src`` (empty when ``src`` is absent), skipping
+    any basename in ``exclude``."""
     if dst.exists():
         shutil.rmtree(dst)
     if src.exists():
-        shutil.copytree(src, dst)
+        ignore = shutil.ignore_patterns(*exclude) if exclude else None
+        shutil.copytree(src, dst, ignore=ignore)
     else:
         dst.mkdir(parents=True, exist_ok=True)
 
@@ -57,13 +68,14 @@ class Workspace:
     def mirror_trees_out(self) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
         for subdir, live_root in self._trees:
-            _replace_tree(live_root, self._root / subdir)
+            # Derived indexes never enter the workspace, so they never conflict.
+            _replace_tree(live_root, self._root / subdir, exclude=DERIVED_INDEX_NAMES)
 
     def mirror_trees_in(self) -> None:
         for subdir, live_root in self._trees:
             ws_tree = self._root / subdir
             if ws_tree.exists():
-                _replace_tree(ws_tree, live_root)
+                _replace_tree(ws_tree, live_root, exclude=DERIVED_INDEX_NAMES)
 
     # --- manifest ----------------------------------------------------------
 
