@@ -13,6 +13,8 @@ from typing import Any, Final
 
 import structlog
 
+from coffer.infrastructure.logging.eval_capture import install_eval_capture_handler
+
 _TRACE_ID: ContextVar[str | None] = ContextVar("coffer_trace_id", default=None)
 _SENTINEL: Final = "-"
 
@@ -99,3 +101,5 @@ def configure_logging(level: str = "INFO") -> None:
         cache_logger_on_first_use=True,
     )
     _attach_file_handler()
+    # Opt-in eval-capture sink (ADR-019): no-op unless COFFER_EVAL_CAPTURE is set.
+    install_eval_capture_handler()
