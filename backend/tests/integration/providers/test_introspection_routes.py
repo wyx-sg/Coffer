@@ -50,7 +50,9 @@ async def client():  # type: ignore[no-untyped-def]
 
 @pytest.mark.acceptance(spec="008-agent-chat", scenario="list a provider's models")
 async def test_list_models(client) -> None:  # type: ignore[no-untyped-def]
-    r = await client.post("/api/v1/models/list-models", json={"provider": "openai", "credential_ref": "ok"})
+    r = await client.post(
+        "/api/v1/models/list-models", json={"provider": "openai", "credential_ref": "ok"}
+    )
     assert r.status_code == 200
     assert r.json()["models"] == ["gpt-4o", "gpt-4o-mini"]
 
@@ -79,7 +81,8 @@ async def test_test_connection_ok_and_fail(client) -> None:  # type: ignore[no-u
 @pytest.mark.acceptance(spec="006-knowledge-base", scenario="test an embedding model")
 async def test_embedding_test_reports_dimension(client) -> None:  # type: ignore[no-untyped-def]
     r = await client.post(
-        "/api/v1/embedding/test", json={"provider": "openai", "model": "text-embedding-3-small", "credential_ref": "ok"}
+        "/api/v1/embedding/test",
+        json={"provider": "openai", "model": "text-embedding-3-small", "credential_ref": "ok"},
     )
     assert r.status_code == 200
     assert r.json()["ok"] is True

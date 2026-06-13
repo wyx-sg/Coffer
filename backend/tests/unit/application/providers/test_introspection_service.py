@@ -39,9 +39,7 @@ def _svc(port: ProviderIntrospectionPort, secrets=None):  # type: ignore[no-unty
 
 async def test_list_models_resolves_credential_ref() -> None:
     port = _FakePort(models=["gpt-4o", "gpt-4o-mini"])
-    result = await _svc(port).list_models(
-        provider="openai", base_url=None, credential_ref="ref-x"
-    )
+    result = await _svc(port).list_models(provider="openai", base_url=None, credential_ref="ref-x")
     assert result.models == ["gpt-4o", "gpt-4o-mini"]
     assert port.seen_key == "sk-secret"  # ref resolved server-side
 
