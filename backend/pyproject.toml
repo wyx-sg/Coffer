@@ -40,6 +40,7 @@ dependencies = [
     "langchain-anthropic>=1.4",
     "langchain-openai>=1.2",
     "langchain-ollama>=1.1",
+    "claude-agent-sdk>=0.2,<0.3",
 ]
 
 [project.optional-dependencies]
@@ -570,4 +571,5 @@ forbidden_modules = [
     "langchain_anthropic",
     "langchain_openai",
     "langchain_ollama",
+    "claude_agent_sdk",
 ]
