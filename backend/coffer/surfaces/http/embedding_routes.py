@@ -6,8 +6,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from coffer.application.embedding_config_service import EmbeddingConfigService
+from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.embedding_config import GlobalEmbeddingConfig
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.chat.dependencies import get_introspection_service
+from coffer.surfaces.http.chat.schemas import EmbeddingTestIn, TestResultOut
 from coffer.surfaces.http.dependencies import get_actor, get_embedding_config_service
 from coffer.surfaces.http.schemas import EmbeddingConfigOut, EmbeddingConfigUpdate
 
@@ -57,3 +60,21 @@ async def update_config(
         actor=actor,
     )
     return _to_out(saved)
+
+
+@router.post("/test", response_model=TestResultOut)
+async def test_embedding(
+    body: EmbeddingTestIn,
+    svc: ModelIntrospectionService = Depends(get_introspection_service),  # noqa: B008
+) -> TestResultOut:
+    """Probe an embedding provider; ok=true reports the returned dimension.
+
+    Model listing reuses ``POST /api/v1/models/list-models`` (same providers).
+    """
+    result = await svc.test_embedding(
+        provider=body.provider,
+        model=body.model,
+        base_url=body.base_url,
+        credential_ref=body.credential_ref,
+    )
+    return TestResultOut(ok=result.ok, message=result.message, detail=result.detail)

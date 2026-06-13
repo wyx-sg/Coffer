@@ -193,6 +193,13 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 - **When** the user opens its detail view (UI or `coffer kb describe`),
 - **Then** they see document count, chunk count, the indexed retrieval modes, and the on-disk byte size of `knowledge/<name>/`.
 
+### Scenario: test an embedding model
+
+- **Given** an embedding provider, model id, and (where required) credential ref,
+- **When** the user tests the embedding model,
+- **Then** Coffer requests one embedding and reports success with the returned
+  vector dimension, or a humanized failure message, without persisting anything.
+
 > **Deferred to future test work** (frontend Playwright + full-CLI e2e): create/upload/search/delete a KB through the desktop app; CLI covers every desktop operation; CLI search/grep return machine-readable JSON. Listed for completeness; `make verify-acceptance` does not gate on them.
 
 ## Requirements

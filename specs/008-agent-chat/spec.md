@@ -473,6 +473,22 @@ referenced by at least one test marked
 - **Then** the assistant message records token usage and the audit log contains
   the completed turn with actor `agent`.
 
+### Scenario: list a provider's models
+
+- **Given** the user is adding or editing a model and has entered a provider
+  (plus base URL / credential ref where the provider needs them),
+- **When** they fetch the provider's models,
+- **Then** Coffer returns the model ids the provider exposes for selection, and
+  if none can be listed it returns an empty list with a message so the user can
+  still type a model id manually.
+
+### Scenario: test a model connection
+
+- **Given** a model's provider, model id, and (where required) credential ref,
+- **When** the user tests the connection,
+- **Then** Coffer makes a minimal request to the provider and reports success or
+  a humanized failure message, without persisting anything.
+
 ## Requirements
 
 ### Functional Requirements
