@@ -70,3 +70,17 @@ def test_block_dangerous_bash_allows_safe(command: str) -> None:
     proc = run_hook("block_dangerous_bash.py", {"tool_name": "Bash", "tool_input": {"command": command}})
     assert proc.returncode == 0, proc.stderr
     assert hook_json(proc) == {}  # no decision -> normal permission flow
+
+
+def test_session_context_reports_branch() -> None:
+    proc = run_hook("session_context.py", {"hook_event_name": "SessionStart"})
+    assert proc.returncode == 0, proc.stderr
+    out = hook_json(proc)
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "branch" in ctx.lower()  # human-readable branch line is present
+
+
+def test_session_context_never_blocks_outside_git(tmp_path: Path) -> None:
+    proc = run_hook("session_context.py", {"hook_event_name": "SessionStart"}, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr  # non-git cwd must not error
