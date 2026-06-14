@@ -382,6 +382,24 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user disables the follow switch,
 - **Then** every currently delivered skill remains as an explicit per-skill binding with its link intact, and subsequent master-store additions are no longer auto-delivered.
 
+### Scenario: deliver a skill to OpenCode under skills/
+
+- **Given** a registered OpenCode agent and an imported master skill,
+- **When** the skill is delivered to the agent,
+- **Then** it lands at `<config_dir>/skills/<name>` (with its `SKILL.md`) resolving to the canonical master folder.
+
+### Scenario: deliver a skill to OpenClaw under workspace/skills/
+
+- **Given** a registered OpenClaw agent and an imported master skill,
+- **When** the skill is delivered to the agent,
+- **Then** it lands at `<config_dir>/workspace/skills/<name>` (resolving to the master folder) and not at the flat `skills/` location.
+
+### Scenario: enabling a skill for a non-folder-delivery agent fails cleanly
+
+- **Given** a registered agent whose skill-delivery mode is not folder-based (e.g. Cursor or Hermes),
+- **When** the user enables a skill for that agent,
+- **Then** the request is rejected with `unprocessable_entity` (422) before any filesystem write, and follow-driven auto-delivery skips the agent without error.
+
 ## Requirements
 
 ### Functional Requirements

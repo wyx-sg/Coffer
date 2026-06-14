@@ -532,6 +532,42 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user writes back content carrying the fingerprint from the earlier read,
 - **Then** the write is rejected with `conflict` (409) and the on-disk file is unchanged; re-reading yields a fresh fingerprint that allows the write.
 
+### Scenario: list OpenCode plugins
+
+- **Given** a registered OpenCode agent whose `opencode.json` carries a `plugin` array,
+- **When** the user lists its plugins,
+- **Then** Coffer returns one entry per array member with no parse errors.
+
+### Scenario: toggle an OpenCode plugin
+
+- **Given** a registered OpenCode agent with a plugin enabled in its `plugin` array,
+- **When** the user disables that plugin,
+- **Then** the plugin is removed from the `plugin` array while sibling keys in `opencode.json` are preserved.
+
+### Scenario: uninstall an OpenCode plugin
+
+- **Given** a registered OpenCode agent with a plugin in its `plugin` array,
+- **When** the user uninstalls that plugin,
+- **Then** the plugin is removed from the `plugin` array.
+
+### Scenario: list + toggle OpenClaw plugins
+
+- **Given** a registered OpenClaw agent whose `openclaw.json` carries a `plugins` block with entries, an allow-list, and a deny-list,
+- **When** the user lists plugins and then enables a denied one,
+- **Then** the listing reflects each plugin's enabled state, and the toggle updates the block so the plugin reads as enabled.
+
+### Scenario: list Cursor extensions read-only
+
+- **Given** a registered Cursor agent with installed extensions,
+- **When** the user lists its plugins and then attempts to toggle or uninstall one,
+- **Then** the extensions are listed, the toggle is rejected with `unprocessable_entity` (422), the uninstall is rejected with `unprocessable_entity` (422), and the extensions file is never written.
+
+### Scenario: Hermes has no plugin facet
+
+- **Given** a registered Hermes agent (whose plugin mechanism is MCP),
+- **When** the user lists plugins and then attempts to toggle or uninstall one,
+- **Then** the listing is empty and both the toggle and uninstall are rejected with `unprocessable_entity` (422).
+
 ## Requirements
 
 ### Functional Requirements

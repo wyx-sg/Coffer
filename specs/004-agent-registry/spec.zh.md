@@ -534,6 +534,42 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 - **When** 用户携带先前读取的指纹写回内容，
 - **Then** 写入以 `conflict`（409）拒绝且磁盘文件不变；重新读取得到允许写入的新指纹。
 
+### Scenario: list OpenCode plugins
+
+- **Given** 一个已注册的 OpenCode agent，其 `opencode.json` 带有 `plugin` 数组，
+- **When** 用户列出其插件，
+- **Then** Coffer 为数组中每个成员返回一个条目且无解析错误。
+
+### Scenario: toggle an OpenCode plugin
+
+- **Given** 一个已注册的 OpenCode agent，其 `plugin` 数组中启用了某插件，
+- **When** 用户禁用该插件，
+- **Then** 该插件从 `plugin` 数组中移除，同时 `opencode.json` 中的同级键保持不变。
+
+### Scenario: uninstall an OpenCode plugin
+
+- **Given** 一个已注册的 OpenCode agent，其 `plugin` 数组中存在某插件，
+- **When** 用户卸载该插件，
+- **Then** 该插件从 `plugin` 数组中移除。
+
+### Scenario: list + toggle OpenClaw plugins
+
+- **Given** 一个已注册的 OpenClaw agent，其 `openclaw.json` 的 `plugins` 块带有条目、允许列表与拒绝列表，
+- **When** 用户列出插件并随后启用一个被拒绝的插件，
+- **Then** 列表反映各插件的启用状态，切换更新该块使该插件读为已启用。
+
+### Scenario: list Cursor extensions read-only
+
+- **Given** 一个已注册的 Cursor agent，带有已安装扩展，
+- **When** 用户列出其插件并随后尝试切换或卸载某个，
+- **Then** 扩展被列出，切换以 `unprocessable_entity`（422）拒绝，卸载以 `unprocessable_entity`（422）拒绝，且扩展文件从不被写入。
+
+### Scenario: Hermes has no plugin facet
+
+- **Given** 一个已注册的 Hermes agent（其插件机制即 MCP），
+- **When** 用户列出插件并随后尝试切换或卸载某个，
+- **Then** 列表为空，切换与卸载均以 `unprocessable_entity`（422）拒绝。
+
 ## Requirements
 
 ### Functional Requirements

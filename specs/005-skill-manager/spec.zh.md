@@ -384,6 +384,24 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **When** 用户关闭跟随开关，
 - **Then** 每个当前已投递的 skill 都保留为显式逐 skill binding 且链接完好，后续主库新增不再自动投递。
 
+### Scenario: deliver a skill to OpenCode under skills/（投递到 OpenCode 的 skills/）
+
+- **Given** 一个已注册的 OpenCode agent 和一个已导入的主库 skill，
+- **When** 该 skill 被投递给该 agent，
+- **Then** 它落在 `<config_dir>/skills/<name>`（含其 `SKILL.md`）并解析到规范的主库文件夹。
+
+### Scenario: deliver a skill to OpenClaw under workspace/skills/（投递到 OpenClaw 的 workspace/skills/）
+
+- **Given** 一个已注册的 OpenClaw agent 和一个已导入的主库 skill，
+- **When** 该 skill 被投递给该 agent，
+- **Then** 它落在 `<config_dir>/workspace/skills/<name>`（解析到主库文件夹），而不在扁平的 `skills/` 位置。
+
+### Scenario: enabling a skill for a non-folder-delivery agent fails cleanly（为非文件夹投递的 agent 启用 skill 干净失败）
+
+- **Given** 一个已注册的 agent，其 skill 投递模式不是基于文件夹（如 Cursor 或 Hermes），
+- **When** 用户为该 agent 启用某 skill，
+- **Then** 请求在任何文件系统写入之前以 `unprocessable_entity`（422）拒绝，且跟随驱动的自动投递跳过该 agent 而不报错。
+
 ## Requirements
 
 ### Functional Requirements
