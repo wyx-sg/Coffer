@@ -62,6 +62,10 @@ class ClaudeSdkProvider:
         stored: dict[str, Any] = {"cwd": str(pathlib.Path(cwd).expanduser())}
         if isinstance(agent_config.get("permission_mode"), str):
             stored["permission_mode"] = agent_config["permission_mode"]
+        # Persist the model so a chat-chosen model reaches the SDK; without this
+        # the option was always None and the CLI always picked the model itself.
+        if isinstance(agent_config.get("model"), str):
+            stored["model"] = agent_config["model"]
         await self._conversations.set_agent_config(conversation_id, stored)
 
     async def build_adapter(self, conversation_id: str) -> AgentAdapter:

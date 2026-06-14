@@ -23,9 +23,11 @@ from coffer.application.audit_service import AuditService
 from coffer.application.channel.conversation_spec import resolve_conversation_spec
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import (
+    AgentCatalogPort,
     ChannelAdapter,
     ChannelPeer,
     ChannelPeerRepoPort,
+    ModelCatalogPort,
 )
 from coffer.application.channel.turn_render import PendingApproval, TurnRenderer
 from coffer.application.chat.ports import ApprovalDecision
@@ -36,6 +38,7 @@ from coffer.domain.channel.envelopes import (
     parse_approval_value,
 )
 from coffer.domain.chat.errors import (
+    AgentConfigRejected,
     ApprovalNotFound,
     ConversationNotFound,
     TurnInProgress,
@@ -67,6 +70,14 @@ class ConversationPort(Protocol):
     ) -> Any: ...
 
     async def get_conversation(self, conversation_id: str) -> Any: ...
+
+    async def set_conversation_model(
+        self, conversation_id: str, *, model_id: str | None
+    ) -> Any: ...
+
+    async def get_agent_config(self, conversation_id: str) -> dict[str, Any]: ...
+
+    async def set_agent_config(self, conversation_id: str, config: dict[str, Any]) -> None: ...
 
 
 class TurnPort(Protocol):
@@ -119,6 +130,7 @@ class InboundProcessor:
         turns: TurnPort,
         audit: AuditService,
         agents: AgentCatalogPort,
+        models: ModelCatalogPort,
     ) -> None:
         self._peers = peers
         self._pairing = pairing
@@ -126,6 +138,7 @@ class InboundProcessor:
         self._turns = turns
         self._audit = audit
         self._agents = agents
+        self._models = models
         self._bindings: dict[str, ChannelBinding] = {}
         self._sessions: dict[str, _Session] = {}
 
@@ -287,6 +300,8 @@ class InboundProcessor:
             await self._cmd_agent(binding, peer, text)
         elif command == "/cwd":
             await self._cmd_cwd(binding, peer, text)
+        elif command == "/model":
+            await self._cmd_model(binding, peer, text)
         elif command == "/stop":
             # The turn that is actually draining wins over the peer's bound
             # conversation: after ``/new`` rebinds the peer, a turn can still be
@@ -362,6 +377,53 @@ class InboundProcessor:
         await self._open_and_report(
             binding, replace(peer, preferred_workspace=name), f"📁 Switched to workspace '{name}'."
         )
+
+    # -- parametric switch (/model: same conversation, next turn) ----------------
+
+    async def _cmd_model(self, binding: ChannelBinding, peer: ChannelPeer, text: str) -> None:
+        # /model targets the active conversation (created on first contact). The
+        # model is re-read each turn, so the switch needs no new conversation.
+        try:
+            conversation_id = await self._ensure_conversation(binding, peer)
+        except CofferError as e:
+            await self._safe_send(
+                binding, peer.chat_id, self._explain_conversation_error(binding, e)
+            )
+            return
+        conv = await self._conversations.get_conversation(conversation_id)
+        builtin = conv.agent_key == "builtin"
+        parts = text.split()
+        if len(parts) < 2:
+            if builtin:
+                current = conv.model_id or "(default)"
+                available = ", ".join(n for _id, n in self._models.list_models()) or "(none)"
+                await self._safe_send(
+                    binding, peer.chat_id, f"Model: {current}\nAvailable: {available}"
+                )
+            else:
+                cfg = await self._conversations.get_agent_config(conversation_id)
+                current = cfg.get("model") or "(CLI default)"
+                await self._safe_send(
+                    binding, peer.chat_id, f"Model: {current}\n(passed through to the agent's CLI)"
+                )
+            return
+        name = parts[1]
+        if builtin:
+            model_id = self._models.resolve(name)
+            if model_id is None:
+                available = ", ".join(n for _id, n in self._models.list_models()) or "(none)"
+                await self._safe_send(
+                    binding, peer.chat_id, f"Unknown model '{name}'. Available: {available}"
+                )
+                return
+            await self._conversations.set_conversation_model(conversation_id, model_id=model_id)
+        else:
+            # Bridged agents: raw passthrough; we do not own the CLI's model
+            # namespace, so a bad name surfaces as the CLI's own error next turn.
+            cfg = await self._conversations.get_agent_config(conversation_id)
+            cfg["model"] = name
+            await self._conversations.set_agent_config(conversation_id, cfg)
+        await self._safe_send(binding, peer.chat_id, f"🧠 Model set to '{name}' for the next turn.")
 
     async def _open_and_report(
         self, binding: ChannelBinding, peer: ChannelPeer, success: str

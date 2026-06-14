@@ -212,6 +212,22 @@ class FakeChannelAdapter:
         self.resolved.append((chat_id, message_id, outcome_text))
 
 
+class FakeModelCatalog:
+    """In-memory ModelCatalogPort: maps a chat-typed name to a registry id."""
+
+    def __init__(self) -> None:
+        self._by_name: dict[str, str] = {}
+
+    def add(self, name: str, model_id: str) -> None:
+        self._by_name[name] = model_id
+
+    def resolve(self, name: str) -> str | None:
+        return self._by_name.get(name)
+
+    def list_models(self) -> list[tuple[str, str]]:
+        return [(model_id, name) for name, model_id in self._by_name.items()]
+
+
 class StubListenerController:
     """Recording ``ListenerControllerPort`` (no real child process)."""
 
@@ -286,6 +302,7 @@ class ChannelEnv:
     pairing: PairingManager
     provider: ScriptedAgentProvider
     registry: AgentProviderRegistry
+    models: FakeModelCatalog
     chat: ChatService
     orchestrator: TurnOrchestrator
     processor: InboundProcessor
@@ -387,6 +404,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         audit=audit,
     )
     orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, audit=audit)
+    models = FakeModelCatalog()
     processor = InboundProcessor(
         peers=peers,
         pairing=pairing,
@@ -394,6 +412,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         turns=orchestrator,
         audit=audit,
         agents=registry,
+        models=models,
     )
 
     created_adapters: list[FakeChannelAdapter] = []
@@ -438,6 +457,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         pairing=pairing,
         provider=provider,
         registry=registry,
+        models=models,
         chat=chat,
         orchestrator=orchestrator,
         processor=processor,

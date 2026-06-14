@@ -114,6 +114,52 @@ async def test_new_reuses_sticky_agent(env: ChannelEnv) -> None:
     assert conv.agent_key == "codex"  # /new kept the sticky agent
 
 
+# -- /model (parametric: same conversation, next turn) -------------------------
+
+
+async def test_model_switch_for_builtin_sets_conversation_model(env: ChannelEnv) -> None:
+    env.models.add("opus", "model-opus-id")
+    resource, adapter = await env.paired_channel()
+
+    await env.processor.on_message(inbound("tg", "owner", "/model opus"))
+    await wait_until(lambda: adapter.texts())
+
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    conv = await env.chat.get_conversation(peer.active_conversation_id)
+    assert conv.model_id == "model-opus-id"  # builtin → registry override
+
+
+async def test_model_rejects_unknown_builtin_model(env: ChannelEnv) -> None:
+    resource, adapter = await env.paired_channel()
+
+    await env.processor.on_message(inbound("tg", "owner", "/model ghost"))
+
+    assert any("ghost" in t for t in adapter.texts())
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    if peer.active_conversation_id is not None:
+        conv = await env.chat.get_conversation(peer.active_conversation_id)
+        assert conv.model_id is None
+
+
+async def test_model_switch_for_bridged_agent_passes_through_to_agent_config(
+    env: ChannelEnv,
+) -> None:
+    env.add_agent("codex", reply="ok")
+    resource, adapter = await env.paired_channel()
+    await env.processor.on_message(inbound("tg", "owner", "/agent codex"))
+    await wait_until(lambda: adapter.texts())
+
+    await env.processor.on_message(inbound("tg", "owner", "/model gpt-5-codex"))
+    await wait_until(lambda: any("gpt-5-codex" in t for t in adapter.texts()))
+
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    cfg = await env.chat.get_agent_config(peer.active_conversation_id)
+    assert cfg["model"] == "gpt-5-codex"  # bridged → raw passthrough
+
+
 async def test_status_reports_agent_and_workspace(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     adapter = env.bind(resource, workspaces={"proj": "/srv/proj"})

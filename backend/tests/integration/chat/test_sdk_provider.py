@@ -204,6 +204,26 @@ async def test_init_conversation_omits_permission_mode_when_absent(tmp_path) -> 
     await engine.dispose()
 
 
+@pytest.mark.asyncio
+async def test_init_conversation_persists_model_and_adapter_passes_it(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The model in agent_config is persisted (previously dropped) and reaches
+    the SDK options, so a chat-chosen model actually takes effect."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, captured = _make_factory(_simple_messages())
+    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
+
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path), "model": "opus"})
+    stored = await repo.get_agent_config(conv.id)
+    assert stored["model"] == "opus"
+
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+    assert captured[0].model == "opus"
+
+    await engine.dispose()
+
+
 # ---------------------------------------------------------------------------
 # build_adapter
 # ---------------------------------------------------------------------------

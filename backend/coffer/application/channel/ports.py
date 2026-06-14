@@ -111,6 +111,16 @@ class AgentCatalogPort(Protocol):
     def display_name(self, agent_key: str) -> str | None: ...
 
 
+class ModelCatalogPort(Protocol):
+    """The slice of the model registry the channel core needs for ``/model`` on
+    the builtin agent: resolve a chat-typed name to a registry model id and list
+    the choices. Bridged agents bypass this (raw passthrough to the CLI)."""
+
+    def resolve(self, name: str) -> str | None: ...
+
+    def list_models(self) -> list[tuple[str, str]]: ...
+
+
 @runtime_checkable
 class EventIngestAdapter(Protocol):
     """An adapter that receives platform events pushed from outside the

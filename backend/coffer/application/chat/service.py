@@ -212,6 +212,15 @@ class ChatService:
         await self.get_conversation(conversation_id)  # existence check
         return await self._conversations.set_model(conversation_id, model_id)
 
+    async def get_agent_config(self, conversation_id: str) -> dict[str, Any]:
+        """The provider-private agent config (cwd, session id, model) for a
+        conversation — used by the channel layer's ``/model`` passthrough."""
+        return await self._conversations.get_agent_config(conversation_id)
+
+    async def set_agent_config(self, conversation_id: str, config: dict[str, Any]) -> None:
+        """Persist the provider-private agent config for a conversation."""
+        await self._conversations.set_agent_config(conversation_id, config)
+
     async def archive_conversation(
         self, conversation_id: str, *, actor: str = "user"
     ) -> Conversation:
