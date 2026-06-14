@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+import yaml
+
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import ConfigFileFormatInvalid, ConfigFileNotAllowed
 
@@ -34,6 +36,7 @@ class ConfigFileFormat(StrEnum):
 
     JSON = "json"
     TOML = "toml"
+    YAML = "yaml"
     MARKDOWN = "markdown"
     TEXT = "text"
 
@@ -187,4 +190,9 @@ def validate_content(fmt: ConfigFileFormat, text: str) -> None:
             tomllib.loads(text)
         except tomllib.TOMLDecodeError as e:
             raise ConfigFileFormatInvalid("toml", str(e)) from e
+    elif fmt is ConfigFileFormat.YAML:
+        try:
+            yaml.safe_load(text)
+        except yaml.YAMLError as e:
+            raise ConfigFileFormatInvalid("yaml", str(e)) from e
     # markdown / text: nothing to validate.
