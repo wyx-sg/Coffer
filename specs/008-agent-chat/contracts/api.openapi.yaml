@@ -458,6 +458,24 @@ components:
           format: date-time
           nullable: true
           description: Null for an active conversation; the instant it was archived otherwise.
+        origin:
+          type: string
+          enum: [web, channel]
+          default: web
+          description: Where the thread was opened from (ADR-021) — a Vault Console draft or an IM channel.
+        peer:
+          nullable: true
+          description: The IM peer driving a channel-origin conversation; null for web threads.
+          allOf:
+            - $ref: '#/components/schemas/ConversationPeerOut'
+
+    ConversationPeerOut:
+      type: object
+      required: [chat_id, display_name, channel]
+      properties:
+        chat_id: { type: string }
+        display_name: { type: string }
+        channel: { type: string, description: The channel resource name. }
 
     ConversationListOut:
       type: object

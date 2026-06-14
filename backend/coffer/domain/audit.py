@@ -81,7 +81,7 @@ class AuditEventType(StrEnum):
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"
     CHANNEL_NOTIFY_SENT = "channel_notify_sent"
-    # spec 009-channels — entrypoint differentiation (ADR-021)
+    # spec 009-channels — entrypoint differentiation (ADR-023)
     CHANNEL_TURN_STARTED = "channel_turn_started"
     CHANNEL_APPROVAL_RESOLVED = "channel_approval_resolved"
     # spec 010-sync

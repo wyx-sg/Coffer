@@ -1,6 +1,6 @@
-# ADR-021：Channel 入口差异化层
+# ADR-023：Channel 入口差异化层
 
-> English: [ADR-021-channel-entrypoint-differentiation.md](./ADR-021-channel-entrypoint-differentiation.md)
+> English: [ADR-023-channel-entrypoint-differentiation.md](./ADR-023-channel-entrypoint-differentiation.md)
 
 **状态**：已接受
 **Spec**：[009-channels](../../specs/009-channels/spec.zh.md)

@@ -51,7 +51,7 @@
     "agents": "Agent",
     "channels": "渠道",
     "audit": "审计日志",
-    "chat": "对话"
+    "chat": "金库控制台"
   },
   "resources": {
     "title": "MCP 服务器",
@@ -1123,7 +1123,8 @@
       "archivedEmpty": "没有已归档的对话",
       "filterLabel": "筛选对话",
       "filterActive": "活跃",
-      "filterArchived": "归档"
+      "filterArchived": "归档",
+      "viaChannel": "来自 {{channel}}"
     },
     "thread": {
       "empty": "发送消息开始对话。",
@@ -1182,6 +1183,20 @@
       "allow": "允许",
       "deny": "拒绝"
     }
+  },
+  "history": {
+    "title": "历史记录",
+    "open": "搜索历史",
+    "close": "关闭历史",
+    "back": "返回结果",
+    "reindex": "重建索引",
+    "reindexed": "已重建 {{indexed}} 个会话的索引。",
+    "searchPlaceholder": "搜索所有对话记录…",
+    "searchAria": "搜索历史",
+    "prompt": "跨所有 Agent 检索过往会话。",
+    "noResults": "没有匹配的会话。",
+    "loadFailed": "加载该会话失败。",
+    "emptySession": "该会话没有对话内容。"
   },
   "channels": {
     "title": "消息渠道",

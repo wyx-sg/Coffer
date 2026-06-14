@@ -140,6 +140,10 @@ class ChatService:
         agent_key: str = "builtin",
         agent_config: dict[str, Any] | None = None,
         actor: str = "user",
+        origin: str = "web",
+        channel_name: str | None = None,
+        peer_chat_id: str | None = None,
+        peer_display_name: str | None = None,
     ) -> Conversation:
         """Create a conversation for the named agent.
 
@@ -148,6 +152,10 @@ class ChatService:
         created, the agent's provider validates and persists its ``agent_config``
         via ``init_conversation``; if that fails the row is rolled back so an
         invalid configuration leaves nothing half-created.
+
+        ``origin`` and the ``peer_*``/``channel_name`` fields (ADR-021) record
+        where the thread was opened from: ``"web"`` for a Vault Console draft,
+        ``"channel"`` with the IM peer's identity for one a channel drives.
         """
         provider = self._registry.get(agent_key)  # raises UnknownAgent (-> 400)
 
@@ -159,6 +167,10 @@ class ChatService:
             model_id=None,
             created_at=now,
             updated_at=now,
+            origin=origin,
+            channel_name=channel_name,
+            peer_chat_id=peer_chat_id,
+            peer_display_name=peer_display_name,
         )
         created = await self._conversations.create(conv)
 

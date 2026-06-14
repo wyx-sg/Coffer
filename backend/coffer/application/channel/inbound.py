@@ -57,7 +57,15 @@ class ConversationPort(Protocol):
     """The slice of the chat platform's conversation service we use."""
 
     async def create_conversation(
-        self, *, agent_key: str, agent_config: dict[str, Any] | None, actor: str
+        self,
+        *,
+        agent_key: str,
+        agent_config: dict[str, Any] | None,
+        actor: str,
+        origin: str = "web",
+        channel_name: str | None = None,
+        peer_chat_id: str | None = None,
+        peer_display_name: str | None = None,
     ) -> Any: ...
 
     async def get_conversation(self, conversation_id: str) -> Any: ...

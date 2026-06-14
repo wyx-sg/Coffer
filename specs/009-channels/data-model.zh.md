@@ -69,7 +69,7 @@ Workspace: { name: str, path: str (绝对路径) }
 channel 默认值。
 
 迁移：`20260612_0015_channel_tables.py`（创建 + 对称的 downgrade）；
-`20260614_0021_channel_peer_differentiation.py` 增加上述三个可空列。模型
+`20260614_0022_channel_peer_differentiation.py` 增加上述三个可空列。模型
 模块由 `migrations/env.py` import，因此 Alembic 能看到其 metadata。
 
 ## 内存态（从不持久化）

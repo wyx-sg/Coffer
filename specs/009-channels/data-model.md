@@ -74,7 +74,7 @@ peer paired before this revision degrades gracefully: a null sender id means
 the chat-id-only gate, null preferences mean the channel defaults.
 
 Migrations: `20260612_0015_channel_tables.py` (create + symmetric downgrade);
-`20260614_0021_channel_peer_differentiation.py` adds the three nullable
+`20260614_0022_channel_peer_differentiation.py` adds the three nullable
 columns above. The model module is imported by `migrations/env.py` so Alembic
 sees the metadata.
 

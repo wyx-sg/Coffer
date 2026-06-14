@@ -21,7 +21,15 @@ if TYPE_CHECKING:
 
 class _ConversationPort(Protocol):
     async def create_conversation(
-        self, *, agent_key: str, agent_config: dict[str, Any] | None, actor: str
+        self,
+        *,
+        agent_key: str,
+        agent_config: dict[str, Any] | None,
+        actor: str,
+        origin: str = "web",
+        channel_name: str | None = None,
+        peer_chat_id: str | None = None,
+        peer_display_name: str | None = None,
     ) -> Any: ...
 
     async def get_conversation(self, conversation_id: str) -> Any: ...
@@ -44,7 +52,13 @@ async def open_conversation(
         preferred_workspace=peer.preferred_workspace,
     )
     conv = await conversations.create_conversation(
-        agent_key=spec.agent_key, agent_config=spec.agent_config, actor="channel"
+        agent_key=spec.agent_key,
+        agent_config=spec.agent_config,
+        actor="channel",
+        origin="channel",
+        channel_name=binding.name,
+        peer_chat_id=peer.chat_id,
+        peer_display_name=peer.display_name,
     )
     await peers.set_active_conversation(binding.resource_id, conv.id)
     return str(conv.id)

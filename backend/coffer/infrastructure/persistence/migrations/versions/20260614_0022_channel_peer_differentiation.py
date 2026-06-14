@@ -1,7 +1,7 @@
-"""channel_peers: sender identity + sticky preferences (ADR-021)
+"""channel_peers: sender identity + sticky preferences (ADR-023)
 
-Revision ID: 0021
-Revises: 0020
+Revision ID: 0022
+Revises: 0021
 Create Date: 2026-06-14
 
 Adds the paired sender's identity (for the sender-aware owner gate) and the
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 from alembic import op
 from sqlalchemy import inspect
 
-revision: str = "0021"
-down_revision: str | None = "0020"
+revision: str = "0022"
+down_revision: str | None = "0021"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

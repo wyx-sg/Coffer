@@ -1,6 +1,6 @@
-# ADR-021: Channel Entrypoint Differentiation Layer
+# ADR-023: Channel Entrypoint Differentiation Layer
 
-> 中文版: [ADR-021-channel-entrypoint-differentiation.zh.md](./ADR-021-channel-entrypoint-differentiation.zh.md)
+> 中文版: [ADR-023-channel-entrypoint-differentiation.zh.md](./ADR-023-channel-entrypoint-differentiation.zh.md)
 
 **Status**: Accepted
 **Spec**: [009-channels](../../specs/009-channels/spec.md)

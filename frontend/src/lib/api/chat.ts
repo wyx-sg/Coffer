@@ -39,6 +39,13 @@ export interface MessageListOut {
   messages: Message[];
 }
 
+/** The IM peer behind a channel-originated conversation (ADR-021). */
+export interface ConversationPeer {
+  chat_id: string;
+  display_name: string;
+  channel: string;
+}
+
 export interface Conversation {
   id: string;
   agent_key: string;
@@ -48,6 +55,10 @@ export interface Conversation {
   updated_at: string;
   /** Null for an active conversation; an ISO timestamp once archived. */
   archived_at?: string | null;
+  /** Where the conversation started: the web console or an IM channel. */
+  origin?: "web" | "channel";
+  /** The paired IM peer; non-null only when origin === "channel". */
+  peer?: ConversationPeer | null;
 }
 
 export interface ConversationListOut {
