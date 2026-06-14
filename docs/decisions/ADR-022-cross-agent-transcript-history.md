@@ -2,9 +2,17 @@
 
 > 中文版: [ADR-022-cross-agent-transcript-history.zh.md](./ADR-022-cross-agent-transcript-history.zh.md)
 
-- **Status:** Accepted
+- **Status:** Superseded (2026-06-14)
 - **Spec:** [007-memory](../../specs/007-memory/spec.md) (extension — no new spec number), surfaced in [008-agent-chat](../../specs/008-agent-chat/spec.md) via [ADR-021](./ADR-021-chat-as-vault-console.md)
 - **Related:** [ADR-020](./ADR-020-transcript-distillation.md) (transcript distillation — partially supersedes its Alternative B), [ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md) (files-as-truth + SQLite retrieval), [ADR-016](./ADR-016-multi-machine-sync.md) (multi-machine sync), Spec 004 (read-only workspace invariant)
+
+> **Superseded (2026-06-14).** The raw cross-agent transcript browse/search
+> surface described here has been removed. Managing or sharing raw chat
+> transcripts across heterogeneous agents proved to carry little value: only
+> **distilled memory** ([ADR-020](./ADR-020-transcript-distillation.md)) is
+> shared, so a project can continue on another machine through its facts rather
+> than its raw conversations. The distillation→memory pipeline stays intact;
+> this document is kept as a historical record of the rejected approach.
 
 ## Context
 

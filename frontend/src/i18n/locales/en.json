@@ -1184,20 +1184,6 @@
       "deny": "Deny"
     }
   },
-  "history": {
-    "title": "History",
-    "open": "Search history",
-    "close": "Close history",
-    "back": "Back to results",
-    "reindex": "Reindex",
-    "reindexed": "Reindexed {{indexed}} sessions.",
-    "searchPlaceholder": "Search all transcripts…",
-    "searchAria": "Search history",
-    "prompt": "Search across every agent's past sessions.",
-    "noResults": "No matching sessions.",
-    "loadFailed": "Failed to load this session.",
-    "emptySession": "This session has no turns."
-  },
   "channels": {
     "title": "Channels",
     "subtitle": "Connect the IM accounts you already use — Telegram and SeaTalk — to your agents.",

@@ -2,9 +2,15 @@
 
 > English: [ADR-022-cross-agent-transcript-history.md](./ADR-022-cross-agent-transcript-history.md)
 
-- **状态：** 已接受
+- **状态：** 已废弃（2026-06-14）
 - **Spec:** [007-memory](../../specs/007-memory/spec.md)（扩展 —— 不分配新 spec 编号），经 [ADR-021](./ADR-021-chat-as-vault-console.md) 在 [008-agent-chat](../../specs/008-agent-chat/spec.md) 中呈现
 - **关联：** [ADR-020](./ADR-020-transcript-distillation.md)（transcript 蒸馏 —— 部分推翻其 Alternative B）、[ADR-012](./ADR-012-files-as-truth-sqlite-retrieval.md)（files-as-truth + SQLite 检索）、[ADR-016](./ADR-016-multi-machine-sync.md)（多机同步）、Spec 004（只读工作区不变量）
+
+> **已废弃（2026-06-14）。** 本文描述的跨 Agent 原始 transcript 浏览/搜索界面已被移除。
+> 在异构 agent 之间管理或共享原始聊天 transcript 价值有限：只有
+> **蒸馏后的 memory**（[ADR-020](./ADR-020-transcript-distillation.md)）会被共享，
+> 这样一个项目可以凭其事实（而非原始对话）在另一台机器上继续推进。
+> 蒸馏→memory 流水线保持完整；本文档作为被否决方案的历史记录予以保留。
 
 ## 背景
 

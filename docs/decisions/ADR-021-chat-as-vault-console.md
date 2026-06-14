@@ -4,7 +4,7 @@
 
 - **Status:** Accepted
 - **Spec:** [008-agent-chat](../../specs/008-agent-chat/spec.md) (repositioning — no new spec number; Spec 008 `spec.md` is updated before implementation)
-- **Related:** [009-channels](../../specs/009-channels/spec.md) ([ADR-014](./ADR-014-channel-adapter-framework.md), shared turn/approval seams), [ADR-022](./ADR-022-cross-agent-transcript-history.md) (cross-agent history surface that lives in this console), [007-memory](../../specs/007-memory/spec.md) (the vault the console talks to)
+- **Related:** [009-channels](../../specs/009-channels/spec.md) ([ADR-014](./ADR-014-channel-adapter-framework.md), shared turn/approval seams), [007-memory](../../specs/007-memory/spec.md) (the vault the console talks to)
 
 ## Context
 
@@ -55,9 +55,7 @@ Three concrete moves:
    the IM approval button — both resolve the same `submit_approval`.
 3. **CLI agents reframed, not removed.** `claude_code` / `codex` stay available
    but are repositioned: not "your daily coding chat," but (a) **test-drive**
-   targets and (b) the conversations **IM drives that you observe/approve here** —
-   and, via [ADR-022](./ADR-022-cross-agent-transcript-history.md), the source of
-   a unified, searchable history.
+   targets and (b) the conversations **IM drives that you observe/approve here**.
 
 Per Constitution Principle II, Spec 008 `spec.md` and its acceptance scenarios
 are updated to this positioning **before** implementation; this ADR records the
@@ -102,7 +100,6 @@ diverge.
   to the Vault Console positioning.
 - Channel-originated conversations become first-class in the conversation list
   (origin badge, peer identity, pending-approval affordance).
-- `continue`/`resume` of foreign agent sessions stays out of scope (see
-  [ADR-022](./ADR-022-cross-agent-transcript-history.md)).
+- `continue`/`resume` of foreign agent sessions stays out of scope.
 - This is positioning + frontend surfacing; the backend turn / approval /
   channel machinery is reused unchanged.
