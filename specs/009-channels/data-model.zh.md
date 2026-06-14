@@ -9,18 +9,21 @@ channel 是既有 `resources` 表中的行（kind = `channel`）。`config_json`
 
 ```
 ChannelConfig (discriminator: channel_type)
+├── common (两种类型共有, _CommonChannelFields)
+│   ├── default_agent: str = "builtin"
+│   ├── default_agent_config: dict | None
+│   ├── workspaces: list[Workspace] = []   # 命名 cwd allowlist
+│   └── default_workspace: str | None      # workspaces[].name 之一
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
-│   ├── bot_token_ref: str            # credential-store ref, probed at register
-│   ├── default_agent: str = "builtin"
-│   └── default_agent_config: dict | None
+│   └── bot_token_ref: str            # credential-store ref, probed at register
 └── SeaTalkChannelConfig
     ├── channel_type: "seatalk"
     ├── app_id: str
     ├── app_secret_ref: str            # credential-store ref
-    ├── signing_secret_ref: str        # credential-store ref
-    ├── default_agent: str = "builtin"
-    └── default_agent_config: dict | None
+    └── signing_secret_ref: str        # credential-store ref
+
+Workspace: { name: str, path: str (绝对路径) }
 ```
 
 校验规则：
@@ -33,6 +36,10 @@ ChannelConfig (discriminator: channel_type)
 - `default_agent` / `default_agent_config` 不在注册时校验（agent registry
   在创建对话时校验，那是平台的权威关口）；无效的 agent 会在首次接触时以
   turn 错误的形式暴露。
+- `workspaces` 是从该 channel 选取 agent 时的 cwd allowlist。形状（名字唯一、
+  绝对路径、`default_workspace ∈ names`）由 Pydantic 模型校验；kind 的
+  `validate_config` 钩子另外要求注册时每个 `path` 是已存在目录，因此坏的
+  workspace 会中止注册、不写入任何行。chat 消息永不提供裸路径——只给名字。
 
 ## 表：`channel_peers`
 
@@ -47,6 +54,9 @@ ChannelConfig (discriminator: channel_type)
 | `display_name` | TEXT | 配对时发送者的名字，用于 UI/status |
 | `paired_at` | DATETIME (UTC) | |
 | `active_conversation_id` | TEXT NULL | 当前对话；对话消失时清空 |
+| `sender_id` | TEXT NULL | 已配对发送者的稳定 id（Telegram from.id、SeaTalk employee_code）；owner gate 在其存在时校验它。NULL → chat-id-only 闸（旧 peer） |
+| `preferred_agent` | TEXT NULL | 粘性 agent 选择（`/agent`）；NULL → channel `default_agent` |
+| `preferred_workspace` | TEXT NULL | 粘性 workspace 选择（`/cwd`）；NULL → channel `default_workspace` |
 
 约束：`UNIQUE (resource_id, chat_id)`；对 `resource_id` 建索引。
 
@@ -54,7 +64,12 @@ ChannelConfig (discriminator: channel_type)
 接缝不建 FK）：如果对话已在 Chat 页面被删除，下一条入站消息会检测到悬空
 的 id 并创建一段新对话。
 
-迁移：`20260612_0015_channel_tables.py`（创建 + 对称的 downgrade）；模型
+`sender_id` / `preferred_agent` / `preferred_workspace` 都可空，使本修订前
+配对的 peer 优雅退化：null sender id 表示 chat-id-only 闸，null 首选表示用
+channel 默认值。
+
+迁移：`20260612_0015_channel_tables.py`（创建 + 对称的 downgrade）；
+`20260614_0022_channel_peer_differentiation.py` 增加上述三个可空列。模型
 模块由 `migrations/env.py` import，因此 Alembic 能看到其 metadata。
 
 ## 内存态（从不持久化）

@@ -85,7 +85,12 @@ async def wait_until(
 
 
 def inbound(
-    channel: str, chat_id: str, text: str, *, sender_display: str = "Owner"
+    channel: str,
+    chat_id: str,
+    text: str,
+    *,
+    sender_display: str = "Owner",
+    sender_id: str = "",
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
@@ -94,6 +99,7 @@ def inbound(
         text=text,
         platform_message_id="pm-1",
         timestamp=datetime.now(tz=UTC),
+        sender_id=sender_id,
     )
 
 
@@ -206,6 +212,22 @@ class FakeChannelAdapter:
         self.resolved.append((chat_id, message_id, outcome_text))
 
 
+class FakeModelCatalog:
+    """In-memory ModelCatalogPort: maps a chat-typed name to a registry id."""
+
+    def __init__(self) -> None:
+        self._by_name: dict[str, str] = {}
+
+    def add(self, name: str, model_id: str) -> None:
+        self._by_name[name] = model_id
+
+    async def resolve(self, name: str) -> str | None:
+        return self._by_name.get(name)
+
+    async def list_models(self) -> list[tuple[str, str]]:
+        return [(model_id, name) for name, model_id in self._by_name.items()]
+
+
 class StubListenerController:
     """Recording ``ListenerControllerPort`` (no real child process)."""
 
@@ -233,12 +255,13 @@ class StubListenerController:
 class ScriptedAgentProvider:
     """``AgentProvider`` whose adapter a test swaps in before sending."""
 
-    agent_key = "builtin"
-
-    def __init__(self, adapter: Any) -> None:
+    def __init__(self, adapter: Any, agent_key: str = "builtin") -> None:
         self.adapter = adapter
+        self.agent_key = agent_key
+        self.last_agent_config: dict[str, Any] | None = None
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
+        self.last_agent_config = agent_config
         return None
 
     async def build_adapter(self, conversation_id: str) -> Any:
@@ -278,6 +301,8 @@ class ChannelEnv:
     peers: ChannelPeerRepo
     pairing: PairingManager
     provider: ScriptedAgentProvider
+    registry: AgentProviderRegistry
+    models: FakeModelCatalog
     chat: ChatService
     orchestrator: TurnOrchestrator
     processor: InboundProcessor
@@ -285,6 +310,12 @@ class ChannelEnv:
     service: ChannelService
     listener: StubListenerController
     created_adapters: list[FakeChannelAdapter] = field(default_factory=list)
+
+    def add_agent(self, agent_key: str, reply: str = "from-other") -> ScriptedAgentProvider:
+        """Register a second scripted agent so routing tests have a target."""
+        provider = ScriptedAgentProvider(default_reply_adapter(reply), agent_key=agent_key)
+        self.registry.register(provider, display_name=agent_key.title())
+        return provider
 
     async def register_channel(
         self,
@@ -297,19 +328,29 @@ class ChannelEnv:
         cfg = config or {"channel_type": "telegram", "bot_token_ref": ref}
         return await self.resources.register(kind="channel", name=name, config=cfg, actor="test")
 
-    async def pair(self, resource: Resource, chat_id: str = "owner") -> ChannelPeer:
+    async def pair(
+        self, resource: Resource, chat_id: str = "owner", *, sender_id: str | None = None
+    ) -> ChannelPeer:
         peer = ChannelPeer(
             resource_id=resource.id,
             chat_id=chat_id,
             display_name="Owner",
             paired_at=datetime.now(tz=UTC),
             active_conversation_id=None,
+            sender_id=sender_id,
         )
         await self.peers.upsert(peer)
         return peer
 
     def bind(
-        self, resource: Resource, adapter: FakeChannelAdapter | None = None
+        self,
+        resource: Resource,
+        adapter: FakeChannelAdapter | None = None,
+        *,
+        default_agent: str = "builtin",
+        default_agent_config: dict[str, Any] | None = None,
+        workspaces: dict[str, str] | None = None,
+        default_workspace: str | None = None,
     ) -> FakeChannelAdapter:
         adapter = adapter or FakeChannelAdapter()
         self.processor.bind(
@@ -317,19 +358,21 @@ class ChannelEnv:
                 name=resource.name,
                 resource_id=resource.id,
                 channel_type=str(resource.config.get("channel_type", "telegram")),
-                default_agent="builtin",
-                default_agent_config=None,
+                default_agent=default_agent,
+                default_agent_config=default_agent_config,
+                workspaces=workspaces or {},
+                default_workspace=default_workspace,
                 adapter=adapter,
             )
         )
         return adapter
 
     async def paired_channel(
-        self, name: str = "tg", chat_id: str = "owner"
+        self, name: str = "tg", chat_id: str = "owner", *, sender_id: str | None = None
     ) -> tuple[Resource, FakeChannelAdapter]:
         resource = await self.register_channel(name)
         adapter = self.bind(resource)
-        await self.pair(resource, chat_id)
+        await self.pair(resource, chat_id, sender_id=sender_id)
         return resource, adapter
 
     async def audit_entries(self, event_type: str, name: str | None = None) -> list[AuditEntry]:
@@ -361,8 +404,15 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         audit=audit,
     )
     orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, audit=audit)
+    models = FakeModelCatalog()
     processor = InboundProcessor(
-        peers=peers, pairing=pairing, conversations=chat, turns=orchestrator, audit=audit
+        peers=peers,
+        pairing=pairing,
+        conversations=chat,
+        turns=orchestrator,
+        audit=audit,
+        agents=registry,
+        models=models,
     )
 
     created_adapters: list[FakeChannelAdapter] = []
@@ -406,6 +456,8 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         peers=peers,
         pairing=pairing,
         provider=provider,
+        registry=registry,
+        models=models,
         chat=chat,
         orchestrator=orchestrator,
         processor=processor,

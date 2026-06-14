@@ -131,6 +131,15 @@ class ResourceService:
             except ValueError as e:
                 raise ConfigValidationError(str(e)) from e
         validated = self._validate_config(kind_def, config)
+        # Kind-supplied semantic validation beyond shape, at REGISTRATION only
+        # (e.g. a channel's workspace directories must exist on disk). Kept off
+        # update_config so editing an unrelated field never re-probes the
+        # filesystem and rejects the edit because a dir was since removed.
+        if kind_def.validate_config is not None:
+            try:
+                kind_def.validate_config(validated)
+            except ValueError as e:
+                raise ConfigValidationError(str(e)) from e
         # Probe before any DB write — a missing credential must not leave a
         # half-created resource row behind. The spec's "credential missing"
         # edge case requires registration to fail naming the missing ref.

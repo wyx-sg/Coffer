@@ -207,6 +207,65 @@ disable that actually stops traffic) is what makes the feature operable.
 
 ---
 
+### User Story 9 — Switch agent, workspace, and model from chat (Priority: P2)
+
+The owner steers the entrypoint without leaving the IM app. `/agent codex`
+switches the conversation to Codex; `/cwd my-project` points a coding agent at a
+pre-authorized workspace; `/model opus` changes the model. Switching the agent
+or the workspace starts a fresh conversation pinned to the new choice (these are
+fixed for a conversation's life) and the choice sticks for later messages and
+`/new`; switching the model takes effect on the next turn in the same
+conversation. Each command with no argument reports the current value and the
+available choices. The owner can only pick a workspace the operator pre-defined
+— a bare filesystem path in a message is never honored.
+
+**Why this priority**: A channel is an entrypoint *manager*, not a single fixed
+wire. Routing to a chosen agent, in a chosen safe directory, with a chosen
+model, is what makes one paired chat a switchboard for every agent the vault
+exposes — and the workspace allowlist is the boundary that keeps a remote-
+reachable entrypoint from pointing an agent at an arbitrary directory.
+
+**Independent Test**: With a paired channel and two scripted providers, send
+`/agent <second>` and observe a fresh conversation pinned to it and the next
+message answered by it; send `/cwd <name>` for a configured workspace and
+observe a fresh conversation created in that directory; send `/cwd /etc` and
+observe it is refused; send `/model <name>` and observe the next turn use it.
+
+**Covering scenarios**:
+- /agent switches the agent and sticks
+- /agent rejects an unknown agent
+- /cwd selects a configured workspace and refuses a bare path
+- /model switches the model for the next turn
+
+---
+
+### User Story 10 — Know who drove what, and when a turn is done (Priority: P2)
+
+Because the entrypoint is remote-reachable, every turn a channel message drives
+and every approval the owner answers from chat is recorded in the audit log
+with the channel, peer, and agent — answering "who drove which agent through
+which channel, and what did they approve". And because some platforms cannot
+edit messages and show nothing while a long bridged turn runs, every turn ends
+with one compact summary pushed to the chat: done with tool count, duration,
+and tokens, or the error, or the stop.
+
+**Why this priority**: An entrypoint manager's two unclaimed differentiators are
+first-class auth/audit and a reliable completion signal; both must be true on
+every channel, including the silent ones.
+
+**Independent Test**: Drive a turn from a paired channel and observe a
+turn-started audit record with the channel, peer, and agent; answer an approval
+prompt and observe an approval-resolved audit record; observe a completion
+summary message after the turn on a channel that cannot edit messages.
+
+**Covering scenarios**:
+- a channel-driven turn is audited with channel, peer, and agent
+- an approval resolved from chat is audited
+- a completion summary is sent after every turn
+- a group member who is not the paired sender is ignored
+
+---
+
 ### Edge Cases
 
 - A message arriving exactly when the previous turn finishes joins the queue,
@@ -279,17 +338,63 @@ disable that actually stops traffic) is what makes the feature operable.
   status / notify`.
 - **FR-012**: Channel events are audited: pairing issued, paired,
   notification sent — alongside the automatic resource-lifecycle audit.
+- **FR-013**: The owner switches the conversation's agent from chat. `/agent`
+  with no argument reports the current agent and the registry's available agent
+  keys; `/agent <key>` validates the key against the agent registry and, on
+  success, records it as the peer's sticky preference and opens a fresh
+  conversation pinned to it (an existing conversation's agent cannot change), so
+  subsequent messages and `/new` use the chosen agent until it is switched
+  again. An unknown key is rejected with the valid keys listed; no channel-side
+  code is added per agent.
+- **FR-014**: The owner gate verifies sender identity, not only chat identity.
+  Every inbound envelope carries a `sender_id` (Telegram `from.id`, SeaTalk
+  `employee_code`); pairing records it on the peer, and an inbound message is
+  accepted only when its `chat_id` matches and — when the peer has a stored
+  `sender_id` — its sender matches. A peer paired before this requirement (no
+  stored `sender_id`) degrades to the chat-id-only gate. Two channel-driven
+  events are audited beyond FR-012: a turn started by an inbound message
+  (channel, peer, agent, conversation) and an approval resolved from the chat
+  (channel, peer, tool, decision).
+- **FR-015**: After every turn the channel sends one compact completion summary
+  as a fresh message, independent of message-edit capability: success reports a
+  done marker with tool count, duration, and token usage; a failed turn reports
+  the error; an interrupted turn reports the stop. This is the end-of-turn
+  signal on platforms that cannot edit messages and show nothing while a long
+  bridged turn runs.
+- **FR-016**: A channel declares a list of named workspaces (`{name, path}`),
+  each validated to be an existing directory at registration, and an optional
+  default workspace. `/cwd` with no argument lists the workspaces and the
+  current one; `/cwd <name>` selects a workspace and opens a fresh conversation
+  in it (a conversation's working directory cannot change), recording it as the
+  peer's sticky preference. A channel never accepts a bare filesystem path from
+  an inbound message — the workspace list is the only authority for an agent's
+  working directory chosen from a channel. Routing to a bridged agent uses the
+  peer's sticky workspace, else the default workspace; with neither, the owner
+  is told no workspace is configured. The builtin agent needs no workspace.
+- **FR-017**: The owner switches the model from chat. `/model` with no argument
+  reports the current model; `/model <name>` for the builtin agent resolves the
+  name against the model registry and sets the conversation's model override,
+  and for a bridged agent stores the raw upstream model string passed through to
+  the CLI. A model switch takes effect on the next turn in the same conversation
+  (the model is re-read each turn, unlike the agent and working directory). An
+  invalid builtin model is rejected against the registry; a bad bridged model
+  string surfaces as the CLI's own error relayed to the chat.
 
 ### Key Entities
 
 - **Channel** — resource `channel:<name>`; config = type, credential refs,
-  default agent + config.
+  default agent + config, named workspaces + optional default workspace.
 - **ChannelPeer** — the paired owner of a channel: `(resource, chat_id)`,
-  display name, paired-at, pointer to the active conversation. One per
-  channel today; keyed by chat so group chats can become peers later without
-  a schema change.
+  display name, paired-at, pointer to the active conversation, the paired
+  sender's identity (`sender_id`), and sticky preferences (chosen agent and
+  workspace). One per channel today; keyed by chat so group chats can become
+  peers later without a schema change.
+- **Workspace** — a named, pre-authorized working directory on a channel
+  (`{name, path}`); the allowlist of directories an agent may run in when
+  chosen from that channel. Bare paths are never accepted from chat.
 - **InboundMessage / OutboundMessage** — the normalized envelopes every
   adapter produces and consumes; the core never sees platform payloads.
+  Inbound carries the sender's identity (`sender_id`) for the owner gate.
 - **ChannelCapabilities** — what an adapter declares it can do
   (edit messages, interactive buttons, typing indicator); the core picks
   rendering and approval strategies from it.
@@ -311,6 +416,15 @@ disable that actually stops traffic) is what makes the feature operable.
   against a scripted second provider in tests).
 - **SC-005**: Every acceptance scenario below is covered by at least one
   test; `make verify` passes.
+- **SC-006**: From one paired chat the owner reaches every registered agent,
+  each in a chosen pre-authorized workspace, with a chosen model, and a chat
+  message can never point an agent at a directory the operator did not
+  pre-authorize (demonstrated by driving two scripted providers and a refused
+  bare path in tests).
+- **SC-007**: Every channel-driven turn and every approval answered from chat
+  is queryable in the audit log by channel, peer, and agent; and every turn,
+  including on a channel that cannot edit messages, ends with a completion
+  summary in the chat (demonstrated against the edit-incapable fake adapter).
 
 ## Acceptance Scenarios
 
@@ -483,6 +597,62 @@ disable that actually stops traffic) is what makes the feature operable.
 - **When** the user queries status via REST and CLI
 - **Then** adapter run state, paired peer, and (for seatalk) the callback
   port and path are reported accurately
+
+### Scenario: /agent switches the agent and sticks
+
+- **Given** a paired channel with a second scripted agent registered
+- **When** the peer sends `/agent <second>` and then a message
+- **Then** a fresh conversation pinned to the second agent becomes active, the
+  message is answered by it, and `/new` reuses it until switched again
+
+### Scenario: /agent rejects an unknown agent
+
+- **Given** a paired channel
+- **When** the peer sends `/agent nope`
+- **Then** the channel replies that the agent is unknown and lists the valid
+  keys, and the active conversation is unchanged
+
+### Scenario: /cwd selects a configured workspace and refuses a bare path
+
+- **Given** a paired channel configured with a workspace named `proj`
+- **When** the peer sends `/cwd proj`
+- **Then** a fresh conversation is created with that workspace's directory and
+  the choice sticks
+- **And** when the peer sends `/cwd /etc` the channel refuses it and creates no
+  conversation in that directory
+
+### Scenario: /model switches the model for the next turn
+
+- **Given** a paired channel in an active conversation
+- **When** the peer sends `/model <name>` and then a message
+- **Then** the next turn runs with the chosen model in the same conversation
+
+### Scenario: a channel-driven turn is audited with channel, peer, and agent
+
+- **Given** a paired channel
+- **When** the peer sends a message that drives a turn
+- **Then** an audit record names the channel, the peer, the agent, and the
+  conversation
+
+### Scenario: an approval resolved from chat is audited
+
+- **Given** a scripted agent that requests approval
+- **When** the peer answers the approval prompt
+- **Then** an audit record names the channel, the peer, the tool, and the
+  decision
+
+### Scenario: a completion summary is sent after every turn
+
+- **Given** a paired channel on an adapter that cannot edit messages
+- **When** a turn completes
+- **Then** a compact completion summary is sent to the chat reporting the
+  outcome, and a failed turn reports the error
+
+### Scenario: a group member who is not the paired sender is ignored
+
+- **Given** a peer paired with a stored sender identity
+- **When** a message arrives with the same chat id but a different sender id
+- **Then** no reply is sent and no turn is started
 
 ## Assumptions
 

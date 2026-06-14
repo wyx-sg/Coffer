@@ -107,6 +107,12 @@ class Kind:
     # ref at register/update time so a missing credential fails before any DB
     # write — without the core knowing where a kind stores its refs.
     credential_ref_extractor: Callable[[dict[str, Any]], dict[str, str]] | None = None
+    # Optional semantic config validation beyond ``config_schema`` shape,
+    # applied at REGISTRATION only (already shape-validated). Given the validated
+    # config dict; raises ``ValueError`` to reject the write (e.g. a channel's
+    # workspace directories must exist on disk). Deliberately not run on
+    # update_config, so editing an unrelated field never re-probes the filesystem.
+    validate_config: Callable[[dict[str, Any]], None] | None = None
     # Optional pre-write hook for ``ResourceService.update_config``.
     # Receives ``(ref, before_config, after_config)`` (both already shape-validated
     # against ``config_schema``); may raise ``ConfigValidationError`` to reject the

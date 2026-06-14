@@ -10,18 +10,21 @@ Channels are rows in the existing `resources` table (kind = `channel`).
 
 ```
 ChannelConfig (discriminator: channel_type)
+├── common (both types, _CommonChannelFields)
+│   ├── default_agent: str = "builtin"
+│   ├── default_agent_config: dict | None
+│   ├── workspaces: list[Workspace] = []   # named cwd allowlist
+│   └── default_workspace: str | None      # one of workspaces[].name
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
-│   ├── bot_token_ref: str            # credential-store ref, probed at register
-│   ├── default_agent: str = "builtin"
-│   └── default_agent_config: dict | None
+│   └── bot_token_ref: str            # credential-store ref, probed at register
 └── SeaTalkChannelConfig
     ├── channel_type: "seatalk"
     ├── app_id: str
     ├── app_secret_ref: str            # credential-store ref
-    ├── signing_secret_ref: str        # credential-store ref
-    ├── default_agent: str = "builtin"
-    └── default_agent_config: dict | None
+    └── signing_secret_ref: str        # credential-store ref
+
+Workspace: { name: str, path: str (absolute) }
 ```
 
 Validation rules:
@@ -35,6 +38,12 @@ Validation rules:
   (the agent registry validates at conversation creation, the platform's
   authoritative gate); an invalid agent surfaces on first contact as a turn
   error.
+- `workspaces` are the cwd allowlist for agents chosen from this channel.
+  Shape (unique names, absolute paths, `default_workspace ∈ names`) is checked
+  by the Pydantic model; the kind's `validate_config` hook additionally
+  requires each `path` to be an existing directory at registration, so a bad
+  workspace aborts registration with nothing persisted. A chat message never
+  supplies a bare path — only a workspace name.
 
 ## Table: `channel_peers`
 
@@ -49,6 +58,9 @@ keyed by chat id so future group support is a new row, not a migration.
 | `display_name` | TEXT | sender's name at pairing time, for UI/status |
 | `paired_at` | DATETIME (UTC) | |
 | `active_conversation_id` | TEXT NULL | current conversation; cleared when the conversation disappears |
+| `sender_id` | TEXT NULL | paired sender's stable id (Telegram from.id, SeaTalk employee_code); the owner gate checks it when present. NULL → chat-id-only gate (legacy peers) |
+| `preferred_agent` | TEXT NULL | sticky agent choice (`/agent`); NULL → channel `default_agent` |
+| `preferred_workspace` | TEXT NULL | sticky workspace choice (`/cwd`); NULL → channel `default_workspace` |
 
 Constraints: `UNIQUE (resource_id, chat_id)`; index on `resource_id`.
 
@@ -57,9 +69,14 @@ Constraints: `UNIQUE (resource_id, chat_id)`; index on `resource_id`.
 deleted from the Chat page, the next inbound message detects the dangling id
 and creates a fresh conversation.
 
-Migration: `20260612_0015_channel_tables.py` (create + symmetric downgrade);
-the model module is imported by `migrations/env.py` so Alembic sees the
-metadata.
+`sender_id` / `preferred_agent` / `preferred_workspace` are all nullable so a
+peer paired before this revision degrades gracefully: a null sender id means
+the chat-id-only gate, null preferences mean the channel defaults.
+
+Migrations: `20260612_0015_channel_tables.py` (create + symmetric downgrade);
+`20260614_0022_channel_peer_differentiation.py` adds the three nullable
+columns above. The model module is imported by `migrations/env.py` so Alembic
+sees the metadata.
 
 ## In-memory state (never persisted)
 
@@ -78,10 +95,10 @@ Nothing the user relies on lives only in memory.
 ## Normalized envelopes (domain value objects)
 
 ```
-InboundMessage:  channel name, chat_id, sender display name, text,
+InboundMessage:  channel name, chat_id, sender display name, sender_id, text,
                  platform message id, timestamp
-ApprovalClick:   channel name, chat_id, value (request id + decision),
-                 prompt message id
+ApprovalClick:   channel name, chat_id, sender_id, value (request id +
+                 decision), prompt message id
 OutboundText:    markdown text (rendered per adapter capability)
 ChannelCapabilities: supports_edit, supports_buttons, supports_typing,
                  max_message_chars
@@ -97,7 +114,10 @@ never sees a Telegram update or SeaTalk event shape.
 | `channel_pairing_issued` | a pairing code is generated |
 | `channel_paired` | a sender claims the code and becomes the peer |
 | `channel_notify_sent` | notify delivers text to the peer |
+| `channel_turn_started` | an inbound message drives a turn (channel, peer, agent, conversation) |
+| `channel_approval_resolved` | the owner answers a tool approval from chat (channel, peer, tool, decision) |
 
 Resource lifecycle events (`resource_created` … `resource_deleted`) come from
-the framework automatically. Conversation/turn activity is audited by the
-chat platform; the channel layer adds nothing there.
+the framework automatically. The generic per-turn `chat_turn_completed` audit
+is channel-agnostic; `channel_turn_started` and `channel_approval_resolved`
+add the channel/peer/agent context that makes channel-driven work queryable.

@@ -9,7 +9,7 @@ transport in, transport out — every behavior above it is shared.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
@@ -63,6 +63,21 @@ class ChannelAdapter(Protocol):
 
 
 @dataclass(frozen=True)
+class ChannelBinding:
+    """A live channel the runtime has started: resource identity + adapter +
+    the agent/workspace defaults the channel routes to."""
+
+    name: str
+    resource_id: int
+    channel_type: str
+    default_agent: str
+    default_agent_config: dict[str, Any] | None
+    adapter: ChannelAdapter
+    workspaces: dict[str, str] = field(default_factory=dict)  # name -> absolute path
+    default_workspace: str | None = None
+
+
+@dataclass(frozen=True)
 class ChannelPeer:
     """The paired owner of a channel (one row in channel_peers)."""
 
@@ -71,6 +86,14 @@ class ChannelPeer:
     display_name: str
     paired_at: datetime
     active_conversation_id: str | None
+    # The paired sender's stable identity (Telegram from.id, SeaTalk
+    # employee_code); the owner gate checks it when present. ``None`` on rows
+    # paired before the gate gained sender awareness → chat-id-only fallback.
+    sender_id: str | None = None
+    # Sticky structural choices: which agent and which channel workspace new
+    # conversations use. ``None`` means fall back to the channel defaults.
+    preferred_agent: str | None = None
+    preferred_workspace: str | None = None
 
 
 class ChannelPeerRepoPort(Protocol):
@@ -83,6 +106,32 @@ class ChannelPeerRepoPort(Protocol):
     async def set_active_conversation(
         self, resource_id: int, conversation_id: str | None
     ) -> None: ...
+
+    async def set_preferences(
+        self,
+        resource_id: int,
+        *,
+        preferred_agent: str | None,
+        preferred_workspace: str | None,
+    ) -> None: ...
+
+
+class AgentCatalogPort(Protocol):
+    """The slice of the agent registry the channel core needs to route by key:
+    list the available agents and validate a chosen key. Satisfied structurally
+    by ``AgentProviderRegistry``."""
+
+    def agent_keys(self) -> list[str]: ...
+
+
+class ModelCatalogPort(Protocol):
+    """The slice of the model registry the channel core needs for ``/model`` on
+    the builtin agent: resolve a chat-typed name to a registry model id and list
+    the choices. Bridged agents bypass this (raw passthrough to the CLI)."""
+
+    async def resolve(self, name: str) -> str | None: ...
+
+    async def list_models(self) -> list[tuple[str, str]]: ...
 
 
 @runtime_checkable

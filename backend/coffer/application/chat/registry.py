@@ -44,3 +44,7 @@ class AgentProviderRegistry:
     def entries(self) -> list[RegisteredAgent]:
         """Return every registered agent, in registration order."""
         return list(self._entries.values())
+
+    def agent_keys(self) -> list[str]:
+        """Every registered ``agent_key``, in registration order (AgentCatalogPort)."""
+        return list(self._entries.keys())

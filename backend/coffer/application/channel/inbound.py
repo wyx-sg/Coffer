@@ -6,7 +6,8 @@ turn driving (rendering lives in ``turn_render``) → approval bridging.
 The chat platform is reached only through its public seams (conversation
 service + turn orchestrator), exactly like the web UI: agents cannot tell a
 channel turn from a UI turn, and a new agent provider is reachable from every
-channel with no code here changing.
+channel with no code here changing. Slash-command handling lives in
+``commands`` and conversation creation in ``conversation_ops``.
 """
 
 from __future__ import annotations
@@ -20,11 +21,18 @@ from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.commands import HELP_TEXT, ChannelCommands
+from coffer.application.channel.conversation_ops import (
+    ensure_conversation,
+    explain_conversation_error,
+)
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import (
-    ChannelAdapter,
+    AgentCatalogPort,
+    ChannelBinding,
     ChannelPeer,
     ChannelPeerRepoPort,
+    ModelCatalogPort,
 )
 from coffer.application.channel.turn_render import PendingApproval, TurnRenderer
 from coffer.application.chat.ports import ApprovalDecision
@@ -34,21 +42,15 @@ from coffer.domain.channel.envelopes import (
     InboundMessage,
     parse_approval_value,
 )
-from coffer.domain.chat.errors import ApprovalNotFound, ConversationNotFound, TurnInProgress
+from coffer.domain.chat.errors import ApprovalNotFound, TurnInProgress
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
+
+__all__ = ["ChannelBinding", "InboundProcessor"]
 
 _logger = logging.getLogger(__name__)
 
 _QUEUE_MAX = 10
-
-_HELP_TEXT = (
-    "Coffer channel commands:\n"
-    "/new — start a fresh conversation\n"
-    "/stop — interrupt the running turn\n"
-    "/status — active conversation and turn state\n"
-    "/help — this list"
-)
 
 
 class ConversationPort(Protocol):
@@ -68,6 +70,14 @@ class ConversationPort(Protocol):
 
     async def get_conversation(self, conversation_id: str) -> Any: ...
 
+    async def set_conversation_model(
+        self, conversation_id: str, *, model_id: str | None
+    ) -> Any: ...
+
+    async def get_agent_config(self, conversation_id: str) -> dict[str, Any]: ...
+
+    async def set_agent_config(self, conversation_id: str, config: dict[str, Any]) -> None: ...
+
 
 class TurnPort(Protocol):
     """The slice of the turn orchestrator we use."""
@@ -79,18 +89,6 @@ class TurnPort(Protocol):
     def submit_approval(
         self, conversation_id: str, request_id: str, decision: ApprovalDecision
     ) -> None: ...
-
-
-@dataclass(frozen=True)
-class ChannelBinding:
-    """A live channel the runtime has started: resource identity + adapter."""
-
-    name: str
-    resource_id: int
-    channel_type: str
-    default_agent: str
-    default_agent_config: dict[str, Any] | None
-    adapter: ChannelAdapter
 
 
 @dataclass
@@ -116,6 +114,8 @@ class InboundProcessor:
         conversations: ConversationPort,
         turns: TurnPort,
         audit: AuditService,
+        agents: AgentCatalogPort,
+        models: ModelCatalogPort,
     ) -> None:
         self._peers = peers
         self._pairing = pairing
@@ -124,6 +124,13 @@ class InboundProcessor:
         self._audit = audit
         self._bindings: dict[str, ChannelBinding] = {}
         self._sessions: dict[str, _Session] = {}
+        self._commands = ChannelCommands(
+            peers=peers,
+            conversations=conversations,
+            turns=turns,
+            agents=agents,
+            models=models,
+        )
 
     # -- runtime registry ------------------------------------------------
 
@@ -171,6 +178,14 @@ class InboundProcessor:
         if peer is None or peer.chat_id != msg.chat_id:
             await self._maybe_pair(binding, msg)
             return
+        if peer.sender_id is not None and msg.sender_id and peer.sender_id != msg.sender_id:
+            # Right chat (e.g. a paired group), wrong member — ignore silently.
+            # Never fall through to pairing: an intruder must not be able to
+            # re-pair the channel by sending a code into the owner's chat. A
+            # message with no sender id (the transport could not supply one)
+            # falls back to the chat-id match already passed, so a quirk in one
+            # update shape never locks the owner out of their own channel.
+            return
         text = msg.text.strip()
         if not text:
             # Non-text content reaches the core as an empty envelope.
@@ -179,7 +194,9 @@ class InboundProcessor:
             )
             return
         if text.startswith("/"):
-            await self._handle_command(binding, peer, text)
+            await self._commands.handle(
+                binding, peer, text, self._session(binding.name), self._safe_send
+            )
             return
         session = self._session(msg.channel)
         if len(session.queue) >= _QUEUE_MAX:
@@ -198,6 +215,8 @@ class InboundProcessor:
         peer = await self._peers.get(binding.resource_id)
         if peer is None or peer.chat_id != click.chat_id:
             return  # only the owner decides
+        if peer.sender_id is not None and click.sender_id and peer.sender_id != click.sender_id:
+            return  # right chat, wrong member (a click with no sender id falls back to chat id)
         parsed = parse_approval_value(click.value)
         if parsed is None:
             return
@@ -208,6 +227,7 @@ class InboundProcessor:
             return
         outcome = "✅ Approved" if decision_word == "allow" else "❌ Denied"
         decision: Literal["allow", "deny"] = "allow" if decision_word == "allow" else "deny"
+        applied = True
         try:
             self._turns.submit_approval(
                 pending.conversation_id,
@@ -216,6 +236,20 @@ class InboundProcessor:
             )
         except ApprovalNotFound:
             outcome = "⌛ Expired"
+            applied = False  # the gate had already closed — nothing was decided
+        await self._audit.record(
+            AuditEventType.CHANNEL_APPROVAL_RESOLVED.value,
+            ref=ResourceRef(kind="channel", name=binding.name),
+            actor=peer.display_name or "channel",
+            details={
+                "channel": binding.name,
+                "chat_id": peer.chat_id,
+                "tool_name": pending.tool_name,
+                "request_id": request_id,
+                "decision": decision_word,
+                "applied": applied,
+            },
+        )
         with contextlib.suppress(Exception):
             await binding.adapter.resolve_approval_prompt(
                 pending.chat_id, pending.message_id, outcome
@@ -237,6 +271,7 @@ class InboundProcessor:
             display_name=msg.sender_display,
             paired_at=datetime.now(tz=UTC),
             active_conversation_id=None,
+            sender_id=msg.sender_id or None,
         )
         await self._peers.upsert(peer)
         await self._audit.record(
@@ -248,51 +283,8 @@ class InboundProcessor:
         await self._safe_send(
             binding,
             msg.chat_id,
-            f"✅ Paired. This chat now controls Coffer channel '{binding.name}'.\n\n{_HELP_TEXT}",
+            f"✅ Paired. This chat now controls Coffer channel '{binding.name}'.\n\n{HELP_TEXT}",
         )
-
-    # -- commands ------------------------------------------------------------
-
-    async def _handle_command(self, binding: ChannelBinding, peer: ChannelPeer, text: str) -> None:
-        command = text.split()[0].lower()
-        if command in ("/help", "/start"):
-            await self._safe_send(binding, peer.chat_id, _HELP_TEXT)
-        elif command == "/new":
-            try:
-                conv = await self._conversations.create_conversation(
-                    agent_key=binding.default_agent,
-                    agent_config=binding.default_agent_config,
-                    actor="channel",
-                )
-            except CofferError as e:
-                await self._safe_send(binding, peer.chat_id, f"⚠️ {e} [{e.code}]")
-                return
-            await self._peers.set_active_conversation(binding.resource_id, conv.id)
-            await self._safe_send(binding, peer.chat_id, "🆕 Started a fresh conversation.")
-        elif command == "/stop":
-            # The turn that is actually draining wins over the peer's bound
-            # conversation: after ``/new`` rebinds the peer, a turn can still be
-            # running on the previous conversation. Stopping the bound (idle)
-            # conversation would claim "Stopping…" while the real turn runs on.
-            session = self._session(binding.name)
-            target = session.running_conversation_id or peer.active_conversation_id
-            if target is not None:
-                self._turns.interrupt_turn(target)
-                await self._safe_send(binding, peer.chat_id, "⏹ Stopping…")
-            else:
-                await self._safe_send(binding, peer.chat_id, "Nothing is running.")
-        elif command == "/status":
-            session = self._session(binding.name)
-            running = session.drain_task is not None and not session.drain_task.done()
-            conv = peer.active_conversation_id or "none yet"
-            await self._safe_send(
-                binding,
-                peer.chat_id,
-                f"Conversation: {conv}\nAgent: {binding.default_agent}\n"
-                f"Turn running: {'yes' if running else 'no'}\nQueued: {len(session.queue)}",
-            )
-        else:
-            await self._safe_send(binding, peer.chat_id, f"Unknown command {command}. /help")
 
     # -- turn driving ----------------------------------------------------------
 
@@ -310,35 +302,34 @@ class InboundProcessor:
             except Exception:
                 _logger.exception("channel.turn.failed", extra={"channel": binding.name})
 
-    async def _ensure_conversation(self, binding: ChannelBinding, peer: ChannelPeer) -> str:
-        if peer.active_conversation_id is not None:
-            try:
-                await self._conversations.get_conversation(peer.active_conversation_id)
-            except ConversationNotFound:
-                pass
-            else:
-                return peer.active_conversation_id
-        conv = await self._conversations.create_conversation(
-            agent_key=binding.default_agent,
-            agent_config=binding.default_agent_config,
-            actor="channel",
-            origin="channel",
-            channel_name=binding.name,
-            peer_chat_id=peer.chat_id,
-            peer_display_name=peer.display_name,
-        )
-        await self._peers.set_active_conversation(binding.resource_id, conv.id)
-        return str(conv.id)
-
     async def _run_turn(self, binding: ChannelBinding, peer: ChannelPeer, text: str) -> None:
         adapter = binding.adapter
         try:
-            conversation_id = await self._ensure_conversation(binding, peer)
+            conversation_id = await ensure_conversation(
+                self._conversations, self._peers, binding, peer
+            )
         except CofferError as e:
-            # e.g. the channel's default agent is unknown/misconfigured — the
-            # owner must see it in the chat, not only in the daemon log.
-            await self._safe_send(binding, peer.chat_id, f"⚠️ {e} [{e.code}]")
+            # e.g. the channel's default agent is unknown/misconfigured, or a
+            # bridged agent has no workspace — the owner must see it in the chat,
+            # not only in the daemon log.
+            await self._safe_send(binding, peer.chat_id, explain_conversation_error(binding, e))
             return
+        # A channel message driving a turn is first-class in the audit log:
+        # who (the peer), through which channel, drives which agent.
+        with contextlib.suppress(Exception):
+            conv = await self._conversations.get_conversation(conversation_id)
+            await self._audit.record(
+                AuditEventType.CHANNEL_TURN_STARTED.value,
+                ref=ResourceRef(kind="channel", name=binding.name),
+                actor=peer.display_name or "channel",
+                details={
+                    "channel": binding.name,
+                    "chat_id": peer.chat_id,
+                    "display_name": peer.display_name,
+                    "agent_key": conv.agent_key,
+                    "conversation_id": conversation_id,
+                },
+            )
         if adapter.capabilities.supports_typing:
             with contextlib.suppress(Exception):
                 await adapter.send_typing(peer.chat_id)

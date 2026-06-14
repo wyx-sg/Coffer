@@ -20,6 +20,8 @@ class InboundMessage:
     text: str
     platform_message_id: str
     timestamp: datetime
+    sender_id: str = ""  # stable per-sender id for the owner gate (Telegram
+    # from.id, SeaTalk employee_code); "" when the transport has none
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,7 @@ class ApprovalClick:
     chat_id: str
     value: str  # opaque payload the core encoded into the button
     prompt_message_id: str
+    sender_id: str = ""  # who tapped, for the owner gate (Telegram from.id)
 
 
 @dataclass(frozen=True)
