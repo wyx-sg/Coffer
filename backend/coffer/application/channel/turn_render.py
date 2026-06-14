@@ -40,6 +40,7 @@ class PendingApproval:
     conversation_id: str
     chat_id: str
     message_id: str
+    tool_name: str
 
 
 @dataclass
@@ -105,6 +106,7 @@ class TurnRenderer:
             conversation_id=self.conversation_id,
             chat_id=self.chat_id,
             message_id=sent.message_id,
+            tool_name=event.tool_name,
         )
 
     async def _update_progress(self, progress: _Progress) -> None:

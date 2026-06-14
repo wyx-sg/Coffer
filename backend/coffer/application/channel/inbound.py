@@ -163,6 +163,11 @@ class InboundProcessor:
         if peer is None or peer.chat_id != msg.chat_id:
             await self._maybe_pair(binding, msg)
             return
+        if peer.sender_id is not None and peer.sender_id != msg.sender_id:
+            # Right chat (e.g. a paired group), wrong member — ignore silently.
+            # Never fall through to pairing: an intruder must not be able to
+            # re-pair the channel by sending a code into the owner's chat.
+            return
         text = msg.text.strip()
         if not text:
             # Non-text content reaches the core as an empty envelope.
@@ -190,6 +195,8 @@ class InboundProcessor:
         peer = await self._peers.get(binding.resource_id)
         if peer is None or peer.chat_id != click.chat_id:
             return  # only the owner decides
+        if peer.sender_id is not None and peer.sender_id != click.sender_id:
+            return  # right chat, wrong member
         parsed = parse_approval_value(click.value)
         if parsed is None:
             return
@@ -208,6 +215,18 @@ class InboundProcessor:
             )
         except ApprovalNotFound:
             outcome = "⌛ Expired"
+        await self._audit.record(
+            AuditEventType.CHANNEL_APPROVAL_RESOLVED.value,
+            ref=ResourceRef(kind="channel", name=binding.name),
+            actor=peer.display_name or "channel",
+            details={
+                "channel": binding.name,
+                "chat_id": peer.chat_id,
+                "tool_name": pending.tool_name,
+                "request_id": request_id,
+                "decision": decision_word,
+            },
+        )
         with contextlib.suppress(Exception):
             await binding.adapter.resolve_approval_prompt(
                 pending.chat_id, pending.message_id, outcome
@@ -229,6 +248,7 @@ class InboundProcessor:
             display_name=msg.sender_display,
             paired_at=datetime.now(tz=UTC),
             active_conversation_id=None,
+            sender_id=msg.sender_id or None,
         )
         await self._peers.upsert(peer)
         await self._audit.record(
@@ -327,6 +347,22 @@ class InboundProcessor:
             # owner must see it in the chat, not only in the daemon log.
             await self._safe_send(binding, peer.chat_id, f"⚠️ {e} [{e.code}]")
             return
+        # A channel message driving a turn is first-class in the audit log:
+        # who (the peer), through which channel, drives which agent.
+        with contextlib.suppress(Exception):
+            conv = await self._conversations.get_conversation(conversation_id)
+            await self._audit.record(
+                AuditEventType.CHANNEL_TURN_STARTED.value,
+                ref=ResourceRef(kind="channel", name=binding.name),
+                actor=peer.display_name or "channel",
+                details={
+                    "channel": binding.name,
+                    "chat_id": peer.chat_id,
+                    "display_name": peer.display_name,
+                    "agent_key": conv.agent_key,
+                    "conversation_id": conversation_id,
+                },
+            )
         if adapter.capabilities.supports_typing:
             with contextlib.suppress(Exception):
                 await adapter.send_typing(peer.chat_id)

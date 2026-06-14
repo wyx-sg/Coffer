@@ -173,6 +173,7 @@ async def test_handle_event_normalizes_subscriber_text_message(
     [msg] = recorder.messages
     assert (msg.channel, msg.chat_id, msg.text) == ("st", "emp-1", "hi bot")
     assert msg.sender_display == "yu@example.com"
+    assert msg.sender_id == "emp-1"  # 1:1 DM: sender is the employee_code
     assert msg.platform_message_id == "pm-1"
     assert msg.timestamp == datetime.fromtimestamp(1718000000, tz=UTC)
     assert recorder.clicks == []

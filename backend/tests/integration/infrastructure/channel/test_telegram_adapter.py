@@ -28,7 +28,7 @@ def _message_update(update_id: int, *, text: str) -> dict:
             "message_id": 1000 + update_id,
             "date": 1718000000,
             "chat": {"id": 555},
-            "from": {"first_name": "Yu", "username": "yu"},
+            "from": {"id": 4242, "first_name": "Yu", "username": "yu"},
             "text": text,
         },
     }
@@ -40,6 +40,7 @@ def _callback_update(update_id: int, *, data: str) -> dict:
         "callback_query": {
             "id": "cbq-1",
             "data": data,
+            "from": {"id": 4242, "first_name": "Yu"},
             "message": {"message_id": 777, "chat": {"id": 555}},
         },
     }
@@ -73,12 +74,14 @@ async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
     msg = recorder.messages[0]
     assert (msg.channel, msg.chat_id, msg.text) == ("tg", "555", "hello")
     assert msg.sender_display == "Yu"
+    assert msg.sender_id == "4242"  # from.id, for the owner gate
     assert msg.platform_message_id == "1010"
     assert msg.timestamp.year == 2024  # epoch 1718000000 normalized to aware UTC
 
     click = recorder.clicks[0]
     assert (click.channel, click.chat_id, click.value) == ("tg", "555", "approve:1")
     assert click.prompt_message_id == "777"
+    assert click.sender_id == "4242"  # callback_query.from.id
 
     # The tap was acked back to the platform.
     acks = fake_telegram.calls_for("answerCallbackQuery")

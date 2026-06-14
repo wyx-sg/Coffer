@@ -85,7 +85,12 @@ async def wait_until(
 
 
 def inbound(
-    channel: str, chat_id: str, text: str, *, sender_display: str = "Owner"
+    channel: str,
+    chat_id: str,
+    text: str,
+    *,
+    sender_display: str = "Owner",
+    sender_id: str = "",
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
@@ -94,6 +99,7 @@ def inbound(
         text=text,
         platform_message_id="pm-1",
         timestamp=datetime.now(tz=UTC),
+        sender_id=sender_id,
     )
 
 
@@ -297,13 +303,16 @@ class ChannelEnv:
         cfg = config or {"channel_type": "telegram", "bot_token_ref": ref}
         return await self.resources.register(kind="channel", name=name, config=cfg, actor="test")
 
-    async def pair(self, resource: Resource, chat_id: str = "owner") -> ChannelPeer:
+    async def pair(
+        self, resource: Resource, chat_id: str = "owner", *, sender_id: str | None = None
+    ) -> ChannelPeer:
         peer = ChannelPeer(
             resource_id=resource.id,
             chat_id=chat_id,
             display_name="Owner",
             paired_at=datetime.now(tz=UTC),
             active_conversation_id=None,
+            sender_id=sender_id,
         )
         await self.peers.upsert(peer)
         return peer
@@ -325,11 +334,11 @@ class ChannelEnv:
         return adapter
 
     async def paired_channel(
-        self, name: str = "tg", chat_id: str = "owner"
+        self, name: str = "tg", chat_id: str = "owner", *, sender_id: str | None = None
     ) -> tuple[Resource, FakeChannelAdapter]:
         resource = await self.register_channel(name)
         adapter = self.bind(resource)
-        await self.pair(resource, chat_id)
+        await self.pair(resource, chat_id, sender_id=sender_id)
         return resource, adapter
 
     async def audit_entries(self, event_type: str, name: str | None = None) -> list[AuditEntry]:

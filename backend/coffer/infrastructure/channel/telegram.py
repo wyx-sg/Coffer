@@ -144,6 +144,7 @@ class TelegramAdapter:
                     text=str(message.get("text") or ""),
                     platform_message_id=str(message.get("message_id", "")),
                     timestamp=datetime.fromtimestamp(int(message.get("date", 0)), tz=UTC),
+                    sender_id=str(sender.get("id") or ""),
                 )
             )
             return
@@ -152,12 +153,14 @@ class TelegramAdapter:
             with contextlib.suppress(Exception):
                 await self._call("answerCallbackQuery", callback_query_id=callback_query["id"])
             prompt = callback_query.get("message") or {}
+            clicker = callback_query.get("from") or {}
             await self._callbacks.on_approval_click(
                 ApprovalClick(
                     channel=self._name,
                     chat_id=str(prompt.get("chat", {}).get("id", "")),
                     value=str(callback_query.get("data") or ""),
                     prompt_message_id=str(prompt.get("message_id", "")),
+                    sender_id=str(clicker.get("id") or ""),
                 )
             )
 

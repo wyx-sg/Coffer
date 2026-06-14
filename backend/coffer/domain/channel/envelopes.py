@@ -32,6 +32,7 @@ class ApprovalClick:
     chat_id: str
     value: str  # opaque payload the core encoded into the button
     prompt_message_id: str
+    sender_id: str = ""  # who tapped, for the owner gate (Telegram from.id)
 
 
 @dataclass(frozen=True)

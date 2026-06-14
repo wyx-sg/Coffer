@@ -115,6 +115,8 @@ class SeaTalkAdapter:
                     timestamp=datetime.fromtimestamp(
                         int(envelope.get("timestamp", 0) or 0), tz=UTC
                     ),
+                    # SeaTalk DMs are 1:1, so the sender is the employee_code.
+                    sender_id=str(event.get("employee_code", "")),
                 )
             )
         elif event_type == "interactive_message_click":
@@ -124,6 +126,7 @@ class SeaTalkAdapter:
                     chat_id=str(event.get("employee_code", "")),
                     value=str(event.get("value", "")),
                     prompt_message_id=str(event.get("message_id", "")),
+                    sender_id=str(event.get("employee_code", "")),
                 )
             )
 
