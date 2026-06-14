@@ -278,16 +278,16 @@ release checks and can leave the repo in a half-tagged state.
 
 ### LLM 调用前必须抹除的不变量
 
-原始 `.jsonl` 记录**绝不落盘**，也不会出现在事实正文里。LLM 调用前：
+原始记录**绝不落盘**，也不会出现在事实正文里。LLM 调用前：
 
-- 所有 `tool_use` 与 `tool_result` 块被丢弃。
+- 所有 `tool_use` / `tool_result` 块（Claude/Codex）以及非 `text` 的 part —— tool、reasoning、file、step（OpenCode）—— 被丢弃。
 - assistant 回复中嵌入的文件内容片段与命令输出被丢弃。
 - 常见 secret 模式（API key、token、PEM block）经正则抹除器删除。
 - 长片段被截断。
 
 只有抹除后的自然语言文本（用户 + 助手的散文部分）发送给 LLM。只有提炼出的洞察文本写入事实 store。原始记录与抹除中间体均不存储于 `~/.coffer/` 的任何位置。
 
-Coffer 读取 `~/.claude/projects/` 与 `~/.codex/sessions/`，但在此流程中**绝不写入它们** —— Spec 004 的只读不变量得到完整保留。
+Coffer 读取 `~/.claude/projects/`、`~/.codex/sessions/` 以及 OpenCode 的存储树（`~/.local/share/opencode/storage/`），但在此流程中**绝不写入它们** —— Spec 004 的只读不变量得到完整保留。Cursor / OpenClaw / Hermes 的记录读取器被推迟（见 spec.md 的 US「distill transcript to memory」）：它们的存储要么临时、要么无文档、要么不带工作目录无法按项目归类。
 
 ### 审计
 
