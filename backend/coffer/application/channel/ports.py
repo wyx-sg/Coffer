@@ -71,6 +71,14 @@ class ChannelPeer:
     display_name: str
     paired_at: datetime
     active_conversation_id: str | None
+    # The paired sender's stable identity (Telegram from.id, SeaTalk
+    # employee_code); the owner gate checks it when present. ``None`` on rows
+    # paired before the gate gained sender awareness → chat-id-only fallback.
+    sender_id: str | None = None
+    # Sticky structural choices: which agent and which channel workspace new
+    # conversations use. ``None`` means fall back to the channel defaults.
+    preferred_agent: str | None = None
+    preferred_workspace: str | None = None
 
 
 class ChannelPeerRepoPort(Protocol):
@@ -82,6 +90,14 @@ class ChannelPeerRepoPort(Protocol):
 
     async def set_active_conversation(
         self, resource_id: int, conversation_id: str | None
+    ) -> None: ...
+
+    async def set_preferences(
+        self,
+        resource_id: int,
+        *,
+        preferred_agent: str | None,
+        preferred_workspace: str | None,
     ) -> None: ...
 
 

@@ -70,6 +70,52 @@ async def test_get_unknown_resource_returns_none(env: ChannelEnv) -> None:
     assert await env.peers.get(99999) is None
 
 
+async def test_sender_id_and_preferences_roundtrip(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.peers.upsert(
+        ChannelPeer(
+            resource_id=resource.id,
+            chat_id="chat-1",
+            display_name="Owner",
+            paired_at=datetime.now(tz=UTC),
+            active_conversation_id=None,
+            sender_id="u-42",
+            preferred_agent="codex",
+            preferred_workspace="proj",
+        )
+    )
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    assert peer.sender_id == "u-42"
+    assert peer.preferred_agent == "codex"
+    assert peer.preferred_workspace == "proj"
+
+
+async def test_legacy_peer_reads_new_fields_as_none(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.peers.upsert(_peer(resource.id))  # no new fields supplied
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    assert peer.sender_id is None
+    assert peer.preferred_agent is None
+    assert peer.preferred_workspace is None
+
+
+async def test_set_preferences_updates_and_preserves_active_conversation(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.peers.upsert(_peer(resource.id))
+    await env.peers.set_active_conversation(resource.id, "conv-7")
+
+    await env.peers.set_preferences(
+        resource.id, preferred_agent="claude_code", preferred_workspace="docs"
+    )
+    peer = await env.peers.get(resource.id)
+    assert peer is not None
+    assert peer.preferred_agent == "claude_code"
+    assert peer.preferred_workspace == "docs"
+    assert peer.active_conversation_id == "conv-7"  # preferences don't disturb it
+
+
 # ---------------------------------------------------------------------------
 # Migration 20260612_0015 (same alembic harness as the persistence tests)
 # ---------------------------------------------------------------------------
@@ -102,6 +148,9 @@ def test_migration_0015_creates_channel_peers(tmp_path, monkeypatch):  # type: i
             "display_name",
             "paired_at",
             "active_conversation_id",
+            "sender_id",
+            "preferred_agent",
+            "preferred_workspace",
         }
         fks = conn.execute("PRAGMA foreign_key_list(channel_peers)").fetchall()
         assert len(fks) == 1
