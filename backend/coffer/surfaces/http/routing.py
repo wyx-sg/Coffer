@@ -25,6 +25,7 @@ from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.distill import router as distill_router  # spec 007 extension
 from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
+from coffer.surfaces.http.history import router as history_router  # ADR-022 transcript history
 from coffer.surfaces.http.knowledge_base import router as kb_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router

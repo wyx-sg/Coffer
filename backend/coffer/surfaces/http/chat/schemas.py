@@ -74,6 +74,14 @@ class ConversationPatch(BaseModel):
     model_id: str | None = None
 
 
+class ConversationPeerOut(BaseModel):
+    """The IM peer driving a channel-origin conversation (ADR-021)."""
+
+    chat_id: str
+    display_name: str
+    channel: str
+
+
 class ConversationOut(BaseModel):
     """Single conversation response."""
 
@@ -84,6 +92,9 @@ class ConversationOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None = None
+    # ADR-021 — where the thread was opened from, for the Vault Console.
+    origin: str = "web"
+    peer: ConversationPeerOut | None = None
 
 
 class ConversationListOut(BaseModel):

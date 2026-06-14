@@ -29,6 +29,7 @@ from coffer.surfaces.http.chat.schemas import (
     ConversationListOut,
     ConversationOut,
     ConversationPatch,
+    ConversationPeerOut,
     MessageListOut,
     MessageOut,
 )
@@ -52,6 +53,13 @@ router = APIRouter(
 
 
 def _conv_out(conv: Conversation) -> ConversationOut:
+    peer: ConversationPeerOut | None = None
+    if conv.origin == "channel" and conv.peer_chat_id is not None:
+        peer = ConversationPeerOut(
+            chat_id=conv.peer_chat_id,
+            display_name=conv.peer_display_name or conv.peer_chat_id,
+            channel=conv.channel_name or "",
+        )
     return ConversationOut(
         id=conv.id,
         agent_key=conv.agent_key,
@@ -60,6 +68,8 @@ def _conv_out(conv: Conversation) -> ConversationOut:
         created_at=conv.created_at,
         updated_at=conv.updated_at,
         archived_at=conv.archived_at,
+        origin=conv.origin,
+        peer=peer,
     )
 
 

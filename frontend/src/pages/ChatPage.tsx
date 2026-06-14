@@ -5,11 +5,12 @@
 // (/chat/:id), so refresh and deep-links reopen the same thread.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { MessageSquareOff, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { History, MessageSquareOff, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useChatController } from "@/lib/hooks/useChatController";
 import { ConversationList } from "@/components/chat/ConversationList";
+import { HistoryPanel } from "@/components/chat/HistoryPanel";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { DraftThread } from "@/components/chat/DraftThread";
 import { translateApiError } from "@/lib/api/errors";
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
 export function ChatPage() {
   const { t } = useTranslation();
   const [historyOpen, setHistoryOpen] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
   const c = useChatController();
 
   return (
@@ -29,33 +31,50 @@ export function ChatPage() {
           historyOpen ? "flex w-64" : "hidden w-0",
         )}
       >
-        <div className="flex items-center justify-between border-b border-border px-2 py-2">
-          <span className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t("chat.title")}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="size-7 p-0"
-            onClick={() => setHistoryOpen(false)}
-            aria-label={t("chat.history.collapse")}
-          >
-            <PanelLeftClose className="size-4" />
-          </Button>
-        </div>
-        <ConversationList
-          conversations={c.listConversations}
-          activeId={c.activeConv?.id ?? null}
-          loading={c.listLoading}
-          view={c.showArchived ? "archived" : "active"}
-          onToggleView={c.toggleView}
-          onSelect={c.selectConversation}
-          onCreate={c.startDraft}
-          onRename={c.renameConversation}
-          onDelete={c.requestDelete}
-          onArchive={c.requestArchive}
-          onRestore={c.restoreConversation}
-        />
+        {searchOpen ? (
+          <HistoryPanel onClose={() => setSearchOpen(false)} />
+        ) : (
+          <>
+            <div className="flex items-center justify-between border-b border-border px-2 py-2">
+              <span className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t("chat.title")}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-7 p-0"
+                  onClick={() => setSearchOpen(true)}
+                  aria-label={t("history.open")}
+                >
+                  <History className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-7 p-0"
+                  onClick={() => setHistoryOpen(false)}
+                  aria-label={t("chat.history.collapse")}
+                >
+                  <PanelLeftClose className="size-4" />
+                </Button>
+              </div>
+            </div>
+            <ConversationList
+              conversations={c.listConversations}
+              activeId={c.activeConv?.id ?? null}
+              loading={c.listLoading}
+              view={c.showArchived ? "archived" : "active"}
+              onToggleView={c.toggleView}
+              onSelect={c.selectConversation}
+              onCreate={c.startDraft}
+              onRename={c.renameConversation}
+              onDelete={c.requestDelete}
+              onArchive={c.requestArchive}
+              onRestore={c.restoreConversation}
+            />
+          </>
+        )}
       </div>
 
       {/* Thread column */}

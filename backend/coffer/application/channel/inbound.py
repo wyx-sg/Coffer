@@ -55,7 +55,15 @@ class ConversationPort(Protocol):
     """The slice of the chat platform's conversation service we use."""
 
     async def create_conversation(
-        self, *, agent_key: str, agent_config: dict[str, Any] | None, actor: str
+        self,
+        *,
+        agent_key: str,
+        agent_config: dict[str, Any] | None,
+        actor: str,
+        origin: str = "web",
+        channel_name: str | None = None,
+        peer_chat_id: str | None = None,
+        peer_display_name: str | None = None,
     ) -> Any: ...
 
     async def get_conversation(self, conversation_id: str) -> Any: ...
@@ -314,6 +322,10 @@ class InboundProcessor:
             agent_key=binding.default_agent,
             agent_config=binding.default_agent_config,
             actor="channel",
+            origin="channel",
+            channel_name=binding.name,
+            peer_chat_id=peer.chat_id,
+            peer_display_name=peer.display_name,
         )
         await self._peers.set_active_conversation(binding.resource_id, conv.id)
         return str(conv.id)
