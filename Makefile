@@ -85,6 +85,7 @@ hooks:
 	fi
 
 verify: lint verify-unit verify-integration verify-contract verify-acceptance
+	@$(PY) scripts/verify_stamp.py write && echo "verify: OK — recorded .coffer-verify.stamp"
 verify-all: verify verify-e2e
 
 verify-acceptance:

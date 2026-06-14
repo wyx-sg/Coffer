@@ -200,3 +200,6 @@ dist/
 # Opt-in eval-capture sink (ADR-019) — a local dev artefact, never committed.
 *eval-capture*.jsonl
 evals/captured/
+
+# verify-before-commit freshness stamp (scripts/verify_stamp.py) — local only.
+.coffer-verify.stamp
