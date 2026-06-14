@@ -159,7 +159,7 @@ class AgentService:
         # leaf under an EXISTING config dir, then assert it's usable. We refuse
         # to create a missing config dir (a typo'd path must fail, not be
         # silently materialised).
-        self._ensure_skill_dir(cfg.resolved_skill_dir())
+        self._ensure_skill_dir(cfg.resolved_config_dir(), cfg.resolved_skill_dir())
 
         # Dedup by the resolved config dir — one agent per config directory.
         new_config_dir = str(cfg.resolved_config_dir())
@@ -186,22 +186,25 @@ class AgentService:
         return registered
 
     @staticmethod
-    def _ensure_skill_dir(skill_dir: pathlib.Path) -> None:
-        """Create the ``skills/`` leaf under an EXISTING config dir, then assert
-        it's usable.
+    def _ensure_skill_dir(config_dir: pathlib.Path, skill_dir: pathlib.Path) -> None:
+        """Create the skill-delivery subpath under an EXISTING config dir, then
+        assert it's usable.
 
-        The agent's config dir (``skill_dir.parent``) must already exist — we
-        refuse to ``mkdir -p`` a mistyped config location (e.g.
+        The agent's config dir (``~/.claude``, ``~/.openclaw``, …) must already
+        exist — we refuse to ``mkdir -p`` a mistyped config location (e.g.
         ``/Usrs/me/.claude``) into being, which would silently deliver skills to
-        a directory the agent never reads. Only the ``skills/`` subfolder is
-        auto-created. ``mkdir`` failures are swallowed — ``assert_skill_dir_usable``
-        surfaces the precise reason (privileged / not-writable / not-a-directory).
+        a directory the agent never reads. The Coffer-owned skill subpath under
+        it (``skills`` for most agents, ``workspace/skills`` for OpenClaw) IS
+        auto-created, including intermediate components. ``mkdir`` failures are
+        swallowed — ``assert_skill_dir_usable`` surfaces the precise reason
+        (privileged / not-writable / not-a-directory).
         """
-        config_dir = skill_dir.parent
         if not config_dir.is_dir():
             raise SkillDirNotWritable(str(config_dir), "directory_missing")
         with contextlib.suppress(OSError):
-            skill_dir.mkdir(exist_ok=True)
+            # parents=True creates nested subpaths (OpenClaw's workspace/skills)
+            # but never the config_dir itself — that's guarded above.
+            skill_dir.mkdir(parents=True, exist_ok=True)
         assert_skill_dir_usable(skill_dir)
 
     async def list(self) -> list[Resource]:
@@ -236,7 +239,7 @@ class AgentService:
         # fail because the existing dir has become non-writable since register.
         dir_changed = new_cfg.resolved_config_dir() != cfg.resolved_config_dir()
         if dir_changed:
-            self._ensure_skill_dir(new_cfg.resolved_skill_dir())
+            self._ensure_skill_dir(new_cfg.resolved_config_dir(), new_cfg.resolved_skill_dir())
         updated = await self._rs.update_config(
             ResourceRef("agent", name),
             new_config=new_cfg.model_dump(mode="json"),

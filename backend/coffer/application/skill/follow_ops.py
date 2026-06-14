@@ -55,6 +55,10 @@ async def apply_follow_for_agent(*, service: SkillService, agent_name: str, acto
         agent = await service._rs.get(ResourceRef("agent", agent_name))
     except CofferError:
         return
+    # Non-folder agents (Cursor/Hermes) can't receive folder-symlink deliveries;
+    # skip reconciliation so registration / policy-change flows don't crash.
+    if not service._is_folder_delivery(agent):
+        return
     follow, exclusions = service._resolve_agent_skill_policy(agent)
     if not follow:
         return

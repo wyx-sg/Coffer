@@ -203,6 +203,8 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **非托管条目是指向主库之外的 symlink**：列为非托管但不可收编（收编会搬走别人的事实来源）；用户可手动处理链接目标，或删除该链接。
 - **非托管 skill 没有合法 SKILL.md**：以 `valid=false` 及原因列出；可删除，但在通过校验之前不可收编。
 - **开启跟随时目标路径已存在同名的非 Coffer 文件夹**：该 skill 报告为冲突（与 FR-011 同规则）而不被覆盖；主库其余部分照常投递。
+- **各 agent 的交付目标**：folder 模式的 agent 交付到其配置目录下的 skill 子路径——Claude Code、Codex、OpenCode 为 `<config_dir>/skills/<name>`；OpenClaw 为 `<config_dir>/workspace/skills/<name>`。每个 agent 的模式与子路径来自能力清单，因此新增一个 agent 的交付目标是数据而非新分支。
+- **交付模式尚未接通的 agent（Cursor、Hermes）**：Cursor（`rules_mdc`）与 Hermes（`external_dir`）是已识别的交付模式扩展点，其端到端交付作为单独的后续项。为这类 agent 启用 skill 会在任何文件系统写入之前以明确的“交付模式尚不支持”错误（HTTP 422）拒绝，而不是用 folder 模式误交付；follow / relink 协调器会跳过这些 agent，因此注册与策略变更仍可成功。
 
 ## Acceptance Scenarios
 
