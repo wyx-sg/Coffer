@@ -60,12 +60,16 @@ class TurnRenderer:
     conversation_id: str
     pending_approvals: dict[str, PendingApproval]
     send: Callable[[str], Awaitable[None]]  # owner-bound safe send
+    now: Callable[[], float] = time.monotonic  # injectable clock (turn duration)
 
     async def consume(self, queue: asyncio.Queue[Any]) -> None:
         parts: list[str] = []
         progress = _Progress()
         stop_reason = "end_turn"
         error: TurnError | None = None
+        started = self.now()
+        tool_ids: set[str] = set()
+        tokens: int | None = None
         while True:
             event = await queue.get()
             if event is None:
@@ -73,6 +77,7 @@ class TurnRenderer:
             if isinstance(event, TextDelta):
                 parts.append(event.text)
             elif isinstance(event, ToolCall):
+                tool_ids.add(event.tool_use_id)
                 progress.lines[event.tool_use_id] = f"⏳ {event.tool_name}"
                 await self._update_progress(progress)
             elif isinstance(event, ToolResult):
@@ -83,9 +88,34 @@ class TurnRenderer:
                 await self._deliver_approval_prompt(event)
             elif isinstance(event, TurnDone):
                 stop_reason = event.stop_reason
+                if event.prompt_tokens is not None or event.completion_tokens is not None:
+                    tokens = (event.prompt_tokens or 0) + (event.completion_tokens or 0)
             elif isinstance(event, TurnError):
                 error = event
         await self._finish(parts, stop_reason, error, progress)
+        # Every turn ends with a compact fact summary — the only end-of-turn
+        # signal on platforms that cannot edit and show nothing mid-turn.
+        await self.send(
+            self._summary(error, stop_reason, len(tool_ids), self.now() - started, tokens)
+        )
+
+    @staticmethod
+    def _summary(
+        error: TurnError | None,
+        stop_reason: str,
+        tool_count: int,
+        duration: float,
+        tokens: int | None,
+    ) -> str:
+        facts = [f"{tool_count} tool" + ("" if tool_count == 1 else "s"), f"{duration:.1f}s"]
+        if tokens is not None:
+            facts.append(f"{tokens} tok")
+        detail = " · ".join(facts)
+        if error is not None:
+            return f"⚠️ failed · {detail}"
+        if stop_reason == "interrupted":
+            return f"⏹ stopped · {detail}"
+        return f"✅ done · {detail}"
 
     async def _deliver_approval_prompt(self, event: ApprovalRequest) -> None:
         preview = json.dumps(event.tool_input, ensure_ascii=False)

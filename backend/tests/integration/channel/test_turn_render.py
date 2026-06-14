@@ -1,21 +1,36 @@
 """TurnRenderer progress strategy is picked from capabilities, never the type.
 
 supports_edit → one editable progress message, deleted when the turn ends;
-without it the renderer sends no tool-progress traffic at all.
+without it the renderer sends no tool-progress traffic at all. Every turn ends
+with a compact completion summary (FR-015), capability-agnostic.
 """
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from typing import Any
 
 from coffer.application.channel.turn_render import TurnRenderer
-from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone
+from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone, TurnError
 
 from .conftest import FakeChannelAdapter
 
 
-async def _render(adapter: FakeChannelAdapter, events: list[Any]) -> None:
+def _clock(*values: float) -> Callable[[], float]:
+    """A deterministic monotonic clock returning the given values in order
+    (last value repeats), so turn duration is fixed in tests."""
+    seq = list(values) or [0.0]
+
+    def now() -> float:
+        return seq.pop(0) if len(seq) > 1 else seq[0]
+
+    return now
+
+
+async def _render(
+    adapter: FakeChannelAdapter, events: list[Any], *, now: Callable[[], float] | None = None
+) -> None:
     async def send(text: str) -> None:
         await adapter.send_text("owner", text)
 
@@ -26,6 +41,7 @@ async def _render(adapter: FakeChannelAdapter, events: list[Any]) -> None:
         conversation_id="c1",
         pending_approvals={},
         send=send,
+        now=now or _clock(0.0),
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
     for event in events:
@@ -52,7 +68,9 @@ async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
     progress_id = "m1"  # ids are issued in send order
     # …which is deleted when the turn finishes, before the final reply.
     assert adapter.deleted == [("owner", progress_id)]
-    assert adapter.sent[-1] == ("owner", "found 3 cats")
+    assert ("owner", "found 3 cats") in adapter.sent
+    # The turn ends with a compact completion summary.
+    assert adapter.sent[-1] == ("owner", "✅ done · 1 tool · 0.0s")
 
 
 async def test_without_edit_support_no_progress_traffic_is_sent() -> None:
@@ -60,6 +78,44 @@ async def test_without_edit_support_no_progress_traffic_is_sent() -> None:
 
     await _render(adapter, _TOOL_TURN)
 
-    assert adapter.sent == [("owner", "found 3 cats")]  # the reply, nothing else
+    # The reply, then the completion summary — and nothing else (no progress).
+    assert adapter.sent == [
+        ("owner", "found 3 cats"),
+        ("owner", "✅ done · 1 tool · 0.0s"),
+    ]
     assert adapter.edits == []
     assert adapter.deleted == []
+
+
+async def test_summary_reports_duration_and_tokens() -> None:
+    adapter = FakeChannelAdapter(supports_edit=False)
+    events = [
+        TextDelta(text="hi"),
+        TurnDone(prompt_tokens=50, completion_tokens=30, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events, now=_clock(100.0, 101.5))
+
+    assert adapter.sent[-1] == ("owner", "✅ done · 0 tools · 1.5s · 80 tok")
+
+
+async def test_error_turn_ends_with_a_failed_summary() -> None:
+    adapter = FakeChannelAdapter(supports_edit=False)
+    events = [TurnError(code="PROVIDER_TIMEOUT", message="upstream timed out")]
+
+    await _render(adapter, events)
+
+    assert adapter.sent[0] == ("owner", "⚠️ upstream timed out [PROVIDER_TIMEOUT]")
+    assert adapter.sent[-1] == ("owner", "⚠️ failed · 0 tools · 0.0s")
+
+
+async def test_interrupted_turn_ends_with_a_stopped_summary() -> None:
+    adapter = FakeChannelAdapter(supports_edit=False)
+    events = [
+        TextDelta(text="partial"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.sent[-1] == ("owner", "⏹ stopped · 0 tools · 0.0s")
