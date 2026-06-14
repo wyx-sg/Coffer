@@ -101,6 +101,7 @@ class MCPGatewaySession:
         clock: Callable[[], datetime] | None = None,
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
+        embedder_provider: Callable[[], Awaitable[Any | None]] | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._resources = resource_service
@@ -116,6 +117,7 @@ class MCPGatewaySession:
         # daemon's lifetime and the on_delete hook walks dead ones).
         self._on_dispose = on_dispose
         self._builtin = builtin_tools or BuiltinToolRegistry()
+        self._embedder_provider = embedder_provider  # semantic search_tools; None → BM25
         self._initialized = False
         # FR-004: the agent's launch cwd, reported by the shim at the
         # ``initialize`` handshake (params._meta["coffer/cwd"]). Threaded into
@@ -263,12 +265,14 @@ class MCPGatewaySession:
             listed = await list_tools_across(
                 self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
             )
+            embedder = await self._embedder_provider() if self._embedder_provider else None
             return await dispatch_tool_search(
                 params=params,
                 aggregated_tools=listed["tools"],
                 invocations=self._invocations,
                 session_id=self.id,
                 clock=self._clock,
+                embedder=embedder,
             )
         if self._builtin.is_builtin(name):
             params = self._inject_session_cwd(name, params)

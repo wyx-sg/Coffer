@@ -145,7 +145,9 @@ def test_archive_and_unarchive_filter_the_list() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()["id"]
+        conv_id = client.post(
+            "/api/v1/chat/conversations", json={"agent_key": "builtin"}
+        ).json()["id"]
 
         # Active by default; archived list empty.
         assert len(client.get("/api/v1/chat/conversations").json()["conversations"]) == 1
@@ -208,7 +210,9 @@ def test_patch_conversation_unknown_model_returns_404() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()["id"]
+        conv_id = client.post(
+            "/api/v1/chat/conversations", json={"agent_key": "builtin"}
+        ).json()["id"]
 
         resp = client.patch(
             f"/api/v1/chat/conversations/{conv_id}",
@@ -232,7 +236,9 @@ def test_patch_conversation_is_atomic_on_invalid_model() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()["id"]
+        conv_id = client.post(
+            "/api/v1/chat/conversations", json={"agent_key": "builtin"}
+        ).json()["id"]
         original_title = client.get(f"/api/v1/chat/conversations/{conv_id}").json()["title"]
 
         resp = client.patch(
@@ -659,7 +665,9 @@ def test_submit_approval_no_pending_request_returns_409() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()["id"]
+        conv_id = client.post(
+            "/api/v1/chat/conversations", json={"agent_key": "builtin"}
+        ).json()["id"]
         # No turn in flight → no pending approval → 409.
         resp = client.post(
             f"/api/v1/chat/conversations/{conv_id}/approvals",
@@ -689,7 +697,9 @@ def test_interrupt_no_active_turn_is_a_noop_204() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()["id"]
+        conv_id = client.post(
+            "/api/v1/chat/conversations", json={"agent_key": "builtin"}
+        ).json()["id"]
         resp = client.post(f"/api/v1/chat/conversations/{conv_id}/interrupt")
         assert resp.status_code == 204
 

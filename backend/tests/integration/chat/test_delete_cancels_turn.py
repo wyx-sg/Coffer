@@ -93,7 +93,9 @@ def test_delete_conversation_route_passes_cancel_fn_to_service() -> None:
     chat_svc.delete_conversation = _capturing_delete  # type: ignore[method-assign]
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()["id"]
+        conv_id = client.post(
+            "/api/v1/chat/conversations", json={"agent_key": "builtin"}
+        ).json()["id"]
         resp = client.delete(f"/api/v1/chat/conversations/{conv_id}")
         assert resp.status_code == 204
 

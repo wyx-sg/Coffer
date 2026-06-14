@@ -1,5 +1,5 @@
 # backend/tests/unit/domain/mcp/test_tool_search.py
-from coffer.domain.mcp.tool_search import ScoredTool, rank_tools
+from coffer.domain.mcp.tool_search import ScoredTool, rank_by_similarity, rank_tools
 
 
 def _cat():
@@ -40,4 +40,28 @@ def test_empty_catalogue_or_query_returns_empty():
 def test_ties_break_on_catalogue_order():
     cat = [("a__x", "same words here"), ("b__y", "same words here")]
     ranked = rank_tools("same words", cat, top_k=2)
+    assert [s.index for s in ranked] == [0, 1]
+
+
+# -- rank_by_similarity (semantic cosine ranker) -------------------------------
+
+
+def test_similarity_ranks_closest_vector_first():
+    query = [1.0, 0.0]
+    docs = [[0.0, 1.0], [0.9, 0.1], [0.2, 0.9]]
+    ranked = rank_by_similarity(query, docs, top_k=3)
+    assert ranked[0].index == 1  # most aligned with the query axis
+    assert ranked[0].score > ranked[1].score
+
+
+def test_similarity_skips_zero_norm_docs_and_empty_query():
+    assert rank_by_similarity([0.0, 0.0], [[1.0, 0.0]], top_k=3) == []
+    ranked = rank_by_similarity([1.0, 0.0], [[0.0, 0.0], [1.0, 0.0]], top_k=3)
+    assert [s.index for s in ranked] == [1]  # zero-norm doc dropped
+
+
+def test_similarity_ties_break_on_index_order():
+    query = [1.0, 0.0]
+    docs = [[1.0, 0.0], [1.0, 0.0]]
+    ranked = rank_by_similarity(query, docs, top_k=2)
     assert [s.index for s in ranked] == [0, 1]
