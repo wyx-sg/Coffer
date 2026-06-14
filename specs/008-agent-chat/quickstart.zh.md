@@ -2,6 +2,13 @@
 
 > English: [quickstart.md](./quickstart.md)
 
+> **注（[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)）。**
+> 下文描述的 **Coffer Assistant** 聊天人格已退场。聊天现在**只**与 Coffer 受管
+> agent（Claude Code、Codex）对话，页面标签为 **Chat（聊天）**（而非 _Vault Console
+> 金库控制台_）。本地模型不再是聊天 agent；它驱动内部 `coffer__*` 能力——语义化的
+> `coffer__search_tools` 与对你知识/记忆的 `coffer__ask` agentic-RAG 工具。下文描述的是
+> 早先的内置 agent 聊天流程，保留作历史参考。
+
 Chat 页面让你与 **Coffer Assistant** 对话 —— 这是 Coffer 的内置 agent。
 该 agent 可以使用你 vault 中的一切：你的 MCP server 工具、你的记忆库、
 你的知识库以及你的 skills。
@@ -10,10 +17,10 @@ Chat 页面让你与 **Coffer Assistant** 对话 —— 这是 Coffer 的内置 
 
 内置 agent 需要一个 LLM。打开 **Settings → Models** 并添加一个：
 
-| Provider | 你需要提供 |
-|---|---|
-| Anthropic | model id（例如 `claude-sonnet-4-6`）+ API-key 凭据 |
-| OpenAI | model id（例如 `gpt-4o`）+ API-key 凭据 |
+| Provider       | 你需要提供                                                             |
+| -------------- | ---------------------------------------------------------------------- |
+| Anthropic      | model id（例如 `claude-sonnet-4-6`）+ API-key 凭据                     |
+| OpenAI         | model id（例如 `gpt-4o`）+ API-key 凭据                                |
 | Ollama（本地） | model id（例如 `llama3.1`）+ base URL（例如 `http://localhost:11434`） |
 
 你添加的第一个模型会成为默认模型。云端模型通过一个凭据引用来引用它的 API

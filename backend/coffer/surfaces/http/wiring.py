@@ -39,11 +39,10 @@ from coffer.application.memory.sync import MemoryReconciler
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
-from coffer.infrastructure.chat.builtin_provider import BuiltinAgentProvider
+from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make_ask_tool
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.chat.gateway_tool_provider import GatewayToolProvider
-from coffer.infrastructure.chat.langgraph_agent import DEFAULT_RECURSION_LIMIT
 from coffer.infrastructure.chat.model_persistence import ChatModelRepo
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
@@ -241,6 +240,7 @@ def wire_chat(
     sm: object,
     mcp_session_factory: Callable[[str], Any],
     credential_store: Any,
+    builtin_tools: BuiltinToolRegistry,
 ) -> MCPGatewaySession:
     """Wire the agent-chat feature (spec 008) into the running app.
 
@@ -248,8 +248,14 @@ def wire_chat(
     (after KB, memory, MCP, and skill wiring) so the ``coffer-builtin-agent``
     gateway session sees all built-in tools.
 
-    Returns the long-lived ``MCPGatewaySession`` for the built-in agent so
-    the caller (``_lifespan``) can dispose it on shutdown.
+    Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
+    former ``builtin`` chat persona is retired (ADR-024). The local model lives
+    on as an internal capability: this function registers the ``coffer__ask``
+    agentic-retrieval built-in tool, which reuses the same gateway session.
+
+    Returns the long-lived ``MCPGatewaySession`` (the ``coffer-builtin-agent``
+    session that backs ``coffer__ask`` and other internal flows) so the caller
+    (``_lifespan``) can dispose it on shutdown.
     """
     # 1. Persistence repos.
     conv_repo = ConversationRepo(sm)  # type: ignore[arg-type]
@@ -276,24 +282,31 @@ def wire_chat(
             raise CredentialMissing(ref)
         return value
 
-    # 5. The agent-provider registry — the platform seam. v1 registers the one
-    #    built-in agent; a further agent is one more register() call here, with
-    #    no change to the chat surface, persistence, or the wire contract.
-    builtin_provider = BuiltinAgentProvider(
-        model_service=model_svc,
-        conversations=conv_repo,
-        tool_gateway=tool_gateway,
-        credential_resolver=_credential_resolver,
-        recursion_limit=_agent_recursion_limit(),
+    # 5. ``coffer__ask`` — the local model's internal job (ADR-024). The retired
+    #    builtin chat persona is replaced by an agentic-retrieval built-in tool
+    #    that reuses the same gateway session + model registry. Registered into
+    #    the (already-populated) BuiltinToolRegistry so every gateway session —
+    #    including the one Claude Code / Codex connect to — advertises it. The
+    #    tool exposes only read-only retrieval tools to its loop, so it can never
+    #    recurse into itself.
+    builtin_tools.register(
+        make_ask_tool(
+            model_service=model_svc,
+            tool_gateway=tool_gateway,
+            credential_resolver=_credential_resolver,
+            recursion_limit=_agent_recursion_limit(),
+        )
     )
+
+    # 6. The agent-provider registry — the platform seam. Chat lists only
+    #    Coffer-managed agents; a further agent is one more register() call here,
+    #    with no change to the chat surface, persistence, or the wire contract.
+    #    They surface in the picker only when their binary is on PATH (availability()).
     registry = AgentProviderRegistry()
-    registry.register(builtin_provider, display_name="Coffer Assistant")
-    # CLI-backed agents: each is one more register() call, no platform change.
-    # They surface in the picker only when their binary is on PATH (availability()).
     registry.register(ClaudeSdkProvider(conversations=conv_repo), display_name="Claude Code")
     registry.register(CodexAppServerProvider(conversations=conv_repo), display_name="Codex")
 
-    # 6. Application services + the agent-agnostic turn orchestrator.
+    # 7. Application services + the agent-agnostic turn orchestrator.
     chat_svc = ChatService(
         conversations=conv_repo,
         messages=msg_repo,
@@ -302,7 +315,7 @@ def wire_chat(
     )
     orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry, audit=audit)
 
-    # 7. Startup sweep: flip any lingering ``status='streaming'`` rows to
+    # 8. Startup sweep: flip any lingering ``status='streaming'`` rows to
     #    ``'failed'`` (recover from a prior daemon crash).
     loop = asyncio.get_running_loop()
 

@@ -55,6 +55,23 @@ provider 接缝保持诚实的 test-drive 目标，(b) IM peer 驱动、用户�
 会话。**移出范围：** 把 Coffer 当作主力的浏览器内编码聊天；只对那个定位才有意义的
 能力保持在范围外，除非未来某个 spec 重开它。
 
+## 再次定位 —— 内置 agent 是内部能力（[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)）
+
+[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)
+部分取代了上面的 Vault Console 定位。`builtin`「Coffer Assistant」**退出聊天人格**：
+它不再是注册的聊天 agent，并从 agent 选择器中移除。聊天**只**与 Coffer 受管 agent
+（`claude_code`、`codex`，及将来的受管 agent）对话，界面从 _Vault Console（金库控制
+台）_ 改回 **Chat（聊天）**。"通过内置 agent 与金库对话"这一职责被去掉；本地模型重塑
+为**仅内部**能力，只能通过 `coffer__*` MCP 工具触达——即对 `coffer__search_tools` 的
+语义升级，与一个对知识/记忆的新 `coffer__ask` agentic-RAG 工具（见 ADR-024）。**旁观
+并审批 channel 驱动会话**这一职责（ADR-021 职责 2）原样存续，走同一套
+`ConversationPort` / `TurnPort` / `submit_approval` 接缝。
+
+下文用户故事、验收场景与功能需求中仍把内置 agent 描述为可选聊天 agent 的部分（它的
+model 选择器、它在聊天里的金库工具调用、对它的 `coffer chat`），应读作 ADR-024 从聊天
+面移除的历史已交付行为；LLM/agentic-loop 机器保留但被重塑到 `coffer__ask` 之后，而非
+作为聊天人格呈现给用户。
+
 ## 用户场景与测试
 
 ### 用户故事 1 —— 在首次聊天前配置一个模型 provider（优先级：P1）
@@ -347,8 +364,9 @@ agent 使用哪一个。
 
 - **Given** 一个运行中守护进程，
 - **When** 用户询问平台它提供哪些 agent，
-- **Then** 内置 agent 被列出，带一个显示名与一个可用性标志，且该列表可从 REST
-  API 触达。
+- **Then** 受管 agent（`claude_code`、`codex`）被列出，各带一个显示名与一个可用性
+  标志，`builtin` agent **不**在其中（[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)），
+  且该列表可从 REST API 触达。
 
 ### 场景：开始一个对话时选择一个 agent
 
@@ -642,11 +660,14 @@ agent 使用哪一个。
   agent 进行的工具调用记录在 gateway 的调用日志中，归属于该 agent 的 gateway
   session。
 
-**Vault Console：来源呈现（[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md)）**
+**Chat 界面：来源呈现（[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md)，被 [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md) 修订）**
 
-- **FR-033**：Chat 界面 MUST 以 **Vault Console** 呈现：其主要角色是通过内置 agent
-  与金库对话、以及旁观/审批 channel 驱动的会话。它 MUST NOT 把自己定位为主力的浏览器
-  内编码聊天；CLI agent 仍作为 provider 接缝验证、以及 channel 驱动会话的目标而保留。
+- **FR-033**：Chat 界面（标签为 **Chat（聊天）**，按 [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)
+  从 _Vault Console_ 改回）MUST **只**与 Coffer 受管 agent 对话，并 MUST 呈现、让用户
+  旁观/审批 channel 驱动的会话。`builtin` agent MUST NOT 作为聊天 agent 提供；其模型是
+  仅内部能力，只能通过 `coffer__*` 工具触达（ADR-024），而非聊天人格。Chat 界面 MUST
+  NOT 把自己定位为主力的浏览器内编码聊天；受管 agent 仍作为 provider 接缝验证、以及
+  channel 驱动会话的目标而保留。
 - **FR-034**：会话历史 MUST 呈现每个会话的来源（网页草稿 vs channel peer），并对
   channel 来源的会话呈现 peer 身份；任一会话上的待审批工具调用 MUST 可从网页审批
   卡片解决，与 channel 自身的审批控件等价（两者解决 FR-020 的同一 human-approval

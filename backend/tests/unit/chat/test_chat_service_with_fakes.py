@@ -49,7 +49,7 @@ def make_service() -> tuple[
 @pytest.mark.asyncio
 async def test_create_conversation_returns_placeholder_title() -> None:
     svc, _conv_repo, _, _audit_repo, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     assert conv.title == "New conversation"
     assert conv.agent_key == "builtin"
     assert conv.model_id is None
@@ -58,7 +58,7 @@ async def test_create_conversation_returns_placeholder_title() -> None:
 @pytest.mark.asyncio
 async def test_create_conversation_emits_audit_event() -> None:
     svc, _, _, audit_repo, _ = make_service()
-    conv = await svc.create_conversation(actor="alice")
+    conv = await svc.create_conversation(agent_key="builtin", actor="alice")
     entry = next(e for e in audit_repo.entries if e.event_type == "conversation_created")
     assert entry.details["conversation_id"] == conv.id
     assert entry.actor == "alice"
@@ -67,7 +67,7 @@ async def test_create_conversation_emits_audit_event() -> None:
 @pytest.mark.asyncio
 async def test_create_conversation_calls_provider_init_conversation() -> None:
     svc, _, _, _, provider = make_service()
-    conv = await svc.create_conversation(agent_config={"model_id": "m-1"})
+    conv = await svc.create_conversation(agent_key="builtin", agent_config={"model_id": "m-1"})
     assert provider.init_calls == [(conv.id, {"model_id": "m-1"})]
 
 
@@ -98,7 +98,7 @@ async def test_create_conversation_rolls_back_when_init_rejects_config() -> None
     )
 
     with pytest.raises(AgentConfigRejected):
-        await svc.create_conversation(agent_config={"model_id": "ghost"})
+        await svc.create_conversation(agent_key="builtin", agent_config={"model_id": "ghost"})
 
     # The conversation row was rolled back — nothing left half-created.
     assert await conv_repo.list() == []
@@ -120,8 +120,8 @@ async def test_get_conversation_raises_not_found() -> None:
 @pytest.mark.asyncio
 async def test_list_conversations_newest_first() -> None:
     svc, conv_repo, _msg_repo, _, _ = make_service()
-    c1 = await svc.create_conversation()
-    c2 = await svc.create_conversation()
+    c1 = await svc.create_conversation(agent_key="builtin")
+    c2 = await svc.create_conversation(agent_key="builtin")
     await conv_repo.touch(c1.id, datetime(2030, 1, 2, tzinfo=UTC))
     await conv_repo.touch(c2.id, datetime(2030, 1, 1, tzinfo=UTC))
     result = await svc.list_conversations()
@@ -131,7 +131,7 @@ async def test_list_conversations_newest_first() -> None:
 @pytest.mark.asyncio
 async def test_rename_conversation() -> None:
     svc, _, _, _, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     updated = await svc.rename_conversation(conv.id, new_title="My Chat")
     assert updated.title == "My Chat"
 
@@ -146,7 +146,7 @@ async def test_rename_conversation_not_found() -> None:
 @pytest.mark.asyncio
 async def test_set_conversation_model_then_clear() -> None:
     svc, _, _, _, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     updated = await svc.set_conversation_model(conv.id, model_id="m-001")
     assert updated.model_id == "m-001"
     cleared = await svc.set_conversation_model(conv.id, model_id=None)
@@ -161,7 +161,7 @@ async def test_set_conversation_model_then_clear() -> None:
 @pytest.mark.asyncio
 async def test_delete_conversation_removes_messages() -> None:
     svc, conv_repo, msg_repo, _audit_repo, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="hi")])
     await svc.delete_conversation(conv.id)
 
@@ -172,7 +172,7 @@ async def test_delete_conversation_removes_messages() -> None:
 @pytest.mark.asyncio
 async def test_delete_conversation_emits_audit_event() -> None:
     svc, _, _, audit_repo, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     await svc.delete_conversation(conv.id, actor="bob")
     assert any(e.event_type == "conversation_deleted" for e in audit_repo.entries)
 
@@ -180,7 +180,7 @@ async def test_delete_conversation_emits_audit_event() -> None:
 @pytest.mark.asyncio
 async def test_delete_conversation_calls_provider_on_conversation_deleted() -> None:
     svc, _, _, _, provider = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     await svc.delete_conversation(conv.id)
     assert provider.deleted == [conv.id]
 
@@ -195,7 +195,7 @@ async def test_delete_conversation_not_found() -> None:
 @pytest.mark.asyncio
 async def test_delete_conversation_calls_cancel_fn() -> None:
     svc, _, _, _, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     cancelled: list[str] = []
     await svc.delete_conversation(conv.id, cancel_turn_fn=lambda cid: cancelled.append(cid))
     assert conv.id in cancelled
@@ -209,7 +209,7 @@ async def test_delete_conversation_calls_cancel_fn() -> None:
 @pytest.mark.asyncio
 async def test_append_message_basic() -> None:
     svc, _, _msg_repo, _, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     msg = await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="hello")])
     assert msg.role == Role.USER
     assert msg.seq == 0
@@ -219,7 +219,7 @@ async def test_append_message_basic() -> None:
 @pytest.mark.asyncio
 async def test_first_user_message_sets_title() -> None:
     svc, conv_repo, _, _, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     await svc.append_message(
         conv.id, role=Role.USER, content=[TextBlock(text="Tell me about Python")]
     )
@@ -231,7 +231,7 @@ async def test_first_user_message_sets_title() -> None:
 @pytest.mark.asyncio
 async def test_first_user_message_title_truncated_at_60_chars() -> None:
     svc, conv_repo, _, _, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="A" * 100)])
     updated = await conv_repo.get(conv.id)
     assert updated is not None
@@ -241,7 +241,7 @@ async def test_first_user_message_title_truncated_at_60_chars() -> None:
 @pytest.mark.asyncio
 async def test_second_user_message_does_not_change_title() -> None:
     svc, conv_repo, _, _, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="First message")])
     await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="Second message")])
     updated = await conv_repo.get(conv.id)
@@ -252,7 +252,7 @@ async def test_second_user_message_does_not_change_title() -> None:
 @pytest.mark.asyncio
 async def test_append_message_increments_seq() -> None:
     svc, _, _msg_repo, _, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     m0 = await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="q")])
     m1 = await svc.append_message(
         conv.id, role=Role.ASSISTANT, content=[TextBlock(text="a")], status="complete"
@@ -264,7 +264,7 @@ async def test_append_message_increments_seq() -> None:
 @pytest.mark.asyncio
 async def test_list_messages_ordered_by_seq() -> None:
     svc, _, _, _, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="q")])
     await svc.append_message(conv.id, role=Role.ASSISTANT, content=[TextBlock(text="a")])
     msgs = await svc.list_messages(conv.id)
@@ -281,7 +281,7 @@ async def test_list_messages_conversation_not_found() -> None:
 @pytest.mark.asyncio
 async def test_append_with_non_text_content() -> None:
     svc, _, _msg_repo, _, _ = make_service()
-    conv = await svc.create_conversation()
+    conv = await svc.create_conversation(agent_key="builtin")
     tool_use = ToolUseBlock(tool_use_id="t1", tool_name="coffer__list_skills", tool_input={})
     msg = await svc.append_message(
         conv.id, role=Role.ASSISTANT, content=[tool_use], status="complete"

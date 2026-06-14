@@ -1,8 +1,8 @@
 // src/lib/hooks/useChatController.ts
-// Orchestration for the Chat page: binds the conversation/model/agent queries,
-// the streaming turn, and the draft → create → first-message flow, exposing a
-// flat interface the ChatPage component renders. Keeping this out of the page
-// keeps the component presentational (and under the file-size limit).
+// Orchestration for the Chat page: binds the conversation/agent queries, the
+// streaming turn, and the draft → create → first-message flow, exposing a flat
+// interface the ChatPage component renders. Keeping this out of the page keeps
+// the component presentational (and under the file-size limit).
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -13,11 +13,9 @@ import {
   useCreateConversation,
   useRenameConversation,
   useDeleteConversation,
-  useSetConversationModel,
   useArchiveConversation,
   useUnarchiveConversation,
 } from "@/lib/hooks/useConversations";
-import { useModels } from "@/lib/hooks/useModels";
 import { useChatAgents } from "@/lib/hooks/useChatAgents";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
 import { getRecentCwds, lastCwd, pushRecentCwd } from "@/lib/chatCwd";
@@ -28,11 +26,10 @@ export function useChatController() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  // Draft top-bar selection (agent + model) before the conversation exists;
-  // null until the user touches a selector — defaults are derived below.
+  // Draft top-bar selection (agent + working directory) before the conversation
+  // exists; null until the user touches a selector — defaults are derived below.
   const [draftConfig, setDraftConfig] = useState<{
     agentKey: string;
-    modelId: string | null;
     cwd: string;
   } | null>(null);
   // After creating from the draft, the first message is sent once the turn hook
@@ -42,12 +39,10 @@ export function useChatController() {
   const { data: conversations = [], isPending: convLoading } = useConversations();
   const { data: archivedConversations = [], isPending: archivedLoading } =
     useArchivedConversations(showArchived);
-  const { data: models = [] } = useModels();
   const { data: agents = [] } = useChatAgents();
   const createConv = useCreateConversation();
   const renameConv = useRenameConversation();
   const deleteConv = useDeleteConversation();
-  const setModel = useSetConversationModel();
   const archiveConv = useArchiveConversation();
   const unarchiveConv = useUnarchiveConversation();
 
@@ -83,18 +78,20 @@ export function useChatController() {
     }
   }, [pendingFirst, activeConv?.id, turn]);
 
-  const defaultModelId = models.find((m) => m.is_default)?.id ?? models[0]?.id ?? null;
-  // Pre-fill a CLI agent's working directory with the last one used, so the
+  // Chat talks only to Coffer-managed agents (claude_code / codex). The draft
+  // defaults to the first available one; when none is available the draft
+  // surface shows an install/configure empty state instead.
+  const firstAvailableAgent = agents.find((a) => a.available)?.agent_key ?? null;
+  // Pre-fill a managed agent's working directory with the last one used, so the
   // draft isn't an empty "type a path" field (the recents come from chatCwd).
   const defaultCwd = lastCwd() ?? "";
   const effectiveDraft = draftConfig ?? {
-    agentKey: agents.find((a) => a.available)?.agent_key ?? "builtin",
-    modelId: defaultModelId,
+    agentKey: firstAvailableAgent ?? "",
     cwd: defaultCwd,
   };
 
   const startDraft = () => {
-    setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId: defaultModelId, cwd: defaultCwd });
+    setDraftConfig({ agentKey: effectiveDraft.agentKey, cwd: defaultCwd });
     navigate("/chat");
   };
 
@@ -104,20 +101,13 @@ export function useChatController() {
   };
 
   const sendDraft = (text: string) => {
-    // The built-in agent is configured by model; CLI agents by working directory.
-    const isCli = effectiveDraft.agentKey !== "builtin";
-    const agentConfig =
-      effectiveDraft.agentKey === "builtin"
-        ? effectiveDraft.modelId
-          ? { model_id: effectiveDraft.modelId }
-          : {}
-        : { cwd: effectiveDraft.cwd.trim() };
-    // Remember a CLI agent's working directory so the next draft defaults to it.
-    if (isCli) pushRecentCwd(effectiveDraft.cwd);
+    // Managed agents (claude_code / codex) are configured by a working directory.
+    // Remember it so the next draft defaults to it.
+    pushRecentCwd(effectiveDraft.cwd);
     createConv.mutate(
       {
         agent_key: effectiveDraft.agentKey,
-        agent_config: agentConfig,
+        agent_config: { cwd: effectiveDraft.cwd.trim() },
       },
       {
         onSuccess: (created) => {
@@ -154,7 +144,6 @@ export function useChatController() {
   return {
     conversations,
     convLoading,
-    models,
     agents,
     activeConv,
     // Route-id resolution state: still resolving / definitively unknown.
@@ -165,17 +154,14 @@ export function useChatController() {
     activeAgent,
     turn,
     effectiveDraft,
+    // True when no Coffer-managed agent (claude_code / codex) is available, so
+    // the draft surface shows an install/configure empty state instead.
+    noManagedAgent: !firstAvailableAgent,
     recentCwds: getRecentCwds(),
     setDraftAgent: (agentKey: string) =>
-      setDraftConfig({ agentKey, modelId: effectiveDraft.modelId, cwd: effectiveDraft.cwd }),
-    setDraftModel: (modelId: string | null) =>
-      setDraftConfig({ agentKey: effectiveDraft.agentKey, modelId, cwd: effectiveDraft.cwd }),
+      setDraftConfig({ agentKey, cwd: effectiveDraft.cwd }),
     setDraftCwd: (cwd: string) =>
-      setDraftConfig({
-        agentKey: effectiveDraft.agentKey,
-        modelId: effectiveDraft.modelId,
-        cwd,
-      }),
+      setDraftConfig({ agentKey: effectiveDraft.agentKey, cwd }),
     startDraft,
     selectConversation,
     sendDraft,
@@ -183,8 +169,6 @@ export function useChatController() {
     createError: createConv.isError ? createConv.error : null,
     resetCreateError: () => createConv.reset(),
     renameConversation: (id: string, title: string) => renameConv.mutate({ id, title }),
-    setConversationModel: (id: string, modelId: string | null) =>
-      setModel.mutate({ id, model_id: modelId }),
     deletingId,
     requestDelete: setDeletingId,
     confirmDelete,

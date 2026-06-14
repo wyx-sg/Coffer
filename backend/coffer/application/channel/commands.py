@@ -163,43 +163,23 @@ class ChannelCommands:
         except CofferError as e:
             await send(binding, peer.chat_id, explain_conversation_error(binding, e))
             return
-        conv = await self._conversations.get_conversation(conversation_id)
-        builtin = conv.agent_key == "builtin"
         parts = text.split()
         if len(parts) < 2:
-            if builtin:
-                current = conv.model_id or "(default)"
-                names = [n for _id, n in await self._models.list_models()]
-                await send(
-                    binding,
-                    peer.chat_id,
-                    f"Model: {current}\nAvailable: {', '.join(names) or '(none)'}",
-                )
-            else:
-                cfg = await self._conversations.get_agent_config(conversation_id)
-                current = cfg.get("model") or "(CLI default)"
-                await send(
-                    binding, peer.chat_id, f"Model: {current}\n(passed through to the agent's CLI)"
-                )
+            # Show the current model. Coffer-managed CLI agents own their own
+            # model namespace (ADR-024 retired the builtin model-registry agent),
+            # so we just report what will be passed through to the agent's CLI.
+            cfg = await self._conversations.get_agent_config(conversation_id)
+            current = cfg.get("model") or "(CLI default)"
+            await send(
+                binding, peer.chat_id, f"Model: {current}\n(passed through to the agent's CLI)"
+            )
             return
         name = parts[1]
-        if builtin:
-            model_id = await self._models.resolve(name)
-            if model_id is None:
-                names = [n for _id, n in await self._models.list_models()]
-                await send(
-                    binding,
-                    peer.chat_id,
-                    f"Unknown model '{name}'. Available: {', '.join(names) or '(none)'}",
-                )
-                return
-            await self._conversations.set_conversation_model(conversation_id, model_id=model_id)
-        else:
-            # Bridged agents: raw passthrough; we do not own the CLI's model
-            # namespace, so a bad name surfaces as the CLI's own error next turn.
-            cfg = await self._conversations.get_agent_config(conversation_id)
-            cfg["model"] = name
-            await self._conversations.set_agent_config(conversation_id, cfg)
+        # Bridged agents: raw passthrough; we do not own the CLI's model
+        # namespace, so a bad name surfaces as the CLI's own error next turn.
+        cfg = await self._conversations.get_agent_config(conversation_id)
+        cfg["model"] = name
+        await self._conversations.set_agent_config(conversation_id, cfg)
         await send(binding, peer.chat_id, f"🧠 Model set to '{name}' for the next turn.")
 
     async def _open_and_report(

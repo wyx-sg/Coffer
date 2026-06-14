@@ -67,6 +67,28 @@ chat; they remain (a) test-drive targets that keep the provider seam honest and
 only make sense for that positioning stay out of scope unless a future spec
 re-opens it.
 
+## Repositioning — the built-in agent is an internal capability ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md))
+
+[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)
+partially supersedes the Vault Console positioning above. The `builtin` "Coffer
+Assistant" is **retired as a chat persona**: it is no longer a registered chat
+agent and is removed from the agent picker. Chat talks **only** to Coffer-managed
+agents (`claude_code`, `codex`, and future managed agents), and the surface
+reverts from _Vault Console_ to **Chat**. The "talk to the vault through the
+built-in agent" job is dropped; the local model is recast as an **internal-only**
+capability reachable solely through `coffer__*` MCP tools — a semantic upgrade to
+`coffer__search_tools` and a new `coffer__ask` agentic-RAG tool over
+knowledge/memory (see ADR-024). The **observe-and-approve channel-driven
+conversations** job (ADR-021 job 2) stands unchanged, over the same
+`ConversationPort` / `TurnPort` / `submit_approval` seams.
+
+Where the User Stories, Acceptance Scenarios, and Functional Requirements below
+still describe the built-in agent as a selectable chat agent (its model picker,
+its in-chat vault tool calls, `coffer chat` against it), read them as the
+historical shipped behaviour that ADR-024 removes from the chat surface; the
+LLM/agentic-loop machinery is kept but repurposed behind `coffer__ask` rather
+than presented to the user as a chat persona.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Configure a model provider before the first chat (Priority: P1)
@@ -403,8 +425,10 @@ referenced by at least one test marked
 
 - **Given** a running daemon,
 - **When** the user asks the platform which agents it offers,
-- **Then** the built-in agent is listed with a display name and an availability
-  flag, and the list is reachable from the REST API.
+- **Then** the managed agents (`claude_code`, `codex`) are listed, each with a
+  display name and an availability flag, the `builtin` agent is **not** among
+  them ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)),
+  and the list is reachable from the REST API.
 
 ### Scenario: choose an agent when starting a conversation
 
@@ -753,13 +777,17 @@ referenced by at least one test marked
   `agent`; tool invocations the built-in agent makes are recorded in the
   gateway's invocation log under the agent's gateway session.
 
-**Vault Console: origin surfacing ([ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.md))**
+**Chat surface: origin surfacing ([ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.md), amended by [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md))**
 
-- **FR-033**: The Chat surface MUST be presented as the **Vault Console**: its
-  primary roles are conversing with the vault through the built-in agent and
-  observing/approving channel-driven conversations. It MUST NOT position itself
-  as a primary in-browser coding chat; the CLI agents remain available as
-  provider-seam validation and as the targets of channel-driven conversations.
+- **FR-033**: The Chat surface (labelled **Chat**, reverted from _Vault Console_
+  per [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md))
+  MUST talk **only** to Coffer-managed agents and MUST surface and let the user
+  observe/approve channel-driven conversations. The `builtin` agent MUST NOT be
+  offered as a chat agent; its model is an internal-only capability reached
+  through `coffer__*` tools (ADR-024), not a chat persona. The Chat surface MUST
+  NOT position itself as a primary in-browser coding chat; the managed agents
+  remain available as provider-seam validation and as the targets of
+  channel-driven conversations.
 - **FR-034**: The conversation history MUST surface each conversation's origin
   (web draft vs. channel peer) and, for channel-originated conversations, the
   peer identity; a pending tool approval on any conversation MUST be resolvable

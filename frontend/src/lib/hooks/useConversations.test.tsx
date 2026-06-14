@@ -45,7 +45,7 @@ const chatApiMock = chatApi as unknown as Record<string, ReturnType<typeof vi.fn
 function makeConversation(overrides?: Partial<Conversation>): Conversation {
   return {
     id: "conv-1",
-    agent_key: "builtin",
+    agent_key: "claude_code",
     title: "Test Conversation",
     model_id: null,
     created_at: "2026-05-22T00:00:00Z",
@@ -168,7 +168,7 @@ describe("useCreateConversation", () => {
   });
 
   test("passes agent_key and agent_config when provided", async () => {
-    const conv = makeConversation({ model_id: "model-1" });
+    const conv = makeConversation();
     chatApiMock.createConversation.mockResolvedValue(conv);
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
 
@@ -176,7 +176,7 @@ describe("useCreateConversation", () => {
       wrapper: makeWrapper(),
     });
 
-    const body = { agent_key: "builtin", agent_config: { model_id: "model-1" } };
+    const body = { agent_key: "claude_code", agent_config: { cwd: "/home/me/project" } };
     await act(async () => {
       await result.current.mutateAsync(body);
     });

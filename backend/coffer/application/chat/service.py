@@ -137,7 +137,7 @@ class ChatService:
     async def create_conversation(
         self,
         *,
-        agent_key: str = "builtin",
+        agent_key: str,
         agent_config: dict[str, Any] | None = None,
         actor: str = "user",
         origin: str = "web",

@@ -20,10 +20,8 @@ import type { AgentOut } from "@/lib/api/agents";
 import { useRemoveAgent } from "@/lib/hooks/useAgents";
 import { useSkills } from "@/lib/hooks/useSkills";
 
-// Managed coding agents only (Claude Code / Codex). The built-in Coffer
-// Assistant is NOT a registry agent — no config_dir / config files / MCP
-// install / delete — so it lives in its own BuiltinAgentSection rather than as
-// a special-cased row here, keeping this table's columns uniform.
+// Managed coding agents only (Claude Code / Codex), keeping this table's
+// columns uniform.
 type Row = AgentOut;
 
 export function AgentTable({ agents }: { agents: AgentOut[] }) {

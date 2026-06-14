@@ -215,7 +215,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # coffer-builtin-agent gateway session sees the fully-populated
     # BuiltinToolRegistry (KB + memory + skill + MCP tools). The session factory
     # is the one wire_mcp_kind registered via set_mcp_session_factory.
-    chat_gateway_session = wire_chat(audit, sm, get_mcp_session_factory(), credential_store)
+    chat_gateway_session = wire_chat(
+        audit, sm, get_mcp_session_factory(), credential_store, builtin_tools
+    )
     # The chat session's supervisor stays registered in session_supervisors so
     # the mcp_server on_delete hook evicts its upstream connections too; shutdown
     # disposes the chat session first (its on_dispose deregisters the entry), so

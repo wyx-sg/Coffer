@@ -5,7 +5,6 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MessageThread } from "./MessageThread";
 import type { Conversation, Message } from "@/lib/api/chat";
-import type { Model } from "@/lib/api/models";
 
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
@@ -18,19 +17,9 @@ const chatApiMock = chatApi as unknown as Record<string, ReturnType<typeof vi.fn
 
 const BASE_CONV: Conversation = {
   id: "conv-1",
-  agent_key: "builtin",
+  agent_key: "claude_code",
   title: "Test",
-  model_id: "model-1",
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-01T00:00:00Z",
-};
-
-const BASE_MODEL: Model = {
-  id: "model-1",
-  display_name: "Test Model",
-  provider: "anthropic",
-  model: "claude-3-5-sonnet",
-  is_default: true,
+  model_id: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };
@@ -49,11 +38,9 @@ const makeMsg = (overrides: Partial<Message>): Message => ({
 function renderThread(props?: Partial<React.ComponentProps<typeof MessageThread>>) {
   const defaultProps: React.ComponentProps<typeof MessageThread> = {
     conversation: BASE_CONV,
-    models: [BASE_MODEL],
     liveMessage: null,
     isStreaming: false,
     onSend: vi.fn(),
-    onModelChange: vi.fn(),
   };
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -70,27 +57,11 @@ describe("MessageThread", () => {
     vi.clearAllMocks();
   });
 
-  test("shows no-model empty state when zero models are configured", () => {
-    // I2: empty state is driven by the model LIST, not by conversation.model_id.
-    chatApiMock.listMessages = vi.fn();
-    renderThread({ models: [] });
-    expect(screen.getByText("No model configured")).toBeInTheDocument();
-  });
-
-  test("does NOT show no-model empty state when models exist but conversation.model_id is null", async () => {
-    // I2: conversation with model_id=null uses the default model — it is valid.
+  test("renders the thread for a managed agent without any model machinery", async () => {
+    // Chat talks only to managed agents (Claude Code, Codex) — configured by a
+    // working directory, never a Coffer model. The thread must render normally.
     chatApiMock.listMessages = vi.fn().mockResolvedValue({ messages: [] });
-    renderThread({ conversation: { ...BASE_CONV, model_id: null }, models: [BASE_MODEL] });
-    await waitFor(() =>
-      expect(screen.queryByText("No model configured")).not.toBeInTheDocument(),
-    );
-  });
-
-  test("a CLI agent conversation renders without any model (CLI agents need no model)", async () => {
-    // CLI agents (Claude Code, Codex) are configured by a working directory, so
-    // a zero-model vault must NOT blank their thread with the no-model state.
-    chatApiMock.listMessages = vi.fn().mockResolvedValue({ messages: [] });
-    renderThread({ conversation: { ...BASE_CONV, agent_key: "claude_code" }, models: [] });
+    renderThread();
     await waitFor(() => expect(chatApiMock.listMessages).toHaveBeenCalled());
     expect(screen.queryByText("No model configured")).not.toBeInTheDocument();
   });
@@ -114,9 +85,7 @@ describe("MessageThread", () => {
       ],
     });
     renderThread();
-    await waitFor(() =>
-      expect(screen.getByText("Hello from assistant")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("Hello from assistant")).toBeInTheDocument());
   });
 
   test("renders live streaming message text", async () => {
@@ -124,9 +93,7 @@ describe("MessageThread", () => {
     renderThread({
       liveMessage: { text: "Streaming reply...", toolBlocks: [], streaming: true },
     });
-    await waitFor(() =>
-      expect(screen.getByText("Streaming reply...")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("Streaming reply...")).toBeInTheDocument());
   });
 
   test("renders tool call card for live message with tool blocks", async () => {
@@ -151,17 +118,13 @@ describe("MessageThread", () => {
   test("renders Composer", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread();
-    await waitFor(() =>
-      expect(screen.getByRole("textbox")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole("textbox")).toBeInTheDocument());
   });
 
   test("Composer is disabled while streaming", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({ isStreaming: true });
-    await waitFor(() =>
-      expect(screen.getByRole("textbox")).toBeDisabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("textbox")).toBeDisabled());
   });
 
   test("locks the composer when the server reports an in-flight turn (persisted streaming row)", async () => {
@@ -220,7 +183,12 @@ describe("MessageThread", () => {
           role: "assistant",
           content: [{ type: "text", text: "earlier answer" }],
         }),
-        makeMsg({ id: "msg-3", seq: 3, role: "user", content: [{ type: "text", text: "my question" }] }),
+        makeMsg({
+          id: "msg-3",
+          seq: 3,
+          role: "user",
+          content: [{ type: "text", text: "my question" }],
+        }),
         makeMsg({ id: "msg-4", seq: 4, role: "assistant", status: "streaming", content: [] }),
       ],
     });
@@ -252,17 +220,13 @@ describe("MessageThread", () => {
     await waitFor(() => expect(screen.getByText("Research Bot")).toBeInTheDocument());
   });
 
-  test("hides the model selector for a non-builtin agent", async () => {
+  test("does not render a per-conversation model selector", async () => {
+    // Managed agents carry no Coffer-registered model, so the thread bar shows
+    // only the agent label — there is no model selector.
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
-    renderThread({
-      conversation: { ...BASE_CONV, agent_key: "other" },
-      agentLabel: "Other Agent",
-      showModelSelector: false,
-    });
+    renderThread({ agentLabel: "Other Agent" });
     await waitFor(() => expect(screen.getByText("Other Agent")).toBeInTheDocument());
-    expect(
-      screen.queryByRole("combobox", { name: /select.*model/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /select.*model/i })).not.toBeInTheDocument();
   });
 
   test("renders the approval card when a turn is paused on approval", async () => {
@@ -278,9 +242,7 @@ describe("MessageThread", () => {
       },
       onApprovalDecide,
     });
-    await waitFor(() =>
-      expect(screen.getByText("Approval required")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("Approval required")).toBeInTheDocument());
     expect(screen.getByText("run_command")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /allow/i }));

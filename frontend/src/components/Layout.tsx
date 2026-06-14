@@ -38,9 +38,9 @@ interface NavGroup {
 /**
  * Sidebar navigation — a role-based information architecture (see ADR-007):
  *
- * - **Agents** — the consumers: the agents you use (Claude Code, Codex, the
- *   built-in agent), Chat with them, and the Channels they communicate over.
- *   Agents are NOT vault assets, so they are not under Resources.
+ * - **Agents** — the consumers: the agents you use (Claude Code, Codex), Chat
+ *   with them, and the Channels they communicate over. Agents are NOT vault
+ *   assets, so they are not under Resources.
  * - **Resources** — the assets agents draw on, modelled as kind-agnostic
  *   resource kinds (MCP servers today; skills / knowledge / memory as they
  *   land), surfaced through the kind registry.

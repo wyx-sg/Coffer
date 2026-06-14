@@ -51,7 +51,7 @@
     "agents": "Agent",
     "channels": "渠道",
     "audit": "审计日志",
-    "chat": "金库控制台"
+    "chat": "聊天"
   },
   "resources": {
     "title": "MCP 服务器",
@@ -434,7 +434,7 @@
     },
     "models": {
       "title": "模型",
-      "subtitle": "Coffer 助手使用的 AI 模型配置。",
+      "subtitle": "Coffer 内部模型——驱动工具/知识检索、agentic RAG 与蒸馏。",
       "add": "添加模型",
       "addTitle": "添加模型",
       "editTitle": "编辑模型",
@@ -452,7 +452,7 @@
       "baseUrl": "Base URL",
       "baseUrlPlaceholder": "例：http://localhost:11434",
       "setDefault": "设为默认",
-      "llmTitle": "LLM 模型",
+      "llmTitle": "Coffer 内部模型",
       "fetchModels": "拉取模型",
       "testConnection": "测试连接",
       "fetchedCount": "已拉取 {{count}} 个模型——选择或手填"
@@ -600,28 +600,6 @@
     "detectedHeading": "检测到的 agent",
     "managedSectionTitle": "受管 agents",
     "noManagedAgents": "尚未注册任何编码 agent。点击「添加 agent」来检测并注册 Claude Code 或 Codex。",
-    "builtin": {
-      "heading": "内置 Agent",
-      "sectionTitle": "内置 agent",
-      "badge": "内置",
-      "runsOn": "运行于 {{model}}",
-      "startChat": "开始对话",
-      "details": "详情",
-      "description": "Coffer 自带的助手——无需安装 CLI agent 即可在应用内对话。",
-      "tagline": "Coffer 自带的助手——无需安装 CLI agent 即可在应用内对话。",
-      "detail": {
-        "modelTitle": "模型",
-        "usesModel": "运行所用模型：",
-        "noModel": "尚未配置模型——请在 设置 → 模型 中设置。",
-        "configureModels": "配置模型",
-        "skillsTitle": "Skills",
-        "skillsNote": "助手可按需加载的主库 skill。",
-        "mcpTitle": "MCP 服务器",
-        "mcpNote": "这些已注册 MCP 服务器的工具会聚合给助手使用。",
-        "none": "暂无。",
-        "disabled": "已禁用"
-      }
-    },
     "namePlaceholder": "留空则按类型使用默认名称",
     "folderPicker": {
       "browse": "浏览…",
@@ -1090,9 +1068,6 @@
       "body": "请先添加至少一个模型，再开始对话。",
       "cta": "前往设置 → 模型"
     },
-    "agent": {
-      "cofferAssistant": "Coffer 助手"
-    },
     "message": {
       "failed": "该回复未完成。",
       "tokens": "输入 {{prompt}} · 输出 {{completion}}"
@@ -1139,7 +1114,7 @@
       "restoring": "恢复中…"
     },
     "composer": {
-      "placeholder": "发消息给 Coffer 助手…（Enter 发送，Shift+Enter 换行）",
+      "placeholder": "输入消息…（Enter 发送，Shift+Enter 换行）",
       "ariaLabel": "消息输入框",
       "send": "发送",
       "stop": "停止",
@@ -1166,7 +1141,9 @@
     },
     "draft": {
       "guide": "给 {{agent}} 发消息，开始新对话。",
-      "workdirNeeded": "在上方填写工作目录后，即可与 {{agent}} 对话。"
+      "workdirNeeded": "在上方填写工作目录后，即可与 {{agent}} 对话。",
+      "noAgentTitle": "没有可用的受管 agent",
+      "noAgentBody": "聊天需要连接 Coffer 受管的 agent。请安装或配置 Claude Code 或 Codex，然后在「Agent」页面注册。"
     },
     "delete": {
       "title": "删除此对话？",

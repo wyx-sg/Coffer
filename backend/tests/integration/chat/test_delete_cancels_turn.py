@@ -93,7 +93,7 @@ def test_delete_conversation_route_passes_cancel_fn_to_service() -> None:
     chat_svc.delete_conversation = _capturing_delete  # type: ignore[method-assign]
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations").json()["id"]
+        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()["id"]
         resp = client.delete(f"/api/v1/chat/conversations/{conv_id}")
         assert resp.status_code == 204
 
@@ -115,7 +115,7 @@ async def test_delete_discards_an_in_flight_turn() -> None:
     chat_svc, _model_svc, orchestrator, _registry = make_chat_services(
         provider=FakeAgentProvider(_BlockingAdapter(), agent_key="builtin")
     )
-    conv = await chat_svc.create_conversation()
+    conv = await chat_svc.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hello")
     first = await asyncio.wait_for(queue.get(), timeout=5.0)

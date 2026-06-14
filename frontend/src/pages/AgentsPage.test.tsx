@@ -23,16 +23,11 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
   useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
-vi.mock("@/lib/hooks/useChatAgents", () => ({
-  useChatAgents: vi.fn(),
-}));
 const hooks = await import("@/lib/hooks/useAgents");
 const useAgentsMock = vi.mocked(hooks.useAgents);
 const useAgentCandidatesMock = vi.mocked(hooks.useAgentCandidates);
 const useRegisterAgentMock = vi.mocked(hooks.useRegisterAgent);
 const useRemoveAgentMock = vi.mocked(hooks.useRemoveAgent);
-const chatHooks = await import("@/lib/hooks/useChatAgents");
-const useChatAgentsMock = vi.mocked(chatHooks.useChatAgents);
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -65,10 +60,6 @@ function stubHooks(opts: { data?: unknown; isPending?: boolean; error?: unknown 
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof hooks.useRemoveAgent>);
-  // By default the chat-agents call surfaces the built-in assistant.
-  useChatAgentsMock.mockReturnValue({
-    data: [{ agent_key: "builtin", display_name: "Coffer Assistant", available: true }],
-  } as unknown as ReturnType<typeof chatHooks.useChatAgents>);
 }
 
 afterEach(() => vi.clearAllMocks());
@@ -112,12 +103,9 @@ describe("AgentsPage", () => {
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
-  test("renders the welcome panel when no agents and no built-in exist", () => {
+  test("renders the welcome panel when no agents exist", () => {
     stubHooks({ data: [] });
-    // Welcome panel only when truly empty — no registry agents AND no built-in.
-    useChatAgentsMock.mockReturnValue({
-      data: undefined,
-    } as unknown as ReturnType<typeof chatHooks.useChatAgents>);
+    // Welcome panel only when truly empty — no registry agents.
     render(<AgentsPage />, { wrapper: wrap(null) });
     expect(screen.getByText(/manage your local ai agents/i)).toBeInTheDocument();
     // The welcome panel offers the single "Add agent" next step (no standalone
@@ -134,26 +122,23 @@ describe("AgentsPage", () => {
     expect(screen.getByText(/failed to load agents/i)).toBeInTheDocument();
   });
 
-  test("renders the built-in Coffer Assistant in its own section, separate from managed agents", () => {
-    stubHooks({ data: [] });
+  test("renders only managed agents — no built-in agent card", () => {
+    stubHooks({
+      data: [
+        {
+          name: "cur",
+          type: "codex",
+          config_dir: "/home/u/.codex",
+          description: null,
+          created_at: "2026-05-22T00:00:00Z",
+          updated_at: "2026-05-22T00:00:00Z",
+        },
+      ],
+    });
     render(<AgentsPage />, { wrapper: wrap(null) });
-    // The built-in agent is its own section (distinct shape from the managed
-    // coding agents), marked Built-in, with a Start chat action.
-    expect(screen.getByText("Coffer Assistant")).toBeInTheDocument();
-    expect(screen.getByText("Built-in")).toBeInTheDocument(); // the badge
-    expect(screen.getByRole("button", { name: /start chat/i })).toBeInTheDocument();
-    // With no managed agents, the managed section shows its empty message.
-    expect(screen.getByText(/no coding agents registered yet/i)).toBeInTheDocument();
-  });
-
-  test("omits the built-in section when the chat-agents call fails", () => {
-    stubHooks({ data: [] });
-    useChatAgentsMock.mockReturnValue({
-      data: undefined,
-    } as unknown as ReturnType<typeof chatHooks.useChatAgents>);
-    render(<AgentsPage />, { wrapper: wrap(null) });
+    // The managed agent renders; the retired built-in persona does not.
+    expect(screen.getByText("cur")).toBeInTheDocument();
     expect(screen.queryByText("Coffer Assistant")).not.toBeInTheDocument();
-    // The rest of the page still renders.
-    expect(screen.getByRole("heading", { name: /^agents$/i })).toBeInTheDocument();
+    expect(screen.queryByText("Built-in")).not.toBeInTheDocument();
   });
 });
