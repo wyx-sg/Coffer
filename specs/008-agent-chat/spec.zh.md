@@ -36,7 +36,7 @@ in-flight turn at a time, and user interruption."
 最重要的是审批通道 —— 仍然完整交付并被端到端证明，因此接缝在它落地的那一天就是
 真实的，而非一个承诺。
 
-## 定位 —— Vault Console（金库控制台，[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md) / [ADR-022](../../docs/decisions/ADR-022-cross-agent-transcript-history.zh.md)）
+## 定位 —— Vault Console（金库控制台，[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md)）
 
 交付之后，本界面从"一个通用的多 agent 聊天客户端"重定位为 **Vault Console（金库
 控制台）**：用来*使用与检视金库*的地方，而非一个在浏览器里、与 agent 自己的 UI 或
@@ -52,14 +52,8 @@ IM 竞争的日常编码聊天。它的两个耐久职责是：
 
 CLI agent（Claude Code、Codex）**不**被重定位为日常编码聊天；它们仍然是 (a) 让
 provider 接缝保持诚实的 test-drive 目标，(b) IM peer 驱动、用户在这里旁观/审批的
-会话 —— 以及下面跨 agent 历史的来源。**移出范围：** 把 Coffer 当作主力的浏览器内
-编码聊天；只对那个定位才有意义的能力保持在范围外，除非未来某个 spec 重开它。
-
-**跨 agent transcript 历史（[ADR-022](../../docs/decisions/ADR-022-cross-agent-transcript-history.zh.md)）。**
-控制台新增一个统一的、**纯本地**的搜索与只读浏览，覆盖每个 agent 的磁盘 transcript
-（`~/.claude/projects/`、`~/.codex/sessions/`）以及本地网页/IM 会话。原始历史是可
-重建的本地索引，**永不同步**；只有蒸馏层 —— ADR-020 memory 事实，以及将来的摘要/
-交接产物 —— 才跨机。
+会话。**移出范围：** 把 Coffer 当作主力的浏览器内编码聊天；只对那个定位才有意义的
+能力保持在范围外，除非未来某个 spec 重开它。
 
 ## 用户场景与测试
 
@@ -298,30 +292,6 @@ agent 使用哪一个。
 
 ---
 
-### 用户故事 12 —— 跨所有 agent 搜索与浏览历史（优先级：P2）
-
-用户想跨每个 agent 找到一次过去的会话 —— "那次我们调试 migration 的会话" —— 无论它
-发生在 Claude Code、Codex、IM peer 还是控制台。Vault Console 提供在一个**本地**索引
-（覆盖所有 agent 的 transcript）之上的统一**搜索**，以及对选中会话的只读**浏览**，
-按 agent / project / 时间过滤。不拷贝、不同步任何原始 transcript；索引可重建、本地。
-
-**为何此优先级**：跨 agent 的可搜索历史是任何原生客户端都没有的能力，也是 Vault
-Console 定位的具体回报。不阻塞核心循环。
-
-**独立测试**：磁盘上至少有一个 Claude Code 和一个 Codex transcript，搜索其中之一出现
-的一句话；观察匹配会话连同其 agent 与 project 被列出；打开它读其脱敏后的回合；删掉
-索引、重跑 reindex，确认结果一致。
-
-**覆盖的场景**：
-
-- 在本地 transcript 索引上的搜索返回跨 Claude Code、Codex 和本地会话的匹配
-- 一个匹配会话以只读方式浏览，展示脱敏后的自然语言回合
-- 密钥 / 工具 payload / 文件内容在索引和浏览视图中均不存在
-- 索引纯本地，永不写入同步介质
-- 索引通过 reindex 命令从磁盘 transcript 重建，删除它不丢任何耐久数据
-
----
-
 ### 边界情况
 
 - **没有配置模型**：Chat 页面渲染一个链接到 Settings → Models 的可操作空状态；
@@ -537,26 +507,6 @@ Console 定位的具体回报。不阻塞核心循环。
 - **Then** 该会话带着 channel 来源与 peer 身份标记出现，且从网页审批卡片提交
   allow/deny 解决的是与 IM 按钮相同的那个待审批。
 
-### 场景：跨 agent 搜索 transcript
-
-- **Given** 磁盘上至少有一个 Claude Code transcript 和一个 Codex transcript，
-- **When** 用户搜索其中之一出现的一句话，
-- **Then** 匹配会话连同其 agent 与 project 被返回，且结果中不含密钥、工具 payload
-  或文件内容。
-
-### 场景：只读浏览一次过去的会话
-
-- **Given** 历史中已索引的一个 transcript，
-- **When** 用户打开它，
-- **Then** 其脱敏后的自然语言回合以只读方式渲染，且不向 agent 的 session store 写入
-  任何内容。
-
-### 场景：历史索引本地且可重建
-
-- **Given** 一个已填充的 transcript 历史索引，
-- **When** 用户删除索引并运行 reindex 命令，
-- **Then** 索引从磁盘 transcript 重建，且永不出现在同步介质中。
-
 ## 需求
 
 ### 功能需求
@@ -692,25 +642,15 @@ Console 定位的具体回报。不阻塞核心循环。
   agent 进行的工具调用记录在 gateway 的调用日志中，归属于该 agent 的 gateway
   session。
 
-**Vault Console：来源呈现与跨 agent 历史（[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md) / [ADR-022](../../docs/decisions/ADR-022-cross-agent-transcript-history.zh.md)）**
+**Vault Console：来源呈现（[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md)）**
 
 - **FR-033**：Chat 界面 MUST 以 **Vault Console** 呈现：其主要角色是通过内置 agent
   与金库对话、以及旁观/审批 channel 驱动的会话。它 MUST NOT 把自己定位为主力的浏览器
-  内编码聊天；CLI agent 仍作为 provider 接缝验证、以及 channel 驱动与历史索引会话的
-  目标而保留。
+  内编码聊天；CLI agent 仍作为 provider 接缝验证、以及 channel 驱动会话的目标而保留。
 - **FR-034**：会话历史 MUST 呈现每个会话的来源（网页草稿 vs channel peer），并对
   channel 来源的会话呈现 peer 身份；任一会话上的待审批工具调用 MUST 可从网页审批
   卡片解决，与 channel 自身的审批控件等价（两者解决 FR-020 的同一 human-approval
   通道）。
-- **FR-035**：System MUST 提供**跨 agent transcript 历史**：在每个已注册 agent 的
-  磁盘 transcript（只读，复用只读 transcript reader）以及本地会话之上建一个纯本地、
-  可重建的索引，暴露按 agent / project / 时间过滤的统一搜索与只读浏览。
-- **FR-036**：只有脱敏后的自然语言回合 MUST 进入历史索引；`tool_use`/`tool_result`
-  块、文件内容、命令输出 MUST 在解析时丢弃。任何原始 transcript 内容 MUST NOT 被
-  持久化进 files-as-truth 或写入同步介质；索引 MUST 可从磁盘 transcript 重建，其丢失
-  MUST 不损失任何耐久数据。
-- **FR-037**：历史界面 MUST NOT 向任何 agent 的 session store 写入（Spec 004 只读
-  不变量）。过去外部会话的 `continue`/`resume` 在本次修订中不在范围内。
 
 ### 关键实体
 
@@ -784,6 +724,7 @@ Console 定位的具体回报。不阻塞核心循环。
 - agent-provider 注册表在启动时由代码填充；v1 注册一个 provider（内置 agent）。
   注册表是接缝 —— 从用户管理的配置填充它不在本规格内。
 - 以下被明确**列为不在范围**：用户创建或用户编辑的 agent；一个管理 agent 注册表的
-  GUI；超出 gateway 现有门控与审批通道的每 agent 能力作用域；对话摘要与导出；以及
-  过去外部 agent 会话的恢复/继续（由 ADR-022 缓做）。跨 agent transcript 的**搜索与
-  只读浏览**按 ADR-022 在范围内；远程通道由 Spec 009 单独交付。
+  GUI；超出 gateway 现有门控与审批通道的每 agent 能力作用域；对话摘要与导出；过去
+  外部 agent 会话的恢复/继续；以及任何跨 agent 的原始 transcript 浏览/搜索界面（跨
+  agent 的共享由蒸馏后的 memory 承担，[ADR-020](../../docs/decisions/ADR-020-transcript-distillation.zh.md)）。
+  远程通道由 Spec 009 单独交付。

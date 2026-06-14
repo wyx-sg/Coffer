@@ -4,7 +4,7 @@
 
 - **状态：** 已接受
 - **Spec:** [008-agent-chat](../../specs/008-agent-chat/spec.md)（重定位 —— 不分配新 spec 编号；实现前先更新 Spec 008 `spec.md`）
-- **关联：** [009-channels](../../specs/009-channels/spec.md)（[ADR-014](./ADR-014-channel-adapter-framework.md)，共享 turn/审批 seam）、[ADR-022](./ADR-022-cross-agent-transcript-history.md)（落在本控制台里的跨 agent 历史界面）、[007-memory](../../specs/007-memory/spec.md)（控制台对话的金库）
+- **关联：** [009-channels](../../specs/009-channels/spec.md)（[ADR-014](./ADR-014-channel-adapter-framework.md)，共享 turn/审批 seam）、[007-memory](../../specs/007-memory/spec.md)（控制台对话的金库）
 
 ## 背景
 
@@ -48,8 +48,7 @@ knowledge、聚合 MCP、同步），不是又一个聊天前端。"一个没有
    `submit_approval`。
 3. **CLI agent 重定位，而非删除。** `claude_code` / `codex` 仍保留，但重新定位：
    不是"你的日常编码聊天"，而是 (a) 可 **test-drive** 的目标，(b) **IM 驱动、你在
-   这里旁观/审批**的会话 —— 并且通过
-   [ADR-022](./ADR-022-cross-agent-transcript-history.md) 成为统一可搜索历史的来源。
+   这里旁观/审批**的会话。
 
 按宪法原则 II，实现**之前**先把 Spec 008 `spec.md` 及其验收场景更新到这个定位；
 本 ADR 记录方向。
@@ -87,6 +86,5 @@ turn/审批 seam。Channels 始终需要在某处有一个人工审批席；控�
   定位。
 - channel 来源的会话在会话列表中成为一等公民（来源徽标、peer 身份、待审批
   提示）。
-- 外部 agent 会话的 `continue`/`resume` 保持在范围外（见
-  [ADR-022](./ADR-022-cross-agent-transcript-history.md)）。
+- 外部 agent 会话的 `continue`/`resume` 保持在范围外。
 - 这是定位 + 前端呈现；后端的 turn / 审批 / channel 机制原样复用。

@@ -12,7 +12,6 @@ from coffer.surfaces.cli import (
     chat_cmd,
     credentials_cmd,
     daemon_cmd,
-    history_cmd,
     knowledge_base_cmd,
     memory_cmd,
     model_cmd,
@@ -57,7 +56,6 @@ app.add_typer(chat_cmd.app, name="chat")
 app.add_typer(model_cmd.app, name="model")
 app.add_typer(sync_cmd.app, name="sync")
 app.add_typer(transcript_cmd.app, name="transcript")
-app.add_typer(history_cmd.app, name="history")
 
 # Vault-level backup / restore are top-level verbs (not under `daemon`): they
 # operate on the on-disk vault offline, independent of the daemon lifecycle.

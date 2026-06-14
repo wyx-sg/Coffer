@@ -80,7 +80,7 @@ describe("ChatPage", () => {
     vi.clearAllMocks();
   });
 
-  test("shows conversation history panel with active/archived filter", async () => {
+  test("shows conversation list with active/archived filter", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     modelsApiMock.list.mockResolvedValue({ models: [] });
     renderPage();
@@ -175,9 +175,7 @@ describe("ChatPage", () => {
 
     expect(await screen.findByText("old question")).toBeInTheDocument();
     // Read-only: no composer; a restore call-to-action instead.
-    expect(
-      screen.queryByRole("textbox", { name: /message input/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /restore/i })).toBeInTheDocument();
   });
 
@@ -195,9 +193,7 @@ describe("ChatPage", () => {
 
     await waitFor(() => expect(chatApiMock.unarchiveConversation).toHaveBeenCalled());
     expect(chatApiMock.unarchiveConversation.mock.calls[0][0]).toBe("conv-1");
-    expect(
-      await screen.findByRole("textbox", { name: /message input/i }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: /message input/i })).toBeInTheDocument();
   });
 
   test("an unknown /chat/:id shows a not-found state, not the silent draft surface", async () => {
