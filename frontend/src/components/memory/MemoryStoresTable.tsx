@@ -3,6 +3,7 @@
 // KnowledgeBasesTable): rows navigate to the store detail page, search covers
 // name + description, and a scope column distinguishes global vs per-project
 // stores (stores are auto-provisioned; there is no llm_provider anymore).
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,6 +11,7 @@ import { Trash2 } from "lucide-react";
 
 import { DataTable, type Column } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { deriveScope, type MemoryStoreOut } from "@/kinds/memory/api";
 
@@ -18,6 +20,8 @@ export function MemoryStoresTable({ items }: { items: MemoryStoreOut[] }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const del = useDeleteResource();
+  // Styled confirmation dialog (no native window.confirm). `null` = closed.
+  const [deletingName, setDeletingName] = useState<string | null>(null);
 
   // The dedicated `/memory_stores` rows carry an explicit `scope`; fall back to
   // deriving it from project_id vs the WORKSPACE_GLOBAL sentinel, and only show
@@ -64,12 +68,7 @@ export function MemoryStoresTable({ items }: { items: MemoryStoreOut[] }) {
           className="text-muted-foreground hover:text-destructive"
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(t("memory.deleteStoreConfirm", { name: r.name }))) {
-              del.mutate(
-                { kind: "memory", name: r.name },
-                { onSuccess: () => qc.invalidateQueries({ queryKey: ["memory-stores"] }) },
-              );
-            }
+            setDeletingName(r.name);
           }}
           aria-label={t("common.delete")}
         >
@@ -80,16 +79,38 @@ export function MemoryStoresTable({ items }: { items: MemoryStoreOut[] }) {
   ];
 
   return (
-    <DataTable
-      rows={items}
-      columns={columns}
-      rowKey={(r) => r.name}
-      search={{
-        accessor: (r) => `${r.name} ${r.description ?? ""}`,
-        placeholder: t("memory.searchPlaceholder"),
-      }}
-      onRowClick={(r) => navigate(`/memory/${r.name}`)}
-      emptyMessage={t("memory.noMatches")}
-    />
+    <>
+      <DataTable
+        rows={items}
+        columns={columns}
+        rowKey={(r) => r.name}
+        search={{
+          accessor: (r) => `${r.name} ${r.description ?? ""}`,
+          placeholder: t("memory.searchPlaceholder"),
+        }}
+        onRowClick={(r) => navigate(`/memory/${r.name}`)}
+        emptyMessage={t("memory.noMatches")}
+      />
+
+      <ConfirmDialog
+        open={deletingName !== null}
+        onOpenChange={(o) => !o && setDeletingName(null)}
+        title={t("memory.deleteStoreConfirm", { name: deletingName ?? "" })}
+        confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
+        pending={del.isPending}
+        onConfirm={() => {
+          if (!deletingName) return;
+          del.mutate(
+            { kind: "memory", name: deletingName },
+            {
+              onSuccess: () => {
+                qc.invalidateQueries({ queryKey: ["memory-stores"] });
+                setDeletingName(null);
+              },
+            },
+          );
+        }}
+      />
+    </>
   );
 }

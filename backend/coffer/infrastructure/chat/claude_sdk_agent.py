@@ -1,24 +1,18 @@
 """SDK-backed Claude adapter — drive Claude Code via ``claude-agent-sdk`` and
 relay per-tool approvals through Coffer's approval seam (spec 008).
 
-Where ``cli_agent.py`` shells out to ``claude -p`` and only streams stdout (no
-approval bridging), this adapter drives Claude Code through the Python
-``ClaudeSDKClient``. The SDK's ``can_use_tool`` callback is the relay point: when
-Claude wants to run a tool, the adapter emits an ``ApprovalRequest`` event and
-``await``s the human decision on the ``ApprovalGate``, then answers the SDK with
-``PermissionResultAllow`` / ``PermissionResultDeny``. Because the SDK dispatches
-each control request in its own task, awaiting in ``can_use_tool`` does not stall
-message streaming.
+Unlike ``cli_agent.py`` (which shells out to ``claude -p`` with no approval
+bridging), this adapter drives Claude Code through the Python ``ClaudeSDKClient``.
+The SDK's ``can_use_tool`` callback is the relay point: the adapter emits an
+``ApprovalRequest`` and awaits the decision on the ``ApprovalGate``, then answers
+with ``PermissionResultAllow`` / ``PermissionResultDeny``. The SDK dispatches each
+control request in its own task, so awaiting there never stalls streaming.
 
-Streamed SDK messages and the ``can_use_tool`` callback both feed a single
-``asyncio.Queue`` so they interleave in true arrival order; ``_stream`` drains
-that queue and yields the platform's ``AgentEvent``s. The concrete
-``ClaudeSDKClient`` is wrapped behind the ``ClaudeSdkSession`` protocol so turns
-are testable without a real ``claude`` binary (mirrors ``cli_agent``'s
-``Spawner`` injection seam).
-
-The SDK is permitted here by Contract 9 — this file is the only one that imports
-the real ``ClaudeSDKClient`` (in ``ClaudeSdkClientSession``).
+Streamed messages and ``can_use_tool`` both feed one ``asyncio.Queue`` so they
+interleave in arrival order; ``_stream`` drains it into ``AgentEvent``s. The
+concrete ``ClaudeSDKClient`` is wrapped behind the ``ClaudeSdkSession`` protocol
+so turns are testable without a real ``claude`` binary. Per Contract 9 this file
+is the only one that imports the real ``ClaudeSDKClient``.
 """
 
 from __future__ import annotations
@@ -105,7 +99,14 @@ class ClaudeSdkClientSession:
         self._client = ClaudeSDKClient(options=options)
 
     async def connect(self, prompt: str) -> None:
-        await self._client.connect(prompt)
+        # ``can_use_tool`` requires streaming mode, so pass the single user turn
+        # as a one-message async stream rather than a plain string (the SDK
+        # streams it, waits for the result, then ends input).
+        async def _stream() -> AsyncIterator[dict[str, Any]]:
+            msg = {"role": "user", "content": prompt}
+            yield {"type": "user", "session_id": "", "message": msg, "parent_tool_use_id": None}
+
+        await self._client.connect(_stream())
 
     def receive_messages(self) -> AsyncIterator[Any]:
         return self._client.receive_messages()
