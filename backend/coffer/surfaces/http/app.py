@@ -26,6 +26,7 @@ import os
 import pathlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import cast
 
 from fastapi import FastAPI
 
@@ -39,6 +40,7 @@ from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CredentialMissing
+from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
@@ -181,14 +183,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     async def _resolve_embedding() -> object:
         return (await embedding_config_svc.get()).to_embedding_config()
 
-    # Semantic search_tools (ADR-024): resolve the same embedder the KB uses, or
-    # None when embeddings are disabled / the engine is unavailable (→ the
-    # gateway falls back to the BM25 ranker). Cached per config to reuse the
-    # underlying client.
+    # Semantic search_tools (ADR-024): the same embedder the KB uses, or None
+    # when embeddings are off / unavailable (→ gateway BM25 fallback). Cached per
+    # config to reuse the underlying client.
     _ts_embedder_cache: dict[tuple[object, ...], object] = {}
 
     async def _tool_search_embedder() -> object | None:
-        embedding = await _resolve_embedding()
+        embedding = cast(EmbeddingConfig | None, await _resolve_embedding())
         if embedding is None:
             return None
         key = (
