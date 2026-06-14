@@ -119,6 +119,17 @@ async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -
     for a in await service._rs.list(kind="agent"):
         if not a.enabled:
             continue
+        # Non-folder delivery agents (Cursor/Hermes) can't receive folder
+        # symlinks; skip auto-bind audibly rather than raise per-agent.
+        if not service._is_folder_delivery(a):
+            await audit_autobind_skipped(
+                service=service,
+                skill_name=skill.name,
+                agent_name=a.name,
+                reason="delivery_mode_unsupported",
+                actor=actor,
+            )
+            continue
         # Per-agent follow policy (FR-025): agents that opted out of the
         # master library, or excluded this skill, are skipped — audibly, so
         # "imported but not delivered to agent X" is observable.
@@ -173,6 +184,10 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
     try:
         agent = await service._rs.get(ResourceRef("agent", agent_name))
     except CofferError:
+        return
+    # Non-folder agents (Cursor/Hermes) have no folder-symlink bindings to move;
+    # skip rather than crash on config-dir-change reconciliation.
+    if not service._is_folder_delivery(agent):
         return
     new_skill_dir = service._resolve_agent_skill_dir(agent)
     skills_by_id = {s.id: s for s in await service._rs.list(kind="skill")}

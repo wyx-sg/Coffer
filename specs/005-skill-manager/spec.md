@@ -201,6 +201,8 @@ Per-skill bindings are precise but chatty: every new skill must be enabled agent
 - **Unmanaged entry is a symlink pointing outside the master store**: Listed as unmanaged-but-not-adoptable (adopting would move someone else's source of truth); the user can follow the link's target manually or delete the link.
 - **Unmanaged skill without a valid SKILL.md**: Listed with `valid=false` and the reason; it can be deleted but not adopted until it validates.
 - **Follow-all enabled while a target path holds a non-Coffer folder of the same name**: That skill is reported as a conflict (same rule as FR-011) instead of being overwritten; the rest of the master store is delivered normally.
+- **Per-agent delivery target**: Folder-mode agents deliver into the skill subpath under their config dir — `<config_dir>/skills/<name>` for Claude Code, Codex, and OpenCode; `<config_dir>/workspace/skills/<name>` for OpenClaw. Each agent's mode and subpath come from the capability manifest, so adding an agent's delivery target is data, not a new branch.
+- **Agent whose delivery mode is not yet wired (Cursor, Hermes)**: Cursor (`rules_mdc`) and Hermes (`external_dir`) are recognized delivery-mode extension points whose end-to-end delivery is a separate follow-up. Enabling a skill for such an agent is refused with an explicit "delivery mode not yet supported" error (HTTP 422) before any filesystem write, rather than mis-delivering via the folder model; the follow / relink reconcilers skip these agents so registration and policy changes still succeed.
 
 ## Acceptance Scenarios
 
@@ -379,6 +381,24 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **Given** an agent with follow enabled and several delivered skills,
 - **When** the user disables the follow switch,
 - **Then** every currently delivered skill remains as an explicit per-skill binding with its link intact, and subsequent master-store additions are no longer auto-delivered.
+
+### Scenario: deliver a skill to OpenCode under skills/
+
+- **Given** a registered OpenCode agent and an imported master skill,
+- **When** the skill is delivered to the agent,
+- **Then** it lands at `<config_dir>/skills/<name>` (with its `SKILL.md`) resolving to the canonical master folder.
+
+### Scenario: deliver a skill to OpenClaw under workspace/skills/
+
+- **Given** a registered OpenClaw agent and an imported master skill,
+- **When** the skill is delivered to the agent,
+- **Then** it lands at `<config_dir>/workspace/skills/<name>` (resolving to the master folder) and not at the flat `skills/` location.
+
+### Scenario: enabling a skill for a non-folder-delivery agent fails cleanly
+
+- **Given** a registered agent whose skill-delivery mode is not folder-based (e.g. Cursor or Hermes),
+- **When** the user enables a skill for that agent,
+- **Then** the request is rejected with `unprocessable_entity` (422) before any filesystem write, and follow-driven auto-delivery skips the agent without error.
 
 ## Requirements
 

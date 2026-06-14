@@ -3,6 +3,7 @@ import json
 import pytest
 
 from coffer.domain.agent import plugin_state as ps
+from coffer.domain.agent import plugin_state_extra as pse
 from coffer.domain.workspace_errors import AgentConfigParseError, PluginNotFound
 
 CODEX_TOML = """
@@ -120,3 +121,161 @@ def test_toggle_claude_plugin_writes_settings_only() -> None:
 def test_toggle_claude_tolerates_non_dict_enabled_map() -> None:
     out = ps.set_claude_enabled('{"enabledPlugins": ["broken"]}', "x@m", True)
     assert json.loads(out)["enabledPlugins"] == {"x@m": True}
+
+
+# ---------------------------------------------------------------------------
+# Cursor (read-only; VSIX extensions.json is a JSON array)
+# ---------------------------------------------------------------------------
+
+CURSOR_EXTENSIONS = json.dumps(
+    [
+        {"identifier": {"id": "ms-python.python"}, "version": "2024.1.0"},
+        {"identifier": {"id": "esbenp.prettier-vscode"}, "version": "10.0.0"},
+        {"version": "1.0.0"},  # malformed entry without identifier — tolerated
+    ]
+)
+
+
+def test_parse_cursor_extensions() -> None:
+    plugins, marketplaces = pse.parse_cursor(CURSOR_EXTENSIONS)
+    assert [p.id for p in plugins] == ["ms-python.python", "esbenp.prettier-vscode"]
+    # No marketplace concept for Cursor extensions.
+    assert marketplaces == []
+    # All listed extensions are reported enabled (enable/disable lives in SQLite).
+    assert all(p.enabled for p in plugins)
+    assert all(p.installed for p in plugins)
+
+
+def test_parse_cursor_missing_tolerated() -> None:
+    plugins, marketplaces = pse.parse_cursor(None)
+    assert plugins == [] and marketplaces == []
+    plugins, _ = pse.parse_cursor("")
+    assert plugins == []
+
+
+def test_parse_cursor_parse_error() -> None:
+    with pytest.raises(AgentConfigParseError):
+        pse.parse_cursor("{not json")
+
+
+def test_parse_cursor_non_array_tolerated() -> None:
+    # A non-array top level is treated as "no extensions" rather than a crash.
+    plugins, _ = pse.parse_cursor('{"unexpected": true}')
+    assert plugins == []
+
+
+# ---------------------------------------------------------------------------
+# OpenCode (toggle = presence in the "plugin" array)
+# ---------------------------------------------------------------------------
+
+OPENCODE_CONFIG = json.dumps({"plugin": ["my-plugin", "./local/plugin.ts"], "other": 1})
+
+
+def test_parse_opencode_plugins() -> None:
+    plugins, marketplaces = pse.parse_opencode(OPENCODE_CONFIG)
+    assert [p.id for p in plugins] == ["my-plugin", "./local/plugin.ts"]
+    assert marketplaces == []
+    assert all(p.enabled for p in plugins)
+
+
+def test_parse_opencode_missing_tolerated() -> None:
+    plugins, _ = pse.parse_opencode("{}")
+    assert plugins == []
+    plugins, _ = pse.parse_opencode(None)
+    assert plugins == []
+
+
+def test_parse_opencode_parse_error() -> None:
+    with pytest.raises(AgentConfigParseError):
+        pse.parse_opencode("{broken")
+
+
+def test_set_opencode_enabled_adds_and_removes() -> None:
+    # Disable removes from the array.
+    out = pse.set_opencode_enabled(OPENCODE_CONFIG, "my-plugin", False)
+    plugins, _ = pse.parse_opencode(out)
+    assert "my-plugin" not in {p.id for p in plugins}
+    assert "other" in json.loads(out)  # sibling keys survive
+    # Enable adds to the array.
+    out2 = pse.set_opencode_enabled(out, "my-plugin", True)
+    plugins2, _ = pse.parse_opencode(out2)
+    assert "my-plugin" in {p.id for p in plugins2}
+
+
+def test_set_opencode_enabled_disable_missing_raises() -> None:
+    with pytest.raises(PluginNotFound):
+        pse.set_opencode_enabled(OPENCODE_CONFIG, "ghost", False)
+
+
+def test_set_opencode_enabled_idempotent_add() -> None:
+    out = pse.set_opencode_enabled(OPENCODE_CONFIG, "my-plugin", True)
+    # No duplicate appended.
+    assert json.loads(out)["plugin"].count("my-plugin") == 1
+
+
+def test_remove_opencode_entry() -> None:
+    out = pse.remove_opencode_entry(OPENCODE_CONFIG, "my-plugin")
+    plugins, _ = pse.parse_opencode(out)
+    assert "my-plugin" not in {p.id for p in plugins}
+    with pytest.raises(PluginNotFound):
+        pse.remove_opencode_entry(OPENCODE_CONFIG, "ghost")
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw (plugins{} block — tolerant of partly documented shape)
+# ---------------------------------------------------------------------------
+
+OPENCLAW_CONFIG = json.dumps(
+    {
+        "plugins": {
+            "entries": ["alpha", "beta", "gamma"],
+            "enabled": ["alpha", "beta"],
+            "deny": ["gamma"],
+        }
+    }
+)
+
+
+def test_parse_openclaw_plugins() -> None:
+    plugins, marketplaces = pse.parse_openclaw(OPENCLAW_CONFIG)
+    by_id = {p.id: p.enabled for p in plugins}
+    assert by_id == {"alpha": True, "beta": True, "gamma": False}
+    assert marketplaces == []
+
+
+def test_parse_openclaw_entries_as_dicts() -> None:
+    text = json.dumps({"plugins": {"entries": [{"id": "x"}, {"name": "y"}], "enabled": ["x"]}})
+    plugins, _ = pse.parse_openclaw(text)
+    by_id = {p.id: p.enabled for p in plugins}
+    assert set(by_id) == {"x", "y"}
+    assert by_id["x"] is True
+
+
+def test_parse_openclaw_missing_tolerated() -> None:
+    plugins, _ = pse.parse_openclaw("{}")
+    assert plugins == []
+    plugins, _ = pse.parse_openclaw(None)
+    assert plugins == []
+
+
+def test_parse_openclaw_parse_error() -> None:
+    with pytest.raises(AgentConfigParseError):
+        pse.parse_openclaw("{broken")
+
+
+def test_set_openclaw_enabled() -> None:
+    out = pse.set_openclaw_enabled(OPENCLAW_CONFIG, "gamma", True)
+    by_id = {p.id: p.enabled for p in pse.parse_openclaw(out)[0]}
+    assert by_id["gamma"] is True
+    out2 = pse.set_openclaw_enabled(out, "alpha", False)
+    by_id2 = {p.id: p.enabled for p in pse.parse_openclaw(out2)[0]}
+    assert by_id2["alpha"] is False
+    with pytest.raises(PluginNotFound):
+        pse.set_openclaw_enabled(OPENCLAW_CONFIG, "ghost", True)
+
+
+def test_remove_openclaw_entry() -> None:
+    out = pse.remove_openclaw_entry(OPENCLAW_CONFIG, "alpha")
+    assert "alpha" not in {p.id for p in pse.parse_openclaw(out)[0]}
+    with pytest.raises(PluginNotFound):
+        pse.remove_openclaw_entry(OPENCLAW_CONFIG, "ghost")

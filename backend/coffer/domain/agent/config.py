@@ -81,5 +81,12 @@ class AgentConfig(BaseModel):
         return pathlib.Path(self.config_dir)
 
     def resolved_skill_dir(self) -> pathlib.Path:
-        """Where skills are delivered: ``<config_dir>/skills``."""
-        return self.resolved_config_dir() / "skills"
+        """Where folder-mode skills are delivered: ``<config_dir>/<subpath>``.
+
+        The subpath comes from the agent's capability descriptor — ``skills``
+        for most agents, ``workspace/skills`` for OpenClaw. Non-folder delivery
+        modes (Cursor, Hermes) do not use this path.
+        """
+        from coffer.domain.agent.descriptor import descriptor_for
+
+        return self.resolved_config_dir() / descriptor_for(self.type).skill_subpath

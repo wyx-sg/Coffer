@@ -183,11 +183,22 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 ### User Story 11 —— 管理 agent 的插件（优先级 P2）
 
-两种受支持的 agent 都有以文件落盘的插件体系。用户打开 agent 的插件 tab，看到按 marketplace 分组的全部已安装插件，带启用状态与磁盘缓存是否存在。可以启用/禁用任意插件，并卸载 Codex 插件。所有写操作都经由每个 agent 的文档化配置面——Codex `[plugins."<name>@<marketplace>"]` 的 `enabled` 字段、Claude Code `settings.json` 的 `enabledPlugins` 映射——绝不写 agent 的内部状态文件。安装新插件与 marketplace 管理留给 agent 自己的工具链。
+有以文件落盘插件体系的 agent，都在 agent 的插件 tab 暴露：按 marketplace 分组的全部已安装插件，带启用状态与磁盘缓存是否存在。插件 facet 通过能力清单（capability manifest）做了泛化——每个 agent 记录带一个 `PluginCapability`（插件模型判别符、写入面的 allowlist key，以及 `can_toggle`/`can_uninstall` 标志），服务按数据分派而非按 agent 分支。每个能力映射到该 agent 的文档化配置面；内部状态文件只读、绝不写入。安装新插件与 marketplace 管理留给 agent 自己的工具链。
 
-**为什么是这个优先级**：插件是真实、持久的 agent 配置，而今天 Coffer 对其完全不可见。可见性加上便宜又安全的写操作（开关、Codex 卸载）覆盖了日常需求；安装留在它本来就好用的地方。
+各 agent 的插件支持：
 
-**独立可测**：注册一个配置了插件的 `codex` agent；打开插件 tab；观察插件按 marketplace 分组并带启用状态；禁用一个并观察 `config.toml` 中写入 `enabled = false`；卸载一个并观察其配置条目与缓存目录都消失。
+| Agent       | 插件模型                                                                                                   | 写入面          | 列出 | 开关 | 卸载                  |
+| ----------- | ---------------------------------------------------------------------------------------------------------- | --------------- | ---- | ---- | --------------------- |
+| Claude Code | `settings.json` 的 `enabledPlugins` 映射（内部 `installed_plugins.json` / `known_marketplaces.json` 只读） | `settings.json` | 是   | 是   | 否（用 agent 工具链） |
+| Codex       | `[plugins."<name>@<marketplace>"]` 表 + 缓存目录                                                           | `config.toml`   | 是   | 是   | 是（条目 + 缓存）     |
+| Cursor      | `extensions/extensions.json` 的 VSIX 列表（启停在 SQLite）                                                 | 无（只读）      | 是   | 否   | 否                    |
+| OpenCode    | `opencode.json` 的 `plugin` 数组                                                                           | `opencode.json` | 是   | 是   | 是（从数组移除）      |
+| OpenClaw    | `openclaw.json` 的 `plugins{}` 块                                                                          | `openclaw.json` | 是   | 是   | 是                    |
+| Hermes      | 无——MCP 即插件机制                                                                                         | 无              | 空   | 否   | 否                    |
+
+**为什么是这个优先级**：插件是真实、持久的 agent 配置，而今天 Coffer 对其完全不可见。可见性加上便宜又安全的写操作（开关、受支持处的卸载）覆盖了日常需求；安装留在它本来就好用的地方。
+
+**独立可测**：注册一个配置了插件的 `codex` agent；打开插件 tab；观察插件按 marketplace 分组并带启用状态；禁用一个并观察 `config.toml` 中写入 `enabled = false`；卸载一个并观察其配置条目与缓存目录都消失。对 `opencode` agent，开关一个插件并观察它从 `plugin` 数组移除；对 `cursor` agent，列出扩展并观察开关与卸载被拒绝。
 
 **代表性场景**：
 
@@ -196,12 +207,15 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 - uninstall a Codex plugin
 - reject uninstalling a Claude Code plugin
 - flag a plugin whose cache is missing
+- list, toggle, and uninstall OpenCode and OpenClaw plugins via their documented config surfaces
+- list Cursor extensions read-only, rejecting toggle and uninstall
+- report an empty plugin listing for Hermes and reject toggle/uninstall
 
 ---
 
 ### User Story 12 —— 管理目录型配置条目（优先级 P2）
 
-有些 agent 配置不是单个文件而是一个 prose 文件目录——Claude Code 的 `agents/` 目录下每个个人 subagent 一个 Markdown 文件。用户在配置文件 tab 展开这样的条目，看到其中的文件，打开编辑、新建或删除——校验、原子写入与 `.bak` 兜底与单文件条目完全一致。allowlist 还新增 Codex 的 `hooks.json`，并把 `memory` key 改名为 `instructions`（CLAUDE.md / AGENTS.md 是人写的指令，不是 agent 自写的记忆）。
+有些 agent 配置不是单个文件而是一个 prose 文件目录——Claude Code 的 `agents/` 目录下每个个人 subagent 一个 Markdown 文件，OpenCode 同时保留 `agents/`（subagents）与 `commands/`（slash 命令）两个目录，Hermes 保留一个 `cron/` 定时任务目录。用户在配置文件 tab 展开这样的条目，看到其中的文件，打开编辑、新建或删除——校验、原子写入与 `.bak` 兜底与单文件条目完全一致。allowlist 还新增 Codex 的 `hooks.json`；把 `memory` key 改名为 `instructions`（CLAUDE.md / AGENTS.md 是人写的指令，不是 agent 自写的记忆）；并把各 agent 的指令/身份面纳入 allowlist（Cursor 的全局 `.cursorrules` + `AGENTS.md`，Hermes 的 `SOUL.md` + `USER.md`）。
 
 **为什么是这个优先级**：subagent 定义正是 hub 模型希望「先可见、后可收编」的那类可共享 prose；今天它们完全不可见。
 
@@ -520,6 +534,42 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 - **When** 用户携带先前读取的指纹写回内容，
 - **Then** 写入以 `conflict`（409）拒绝且磁盘文件不变；重新读取得到允许写入的新指纹。
 
+### Scenario: list OpenCode plugins
+
+- **Given** 一个已注册的 OpenCode agent，其 `opencode.json` 带有 `plugin` 数组，
+- **When** 用户列出其插件，
+- **Then** Coffer 为数组中每个成员返回一个条目且无解析错误。
+
+### Scenario: toggle an OpenCode plugin
+
+- **Given** 一个已注册的 OpenCode agent，其 `plugin` 数组中启用了某插件，
+- **When** 用户禁用该插件，
+- **Then** 该插件从 `plugin` 数组中移除，同时 `opencode.json` 中的同级键保持不变。
+
+### Scenario: uninstall an OpenCode plugin
+
+- **Given** 一个已注册的 OpenCode agent，其 `plugin` 数组中存在某插件，
+- **When** 用户卸载该插件，
+- **Then** 该插件从 `plugin` 数组中移除。
+
+### Scenario: list + toggle OpenClaw plugins
+
+- **Given** 一个已注册的 OpenClaw agent，其 `openclaw.json` 的 `plugins` 块带有条目、允许列表与拒绝列表，
+- **When** 用户列出插件并随后启用一个被拒绝的插件，
+- **Then** 列表反映各插件的启用状态，切换更新该块使该插件读为已启用。
+
+### Scenario: list Cursor extensions read-only
+
+- **Given** 一个已注册的 Cursor agent，带有已安装扩展，
+- **When** 用户列出其插件并随后尝试切换或卸载某个，
+- **Then** 扩展被列出，切换以 `unprocessable_entity`（422）拒绝，卸载以 `unprocessable_entity`（422）拒绝，且扩展文件从不被写入。
+
+### Scenario: Hermes has no plugin facet
+
+- **Given** 一个已注册的 Hermes agent（其插件机制即 MCP），
+- **When** 用户列出插件并随后尝试切换或卸载某个，
+- **Then** 列表为空，切换与卸载均以 `unprocessable_entity`（422）拒绝。
+
 ## Requirements
 
 ### Functional Requirements
@@ -543,7 +593,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 **配置文件**
 
-- **FR-013**: 每个受支持 agent 类型 MUST 定义一份精选的配置文件 allowlist（在其能力清单记录中），每个条目携带稳定的 `key`、一个显示名、一个解析后的绝对路径与一个 `format`（`json`、`toml`、`yaml`、`markdown` 或 `text`）。Claude Code → `settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`（key 为 `instructions`）与 `agents/` 目录条目（FR-034）；Codex → `config.toml`、`AGENTS.md`（key 为 `instructions`）与 `hooks.json`；Cursor → `mcp.json`；OpenCode → `opencode.json`、`AGENTS.md`；OpenClaw → `openclaw.json`；Hermes → `config.yaml`、`SOUL.md`。新增 agent 的 allowlist 起步从简（承载 MCP 的文件加一个显而易见的指令文件），随其它能力落地再扩充。原 `memory` key 改名为 `instructions`——这些文件是人写的指令，区别于 agent 自写的记忆（spec 007 的领域）。
+- **FR-013**: 每个受支持 agent 类型 MUST 定义一份精选的配置文件 allowlist（在其能力清单记录中），每个条目携带稳定的 `key`、一个显示名、一个解析后的绝对路径与一个 `format`（`json`、`toml`、`yaml`、`markdown` 或 `text`）。Claude Code → `settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`（key 为 `instructions`）与 `agents/` 目录条目（FR-034）；Codex → `config.toml`、`AGENTS.md`（key 为 `instructions`）与 `hooks.json`；Cursor → `mcp.json`、`.cursorrules`（key 为 `rules`）、`AGENTS.md`（key 为 `instructions`）；OpenCode → `opencode.json`、`AGENTS.md` 以及 `agents/`（key 为 `subagents`）与 `commands/` 目录条目（FR-034）；OpenClaw → `openclaw.json`（其指令/身份文件未被可靠记录，确认前不添加）；Hermes → `config.yaml`、`SOUL.md`（key 为 `instructions`）、`USER.md`（key 为 `identity_user`）以及 `cron/` 目录条目（FR-034）。新增 agent 的 allowlist 覆盖各自的配置、指令/身份与受管目录面，随其它能力落地再扩充。原 `memory` key 改名为 `instructions`——这些文件是人写的指令，区别于 agent 自写的记忆（spec 007 的领域）。
 - **FR-014**: 用户 MUST 能列出一个 agent 的配置文件，并对每个文件给出其 key、显示名、路径、格式与存在性（文件存在时附带大小与修改时间）。
 - **FR-015**: 用户 MUST 能读取任一 allowlist 内配置文件的内容。不存在的文件读为空内容、`exists=false`，且读取不会创建它。
 - **FR-016**: 用户 MUST 能写入（保存）任一 allowlist 内配置文件的内容。写入前 MUST 按文件的 `format` 校验内容；畸形的 `json`/`toml` MUST 被拒绝（`unprocessable_entity`，422）且磁盘文件保持不变。`markdown`/`text` 文件接受任意内容。

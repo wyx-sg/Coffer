@@ -35,8 +35,9 @@ refined by the skill-delivery work; OpenClaw's real target is
 of scope.
 
 `AgentDescriptor` carries: `display_name`, `config_subpath`, `config_files`
-(allowlist builder), `mcp` (`McpInjectionSpec | None`), `mcp_source_keys`, and
-`skill_subpath`. Each enum value still exposes:
+(allowlist builder), `mcp` (`McpInjectionSpec | None`), `mcp_source_keys`,
+`skill_subpath`, and `plugins` (`PluginCapability | None`). Each enum value still
+exposes:
 
 - `display_name: str`
 - `default_name() -> str` (stable per-type default resource name — underscores become hyphens, e.g. `claude_code` → `claude-code`; used when the user registers without an explicit name)
@@ -107,17 +108,29 @@ which is spec 007's domain):
 | `codex`       | `instructions`   | `~/.codex/AGENTS.md`               | `markdown` | `file`      |
 | `codex`       | `hooks`          | `~/.codex/hooks.json`              | `json`     | `file`      |
 | `cursor`      | `mcp`            | `~/.cursor/mcp.json`               | `json`     | `file`      |
+| `cursor`      | `rules`          | `~/.cursor/.cursorrules`           | `markdown` | `file`      |
+| `cursor`      | `instructions`   | `~/.cursor/AGENTS.md`              | `markdown` | `file`      |
 | `opencode`    | `config`         | `~/.config/opencode/opencode.json` | `json`     | `file`      |
 | `opencode`    | `instructions`   | `~/.config/opencode/AGENTS.md`     | `markdown` | `file`      |
+| `opencode`    | `subagents`      | `~/.config/opencode/agents/`       | `markdown` | `directory` |
+| `opencode`    | `commands`       | `~/.config/opencode/commands/`     | `markdown` | `directory` |
 | `openclaw`    | `config`         | `~/.openclaw/openclaw.json`        | `json`     | `file`      |
 | `hermes`      | `config`         | `~/.hermes/config.yaml`            | `yaml`     | `file`      |
 | `hermes`      | `instructions`   | `~/.hermes/SOUL.md`                | `markdown` | `file`      |
+| `hermes`      | `identity_user`  | `~/.hermes/USER.md`                | `markdown` | `file`      |
+| `hermes`      | `cron`           | `~/.hermes/cron/`                  | `markdown` | `directory` |
 
-(The allowlist for the agents added on top of Claude Code / Codex starts minimal
-— the MCP-bearing file plus an obvious instructions file — and grows as their
-other facets land. `global` always anchors to `$HOME` — Claude Code keeps
-`~/.claude.json` at
-the home root even when the config dir itself is overridden.)
+(The allowlist for the agents added on top of Claude Code / Codex covers each
+agent's config, instructions/identity, and managed directory surfaces and grows
+as their other facets land. Cursor carries the global `~/.cursor/.cursorrules`
+plus `AGENTS.md`; its per-project `.cursor/rules/*.mdc` are project-scoped, not
+config-dir files, so they stay out of the allowlist. OpenCode adds RW
+`agents/` and `commands/` directories. Hermes carries both identity files
+(`SOUL.md` + `USER.md`) and the RW `cron/` directory. OpenClaw stays
+config-only — its instructions/identity file is not reliably documented, so no
+instructions entry is added until confirmed. `global` always anchors to `$HOME`
+— Claude Code keeps `~/.claude.json` at the home root even when the config dir
+itself is overridden.)
 
 `~/.codex/auth.json` is deliberately excluded (credential/state, not a
 hand-edited config). `~/.claude.json` is included (per product decision) and
@@ -133,8 +146,10 @@ when `key` is not in the type's allowlist (drives the 404 + no-FS-access rule).
 
 An allowlisted entry with `kind=directory` lists its child files instead of
 carrying content; the directory on disk is the source of truth (derived, never
-stored). v1 directory entries: Claude Code `subagents` (`~/.claude/agents/`,
-one Markdown file per personal subagent, nested paths allowed).
+stored). Directory entries: Claude Code `subagents` (`~/.claude/agents/`, one
+Markdown file per personal subagent, nested paths allowed), OpenCode `subagents`
+(`~/.config/opencode/agents/`) and `commands` (`~/.config/opencode/commands/`),
+and Hermes `cron` (`~/.hermes/cron/`).
 
 `DirEntryInfo` — frozen dataclass for one child file:
 
@@ -323,14 +338,42 @@ with secret keys moved to `credential_refs` for adoption). Malformed files
 raise `AgentConfigParseError`, which the listing degrades to a `parse_errors`
 item instead of failing the view (FR-030).
 
-### Agent Plugin (`domain/agent/plugin_state.py` — `PluginInfo` / `MarketplaceInfo`)
+### `PluginCapability` / `PluginModel` (`domain/agent/descriptor.py`)
 
-One installed plugin, id `<name>@<marketplace>`. Codex state lives in
+The plugin facet of the capability manifest. `PluginModel` is the strategy
+discriminator — `CLAUDE`, `CODEX`, `CURSOR_RO`, `OPENCODE`, `OPENCLAW` — each
+mapping to a parse/toggle/uninstall strategy in `plugin_state.py` /
+`plugin_state_extra.py`. `PluginCapability` (frozen) carries enough for the
+service to dispatch without an `AgentType` switch:
+
+| Field           | Type          | Notes                                                                |
+| --------------- | ------------- | -------------------------------------------------------------------- |
+| `model`         | `PluginModel` | parse/toggle/uninstall strategy                                      |
+| `config_key`    | `str \| None` | allowlist key of the write surface (`None` = list-only, e.g. Cursor) |
+| `can_toggle`    | `bool`        | whether `set_enabled` is supported                                   |
+| `can_uninstall` | `bool`        | whether `uninstall` is supported                                     |
+
+`AgentDescriptor.plugins` is `PluginCapability | None`; `None` means the agent
+has no plugin concept (Hermes — MCP is the plugin mechanism), so the listing is
+empty and toggle/uninstall raise the matching "unsupported" error. The per-agent
+mapping: Claude Code `CLAUDE`/`settings`/toggle-only; Codex `CODEX`/`config`/full;
+Cursor `CURSOR_RO`/`None`/read-only; OpenCode `OPENCODE`/`config`/full; OpenClaw
+`OPENCLAW`/`config`/full; Hermes `None`.
+
+### Agent Plugin (`domain/agent/plugin_state.py`, `domain/agent/plugin_state_extra.py` — `PluginInfo` / `MarketplaceInfo`)
+
+One installed plugin, id `<name>@<marketplace>` (or the bare extension/plugin
+name for agents without a marketplace concept). Codex state lives in
 `config.toml` (`[plugins."…"]` + `[marketplaces.*]`, both readable and the
 plugins table writable). Claude Code splits state across the internal
 inventory files `installed_plugins.json` / `known_marketplaces.json`
 (read-only inputs — Coffer never writes them) and the documented write surface
-`settings.json` `enabledPlugins`.
+`settings.json` `enabledPlugins`. The newer agents add pure-text transforms in
+`plugin_state_extra.py`: Cursor reads the `extensions/extensions.json` array
+(read-only); OpenCode toggles membership in the `plugin` array of
+`opencode.json`; OpenClaw reads/writes the `plugins{}` block of `openclaw.json`
+(tolerant of its partly documented `entries`/`enabled`/`allow`/`deny` shape).
+Agents without a marketplace concept return an empty `marketplaces` list.
 
 | Field         | Type   | Notes                                                               |
 | ------------- | ------ | ------------------------------------------------------------------- |
@@ -355,11 +398,11 @@ the plugin's cache directory exists on disk (no repair is attempted, FR-031).
 
 ### `AgentPluginService` (`application/agent/plugin_service.py`)
 
-| Method                                         | Purpose                                                                                                                                                           |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_plugins(name)`                           | Parse plugin + marketplace state per type; compute `cache_present` from the documented cache directory; collect `parse_errors`.                                   |
-| `set_enabled(name, plugin_id, enabled, actor)` | Write only the documented surface (codex `config.toml` entry / claude_code `settings.json` `enabledPlugins`); audits `agent_plugin_toggled`.                      |
-| `uninstall(name, plugin_id, actor)`            | Codex only: remove the `[plugins."…"]` entry and delete the cache directory; claude_code → `PluginUninstallUnsupported` → 422; audits `agent_plugin_uninstalled`. |
+| Method                                         | Purpose                                                                                                                                                                                                                                  |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_plugins(name)`                           | Dispatch on `descriptor.plugins.model`; parse plugin + marketplace state from the documented file(s); compute `cache_present`; collect `parse_errors`. No capability → empty listing.                                                    |
+| `set_enabled(name, plugin_id, enabled, actor)` | Dispatch on the `PluginModel`; write only the capability's `config_key` surface; `can_toggle=false` (Cursor) or no capability (Hermes) → `PluginToggleUnsupported` → 422; audits `agent_plugin_toggled`.                                 |
+| `uninstall(name, plugin_id, actor)`            | Dispatch on the `PluginModel`; remove the entry (Codex also deletes the cache directory); `can_uninstall=false` (Claude Code, Cursor) or no capability (Hermes) → `PluginUninstallUnsupported` → 422; audits `agent_plugin_uninstalled`. |
 
 ### `ConfigFileStorePort` (Protocol, defined in application)
 

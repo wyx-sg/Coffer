@@ -181,11 +181,22 @@ A direct MCP entry in one agent benefits that agent alone. The user clicks "Adop
 
 ### User Story 11 — Manage the agent's plugins (Priority: P2)
 
-Both supported agents have a file-backed plugin system. The user opens the agent's Plugins tab and sees every installed plugin grouped by marketplace, with its enabled state and whether its on-disk cache is present. They can enable/disable any plugin, and uninstall a Codex plugin. All writes go through each agent's documented configuration surface — the Codex `[plugins."<name>@<marketplace>"]` `enabled` field, the Claude Code `enabledPlugins` map in `settings.json` — never through the agents' internal state files. Installing new plugins and managing marketplaces stay with the agent's own tooling.
+Agents with a file-backed plugin system expose it through the agent's Plugins tab: every installed plugin grouped by marketplace, with its enabled state and whether its on-disk cache is present. The plugin facet is generalised through the capability manifest — each agent record carries a `PluginCapability` (a plugin-model discriminator, the write-surface allowlist key, and `can_toggle`/`can_uninstall` flags), so the service dispatches on data rather than per-agent branches. Each capability maps to the agent's documented configuration surface; internal state files are read, never written. Installing new plugins and managing marketplaces stay with the agent's own tooling.
 
-**Why this priority**: Plugins are real, persistent agent configuration that today is invisible to Coffer. Visibility plus the cheap, safe writes (toggle, Codex uninstall) cover the recurring needs; installation is left where it already works.
+Per-agent plugin support:
 
-**Independent Test**: Register a `codex` agent with plugins configured; open the Plugins tab; observe the plugins grouped by marketplace with enabled state; disable one and observe `enabled = false` written to `config.toml`; uninstall one and observe its config entry and cache directory gone.
+| Agent       | Plugin model                                                                                                      | Write surface    | List  | Toggle | Uninstall             |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- | ---------------- | ----- | ------ | --------------------- |
+| Claude Code | `enabledPlugins` map in `settings.json` (internal `installed_plugins.json` / `known_marketplaces.json` read-only) | `settings.json`  | yes   | yes    | no (agent tooling)    |
+| Codex       | `[plugins."<name>@<marketplace>"]` tables + cache dir                                                             | `config.toml`    | yes   | yes    | yes (entry + cache)   |
+| Cursor      | VSIX list from `extensions/extensions.json` (enable/disable in SQLite)                                            | none (read-only) | yes   | no     | no                    |
+| OpenCode    | the `plugin` array in `opencode.json`                                                                             | `opencode.json`  | yes   | yes    | yes (drop from array) |
+| OpenClaw    | the `plugins{}` block in `openclaw.json`                                                                          | `openclaw.json`  | yes   | yes    | yes                   |
+| Hermes      | none — MCP is the plugin mechanism                                                                                | none             | empty | no     | no                    |
+
+**Why this priority**: Plugins are real, persistent agent configuration that today is invisible to Coffer. Visibility plus the cheap, safe writes (toggle, uninstall where supported) cover the recurring needs; installation is left where it already works.
+
+**Independent Test**: Register a `codex` agent with plugins configured; open the Plugins tab; observe the plugins grouped by marketplace with enabled state; disable one and observe `enabled = false` written to `config.toml`; uninstall one and observe its config entry and cache directory gone. For an `opencode` agent, toggle a plugin and observe it removed from the `plugin` array; for a `cursor` agent, list extensions and observe toggle/uninstall rejected.
 
 **Covering scenarios**:
 
@@ -194,12 +205,15 @@ Both supported agents have a file-backed plugin system. The user opens the agent
 - uninstall a Codex plugin
 - reject uninstalling a Claude Code plugin
 - flag a plugin whose cache is missing
+- list, toggle, and uninstall OpenCode and OpenClaw plugins via their documented config surfaces
+- list Cursor extensions read-only, rejecting toggle and uninstall
+- report an empty plugin listing for Hermes and reject toggle/uninstall
 
 ---
 
 ### User Story 12 — Manage directory-type config entries (Priority: P2)
 
-Some agent configuration is a directory of prose files, not a single file — Claude Code's `agents/` directory holds one Markdown file per personal subagent. The user expands such an entry in the config-files tab, sees its files, opens one to edit, creates a new one, or deletes one — with the same validation, atomic-write, and `.bak` safety net as single-file entries. The allowlist also gains Codex's `hooks.json`, and the `memory` key is renamed `instructions` (CLAUDE.md / AGENTS.md are human-authored instructions, not agent-written memory).
+Some agent configuration is a directory of prose files, not a single file — Claude Code's `agents/` directory holds one Markdown file per personal subagent, OpenCode keeps both an `agents/` (subagents) and a `commands/` (slash commands) directory, and Hermes keeps a `cron/` directory of scheduled jobs. The user expands such an entry in the config-files tab, sees its files, opens one to edit, creates a new one, or deletes one — with the same validation, atomic-write, and `.bak` safety net as single-file entries. The allowlist also gains Codex's `hooks.json`; the `memory` key is renamed `instructions` (CLAUDE.md / AGENTS.md are human-authored instructions, not agent-written memory); and each agent's instructions/identity surfaces are allowlisted (Cursor's global `.cursorrules` + `AGENTS.md`, Hermes's `SOUL.md` + `USER.md`).
 
 **Why this priority**: Subagent definitions are exactly the kind of shareable prose the hub model wants visible first, adoptable later; today they are invisible.
 
@@ -518,6 +532,42 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user writes back content carrying the fingerprint from the earlier read,
 - **Then** the write is rejected with `conflict` (409) and the on-disk file is unchanged; re-reading yields a fresh fingerprint that allows the write.
 
+### Scenario: list OpenCode plugins
+
+- **Given** a registered OpenCode agent whose `opencode.json` carries a `plugin` array,
+- **When** the user lists its plugins,
+- **Then** Coffer returns one entry per array member with no parse errors.
+
+### Scenario: toggle an OpenCode plugin
+
+- **Given** a registered OpenCode agent with a plugin enabled in its `plugin` array,
+- **When** the user disables that plugin,
+- **Then** the plugin is removed from the `plugin` array while sibling keys in `opencode.json` are preserved.
+
+### Scenario: uninstall an OpenCode plugin
+
+- **Given** a registered OpenCode agent with a plugin in its `plugin` array,
+- **When** the user uninstalls that plugin,
+- **Then** the plugin is removed from the `plugin` array.
+
+### Scenario: list + toggle OpenClaw plugins
+
+- **Given** a registered OpenClaw agent whose `openclaw.json` carries a `plugins` block with entries, an allow-list, and a deny-list,
+- **When** the user lists plugins and then enables a denied one,
+- **Then** the listing reflects each plugin's enabled state, and the toggle updates the block so the plugin reads as enabled.
+
+### Scenario: list Cursor extensions read-only
+
+- **Given** a registered Cursor agent with installed extensions,
+- **When** the user lists its plugins and then attempts to toggle or uninstall one,
+- **Then** the extensions are listed, the toggle is rejected with `unprocessable_entity` (422), the uninstall is rejected with `unprocessable_entity` (422), and the extensions file is never written.
+
+### Scenario: Hermes has no plugin facet
+
+- **Given** a registered Hermes agent (whose plugin mechanism is MCP),
+- **When** the user lists plugins and then attempts to toggle or uninstall one,
+- **Then** the listing is empty and both the toggle and uninstall are rejected with `unprocessable_entity` (422).
+
 ## Requirements
 
 ### Functional Requirements
@@ -541,7 +591,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 **Config files**
 
-- **FR-013**: Each supported agent type MUST define a curated allowlist of config files (in its capability-manifest record), each entry carrying a stable `key`, a display name, a resolved absolute path, and a `format` (`json`, `toml`, `yaml`, `markdown`, or `text`). Claude Code → `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md` (key `instructions`), and the `agents/` directory entry (FR-034); Codex → `config.toml`, `AGENTS.md` (key `instructions`), and `hooks.json`; Cursor → `mcp.json`; OpenCode → `opencode.json`, `AGENTS.md`; OpenClaw → `openclaw.json`; Hermes → `config.yaml`, `SOUL.md`. The allowlist for the newer agents starts minimal (the MCP-bearing file plus an obvious instructions file) and grows as their other facets land. The former `memory` key is renamed `instructions` — these files are human-authored instructions, distinct from agent-written memory (spec 007's domain).
+- **FR-013**: Each supported agent type MUST define a curated allowlist of config files (in its capability-manifest record), each entry carrying a stable `key`, a display name, a resolved absolute path, and a `format` (`json`, `toml`, `yaml`, `markdown`, or `text`). Claude Code → `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md` (key `instructions`), and the `agents/` directory entry (FR-034); Codex → `config.toml`, `AGENTS.md` (key `instructions`), and `hooks.json`; Cursor → `mcp.json`, `.cursorrules` (key `rules`), `AGENTS.md` (key `instructions`); OpenCode → `opencode.json`, `AGENTS.md`, and the `agents/` (key `subagents`) and `commands/` directory entries (FR-034); OpenClaw → `openclaw.json` (its instructions/identity file is not reliably documented, so none is added until confirmed); Hermes → `config.yaml`, `SOUL.md` (key `instructions`), `USER.md` (key `identity_user`), and the `cron/` directory entry (FR-034). The allowlist for the newer agents covers each agent's config, instructions/identity, and managed directory surfaces, and grows as their other facets land. The former `memory` key is renamed `instructions` — these files are human-authored instructions, distinct from agent-written memory (spec 007's domain).
 - **FR-014**: Users MUST be able to list an agent's config files with, for each, its key, display name, path, format, and existence (plus size and modified time when the file exists).
 - **FR-015**: Users MUST be able to read the content of any allowlisted config file. A file that does not exist reads as empty content with `exists=false` and is not created by the read.
 - **FR-016**: Users MUST be able to write (save) the content of any allowlisted config file. The content MUST be validated against the file's `format` before any write; malformed `json`/`toml` MUST be rejected (`unprocessable_entity`, 422) and the on-disk file left unchanged. `markdown`/`text` files accept any content.

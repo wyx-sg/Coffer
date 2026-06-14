@@ -106,9 +106,13 @@ async def _setup(tmp_path: pathlib.Path, fake_fetch: dict[str, pathlib.Path] | N
     # Cross-kind resolver — tests are outside the contract scope so we can
     # import both kinds here without violating Contract 5.
     from coffer.domain.agent.config import AgentConfig
+    from coffer.domain.agent.descriptor import descriptor_for
 
     def _agent_skill_dir(r: Resource):
         return AgentConfig.model_validate(r.config).resolved_skill_dir()
+
+    def _agent_skill_delivery(r: Resource) -> str:
+        return descriptor_for(AgentConfig.model_validate(r.config).type).skill_delivery_mode.value
 
     # Order: create services first, then kinds (with cross-kind hooks).
     placeholder_kinds: dict = {}
@@ -123,6 +127,7 @@ async def _setup(tmp_path: pathlib.Path, fake_fetch: dict[str, pathlib.Path] | N
         source_fetcher=fetcher,  # type: ignore[arg-type]
         sync_engine=SyncEngine(),
         agent_skill_dir_resolver=_agent_skill_dir,
+        agent_skill_delivery_resolver=_agent_skill_delivery,
     )
 
     agent_svc = AgentService(
@@ -326,6 +331,108 @@ async def test_refuse_to_overwrite_non_coffer_target(tmp_path):
     import re
 
     assert re.match(r".*\.coffer-backup-\d{10,}$", backups[0].name)
+    await engine.dispose()
+
+
+# ----- per-agent delivery targets (spec 005, Batch 2) -----
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="005-skill-manager", scenario="deliver a skill to OpenCode under skills/"
+)
+async def test_opencode_delivers_to_skills_dir(tmp_path):
+    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
+    config_dir = tmp_path / "oc-cfg"
+    config_dir.mkdir()
+    await agent_svc.register(
+        agent_type=AgentType.OPENCODE, name="oc", config_dir=str(config_dir), actor="cli"
+    )
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="my-skill")
+    await skill_svc.import_local(path=str(src), actor="cli")
+    target = config_dir / "skills" / "my-skill"
+    assert target.exists()
+    assert (target / "SKILL.md").is_file()
+    # The link resolves to the canonical master folder.
+    assert pathlib.Path(os.path.realpath(target)) == store.paths_for("my-skill").folder
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="005-skill-manager", scenario="deliver a skill to OpenClaw under workspace/skills/"
+)
+async def test_openclaw_delivers_to_workspace_skills_dir(tmp_path):
+    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
+    config_dir = tmp_path / "claw-cfg"
+    # OpenClaw nests skills under workspace/skills; registration auto-creates
+    # the full Coffer-owned subpath under the existing config dir.
+    config_dir.mkdir()
+    await agent_svc.register(
+        agent_type=AgentType.OPENCLAW, name="claw", config_dir=str(config_dir), actor="cli"
+    )
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="my-skill")
+    await skill_svc.import_local(path=str(src), actor="cli")
+    target = config_dir / "workspace" / "skills" / "my-skill"
+    assert target.exists()
+    assert (target / "SKILL.md").is_file()
+    assert pathlib.Path(os.path.realpath(target)) == store.paths_for("my-skill").folder
+    # And NOT delivered to the flat skills/ location.
+    assert not (config_dir / "skills" / "my-skill").exists()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("agent_type", [AgentType.CURSOR, AgentType.HERMES])
+@pytest.mark.acceptance(
+    spec="005-skill-manager",
+    scenario="enabling a skill for a non-folder-delivery agent fails cleanly",
+)
+async def test_enable_unsupported_delivery_mode_raises(tmp_path, agent_type):
+    from coffer.domain.workspace_errors import SkillDeliveryUnsupported
+
+    skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
+    config_dir = tmp_path / f"{agent_type.value}-cfg"
+    config_dir.mkdir()
+    await agent_svc.register(
+        agent_type=agent_type, name="a", config_dir=str(config_dir), actor="cli"
+    )
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="my-skill")
+    # Import auto-binds; the non-folder agent is skipped (no crash, no link).
+    await skill_svc.import_local(path=str(src), actor="cli")
+    assert not (config_dir / "skills" / "my-skill").exists()
+    # Explicit enable is refused with a clean 422-mapped error before any FS work.
+    with pytest.raises(SkillDeliveryUnsupported):
+        await skill_svc.enable_for(skill_name="my-skill", agent_name="a", force=False, actor="cli")
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("agent_type", [AgentType.CURSOR, AgentType.HERMES])
+async def test_reconcilers_are_noop_for_non_folder_agents(tmp_path, agent_type):
+    """relink (config-dir-change) and apply_follow (policy-change/registration)
+    must not raise for Cursor/Hermes — they have no folder-symlink bindings."""
+    skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
+    config_dir = tmp_path / f"{agent_type.value}-cfg"
+    config_dir.mkdir()
+    await agent_svc.register(
+        agent_type=agent_type, name="a", config_dir=str(config_dir), actor="cli"
+    )
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="my-skill")
+    await skill_svc.import_local(path=str(src), actor="cli")
+
+    # apply_follow_for_agent: no-op (registration already invoked it; call again).
+    await skill_svc.apply_follow_for_agent("a", actor="system")
+    # relink_for_agent: no-op even though the config dir "changed".
+    await skill_svc.relink_for_agent("a", actor="cli")
+
+    # No links were created and disable/cleanup remain harmless no-ops.
+    assert not (config_dir / "skills" / "my-skill").exists()
+    await skill_svc.disable_for(skill_name="my-skill", agent_name="a", actor="cli")
     await engine.dispose()
 
 

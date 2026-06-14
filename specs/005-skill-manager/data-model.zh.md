@@ -92,14 +92,14 @@ frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `S
 
 对外暴露的字段（`application/skill/unmanaged_ops.py` 中的 `UnmanagedView`）：
 
-| 字段           | 类型          | 说明                                                                  |
-| -------------- | ------------- | ----------------------------------------------------------------------- |
-| `name`         | `str`         | 文件夹名                                                              |
-| `path`         | `str`         | 磁盘绝对路径                                                          |
+| 字段           | 类型          | 说明                                                                       |
+| -------------- | ------------- | -------------------------------------------------------------------------- |
+| `name`         | `str`         | 文件夹名                                                                   |
+| `path`         | `str`         | 磁盘绝对路径                                                               |
 | `location`     | `str`         | `"skills"`（`<config_dir>/skills`）或 `"agents_dir"`（`~/.agents/skills`） |
-| `valid`        | `bool`        | 是否通过 AgentSkills 校验（FR-004）                                   |
-| `reason`       | `str \| None` | 不合法时的失败原因                                                    |
-| `foreign_link` | `bool`        | 指向主库之外的 symlink——呈现给用户但永不可 adopt                      |
+| `valid`        | `bool`        | 是否通过 AgentSkills 校验（FR-004）                                        |
+| `reason`       | `str \| None` | 不合法时的失败原因                                                         |
+| `foreign_link` | `bool`        | 指向主库之外的 symlink——呈现给用户但永不可 adopt                           |
 
 ### Follow 策略（存于 agent 资源的 config，spec 004）—— workspace 修订
 
@@ -153,11 +153,11 @@ import agent-kind 代码（Contract 5c）。
 
 workspace 修订新增：
 
-| 值                        | 触发时机                                                                  |
+| 值                        | 触发时机                                                                    |
 | ------------------------- | --------------------------------------------------------------------------- |
-| `skill_adopted`           | 一个未托管 skill 文件夹被 adopt 进主库（FR-023）                          |
-| `skill_unmanaged_deleted` | 一个未托管 skill 文件夹被从 agent workspace 中删除（FR-024）              |
-| `skill_autobind_skipped`  | 自动绑定 / follow 调和跳过某个 agent（如目标冲突；尽力而为）              |
+| `skill_adopted`           | 一个未托管 skill 文件夹被 adopt 进主库（FR-023）                            |
+| `skill_unmanaged_deleted` | 一个未托管 skill 文件夹被从 agent workspace 中删除（FR-024）                |
+| `skill_autobind_skipped`  | 自动绑定 / follow 调和跳过某个 agent（如目标冲突；尽力而为）                |
 | `skill_relinked`          | 某个已启用 binding 的托管链接在新投递路径上被重建（如 `config_dir` 变更后） |
 
 skill **删除** 没有专门的事件——删除一个 skill 走 `ResourceService.delete`，
@@ -195,6 +195,29 @@ resource kind 一样。
 <config_dir>/skills/<skill-name>  → symlink/junction 指向  ~/.coffer/skills/<skill-name>
 ```
 
+### 各 agent 的交付目标
+
+每个 agent 通过能力清单（`domain/agent/descriptor.py`）声明 Coffer _如何_ 以及
+_交付到哪里_：`skill_delivery_mode`（`SkillDeliveryMode` —
+`folder` / `rules_mdc` / `external_dir`），folder 模式还携带 agent 配置目录下的
+`skill_subpath`。skill 服务通过组合根注入的 resolver 读取该模式，resolver 返回
+普通字符串（契约 5：服务永不导入 descriptor）。
+
+| Agent       | 交付模式       | folder 目标                            | 状态                       |
+| ----------- | -------------- | -------------------------------------- | -------------------------- |
+| Claude Code | `folder`       | `<config_dir>/skills/<name>`           | 已交付                     |
+| Codex       | `folder`       | `<config_dir>/skills/<name>`           | 已交付                     |
+| OpenCode    | `folder`       | `<config_dir>/skills/<name>`           | 已交付                     |
+| OpenClaw    | `folder`       | `<config_dir>/workspace/skills/<name>` | 已交付                     |
+| Cursor      | `rules_mdc`    | —                                      | 已识别的扩展点（尚未交付） |
+| Hermes      | `external_dir` | —                                      | 已识别的扩展点（尚未交付） |
+
+folder 交付通过 symlink（FAT32 上回退为复制）把 master 目录链接到目标，agent 读取
+到的是规范的 `SKILL.md`（例如 OpenClaw 看到 `workspace/skills/<name>/SKILL.md`）。
+为 `rules_mdc` / `external_dir` 的 agent 启用 skill 会在任何文件系统写入之前抛出
+`SkillDeliveryUnsupported`（HTTP 422）；follow / relink 协调器会跳过这些 agent，
+因此注册、配置目录变更和策略变更流程对它们永远不会失败。
+
 ## Application 服务契约（`backend/coffer/application/skill/`）
 
 ### `SkillService`
@@ -214,12 +237,12 @@ workspace 修订的新增能力（以自由函数实现于 `unmanaged_ops.py` /
 `follow_ops.py`；逐 agent 启用/禁用流程拆分到 `binding_ops.py` 以满足文件
 大小上限——风格同 `lifecycle_ops.py`，概念上都是 skill 子包私有）：
 
-| 方法                                                            | 用途                                                                                     |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------|
-| `list_unmanaged(agent_name) -> list[UnmanagedView]`             | FR-022 对 agent skill 位置的只读扫描（见上文「未托管 skill」）。                         |
+| 方法                                                                   | 用途                                                                                                                                                               |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `list_unmanaged(agent_name) -> list[UnmanagedView]`                    | FR-022 对 agent skill 位置的只读扫描（见上文「未托管 skill」）。                                                                                                   |
 | `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-023：校验 → 移动到 `~/.coffer/skills/<name>/` → 注册 → 把托管链接投递到 `<config_dir>/skills/<name>` → 为该 agent 记录已启用的 binding；audit `skill_adopted`。 |
-| `delete_unmanaged(agent_name, skill_name, location, actor) -> None` | FR-024：仅从磁盘删除该文件夹；audit `skill_unmanaged_deleted`。                      |
-| follow 调和（`follow_ops.py`）                                  | FR-025：在开关/排除项/skill 集合变化时调和投递；关闭开关时把已投递的 skill 保留为显式 binding。 |
+| `delete_unmanaged(agent_name, skill_name, location, actor) -> None`    | FR-024：仅从磁盘删除该文件夹；audit `skill_unmanaged_deleted`。                                                                                                    |
+| follow 调和（`follow_ops.py`）                                         | FR-025：在开关/排除项/skill 集合变化时调和投递；关闭开关时把已投递的 skill 保留为显式 binding。                                                                    |
 
 ### 文件查看器（`application/skill/file_ops.py`）
 

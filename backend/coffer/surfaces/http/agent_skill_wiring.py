@@ -25,6 +25,7 @@ from coffer.application.skill.builtin_tools import register_skill_builtin_tools
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.scan import scan_locations
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
@@ -84,6 +85,12 @@ def wire_agent_and_skill_kinds(
         cfg = AgentConfig.model_validate(r.config)
         return (cfg.follow_all_skills, cfg.skill_exclusions)
 
+    def _agent_skill_delivery(r: Resource) -> str:
+        # Plain str (the SkillDeliveryMode value), never the enum, so the skill
+        # service stays free of agent-kind imports (Contract 5). Only this
+        # composition root may read the agent's capability descriptor.
+        return descriptor_for(AgentConfig.model_validate(r.config).type).skill_delivery_mode.value
+
     skill_svc = SkillService(
         resource_service=resource_svc,
         audit=audit,
@@ -95,6 +102,7 @@ def wire_agent_and_skill_kinds(
         workspace_scan=WorkspaceScan(),
         agent_scan_locations_resolver=_agent_scan_locations,
         agent_skill_policy_resolver=_agent_skill_policy,
+        agent_skill_delivery_resolver=_agent_skill_delivery,
     )
 
     # Agent kind (spec 004-agent-registry). Detection is discovery-only (no

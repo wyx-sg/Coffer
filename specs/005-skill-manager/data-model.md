@@ -104,14 +104,14 @@ both types, plus `~/.agents/skills` for `codex`. The infrastructure layer
 
 Surfaced fields (`UnmanagedView` in `application/skill/unmanaged_ops.py`):
 
-| Field          | Type          | Notes                                                                       |
-| -------------- | ------------- | ---------------------------------------------------------------------------- |
-| `name`         | `str`         | folder name                                                                 |
-| `path`         | `str`         | absolute path on disk                                                       |
-| `location`     | `str`         | `"skills"` (`<config_dir>/skills`) or `"agents_dir"` (`~/.agents/skills`)   |
-| `valid`        | `bool`        | passes AgentSkills validation (FR-004)                                      |
-| `reason`       | `str \| None` | validation failure reason when invalid                                      |
-| `foreign_link` | `bool`        | symlink targeting outside the master store — surfaced, never adoptable      |
+| Field          | Type          | Notes                                                                     |
+| -------------- | ------------- | ------------------------------------------------------------------------- |
+| `name`         | `str`         | folder name                                                               |
+| `path`         | `str`         | absolute path on disk                                                     |
+| `location`     | `str`         | `"skills"` (`<config_dir>/skills`) or `"agents_dir"` (`~/.agents/skills`) |
+| `valid`        | `bool`        | passes AgentSkills validation (FR-004)                                    |
+| `reason`       | `str \| None` | validation failure reason when invalid                                    |
+| `foreign_link` | `bool`        | symlink targeting outside the master store — surfaced, never adoptable    |
 
 ### Follow Policy (stored on the agent resource's config, spec 004) — workspace amendment
 
@@ -168,11 +168,11 @@ Add to `AuditEventType`:
 
 The workspace amendment adds:
 
-| Value                     | When emitted                                                                  |
-| ------------------------- | ------------------------------------------------------------------------------ |
-| `skill_adopted`           | An unmanaged skill folder was adopted into the master store (FR-023)          |
-| `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (FR-024)      |
-| `skill_autobind_skipped`  | Auto-bind / follow reconciliation skipped an agent (e.g. target conflict; best-effort) |
+| Value                     | When emitted                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `skill_adopted`           | An unmanaged skill folder was adopted into the master store (FR-023)                                       |
+| `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (FR-024)                                   |
+| `skill_autobind_skipped`  | Auto-bind / follow reconciliation skipped an agent (e.g. target conflict; best-effort)                     |
 | `skill_relinked`          | An enabled binding's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
 
 Skill **removal** has no dedicated event — deleting a skill goes through
@@ -215,6 +215,31 @@ Per-agent symlink targets land at:
 <config_dir>/skills/<skill-name>  → symlink/junction to  ~/.coffer/skills/<skill-name>
 ```
 
+### Per-agent delivery targets
+
+Each agent declares _how_ and _where_ Coffer delivers a skill via the capability
+manifest (`domain/agent/descriptor.py`): a `skill_delivery_mode`
+(`SkillDeliveryMode` — `folder` / `rules_mdc` / `external_dir`) plus, for the
+folder model, a `skill_subpath` under the agent's config dir. The skill service
+reads the mode through a composition-root resolver that returns a plain string
+(Contract 5: the service never imports the descriptor).
+
+| Agent       | Delivery mode  | Folder target                          | Status                                         |
+| ----------- | -------------- | -------------------------------------- | ---------------------------------------------- |
+| Claude Code | `folder`       | `<config_dir>/skills/<name>`           | Delivered                                      |
+| Codex       | `folder`       | `<config_dir>/skills/<name>`           | Delivered                                      |
+| OpenCode    | `folder`       | `<config_dir>/skills/<name>`           | Delivered                                      |
+| OpenClaw    | `folder`       | `<config_dir>/workspace/skills/<name>` | Delivered                                      |
+| Cursor      | `rules_mdc`    | —                                      | Recognized extension point (not yet delivered) |
+| Hermes      | `external_dir` | —                                      | Recognized extension point (not yet delivered) |
+
+Folder delivery symlinks (copy-fallback) the master folder into the target, so
+the agent reads the canonical `SKILL.md` (e.g. OpenClaw sees
+`workspace/skills/<name>/SKILL.md`). Enabling a skill for a `rules_mdc` /
+`external_dir` agent raises `SkillDeliveryUnsupported` (HTTP 422) before any
+filesystem write; the follow / relink reconcilers skip these agents so
+registration, config-dir-change, and policy-change flows never fail for them.
+
 ## Application service contracts (`backend/coffer/application/skill/`)
 
 ### `SkillService`
@@ -235,12 +260,12 @@ Workspace-amendment additions (implemented as free functions in
 `service.py` for the per-agent enable/disable flow — all conceptually private
 to the skill subpackage, same style as `lifecycle_ops.py`):
 
-| Method                                                          | Purpose                                                                                                                          |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------|
-| `list_unmanaged(agent_name) -> list[UnmanagedView]`             | FR-022 read-only scan over the agent's skill locations (see Unmanaged Skill above).                                              |
+| Method                                                                 | Purpose                                                                                                                                                                          |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_unmanaged(agent_name) -> list[UnmanagedView]`                    | FR-022 read-only scan over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
 | `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-023: validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
-| `delete_unmanaged(agent_name, skill_name, location, actor) -> None` | FR-024: delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                 |
-| follow reconciliation (`follow_ops.py`)                         | FR-025: reconcile deliveries on flag/exclusion changes and on skill register/remove; disabling preserves delivered skills as explicit bindings. |
+| `delete_unmanaged(agent_name, skill_name, location, actor) -> None`    | FR-024: delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
+| follow reconciliation (`follow_ops.py`)                                | FR-025: reconcile deliveries on flag/exclusion changes and on skill register/remove; disabling preserves delivered skills as explicit bindings.                                  |
 
 ### File viewer (`application/skill/file_ops.py`)
 

@@ -60,6 +60,18 @@ AgentScanLocationsResolver = Callable[[Resource], list[pathlib.Path]]
 # from AgentConfig — same Contract 5 seam as above.
 AgentSkillPolicyResolver = Callable[[Resource], tuple[bool, list[str]]]
 
+# Resolver for an agent's skill-delivery MODE (spec 005). Returns a plain
+# ``str`` (the SkillDeliveryMode value, e.g. ``"folder"``) — deliberately a
+# bare string, not the enum, so this module never imports agent-kind /
+# descriptor code (Contract 5). Built at the composition root from the agent's
+# capability descriptor.
+AgentSkillDeliveryResolver = Callable[[Resource], str]
+
+# The only delivery mode the folder-symlink model implements today. Compared as
+# a literal (not an enum import) to keep Contract 5 — the agent descriptor owns
+# the SkillDeliveryMode enum; this layer only sees the resolved string value.
+_FOLDER_DELIVERY = "folder"
+
 
 @dataclass(frozen=True)
 class UpdateOutcome:
@@ -85,6 +97,7 @@ class SkillService:
         workspace_scan: WorkspaceScanPort | None = None,
         agent_scan_locations_resolver: AgentScanLocationsResolver | None = None,
         agent_skill_policy_resolver: AgentSkillPolicyResolver | None = None,
+        agent_skill_delivery_resolver: AgentSkillDeliveryResolver | None = None,
         rmtree: Callable[[pathlib.Path], None] = shutil.rmtree,
     ) -> None:
         self._rs = resource_service
@@ -103,6 +116,10 @@ class SkillService:
         # Follow-policy resolver (FR-025). Optional: an unwired context falls
         # back to (True, []) — the pre-amendment trust-mode auto-bind.
         self._agent_skill_policy_resolver = agent_skill_policy_resolver
+        # Skill-delivery-mode resolver (spec 005). Optional: an unwired context
+        # (existing construction sites / tests) defaults to the folder model,
+        # preserving Claude Code / Codex / OpenCode / OpenClaw delivery.
+        self._agent_skill_delivery_resolver = agent_skill_delivery_resolver
         self._rmtree = rmtree
 
     # ---------- imports ----------
@@ -224,6 +241,20 @@ class SkillService:
         if self._agent_skill_policy_resolver is None:
             return (True, [])
         return self._agent_skill_policy_resolver(agent)
+
+    def _resolve_agent_skill_delivery(self, agent: Resource) -> str:
+        """The agent's skill-delivery mode value (e.g. ``"folder"``).
+
+        Unwired contexts default to the folder model so existing construction
+        sites and tests keep delivering via symlink. Returned as a plain string
+        (Contract 5: this layer must not import the descriptor's enum).
+        """
+        if self._agent_skill_delivery_resolver is None:
+            return _FOLDER_DELIVERY
+        return self._agent_skill_delivery_resolver(agent)
+
+    def _is_folder_delivery(self, agent: Resource) -> bool:
+        return self._resolve_agent_skill_delivery(agent) == _FOLDER_DELIVERY
 
     async def apply_follow_for_agent(self, agent_name: str, *, actor: str = "system") -> None:
         """Reconcile an agent's deliveries with its follow policy.

@@ -18,6 +18,7 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import TargetConflict
 from coffer.domain.resource import ResourceRef
 from coffer.domain.skill.binding import BindingState
+from coffer.domain.workspace_errors import SkillDeliveryUnsupported
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
@@ -33,6 +34,13 @@ async def enable_skill_for_agent(
 ) -> BindingState:
     skill = await service._rs.get(ResourceRef("skill", skill_name))
     agent = await service._rs.get(ResourceRef("agent", agent_name))
+    # Gate non-folder delivery modes BEFORE any filesystem work. Cursor
+    # (rules_mdc) / Hermes (external_dir) are recognized extension points the
+    # folder-symlink model must not mis-deliver into; fail explicitly (422).
+    mode = service._resolve_agent_skill_delivery(agent)
+    if mode != "folder":  # SkillDeliveryMode.FOLDER.value; literal keeps Contract 5
+        agent_type = str(agent.config.get("type", "")) if isinstance(agent.config, dict) else ""
+        raise SkillDeliveryUnsupported(agent_type, mode)
     target_dir = service._resolve_agent_skill_dir(agent)
     link_path = target_dir / skill_name
     master = service._store.paths_for(skill_name).folder
