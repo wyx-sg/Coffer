@@ -107,7 +107,7 @@ pretty = true
 # present on CI (→ import-untyped) but may be absent in a lean dev/verify env
 # (→ import-not-found); ignoring missing imports keeps mypy stable across both.
 [[tool.mypy.overrides]]
-module = ["sqlite_vec.*", "markitdown.*", "fastembed.*"]
+module = ["sqlite_vec.*", "markitdown.*", "fastembed.*", "ruamel.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

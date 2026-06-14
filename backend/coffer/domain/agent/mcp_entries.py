@@ -21,8 +21,6 @@ from typing import Any
 
 import tomlkit
 from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
-from ruamel.yaml.error import YAMLError as _RuamelYAMLError
 
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_injection import default_container_key
@@ -71,13 +69,13 @@ def _parse_yaml(text: str) -> MutableMapping[str, Any]:
     level (mirrors the JSON ``top-level value must be an object`` rule).
     """
     if not text.strip():
-        return CommentedMap()
+        return {}
     try:
         data = _yaml().load(text)
-    except _RuamelYAMLError as e:
+    except Exception as e:  # ruamel raises various YAMLError subclasses
         raise ConfigFileFormatInvalid("yaml", str(e)) from e
     if data is None:
-        return CommentedMap()
+        return {}
     if not isinstance(data, MutableMapping):
         raise ConfigFileFormatInvalid("yaml", "top-level value must be a mapping")
     return data

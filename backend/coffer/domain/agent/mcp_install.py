@@ -29,7 +29,6 @@ from collections.abc import MutableMapping
 from typing import Any
 
 import tomlkit
-from ruamel.yaml.comments import CommentedMap
 
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_entries import (
@@ -95,7 +94,7 @@ def apply_install(
         ydata = _parse_yaml(text)
         servers = ydata.get(ck)
         if not isinstance(servers, MutableMapping):
-            servers = CommentedMap()
+            servers = {}
             ydata[ck] = servers
         servers[COFFER_SERVER_KEY] = dict(fields)
         return _dump_yaml(ydata)
