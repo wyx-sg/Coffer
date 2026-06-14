@@ -327,9 +327,9 @@ agent 的 turn-started 审计记录；回答一个审批提示，观察一条 ap
   裸文件路径——workspace 列表是从 channel 选取 agent 工作目录的唯一权威。路由到
   桥接 agent 时用 peer 的粘性 workspace，无则默认 workspace；两者皆无时告知
   owner 未配置 workspace。builtin agent 不需要 workspace。
-- **FR-017**: owner 从 chat 切换 model。`/model` 无参时报告当前 model；`/model
-  <name>` 对 builtin agent 把名字对 model registry 解析并设会话的 model 覆盖，
-  对桥接 agent 则存原始上游 model 串透传给 CLI。model 切换在同会话下条 turn
+- **FR-017**: owner 从 chat 切换 model。`/model` 无参时报告当前 model；
+  `/model <name>` 对 builtin agent 把名字对 model registry 解析并设会话的 model
+  覆盖，对桥接 agent 则存原始上游 model 串透传给 CLI。model 切换在同会话下条 turn
   生效（model 每 turn 重读，不同于 agent 与工作目录）。非法 builtin model 对
   registry 校验被拒；坏的桥接 model 串会以 CLI 自己的错误回传到 chat。
 
