@@ -87,57 +87,12 @@ def config_files_for(
     When omitted, the type's standard location is used. Files need not exist —
     `exists` is reported at read/list time by the application layer.
     """
+    # Lazy import keeps the manifest's import of this module (for ConfigFileSpec)
+    # acyclic — the manifest owns the per-agent allowlist data.
+    from coffer.domain.agent.descriptor import descriptor_for
+
     cfg = config_dir or agent_type.config_dir()
-    if agent_type is AgentType.CLAUDE_CODE:
-        return (
-            ConfigFileSpec(
-                "settings", "User settings", cfg / "settings.json", ConfigFileFormat.JSON
-            ),
-            ConfigFileSpec(
-                "settings_local",
-                "Local settings override",
-                cfg / "settings.local.json",
-                ConfigFileFormat.JSON,
-            ),
-            # Claude Code's global state/config file always lives at the home
-            # root (``~/.claude.json``), regardless of where the config dir
-            # itself points — it also holds user-scope MCP servers. Anchoring
-            # it to ``cfg.parent`` was only coincidentally correct for the
-            # default ~/.claude and resolved to the wrong file for a custom
-            # config_dir, so we anchor it to $HOME directly.
-            ConfigFileSpec(
-                "global", "Global config", _home() / ".claude.json", ConfigFileFormat.JSON
-            ),
-            ConfigFileSpec(
-                "instructions",
-                "User instructions (CLAUDE.md)",
-                cfg / "CLAUDE.md",
-                ConfigFileFormat.MARKDOWN,
-            ),
-            ConfigFileSpec(
-                "subagents",
-                "Subagents (agents/)",
-                cfg / "agents",
-                ConfigFileFormat.MARKDOWN,
-                kind=ConfigFileKind.DIRECTORY,
-            ),
-        )
-    if agent_type is AgentType.CODEX:
-        return (
-            ConfigFileSpec(
-                "config", "Config (config.toml)", cfg / "config.toml", ConfigFileFormat.TOML
-            ),
-            ConfigFileSpec(
-                "instructions",
-                "Global instructions (AGENTS.md)",
-                cfg / "AGENTS.md",
-                ConfigFileFormat.MARKDOWN,
-            ),
-            ConfigFileSpec(
-                "hooks", "Hooks (hooks.json)", cfg / "hooks.json", ConfigFileFormat.JSON
-            ),
-        )
-    raise AssertionError(f"unhandled AgentType: {agent_type!r}")  # pragma: no cover
+    return descriptor_for(agent_type).config_files(cfg)
 
 
 def spec_for(

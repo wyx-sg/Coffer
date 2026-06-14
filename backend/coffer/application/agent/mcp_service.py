@@ -23,22 +23,17 @@ from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import ConfigFileSpec, spec_for
+from coffer.domain.agent.descriptor import descriptor_for
+from coffer.domain.agent.mcp_injection import McpInjectionSpec
 from coffer.domain.agent.mcp_install import (
     apply_install,
     apply_uninstall,
     installed_command,
     is_installed,
 )
-from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import ShimNotFound
+from coffer.domain.errors import McpInstallUnsupported, ShimNotFound
 from coffer.domain.resource import Resource, ResourceRef
-
-# Which allowlisted config-file key holds each type's MCP servers.
-_MCP_CONFIG_KEY: dict[AgentType, str] = {
-    AgentType.CLAUDE_CODE: "global",
-    AgentType.CODEX: "config",
-}
 
 _SHIM_BINARY = "coffer-mcp-shim"
 
@@ -95,25 +90,31 @@ class AgentMcpService:
         self._store = store
         self._resolve_shim = shim_resolver
 
-    async def _mcp_spec(self, name: str) -> ConfigFileSpec:
+    async def _mcp_spec(self, name: str) -> tuple[ConfigFileSpec, McpInjectionSpec]:
         # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
         resource = await self._agents.get(name)
         cfg = AgentConfig.model_validate(resource.config)
-        return spec_for(cfg.type, _MCP_CONFIG_KEY[cfg.type], cfg.resolved_config_dir())
+        injection = descriptor_for(cfg.type).mcp
+        if injection is None:
+            raise McpInstallUnsupported(cfg.type.value)
+        spec = spec_for(cfg.type, injection.config_key, cfg.resolved_config_dir())
+        return spec, injection
 
     async def status(self, name: str) -> McpInstallStatus:
-        spec = await self._mcp_spec(name)
+        spec, inj = await self._mcp_spec(name)
         text = self._store.read_text(spec.path) or ""
         return McpInstallStatus(
-            installed=is_installed(spec.format, text),
-            command=installed_command(spec.format, text),
+            installed=is_installed(spec.format, text, container_key=inj.container_key),
+            command=installed_command(spec.format, text, container_key=inj.container_key),
         )
 
     async def install(self, name: str, *, actor: str = "api") -> McpInstallStatus:
-        spec = await self._mcp_spec(name)
+        spec, inj = await self._mcp_spec(name)
         shim = self._resolve_shim()  # raises ShimNotFound (→ 422) before any write
         text = self._store.read_text(spec.path) or ""
-        new_text = apply_install(spec.format, text, shim)
+        new_text = apply_install(
+            spec.format, text, shim, container_key=inj.container_key, entry_style=inj.entry_style
+        )
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(
             AuditEventType.AGENT_MCP_INSTALLED.value,
@@ -124,12 +125,12 @@ class AgentMcpService:
         return McpInstallStatus(installed=True, command=shim)
 
     async def uninstall(self, name: str, *, actor: str = "api") -> McpInstallStatus:
-        spec = await self._mcp_spec(name)
+        spec, inj = await self._mcp_spec(name)
         text = self._store.read_text(spec.path)
         # No-op success when not installed — don't write or audit.
-        if text is None or not is_installed(spec.format, text):
+        if text is None or not is_installed(spec.format, text, container_key=inj.container_key):
             return McpInstallStatus(installed=False, command=None)
-        new_text = apply_uninstall(spec.format, text)
+        new_text = apply_uninstall(spec.format, text, container_key=inj.container_key)
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(
             AuditEventType.AGENT_MCP_UNINSTALLED.value,

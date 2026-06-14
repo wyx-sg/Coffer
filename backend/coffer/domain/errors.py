@@ -151,6 +151,16 @@ class ShimNotFound(CofferError):  # noqa: N818
         self.looked_for = looked_for
 
 
+class McpInstallUnsupported(CofferError):  # noqa: N818
+    """The agent type does not declare an MCP injection target. Maps to 422."""
+
+    code = "MCP_INSTALL_UNSUPPORTED"
+
+    def __init__(self, agent_type: str) -> None:
+        super().__init__(f"agent type {agent_type!r} does not support Coffer MCP install")
+        self.agent_type = agent_type
+
+
 class FsPathNotBrowsable(CofferError):  # noqa: N818
     """A folder-browse path can't be listed (missing, not a dir, unreadable).
 

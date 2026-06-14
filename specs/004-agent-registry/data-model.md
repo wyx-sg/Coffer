@@ -6,22 +6,37 @@ in the generic `resources` table, so spec 004 adds no table of its own.
 
 ## Domain entities (`backend/coffer/domain/agent/`)
 
-### `AgentType` (`domain/agent/types.py`)
+### `AgentType` + the capability manifest (`domain/agent/types.py`, `domain/agent/descriptor.py`)
 
-A string-valued enum (`StrEnum`). v1 supports exactly two products; each value
-covers both the CLI and the app/IDE form of that product, which share one
-config directory.
+`AgentType` is a string-valued enum (`StrEnum`) — the stable identity (persisted
+value + API contract + registration whitelist). Each value covers both the CLI
+and the app/IDE form of that product, which share one config directory.
 
-| Value         | Display name | Default `config_dir` (POSIX expansion) | Skills delivered to |
-| ------------- | ------------ | -------------------------------------- | ------------------- |
-| `claude_code` | Claude Code  | `~/.claude`                            | `~/.claude/skills`  |
-| `codex`       | OpenAI Codex | `~/.codex`                             | `~/.codex/skills`   |
+All _per-type behaviour_ lives in the **capability manifest**
+(`domain/agent/descriptor.py`): `AGENT_DESCRIPTORS: dict[AgentType,
+AgentDescriptor]`, one record per agent. `types.py` methods, `config_files_for`,
+the MCP services, and auto-detect read this table (the enum's methods delegate
+via a lazy import to keep the graph acyclic). **Adding an agent = adding one
+enum value + one descriptor record** (plus a novel MCP entry renderer or memory
+adapter only when the agent introduces a genuinely new shape).
 
-`claude_desktop` and `cursor` are intentionally **not** present in v1 (see
-spec.md "Note on agent types"). Adding either later means a new enum value, a
-`detect_marker`, and a config-file allowlist.
+| Value         | Display name | Default `config_dir` | MCP file / container / shape               |
+| ------------- | ------------ | -------------------- | ------------------------------------------ |
+| `claude_code` | Claude Code  | `~/.claude`          | `~/.claude.json` · `mcpServers` · map      |
+| `codex`       | OpenAI Codex | `~/.codex`           | `config.toml` · `mcp_servers` · map        |
+| `cursor`      | Cursor       | `~/.cursor`          | `mcp.json` · `mcpServers` · map            |
+| `opencode`    | OpenCode     | `~/.config/opencode` | `opencode.json` · `mcp` · typed-array      |
+| `openclaw`    | OpenClaw     | `~/.openclaw`        | `openclaw.json` · `mcp` · map              |
+| `hermes`      | Hermes       | `~/.hermes`          | `config.yaml` (YAML) · `mcp_servers` · map |
 
-Each enum value carries:
+Skills are delivered to `<config_dir>/skills` (per-agent skill targets are
+refined by the skill-delivery work; OpenClaw's real target is
+`workspace/skills`). `claude_desktop` (the separate Claude chat app) remains out
+of scope.
+
+`AgentDescriptor` carries: `display_name`, `config_subpath`, `config_files`
+(allowlist builder), `mcp` (`McpInjectionSpec | None`), `mcp_source_keys`, and
+`skill_subpath`. Each enum value still exposes:
 
 - `display_name: str`
 - `default_name() -> str` (stable per-type default resource name — underscores become hyphens, e.g. `claude_code` → `claude-code`; used when the user registers without an explicit name)
@@ -34,12 +49,12 @@ The config-file allowlist and the skills-delivery target (`<config_dir>/skills`)
 
 Pydantic v2 `BaseModel`. The kind-specific config schema registered with `ResourceService`.
 
-| Field        | Type           | Notes                                                                                 |
-| ------------ | -------------- | ------------------------------------------------------------------------------------- |
-| `type`       | `AgentType`    | required; enum value                                                                  |
-| `config_dir` | `Path \| None` | optional absolute-path override; defaults to `type.default_config_dir()` at read time |
-| `follow_all_skills` | `bool` | follow-master-library policy flag (spec 005 FR-025); defaults to `True`, preserving the pre-amendment trust-mode auto-bind behavior |
-| `skill_exclusions` | `list[str]` | skill names excluded from delivery while following; default `[]` |
+| Field               | Type           | Notes                                                                                                                               |
+| ------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `type`              | `AgentType`    | required; enum value                                                                                                                |
+| `config_dir`        | `Path \| None` | optional absolute-path override; defaults to `type.default_config_dir()` at read time                                               |
+| `follow_all_skills` | `bool`         | follow-master-library policy flag (spec 005 FR-025); defaults to `True`, preserving the pre-amendment trust-mode auto-bind behavior |
+| `skill_exclusions`  | `list[str]`    | skill names excluded from delivery while following; default `[]`                                                                    |
 
 Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`. The two policy fields are _stored_ here (this spec's schema) but their delivery semantics are owned by spec 005 (`SkillService` follow reconciliation); they surface on `AgentOut` and are updatable via `PATCH /agents/{name}`.
 
@@ -56,9 +71,10 @@ Pure domain module (no I/O beyond `os.environ`-based path construction, same
 pattern as `types.py`). Defines the curated set of config files each agent
 type exposes for view/edit.
 
-`ConfigFileFormat` — `StrEnum` of `json`, `toml`, `markdown`, `text`. Drives
-save-time validation: `json` parses with `json.loads`, `toml` with
-`tomllib.loads`; `markdown` and `text` are always valid.
+`ConfigFileFormat` — `StrEnum` of `json`, `toml`, `yaml`, `markdown`, `text`.
+Drives save-time validation: `json` parses with `json.loads`, `toml` with
+`tomllib.loads`, `yaml` with `yaml.safe_load`; `markdown` and `text` are always
+valid.
 
 `ConfigFileKind` — `StrEnum` of `file`, `directory`. A `directory` entry
 (FR-034) resolves to a directory of files rather than a single file; its
@@ -80,18 +96,27 @@ dir. Current set (the former `memory` key is renamed `instructions` — these
 files are human-authored instructions, distinct from agent-written memory,
 which is spec 007's domain):
 
-| Agent         | `key`            | Path                            | Format     | Kind        |
-| ------------- | ---------------- | ------------------------------- | ---------- | ----------- |
-| `claude_code` | `settings`       | `~/.claude/settings.json`       | `json`     | `file`      |
-| `claude_code` | `settings_local` | `~/.claude/settings.local.json` | `json`     | `file`      |
-| `claude_code` | `global`         | `~/.claude.json`                | `json`     | `file`      |
-| `claude_code` | `instructions`   | `~/.claude/CLAUDE.md`           | `markdown` | `file`      |
-| `claude_code` | `subagents`      | `~/.claude/agents/`             | `markdown` | `directory` |
-| `codex`       | `config`         | `~/.codex/config.toml`          | `toml`     | `file`      |
-| `codex`       | `instructions`   | `~/.codex/AGENTS.md`            | `markdown` | `file`      |
-| `codex`       | `hooks`          | `~/.codex/hooks.json`           | `json`     | `file`      |
+| Agent         | `key`            | Path                               | Format     | Kind        |
+| ------------- | ---------------- | ---------------------------------- | ---------- | ----------- |
+| `claude_code` | `settings`       | `~/.claude/settings.json`          | `json`     | `file`      |
+| `claude_code` | `settings_local` | `~/.claude/settings.local.json`    | `json`     | `file`      |
+| `claude_code` | `global`         | `~/.claude.json`                   | `json`     | `file`      |
+| `claude_code` | `instructions`   | `~/.claude/CLAUDE.md`              | `markdown` | `file`      |
+| `claude_code` | `subagents`      | `~/.claude/agents/`                | `markdown` | `directory` |
+| `codex`       | `config`         | `~/.codex/config.toml`             | `toml`     | `file`      |
+| `codex`       | `instructions`   | `~/.codex/AGENTS.md`               | `markdown` | `file`      |
+| `codex`       | `hooks`          | `~/.codex/hooks.json`              | `json`     | `file`      |
+| `cursor`      | `mcp`            | `~/.cursor/mcp.json`               | `json`     | `file`      |
+| `opencode`    | `config`         | `~/.config/opencode/opencode.json` | `json`     | `file`      |
+| `opencode`    | `instructions`   | `~/.config/opencode/AGENTS.md`     | `markdown` | `file`      |
+| `openclaw`    | `config`         | `~/.openclaw/openclaw.json`        | `json`     | `file`      |
+| `hermes`      | `config`         | `~/.hermes/config.yaml`            | `yaml`     | `file`      |
+| `hermes`      | `instructions`   | `~/.hermes/SOUL.md`                | `markdown` | `file`      |
 
-(`global` always anchors to `$HOME` — Claude Code keeps `~/.claude.json` at
+(The allowlist for the agents added on top of Claude Code / Codex starts minimal
+— the MCP-bearing file plus an obvious instructions file — and grows as their
+other facets land. `global` always anchors to `$HOME` — Claude Code keeps
+`~/.claude.json` at
 the home root even when the config dir itself is overridden.)
 
 `~/.codex/auth.json` is deliberately excluded (credential/state, not a
@@ -113,11 +138,11 @@ one Markdown file per personal subagent, nested paths allowed).
 
 `DirEntryInfo` — frozen dataclass for one child file:
 
-| Field         | Type       | Notes                                          |
-| ------------- | ---------- | ---------------------------------------------- |
-| `relpath`     | `str`      | POSIX path relative to the entry's directory   |
-| `size`        | `int`      | byte size                                      |
-| `modified_at` | `datetime` | last-modified time                             |
+| Field         | Type       | Notes                                        |
+| ------------- | ---------- | -------------------------------------------- |
+| `relpath`     | `str`      | POSIX path relative to the entry's directory |
+| `size`        | `int`      | byte size                                    |
+| `modified_at` | `datetime` | last-modified time                           |
 
 `validate_child_relpath(root, relpath) -> Path` is the child-path security
 boundary (pure path math; symlink escape is re-checked at I/O time by the
@@ -125,20 +150,31 @@ store): it rejects traversal (`..`), absolute paths, backslashes, hidden
 segments, and any extension other than lowercase `.md` — before any
 filesystem access.
 
-### Coffer MCP entry (`domain/agent/mcp_install.py`)
+### MCP injection — orthogonal axes (`domain/agent/mcp_injection.py`, `mcp_install.py`)
 
-Pure domain module that builds / detects / removes the `coffer` MCP-server
-entry inside an agent's MCP config **text**, without touching the filesystem.
+MCP configuration varies across agents along **two independent axes**, captured
+by `McpInjectionSpec` (held per agent in the manifest):
+
+- **format** — `json` / `toml` / `yaml` — selects the parser/serializer (each
+  preserving the user's comments/order: `json` stdlib, `toml` `tomlkit`, `yaml`
+  `ruamel.yaml` round-trip).
+- **shape** — `container_key` (the top-level table: `mcpServers` / `mcp_servers`
+  / `mcp`) + `entry_style` (`McpEntryStyle`): `COMMAND_MAP` (`{"command": shim}`
+  — Claude/Codex/Cursor/Hermes) or `TYPED_COMMAND_ARRAY`
+  (`{"type": "local", "command": [shim]}` — OpenCode).
+
+`mcp_install.py` builds / detects / removes the `coffer` entry as pure text
+transforms (no filesystem):
 
 - `COFFER_SERVER_KEY = "coffer"`.
-- `apply_install(fmt, text, shim_path) -> str` — returns new file text with the
-  `coffer` stdio entry inserted/updated. `json` (Claude Code `~/.claude.json`):
-  `mcpServers.coffer = {"command": shim_path}`. `toml` (Codex `config.toml`):
-  `[mcp_servers.coffer]\ncommand = shim_path`, edited via `tomlkit` so the
-  user's other tables and comments are preserved.
-- `apply_uninstall(fmt, text) -> str` — returns new text with the `coffer`
-  entry removed (no-op if absent).
-- `is_installed(fmt, text) -> bool` — whether a `coffer` entry is present.
+- `apply_install(fmt, text, shim_path, *, container_key=None, entry_style=COMMAND_MAP) -> str`
+  — inserts/updates the `coffer` entry. `container_key` defaults per format
+  (`default_container_key`), reproducing Claude/Codex behaviour; new agents pass
+  their own. Idempotent.
+- `apply_uninstall(fmt, text, *, container_key=None) -> str` — removes the
+  `coffer` entry (no-op if absent).
+- `is_installed` / `installed_command` (`*, container_key=None`) — presence /
+  shim path (the latter handles both command-map and command-array shapes).
 
 The MCP config file for each type is itself an allowlisted config file
 (`global` for Claude Code, `config` for Codex). The Coffer-MCP
@@ -175,13 +211,13 @@ Add to `AuditEventType` (`domain/audit.py`):
 
 The workspace amendment adds:
 
-| Value                       | When emitted                                                                  |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| `agent_config_file_deleted` | A directory-entry child file was deleted (prior content preserved as `.bak`)  |
-| `agent_mcp_entry_removed`   | A direct MCP entry was removed from the agent's config file (FR-026)          |
+| Value                       | When emitted                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| `agent_config_file_deleted` | A directory-entry child file was deleted (prior content preserved as `.bak`)    |
+| `agent_mcp_entry_removed`   | A direct MCP entry was removed from the agent's config file (FR-026)            |
 | `agent_mcp_entry_adopted`   | A direct MCP entry was adopted into a registered `mcp_server` resource (FR-028) |
-| `agent_plugin_toggled`      | A plugin's enabled state was changed on its documented config surface (FR-032) |
-| `agent_plugin_uninstalled`  | A Codex plugin entry + cache directory were removed (FR-033)                  |
+| `agent_plugin_toggled`      | A plugin's enabled state was changed on its documented config surface (FR-032)  |
+| `agent_plugin_uninstalled`  | A Codex plugin entry + cache directory were removed (FR-033)                    |
 
 The lifecycle steps required by FR-011 — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected `agent:<name>` reference). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (ref `agent:<name>`, details `{key}`). Agents have no enable/disable concept, and discovery is read-only and registers nothing, so neither emits an audit event of its own.
 
@@ -229,14 +265,14 @@ daemon-backed browser via `GET /api/v1/fs/browse`, surfaced in the
 Resolves an agent → its `AgentType`, then operates on that type's config-file
 allowlist via a `ConfigFileStorePort`.
 
-| Method                                                       | Purpose                                                                                                                                                                                                                                                             |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_files(name) -> list[ConfigFileInfo]`                   | For each `ConfigFileSpec` of the agent's type, return key, display name, path, format, `kind`, `exists`, and (when present) size + mtime. Directory entries additionally carry `files` (recursive `.md` listing as `DirEntryInfo` rows).                            |
-| `read_file(name, key) -> ConfigFileContent`                  | Resolve `spec_for(type, key)`; return content + format + `exists` + `fingerprint` + `memory_block`. Missing file → empty content, `exists=False`, `fingerprint=""`, no file created.                                                                                |
-| `write_file(name, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | Resolve `spec_for(type, key)`; `validate_content(format, content)` (malformed json/toml → `ConfigFileFormatInvalid` → 422, file unchanged); when `expected_fingerprint` is supplied, reject with `ConfigFileStale` (→ 409) if the on-disk content changed since the read (FR-036); `store.write_text_atomic` (atomic + `.bak`); record `agent_config_file_written`; return the refreshed `ConfigFileInfo`. |
-| `read_child(name, key, relpath) -> ConfigFileContent`        | `validate_child_relpath`, then read one child of a directory entry; same shape as `read_file`.                                                                                                                                                                      |
-| `write_child(name, key, relpath, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | Create-on-write save of one child file; same validation / staleness / atomic-write / audit machinery as `write_file` (FR-035).                                                                                                                          |
-| `delete_child(name, key, relpath, *, actor) -> None`         | Delete one child file, preserving the prior content as `.bak`; records `agent_config_file_deleted`.                                                                                                                                                                 |
+| Method                                                                                            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_files(name) -> list[ConfigFileInfo]`                                                        | For each `ConfigFileSpec` of the agent's type, return key, display name, path, format, `kind`, `exists`, and (when present) size + mtime. Directory entries additionally carry `files` (recursive `.md` listing as `DirEntryInfo` rows).                                                                                                                                                                   |
+| `read_file(name, key) -> ConfigFileContent`                                                       | Resolve `spec_for(type, key)`; return content + format + `exists` + `fingerprint` + `memory_block`. Missing file → empty content, `exists=False`, `fingerprint=""`, no file created.                                                                                                                                                                                                                       |
+| `write_file(name, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo`           | Resolve `spec_for(type, key)`; `validate_content(format, content)` (malformed json/toml → `ConfigFileFormatInvalid` → 422, file unchanged); when `expected_fingerprint` is supplied, reject with `ConfigFileStale` (→ 409) if the on-disk content changed since the read (FR-036); `store.write_text_atomic` (atomic + `.bak`); record `agent_config_file_written`; return the refreshed `ConfigFileInfo`. |
+| `read_child(name, key, relpath) -> ConfigFileContent`                                             | `validate_child_relpath`, then read one child of a directory entry; same shape as `read_file`.                                                                                                                                                                                                                                                                                                             |
+| `write_child(name, key, relpath, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | Create-on-write save of one child file; same validation / staleness / atomic-write / audit machinery as `write_file` (FR-035).                                                                                                                                                                                                                                                                             |
+| `delete_child(name, key, relpath, *, actor) -> None`                                              | Delete one child file, preserving the prior content as `.bak`; records `agent_config_file_deleted`.                                                                                                                                                                                                                                                                                                        |
 
 `ConfigFileContent.fingerprint` is a content fingerprint used for
 optimistic-concurrency writes (FR-036) — reads return it, writes carry it
@@ -268,17 +304,17 @@ claude_code's `~/.claude.json` + `settings.json` `mcpServers` maps and codex's
 `config.toml` `[mcp_servers.*]` tables (pure text transforms; `tomlkit`
 preserves the user's TOML layout).
 
-| Field              | Type             | Notes                                                                                                  |
-| ------------------ | ---------------- | ------------------------------------------------------------------------------------------------------ |
-| `name`             | `str`            | entry key in the config file                                                                           |
-| `source`           | `str`            | allowlist key of the file it came from (`global`/`settings`/`config`)                                  |
-| `transport`        | `str`            | `stdio` or `http` (derived: `url` present → `http`)                                                    |
-| `command` / `args` | `str?` / `tuple` | stdio launch spec                                                                                      |
+| Field              | Type             | Notes                                                                                                                                                            |
+| ------------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`             | `str`            | entry key in the config file                                                                                                                                     |
+| `source`           | `str`            | allowlist key of the file it came from (`global`/`settings`/`config`)                                                                                            |
+| `transport`        | `str`            | `stdio` or `http` (derived: `url` present → `http`)                                                                                                              |
+| `command` / `args` | `str?` / `tuple` | stdio launch spec                                                                                                                                                |
 | `env` / `headers`  | `dict[str,str]`  | `repr=False` — values may carry secrets; over HTTP only KEY NAMES leave the daemon (`env_keys`, `header_keys`, plus `secret_keys` flagging secret-looking names) |
-| `url`              | `str \| None`    | http transport target                                                                                  |
-| `enabled`          | `bool \| None`   | per-entry flag where the format defines one (codex); `None` for claude_code                            |
-| `is_coffer`        | `bool`           | Coffer's own gateway entry — protected from remove/toggle/adopt                                        |
-| `matches_resource` | `str \| None`    | equivalent registered `mcp_server` resource, filled by the application layer                           |
+| `url`              | `str \| None`    | http transport target                                                                                                                                            |
+| `enabled`          | `bool \| None`   | per-entry flag where the format defines one (codex); `None` for claude_code                                                                                      |
+| `is_coffer`        | `bool`           | Coffer's own gateway entry — protected from remove/toggle/adopt                                                                                                  |
+| `matches_resource` | `str \| None`    | equivalent registered `mcp_server` resource, filled by the application layer                                                                                     |
 
 Companion helpers: `parse_entries`, `remove_entry`, `set_entry_enabled` (TOML
 only), `secret_env_keys` (TOKEN/SECRET/PASSWORD/API_KEY/CREDENTIAL/AUTHORIZATION
@@ -296,13 +332,13 @@ inventory files `installed_plugins.json` / `known_marketplaces.json`
 (read-only inputs — Coffer never writes them) and the documented write surface
 `settings.json` `enabledPlugins`.
 
-| Field         | Type   | Notes                                                                  |
-| ------------- | ------ | ----------------------------------------------------------------------- |
-| `id`          | `str`  | `<name>@<marketplace>` (split on the last `@`)                         |
-| `name`        | `str`  |                                                                        |
-| `marketplace` | `str`  |                                                                        |
-| `enabled`     | `bool` | defaults to `True` when the config carries no explicit flag            |
-| `installed`   | `bool` | present in the install inventory; settings-only orphans get `False`    |
+| Field         | Type   | Notes                                                               |
+| ------------- | ------ | ------------------------------------------------------------------- |
+| `id`          | `str`  | `<name>@<marketplace>` (split on the last `@`)                      |
+| `name`        | `str`  |                                                                     |
+| `marketplace` | `str`  |                                                                     |
+| `enabled`     | `bool` | defaults to `True` when the config carries no explicit flag         |
+| `installed`   | `bool` | present in the install inventory; settings-only orphans get `False` |
 
 `MarketplaceInfo` carries `name`, `source_type`, `source` (read-only). The
 HTTP view (`PluginView`) replaces `installed` with `cache_present` — whether
@@ -310,20 +346,20 @@ the plugin's cache directory exists on disk (no repair is attempted, FR-031).
 
 ### `AgentMcpEntryService` (`application/agent/mcp_entry_service.py`)
 
-| Method                                                            | Purpose                                                                                                                                                                                                                                                |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `list_entries(name)`                                              | Parse all MCP-bearing files of the agent's type; mark `is_coffer` and `matches_resource`; collect per-file `parse_errors`.                                                                                                                             |
-| `set_enabled(name, entry, enabled, actor)`                        | Toggle the `enabled` flag in place (codex `config.toml` only — claude_code → `McpEntryToggleUnsupported` → 422). `coffer` entry → `McpEntryProtected`.                                                                                                 |
-| `remove_entry(name, entry, source=None, actor)`                   | Remove the entry from its source file (atomic + `.bak`); `source` disambiguates when claude_code carries the name in both files (else `McpEntrySourceAmbiguous`); audits `agent_mcp_entry_removed`.                                                    |
+| Method                                                                | Purpose                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_entries(name)`                                                  | Parse all MCP-bearing files of the agent's type; mark `is_coffer` and `matches_resource`; collect per-file `parse_errors`.                                                                                                                                                  |
+| `set_enabled(name, entry, enabled, actor)`                            | Toggle the `enabled` flag in place (codex `config.toml` only — claude_code → `McpEntryToggleUnsupported` → 422). `coffer` entry → `McpEntryProtected`.                                                                                                                      |
+| `remove_entry(name, entry, source=None, actor)`                       | Remove the entry from its source file (atomic + `.bak`); `source` disambiguates when claude_code carries the name in both files (else `McpEntrySourceAmbiguous`); audits `agent_mcp_entry_removed`.                                                                         |
 | `adopt(name, entry, source=None, new_name=None, secrets=None, actor)` | FR-028 promotion: secret-looking keys MUST map to keychain refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry, with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
 
 ### `AgentPluginService` (`application/agent/plugin_service.py`)
 
-| Method                                  | Purpose                                                                                                                                                 |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `list_plugins(name)`                    | Parse plugin + marketplace state per type; compute `cache_present` from the documented cache directory; collect `parse_errors`.                        |
-| `set_enabled(name, plugin_id, enabled, actor)` | Write only the documented surface (codex `config.toml` entry / claude_code `settings.json` `enabledPlugins`); audits `agent_plugin_toggled`.       |
-| `uninstall(name, plugin_id, actor)`     | Codex only: remove the `[plugins."…"]` entry and delete the cache directory; claude_code → `PluginUninstallUnsupported` → 422; audits `agent_plugin_uninstalled`. |
+| Method                                         | Purpose                                                                                                                                                           |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_plugins(name)`                           | Parse plugin + marketplace state per type; compute `cache_present` from the documented cache directory; collect `parse_errors`.                                   |
+| `set_enabled(name, plugin_id, enabled, actor)` | Write only the documented surface (codex `config.toml` entry / claude_code `settings.json` `enabledPlugins`); audits `agent_plugin_toggled`.                      |
+| `uninstall(name, plugin_id, actor)`            | Codex only: remove the `[plugins."…"]` entry and delete the cache directory; claude_code → `PluginUninstallUnsupported` → 422; audits `agent_plugin_uninstalled`. |
 
 ### `ConfigFileStorePort` (Protocol, defined in application)
 
