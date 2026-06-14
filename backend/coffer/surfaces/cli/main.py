@@ -9,7 +9,6 @@ from coffer.surfaces.cli import (
     audit_cmd,
     backup_cmd,
     channel_cmd,
-    chat_cmd,
     credentials_cmd,
     daemon_cmd,
     knowledge_base_cmd,
@@ -52,7 +51,6 @@ app.add_typer(channel_cmd.app, name="channel")
 app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(knowledge_base_cmd.app, name="kb")
 app.add_typer(memory_cmd.app, name="memory")
-app.add_typer(chat_cmd.app, name="chat")
 app.add_typer(model_cmd.app, name="model")
 app.add_typer(sync_cmd.app, name="sync")
 app.add_typer(transcript_cmd.app, name="transcript")

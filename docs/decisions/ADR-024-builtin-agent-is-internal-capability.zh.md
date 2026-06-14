@@ -123,6 +123,7 @@ defer Capability B 是*针对工具选择*的——那里下游 frontier 模型�
   知识/记忆 un-defer 为 `coffer__ask`。
 - UI：`/chat` 改回「聊天」；移除 `/agents/builtin` 路由与内置卡片；Settings → Models 重构为
   Coffer 内部模型。
+- CLI：移除 `coffer chat` 命令（内置 agent 的终端聊天）；`coffer model` 及其余 CLI 不变。
 - LangGraph/LangChain 作为**内部**依赖保留（蒸馏 + `coffer__ask`）；删除聊天事件映射与 `builtin`
   聊天 provider。
 - 除 Settings → Models 已存储的内容外无新增持久状态；无迁移。

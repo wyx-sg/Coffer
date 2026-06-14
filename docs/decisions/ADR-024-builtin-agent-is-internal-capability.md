@@ -158,6 +158,8 @@ keeps the very "built-in agent is a thing" framing this ADR removes.
   `coffer__ask`.
 - UI: `/chat` reverts to "Chat"; the `/agents/builtin` route and the built-in
   card are removed; Settings → Models is reframed as Coffer's internal model.
+- CLI: the `coffer chat` command (the built-in agent's terminal chat) is removed;
+  `coffer model` and the rest of the CLI are unchanged.
 - LangGraph/LangChain stay as **internal** dependencies (distillation +
   `coffer__ask`); the chat-event mapping and `builtin` chat provider are deleted.
 - No new persisted state beyond what Settings → Models already stores; no

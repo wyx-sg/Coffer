@@ -251,26 +251,6 @@ agent 使用哪一个。
 
 ---
 
-### 用户故事 9 —— 从命令行聊天（优先级：P2）
-
-用户，一名开发者，在没有 GUI 的情况下与内置 agent 交谈：
-`coffer chat` 打开一个交互式流式会话；`coffer chat -m "…"` 运行一个回合并打印
-回复。
-
-**为何此优先级**：CLI 对等是 Coffer 面向开发者界面的一个长期约定。不阻塞 GUI
-交付物。
-
-**独立测试**：运行 `coffer chat -m "say hello"` 并在 stdout 上观察一个流式回复；
-运行 `coffer chat`，进行一个两回合对话，退出，并确认该对话出现在 GUI 历史列表中。
-
-**覆盖的场景**：
-
-- `coffer chat -m` 运行一个单回合并打印回复
-- `coffer chat` 进行一个交互式多回合会话
-- CLI 对话与 GUI 列出的是同一批实体
-
----
-
 ### 用户故事 10 —— 看 agent 做了什么以及花了多少（优先级：P3）
 
 每个回合在结果消息上记录 token 用量，而内置 agent 调用的每个工具流经 gateway 的
@@ -394,33 +374,12 @@ agent 使用哪一个。
 - **When** 守护进程重启且用户重新打开该对话，
 - **Then** 每条消息都存在且未改变。
 
-### 场景：agent 调用一个 vault 工具
-
-- **Given** 一个 memory store 包含一条能回答某问题的记录，
-- **When** 用户询问该问题，
-- **Then** 该回合包含一次渲染为内联可展开卡片的 `coffer__recall` 工具调用，且
-  答案植根于该记录。
-
 ### 场景：skills 作为工具可触达
 
 - **Given** vault 中至少一个有效的 skill，
 - **When** agent 列出可用工具，
 - **Then** `coffer__list_skills` 与 `coffer__load_skill` 存在，且
   `coffer__load_skill` 返回该 skill 的内容。
-
-### 场景：一次失败的工具调用不破坏回合
-
-- **Given** 一个在被调用时返回错误的工具，
-- **When** agent 在一个回合中调用它，
-- **Then** 工具卡片显示一个失败状态，错误作为一个工具结果返回给 agent，且回合
-  仍以一条助手消息完成。
-
-### 场景：工具迭代上限干净地结束回合
-
-- **Given** 一个会无限调用工具的回合，
-- **When** 迭代上限被达到，
-- **Then** 回合干净地结束 —— 一个正常的回合完成（`turn_done`，而非
-  `turn_error`），携带 stop reason `max_iterations` —— 且对话保持可用。
 
 ### 场景：一个 agent 回合为人工审批而暂停
 
@@ -485,14 +444,6 @@ agent 使用哪一个。
 - **Given** 两个配置好的模型，
 - **When** 用户设置一个对话的模型并发送一条消息，
 - **Then** 回合运行在所选模型上且助手消息记录产生它的模型。
-
-### 场景：聊天与模型的命令行对等
-
-- **Given** 一个运行中守护进程，
-- **When** 用户运行 `coffer model add` 与 `coffer model list --json`，然后
-  `coffer chat -m "…"` 与一个交互式 `coffer chat` 会话，
-- **Then** 模型注册并列出，一个流式回复被产生，且 CLI 对话出现在 GUI 显示的
-  同一历史列表中。
 
 ### 场景：no-model 空状态
 
@@ -650,7 +601,8 @@ agent 使用哪一个。
   现有的 002-ui-shell IA 在其余方面不变。
 - **FR-029**：System MUST 提供一个覆盖每个模型注册操作的 Settings → Models 页面。
 - **FR-030**：GUI 中可用的每个聊天与模型操作 MUST 通过 REST API 可用，且模型操作
-  加 `coffer chat` MUST 作为 CLI 命令可用；CLI 读操作 MUST 支持 `--json`。
+  MUST 作为 CLI 命令可用；CLI 读操作 MUST 支持 `--json`。（`coffer chat` CLI 随内置
+  聊天 agent 的退役一并移除，ADR-024。）
 
 **可观测性**
 
