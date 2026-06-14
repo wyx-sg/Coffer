@@ -13,6 +13,11 @@ import pathlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from coffer.application.skill.delivery_ops import (
+    delivers_skill_folders,
+    reconcile_external_registration,
+    resolve_agent_skill_delivery,
+)
 from coffer.application.skill.lifecycle_ops import infer_link_mode
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import TargetConflict
@@ -34,13 +39,17 @@ async def enable_skill_for_agent(
 ) -> BindingState:
     skill = await service._rs.get(ResourceRef("skill", skill_name))
     agent = await service._rs.get(ResourceRef("agent", agent_name))
-    # Gate non-folder delivery modes BEFORE any filesystem work. Cursor
-    # (rules_mdc) / Hermes (external_dir) are recognized extension points the
-    # folder-symlink model must not mis-deliver into; fail explicitly (422).
-    mode = service._resolve_agent_skill_delivery(agent)
-    if mode != "folder":  # SkillDeliveryMode.FOLDER.value; literal keeps Contract 5
+    # Gate delivery modes that have no on-disk folder delivery wired BEFORE any
+    # filesystem work. FOLDER (own skills dir) and EXTERNAL_DIR (a Coffer-owned
+    # dir the agent scans — Hermes) are both folder-style; Cursor's rules_mdc is
+    # a recognized extension point the folder model must not mis-deliver into,
+    # so it fails explicitly (422).
+    mode = resolve_agent_skill_delivery(service, agent)
+    if not delivers_skill_folders(service, agent):
         agent_type = str(agent.config.get("type", "")) if isinstance(agent.config, dict) else ""
         raise SkillDeliveryUnsupported(agent_type, mode)
+    # For EXTERNAL_DIR agents the resolver returns the Coffer-owned external dir
+    # (not the agent's own skills dir); the link mechanics below are identical.
     target_dir = service._resolve_agent_skill_dir(agent)
     link_path = target_dir / skill_name
     master = service._store.paths_for(skill_name).folder
@@ -60,7 +69,7 @@ async def enable_skill_for_agent(
             # actually exists on disk (not a SYMLINK assumption) so a
             # junction/copy-fallback isn't mislabelled when no prior row
             # existed.
-            return await service._bindings.upsert(
+            binding = await service._bindings.upsert(
                 skill_id=skill.id,
                 agent_id=agent.id,
                 enabled=True,
@@ -68,6 +77,8 @@ async def enable_skill_for_agent(
                 last_link_path=str(link_path),
                 link_mode=prior_mode or infer_link_mode(link_path),
             )
+            await reconcile_external_registration(service, agent)
+            return binding
         if not force:
             raise TargetConflict(str(link_path), status.drift.value)
         # Backup + remove. Microseconds in the suffix, plus a uniquifying
@@ -103,6 +114,9 @@ async def enable_skill_for_agent(
             "mode": mode.value,
         },
     )
+    # EXTERNAL_DIR agents: ensure the Coffer-owned dir is registered in the
+    # agent's config now that it holds a delivered skill (no-op otherwise).
+    await reconcile_external_registration(service, agent)
     return binding
 
 
@@ -142,4 +156,7 @@ async def disable_skill_for_agent(
         actor=actor,
         details={"agent": agent_name},
     )
+    # EXTERNAL_DIR agents: deregister the Coffer-owned dir once its last
+    # delivered skill is removed (no-op otherwise).
+    await reconcile_external_registration(service, agent)
     return binding
