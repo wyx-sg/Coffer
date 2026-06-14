@@ -123,8 +123,6 @@ class AgentCatalogPort(Protocol):
 
     def agent_keys(self) -> list[str]: ...
 
-    def display_name(self, agent_key: str) -> str | None: ...
-
 
 class ModelCatalogPort(Protocol):
     """The slice of the model registry the channel core needs for ``/model`` on

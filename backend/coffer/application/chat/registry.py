@@ -48,8 +48,3 @@ class AgentProviderRegistry:
     def agent_keys(self) -> list[str]:
         """Every registered ``agent_key``, in registration order (AgentCatalogPort)."""
         return list(self._entries.keys())
-
-    def display_name(self, agent_key: str) -> str | None:
-        """The display name for ``agent_key``, or ``None`` if unregistered."""
-        entry = self._entries.get(agent_key)
-        return entry.display_name if entry is not None else None

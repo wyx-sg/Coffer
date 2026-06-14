@@ -170,10 +170,13 @@ class InboundProcessor:
         if peer is None or peer.chat_id != msg.chat_id:
             await self._maybe_pair(binding, msg)
             return
-        if peer.sender_id is not None and peer.sender_id != msg.sender_id:
+        if peer.sender_id is not None and msg.sender_id and peer.sender_id != msg.sender_id:
             # Right chat (e.g. a paired group), wrong member — ignore silently.
             # Never fall through to pairing: an intruder must not be able to
-            # re-pair the channel by sending a code into the owner's chat.
+            # re-pair the channel by sending a code into the owner's chat. A
+            # message with no sender id (the transport could not supply one)
+            # falls back to the chat-id match already passed, so a quirk in one
+            # update shape never locks the owner out of their own channel.
             return
         text = msg.text.strip()
         if not text:
@@ -204,8 +207,8 @@ class InboundProcessor:
         peer = await self._peers.get(binding.resource_id)
         if peer is None or peer.chat_id != click.chat_id:
             return  # only the owner decides
-        if peer.sender_id is not None and peer.sender_id != click.sender_id:
-            return  # right chat, wrong member
+        if peer.sender_id is not None and click.sender_id and peer.sender_id != click.sender_id:
+            return  # right chat, wrong member (a click with no sender id falls back to chat id)
         parsed = parse_approval_value(click.value)
         if parsed is None:
             return
@@ -216,6 +219,7 @@ class InboundProcessor:
             return
         outcome = "✅ Approved" if decision_word == "allow" else "❌ Denied"
         decision: Literal["allow", "deny"] = "allow" if decision_word == "allow" else "deny"
+        applied = True
         try:
             self._turns.submit_approval(
                 pending.conversation_id,
@@ -224,6 +228,7 @@ class InboundProcessor:
             )
         except ApprovalNotFound:
             outcome = "⌛ Expired"
+            applied = False  # the gate had already closed — nothing was decided
         await self._audit.record(
             AuditEventType.CHANNEL_APPROVAL_RESOLVED.value,
             ref=ResourceRef(kind="channel", name=binding.name),
@@ -234,6 +239,7 @@ class InboundProcessor:
                 "tool_name": pending.tool_name,
                 "request_id": request_id,
                 "decision": decision_word,
+                "applied": applied,
             },
         )
         with contextlib.suppress(Exception):
