@@ -61,11 +61,11 @@ class _ModelCatalog:
         lowered = name.lower()
         for m in await self._models.list():
             if m.id == name or m.display_name.lower() == lowered or m.model == name:
-                return m.id
+                return str(m.id)
         return None
 
     async def list_models(self) -> list[tuple[str, str]]:
-        return [(m.id, m.display_name) for m in await self._models.list()]
+        return [(str(m.id), str(m.display_name)) for m in await self._models.list()]
 
 
 def wire_channel_kind(

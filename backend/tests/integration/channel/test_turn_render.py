@@ -11,6 +11,8 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
+import pytest
+
 from coffer.application.channel.turn_render import TurnRenderer
 from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone, TurnError
 
@@ -73,6 +75,9 @@ async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
     assert adapter.sent[-1] == ("owner", "✅ done · 1 tool · 0.0s")
 
 
+@pytest.mark.acceptance(
+    spec="009-channels", scenario="a completion summary is sent after every turn"
+)
 async def test_without_edit_support_no_progress_traffic_is_sent() -> None:
     adapter = FakeChannelAdapter(supports_edit=False)
 

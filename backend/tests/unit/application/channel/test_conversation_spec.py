@@ -4,6 +4,7 @@ defaults + workspace allowlist become (agent_key, agent_config)."""
 from __future__ import annotations
 
 import pytest
+
 from coffer.application.channel.conversation_spec import (
     ConversationSpec,
     resolve_conversation_spec,

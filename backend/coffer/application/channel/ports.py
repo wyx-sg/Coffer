@@ -9,7 +9,7 @@ transport in, transport out — every behavior above it is shared.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
@@ -60,6 +60,21 @@ class ChannelAdapter(Protocol):
     async def resolve_approval_prompt(
         self, chat_id: str, message_id: str, outcome_text: str
     ) -> None: ...
+
+
+@dataclass(frozen=True)
+class ChannelBinding:
+    """A live channel the runtime has started: resource identity + adapter +
+    the agent/workspace defaults the channel routes to."""
+
+    name: str
+    resource_id: int
+    channel_type: str
+    default_agent: str
+    default_agent_config: dict[str, Any] | None
+    adapter: ChannelAdapter
+    workspaces: dict[str, str] = field(default_factory=dict)  # name -> absolute path
+    default_workspace: str | None = None
 
 
 @dataclass(frozen=True)

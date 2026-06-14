@@ -14,22 +14,30 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 
 revision: str = "0021"
 down_revision: str | None = "0020"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+_COLUMNS = ("sender_id", "preferred_agent", "preferred_workspace")
+
+
+def _has_column(table: str, column: str) -> bool:
+    bind = op.get_bind()
+    return any(c["name"] == column for c in inspect(bind).get_columns(table))
+
 
 def upgrade() -> None:
-    op.add_column("channel_peers", sa.Column("sender_id", sa.String(), nullable=True))
-    op.add_column("channel_peers", sa.Column("preferred_agent", sa.String(), nullable=True))
-    op.add_column("channel_peers", sa.Column("preferred_workspace", sa.String(), nullable=True))
+    # Idempotent ADD COLUMN (mirrors 0018): the roundtrip suite re-runs the tail
+    # of the chain after a stamp-back, so adding an existing column must not error.
+    for column in _COLUMNS:
+        if not _has_column("channel_peers", column):
+            op.execute(f"ALTER TABLE channel_peers ADD COLUMN {column} VARCHAR")
 
 
 def downgrade() -> None:
-    op.drop_column("channel_peers", "preferred_workspace")
-    op.drop_column("channel_peers", "preferred_agent")
-    op.drop_column("channel_peers", "sender_id")
+    for column in reversed(_COLUMNS):
+        op.drop_column("channel_peers", column)

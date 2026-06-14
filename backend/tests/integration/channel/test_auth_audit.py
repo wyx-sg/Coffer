@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from coffer.domain.audit import AuditEventType
 from coffer.domain.channel.envelopes import ApprovalClick
 
@@ -13,6 +15,9 @@ from .test_approval_bridge import ApprovalAgentAdapter
 # -- sender-identity gate ------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="009-channels", scenario="a group member who is not the paired sender is ignored"
+)
 async def test_message_from_a_different_sender_is_ignored(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel(sender_id="u-owner")
 
@@ -61,6 +66,9 @@ async def test_approval_click_from_a_different_sender_is_ignored(env: ChannelEnv
 # -- first-class channel-driven audit ------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="009-channels", scenario="a channel-driven turn is audited with channel, peer, and agent"
+)
 async def test_channel_turn_started_is_audited(env: ChannelEnv) -> None:
     resource, adapter = await env.paired_channel()
 
@@ -78,6 +86,7 @@ async def test_channel_turn_started_is_audited(env: ChannelEnv) -> None:
     assert entry.details["conversation_id"] == peer.active_conversation_id
 
 
+@pytest.mark.acceptance(spec="009-channels", scenario="an approval resolved from chat is audited")
 async def test_approval_resolution_is_audited(env: ChannelEnv) -> None:
     env.provider.adapter = ApprovalAgentAdapter()
     _resource, adapter = await env.paired_channel()
