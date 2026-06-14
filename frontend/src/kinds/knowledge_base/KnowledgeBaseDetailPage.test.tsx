@@ -143,24 +143,28 @@ describe("KnowledgeBaseDetailPage", () => {
     seedBaseQueries();
     vi.mocked(api.getDocument).mockResolvedValue({ ...DOC, markdown: "body" });
     vi.mocked(api.deleteDocument).mockResolvedValue(undefined);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     renderPage();
 
     const tree = screen.getByRole("complementary");
     fireEvent.click(await within(tree).findByText("Deploys"));
+    // The viewer's delete button opens a styled confirmation dialog (no native
+    // window.confirm); the delete only fires after confirming inside it.
     fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
     await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d1"));
   });
 
   test("does not delete when the confirm is cancelled", async () => {
     seedBaseQueries();
     vi.mocked(api.getDocument).mockResolvedValue({ ...DOC, markdown: "body" });
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     renderPage();
 
     const tree = screen.getByRole("complementary");
     fireEvent.click(await within(tree).findByText("Deploys"));
     fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^cancel$/i }));
     expect(api.deleteDocument).not.toHaveBeenCalled();
   });
 

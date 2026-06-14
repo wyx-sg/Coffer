@@ -20,11 +20,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import shutil
 from collections.abc import Callable, Sequence
 from typing import Protocol
 
 from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
+
+_logger = logging.getLogger(__name__)
 
 
 class CodexAppServerSession(Protocol):
@@ -61,6 +64,7 @@ class CodexSubprocessSession:
         self._env = env
         self._proc: asyncio.subprocess.Process | None = None
         self._rpc: CodexRpcClient | None = None
+        self._stderr_task: asyncio.Task[None] | None = None
 
     @property
     def rpc(self) -> CodexRpcClient:
@@ -69,23 +73,47 @@ class CodexSubprocessSession:
         return self._rpc
 
     async def start(self) -> None:
+        # Capture stderr (was DEVNULL) and forward it to the daemon log. When
+        # codex exits during the handshake the RPC layer only sees the stream
+        # end ("codex rpc stream ended"); the actual cause (e.g. a broken codex
+        # install: "Missing optional dependency @openai/codex-…") is on stderr,
+        # so surfacing it here turns an opaque failure into an actionable log.
         proc = await asyncio.create_subprocess_exec(
             *self._argv,
             cwd=self._cwd,
             env=self._env,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
         if proc.stdin is None or proc.stdout is None:
             raise RuntimeError("codex app-server subprocess has no stdin/stdout pipe")
         self._proc = proc
+        if proc.stderr is not None:
+            self._stderr_task = asyncio.create_task(self._drain_stderr(proc.stderr))
         self._rpc = CodexRpcClient(proc.stdout, proc.stdin)
         self._rpc.start()
+
+    @staticmethod
+    async def _drain_stderr(stream: asyncio.StreamReader) -> None:
+        """Forward the codex subprocess's stderr to the daemon log, line by line."""
+        with contextlib.suppress(Exception):
+            while True:
+                line = await stream.readline()
+                if not line:
+                    break
+                text = line.decode("utf-8", "replace").rstrip()
+                if text:
+                    _logger.warning("codex app-server stderr: %s", text)
 
     async def close(self) -> None:
         if self._rpc is not None:
             await self._rpc.close()
+        if self._stderr_task is not None:
+            self._stderr_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._stderr_task
+            self._stderr_task = None
         proc = self._proc
         if proc is not None and proc.returncode is None:
             with contextlib.suppress(ProcessLookupError):

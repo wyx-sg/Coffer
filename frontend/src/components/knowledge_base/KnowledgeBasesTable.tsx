@@ -2,6 +2,7 @@
 // The knowledge-bases list rendered via the shared DataTable (mirrors
 // SkillsTable): rows navigate to the KB detail page, search covers name +
 // description, and a modes column shows the enabled retrieval modes.
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,6 +10,7 @@ import { Trash2 } from "lucide-react";
 
 import { DataTable, type Column } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import type { KnowledgeBaseOut } from "@/kinds/knowledge_base/api";
 
@@ -25,6 +27,8 @@ export function KnowledgeBasesTable({ items }: { items: KnowledgeBaseOut[] }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const del = useDeleteResource();
+  // Styled confirmation dialog (no native window.confirm). `null` = closed.
+  const [deletingName, setDeletingName] = useState<string | null>(null);
 
   const columns: Column<KnowledgeBaseOut>[] = [
     {
@@ -70,12 +74,7 @@ export function KnowledgeBasesTable({ items }: { items: KnowledgeBaseOut[] }) {
           className="text-muted-foreground hover:text-destructive"
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(t("knowledgeBases.deleteConfirm", { name: r.name }))) {
-              del.mutate(
-                { kind: "knowledge_base", name: r.name },
-                { onSuccess: () => qc.invalidateQueries({ queryKey: ["knowledge-bases"] }) },
-              );
-            }
+            setDeletingName(r.name);
           }}
           aria-label={t("common.delete")}
         >
@@ -86,16 +85,38 @@ export function KnowledgeBasesTable({ items }: { items: KnowledgeBaseOut[] }) {
   ];
 
   return (
-    <DataTable
-      rows={items}
-      columns={columns}
-      rowKey={(r) => r.name}
-      search={{
-        accessor: (r) => `${r.name} ${r.description ?? ""}`,
-        placeholder: t("knowledgeBases.searchPlaceholder"),
-      }}
-      onRowClick={(r) => navigate(`/knowledge-bases/${r.name}`)}
-      emptyMessage={t("knowledgeBases.noMatches")}
-    />
+    <>
+      <DataTable
+        rows={items}
+        columns={columns}
+        rowKey={(r) => r.name}
+        search={{
+          accessor: (r) => `${r.name} ${r.description ?? ""}`,
+          placeholder: t("knowledgeBases.searchPlaceholder"),
+        }}
+        onRowClick={(r) => navigate(`/knowledge-bases/${r.name}`)}
+        emptyMessage={t("knowledgeBases.noMatches")}
+      />
+
+      <ConfirmDialog
+        open={deletingName !== null}
+        onOpenChange={(o) => !o && setDeletingName(null)}
+        title={t("knowledgeBases.deleteConfirm", { name: deletingName ?? "" })}
+        confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
+        pending={del.isPending}
+        onConfirm={() => {
+          if (!deletingName) return;
+          del.mutate(
+            { kind: "knowledge_base", name: deletingName },
+            {
+              onSuccess: () => {
+                qc.invalidateQueries({ queryKey: ["knowledge-bases"] });
+                setDeletingName(null);
+              },
+            },
+          );
+        }}
+      />
+    </>
   );
 }
