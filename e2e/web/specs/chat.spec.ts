@@ -73,14 +73,19 @@ async function deleteModel(modelId: string): Promise<void> {
 /** New flow: clicking "+" opens a blank draft; sending the first message is
  *  what creates the conversation. Requires a model so the composer renders. */
 async function createConversationViaDraft(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /new chat/i }).first().click();
+  await page
+    .getByRole("button", { name: /new chat/i })
+    .first()
+    .click();
   const composer = page.getByRole("textbox", { name: /message input/i });
   await expect(composer).toBeVisible({ timeout: 5_000 });
   await composer.fill("hello from e2e");
   await composer.press("Enter");
   // The conversation is created (and appears in the history) even though the
   // turn then errors without a live LLM.
-  await expect(page.getByRole("option").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("option").first()).toBeVisible({
+    timeout: 10_000,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -92,8 +97,11 @@ acceptance("008-agent-chat", "manage conversations", async ({ page }) => {
   try {
     await page.goto("/");
 
-    // The "Chat" sidebar entry exists and navigates to /chat.
-    await page.getByRole("link", { name: /^Chat$/i }).first().click();
+    // The "Vault Console" sidebar entry exists and navigates to /chat (ADR-021).
+    await page
+      .getByRole("link", { name: /^Vault Console$/i })
+      .first()
+      .click();
     await expect(page).toHaveURL(/\/chat/);
     await expect(page.getByRole("tab", { name: /^Active$/i })).toBeVisible({
       timeout: 10_000,
@@ -141,7 +149,9 @@ acceptance("008-agent-chat", "no-model empty state", async ({ page }) => {
 
   // With no model configured, the draft surface shows the actionable no-model
   // empty state rather than a composer.
-  await expect(page.getByText("No model configured")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("No model configured")).toBeVisible({
+    timeout: 5_000,
+  });
   await expect(page.getByText("Go to Settings → Models")).toBeVisible();
   await expect(page.getByText(/INTERNAL_ERROR/)).toHaveCount(0);
 });

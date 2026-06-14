@@ -19,6 +19,10 @@ WORKSPACE_GLOBAL_PROJECT_ID = "00000000000000000000000000"
 #: ``kind`` discriminator values for the unified table.
 KIND_KNOWLEDGE_BASE = "knowledge_base"
 KIND_MEMORY = "memory"
+#: Index-only discriminator for the cross-agent transcript history (ADR-022).
+#: NOT a resource kind: rows under this kind are a rebuildable local index over
+#: in-place agent ``.jsonl`` transcripts — never files-as-truth, never synced.
+KIND_TRANSCRIPT = "transcript"
 
 
 @dataclass(frozen=True)

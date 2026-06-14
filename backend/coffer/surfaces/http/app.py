@@ -79,6 +79,7 @@ from coffer.surfaces.http.dependencies import (
     set_retention_service,
 )
 from coffer.surfaces.http.distill_wiring import wire_distill
+from coffer.surfaces.http.history_wiring import wire_history
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
@@ -236,6 +237,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         model_svc=get_model_service(),
         credential_resolver=_distill_credential_resolver,
     )
+
+    # Wire the cross-agent transcript history (ADR-022). Reuses the shared
+    # knowledge substrate under the index-only ``transcript`` discriminator and
+    # the same read-only transcript reader the distill slice uses.
+    wire_history(substrate=substrate, agent_service=get_agent_service())
 
     # Wire the channel kind (spec 009) AFTER wire_chat: the inbound processor
     # drives turns through the chat service handles wire_chat published.

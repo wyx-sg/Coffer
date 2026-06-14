@@ -57,6 +57,13 @@ class ConversationModel(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    # ADR-021 — conversation origin + the IM peer that drives a channel thread.
+    # server_default mirrors migration 0021 so create_all-built and migrated
+    # schemas agree (pre-existing rows + raw inserts default to "web").
+    origin: Mapped[str] = mapped_column(String, nullable=False, default="web", server_default="web")
+    channel_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    peer_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    peer_display_name: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         Index("idx_conversations_updated", "updated_at"),
@@ -127,6 +134,10 @@ class ConversationRepo:
             created_at=_tz(row.created_at),
             updated_at=_tz(row.updated_at),
             archived_at=_tz(row.archived_at) if row.archived_at else None,
+            origin=row.origin,
+            channel_name=row.channel_name,
+            peer_chat_id=row.peer_chat_id,
+            peer_display_name=row.peer_display_name,
         )
 
     async def create(self, conversation: Conversation) -> Conversation:
@@ -138,6 +149,10 @@ class ConversationRepo:
                 model_id=conversation.model_id,
                 created_at=conversation.created_at,
                 updated_at=conversation.updated_at,
+                origin=conversation.origin,
+                channel_name=conversation.channel_name,
+                peer_chat_id=conversation.peer_chat_id,
+                peer_display_name=conversation.peer_display_name,
             )
             session.add(row)
             await session.commit()
