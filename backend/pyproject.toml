@@ -26,6 +26,11 @@ dependencies = [
     "psutil>=5.9",
     "tomlkit>=0.13",
     "pyyaml>=6.0",
+    # spec 004 (agent registry): round-trip YAML editing for agents whose config
+    # is YAML (e.g. Hermes ~/.hermes/config.yaml) — preserves the user's
+    # comments/order on MCP install, the YAML analogue of tomlkit. pyyaml alone
+    # would clobber comments.
+    "ruamel.yaml>=0.18",
     # specs 006 (knowledge_base) + 007 (memory): shared knowledge substrate.
     # Converters → Markdown (MarkItDown default); FTS5 ships with SQLite; the
     # OpenAI SDK drives the swappable-base_url embedding client; sqlite-vec is
@@ -102,7 +107,7 @@ pretty = true
 # present on CI (→ import-untyped) but may be absent in a lean dev/verify env
 # (→ import-not-found); ignoring missing imports keeps mypy stable across both.
 [[tool.mypy.overrides]]
-module = ["sqlite_vec.*", "markitdown.*", "fastembed.*"]
+module = ["sqlite_vec.*", "markitdown.*", "fastembed.*", "ruamel.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

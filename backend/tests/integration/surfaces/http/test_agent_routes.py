@@ -279,13 +279,13 @@ def test_error_422_skill_dir_not_writable(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(spec="004-agent-registry", scenario="reject unsupported agent type")
 def test_error_422_unprocessable_body(tmp_path, monkeypatch):
-    """Types outside {claude_code, codex} — including the v1-dropped cursor /
-    claude_desktop and any garbage value — are rejected with 422."""
+    """Types outside the supported set — e.g. the unsupported Claude Desktop chat
+    app and any garbage value — are rejected with 422."""
     app = _app(tmp_path, monkeypatch, 59633)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        for bad_type in ("cursor", "claude_desktop", "not_a_real_type"):
+        for bad_type in ("claude_desktop", "gemini_cli", "not_a_real_type"):
             r = c.post(
                 "/api/v1/agents",
                 json={"type": bad_type, "name": "x", "config_dir": str(config_dir)},

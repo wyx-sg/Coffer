@@ -26,6 +26,7 @@ from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import ConfigFileSpec, spec_for
+from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.mcp_entries import (
     COFFER_SERVER_KEY,
     McpEntry,
@@ -52,11 +53,16 @@ from coffer.domain.workspace_errors import (
     McpEntryToggleUnsupported,
 )
 
-# Which allowlisted config-file keys hold each type's MCP servers.
-_MCP_SOURCE_KEYS: dict[AgentType, list[str]] = {
-    AgentType.CLAUDE_CODE: ["global", "settings"],  # ~/.claude.json + settings.json
-    AgentType.CODEX: ["config"],  # config.toml
-}
+
+def _source_keys(agent_type: AgentType) -> tuple[str, ...]:
+    """Allowlisted config-file keys that hold the agent's MCP servers."""
+    return descriptor_for(agent_type).resolved_mcp_source_keys()
+
+
+def _container_key(agent_type: AgentType) -> str | None:
+    """Top-level MCP container key for the agent (None → format default)."""
+    inj = descriptor_for(agent_type).mcp
+    return inj.container_key if inj else None
 
 
 @dataclass(frozen=True)
@@ -152,7 +158,7 @@ class AgentMcpEntryService:
 
     def _source_specs(self, cfg: AgentConfig) -> list[ConfigFileSpec]:
         cfg_dir = cfg.resolved_config_dir()
-        return [spec_for(cfg.type, key, cfg_dir) for key in _MCP_SOURCE_KEYS[cfg.type]]
+        return [spec_for(cfg.type, key, cfg_dir) for key in _source_keys(cfg.type)]
 
     async def list_entries(self, name: str) -> McpEntriesView:
         """Merged MCP entries across all MCP-bearing config files.
@@ -170,7 +176,11 @@ class AgentMcpEntryService:
             if text is None:
                 continue
             try:
-                items.extend(parse_entries(spec.format, text, source=spec.key))
+                items.extend(
+                    parse_entries(
+                        spec.format, text, source=spec.key, container_key=_container_key(cfg.type)
+                    )
+                )
             except AgentConfigParseError as e:
                 parse_errors.append(
                     ParseErrorInfo(source=spec.key, path=str(spec.path), error=str(e))
@@ -205,7 +215,7 @@ class AgentMcpEntryService:
         cfg = await self._config_for(name)
         specs = self._source_specs(cfg)
         if source is not None:
-            if source not in _MCP_SOURCE_KEYS[cfg.type]:
+            if source not in _source_keys(cfg.type):
                 raise ConfigFileNotAllowed(cfg.type.value, source)
             specs = [s for s in specs if s.key == source]
 
@@ -216,7 +226,9 @@ class AgentMcpEntryService:
             if text is None:
                 continue
             try:
-                parsed = parse_entries(spec.format, text, source=spec.key)
+                parsed = parse_entries(
+                    spec.format, text, source=spec.key, container_key=_container_key(cfg.type)
+                )
             except AgentConfigParseError as e:
                 if first_parse_error is None:
                     first_parse_error = e
@@ -237,8 +249,11 @@ class AgentMcpEntryService:
         self, name: str, entry: str, *, source: str | None = None, actor: str = "api"
     ) -> None:
         """Remove ``entry`` from the agent config file that contains it."""
+        cfg = await self._config_for(name)
         spec, text, _parsed = await self._locate(name, entry, source)
-        new_text = remove_entry_text(spec.format, text, entry)
+        new_text = remove_entry_text(
+            spec.format, text, entry, container_key=_container_key(cfg.type)
+        )
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(
             AuditEventType.AGENT_MCP_ENTRY_REMOVED.value,
@@ -256,7 +271,7 @@ class AgentMcpEntryService:
             raise McpEntryToggleUnsupported(cfg.type.value)
         if entry == COFFER_SERVER_KEY:
             raise McpEntryProtected(entry)
-        spec = spec_for(cfg.type, _MCP_SOURCE_KEYS[cfg.type][0], cfg.resolved_config_dir())
+        spec = spec_for(cfg.type, _source_keys(cfg.type)[0], cfg.resolved_config_dir())
         text = self._store.read_text(spec.path)
         if text is None:
             raise McpEntryNotFound(entry)
@@ -305,6 +320,7 @@ class AgentMcpEntryService:
         removed; a failure after registration deletes the new resource so the
         agent's file is never left without a working entry.
         """
+        cfg = await self._config_for(name)
         spec, _text, parsed_entry = await self._locate(name, entry, source)
 
         flagged = secret_env_keys({**parsed_entry.env, **parsed_entry.headers})
@@ -360,7 +376,9 @@ class AgentMcpEntryService:
             # and here (two awaits above).
             current = self._store.read_text(spec.path) or ""
             try:
-                new_text = remove_entry_text(spec.format, current, entry)
+                new_text = remove_entry_text(
+                    spec.format, current, entry, container_key=_container_key(cfg.type)
+                )
             except McpEntryNotFound:
                 new_text = None  # entry vanished concurrently — nothing to remove
             if new_text is not None:

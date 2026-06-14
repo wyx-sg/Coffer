@@ -201,9 +201,50 @@ class CodexMemoryAdapter:
         return self._fs.disable_codex_memory(config_path=self._config_dir / "config.toml")
 
 
+# --------------------------------------------------------------------------- #
+# NONE — agents without native memory projection (yet)                         #
+# --------------------------------------------------------------------------- #
+
+
+class NoneMemoryAdapter:
+    """A no-op adapter for agents that don't (yet) project shared memory.
+
+    ``projection_mode`` is NONE, so the engine short-circuits establish/remove to
+    a disabled result; the methods below are defensive no-ops. Agents that gain a
+    real native-memory channel (e.g. OpenClaw ``MEMORY.md``, Hermes
+    ``memories/``) replace this with a SYMLINK/RENDER adapter.
+    """
+
+    projection_mode = ProjectionMode.NONE
+
+    def __init__(self, agent_type: AgentType) -> None:
+        self.agent_type = agent_type
+
+    def memory_location(self, *, project_root: str | None, layer: MemoryLayer) -> Path:
+        # No native target; return a stable, unused sentinel path.
+        return Path("/dev/null")
+
+    def establish(
+        self, *, memory: CanonicalMemory, project_root: str | None, agent_ref: str
+    ) -> ProjectionResult:
+        return ProjectionResult(
+            agent_ref=agent_ref,
+            projection_mode=ProjectionMode.NONE,
+            target_path="",
+            native_memory_disabled=False,
+        )
+
+    def remove(self, *, project_root: str | None, layer: MemoryLayer) -> None:
+        return None
+
+    def render(self, facts_markdown: str) -> bytes:
+        return facts_markdown.encode("utf-8")
+
+
 __all__ = [
     "AgentMemoryAdapter",
     "ClaudeCodeMemoryAdapter",
     "CodexMemoryAdapter",
+    "NoneMemoryAdapter",
     "claude_project_slug",
 ]

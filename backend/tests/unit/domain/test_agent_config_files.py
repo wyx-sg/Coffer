@@ -93,6 +93,16 @@ def test_validate_toml_rejects_malformed():
     assert ei.value.format == "toml"
 
 
+def test_validate_yaml_accepts_well_formed():
+    validate_content(ConfigFileFormat.YAML, "model: gpt\nmcp_servers:\n  fs:\n    command: npx\n")
+
+
+def test_validate_yaml_rejects_malformed():
+    with pytest.raises(ConfigFileFormatInvalid) as ei:
+        validate_content(ConfigFileFormat.YAML, "key: [unclosed\n")
+    assert ei.value.format == "yaml"
+
+
 @pytest.mark.parametrize("fmt", [ConfigFileFormat.MARKDOWN, ConfigFileFormat.TEXT])
 def test_validate_freeform_always_ok(fmt):
     validate_content(fmt, "anything # at all\n```\nnot json\n```")

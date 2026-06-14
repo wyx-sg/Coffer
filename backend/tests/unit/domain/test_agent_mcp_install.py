@@ -8,6 +8,7 @@ import pytest
 import tomlkit
 
 from coffer.domain.agent.config_files import ConfigFileFormat
+from coffer.domain.agent.mcp_injection import McpEntryStyle
 from coffer.domain.agent.mcp_install import (
     COFFER_SERVER_KEY,
     apply_install,
@@ -168,3 +169,77 @@ def test_json_install_preserves_non_ascii():
     out = apply_install(ConfigFileFormat.JSON, existing, SHIM)
     assert "/Users/张三/code" in out
     assert "\\u" not in out
+
+
+# --- YAML (Hermes ~/.hermes/config.yaml, container `mcp_servers`) ---
+
+
+def test_yaml_install_into_empty():
+    out = apply_install(ConfigFileFormat.YAML, "", SHIM)
+    import yaml
+
+    data = yaml.safe_load(out)
+    assert data["mcp_servers"][COFFER_SERVER_KEY] == {"command": SHIM}
+    assert is_installed(ConfigFileFormat.YAML, out)
+    assert installed_command(ConfigFileFormat.YAML, out) == SHIM
+
+
+def test_yaml_install_preserves_comments_and_other_keys():
+    existing = "# my hermes config\nmodel: gpt\n\nmcp_servers:\n  other:\n    command: y\n"
+    out = apply_install(ConfigFileFormat.YAML, existing, SHIM)
+    assert "# my hermes config" in out  # round-trip preserves comments
+    import yaml
+
+    data = yaml.safe_load(out)
+    assert data["model"] == "gpt"
+    assert data["mcp_servers"]["other"] == {"command": "y"}
+    assert data["mcp_servers"][COFFER_SERVER_KEY]["command"] == SHIM
+
+
+def test_yaml_install_idempotent_and_uninstall():
+    once = apply_install(ConfigFileFormat.YAML, "", SHIM)
+    twice = apply_install(ConfigFileFormat.YAML, once, SHIM)
+    assert is_installed(ConfigFileFormat.YAML, twice)
+    out = apply_uninstall(ConfigFileFormat.YAML, twice)
+    assert not is_installed(ConfigFileFormat.YAML, out)
+
+
+def test_yaml_status_false_for_empty():
+    assert is_installed(ConfigFileFormat.YAML, "") is False
+    assert is_installed(ConfigFileFormat.YAML, "model: gpt\n") is False
+
+
+# --- shape axis: OpenCode JSON, container `mcp`, typed command-array ---
+
+
+def test_json_mcp_container_typed_array_install():
+    out = apply_install(
+        ConfigFileFormat.JSON,
+        "",
+        SHIM,
+        container_key="mcp",
+        entry_style=McpEntryStyle.TYPED_COMMAND_ARRAY,
+    )
+    data = json.loads(out)
+    assert data["mcp"][COFFER_SERVER_KEY] == {"type": "local", "command": [SHIM]}
+    # status/command/uninstall all honour the same container_key + array shape
+    assert is_installed(ConfigFileFormat.JSON, out, container_key="mcp")
+    assert installed_command(ConfigFileFormat.JSON, out, container_key="mcp") == SHIM
+    # default container (`mcpServers`) must NOT see it
+    assert is_installed(ConfigFileFormat.JSON, out) is False
+    gone = apply_uninstall(ConfigFileFormat.JSON, out, container_key="mcp")
+    assert is_installed(ConfigFileFormat.JSON, gone, container_key="mcp") is False
+
+
+def test_json_mcp_container_preserves_sibling_entries():
+    existing = json.dumps({"mcp": {"other": {"type": "local", "command": ["y"]}}})
+    out = apply_install(
+        ConfigFileFormat.JSON,
+        existing,
+        SHIM,
+        container_key="mcp",
+        entry_style=McpEntryStyle.TYPED_COMMAND_ARRAY,
+    )
+    data = json.loads(out)
+    assert data["mcp"]["other"] == {"type": "local", "command": ["y"]}
+    assert data["mcp"][COFFER_SERVER_KEY]["command"] == [SHIM]

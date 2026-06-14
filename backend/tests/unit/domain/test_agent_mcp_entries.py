@@ -137,3 +137,59 @@ def test_repr_hides_env_and_header_values() -> None:
     entries = me.parse_entries(ConfigFileFormat.JSON, CLAUDE_JSON, source="global")
     jira = next(e for e in entries if e.name == "jira")
     assert "tok123" not in repr(jira)
+
+
+# --- new shapes: container_key, command-array, environment, YAML ---
+
+
+def test_parse_opencode_mcp_container_array_and_environment() -> None:
+    """OpenCode: container `mcp`, command as array (exe = first element),
+    env under `environment`, explicit `enabled`, and `type` for remote."""
+    text = (
+        '{"mcp": {'
+        '"fs": {"type": "local", "command": ["npx", "-y", "fs-mcp"], '
+        '"environment": {"ROOT": "/tmp"}, "enabled": true}, '
+        '"remote": {"type": "remote", "url": "https://x/mcp", "enabled": false}'
+        "}}"
+    )
+    entries = me.parse_entries(ConfigFileFormat.JSON, text, source="config", container_key="mcp")
+    fs = next(e for e in entries if e.name == "fs")
+    assert fs.transport == "stdio"
+    assert fs.command == "npx" and fs.args == ("-y", "fs-mcp")
+    assert fs.env == {"ROOT": "/tmp"} and fs.enabled is True
+    remote = next(e for e in entries if e.name == "remote")
+    assert remote.transport == "http" and remote.enabled is False
+    # default container `mcpServers` finds nothing here
+    assert me.parse_entries(ConfigFileFormat.JSON, text, source="config") == []
+
+
+def test_parse_yaml_hermes_mcp_servers() -> None:
+    text = (
+        "mcp_servers:\n"
+        "  coffer:\n    command: /bin/coffer-mcp-shim\n"
+        "  files:\n    command: npx\n    args: ['-y', 'server-filesystem']\n"
+        "    enabled: false\n"
+    )
+    entries = me.parse_entries(ConfigFileFormat.YAML, text, source="config")
+    assert {e.name for e in entries} == {"coffer", "files"}
+    files = next(e for e in entries if e.name == "files")
+    assert files.command == "npx" and files.args == ("-y", "server-filesystem")
+    assert files.enabled is False
+    assert next(e for e in entries if e.name == "coffer").is_coffer is True
+
+
+def test_remove_entry_yaml_preserves_comments() -> None:
+    text = "# keep me\nmcp_servers:\n  drop:\n    command: x\n  keep:\n    command: y\n"
+    out = me.remove_entry(ConfigFileFormat.YAML, text, "drop")
+    assert "# keep me" in out
+    entries = me.parse_entries(ConfigFileFormat.YAML, out, source="config")
+    assert {e.name for e in entries} == {"keep"}
+    with pytest.raises(McpEntryNotFound):
+        me.remove_entry(ConfigFileFormat.YAML, out, "nope")
+
+
+def test_remove_entry_json_custom_container() -> None:
+    text = '{"mcp": {"a": {"command": "x"}, "b": {"command": "y"}}}'
+    out = me.remove_entry(ConfigFileFormat.JSON, text, "a", container_key="mcp")
+    entries = me.parse_entries(ConfigFileFormat.JSON, out, source="config", container_key="mcp")
+    assert {e.name for e in entries} == {"b"}

@@ -14,8 +14,15 @@ def test_display_names_present():
         assert t.display_name
 
 
-def test_v1_supports_exactly_two_types():
-    assert {t.value for t in AgentType} == {"claude_code", "codex"}
+def test_supported_types():
+    assert {t.value for t in AgentType} == {
+        "claude_code",
+        "codex",
+        "cursor",
+        "opencode",
+        "openclaw",
+        "hermes",
+    }
 
 
 def test_default_skill_dir_returns_absolute_path():

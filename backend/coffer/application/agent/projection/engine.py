@@ -15,6 +15,7 @@ from coffer.application.agent.projection.adapters import (
     AgentMemoryAdapter,
     ClaudeCodeMemoryAdapter,
     CodexMemoryAdapter,
+    NoneMemoryAdapter,
 )
 from coffer.application.agent.projection.types import (
     CanonicalMemory,
@@ -32,6 +33,12 @@ def default_adapters(fs: ProjectionFs) -> dict[AgentType, AgentMemoryAdapter]:
     return {
         AgentType.CLAUDE_CODE: ClaudeCodeMemoryAdapter(fs),
         AgentType.CODEX: CodexMemoryAdapter(fs),
+        # Agents without a native-memory channel yet — projection is a no-op
+        # (reported as mode=none). Replaced by real adapters in the memory batch.
+        AgentType.CURSOR: NoneMemoryAdapter(AgentType.CURSOR),
+        AgentType.OPENCODE: NoneMemoryAdapter(AgentType.OPENCODE),
+        AgentType.OPENCLAW: NoneMemoryAdapter(AgentType.OPENCLAW),
+        AgentType.HERMES: NoneMemoryAdapter(AgentType.HERMES),
     }
 
 
