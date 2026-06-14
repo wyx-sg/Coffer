@@ -21,6 +21,7 @@ import os
 import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 
 from coffer.domain.agent.config_files import (
     ConfigFileFormat,
@@ -29,6 +30,44 @@ from coffer.domain.agent.config_files import (
 )
 from coffer.domain.agent.mcp_injection import McpEntryStyle, McpInjectionSpec
 from coffer.domain.agent.types import AgentType
+
+
+class PluginModel(StrEnum):
+    """Which plugin parse/toggle/uninstall strategy an agent uses.
+
+    The :class:`AgentPluginService` dispatches on this discriminator instead of
+    switching on :class:`AgentType`, so adding an agent's plugin support is data
+    (a :class:`PluginCapability` record), not a new ``if`` branch.
+    """
+
+    #: Claude Code — 3 internal/settings files; toggle writes settings only.
+    CLAUDE = "claude"
+    #: Codex — ``[plugins."<id>"]`` tables in config.toml + a cache dir.
+    CODEX = "codex"
+    #: Cursor — read-only VSIX list from ``extensions.json`` (array).
+    CURSOR_RO = "cursor_ro"
+    #: OpenCode — the ``plugin`` array in opencode.json.
+    OPENCODE = "opencode"
+    #: OpenClaw — the ``plugins`` block in openclaw.json.
+    OPENCLAW = "openclaw"
+
+
+@dataclass(frozen=True)
+class PluginCapability:
+    """How Coffer manages one agent's plugins (the plugin facet of the manifest).
+
+    Carries enough for the service to dispatch without a type switch: the
+    ``model`` strategy discriminator, the allowlist ``config_key`` of the write
+    surface (``None`` for list-only agents), and capability flags.
+    """
+
+    model: PluginModel
+    #: Allowlist key of the file the toggle/uninstall transforms write
+    #: (``"settings"`` for Claude, ``"config"`` for the rest; ``None`` =
+    #: list-only, no write surface).
+    config_key: str | None
+    can_toggle: bool = True
+    can_uninstall: bool = False
 
 
 def _home() -> pathlib.Path:
@@ -58,6 +97,10 @@ class AgentDescriptor:
     #: (``skills`` for most; OpenClaw nests under ``workspace``). Refined by the
     #: skill-delivery batch.
     skill_subpath: str = "skills"
+    #: How Coffer manages this agent's plugins (``None`` = no plugin concept,
+    #: e.g. Hermes where MCP *is* the plugin mechanism — empty listing, toggle
+    #: and uninstall unsupported).
+    plugins: PluginCapability | None = None
 
     def default_config_dir(self) -> pathlib.Path:
         return _home() / self.config_subpath
@@ -175,6 +218,12 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         mcp_source_keys=("global", "settings"),
+        plugins=PluginCapability(
+            model=PluginModel.CLAUDE,
+            config_key="settings",
+            can_toggle=True,
+            can_uninstall=False,
+        ),
     ),
     AgentType.CODEX: AgentDescriptor(
         type=AgentType.CODEX,
@@ -188,6 +237,12 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         mcp_source_keys=("config",),
+        plugins=PluginCapability(
+            model=PluginModel.CODEX,
+            config_key="config",
+            can_toggle=True,
+            can_uninstall=True,
+        ),
     ),
     AgentType.CURSOR: AgentDescriptor(
         type=AgentType.CURSOR,
@@ -200,6 +255,15 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             format=ConfigFileFormat.JSON,
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
+        # Read-only VSIX list; enable/disable lives in Cursor's SQLite (internal
+        # state), so there is no write surface (config_key=None) and neither
+        # toggle nor uninstall is supported.
+        plugins=PluginCapability(
+            model=PluginModel.CURSOR_RO,
+            config_key=None,
+            can_toggle=False,
+            can_uninstall=False,
+        ),
     ),
     AgentType.OPENCODE: AgentDescriptor(
         type=AgentType.OPENCODE,
@@ -211,6 +275,12 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             container_key="mcp",
             format=ConfigFileFormat.JSON,
             entry_style=McpEntryStyle.TYPED_COMMAND_ARRAY,
+        ),
+        plugins=PluginCapability(
+            model=PluginModel.OPENCODE,
+            config_key="config",
+            can_toggle=True,
+            can_uninstall=True,
         ),
     ),
     AgentType.OPENCLAW: AgentDescriptor(
@@ -226,6 +296,14 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         ),
         # NOTE: OpenClaw's real skills dir is workspace/skills; kept flat here
         # until the skill-delivery batch wires per-agent skill targets.
+        # OpenClaw's plugins{} schema is only partly documented; the transforms
+        # are tolerant (see plugin_state_extra.py).
+        plugins=PluginCapability(
+            model=PluginModel.OPENCLAW,
+            config_key="config",
+            can_toggle=True,
+            can_uninstall=True,
+        ),
     ),
     AgentType.HERMES: AgentDescriptor(
         type=AgentType.HERMES,

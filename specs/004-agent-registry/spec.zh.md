@@ -183,11 +183,22 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 ### User Story 11 —— 管理 agent 的插件（优先级 P2）
 
-两种受支持的 agent 都有以文件落盘的插件体系。用户打开 agent 的插件 tab，看到按 marketplace 分组的全部已安装插件，带启用状态与磁盘缓存是否存在。可以启用/禁用任意插件，并卸载 Codex 插件。所有写操作都经由每个 agent 的文档化配置面——Codex `[plugins."<name>@<marketplace>"]` 的 `enabled` 字段、Claude Code `settings.json` 的 `enabledPlugins` 映射——绝不写 agent 的内部状态文件。安装新插件与 marketplace 管理留给 agent 自己的工具链。
+有以文件落盘插件体系的 agent，都在 agent 的插件 tab 暴露：按 marketplace 分组的全部已安装插件，带启用状态与磁盘缓存是否存在。插件 facet 通过能力清单（capability manifest）做了泛化——每个 agent 记录带一个 `PluginCapability`（插件模型判别符、写入面的 allowlist key，以及 `can_toggle`/`can_uninstall` 标志），服务按数据分派而非按 agent 分支。每个能力映射到该 agent 的文档化配置面；内部状态文件只读、绝不写入。安装新插件与 marketplace 管理留给 agent 自己的工具链。
 
-**为什么是这个优先级**：插件是真实、持久的 agent 配置，而今天 Coffer 对其完全不可见。可见性加上便宜又安全的写操作（开关、Codex 卸载）覆盖了日常需求；安装留在它本来就好用的地方。
+各 agent 的插件支持：
 
-**独立可测**：注册一个配置了插件的 `codex` agent；打开插件 tab；观察插件按 marketplace 分组并带启用状态；禁用一个并观察 `config.toml` 中写入 `enabled = false`；卸载一个并观察其配置条目与缓存目录都消失。
+| Agent       | 插件模型                                                                                                   | 写入面          | 列出 | 开关 | 卸载                  |
+| ----------- | ---------------------------------------------------------------------------------------------------------- | --------------- | ---- | ---- | --------------------- |
+| Claude Code | `settings.json` 的 `enabledPlugins` 映射（内部 `installed_plugins.json` / `known_marketplaces.json` 只读） | `settings.json` | 是   | 是   | 否（用 agent 工具链） |
+| Codex       | `[plugins."<name>@<marketplace>"]` 表 + 缓存目录                                                           | `config.toml`   | 是   | 是   | 是（条目 + 缓存）     |
+| Cursor      | `extensions/extensions.json` 的 VSIX 列表（启停在 SQLite）                                                 | 无（只读）      | 是   | 否   | 否                    |
+| OpenCode    | `opencode.json` 的 `plugin` 数组                                                                           | `opencode.json` | 是   | 是   | 是（从数组移除）      |
+| OpenClaw    | `openclaw.json` 的 `plugins{}` 块                                                                          | `openclaw.json` | 是   | 是   | 是                    |
+| Hermes      | 无——MCP 即插件机制                                                                                         | 无              | 空   | 否   | 否                    |
+
+**为什么是这个优先级**：插件是真实、持久的 agent 配置，而今天 Coffer 对其完全不可见。可见性加上便宜又安全的写操作（开关、受支持处的卸载）覆盖了日常需求；安装留在它本来就好用的地方。
+
+**独立可测**：注册一个配置了插件的 `codex` agent；打开插件 tab；观察插件按 marketplace 分组并带启用状态；禁用一个并观察 `config.toml` 中写入 `enabled = false`；卸载一个并观察其配置条目与缓存目录都消失。对 `opencode` agent，开关一个插件并观察它从 `plugin` 数组移除；对 `cursor` agent，列出扩展并观察开关与卸载被拒绝。
 
 **代表性场景**：
 
@@ -196,6 +207,9 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 - uninstall a Codex plugin
 - reject uninstalling a Claude Code plugin
 - flag a plugin whose cache is missing
+- list, toggle, and uninstall OpenCode and OpenClaw plugins via their documented config surfaces
+- list Cursor extensions read-only, rejecting toggle and uninstall
+- report an empty plugin listing for Hermes and reject toggle/uninstall
 
 ---
 

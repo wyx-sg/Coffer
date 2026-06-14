@@ -32,8 +32,8 @@ OpenClaw 的真实目标是 `workspace/skills`）。`claude_desktop`（独立的
 应用）仍不在范围内。
 
 `AgentDescriptor` 携带：`display_name`、`config_subpath`、`config_files`
-（allowlist 构造器）、`mcp`（`McpInjectionSpec | None`）、`mcp_source_keys` 与
-`skill_subpath`。每个 enum 值仍提供：
+（allowlist 构造器）、`mcp`（`McpInjectionSpec | None`）、`mcp_source_keys`、
+`skill_subpath` 与 `plugins`（`PluginCapability | None`）。每个 enum 值仍提供：
 
 - `display_name: str`
 - `default_name() -> str`（稳定的按类型默认资源名——下划线变连字符，如 `claude_code` → `claude-code`；用户未显式提供名称时使用）
@@ -298,13 +298,37 @@ agent 自身文件中配置的一个 MCP server 条目。从 claude_code 的 `~/
 `credential_refs` 供 adopt 使用）。畸形文件抛出 `AgentConfigParseError`，
 列表视图将其降级为一条 `parse_errors` 而非整体失败（FR-030）。
 
-### Agent Plugin (`domain/agent/plugin_state.py` —— `PluginInfo` / `MarketplaceInfo`)
+### `PluginCapability` / `PluginModel` (`domain/agent/descriptor.py`)
 
-一个已安装的 plugin，id 为 `<name>@<marketplace>`。Codex 的状态在
-`config.toml`（`[plugins."…"]` + `[marketplaces.*]`，可读，plugins 表可写）。
-Claude Code 的状态分布在内部清单文件 `installed_plugins.json` /
-`known_marketplaces.json`（只读输入——Coffer 绝不写它们）与文档化的写入面
-`settings.json` `enabledPlugins` 之间。
+能力清单的插件 facet。`PluginModel` 是策略判别符——`CLAUDE`、`CODEX`、
+`CURSOR_RO`、`OPENCODE`、`OPENCLAW`——各自映射到 `plugin_state.py` /
+`plugin_state_extra.py` 中的一种解析/开关/卸载策略。`PluginCapability`（frozen）
+携带让服务无需 `AgentType` 分支即可分派的全部信息：
+
+| 字段            | 类型          | 说明                                                 |
+| --------------- | ------------- | ---------------------------------------------------- |
+| `model`         | `PluginModel` | 解析/开关/卸载策略                                   |
+| `config_key`    | `str \| None` | 写入面的 allowlist key（`None` = 只列出，如 Cursor） |
+| `can_toggle`    | `bool`        | 是否支持 `set_enabled`                               |
+| `can_uninstall` | `bool`        | 是否支持 `uninstall`                                 |
+
+`AgentDescriptor.plugins` 为 `PluginCapability | None`；`None` 表示该 agent 没有
+插件概念（Hermes——MCP 即插件机制），列表为空，开关/卸载抛出对应的“不支持”错误。
+各 agent 映射：Claude Code `CLAUDE`/`settings`/仅开关；Codex `CODEX`/`config`/完整；
+Cursor `CURSOR_RO`/`None`/只读；OpenCode `OPENCODE`/`config`/完整；OpenClaw
+`OPENCLAW`/`config`/完整；Hermes `None`。
+
+### Agent Plugin (`domain/agent/plugin_state.py`、`domain/agent/plugin_state_extra.py` —— `PluginInfo` / `MarketplaceInfo`)
+
+一个已安装的 plugin，id 为 `<name>@<marketplace>`（无 marketplace 概念的 agent
+则为裸的扩展/插件名）。Codex 的状态在 `config.toml`（`[plugins."…"]` +
+`[marketplaces.*]`，可读，plugins 表可写）。Claude Code 的状态分布在内部清单文件
+`installed_plugins.json` / `known_marketplaces.json`（只读输入——Coffer 绝不写
+它们）与文档化的写入面 `settings.json` `enabledPlugins` 之间。较新的 agent 在
+`plugin_state_extra.py` 中加入纯文本变换：Cursor 读取 `extensions/extensions.json`
+数组（只读）；OpenCode 切换 `opencode.json` 的 `plugin` 数组成员；OpenClaw 读写
+`openclaw.json` 的 `plugins{}` 块（对其部分文档化的 `entries`/`enabled`/`allow`/
+`deny` 形态保持宽容）。无 marketplace 概念的 agent 返回空 `marketplaces` 列表。
 
 | 字段          | 类型   | 说明                                                   |
 | ------------- | ------ | ------------------------------------------------------ |
@@ -329,11 +353,11 @@ Claude Code 的状态分布在内部清单文件 `installed_plugins.json` /
 
 ### `AgentPluginService` (`application/agent/plugin_service.py`)
 
-| 方法                                           | 用途                                                                                                                                    |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_plugins(name)`                           | 按类型解析 plugin + marketplace 状态；从文档化的缓存目录计算 `cache_present`；收集 `parse_errors`。                                     |
-| `set_enabled(name, plugin_id, enabled, actor)` | 只写文档化的面（codex `config.toml` 条目 / claude_code `settings.json` `enabledPlugins`）；audit `agent_plugin_toggled`。               |
-| `uninstall(name, plugin_id, actor)`            | 仅 codex：移除 `[plugins."…"]` 条目并删除缓存目录；claude_code → `PluginUninstallUnsupported` → 422；audit `agent_plugin_uninstalled`。 |
+| 方法                                           | 用途                                                                                                                                                                                            |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_plugins(name)`                           | 按 `descriptor.plugins.model` 分派；从文档化文件解析 plugin + marketplace 状态；计算 `cache_present`；收集 `parse_errors`。无能力 → 空列表。                                                    |
+| `set_enabled(name, plugin_id, enabled, actor)` | 按 `PluginModel` 分派；只写能力的 `config_key` 面；`can_toggle=false`（Cursor）或无能力（Hermes）→ `PluginToggleUnsupported` → 422；audit `agent_plugin_toggled`。                              |
+| `uninstall(name, plugin_id, actor)`            | 按 `PluginModel` 分派；移除条目（Codex 还删除缓存目录）；`can_uninstall=false`（Claude Code、Cursor）或无能力（Hermes）→ `PluginUninstallUnsupported` → 422；audit `agent_plugin_uninstalled`。 |
 
 ### `ConfigFileStorePort`（Protocol，定义在 application）
 

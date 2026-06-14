@@ -93,6 +93,16 @@ class PluginUninstallUnsupported(CofferError):  # noqa: N818
         self.agent_type = agent_type
 
 
+class PluginToggleUnsupported(CofferError):  # noqa: N818
+    """The agent type does not support enabling/disabling plugins via Coffer. Maps to 422."""
+
+    code = "PLUGIN_TOGGLE_UNSUPPORTED"
+
+    def __init__(self, agent_type: str) -> None:
+        super().__init__(f"{agent_type} plugins cannot be toggled through Coffer")
+        self.agent_type = agent_type
+
+
 class McpInstallUnsupported(CofferError):  # noqa: N818
     """The agent type does not declare an MCP injection target. Maps to 422."""
 

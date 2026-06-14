@@ -181,11 +181,22 @@ A direct MCP entry in one agent benefits that agent alone. The user clicks "Adop
 
 ### User Story 11 — Manage the agent's plugins (Priority: P2)
 
-Both supported agents have a file-backed plugin system. The user opens the agent's Plugins tab and sees every installed plugin grouped by marketplace, with its enabled state and whether its on-disk cache is present. They can enable/disable any plugin, and uninstall a Codex plugin. All writes go through each agent's documented configuration surface — the Codex `[plugins."<name>@<marketplace>"]` `enabled` field, the Claude Code `enabledPlugins` map in `settings.json` — never through the agents' internal state files. Installing new plugins and managing marketplaces stay with the agent's own tooling.
+Agents with a file-backed plugin system expose it through the agent's Plugins tab: every installed plugin grouped by marketplace, with its enabled state and whether its on-disk cache is present. The plugin facet is generalised through the capability manifest — each agent record carries a `PluginCapability` (a plugin-model discriminator, the write-surface allowlist key, and `can_toggle`/`can_uninstall` flags), so the service dispatches on data rather than per-agent branches. Each capability maps to the agent's documented configuration surface; internal state files are read, never written. Installing new plugins and managing marketplaces stay with the agent's own tooling.
 
-**Why this priority**: Plugins are real, persistent agent configuration that today is invisible to Coffer. Visibility plus the cheap, safe writes (toggle, Codex uninstall) cover the recurring needs; installation is left where it already works.
+Per-agent plugin support:
 
-**Independent Test**: Register a `codex` agent with plugins configured; open the Plugins tab; observe the plugins grouped by marketplace with enabled state; disable one and observe `enabled = false` written to `config.toml`; uninstall one and observe its config entry and cache directory gone.
+| Agent       | Plugin model                                                                                                      | Write surface    | List  | Toggle | Uninstall             |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- | ---------------- | ----- | ------ | --------------------- |
+| Claude Code | `enabledPlugins` map in `settings.json` (internal `installed_plugins.json` / `known_marketplaces.json` read-only) | `settings.json`  | yes   | yes    | no (agent tooling)    |
+| Codex       | `[plugins."<name>@<marketplace>"]` tables + cache dir                                                             | `config.toml`    | yes   | yes    | yes (entry + cache)   |
+| Cursor      | VSIX list from `extensions/extensions.json` (enable/disable in SQLite)                                            | none (read-only) | yes   | no     | no                    |
+| OpenCode    | the `plugin` array in `opencode.json`                                                                             | `opencode.json`  | yes   | yes    | yes (drop from array) |
+| OpenClaw    | the `plugins{}` block in `openclaw.json`                                                                          | `openclaw.json`  | yes   | yes    | yes                   |
+| Hermes      | none — MCP is the plugin mechanism                                                                                | none             | empty | no     | no                    |
+
+**Why this priority**: Plugins are real, persistent agent configuration that today is invisible to Coffer. Visibility plus the cheap, safe writes (toggle, uninstall where supported) cover the recurring needs; installation is left where it already works.
+
+**Independent Test**: Register a `codex` agent with plugins configured; open the Plugins tab; observe the plugins grouped by marketplace with enabled state; disable one and observe `enabled = false` written to `config.toml`; uninstall one and observe its config entry and cache directory gone. For an `opencode` agent, toggle a plugin and observe it removed from the `plugin` array; for a `cursor` agent, list extensions and observe toggle/uninstall rejected.
 
 **Covering scenarios**:
 
@@ -194,6 +205,9 @@ Both supported agents have a file-backed plugin system. The user opens the agent
 - uninstall a Codex plugin
 - reject uninstalling a Claude Code plugin
 - flag a plugin whose cache is missing
+- list, toggle, and uninstall OpenCode and OpenClaw plugins via their documented config surfaces
+- list Cursor extensions read-only, rejecting toggle and uninstall
+- report an empty plugin listing for Hermes and reject toggle/uninstall
 
 ---
 
