@@ -17,6 +17,11 @@ from coffer.application.agent.projection.adapters import (
     CodexMemoryAdapter,
     NoneMemoryAdapter,
 )
+from coffer.application.agent.projection.new_agent_adapters import (
+    HermesMemoryAdapter,
+    OpenClawMemoryAdapter,
+    OpenCodeMemoryAdapter,
+)
 from coffer.application.agent.projection.types import (
     CanonicalMemory,
     MemoryLayer,
@@ -33,12 +38,12 @@ def default_adapters(fs: ProjectionFs) -> dict[AgentType, AgentMemoryAdapter]:
     return {
         AgentType.CLAUDE_CODE: ClaudeCodeMemoryAdapter(fs),
         AgentType.CODEX: CodexMemoryAdapter(fs),
-        # Agents without a native-memory channel yet — projection is a no-op
-        # (reported as mode=none). Replaced by real adapters in the memory batch.
+        AgentType.OPENCODE: OpenCodeMemoryAdapter(fs),
+        AgentType.OPENCLAW: OpenClawMemoryAdapter(fs),
+        AgentType.HERMES: HermesMemoryAdapter(fs),
+        # Cursor memory is N/A (Cursor removed its memory feature in 2.1), so it
+        # stays a no-op adapter (reported as mode=none).
         AgentType.CURSOR: NoneMemoryAdapter(AgentType.CURSOR),
-        AgentType.OPENCODE: NoneMemoryAdapter(AgentType.OPENCODE),
-        AgentType.OPENCLAW: NoneMemoryAdapter(AgentType.OPENCLAW),
-        AgentType.HERMES: NoneMemoryAdapter(AgentType.HERMES),
     }
 
 

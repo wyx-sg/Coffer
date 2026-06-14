@@ -225,6 +225,24 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **When** Coffer establishes projection,
 - **Then** those files are merged into the canonical store first, then the dir is replaced by a symlink — no file is silently overwritten.
 
+### Scenario: memory renders a managed block into OpenCode AGENTS.md
+
+- **Given** an OpenCode agent,
+- **When** projection runs,
+- **Then** `~/.config/opencode/AGENTS.md` (global) or `<project>/AGENTS.md` (project) gains a managed block holding the rendered facts, content outside the markers is untouched, and removal strips just the block.
+
+### Scenario: memory renders a managed block into OpenClaw MEMORY.md
+
+- **Given** an OpenClaw agent,
+- **When** projection runs,
+- **Then** `~/.openclaw/MEMORY.md` (global) or `<project>/MEMORY.md` (project) gains a managed block holding the rendered facts, and OpenClaw's own `memory/*.md` index is left untouched.
+
+### Scenario: memory renders a managed block into a Hermes memories file
+
+- **Given** a Hermes agent,
+- **When** projection runs,
+- **Then** Coffer owns one bounded file per scope under `~/.hermes/memories/` (`coffer-global.md` for global, `coffer-<slug>.md` for a project) carrying the facts between the managed markers, respecting Hermes' per-file size cap.
+
 ### Scenario: user adds a fact
 
 - **Given** a memory store,
@@ -311,6 +329,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-011**: An `AgentMemoryAdapter` (living with the agent driver, not the memory kind) MUST declare a `projection_mode` of `SYMLINK`, `RENDER`, or `NONE`, and the projection engine MUST dispatch on it. Adding a new agent MUST require only a new adapter — no change to the memory substrate.
 - **FR-012**: For Claude Code, the project layer MUST project the canonical project memory directory as a **directory symlink** into `~/.claude/projects/<slug>/memory/` (bidirectional; auto-memory stays on). If a real memory directory already exists there, Coffer MUST merge its files into the canonical store first and only then replace it with a symlink — never silently overwrite.
 - **FR-013**: For Codex, Coffer MUST render the facts into a marker-fenced managed block `<!-- coffer:memory:start (managed, do not edit) -->…<!-- coffer:memory:end -->` in `<project>/AGENTS.md` (project layer) and `~/.codex/AGENTS.md` (global layer), MUST leave all content outside the markers untouched, MUST re-render idempotently, and MUST disable Codex native `memories` so no second copy accumulates.
+- **FR-013a**: OpenCode, OpenClaw, and Hermes MUST project via `RENDER` managed blocks (markers identical to FR-013), leaving content outside the markers untouched and re-rendering idempotently. OpenCode renders into `<project>/AGENTS.md` (project) and `~/.config/opencode/AGENTS.md` (global). OpenClaw renders into `<project>/MEMORY.md` (project) and `~/.openclaw/MEMORY.md` (global), owning only the managed block (its `memory/*.md` index is left intact). Hermes owns one bounded managed-block file per scope inside its `memories/` store — `~/.hermes/memories/coffer-global.md` (global) and `~/.hermes/memories/coffer-<slug>.md` (project) — so its per-file size cap is respected. Cursor projection is N/A (Cursor removed its memory feature in 2.1).
 - **FR-014**: The adapter (agent layer) MUST perform all native-file mutations; the memory substrate MUST only provide canonical files plus rendered markdown, keeping memory agent-agnostic and the L1 config boundary clean.
 
 **Agent integration via MCP**

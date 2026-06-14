@@ -22,11 +22,15 @@ from coffer.application.agent.projection import (
     CanonicalMemory,
     ClaudeCodeMemoryAdapter,
     CodexMemoryAdapter,
+    HermesMemoryAdapter,
     MemoryLayer,
+    OpenClawMemoryAdapter,
+    OpenCodeMemoryAdapter,
     ProjectionEngine,
     ProjectionMode,
     claude_project_slug,
 )
+from coffer.application.agent.projection.engine import default_adapters
 from coffer.domain.agent.types import AgentType
 from coffer.infrastructure.agent.projection_fs import ProjectionFsAdapter
 
@@ -321,6 +325,130 @@ def test_engine_establish_routes_to_codex_adapter(tmp_path, fs):
     )
     assert result.projection_mode is ProjectionMode.RENDER
     assert (codex_dir / "AGENTS.md").exists()
+
+
+# --------------------------------------------------------------------------- #
+# OpenCode / OpenClaw / Hermes — RENDER                                        #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="memory renders a managed block into OpenCode AGENTS.md"
+)
+def test_opencode_renders_managed_block_into_agents_md(tmp_path, fs):
+    config_dir = tmp_path / ".config" / "opencode"
+    adapter = OpenCodeMemoryAdapter(fs, config_dir=config_dir)
+    assert adapter.projection_mode is ProjectionMode.RENDER
+
+    project_root = tmp_path / "repo"
+    project_root.mkdir()
+    # memory_location for both layers.
+    assert adapter.memory_location(project_root=str(project_root), layer=MemoryLayer.PROJECT) == (
+        project_root / "AGENTS.md"
+    )
+    assert adapter.memory_location(project_root=None, layer=MemoryLayer.GLOBAL) == (
+        config_dir / "AGENTS.md"
+    )
+
+    # GLOBAL: managed block written, native memory NOT disabled.
+    memory = _canonical(tmp_path, MemoryLayer.GLOBAL, name="oc-global")
+    result = adapter.establish(memory=memory, project_root=None, agent_ref="oc")
+    target = config_dir / "AGENTS.md"
+    text = target.read_text(encoding="utf-8")
+    assert MANAGED_BLOCK_START in text and MANAGED_BLOCK_END in text
+    assert "a fact" in text
+    assert result.projection_mode is ProjectionMode.RENDER
+    assert result.native_memory_disabled is False
+    assert result.target_path == str(target)
+
+    # remove strips the block.
+    adapter.remove(project_root=None, layer=MemoryLayer.GLOBAL)
+    after = target.read_text(encoding="utf-8")
+    assert MANAGED_BLOCK_START not in after
+
+
+def test_opencode_project_preserves_surrounding_content(tmp_path, fs):
+    config_dir = tmp_path / ".config" / "opencode"
+    adapter = OpenCodeMemoryAdapter(fs, config_dir=config_dir)
+    project_root = tmp_path / "repo"
+    project_root.mkdir()
+    agents = project_root / "AGENTS.md"
+    agents.write_text("# Project rules\n\nKeep me.\n", encoding="utf-8")
+    memory = _canonical(tmp_path, MemoryLayer.PROJECT, name="oc-proj")
+    adapter.establish(memory=memory, project_root=str(project_root), agent_ref="oc")
+    text = agents.read_text(encoding="utf-8")
+    assert "Keep me." in text
+    assert MANAGED_BLOCK_START in text
+
+
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="memory renders a managed block into OpenClaw MEMORY.md"
+)
+def test_openclaw_renders_managed_block_into_memory_md(tmp_path, fs):
+    config_dir = tmp_path / ".openclaw"
+    adapter = OpenClawMemoryAdapter(fs, config_dir=config_dir)
+    assert adapter.projection_mode is ProjectionMode.RENDER
+
+    project_root = tmp_path / "repo"
+    project_root.mkdir()
+    assert adapter.memory_location(project_root=str(project_root), layer=MemoryLayer.PROJECT) == (
+        project_root / "MEMORY.md"
+    )
+    assert adapter.memory_location(project_root=None, layer=MemoryLayer.GLOBAL) == (
+        config_dir / "MEMORY.md"
+    )
+
+    memory = _canonical(tmp_path, MemoryLayer.GLOBAL, name="claw-global")
+    result = adapter.establish(memory=memory, project_root=None, agent_ref="claw")
+    target = config_dir / "MEMORY.md"
+    text = target.read_text(encoding="utf-8")
+    assert MANAGED_BLOCK_START in text and "a fact" in text
+    assert result.native_memory_disabled is False
+
+    adapter.remove(project_root=None, layer=MemoryLayer.GLOBAL)
+    assert MANAGED_BLOCK_START not in target.read_text(encoding="utf-8")
+
+
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="memory renders a managed block into a Hermes memories file"
+)
+def test_hermes_renders_one_bounded_file_per_scope(tmp_path, fs):
+    config_dir = tmp_path / ".hermes"
+    adapter = HermesMemoryAdapter(fs, config_dir=config_dir)
+    assert adapter.projection_mode is ProjectionMode.RENDER
+
+    project_root = "/work/my-repo"
+    # GLOBAL → memories/coffer-global.md; PROJECT → memories/coffer-<slug>.md.
+    assert adapter.memory_location(project_root=None, layer=MemoryLayer.GLOBAL) == (
+        config_dir / "memories" / "coffer-global.md"
+    )
+    slug = claude_project_slug(project_root)
+    assert adapter.memory_location(project_root=project_root, layer=MemoryLayer.PROJECT) == (
+        config_dir / "memories" / f"coffer-{slug}.md"
+    )
+
+    memory = _canonical(tmp_path, MemoryLayer.GLOBAL, name="hermes-global")
+    result = adapter.establish(memory=memory, project_root=None, agent_ref="hermes")
+    target = config_dir / "memories" / "coffer-global.md"
+    text = target.read_text(encoding="utf-8")
+    assert MANAGED_BLOCK_START in text and "a fact" in text
+    assert result.native_memory_disabled is False
+    assert result.target_path == str(target)
+
+    adapter.remove(project_root=None, layer=MemoryLayer.GLOBAL)
+    assert MANAGED_BLOCK_START not in target.read_text(encoding="utf-8")
+
+
+def test_default_adapters_registry_modes(fs):
+    adapters = default_adapters(fs)
+    assert isinstance(adapters[AgentType.OPENCODE], OpenCodeMemoryAdapter)
+    assert isinstance(adapters[AgentType.OPENCLAW], OpenClawMemoryAdapter)
+    assert isinstance(adapters[AgentType.HERMES], HermesMemoryAdapter)
+    assert adapters[AgentType.OPENCODE].projection_mode is ProjectionMode.RENDER
+    assert adapters[AgentType.OPENCLAW].projection_mode is ProjectionMode.RENDER
+    assert adapters[AgentType.HERMES].projection_mode is ProjectionMode.RENDER
+    # Cursor memory is N/A (removed in Cursor 2.1) → stays NONE.
+    assert adapters[AgentType.CURSOR].projection_mode is ProjectionMode.NONE
 
 
 def test_engine_remove_target_by_mode(tmp_path, fs):

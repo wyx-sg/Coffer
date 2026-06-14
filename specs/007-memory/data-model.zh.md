@@ -10,16 +10,16 @@ memory 面的实体、端口、统一 SQLite schema（与 knowledge base 共享�
 
 Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。与 KB 面共享检索模式词汇与 embedding 语义；字段布局刻意不同 —— 见下文。
 
-| 字段                       | 类型                                       | 说明                                                                       |
-| -------------------------- | ------------------------------------------ | -------------------------------------------------------------------------- |
-| `retrieval_modes`          | `list[Literal["grep","keyword","vector"]]` | 启用的模式。默认 `["grep","keyword"]`（零配置、离线）。`vector` 为可选项。 |
-| `default_mode`             | `Literal["grep","keyword","vector"]`       | 默认 `"keyword"`。                                                         |
-| `embedding_provider`       | `str \| None`                              | OpenAI 兼容 provider id（如 `openai`、`voyage`、`local`）。`vector` 必填。 |
-| `embedding_model`          | `str \| None`                              | 如 `bge-m3`（本地）或某云端模型。`vector` 必填。                           |
-| `embedding_base_url`       | `str \| None`                              | OpenAI 兼容 provider 的 base URL 覆盖。                                    |
-| `embedding_credential_ref` | `str \| None`                              | embedding API key 的 keychain ref（绝不明文）。                            |
+| 字段                       | 类型                                       | 说明                                                                           |
+| -------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------ |
+| `retrieval_modes`          | `list[Literal["grep","keyword","vector"]]` | 启用的模式。默认 `["grep","keyword"]`（零配置、离线）。`vector` 为可选项。     |
+| `default_mode`             | `Literal["grep","keyword","vector"]`       | 默认 `"keyword"`。                                                             |
+| `embedding_provider`       | `str \| None`                              | OpenAI 兼容 provider id（如 `openai`、`voyage`、`local`）。`vector` 必填。     |
+| `embedding_model`          | `str \| None`                              | 如 `bge-m3`（本地）或某云端模型。`vector` 必填。                               |
+| `embedding_base_url`       | `str \| None`                              | OpenAI 兼容 provider 的 base URL 覆盖。                                        |
+| `embedding_credential_ref` | `str \| None`                              | embedding API key 的 keychain ref（绝不明文）。                                |
 | `embedding_dimensions`     | `int`                                      | 默认 `768`；范围 `1–8192`。决定该 store 的 `vec_chunks` 表宽；随线上契约传输。 |
-| `max_fact_chars`           | `int`                                      | 默认 `8192`；范围 `64–32768`。可变。                                       |
+| `max_fact_chars`           | `int`                                      | 默认 `8192`；范围 `64–32768`。可变。                                           |
 
 embedding 模型 **可变** —— 改它会重嵌整个 store（文件是真相）。没有不可变锁。
 
@@ -59,13 +59,13 @@ class ResolvedScope:
 
 frozen dataclass；recall 结果。
 
-| 字段     | 类型       | 说明                                                  |
-| -------- | ---------- | ------------------------------------------------------ |
-| `id`     | `str`      | 事实（document）id。                                  |
-| `text`   | `str`      | 事实正文 / 命中的 passage。                           |
+| 字段     | 类型       | 说明                                                    |
+| -------- | ---------- | ------------------------------------------------------- |
+| `id`     | `str`      | 事实（document）id。                                    |
+| `text`   | `str`      | 事实正文 / 命中的 passage。                             |
 | `score`  | `float`    | 逐 store 的相关性分数（保留在线上契约里；见下文 RRF）。 |
-| `source` | `str`      | 来源事实文件的 `<scope>:<fact file path>`。           |
-| `time`   | `datetime` | 事实的 `updated_at`。                                 |
+| `source` | `str`      | 来源事实文件的 `<scope>:<fact file path>`。             |
+| `time`   | `datetime` | 事实的 `updated_at`。                                   |
 
 跨 store 的 recall 用**倒数排名融合**（reciprocal rank fusion，k=60）合并逐 store 的命中列表：不同 store/模式的原始分数不可比（翻转后的 bm25 无上界、vector ≤ 1、grep 是平坦分数），所以 RRF 按逐 store 的名次排序 —— 每条命中保留原始分数，只有合并后的**顺序**来自融合。`grep` recall 是真实服务的：ripgrep 扫该 store 的事实文件（对 FTS5 无法分词的内容必不可少，如 CJK）。store 名会被校验（`global` | `project-<26 字符 ULID>`）：形状合法的名字会惰性 provision 对应 store；其余一律 404。
 
@@ -183,10 +183,14 @@ release target tags and pushes atomically.
 
 ## 原生投影目标（归 agent adapter 所有，不属于基底）
 
-| Agent       | Project 层                                                   | Global 层                               |
-| ----------- | ----------------------------------------------------------- | --------------------------------------- |
-| Claude Code | SYMLINK 规范目录 → `~/.claude/projects/<slug>/memory/`       | RENDER 块写进 `~/.claude/CLAUDE.md`     |
-| Codex       | RENDER 块写进 `<project>/AGENTS.md`；禁用 `memories`         | RENDER 块写进 `~/.codex/AGENTS.md`      |
+| Agent       | Project 层                                             | Global 层                                           |
+| ----------- | ------------------------------------------------------ | --------------------------------------------------- |
+| Claude Code | SYMLINK 规范目录 → `~/.claude/projects/<slug>/memory/` | RENDER 块写进 `~/.claude/CLAUDE.md`                 |
+| Codex       | RENDER 块写进 `<project>/AGENTS.md`；禁用 `memories`   | RENDER 块写进 `~/.codex/AGENTS.md`                  |
+| OpenCode    | RENDER 块写进 `<project>/AGENTS.md`                    | RENDER 块写进 `~/.config/opencode/AGENTS.md`        |
+| OpenClaw    | RENDER 块写进 `<project>/MEMORY.md`                    | RENDER 块写进 `~/.openclaw/MEMORY.md`               |
+| Hermes      | RENDER 块写进 `~/.hermes/memories/coffer-<slug>.md`    | RENDER 块写进 `~/.hermes/memories/coffer-global.md` |
+| Cursor      | N/A（Cursor 2.1 移除了记忆功能）                       | N/A（Cursor 2.1 移除了记忆功能）                    |
 
 受管块标记（Next.js / claude-mem 先例）：
 
@@ -198,16 +202,16 @@ release target tags and pushes atomically.
 
 ## 级联与完整性规则
 
-| 动作                        | 效果                                                                                                                              |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `remember` / 用户新增       | 写 `<fact-slug>.md` → 重新生成 `MEMORY.md` → 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计 → 重投影。                            |
-| `update_memory` / 用户编辑  | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 重新生成 `MEMORY.md` → 审计 → 重投影。                          |
-| `forget` / 用户删除         | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 重新生成 `MEMORY.md` → 审计 → 重投影。                                       |
-| 清空一个 scope              | 删除该 store 全部 `.md` → 移除全部索引行 → `MEMORY.md` 置空 → 重投影为空 → 审计。store Resource 保留。                            |
-| 删除 store Resource         | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、拆掉投影（替换 symlink / 剥除受管块）、审计。                                |
-| Recall                      | **读时惰性 reindex**：扫 `store_dir` 找增量（按 `content_sha256`）→ `reconcile` → 搜索。不写 `MEMORY.md`。                        |
-| 修改 embedding 模型         | 允许 → 下次索引时对 store 重新 embedding（文件是真相）。                                                                          |
-| 修改 `max_fact_chars`       | 允许。                                                                                                                            |
+| 动作                       | 效果                                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `remember` / 用户新增      | 写 `<fact-slug>.md` → 重新生成 `MEMORY.md` → 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计 → 重投影。     |
+| `update_memory` / 用户编辑 | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 重新生成 `MEMORY.md` → 审计 → 重投影。   |
+| `forget` / 用户删除        | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 重新生成 `MEMORY.md` → 审计 → 重投影。                |
+| 清空一个 scope             | 删除该 store 全部 `.md` → 移除全部索引行 → `MEMORY.md` 置空 → 重投影为空 → 审计。store Resource 保留。     |
+| 删除 store Resource        | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、拆掉投影（替换 symlink / 剥除受管块）、审计。         |
+| Recall                     | **读时惰性 reindex**：扫 `store_dir` 找增量（按 `content_sha256`）→ `reconcile` → 搜索。不写 `MEMORY.md`。 |
+| 修改 embedding 模型        | 允许 → 下次索引时对 store 重新 embedding（文件是真相）。                                                   |
+| 修改 `max_fact_chars`      | 允许。                                                                                                     |
 
 ## 单一 re-index 例程（`application/knowledge/reindex.py`，与 KB 共享）
 
@@ -224,13 +228,13 @@ memory 的所有写路径（remember、update、用户编辑、惰性 reindex �
 
 ## 新增审计事件
 
-| 值                   | 何时发出                                   |
-| -------------------- | ------------------------------------------ |
-| `"memory_added"`     | `remember`/用户新增成功后                  |
-| `"memory_updated"`   | `update`/用户编辑成功后                    |
-| `"memory_deleted"`   | `forget`/用户删除成功后                    |
-| `"memory_cleared"`   | 清空一个 scope 后                          |
-| `"memory_projected"` | 建立/刷新一个投影后                        |
+| 值                   | 何时发出                  |
+| -------------------- | ------------------------- |
+| `"memory_added"`     | `remember`/用户新增成功后 |
+| `"memory_updated"`   | `update`/用户编辑成功后   |
+| `"memory_deleted"`   | `forget`/用户删除成功后   |
+| `"memory_cleared"`   | 清空一个 scope 后         |
+| `"memory_projected"` | 建立/刷新一个投影后       |
 
 ## 对话记录提炼（Spec 007 扩展）
 
@@ -240,12 +244,12 @@ memory 的所有写路径（remember、update、用户编辑、惰性 reindex �
 
 一次 LLM 调用返回一个洞察数组，每条洞察的 `type` 取自封闭词汇表：
 
-| `type` | 含义 |
-| --- | --- |
-| `decision` | 会话中做出的蓄意架构或实现决策。 |
-| `gotcha` | 会话中发现的非显然陷阱、失效模式或约束。 |
-| `convention` | 项目特定的实践或风格规范，今后应当遵循。 |
-| `todo` | 会话中未解决的显式行动项或悬而未决的问题。 |
+| `type`       | 含义                                       |
+| ------------ | ------------------------------------------ |
+| `decision`   | 会话中做出的蓄意架构或实现决策。           |
+| `gotcha`     | 会话中发现的非显然陷阱、失效模式或约束。   |
+| `convention` | 项目特定的实践或风格规范，今后应当遵循。   |
+| `todo`       | 会话中未解决的显式行动项或悬而未决的问题。 |
 
 每条洞察成为一个 `MemoryFact`，`actor="agent"`（由自动化提炼写入，非人工），`type` 存于 `metadata.type`。
 
