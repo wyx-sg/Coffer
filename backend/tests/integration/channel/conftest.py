@@ -221,10 +221,10 @@ class FakeModelCatalog:
     def add(self, name: str, model_id: str) -> None:
         self._by_name[name] = model_id
 
-    def resolve(self, name: str) -> str | None:
+    async def resolve(self, name: str) -> str | None:
         return self._by_name.get(name)
 
-    def list_models(self) -> list[tuple[str, str]]:
+    async def list_models(self) -> list[tuple[str, str]]:
         return [(model_id, name) for name, model_id in self._by_name.items()]
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from coffer.application.channel.conversation_spec import validate_workspaces
 from coffer.domain.channel.config import ChannelConfigModel
 from coffer.domain.resource import Kind, ResourceRef
 
@@ -19,6 +20,13 @@ def _channel_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
         if isinstance(value, str) and value:
             refs[field] = value
     return refs
+
+
+def _validate_channel_config(config: dict[str, Any]) -> None:
+    """Workspace directories must exist on disk at registration (the cwd
+    allowlist is only useful if its entries are real)."""
+    workspaces = [(w["name"], w["path"]) for w in config.get("workspaces", [])]
+    validate_workspaces(workspaces, default=config.get("default_workspace"))
 
 
 def make_channel_kind(on_delete: Callable[[ResourceRef], Awaitable[None]] | None = None) -> Kind:
@@ -36,4 +44,5 @@ def make_channel_kind(on_delete: Callable[[ResourceRef], Awaitable[None]] | None
         config_schema=ChannelConfigModel,
         on_delete=on_delete,
         credential_ref_extractor=_channel_credential_ref_extractor,
+        validate_config=_validate_channel_config,
     )

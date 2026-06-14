@@ -396,7 +396,8 @@ class InboundProcessor:
         if len(parts) < 2:
             if builtin:
                 current = conv.model_id or "(default)"
-                available = ", ".join(n for _id, n in self._models.list_models()) or "(none)"
+                names = [n for _id, n in await self._models.list_models()]
+                available = ", ".join(names) or "(none)"
                 await self._safe_send(
                     binding, peer.chat_id, f"Model: {current}\nAvailable: {available}"
                 )
@@ -409,9 +410,10 @@ class InboundProcessor:
             return
         name = parts[1]
         if builtin:
-            model_id = self._models.resolve(name)
+            model_id = await self._models.resolve(name)
             if model_id is None:
-                available = ", ".join(n for _id, n in self._models.list_models()) or "(none)"
+                names = [n for _id, n in await self._models.list_models()]
+                available = ", ".join(names) or "(none)"
                 await self._safe_send(
                     binding, peer.chat_id, f"Unknown model '{name}'. Available: {available}"
                 )

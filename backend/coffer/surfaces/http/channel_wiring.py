@@ -30,7 +30,12 @@ from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
 from coffer.surfaces.http.channel_routes import set_channel_service
-from coffer.surfaces.http.chat.dependencies import get_chat_service, get_turn_orchestrator
+from coffer.surfaces.http.chat.dependencies import (
+    get_agent_registry,
+    get_chat_service,
+    get_model_service,
+    get_turn_orchestrator,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -43,6 +48,24 @@ def _daemon_info() -> tuple[str, str]:
     if token is None:
         raise RuntimeError("daemon token not published yet")
     return f"http://127.0.0.1:{daemon_routes.get_port()}", token
+
+
+class _ModelCatalog:
+    """Adapts the model registry to the channel core's ModelCatalogPort: resolve
+    a chat-typed name (display name, id, or upstream model string) to a model id."""
+
+    def __init__(self, models: Any) -> None:
+        self._models = models
+
+    async def resolve(self, name: str) -> str | None:
+        lowered = name.lower()
+        for m in await self._models.list():
+            if m.id == name or m.display_name.lower() == lowered or m.model == name:
+                return m.id
+        return None
+
+    async def list_models(self) -> list[tuple[str, str]]:
+        return [(m.id, m.display_name) for m in await self._models.list()]
 
 
 def wire_channel_kind(
@@ -60,6 +83,8 @@ def wire_channel_kind(
         conversations=get_chat_service(),
         turns=get_turn_orchestrator(),
         audit=audit,
+        agents=get_agent_registry(),
+        models=_ModelCatalog(get_model_service()),
     )
 
     # Production injects the EncryptedCredentialStore; None (tests) falls back

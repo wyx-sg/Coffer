@@ -4,7 +4,42 @@ from __future__ import annotations
 
 import pytest
 
+from coffer.domain.errors import ConfigValidationError, ResourceNotFound
+from coffer.domain.resource import ResourceRef
+
 from .conftest import ChannelEnv, inbound, wait_until
+
+# -- registration validates the workspace allowlist (FR-016) -------------------
+
+
+async def test_register_accepts_existing_workspace_dirs(env: ChannelEnv, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    resource = await env.register_channel(
+        "ok",
+        config={
+            "channel_type": "telegram",
+            "bot_token_ref": "channel/tg/bot-token",
+            "workspaces": [{"name": "w", "path": str(ws)}],
+            "default_workspace": "w",
+        },
+    )
+    assert resource.name == "ok"
+
+
+async def test_register_rejects_a_nonexistent_workspace_dir(env: ChannelEnv, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    with pytest.raises(ConfigValidationError):
+        await env.register_channel(
+            "bad",
+            config={
+                "channel_type": "telegram",
+                "bot_token_ref": "channel/tg/bot-token",
+                "workspaces": [{"name": "w", "path": str(tmp_path / "missing")}],
+            },
+        )
+    with pytest.raises(ResourceNotFound):
+        await env.resources.get(ResourceRef(kind="channel", name="bad"))
+
 
 # -- /agent --------------------------------------------------------------------
 

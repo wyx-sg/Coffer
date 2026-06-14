@@ -102,7 +102,15 @@ class ResourceService:
         # mode='json' ensures Pydantic special types (e.g. HttpUrl) are
         # serialised to plain str rather than their Pydantic wrapper objects,
         # which are not JSON-serialisable by the standard library json module.
-        return validated.model_dump(mode="json")
+        dumped = validated.model_dump(mode="json")
+        # Kind-supplied semantic validation beyond shape (e.g. a channel's
+        # workspace directories must exist); raises to reject the write.
+        if kind_def.validate_config is not None:
+            try:
+                kind_def.validate_config(dumped)
+            except ValueError as e:
+                raise ConfigValidationError(str(e)) from e
+        return dumped
 
     async def register(
         self,
