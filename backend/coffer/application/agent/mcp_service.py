@@ -32,8 +32,9 @@ from coffer.domain.agent.mcp_install import (
     is_installed,
 )
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import McpInstallUnsupported, ShimNotFound
+from coffer.domain.errors import ShimNotFound
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.workspace_errors import McpInstallUnsupported
 
 _SHIM_BINARY = "coffer-mcp-shim"
 

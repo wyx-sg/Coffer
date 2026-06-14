@@ -29,6 +29,7 @@ from collections.abc import MutableMapping
 from typing import Any
 
 import tomlkit
+from ruamel.yaml.comments import CommentedMap
 
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_entries import (
@@ -91,13 +92,13 @@ def apply_install(
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
     if fmt is ConfigFileFormat.YAML:
-        data = _parse_yaml(text)
-        servers = data.get(ck)
+        ydata = _parse_yaml(text)
+        servers = ydata.get(ck)
         if not isinstance(servers, MutableMapping):
-            servers = _parse_yaml("{}")
-            data[ck] = servers
+            servers = CommentedMap()
+            ydata[ck] = servers
         servers[COFFER_SERVER_KEY] = dict(fields)
-        return _dump_yaml(data)
+        return _dump_yaml(ydata)
 
     if fmt is ConfigFileFormat.TOML:
         doc = _parse_toml(text)
@@ -127,11 +128,11 @@ def apply_uninstall(fmt: ConfigFileFormat, text: str, *, container_key: str | No
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
     if fmt is ConfigFileFormat.YAML:
-        data = _parse_yaml(text)
-        servers = data.get(ck)
+        ydata = _parse_yaml(text)
+        servers = ydata.get(ck)
         if isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers:
             del servers[COFFER_SERVER_KEY]
-        return _dump_yaml(data)
+        return _dump_yaml(ydata)
 
     if fmt is ConfigFileFormat.TOML:
         doc = _parse_toml(text)

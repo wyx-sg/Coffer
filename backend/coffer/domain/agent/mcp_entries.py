@@ -21,7 +21,8 @@ from typing import Any
 
 import tomlkit
 from ruamel.yaml import YAML
-from ruamel.yaml import YAMLError as _RuamelYAMLError
+from ruamel.yaml.comments import CommentedMap
+from ruamel.yaml.error import YAMLError as _RuamelYAMLError
 
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_injection import default_container_key
@@ -70,13 +71,13 @@ def _parse_yaml(text: str) -> MutableMapping[str, Any]:
     level (mirrors the JSON ``top-level value must be an object`` rule).
     """
     if not text.strip():
-        return _yaml().load("{}")
+        return CommentedMap()
     try:
         data = _yaml().load(text)
     except _RuamelYAMLError as e:
         raise ConfigFileFormatInvalid("yaml", str(e)) from e
     if data is None:
-        return _yaml().load("{}")
+        return CommentedMap()
     if not isinstance(data, MutableMapping):
         raise ConfigFileFormatInvalid("yaml", "top-level value must be a mapping")
     return data
@@ -214,14 +215,14 @@ def remove_entry(
 
     if fmt is ConfigFileFormat.YAML:
         try:
-            data = _parse_yaml(text)
+            ydata = _parse_yaml(text)
         except ConfigFileFormatInvalid as e:
             raise AgentConfigParseError("<config>", str(e)) from e
-        servers = data.get(ck)
+        servers = ydata.get(ck)
         if not isinstance(servers, MutableMapping) or name not in servers:
             raise McpEntryNotFound(name)
         del servers[name]
-        return _dump_yaml(data)
+        return _dump_yaml(ydata)
 
     if fmt is ConfigFileFormat.TOML:
         try:
