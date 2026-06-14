@@ -66,6 +66,7 @@ def include_all_routers(app: FastAPI) -> None:
         projection_router,
         agent_native_router,
         distill_router,  # spec 007 extension — transcript distillation
+        history_router,  # ADR-022 — cross-agent transcript history
         # chat (008)
         chat_conversation_router,
         chat_turn_router,

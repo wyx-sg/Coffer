@@ -16,8 +16,8 @@ built-in agent's own gating makes optional — a human-approval channel for tool
 calls — and the controls every conversation needs: streamed turns, one
 in-flight turn at a time, and user interruption."
 
-This spec turns Coffer from a vault that *stores* AI assets into one that
-*uses* them, and it does so as a **platform**, not a single hard-wired feature.
+This spec turns Coffer from a vault that _stores_ AI assets into one that
+_uses_ them, and it does so as a **platform**, not a single hard-wired feature.
 It delivers two things at once:
 
 1. **A chat platform.** A first-class chat surface, persisted multi-conversation
@@ -42,6 +42,38 @@ Every platform capability that the built-in agent does not itself need — the
 approval channel above all — still ships complete and is proven end-to-end, so
 the seam is real on the day it lands rather than a promise.
 
+## Positioning — Vault Console ([ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.md) / [ADR-022](../../docs/decisions/ADR-022-cross-agent-transcript-history.md))
+
+After shipping, this surface is repositioned from "a general multi-agent chat
+client" to the **Vault Console**: the place to _use and inspect the vault_, not a
+daily in-browser coding chat that competes with the agents' own UIs or with IM.
+Its two durable jobs are:
+
+1. **Talk to the vault.** Through the built-in agent (an in-process MCP client of
+   Coffer's own gateway), the user converses with — and inspects — their memory,
+   skills, knowledge, and aggregated MCP tools. Each turn surfaces which vault
+   resources it touched, so the console doubles as a way to see what an agent
+   would get from the vault.
+2. **Observe and approve channel-driven conversations.** Channels (Spec 009)
+   create conversations and route tool approvals through the **same**
+   `ConversationPort` / `TurnPort` seams this surface uses. The console is the
+   human-in-the-loop seat: it surfaces conversation origin (web draft vs. channel
+   peer) and lets the user take the approval seat for turns an IM peer is driving.
+
+The CLI agents (Claude Code, Codex) are **not** repositioned as a daily coding
+chat; they remain (a) test-drive targets that keep the provider seam honest and
+(b) the conversations an IM peer drives that the user observes/approves here —
+and the source of the cross-agent history below. **De-scoped:** using Coffer as a
+primary in-browser coding chat; affordances that only make sense for that
+positioning stay out of scope unless a future spec re-opens it.
+
+**Cross-agent transcript history ([ADR-022](../../docs/decisions/ADR-022-cross-agent-transcript-history.md)).**
+The console adds a unified, **local-only** search and read-only browse over the
+on-disk transcripts of every agent (`~/.claude/projects/`, `~/.codex/sessions/`)
+plus local web/IM conversations. Raw history is a rebuildable local index that
+**never syncs**; only the distilled layer — ADR-020 memory facts, and a future
+summary/handoff artifact — crosses machines.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Configure a model provider before the first chat (Priority: P1)
@@ -60,6 +92,7 @@ Anthropic model with a credential, save; observe it listed and marked as the
 default; the Chat page stops showing the "no model configured" state.
 
 **Covering scenarios**:
+
 - register a cloud model with a credential
 - register a local Ollama model with a base URL and no credential
 - reject a model whose required credential or base URL is missing
@@ -87,6 +120,7 @@ built-in agent; pick it, confirm; a conversation is created whose recorded agent
 is the built-in one and which is immediately usable.
 
 **Covering scenarios**:
+
 - the new-conversation dialog lists every registered agent with its availability
 - creating a conversation records the chosen agent and validates its config
 - an unknown agent or an invalid agent configuration is rejected, nothing persisted
@@ -109,6 +143,7 @@ hold a streamed conversation is not a product.
 that completes without error and is still visible after reload.
 
 **Covering scenarios**:
+
 - send a message and receive a streamed assistant reply
 - the reply is persisted and survives a page reload and a daemon restart
 - the composer is disabled while a turn is streaming and re-enabled when it ends
@@ -124,7 +159,7 @@ gateway — upstream MCP server tools, `coffer__recall`, `coffer__search_knowled
 `coffer__load_skill` — and each call appears in the message stream as an inline,
 expandable card showing the tool name, status, inputs, and result.
 
-**Why this priority**: This is what makes the built-in agent *Coffer's* agent
+**Why this priority**: This is what makes the built-in agent _Coffer's_ agent
 rather than a generic chat box — it dogfoods the vault.
 
 **Independent Test**: With a memory store holding a known record, ask the agent a
@@ -132,6 +167,7 @@ question answerable only from that record; observe a `coffer__recall`
 tool-call card in the stream and an answer grounded in the record.
 
 **Covering scenarios**:
+
 - the agent discovers every tool the gateway aggregates (upstream MCP + built-in)
 - a tool call renders as an inline expandable card, collapsed by default
 - skills are reachable via `coffer__list_skills` / `coffer__load_skill`
@@ -155,6 +191,7 @@ one, restart the daemon, reopen Chat — both conversations and their messages a
 still present with the new name; delete one and confirm it is gone.
 
 **Covering scenarios**:
+
 - create, list, switch, rename, and delete conversations
 - a new conversation receives an auto-generated title from its first message
 - conversations and messages survive a daemon restart
@@ -182,6 +219,7 @@ tool call; observe the approval card; click Allow; observe the tool run and the
 turn finish. Repeat with Deny; observe the agent receive the denial.
 
 **Covering scenarios**:
+
 - an agent turn pauses and emits an approval request the surface renders
 - allowing a request lets the agent run the tool and finish the turn
 - denying a request returns the denial to the agent as the tool result
@@ -206,6 +244,7 @@ assistant message holding the partial output is persisted, and the conversation
 accepts the next message.
 
 **Covering scenarios**:
+
 - stopping a running turn ends it and persists the partial assistant message
 - a stopped conversation immediately accepts a new turn
 - stopping when no turn is running is a harmless no-op
@@ -227,6 +266,7 @@ in the top-bar selector, send a message, and confirm the turn ran on the chosen
 model (recorded on the resulting message).
 
 **Covering scenarios**:
+
 - a conversation uses the default model unless overridden
 - changing the model selector affects subsequent turns only
 - each assistant message records which model produced it
@@ -247,6 +287,7 @@ reply on stdout; run `coffer chat`, hold a two-turn conversation, exit, and
 confirm the conversation appears in the GUI history list.
 
 **Covering scenarios**:
+
 - `coffer chat -m` runs a single turn and prints the reply
 - `coffer chat` holds an interactive multi-turn session
 - CLI conversations are the same entities the GUI lists
@@ -266,8 +307,68 @@ assistant message shows token usage and the audit log records the completed
 turn with actor `agent`.
 
 **Covering scenarios**:
+
 - an assistant message records prompt/completion token usage
 - a completed turn is recorded in the audit log with actor `agent`
+
+---
+
+### User Story 11 — Observe and approve a channel-driven conversation (Priority: P2)
+
+An IM peer (Spec 009) is driving a conversation against an agent. From the Vault
+Console the user sees that conversation in the history list **marked by its
+origin and peer identity**, watches its turns stream, and — when the agent pauses
+on a tool approval — **takes the approval seat from the web**, equivalently to
+the IM button.
+
+**Why this priority**: Channels already route approvals through the platform's
+approval channel; giving the human a web seat to observe and approve is what
+makes the console's second role real. Not blocking the core loop.
+
+**Independent Test**: Pair an IM peer, have it start a turn that requests
+approval; open the Vault Console, see the conversation badged with its channel
+origin and peer; click Allow; observe the tool run and the IM peer receive the
+result.
+
+**Covering scenarios**:
+
+- the conversation list marks each conversation's origin (web vs. channel) and,
+  for channel conversations, the peer identity
+- a pending approval on a channel-driven turn is resolvable from the web approval
+  card, equivalently to the IM button (both resolve the same approval channel)
+- observing a channel-driven turn streams the same turn events the web composer
+  would
+
+---
+
+### User Story 12 — Search and browse history across all agents (Priority: P2)
+
+The user wants to find a past conversation across every agent — "the session
+where we debugged the migration" — whether it happened in Claude Code, Codex, an
+IM peer, or the console. The Vault Console offers a unified **search** over a
+**local** index of all agents' transcripts and read-only **browse** of a selected
+session, scoped by agent / project / time. No raw transcript is copied or synced;
+the index is rebuildable and local.
+
+**Why this priority**: A cross-agent searchable history is the capability no
+native client offers and the concrete payoff of the Vault Console positioning.
+Not blocking the core loop.
+
+**Independent Test**: With at least one Claude Code and one Codex transcript on
+disk, search a phrase that appears in one; observe the matching session listed
+with its agent and project; open it and read its scrubbed turns; delete the index,
+re-run reindex, and confirm the same result.
+
+**Covering scenarios**:
+
+- a search over the local transcript index returns matches across Claude Code,
+  Codex, and local conversations
+- a matched session browses read-only, showing scrubbed natural-language turns
+- secrets / tool payloads / file contents are absent from the index and the
+  browse view
+- the index is local-only and is never written into the sync medium
+- the index rebuilds from on-disk transcripts via a reindex command, and deleting
+  it loses nothing durable
 
 ---
 
@@ -513,6 +614,36 @@ referenced by at least one test marked
 - **Then** Coffer makes a minimal request to the provider and reports success or
   a humanized failure message, without persisting anything.
 
+### Scenario: a channel-driven conversation is observable and approvable from the console
+
+- **Given** an IM peer driving a conversation whose turn pauses on a tool
+  approval,
+- **When** the user opens the Vault Console,
+- **Then** the conversation appears badged with its channel origin and peer
+  identity, and submitting an allow/deny from the web approval card resolves the
+  same pending approval the IM button would.
+
+### Scenario: search transcripts across agents
+
+- **Given** at least one Claude Code transcript and one Codex transcript on disk,
+- **When** the user searches a phrase present in one of them,
+- **Then** the matching session is returned with its agent and project, and the
+  result contains no secrets, tool payloads, or file contents.
+
+### Scenario: browse a past session read-only
+
+- **Given** a transcript indexed in the history,
+- **When** the user opens it,
+- **Then** its scrubbed natural-language turns render read-only and no write is
+  made to the agent's session store.
+
+### Scenario: the history index is local and rebuildable
+
+- **Given** a populated transcript history index,
+- **When** the user deletes the index and runs the reindex command,
+- **Then** the index is rebuilt from the on-disk transcripts and never appears in
+  the sync medium.
+
 ## Requirements
 
 ### Functional Requirements
@@ -681,6 +812,33 @@ referenced by at least one test marked
   `agent`; tool invocations the built-in agent makes are recorded in the
   gateway's invocation log under the agent's gateway session.
 
+**Vault Console: origin surfacing & cross-agent history ([ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.md) / [ADR-022](../../docs/decisions/ADR-022-cross-agent-transcript-history.md))**
+
+- **FR-033**: The Chat surface MUST be presented as the **Vault Console**: its
+  primary roles are conversing with the vault through the built-in agent and
+  observing/approving channel-driven conversations. It MUST NOT position itself
+  as a primary in-browser coding chat; the CLI agents remain available as
+  provider-seam validation and as the targets of channel-driven and
+  history-indexed conversations.
+- **FR-034**: The conversation history MUST surface each conversation's origin
+  (web draft vs. channel peer) and, for channel-originated conversations, the
+  peer identity; a pending tool approval on any conversation MUST be resolvable
+  from the web approval card, equivalently to the channel's own approval control
+  (both resolve the same human-approval channel of FR-020).
+- **FR-035**: System MUST provide a **cross-agent transcript history**: a
+  local-only, rebuildable index over the on-disk transcripts of every registered
+  agent (read-only, reusing the read-only transcript readers) plus local
+  conversations, exposing unified search and read-only browse scoped by agent /
+  project / time.
+- **FR-036**: Only scrubbed natural-language turns MUST enter the history index;
+  `tool_use`/`tool_result` blocks, file contents, and command output MUST be
+  dropped at parse. No raw transcript content MUST be persisted into
+  files-as-truth or written into the sync medium; the index MUST be rebuildable
+  from the on-disk transcripts and its loss MUST forfeit nothing durable.
+- **FR-037**: The history surface MUST NOT write into any agent's session store
+  (Spec 004 read-only invariant). `continue`/`resume` of a past foreign session
+  is out of scope for this revision.
+
 ### Key Entities
 
 - **Agent Provider**: The platform's unit of extension. A provider owns one
@@ -771,6 +929,8 @@ referenced by at least one test marked
   provider (the built-in agent). The registry is the seam — populating it from
   user-managed configuration is not in this spec.
 - The following are explicitly **out of scope**: user-created or user-edited
-  agents; a GUI for managing the agent registry; remote channels; per-agent
-  capability scoping beyond the gateway's existing gating and the approval
-  channel; conversation summarisation, search, and export.
+  agents; a GUI for managing the agent registry; per-agent capability scoping
+  beyond the gateway's existing gating and the approval channel; conversation
+  summarisation and export; and resuming/continuing a past foreign agent session
+  (deferred by ADR-022). Cross-agent transcript **search and read-only browse**
+  are in scope per ADR-022; remote channels are delivered separately by Spec 009.

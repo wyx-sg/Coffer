@@ -36,6 +36,31 @@ in-flight turn at a time, and user interruption."
 最重要的是审批通道 —— 仍然完整交付并被端到端证明，因此接缝在它落地的那一天就是
 真实的，而非一个承诺。
 
+## 定位 —— Vault Console（金库控制台，[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md) / [ADR-022](../../docs/decisions/ADR-022-cross-agent-transcript-history.zh.md)）
+
+交付之后，本界面从"一个通用的多 agent 聊天客户端"重定位为 **Vault Console（金库
+控制台）**：用来*使用与检视金库*的地方，而非一个在浏览器里、与 agent 自己的 UI 或
+IM 竞争的日常编码聊天。它的两个耐久职责是：
+
+1. **对金库说话。** 通过内置 agent（Coffer 自有网关的进程内 MCP 客户端），用户与
+   自己的 memory、skills、knowledge、聚合 MCP 工具对话并检视它们。每个回合 surface
+   它碰了哪些金库资源，让控制台同时成为"查看一个 agent 能从金库拿到什么"的地方。
+2. **旁观并审批 channel 驱动的会话。** Channels（Spec 009）创建会话、转发工具审批走
+   的是与本界面**同一套** `ConversationPort` / `TurnPort` 接缝。控制台是
+   human-in-the-loop 审批席：它呈现会话来源（网页草稿 vs channel peer），让用户为 IM
+   peer 正在驱动的回合接管审批席。
+
+CLI agent（Claude Code、Codex）**不**被重定位为日常编码聊天；它们仍然是 (a) 让
+provider 接缝保持诚实的 test-drive 目标，(b) IM peer 驱动、用户在这里旁观/审批的
+会话 —— 以及下面跨 agent 历史的来源。**移出范围：** 把 Coffer 当作主力的浏览器内
+编码聊天；只对那个定位才有意义的能力保持在范围外，除非未来某个 spec 重开它。
+
+**跨 agent transcript 历史（[ADR-022](../../docs/decisions/ADR-022-cross-agent-transcript-history.zh.md)）。**
+控制台新增一个统一的、**纯本地**的搜索与只读浏览，覆盖每个 agent 的磁盘 transcript
+（`~/.claude/projects/`、`~/.codex/sessions/`）以及本地网页/IM 会话。原始历史是可
+重建的本地索引，**永不同步**；只有蒸馏层 —— ADR-020 memory 事实，以及将来的摘要/
+交接产物 —— 才跨机。
+
 ## 用户场景与测试
 
 ### 用户故事 1 —— 在首次聊天前配置一个模型 provider（优先级：P1）
@@ -53,6 +78,7 @@ model id。一旦存在一个模型，内置 agent 就可被选择且聊天被�
 状态。
 
 **覆盖的场景**：
+
 - 用一个凭据注册一个云端模型
 - 用一个 base URL、无凭据注册一个本地 Ollama 模型
 - 拒绝一个缺少必需凭据或 base URL 的模型
@@ -75,6 +101,7 @@ model id。一旦存在一个模型，内置 agent 就可被选择且聊天被�
 确认；一个对话被创建，其记录的 agent 是内置那一个，且立即可用。
 
 **覆盖的场景**：
+
 - 新对话对话框列出每一个已注册 agent 及其可用性
 - 创建一个对话记录所选 agent 并校验其配置
 - 一个未知 agent 或一个无效的 agent 配置被拒绝，不持久化任何东西
@@ -95,6 +122,7 @@ model id。一旦存在一个模型，内置 agent 就可被选择且聊天被�
 在 reload 后仍然可见。
 
 **覆盖的场景**：
+
 - 发送一条消息并收到一个流式助手回复
 - 该回复被持久化并在页面 reload 与守护进程重启后保留
 - composer 在一个回合流式输出时被禁用、在它结束时重新启用
@@ -109,7 +137,7 @@ OAuth?"）。agent 通过 Coffer 的 MCP gateway 调用工具 —— 上游 MCP 
 `coffer__recall`、`coffer__search_knowledge`、`coffer__load_skill` —— 且每次调用
 在消息流中以一张内联、可展开的卡片出现，展示工具名、状态、输入与结果。
 
-**为何此优先级**：这是让内置 agent 成为 *Coffer 的* agent 而非一个通用聊天框的
+**为何此优先级**：这是让内置 agent 成为 _Coffer 的_ agent 而非一个通用聊天框的
 东西 —— 它 dogfood 了 vault。
 
 **独立测试**：在一个 memory store 持有一条已知记录的情况下，向 agent 询问一个只能
@@ -117,6 +145,7 @@ OAuth?"）。agent 通过 Coffer 的 MCP gateway 调用工具 —— 上游 MCP 
 记录的回答。
 
 **覆盖的场景**：
+
 - agent 发现 gateway 聚合的每一个工具（上游 MCP + 内置）
 - 一次工具调用渲染为一张内联可展开卡片，默认折叠
 - skills 可通过 `coffer__list_skills` / `coffer__load_skill` 触达
@@ -138,6 +167,7 @@ local-first、SQLite-as-record 立场。
 重新打开 Chat —— 两个对话及其消息都仍然存在并带新名称；删除一个并确认它已消失。
 
 **覆盖的场景**：
+
 - 创建、列出、切换、重命名并删除对话
 - 一个新对话从它的首条消息收到一个自动生成的标题
 - 对话与消息在守护进程重启后保留
@@ -161,6 +191,7 @@ local-first、SQLite-as-record 立场。
 点击 Allow；观察工具运行且回合结束。用 Deny 重复；观察 agent 收到拒绝。
 
 **覆盖的场景**：
+
 - 一个 agent 回合暂停并发出一个界面渲染的审批请求
 - allow 一个请求让 agent 运行该工具并结束回合
 - deny 一个请求把拒绝作为工具结果返回给 agent
@@ -182,6 +213,7 @@ local-first、SQLite-as-record 立场。
 消息被持久化，且对话接受下一条消息。
 
 **覆盖的场景**：
+
 - 停止一个正在运行的回合结束它并持久化部分助手消息
 - 一个被停止的对话立即接受一个新回合
 - 在没有回合运行时停止是一个无害的 no-op
@@ -201,6 +233,7 @@ agent 使用哪一个。
 一条消息，并确认该回合运行在所选模型上（记录在结果消息上）。
 
 **覆盖的场景**：
+
 - 除非被覆盖，一个对话使用默认模型
 - 改变模型选择器只影响后续回合
 - 每条助手消息记录产生它的模型
@@ -220,6 +253,7 @@ agent 使用哪一个。
 运行 `coffer chat`，进行一个两回合对话，退出，并确认该对话出现在 GUI 历史列表中。
 
 **覆盖的场景**：
+
 - `coffer chat -m` 运行一个单回合并打印回复
 - `coffer chat` 进行一个交互式多回合会话
 - CLI 对话与 GUI 列出的是同一批实体
@@ -237,8 +271,54 @@ agent 使用哪一个。
 日志以 actor `agent` 记录该已完成回合。
 
 **覆盖的场景**：
+
 - 一条助手消息记录 prompt/completion token 用量
 - 一个已完成回合以 actor `agent` 记录在审计日志中
+
+---
+
+### 用户故事 11 —— 旁观并审批 channel 驱动的会话（优先级：P2）
+
+一个 IM peer（Spec 009）正在驱动一个针对某 agent 的会话。在 Vault Console 里，用户
+在历史列表中看到该会话**带有来源与 peer 身份标记**，看它的回合流式推进，并在 agent
+因工具审批暂停时**从网页接管审批席**，与 IM 按钮等价。
+
+**为何此优先级**：Channels 已经把审批走平台的审批通道；给人一个在网页旁观并审批的
+席位，才让控制台的第二个角色变真。不阻塞核心循环。
+
+**独立测试**：配对一个 IM peer，让它发起一个请求审批的回合；打开 Vault Console，看到
+该会话带着 channel 来源与 peer 标记；点 Allow；观察工具运行、IM peer 收到结果。
+
+**覆盖的场景**：
+
+- 会话列表标记每个会话的来源（网页 vs channel），并对 channel 会话标记 peer 身份
+- channel 驱动回合上的待审批可从网页审批卡片解决，与 IM 按钮等价（两者解决同一审批
+  通道）
+- 旁观一个 channel 驱动回合，流式收到与网页 composer 相同的回合事件
+
+---
+
+### 用户故事 12 —— 跨所有 agent 搜索与浏览历史（优先级：P2）
+
+用户想跨每个 agent 找到一次过去的会话 —— "那次我们调试 migration 的会话" —— 无论它
+发生在 Claude Code、Codex、IM peer 还是控制台。Vault Console 提供在一个**本地**索引
+（覆盖所有 agent 的 transcript）之上的统一**搜索**，以及对选中会话的只读**浏览**，
+按 agent / project / 时间过滤。不拷贝、不同步任何原始 transcript；索引可重建、本地。
+
+**为何此优先级**：跨 agent 的可搜索历史是任何原生客户端都没有的能力，也是 Vault
+Console 定位的具体回报。不阻塞核心循环。
+
+**独立测试**：磁盘上至少有一个 Claude Code 和一个 Codex transcript，搜索其中之一出现
+的一句话；观察匹配会话连同其 agent 与 project 被列出；打开它读其脱敏后的回合；删掉
+索引、重跑 reindex，确认结果一致。
+
+**覆盖的场景**：
+
+- 在本地 transcript 索引上的搜索返回跨 Claude Code、Codex 和本地会话的匹配
+- 一个匹配会话以只读方式浏览，展示脱敏后的自然语言回合
+- 密钥 / 工具 payload / 文件内容在索引和浏览视图中均不存在
+- 索引纯本地，永不写入同步介质
+- 索引通过 reindex 命令从磁盘 transcript 重建，删除它不丢任何耐久数据
 
 ---
 
@@ -450,6 +530,33 @@ agent 使用哪一个。
 - **When** 用户测试连接，
 - **Then** Coffer 向 provider 发一个最小请求并报告成功或人性化的失败信息，且不持久化任何内容。
 
+### 场景：channel 驱动的会话可从控制台旁观与审批
+
+- **Given** 一个 IM peer 驱动的会话，其回合因工具审批而暂停，
+- **When** 用户打开 Vault Console，
+- **Then** 该会话带着 channel 来源与 peer 身份标记出现，且从网页审批卡片提交
+  allow/deny 解决的是与 IM 按钮相同的那个待审批。
+
+### 场景：跨 agent 搜索 transcript
+
+- **Given** 磁盘上至少有一个 Claude Code transcript 和一个 Codex transcript，
+- **When** 用户搜索其中之一出现的一句话，
+- **Then** 匹配会话连同其 agent 与 project 被返回，且结果中不含密钥、工具 payload
+  或文件内容。
+
+### 场景：只读浏览一次过去的会话
+
+- **Given** 历史中已索引的一个 transcript，
+- **When** 用户打开它，
+- **Then** 其脱敏后的自然语言回合以只读方式渲染，且不向 agent 的 session store 写入
+  任何内容。
+
+### 场景：历史索引本地且可重建
+
+- **Given** 一个已填充的 transcript 历史索引，
+- **When** 用户删除索引并运行 reindex 命令，
+- **Then** 索引从磁盘 transcript 重建，且永不出现在同步介质中。
+
 ## 需求
 
 ### 功能需求
@@ -585,6 +692,26 @@ agent 使用哪一个。
   agent 进行的工具调用记录在 gateway 的调用日志中，归属于该 agent 的 gateway
   session。
 
+**Vault Console：来源呈现与跨 agent 历史（[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md) / [ADR-022](../../docs/decisions/ADR-022-cross-agent-transcript-history.zh.md)）**
+
+- **FR-033**：Chat 界面 MUST 以 **Vault Console** 呈现：其主要角色是通过内置 agent
+  与金库对话、以及旁观/审批 channel 驱动的会话。它 MUST NOT 把自己定位为主力的浏览器
+  内编码聊天；CLI agent 仍作为 provider 接缝验证、以及 channel 驱动与历史索引会话的
+  目标而保留。
+- **FR-034**：会话历史 MUST 呈现每个会话的来源（网页草稿 vs channel peer），并对
+  channel 来源的会话呈现 peer 身份；任一会话上的待审批工具调用 MUST 可从网页审批
+  卡片解决，与 channel 自身的审批控件等价（两者解决 FR-020 的同一 human-approval
+  通道）。
+- **FR-035**：System MUST 提供**跨 agent transcript 历史**：在每个已注册 agent 的
+  磁盘 transcript（只读，复用只读 transcript reader）以及本地会话之上建一个纯本地、
+  可重建的索引，暴露按 agent / project / 时间过滤的统一搜索与只读浏览。
+- **FR-036**：只有脱敏后的自然语言回合 MUST 进入历史索引；`tool_use`/`tool_result`
+  块、文件内容、命令输出 MUST 在解析时丢弃。任何原始 transcript 内容 MUST NOT 被
+  持久化进 files-as-truth 或写入同步介质；索引 MUST 可从磁盘 transcript 重建，其丢失
+  MUST 不损失任何耐久数据。
+- **FR-037**：历史界面 MUST NOT 向任何 agent 的 session store 写入（Spec 004 只读
+  不变量）。过去外部会话的 `continue`/`resume` 在本次修订中不在范围内。
+
 ### 关键实体
 
 - **Agent Provider**：平台的扩展单元。一个 provider 拥有一个 agent 类型：它有一个
@@ -657,5 +784,6 @@ agent 使用哪一个。
 - agent-provider 注册表在启动时由代码填充；v1 注册一个 provider（内置 agent）。
   注册表是接缝 —— 从用户管理的配置填充它不在本规格内。
 - 以下被明确**列为不在范围**：用户创建或用户编辑的 agent；一个管理 agent 注册表的
-  GUI；远程通道；超出 gateway 现有门控与审批通道的每 agent 能力作用域；对话摘要、
-  搜索与导出。
+  GUI；超出 gateway 现有门控与审批通道的每 agent 能力作用域；对话摘要与导出；以及
+  过去外部 agent 会话的恢复/继续（由 ADR-022 缓做）。跨 agent transcript 的**搜索与
+  只读浏览**按 ADR-022 在范围内；远程通道由 Spec 009 单独交付。
