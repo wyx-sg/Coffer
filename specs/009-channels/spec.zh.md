@@ -193,6 +193,56 @@ disable）是这个 feature 可运维的根基。
 
 ---
 
+### User Story 9 — 从 chat 切换 agent、workspace 与 model（优先级：P2）
+
+owner 不离开 IM app 就能操控入口。`/agent codex` 把会话切到 Codex；`/cwd
+my-project` 把编码 agent 指向一个预授权 workspace；`/model opus` 改 model。切换
+agent 或 workspace 会开一个 pin 到新选择的新会话（这两者对会话终身固定），且
+选择对后续消息与 `/new` 粘性保留；切换 model 在同会话下条 turn 生效。每个命令
+无参时报告当前值与可选项。owner 只能挑 operator 预先定义的 workspace——消息里
+的裸文件路径从不被采纳。
+
+**为何此优先级**：channel 是入口*管理者*，不是一根固定线。路由到所选 agent、在
+所选安全目录里、用所选 model，才让一个已配对的 chat 成为通往 vault 暴露的每个
+agent 的交换机——而 workspace allowlist 是那道边界，防止可远程触达的入口把 agent
+指向任意目录。
+
+**Independent Test**：用一个已配对 channel 和两个脚本化 provider，发
+`/agent <second>` 观察一个 pin 到它的新会话且下条消息由它回答；为已配置
+workspace 发 `/cwd <name>` 观察在该目录建的新会话；发 `/cwd /etc` 观察被拒；发
+`/model <name>` 观察下条 turn 用它。
+
+**Covering scenarios**:
+- /agent switches the agent and sticks
+- /agent rejects an unknown agent
+- /cwd selects a configured workspace and refuses a bare path
+- /model switches the model for the next turn
+
+---
+
+### User Story 10 — 知道谁驱动了什么、以及一个 turn 何时完成（优先级：P2）
+
+因为入口可远程触达，channel 消息驱动的每个 turn、owner 从 chat 回答的每个审批，
+都连同 channel、peer、agent 记入审计日志——回答「谁经哪个 channel 驱动了哪个
+agent、批准了什么」。又因为某些平台不能编辑消息、长桥接 turn 运行期间什么都不
+显示，每个 turn 都以一条推到 chat 的紧凑摘要收尾：done + 工具数、耗时、token，
+或错误，或停止。
+
+**为何此优先级**：入口管理者的两个无人认领的差异化点是一等 auth/审计与可靠的
+完成信号；二者必须在每个 channel 上为真，包括沉默的那些。
+
+**Independent Test**：从已配对 channel 驱动一个 turn，观察一条带 channel、peer、
+agent 的 turn-started 审计记录；回答一个审批提示，观察一条 approval-resolved
+审计记录；在不能编辑消息的 channel 上观察 turn 后的完成摘要消息。
+
+**Covering scenarios**:
+- a channel-driven turn is audited with channel, peer, and agent
+- an approval resolved from chat is audited
+- a completion summary is sent after every turn
+- a group member who is not the paired sender is ignored
+
+---
+
 ### Edge Cases
 
 - 一条恰好在上一个 turn 结束瞬间到达的消息会进入队列，而不是制造竞态：
@@ -254,16 +304,48 @@ disable）是这个 feature 可运维的根基。
   status / notify`。
 - **FR-012**: channel 事件都被审计：配对码签发、配对完成、通知已发送
   —— 与自动的资源生命周期审计并列。
+- **FR-013**: owner 从 chat 切换会话的 agent。`/agent` 无参时报告当前 agent
+  与注册表里可选的 agent key；`/agent <key>` 对 agent 注册表校验该 key，成功后
+  把它记为 peer 的粘性首选并开一个 pin 到它的新会话（已存在会话的 agent 不可
+  改），此后的消息与 `/new` 都用所选 agent，直到再次切换。未知 key 被拒绝并
+  列出合法 keys；不为任何 agent 增加 channel 侧代码。
+- **FR-014**: owner gate 校验发送者身份，而非只看会话身份。每条 inbound 信封
+  携带 `sender_id`（Telegram `from.id`、SeaTalk `employee_code`）；pairing 把它
+  记到 peer，一条 inbound 消息只有在 `chat_id` 匹配且（当 peer 有已存
+  `sender_id` 时）发送者匹配时才被接受。本要求之前配对的 peer（无已存
+  `sender_id`）退化为 chat-id-only 闸。在 FR-012 之外审计两个 channel 驱动事件：
+  一条 inbound 消息驱动的 turn（channel、peer、agent、conversation），与从 chat
+  解决的审批（channel、peer、工具、决定）。
+- **FR-015**: 每个 turn 后，channel 发一条紧凑的完成摘要作为新消息，与消息
+  编辑能力无关：成功时报告 done 标记 + 工具数、耗时、token 用量；失败的 turn
+  报告错误；被中断的 turn 报告停止。在不能编辑消息、且长桥接 turn 运行期间什么
+  都不显示的平台上，这就是 turn 结束信号。
+- **FR-016**: 一个 channel 声明一组命名 workspace（`{name, path}`），注册时各
+  校验为已存在目录，外加一个可选默认 workspace。`/cwd` 无参时列出 workspaces
+  与当前那个；`/cwd <name>` 选一个 workspace 并在其中开一个新会话（会话的工作
+  目录不可改），把它记为 peer 的粘性首选。channel 永不接受来自 inbound 消息的
+  裸文件路径——workspace 列表是从 channel 选取 agent 工作目录的唯一权威。路由到
+  桥接 agent 时用 peer 的粘性 workspace，无则默认 workspace；两者皆无时告知
+  owner 未配置 workspace。builtin agent 不需要 workspace。
+- **FR-017**: owner 从 chat 切换 model。`/model` 无参时报告当前 model；`/model
+  <name>` 对 builtin agent 把名字对 model registry 解析并设会话的 model 覆盖，
+  对桥接 agent 则存原始上游 model 串透传给 CLI。model 切换在同会话下条 turn
+  生效（model 每 turn 重读，不同于 agent 与工作目录）。非法 builtin model 对
+  registry 校验被拒；坏的桥接 model 串会以 CLI 自己的错误回传到 chat。
 
 ### Key Entities
 
 - **Channel** — 资源 `channel:<name>`；config = 类型、凭据 ref、默认
-  agent + 配置。
+  agent + 配置、命名 workspaces + 可选默认 workspace。
 - **ChannelPeer** — channel 的已配对 owner：`(resource, chat_id)`、显示
-  名、配对时间、指向活跃对话的指针。目前每个 channel 一个；以 chat 为键，
+  名、配对时间、指向活跃对话的指针、已配对发送者身份（`sender_id`），以及
+  粘性首选（所选 agent 与 workspace）。目前每个 channel 一个；以 chat 为键，
   使群聊将来可以直接成为新的 peer 行而无需改 schema。
+- **Workspace** — channel 上一个命名、预授权的工作目录（`{name, path}`）；从
+  该 channel 选取 agent 运行目录时的 allowlist。裸路径从不被 chat 接受。
 - **InboundMessage / OutboundMessage** — 每个 adapter 生产与消费的规范化
-  信封 (envelope)；内核永远看不到平台原始载荷。
+  信封 (envelope)；内核永远看不到平台原始载荷。inbound 为 owner gate 携带
+  发送者身份（`sender_id`）。
 - **ChannelCapabilities** — adapter 声明自己能做什么（编辑消息、交互
   按钮、typing indicator）；内核据此选择渲染与审批策略。
 - **PairingCode** — 内存态、一次性、按 channel；从不持久化。
@@ -284,6 +366,13 @@ disable）是这个 feature 可运维的根基。
   驱动 channel 来演示）。
 - **SC-005**: 下方每个 acceptance scenario 至少被一个测试覆盖；
   `make verify` 通过。
+- **SC-006**: 从一个已配对 chat，owner 能触达每个已注册 agent，每个都在一个
+  所选预授权 workspace 里、用一个所选 model，且一条 chat 消息绝不能把 agent
+  指向 operator 未预授权的目录（用驱动两个脚本化 provider 与一次被拒裸路径来
+  演示）。
+- **SC-007**: 每个 channel 驱动的 turn、每个从 chat 回答的审批，都能按 channel、
+  peer、agent 在审计日志里查到；且每个 turn——包括在不能编辑消息的 channel 上
+  ——都以一条 chat 里的完成摘要收尾（用不能编辑的假 adapter 来演示）。
 
 ## Acceptance Scenarios
 
@@ -452,6 +541,56 @@ disable）是这个 feature 可运维的根基。
 - **When** 用户经 REST 和 CLI 查询 status
 - **Then** adapter 运行状态、已配对 peer，以及（对 seatalk）回调端口和
   路径都被准确报告
+
+### Scenario: /agent switches the agent and sticks
+
+- **Given** 一个已配对 channel，并注册了第二个脚本化 agent
+- **When** peer 发 `/agent <second>` 然后发一条消息
+- **Then** 一个 pin 到第二个 agent 的新会话成为活跃会话，该消息由它回答，且
+  `/new` 复用它直到再次切换
+
+### Scenario: /agent rejects an unknown agent
+
+- **Given** 一个已配对 channel
+- **When** peer 发 `/agent nope`
+- **Then** channel 回复该 agent 未知并列出合法 keys，活跃会话不变
+
+### Scenario: /cwd selects a configured workspace and refuses a bare path
+
+- **Given** 一个配置了名为 `proj` 的 workspace 的已配对 channel
+- **When** peer 发 `/cwd proj`
+- **Then** 用该 workspace 的目录建一个新会话，且选择粘性保留
+- **And** 当 peer 发 `/cwd /etc` 时，channel 拒绝它，不在该目录建任何会话
+
+### Scenario: /model switches the model for the next turn
+
+- **Given** 一个处于活跃会话的已配对 channel
+- **When** peer 发 `/model <name>` 然后发一条消息
+- **Then** 下条 turn 在同会话里以所选 model 运行
+
+### Scenario: a channel-driven turn is audited with channel, peer, and agent
+
+- **Given** 一个已配对 channel
+- **When** peer 发一条驱动 turn 的消息
+- **Then** 一条审计记录写下 channel、peer、agent 与 conversation
+
+### Scenario: an approval resolved from chat is audited
+
+- **Given** 一个请求审批的脚本化 agent
+- **When** peer 回答审批提示
+- **Then** 一条审计记录写下 channel、peer、工具与决定
+
+### Scenario: a completion summary is sent after every turn
+
+- **Given** 一个在不能编辑消息的 adapter 上的已配对 channel
+- **When** 一个 turn 完成
+- **Then** 一条紧凑完成摘要被发到 chat 报告结果，且失败的 turn 报告错误
+
+### Scenario: a group member who is not the paired sender is ignored
+
+- **Given** 一个带已存发送者身份的已配对 peer
+- **When** 一条消息以相同 chat id 但不同 sender id 到达
+- **Then** 不发回复，也不启动 turn
 
 ## Assumptions
 
