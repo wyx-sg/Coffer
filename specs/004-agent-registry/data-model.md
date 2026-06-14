@@ -108,17 +108,29 @@ which is spec 007's domain):
 | `codex`       | `instructions`   | `~/.codex/AGENTS.md`               | `markdown` | `file`      |
 | `codex`       | `hooks`          | `~/.codex/hooks.json`              | `json`     | `file`      |
 | `cursor`      | `mcp`            | `~/.cursor/mcp.json`               | `json`     | `file`      |
+| `cursor`      | `rules`          | `~/.cursor/.cursorrules`           | `markdown` | `file`      |
+| `cursor`      | `instructions`   | `~/.cursor/AGENTS.md`              | `markdown` | `file`      |
 | `opencode`    | `config`         | `~/.config/opencode/opencode.json` | `json`     | `file`      |
 | `opencode`    | `instructions`   | `~/.config/opencode/AGENTS.md`     | `markdown` | `file`      |
+| `opencode`    | `subagents`      | `~/.config/opencode/agents/`       | `markdown` | `directory` |
+| `opencode`    | `commands`       | `~/.config/opencode/commands/`     | `markdown` | `directory` |
 | `openclaw`    | `config`         | `~/.openclaw/openclaw.json`        | `json`     | `file`      |
 | `hermes`      | `config`         | `~/.hermes/config.yaml`            | `yaml`     | `file`      |
 | `hermes`      | `instructions`   | `~/.hermes/SOUL.md`                | `markdown` | `file`      |
+| `hermes`      | `identity_user`  | `~/.hermes/USER.md`                | `markdown` | `file`      |
+| `hermes`      | `cron`           | `~/.hermes/cron/`                  | `markdown` | `directory` |
 
-(The allowlist for the agents added on top of Claude Code / Codex starts minimal
-— the MCP-bearing file plus an obvious instructions file — and grows as their
-other facets land. `global` always anchors to `$HOME` — Claude Code keeps
-`~/.claude.json` at
-the home root even when the config dir itself is overridden.)
+(The allowlist for the agents added on top of Claude Code / Codex covers each
+agent's config, instructions/identity, and managed directory surfaces and grows
+as their other facets land. Cursor carries the global `~/.cursor/.cursorrules`
+plus `AGENTS.md`; its per-project `.cursor/rules/*.mdc` are project-scoped, not
+config-dir files, so they stay out of the allowlist. OpenCode adds RW
+`agents/` and `commands/` directories. Hermes carries both identity files
+(`SOUL.md` + `USER.md`) and the RW `cron/` directory. OpenClaw stays
+config-only — its instructions/identity file is not reliably documented, so no
+instructions entry is added until confirmed. `global` always anchors to `$HOME`
+— Claude Code keeps `~/.claude.json` at the home root even when the config dir
+itself is overridden.)
 
 `~/.codex/auth.json` is deliberately excluded (credential/state, not a
 hand-edited config). `~/.claude.json` is included (per product decision) and
@@ -134,8 +146,10 @@ when `key` is not in the type's allowlist (drives the 404 + no-FS-access rule).
 
 An allowlisted entry with `kind=directory` lists its child files instead of
 carrying content; the directory on disk is the source of truth (derived, never
-stored). v1 directory entries: Claude Code `subagents` (`~/.claude/agents/`,
-one Markdown file per personal subagent, nested paths allowed).
+stored). Directory entries: Claude Code `subagents` (`~/.claude/agents/`, one
+Markdown file per personal subagent, nested paths allowed), OpenCode `subagents`
+(`~/.config/opencode/agents/`) and `commands` (`~/.config/opencode/commands/`),
+and Hermes `cron` (`~/.hermes/cron/`).
 
 `DirEntryInfo` — frozen dataclass for one child file:
 

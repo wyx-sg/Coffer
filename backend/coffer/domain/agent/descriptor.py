@@ -168,6 +168,14 @@ def _codex_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
 def _cursor_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     return (
         ConfigFileSpec("mcp", "MCP servers (mcp.json)", cfg / "mcp.json", ConfigFileFormat.JSON),
+        # Global ~/.cursor/.cursorrules — the per-project .cursor/rules/*.mdc are
+        # project-scoped, not config-dir files, so they stay out of the allowlist.
+        ConfigFileSpec(
+            "rules", "Rules (.cursorrules)", cfg / ".cursorrules", ConfigFileFormat.MARKDOWN
+        ),
+        ConfigFileSpec(
+            "instructions", "Instructions (AGENTS.md)", cfg / "AGENTS.md", ConfigFileFormat.MARKDOWN
+        ),
     )
 
 
@@ -179,12 +187,28 @@ def _opencode_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
         ConfigFileSpec(
             "instructions", "Instructions (AGENTS.md)", cfg / "AGENTS.md", ConfigFileFormat.MARKDOWN
         ),
+        ConfigFileSpec(
+            "subagents",
+            "Subagents (agents/)",
+            cfg / "agents",
+            ConfigFileFormat.MARKDOWN,
+            kind=ConfigFileKind.DIRECTORY,
+        ),
+        ConfigFileSpec(
+            "commands",
+            "Commands (commands/)",
+            cfg / "commands",
+            ConfigFileFormat.MARKDOWN,
+            kind=ConfigFileKind.DIRECTORY,
+        ),
     )
 
 
 def _openclaw_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     # openclaw.json is JSON5; in practice comment-free configs parse as JSON.
     # JSON5-specific syntax support is a follow-up if real configs need it.
+    # OpenClaw's instructions/identity surface is not reliably documented, so no
+    # instructions entry is added until the file is confirmed.
     return (
         ConfigFileSpec(
             "config", "Config (openclaw.json)", cfg / "openclaw.json", ConfigFileFormat.JSON
@@ -199,6 +223,16 @@ def _hermes_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
         ),
         ConfigFileSpec(
             "instructions", "Identity (SOUL.md)", cfg / "SOUL.md", ConfigFileFormat.MARKDOWN
+        ),
+        ConfigFileSpec(
+            "identity_user", "Identity (USER.md)", cfg / "USER.md", ConfigFileFormat.MARKDOWN
+        ),
+        ConfigFileSpec(
+            "cron",
+            "Cron jobs (cron/)",
+            cfg / "cron",
+            ConfigFileFormat.MARKDOWN,
+            kind=ConfigFileKind.DIRECTORY,
         ),
     )
 

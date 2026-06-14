@@ -215,7 +215,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 ### User Story 12 —— 管理目录型配置条目（优先级 P2）
 
-有些 agent 配置不是单个文件而是一个 prose 文件目录——Claude Code 的 `agents/` 目录下每个个人 subagent 一个 Markdown 文件。用户在配置文件 tab 展开这样的条目，看到其中的文件，打开编辑、新建或删除——校验、原子写入与 `.bak` 兜底与单文件条目完全一致。allowlist 还新增 Codex 的 `hooks.json`，并把 `memory` key 改名为 `instructions`（CLAUDE.md / AGENTS.md 是人写的指令，不是 agent 自写的记忆）。
+有些 agent 配置不是单个文件而是一个 prose 文件目录——Claude Code 的 `agents/` 目录下每个个人 subagent 一个 Markdown 文件，OpenCode 同时保留 `agents/`（subagents）与 `commands/`（slash 命令）两个目录，Hermes 保留一个 `cron/` 定时任务目录。用户在配置文件 tab 展开这样的条目，看到其中的文件，打开编辑、新建或删除——校验、原子写入与 `.bak` 兜底与单文件条目完全一致。allowlist 还新增 Codex 的 `hooks.json`；把 `memory` key 改名为 `instructions`（CLAUDE.md / AGENTS.md 是人写的指令，不是 agent 自写的记忆）；并把各 agent 的指令/身份面纳入 allowlist（Cursor 的全局 `.cursorrules` + `AGENTS.md`，Hermes 的 `SOUL.md` + `USER.md`）。
 
 **为什么是这个优先级**：subagent 定义正是 hub 模型希望「先可见、后可收编」的那类可共享 prose；今天它们完全不可见。
 
@@ -557,7 +557,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 **配置文件**
 
-- **FR-013**: 每个受支持 agent 类型 MUST 定义一份精选的配置文件 allowlist（在其能力清单记录中），每个条目携带稳定的 `key`、一个显示名、一个解析后的绝对路径与一个 `format`（`json`、`toml`、`yaml`、`markdown` 或 `text`）。Claude Code → `settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`（key 为 `instructions`）与 `agents/` 目录条目（FR-034）；Codex → `config.toml`、`AGENTS.md`（key 为 `instructions`）与 `hooks.json`；Cursor → `mcp.json`；OpenCode → `opencode.json`、`AGENTS.md`；OpenClaw → `openclaw.json`；Hermes → `config.yaml`、`SOUL.md`。新增 agent 的 allowlist 起步从简（承载 MCP 的文件加一个显而易见的指令文件），随其它能力落地再扩充。原 `memory` key 改名为 `instructions`——这些文件是人写的指令，区别于 agent 自写的记忆（spec 007 的领域）。
+- **FR-013**: 每个受支持 agent 类型 MUST 定义一份精选的配置文件 allowlist（在其能力清单记录中），每个条目携带稳定的 `key`、一个显示名、一个解析后的绝对路径与一个 `format`（`json`、`toml`、`yaml`、`markdown` 或 `text`）。Claude Code → `settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`（key 为 `instructions`）与 `agents/` 目录条目（FR-034）；Codex → `config.toml`、`AGENTS.md`（key 为 `instructions`）与 `hooks.json`；Cursor → `mcp.json`、`.cursorrules`（key 为 `rules`）、`AGENTS.md`（key 为 `instructions`）；OpenCode → `opencode.json`、`AGENTS.md` 以及 `agents/`（key 为 `subagents`）与 `commands/` 目录条目（FR-034）；OpenClaw → `openclaw.json`（其指令/身份文件未被可靠记录，确认前不添加）；Hermes → `config.yaml`、`SOUL.md`（key 为 `instructions`）、`USER.md`（key 为 `identity_user`）以及 `cron/` 目录条目（FR-034）。新增 agent 的 allowlist 覆盖各自的配置、指令/身份与受管目录面，随其它能力落地再扩充。原 `memory` key 改名为 `instructions`——这些文件是人写的指令，区别于 agent 自写的记忆（spec 007 的领域）。
 - **FR-014**: 用户 MUST 能列出一个 agent 的配置文件，并对每个文件给出其 key、显示名、路径、格式与存在性（文件存在时附带大小与修改时间）。
 - **FR-015**: 用户 MUST 能读取任一 allowlist 内配置文件的内容。不存在的文件读为空内容、`exists=false`，且读取不会创建它。
 - **FR-016**: 用户 MUST 能写入（保存）任一 allowlist 内配置文件的内容。写入前 MUST 按文件的 `format` 校验内容；畸形的 `json`/`toml` MUST 被拒绝（`unprocessable_entity`，422）且磁盘文件保持不变。`markdown`/`text` 文件接受任意内容。
