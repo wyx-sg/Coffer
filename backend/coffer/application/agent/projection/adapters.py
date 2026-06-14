@@ -13,6 +13,17 @@ the memory substrate stays agent-agnostic (FR-014).
 - **Codex** → ``RENDER``: a marker-fenced managed block in ``<project>/AGENTS.md``
   (project) and ``~/.codex/AGENTS.md`` (global); Codex native ``memories`` is
   disabled so no second copy accumulates.
+
+The three newer RENDER adapters (defined in ``new_agent_adapters`` and re-exported
+here) follow the same managed-block pattern but disable no native channel:
+
+- **OpenCode** → ``RENDER``: a managed block in ``<project>/AGENTS.md`` (project)
+  and ``~/.config/opencode/AGENTS.md`` (global).
+- **OpenClaw** → ``RENDER``: a managed block in ``<project>/MEMORY.md`` (project)
+  and ``~/.openclaw/MEMORY.md`` (global); OpenClaw's ``memory/*.md`` index is
+  left untouched.
+- **Hermes** → ``RENDER``: one bounded managed-block file per scope inside the
+  global ``memories/`` store (``coffer-global.md`` / ``coffer-<slug>.md``).
 """
 
 from __future__ import annotations
@@ -241,10 +252,22 @@ class NoneMemoryAdapter:
         return facts_markdown.encode("utf-8")
 
 
+# Re-export the newer RENDER adapters (defined in a sibling module to keep this
+# file under the size limit). The import lives at the bottom so ``claude_project_slug``
+# above is already defined when ``new_agent_adapters`` imports it back (no cycle).
+from coffer.application.agent.projection.new_agent_adapters import (  # noqa: E402
+    HermesMemoryAdapter,
+    OpenClawMemoryAdapter,
+    OpenCodeMemoryAdapter,
+)
+
 __all__ = [
     "AgentMemoryAdapter",
     "ClaudeCodeMemoryAdapter",
     "CodexMemoryAdapter",
+    "HermesMemoryAdapter",
     "NoneMemoryAdapter",
+    "OpenClawMemoryAdapter",
+    "OpenCodeMemoryAdapter",
     "claude_project_slug",
 ]

@@ -9,6 +9,9 @@ from coffer.application.agent.projection.adapters import (
     AgentMemoryAdapter,
     ClaudeCodeMemoryAdapter,
     CodexMemoryAdapter,
+    HermesMemoryAdapter,
+    OpenClawMemoryAdapter,
+    OpenCodeMemoryAdapter,
     claude_project_slug,
 )
 from coffer.application.agent.projection.engine import ProjectionEngine, default_adapters
@@ -30,7 +33,10 @@ __all__ = [
     "CanonicalMemory",
     "ClaudeCodeMemoryAdapter",
     "CodexMemoryAdapter",
+    "HermesMemoryAdapter",
     "MemoryLayer",
+    "OpenClawMemoryAdapter",
+    "OpenCodeMemoryAdapter",
     "ProjectionEngine",
     "ProjectionFs",
     "ProjectionMode",

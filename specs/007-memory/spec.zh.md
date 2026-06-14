@@ -198,6 +198,24 @@
 - **When** Coffer 建立投影，
 - **Then** 这些文件先被合并进规范化 store，然后该目录被替换为 symlink —— 没有任何文件被静默覆盖。
 
+### Scenario: memory renders a managed block into OpenCode AGENTS.md
+
+- **Given** 一个 OpenCode agent，
+- **When** 投影运行，
+- **Then** `~/.config/opencode/AGENTS.md`（global）或 `<project>/AGENTS.md`（project）获得一个承载渲染事实的 managed block，标记之外的内容不被触碰，移除时只剥除该块。
+
+### Scenario: memory renders a managed block into OpenClaw MEMORY.md
+
+- **Given** 一个 OpenClaw agent，
+- **When** 投影运行，
+- **Then** `~/.openclaw/MEMORY.md`（global）或 `<project>/MEMORY.md`（project）获得一个承载渲染事实的 managed block，OpenClaw 自身的 `memory/*.md` 索引不被触碰。
+
+### Scenario: memory renders a managed block into a Hermes memories file
+
+- **Given** 一个 Hermes agent，
+- **When** 投影运行，
+- **Then** Coffer 在 `~/.hermes/memories/` 下按 scope 各持有一个有界文件（global 为 `coffer-global.md`，project 为 `coffer-<slug>.md`），事实写在 managed 标记之间，尊重 Hermes 的单文件大小上限。
+
 ### Scenario: user adds a fact
 
 - **Given** 一个记忆 store，
@@ -276,6 +294,7 @@
 - **FR-011**：`AgentMemoryAdapter`（随 agent driver 而非 memory kind）MUST 声明 `projection_mode` 为 `SYMLINK`、`RENDER` 或 `NONE`，投影引擎 MUST 据此分派。新增一个 agent MUST 只需新增一个 adapter —— 不改动 memory 底座。
 - **FR-012**：对 Claude Code，project 层 MUST 把规范化项目记忆目录作为 **目录 symlink** 投影进 `~/.claude/projects/<slug>/memory/`（双向；auto-memory 保持开启）。若那里已存在真实记忆目录，Coffer MUST 先把其文件合并进规范化 store，再替换为 symlink —— 绝不静默覆盖。
 - **FR-013**：对 Codex，Coffer MUST 把事实渲染进 `<project>/AGENTS.md`（project 层）与 `~/.codex/AGENTS.md`（global 层）中带标记栅栏的 managed block `<!-- coffer:memory:start (managed, do not edit) -->…<!-- coffer:memory:end -->`，MUST 不触碰标记之外的内容，MUST 幂等重渲染，并 MUST 禁用 Codex 原生 `memories`，使第二份副本不累积。
+- **FR-013a**：OpenCode、OpenClaw、Hermes MUST 经 `RENDER` managed block 投影（标记与 FR-013 一致），不触碰标记之外的内容并幂等重渲染。OpenCode 渲染进 `<project>/AGENTS.md`（project）与 `~/.config/opencode/AGENTS.md`（global）。OpenClaw 渲染进 `<project>/MEMORY.md`（project）与 `~/.openclaw/MEMORY.md`（global），只拥有 managed block（其 `memory/*.md` 索引不被触碰）。Hermes 在其 `memories/` store 内按 scope 各持有一个有界 managed-block 文件 —— `~/.hermes/memories/coffer-global.md`（global）与 `~/.hermes/memories/coffer-<slug>.md`（project）—— 以尊重单文件大小上限。Cursor 投影 N/A（Cursor 在 2.1 移除了记忆功能）。
 - **FR-014**：adapter（agent 层）MUST 执行所有原生文件改动；memory 底座 MUST 只提供规范化文件加已渲染 markdown，保持 memory 与 agent 无关、L1 config 边界干净。
 
 **通过 MCP 集成 agent**

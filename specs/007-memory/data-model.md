@@ -10,16 +10,16 @@ Entities, ports, the unified SQLite schema (shared with the knowledge base), and
 
 Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "memory"`. Shares the retrieval-mode vocabulary and embedding semantics with the KB face; the field layout deliberately differs — see below.
 
-| Field                      | Type                                       | Notes                                                                                    |
-| -------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| `retrieval_modes`          | `list[Literal["grep","keyword","vector"]]` | Enabled modes. Default `["grep","keyword"]` (zero config, offline). `vector` is opt-in.  |
-| `default_mode`             | `Literal["grep","keyword","vector"]`       | Default `"keyword"`.                                                                     |
-| `embedding_provider`       | `str \| None`                              | OpenAI-compatible provider id (e.g. `openai`, `voyage`, `local`). Required for `vector`. |
-| `embedding_model`          | `str \| None`                              | e.g. `bge-m3` (local) or a cloud model. Required for `vector`.                           |
-| `embedding_base_url`       | `str \| None`                              | Override base URL for OpenAI-compatible providers.                                       |
-| `embedding_credential_ref` | `str \| None`                              | Keychain ref for the embedding API key (never plaintext).                                |
+| Field                      | Type                                       | Notes                                                                                              |
+| -------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `retrieval_modes`          | `list[Literal["grep","keyword","vector"]]` | Enabled modes. Default `["grep","keyword"]` (zero config, offline). `vector` is opt-in.            |
+| `default_mode`             | `Literal["grep","keyword","vector"]`       | Default `"keyword"`.                                                                               |
+| `embedding_provider`       | `str \| None`                              | OpenAI-compatible provider id (e.g. `openai`, `voyage`, `local`). Required for `vector`.           |
+| `embedding_model`          | `str \| None`                              | e.g. `bge-m3` (local) or a cloud model. Required for `vector`.                                     |
+| `embedding_base_url`       | `str \| None`                              | Override base URL for OpenAI-compatible providers.                                                 |
+| `embedding_credential_ref` | `str \| None`                              | Keychain ref for the embedding API key (never plaintext).                                          |
 | `embedding_dimensions`     | `int`                                      | Default `768`; range `1–8192`. Drives the per-store `vec_chunks` table width; carried on the wire. |
-| `max_fact_chars`           | `int`                                      | Default `8192`; range `64–32768`. Mutable.                                               |
+| `max_fact_chars`           | `int`                                      | Default `8192`; range `64–32768`. Mutable.                                                         |
 
 The embedding model is **mutable** — changing it re-embeds the store (files are truth). No immutability lock.
 
@@ -59,13 +59,13 @@ class ResolvedScope:
 
 Frozen dataclass; recall result.
 
-| Field    | Type       | Notes                                                          |
-| -------- | ---------- | -------------------------------------------------------------- |
-| `id`     | `str`      | Fact (document) id.                                            |
-| `text`   | `str`      | Fact body / matched passage.                                   |
-| `score`  | `float`    | Per-store relevance score (kept on the wire; see RRF below).   |
-| `source` | `str`      | `<scope>:<fact file path>` of the source fact file.            |
-| `time`   | `datetime` | `updated_at` of the fact.                                      |
+| Field    | Type       | Notes                                                        |
+| -------- | ---------- | ------------------------------------------------------------ |
+| `id`     | `str`      | Fact (document) id.                                          |
+| `text`   | `str`      | Fact body / matched passage.                                 |
+| `score`  | `float`    | Per-store relevance score (kept on the wire; see RRF below). |
+| `source` | `str`      | `<scope>:<fact file path>` of the source fact file.          |
+| `time`   | `datetime` | `updated_at` of the fact.                                    |
 
 Cross-store recall merges per-store hit lists by **reciprocal rank fusion** (k=60): raw scores across stores/modes are not comparable (flipped bm25 is unbounded, vector ≤ 1, grep is flat), so RRF ranks by per-store position — each hit keeps its original score, only the merged ORDER comes from the fusion. `grep` recall is served for real: ripgrep over the store's fact files (essential for content FTS5 cannot tokenize, e.g. CJK). Store names are validated (`global` | `project-<26-char ULID>`): a well-formed name lazily provisions its store; anything else 404s.
 
@@ -183,10 +183,14 @@ release target tags and pushes atomically.
 
 ## Native projection targets (owned by the agent adapter, not the substrate)
 
-| Agent       | Project layer                                               | Global layer                            |
-| ----------- | ----------------------------------------------------------- | --------------------------------------- |
-| Claude Code | SYMLINK canonical dir → `~/.claude/projects/<slug>/memory/` | RENDER block into `~/.claude/CLAUDE.md` |
-| Codex       | RENDER block into `<project>/AGENTS.md`; disable `memories` | RENDER block into `~/.codex/AGENTS.md`  |
+| Agent       | Project layer                                               | Global layer                                            |
+| ----------- | ----------------------------------------------------------- | ------------------------------------------------------- |
+| Claude Code | SYMLINK canonical dir → `~/.claude/projects/<slug>/memory/` | RENDER block into `~/.claude/CLAUDE.md`                 |
+| Codex       | RENDER block into `<project>/AGENTS.md`; disable `memories` | RENDER block into `~/.codex/AGENTS.md`                  |
+| OpenCode    | RENDER block into `<project>/AGENTS.md`                     | RENDER block into `~/.config/opencode/AGENTS.md`        |
+| OpenClaw    | RENDER block into `<project>/MEMORY.md`                     | RENDER block into `~/.openclaw/MEMORY.md`               |
+| Hermes      | RENDER block into `~/.hermes/memories/coffer-<slug>.md`     | RENDER block into `~/.hermes/memories/coffer-global.md` |
+| Cursor      | N/A (memory removed in Cursor 2.1)                          | N/A (memory removed in Cursor 2.1)                      |
 
 Managed block markers (Next.js / claude-mem precedent):
 
@@ -240,12 +244,12 @@ Transcript distillation is a **producer of memory facts** — it uses the existi
 
 The one-shot LLM call returns a JSON array of insights, each with a `type` drawn from a closed vocabulary:
 
-| `type` | Meaning |
-| --- | --- |
-| `decision` | A deliberate architectural or implementation choice made during the session. |
-| `gotcha` | A non-obvious failure mode, trap, or constraint discovered during the session. |
+| `type`       | Meaning                                                                          |
+| ------------ | -------------------------------------------------------------------------------- |
+| `decision`   | A deliberate architectural or implementation choice made during the session.     |
+| `gotcha`     | A non-obvious failure mode, trap, or constraint discovered during the session.   |
 | `convention` | A project-specific practice or style rule that should be followed going forward. |
-| `todo` | An explicit action item or open question that was not resolved in the session. |
+| `todo`       | An explicit action item or open question that was not resolved in the session.   |
 
 Each insight becomes a `MemoryFact` with `actor="agent"` (written by automated distillation, not by a human) and the `type` stored in `metadata.type`.
 
