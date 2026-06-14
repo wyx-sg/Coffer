@@ -6,7 +6,6 @@
 // derived helpers (run search by mode, select a doc, confirm-then-delete,
 // upload + duplicate-replace retry).
 import { useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/errors";
@@ -33,7 +32,6 @@ import {
 const DOCS_PAGE_SIZE = 100;
 
 export function useKnowledgeBaseDetail(name: string) {
-  const { t } = useTranslation();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,6 +46,7 @@ export function useKnowledgeBaseDetail(name: string) {
 
   const [showSettings, setShowSettings] = useState(false);
   const [lastFile, setLastFile] = useState<File | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   // Documents are paged so a large KB doesn't load all at once; the tree shows a
   // "Load more" affordance once more documents exist than are loaded.
@@ -148,11 +147,15 @@ export function useKnowledgeBaseDetail(name: string) {
     setSelectedId(id);
     setEditing(false);
   };
+  // Open the styled confirmation dialog (no native window.confirm). The page
+  // renders <ConfirmDialog open={deleteOpen} .../> and calls performDelete.
   const confirmDelete = () => {
-    if (!selectedId) return;
-    const title = docDetailQuery.data?.title ?? selectedId;
-    if (window.confirm(t("knowledgeBases.detail.deleteConfirm", { title }))) del.mutate(selectedId);
+    if (selectedId) setDeleteOpen(true);
   };
+  const performDelete = () => {
+    if (selectedId) del.mutate(selectedId, { onSuccess: () => setDeleteOpen(false) });
+  };
+  const deleteTitle = docDetailQuery.data?.title ?? selectedId ?? "";
   const startEdit = () => {
     setEditText(docDetailQuery.data?.markdown ?? "");
     setEditing(true);
@@ -213,6 +216,10 @@ export function useKnowledgeBaseDetail(name: string) {
     runSearch,
     selectDoc,
     confirmDelete,
+    performDelete,
+    deleteOpen,
+    setDeleteOpen,
+    deleteTitle,
     startEdit,
     cancelEdit,
     saveEdit,

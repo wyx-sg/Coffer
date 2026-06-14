@@ -10,6 +10,7 @@ import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/lib/api/errors";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { KnowledgeBaseDetailHeader } from "./KnowledgeBaseDetailHeader";
 import { KnowledgeBaseDocTree } from "./KnowledgeBaseDocTree";
 import { KnowledgeBaseDocViewer } from "./KnowledgeBaseDocViewer";
@@ -107,6 +108,15 @@ export function KnowledgeBaseDetailPage() {
       </div>
 
       <input ref={kb.fileInputRef} type="file" className="hidden" onChange={kb.handleFileChange} />
+
+      <ConfirmDialog
+        open={kb.deleteOpen}
+        onOpenChange={kb.setDeleteOpen}
+        title={t("knowledgeBases.detail.deleteConfirm", { title: kb.deleteTitle })}
+        confirmLabel={kb.del.isPending ? t("common.deleting") : t("common.delete")}
+        pending={kb.del.isPending}
+        onConfirm={kb.performDelete}
+      />
     </div>
   );
 }
