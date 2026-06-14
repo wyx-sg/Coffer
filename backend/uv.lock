@@ -393,7 +393,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "claude-agent-sdk", specifier = ">=0.2,<0.3" },
     { name = "cryptography", specifier = ">=42.0" },
-    { name = "fastapi", specifier = ">=0.136.3" },
+    { name = "fastapi", specifier = ">=0.136.3,!=0.137.0" },
     { name = "fastembed", marker = "extra == 'local-embeddings'", specifier = ">=0.3" },
     { name = "grimp", marker = "python_full_version == '3.14.*' and platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'dev'", specifier = "<4" },
     { name = "httpx", specifier = ">=0.27" },

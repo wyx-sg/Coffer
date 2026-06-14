@@ -87,7 +87,9 @@
 
 **为什么是这个优先级**：agent 在本地对话记录中积累了机构知识，这些知识原本孤立于每个会话、对其他 agent 不可见。提炼是挖掘这些知识最无侵入性的机制：它产出标准 memory 事实，免费继承跨 agent 共享和多机同步能力。它是 P2 而非 P1，因为核心共享 memory 流程（Story 1–3）必须先就位 —— 提炼是在其之上叠加的能力。完整决策依据和被否决的备选方案见 [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.zh.md)。
 
-**独立可测**：在某个 agent 配置目录下至少有一条 Claude Code 或 Codex 对话记录的项目里，运行 `coffer transcript distill <agent> --project <path> --dry-run`，观察到至少一条洞察被打印出来，但没有任何事实被写入磁盘。然后不带 `--dry-run` 再运行，通过 `coffer memory recall <store> "<topic>"` 确认：至少一条提炼事实现在可被召回，携带 `actor="agent"` 和非空的 `origin_session_id`，且不包含工具调用载荷、文件内容或疑似密钥的字符串。
+**支持的对话记录读取器**：提炼通过版本化、防御式的 per-agent 读取器读取每个 agent 的原生本地存储。**Claude Code** 与 **Codex** 读取 agent 配置目录下每会话一个的 `.jsonl` 文件；**OpenCode** 读取 XDG data 目录下的多文件 JSON 存储树（`~/.local/share/opencode/storage/{project,session,message,part}`），将记录拼接成会话，工作目录取自 project 记录。**Cursor**、**OpenClaw**、**Hermes** 的读取器被推迟：它们的格式当前无法可靠地用于项目作用域提炼 —— Cursor 的 `agent-transcripts/*.jsonl` 是临时的（重启即清空），耐久状态在内部 `vscdb` SQLite 中；OpenClaw 的会话格式无文档；Hermes 的会话是跨平台 chat 会话、不记录工作目录，无法按项目作用域归类。对这些 agent 提炼会返回明确的「不支持的 agent」错误，而非臆测。
+
+**独立可测**：在某个项目里、其原生存储中至少有一条 Claude Code、Codex 或 OpenCode 对话记录，运行 `coffer transcript distill <agent> --project <path> --dry-run`，观察到至少一条洞察被打印出来，但没有任何事实被写入磁盘。然后不带 `--dry-run` 再运行，通过 `coffer memory recall <store> "<topic>"` 确认：至少一条提炼事实现在可被召回，携带 `actor="agent"` 和非空的 `origin_session_id`，且不包含工具调用载荷、文件内容或疑似密钥的字符串。
 
 **代表性场景**：
 
@@ -260,7 +262,7 @@
 
 ### Scenario: distill-transcript-to-memory
 
-- **Given** 一个已注册的 agent，且其本地对话记录目录下至少有一个含自然语言对话轮次的 `.jsonl` 文件，
+- **Given** 一个已注册的 agent（Claude Code、Codex 或 OpenCode），且其原生存储中至少有一条含自然语言对话轮次的对话记录，
 - **When** 调用 `POST /api/v1/agents/{name}/transcripts/distill`（或 CLI 中的 `coffer transcript distill <agent>`），且 `dry_run=false`，
 - **Then** 对话记录被读取，工具调用载荷和密钥在 LLM 调用前被清洗，LLM 返回结构化洞察，每条洞察被写为项目作用域的 memory 事实，携带 `actor="agent"`、`origin_session_id=<对话记录会话 id>`，且 `type` ∈ `{decision, gotcha, convention, todo}`；任何已持久化事实中均不出现原始对话内容；`coffer__recall` 此后返回这些新事实；当 `dry_run=true` 时，洞察被返回但不向磁盘写入任何内容。
 

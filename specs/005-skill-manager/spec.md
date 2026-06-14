@@ -201,8 +201,8 @@ Per-skill bindings are precise but chatty: every new skill must be enabled agent
 - **Unmanaged entry is a symlink pointing outside the master store**: Listed as unmanaged-but-not-adoptable (adopting would move someone else's source of truth); the user can follow the link's target manually or delete the link.
 - **Unmanaged skill without a valid SKILL.md**: Listed with `valid=false` and the reason; it can be deleted but not adopted until it validates.
 - **Follow-all enabled while a target path holds a non-Coffer folder of the same name**: That skill is reported as a conflict (same rule as FR-011) instead of being overwritten; the rest of the master store is delivered normally.
-- **Per-agent delivery target**: Folder-mode agents deliver into the skill subpath under their config dir — `<config_dir>/skills/<name>` for Claude Code, Codex, and OpenCode; `<config_dir>/workspace/skills/<name>` for OpenClaw. Each agent's mode and subpath come from the capability manifest, so adding an agent's delivery target is data, not a new branch.
-- **Agent whose delivery mode is not yet wired (Cursor, Hermes)**: Cursor (`rules_mdc`) and Hermes (`external_dir`) are recognized delivery-mode extension points whose end-to-end delivery is a separate follow-up. Enabling a skill for such an agent is refused with an explicit "delivery mode not yet supported" error (HTTP 422) before any filesystem write, rather than mis-delivering via the folder model; the follow / relink reconcilers skip these agents so registration and policy changes still succeed.
+- **Per-agent delivery target**: Folder-mode agents deliver into the skill subpath under their config dir — `<config_dir>/skills/<name>` for Claude Code, Codex, and OpenCode; `<config_dir>/workspace/skills/<name>` for OpenClaw. Hermes (`external_dir`) folder-delivers into a Coffer-owned external directory (`~/.coffer/agent-skills/<agent>/<name>`) that Coffer registers under `skills.external_dirs` in the agent's `config.yaml`. Each agent's mode, subpath, and registration come from the capability manifest, so adding an agent's delivery target is data, not a new branch.
+- **Agent whose delivery mode is not yet wired (Cursor)**: Cursor's `rules_mdc` is a recognized delivery-mode extension point whose end-to-end delivery is deferred — its `.mdc` rules are project-scoped, with no officially-supported global/agent-level `.mdc` location to deliver an agent-wide skill into (global User Rules live in Cursor's internal settings, not files). Enabling a skill for such an agent is refused with an explicit "delivery mode not yet supported" error (HTTP 422) before any filesystem write, rather than mis-delivering via the folder model; the follow / relink reconcilers skip these agents so registration and policy changes still succeed.
 
 ## Acceptance Scenarios
 
@@ -394,9 +394,21 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the skill is delivered to the agent,
 - **Then** it lands at `<config_dir>/workspace/skills/<name>` (resolving to the master folder) and not at the flat `skills/` location.
 
+### Scenario: deliver a skill to an external-dir agent and register the directory
+
+- **Given** a registered Hermes agent (`external_dir` delivery) and an imported master skill,
+- **When** the skill is delivered to the agent,
+- **Then** the skill folder lands in a Coffer-owned external directory (resolving to the master folder) — not under the agent's own `skills/` — and that directory is registered under `skills.external_dirs` in the agent's `config.yaml`, preserving the user's other config keys/comments and de-duplicating by resolved path.
+
+### Scenario: deregister an external-dir agent's directory when its last skill is removed
+
+- **Given** a Hermes agent whose Coffer-owned external directory is registered in its `config.yaml`,
+- **When** the last delivered skill is disabled (or the agent is deleted),
+- **Then** the Coffer entry is removed from `skills.external_dirs` (pruning the now-empty list) while any directories the user added themselves are left intact.
+
 ### Scenario: enabling a skill for a non-folder-delivery agent fails cleanly
 
-- **Given** a registered agent whose skill-delivery mode is not folder-based (e.g. Cursor or Hermes),
+- **Given** a registered agent whose skill-delivery mode is not folder-based (Cursor's `rules_mdc`),
 - **When** the user enables a skill for that agent,
 - **Then** the request is rejected with `unprocessable_entity` (422) before any filesystem write, and follow-driven auto-delivery skips the agent without error.
 

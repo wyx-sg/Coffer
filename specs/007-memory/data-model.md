@@ -278,16 +278,16 @@ release checks and can leave the repo in a half-tagged state.
 
 ### Scrub-before-LLM invariant
 
-The raw `.jsonl` transcript is **never persisted** and never reaches the fact body. Before the LLM call:
+The raw transcript is **never persisted** and never reaches the fact body. Before the LLM call:
 
-- All `tool_use` and `tool_result` blocks are dropped.
+- All `tool_use` / `tool_result` blocks (Claude/Codex) and non-`text` parts — tool, reasoning, file, step (OpenCode) — are dropped.
 - File-content passages and command output embedded in assistant turns are dropped.
 - Common secret patterns (API keys, tokens, PEM blocks) are redacted by a regex scrubber.
 - Long blobs are truncated.
 
 Only scrubbed natural-language text (user + assistant prose) is sent to the LLM. Only the distilled insight text is written to the fact store. Neither the raw transcript nor the scrubbed intermediate text is stored anywhere in `~/.coffer/`.
 
-Coffer reads `~/.claude/projects/` and `~/.codex/sessions/` but **never writes to them** in this flow — Spec 004's read-only invariant is fully preserved.
+Coffer reads `~/.claude/projects/`, `~/.codex/sessions/`, and OpenCode's storage tree (`~/.local/share/opencode/storage/`) but **never writes to them** in this flow — Spec 004's read-only invariant is fully preserved. Readers for Cursor / OpenClaw / Hermes transcripts are deferred (see spec.md, US "distill transcript to memory"): their stores are ephemeral, undocumented, or carry no working directory to scope facts by.
 
 ### Audit
 

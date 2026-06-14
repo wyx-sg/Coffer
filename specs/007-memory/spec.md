@@ -107,8 +107,22 @@ memory flow (Stories 1–3) must work first — distillation is additive on top
 of it. See [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.md)
 for the full decision rationale and rejected alternatives.
 
-**Independent Test**: From a project with at least one Claude Code or Codex
-transcript under the agent's config dir, run
+**Supported transcript readers**: distillation reads each agent's native local
+store through a versioned, defensive per-agent reader. **Claude Code** and
+**Codex** read one `.jsonl` file per session under the agent's config dir;
+**OpenCode** reads its multi-file JSON storage tree under the XDG data dir
+(`~/.local/share/opencode/storage/{project,session,message,part}`), joining the
+records into sessions with the project working directory taken from the project
+record. Readers for **Cursor**, **OpenClaw**, and **Hermes** are deferred: their
+formats can't be read reliably for project-scoped distillation today — Cursor's
+`agent-transcripts/*.jsonl` are ephemeral (emptied on restart) with the durable
+state in an internal `vscdb` SQLite; OpenClaw's session format is undocumented;
+and Hermes sessions are cross-platform chat sessions that record no working
+directory, so they can't be scoped to a project. Distillation for those agents
+returns an explicit "unsupported agent" error rather than guessing.
+
+**Independent Test**: From a project with at least one Claude Code, Codex, or
+OpenCode transcript in the agent's native store, run
 `coffer transcript distill <agent> --project <path> --dry-run` and observe
 at least one insight printed without any fact being written to disk. Then run
 without `--dry-run` and confirm via `coffer memory recall <store> "<topic>"`
@@ -287,8 +301,8 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 ### Scenario: distill-transcript-to-memory
 
-- **Given** a registered agent with at least one local transcript `.jsonl` file
-  containing natural-language conversation turns,
+- **Given** a registered agent (Claude Code, Codex, or OpenCode) with at least
+  one local transcript in its native store containing natural-language turns,
 - **When** `POST /api/v1/agents/{name}/transcripts/distill` is called (or
   `coffer transcript distill <agent>` in the CLI) with `dry_run=false`,
 - **Then** the transcript is read, tool payloads and secrets are scrubbed before

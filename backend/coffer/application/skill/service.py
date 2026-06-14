@@ -17,7 +17,9 @@ from typing import TYPE_CHECKING
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
+from coffer.application.skill import delivery_ops
 from coffer.application.skill.ports import (
+    ExternalDirRegistrarPort,
     MasterStorePort,
     SkillBindingRepoPort,
     SourceFetcherPort,
@@ -33,6 +35,7 @@ from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.skill.binding import BindingState
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.drift import DriftReport
+from coffer.domain.skill.external_dir import ExternalDirRegistration
 from coffer.domain.skill.source import GitSource, LocalImportSource
 from coffer.domain.skill.validator import (
     ValidationFailure,
@@ -60,17 +63,14 @@ AgentScanLocationsResolver = Callable[[Resource], list[pathlib.Path]]
 # from AgentConfig — same Contract 5 seam as above.
 AgentSkillPolicyResolver = Callable[[Resource], tuple[bool, list[str]]]
 
-# Resolver for an agent's skill-delivery MODE (spec 005). Returns a plain
-# ``str`` (the SkillDeliveryMode value, e.g. ``"folder"``) — deliberately a
-# bare string, not the enum, so this module never imports agent-kind /
-# descriptor code (Contract 5). Built at the composition root from the agent's
-# capability descriptor.
+# Resolver for an agent's skill-delivery MODE (spec 005): a plain ``str`` (the
+# SkillDeliveryMode value, never the enum, so this layer imports no agent-kind
+# code — Contract 5). Built at the composition root from the descriptor.
 AgentSkillDeliveryResolver = Callable[[Resource], str]
 
-# The only delivery mode the folder-symlink model implements today. Compared as
-# a literal (not an enum import) to keep Contract 5 — the agent descriptor owns
-# the SkillDeliveryMode enum; this layer only sees the resolved string value.
-_FOLDER_DELIVERY = "folder"
+# Resolver for an agent's external-dir registration (spec 005 — Hermes): an
+# ``ExternalDirRegistration`` for EXTERNAL_DIR agents, ``None`` otherwise.
+AgentExternalRegistrationResolver = Callable[[Resource], ExternalDirRegistration | None]
 
 
 @dataclass(frozen=True)
@@ -98,6 +98,8 @@ class SkillService:
         agent_scan_locations_resolver: AgentScanLocationsResolver | None = None,
         agent_skill_policy_resolver: AgentSkillPolicyResolver | None = None,
         agent_skill_delivery_resolver: AgentSkillDeliveryResolver | None = None,
+        external_dir_registrar: ExternalDirRegistrarPort | None = None,
+        agent_external_registration_resolver: AgentExternalRegistrationResolver | None = None,
         rmtree: Callable[[pathlib.Path], None] = shutil.rmtree,
     ) -> None:
         self._rs = resource_service
@@ -116,10 +118,12 @@ class SkillService:
         # Follow-policy resolver (FR-025). Optional: an unwired context falls
         # back to (True, []) — the pre-amendment trust-mode auto-bind.
         self._agent_skill_policy_resolver = agent_skill_policy_resolver
-        # Skill-delivery-mode resolver (spec 005). Optional: an unwired context
-        # (existing construction sites / tests) defaults to the folder model,
-        # preserving Claude Code / Codex / OpenCode / OpenClaw delivery.
+        # Skill-delivery-mode resolver (spec 005); unwired → folder model.
         self._agent_skill_delivery_resolver = agent_skill_delivery_resolver
+        # EXTERNAL_DIR delivery (spec 005 — Hermes): registrar edits the agent's
+        # config, resolver yields where/how; unwired → skip registration.
+        self._external_dir_registrar = external_dir_registrar
+        self._agent_external_registration_resolver = agent_external_registration_resolver
         self._rmtree = rmtree
 
     # ---------- imports ----------
@@ -242,20 +246,6 @@ class SkillService:
             return (True, [])
         return self._agent_skill_policy_resolver(agent)
 
-    def _resolve_agent_skill_delivery(self, agent: Resource) -> str:
-        """The agent's skill-delivery mode value (e.g. ``"folder"``).
-
-        Unwired contexts default to the folder model so existing construction
-        sites and tests keep delivering via symlink. Returned as a plain string
-        (Contract 5: this layer must not import the descriptor's enum).
-        """
-        if self._agent_skill_delivery_resolver is None:
-            return _FOLDER_DELIVERY
-        return self._agent_skill_delivery_resolver(agent)
-
-    def _is_folder_delivery(self, agent: Resource) -> bool:
-        return self._resolve_agent_skill_delivery(agent) == _FOLDER_DELIVERY
-
     async def apply_follow_for_agent(self, agent_name: str, *, actor: str = "system") -> None:
         """Reconcile an agent's deliveries with its follow policy.
 
@@ -292,10 +282,20 @@ class SkillService:
         agent = await self._rs.get(ref)
         self._unlink_all(await self._bindings.list_for_agent(agent.id))
         await self._bindings.delete_for_agent(agent.id)
+        # Agent + bindings gone — drop any external-dir registration in its config.
+        delivery_ops.deregister_external(self, agent)
 
     async def _cleanup_bindings_internal(self, *, skill_id: int) -> None:
-        self._unlink_all(await self._bindings.list_for_skill(skill_id))
+        bindings = await self._bindings.list_for_skill(skill_id)
+        affected_agent_ids = {b.agent_resource_id for b in bindings}
+        self._unlink_all(bindings)
         await self._bindings.delete_for_skill(skill_id)
+        # A removed skill may have been an external-dir agent's last one —
+        # reconcile each affected agent's registration.
+        for agent_id in affected_agent_ids:
+            agent = await self._get_agent_by_id(agent_id)
+            if agent is not None:
+                await delivery_ops.reconcile_external_registration(self, agent)
 
     def _unlink_all(self, bindings: list[BindingState]) -> None:
         """Best-effort symlink teardown for a list of bindings."""

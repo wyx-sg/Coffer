@@ -27,8 +27,11 @@ from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.scan import scan_locations
+from coffer.domain.agent.skill_delivery import SkillDeliveryMode
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.skill.external_dir import ExternalDirRegistration
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from coffer.infrastructure.skill.external_dir_registrar import YamlExternalDirRegistrar
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.source_fetcher import GitSourceFetcher
@@ -74,8 +77,35 @@ def wire_agent_and_skill_kinds(
     # skill_dir, scan locations (FR-022) and follow policy (FR-025) but
     # cannot import agent-kind code itself (Contract 5) — only this
     # composition root may bridge the two kinds.
+    # EXTERNAL_DIR agents (Hermes) don't receive skills in their own config dir;
+    # Coffer folder-delivers into an agent-named directory it owns and registers
+    # that dir in the agent's config. Keep it beside the master store.
+    external_skill_base = master_store.root.parent / "agent-skills"
+
     def _agent_skill_dir(r: Resource):  # type: ignore[no-untyped-def]
-        return AgentConfig.model_validate(r.config).resolved_skill_dir()
+        cfg = AgentConfig.model_validate(r.config)
+        if descriptor_for(cfg.type).skill_delivery_mode is SkillDeliveryMode.EXTERNAL_DIR:
+            return external_skill_base / r.name
+        return cfg.resolved_skill_dir()
+
+    def _agent_external_registration(r: Resource) -> ExternalDirRegistration | None:
+        cfg = AgentConfig.model_validate(r.config)
+        desc = descriptor_for(cfg.type)
+        if desc.skill_delivery_mode is not SkillDeliveryMode.EXTERNAL_DIR:
+            return None
+        # Hermes scans dirs listed under ``skills.external_dirs`` in its
+        # ``config.yaml``. Resolve the config file from the manifest so a custom
+        # config dir is honoured; fall back to the conventional name.
+        config_dir = cfg.resolved_config_dir()
+        config_file = next(
+            (s.path for s in desc.config_files(config_dir) if s.key == "config"),
+            config_dir / "config.yaml",
+        )
+        return ExternalDirRegistration(
+            config_path=config_file,
+            external_dir=external_skill_base / r.name,
+            container_keys=("skills", "external_dirs"),
+        )
 
     def _agent_scan_locations(r: Resource) -> list[pathlib.Path]:
         cfg = AgentConfig.model_validate(r.config)
@@ -103,6 +133,8 @@ def wire_agent_and_skill_kinds(
         agent_scan_locations_resolver=_agent_scan_locations,
         agent_skill_policy_resolver=_agent_skill_policy,
         agent_skill_delivery_resolver=_agent_skill_delivery,
+        external_dir_registrar=YamlExternalDirRegistrar(),
+        agent_external_registration_resolver=_agent_external_registration,
     )
 
     # Agent kind (spec 004-agent-registry). Detection is discovery-only (no

@@ -16,6 +16,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING
 
+from coffer.application.skill.delivery_ops import delivers_skill_folders
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
@@ -55,9 +56,10 @@ async def apply_follow_for_agent(*, service: SkillService, agent_name: str, acto
         agent = await service._rs.get(ResourceRef("agent", agent_name))
     except CofferError:
         return
-    # Non-folder agents (Cursor/Hermes) can't receive folder-symlink deliveries;
+    # Non-folder agents (Cursor's rules_mdc) can't receive folder deliveries;
     # skip reconciliation so registration / policy-change flows don't crash.
-    if not service._is_folder_delivery(agent):
+    # FOLDER and EXTERNAL_DIR (Hermes) agents follow the master library.
+    if not delivers_skill_folders(service, agent):
         return
     follow, exclusions = service._resolve_agent_skill_policy(agent)
     if not follow:
