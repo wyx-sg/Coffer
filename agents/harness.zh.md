@@ -11,6 +11,7 @@ Coffer 提交了一套 checked-in 的控制层，让 agent-facing harness 被强
 | `.claude/settings.json` | 权限（allow 安全命令、deny 破坏性命令）+ hook 接线。已提交、团队共享。 |
 | `.claude/hooks/auto_format.py` | PostToolUse（Edit/Write）—— 格式化改动的文件（`.py` 用 ruff，`.ts/.tsx/.js/.jsx/.css/.json/.md` 用 prettier）。尽力而为，绝不阻断。 |
 | `.claude/hooks/block_dangerous_bash.py` | PreToolUse（Bash）—— 拦截一小撮破坏性命令（递归删 root/home、force/直推保护分支、pipe-to-shell、裸写块设备）。 |
+| `.claude/hooks/verify_before_commit.py` | PreToolUse（Bash）—— 当 `git commit` 时 `make verify` 已 stale（源码相对上次通过的 verify 有变，按 `scripts/verify_stamp.py` 的内容指纹判定），要求确认。绝不硬阻塞；绝不弄坏 agent。 |
 | `.claude/hooks/session_context.py` | SessionStart —— 注入分支、worktree 状态、未提交文件数、session 协议提醒。 |
 
 ## Skills

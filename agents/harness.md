@@ -11,6 +11,7 @@ Coffer ships a checked-in control layer so the agent-facing harness is enforced,
 | `.claude/settings.json` | Permissions (allow safe commands, deny destructive ones) + hook wiring. Committed, team-shared. |
 | `.claude/hooks/auto_format.py` | PostToolUse on Edit/Write — formats the edited file (ruff for `.py`, prettier for `.ts/.tsx/.js/.jsx/.css/.json/.md`). Best-effort, never blocks. |
 | `.claude/hooks/block_dangerous_bash.py` | PreToolUse on Bash — denies a narrow set of destructive commands (recursive root/home delete, force/direct push to protected branches, pipe-to-shell, raw block-device writes). |
+| `.claude/hooks/verify_before_commit.py` | PreToolUse on Bash — when a `git commit` runs while `make verify` is stale (source changed since the last passing verify, per `scripts/verify_stamp.py`'s content fingerprint), asks for confirmation. Never hard-blocks; never breaks the agent. |
 | `.claude/hooks/session_context.py` | SessionStart — injects branch, worktree status, dirty-file count, and the session protocol reminder. |
 
 ## Skills
