@@ -25,6 +25,10 @@ from coffer.domain.distill.locations import (
 )
 from coffer.domain.distill.scrub import scrub_text
 from coffer.domain.distill.session import TranscriptMessage, TranscriptSession
+from coffer.infrastructure.distill.opencode_reader import (
+    opencode_storage_dir,
+    parse_opencode_storage,
+)
 
 log = logging.getLogger(__name__)
 
@@ -232,14 +236,34 @@ class FileTranscriptReader:
 
     Implements ``TranscriptReaderPort``; wired at the composition root.
     Reads Claude Code ``~/.claude/projects/**/*.jsonl`` and
-    Codex ``~/.codex/sessions/**/*.jsonl``.
+    Codex ``~/.codex/sessions/**/*.jsonl`` (one ``.jsonl`` per session), plus
+    OpenCode's multi-file JSON storage tree via a per-agent *tree source*.
     """
 
-    # Map agent_type_value → parser function
+    # Map agent_type_value → parser function (one .jsonl file per session).
     _PARSERS: ClassVar[dict[str, Callable[..., TranscriptSession]]] = {
         "claude_code": parse_claude_code,
         "codex": parse_codex,
     }
+
+    # Agents whose transcripts are NOT one-.jsonl-per-session but a storage tree
+    # joined across files. Each source ignores config_dir and reads its own
+    # (XDG-derived) location, returning fully-built sessions.
+    _TREE_SOURCES: ClassVar[dict[str, Callable[[], list[TranscriptSession]]]] = {
+        "opencode": lambda: parse_opencode_storage(opencode_storage_dir()),
+    }
+
+    def _tree_sessions(self, agent_type_value: str) -> list[TranscriptSession]:
+        source = self._TREE_SOURCES[agent_type_value]
+        try:
+            return source()
+        except Exception:
+            log.warning(
+                "transcript_reader: failed to read %s storage tree; skipping",
+                agent_type_value,
+                exc_info=True,
+            )
+            return []
 
     def _iter_files(self, agent_type_value: str, config_dir: str) -> Iterable[Path]:
         """Yield transcript file paths under the agent's sessions directory."""
@@ -263,6 +287,8 @@ class FileTranscriptReader:
         If the sessions directory does not exist, returns an empty list.
         Errors on individual files are logged and skipped.
         """
+        if agent_type_value in self._TREE_SOURCES:
+            return self._tree_sessions(agent_type_value)
         sessions: list[TranscriptSession] = []
         for path in self._iter_files(agent_type_value, config_dir):
             try:
@@ -279,6 +305,11 @@ class FileTranscriptReader:
         Raises KeyError if no matching session is found.
         Raises UnsupportedAgentTypeError for unknown agent types.
         """
+        if agent_type_value in self._TREE_SOURCES:
+            for session in self._tree_sessions(agent_type_value):
+                if session.session_id == session_id:
+                    return session
+            raise KeyError(f"No transcript session with id={session_id!r} for {agent_type_value!r}")
         for path in self._iter_files(agent_type_value, config_dir):
             try:
                 session = self._parse_file(agent_type_value, path)
