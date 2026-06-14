@@ -19,6 +19,12 @@ Coffer 的聊天平台（spec 008）。来自已配对 owner 的消息成为一�
 gate) —— 因此 N 个 channel 与 M 个 agent 的成本是 N + M，而永远不是
 N × M。
 
+> **注（[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)）。**
+> 下文把 `builtin` agent 当作可路由 channel 目标的提及，反映的是本 spec 落地时已交付的
+> 行为。ADR-024 让内置 agent 退出聊天人格，因此 channel **只**路由到**受管** agent
+> （Claude Code、Codex……）；内置模型现在是内部 `coffer__*` 能力，而非聊天目标。channel
+> 旁观/审批在共享接缝上的机制不变。
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Register a channel (Priority: P1)
@@ -36,6 +42,7 @@ Channels 页面和 CLI 中；凭据引用无法解析的 channel 会被校验拒
 一个悬空 (dangling) 的 ref 尝试注册，确认被拒绝且没有任何行被持久化。
 
 **Covering scenarios**:
+
 - register a telegram channel
 - reject a channel with a missing credential
 - register and list channels from the command line
@@ -58,6 +65,7 @@ bot，必须在任何消息流动之前就 fail closed。
 turn 启动。
 
 **Covering scenarios**:
+
 - issue a pairing code
 - pair by sending the code
 - ignore messages from strangers
@@ -83,6 +91,7 @@ IM 应用里即可触达。
 的 REST API 看到。
 
 **Covering scenarios**:
+
 - a paired message gets an agent reply
 - the channel conversation is a normal chat conversation
 - a long reply is chunked for the platform
@@ -106,6 +115,7 @@ interrupted 结束；发送 `/new`，观察为该 peer 记录了一段新对话�
 期间灌入大量消息，观察排队执行以及溢出提示。
 
 **Covering scenarios**:
+
 - /new starts a fresh conversation
 - /stop interrupts a running turn
 - messages during a turn are queued in order
@@ -127,6 +137,7 @@ owner 的点按会像在 web UI 里点击一样解决平台的审批门，提示
 IM 的 Approve 按钮，观察决定送达 agent 且提示被更新；再用 Deny 重复一遍。
 
 **Covering scenarios**:
+
 - an approval prompt is answered from the IM chat
 - a denied approval is delivered to the agent
 
@@ -146,6 +157,7 @@ service 上的 notify 入口）必须现在就被验证。
 在伪造 IM 中看到消息；再在未配对的 channel 上调用，得到一个干净的报错。
 
 **Covering scenarios**:
+
 - notify delivers to the paired owner
 - notify on an unpaired channel fails cleanly
 
@@ -169,6 +181,7 @@ daemon。
 的事件并看到 401 且什么都没被转发。
 
 **Covering scenarios**:
+
 - the callback listener answers the verification handshake
 - a signed seatalk event reaches the channel
 - a tampered seatalk event is rejected
@@ -187,6 +200,7 @@ daemon。
 disable）是这个 feature 可运维的根基。
 
 **Covering scenarios**:
+
 - disable stops the adapter and enable restarts it
 - deleting a channel cleans up its runtime and peer
 - channel status reports runtime, pairing, and callback details
@@ -213,6 +227,7 @@ workspace 发 `/cwd <name>` 观察在该目录建的新会话；发 `/cwd /etc` 
 `/model <name>` 观察下条 turn 用它。
 
 **Covering scenarios**:
+
 - /agent switches the agent and sticks
 - /agent rejects an unknown agent
 - /cwd selects a configured workspace and refuses a bare path
@@ -236,6 +251,7 @@ agent 的 turn-started 审计记录；回答一个审批提示，观察一条 ap
 审计记录；在不能编辑消息的 channel 上观察 turn 后的完成摘要消息。
 
 **Covering scenarios**:
+
 - a channel-driven turn is audited with channel, peer, and agent
 - an approval resolved from chat is audited
 - a completion summary is sent after every turn
@@ -301,7 +317,7 @@ agent 的 turn-started 审计记录；回答一个审批提示，观察一条 ap
 - **FR-011**: Channels 页面列出 channel、注册新 channel（secret 经凭据存储
   保存）、显示状态（adapter 运行中、已配对 peer、回调端点）、签发配对
   码、切换启用/停用。CLI 对等：`coffer channel list / register / pair /
-  status / notify`。
+status / notify`。
 - **FR-012**: channel 事件都被审计：配对码签发、配对完成、通知已发送
   —— 与自动的资源生命周期审计并列。
 - **FR-013**: owner 从 chat 切换会话的 agent。`/agent` 无参时报告当前 agent

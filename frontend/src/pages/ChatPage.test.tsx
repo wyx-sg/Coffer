@@ -37,9 +37,9 @@ const modelsApiMock = modelsApi as unknown as Record<string, ReturnType<typeof v
 
 const makeConv = (overrides?: Partial<Conversation>): Conversation => ({
   id: "conv-1",
-  agent_key: "builtin",
+  agent_key: "claude_code",
   title: "Test Conv",
-  model_id: "model-1",
+  model_id: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
   ...overrides,
@@ -56,12 +56,15 @@ const makeModel = (overrides?: Partial<Model>): Model => ({
   ...overrides,
 });
 
-function renderPage(initialPath = "/chat") {
+function renderPage(
+  initialPath = "/chat",
+  agents?: { agent_key: string; display_name: string; available: boolean }[],
+) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   chatApiMock.listAgents = vi.fn().mockResolvedValue({
-    agents: [{ agent_key: "builtin", display_name: "Coffer Assistant", available: true }],
+    agents: agents ?? [{ agent_key: "claude_code", display_name: "Claude Code", available: true }],
   });
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
@@ -88,21 +91,26 @@ describe("ChatPage", () => {
     expect(screen.getByRole("tab", { name: /archived/i })).toBeInTheDocument();
   });
 
-  test("bare /chat shows the draft surface (composer), not a modal", async () => {
+  test("bare /chat shows the draft surface (composer once a workdir is set), not a modal", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    modelsApiMock.list.mockResolvedValue({ models: [] });
     renderPage("/chat");
-    // Draft guide + composer are present; no "Start conversation" dialog button.
+    // Managed agents are configured by a working directory; once set, the draft
+    // guide + composer appear — no "Start conversation" dialog button.
+    const dir = await screen.findByRole("textbox", { name: /working directory/i });
+    fireEvent.change(dir, { target: { value: "/home/me/project" } });
     expect(await screen.findByText(/start a new conversation/i)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /start conversation/i })).not.toBeInTheDocument();
   });
 
-  test("draft with no models shows the no-model empty state", async () => {
+  test("draft with no managed agent available shows the install/configure empty state", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     modelsApiMock.list.mockResolvedValue({ models: [] });
-    renderPage("/chat");
-    expect(await screen.findByText("No model configured")).toBeInTheDocument();
+    renderPage("/chat", [
+      { agent_key: "claude_code", display_name: "Claude Code", available: false },
+    ]);
+    expect(await screen.findByText("No managed agent available")).toBeInTheDocument();
   });
 
   test("/chat/:id opens that conversation's thread (URL-addressable)", async () => {
@@ -118,19 +126,22 @@ describe("ChatPage", () => {
 
   test("sending the first message in the draft creates a conversation", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    modelsApiMock.list.mockResolvedValue({ models: [] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
     renderPage("/chat");
 
+    // A managed agent is configured by its working directory.
+    const dir = await screen.findByRole("textbox", { name: /working directory/i });
+    fireEvent.change(dir, { target: { value: "/home/me/project" } });
     const composer = await screen.findByRole("textbox", { name: /message input/i });
     fireEvent.change(composer, { target: { value: "hello there" } });
     fireEvent.keyDown(composer, { key: "Enter", shiftKey: false });
 
     await waitFor(() =>
       expect(chatApiMock.createConversation).toHaveBeenCalledWith({
-        agent_key: "builtin",
-        agent_config: { model_id: "model-1" },
+        agent_key: "claude_code",
+        agent_config: { cwd: "/home/me/project" },
       }),
     );
   });
@@ -207,19 +218,22 @@ describe("ChatPage", () => {
     renderPage("/chat/nope");
 
     expect(await screen.findByText("Conversation not found")).toBeInTheDocument();
-    expect(screen.queryByText(/start a new conversation/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /working directory/i })).not.toBeInTheDocument();
 
-    // The explicit way out: start a fresh chat from the not-found state.
+    // The explicit way out: start a fresh chat from the not-found state — the
+    // draft surface (with its working-directory input) replaces the not-found UI.
     fireEvent.click(screen.getByRole("button", { name: /start a new chat/i }));
-    expect(await screen.findByText(/start a new conversation/i)).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: /working directory/i })).toBeInTheDocument();
   });
 
   test("surfaces an error when creating a conversation fails", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
+    modelsApiMock.list.mockResolvedValue({ models: [] });
     chatApiMock.createConversation.mockRejectedValue(new Error("boom"));
     renderPage("/chat");
 
+    const dir = await screen.findByRole("textbox", { name: /working directory/i });
+    fireEvent.change(dir, { target: { value: "/home/me/project" } });
     const composer = await screen.findByRole("textbox", { name: /message input/i });
     fireEvent.change(composer, { target: { value: "hi" } });
     fireEvent.keyDown(composer, { key: "Enter", shiftKey: false });

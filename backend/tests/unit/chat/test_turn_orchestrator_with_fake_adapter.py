@@ -141,7 +141,7 @@ async def test_happy_path_collects_events() -> None:
         TurnDone(prompt_tokens=10, completion_tokens=5, stop_reason="end_turn"),
     ]
     orchestrator, _conv, _msg, _audit, _prov = make_orchestrator(scripted)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "Hi there")
     events = await drain_queue(queue)
@@ -157,7 +157,7 @@ async def test_happy_path_persists_assistant_message() -> None:
         TurnDone(prompt_tokens=20, completion_tokens=8, stop_reason="end_turn"),
     ]
     orchestrator, _, msg_repo, _, _ = make_orchestrator(scripted)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "What is the capital of France?")
     await drain_queue(queue)
@@ -179,7 +179,7 @@ async def test_happy_path_emits_audit_event() -> None:
         TurnDone(prompt_tokens=5, completion_tokens=3, stop_reason="end_turn"),
     ]
     orchestrator, _, _, audit_repo, _ = make_orchestrator(scripted)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "ping")
     await drain_queue(queue)
@@ -195,7 +195,7 @@ async def test_completed_turn_records_token_usage_and_agent_audit() -> None:
         TurnDone(prompt_tokens=12, completion_tokens=6, stop_reason="end_turn"),
     ]
     orchestrator, _, msg_repo, audit_repo, _ = make_orchestrator(scripted)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "ping")
     await drain_queue(queue)
@@ -213,7 +213,7 @@ async def test_history_passed_to_adapter_includes_the_user_message() -> None:
         [TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")]
     )
     orchestrator, _, _, _, _ = make_orchestrator(adapter=adapter)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "remember this")
     await drain_queue(queue)
@@ -233,7 +233,7 @@ async def test_model_id_recorded_from_adapter() -> None:
         model_id="m-xyz",
     )
     orchestrator, _, msg_repo, _, _ = make_orchestrator(adapter=adapter)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     await drain_queue(queue)
@@ -250,7 +250,7 @@ async def test_model_id_recorded_from_adapter() -> None:
 @pytest.mark.asyncio
 async def test_turn_in_progress_raises_on_second_start() -> None:
     orchestrator, _, _, _, _ = make_orchestrator(adapter=_BlockingAdapter([]))
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     await orchestrator.start_turn(conv.id, "first message")
     with pytest.raises(TurnInProgress):
@@ -263,7 +263,7 @@ async def test_turn_in_progress_raises_on_second_start() -> None:
 async def test_build_adapter_no_model_propagates_and_releases_slot() -> None:
     provider = FakeAgentProvider(adapter=None, build_error=NoModelConfigured())
     orchestrator, _, _, _, _ = make_orchestrator(provider=provider)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     with pytest.raises(NoModelConfigured):
         await orchestrator.start_turn(conv.id, "hi")
@@ -284,7 +284,7 @@ async def test_turn_error_persists_failed_message() -> None:
         TurnError(code="PROVIDER_ERROR", message="API rate limit exceeded"),
     ]
     orchestrator, _, msg_repo, _, _ = make_orchestrator(scripted)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "test")
     await drain_queue(queue)
@@ -303,7 +303,7 @@ async def test_turn_error_is_logged_server_side(caplog: pytest.LogCaptureFixture
         TurnError(code="PROVIDER_ERROR", message="API rate limit exceeded"),
     ]
     orchestrator, _, _, _, _ = make_orchestrator(scripted)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     with caplog.at_level("WARNING", logger="coffer.application.chat.turn_orchestrator"):
         queue = await orchestrator.start_turn(conv.id, "test")
@@ -337,7 +337,7 @@ async def test_unexpected_adapter_error_yields_internal_error_and_failed_message
     """An unexpected exception from the adapter surfaces as TurnError
     (INTERNAL_ERROR) and finalizes the assistant message as failed."""
     orchestrator, _, msg_repo, _, _ = make_orchestrator(adapter=_RaisingAdapter())
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     events = await drain_queue(queue)
@@ -356,7 +356,7 @@ async def test_cancel_turn_discards_the_partial_turn() -> None:
     orchestrator, _, msg_repo, _, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial")])
     )
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     first = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -387,7 +387,7 @@ async def test_interrupt_persists_the_partial_message() -> None:
     orchestrator, _, msg_repo, _, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial answer")])
     )
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     first = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -422,7 +422,7 @@ async def test_interrupt_noop_when_no_active_turn() -> None:
 @pytest.mark.acceptance(spec="008-agent-chat", scenario="an agent turn pauses for human approval")
 async def test_approval_request_forwarded_and_decision_relayed() -> None:
     orchestrator, _, _, _, _ = make_orchestrator(adapter=_ApprovalAdapter("r1"))
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "do the thing")
 
@@ -444,7 +444,7 @@ async def test_approval_request_forwarded_and_decision_relayed() -> None:
 )
 async def test_approval_deny_decision_is_relayed_to_the_agent() -> None:
     orchestrator, _, _, _, _ = make_orchestrator(adapter=_ApprovalAdapter("r1"))
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "do the thing")
     event = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -468,7 +468,7 @@ async def test_submit_approval_no_active_turn_raises() -> None:
 @pytest.mark.asyncio
 async def test_submit_approval_unknown_request_raises() -> None:
     orchestrator, _, _, _, _ = make_orchestrator(adapter=_ApprovalAdapter("r1"))
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "do the thing")
     await asyncio.wait_for(queue.get(), timeout=5.0)  # the ApprovalRequest
@@ -485,7 +485,7 @@ async def test_interrupt_while_waiting_for_approval_ends_the_turn() -> None:
     """Interrupting a turn parked in approvals.wait() cancels the wait and the
     turn ends with a terminal TurnDone(stop_reason='interrupted')."""
     orchestrator, _, _, _, _ = make_orchestrator(adapter=_ApprovalAdapter("r1"))
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "do the thing")
     event = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -510,7 +510,7 @@ async def test_active_turns_cleared_after_completion() -> None:
         TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn"),
     ]
     orchestrator, _, _, _, _ = make_orchestrator(scripted)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     await drain_queue(queue)
@@ -549,7 +549,7 @@ async def test_placeholder_write_failure_still_persists_failed_message_and_audit
         conversations=conv_repo, messages=msg_repo, registry=registry, audit=audit
     )  # type: ignore[arg-type]
     orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry, audit=audit)
-    conv = await chat_svc.create_conversation()
+    conv = await chat_svc.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     events = await drain_queue(queue)
@@ -593,7 +593,7 @@ async def test_interrupt_during_placeholder_append_leaves_no_orphan_streaming_ro
         conversations=conv_repo, messages=msg_repo, registry=registry, audit=audit
     )  # type: ignore[arg-type]
     orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry, audit=audit)
-    conv = await chat_svc.create_conversation()
+    conv = await chat_svc.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     await asyncio.sleep(0)  # let the task reach the parked append
@@ -616,7 +616,7 @@ async def test_turn_completion_bumps_conversation_updated_at() -> None:
     orchestrator, conv_repo, _, _, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial")])
     )
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     # First event means the placeholder row (and its touch) already happened.
@@ -646,7 +646,7 @@ async def test_in_flight_turn_leaves_a_streaming_assistant_row() -> None:
     orchestrator, _, msg_repo, _, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial")])
     )
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     first = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -669,7 +669,7 @@ async def test_completed_turn_finalizes_the_same_row_not_a_duplicate() -> None:
         TurnDone(prompt_tokens=3, completion_tokens=2, stop_reason="end_turn"),
     ]
     orchestrator, _, msg_repo, _, _ = make_orchestrator(scripted)
-    conv = await orchestrator._chat.create_conversation()
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     await drain_queue(queue)

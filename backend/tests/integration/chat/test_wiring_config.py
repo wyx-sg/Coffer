@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.infrastructure.chat.langgraph_agent import DEFAULT_RECURSION_LIMIT
+from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT
 from coffer.surfaces.http.wiring import _agent_recursion_limit
 
 

@@ -11,6 +11,8 @@
 
 > **工作区增补（Workspace amendment）。** Story 9–12 把 registry 扩展到 agent 真实的磁盘工作区：agent 自己文件里实际配置的 MCP server、agent 已安装的插件、以及目录型配置条目。指导原则是**收编 → 主库 → 投递（ingest → hub → deliver）**：在 agent 工作区里发现的任何可共享内容，都可以被收编进 Coffer 的中枢（MCP 网关、spec 005 的 skill 主库），再投递给任意 agent，而不是作为各 agent 各自为政的一次性配置存在。所有写操作只经由每个 agent 的文档化配置路径；内部状态文件只读、绝不写入。
 
+> **关于内置 agent（[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)）。** 本 registry 只持有**受管** agent——本地安装、由 Coffer 投递资产的外部 coding agent（Claude Code、Codex……）。原 `builtin`「Coffer Assistant」**不**是这里注册的 agent：[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md) 让它退出聊天人格，把其本地模型重塑为只能通过 `coffer__*` MCP 工具触达的 Coffer 内部能力。（spec 008 中那个独立的聊天 agent-provider 注册表同样去掉 `builtin` provider，只列受管 agent。）
+
 ## 用户场景与测试
 
 ### User Story 1 —— 发现已安装的 agent 并选择要添加哪些（优先级 P1）

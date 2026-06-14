@@ -162,12 +162,16 @@ async def dispatch_tool_search(
     invocations: MCPInvocationRepoPort,
     session_id: str,
     clock: Callable[[], datetime],
+    embedder: Any | None = None,
 ) -> dict[str, Any]:
-    """Run ``coffer__search_tools`` over ``aggregated_tools``; log + wrap."""
+    """Run ``coffer__search_tools`` over ``aggregated_tools``; log + wrap.
+
+    When ``embedder`` is set the ranking is semantic; otherwise BM25 (ADR-024).
+    """
     started = clock()
     try:
         args = params.get("arguments") or {}
-        result = execute_tool_search(args, aggregated_tools)
+        result = await execute_tool_search(args, aggregated_tools, embedder)
         # Capture the (intent -> ranked tools) shape for the eval flywheel.
         # Best-effort and opt-in (ADR-019); a no-op unless COFFER_EVAL_CAPTURE is
         # set. ``query`` is a validated non-empty str by the time we get here.

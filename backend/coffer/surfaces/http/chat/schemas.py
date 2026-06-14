@@ -56,14 +56,15 @@ class ContentBlockOut(BaseModel):
 
 
 class ConversationCreate(BaseModel):
-    """Optional body for POST /conversations.
+    """Body for POST /conversations.
 
-    ``agent_key`` selects the agent (default: the built-in agent). ``agent_config``
-    is an opaque, agent-specific configuration object the named agent validates
-    and stores; for the built-in agent it accepts an optional ``model_id``.
+    ``agent_key`` selects the Coffer-managed agent to talk to (required — chat
+    has no built-in agent since ADR-024). ``agent_config`` is an opaque,
+    agent-specific configuration object the named agent validates and stores
+    (e.g. ``cwd`` for ``claude_code`` / ``codex``).
     """
 
-    agent_key: str = "builtin"
+    agent_key: str
     agent_config: dict[str, Any] | None = None
 
 

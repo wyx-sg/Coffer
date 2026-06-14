@@ -26,6 +26,7 @@ import os
 import pathlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import cast
 
 from fastapi import FastAPI
 
@@ -39,9 +40,11 @@ from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CredentialMissing
+from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
+from coffer.infrastructure.knowledge.embeddings import make_embedder
 from coffer.infrastructure.logging.setup import configure_logging
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -180,6 +183,31 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     async def _resolve_embedding() -> object:
         return (await embedding_config_svc.get()).to_embedding_config()
 
+    # Semantic search_tools (ADR-024): the same embedder the KB uses, or None
+    # when embeddings are off / unavailable (→ gateway BM25 fallback). Cached per
+    # config to reuse the underlying client.
+    _ts_embedder_cache: dict[tuple[object, ...], object] = {}
+
+    async def _tool_search_embedder() -> object | None:
+        embedding = cast(EmbeddingConfig | None, await _resolve_embedding())
+        if embedding is None:
+            return None
+        key = (
+            embedding.provider,
+            embedding.model,
+            embedding.base_url,
+            embedding.credential_ref,
+            embedding.dimensions,
+        )
+        embedder = _ts_embedder_cache.get(key)
+        if embedder is None:
+            try:
+                embedder = make_embedder(embedding, resolve_credential=credential_store.get)
+            except Exception:
+                return None
+            _ts_embedder_cache[key] = embedder
+        return embedder
+
     wire_kb_kind(
         app,
         resource_svc,
@@ -208,14 +236,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
     process_supervisor, session_supervisors = wire_mcp_kind(
-        app, resource_svc, audit, sm, credential_store, builtin_tools
+        app, resource_svc, audit, sm, credential_store, builtin_tools, _tool_search_embedder
     )
 
     # Wire the chat feature (spec 008). Must come AFTER all other wiring so the
     # coffer-builtin-agent gateway session sees the fully-populated
     # BuiltinToolRegistry (KB + memory + skill + MCP tools). The session factory
     # is the one wire_mcp_kind registered via set_mcp_session_factory.
-    chat_gateway_session = wire_chat(audit, sm, get_mcp_session_factory(), credential_store)
+    chat_gateway_session = wire_chat(
+        audit, sm, get_mcp_session_factory(), credential_store, builtin_tools
+    )
     # The chat session's supervisor stays registered in session_supervisors so
     # the mcp_server on_delete hook evicts its upstream connections too; shutdown
     # disposes the chat session first (its on_dispose deregisters the entry), so

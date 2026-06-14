@@ -67,6 +67,28 @@ chat; they remain (a) test-drive targets that keep the provider seam honest and
 only make sense for that positioning stay out of scope unless a future spec
 re-opens it.
 
+## Repositioning — the built-in agent is an internal capability ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md))
+
+[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)
+partially supersedes the Vault Console positioning above. The `builtin` "Coffer
+Assistant" is **retired as a chat persona**: it is no longer a registered chat
+agent and is removed from the agent picker. Chat talks **only** to Coffer-managed
+agents (`claude_code`, `codex`, and future managed agents), and the surface
+reverts from _Vault Console_ to **Chat**. The "talk to the vault through the
+built-in agent" job is dropped; the local model is recast as an **internal-only**
+capability reachable solely through `coffer__*` MCP tools — a semantic upgrade to
+`coffer__search_tools` and a new `coffer__ask` agentic-RAG tool over
+knowledge/memory (see ADR-024). The **observe-and-approve channel-driven
+conversations** job (ADR-021 job 2) stands unchanged, over the same
+`ConversationPort` / `TurnPort` / `submit_approval` seams.
+
+Where the User Stories, Acceptance Scenarios, and Functional Requirements below
+still describe the built-in agent as a selectable chat agent (its model picker,
+its in-chat vault tool calls, `coffer chat` against it), read them as the
+historical shipped behaviour that ADR-024 removes from the chat surface; the
+LLM/agentic-loop machinery is kept but repurposed behind `coffer__ask` rather
+than presented to the user as a chat persona.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Configure a model provider before the first chat (Priority: P1)
@@ -266,27 +288,6 @@ model (recorded on the resulting message).
 
 ---
 
-### User Story 9 — Chat from the command line (Priority: P2)
-
-The user, a developer, talks to the built-in agent without the GUI:
-`coffer chat` opens an interactive streaming session; `coffer chat -m "…"` runs
-one turn and prints the reply.
-
-**Why this priority**: CLI parity is a standing Coffer convention for developer
-surfaces. Not blocking the GUI deliverable.
-
-**Independent Test**: Run `coffer chat -m "say hello"` and observe a streamed
-reply on stdout; run `coffer chat`, hold a two-turn conversation, exit, and
-confirm the conversation appears in the GUI history list.
-
-**Covering scenarios**:
-
-- `coffer chat -m` runs a single turn and prints the reply
-- `coffer chat` holds an interactive multi-turn session
-- CLI conversations are the same entities the GUI lists
-
----
-
 ### User Story 10 — See what the agent did and what it cost (Priority: P3)
 
 Every turn records token usage on the resulting message, and every tool the
@@ -403,8 +404,10 @@ referenced by at least one test marked
 
 - **Given** a running daemon,
 - **When** the user asks the platform which agents it offers,
-- **Then** the built-in agent is listed with a display name and an availability
-  flag, and the list is reachable from the REST API.
+- **Then** the managed agents (`claude_code`, `codex`) are listed, each with a
+  display name and an availability flag, the `builtin` agent is **not** among
+  them ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)),
+  and the list is reachable from the REST API.
 
 ### Scenario: choose an agent when starting a conversation
 
@@ -435,34 +438,12 @@ referenced by at least one test marked
 - **When** the daemon restarts and the user reopens the conversation,
 - **Then** every message is present and unchanged.
 
-### Scenario: the agent calls a vault tool
-
-- **Given** a memory store containing a record that answers a question,
-- **When** the user asks that question,
-- **Then** the turn includes a `coffer__recall` tool call rendered as an
-  inline expandable card, and the answer is grounded in the record.
-
 ### Scenario: skills are reachable as tools
 
 - **Given** at least one valid skill in the vault,
 - **When** the agent lists available tools,
 - **Then** `coffer__list_skills` and `coffer__load_skill` are present and
   `coffer__load_skill` returns the skill's content.
-
-### Scenario: a failed tool call does not break the turn
-
-- **Given** a tool that returns an error when invoked,
-- **When** the agent calls it during a turn,
-- **Then** the tool card shows a failed state, the error is returned to the agent
-  as a tool result, and the turn still completes with an assistant message.
-
-### Scenario: tool-iteration limit ends the turn cleanly
-
-- **Given** a turn that would call tools indefinitely,
-- **When** the iteration limit is reached,
-- **Then** the turn ends cleanly — a normal turn completion (`turn_done`, not
-  `turn_error`), carrying the stop reason `max_iterations` — and the
-  conversation stays usable.
 
 ### Scenario: an agent turn pauses for human approval
 
@@ -537,14 +518,6 @@ referenced by at least one test marked
 - **When** the user sets a conversation's model and sends a message,
 - **Then** the turn runs on the chosen model and the assistant message records
   which model produced it.
-
-### Scenario: command-line parity for chat and models
-
-- **Given** a running daemon,
-- **When** the user runs `coffer model add` and `coffer model list --json`, then
-  `coffer chat -m "…"` and an interactive `coffer chat` session,
-- **Then** the model registers and lists, a streamed reply is produced, and CLI
-  conversations appear in the same history list the GUI shows.
 
 ### Scenario: no-model empty state
 
@@ -742,8 +715,9 @@ referenced by at least one test marked
 - **FR-029**: System MUST provide a Settings → Models page covering every model
   registration operation.
 - **FR-030**: Every chat and model operation available in the GUI MUST be
-  available through the REST API, and the model operations plus `coffer chat`
-  MUST be available as CLI commands; CLI read operations MUST support `--json`.
+  available through the REST API, and the model operations MUST be available as
+  CLI commands; CLI read operations MUST support `--json`. (The `coffer chat`
+  CLI was removed with the retired built-in chat agent, ADR-024.)
 
 **Observability**
 
@@ -753,13 +727,17 @@ referenced by at least one test marked
   `agent`; tool invocations the built-in agent makes are recorded in the
   gateway's invocation log under the agent's gateway session.
 
-**Vault Console: origin surfacing ([ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.md))**
+**Chat surface: origin surfacing ([ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.md), amended by [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md))**
 
-- **FR-033**: The Chat surface MUST be presented as the **Vault Console**: its
-  primary roles are conversing with the vault through the built-in agent and
-  observing/approving channel-driven conversations. It MUST NOT position itself
-  as a primary in-browser coding chat; the CLI agents remain available as
-  provider-seam validation and as the targets of channel-driven conversations.
+- **FR-033**: The Chat surface (labelled **Chat**, reverted from _Vault Console_
+  per [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md))
+  MUST talk **only** to Coffer-managed agents and MUST surface and let the user
+  observe/approve channel-driven conversations. The `builtin` agent MUST NOT be
+  offered as a chat agent; its model is an internal-only capability reached
+  through `coffer__*` tools (ADR-024), not a chat persona. The Chat surface MUST
+  NOT position itself as a primary in-browser coding chat; the managed agents
+  remain available as provider-seam validation and as the targets of
+  channel-driven conversations.
 - **FR-034**: The conversation history MUST surface each conversation's origin
   (web draft vs. channel peer) and, for channel-originated conversations, the
   peer identity; a pending tool approval on any conversation MUST be resolvable

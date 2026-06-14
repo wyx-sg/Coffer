@@ -39,9 +39,13 @@ Messages from anyone else are ignored silently.
 ### 4. Chat
 
 Send any message — it lands in a conversation with the channel's default
-agent (the built-in Coffer Assistant unless configured otherwise) and the
+agent (a Coffer-managed agent such as Claude Code or Codex) and the
 reply comes back to Telegram. The same conversation is visible on the Chat
 page.
+
+> Per [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md),
+> channels route to managed agents only; the built-in "Coffer Assistant" is no
+> longer a chat target.
 
 Commands: `/new` fresh conversation · `/stop` interrupt the running turn ·
 `/status` what's active · `/help`.
@@ -52,7 +56,7 @@ Commands: `/new` fresh conversation · `/stop` interrupt the running turn ·
 
 On the [SeaTalk Open Platform](https://open.seatalk.io/), create an app,
 enable the **Bot** capability and set it Online, and request the scopes your
-admin must approve (at minimum *Send Message to Bot User*). Note the
+admin must approve (at minimum _Send Message to Bot User_). Note the
 **App ID**, **App Secret**, and the Event Callback **Signing Secret**.
 
 ### 2. Register the channel

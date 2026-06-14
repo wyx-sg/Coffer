@@ -156,33 +156,14 @@ async def test_new_reuses_sticky_agent(env: ChannelEnv) -> None:
 # -- /model (parametric: same conversation, next turn) -------------------------
 
 
+# NOTE: the builtin-agent /model tests (registry override + reject-unknown) were
+# removed with ADR-024 — the builtin chat agent that resolved models from the
+# registry is retired. Channels route to managed agents only, whose /model is the
+# raw passthrough covered by the bridged test below (which now carries the
+# spec-009 "/model" acceptance marker).
+
+
 @pytest.mark.acceptance(spec="009-channels", scenario="/model switches the model for the next turn")
-async def test_model_switch_for_builtin_sets_conversation_model(env: ChannelEnv) -> None:
-    env.models.add("opus", "model-opus-id")
-    resource, adapter = await env.paired_channel()
-
-    await env.processor.on_message(inbound("tg", "owner", "/model opus"))
-    await wait_until(lambda: adapter.texts())
-
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    conv = await env.chat.get_conversation(peer.active_conversation_id)
-    assert conv.model_id == "model-opus-id"  # builtin → registry override
-
-
-async def test_model_rejects_unknown_builtin_model(env: ChannelEnv) -> None:
-    resource, adapter = await env.paired_channel()
-
-    await env.processor.on_message(inbound("tg", "owner", "/model ghost"))
-
-    assert any("ghost" in t for t in adapter.texts())
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    if peer.active_conversation_id is not None:
-        conv = await env.chat.get_conversation(peer.active_conversation_id)
-        assert conv.model_id is None
-
-
 async def test_model_switch_for_bridged_agent_passes_through_to_agent_config(
     env: ChannelEnv,
 ) -> None:

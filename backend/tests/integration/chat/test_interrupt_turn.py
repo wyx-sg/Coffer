@@ -49,7 +49,7 @@ async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
     chat_svc, _model_svc, orchestrator, _registry = make_chat_services(
         provider=FakeAgentProvider(_BlockingAdapter(), agent_key="builtin")
     )
-    conv = await chat_svc.create_conversation()
+    conv = await chat_svc.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "hi")
     await asyncio.wait_for(queue.get(), timeout=5.0)  # TurnStarted

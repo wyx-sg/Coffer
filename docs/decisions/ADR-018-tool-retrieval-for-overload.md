@@ -1,6 +1,7 @@
 # ADR-018: Tool Retrieval for Aggregation Overload
 
 **Status**: Accepted
+**Amended by**: [ADR-024](ADR-024-builtin-agent-is-internal-capability.md) (2026-06-14) — `coffer__search_tools` gains a semantic (embedding) ranking path with BM25 fallback, and Capability B is un-deferred for knowledge/memory as the `coffer__ask` built-in tool.
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu
 **Related**: `.specify/memory/constitution.md`, [spec `001-mcp-gateway`](../../specs/001-mcp-gateway/spec.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)
@@ -24,7 +25,7 @@ Aggregation, the feature, becomes the thing that makes the agent worse.
 The published evidence is consistent and strong (see Evidence below):
 
 - Anthropic's **Tool Search Tool** documents the same 30–50-tool cliff and shows
-  that letting the model *search* the catalogue instead of being handed all of
+  that letting the model _search_ the catalogue instead of being handed all of
   it lifts tool-selection accuracy **49% → 74%** (Opus 4) and **79.5% → 88.1%**
   (Opus 4.5), with roughly **85%** fewer tokens spent on tool definitions.
 - **RAG-MCP** reports retrieval-based tool selection at **43%** accuracy versus
@@ -88,13 +89,13 @@ The invocation is recorded in the invocation log like any other gateway call
 - No persisted setting and no migration: keeping the gateway additive (rather
   than adding a server-side advertise/defer mode) avoids new state in
   `coffer.db`.
-- The agent must *choose* to call `coffer__search_tools` (or the client must use
+- The agent must _choose_ to call `coffer__search_tools` (or the client must use
   native tool-search). For an agent that ignores it, the full catalogue is still
   present — a graceful, additive fallback rather than a hard dependency.
 
 ## Alternatives Considered
 
-- **An LLM router (`coffer_use(intent)` that selects *and* invokes).** Rejected:
+- **An LLM router (`coffer_use(intent)` that selects _and_ invokes).** Rejected:
   it doubles cost and latency (a second model call wrapping every tool use); a
   context-starved router is weaker at selection than the main model — Copilot's
   own data shows retrieval **94.5% > 87.5%** LLM selection; it inserts an opaque,
@@ -103,7 +104,7 @@ The invocation is recorded in the invocation log like any other gateway call
   legible.
 - **Server-side defer-load / advertise-mode (hide upstream tools from
   `tools/list` until searched).** Rejected for now: deferral is properly the
-  *client's* choice — e.g. Claude Code's `tool_search_tool` with
+  _client's_ choice — e.g. Claude Code's `tool_search_tool` with
   `defer_loading` — and a server-side mode would require a persisted setting plus
   a migration. Keeping Coffer additive avoids that. Revisit only for clients that
   lack native tool-search.

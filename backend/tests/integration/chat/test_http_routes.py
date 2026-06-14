@@ -99,7 +99,7 @@ def test_conversation_crud_roundtrip() -> None:
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
         # Create
-        resp = client.post("/api/v1/chat/conversations")
+        resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
         assert resp.status_code == 201, resp.text
         data = resp.json()
         conv_id = data["id"]
@@ -145,7 +145,9 @@ def test_archive_and_unarchive_filter_the_list() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations").json()["id"]
+        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
+            "id"
+        ]
 
         # Active by default; archived list empty.
         assert len(client.get("/api/v1/chat/conversations").json()["conversations"]) == 1
@@ -208,7 +210,9 @@ def test_patch_conversation_unknown_model_returns_404() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations").json()["id"]
+        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
+            "id"
+        ]
 
         resp = client.patch(
             f"/api/v1/chat/conversations/{conv_id}",
@@ -232,7 +236,9 @@ def test_patch_conversation_is_atomic_on_invalid_model() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations").json()["id"]
+        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
+            "id"
+        ]
         original_title = client.get(f"/api/v1/chat/conversations/{conv_id}").json()["title"]
 
         resp = client.patch(
@@ -474,7 +480,7 @@ def test_send_message_streams_sse_events() -> None:
         )
 
         # Create conversation
-        resp = client.post("/api/v1/chat/conversations")
+        resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
         assert resp.status_code == 201
         conv_id = resp.json()["id"]
 
@@ -528,7 +534,7 @@ def test_send_message_turn_in_progress_returns_409_json(monkeypatch) -> None:  #
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
         # Create conversation
-        resp = client.post("/api/v1/chat/conversations")
+        resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
         conv_id = resp.json()["id"]
 
         # Try to send — should get 409 JSON
@@ -562,7 +568,7 @@ def test_send_message_no_model_configured_returns_409_json(monkeypatch) -> None:
     monkeypatch.setattr(orchestrator, "start_turn", _raise_no_model)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        resp = client.post("/api/v1/chat/conversations")
+        resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
         conv_id = resp.json()["id"]
 
         resp = client.post(
@@ -618,7 +624,7 @@ def test_send_message_no_model_real_orchestrator() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        resp = client.post("/api/v1/chat/conversations")
+        resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
         conv_id = resp.json()["id"]
 
         resp = client.post(
@@ -659,7 +665,9 @@ def test_submit_approval_no_pending_request_returns_409() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations").json()["id"]
+        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
+            "id"
+        ]
         # No turn in flight → no pending approval → 409.
         resp = client.post(
             f"/api/v1/chat/conversations/{conv_id}/approvals",
@@ -689,7 +697,9 @@ def test_interrupt_no_active_turn_is_a_noop_204() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations").json()["id"]
+        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
+            "id"
+        ]
         resp = client.post(f"/api/v1/chat/conversations/{conv_id}/interrupt")
         assert resp.status_code == 204
 
@@ -723,7 +733,7 @@ def test_send_message_streams_turn_error_event() -> None:
                 "credential_ref": "ref",
             },
         )
-        resp = client.post("/api/v1/chat/conversations")
+        resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
         conv_id = resp.json()["id"]
 
         resp = client.post(
@@ -774,7 +784,7 @@ def test_send_message_streams_and_persists_assistant_message() -> None:
                 "credential_ref": "ref",
             },
         )
-        resp = client.post("/api/v1/chat/conversations")
+        resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
         conv_id = resp.json()["id"]
 
         # Send message — consume SSE stream.

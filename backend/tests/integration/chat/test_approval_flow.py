@@ -71,7 +71,7 @@ async def _run_via_route(behavior: str) -> list[AgentEvent]:
     chat_svc, _model_svc, orchestrator, _registry = make_chat_services(
         provider=FakeAgentProvider(_ApprovalAdapter(), agent_key="builtin")
     )
-    conv = await chat_svc.create_conversation()
+    conv = await chat_svc.create_conversation(agent_key="builtin")
 
     queue = await orchestrator.start_turn(conv.id, "please run a command")
 

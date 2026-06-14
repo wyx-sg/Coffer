@@ -19,6 +19,14 @@ IM chat. The channel layer and the agent layer meet only at the chat
 platform's existing seams — conversation creation, the turn event stream, the
 approval gate — so the cost of N channels and M agents is N + M, never N × M.
 
+> **Note ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)).**
+> Mentions of the `builtin` agent below as a routable channel target reflect the
+> behaviour shipped when this spec landed. ADR-024 retires the built-in agent as a
+> chat persona, so channels route to **managed** agents (Claude Code, Codex, …)
+> only; the built-in model is now an internal `coffer__*` capability, not a chat
+> target. The channel observe/approve mechanics over the shared seams are
+> unchanged.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Register a channel (Priority: P1)
@@ -39,6 +47,7 @@ Channels page; attempt a registration with a dangling ref and see it rejected
 with no row persisted.
 
 **Covering scenarios**:
+
 - register a telegram channel
 - reject a channel with a missing credential
 - register and list channels from the command line
@@ -62,6 +71,7 @@ observe the confirmation reply and the peer recorded; send messages from a
 second account and observe no reply and no turn started.
 
 **Covering scenarios**:
+
 - issue a pairing code
 - pair by sending the code
 - ignore messages from strangers
@@ -89,6 +99,7 @@ the IM apps the user already lives in.
 exchange visible through the chat platform's REST API.
 
 **Covering scenarios**:
+
 - a paired message gets an agent reply
 - the channel conversation is a normal chat conversation
 - a long reply is chunked for the platform
@@ -114,6 +125,7 @@ for the peer; flood messages during a turn and observe queued execution and
 an overflow notice.
 
 **Covering scenarios**:
+
 - /new starts a fresh conversation
 - /stop interrupts a running turn
 - messages during a turn are queued in order
@@ -137,6 +149,7 @@ turn, click the fake IM's Approve button, observe the decision delivered to
 the agent and the prompt updated; repeat with Deny.
 
 **Covering scenarios**:
+
 - an approval prompt is answered from the IM chat
 - a denied approval is delivered to the agent
 
@@ -157,6 +170,7 @@ observe the message in the fake IM; call it on an unpaired channel and
 observe a clean error.
 
 **Covering scenarios**:
+
 - notify delivers to the paired owner
 - notify on an unpaired channel fails cleanly
 
@@ -182,6 +196,7 @@ verification challenge and see it echoed; POST a signed event and see it
 forwarded; POST a tampered event and see 401 with nothing forwarded.
 
 **Covering scenarios**:
+
 - the callback listener answers the verification handshake
 - a signed seatalk event reaches the channel
 - a tampered seatalk event is rejected
@@ -201,6 +216,7 @@ path to point the tunnel at.
 disable that actually stops traffic) is what makes the feature operable.
 
 **Covering scenarios**:
+
 - disable stops the adapter and enable restarts it
 - deleting a channel cleans up its runtime and peer
 - channel status reports runtime, pairing, and callback details
@@ -219,7 +235,7 @@ conversation. Each command with no argument reports the current value and the
 available choices. The owner can only pick a workspace the operator pre-defined
 — a bare filesystem path in a message is never honored.
 
-**Why this priority**: A channel is an entrypoint *manager*, not a single fixed
+**Why this priority**: A channel is an entrypoint _manager_, not a single fixed
 wire. Routing to a chosen agent, in a chosen safe directory, with a chosen
 model, is what makes one paired chat a switchboard for every agent the vault
 exposes — and the workspace allowlist is the boundary that keeps a remote-
@@ -232,6 +248,7 @@ observe a fresh conversation created in that directory; send `/cwd /etc` and
 observe it is refused; send `/model <name>` and observe the next turn use it.
 
 **Covering scenarios**:
+
 - /agent switches the agent and sticks
 - /agent rejects an unknown agent
 - /cwd selects a configured workspace and refuses a bare path
@@ -259,6 +276,7 @@ prompt and observe an approval-resolved audit record; observe a completion
 summary message after the turn on a channel that cannot edit messages.
 
 **Covering scenarios**:
+
 - a channel-driven turn is audited with channel, peer, and agent
 - an approval resolved from chat is audited
 - a completion summary is sent after every turn
@@ -335,7 +353,7 @@ summary message after the turn on a channel that cannot edit messages.
   secrets through the credential store), shows status (adapter running,
   paired peer, callback endpoint), issues pairing codes, and toggles
   enable/disable. CLI parity: `coffer channel list / register / pair /
-  status / notify`.
+status / notify`.
 - **FR-012**: Channel events are audited: pairing issued, paired,
   notification sent — alongside the automatic resource-lifecycle audit.
 - **FR-013**: The owner switches the conversation's agent from chat. `/agent`

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import FastAPI
@@ -57,6 +58,7 @@ def wire_mcp_kind(
     sm: object,
     credential_store: Any,
     builtin_tools: BuiltinToolRegistry | None = None,
+    embedder_provider: Callable[[], Awaitable[Any | None]] | None = None,
 ) -> tuple[SubprocessSupervisor, dict[str, SubprocessSupervisor]]:
     """Build and wire all MCP-specific plumbing into the app.
 
@@ -120,6 +122,7 @@ def wire_mcp_kind(
             invocations=inv_repo,
             on_dispose=_drop_supervisor,
             builtin_tools=builtin_tools,
+            embedder_provider=embedder_provider,
         )
 
     # 6. Set ALL the MCP dependency providers

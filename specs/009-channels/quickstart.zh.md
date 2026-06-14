@@ -38,9 +38,12 @@ coffer channel pair my-telegram        # prints an 8-character code
 
 ### 4. 聊天
 
-随便发一条消息 —— 它会落进一段与 channel 默认 agent（未另行配置时为
-内置的 Coffer Assistant）的对话，回复回到 Telegram。同一段对话在 Chat
+随便发一条消息 —— 它会落进一段与 channel 默认 agent（Coffer 受管 agent，
+如 Claude Code 或 Codex）的对话，回复回到 Telegram。同一段对话在 Chat
 页面也可见。
+
+> 按 [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)，
+> channel 只路由到受管 agent；内置「Coffer Assistant」不再是聊天目标。
 
 命令：`/new` 开新对话 · `/stop` 打断运行中的 turn · `/status` 查看当前
 状态 · `/help`。
@@ -50,8 +53,8 @@ coffer channel pair my-telegram        # prints an 8-character code
 ### 1. 创建 app
 
 在 [SeaTalk Open Platform](https://open.seatalk.io/) 上创建一个 app，启用
-**Bot** 能力并将其设为 Online，申请需要管理员审批的 scope（至少 *Send
-Message to Bot User*）。记下 **App ID**、**App Secret** 与 Event
+**Bot** 能力并将其设为 Online，申请需要管理员审批的 scope（至少 _Send
+Message to Bot User_）。记下 **App ID**、**App Secret** 与 Event
 Callback 的 **Signing Secret**。
 
 ### 2. 注册 channel

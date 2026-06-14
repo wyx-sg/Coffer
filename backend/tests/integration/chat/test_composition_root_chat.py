@@ -94,12 +94,16 @@ def test_model_crud_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-de
         assert resp.status_code == 204
 
 
-def test_conversation_crud_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-def]
+def test_conversation_crud_via_wired_daemon(app, tmp_path) -> None:  # type: ignore[no-untyped-def]
     """Create, rename, and delete a conversation through the fully-wired daemon."""
     with TestClient(app) as client:
         set_active_token(_TOKEN)
 
-        resp = client.post("/api/v1/chat/conversations", headers=_HEADERS)
+        resp = client.post(
+            "/api/v1/chat/conversations",
+            headers=_HEADERS,
+            json={"agent_key": "claude_code", "agent_config": {"cwd": str(tmp_path)}},
+        )
         assert resp.status_code == 201, resp.text
         conv_id = resp.json()["id"]
         assert resp.json()["title"] == "New conversation"
@@ -119,66 +123,10 @@ def test_conversation_crud_via_wired_daemon(app) -> None:  # type: ignore[no-unt
         assert resp.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# NoModelConfigured path: POST to turn endpoint with no model registered
-# ---------------------------------------------------------------------------
-
-
-def test_no_model_configured_path_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-def]
-    """With no model registered, POST to the turn endpoint returns 409 JSON.
-
-    This confirms the TurnOrchestrator + ModelService are wired and the turn
-    endpoint is reachable — without needing any LLM call.
-    """
-    with TestClient(app) as client:
-        set_active_token(_TOKEN)
-
-        resp = client.post("/api/v1/chat/conversations", headers=_HEADERS)
-        assert resp.status_code == 201
-        conv_id = resp.json()["id"]
-
-        resp = client.post(
-            f"/api/v1/chat/conversations/{conv_id}/messages",
-            headers=_HEADERS,
-            json={"text": "Hello"},
-        )
-        assert resp.status_code == 409, resp.text
-        body = resp.json()
-        assert body["error"]["code"] == "NO_MODEL_CONFIGURED"
-        assert "text/event-stream" not in resp.headers.get("content-type", "")
-
-
-def test_missing_credential_returns_400_not_500(app) -> None:  # type: ignore[no-untyped-def]
-    """A model whose credential is absent from the keychain must fail the turn
-    with a mapped 400 (CREDENTIAL_MISSING), keeping the conversation usable —
-    not a generic 500 (HOME is a tmp dir, so the keychain has no such entry)."""
-    with TestClient(app) as client:
-        set_active_token(_TOKEN)
-
-        resp = client.post(
-            "/api/v1/models",
-            headers=_HEADERS,
-            json={
-                "display_name": "Claude",
-                "provider": "anthropic",
-                "model": "claude-sonnet-4-6",
-                "credential_ref": "no-such-keychain-entry",
-            },
-        )
-        assert resp.status_code == 201, resp.text
-
-        resp = client.post("/api/v1/chat/conversations", headers=_HEADERS)
-        assert resp.status_code == 201
-        conv_id = resp.json()["id"]
-
-        resp = client.post(
-            f"/api/v1/chat/conversations/{conv_id}/messages",
-            headers=_HEADERS,
-            json={"text": "Hello"},
-        )
-        assert resp.status_code == 400, resp.text
-        assert resp.json()["error"]["code"] == "CREDENTIAL_MISSING"
-        assert "text/event-stream" not in resp.headers.get("content-type", "")
+# NOTE: the former NoModelConfigured / CREDENTIAL_MISSING turn tests were removed
+# with ADR-024 — those behaviours belonged to the builtin chat agent's model +
+# credential resolution, which is retired. The model registry's no-model path is
+# now exercised through ``coffer__ask`` (see test_agentic_rag.py).
 
 
 # ---------------------------------------------------------------------------
@@ -210,16 +158,16 @@ def test_chat_db_tables_created_on_startup(app, tmp_path) -> None:  # type: igno
 
 @pytest.mark.acceptance(spec="008-agent-chat", scenario="list available agents")
 def test_list_agents_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-def]
-    """GET /api/v1/chat/agents lists the built-in + CLI agents with availability."""
+    """GET /api/v1/chat/agents lists only Coffer-managed agents (ADR-024)."""
     with TestClient(app) as client:
         set_active_token(_TOKEN)
         resp = client.get("/api/v1/chat/agents", headers=_HEADERS)
         assert resp.status_code == 200, resp.text
         agents = resp.json()["agents"]
         by_key = {a["agent_key"]: a for a in agents}
-        # The built-in agent is always present and available.
-        assert by_key["builtin"]["display_name"] == "Coffer Assistant"
-        assert by_key["builtin"]["available"] is True
+        # The built-in chat persona is retired (ADR-024); chat lists managed
+        # agents only — the local model now lives on as the coffer__ask tool.
+        assert "builtin" not in by_key
         # The CLI agents are registered; availability tracks whether their
         # binary is on PATH on this host (a bool either way, but present).
         assert {"claude_code", "codex"} <= set(by_key)
@@ -230,17 +178,17 @@ def test_list_agents_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-d
 @pytest.mark.acceptance(
     spec="008-agent-chat", scenario="choose an agent when starting a conversation"
 )
-def test_create_conversation_with_agent_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-def]
-    """Creating a conversation records the chosen agent and validates its config."""
+def test_create_conversation_with_agent_via_wired_daemon(app, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Creating a conversation records the chosen managed agent and its config."""
     with TestClient(app) as client:
         set_active_token(_TOKEN)
         resp = client.post(
             "/api/v1/chat/conversations",
             headers=_HEADERS,
-            json={"agent_key": "builtin", "agent_config": {}},
+            json={"agent_key": "claude_code", "agent_config": {"cwd": str(tmp_path)}},
         )
         assert resp.status_code == 201, resp.text
-        assert resp.json()["agent_key"] == "builtin"
+        assert resp.json()["agent_key"] == "claude_code"
 
 
 @pytest.mark.acceptance(
@@ -264,7 +212,7 @@ def test_create_conversation_rejects_unknown_agent_and_bad_config(app) -> None: 
         resp = client.post(
             "/api/v1/chat/conversations",
             headers=_HEADERS,
-            json={"agent_key": "builtin", "agent_config": {"model_id": "ghost"}},
+            json={"agent_key": "claude_code", "agent_config": {}},
         )
         assert resp.status_code == 400, resp.text
         assert resp.json()["error"]["code"] == "AGENT_CONFIG_REJECTED"

@@ -155,17 +155,16 @@ async def list_conversations(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_conversation(
-    body: ConversationCreate | None = None,
+    body: ConversationCreate,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
 ) -> ConversationOut:
-    """Create a conversation for the named agent.
+    """Create a conversation for the named Coffer-managed agent.
 
-    ``agent_key`` defaults to the built-in agent; ``agent_config`` is validated
-    by that agent. An unknown agent or an invalid config is rejected with 400.
+    ``agent_key`` is required (chat has no built-in agent since ADR-024);
+    ``agent_config`` is validated by that agent. An unknown agent or an invalid
+    config is rejected with 400.
     """
-    agent_key = body.agent_key if body is not None else "builtin"
-    agent_config = body.agent_config if body is not None else None
-    conv = await svc.create_conversation(agent_key=agent_key, agent_config=agent_config)
+    conv = await svc.create_conversation(agent_key=body.agent_key, agent_config=body.agent_config)
     return _conv_out(conv)
 
 

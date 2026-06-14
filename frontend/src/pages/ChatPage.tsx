@@ -77,7 +77,6 @@ export function ChatPage() {
         {c.activeConv ? (
           <MessageThread
             conversation={c.activeConv}
-            models={c.models}
             liveMessage={c.turn.liveMessage}
             isStreaming={c.turn.isStreaming}
             turnError={c.turn.error}
@@ -89,9 +88,7 @@ export function ChatPage() {
               c.turn.send(text);
             }}
             onClearTurnError={c.turn.clearError}
-            onModelChange={(modelId) => c.setConversationModel(c.activeConv!.id, modelId)}
             agentLabel={c.activeAgent?.display_name ?? c.activeConv.agent_key}
-            showModelSelector={c.activeConv.agent_key === "builtin"}
             readOnly={c.activeArchived}
             onRestore={() => c.restoreConversation(c.activeConv!.id)}
             restorePending={c.restorePending}
@@ -122,13 +119,11 @@ export function ChatPage() {
         ) : (
           <DraftThread
             agents={c.agents}
-            models={c.models}
             agentKey={c.effectiveDraft.agentKey}
-            modelId={c.effectiveDraft.modelId}
             cwd={c.effectiveDraft.cwd}
             recentCwds={c.recentCwds}
+            noManagedAgent={c.noManagedAgent}
             onAgentChange={c.setDraftAgent}
-            onModelChange={c.setDraftModel}
             onCwdChange={c.setDraftCwd}
             onSend={c.sendDraft}
             creating={c.creating}

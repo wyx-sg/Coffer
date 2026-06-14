@@ -55,6 +55,23 @@ provider 接缝保持诚实的 test-drive 目标，(b) IM peer 驱动、用户�
 会话。**移出范围：** 把 Coffer 当作主力的浏览器内编码聊天；只对那个定位才有意义的
 能力保持在范围外，除非未来某个 spec 重开它。
 
+## 再次定位 —— 内置 agent 是内部能力（[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)）
+
+[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)
+部分取代了上面的 Vault Console 定位。`builtin`「Coffer Assistant」**退出聊天人格**：
+它不再是注册的聊天 agent，并从 agent 选择器中移除。聊天**只**与 Coffer 受管 agent
+（`claude_code`、`codex`，及将来的受管 agent）对话，界面从 _Vault Console（金库控制
+台）_ 改回 **Chat（聊天）**。"通过内置 agent 与金库对话"这一职责被去掉；本地模型重塑
+为**仅内部**能力，只能通过 `coffer__*` MCP 工具触达——即对 `coffer__search_tools` 的
+语义升级，与一个对知识/记忆的新 `coffer__ask` agentic-RAG 工具（见 ADR-024）。**旁观
+并审批 channel 驱动会话**这一职责（ADR-021 职责 2）原样存续，走同一套
+`ConversationPort` / `TurnPort` / `submit_approval` 接缝。
+
+下文用户故事、验收场景与功能需求中仍把内置 agent 描述为可选聊天 agent 的部分（它的
+model 选择器、它在聊天里的金库工具调用、对它的 `coffer chat`），应读作 ADR-024 从聊天
+面移除的历史已交付行为；LLM/agentic-loop 机器保留但被重塑到 `coffer__ask` 之后，而非
+作为聊天人格呈现给用户。
+
 ## 用户场景与测试
 
 ### 用户故事 1 —— 在首次聊天前配置一个模型 provider（优先级：P1）
@@ -234,26 +251,6 @@ agent 使用哪一个。
 
 ---
 
-### 用户故事 9 —— 从命令行聊天（优先级：P2）
-
-用户，一名开发者，在没有 GUI 的情况下与内置 agent 交谈：
-`coffer chat` 打开一个交互式流式会话；`coffer chat -m "…"` 运行一个回合并打印
-回复。
-
-**为何此优先级**：CLI 对等是 Coffer 面向开发者界面的一个长期约定。不阻塞 GUI
-交付物。
-
-**独立测试**：运行 `coffer chat -m "say hello"` 并在 stdout 上观察一个流式回复；
-运行 `coffer chat`，进行一个两回合对话，退出，并确认该对话出现在 GUI 历史列表中。
-
-**覆盖的场景**：
-
-- `coffer chat -m` 运行一个单回合并打印回复
-- `coffer chat` 进行一个交互式多回合会话
-- CLI 对话与 GUI 列出的是同一批实体
-
----
-
 ### 用户故事 10 —— 看 agent 做了什么以及花了多少（优先级：P3）
 
 每个回合在结果消息上记录 token 用量，而内置 agent 调用的每个工具流经 gateway 的
@@ -347,8 +344,9 @@ agent 使用哪一个。
 
 - **Given** 一个运行中守护进程，
 - **When** 用户询问平台它提供哪些 agent，
-- **Then** 内置 agent 被列出，带一个显示名与一个可用性标志，且该列表可从 REST
-  API 触达。
+- **Then** 受管 agent（`claude_code`、`codex`）被列出，各带一个显示名与一个可用性
+  标志，`builtin` agent **不**在其中（[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)），
+  且该列表可从 REST API 触达。
 
 ### 场景：开始一个对话时选择一个 agent
 
@@ -376,33 +374,12 @@ agent 使用哪一个。
 - **When** 守护进程重启且用户重新打开该对话，
 - **Then** 每条消息都存在且未改变。
 
-### 场景：agent 调用一个 vault 工具
-
-- **Given** 一个 memory store 包含一条能回答某问题的记录，
-- **When** 用户询问该问题，
-- **Then** 该回合包含一次渲染为内联可展开卡片的 `coffer__recall` 工具调用，且
-  答案植根于该记录。
-
 ### 场景：skills 作为工具可触达
 
 - **Given** vault 中至少一个有效的 skill，
 - **When** agent 列出可用工具，
 - **Then** `coffer__list_skills` 与 `coffer__load_skill` 存在，且
   `coffer__load_skill` 返回该 skill 的内容。
-
-### 场景：一次失败的工具调用不破坏回合
-
-- **Given** 一个在被调用时返回错误的工具，
-- **When** agent 在一个回合中调用它，
-- **Then** 工具卡片显示一个失败状态，错误作为一个工具结果返回给 agent，且回合
-  仍以一条助手消息完成。
-
-### 场景：工具迭代上限干净地结束回合
-
-- **Given** 一个会无限调用工具的回合，
-- **When** 迭代上限被达到，
-- **Then** 回合干净地结束 —— 一个正常的回合完成（`turn_done`，而非
-  `turn_error`），携带 stop reason `max_iterations` —— 且对话保持可用。
 
 ### 场景：一个 agent 回合为人工审批而暂停
 
@@ -467,14 +444,6 @@ agent 使用哪一个。
 - **Given** 两个配置好的模型，
 - **When** 用户设置一个对话的模型并发送一条消息，
 - **Then** 回合运行在所选模型上且助手消息记录产生它的模型。
-
-### 场景：聊天与模型的命令行对等
-
-- **Given** 一个运行中守护进程，
-- **When** 用户运行 `coffer model add` 与 `coffer model list --json`，然后
-  `coffer chat -m "…"` 与一个交互式 `coffer chat` 会话，
-- **Then** 模型注册并列出，一个流式回复被产生，且 CLI 对话出现在 GUI 显示的
-  同一历史列表中。
 
 ### 场景：no-model 空状态
 
@@ -632,7 +601,8 @@ agent 使用哪一个。
   现有的 002-ui-shell IA 在其余方面不变。
 - **FR-029**：System MUST 提供一个覆盖每个模型注册操作的 Settings → Models 页面。
 - **FR-030**：GUI 中可用的每个聊天与模型操作 MUST 通过 REST API 可用，且模型操作
-  加 `coffer chat` MUST 作为 CLI 命令可用；CLI 读操作 MUST 支持 `--json`。
+  MUST 作为 CLI 命令可用；CLI 读操作 MUST 支持 `--json`。（`coffer chat` CLI 随内置
+  聊天 agent 的退役一并移除，ADR-024。）
 
 **可观测性**
 
@@ -642,11 +612,14 @@ agent 使用哪一个。
   agent 进行的工具调用记录在 gateway 的调用日志中，归属于该 agent 的 gateway
   session。
 
-**Vault Console：来源呈现（[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md)）**
+**Chat 界面：来源呈现（[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md)，被 [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md) 修订）**
 
-- **FR-033**：Chat 界面 MUST 以 **Vault Console** 呈现：其主要角色是通过内置 agent
-  与金库对话、以及旁观/审批 channel 驱动的会话。它 MUST NOT 把自己定位为主力的浏览器
-  内编码聊天；CLI agent 仍作为 provider 接缝验证、以及 channel 驱动会话的目标而保留。
+- **FR-033**：Chat 界面（标签为 **Chat（聊天）**，按 [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)
+  从 _Vault Console_ 改回）MUST **只**与 Coffer 受管 agent 对话，并 MUST 呈现、让用户
+  旁观/审批 channel 驱动的会话。`builtin` agent MUST NOT 作为聊天 agent 提供；其模型是
+  仅内部能力，只能通过 `coffer__*` 工具触达（ADR-024），而非聊天人格。Chat 界面 MUST
+  NOT 把自己定位为主力的浏览器内编码聊天；受管 agent 仍作为 provider 接缝验证、以及
+  channel 驱动会话的目标而保留。
 - **FR-034**：会话历史 MUST 呈现每个会话的来源（网页草稿 vs channel peer），并对
   channel 来源的会话呈现 peer 身份；任一会话上的待审批工具调用 MUST 可从网页审批
   卡片解决，与 channel 自身的审批控件等价（两者解决 FR-020 的同一 human-approval

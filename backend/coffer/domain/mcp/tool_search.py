@@ -83,4 +83,34 @@ def rank_tools(
     return scored[:top_k]
 
 
-__all__ = ["ScoredTool", "rank_tools"]
+def rank_by_similarity(
+    query_vec: Sequence[float],
+    doc_vecs: Sequence[Sequence[float]],
+    top_k: int,
+) -> list[ScoredTool]:
+    """Rank ``doc_vecs`` by cosine similarity to ``query_vec``; best-first.
+
+    Pure + deterministic (ties keep catalogue order). A zero-norm query or doc
+    vector scores 0. Used for semantic tool search when an embedder is
+    configured; the BM25 :func:`rank_tools` is the offline-eval-guarded
+    fallback.
+    """
+    if top_k <= 0 or not doc_vecs or not query_vec:
+        return []
+    q_norm = math.sqrt(sum(x * x for x in query_vec))
+    if q_norm == 0.0:
+        return []
+
+    scored: list[ScoredTool] = []
+    for i, dv in enumerate(doc_vecs):
+        d_norm = math.sqrt(sum(x * x for x in dv))
+        if d_norm == 0.0:
+            continue
+        dot = sum(a * b for a, b in zip(query_vec, dv, strict=False))
+        scored.append(ScoredTool(index=i, score=dot / (q_norm * d_norm)))
+
+    scored.sort(key=lambda s: (-s.score, s.index))
+    return scored[:top_k]
+
+
+__all__ = ["ScoredTool", "rank_by_similarity", "rank_tools"]

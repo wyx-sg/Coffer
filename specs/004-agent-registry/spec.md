@@ -9,6 +9,8 @@
 
 > **Workspace amendment.** Stories 9–12 extend the registry into the agent's real on-disk workspace: the MCP servers actually configured in the agent's own files, the agent's installed plugins, and directory-type config entries. The guiding principle is **ingest → hub → deliver**: anything shareable found in an agent's workspace can be adopted into Coffer's hub (the MCP gateway, the master skill store of spec 005) and delivered back to any agent, instead of living as per-agent one-off config. All writes go through each agent's documented configuration paths only; internal state files are read, never written.
 
+> **Note on the built-in agent ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)).** This registry holds only **managed** agents — locally-installed external coding agents (Claude Code, Codex, …) that Coffer delivers assets to. The former `builtin` "Coffer Assistant" is **not** a registered agent here: [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md) retires it as a chat persona and recasts its local model as an internal Coffer capability reached only through `coffer__*` MCP tools. (The separate chat agent-provider registry of spec 008 likewise drops the `builtin` provider and lists managed agents only.)
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Discover installed agents and choose which to add (Priority: P1)

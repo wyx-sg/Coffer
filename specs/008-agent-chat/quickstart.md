@@ -2,6 +2,15 @@
 
 > 中文版: [quickstart.zh.md](./quickstart.zh.md)
 
+> **Note ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)).**
+> The **Coffer Assistant** chat persona described below has been retired. Chat now
+> talks **only** to Coffer-managed agents (Claude Code, Codex), and the page is
+> labelled **Chat** (not _Vault Console_). The local model is no longer a chat
+> agent; it powers internal `coffer__*` capabilities — semantic
+> `coffer__search_tools` and the `coffer__ask` agentic-RAG tool over your
+> knowledge and memory. The sections below describe the earlier built-in-agent
+> chat flow and are kept for historical reference.
+
 The Chat page lets you talk to **Coffer Assistant** — Coffer's built-in agent.
 The agent can use everything in your vault: your MCP server tools, your memory
 stores, your knowledge bases, and your skills.
@@ -10,10 +19,10 @@ stores, your knowledge bases, and your skills.
 
 The built-in agent needs an LLM. Open **Settings → Models** and add one:
 
-| Provider | What you supply |
-|---|---|
-| Anthropic | model id (e.g. `claude-sonnet-4-6`) + API-key credential |
-| OpenAI | model id (e.g. `gpt-4o`) + API-key credential |
+| Provider       | What you supply                                                       |
+| -------------- | --------------------------------------------------------------------- |
+| Anthropic      | model id (e.g. `claude-sonnet-4-6`) + API-key credential              |
+| OpenAI         | model id (e.g. `gpt-4o`) + API-key credential                         |
 | Ollama (local) | model id (e.g. `llama3.1`) + base URL (e.g. `http://localhost:11434`) |
 
 The first model you add becomes the default. A cloud model references its API
@@ -80,17 +89,17 @@ Conversations follow a two-stage lifecycle, both windows configurable under
    deleted the configured number of days **after it was archived** (default
    **30 days**).
 
-Either window can be set to *off* to disable that stage. Active conversations
+Either window can be set to _off_ to disable that stage. Active conversations
 (never archived) are never deleted by the delete stage.
 
 > **Upgrade note (behaviour change).** Earlier builds deleted conversations by
-> *last activity* (a single stage). The lifecycle is now the two-stage model
-> above: the delete window is measured from *archival*, not last activity, and
+> _last activity_ (a single stage). The lifecycle is now the two-stage model
+> above: the delete window is measured from _archival_, not last activity, and
 > the separate auto-archive window was added. On upgrade, a legacy single-stage
 > retention setting is reset to the new defaults (archive 7 days + delete 30
 > days); a setting you had **disabled** stays disabled. If you previously
 > customised conversation retention, re-check **Settings → Data** after
-> upgrading. This is safe: the new delete stage only ever removes *archived*
+> upgrading. This is safe: the new delete stage only ever removes _archived_
 > threads, so no active conversation is deleted by the change.
 
 ## What happens behind the scenes
