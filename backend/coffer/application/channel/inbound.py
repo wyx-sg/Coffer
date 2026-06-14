@@ -15,11 +15,12 @@ import asyncio
 import contextlib
 import logging
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.conversation_spec import resolve_conversation_spec
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import (
     ChannelAdapter,
@@ -34,7 +35,11 @@ from coffer.domain.channel.envelopes import (
     InboundMessage,
     parse_approval_value,
 )
-from coffer.domain.chat.errors import ApprovalNotFound, ConversationNotFound, TurnInProgress
+from coffer.domain.chat.errors import (
+    ApprovalNotFound,
+    ConversationNotFound,
+    TurnInProgress,
+)
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
 
@@ -45,8 +50,11 @@ _QUEUE_MAX = 10
 _HELP_TEXT = (
     "Coffer channel commands:\n"
     "/new — start a fresh conversation\n"
+    "/agent [key] — show or switch the agent (opens a fresh conversation)\n"
+    "/cwd [name] — show or switch the workspace (opens a fresh conversation)\n"
+    "/model [name] — show or switch the model (next turn)\n"
     "/stop — interrupt the running turn\n"
-    "/status — active conversation and turn state\n"
+    "/status — active conversation, agent, workspace, and turn state\n"
     "/help — this list"
 )
 
@@ -83,6 +91,8 @@ class ChannelBinding:
     default_agent: str
     default_agent_config: dict[str, Any] | None
     adapter: ChannelAdapter
+    workspaces: dict[str, str] = field(default_factory=dict)  # name -> absolute path
+    default_workspace: str | None = None
 
 
 @dataclass
@@ -108,12 +118,14 @@ class InboundProcessor:
         conversations: ConversationPort,
         turns: TurnPort,
         audit: AuditService,
+        agents: AgentCatalogPort,
     ) -> None:
         self._peers = peers
         self._pairing = pairing
         self._conversations = conversations
         self._turns = turns
         self._audit = audit
+        self._agents = agents
         self._bindings: dict[str, ChannelBinding] = {}
         self._sessions: dict[str, _Session] = {}
 
@@ -270,17 +282,11 @@ class InboundProcessor:
         if command in ("/help", "/start"):
             await self._safe_send(binding, peer.chat_id, _HELP_TEXT)
         elif command == "/new":
-            try:
-                conv = await self._conversations.create_conversation(
-                    agent_key=binding.default_agent,
-                    agent_config=binding.default_agent_config,
-                    actor="channel",
-                )
-            except CofferError as e:
-                await self._safe_send(binding, peer.chat_id, f"⚠️ {e} [{e.code}]")
-                return
-            await self._peers.set_active_conversation(binding.resource_id, conv.id)
-            await self._safe_send(binding, peer.chat_id, "🆕 Started a fresh conversation.")
+            await self._open_and_report(binding, peer, "🆕 Started a fresh conversation.")
+        elif command == "/agent":
+            await self._cmd_agent(binding, peer, text)
+        elif command == "/cwd":
+            await self._cmd_cwd(binding, peer, text)
         elif command == "/stop":
             # The turn that is actually draining wins over the peer's bound
             # conversation: after ``/new`` rebinds the peer, a turn can still be
@@ -297,14 +303,88 @@ class InboundProcessor:
             session = self._session(binding.name)
             running = session.drain_task is not None and not session.drain_task.done()
             conv = peer.active_conversation_id or "none yet"
+            agent = peer.preferred_agent or binding.default_agent
+            workspace = peer.preferred_workspace or binding.default_workspace or "(none)"
             await self._safe_send(
                 binding,
                 peer.chat_id,
-                f"Conversation: {conv}\nAgent: {binding.default_agent}\n"
+                f"Conversation: {conv}\nAgent: {agent}\nWorkspace: {workspace}\n"
                 f"Turn running: {'yes' if running else 'no'}\nQueued: {len(session.queue)}",
             )
         else:
             await self._safe_send(binding, peer.chat_id, f"Unknown command {command}. /help")
+
+    # -- structural switches (/agent, /cwd) --------------------------------------
+
+    async def _cmd_agent(self, binding: ChannelBinding, peer: ChannelPeer, text: str) -> None:
+        parts = text.split()
+        keys = self._agents.agent_keys()
+        if len(parts) < 2:
+            current = peer.preferred_agent or binding.default_agent
+            await self._safe_send(
+                binding,
+                peer.chat_id,
+                f"Agent: {current}\nAvailable: {', '.join(keys)}",
+            )
+            return
+        key = parts[1]
+        if key not in keys:
+            await self._safe_send(
+                binding, peer.chat_id, f"Unknown agent '{key}'. Available: {', '.join(keys)}"
+            )
+            return
+        await self._peers.set_preferences(
+            binding.resource_id, preferred_agent=key, preferred_workspace=peer.preferred_workspace
+        )
+        await self._open_and_report(
+            binding, replace(peer, preferred_agent=key), f"🔀 Switched to agent '{key}'."
+        )
+
+    async def _cmd_cwd(self, binding: ChannelBinding, peer: ChannelPeer, text: str) -> None:
+        parts = text.split()
+        available = ", ".join(sorted(binding.workspaces)) or "(none configured)"
+        if len(parts) < 2:
+            current = peer.preferred_workspace or binding.default_workspace or "(none)"
+            await self._safe_send(
+                binding, peer.chat_id, f"Workspace: {current}\nAvailable: {available}"
+            )
+            return
+        name = parts[1]
+        if name not in binding.workspaces:
+            # A bare path is never honored — only operator-authorized names.
+            await self._safe_send(
+                binding, peer.chat_id, f"Unknown workspace '{name}'. Available: {available}"
+            )
+            return
+        await self._peers.set_preferences(
+            binding.resource_id, preferred_agent=peer.preferred_agent, preferred_workspace=name
+        )
+        await self._open_and_report(
+            binding, replace(peer, preferred_workspace=name), f"📁 Switched to workspace '{name}'."
+        )
+
+    async def _open_and_report(
+        self, binding: ChannelBinding, peer: ChannelPeer, success: str
+    ) -> None:
+        try:
+            await self._open_conversation(binding, peer)
+        except CofferError as e:
+            await self._safe_send(
+                binding, peer.chat_id, self._explain_conversation_error(binding, e)
+            )
+            return
+        await self._safe_send(binding, peer.chat_id, success)
+
+    def _explain_conversation_error(self, binding: ChannelBinding, e: CofferError) -> str:
+        if isinstance(e, AgentConfigRejected) and e.reason in {
+            "invalid_cwd",
+            "cwd_not_a_directory",
+        }:
+            available = ", ".join(sorted(binding.workspaces)) or "(none configured)"
+            return (
+                f"⚠️ That agent needs a workspace. Pick one with /cwd <name>. Available: {available}"
+            )
+        return f"⚠️ {e} [{e.code}]"
 
     # -- turn driving ----------------------------------------------------------
 
@@ -330,10 +410,21 @@ class InboundProcessor:
                 pass
             else:
                 return peer.active_conversation_id
+        return await self._open_conversation(binding, peer)
+
+    async def _open_conversation(self, binding: ChannelBinding, peer: ChannelPeer) -> str:
+        """Create a conversation from the peer's sticky choices + channel
+        defaults (resolver) and make it the peer's active conversation."""
+        spec = resolve_conversation_spec(
+            default_agent=binding.default_agent,
+            default_agent_config=binding.default_agent_config,
+            workspaces=binding.workspaces,
+            default_workspace=binding.default_workspace,
+            preferred_agent=peer.preferred_agent,
+            preferred_workspace=peer.preferred_workspace,
+        )
         conv = await self._conversations.create_conversation(
-            agent_key=binding.default_agent,
-            agent_config=binding.default_agent_config,
-            actor="channel",
+            agent_key=spec.agent_key, agent_config=spec.agent_config, actor="channel"
         )
         await self._peers.set_active_conversation(binding.resource_id, conv.id)
         return str(conv.id)
@@ -343,9 +434,12 @@ class InboundProcessor:
         try:
             conversation_id = await self._ensure_conversation(binding, peer)
         except CofferError as e:
-            # e.g. the channel's default agent is unknown/misconfigured — the
-            # owner must see it in the chat, not only in the daemon log.
-            await self._safe_send(binding, peer.chat_id, f"⚠️ {e} [{e.code}]")
+            # e.g. the channel's default agent is unknown/misconfigured, or a
+            # bridged agent has no workspace — the owner must see it in the chat,
+            # not only in the daemon log.
+            await self._safe_send(
+                binding, peer.chat_id, self._explain_conversation_error(binding, e)
+            )
             return
         # A channel message driving a turn is first-class in the audit log:
         # who (the peer), through which channel, drives which agent.

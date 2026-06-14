@@ -239,12 +239,13 @@ class StubListenerController:
 class ScriptedAgentProvider:
     """``AgentProvider`` whose adapter a test swaps in before sending."""
 
-    agent_key = "builtin"
-
-    def __init__(self, adapter: Any) -> None:
+    def __init__(self, adapter: Any, agent_key: str = "builtin") -> None:
         self.adapter = adapter
+        self.agent_key = agent_key
+        self.last_agent_config: dict[str, Any] | None = None
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
+        self.last_agent_config = agent_config
         return None
 
     async def build_adapter(self, conversation_id: str) -> Any:
@@ -284,6 +285,7 @@ class ChannelEnv:
     peers: ChannelPeerRepo
     pairing: PairingManager
     provider: ScriptedAgentProvider
+    registry: AgentProviderRegistry
     chat: ChatService
     orchestrator: TurnOrchestrator
     processor: InboundProcessor
@@ -291,6 +293,12 @@ class ChannelEnv:
     service: ChannelService
     listener: StubListenerController
     created_adapters: list[FakeChannelAdapter] = field(default_factory=list)
+
+    def add_agent(self, agent_key: str, reply: str = "from-other") -> ScriptedAgentProvider:
+        """Register a second scripted agent so routing tests have a target."""
+        provider = ScriptedAgentProvider(default_reply_adapter(reply), agent_key=agent_key)
+        self.registry.register(provider, display_name=agent_key.title())
+        return provider
 
     async def register_channel(
         self,
@@ -318,7 +326,14 @@ class ChannelEnv:
         return peer
 
     def bind(
-        self, resource: Resource, adapter: FakeChannelAdapter | None = None
+        self,
+        resource: Resource,
+        adapter: FakeChannelAdapter | None = None,
+        *,
+        default_agent: str = "builtin",
+        default_agent_config: dict[str, Any] | None = None,
+        workspaces: dict[str, str] | None = None,
+        default_workspace: str | None = None,
     ) -> FakeChannelAdapter:
         adapter = adapter or FakeChannelAdapter()
         self.processor.bind(
@@ -326,8 +341,10 @@ class ChannelEnv:
                 name=resource.name,
                 resource_id=resource.id,
                 channel_type=str(resource.config.get("channel_type", "telegram")),
-                default_agent="builtin",
-                default_agent_config=None,
+                default_agent=default_agent,
+                default_agent_config=default_agent_config,
+                workspaces=workspaces or {},
+                default_workspace=default_workspace,
                 adapter=adapter,
             )
         )
@@ -371,7 +388,12 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     )
     orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, audit=audit)
     processor = InboundProcessor(
-        peers=peers, pairing=pairing, conversations=chat, turns=orchestrator, audit=audit
+        peers=peers,
+        pairing=pairing,
+        conversations=chat,
+        turns=orchestrator,
+        audit=audit,
+        agents=registry,
     )
 
     created_adapters: list[FakeChannelAdapter] = []
@@ -415,6 +437,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         peers=peers,
         pairing=pairing,
         provider=provider,
+        registry=registry,
         chat=chat,
         orchestrator=orchestrator,
         processor=processor,

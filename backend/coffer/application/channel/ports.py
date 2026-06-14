@@ -101,6 +101,16 @@ class ChannelPeerRepoPort(Protocol):
     ) -> None: ...
 
 
+class AgentCatalogPort(Protocol):
+    """The slice of the agent registry the channel core needs to route by key:
+    list the available agents and validate a chosen key. Satisfied structurally
+    by ``AgentProviderRegistry``."""
+
+    def agent_keys(self) -> list[str]: ...
+
+    def display_name(self, agent_key: str) -> str | None: ...
+
+
 @runtime_checkable
 class EventIngestAdapter(Protocol):
     """An adapter that receives platform events pushed from outside the
