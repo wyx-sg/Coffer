@@ -20,6 +20,8 @@ class InboundMessage:
     text: str
     platform_message_id: str
     timestamp: datetime
+    sender_id: str = ""  # stable per-sender id for the owner gate (Telegram
+    # from.id, SeaTalk employee_code); "" when the transport has none
 
 
 @dataclass(frozen=True)

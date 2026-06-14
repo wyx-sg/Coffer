@@ -11,9 +11,10 @@ high-entropy blob) is rejected with a pointer at the credential store.
 from __future__ import annotations
 
 import re
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, RootModel, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 # A credential ref is a human-chosen path like "channel/tg/bot-token".
 # Raw secrets are longer and machine-shaped; reject the obvious cases. The
@@ -37,11 +38,44 @@ def _reject_raw_secret(field: str, value: str) -> str:
     return value
 
 
-class TelegramChannelConfig(BaseModel):
-    channel_type: Literal["telegram"] = "telegram"
-    bot_token_ref: str = Field(min_length=1, max_length=256)
+class Workspace(BaseModel):
+    """A named, pre-authorized working directory an agent may run in when
+    chosen from this channel. The set of workspaces is the cwd allowlist: a
+    channel never honors a bare path typed into a chat message."""
+
+    name: str = Field(min_length=1, max_length=64)
+    path: str = Field(min_length=1, max_length=4096)
+
+    @field_validator("path")
+    @classmethod
+    def _path_absolute(cls, v: str) -> str:
+        if not (PurePosixPath(v).is_absolute() or PureWindowsPath(v).is_absolute()):
+            raise ValueError("workspace path must be absolute")
+        return v
+
+
+class _CommonChannelFields(BaseModel):
+    """Fields shared by every channel type: the agent it routes to by default
+    and the workspace allowlist used when routing to a bridged agent."""
+
     default_agent: str = "builtin"
     default_agent_config: dict[str, Any] | None = None
+    workspaces: list[Workspace] = Field(default_factory=list)
+    default_workspace: str | None = None
+
+    @model_validator(mode="after")
+    def _check_workspaces(self) -> _CommonChannelFields:
+        names = [w.name for w in self.workspaces]
+        if len(names) != len(set(names)):
+            raise ValueError("duplicate workspace name")
+        if self.default_workspace is not None and self.default_workspace not in names:
+            raise ValueError("default_workspace must name a declared workspace")
+        return self
+
+
+class TelegramChannelConfig(_CommonChannelFields):
+    channel_type: Literal["telegram"] = "telegram"
+    bot_token_ref: str = Field(min_length=1, max_length=256)
 
     @field_validator("bot_token_ref")
     @classmethod
@@ -49,13 +83,11 @@ class TelegramChannelConfig(BaseModel):
         return _reject_raw_secret("bot_token_ref", v)
 
 
-class SeaTalkChannelConfig(BaseModel):
+class SeaTalkChannelConfig(_CommonChannelFields):
     channel_type: Literal["seatalk"] = "seatalk"
     app_id: str = Field(min_length=1, max_length=128)
     app_secret_ref: str = Field(min_length=1, max_length=256)
     signing_secret_ref: str = Field(min_length=1, max_length=256)
-    default_agent: str = "builtin"
-    default_agent_config: dict[str, Any] | None = None
 
     @field_validator("app_secret_ref", "signing_secret_ref")
     @classmethod
