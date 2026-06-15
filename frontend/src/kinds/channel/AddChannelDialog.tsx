@@ -41,6 +41,7 @@ export function AddChannelDialog({
   const [appId, setAppId] = useState("");
   const [appSecret, setAppSecret] = useState("");
   const [signingSecret, setSigningSecret] = useState("");
+  const [publicBaseUrl, setPublicBaseUrl] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   const reset = () => {
@@ -50,6 +51,7 @@ export function AddChannelDialog({
     setAppId("");
     setAppSecret("");
     setSigningSecret("");
+    setPublicBaseUrl("");
     setFormError(null);
   };
 
@@ -79,6 +81,7 @@ export function AddChannelDialog({
             app_id: appId,
             app_secret: appSecret,
             signing_secret: signingSecret,
+            public_base_url: publicBaseUrl,
           },
     );
     if (!parsed.success) {
@@ -178,6 +181,21 @@ export function AddChannelDialog({
                   autoComplete="off"
                 />
                 <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkHint")}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="channel-public-base-url">
+                  {t("channels.dialog.publicBaseUrl")}
+                </Label>
+                <Input
+                  id="channel-public-base-url"
+                  value={publicBaseUrl}
+                  onChange={(e) => setPublicBaseUrl(e.target.value)}
+                  placeholder="https://xxx.trycloudflare.com"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("channels.dialog.publicBaseUrlHint")}
+                </p>
               </div>
             </>
           )}

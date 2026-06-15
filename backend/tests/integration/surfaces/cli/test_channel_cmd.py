@@ -298,7 +298,13 @@ def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) ->
     as_json = runner.invoke(app, ["channel", "status", "st", "--json"])
     assert as_json.exit_code == 0, as_json.output
     body = json.loads(as_json.output)
-    assert body["callback"] == {"port": 8787, "path": "/seatalk/st", "listener_running": True}
+    assert body["callback"] == {
+        "port": 8787,
+        "path": "/seatalk/st",
+        "listener_running": True,
+        "public_base_url": None,
+        "public_callback_url": None,
+    }
 
 
 def test_status_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:

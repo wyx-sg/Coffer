@@ -50,6 +50,13 @@ class CallbackInfoOut(BaseModel):
     port: int
     path: str
     listener_running: bool
+    public_base_url: str | None = None
+    public_callback_url: str | None = None
+
+
+class CallbackTestOut(BaseModel):
+    ok: bool
+    detail: str
 
 
 class ChannelStatusOut(BaseModel):
@@ -98,6 +105,8 @@ async def channel_status(name: str) -> ChannelStatusOut:
             port=status.callback.port,
             path=status.callback.path,
             listener_running=status.callback.listener_running,
+            public_base_url=status.callback.public_base_url,
+            public_callback_url=status.callback.public_callback_url,
         )
         if status.callback is not None
         else None
@@ -117,6 +126,13 @@ async def channel_status(name: str) -> ChannelStatusOut:
 async def notify_channel(name: str, body: NotifyIn, actor: str = Depends(get_actor)) -> NotifyOut:
     await get_channel_service().notify(name, body.text, actor=actor)
     return NotifyOut(sent=True)
+
+
+@router.post("/{name}/callback-test", response_model=CallbackTestOut)
+async def test_channel_callback(name: str) -> CallbackTestOut:
+    """Probe a SeaTalk channel's public callback URL end to end."""
+    result = await get_channel_service().test_callback(name)
+    return CallbackTestOut(ok=result.ok, detail=result.detail)
 
 
 @router.post("/{name}/events", response_model=EventAcceptedOut)

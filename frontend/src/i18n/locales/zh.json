@@ -1213,6 +1213,8 @@
       "signingSecret": "Signing Secret",
       "telegramHint": "BotFather 给你的机器人 token。",
       "seatalkHint": "来自 SeaTalk 开放平台应用的 App ID、App Secret 和 Signing Secret。",
+      "publicBaseUrl": "公网回调地址（base URL）",
+      "publicBaseUrlHint": "可选。你的隧道公网地址（如 https://xxx.trycloudflare.com）。Coffer 会据此拼出完整回调 URL，供你填到 SeaTalk 开放平台。",
       "created": "渠道 {{name}} 已注册"
     },
     "edit": {
@@ -1260,9 +1262,15 @@
     },
     "callback": {
       "title": "SeaTalk 回调",
-      "endpoint": "回调地址",
+      "registerUrl": "填到 SeaTalk 的回调地址",
+      "copy": "复制",
+      "copied": "已复制",
+      "test": "测试可达性",
+      "testing": "测试中…",
+      "setBaseUrlHint": "在「编辑」里填入你的隧道公网地址（base URL），这里就会显示要填到 SeaTalk 的完整回调地址。",
+      "endpoint": "本地监听",
       "listener": "监听进程",
-      "hint": "用隧道工具（cloudflared、ngrok）指向该地址，并把公网 URL 注册到 SeaTalk 开放平台。"
+      "hint": "用隧道工具（cloudflared、ngrok）指向本地监听地址。可达性测试仅验证链路与握手，签名密钥是否与 SeaTalk 一致需真实事件才能确认。"
     },
     "deleteTitle": "删除渠道",
     "deleteConfirm": "确定删除渠道“{{name}}”？其适配器将停止，配对关系也会被移除。"

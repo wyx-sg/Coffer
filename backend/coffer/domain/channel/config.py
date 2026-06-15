@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Annotated, Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
@@ -88,11 +89,36 @@ class SeaTalkChannelConfig(_CommonChannelFields):
     app_id: str = Field(min_length=1, max_length=128)
     app_secret_ref: str = Field(min_length=1, max_length=256)
     signing_secret_ref: str = Field(min_length=1, max_length=256)
+    # The tunnel's public base URL (scheme://host[:port]); the full SeaTalk
+    # callback URL is this + "/seatalk/<name>". Optional: Coffer does not run the
+    # tunnel, so until the user records their public base URL here we only know
+    # the loopback address.
+    public_base_url: str | None = Field(default=None, max_length=512)
 
     @field_validator("app_secret_ref", "signing_secret_ref")
     @classmethod
     def _ref_not_secret(cls, v: str) -> str:
         return _reject_raw_secret("secret ref", v)
+
+    @field_validator("public_base_url")
+    @classmethod
+    def _normalize_public_base_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            return None
+        parsed = urlparse(v)
+        if parsed.scheme != "https":
+            raise ValueError("public_base_url must start with https:// (SeaTalk requires HTTPS)")
+        if not parsed.netloc:
+            raise ValueError("public_base_url must include a host, e.g. https://example.com")
+        if parsed.path.strip("/") or parsed.query or parsed.fragment:
+            raise ValueError(
+                "public_base_url must be a bare base URL (scheme://host) with no path; "
+                "Coffer appends /seatalk/<name> itself"
+            )
+        return v.rstrip("/")
 
 
 ChannelConfig = Annotated[

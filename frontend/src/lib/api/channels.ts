@@ -26,6 +26,16 @@ export interface CallbackInfo {
   port: number;
   path: string;
   listener_running: boolean;
+  /** The tunnel's public base URL the user recorded (null until set). */
+  public_base_url: string | null;
+  /** Full callback URL to register on SeaTalk (base + path); null until base set. */
+  public_callback_url: string | null;
+}
+
+/** Result of the public-callback reachability self-test. */
+export interface CallbackTestResult {
+  ok: boolean;
+  detail: string;
 }
 
 export interface ChannelStatus {
@@ -91,4 +101,9 @@ export function getChannelStatus(name: string): Promise<ChannelStatus> {
 /** Push a text message to the channel's paired peer. */
 export function notifyChannel(name: string, text: string): Promise<NotifyOut> {
   return call<NotifyOut>("POST", `/channels/${encodeURIComponent(name)}/notify`, { text });
+}
+
+/** Probe the channel's public callback URL end to end (SeaTalk only). */
+export function testChannelCallback(name: string): Promise<CallbackTestResult> {
+  return call<CallbackTestResult>("POST", `/channels/${encodeURIComponent(name)}/callback-test`);
 }

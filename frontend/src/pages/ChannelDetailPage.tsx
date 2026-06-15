@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Switch } from "@/components/ui/switch";
+import { ChannelCallbackCard } from "@/kinds/channel/ChannelCallbackCard";
 import {
-  ChannelCallbackCard,
   ChannelPairingCard,
   ChannelStatusCard,
   ChannelTestMessageCard,
@@ -145,7 +145,9 @@ export function ChannelDetailPage() {
         />
       </div>
 
-      {status?.callback ? <ChannelCallbackCard callback={status.callback} /> : null}
+      {status?.callback ? (
+        <ChannelCallbackCard name={name} callback={status.callback} />
+      ) : null}
 
       <ChannelTestMessageCard
         hasPeer={status?.peer != null}
