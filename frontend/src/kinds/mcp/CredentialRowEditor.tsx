@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 export interface CredRow {
@@ -42,10 +43,10 @@ export function CredentialRowEditor({ creds, onUpdate, onRemove, onAdd }: Props)
               value={row.name}
               onChange={(e) => onUpdate(idx, { name: e.target.value })}
               placeholder="GITHUB_TOKEN"
-              className="font-mono text-xs"
+              className="flex-1 font-mono text-xs"
             />
-            <Input
-              type="password"
+            <PasswordInput
+              containerClassName="flex-1"
               value={row.value}
               onChange={(e) => onUpdate(idx, { value: e.target.value })}
               placeholder={

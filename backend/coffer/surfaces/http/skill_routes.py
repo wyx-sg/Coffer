@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import pathlib
 import re
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
-from coffer.application.skill import file_ops
 from coffer.application.skill.service import SkillService, UpdateOutcome
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
@@ -97,29 +95,8 @@ class DriftReportOut(BaseModel):
     entries: list[DriftEntryOut]
 
 
-class SkillFileNodeOut(BaseModel):
-    """One node in a skill's master-folder tree (recursive)."""
-
-    name: str
-    path: str  # POSIX, relative to the master folder root ("" for the root)
-    type: str  # "file" | "dir"
-    size: int | None = None
-    # True on a dir whose children were clipped at MAX_TREE_DEPTH, so the
-    # viewer can signal the tree is incomplete (CODE-F8).
-    truncated: bool = False
-    children: list[SkillFileNodeOut] = Field(default_factory=list)
-
-
-class SkillFileTreeOut(BaseModel):
-    root: SkillFileNodeOut
-
-
-class SkillFileContentOut(BaseModel):
-    path: str  # POSIX, relative to the master folder root
-    content: str  # empty when ``binary`` is true
-    truncated: bool
-    binary: bool
-    size: int
+# The skill master-folder viewer/editor schemas + routes live in
+# ``skill_file_routes.py`` (split out for the component size cap).
 
 
 # ---------- helpers ----------
@@ -158,17 +135,6 @@ def _validate_skill_name(name: str) -> str:
 async def _agents_by_id(svc: SkillService) -> dict[int, str]:
     """Build an agent-id -> name map once per request (avoids an N+1)."""
     return {a.id: a.name for a in await svc.list_agents()}
-
-
-def _node_to_out(node: file_ops.FileNode) -> SkillFileNodeOut:
-    return SkillFileNodeOut(
-        name=node.name,
-        path=node.path,
-        type=node.type,
-        size=node.size,
-        truncated=node.truncated,
-        children=[_node_to_out(c) for c in node.children],
-    )
 
 
 async def _to_skill_out(
@@ -330,54 +296,6 @@ async def disable_skill_for_agent(
         last_linked_at=b.last_linked_at,
         last_link_path=b.last_link_path,
         link_mode=b.link_mode,
-    )
-
-
-@router.get("/{name}/files", response_model=SkillFileTreeOut)
-async def list_skill_files(
-    name: str,
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-) -> SkillFileTreeOut:
-    """Return the skill's master folder as a read-only file tree."""
-    name = _validate_skill_name(name)
-    # 404 if the skill isn't registered (raises ResourceNotFound → 404).
-    await svc.get_skill(name)
-    root = file_ops.build_file_tree(pathlib.Path(svc.master_path(name)))
-    return SkillFileTreeOut(root=_node_to_out(root))
-
-
-@router.get("/{name}/files/content", response_model=SkillFileContentOut)
-async def read_skill_file(
-    name: str,
-    path: str = Query(min_length=1),
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-) -> SkillFileContentOut:
-    """Read a single file's contents from the skill's master folder."""
-    name = _validate_skill_name(name)
-    # 404 if the skill isn't registered (raises ResourceNotFound → 404).
-    await svc.get_skill(name)
-    master = pathlib.Path(svc.master_path(name))
-    try:
-        result = file_ops.read_skill_file(master, path)
-    except ValueError as exc:
-        # Path escapes the skill folder — reject before any read happens.
-        # The error handler maps a 400 HTTPException to the {error:{code:
-        # BAD_REQUEST, message, details}} envelope used across the surface.
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="requested path is outside the skill folder",
-        ) from exc
-    except (FileNotFoundError, IsADirectoryError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"no such file in skill: {path}",
-        ) from exc
-    return SkillFileContentOut(
-        path=result.path,
-        content=result.content,
-        truncated=result.truncated,
-        binary=result.binary,
-        size=result.size,
     )
 
 

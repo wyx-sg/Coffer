@@ -94,7 +94,7 @@ Files in agents' `config_dir/skills` folders can be tampered with (deleted, repl
 
 ### User Story 6 — Manage skills through the desktop app (Priority: P2)
 
-The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker or paste a Git URL, and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a read-only Files tab (file tree + file viewer). Per-agent enable/disable lives on the agent detail page — the agent's "Skills" tab lists the skills bound to that agent with per-binding toggles.
+The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker or paste a Git URL, and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + file viewer that renders Markdown and supports editing existing text files). Per-agent enable/disable lives on the agent detail page — the agent's "Skills" tab lists the skills bound to that agent with per-binding toggles.
 
 **Why this priority**: Non-CLI users need a visual surface for daily management.
 
@@ -322,6 +322,12 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user requests file contents for a path that resolves outside the master folder (`..` traversal, an absolute path, or an escaping symlink),
 - **Then** the request is rejected with a `400` error before any file is read, and no content is returned.
 
+### Scenario: edit a skill file
+
+- **Given** an imported skill that contains an existing text file,
+- **When** the user saves new contents for that file by its folder-relative path,
+- **Then** Coffer overwrites the file atomically and a subsequent read returns the new contents; writing a non-existent path, a path outside the master folder, an existing binary file, or content over the size cap is rejected (`404`/`400`) and the file is left unchanged.
+
 ### Scenario: list unmanaged skills across an agent's skill locations
 
 - **Given** a registered `codex` agent with one Coffer-managed link in `<config_dir>/skills`, one hand-copied skill folder there, and another skill folder in `~/.agents/skills`,
@@ -469,7 +475,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 **Surfaces**
 
 - **FR-019**: Every management operation MUST be available through (a) the REST API, (b) the `coffer skill ...` CLI with `--json`, and (c) the desktop Skills page.
-- **FR-021**: System MUST expose a read-only view of a skill's master folder: a recursive file tree (name, folder-relative path, type, size, children) and the contents of an individual file. Reads MUST be contained to the master folder — any path that resolves outside it (`..` traversal, absolute path, or escaping symlink) MUST be rejected. File reads MUST be size-capped (truncating with a `truncated` flag) and MUST flag non-UTF-8 / NUL-containing files as binary with empty content. No mutation, no symlink-following out of the folder.
+- **FR-021**: System MUST expose a view of a skill's master folder: a recursive file tree (name, folder-relative path, type, size, children) and the contents of an individual file. Markdown files render as formatted Markdown; other text files show raw. Reads MUST be contained to the master folder — any path that resolves outside it (`..` traversal, absolute path, or escaping symlink) MUST be rejected. File reads MUST be size-capped (truncating with a `truncated` flag) and MUST flag non-UTF-8 / NUL-containing files as binary with empty content. The system MUST also allow overwriting an **existing text file** in the master folder, under the same containment guard and size cap; it MUST refuse to create new files/directories here, to write outside the folder, or to overwrite a binary file with text. The write MUST be atomic. No symlink-following out of the folder.
 
 **Observability**
 

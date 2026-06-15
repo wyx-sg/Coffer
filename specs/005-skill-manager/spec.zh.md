@@ -96,7 +96,7 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 ### User Story 6 —— 在桌面 App 中管理 skill（优先级 P2）
 
-用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入或粘贴 Git URL 拉取，并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个只读的 Files tab（文件树 + 文件查看器）。按 agent 的启用/禁用在 agent 详情页上进行——该 agent 的「Skills」tab 列出绑定到该 agent 的 skill，并带每条 binding 的开关。
+用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入或粘贴 Git URL 拉取，并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 文件查看器：渲染 Markdown 并支持编辑已存在的文本文件）。按 agent 的启用/禁用在 agent 详情页上进行——该 agent 的「Skills」tab 列出绑定到该 agent 的 skill，并带每条 binding 的开关。
 
 **为什么是这个优先级**：非 CLI 用户需要一个可视化日常管理面板。
 
@@ -324,6 +324,12 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **When** 用户请求一个解析后位于 master 文件夹之外的路径（`..` 穿越、绝对路径或越界 symlink）的文件内容，
 - **Then** 请求在任何文件被读取前以 `400` 错误拒绝，且不返回任何内容。
 
+### Scenario: edit a skill file（编辑 skill 文件）
+
+- **Given** 一个已导入、含有某个已存在文本文件的 skill，
+- **When** 用户按相对路径为该文件保存新内容，
+- **Then** Coffer 原子地覆盖该文件，随后读取返回新内容；写入不存在的路径、master 文件夹之外的路径、已存在的二进制文件，或超过大小上限的内容都会被拒绝（`404`/`400`），且文件保持不变。
+
 ### Scenario: list unmanaged skills across an agent's skill locations（列出 agent 各 skill 位置的非托管 skill）
 
 - **Given** 一个已注册 `codex` agent，`<config_dir>/skills` 下有一条 Coffer 托管链接与一个手工拷贝的 skill 文件夹，`~/.agents/skills` 下另有一个 skill 文件夹，
@@ -471,7 +477,7 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 **Surface**
 
 - **FR-019**：每一项管理操作必须可通过（a）REST API、（b）`coffer skill ...` CLI（含 `--json`）、（c）桌面 Skills 页 三种 surface 完成。
-- **FR-021**：系统必须提供 skill master 文件夹的只读视图：一棵递归文件树（name、相对路径、type、size、children）以及单个文件的内容。读取必须限制在 master 文件夹内——任何解析后位于其外的路径（`..` 穿越、绝对路径或越界 symlink）必须被拒绝。文件读取必须做大小上限（超限时截断并带 `truncated` 标记），并把非 UTF-8 / 含 NUL 字节的文件标记为 binary 且内容为空。不做任何写入，不跟随越界 symlink。
+- **FR-021**：系统必须提供 skill master 文件夹的视图：一棵递归文件树（name、相对路径、type、size、children）以及单个文件的内容。Markdown 文件渲染为格式化 Markdown，其他文本文件以原文显示。读取必须限制在 master 文件夹内——任何解析后位于其外的路径（`..` 穿越、绝对路径或越界 symlink）必须被拒绝。文件读取必须做大小上限（超限时截断并带 `truncated` 标记），并把非 UTF-8 / 含 NUL 字节的文件标记为 binary 且内容为空。系统还必须允许在同样的限制与大小上限下**覆盖 master 文件夹中已存在的文本文件**；必须拒绝在此创建新文件/目录、写到文件夹之外、或用文本覆盖二进制文件。写入必须是原子的。不跟随越界 symlink。
 
 **可观测**
 

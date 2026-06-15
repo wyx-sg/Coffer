@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from coffer.application.agent.service import AgentService
+from coffer.domain.agent.descriptor import is_agent_enabled
 from coffer.domain.agent.types import AgentType
 
 
@@ -42,6 +43,8 @@ class AutoDetectService:
         existing = {r.config.get("type") for r in await self._agents.list()}
         candidates: list[AgentCandidate] = []
         for t in AgentType:
+            if not is_agent_enabled(t):
+                continue
             if t.value in existing:
                 continue
             if not t.detect_marker().exists():

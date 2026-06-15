@@ -29,7 +29,7 @@ export function ChatPage() {
           historyOpen ? "flex w-64" : "hidden w-0",
         )}
       >
-        <div className="flex items-center justify-between border-b border-border px-2 py-2">
+        <div className="flex items-center justify-between px-2 pt-2">
           <span className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t("chat.title")}
           </span>

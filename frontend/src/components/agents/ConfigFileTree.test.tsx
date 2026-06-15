@@ -1,7 +1,7 @@
 // frontend/src/components/agents/ConfigFileTree.test.tsx
-// Each config entry shows display name + mono path, plus a muted one-line
-// description of what the file is FOR — but only for keys we have copy for;
-// an unknown key renders no description (never a raw i18n key).
+// Each config entry shows its display name + mono path. The "what is this file
+// for" description was moved to the right-hand editor pane (ConfigEditorPane),
+// so the tree itself renders no description copy for any key.
 import { describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ConfigFileTree } from "./ConfigFileTree";
@@ -35,32 +35,17 @@ const SETTINGS: ConfigFileInfo = {
   modified_at: "2026-05-22T00:00:00Z",
 };
 
-describe("ConfigFileTree descriptions", () => {
-  test("renders the i18n description line for a known key", () => {
+describe("ConfigFileTree", () => {
+  test("renders the display name and mono path for an entry", () => {
     renderTree([SETTINGS]);
-    expect(screen.getByText(en.agents.config.desc.settings)).toBeInTheDocument();
+    expect(screen.getByText("User settings")).toBeInTheDocument();
+    expect(screen.getByText(SETTINGS.path)).toBeInTheDocument();
   });
 
-  test("renders a description for a directory-backed known key", () => {
-    renderTree([
-      {
-        key: "subagents",
-        display_name: "Subagents (agents/)",
-        path: "/home/u/.claude/agents",
-        format: "markdown",
-        exists: true,
-        size: null,
-        modified_at: null,
-        kind: "directory",
-        files: [],
-      },
-    ]);
-    expect(screen.getByText(en.agents.config.desc.subagents)).toBeInTheDocument();
-  });
-
-  test("renders no description (and no raw key) for an unknown key", () => {
-    renderTree([{ ...SETTINGS, key: "mystery", display_name: "Mystery file" }]);
-    expect(screen.getByText("Mystery file")).toBeInTheDocument();
-    expect(screen.queryByText(/agents\.config\.desc/)).not.toBeInTheDocument();
+  test("does not render the description line in the tree (moved to the pane)", () => {
+    renderTree([SETTINGS]);
+    expect(
+      screen.queryByText(en.agents.config.desc.settings),
+    ).not.toBeInTheDocument();
   });
 });

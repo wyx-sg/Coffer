@@ -220,15 +220,35 @@ paths:
         name: name
         required: true
         schema: { type: string }
-      - in: query
-        name: path
-        required: true
-        description: Path to the file, relative to the skill's master folder.
-        schema: { type: string, minLength: 1 }
     get:
       tags: [skills]
       operationId: readSkillFile
       summary: Read a single file's contents from a skill's master folder
+      parameters:
+        - in: query
+          name: path
+          required: true
+          description: Path to the file, relative to the skill's master folder.
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillFileContentOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    put:
+      tags: [skills]
+      operationId: writeSkillFile
+      summary: Overwrite one existing text file in a skill's master folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SkillFileWriteRequest" }
       responses:
         "200":
           description: OK
@@ -606,6 +626,22 @@ components:
         size:
           type: integer
           description: True byte size of the file on disk.
+    SkillFileWriteRequest:
+      type: object
+      required: [path, content]
+      properties:
+        path:
+          type: string
+          minLength: 1
+          description: >-
+            POSIX path of an EXISTING text file, relative to the master folder
+            root. Must stay inside the folder; new files / directories are not
+            created here.
+        content:
+          type: string
+          description: >-
+            Full new UTF-8 contents. Rejected (400) if it exceeds the file-size
+            cap or the target is an existing binary file.
 
   responses:
     Unauthorized:

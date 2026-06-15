@@ -50,52 +50,54 @@ export function ConversationList({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-2">
-        <div
-          className="inline-flex rounded-md bg-muted p-0.5"
-          role="tablist"
-          aria-label={t("chat.history.filterLabel")}
-        >
-          {(["active", "archived"] as const).map((v) => {
-            const selected = view === v;
-            return (
-              <button
-                key={v}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => {
-                  if (!selected) onToggleView();
-                }}
-                className={cn(
-                  "rounded px-2.5 py-1 text-xs font-medium transition-colors",
-                  selected
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {v === "active"
-                  ? t("chat.history.filterActive")
-                  : t("chat.history.filterArchived")}
-              </button>
-            );
-          })}
-        </div>
-        {!archivedView && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="size-7 p-0"
-            onClick={onCreate}
-            aria-label={t("chat.history.new")}
+      {/* One toolbar: view tabs + new-chat, then search — a single bordered
+          band instead of two stacked thin rows. */}
+      <div className="space-y-2 border-b border-border px-2 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <div
+            className="inline-flex rounded-md bg-muted p-0.5"
+            role="tablist"
+            aria-label={t("chat.history.filterLabel")}
           >
-            <Plus className="size-4" />
-          </Button>
-        )}
-      </div>
+            {(["active", "archived"] as const).map((v) => {
+              const selected = view === v;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => {
+                    if (!selected) onToggleView();
+                  }}
+                  className={cn(
+                    "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                    selected
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {v === "active"
+                    ? t("chat.history.filterActive")
+                    : t("chat.history.filterArchived")}
+                </button>
+              );
+            })}
+          </div>
+          {!archivedView && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-7 p-0"
+              onClick={onCreate}
+              aria-label={t("chat.history.new")}
+            >
+              <Plus className="size-4" />
+            </Button>
+          )}
+        </div>
 
-      {conversations.length > 0 && (
-        <div className="border-b border-border px-2 py-2">
+        {conversations.length > 0 && (
           <SearchInput
             value={query}
             onChange={setQuery}
@@ -103,8 +105,8 @@ export function ConversationList({
             placeholder={t("chat.history.search")}
             className="[&_input]:h-8 [&_input]:text-xs"
           />
-        </div>
-      )}
+        )}
+      </div>
 
       <div
         className="flex-1 overflow-y-auto px-2 py-2"

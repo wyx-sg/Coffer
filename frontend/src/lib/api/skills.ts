@@ -110,7 +110,7 @@ export interface SkillFileContentOut {
 }
 
 async function call<T>(
-  method: "GET" | "POST" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -159,4 +159,6 @@ export const skillsApi = {
   filesTree: (name: string) => call<SkillFileTreeOut>("GET", `/skills/${enc(name)}/files`),
   fileContent: (name: string, path: string) =>
     call<SkillFileContentOut>("GET", `/skills/${enc(name)}/files/content?path=${enc(path)}`),
+  writeFileContent: (name: string, path: string, content: string) =>
+    call<SkillFileContentOut>("PUT", `/skills/${enc(name)}/files/content`, { path, content }),
 };

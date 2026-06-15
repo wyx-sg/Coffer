@@ -22,19 +22,16 @@ import { fsApi } from "@/lib/api/fs";
 import { isTauri } from "@/lib/tauri";
 
 /**
- * Open the Tauri OS-native directory dialog. The import specifier is held in a
- * variable + `@vite-ignore`d so the web build never tries to resolve the
- * desktop-only plugin; callers guard on `isTauri()` and fall back on throw.
+ * Open the Tauri OS-native directory dialog. Uses a static import specifier so
+ * Vite bundles/code-splits the plugin and it resolves in the packaged app — a
+ * `@vite-ignore`d variable specifier leaves a bare import the WebView can't
+ * resolve at runtime, which then silently falls back to the web browser. The
+ * package is a frontend dependency; `isTauri()` guards invocation on web. This
+ * mirrors the working pattern in SyncMasterKeyCard.
  */
 async function pickNative(defaultPath?: string): Promise<string | null> {
-  const spec = "@tauri-apps/plugin-dialog";
-  const mod = (await import(/* @vite-ignore */ spec)) as {
-    open: (opts: {
-      directory?: boolean;
-      defaultPath?: string;
-    }) => Promise<string | string[] | null>;
-  };
-  const picked = await mod.open({ directory: true, defaultPath });
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({ directory: true, defaultPath });
   return typeof picked === "string" ? picked : null;
 }
 

@@ -196,6 +196,89 @@ def test_binary_file_returns_binary_true(tmp_path, monkeypatch):
         assert body["size"] == len(b"\x00\x01\x02PNG\x00")
 
 
+@pytest.mark.acceptance(spec="005-skill-manager", scenario="edit a skill file")
+def test_write_skill_file_roundtrip(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59760)
+    src = tmp_path / "src"
+    _write_nested_skill_folder(src, name="edit-skill")
+
+    with _client(app) as c:
+        _import(c, src)
+
+        new_body = "print('edited')\n"
+        r = c.put(
+            "/api/v1/skills/edit-skill/files/content",
+            json={"path": "scripts/run.py", "content": new_body},
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["content"] == new_body
+        assert body["binary"] is False
+        assert body["size"] == len(new_body)
+
+        # The change is persisted — a fresh read returns the new content.
+        r = c.get(
+            "/api/v1/skills/edit-skill/files/content",
+            params={"path": "scripts/run.py"},
+        )
+        assert r.json()["content"] == new_body
+
+
+def test_write_skill_file_rejects_missing_and_escape(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59770)
+    src = tmp_path / "src"
+    _write_nested_skill_folder(src, name="edit-guard")
+
+    with _client(app) as c:
+        _import(c, src)
+
+        # A file that does not exist cannot be written (no create-file).
+        r = c.put(
+            "/api/v1/skills/edit-guard/files/content",
+            json={"path": "scripts/new.py", "content": "x"},
+        )
+        assert r.status_code == 404, r.text
+
+        # Path traversal out of the master folder is rejected.
+        r = c.put(
+            "/api/v1/skills/edit-guard/files/content",
+            json={"path": "../../etc/passwd", "content": "x"},
+        )
+        assert r.status_code == 400, r.text
+
+    # Unknown skill is a 404.
+    with _client(app) as c:
+        r = c.put(
+            "/api/v1/skills/nope/files/content",
+            json={"path": "SKILL.md", "content": "x"},
+        )
+        assert r.status_code == 404, r.text
+
+
+def test_write_skill_file_rejects_binary_and_oversize(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59780)
+    src = tmp_path / "src"
+    _write_nested_skill_folder(src, name="edit-limits")
+    (src / "blob.bin").write_bytes(b"\x00\x01PNG\x00")
+
+    with _client(app) as c:
+        _import(c, src)
+
+        # Refuse to overwrite a binary file with text.
+        r = c.put(
+            "/api/v1/skills/edit-limits/files/content",
+            json={"path": "blob.bin", "content": "text"},
+        )
+        assert r.status_code == 400, r.text
+
+        # Content over the byte cap is rejected.
+        r = c.put(
+            "/api/v1/skills/edit-limits/files/content",
+            json={"path": "SKILL.md", "content": "a" * (MAX_FILE_BYTES + 1)},
+        )
+        assert r.status_code == 400, r.text
+
+
 def test_oversize_file_is_truncated(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59750)
     src = tmp_path / "src"
