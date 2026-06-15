@@ -57,6 +57,7 @@ export function EditChannelDialog({
   const [botToken, setBotToken] = useState("");
   const [appSecret, setAppSecret] = useState("");
   const [signingSecret, setSigningSecret] = useState("");
+  const [publicBaseUrl, setPublicBaseUrl] = useState(strField(config, "public_base_url"));
 
   // Offer the registered agents, plus the channel's current binding so a value
   // that is still loading or since-removed (e.g. a legacy "builtin") stays
@@ -71,6 +72,7 @@ export function EditChannelDialog({
     setBotToken("");
     setAppSecret("");
     setSigningSecret("");
+    setPublicBaseUrl(strField(config, "public_base_url"));
   };
 
   const submit = () => {
@@ -83,6 +85,7 @@ export function EditChannelDialog({
         bot_token: botToken,
         app_secret: appSecret,
         signing_secret: signingSecret,
+        public_base_url: channelType === "seatalk" ? publicBaseUrl : undefined,
       },
     });
     update.mutate(plan, {
@@ -134,15 +137,32 @@ export function EditChannelDialog({
           </div>
 
           {channelType === "seatalk" ? (
-            <div className="space-y-2">
-              <Label htmlFor="edit-channel-app-id">{t("channels.dialog.appId")}</Label>
-              <Input
-                id="edit-channel-app-id"
-                value={appId}
-                onChange={(e) => setAppId(e.target.value)}
-                autoComplete="off"
-              />
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="edit-channel-app-id">{t("channels.dialog.appId")}</Label>
+                <Input
+                  id="edit-channel-app-id"
+                  value={appId}
+                  onChange={(e) => setAppId(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-channel-public-base-url">
+                  {t("channels.dialog.publicBaseUrl")}
+                </Label>
+                <Input
+                  id="edit-channel-public-base-url"
+                  value={publicBaseUrl}
+                  onChange={(e) => setPublicBaseUrl(e.target.value)}
+                  placeholder="https://xxx.trycloudflare.com"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("channels.dialog.publicBaseUrlHint")}
+                </p>
+              </div>
+            </>
           ) : null}
 
           {channelType === "telegram" ? (

@@ -35,6 +35,9 @@ export const addChannelFormSchema = z.discriminatedUnion("channel_type", [
     app_id: z.string().min(1, "app id required"),
     app_secret: z.string().min(1, "app secret required"),
     signing_secret: z.string().min(1, "signing secret required"),
+    // Optional: the tunnel's public base URL (https://host). The full SeaTalk
+    // callback URL is composed from this on the channel detail page.
+    public_base_url: z.string().optional(),
   }),
 ]);
 
@@ -83,6 +86,9 @@ export function planChannel(values: AddChannelFormValues): ChannelPlan {
       app_secret_ref: appSecretRef,
       signing_secret_ref: signingSecretRef,
       default_agent: DEFAULT_AGENT,
+      ...(values.public_base_url?.trim()
+        ? { public_base_url: values.public_base_url.trim() }
+        : {}),
     },
     secrets: [
       { ref: appSecretRef, value: values.app_secret },
@@ -107,6 +113,8 @@ export interface ChannelEditValues {
   app_secret?: string;
   /** New SeaTalk signing secret; blank leaves the stored credential untouched. */
   signing_secret?: string;
+  /** SeaTalk public base URL (mutable config — not a secret); blank clears it. */
+  public_base_url?: string;
 }
 
 export interface ChannelEditInput {
@@ -141,6 +149,10 @@ export function planChannelEdit(input: ChannelEditInput): ChannelPlan {
     }
   } else if (config.channel_type === "seatalk") {
     if (values.app_id !== undefined) nextConfig.app_id = values.app_id;
+    if (values.public_base_url !== undefined) {
+      // Blank clears the stored URL (backend normalizes "" → null).
+      nextConfig.public_base_url = values.public_base_url.trim() || null;
+    }
     const appSecretRef = config.app_secret_ref;
     const signingSecretRef = config.signing_secret_ref;
     if (values.app_secret && typeof appSecretRef === "string") {

@@ -135,7 +135,13 @@ acceptance("009-channels", "channel status reports runtime, pairing, and callbac
       paired_at: "2026-06-12T08:00:00Z",
       active_conversation_id: "conv-1",
     },
-    callback: { port: 8466, path: "/seatalk/st", listener_running: true },
+    callback: {
+      port: 8466,
+      path: "/seatalk/st",
+      listener_running: true,
+      public_base_url: null,
+      public_callback_url: null,
+    },
   });
   stubPairing();
   renderPage();

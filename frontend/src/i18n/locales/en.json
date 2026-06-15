@@ -1213,6 +1213,8 @@
       "signingSecret": "Signing secret",
       "telegramHint": "The token BotFather gave you for the bot.",
       "seatalkHint": "App ID, App Secret, and Signing Secret from the SeaTalk Open Platform app.",
+      "publicBaseUrl": "Public callback URL (base URL)",
+      "publicBaseUrlHint": "Optional. Your tunnel's public address (e.g. https://xxx.trycloudflare.com). Coffer composes the full callback URL from it for you to register on the SeaTalk Open Platform.",
       "created": "Channel {{name}} registered"
     },
     "edit": {
@@ -1260,9 +1262,15 @@
     },
     "callback": {
       "title": "SeaTalk callback",
-      "endpoint": "Endpoint",
+      "registerUrl": "Callback URL to register on SeaTalk",
+      "copy": "Copy",
+      "copied": "Copied",
+      "test": "Test reachability",
+      "testing": "Testing…",
+      "setBaseUrlHint": "Set your tunnel's public base URL in Edit, and the full callback URL to register on SeaTalk will appear here.",
+      "endpoint": "Local listener",
       "listener": "Listener",
-      "hint": "Point a tunnel (cloudflared, ngrok) at this address and register the public URL on the SeaTalk Open Platform."
+      "hint": "Point a tunnel (cloudflared, ngrok) at the local listener address. The reachability test verifies the path and handshake; whether the signing secret matches SeaTalk's is confirmed only on a real event."
     },
     "deleteTitle": "Delete channel",
     "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed."

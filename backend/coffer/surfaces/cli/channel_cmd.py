@@ -153,6 +153,8 @@ def status(
             f"callback: 127.0.0.1:{callback['port']}{callback['path']} "
             f"(listener {'up' if callback['listener_running'] else 'down'})"
         )
+        if callback.get("public_callback_url"):
+            typer.echo(f"register: {callback['public_callback_url']}")
 
 
 @app.command("notify")

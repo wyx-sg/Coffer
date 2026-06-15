@@ -91,6 +91,29 @@ describe("planChannelEdit", () => {
     });
   });
 
+  test("seatalk: sets public_base_url, and a blank value clears it (null)", () => {
+    const base = {
+      channel_type: "seatalk",
+      app_id: "app-1",
+      app_secret_ref: "channel/st/app-secret",
+      signing_secret_ref: "channel/st/signing-secret",
+      default_agent: "builtin",
+    };
+    const set = planChannelEdit({
+      name: "st",
+      config: base,
+      values: { default_agent: "builtin", public_base_url: "https://x.trycloudflare.com/" },
+    });
+    expect(set.config.public_base_url).toBe("https://x.trycloudflare.com/");
+
+    const cleared = planChannelEdit({
+      name: "st",
+      config: { ...base, public_base_url: "https://x.trycloudflare.com" },
+      values: { default_agent: "builtin", public_base_url: "  " },
+    });
+    expect(cleared.config.public_base_url).toBeNull();
+  });
+
   test("seatalk: only the signing secret rotates when the app secret is blank", () => {
     const plan = planChannelEdit({
       name: "st",

@@ -209,7 +209,13 @@ async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) ->
     assert body["peer"]["chat_id"] == "emp-1"
     assert body["peer"]["display_name"] == "Yu"
     assert body["peer"]["active_conversation_id"] == "conv-9"
-    assert body["callback"] == {"port": 8787, "path": "/seatalk/st", "listener_running": True}
+    assert body["callback"] == {
+        "port": 8787,
+        "path": "/seatalk/st",
+        "listener_running": True,
+        "public_base_url": None,
+        "public_callback_url": None,
+    }
 
 
 async def test_notify_delivers_to_paired_peer(ctx: _Ctx) -> None:

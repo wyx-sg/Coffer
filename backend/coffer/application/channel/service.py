@@ -8,11 +8,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+import httpx
+
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.callback_probe import CallbackTestResult, probe_seatalk_callback
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import (
     ChannelPeer,
@@ -27,6 +31,8 @@ if TYPE_CHECKING:
     from coffer.application.channel.runtime import ChannelRuntime
     from coffer.application.resource_service import ResourceService
 
+MaterializeFn = Callable[[dict[str, str]], Awaitable[dict[str, str]]]
+
 _logger = logging.getLogger(__name__)
 
 
@@ -35,6 +41,8 @@ class CallbackInfo:
     port: int
     path: str
     listener_running: bool
+    public_base_url: str | None = None
+    public_callback_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -57,12 +65,19 @@ class ChannelService:
         pairing: PairingManager,
         runtime: ChannelRuntime,
         audit: AuditService,
+        materialize: MaterializeFn | None = None,
+        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._resources = resources
         self._peers = peers
         self._pairing = pairing
         self._runtime = runtime
         self._audit = audit
+        # Injected by the composition root for the callback self-test: resolve
+        # the signing secret and make the outbound probe. Absent in unit tests
+        # that don't exercise test_callback.
+        self._materialize = materialize
+        self._http = http_client
         self._ingest_tasks: set[asyncio.Task[None]] = set()
 
     async def _channel(self, name: str) -> Resource:
@@ -86,10 +101,15 @@ class ChannelService:
         channel_type = str(resource.config.get("channel_type", ""))
         callback: CallbackInfo | None = None
         if channel_type == "seatalk":
+            path = f"/seatalk/{name}"
+            base = resource.config.get("public_base_url")
+            base = base if isinstance(base, str) and base else None
             callback = CallbackInfo(
                 port=self._runtime.listener_port,
-                path=f"/seatalk/{name}",
+                path=path,
                 listener_running=self._runtime.listener_running,
+                public_base_url=base,
+                public_callback_url=f"{base}{path}" if base else None,
             )
         return ChannelStatus(
             name=name,
@@ -99,6 +119,40 @@ class ChannelService:
             pending_pairing=self._pairing.pending(name),
             peer=peer,
             callback=callback,
+        )
+
+    async def test_callback(self, name: str) -> CallbackTestResult:
+        """Probe the channel's public callback URL end to end (SeaTalk only).
+
+        Confirms public URL → tunnel → loopback listener → signature → handshake.
+        Does not confirm the signing secret matches SeaTalk's (we sign and
+        verify with the same stored secret) — that only shows on a real event.
+        """
+        resource = await self._channel(name)
+        config = resource.config
+        if str(config.get("channel_type", "")) != "seatalk":
+            return CallbackTestResult(
+                ok=False, detail="callback test applies to SeaTalk channels only"
+            )
+        base = config.get("public_base_url")
+        if not (isinstance(base, str) and base):
+            return CallbackTestResult(
+                ok=False, detail="set the channel's public callback URL (base URL) first"
+            )
+        signing_ref = str(config.get("signing_secret_ref", ""))
+        if self._materialize is None or self._http is None or not signing_ref:
+            return CallbackTestResult(ok=False, detail="callback testing is not available")
+        try:
+            signing_secret = (await self._materialize({"s": signing_ref}))["s"]
+        except Exception:
+            _logger.exception("channel.callback_test.secret_failed", extra={"channel": name})
+            return CallbackTestResult(
+                ok=False, detail="could not load the channel's signing secret"
+            )
+        return await probe_seatalk_callback(
+            client=self._http,
+            url=f"{base}/seatalk/{name}",
+            signing_secret=signing_secret,
         )
 
     async def ingest_event(self, name: str, envelope: dict[str, object]) -> None:

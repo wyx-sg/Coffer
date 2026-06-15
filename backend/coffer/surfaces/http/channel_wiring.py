@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
@@ -131,6 +132,10 @@ def wire_channel_kind(
         pairing=pairing,
         runtime=runtime,
         audit=audit,
+        # The callback self-test resolves the signing secret and probes the
+        # public URL over the network.
+        materialize=materialize,
+        http_client=httpx.AsyncClient(),
     )
     set_channel_service(service)
     return runtime

@@ -25,6 +25,28 @@ SEATALK_CONFIG = {
 }
 
 
+def test_public_base_url_defaults_none_and_accepts_https():
+    assert parse_channel_config(SEATALK_CONFIG).public_base_url is None
+    cfg = parse_channel_config({**SEATALK_CONFIG, "public_base_url": "https://x.trycloudflare.com"})
+    assert cfg.public_base_url == "https://x.trycloudflare.com"
+
+
+def test_public_base_url_strips_trailing_slash_and_blank_to_none():
+    cfg = parse_channel_config({**SEATALK_CONFIG, "public_base_url": "https://x.example.com/"})
+    assert cfg.public_base_url == "https://x.example.com"
+    assert parse_channel_config({**SEATALK_CONFIG, "public_base_url": "  "}).public_base_url is None
+
+
+def test_public_base_url_rejects_non_https():
+    with pytest.raises(ValidationError, match="https"):
+        parse_channel_config({**SEATALK_CONFIG, "public_base_url": "http://x.example.com"})
+
+
+def test_public_base_url_rejects_path():
+    with pytest.raises(ValidationError, match="no path"):
+        parse_channel_config({**SEATALK_CONFIG, "public_base_url": "https://x.example.com/seatalk"})
+
+
 def test_parse_valid_telegram_config():
     cfg = parse_channel_config(TELEGRAM_CONFIG)
     assert isinstance(cfg, TelegramChannelConfig)
@@ -150,6 +172,7 @@ def test_root_model_round_trips_seatalk_dict():
         "default_agent_config": None,
         "workspaces": [],
         "default_workspace": None,
+        "public_base_url": None,
     }
 
 

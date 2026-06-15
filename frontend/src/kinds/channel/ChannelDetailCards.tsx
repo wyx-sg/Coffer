@@ -5,16 +5,16 @@
 // so the page stays within the size budget.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, KeyRound, Webhook, Activity, Send } from "lucide-react";
+import { Copy, KeyRound, Activity, Send } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { CallbackInfo, ChannelStatus, PairingCode } from "@/lib/api/channels";
+import type { ChannelStatus, PairingCode } from "@/lib/api/channels";
 
-function StatusRow({ label, value }: { label: string; value: React.ReactNode }) {
+export function StatusRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 text-sm">
       <span className="shrink-0 text-muted-foreground">{label}</span>
@@ -149,39 +149,6 @@ export function ChannelPairingCard({
             </p>
           </div>
         ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** SeaTalk only: where the callback listener serves, and the tunnel hint. */
-export function ChannelCallbackCard({ callback }: { callback: CallbackInfo }) {
-  const { t } = useTranslation();
-  const endpoint = `127.0.0.1:${callback.port}${callback.path}`;
-  return (
-    <Card className="paper-card">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 font-serif text-lg">
-          <Webhook className="size-4 text-primary" aria-hidden />
-          {t("channels.callback.title")}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <StatusRow
-          label={t("channels.callback.endpoint")}
-          value={<code className="text-xs">{endpoint}</code>}
-        />
-        <StatusRow
-          label={t("channels.callback.listener")}
-          value={
-            callback.listener_running ? (
-              <Badge>{t("channels.status.running")}</Badge>
-            ) : (
-              <Badge variant="outline">{t("channels.status.stopped")}</Badge>
-            )
-          }
-        />
-        <p className="pt-1 text-xs text-muted-foreground">{t("channels.callback.hint")}</p>
       </CardContent>
     </Card>
   );
