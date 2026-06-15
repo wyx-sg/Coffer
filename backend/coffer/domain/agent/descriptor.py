@@ -107,6 +107,15 @@ class AgentDescriptor:
     #: e.g. Hermes where MCP *is* the plugin mechanism — empty listing, toggle
     #: and uninstall unsupported).
     plugins: PluginCapability | None = None
+    #: Whether this agent is surfaced in the UI. Only Claude Code and Codex are
+    #: fully tested today; the rest are wired in the manifest (so the retained
+    #: distill/projection/skill-delivery code can still reference them) but
+    #: hidden from discovery — the only UI entry point that enumerates agents —
+    #: until they are validated. The backend still accepts a direct registration
+    #: of any manifest type (the retained multi-agent features depend on it);
+    #: this flag gates discovery/visibility, not registration. Flipping it back
+    #: to ``True`` re-exposes the agent.
+    enabled: bool = True
 
     def default_config_dir(self) -> pathlib.Path:
         return _home() / self.config_subpath
@@ -307,6 +316,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             can_toggle=False,
             can_uninstall=False,
         ),
+        enabled=False,
     ),
     AgentType.OPENCODE: AgentDescriptor(
         type=AgentType.OPENCODE,
@@ -325,6 +335,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             can_toggle=True,
             can_uninstall=True,
         ),
+        enabled=False,
     ),
     AgentType.OPENCLAW: AgentDescriptor(
         type=AgentType.OPENCLAW,
@@ -348,6 +359,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             can_toggle=True,
             can_uninstall=True,
         ),
+        enabled=False,
     ),
     AgentType.HERMES: AgentDescriptor(
         type=AgentType.HERMES,
@@ -363,6 +375,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         # Hermes registers skills as external directories, not symlinked
         # folders — a recognized extension point not yet delivered.
         skill_delivery_mode=SkillDeliveryMode.EXTERNAL_DIR,
+        enabled=False,
     ),
 }
 
@@ -372,3 +385,13 @@ def descriptor_for(agent_type: AgentType) -> AgentDescriptor:
         return AGENT_DESCRIPTORS[agent_type]
     except KeyError:  # pragma: no cover - every enum value has a record
         raise AssertionError(f"no descriptor for AgentType {agent_type!r}") from None
+
+
+def is_agent_enabled(agent_type: AgentType) -> bool:
+    """Whether this agent is surfaced in the UI and accepted for registration."""
+    return descriptor_for(agent_type).enabled
+
+
+def visible_agent_types() -> tuple[AgentType, ...]:
+    """Agent types currently exposed to users (``enabled=True`` in the manifest)."""
+    return tuple(t for t in AgentType if descriptor_for(t).enabled)

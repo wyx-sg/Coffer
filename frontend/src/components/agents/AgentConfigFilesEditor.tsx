@@ -28,9 +28,29 @@ import { ConfigFileTree } from "@/components/agents/ConfigFileTree";
 import { translateApiError } from "@/lib/api/errors";
 import { useConfigEditorState } from "@/lib/hooks/useConfigEditorState";
 
+// Keys that have a human description under `agents.config.desc.<key>`. Listing
+// them explicitly keeps an unknown/new key from rendering a raw i18n string.
+// The copy is shown in the right pane (next to the content), not the left tree.
+const DESCRIBED_KEYS = new Set([
+  "settings",
+  "settings_local",
+  "global",
+  "instructions",
+  "subagents",
+  "config",
+  "hooks",
+]);
+
 export function AgentConfigFilesEditor({ name }: { name: string }) {
   const { t } = useTranslation();
   const s = useConfigEditorState(name);
+
+  // One-line "what is this file for" description for the selected key, only for
+  // keys we have copy for; unknown keys render nothing rather than a raw key.
+  const description =
+    s.selectedKey && DESCRIBED_KEYS.has(s.selectedKey)
+      ? t(`agents.config.desc.${s.selectedKey}`)
+      : null;
 
   return (
     <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
@@ -72,6 +92,7 @@ export function AgentConfigFilesEditor({ name }: { name: string }) {
                 ? `${s.selectedInfo?.path ?? s.selectedKey}/${s.selectedChild}`
                 : (s.selectedInfo?.path ?? s.selectedKey)
             }
+            description={description}
             formatLabel={s.activeContent?.format ?? s.selectedInfo?.format}
             editorKey={s.selectedChild ?? s.selectedKey}
             draft={s.draft}

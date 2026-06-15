@@ -14,6 +14,8 @@ import { translateApiError } from "@/lib/api/errors";
 export interface ConfigEditorPaneProps {
   /** Full path shown in the header (file path, or path/relpath for a child). */
   pathLabel: string;
+  /** One-line "what is this file for" copy, shown under the path. */
+  description?: string | null;
   formatLabel: string | undefined;
   /** i18n key parameter for the textarea aria-label. */
   editorKey: string;
@@ -40,9 +42,16 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
   const { t } = useTranslation();
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate font-mono text-xs text-muted-foreground">
-          {props.pathLabel}
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-mono text-xs text-muted-foreground">
+            {props.pathLabel}
+          </span>
+          {props.description ? (
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              {props.description}
+            </span>
+          ) : null}
         </span>
         <div className="flex shrink-0 items-center gap-2">
           <span className="text-xs text-muted-foreground">{props.formatLabel}</span>

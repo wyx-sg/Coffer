@@ -15,6 +15,8 @@
     "clear": "清除",
     "rawLog": "原始日志",
     "done": "完成",
+    "showPassword": "显示",
+    "hidePassword": "隐藏",
     "bulk": {
       "selected": "已选 {{count}} 项",
       "selectAll": "全选",
@@ -879,7 +881,9 @@
       "tree": "文件",
       "selectFile": "选择一个文件查看。",
       "binary": "二进制文件（{{size}} 字节）",
-      "truncated": "内容已截断——仅显示文件开头部分。"
+      "truncated": "内容已截断——仅显示文件开头部分。",
+      "saved": "已保存。",
+      "truncatedReadonly": "该文件过大，暂不支持在此编辑。"
     },
     "welcome": {
       "title": "管理你的 Skill",

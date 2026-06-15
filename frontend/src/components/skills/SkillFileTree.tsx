@@ -1,23 +1,22 @@
 // frontend/src/components/skills/SkillFileTree.tsx
-// Two-pane read-only file browser for a skill's master folder (the Files tab):
-// a recursive left tree (expand/collapse dirs, click a file to select it) and a
-// right content pane. The content pane renders the file as a read-only <pre>;
-// binary files show a placeholder and truncated files show a note. Mirrors the
-// AgentConfigFilesEditor layout, minus editing.
+// Two-pane file browser for a skill's master folder (the Files tab): a recursive
+// left tree (expand/collapse dirs, click a file to select it) and a right
+// content pane (SkillFileViewer) that renders Markdown nicely, shows other text
+// files raw, and supports editing. Mirrors the AgentConfigFilesEditor layout.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
+import { SkillFileViewer } from "@/components/skills/SkillFileViewer";
 import { translateApiError } from "@/lib/api/errors";
 import type { SkillFileNode } from "@/lib/api/skills";
-import { useSkillFileContent, useSkillFiles } from "@/lib/hooks/useSkills";
+import { useSkillFiles } from "@/lib/hooks/useSkills";
 import { cn } from "@/lib/utils";
 
 export function SkillFileTree({ name }: { name: string }) {
   const { t } = useTranslation();
   const tree = useSkillFiles(name);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const content = useSkillFileContent(name, selectedPath);
 
   return (
     <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
@@ -43,34 +42,10 @@ export function SkillFileTree({ name }: { name: string }) {
         ) : null}
       </div>
 
-      {/* Right: read-only content of the selected file. */}
+      {/* Right: rendered/editable content of the selected file. */}
       <div className="min-w-0">
         {selectedPath ? (
-          <div className="space-y-2">
-            <span className="block truncate font-mono text-xs text-muted-foreground">
-              {selectedPath}
-            </span>
-            {content.isPending ? (
-              <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-            ) : content.error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {translateApiError(t, content.error)}
-              </p>
-            ) : content.data?.binary ? (
-              <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
-                {t("skills.files.binary", { size: content.data.size })}
-              </div>
-            ) : (
-              <>
-                <pre className="h-80 w-full overflow-auto rounded border bg-background p-2 font-mono text-xs text-foreground">
-                  {content.data?.content ?? ""}
-                </pre>
-                {content.data?.truncated ? (
-                  <p className="text-xs text-muted-foreground">{t("skills.files.truncated")}</p>
-                ) : null}
-              </>
-            )}
-          </div>
+          <SkillFileViewer name={name} path={selectedPath} />
         ) : (
           <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
             {t("skills.files.selectFile")}

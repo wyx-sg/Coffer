@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -147,9 +148,8 @@ export function EditChannelDialog({
           {channelType === "telegram" ? (
             <div className="space-y-2">
               <Label htmlFor="edit-channel-bot-token">{t("channels.edit.newBotToken")}</Label>
-              <Input
+              <PasswordInput
                 id="edit-channel-bot-token"
-                type="password"
                 value={botToken}
                 onChange={(e) => setBotToken(e.target.value)}
                 autoComplete="off"
@@ -161,9 +161,8 @@ export function EditChannelDialog({
             <>
               <div className="space-y-2">
                 <Label htmlFor="edit-channel-app-secret">{t("channels.edit.newAppSecret")}</Label>
-                <Input
+                <PasswordInput
                   id="edit-channel-app-secret"
-                  type="password"
                   value={appSecret}
                   onChange={(e) => setAppSecret(e.target.value)}
                   autoComplete="off"
@@ -174,9 +173,8 @@ export function EditChannelDialog({
                 <Label htmlFor="edit-channel-signing-secret">
                   {t("channels.edit.newSigningSecret")}
                 </Label>
-                <Input
+                <PasswordInput
                   id="edit-channel-signing-secret"
-                  type="password"
                   value={signingSecret}
                   onChange={(e) => setSigningSecret(e.target.value)}
                   autoComplete="off"

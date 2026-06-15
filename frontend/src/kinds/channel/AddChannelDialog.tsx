@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
@@ -140,9 +141,8 @@ export function AddChannelDialog({
           {channelType === "telegram" ? (
             <div className="space-y-2">
               <Label htmlFor="channel-bot-token">{t("channels.dialog.botToken")}</Label>
-              <Input
+              <PasswordInput
                 id="channel-bot-token"
-                type="password"
                 value={botToken}
                 onChange={(e) => setBotToken(e.target.value)}
                 autoComplete="off"
@@ -162,9 +162,8 @@ export function AddChannelDialog({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="channel-app-secret">{t("channels.dialog.appSecret")}</Label>
-                <Input
+                <PasswordInput
                   id="channel-app-secret"
-                  type="password"
                   value={appSecret}
                   onChange={(e) => setAppSecret(e.target.value)}
                   autoComplete="off"
@@ -172,9 +171,8 @@ export function AddChannelDialog({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="channel-signing-secret">{t("channels.dialog.signingSecret")}</Label>
-                <Input
+                <PasswordInput
                   id="channel-signing-secret"
-                  type="password"
                   value={signingSecret}
                   onChange={(e) => setSigningSecret(e.target.value)}
                   autoComplete="off"
