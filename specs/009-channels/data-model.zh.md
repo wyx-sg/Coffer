@@ -10,7 +10,7 @@ channel 是既有 `resources` 表中的行（kind = `channel`）。`config_json`
 ```
 ChannelConfig (discriminator: channel_type)
 ├── common (两种类型共有, _CommonChannelFields)
-│   ├── default_agent: str = "builtin"
+│   ├── default_agent: str = "claude-code"  # 必须是已注册的 agent
 │   ├── default_agent_config: dict | None
 │   ├── workspaces: list[Workspace] = []   # 命名 cwd allowlist
 │   └── default_workspace: str | None      # workspaces[].name 之一
@@ -33,9 +33,10 @@ Workspace: { name: str, path: str (绝对路径) }
   secret 的姿态一致。
 - 该 kind 声明了 `credential_ref_extractor`，因此 `ResourceService` 会在
   写入行之前探测每一个 ref；悬空的 ref 会中止注册。
-- `default_agent` / `default_agent_config` 不在注册时校验（agent registry
-  在创建对话时校验，那是平台的权威关口）；无效的 agent 会在首次接触时以
-  turn 错误的形式暴露。
+- `default_agent` 在注册时就对照实时 agent registry 校验（ADR-024 退役了旧的
+  `builtin` 伪 agent）：未注册的 agent 会被当场拒绝，而不是在首个 turn 才静默
+  失败。仅当 registry 为空时跳过校验，以免 registry 配错时阻断所有 channel 写入。
+  `default_agent_config` 仍是透传。
 - `workspaces` 是从该 channel 选取 agent 时的 cwd allowlist。形状（名字唯一、
   绝对路径、`default_workspace ∈ names`）由 Pydantic 模型校验；kind 的
   `validate_config` 钩子另外要求注册时每个 `path` 是已存在目录，因此坏的

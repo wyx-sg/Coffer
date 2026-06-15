@@ -8,8 +8,14 @@ import { z } from "zod";
 
 import type { ChannelType } from "@/lib/api/channels";
 
-/** Every channel conversation starts on the built-in agent for now. */
-export const DEFAULT_AGENT = "builtin";
+/**
+ * The agent a newly-created channel routes to by default. Must name a
+ * registered agent — the backend validates `default_agent` against the live
+ * agent registry (ADR-024 retired the old "builtin" pseudo-agent), and
+ * `claude-code` is the conventional seeded agent. The owner can re-bind it
+ * later via the edit dialog.
+ */
+export const DEFAULT_AGENT = "claude-code";
 
 const channelNameSchema = z
   .string()

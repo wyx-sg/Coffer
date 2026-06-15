@@ -117,7 +117,13 @@ def wire_channel_kind(
     async def on_delete(ref: ResourceRef) -> None:
         await runtime.evict(ref.name)
 
-    app.state.kinds["channel"] = make_channel_kind(on_delete=on_delete)
+    app.state.kinds["channel"] = make_channel_kind(
+        on_delete=on_delete,
+        # Validate a channel's default_agent against the live agent registry at
+        # create/edit, so an unknown agent (e.g. the retired "builtin") is
+        # rejected up front instead of failing silently on the first turn.
+        agent_keys=lambda: get_agent_registry().agent_keys(),
+    )
 
     service = ChannelService(
         resources=resource_svc,

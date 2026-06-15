@@ -57,10 +57,10 @@ def test_missing_channel_type_rejected():
 def test_default_agent_defaults_to_managed_agent():
     # ADR-024 retired the builtin chat agent; channels default to a managed agent.
     cfg = parse_channel_config(TELEGRAM_CONFIG)
-    assert cfg.default_agent == "claude_code"
+    assert cfg.default_agent == "claude-code"
     assert cfg.default_agent_config is None
     seatalk = parse_channel_config(SEATALK_CONFIG)
-    assert seatalk.default_agent == "claude_code"
+    assert seatalk.default_agent == "claude-code"
 
 
 def test_default_agent_override_kept():
@@ -134,7 +134,7 @@ def test_root_model_round_trips_flat_dict():
     assert dumped == {
         "channel_type": "telegram",
         "bot_token_ref": "channel/tg/bot-token",
-        "default_agent": "claude_code",
+        "default_agent": "claude-code",
         "default_agent_config": None,
         "workspaces": [],
         "default_workspace": None,
@@ -146,7 +146,7 @@ def test_root_model_round_trips_seatalk_dict():
     dumped = model.model_dump(mode="json")
     assert dumped == {
         **SEATALK_CONFIG,
-        "default_agent": "claude_code",
+        "default_agent": "claude-code",
         "default_agent_config": None,
         "workspaces": [],
         "default_workspace": None,
