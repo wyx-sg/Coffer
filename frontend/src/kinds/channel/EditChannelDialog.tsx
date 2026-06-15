@@ -58,11 +58,11 @@ export function EditChannelDialog({
   const [appSecret, setAppSecret] = useState("");
   const [signingSecret, setSigningSecret] = useState("");
 
-  // "builtin" is always selectable even though it is not a registered agent
-  // resource; merge it with the registered agents and the channel's current
-  // binding (so a value still loading / since-removed stays shown), de-duped.
+  // Offer the registered agents, plus the channel's current binding so a value
+  // that is still loading or since-removed (e.g. a legacy "builtin") stays
+  // shown until the owner picks a valid one. De-duped.
   const agentOptions = Array.from(
-    new Set([DEFAULT_AGENT, defaultAgent, ...(agents ?? []).map((a) => a.name)]),
+    new Set([defaultAgent, ...(agents ?? []).map((a) => a.name)]),
   );
 
   const reset = () => {

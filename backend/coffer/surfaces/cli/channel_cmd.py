@@ -60,7 +60,7 @@ def register(
     signing_secret_ref: str | None = typer.Option(
         None, "--signing-secret-ref", help="Keychain ref of the SeaTalk signing secret"
     ),
-    default_agent: str = typer.Option("claude_code", "--agent", help="Default agent key"),
+    default_agent: str = typer.Option("claude-code", "--agent", help="Default agent key"),
     agent_config: str | None = typer.Option(
         None, "--agent-config", help="Default agent config as JSON"
     ),

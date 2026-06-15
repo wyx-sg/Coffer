@@ -35,7 +35,7 @@ async def test_register_telegram_channel_is_listed_with_config_and_audited(
     assert listed[0].enabled is True
     assert listed[0].config["channel_type"] == "telegram"
     assert listed[0].config["bot_token_ref"] == "channel/tg/bot-token"
-    assert listed[0].config["default_agent"] == "claude_code"
+    assert listed[0].config["default_agent"] == "claude-code"
 
     entries = await env.audit_entries("resource_created", name="tg")
     assert len(entries) == 1
