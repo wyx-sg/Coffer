@@ -27,6 +27,7 @@ from coffer.infrastructure.channel.listener_spawn import CallbackListenerControl
 from coffer.infrastructure.channel.persistence import ChannelPeerRepo
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.telegram import TelegramAdapter
+from coffer.infrastructure.channel.tunnel_spawn import TunnelController
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
@@ -112,6 +113,7 @@ def wire_channel_kind(
         processor=processor,
         pairing=pairing,
         listener=listener,
+        tunnel=TunnelController(),
         materialize=materialize,
     )
 

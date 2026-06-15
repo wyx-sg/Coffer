@@ -114,6 +114,38 @@ describe("planChannelEdit", () => {
     expect(cleared.config.public_base_url).toBeNull();
   });
 
+  test("seatalk: a tunnel token mints a ref + secret write and turns on managed tunneling", () => {
+    const plan = planChannelEdit({
+      name: "st",
+      config: {
+        channel_type: "seatalk",
+        app_id: "app-1",
+        app_secret_ref: "channel/st/app-secret",
+        signing_secret_ref: "channel/st/signing-secret",
+        default_agent: "claude-code",
+      },
+      values: { default_agent: "claude-code", tunnel_token: "cf-token" },
+    });
+    expect(plan.config.tunnel_token_ref).toBe("channel/st/tunnel-token");
+    expect(plan.secrets).toContainEqual({ ref: "channel/st/tunnel-token", value: "cf-token" });
+  });
+
+  test("seatalk: a tunnel token rotates into the existing ref", () => {
+    const plan = planChannelEdit({
+      name: "st",
+      config: {
+        channel_type: "seatalk",
+        app_id: "app-1",
+        app_secret_ref: "channel/st/app-secret",
+        signing_secret_ref: "channel/st/signing-secret",
+        tunnel_token_ref: "channel/st/tunnel-token",
+        default_agent: "claude-code",
+      },
+      values: { default_agent: "claude-code", tunnel_token: "rotated" },
+    });
+    expect(plan.secrets).toEqual([{ ref: "channel/st/tunnel-token", value: "rotated" }]);
+  });
+
   test("seatalk: only the signing secret rotates when the app secret is blank", () => {
     const plan = planChannelEdit({
       name: "st",

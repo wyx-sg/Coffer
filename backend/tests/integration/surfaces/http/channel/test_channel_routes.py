@@ -62,6 +62,9 @@ class _StubRuntime:
     def is_running(self, name: str) -> bool:
         return name in self.adapters
 
+    def tunnel_running(self, name: str) -> bool:
+        return False
+
     def adapter(self, name: str) -> _StubAdapter | None:
         return self.adapters.get(name)
 
@@ -215,6 +218,8 @@ async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) ->
         "listener_running": True,
         "public_base_url": None,
         "public_callback_url": None,
+        "tunnel_managed": False,
+        "tunnel_running": False,
     }
 
 

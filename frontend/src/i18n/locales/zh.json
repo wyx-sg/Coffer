@@ -1215,6 +1215,8 @@
       "seatalkHint": "来自 SeaTalk 开放平台应用的 App ID、App Secret 和 Signing Secret。",
       "publicBaseUrl": "公网回调地址（base URL）",
       "publicBaseUrlHint": "可选。你的隧道公网地址（如 https://xxx.trycloudflare.com）。Coffer 会据此拼出完整回调 URL，供你填到 SeaTalk 开放平台。",
+      "tunnelToken": "Cloudflare 隧道 token",
+      "tunnelTokenHint": "可选。填入 cloudflared 命名隧道的连接器 token 后，渠道启用时 Coffer 会自动起并维持隧道（需先装 cloudflared，并在 Cloudflare 控制台把该隧道指向 http://127.0.0.1:8787）。",
       "created": "渠道 {{name}} 已注册"
     },
     "edit": {
@@ -1270,6 +1272,7 @@
       "setBaseUrlHint": "在「编辑」里填入你的隧道公网地址（base URL），这里就会显示要填到 SeaTalk 的完整回调地址。",
       "endpoint": "本地监听",
       "listener": "监听进程",
+      "tunnel": "隧道",
       "hint": "用隧道工具（cloudflared、ngrok）指向本地监听地址。可达性测试仅验证链路与握手，签名密钥是否与 SeaTalk 一致需真实事件才能确认。"
     },
     "deleteTitle": "删除渠道",

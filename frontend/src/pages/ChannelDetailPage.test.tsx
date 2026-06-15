@@ -141,6 +141,8 @@ acceptance("009-channels", "channel status reports runtime, pairing, and callbac
       listener_running: true,
       public_base_url: null,
       public_callback_url: null,
+      tunnel_managed: false,
+      tunnel_running: false,
     },
   });
   stubPairing();

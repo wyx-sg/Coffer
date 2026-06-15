@@ -42,6 +42,7 @@ export function AddChannelDialog({
   const [appSecret, setAppSecret] = useState("");
   const [signingSecret, setSigningSecret] = useState("");
   const [publicBaseUrl, setPublicBaseUrl] = useState("");
+  const [tunnelToken, setTunnelToken] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   const reset = () => {
@@ -52,6 +53,7 @@ export function AddChannelDialog({
     setAppSecret("");
     setSigningSecret("");
     setPublicBaseUrl("");
+    setTunnelToken("");
     setFormError(null);
   };
 
@@ -82,6 +84,7 @@ export function AddChannelDialog({
             app_secret: appSecret,
             signing_secret: signingSecret,
             public_base_url: publicBaseUrl,
+            tunnel_token: tunnelToken,
           },
     );
     if (!parsed.success) {
@@ -195,6 +198,18 @@ export function AddChannelDialog({
                 />
                 <p className="text-xs text-muted-foreground">
                   {t("channels.dialog.publicBaseUrlHint")}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="channel-tunnel-token">{t("channels.dialog.tunnelToken")}</Label>
+                <PasswordInput
+                  id="channel-tunnel-token"
+                  value={tunnelToken}
+                  onChange={(e) => setTunnelToken(e.target.value)}
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("channels.dialog.tunnelTokenHint")}
                 </p>
               </div>
             </>

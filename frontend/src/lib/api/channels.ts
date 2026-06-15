@@ -30,6 +30,10 @@ export interface CallbackInfo {
   public_base_url: string | null;
   /** Full callback URL to register on SeaTalk (base + path); null until base set. */
   public_callback_url: string | null;
+  /** Whether Coffer manages a cloudflared tunnel for this channel (token set). */
+  tunnel_managed: boolean;
+  /** Whether the managed cloudflared tunnel process is currently alive. */
+  tunnel_running: boolean;
 }
 
 /** Result of the public-callback reachability self-test. */

@@ -98,6 +98,18 @@ export function ChannelCallbackCard({ name, callback }: { name: string; callback
             )
           }
         />
+        {callback.tunnel_managed ? (
+          <StatusRow
+            label={t("channels.callback.tunnel")}
+            value={
+              callback.tunnel_running ? (
+                <Badge>{t("channels.status.running")}</Badge>
+              ) : (
+                <Badge variant="outline">{t("channels.status.stopped")}</Badge>
+              )
+            }
+          />
+        ) : null}
         <p className="pt-1 text-xs text-muted-foreground">{t("channels.callback.hint")}</p>
       </CardContent>
     </Card>

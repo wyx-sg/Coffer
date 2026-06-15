@@ -43,6 +43,10 @@ class CallbackInfo:
     listener_running: bool
     public_base_url: str | None = None
     public_callback_url: str | None = None
+    # Whether Coffer manages a cloudflared tunnel for this channel (a token is
+    # configured) and whether that tunnel process is currently alive.
+    tunnel_managed: bool = False
+    tunnel_running: bool = False
 
 
 @dataclass(frozen=True)
@@ -104,12 +108,16 @@ class ChannelService:
             path = f"/seatalk/{name}"
             base = resource.config.get("public_base_url")
             base = base if isinstance(base, str) and base else None
+            token_ref = resource.config.get("tunnel_token_ref")
+            tunnel_managed = bool(isinstance(token_ref, str) and token_ref)
             callback = CallbackInfo(
                 port=self._runtime.listener_port,
                 path=path,
                 listener_running=self._runtime.listener_running,
                 public_base_url=base,
                 public_callback_url=f"{base}{path}" if base else None,
+                tunnel_managed=tunnel_managed,
+                tunnel_running=self._runtime.tunnel_running(name),
             )
         return ChannelStatus(
             name=name,

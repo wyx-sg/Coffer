@@ -47,6 +47,17 @@ def test_public_base_url_rejects_path():
         parse_channel_config({**SEATALK_CONFIG, "public_base_url": "https://x.example.com/seatalk"})
 
 
+def test_tunnel_token_ref_defaults_none_and_accepts_a_ref():
+    assert parse_channel_config(SEATALK_CONFIG).tunnel_token_ref is None
+    cfg = parse_channel_config({**SEATALK_CONFIG, "tunnel_token_ref": "channel/st/tunnel-token"})
+    assert cfg.tunnel_token_ref == "channel/st/tunnel-token"
+
+
+def test_tunnel_token_ref_rejects_raw_secret():
+    with pytest.raises(ValidationError, match="raw secret"):
+        parse_channel_config({**SEATALK_CONFIG, "tunnel_token_ref": "A" * 60})
+
+
 def test_parse_valid_telegram_config():
     cfg = parse_channel_config(TELEGRAM_CONFIG)
     assert isinstance(cfg, TelegramChannelConfig)
@@ -173,6 +184,7 @@ def test_root_model_round_trips_seatalk_dict():
         "workspaces": [],
         "default_workspace": None,
         "public_base_url": None,
+        "tunnel_token_ref": None,
     }
 
 

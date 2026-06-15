@@ -38,6 +38,9 @@ export const addChannelFormSchema = z.discriminatedUnion("channel_type", [
     // Optional: the tunnel's public base URL (https://host). The full SeaTalk
     // callback URL is composed from this on the channel detail page.
     public_base_url: z.string().optional(),
+    // Optional: a cloudflared connector token. When set, Coffer runs the
+    // named tunnel itself instead of the user running cloudflared by hand.
+    tunnel_token: z.string().optional(),
   }),
 ]);
 
@@ -53,7 +56,7 @@ export interface ChannelPlan {
 /** Credential-store ref for one of a channel's secrets. */
 export function channelSecretRef(
   name: string,
-  secret: "bot-token" | "app-secret" | "signing-secret",
+  secret: "bot-token" | "app-secret" | "signing-secret" | "tunnel-token",
 ): string {
   return `channel/${name}/${secret}`;
 }
@@ -78,6 +81,8 @@ export function planChannel(values: AddChannelFormValues): ChannelPlan {
   }
   const appSecretRef = channelSecretRef(values.name, "app-secret");
   const signingSecretRef = channelSecretRef(values.name, "signing-secret");
+  const tunnelToken = values.tunnel_token?.trim();
+  const tunnelTokenRef = channelSecretRef(values.name, "tunnel-token");
   return {
     name: values.name,
     config: {
@@ -89,10 +94,12 @@ export function planChannel(values: AddChannelFormValues): ChannelPlan {
       ...(values.public_base_url?.trim()
         ? { public_base_url: values.public_base_url.trim() }
         : {}),
+      ...(tunnelToken ? { tunnel_token_ref: tunnelTokenRef } : {}),
     },
     secrets: [
       { ref: appSecretRef, value: values.app_secret },
       { ref: signingSecretRef, value: values.signing_secret },
+      ...(tunnelToken ? [{ ref: tunnelTokenRef, value: tunnelToken }] : []),
     ],
   };
 }
@@ -115,6 +122,8 @@ export interface ChannelEditValues {
   signing_secret?: string;
   /** SeaTalk public base URL (mutable config — not a secret); blank clears it. */
   public_base_url?: string;
+  /** New cloudflared tunnel token; blank leaves the stored credential untouched. */
+  tunnel_token?: string;
 }
 
 export interface ChannelEditInput {
@@ -160,6 +169,16 @@ export function planChannelEdit(input: ChannelEditInput): ChannelPlan {
     }
     if (values.signing_secret && typeof signingSecretRef === "string") {
       secrets.push({ ref: signingSecretRef, value: values.signing_secret });
+    }
+    if (values.tunnel_token?.trim()) {
+      // Reuse the existing ref, or mint one the first time a token is set
+      // (which also turns on Coffer-managed tunneling for this channel).
+      const ref =
+        typeof config.tunnel_token_ref === "string" && config.tunnel_token_ref
+          ? config.tunnel_token_ref
+          : channelSecretRef(input.name, "tunnel-token");
+      nextConfig.tunnel_token_ref = ref;
+      secrets.push({ ref, value: values.tunnel_token.trim() });
     }
   }
 
