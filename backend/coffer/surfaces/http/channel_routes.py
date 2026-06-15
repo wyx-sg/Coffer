@@ -52,6 +52,8 @@ class CallbackInfoOut(BaseModel):
     listener_running: bool
     public_base_url: str | None = None
     public_callback_url: str | None = None
+    tunnel_managed: bool = False
+    tunnel_running: bool = False
 
 
 class CallbackTestOut(BaseModel):
@@ -107,6 +109,8 @@ async def channel_status(name: str) -> ChannelStatusOut:
             listener_running=status.callback.listener_running,
             public_base_url=status.callback.public_base_url,
             public_callback_url=status.callback.public_callback_url,
+            tunnel_managed=status.callback.tunnel_managed,
+            tunnel_running=status.callback.tunnel_running,
         )
         if status.callback is not None
         else None

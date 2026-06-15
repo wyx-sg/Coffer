@@ -90,14 +90,19 @@ class SeaTalkChannelConfig(_CommonChannelFields):
     app_secret_ref: str = Field(min_length=1, max_length=256)
     signing_secret_ref: str = Field(min_length=1, max_length=256)
     # The tunnel's public base URL (scheme://host[:port]); the full SeaTalk
-    # callback URL is this + "/seatalk/<name>". Optional: Coffer does not run the
-    # tunnel, so until the user records their public base URL here we only know
-    # the loopback address.
+    # callback URL is this + "/seatalk/<name>". Optional: until the user records
+    # their public base URL here we only know the loopback address.
     public_base_url: str | None = Field(default=None, max_length=512)
+    # Credential-store ref for a cloudflared connector token. When set, the
+    # daemon runs and supervises a `cloudflared tunnel run` child for this
+    # channel (a managed named tunnel); absent means the user runs their own.
+    tunnel_token_ref: str | None = Field(default=None, max_length=256)
 
-    @field_validator("app_secret_ref", "signing_secret_ref")
+    @field_validator("app_secret_ref", "signing_secret_ref", "tunnel_token_ref")
     @classmethod
-    def _ref_not_secret(cls, v: str) -> str:
+    def _ref_not_secret(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
         return _reject_raw_secret("secret ref", v)
 
     @field_validator("public_base_url")

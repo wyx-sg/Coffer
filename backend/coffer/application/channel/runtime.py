@@ -24,6 +24,7 @@ from coffer.application.channel.ports import (
     AdapterCallbacks,
     ChannelAdapter,
     ListenerControllerPort,
+    TunnelControllerPort,
 )
 from coffer.domain.channel.config import parse_channel_config
 
@@ -53,6 +54,7 @@ class ChannelRuntime:
         processor: InboundProcessor,
         pairing: PairingManager,
         listener: ListenerControllerPort | None = None,
+        tunnel: TunnelControllerPort | None = None,
         materialize: Callable[[dict[str, str]], Awaitable[dict[str, str]]] | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
     ) -> None:
@@ -61,12 +63,15 @@ class ChannelRuntime:
         self._processor = processor
         self._pairing = pairing
         self._listener = listener
+        self._tunnel = tunnel
         self._materialize = materialize
         self._interval = interval_seconds
         self._running: dict[str, _Running] = {}
         self._failed_at: dict[str, float] = {}
         self._listener_refs: dict[str, str] | None = None
         self._listener_failed_at: float | None = None
+        self._tunnel_refs: dict[str, str] | None = None
+        self._tunnel_failed_at: float | None = None
         self._stop = asyncio.Event()
 
     # -- introspection (used by ChannelService) ---------------------------
@@ -85,6 +90,9 @@ class ChannelRuntime:
     @property
     def listener_running(self) -> bool:
         return self._listener is not None and self._listener.running()
+
+    def tunnel_running(self, name: str) -> bool:
+        return self._tunnel is not None and self._tunnel.running(name)
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -108,13 +116,22 @@ class ChannelRuntime:
             with contextlib.suppress(Exception):
                 await self._listener.ensure_stopped()
         self._listener_refs = None
+        if self._tunnel is not None:
+            with contextlib.suppress(Exception):
+                await self._tunnel.dispose()
+        self._tunnel_refs = None
         self._processor.shutdown()
 
     async def evict(self, name: str) -> None:
         """Resource deleted: stop the adapter and drop pairing state now."""
         await self._stop_adapter(name)
         self._pairing.clear(name)
-        await self._reconcile_listener(await self._enabled_channels())
+        if self._tunnel is not None:
+            with contextlib.suppress(Exception):
+                await self._tunnel.ensure_stopped(name)
+        desired = await self._enabled_channels()
+        await self._reconcile_listener(desired)
+        await self._reconcile_tunnels(desired)
 
     # -- reconciliation ----------------------------------------------------
 
@@ -136,6 +153,7 @@ class ChannelRuntime:
                 if name not in self._running and self._may_retry(name):
                     await self._start_adapter(name, resource_id, config)
             await self._reconcile_listener(desired)
+            await self._reconcile_tunnels(desired)
         except Exception:
             # The reconciler must outlive any single bad tick.
             _logger.exception("channel.runtime.tick_failed")
@@ -238,6 +256,50 @@ class ChannelRuntime:
             return
         self._listener_failed_at = None
         self._listener_refs = refs
+
+    async def _reconcile_tunnels(self, desired: dict[str, tuple[int, dict[str, object]]]) -> None:
+        if self._tunnel is None or self._stop.is_set():
+            return
+        materialize = self._materialize
+        refs: dict[str, str] = {}
+        if materialize is not None:
+            for name, (_rid, config) in desired.items():
+                if config.get("channel_type") == "seatalk":
+                    ref = str(config.get("tunnel_token_ref") or "")
+                    if ref:
+                        refs[name] = ref
+        # Always stop tunnels for channels no longer managed (disabled, deleted,
+        # or token-ref cleared), even when the rest is a steady state.
+        for name in self._tunnel.active() - set(refs):
+            with contextlib.suppress(Exception):
+                await self._tunnel.ensure_stopped(name)
+        if refs == self._tunnel_refs and all(self._tunnel.running(n) for n in refs):
+            return
+        if (
+            refs
+            and self._tunnel_failed_at is not None
+            and (time.monotonic() - self._tunnel_failed_at) < _FAILURE_RETRY_SECONDS
+        ):
+            return
+        tokens: dict[str, str] = {}
+        for name, ref in refs.items():
+            assert materialize is not None  # refs is empty otherwise
+            try:
+                tokens[name] = (await materialize({"token": ref}))["token"]
+            except Exception:
+                self._tunnel_failed_at = time.monotonic()
+                _logger.exception("channel.tunnel.secret_failed", extra={"channel": name})
+                return
+        try:
+            for name, token in tokens.items():
+                await self._tunnel.ensure_running(name, token)
+        except Exception:
+            # cloudflared missing / spawn failure — retry on the 30s ladder.
+            self._tunnel_failed_at = time.monotonic()
+            _logger.exception("channel.tunnel.reconcile_failed")
+            return
+        self._tunnel_failed_at = None
+        self._tunnel_refs = refs
 
     @staticmethod
     def _hash(config: dict[str, object]) -> str:

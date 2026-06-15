@@ -58,6 +58,7 @@ export function EditChannelDialog({
   const [appSecret, setAppSecret] = useState("");
   const [signingSecret, setSigningSecret] = useState("");
   const [publicBaseUrl, setPublicBaseUrl] = useState(strField(config, "public_base_url"));
+  const [tunnelToken, setTunnelToken] = useState("");
 
   // Offer the registered agents, plus the channel's current binding so a value
   // that is still loading or since-removed (e.g. a legacy "builtin") stays
@@ -73,6 +74,7 @@ export function EditChannelDialog({
     setAppSecret("");
     setSigningSecret("");
     setPublicBaseUrl(strField(config, "public_base_url"));
+    setTunnelToken("");
   };
 
   const submit = () => {
@@ -86,6 +88,7 @@ export function EditChannelDialog({
         app_secret: appSecret,
         signing_secret: signingSecret,
         public_base_url: channelType === "seatalk" ? publicBaseUrl : undefined,
+        tunnel_token: channelType === "seatalk" ? tunnelToken : undefined,
       },
     });
     update.mutate(plan, {
@@ -160,6 +163,21 @@ export function EditChannelDialog({
                 />
                 <p className="text-xs text-muted-foreground">
                   {t("channels.dialog.publicBaseUrlHint")}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-channel-tunnel-token">
+                  {t("channels.dialog.tunnelToken")}
+                </Label>
+                <PasswordInput
+                  id="edit-channel-tunnel-token"
+                  value={tunnelToken}
+                  onChange={(e) => setTunnelToken(e.target.value)}
+                  autoComplete="off"
+                  placeholder={t("channels.edit.rotatePlaceholder")}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("channels.dialog.tunnelTokenHint")}
                 </p>
               </div>
             </>

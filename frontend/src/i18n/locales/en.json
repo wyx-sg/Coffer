@@ -1215,6 +1215,8 @@
       "seatalkHint": "App ID, App Secret, and Signing Secret from the SeaTalk Open Platform app.",
       "publicBaseUrl": "Public callback URL (base URL)",
       "publicBaseUrlHint": "Optional. Your tunnel's public address (e.g. https://xxx.trycloudflare.com). Coffer composes the full callback URL from it for you to register on the SeaTalk Open Platform.",
+      "tunnelToken": "Cloudflare tunnel token",
+      "tunnelTokenHint": "Optional. With a cloudflared named-tunnel connector token here, Coffer starts and keeps the tunnel running while the channel is enabled (cloudflared must be installed, and the tunnel's Cloudflare ingress must point at http://127.0.0.1:8787).",
       "created": "Channel {{name}} registered"
     },
     "edit": {
@@ -1270,6 +1272,7 @@
       "setBaseUrlHint": "Set your tunnel's public base URL in Edit, and the full callback URL to register on SeaTalk will appear here.",
       "endpoint": "Local listener",
       "listener": "Listener",
+      "tunnel": "Tunnel",
       "hint": "Point a tunnel (cloudflared, ngrok) at the local listener address. The reachability test verifies the path and handshake; whether the signing secret matches SeaTalk's is confirmed only on a real event."
     },
     "deleteTitle": "Delete channel",

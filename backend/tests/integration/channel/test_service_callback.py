@@ -44,6 +44,9 @@ class _Runtime:
     def is_running(self, name: str) -> bool:
         return False
 
+    def tunnel_running(self, name: str) -> bool:
+        return False
+
 
 def _seatalk_config(public_base_url: str | None) -> dict[str, Any]:
     cfg: dict[str, Any] = {
