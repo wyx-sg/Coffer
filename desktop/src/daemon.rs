@@ -50,6 +50,26 @@ pub fn bundled_daemon_path(app: &AppHandle) -> Result<PathBuf, String> {
     crate::shim::resolve_sidecar(app, &["coffer-daemon"])
 }
 
+/// Path the daemon's stdout/stderr is appended to, given the user's home dir.
+/// Pure so it's unit-testable. Mirrors the CLI spawn (backend `_client.py`),
+/// which logs to this same file.
+fn daemon_log_path(home: &str) -> PathBuf {
+    PathBuf::from(home)
+        .join(".coffer")
+        .join("logs")
+        .join("daemon.log")
+}
+
+/// Open `~/.coffer/logs/daemon.log` for appending, creating the logs directory
+/// if needed. Returns `None` on any failure (no home, mkdir/open error) so the
+/// caller falls back to `/dev/null` rather than failing the spawn.
+fn open_daemon_log() -> Option<fs::File> {
+    let home = env::var("HOME").ok().or_else(|| env::var("USERPROFILE").ok())?;
+    let path = daemon_log_path(&home);
+    fs::create_dir_all(path.parent()?).ok()?;
+    fs::OpenOptions::new().create(true).append(true).open(&path).ok()
+}
+
 /// Read the daemon discovery file at `~/.coffer/daemon.json` and return the
 /// port if present. Returns `None` on any I/O / parse failure — callers
 /// treat that as "no daemon running."
@@ -386,9 +406,26 @@ fn spawn_daemon_detached(app: &AppHandle) -> Result<u32, String> {
 
     let binary = bundled_daemon_path(app)?;
     let mut cmd = Command::new(&binary);
-    cmd.stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .stdin(Stdio::null());
+    cmd.stdin(Stdio::null());
+
+    // Append the daemon's stdout/stderr to ~/.coffer/logs/daemon.log so a
+    // crash or stack trace from a GUI-spawned daemon is recoverable. Both
+    // streams previously went to /dev/null, which made daemon failures
+    // impossible to debug. Fall back to /dev/null only if the log file cannot
+    // be opened. One handle per stream (try_clone) so neither closes the other.
+    match open_daemon_log() {
+        Some(log) => match log.try_clone() {
+            Ok(log_err) => {
+                cmd.stdout(Stdio::from(log)).stderr(Stdio::from(log_err));
+            }
+            Err(_) => {
+                cmd.stdout(Stdio::from(log)).stderr(Stdio::null());
+            }
+        },
+        None => {
+            cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        }
+    }
 
     // A Finder/Dock-launched .app inherits the minimal GUI PATH
     // (/usr/bin:/bin:/usr/sbin:/sbin), so the daemon — and the npx/uvx MCP
@@ -517,6 +554,17 @@ pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
 mod tests {
     use super::*;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn daemon_log_path_is_under_coffer_logs() {
+        // The daemon's stdout/stderr append here instead of /dev/null so a
+        // GUI-spawned daemon's crash is recoverable. Mirrors the CLI spawn
+        // (backend _client.py), which logs to the same file.
+        assert_eq!(
+            daemon_log_path("/Users/u"),
+            PathBuf::from("/Users/u/.coffer/logs/daemon.log")
+        );
+    }
 
     #[test]
     fn parse_daemon_port_reads_well_formed_value() {

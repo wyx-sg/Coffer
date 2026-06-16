@@ -151,14 +151,22 @@ async def _collect(adapter: ClaudeSdkAgentAdapter, history: list[Message]) -> li
 
 
 @pytest.mark.asyncio
-async def test_init_conversation_rejects_missing_cwd(tmp_path) -> None:  # type: ignore[no-untyped-def]
+async def test_init_conversation_defaults_missing_cwd_to_workspace(  # type: ignore[no-untyped-def]
+    tmp_path, monkeypatch
+) -> None:
+    # No cwd given (a channel without a workspace, or a chat draft with the
+    # working-dir UI removed) must NOT fail the turn — it falls back to the
+    # Coffer-managed workspace under ~/.coffer, creating it on first use.
+    monkeypatch.setenv("HOME", str(tmp_path))
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv())
     provider = ClaudeSdkProvider(conversations=repo)
 
-    with pytest.raises(AgentConfigRejected) as exc:
-        await provider.init_conversation(conv.id, {})
-    assert exc.value.reason == "invalid_cwd"
+    await provider.init_conversation(conv.id, {})
+    stored = await repo.get_agent_config(conv.id)
+    expected = str(tmp_path / ".coffer" / "workspace")
+    assert stored["cwd"] == expected
+    assert (tmp_path / ".coffer" / "workspace").is_dir()
 
     await engine.dispose()
 

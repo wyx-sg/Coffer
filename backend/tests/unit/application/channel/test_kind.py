@@ -71,14 +71,14 @@ def test_extractor_skips_missing_empty_and_non_string_values():
 # -- default_agent validation -------------------------------------------------
 
 
-def _validate(config: dict, agent_keys=lambda: ["claude-code", "codex"]):
+def _validate(config: dict, agent_keys=lambda: ["claude_code", "codex"]):
     validator = make_channel_kind(agent_keys=agent_keys).validate_config
     assert validator is not None
     validator(config)
 
 
 def test_validate_accepts_registered_default_agent():
-    _validate({"channel_type": "telegram", "default_agent": "claude-code"})
+    _validate({"channel_type": "telegram", "default_agent": "claude_code"})
 
 
 def test_validate_rejects_unregistered_default_agent():
@@ -100,3 +100,38 @@ def test_validate_skips_when_registry_empty():
 
 def test_validate_skips_when_default_agent_absent():
     _validate({"channel_type": "telegram"})
+
+
+# -- default_agent validation on UPDATE ---------------------------------------
+# validate_config runs at registration only (it also probes workspace dirs on
+# disk). An edit that re-binds the channel to an unknown agent must still be
+# rejected up front — otherwise the bot goes silently dead at turn time — so the
+# channel Kind also wires an on_update_config hook that validates default_agent.
+
+
+def _update_validate(config: dict, agent_keys=lambda: ["claude_code", "codex"]):
+    hook = make_channel_kind(agent_keys=agent_keys).on_update_config
+    assert hook is not None
+    ref = ResourceRef(kind="channel", name="st")
+    result = hook(ref, {"channel_type": "telegram"}, config)
+    assert result is None  # synchronous validation, no awaitable
+
+
+def test_update_accepts_registered_default_agent():
+    _update_validate({"channel_type": "telegram", "default_agent": "codex"})
+
+
+def test_update_rejects_unregistered_default_agent():
+    from coffer.domain.errors import ConfigValidationError
+
+    with pytest.raises(ConfigValidationError, match="builtin"):
+        _update_validate({"channel_type": "telegram", "default_agent": "builtin"})
+
+
+def test_update_skips_when_no_agent_keys_injected():
+    # No agent_keys provider → no update hook wired (backward-compatible).
+    assert make_channel_kind().on_update_config is None
+
+
+def test_update_skips_when_registry_empty():
+    _update_validate({"channel_type": "telegram", "default_agent": "builtin"}, agent_keys=list)

@@ -21,6 +21,7 @@ from coffer.infrastructure.chat.claude_sdk_agent import (
     SdkSessionFactory,
     default_session_factory,
 )
+from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 
 
 class ClaudeSdkProvider:
@@ -50,10 +51,10 @@ class ClaudeSdkProvider:
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
         if not isinstance(cwd, str) or not cwd.strip():
-            raise AgentConfigRejected(
-                reason="invalid_cwd",
-                message="agent_config.cwd (a working directory path) is required",
-            )
+            # No working directory given (a channel without a workspace, or a
+            # chat draft now that the per-turn picker is gone). Fall back to the
+            # Coffer-managed workspace rather than fail the turn silently.
+            cwd = default_workspace_dir()
         if not pathlib.Path(cwd).expanduser().is_dir():
             raise AgentConfigRejected(
                 reason="cwd_not_a_directory",

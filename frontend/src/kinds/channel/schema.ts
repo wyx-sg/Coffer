@@ -9,13 +9,15 @@ import { z } from "zod";
 import type { ChannelType } from "@/lib/api/channels";
 
 /**
- * The agent a newly-created channel routes to by default. Must name a
- * registered agent — the backend validates `default_agent` against the live
- * agent registry (ADR-024 retired the old "builtin" pseudo-agent), and
- * `claude-code` is the conventional seeded agent. The owner can re-bind it
- * later via the edit dialog.
+ * The agent a newly-created channel routes to by default. This is a chat
+ * provider KEY (`claude_code`, underscore) — the key the turn orchestrator
+ * resolves an agent by — not the `claude-code` resource name. A hyphenated
+ * value passes registration but fails at turn time with UNKNOWN_AGENT, leaving
+ * the bot silently dead. The backend validates `default_agent` against the live
+ * provider registry (ADR-024 retired the old "builtin" pseudo-agent). The owner
+ * can re-bind it later via the edit dialog.
  */
-export const DEFAULT_AGENT = "claude-code";
+export const DEFAULT_AGENT = "claude_code";
 
 const channelNameSchema = z
   .string()

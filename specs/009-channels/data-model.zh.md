@@ -10,7 +10,7 @@ channel 是既有 `resources` 表中的行（kind = `channel`）。`config_json`
 ```
 ChannelConfig (discriminator: channel_type)
 ├── common (两种类型共有, _CommonChannelFields)
-│   ├── default_agent: str = "claude-code"  # 必须是已注册的 agent
+│   ├── default_agent: str = "claude_code"  # chat provider key；必须是已注册的 agent
 │   ├── default_agent_config: dict | None
 │   ├── workspaces: list[Workspace] = []   # 命名 cwd allowlist
 │   └── default_workspace: str | None      # workspaces[].name 之一
@@ -33,14 +33,20 @@ Workspace: { name: str, path: str (绝对路径) }
   secret 的姿态一致。
 - 该 kind 声明了 `credential_ref_extractor`，因此 `ResourceService` 会在
   写入行之前探测每一个 ref；悬空的 ref 会中止注册。
-- `default_agent` 在注册时就对照实时 agent registry 校验（ADR-024 退役了旧的
-  `builtin` 伪 agent）：未注册的 agent 会被当场拒绝，而不是在首个 turn 才静默
-  失败。仅当 registry 为空时跳过校验，以免 registry 配错时阻断所有 channel 写入。
-  `default_agent_config` 仍是透传。
+- `default_agent` 是 chat **provider key**（如 `claude_code`，下划线）——
+  turn 编排器据以解析 agent 的键，而**不是** `claude-code` 资源名；连字符值能通过
+  注册却会在 turn 时报 `UNKNOWN_AGENT`，让 bot 静默失活。它在**创建**
+  （`validate_config`）和**编辑**（`on_update_config`）时都对照实时 agent registry
+  校验（ADR-024 退役了旧的 `builtin` 伪 agent）：未注册的 agent 会被当场拒绝，而
+  不是在首个 turn 才静默失败。仅当 registry 为空时跳过校验，以免 registry 配错时
+  阻断所有 channel 写入。`default_agent_config` 仍是透传。
 - `workspaces` 是从该 channel 选取 agent 时的 cwd allowlist。形状（名字唯一、
   绝对路径、`default_workspace ∈ names`）由 Pydantic 模型校验；kind 的
   `validate_config` 钩子另外要求注册时每个 `path` 是已存在目录，因此坏的
   workspace 会中止注册、不写入任何行。chat 消息永不提供裸路径——只给名字。
+  当 channel 未声明任何 workspace（且 peer 也未选）时，turn 会回落到 Coffer
+  托管的工作目录 `~/.coffer/workspace`（首次使用时创建），而不是失败——因此渠道
+  无需配置 workspace 也能开箱即用。
 
 ## 表：`channel_peers`
 

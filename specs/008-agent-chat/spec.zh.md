@@ -27,7 +27,7 @@ in-flight turn at a time, and user interruption."
    进程内的 agentic 循环，由用户自己的 MCP server、skills、memory 与知识库通过
    Coffer 的 MCP gateway 驱动，运行在一个用户配置的 LLM provider 上 ——
    **外加**两个 CLI 支持的 agent，**Claude Code** 与 **Codex**，每个都由它安装的
-   命令行工具在一个用户按对话挑选的工作目录中驱动。这些 CLI agent 是保持接缝
+   命令行工具在一个工作目录（默认是 Coffer 托管的工作目录）中驱动。这些 CLI agent 是保持接缝
    诚实的东西：它们是真实的第二与第三个 provider，而非一个承诺，并且它们证明了
    新增一个 agent 是一个注册表条目，无需改动聊天界面、持久化或 wire 契约。
 
@@ -500,8 +500,11 @@ agent 使用哪一个。
   交付三个 agent —— 内置 agent 加两个 CLI 支持的 agent（Claude Code、Codex）——
   因此接缝由真实的额外 provider 验证，而非一个单一占用者。
 - **FR-005a**：System MUST 交付面向 Claude Code 与 Codex 的子进程支持的 agent provider。
-  每个由一个工作目录（其 `agent_config.cwd`）按对话配置，该目录 MUST 是一个存在的
-  目录，否则配置被拒绝。一个 CLI agent 的可用性 MUST 反映其命令行二进制是否可在
+  每个在一个工作目录（其 `agent_config.cwd`）中运行。当某个回合未提供 cwd 时，
+  provider MUST 默认回落到 Coffer 托管的工作目录 `~/.coffer/workspace`（首次使用时
+  创建），而不是拒绝该回合——这样聊天草稿（无每回合目录选择器）与未配置 workspace
+  的渠道都能开箱即用。一个显式提供的 cwd MUST 是一个存在的目录，否则配置被拒绝。
+  一个 CLI agent 的可用性 MUST 反映其命令行二进制是否可在
   守护进程的 PATH 上解析；一个不可用的 agent 被列出但不可选。一个 CLI 回合 MUST
   在该目录中运行该工具、把它的行分隔 JSON 输出流式映射到平台的回合事件，并持久化
   上游 session id 以便下一个回合延续同一 session。Claude Code 通过 Claude Agent

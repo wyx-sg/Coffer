@@ -7,6 +7,7 @@ from typing import Any
 
 from coffer.application.channel.conversation_spec import validate_workspaces
 from coffer.domain.channel.config import ChannelConfigModel
+from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, ResourceRef
 
 _REF_FIELDS = ("bot_token_ref", "app_secret_ref", "signing_secret_ref")
@@ -57,6 +58,32 @@ def _make_validator(
     return _validate_channel_config
 
 
+def _make_update_validator(
+    agent_keys: Callable[[], list[str]] | None,
+) -> Callable[[ResourceRef, dict[str, Any], dict[str, Any]], None] | None:
+    """Update-time validation hook (``on_update_config``).
+
+    ``validate_config`` runs at registration only — it also probes workspace
+    directories on disk, which an edit deliberately must not re-check. But an
+    edit that re-binds the channel to an unknown ``default_agent`` would still
+    pass shape validation and only fail (silently) at the next turn. So when an
+    ``agent_keys`` provider is injected we also validate ``default_agent`` here,
+    converting the resolver's ``ValueError`` into the ``ConfigValidationError``
+    the resource service surfaces to the caller. Returns ``None`` when no
+    provider is injected (no hook wired — backward compatible).
+    """
+    if agent_keys is None:
+        return None
+
+    def _validate_update(_ref: ResourceRef, _before: dict[str, Any], after: dict[str, Any]) -> None:
+        try:
+            _validate_default_agent(after, agent_keys)
+        except ValueError as e:
+            raise ConfigValidationError(str(e)) from e
+
+    return _validate_update
+
+
 def make_channel_kind(
     on_delete: Callable[[ResourceRef], Awaitable[None]] | None = None,
     *,
@@ -72,8 +99,9 @@ def make_channel_kind(
 
     ``agent_keys`` (also injected by the composition root) lists the currently
     registered agent keys; when provided, a channel's ``default_agent`` is
-    validated against it at create/edit so an unknown agent is rejected up front
-    rather than failing silently on the first turn.
+    validated against it at BOTH create (``validate_config``) and edit
+    (``on_update_config``) so an unknown agent is rejected up front rather than
+    failing silently on the first turn.
     """
     return Kind(
         name="channel",
@@ -82,4 +110,5 @@ def make_channel_kind(
         on_delete=on_delete,
         credential_ref_extractor=_channel_credential_ref_extractor,
         validate_config=_make_validator(agent_keys),
+        on_update_config=_make_update_validator(agent_keys),
     )

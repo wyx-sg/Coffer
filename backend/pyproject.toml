@@ -10,10 +10,13 @@ requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Coffer contributors" }]
 dependencies = [
-    # 0.137.0 regressed APIRouter inclusion (app.include_router adds only the
+    # 0.137.x regressed APIRouter inclusion (app.include_router adds only the
     # first route of a multi-route router), which strips most endpoints off the
-    # app. Pin it out until a fixed release is verified.
-    "fastapi>=0.136.3,!=0.137.0",
+    # app — observed in 0.137.0 and still present in 0.137.1, so the whole
+    # 0.137 line is excluded (a fresh CI install otherwise grabs 0.137.1 and
+    # the kb/memory/distill contract checks fail). Lift the cap once a fixed
+    # release is verified.
+    "fastapi>=0.136.3,<0.137",
     "uvicorn[standard]>=0.49.0",
     "pydantic>=2.13.4",
     "sqlalchemy[asyncio]>=2.0,<3.0",

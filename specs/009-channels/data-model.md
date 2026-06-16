@@ -11,7 +11,7 @@ Channels are rows in the existing `resources` table (kind = `channel`).
 ```
 ChannelConfig (discriminator: channel_type)
 ├── common (both types, _CommonChannelFields)
-│   ├── default_agent: str = "claude-code"  # must name a registered agent
+│   ├── default_agent: str = "claude_code"  # chat provider key; must name a registered agent
 │   ├── default_agent_config: dict | None
 │   ├── workspaces: list[Workspace] = []   # named cwd allowlist
 │   └── default_workspace: str | None      # one of workspaces[].name
@@ -34,17 +34,25 @@ Validation rules:
   store) — same posture as `mcp_server`'s static-value secret rejection.
 - The kind declares `credential_ref_extractor`, so `ResourceService` probes
   every ref before the row is written; a dangling ref aborts registration.
-- `default_agent` is validated at registration against the live agent registry
-  (ADR-024 retired the old `builtin` pseudo-agent): an unknown agent is rejected
-  up front rather than failing silently on the first turn. Validation is skipped
-  only when the registry is empty, so a misconfigured registry never blocks all
-  channel writes. `default_agent_config` is still a pass-through.
+- `default_agent` is a chat **provider key** (e.g. `claude_code`, underscore) —
+  the key the turn orchestrator resolves an agent by — not the `claude-code`
+  resource name; a hyphenated value passes registration but fails at turn time
+  with `UNKNOWN_AGENT`, leaving the bot silently dead. It is validated against
+  the live agent registry (ADR-024 retired the old `builtin` pseudo-agent) at
+  **both** create (`validate_config`) and edit (`on_update_config`): an unknown
+  agent is rejected up front rather than failing silently on the first turn.
+  Validation is skipped only when the registry is empty, so a misconfigured
+  registry never blocks all channel writes. `default_agent_config` is still a
+  pass-through.
 - `workspaces` are the cwd allowlist for agents chosen from this channel.
   Shape (unique names, absolute paths, `default_workspace ∈ names`) is checked
   by the Pydantic model; the kind's `validate_config` hook additionally
   requires each `path` to be an existing directory at registration, so a bad
   workspace aborts registration with nothing persisted. A chat message never
-  supplies a bare path — only a workspace name.
+  supplies a bare path — only a workspace name. When a channel declares no
+  workspace (and the peer picks none), a turn falls back to the Coffer-managed
+  workspace `~/.coffer/workspace` (created on first use) rather than failing —
+  so a channel works out of the box without configuring a workspace.
 
 ## Table: `channel_peers`
 

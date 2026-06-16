@@ -4,7 +4,7 @@
 // the channel's EXISTING credential ref BEFORE the config is PATCHed, a blank
 // secret field rotates nothing, and changing the bound agent PATCHes the full
 // config (refs preserved) with only default_agent changed.
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -12,9 +12,14 @@ import { EditChannelDialog } from "./EditChannelDialog";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+// The agent picker reads the chat provider registry (GET /chat/agents) — the
+// same registry a turn resolves by — so it can only offer real provider keys.
+vi.mock("@/lib/api/chat", () => ({ chatApi: { listAgents: vi.fn() } }));
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
+const { chatApi } = await import("@/lib/api/chat");
+const listAgentsMock = vi.mocked(chatApi.listAgents);
 
 function installApi(api: ApiClientMock) {
   getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
@@ -29,7 +34,7 @@ const telegramResource = {
   config: {
     channel_type: "telegram",
     bot_token_ref: "channel/tg/bot-token",
-    default_agent: "builtin",
+    default_agent: "claude_code",
   },
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -46,6 +51,12 @@ function renderDialog(resource = telegramResource) {
   );
 }
 
+beforeEach(() => {
+  listAgentsMock.mockResolvedValue({
+    agents: [{ agent_key: "claude_code", display_name: "Claude Code", available: true }],
+  });
+});
+
 afterEach(() => vi.clearAllMocks());
 
 function save() {
@@ -53,6 +64,18 @@ function save() {
 }
 
 describe("EditChannelDialog", () => {
+  test("sources the agent picker from the chat provider registry, not the resource list", async () => {
+    // The bound agent is a chat provider key (claude_code, underscore). The
+    // picker must read the same registry the turn resolves by (chatApi.listAgents
+    // → GET /chat/agents) so a re-bind can only ever pick a real provider key.
+    // The old useAgents() source served resource names (claude-code), which
+    // fail at turn time with UNKNOWN_AGENT.
+    installApi(mockApiClient());
+    renderDialog();
+
+    await waitFor(() => expect(listAgentsMock).toHaveBeenCalled());
+  });
+
   test("rotating the bot token writes the existing ref first, then PATCHes config", async () => {
     const api = installApi(mockApiClient());
     renderDialog();
@@ -73,7 +96,7 @@ describe("EditChannelDialog", () => {
         config: {
           channel_type: "telegram",
           bot_token_ref: "channel/tg/bot-token",
-          default_agent: "builtin",
+          default_agent: "claude_code",
         },
       },
     });
@@ -99,7 +122,7 @@ describe("EditChannelDialog", () => {
         app_id: "app-1",
         app_secret_ref: "channel/st/app-secret",
         signing_secret_ref: "channel/st/signing-secret",
-        default_agent: "builtin",
+        default_agent: "claude_code",
       },
     } as unknown as typeof telegramResource);
 

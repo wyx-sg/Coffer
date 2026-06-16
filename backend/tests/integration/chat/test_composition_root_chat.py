@@ -197,7 +197,8 @@ def test_create_conversation_with_agent_via_wired_daemon(app, tmp_path) -> None:
 )
 def test_create_conversation_rejects_unknown_agent_and_bad_config(app) -> None:  # type: ignore[no-untyped-def]
     """An unknown agent_key, or an agent_config the agent rejects, is a 400 — and
-    nothing is persisted."""
+    nothing is persisted. (An *absent* cwd is no longer invalid: it defaults to
+    the Coffer-managed workspace. Only an explicitly-bad cwd is rejected.)"""
     with TestClient(app) as client:
         set_active_token(_TOKEN)
 
@@ -209,10 +210,12 @@ def test_create_conversation_rejects_unknown_agent_and_bad_config(app) -> None: 
         assert resp.status_code == 400, resp.text
         assert resp.json()["error"]["code"] == "UNKNOWN_AGENT"
 
+        # An explicitly-supplied cwd that is not an existing directory is still
+        # rejected (a defaulted/absent cwd would instead fall back silently).
         resp = client.post(
             "/api/v1/chat/conversations",
             headers=_HEADERS,
-            json={"agent_key": "claude_code", "agent_config": {}},
+            json={"agent_key": "claude_code", "agent_config": {"cwd": "/no/such/dir/xyz"}},
         )
         assert resp.status_code == 400, resp.text
         assert resp.json()["error"]["code"] == "AGENT_CONFIG_REJECTED"
