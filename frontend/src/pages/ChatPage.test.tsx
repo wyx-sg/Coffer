@@ -91,16 +91,15 @@ describe("ChatPage", () => {
     expect(screen.getByRole("tab", { name: /archived/i })).toBeInTheDocument();
   });
 
-  test("bare /chat shows the draft surface (composer once a workdir is set), not a modal", async () => {
+  test("bare /chat shows the draft surface with a composer right away, not a modal", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     modelsApiMock.list.mockResolvedValue({ models: [] });
     renderPage("/chat");
-    // Managed agents are configured by a working directory; once set, the draft
-    // guide + composer appear — no "Start conversation" dialog button.
-    const dir = await screen.findByRole("textbox", { name: /working directory/i });
-    fireEvent.change(dir, { target: { value: "/home/me/project" } });
+    // No per-turn working-directory step anymore: the draft guide + composer
+    // appear immediately — no "Start conversation" dialog button.
     expect(await screen.findByText(/start a new conversation/i)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /working directory/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /start conversation/i })).not.toBeInTheDocument();
   });
 
@@ -131,9 +130,8 @@ describe("ChatPage", () => {
     chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
     renderPage("/chat");
 
-    // A managed agent is configured by its working directory.
-    const dir = await screen.findByRole("textbox", { name: /working directory/i });
-    fireEvent.change(dir, { target: { value: "/home/me/project" } });
+    // No working-directory step: just type the first message. The turn defaults
+    // to the Coffer-managed workspace on the backend, so no cwd is sent.
     const composer = await screen.findByRole("textbox", { name: /message input/i });
     fireEvent.change(composer, { target: { value: "hello there" } });
     fireEvent.keyDown(composer, { key: "Enter", shiftKey: false });
@@ -141,7 +139,7 @@ describe("ChatPage", () => {
     await waitFor(() =>
       expect(chatApiMock.createConversation).toHaveBeenCalledWith({
         agent_key: "claude_code",
-        agent_config: { cwd: "/home/me/project" },
+        agent_config: {},
       }),
     );
   });
@@ -218,12 +216,12 @@ describe("ChatPage", () => {
     renderPage("/chat/nope");
 
     expect(await screen.findByText("Conversation not found")).toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: /working directory/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
 
     // The explicit way out: start a fresh chat from the not-found state — the
-    // draft surface (with its working-directory input) replaces the not-found UI.
+    // draft surface (with its composer) replaces the not-found UI.
     fireEvent.click(screen.getByRole("button", { name: /start a new chat/i }));
-    expect(await screen.findByRole("textbox", { name: /working directory/i })).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: /message input/i })).toBeInTheDocument();
   });
 
   test("surfaces an error when creating a conversation fails", async () => {
@@ -232,8 +230,6 @@ describe("ChatPage", () => {
     chatApiMock.createConversation.mockRejectedValue(new Error("boom"));
     renderPage("/chat");
 
-    const dir = await screen.findByRole("textbox", { name: /working directory/i });
-    fireEvent.change(dir, { target: { value: "/home/me/project" } });
     const composer = await screen.findByRole("textbox", { name: /message input/i });
     fireEvent.change(composer, { target: { value: "hi" } });
     fireEvent.keyDown(composer, { key: "Enter", shiftKey: false });

@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAgents } from "@/lib/hooks/useAgents";
+import { useChatAgents } from "@/lib/hooks/useChatAgents";
 import { useUpdateChannel } from "@/lib/hooks/useChannels";
 import type { ResourceOut } from "@/lib/components/kindRegistry";
 import { DEFAULT_AGENT, planChannelEdit } from "./schema";
@@ -48,7 +48,11 @@ export function EditChannelDialog({
   const config = resource.config as Record<string, unknown>;
   const channelType = strField(config, "channel_type") || "telegram";
   const update = useUpdateChannel();
-  const { data: agents } = useAgents();
+  // Source the picker from the chat provider registry (provider keys like
+  // claude_code) — the same registry the turn resolves by — not the resource
+  // list (names like claude-code), which would re-bind to an agent that fails
+  // at turn time with UNKNOWN_AGENT.
+  const { data: agents } = useChatAgents();
 
   const [defaultAgent, setDefaultAgent] = useState(
     strField(config, "default_agent") || DEFAULT_AGENT,
@@ -60,11 +64,13 @@ export function EditChannelDialog({
   const [publicBaseUrl, setPublicBaseUrl] = useState(strField(config, "public_base_url"));
   const [tunnelToken, setTunnelToken] = useState("");
 
-  // Offer the registered agents, plus the channel's current binding so a value
-  // that is still loading or since-removed (e.g. a legacy "builtin") stays
-  // shown until the owner picks a valid one. De-duped.
+  // Offer the registered provider keys, plus the channel's current binding so a
+  // value that is still loading or since-removed (e.g. a legacy "builtin")
+  // stays shown until the owner picks a valid one. De-duped, keyed by provider
+  // key; the human-readable display name is looked up per key.
+  const agentLabels = new Map((agents ?? []).map((a) => [a.agent_key, a.display_name]));
   const agentOptions = Array.from(
-    new Set([defaultAgent, ...(agents ?? []).map((a) => a.name)]),
+    new Set([defaultAgent, ...(agents ?? []).map((a) => a.agent_key)]),
   );
 
   const reset = () => {
@@ -131,7 +137,7 @@ export function EditChannelDialog({
               <SelectContent>
                 {agentOptions.map((a) => (
                   <SelectItem key={a} value={a}>
-                    {a}
+                    {agentLabels.get(a) ?? a}
                   </SelectItem>
                 ))}
               </SelectContent>

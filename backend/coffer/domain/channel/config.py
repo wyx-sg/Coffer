@@ -59,7 +59,10 @@ class _CommonChannelFields(BaseModel):
     """Fields shared by every channel type: the agent it routes to by default
     and the workspace allowlist used when routing to a bridged agent."""
 
-    default_agent: str = "claude-code"
+    # The provider key the chat AgentProviderRegistry resolves a turn by
+    # (underscore form), NOT the "claude-code" resource name — a hyphenated
+    # value reaches turn time and fails with UNKNOWN_AGENT.
+    default_agent: str = "claude_code"
     default_agent_config: dict[str, Any] | None = None
     workspaces: list[Workspace] = Field(default_factory=list)
     default_workspace: str | None = None

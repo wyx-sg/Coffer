@@ -120,11 +120,8 @@ export function ChatPage() {
           <DraftThread
             agents={c.agents}
             agentKey={c.effectiveDraft.agentKey}
-            cwd={c.effectiveDraft.cwd}
-            recentCwds={c.recentCwds}
             noManagedAgent={c.noManagedAgent}
             onAgentChange={c.setDraftAgent}
-            onCwdChange={c.setDraftCwd}
             onSend={c.sendDraft}
             creating={c.creating}
           />

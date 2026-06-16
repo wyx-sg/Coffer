@@ -61,9 +61,26 @@ describe("useChatTurn", () => {
       },
     );
 
-    const { result } = renderHook(() => useChatTurn("conv-1"), {
-      wrapper: makeWrapper(),
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
+    // The post-turn refetch carries the persisted assistant reply, so the live
+    // bubble is cleared (the keyed persisted bubble takes over).
+    qc.setQueryData(["messages", "conv-1"], [
+      {
+        id: "a1",
+        conversation_id: "conv-1",
+        seq: 1,
+        role: "assistant",
+        content: [{ type: "text", text: "Hello world" }],
+        status: "complete",
+        created_at: "",
+      },
+    ]);
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
     await act(async () => {
       await result.current.send("hi");
@@ -74,6 +91,80 @@ describe("useChatTurn", () => {
     expect(result.current.liveMessage).toBeNull();
     expect(result.current.error).toBeNull();
     expect(streamChatTurnMock).toHaveBeenCalledWith("conv-1", "hi", expect.any(AbortSignal));
+  });
+
+  test("keeps the live bubble until the refetched messages carry the assistant reply (no flicker)", async () => {
+    // Flicker repro: clearing the live bubble before the persisted reply is in
+    // the messages cache leaves a gap (and remounts the bubble). When the
+    // refetch already carries the reply, the live bubble is safe to drop.
+    streamChatTurnMock.mockImplementation(async function* () {
+      yield { event: "turn_start", data: {} };
+      yield { event: "text_delta", data: { text: "The answer" } };
+      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+    });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    // Stand in for the post-turn refetch: the persisted assistant reply is in
+    // the cache by the time the hook checks.
+    qc.setQueryData(["messages", "conv-1"], [
+      {
+        id: "a1",
+        conversation_id: "conv-1",
+        seq: 1,
+        role: "assistant",
+        content: [{ type: "text", text: "The answer" }],
+        status: "complete",
+        created_at: "",
+      },
+    ]);
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+
+    await act(async () => {
+      await result.current.send("q");
+    });
+
+    expect(result.current.liveMessage).toBeNull();
+  });
+
+  test("does NOT clear the live bubble when the refetch still lacks the assistant reply", async () => {
+    // If the persisted reply isn't in the refetched history yet, dropping the
+    // live bubble would blank the just-streamed answer — hold it instead.
+    streamChatTurnMock.mockImplementation(async function* () {
+      yield { event: "turn_start", data: {} };
+      yield { event: "text_delta", data: { text: "The answer" } };
+      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+    });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    // Refetch brings only the user message back — the assistant reply hasn't
+    // landed yet.
+    qc.setQueryData(["messages", "conv-1"], [
+      {
+        id: "u1",
+        conversation_id: "conv-1",
+        seq: 0,
+        role: "user",
+        content: [{ type: "text", text: "q" }],
+        status: "complete",
+        created_at: "",
+      },
+    ]);
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+
+    await act(async () => {
+      await result.current.send("q");
+    });
+
+    expect(result.current.liveMessage).not.toBeNull();
+    expect(result.current.liveMessage?.text).toBe("The answer");
   });
 
   test("sets error on ApiError and clears streaming state", async () => {
@@ -427,7 +518,26 @@ describe("useChatTurn", () => {
       yield { event: "turn_done", data: { stop_reason: "end_turn" } };
     });
 
-    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    // The post-turn refetch carries a persisted assistant reply, so the live
+    // bubble clears once the turn ends.
+    qc.setQueryData(["messages", "conv-1"], [
+      {
+        id: "a1",
+        conversation_id: "conv-1",
+        seq: 1,
+        role: "assistant",
+        content: [{ type: "text", text: "an answer" }],
+        status: "complete",
+        created_at: "",
+      },
+    ]);
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
     let sendPromise!: Promise<void>;
     act(() => {

@@ -18,7 +18,7 @@ import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef, use
 import { useQueryClient } from "@tanstack/react-query";
 
 import { streamChatTurn, type AgentEvent, type ApprovalRequestEvent } from "@/lib/chat/streamClient";
-import { chatApi, type ContentBlock } from "@/lib/api/chat";
+import { chatApi, type ContentBlock, type Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
 import { CONVERSATIONS_KEY, messagesKey } from "./useConversations";
 
@@ -114,20 +114,31 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
       try {
         const gen = streamChatTurn(conversationId, text, controller.signal);
 
+        // Accumulate the streamed assistant text so we can confirm the persisted
+        // reply has landed before dropping the live bubble (see below).
+        let assistantText = "";
         for await (const event of gen) {
           if (!isCurrent()) return;
           if (event.event === "approval_request") {
             // The turn paused — surface the request so the user can decide.
             setPendingApproval(event.data);
           } else {
+            if (event.event === "text_delta") assistantText += event.data.text;
             handleEvent(event, setLiveMessage);
           }
         }
 
-        // Turn completed — invalidate the messages query so the persisted
-        // message is fetched and liveMessage can be cleared.
+        // Turn completed — refetch the persisted messages, then drop the live
+        // bubble ONLY once that refetch actually carries this turn's assistant
+        // reply. Clearing before it lands removes the live bubble into a gap
+        // (the keyed persisted bubble hasn't rendered yet), so the just-streamed
+        // answer flickers out and back in. Aligning on the reply closes the gap.
         await qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
-        if (isCurrent()) setLiveMessage(null);
+        if (!isCurrent()) return;
+        const refetched = qc.getQueryData<Message[]>(messagesKey(conversationId)) ?? [];
+        if (assistantReplyLanded(refetched, assistantText)) {
+          setLiveMessage(null);
+        }
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           return;
@@ -197,6 +208,31 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     submitApproval,
     interrupt,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Reply alignment
+// ---------------------------------------------------------------------------
+
+/**
+ * Has the refetched history caught up with the turn that just streamed — i.e.
+ * does it carry this turn's assistant reply? Align by the streamed text (a
+ * complete assistant message whose text matches what streamed); for a reply
+ * with no text (a tool-only turn) fall back to existence of any complete
+ * assistant message. Used to gate clearing the live bubble so it never blanks
+ * into a gap before the persisted bubble renders.
+ */
+function assistantReplyLanded(messages: Message[], streamedText: string): boolean {
+  const replies = messages.filter((m) => m.role === "assistant" && m.status === "complete");
+  const wanted = streamedText.trim();
+  if (!wanted) return replies.length > 0;
+  return replies.some((m) => {
+    const text = m.content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text ?? "")
+      .join("");
+    return text.trim() === wanted || text.includes(wanted);
+  });
 }
 
 // ---------------------------------------------------------------------------

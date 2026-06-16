@@ -31,7 +31,7 @@ It delivers two things at once:
    MCP servers, skills, memory, and knowledge bases through Coffer's MCP
    gateway, on a user-configured LLM provider — **plus** two CLI-backed agents,
    **Claude Code** and **Codex**, each driven by its installed command-line tool
-   in a working directory the user picks per conversation. The CLI agents are
+   in a working directory (the Coffer-managed workspace by default). The CLI agents are
    what keep the seam honest: they are real second and third providers, not a
    promise, and they prove that adding an agent is one registry entry with no
    change to the chat surface, persistence, or the wire contract.
@@ -588,9 +588,12 @@ referenced by at least one test marked
   CLI-backed agents (Claude Code, Codex) — so the seam is validated by real
   additional providers, not a single occupant.
 - **FR-005a**: System MUST ship subprocess-backed agent providers for Claude Code and
-  Codex. Each is configured per conversation by a working directory (its
-  `agent_config.cwd`), which MUST be an existing directory or the configuration
-  is rejected. A CLI agent's availability MUST reflect whether its command-line
+  Codex. Each runs in a working directory (its `agent_config.cwd`). When a turn
+  supplies no cwd, the provider MUST default to the Coffer-managed workspace
+  `~/.coffer/workspace` (created on first use) rather than reject the turn — so a
+  chat draft (no per-turn directory picker) and a channel without a configured
+  workspace both work out of the box. An explicitly-supplied cwd MUST be an
+  existing directory or the configuration is rejected. A CLI agent's availability MUST reflect whether its command-line
   binary is resolvable on the daemon's PATH; an unavailable agent is listed but
   not selectable. A CLI turn MUST run the tool in that directory, stream its
   line-delimited JSON output mapped onto the platform's turn events, and persist

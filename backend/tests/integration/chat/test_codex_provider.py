@@ -112,14 +112,21 @@ async def _collect(adapter: CodexAppServerAdapter, history: list[Message]) -> li
 
 
 @pytest.mark.asyncio
-async def test_init_conversation_rejects_missing_cwd(tmp_path: Any) -> None:
+async def test_init_conversation_defaults_missing_cwd_to_workspace(
+    tmp_path: Any, monkeypatch: Any
+) -> None:
+    # No cwd given falls back to the Coffer-managed workspace rather than
+    # failing the turn (parity with the SDK provider).
+    monkeypatch.setenv("HOME", str(tmp_path))
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv())
     provider = CodexAppServerProvider(conversations=repo)
 
-    with pytest.raises(AgentConfigRejected) as exc:
-        await provider.init_conversation(conv.id, {})
-    assert exc.value.reason == "invalid_cwd"
+    await provider.init_conversation(conv.id, {})
+    stored = await repo.get_agent_config(conv.id)
+    expected = str(tmp_path / ".coffer" / "workspace")
+    assert stored["cwd"] == expected
+    assert (tmp_path / ".coffer" / "workspace").is_dir()
 
     await engine.dispose()
 

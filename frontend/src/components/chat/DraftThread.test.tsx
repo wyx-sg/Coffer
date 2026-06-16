@@ -12,7 +12,6 @@ const agents: AgentInfo[] = [
 
 function renderDraft(overrides: Partial<React.ComponentProps<typeof DraftThread>> = {}) {
   const onSend = vi.fn();
-  const onCwdChange = vi.fn();
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
@@ -20,20 +19,18 @@ function renderDraft(overrides: Partial<React.ComponentProps<typeof DraftThread>
         <DraftThread
           agents={agents}
           agentKey="claude_code"
-          cwd="/home/me/project"
           onAgentChange={vi.fn()}
-          onCwdChange={onCwdChange}
           onSend={onSend}
           {...overrides}
         />
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return { onSend, onCwdChange };
+  return { onSend };
 }
 
 describe("DraftThread", () => {
-  test("shows the start guide and a composer when a working directory is set", () => {
+  test("shows the start guide and a composer right away (no working directory needed)", () => {
     renderDraft();
     expect(screen.getByText(/start a new conversation/i)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
@@ -53,34 +50,13 @@ describe("DraftThread", () => {
     expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
   });
 
-  test("shows a working-directory input and no composer until cwd is set", () => {
-    const { onCwdChange } = renderDraft({ cwd: "" });
-    const dir = screen.getByRole("textbox", { name: /working directory/i });
-    expect(dir).toBeInTheDocument();
-    // No composer until a directory is provided.
-    expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
-    fireEvent.change(dir, { target: { value: "/home/me/project" } });
-    expect(onCwdChange).toHaveBeenCalledWith("/home/me/project");
-  });
-
-  test("offers a folder Browse button next to the path field", () => {
-    renderDraft({ cwd: "" });
-    expect(screen.getByRole("button", { name: /browse/i })).toBeInTheDocument();
-  });
-
-  test("recent directories are offered and picking one sets the cwd", () => {
-    const { onCwdChange } = renderDraft({
-      cwd: "",
-      recentCwds: ["/home/me/alpha", "/home/me/beta"],
-    });
-    // Open the recents popover and pick one.
-    fireEvent.click(screen.getByRole("button", { name: /recent directories/i }));
-    fireEvent.click(screen.getByText("/home/me/beta"));
-    expect(onCwdChange).toHaveBeenCalledWith("/home/me/beta");
-  });
-
-  test("no recents control when there is no history", () => {
-    renderDraft({ cwd: "", recentCwds: [] });
-    expect(screen.queryByRole("button", { name: /recent directories/i })).not.toBeInTheDocument();
+  test("no longer renders a working-directory input or folder picker", () => {
+    // The per-turn working-directory UI was removed; turns default to the
+    // Coffer-managed workspace on the backend.
+    renderDraft();
+    expect(
+      screen.queryByRole("textbox", { name: /working directory/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /browse/i })).not.toBeInTheDocument();
   });
 });

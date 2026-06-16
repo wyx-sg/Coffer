@@ -26,6 +26,7 @@ from coffer.infrastructure.chat.codex_app_server import (
     AppServerSessionFactory,
     default_app_server_session,
 )
+from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 
 
 class CodexAppServerProvider:
@@ -57,10 +58,9 @@ class CodexAppServerProvider:
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
         if not isinstance(cwd, str) or not cwd.strip():
-            raise AgentConfigRejected(
-                reason="invalid_cwd",
-                message="agent_config.cwd (a working directory path) is required",
-            )
+            # No working directory given — fall back to the Coffer-managed
+            # workspace rather than fail the turn (parity with the SDK provider).
+            cwd = default_workspace_dir()
         if not pathlib.Path(cwd).expanduser().is_dir():
             raise AgentConfigRejected(
                 reason="cwd_not_a_directory",

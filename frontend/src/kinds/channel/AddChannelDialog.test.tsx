@@ -69,7 +69,7 @@ acceptance("009-channels", "register a telegram channel", async () => {
         config: {
           channel_type: "telegram",
           bot_token_ref: "channel/tg/bot-token",
-          default_agent: "claude-code",
+          default_agent: "claude_code",
         },
       },
     },
@@ -114,7 +114,7 @@ describe("AddChannelDialog", () => {
           app_id: "app-1",
           app_secret_ref: "channel/st/app-secret",
           signing_secret_ref: "channel/st/signing-secret",
-          default_agent: "claude-code",
+          default_agent: "claude_code",
         },
       },
     });
