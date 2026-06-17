@@ -2,8 +2,9 @@
 
 The hook asks for confirmation when a `git commit` is about to run while
 `make verify` is stale (source changed since the last passing verify). It must
-stay silent for fresh trees and for any non-commit command, and never break the
-agent on error.
+stay silent for fresh trees, for any non-commit command, and when no verify
+baseline exists yet (no stamp -> nothing to be stale against), and never break
+the agent on error.
 """
 
 from __future__ import annotations
@@ -61,10 +62,14 @@ def _decision(proc: subprocess.CompletedProcess[str]) -> str | None:
     return json.loads(out)["hookSpecificOutput"]["permissionDecision"]
 
 
-def test_asks_when_stale_no_stamp(repo: Path) -> None:
+def test_silent_when_no_stamp_baseline(repo: Path) -> None:
+    # No stamp means no `make verify` baseline exists yet (the stamp is
+    # gitignored, so a fresh clone or new branch never has one). The guard stays
+    # silent rather than nagging on every commit; it only asks once a baseline
+    # exists and source has since changed (covered below).
     proc = _run("git commit -m 'wip'", repo)
     assert proc.returncode == 0, proc.stderr
-    assert _decision(proc) == "ask"
+    assert proc.stdout.strip() == ""  # no baseline -> no decision -> default flow
 
 
 def test_asks_when_source_changed_since_verify(repo: Path) -> None:
