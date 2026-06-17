@@ -33,6 +33,14 @@ def _is_fresh(target: Path) -> bool | None:
     try:
         import verify_stamp  # type: ignore[import-not-found]
 
+        # No stamp means no `make verify` baseline exists on this checkout — the
+        # stamp is gitignored, so a fresh clone or a new branch never has one.
+        # Treat that as "unknown" rather than "stale" so the guard stays quiet
+        # until the first `make verify` writes a stamp, instead of asking on
+        # every commit (doc-only commits included). The stale path below still
+        # fires once a baseline exists and source has since changed.
+        if not (target / verify_stamp.STAMP_NAME).exists():
+            return None
         return verify_stamp.is_fresh(target)
     except Exception:
         return None
