@@ -7,7 +7,7 @@ they pin).
 
 - [ ] T001 `domain/channel/config.py` — ChannelConfig union (telegram/seatalk),
       ref fields, secret-looking-value rejection + unit tests
-- [ ] T002 `domain/channel/envelopes.py` — InboundMessage, ApprovalClick,
+- [ ] T002 `domain/channel/envelopes.py` — InboundMessage,
       OutboundText, ChannelCapabilities + unit tests
 - [ ] T003 `domain/channel/signing.py` — seatalk signature + unit tests
 - [ ] T004 hoist `CredentialResolver` → `application/credentials/resolver.py`;
@@ -27,7 +27,7 @@ they pin).
       redactor, on_delete) + integration tests via ResourceService
 - [ ] T010 `application/channel/inbound.py` — InboundProcessor: owner gate,
       pairing claim, commands (/new /stop /status /help), conversation
-      mapping, queueing, turn driving, rendering dispatch, approval bridge +
+      mapping, queueing, turn driving, rendering dispatch +
       integration tests with FakeChannelAdapter + scripted AgentProvider
 - [ ] T011 `application/channel/service.py` — ChannelService (issue code,
       status, notify, peer queries) + integration tests

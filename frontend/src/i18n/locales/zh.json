@@ -578,8 +578,7 @@
     "MODEL_NOT_FOUND": "未找到模型",
     "MODEL_REJECTED": "模型配置被拒绝",
     "NO_MODEL_CONFIGURED": "尚未配置模型，请先添加一个再开始对话。",
-    "TURN_IN_PROGRESS": "该对话已有一轮正在进行中",
-    "APPROVAL_NOT_FOUND": "该审批请求已不在待处理状态"
+    "TURN_IN_PROGRESS": "该对话已有一轮正在进行中"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -1157,12 +1156,6 @@
       "title": "归档此对话？",
       "body": "它将被移入归档，你可以随时恢复。",
       "confirm": "归档"
-    },
-    "approval": {
-      "title": "需要审批",
-      "tool": "工具",
-      "allow": "允许",
-      "deny": "拒绝"
     }
   },
   "channels": {
@@ -1188,7 +1181,7 @@
     },
     "welcome": {
       "title": "在你常用的 IM 里和 agent 对话",
-      "body": "一个渠道把一个 Telegram 机器人或 SeaTalk 应用接入 Coffer 的对话平台。与你自己的账号配对后，给机器人发消息即可与 agent 对话——回复、审批和通知都会送达 IM 聊天里。",
+      "body": "一个渠道把一个 Telegram 机器人或 SeaTalk 应用接入 Coffer 的对话平台。与你自己的账号配对后，给机器人发消息即可与 agent 对话——回复和通知都会送达 IM 聊天里。",
       "featureChat": {
         "title": "随处对话",
         "body": "消息会进入一条普通会话；agent 的回复原路返回 IM 聊天。"

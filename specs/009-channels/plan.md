@@ -6,7 +6,7 @@
 
 Add a `channel` resource kind that connects IM accounts (Telegram, SeaTalk)
 to the spec-008 chat platform. The channel core (pairing, routing, commands,
-queueing, rendering policy, approval bridging, notify) is kind-agnostic over
+queueing, rendering policy, notify) is kind-agnostic over
 a small adapter protocol; Telegram and SeaTalk are the first two adapters.
 A separate callback-listener process gives SeaTalk its webhook ingress, per
 the constitution's public-surface rule. The frontend gains a Channels page in
@@ -16,7 +16,7 @@ the Agents nav group.
 
 - **Drives the platform in-process** — `ChatService.create_conversation`,
   `TurnOrchestrator.start_turn` (drain the returned queue to the `None`
-  sentinel), `submit_approval`, `interrupt_turn`. No HTTP between channel
+  sentinel), `interrupt_turn`. No HTTP between channel
   core and chat platform.
 - **No new SDKs.** Telegram and SeaTalk are spoken with `httpx` against fixed
   hosts (`api.telegram.org`, `openapi.seatalk.io`). No user-controlled URLs
@@ -54,7 +54,7 @@ the Agents nav group.
 backend/coffer/
 ├── domain/channel/
 │   ├── config.py        # ChannelConfig discriminated union + ref validation
-│   ├── envelopes.py     # InboundMessage, ApprovalClick, ChannelCapabilities
+│   ├── envelopes.py     # InboundMessage, ChannelCapabilities
 │   └── signing.py       # seatalk_signature(body, secret) — pure hashlib
 ├── application/
 │   ├── credentials/resolver.py   # CredentialResolver (hoisted from mcp)
@@ -64,7 +64,7 @@ backend/coffer/
 │       ├── pairing.py   # PairingManager (codes, TTL, attempt bounds)
 │       ├── service.py   # ChannelService: pairing API, notify, status, peers
 │       ├── inbound.py   # InboundProcessor: owner gate, commands, queueing,
-│       │                #   conversation mapping, turn driving, approval bridge
+│       │                #   conversation mapping, turn driving
 │       └── runtime.py   # ChannelRuntime: reconciler loop + listener lifecycle
 ├── infrastructure/channel/
 │   ├── persistence.py   # ChannelPeerModel + repo
@@ -86,11 +86,11 @@ backend/coffer/
 Key seams:
 
 - `ChannelAdapter` protocol: `capabilities`, `start(callbacks)`, `stop()`,
-  `send_text`, `edit_text`, `delete_message`, `send_approval_prompt`,
-  `resolve_approval_prompt`, `send_typing`. Optional surfaces are declared by
+  `send_text`, `edit_text`, `delete_message`,
+  `send_typing`. Optional surfaces are declared by
   `ChannelCapabilities`; the core consults capabilities, never adapter type.
-- `AdapterCallbacks` (given to adapters): `on_message(InboundMessage)`,
-  `on_approval_click(ApprovalClick)`. Adapters never import chat modules.
+- `AdapterCallbacks` (given to adapters): `on_message(InboundMessage)`.
+  Adapters never import chat modules.
 - The SeaTalk adapter has no poll loop; the daemon's events-ingest route
   feeds `handle_event` on the adapter via the runtime's registry.
 - The listener child gets per-channel signing secrets, the daemon URL, and
@@ -122,8 +122,8 @@ i18n: `channels` namespace in `en.json`/`zh.json` (parity test enforces).
   signature function, command parsing, capability-driven strategy selection.
 - **Integration** (real SQLite, fake transports): a `FakeChannelAdapter`
   drives the full inbound pipeline against a scripted `AgentProvider`
-  (register → pair → message → reply → /new → /stop → queue → approval
-  allow/deny → notify); Telegram adapter against a local fake Bot API (ASGI
+  (register → pair → message → reply → /new → /stop → queue →
+  notify); Telegram adapter against a local fake Bot API (ASGI
   httpx transport): polling, offset commit, HTML fallback, buttons; SeaTalk
   adapter against a fake openapi host: token refresh, send, cards, 429
   backoff; callback listener app: challenge echo, good/bad signature,

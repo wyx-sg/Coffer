@@ -92,7 +92,6 @@ _STATUS: dict[str, int] = {
     "TURN_IN_PROGRESS": 409,
     "UNKNOWN_AGENT": 400,
     "AGENT_CONFIG_REJECTED": 400,
-    "APPROVAL_NOT_FOUND": 409,
     # channels (spec 009)
     "CHANNEL_NOT_PAIRED": 409,
     "CHANNEL_NOT_RUNNING": 409,

@@ -80,8 +80,6 @@ export function ChatPage() {
             liveMessage={c.turn.liveMessage}
             isStreaming={c.turn.isStreaming}
             turnError={c.turn.error}
-            pendingApproval={c.turn.pendingApproval}
-            onApprovalDecide={c.turn.submitApproval}
             onStop={() => void c.turn.interrupt()}
             onSend={(text) => {
               c.turn.clearError();

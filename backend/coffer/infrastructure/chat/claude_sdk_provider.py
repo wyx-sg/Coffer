@@ -61,8 +61,6 @@ class ClaudeSdkProvider:
                 message=f"agent_config.cwd is not an existing directory: {cwd!r}",
             )
         stored: dict[str, Any] = {"cwd": str(pathlib.Path(cwd).expanduser())}
-        if isinstance(agent_config.get("permission_mode"), str):
-            stored["permission_mode"] = agent_config["permission_mode"]
         # Persist the model so a chat-chosen model reaches the SDK; without this
         # the option was always None and the CLI always picked the model itself.
         if isinstance(agent_config.get("model"), str):

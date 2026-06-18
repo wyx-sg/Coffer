@@ -159,14 +159,6 @@ class SendMessageRequest(BaseModel):
     text: str = Field(min_length=1, max_length=32768)
 
 
-class ApprovalSubmit(BaseModel):
-    """Body for POST /conversations/{id}/approvals."""
-
-    request_id: str
-    behavior: Literal["allow", "deny"]
-    message: str | None = None
-
-
 # ---------------------------------------------------------------------------
 # Model
 # ---------------------------------------------------------------------------

@@ -640,43 +640,8 @@ def test_send_message_no_model_real_orchestrator() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Approval + interrupt route guards (non-streaming error / no-op paths)
+# Interrupt route guards (non-streaming error / no-op paths)
 # ---------------------------------------------------------------------------
-
-
-def test_submit_approval_unknown_conversation_returns_404() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
-    set_active_token(_TOKEN)
-
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        resp = client.post(
-            "/api/v1/chat/conversations/no-such-conv/approvals",
-            json={"request_id": "r1", "behavior": "allow"},
-        )
-        assert resp.status_code == 404
-
-    set_active_token(None)
-
-
-def test_submit_approval_no_pending_request_returns_409() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
-    set_active_token(_TOKEN)
-
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
-            "id"
-        ]
-        # No turn in flight → no pending approval → 409.
-        resp = client.post(
-            f"/api/v1/chat/conversations/{conv_id}/approvals",
-            json={"request_id": "r1", "behavior": "allow"},
-        )
-        assert resp.status_code == 409
-        assert resp.json()["error"]["code"] == "APPROVAL_NOT_FOUND"
-
-    set_active_token(None)
 
 
 def test_interrupt_unknown_conversation_returns_404() -> None:

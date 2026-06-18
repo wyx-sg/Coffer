@@ -9,13 +9,10 @@
 
 Spec 009 made Coffer the channel-entrypoint manager: an owner pairs an IM
 account to a `channel:<name>` resource and drives any registered agent
-(`builtin`, `claude_code`, `codex`) through the chat platform's seams. The
-per-tool approval relay for both bridged agents shipped earlier (Claude Code on
-the Agent SDK, Codex on `app-server`), so an owner can approve tool calls from
-the IM app.
+(`builtin`, `claude_code`, `codex`) through the chat platform's seams.
 
 What the entrypoint manager still lacked is the layer that makes it a
-*switchboard* rather than a single fixed wire: an owner could only talk to the
+_switchboard_ rather than a single fixed wire: an owner could only talk to the
 one agent baked into the channel config, in the one (operator-baked) working
 directory, with no record of who drove what, and — on a platform that cannot
 edit messages (SeaTalk) — no signal at all while a long bridged turn ran. These
@@ -35,11 +32,11 @@ Two facts from the code shaped the design:
 ## Decision
 
 1. **Structural vs parametric selection — one mental model for all switches.**
-   - *Structural* dimensions (`agent_key`, `cwd`) are pinned when a conversation
+   - _Structural_ dimensions (`agent_key`, `cwd`) are pinned when a conversation
      is created and cannot change mid-conversation. Switching one **opens a new
      conversation**, carrying over the other dimension's sticky value; the old
      conversation stays in history. `/agent` and `/cwd` are structural.
-   - *Parametric* dimensions (`model`) are re-read each turn. Switching one
+   - _Parametric_ dimensions (`model`) are re-read each turn. Switching one
      **takes effect on the next turn in the same conversation**. `/model` is
      parametric.
 
@@ -77,11 +74,10 @@ Two facts from the code shaped the design:
    back to the chat. (This also fixes the Claude Code provider, which previously
    accepted a `model` option but never persisted one, so the CLI always chose.)
 
-5. **Channel-driven work is first-class in the audit log.** Two new event types
-   record what the generic per-turn audit could not: `CHANNEL_TURN_STARTED` when
+5. **Channel-driven work is first-class in the audit log.** A new event type
+   records what the generic per-turn audit could not: `CHANNEL_TURN_STARTED` when
    an inbound message drives a turn (who/when/which channel/which agent/which
-   conversation) and `CHANNEL_APPROVAL_RESOLVED` when the owner answers a tool
-   approval from the chat (channel/peer/tool/decision). Audit lives in the
+   conversation). Audit lives in the
    channel layer because that is the only place the channel + peer context
    exists; the existing free-form `details_json` carries the structured context
    with no schema change.
@@ -113,10 +109,6 @@ Two facts from the code shaped the design:
 - **Validate bridged model strings against a curated list** — rejected as
   cargo-cult; Coffer does not own the upstream CLI's model namespace and would
   have to chase it. Passthrough with a relayed CLI error is honest and cheap.
-- **Audit approvals at the platform seam (`submit_approval`) to cover web + IM
-  uniformly** — deferred; the channel + peer context that makes the record
-  useful only exists in the channel layer. A surface-agnostic approval audit can
-  follow if the web surface needs it.
 - **Stream token-level text and refresh a heartbeat during the turn** —
   rejected for now; a single completion summary is the high-value, low-noise
   signal, and block-level tool progress already exists where the platform can
@@ -134,5 +126,5 @@ Two facts from the code shaped the design:
   capabilities, so no adapter learns about them — the differentiation layer is
   channel-agnostic and any future channel inherits it (spec 009 SC-003
   preserved).
-- The audit log answers "who drove which agent through which channel, and what
-  did they approve" without a schema change.
+- The audit log answers "who drove which agent through which channel" without a
+  schema change.

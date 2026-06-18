@@ -6,13 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import { chatApi } from "@/lib/api/chat";
 import { messagesKey } from "@/lib/hooks/useConversations";
 import { isNearBottom } from "@/lib/chat/scroll";
-import type { LiveMessage, PendingApproval } from "@/lib/hooks/useChatTurn";
+import type { LiveMessage } from "@/lib/hooks/useChatTurn";
 import type { Conversation } from "@/lib/api/chat";
 import { Button } from "@/components/ui/button";
 import { AgentModelBar } from "./AgentModelBar";
 import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";
-import { ApprovalCard } from "./ApprovalCard";
 import { translateApiError } from "@/lib/api/errors";
 
 interface Props {
@@ -23,10 +22,6 @@ interface Props {
   turnError?: Error | null;
   /** Called when the user dismisses the turn error banner. */
   onClearTurnError?: () => void;
-  /** A turn paused awaiting a human allow/deny decision, if any. */
-  pendingApproval?: PendingApproval | null;
-  /** Called with the user's decision on the pending approval request. */
-  onApprovalDecide?: (behavior: "allow" | "deny") => void | Promise<void>;
   /** Called when the user stops the in-flight turn. */
   onStop?: () => void;
   onSend: (text: string) => void;
@@ -46,8 +41,6 @@ export function MessageThread({
   isStreaming,
   turnError,
   onClearTurnError,
-  pendingApproval,
-  onApprovalDecide,
   onStop,
   onSend,
   agentLabel,
@@ -163,11 +156,6 @@ export function MessageThread({
             </button>
           )}
         </div>
-      )}
-
-      {/* Human-approval card — shown while a turn is paused for a decision. */}
-      {pendingApproval && onApprovalDecide && (
-        <ApprovalCard approval={pendingApproval} onDecide={onApprovalDecide} />
       )}
 
       {readOnly ? (

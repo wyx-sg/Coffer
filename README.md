@@ -21,7 +21,7 @@ Coffer is a daemon + CLI + desktop app that gives every AI agent on your machine
 - **Skills** — keep a master library of agent skill bundles and deliver them into one or more agents' skill directories, with drift reconciliation.
 - **Knowledge base** — drop in any-format documents (auto-converted to markdown) and let agents retrieve them by grep / keyword / vector search.
 - **Memory** — one canonical, agent-native memory store shared across agents (Claude / Codex), readable and writable over MCP.
-- **Channels** — chat with a built-in agent from Telegram or SeaTalk, answer approval prompts, and receive notifications from your phone.
+- **Channels** — chat with a built-in agent from Telegram or SeaTalk, and receive notifications from your phone.
 
 Run Coffer on more than one machine? **Multi-machine sync** keeps one vault consistent across them through a git repository you own — knowledge, memory, resources, and ciphertext-only credentials travel; the encryption key never leaves your machines.
 
@@ -50,9 +50,9 @@ overrides: `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
 
 Download the installer from [Releases](https://github.com/wyx-sg/Coffer/releases/latest):
 
-| Platform             | File                                    |
-| -------------------- | --------------------------------------- |
-| macOS Apple silicon  | `Coffer_<version>_aarch64-unsigned.dmg` |
+| Platform            | File                                    |
+| ------------------- | --------------------------------------- |
+| macOS Apple silicon | `Coffer_<version>_aarch64-unsigned.dmg` |
 
 Coffer currently ships macOS (Apple Silicon) only. The `-unsigned` suffix marks
 the DMG as not yet notarised (see below). Verify the download against the

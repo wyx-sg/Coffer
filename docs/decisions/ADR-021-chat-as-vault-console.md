@@ -2,16 +2,21 @@
 
 > 中文版: [ADR-021-chat-as-vault-console.zh.md](./ADR-021-chat-as-vault-console.zh.md)
 
-- **Status:** Accepted — partially superseded by [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md) (2026-06-14)
+- **Status:** Accepted — superseded by [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md) (2026-06-14, the `builtin`-persona job) and [ADR-025](./ADR-025-remove-tool-approval.md) (2026-06-18, the approval-seat job)
 - **Spec:** [008-agent-chat](../../specs/008-agent-chat/spec.md) (repositioning — no new spec number; Spec 008 `spec.md` is updated before implementation)
-- **Related:** [009-channels](../../specs/009-channels/spec.md) ([ADR-014](./ADR-014-channel-adapter-framework.md), shared turn/approval seams), [007-memory](../../specs/007-memory/spec.md) (the vault the console talks to)
+- **Related:** [009-channels](../../specs/009-channels/spec.md) ([ADR-014](./ADR-014-channel-adapter-framework.md), shared turn seams), [007-memory](../../specs/007-memory/spec.md) (the vault the console talks to)
 
 > **Note (2026-06-14):** [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md)
 > supersedes the **"converse with the vault through the `builtin` agent"** job below —
 > the built-in agent is retired as a chat persona and recast as internal Coffer
 > capabilities (`coffer__search_tools` semantic ranking, `coffer__ask`); the chat
-> surface reverts from _Vault Console_ to _Chat_. The **channel observe/approve**
-> job (job 2) stands unchanged.
+> surface reverts from _Vault Console_ to _Chat_.
+>
+> **Note (2026-06-18):** [ADR-025](./ADR-025-remove-tool-approval.md) supersedes the
+> **"approval seat"** job (job 2) below — the entire interactive tool-approval system
+> is removed. Agents run with full permissions; owner-pairing is the trust boundary.
+> The console's remaining role is to **observe** channel-driven conversations, not to
+> approve their tool calls.
 
 ## Context
 

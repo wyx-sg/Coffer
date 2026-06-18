@@ -19,9 +19,9 @@ features:
   - title: Skills · Knowledge · Memory
     details: Keep one master skill library and deliver it into each agent; curate knowledge bases your agents can search; share one memory across every agent.
   - title: Chat with any agent
-    details: Talk to Coffer's built-in agent — or drive Claude Code and Codex — from a streamed chat with tool-call approval, in the web or desktop app.
+    details: Talk to Coffer's built-in agent — or drive Claude Code and Codex — from a streamed chat, in the web or desktop app.
   - title: Reach agents anywhere
-    details: Pair a Telegram or SeaTalk channel and chat with your agents (and approve their tool calls) from your phone. Multi-machine sync keeps every machine consistent over a git repo you own.
+    details: Pair a Telegram or SeaTalk channel and chat with your agents from your phone. Multi-machine sync keeps every machine consistent over a git repo you own.
   - title: CLI · Web · Desktop
     details: Drive the whole vault from a terminal, a local web UI, or the desktop app. Agents auto-discover the daemon — no port or token wiring.
 ---

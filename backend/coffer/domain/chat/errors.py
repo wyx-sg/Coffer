@@ -79,16 +79,3 @@ class AgentConfigRejected(CofferError):  # noqa: N818
     def __init__(self, reason: str, message: str) -> None:
         super().__init__(message)
         self.reason = reason
-
-
-class ApprovalNotFound(CofferError):  # noqa: N818
-    """Raised when an approval decision references an unknown or already-decided request."""
-
-    code = "APPROVAL_NOT_FOUND"
-
-    def __init__(self, request_id: str) -> None:
-        super().__init__(
-            f"no pending approval request matches {request_id!r}; "
-            "it is unknown or has already been decided"
-        )
-        self.request_id = request_id

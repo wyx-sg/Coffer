@@ -8,7 +8,7 @@
 ## Context
 
 Coffer 需要消息 channel（Telegram、SeaTalk，以后更多），让唯一的 owner
-通过它们与聊天平台（spec 008）上的任何 agent 对话、批准工具调用、接收
+通过它们与聊天平台（spec 008）上的任何 agent 对话、接收
 通知。channel 和 agent 都还会继续增加，因此集成成本必须保持 N + M：新增
 一个 channel 不得触碰 agent 代码，新增一个 agent 也不得触碰 channel
 代码。
@@ -28,13 +28,13 @@ Coffer 需要消息 channel（Telegram、SeaTalk，以后更多），让唯一�
 2. **薄 adapter，共享内核。** adapter 只实现传输：生命周期、出站发送/
    编辑、把入站消息规范化成公共信封，以及一份 `ChannelCapabilities` 声明
    （能否编辑消息？能否显示按钮？能否显示输入中？）。配对、owner 门、
-   命令、排队、对话映射、渲染策略与审批桥接都放在与 kind 无关的 channel
+   命令、排队、对话映射与渲染策略都放在与 kind 无关的 channel
    内核里。内核根据能力选择行为，从不根据 adapter 类型 —— Telegram 靠
    编辑一条消息来流式展示进度，SeaTalk 降级为「先确认、后给最终回复」，
    内核里零平台条件分支。
 3. **只通过聊天平台既有的接缝触达它** ——
    `ChatService.create_conversation`、`TurnOrchestrator.start_turn` /
-   `submit_approval` / `interrupt_turn` —— 进程内调用，与 web UI 经 HTTP
+   `interrupt_turn` —— 进程内调用，与 web UI 经 HTTP
    做的事完全一致。channel 对 agent 一无所知；agent 也分不清一个 turn 来
    自 channel 还是 UI。任何已注册的 agent 都能从任何 channel 触达，双方
    都无需改代码。

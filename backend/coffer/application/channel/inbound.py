@@ -1,7 +1,7 @@
 """The shared inbound pipeline: every channel's messages flow through here.
 
 owner gate → pairing claim → commands → queueing → conversation mapping →
-turn driving (rendering lives in ``turn_render``) → approval bridging.
+turn driving (rendering lives in ``turn_render``).
 
 The chat platform is reached only through its public seams (conversation
 service + turn orchestrator), exactly like the web UI: agents cannot tell a
@@ -18,7 +18,7 @@ import logging
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal, Protocol
+from typing import Any, Protocol
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.commands import HELP_TEXT, ChannelCommands
@@ -34,15 +34,10 @@ from coffer.application.channel.ports import (
     ChannelPeerRepoPort,
     ModelCatalogPort,
 )
-from coffer.application.channel.turn_render import PendingApproval, TurnRenderer
-from coffer.application.chat.ports import ApprovalDecision
+from coffer.application.channel.turn_render import TurnRenderer
 from coffer.domain.audit import AuditEventType
-from coffer.domain.channel.envelopes import (
-    ApprovalClick,
-    InboundMessage,
-    parse_approval_value,
-)
-from coffer.domain.chat.errors import ApprovalNotFound, TurnInProgress
+from coffer.domain.channel.envelopes import InboundMessage
+from coffer.domain.chat.errors import TurnInProgress
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
 
@@ -86,16 +81,11 @@ class TurnPort(Protocol):
 
     def interrupt_turn(self, conversation_id: str) -> None: ...
 
-    def submit_approval(
-        self, conversation_id: str, request_id: str, decision: ApprovalDecision
-    ) -> None: ...
-
 
 @dataclass
 class _Session:
     queue: deque[str] = field(default_factory=lambda: deque(maxlen=_QUEUE_MAX))
     drain_task: asyncio.Task[None] | None = None
-    pending_approvals: dict[str, PendingApproval] = field(default_factory=dict)
     # The conversation whose turn is draining right now (None between turns).
     # Tracked separately from the peer's active conversation: ``/new`` rebinds
     # the peer while a turn keeps draining on the old conversation, so ``/stop``
@@ -152,13 +142,6 @@ class InboundProcessor:
             with contextlib.suppress(Exception):
                 self._turns.interrupt_turn(session.running_conversation_id)
             session.running_conversation_id = None
-        # A turn parked on an approval gate would wait forever once its
-        # prompt's buttons are gone — interrupt it instead of wedging the
-        # conversation until a manual /stop.
-        for pending in session.pending_approvals.values():
-            with contextlib.suppress(Exception):
-                self._turns.interrupt_turn(pending.conversation_id)
-        session.pending_approvals.clear()
 
     def binding(self, name: str) -> ChannelBinding | None:
         return self._bindings.get(name)
@@ -206,53 +189,6 @@ class InboundProcessor:
         if session.drain_task is None or session.drain_task.done():
             session.drain_task = asyncio.create_task(
                 self._drain(binding), name=f"channel-drain:{binding.name}"
-            )
-
-    async def on_approval_click(self, click: ApprovalClick) -> None:
-        binding = self._bindings.get(click.channel)
-        if binding is None:
-            return
-        peer = await self._peers.get(binding.resource_id)
-        if peer is None or peer.chat_id != click.chat_id:
-            return  # only the owner decides
-        if peer.sender_id is not None and click.sender_id and peer.sender_id != click.sender_id:
-            return  # right chat, wrong member (a click with no sender id falls back to chat id)
-        parsed = parse_approval_value(click.value)
-        if parsed is None:
-            return
-        request_id, decision_word = parsed
-        session = self._session(click.channel)
-        pending = session.pending_approvals.pop(request_id, None)
-        if pending is None:
-            return
-        outcome = "✅ Approved" if decision_word == "allow" else "❌ Denied"
-        decision: Literal["allow", "deny"] = "allow" if decision_word == "allow" else "deny"
-        applied = True
-        try:
-            self._turns.submit_approval(
-                pending.conversation_id,
-                request_id,
-                ApprovalDecision(behavior=decision),
-            )
-        except ApprovalNotFound:
-            outcome = "⌛ Expired"
-            applied = False  # the gate had already closed — nothing was decided
-        await self._audit.record(
-            AuditEventType.CHANNEL_APPROVAL_RESOLVED.value,
-            ref=ResourceRef(kind="channel", name=binding.name),
-            actor=peer.display_name or "channel",
-            details={
-                "channel": binding.name,
-                "chat_id": peer.chat_id,
-                "tool_name": pending.tool_name,
-                "request_id": request_id,
-                "decision": decision_word,
-                "applied": applied,
-            },
-        )
-        with contextlib.suppress(Exception):
-            await binding.adapter.resolve_approval_prompt(
-                pending.chat_id, pending.message_id, outcome
             )
 
     # -- pairing -----------------------------------------------------------
@@ -353,7 +289,6 @@ class InboundProcessor:
             adapter=adapter,
             chat_id=peer.chat_id,
             conversation_id=conversation_id,
-            pending_approvals=session.pending_approvals,
             send=_send,
         )
         # Track the live turn so /stop and unbind can target it even after /new

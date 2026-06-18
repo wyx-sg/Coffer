@@ -18,7 +18,6 @@ import httpx
 
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import (
-    ApprovalClick,
     ChannelCapabilities,
     InboundMessage,
     SentMessage,
@@ -75,7 +74,6 @@ class SeaTalkAdapter:
     def capabilities(self) -> ChannelCapabilities:
         return ChannelCapabilities(
             supports_edit=False,
-            supports_buttons=True,
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
         )
@@ -119,16 +117,6 @@ class SeaTalkAdapter:
                     sender_id=str(event.get("employee_code", "")),
                 )
             )
-        elif event_type == "interactive_message_click":
-            await self._callbacks.on_approval_click(
-                ApprovalClick(
-                    channel=self._name,
-                    chat_id=str(event.get("employee_code", "")),
-                    value=str(event.get("value", "")),
-                    prompt_message_id=str(event.get("message_id", "")),
-                    sender_id=str(event.get("employee_code", "")),
-                )
-            )
 
     # -- outbound ------------------------------------------------------------
 
@@ -155,38 +143,6 @@ class SeaTalkAdapter:
             await self._post(
                 "/messaging/v2/single_chat_typing", {"employee_code": chat_id}, retries=0
             )
-
-    async def send_approval_prompt(
-        self, chat_id: str, text: str, *, allow_value: str, deny_value: str
-    ) -> SentMessage:
-        card = {
-            "elements": [
-                {"element_type": "description", "description": {"format": 2, "text": text}},
-                {
-                    "element_type": "button",
-                    "button": {
-                        "button_type": "callback",
-                        "text": "✅ Approve",
-                        "value": allow_value,
-                    },
-                },
-                {
-                    "element_type": "button",
-                    "button": {"button_type": "callback", "text": "❌ Deny", "value": deny_value},
-                },
-            ]
-        }
-        result = await self._send_single_chat(
-            chat_id, {"tag": "interactive_message", "interactive_message": card}
-        )
-        return SentMessage(message_id=str(result.get("message_id", "")))
-
-    async def resolve_approval_prompt(
-        self, chat_id: str, message_id: str, outcome_text: str
-    ) -> None:
-        # SeaTalk has no reliable message-edit API; deliver the outcome as a
-        # follow-up message instead.
-        await self.send_text(chat_id, outcome_text)
 
     # -- transport -------------------------------------------------------------
 

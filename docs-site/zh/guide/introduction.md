@@ -12,15 +12,15 @@ Coffer 转而成为唯一事实来源。在 Coffer 里**只配置一次** ——
 
 ### Coffer 管理什么
 
-| 类别 | 是什么 |
-| --- | --- |
-| [MCP 服务器](/zh/guide/register-server) | 聚合上游 MCP 服务器;通过一个端点带命名空间地重新暴露其工具。 |
-| [Agents](/zh/guide/agents) | 检测并注册 Claude Code / Codex;编辑其配置、投递技能、安装 Coffer 的 MCP 服务器。 |
-| [技能](/zh/guide/skills) | 一份主技能库,投递给你选定的 agent。 |
-| [知识库](/zh/guide/knowledge-base) | agent 可检索(grep / keyword / vector)但不可写入的文档存储。 |
-| [记忆](/zh/guide/memory) | 跨所有 agent 的一份共享事实集,原生投影进每个 agent。 |
-| [对话](/zh/guide/chat) | 与 Coffer 内置 agent 对话,或驱动 Claude Code / Codex,工具调用可审批。 |
-| [渠道](/zh/guide/channels) | 从 Telegram 或 SeaTalk 触达你的 agent。 |
+| 类别                                    | 是什么                                                                           |
+| --------------------------------------- | -------------------------------------------------------------------------------- |
+| [MCP 服务器](/zh/guide/register-server) | 聚合上游 MCP 服务器;通过一个端点带命名空间地重新暴露其工具。                     |
+| [Agents](/zh/guide/agents)              | 检测并注册 Claude Code / Codex;编辑其配置、投递技能、安装 Coffer 的 MCP 服务器。 |
+| [技能](/zh/guide/skills)                | 一份主技能库,投递给你选定的 agent。                                              |
+| [知识库](/zh/guide/knowledge-base)      | agent 可检索(grep / keyword / vector)但不可写入的文档存储。                      |
+| [记忆](/zh/guide/memory)                | 跨所有 agent 的一份共享事实集,原生投影进每个 agent。                             |
+| [对话](/zh/guide/chat)                  | 与 Coffer 内置 agent 对话,或驱动 Claude Code / Codex。                           |
+| [渠道](/zh/guide/channels)              | 从 Telegram 或 SeaTalk 触达你的 agent。                                          |
 
 外加两项横切能力:[加密凭证库](/zh/guide/credentials)和[多机同步](/zh/guide/sync)。
 

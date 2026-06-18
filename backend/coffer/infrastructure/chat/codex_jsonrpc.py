@@ -14,9 +14,9 @@ Three inbound frame kinds share one read loop and are demuxed by shape:
 
 * ``{"id", "result"}`` / ``{"id", "error"}`` — a **response** to a client request;
   correlated to the pending future by ``id``.
-* ``{"id", "method", "params"}`` — a **server→client request** (e.g. an approval);
-  routed to the handler registered via :meth:`on_request`, whose return value is
-  written back as ``{"id", "result"}``.
+* ``{"id", "method", "params"}`` — a **server→client request**; routed to the
+  handler registered via :meth:`on_request`, whose return value is written back
+  as ``{"id", "result"}``.
 * ``{"method", "params"}`` (no ``id``) — a **notification**; pushed to the async
   iterator returned by :meth:`notifications`.
 

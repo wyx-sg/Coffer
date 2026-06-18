@@ -10,7 +10,6 @@ import pytest
 
 from coffer.application.audit_service import AuditService
 from coffer.application.chat.history import trim_history as _trim_history
-from coffer.application.chat.ports import ApprovalDecision, ApprovalGate
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import (
     _ACTIVE_TURNS,
@@ -19,14 +18,13 @@ from coffer.application.chat.turn_orchestrator import (
 )
 from coffer.domain.chat.events import (
     AgentEvent,
-    ApprovalRequest,
     TextDelta,
     TurnDone,
     TurnError,
     TurnStarted,
 )
 from coffer.domain.chat.message import Message, Role, TextBlock
-from coffer.domain.errors import ApprovalNotFound, NoModelConfigured, TurnInProgress
+from coffer.domain.errors import NoModelConfigured, TurnInProgress
 
 from .conftest import (
     FakeAgentAdapter,
@@ -86,35 +84,13 @@ class _BlockingAdapter:
         self._lead = lead
         self.model_id = model_id
 
-    async def run_turn(self, *, history: Any, approvals: ApprovalGate) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, *, history: Any) -> AsyncIterator[AgentEvent]:
         lead = self._lead
 
         async def gen() -> AsyncIterator[AgentEvent]:
             for ev in lead:
                 yield ev
             await asyncio.sleep(3600)
-
-        return gen()
-
-
-class _ApprovalAdapter:
-    """Requests approval, then echoes the decision and finishes the turn."""
-
-    model_id = None
-
-    def __init__(self, request_id: str = "r1") -> None:
-        self._rid = request_id
-
-    async def run_turn(self, *, history: Any, approvals: ApprovalGate) -> AsyncIterator[AgentEvent]:
-        rid = self._rid
-
-        async def gen() -> AsyncIterator[AgentEvent]:
-            yield ApprovalRequest(
-                request_id=rid, tool_use_id="t1", tool_name="do_thing", tool_input={"k": "v"}
-            )
-            decision = await approvals.wait(rid)
-            yield TextDelta(text=f"decided:{decision.behavior}")
-            yield TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn")
 
         return gen()
 
@@ -324,7 +300,7 @@ class _RaisingAdapter:
 
     model_id = None
 
-    async def run_turn(self, *, history: Any, approvals: ApprovalGate) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, *, history: Any) -> AsyncIterator[AgentEvent]:
         async def gen() -> AsyncIterator[AgentEvent]:
             yield TextDelta(text="partial")
             raise RuntimeError("boom")
@@ -411,92 +387,6 @@ async def test_interrupt_persists_the_partial_message() -> None:
 async def test_interrupt_noop_when_no_active_turn() -> None:
     orchestrator, _, _, _, _ = make_orchestrator([])
     orchestrator.interrupt_turn("nonexistent-conv-id")  # must not raise
-
-
-# ---------------------------------------------------------------------------
-# Approval relay
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="an agent turn pauses for human approval")
-async def test_approval_request_forwarded_and_decision_relayed() -> None:
-    orchestrator, _, _, _, _ = make_orchestrator(adapter=_ApprovalAdapter("r1"))
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-
-    queue = await orchestrator.start_turn(conv.id, "do the thing")
-
-    # The approval request reaches the stream and the turn pauses.
-    event = await asyncio.wait_for(queue.get(), timeout=5.0)
-    assert isinstance(event, ApprovalRequest)
-    assert event.request_id == "r1"
-
-    orchestrator.submit_approval(conv.id, "r1", ApprovalDecision(behavior="allow"))
-    rest = await drain_queue(queue)
-
-    assert any(isinstance(e, TextDelta) and e.text == "decided:allow" for e in rest)
-    assert any(isinstance(e, TurnDone) for e in rest)
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="008-agent-chat", scenario="a denied tool call is reported to the agent"
-)
-async def test_approval_deny_decision_is_relayed_to_the_agent() -> None:
-    orchestrator, _, _, _, _ = make_orchestrator(adapter=_ApprovalAdapter("r1"))
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-
-    queue = await orchestrator.start_turn(conv.id, "do the thing")
-    event = await asyncio.wait_for(queue.get(), timeout=5.0)
-    assert isinstance(event, ApprovalRequest)
-
-    orchestrator.submit_approval(conv.id, "r1", ApprovalDecision(behavior="deny"))
-    rest = await drain_queue(queue)
-
-    # The denial is delivered to the agent, which proceeds without the tool.
-    assert any(isinstance(e, TextDelta) and e.text == "decided:deny" for e in rest)
-    assert any(isinstance(e, TurnDone) for e in rest)
-
-
-@pytest.mark.asyncio
-async def test_submit_approval_no_active_turn_raises() -> None:
-    orchestrator, _, _, _, _ = make_orchestrator([])
-    with pytest.raises(ApprovalNotFound):
-        orchestrator.submit_approval("no-conv", "r1", ApprovalDecision(behavior="allow"))
-
-
-@pytest.mark.asyncio
-async def test_submit_approval_unknown_request_raises() -> None:
-    orchestrator, _, _, _, _ = make_orchestrator(adapter=_ApprovalAdapter("r1"))
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-
-    queue = await orchestrator.start_turn(conv.id, "do the thing")
-    await asyncio.wait_for(queue.get(), timeout=5.0)  # the ApprovalRequest
-
-    with pytest.raises(ApprovalNotFound):
-        orchestrator.submit_approval(conv.id, "wrong-id", ApprovalDecision(behavior="allow"))
-
-    orchestrator.interrupt_turn(conv.id)  # cleanup
-    await drain_queue(queue)
-
-
-@pytest.mark.asyncio
-async def test_interrupt_while_waiting_for_approval_ends_the_turn() -> None:
-    """Interrupting a turn parked in approvals.wait() cancels the wait and the
-    turn ends with a terminal TurnDone(stop_reason='interrupted')."""
-    orchestrator, _, _, _, _ = make_orchestrator(adapter=_ApprovalAdapter("r1"))
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-
-    queue = await orchestrator.start_turn(conv.id, "do the thing")
-    event = await asyncio.wait_for(queue.get(), timeout=5.0)
-    assert isinstance(event, ApprovalRequest)
-
-    # Interrupt while the turn is parked inside approvals.wait().
-    orchestrator.interrupt_turn(conv.id)
-    rest = await drain_queue(queue)
-
-    assert any(isinstance(e, TurnDone) and e.stop_reason == "interrupted" for e in rest)
-    assert conv.id not in _ACTIVE_TURNS
 
 
 # ---------------------------------------------------------------------------

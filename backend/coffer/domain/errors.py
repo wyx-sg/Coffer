@@ -389,7 +389,6 @@ class EmbeddingUnavailable(CofferError):  # noqa: N818
 # the file-size limit) so the coffer.domain.errors.X import paths keep working.
 from coffer.domain.chat.errors import (  # noqa: E402, I001
     AgentConfigRejected as AgentConfigRejected,
-    ApprovalNotFound as ApprovalNotFound,
     ConversationNotFound as ConversationNotFound,
     ModelNotFound as ModelNotFound,
     ModelRejected as ModelRejected,

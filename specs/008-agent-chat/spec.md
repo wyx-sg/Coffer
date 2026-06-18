@@ -11,21 +11,18 @@ than one kind of agent can be reached from that page without re-architecture.
 Coffer ships one agent on the platform out of the box — a general-purpose
 built-in agent that uses every resource in the vault (MCP tools, skills,
 memory, knowledge bases) through Coffer's own MCP gateway, on a user-chosen LLM
-provider. The platform also carries the capabilities an agent needs that the
-built-in agent's own gating makes optional — a human-approval channel for tool
-calls — and the controls every conversation needs: streamed turns, one
-in-flight turn at a time, and user interruption."
+provider. The platform also carries the controls every conversation needs:
+streamed turns, one in-flight turn at a time, and user interruption."
 
 This spec turns Coffer from a vault that _stores_ AI assets into one that
 _uses_ them, and it does so as a **platform**, not a single hard-wired feature.
 It delivers two things at once:
 
 1. **A chat platform.** A first-class chat surface, persisted multi-conversation
-   history, a streamed turn protocol, human-in-the-loop tool approval, and user
-   interruption — all expressed against an **agent-provider registry**. An agent
-   is reached only through that registry, so adding another kind of agent is a
-   new registry entry, not a change to the chat page, the persistence layer, or
-   the REST/SSE contract.
+   history, a streamed turn protocol, and user interruption — all expressed
+   against an **agent-provider registry**. An agent is reached only through that
+   registry, so adding another kind of agent is a new registry entry, not a
+   change to the chat page, the persistence layer, or the REST/SSE contract.
 2. **Agents on that platform.** Coffer's built-in general-purpose agent,
    "Coffer Assistant" — an in-process agentic loop, driven by the user's own
    MCP servers, skills, memory, and knowledge bases through Coffer's MCP
@@ -37,10 +34,9 @@ It delivers two things at once:
    change to the chat surface, persistence, or the wire contract.
 
 The platform pieces and its agents are co-delivered because a platform with no
-agent cannot be exercised, and an agent with no platform cannot be reached.
-Every platform capability that the built-in agent does not itself need — the
-approval channel above all — still ships complete and is proven end-to-end, so
-the seam is real on the day it lands rather than a promise.
+agent cannot be exercised, and an agent with no platform cannot be reached. The
+agents run with full permissions; owner-pairing is the security gate. The seam
+is real on the day it lands rather than a promise.
 
 ## Positioning — Vault Console ([ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.md))
 
@@ -54,15 +50,14 @@ Its two durable jobs are:
    skills, knowledge, and aggregated MCP tools. Each turn surfaces which vault
    resources it touched, so the console doubles as a way to see what an agent
    would get from the vault.
-2. **Observe and approve channel-driven conversations.** Channels (Spec 009)
-   create conversations and route tool approvals through the **same**
-   `ConversationPort` / `TurnPort` seams this surface uses. The console is the
-   human-in-the-loop seat: it surfaces conversation origin (web draft vs. channel
-   peer) and lets the user take the approval seat for turns an IM peer is driving.
+2. **Observe channel-driven conversations.** Channels (Spec 009) create
+   conversations through the **same** `ConversationPort` / `TurnPort` seams this
+   surface uses. The console surfaces conversation origin (web draft vs. channel
+   peer) so the user can watch turns an IM peer is driving.
 
 The CLI agents (Claude Code, Codex) are **not** repositioned as a daily coding
 chat; they remain (a) test-drive targets that keep the provider seam honest and
-(b) the conversations an IM peer drives that the user observes/approves here.
+(b) the conversations an IM peer drives that the user observes here.
 **De-scoped:** using Coffer as a primary in-browser coding chat; affordances that
 only make sense for that positioning stay out of scope unless a future spec
 re-opens it.
@@ -78,9 +73,9 @@ reverts from _Vault Console_ to **Chat**. The "talk to the vault through the
 built-in agent" job is dropped; the local model is recast as an **internal-only**
 capability reachable solely through `coffer__*` MCP tools — a semantic upgrade to
 `coffer__search_tools` and a new `coffer__ask` agentic-RAG tool over
-knowledge/memory (see ADR-024). The **observe-and-approve channel-driven
-conversations** job (ADR-021 job 2) stands unchanged, over the same
-`ConversationPort` / `TurnPort` / `submit_approval` seams.
+knowledge/memory (see ADR-024). The **observe channel-driven conversations**
+job (ADR-021 job 2) stands unchanged, over the same `ConversationPort` /
+`TurnPort` seams.
 
 Where the User Stories, Acceptance Scenarios, and Functional Requirements below
 still describe the built-in agent as a selectable chat agent (its model picker,
@@ -214,35 +209,6 @@ still present with the new name; delete one and confirm it is gone.
 
 ---
 
-### User Story 6 — Approve or deny an agent's tool call (Priority: P2)
-
-Some agents must not run a tool until the user says so. When an agent reaches a
-tool call that needs permission, the turn pauses and the chat surface shows an
-**approval card** naming the tool and its inputs. The user clicks **Allow** or
-**Deny**; the agent receives the decision and continues — running the tool on
-allow, or treating the denial as the tool's result on deny. Coffer's built-in
-agent relies on the gateway's own capability gating and does not pause for
-per-call approval; the approval channel is a platform capability that ships
-complete for any agent that does.
-
-**Why this priority**: An agent that can act on the user's machine is only safe
-if the user can interpose. Building the channel into the platform — rather than
-into one agent — is what keeps the seam honest. Not blocking the core loop.
-
-**Independent Test**: Drive a turn with an agent that requests approval for a
-tool call; observe the approval card; click Allow; observe the tool run and the
-turn finish. Repeat with Deny; observe the agent receive the denial.
-
-**Covering scenarios**:
-
-- an agent turn pauses and emits an approval request the surface renders
-- allowing a request lets the agent run the tool and finish the turn
-- denying a request returns the denial to the agent as the tool result
-- an approval decision for an unknown or already-decided request is rejected
-- per-tool approval relay works for SDK-backed Claude Code
-
----
-
 ### User Story 7 — Stop a turn that is running (Priority: P2)
 
 A turn is taking too long or going the wrong way. The user clicks **Stop**. The
@@ -307,34 +273,6 @@ turn with actor `agent`.
 
 ---
 
-### User Story 11 — Observe and approve a channel-driven conversation (Priority: P2)
-
-An IM peer (Spec 009) is driving a conversation against an agent. From the Vault
-Console the user sees that conversation in the history list **marked by its
-origin and peer identity**, watches its turns stream, and — when the agent pauses
-on a tool approval — **takes the approval seat from the web**, equivalently to
-the IM button.
-
-**Why this priority**: Channels already route approvals through the platform's
-approval channel; giving the human a web seat to observe and approve is what
-makes the console's second role real. Not blocking the core loop.
-
-**Independent Test**: Pair an IM peer, have it start a turn that requests
-approval; open the Vault Console, see the conversation badged with its channel
-origin and peer; click Allow; observe the tool run and the IM peer receive the
-result.
-
-**Covering scenarios**:
-
-- the conversation list marks each conversation's origin (web vs. channel) and,
-  for channel conversations, the peer identity
-- a pending approval on a channel-driven turn is resolvable from the web approval
-  card, equivalently to the IM button (both resolve the same approval channel)
-- observing a channel-driven turn streams the same turn events the web composer
-  would
-
----
-
 ### Edge Cases
 
 - **No model configured**: The Chat page renders an actionable empty state that
@@ -353,12 +291,6 @@ result.
 - **Runaway tool loop**: a turn is bounded by a tool-iteration limit; on reaching
   it the turn ends cleanly as a normal turn completion (carrying the stop reason
   `max_iterations`), not as an error.
-- **Approval decision with no matching request**: a decision posted for a
-  request id that does not exist, or one already decided, is rejected; the turn
-  is unaffected.
-- **A turn is interrupted while waiting for approval**: the pending approval
-  wait is cancelled along with the turn; whatever the agent produced before the
-  pause is preserved per the interruption rule below.
 - **Conversation longer than the model context window**: the built-in agent
   sends the most recent history that fits within a context budget (approximated
   by a character budget, ~4 chars/token); older turns are omitted from the model
@@ -445,44 +377,6 @@ referenced by at least one test marked
 - **Then** `coffer__list_skills` and `coffer__load_skill` are present and
   `coffer__load_skill` returns the skill's content.
 
-### Scenario: an agent turn pauses for human approval
-
-- **Given** an agent whose turn requests approval before running a tool,
-- **When** the turn reaches that tool call,
-- **Then** the stream carries an approval request the chat surface renders as a
-  card, the turn waits, and on the user allowing it the agent runs the tool and
-  the turn completes.
-
-### Scenario: a denied tool call is reported to the agent
-
-- **Given** an agent turn paused on an approval request,
-- **When** the user denies it,
-- **Then** the denial is delivered to the agent as the tool's result and the
-  turn completes without running the tool.
-
-### Scenario: per-tool approval relay works for SDK-backed Claude Code
-
-- **Given** a turn driven by the SDK-backed Claude Code provider that requests a
-  tool call requiring approval,
-- **When** the `can_use_tool` callback fires and the user submits an allow or
-  deny decision through the platform's approval channel,
-- **Then** on allow the SDK callback resolves to `PermissionResultAllow` and the
-  turn completes with `TurnDone`; on deny the callback resolves to
-  `PermissionResultDeny` (carrying the denial message) and the turn also
-  completes cleanly with `TurnDone`.
-
-### Scenario: per-tool approval relay works for app-server-backed Codex
-
-- **Given** a turn driven by the app-server-backed Codex provider, where Codex
-  sends an `item/commandExecution/requestApproval` or
-  `item/fileChange/requestApproval` request mid-turn,
-- **When** the platform emits an `ApprovalRequest` event and the user submits an
-  allow or deny decision through the platform's approval channel,
-- **Then** on allow the adapter writes `{decision: "accept"}` back to Codex and
-  the turn proceeds and completes with `TurnDone`; on deny the adapter writes
-  `{decision: "decline"}` back to Codex and the turn also completes cleanly
-  with `TurnDone`.
-
 ### Scenario: stop a running turn
 
 - **Given** a turn that is streaming,
@@ -549,14 +443,12 @@ referenced by at least one test marked
 - **Then** Coffer makes a minimal request to the provider and reports success or
   a humanized failure message, without persisting anything.
 
-### Scenario: a channel-driven conversation is observable and approvable from the console
+### Scenario: a channel-driven conversation is observable from the console
 
-- **Given** an IM peer driving a conversation whose turn pauses on a tool
-  approval,
+- **Given** an IM peer driving a conversation,
 - **When** the user opens the Vault Console,
 - **Then** the conversation appears badged with its channel origin and peer
-  identity, and submitting an allow/deny from the web approval card resolves the
-  same pending approval the IM button would.
+  identity, and its turns stream the same turn events the web composer would.
 
 ## Requirements
 
@@ -581,8 +473,8 @@ referenced by at least one test marked
   a stable key, a display name, and a current availability flag — through the
   REST API and the GUI's new-conversation dialog.
 - **FR-005**: An agent is addressed for a turn through an **agent adapter** that
-  is self-contained: given only the conversation history and an approval
-  channel, it yields a stream of typed turn events. The adapter carries its own
+  is self-contained: given only the conversation history, it yields a stream of
+  typed turn events. The adapter carries its own
   model, tools, and configuration; the orchestrator MUST NOT inject them. The
   platform ships three agents behind this seam — the built-in agent plus two
   CLI-backed agents (Claude Code, Codex) — so the seam is validated by real
@@ -598,16 +490,9 @@ referenced by at least one test marked
   not selectable. A CLI turn MUST run the tool in that directory, stream its
   line-delimited JSON output mapped onto the platform's turn events, and persist
   the upstream session id so the next turn continues the same session. Claude
-  Code is driven via the Claude Agent SDK: each `can_use_tool` permission
-  callback is bridged through the platform's human-approval channel
-  (`can_use_tool` → `ApprovalRequest` event → allow/deny decision → SDK result),
-  so per-call tool approval works end-to-end for SDK-backed Claude Code. Codex
-  is driven via `codex app-server` (JSON-RPC 2.0 over stdio, NDJSON-framed):
-  server→client approval requests (`item/commandExecution/requestApproval` and
-  `item/fileChange/requestApproval`) are bridged through the same
-  human-approval channel (allow → `"accept"` decision, deny → `"decline"`
-  decision), so per-tool approval works end-to-end for app-server-backed Codex
-  through the same platform channel Claude Code uses.
+  Code is driven via the Claude Agent SDK and Codex via `codex app-server`
+  (JSON-RPC 2.0 over stdio, NDJSON-framed); both run with full permissions
+  (owner-pairing is the security gate).
 
 **Built-in agent & agentic loop**
 
@@ -669,19 +554,13 @@ referenced by at least one test marked
   of types `text`, `tool_use`, and `tool_result`; assistant messages MUST also
   store token usage and the model that produced them when the agent reports one.
 
-**Turn lifecycle: streaming, approval, interruption**
+**Turn lifecycle: streaming, interruption**
 
 - **FR-018**: System MUST allow only one in-flight turn per conversation and
   reject a second message until the current turn ends.
 - **FR-019**: System MUST stream a turn to the client as a sequence of typed
-  events covering, at minimum, text deltas, tool calls, tool results, approval
-  requests, turn completion, and turn error.
-- **FR-020**: The platform MUST provide a **human-approval channel**: an agent
-  turn can emit an approval request that pauses the turn; the user submits an
-  allow/deny decision through a dedicated endpoint; the decision is delivered to
-  the waiting turn. A decision for an unknown or already-decided request MUST be
-  rejected. This channel MUST ship and be verified end-to-end even though the
-  built-in agent does not use it.
+  events covering, at minimum, text deltas, tool calls, tool results, turn
+  completion, and turn error.
 - **FR-021**: System MUST let the user interrupt a running turn: the turn stops
   at once and the partial assistant message (whatever text and tool blocks were
   produced) MUST be persisted. Interruption is distinct from conversation
@@ -710,8 +589,8 @@ referenced by at least one test marked
 - **FR-027**: System MUST provide a Chat page in the desktop app: a collapsible
   conversation-history list, a new-conversation dialog with an agent picker and a
   per-agent configuration area, a message thread with streamed text, inline
-  expandable tool-call cards, and approval cards, a model selector, a composer,
-  and a stop control for an in-flight turn.
+  expandable tool-call cards, a model selector, a composer, and a stop control
+  for an in-flight turn.
 - **FR-028**: System MUST add a "Chat" entry to the application sidebar as the
   primary (top-most) navigation item; the existing 002-ui-shell IA is otherwise
   unchanged.
@@ -735,7 +614,7 @@ referenced by at least one test marked
 - **FR-033**: The Chat surface (labelled **Chat**, reverted from _Vault Console_
   per [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md))
   MUST talk **only** to Coffer-managed agents and MUST surface and let the user
-  observe/approve channel-driven conversations. The `builtin` agent MUST NOT be
+  observe channel-driven conversations. The `builtin` agent MUST NOT be
   offered as a chat agent; its model is an internal-only capability reached
   through `coffer__*` tools (ADR-024), not a chat persona. The Chat surface MUST
   NOT position itself as a primary in-browser coding chat; the managed agents
@@ -743,9 +622,7 @@ referenced by at least one test marked
   channel-driven conversations.
 - **FR-034**: The conversation history MUST surface each conversation's origin
   (web draft vs. channel peer) and, for channel-originated conversations, the
-  peer identity; a pending tool approval on any conversation MUST be resolvable
-  from the web approval card, equivalently to the channel's own approval control
-  (both resolve the same human-approval channel of FR-020).
+  peer identity.
 
 ### Key Entities
 
@@ -756,9 +633,9 @@ referenced by at least one test marked
   deletion, and reports whether it is currently available. Providers are held in
   the **agent-provider registry**; the chat surface knows only the registry.
 - **Agent Adapter**: One agent's handling of one turn. Given the conversation
-  history and an approval channel, it yields a stream of agent events. It is
-  self-contained — it carries its own model, tools, and configuration, supplied
-  by its provider when the adapter is built.
+  history, it yields a stream of agent events. It is self-contained — it carries
+  its own model, tools, and configuration, supplied by its provider when the
+  adapter is built.
 - **Built-in Agent**: Coffer's single, code-defined general-purpose agent
   ("Coffer Assistant"), delivered as one agent provider + adapter. Identity,
   system-prompt template, default model selection, and tool-iteration limit. Not
@@ -774,10 +651,7 @@ referenced by at least one test marked
   display name, provider type (`anthropic` | `openai` | `ollama`), model id,
   credential reference (cloud), base URL (Ollama / custom), default flag.
 - **Agent Event**: A typed event in a streamed turn — text delta, tool call,
-  tool result, approval request, turn done, or turn error.
-- **Approval Request / Approval Decision**: The two halves of the human-approval
-  channel. A request names a tool call awaiting permission; a decision is the
-  user's allow/deny answer carried back to the waiting turn.
+  tool result, turn done, or turn error.
 
 ## Success Criteria
 
@@ -802,13 +676,6 @@ referenced by at least one test marked
   the chat page — verified by review against the agent-provider registry, the
   `AgentProvider` / `AgentAdapter` interfaces, and the `agent_key` field, and
   demonstrated by a second provider used only in tests.
-- **SC-008**: The human-approval channel works end-to-end — an agent turn that
-  emits an approval request pauses, the decision endpoint delivers the user's
-  answer, and the turn continues — and a running turn can be stopped with its
-  partial output preserved; both are proven by acceptance tests. The approval
-  channel is additionally exercised by a real provider (SDK-backed Claude Code),
-  not only a scripted fake, confirming that per-call tool approval works
-  end-to-end for production agent adapters.
 
 ## Assumptions
 
@@ -838,7 +705,7 @@ referenced by at least one test marked
   user-managed configuration is not in this spec.
 - The following are explicitly **out of scope**: user-created or user-edited
   agents; a GUI for managing the agent registry; per-agent capability scoping
-  beyond the gateway's existing gating and the approval channel; conversation
+  beyond the gateway's existing gating; conversation
   summarisation and export; resuming/continuing a past foreign agent session;
   and any cross-agent raw-transcript browse/search surface (sharing across agents
   is served by distilled memory, [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.md)).

@@ -59,17 +59,17 @@ Validation rules:
 The paired owner and the conversation pointer. One row per channel today;
 keyed by chat id so future group support is a new row, not a migration.
 
-| column | type | notes |
-| --- | --- | --- |
-| `id` | INTEGER PK | |
-| `resource_id` | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel |
-| `chat_id` | TEXT | Telegram chat id / SeaTalk employee_code |
-| `display_name` | TEXT | sender's name at pairing time, for UI/status |
-| `paired_at` | DATETIME (UTC) | |
-| `active_conversation_id` | TEXT NULL | current conversation; cleared when the conversation disappears |
-| `sender_id` | TEXT NULL | paired sender's stable id (Telegram from.id, SeaTalk employee_code); the owner gate checks it when present. NULL → chat-id-only gate (legacy peers) |
-| `preferred_agent` | TEXT NULL | sticky agent choice (`/agent`); NULL → channel `default_agent` |
-| `preferred_workspace` | TEXT NULL | sticky workspace choice (`/cwd`); NULL → channel `default_workspace` |
+| column                   | type                                         | notes                                                                                                                                               |
+| ------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                     | INTEGER PK                                   |                                                                                                                                                     |
+| `resource_id`            | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel                                                                                                                                         |
+| `chat_id`                | TEXT                                         | Telegram chat id / SeaTalk employee_code                                                                                                            |
+| `display_name`           | TEXT                                         | sender's name at pairing time, for UI/status                                                                                                        |
+| `paired_at`              | DATETIME (UTC)                               |                                                                                                                                                     |
+| `active_conversation_id` | TEXT NULL                                    | current conversation; cleared when the conversation disappears                                                                                      |
+| `sender_id`              | TEXT NULL                                    | paired sender's stable id (Telegram from.id, SeaTalk employee_code); the owner gate checks it when present. NULL → chat-id-only gate (legacy peers) |
+| `preferred_agent`        | TEXT NULL                                    | sticky agent choice (`/agent`); NULL → channel `default_agent`                                                                                      |
+| `preferred_workspace`    | TEXT NULL                                    | sticky workspace choice (`/cwd`); NULL → channel `default_workspace`                                                                                |
 
 Constraints: `UNIQUE (resource_id, chat_id)`; index on `resource_id`.
 
@@ -89,13 +89,12 @@ sees the metadata.
 
 ## In-memory state (never persisted)
 
-| object | scope | content |
-| --- | --- | --- |
-| `PairingCode` | per channel | code, expiry, remaining attempts; replaced on re-issue, dropped on success/expiry/exhaustion |
-| message queue | per peer | bounded FIFO (10) of inbound texts awaiting their turn |
-| progress state | per running turn | IM message id of the editable status message, last-edit timestamp |
-| approval routing | per pending approval | `request_id ↔ (chat, prompt message id)` so a button tap resolves the right gate and updates the right message |
-| seatalk token cache | per channel | app access token + expiry |
+| object              | scope            | content                                                                                      |
+| ------------------- | ---------------- | -------------------------------------------------------------------------------------------- |
+| `PairingCode`       | per channel      | code, expiry, remaining attempts; replaced on re-issue, dropped on success/expiry/exhaustion |
+| message queue       | per peer         | bounded FIFO (10) of inbound texts awaiting their turn                                       |
+| progress state      | per running turn | IM message id of the editable status message, last-edit timestamp                            |
+| seatalk token cache | per channel      | app access token + expiry                                                                    |
 
 Crash behavior: all of it evaporates with the daemon; turns are swept failed
 by the chat platform's startup sweep, codes are re-issued, queues are empty.
@@ -106,8 +105,6 @@ Nothing the user relies on lives only in memory.
 ```
 InboundMessage:  channel name, chat_id, sender display name, sender_id, text,
                  platform message id, timestamp
-ApprovalClick:   channel name, chat_id, sender_id, value (request id +
-                 decision), prompt message id
 OutboundText:    markdown text (rendered per adapter capability)
 ChannelCapabilities: supports_edit, supports_buttons, supports_typing,
                  max_message_chars
@@ -118,15 +115,14 @@ never sees a Telegram update or SeaTalk event shape.
 
 ## Audit events (spec 009)
 
-| event | when |
-| --- | --- |
-| `channel_pairing_issued` | a pairing code is generated |
-| `channel_paired` | a sender claims the code and becomes the peer |
-| `channel_notify_sent` | notify delivers text to the peer |
-| `channel_turn_started` | an inbound message drives a turn (channel, peer, agent, conversation) |
-| `channel_approval_resolved` | the owner answers a tool approval from chat (channel, peer, tool, decision) |
+| event                    | when                                                                  |
+| ------------------------ | --------------------------------------------------------------------- |
+| `channel_pairing_issued` | a pairing code is generated                                           |
+| `channel_paired`         | a sender claims the code and becomes the peer                         |
+| `channel_notify_sent`    | notify delivers text to the peer                                      |
+| `channel_turn_started`   | an inbound message drives a turn (channel, peer, agent, conversation) |
 
 Resource lifecycle events (`resource_created` … `resource_deleted`) come from
 the framework automatically. The generic per-turn `chat_turn_completed` audit
-is channel-agnostic; `channel_turn_started` and `channel_approval_resolved`
-add the channel/peer/agent context that makes channel-driven work queryable.
+is channel-agnostic; `channel_turn_started`
+adds the channel/peer/agent context that makes channel-driven work queryable.

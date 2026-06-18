@@ -15,7 +15,7 @@ Both products converge on the same architecture, which this spec adopts:
 - **Thin adapters, shared core.** An adapter implements lifecycle
   (connect/disconnect), outbound send, and inbound normalization into a
   standard envelope. Session routing, command parsing, pairing/security,
-  approval handling, and rendering policy live in a shared core. Hermes'
+  and rendering policy live in a shared core. Hermes'
   `BaseAdapter` is exactly three methods; OpenClaw's `ChannelPlugin` starts
   from `id` + `setup` and adds optional capability surfaces.
 - **Capability declaration over special-casing.** OpenClaw adapters declare
@@ -33,7 +33,7 @@ Both products converge on the same architecture, which this spec adopts:
   anything coarser shares context across users.
 - **Long-turn UX in three layers.** Immediate ack (typing/reaction), one
   reused editable progress message (cached `(chat_id, status_key) →
-  message_id`, throttled edits), final reply as its own message with
+message_id`, throttled edits), final reply as its own message with
   notifications only on the final message.
 - **Rendering.** Don't emit Telegram MarkdownV2 (escaping minefield). OpenClaw
   renders markdown → Telegram-safe HTML and retries as plain text when the
@@ -54,7 +54,7 @@ Both products converge on the same architecture, which this spec adopts:
   rate-limited, so throttle to ≥ 1.5 s between edits.
 - Inline keyboards (`InlineKeyboardMarkup`) deliver `callback_query` updates
   with the button's `callback_data`; `answerCallbackQuery` acknowledges the
-  tap. This is the approval prompt mechanism.
+  tap.
 - `setMyCommands` registers the native command menu; `sendChatAction` shows
   the typing indicator.
 
@@ -85,7 +85,7 @@ official docs (the doc site requires a developer login).
 - **Interactive cards**: `tag: "interactive_message"` with
   `button_type: "callback"` buttons carrying a custom `value`; taps come back
   as `interactive_message_click` events with the `value`, `message_id`, and
-  `employee_code` — a complete approve/deny loop.
+  `employee_code`.
 - **Typing indicator**: `single_chat_typing` endpoint exists.
 - **Org approval**: a self-built app's scopes (Send Message to Bot User,
   etc.) require organization admin approval; outbound IP allowlist is
@@ -93,13 +93,13 @@ official docs (the doc site requires a developer login).
 
 ## Decisions taken from research
 
-| Decision | Choice | Rationale |
-| --- | --- | --- |
-| Telegram transport | long polling via raw httpx | local-first, no ingress; the API surface used is 7 small methods — an SDK dependency buys nothing and adds an import-confinement contract |
-| SeaTalk transport | webhook → separate listener process + user-run tunnel | webhook is the only option; the constitution requires public-reachable surfaces to be a separate process limited to signed callback paths |
-| SeaTalk SDK | none (raw httpx) | the official repo itself is a thin httpx-equivalent; token caching is ~20 lines |
-| Pairing parameters | 8 chars, no `0O1I`, 1 h TTL, bounded guesses, fail closed | matches both prior arts and Hermes' post-incident hardening |
-| Telegram rendering | markdown → HTML, plain-text retry on rejection | OpenClaw-proven; MarkdownV2 escaping is a known bug farm |
-| Progress UX | one editable status message, throttled; ack first; final reply separate | both prior arts; degrades naturally on SeaTalk via capability flags |
-| Mid-turn input | bounded FIFO queue, control commands bypass | predictable; avoids Hermes' interrupt-by-default surprise |
-| Session scope | one long-lived conversation per `(channel, chat)`, `/new` resets | matches the 1:1 product decision; group chats become new rows later |
+| Decision           | Choice                                                                  | Rationale                                                                                                                                 |
+| ------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Telegram transport | long polling via raw httpx                                              | local-first, no ingress; the API surface used is 7 small methods — an SDK dependency buys nothing and adds an import-confinement contract |
+| SeaTalk transport  | webhook → separate listener process + user-run tunnel                   | webhook is the only option; the constitution requires public-reachable surfaces to be a separate process limited to signed callback paths |
+| SeaTalk SDK        | none (raw httpx)                                                        | the official repo itself is a thin httpx-equivalent; token caching is ~20 lines                                                           |
+| Pairing parameters | 8 chars, no `0O1I`, 1 h TTL, bounded guesses, fail closed               | matches both prior arts and Hermes' post-incident hardening                                                                               |
+| Telegram rendering | markdown → HTML, plain-text retry on rejection                          | OpenClaw-proven; MarkdownV2 escaping is a known bug farm                                                                                  |
+| Progress UX        | one editable status message, throttled; ack first; final reply separate | both prior arts; degrades naturally on SeaTalk via capability flags                                                                       |
+| Mid-turn input     | bounded FIFO queue, control commands bypass                             | predictable; avoids Hermes' interrupt-by-default surprise                                                                                 |
+| Session scope      | one long-lived conversation per `(channel, chat)`, `/new` resets        | matches the 1:1 product decision; group chats become new rows later                                                                       |

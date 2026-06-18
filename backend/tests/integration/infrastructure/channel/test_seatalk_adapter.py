@@ -87,30 +87,6 @@ async def test_non_json_upstream_surfaces_as_channel_send_failed(
         await adapter.stop()
 
 
-async def test_approval_prompt_sends_interactive_card_with_callback_buttons(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    adapter = make_seatalk_adapter(fake_seatalk)
-    try:
-        sent = await adapter.send_approval_prompt(
-            "emp-1", "Run the tool?", allow_value="allow:7", deny_value="deny:7"
-        )
-    finally:
-        await adapter.stop()
-    assert sent.message_id == "m1"
-    body, _auth = fake_seatalk.single_chat_calls[0]
-    message = body["message"]
-    assert message["tag"] == "interactive_message"
-    elements = message["interactive_message"]["elements"]
-    descriptions = [e for e in elements if e["element_type"] == "description"]
-    assert descriptions[0]["description"]["text"] == "Run the tool?"
-    buttons = [e["button"] for e in elements if e["element_type"] == "button"]
-    assert [(b["button_type"], b["value"]) for b in buttons] == [
-        ("callback", "allow:7"),
-        ("callback", "deny:7"),
-    ]
-
-
 async def test_edit_and_delete_are_unsupported_capabilities(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
@@ -122,16 +98,6 @@ async def test_edit_and_delete_are_unsupported_capabilities(fake_seatalk: FakeSe
     finally:
         await adapter.stop()
     assert fake_seatalk.single_chat_calls == []  # nothing reached the platform
-
-
-async def test_resolve_approval_prompt_sends_follow_up_text(fake_seatalk: FakeSeaTalk) -> None:
-    adapter = make_seatalk_adapter(fake_seatalk)
-    try:
-        await adapter.resolve_approval_prompt("emp-1", "m5", "Approved")
-    finally:
-        await adapter.stop()
-    body, _auth = fake_seatalk.single_chat_calls[0]  # no edit API → follow-up message
-    assert body["message"] == {"tag": "text", "text": {"format": 1, "content": "Approved"}}
 
 
 async def test_send_typing_posts_typing_endpoint(fake_seatalk: FakeSeaTalk) -> None:
@@ -176,7 +142,6 @@ async def test_handle_event_normalizes_subscriber_text_message(
     assert msg.sender_id == "emp-1"  # 1:1 DM: sender is the employee_code
     assert msg.platform_message_id == "pm-1"
     assert msg.timestamp == datetime.fromtimestamp(1718000000, tz=UTC)
-    assert recorder.clicks == []
 
 
 async def test_handle_event_image_message_yields_empty_text(fake_seatalk: FakeSeaTalk) -> None:
@@ -199,23 +164,3 @@ async def test_handle_event_image_message_yields_empty_text(fake_seatalk: FakeSe
     [msg] = recorder.messages
     assert msg.text == ""  # non-text content degrades to an empty-text envelope
     assert msg.platform_message_id == "pm-2"
-
-
-async def test_handle_event_click_normalizes_approval(fake_seatalk: FakeSeaTalk) -> None:
-    adapter = make_seatalk_adapter(fake_seatalk)
-    recorder = RecordingCallbacks()
-    await adapter.start(recorder.as_callbacks())
-    try:
-        await adapter.handle_event(
-            {
-                "event_type": "interactive_message_click",
-                "timestamp": 1718000001,
-                "event": {"employee_code": "emp-1", "value": "allow:7", "message_id": "pm-9"},
-            }
-        )
-    finally:
-        await adapter.stop()
-    [click] = recorder.clicks
-    assert (click.channel, click.chat_id, click.value) == ("st", "emp-1", "allow:7")
-    assert click.prompt_message_id == "pm-9"
-    assert recorder.messages == []

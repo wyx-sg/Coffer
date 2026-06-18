@@ -79,11 +79,6 @@ def _user_turn(text: str, conv_id: str = "c1") -> list[Message]:
     ]
 
 
-class _NoApprovals:
-    async def wait(self, request_id: str) -> Any:  # pragma: no cover
-        raise AssertionError("no approval expected")
-
-
 def _basic_frames() -> list[_Frame]:
     """Minimal scripted conversation: thread started + turn completed."""
     return [
@@ -102,7 +97,7 @@ def _make_factory() -> tuple[_Factory, FakeCodexAppServer]:
 
 
 async def _collect(adapter: CodexAppServerAdapter, history: list[Message]) -> list[Any]:
-    stream = await adapter.run_turn(history=history, approvals=_NoApprovals())
+    stream = await adapter.run_turn(history=history)
     return [ev async for ev in stream]
 
 

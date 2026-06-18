@@ -20,13 +20,12 @@ from fastapi import APIRouter, Depends, Response, status
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from coffer.application.chat.ports import ApprovalDecision
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.domain.chat.events import AgentEvent
 from coffer.domain.errors import ConversationNotFound, NoModelConfigured, TurnInProgress
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.chat.schemas import ApprovalSubmit, SendMessageRequest
+from coffer.surfaces.http.chat.schemas import SendMessageRequest
 from coffer.surfaces.http.dependencies import get_chat_service, get_turn_orchestrator
 
 _logger = logging.getLogger(__name__)
@@ -88,31 +87,6 @@ async def send_message(
             raise
 
     return EventSourceResponse(_event_stream())
-
-
-@router.post(
-    "/conversations/{id}/approvals",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-)
-async def submit_approval(
-    id: str,
-    body: ApprovalSubmit,
-    svc: ChatService = Depends(get_chat_service),  # noqa: B008
-    orchestrator: TurnOrchestrator = Depends(get_turn_orchestrator),  # noqa: B008
-) -> Response:
-    """Deliver an allow/deny decision to a turn paused on an approval request.
-
-    404 ``ConversationNotFound`` when the conversation does not exist;
-    409 ``ApprovalNotFound`` when no pending request matches ``request_id``.
-    """
-    await svc.get_conversation(id)  # raises ConversationNotFound -> 404
-    orchestrator.submit_approval(
-        id,
-        body.request_id,
-        ApprovalDecision(behavior=body.behavior, message=body.message),
-    )  # raises ApprovalNotFound -> 409
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

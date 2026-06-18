@@ -32,7 +32,7 @@ domain 层包含与 kind 无关的实体和协议，定义了 Coffer 在概念�
 
 ### application/
 
-application 层使用 infrastructure 和 surfaces 来编排 domain 实体。它定义了实现 Coffer 用例的服务：`resource_service.py` 用于与 kind 无关的 CRUD（任意 kind 的资源创建/读取/更新/启用/禁用/删除），`audit_service.py` 用于记录生命周期事件，`retention_service.py` 用于后台日志清理工作进程，以及每种 kind 一个子目录——`application/mcp/`（会话管理、能力筛选、调用记录）、`application/agent/`、`application/skill/`、`application/channel/`、`application/knowledge/`、`application/knowledge_base/`、`application/memory/` 和 `application/chat/`（`TurnOrchestrator`、审批与回合历史）。与 kind 并列的还有**并非 kind** 的跨层服务切片：`application/sync/`（多机同步）、`application/credentials/`（共享的 `CredentialResolver`）和 `application/fs/`（文件系统浏览）。
+application 层使用 infrastructure 和 surfaces 来编排 domain 实体。它定义了实现 Coffer 用例的服务：`resource_service.py` 用于与 kind 无关的 CRUD（任意 kind 的资源创建/读取/更新/启用/禁用/删除），`audit_service.py` 用于记录生命周期事件，`retention_service.py` 用于后台日志清理工作进程，以及每种 kind 一个子目录——`application/mcp/`（会话管理、能力筛选、调用记录）、`application/agent/`、`application/skill/`、`application/channel/`、`application/knowledge/`、`application/knowledge_base/`、`application/memory/` 和 `application/chat/`（`TurnOrchestrator` 与回合历史）。与 kind 并列的还有**并非 kind** 的跨层服务切片：`application/sync/`（多机同步）、`application/credentials/`（共享的 `CredentialResolver`）和 `application/fs/`（文件系统浏览）。
 
 应用层服务通过构造函数参数接收其 infrastructure 依赖（repository、钥匙串适配器、上游客户端）——它们不自行实例化这些依赖。这就是依赖倒置模式：application 层通过 `domain/` 中的接口或协议类定义它需要什么，组装入口提供具体实现。
 
@@ -111,7 +111,7 @@ backend/coffer/
 │   ├── knowledge/                # KB 摄取 + 检索服务
 │   ├── knowledge_base/           # KB collection 服务
 │   ├── memory/                   # recall/remember 服务
-│   ├── chat/                     # TurnOrchestrator、审批、历史
+│   ├── chat/                     # TurnOrchestrator、历史
 │   ├── sync/                     # 跨层——多机同步（非 kind）
 │   ├── credentials/              # 跨层——CredentialResolver（引用 → 密钥）
 │   └── fs/                       # 跨层——文件系统浏览服务

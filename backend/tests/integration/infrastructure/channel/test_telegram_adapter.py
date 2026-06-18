@@ -34,28 +34,16 @@ def _message_update(update_id: int, *, text: str) -> dict:
     }
 
 
-def _callback_update(update_id: int, *, data: str) -> dict:
-    return {
-        "update_id": update_id,
-        "callback_query": {
-            "id": "cbq-1",
-            "data": data,
-            "from": {"id": 4242, "first_name": "Yu"},
-            "message": {"message_id": 777, "chat": {"id": 555}},
-        },
-    }
-
-
 async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
     fake_telegram: FakeTelegram,
 ) -> None:
     adapter = make_telegram_adapter(fake_telegram)
     recorder = RecordingCallbacks()
     await fake_telegram.update_batches.put([_message_update(10, text="hello")])
-    await fake_telegram.update_batches.put([_callback_update(11, data="approve:1")])
+    await fake_telegram.update_batches.put([_message_update(11, text="world")])
     await adapter.start(recorder.as_callbacks())
     try:
-        await wait_until(lambda: len(recorder.messages) == 1 and len(recorder.clicks) == 1)
+        await wait_until(lambda: len(recorder.messages) == 2)
         # The poll AFTER each dispatched batch must carry update_id + 1.
         await wait_until(
             lambda: (
@@ -77,16 +65,6 @@ async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
     assert msg.sender_id == "4242"  # from.id, for the owner gate
     assert msg.platform_message_id == "1010"
     assert msg.timestamp.year == 2024  # epoch 1718000000 normalized to aware UTC
-
-    click = recorder.clicks[0]
-    assert (click.channel, click.chat_id, click.value) == ("tg", "555", "approve:1")
-    assert click.prompt_message_id == "777"
-    assert click.sender_id == "4242"  # callback_query.from.id
-
-    # The tap was acked back to the platform.
-    acks = fake_telegram.calls_for("answerCallbackQuery")
-    assert len(acks) == 1
-    assert acks[0]["callback_query_id"] == "cbq-1"
 
 
 async def test_poll_error_backs_off_then_recovers(fake_telegram: FakeTelegram) -> None:
@@ -185,10 +163,6 @@ async def test_outbound_methods_map_to_bot_api_calls(fake_telegram: FakeTelegram
         await adapter.edit_text("555", "10", "edited")
         await adapter.delete_message("555", "10")
         await adapter.send_typing("555")
-        sent = await adapter.send_approval_prompt(
-            "555", "Run the tool?", allow_value="allow:7", deny_value="deny:7"
-        )
-        await adapter.resolve_approval_prompt("555", sent.message_id, "Approved")
     finally:
         await adapter.stop()
 
@@ -196,11 +170,3 @@ async def test_outbound_methods_map_to_bot_api_calls(fake_telegram: FakeTelegram
     assert edits[0] == {"chat_id": "555", "message_id": "10", "text": "edited"}
     assert fake_telegram.calls_for("deleteMessage") == [{"chat_id": "555", "message_id": "10"}]
     assert fake_telegram.calls_for("sendChatAction") == [{"chat_id": "555", "action": "typing"}]
-
-    prompt = fake_telegram.calls_for("sendMessage")[0]
-    assert prompt["text"] == "Run the tool?"
-    buttons = prompt["reply_markup"]["inline_keyboard"][0]
-    assert [b["callback_data"] for b in buttons] == ["allow:7", "deny:7"]
-    assert sent.message_id == "101"
-    # Resolving the prompt edits the prompt message in place with the outcome.
-    assert edits[1] == {"chat_id": "555", "message_id": "101", "text": "Approved"}

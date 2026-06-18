@@ -41,7 +41,6 @@ async def _render(
         adapter=adapter,
         chat_id="owner",
         conversation_id="c1",
-        pending_approvals={},
         send=send,
         now=now or _clock(0.0),
     )

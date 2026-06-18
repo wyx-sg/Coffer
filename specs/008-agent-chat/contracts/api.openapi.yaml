@@ -176,10 +176,8 @@ paths:
       description: >
         Appends the user message, then streams the agent turn as
         Server-Sent Events. Event names: `turn_start`, `text_delta`,
-        `tool_call`, `tool_result`, `approval_request`, `turn_done`,
-        `turn_error`. A turn that emits `approval_request` pauses until a
-        decision is posted to `.../approvals`. Each `data:` payload is a JSON
-        object. The stream closes when the turn ends.
+        `tool_call`, `tool_result`, `turn_done`, `turn_error`. Each `data:`
+        payload is a JSON object. The stream closes when the turn ends.
       tags: [chat]
       requestBody:
         required: true
@@ -198,35 +196,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           description: A turn is already in progress, or no model is configured
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorOut'
-
-  /api/v1/chat/conversations/{id}/approvals:
-    parameters:
-      - $ref: '#/components/parameters/ConversationId'
-    post:
-      summary: Submit an allow/deny decision for a paused approval request
-      operationId: submitApproval
-      description: >
-        Delivers the user's decision to a turn paused on an `approval_request`
-        event. Returns 409 when no pending request matches `request_id`
-        (unknown or already decided).
-      tags: [chat]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ApprovalSubmit'
-      responses:
-        '204':
-          description: No Content — decision delivered
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          description: No pending approval request matches request_id
           content:
             application/json:
               schema:
@@ -530,14 +499,6 @@ components:
       required: [text]
       properties:
         text: { type: string, minLength: 1, maxLength: 32768 }
-
-    ApprovalSubmit:
-      type: object
-      required: [request_id, behavior]
-      properties:
-        request_id: { type: string }
-        behavior: { type: string, enum: [allow, deny] }
-        message: { type: string, nullable: true }
 
     ModelCreate:
       type: object

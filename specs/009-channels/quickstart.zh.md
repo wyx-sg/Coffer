@@ -2,8 +2,8 @@
 
 > English: [quickstart.md](./quickstart.md)
 
-在 Telegram 或 SeaTalk 里直接跟你的 Coffer agent 对话，点一下就批准工具
-调用，并让 Coffer 给你推送通知。
+在 Telegram 或 SeaTalk 里直接跟你的 Coffer agent 对话，并让 Coffer 给你
+推送通知。
 
 ## Telegram
 
@@ -91,8 +91,7 @@ cloudflared tunnel --url http://127.0.0.1:8787
 ### 4. 配对并聊天
 
 与 Telegram 相同：`coffer channel pair my-seatalk`，在 SeaTalk 里把码发给
-bot，然后直接开聊。工具审批提示以交互式卡片到达；回复以 SeaTalk
-Markdown 渲染。
+bot，然后直接开聊。回复以 SeaTalk Markdown 渲染。
 
 ## 通知
 

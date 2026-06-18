@@ -197,11 +197,9 @@ The chat surface drives a different lifecycle: instead of forwarding a single JS
 
 2. **In-process agent.** For the built-in agent, the orchestrator drives an in-process LangGraph agent (`infrastructure/chat/langgraph_agent.py`). The agent's tools are Coffer's own gateway tools, exposed to the model through the gateway tool provider (`infrastructure/chat/gateway_tool_provider.py`) — so the chat agent can call the same aggregated MCP capabilities that an external MCP client would, in-process and without a shim.
 
-3. **Approval bridging.** When the agent wants to run a tool that requires confirmation, the LangGraph run is paused at an interrupt and an approval request is streamed to the client. The client resolves it via `submit_approval`; `interrupt_turn` cancels an in-flight turn. The orchestrator translates these into LangGraph resume/cancel signals.
+3. **Streaming back.** Tokens and tool-call events stream to the client over SSE as the run progresses; `interrupt_turn` cancels an in-flight turn, and the final assistant turn is persisted on completion.
 
-4. **Streaming back.** Tokens, tool-call events, and approval prompts stream to the client over SSE as the run progresses; the final assistant turn is persisted on completion.
-
-**CLI-agent variant.** Instead of the in-process LangGraph agent, a chat agent may drive an **external coding-agent subprocess** (Claude Code or Codex) through `infrastructure/chat/cli_agent.py` and `infrastructure/chat/cli_providers.py`. The orchestrator seam is identical — same turn persistence, same approval and streaming contract — but the model loop runs in the external CLI process rather than in-process.
+**CLI-agent variant.** Instead of the in-process LangGraph agent, a chat agent may drive an **external coding-agent subprocess** (Claude Code or Codex) through `infrastructure/chat/cli_agent.py` and `infrastructure/chat/cli_providers.py`. The orchestrator seam is identical — same turn persistence, same streaming contract — but the model loop runs in the external CLI process rather than in-process.
 
 ## Channel-inbound lifecycle
 
