@@ -44,9 +44,23 @@ Pydantic v2 `BaseModel`.
 
 ### `SkillFrontmatter` (`domain/skill/frontmatter.py`)
 
-Pydantic v2 model used during validation of an imported/fetched folder.
-Mirrors agentskills.io minimum: `name`, `description`. Extra fields tolerated
-under `extra='allow'`.
+Pydantic v2 model used during validation of an imported/fetched folder. Aligns
+with the agentskills.io constraints:
+
+| Field           | Type                | Constraint                                                        |
+| --------------- | ------------------- | ----------------------------------------------------------------- |
+| `name`          | `str`               | required, 1–64 chars, `^[a-z0-9][a-z0-9_-]{0,63}$`                |
+| `description`   | `str`               | required, 1–1024 chars                                            |
+| `license`       | `str \| None`       | optional; recognized, not interpreted                             |
+| `allowed_tools` | `list[str] \| None` | optional (`allowed-tools`); normalized from list or delimited str |
+
+`name` accepts a documented superset of the standard's charset — the standard
+allows lowercase letters, digits, and hyphens, and Coffer also tolerates
+underscores for backward-compatibility. `license` and `allowed-tools` are
+third-party authored, so recognizing them stays additive: a non-string
+`license` scalar is coerced to a string and a malformed `allowed-tools` value
+is tolerated (treated as absent) rather than failing validation. Every other
+unrecognized field is tolerated under `extra='allow'`.
 
 The frontmatter `description` is stored on the skill kind's config as
 `SkillConfig.skill_md_description` (see above) — this is the authoritative

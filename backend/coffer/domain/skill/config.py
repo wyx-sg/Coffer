@@ -18,6 +18,8 @@ class SkillConfig(BaseModel):
     # Capped at 64 to match the master store folder-name limit and the
     # SKILL.md frontmatter ``name`` cap (see ``frontmatter._NAME_RE``).
     skill_md_name: str = Field(min_length=1, max_length=64)
-    skill_md_description: str = Field(min_length=1)
+    # Capped at 1024 to match the SKILL.md frontmatter ``description`` cap
+    # (see ``frontmatter._DESCRIPTION_MAX``).
+    skill_md_description: str = Field(min_length=1, max_length=1024)
     version_hash: str = Field(min_length=1, max_length=128)
     last_synced_from_source_at: datetime | None = None

@@ -44,7 +44,16 @@ Pydantic v2 `BaseModel`。
 
 ### `SkillFrontmatter` (`domain/skill/frontmatter.py`)
 
-Pydantic v2 模型，用于校验导入/拉取下来的文件夹。对齐 agentskills.io 的最小集：`name`、`description`；额外字段以 `extra='allow'` 容忍。
+Pydantic v2 模型，用于校验导入/拉取下来的文件夹，对齐 agentskills.io 约束：
+
+| 字段            | 类型                | 约束                                              |
+| --------------- | ------------------- | ------------------------------------------------- |
+| `name`          | `str`               | 必填，1–64 字符，`^[a-z0-9][a-z0-9_-]{0,63}$`     |
+| `description`   | `str`               | 必填，1–1024 字符                                 |
+| `license`       | `str \| None`       | 可选；识别但不解读                                |
+| `allowed_tools` | `list[str] \| None` | 可选（`allowed-tools`）；由列表或分隔字符串归一化 |
+
+`name` 接受标准字符集的有据超集——标准允许小写字母、数字与连字符，Coffer 额外容忍下划线以兼容磁盘上既有的 skill。`license` 与 `allowed-tools` 均为第三方编写字段，识别它们保持纯增量：非字符串的 `license` 标量会被转为字符串，格式异常的 `allowed-tools` 被容忍（视作缺省）而非校验失败。其他一切未识别字段以 `extra='allow'` 容忍。
 
 frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `SkillConfig.skill_md_description` 中 —— 这是权威拷贝，frontmatter 改名也会覆盖它。`resources` 表自身的 `description` 列继承自 kind-agnostic Resource 框架；在 import/fetch 时从 frontmatter `description` 初始化以与其他 kind 保持一致，但**不**在后续 update 时重新同步（视作初次写入后用户可自由编辑的人类标签）。
 

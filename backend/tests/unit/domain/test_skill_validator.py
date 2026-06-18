@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import textwrap
 
+import pytest
+
 from coffer.domain.skill.validator import (
     ValidationFailure,
     ValidationOk,
@@ -137,3 +139,46 @@ def test_size_limit_exceeded(tmp_path):
     result = validate_skill_folder(skill, size_limit_bytes=1024)
     assert isinstance(result, ValidationFailure)
     assert result.reason == "size_limit_exceeded"
+
+
+@pytest.mark.acceptance(
+    spec="005-skill-manager", scenario="reject a skill with an over-long description"
+)
+def test_description_over_1024_chars_rejected(tmp_path):
+    """agentskills.io caps `description` at 1024 chars; over-long is a clean 422."""
+    skill = tmp_path / "skill"
+    _write_skill(skill, description="d" * 1025)
+    result = validate_skill_folder(skill)
+    assert isinstance(result, ValidationFailure)
+    assert result.reason == "skill_md_frontmatter_invalid"
+
+
+@pytest.mark.acceptance(
+    spec="005-skill-manager",
+    scenario="recognize optional agentskills.io frontmatter fields",
+)
+def test_optional_frontmatter_fields_surfaced(tmp_path):
+    """`license` and the experimental `allowed-tools` are parsed, not dropped."""
+    skill = tmp_path / "skill"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        textwrap.dedent(
+            """\
+            ---
+            name: my-skill
+            description: A test skill.
+            license: MIT
+            allowed-tools:
+              - Bash
+              - Read
+            ---
+
+            body
+            """
+        ),
+        encoding="utf-8",
+    )
+    result = validate_skill_folder(skill)
+    assert isinstance(result, ValidationOk)
+    assert result.frontmatter.license == "MIT"
+    assert result.frontmatter.allowed_tools == ["Bash", "Read"]
