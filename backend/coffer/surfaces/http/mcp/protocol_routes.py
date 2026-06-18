@@ -39,11 +39,9 @@ _QUEUE_MAXSIZE = 1000
 # Default idle timeout for the session reaper. A session is considered idle
 # when neither a POST nor an upstream notification has touched it for this
 # many seconds. Conservative default lets long-lived clients stay connected
-# while still bounding leaked-session memory.
-#
-# The constructor knobs on ``start_session_reaper`` allow composition root /
-# tests to override these defaults (CODE-022). Suggested env wiring:
-# ``COFFER_MCP_SESSION_IDLE_S`` and ``COFFER_MCP_SESSION_REAPER_INTERVAL_S``.
+# while still bounding leaked-session memory. The ``start_session_reaper``
+# constructor knobs override these (CODE-022); env wiring is
+# ``COFFER_MCP_SESSION_IDLE_S`` / ``COFFER_MCP_SESSION_REAPER_INTERVAL_S``.
 _DEFAULT_IDLE_TIMEOUT_S = 30 * 60
 
 # How often the session reaper wakes up.
@@ -102,11 +100,15 @@ def _release_session_ref(session_id: str) -> None:
 async def _get_or_create_session(
     session_id: str,
     factory: Callable[[str], MCPGatewaySession],
+    agent_name: str | None = None,
 ) -> MCPGatewaySession:
     _touch(session_id)
     if session_id in _ACTIVE_SESSIONS:
-        return _ACTIVE_SESSIONS[session_id]
+        session = _ACTIVE_SESSIONS[session_id]
+        session.bind_agent(agent_name)
+        return session
     session = factory(session_id)
+    session.bind_agent(agent_name)
     queue = _NOTIFICATION_QUEUES.setdefault(session_id, asyncio.Queue(maxsize=_QUEUE_MAXSIZE))
 
     async def _sink(payload: dict[str, Any]) -> None:
@@ -145,6 +147,7 @@ def _error_response(req_id: Any, code: int, message: str) -> dict[str, Any]:
 async def handle_post(
     request: Request,
     mcp_session_id: str | None = Header(default=None, alias="Mcp-Session-Id"),
+    x_coffer_agent: str | None = Header(default=None, alias="X-Coffer-Agent"),
     factory: Callable[[str], MCPGatewaySession] = Depends(get_mcp_session_factory),  # noqa: B008
 ) -> Any:
     """Process one JSON-RPC request from a downstream MCP client."""
@@ -167,7 +170,7 @@ async def handle_post(
 
     # Allocate a session id on the very first request if the client didn't send one.
     session_id = mcp_session_id or str(uuid.uuid4())
-    session = await _get_or_create_session(session_id, factory)
+    session = await _get_or_create_session(session_id, factory, x_coffer_agent)
 
     # Hold a refcount across the request so a concurrent SSE-close-triggered
     # _drop_session waits for us to finish before disposing the session
@@ -209,7 +212,7 @@ async def handle_post(
         except CofferError as e:
             code = (
                 _JSON_RPC_COFFER_TOOL_DISABLED
-                if e.code == "TOOL_DISABLED"
+                if e.code in ("TOOL_DISABLED", "MCP_SERVER_OUT_OF_SCOPE")
                 else _JSON_RPC_INTERNAL_ERROR
             )
             response: dict[str, Any] = _error_response(req_id, code, str(e))
@@ -241,6 +244,7 @@ async def handle_post(
 @router.get("", response_class=Response)
 async def handle_get(
     mcp_session_id: str | None = Header(default=None, alias="Mcp-Session-Id"),
+    x_coffer_agent: str | None = Header(default=None, alias="X-Coffer-Agent"),
     factory: Callable[[str], MCPGatewaySession] = Depends(get_mcp_session_factory),  # noqa: B008
 ) -> EventSourceResponse:
     """Open the SSE stream for downstream-bound server notifications."""
@@ -250,7 +254,7 @@ async def handle_get(
         raise HTTPException(status_code=400, detail="Mcp-Session-Id header required for GET /mcp")
 
     # Ensure the session exists (might not yet have received its first POST)
-    await _get_or_create_session(mcp_session_id, factory)
+    await _get_or_create_session(mcp_session_id, factory, x_coffer_agent)
     queue = _NOTIFICATION_QUEUES.setdefault(mcp_session_id, asyncio.Queue(maxsize=_QUEUE_MAXSIZE))
 
     stop_event = _stream_stop_event(mcp_session_id)

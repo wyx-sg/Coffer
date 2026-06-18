@@ -9,6 +9,7 @@ names. Migrations are split across three Alembic revisions:
 | `0001`   | `20260520_0001_initial.py`           | `resources`, `audit_log`, `retention_policies`  |
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
+| `0023`   | `20260619_0023_agent_mcp_scope.py`   | `agent_mcp_scope`, `agent_mcp_scope_server`     |
 
 ## Domain entities (`backend/coffer/domain/`)
 
@@ -75,26 +76,26 @@ Plain dataclass.
 
 String-valued enum (use `StrEnum`):
 
-| Value                     | When emitted                                               |
-| ------------------------- | ---------------------------------------------------------- |
-| `"resource_created"`      | After `ResourceService.register`                           |
-| `"resource_updated"`      | After config or description change                         |
-| `"resource_enabled"`      | After `set_enabled(True)` when state flipped               |
-| `"resource_disabled"`     | After `set_enabled(False)` when state flipped              |
-| `"resource_deleted"`      | After `delete` (includes pre-delete snapshot in `details`) |
-| `"capability_first_seen"` | When discovery sees a capability for the first time        |
-| `"capability_enabled"`    | When a user enables a capability that was disabled         |
-| `"capability_disabled"`   | When a user disables a capability                          |
-| `"daemon_started"`        | At daemon startup post-ready                               |
-| `"daemon_stopped"`        | At daemon graceful shutdown                                |
-| `"token_rotated"`         | After `POST /api/v1/daemon/rotate-token`                   |
-| `"retention_updated"`     | When a retention policy is changed                         |
-| `"backup_created"`        | After `POST /api/v1/daemon/backup`                         |
-| `"credential_set"`        | After `POST /api/v1/credentials` stores a secret           |
-| `"credential_read"`       | After `GET /api/v1/credentials/{ref}` reads a secret       |
-| `"credential_deleted"`    | After `DELETE /api/v1/credentials/{ref}` removes a secret  |
-| `"credential_migrated"`   | Per ref, when a legacy keychain secret migrates into the store |
-| `"master_key_relocated"`  | After `PUT /api/v1/settings/credentials` moves the master key |
+| Value                                                       | When emitted                                                            |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `"resource_created"`                                        | After `ResourceService.register`                                        |
+| `"resource_updated"`                                        | After config or description change                                      |
+| `"resource_enabled"`                                        | After `set_enabled(True)` when state flipped                            |
+| `"resource_disabled"`                                       | After `set_enabled(False)` when state flipped                           |
+| `"resource_deleted"`                                        | After `delete` (includes pre-delete snapshot in `details`)              |
+| `"capability_first_seen"`                                   | When discovery sees a capability for the first time                     |
+| `"capability_enabled"`                                      | When a user enables a capability that was disabled                      |
+| `"capability_disabled"`                                     | When a user disables a capability                                       |
+| `"daemon_started"`                                          | At daemon startup post-ready                                            |
+| `"daemon_stopped"`                                          | At daemon graceful shutdown                                             |
+| `"token_rotated"`                                           | After `POST /api/v1/daemon/rotate-token`                                |
+| `"retention_updated"`                                       | When a retention policy is changed                                      |
+| `"backup_created"`                                          | After `POST /api/v1/daemon/backup`                                      |
+| `"credential_set"`                                          | After `POST /api/v1/credentials` stores a secret                        |
+| `"credential_read"`                                         | After `GET /api/v1/credentials/{ref}` reads a secret                    |
+| `"credential_deleted"`                                      | After `DELETE /api/v1/credentials/{ref}` removes a secret               |
+| `"credential_migrated"`                                     | Per ref, when a legacy keychain secret migrates into the store          |
+| `"master_key_relocated"`                                    | After `PUT /api/v1/settings/credentials` moves the master key           |
 | `"keychain_set"` / `"keychain_read"` / `"keychain_deleted"` | _Legacy_ (pre-envelope-encryption); kept renderable for historical rows |
 
 ### `RetentionPolicy` (`domain/retention.py`)
@@ -129,24 +130,24 @@ SQL execution).
 
 Pydantic `BaseModel`. Discriminator value: `"stdio"`.
 
-| Field             | Type               | Notes                                                                                    |
-| ----------------- | ------------------ | ---------------------------------------------------------------------------------------- |
-| `type`            | `Literal["stdio"]` | discriminator                                                                            |
-| `command`         | `str`              | executable, e.g. `"npx"`                                                                 |
-| `args`            | `list[str]`        | default `[]`                                                                             |
-| `env`             | `dict[str, str]`   | static env, never contains secrets; rejected if a value looks like a token (regex check) |
+| Field             | Type               | Notes                                                                                        |
+| ----------------- | ------------------ | -------------------------------------------------------------------------------------------- |
+| `type`            | `Literal["stdio"]` | discriminator                                                                                |
+| `command`         | `str`              | executable, e.g. `"npx"`                                                                     |
+| `args`            | `list[str]`        | default `[]`                                                                                 |
+| `env`             | `dict[str, str]`   | static env, never contains secrets; rejected if a value looks like a token (regex check)     |
 | `credential_refs` | `dict[str, str]`   | maps `env_var_name → ref` into the encrypted credential store; resolved (decrypted) at spawn |
-| `cwd`             | `str \| None`      | optional working directory                                                               |
+| `cwd`             | `str \| None`      | optional working directory                                                                   |
 
 ### `HttpTransport` (`domain/mcp/server_config.py`)
 
 Pydantic `BaseModel`. Discriminator value: `"http"`.
 
-| Field             | Type               | Notes                                      |
-| ----------------- | ------------------ | ------------------------------------------ |
-| `type`            | `Literal["http"]`  | discriminator                              |
-| `url`             | `pydantic.HttpUrl` | upstream MCP HTTP/SSE endpoint             |
-| `headers`         | `dict[str, str]`   | static headers; same secret regex as `env` |
+| Field             | Type               | Notes                                                        |
+| ----------------- | ------------------ | ------------------------------------------------------------ |
+| `type`            | `Literal["http"]`  | discriminator                                                |
+| `url`             | `pydantic.HttpUrl` | upstream MCP HTTP/SSE endpoint                               |
+| `headers`         | `dict[str, str]`   | static headers; same secret regex as `env`                   |
 | `credential_refs` | `dict[str, str]`   | maps `header_name → ref` into the encrypted credential store |
 
 ### `MCPServerConfig` (`domain/mcp/server_config.py`)
@@ -215,6 +216,16 @@ persisted (per [ADR-004](../../docs/decisions/ADR-004-capability-state-model.md)
 | `session_id`      | `str \| None`                                 | per-session correlation         |
 
 **Never store args or results** — schema cannot hold them.
+
+### `AgentMcpScope` (`domain/agent/scope.py`)
+
+Plain dataclass. The per-agent visibility policy the gateway enforces (FR-019..FR-022).
+
+| Field        | Type                         | Notes                                                                          |
+| ------------ | ---------------------------- | ------------------------------------------------------------------------------ |
+| `agent_name` | `str`                        | the agent's resource name (matches the `--agent <name>` / `X-Coffer-Agent` id) |
+| `mode`       | `Literal["auto","selected"]` | `auto` = every enabled server (default); `selected` = the allowlist only       |
+| `servers`    | `list[str]`                  | allowlist of `mcp_server` names; empty unless `selected`                       |
 
 ## SQLite schema (across three Alembic revisions)
 
@@ -295,6 +306,25 @@ CREATE TABLE mcp_server_health (
     status         TEXT      NOT NULL,                    -- 'healthy' | 'failing' | 'unknown'
     checked_at     TIMESTAMP NOT NULL
 );
+
+-- Per-agent MCP scoping: an agent's mode (auto = all enabled servers; selected = allowlist)
+CREATE TABLE agent_mcp_scope (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    mode              TEXT    NOT NULL DEFAULT 'auto',   -- 'auto' | 'selected'
+    created_at        TIMESTAMP NOT NULL,
+    updated_at        TIMESTAMP NOT NULL,
+    UNIQUE (agent_resource_id),
+    CHECK (mode IN ('auto', 'selected'))
+);
+-- Per-agent MCP scoping: the allowlist used when mode = 'selected'
+CREATE TABLE agent_mcp_scope_server (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_resource_id  INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    server_resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    UNIQUE (agent_resource_id, server_resource_id)
+);
+CREATE INDEX idx_agent_scope_server_agent ON agent_mcp_scope_server(agent_resource_id);
 ```
 
 ## SQLAlchemy mapping (summary)
@@ -303,14 +333,16 @@ ORM models live under `backend/coffer/infrastructure/persistence/models.py`
 (kind-agnostic) and `backend/coffer/infrastructure/mcp/persistence.py`
 (MCP-specific), all registered against the same `Base.metadata`:
 
-| ORM class                      | Table                        | Lives in                               |
-| ------------------------------ | ---------------------------- | -------------------------------------- |
-| `ResourceModel`                | `resources`                  | `infrastructure/persistence/models.py` |
-| `AuditLogModel`                | `audit_log`                  | `infrastructure/persistence/models.py` |
-| `RetentionPolicyModel`         | `retention_policies`         | `infrastructure/persistence/models.py` |
-| `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`    |
-| `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/persistence.py`    |
-| `McpServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/persistence.py`    |
+| ORM class                      | Table                        | Lives in                                    |
+| ------------------------------ | ---------------------------- | ------------------------------------------- |
+| `ResourceModel`                | `resources`                  | `infrastructure/persistence/models.py`      |
+| `AuditLogModel`                | `audit_log`                  | `infrastructure/persistence/models.py`      |
+| `RetentionPolicyModel`         | `retention_policies`         | `infrastructure/persistence/models.py`      |
+| `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`         |
+| `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/persistence.py`         |
+| `McpServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/persistence.py`         |
+| `AgentMcpScopeModel`           | `agent_mcp_scope`            | `infrastructure/agent/scope_persistence.py` |
+| `AgentMcpScopeServerModel`     | `agent_mcp_scope_server`     | `infrastructure/agent/scope_persistence.py` |
 
 Each ORM model provides:
 
@@ -319,12 +351,14 @@ Each ORM model provides:
 
 ## Cascade and integrity rules
 
-| Action                             | Effect                                                                                                                           |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `DELETE FROM resources WHERE id=?` | cascades to `mcp_capability_preferences` (via FK). Does **not** cascade to `audit_log` or `mcp_invocations` (history preserved). |
-| `UPDATE resources SET kind=?`      | forbidden — application layer never updates `kind`.                                                                              |
-| `UPDATE resources SET name=?`      | forbidden — rename = delete + register.                                                                                          |
-| `DELETE FROM retention_policies`   | forbidden — policies are upserted at startup, never deleted.                                                                     |
+| Action                              | Effect                                                                                                                                                           |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DELETE FROM resources WHERE id=?`  | cascades to `mcp_capability_preferences` (via FK). Does **not** cascade to `audit_log` or `mcp_invocations` (history preserved).                                 |
+| `DELETE` an **agent** resource      | cascades to `agent_mcp_scope` and its `agent_mcp_scope_server` rows (via the `agent_resource_id` FK).                                                            |
+| `DELETE` an **mcp_server** resource | cascades to the `agent_mcp_scope_server` rows that allowlisted it (via the `server_resource_id` FK); the owning agent's scope survives, now without that server. |
+| `UPDATE resources SET kind=?`       | forbidden — application layer never updates `kind`.                                                                                                              |
+| `UPDATE resources SET name=?`       | forbidden — rename = delete + register.                                                                                                                          |
+| `DELETE FROM retention_policies`    | forbidden — policies are upserted at startup, never deleted.                                                                                                     |
 
 ## Default retention policy seed (run on first daemon startup)
 
@@ -350,8 +384,8 @@ for table_name, days in defaults:
 Every route under `/api/v1/*` requires the `X-Coffer-Token` header. The only
 intentional exception is:
 
-| Endpoint                    | Why unauthenticated                                                                                                                                                                                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Endpoint                    | Why unauthenticated                                                                                                                                                                                                                                                                |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/v1/daemon/status` | Used by the CLI and the `coffer-mcp-shim` as a cheap readiness probe before any token has been read from `~/.coffer/daemon.json`. Returns only lifecycle phase, version, port, started-at, and an aggregate upstream summary — no secrets, no per-resource details, no audit data. |
 
 All mutating endpoints (including `/daemon/backup`, `/daemon/rotate-token`,

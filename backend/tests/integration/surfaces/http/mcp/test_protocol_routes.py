@@ -192,6 +192,66 @@ async def test_post_initialize_then_tools_list_in_same_session(
 
 
 @pytest.mark.asyncio
+async def test_post_binds_agent_identity_from_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-026: the X-Coffer-Agent header is threaded to session.bind_agent so
+    the gateway can attribute the session to an agent for scoping; a header-less
+    POST binds None (unscoped)."""
+    _with_in_memory(monkeypatch)
+    _ACTIVE_SESSIONS.clear()
+    _NOTIFICATION_QUEUES.clear()
+    _LAST_ACTIVITY.clear()
+
+    bound: list[str | None] = []
+
+    class _StubSession:
+        def __init__(self, session_id: str) -> None:
+            self.id = session_id
+
+        def bind_agent(self, agent_name: str | None) -> None:
+            bound.append(agent_name)
+
+        def set_downstream_sink(self, sink: object) -> None:
+            pass
+
+        async def handle_request(self, method: str, params: dict) -> dict:  # type: ignore[type-arg]
+            return {"tools": []}
+
+        async def dispose(self) -> None:
+            pass
+
+    set_mcp_session_factory(lambda session_id: _StubSession(session_id))  # type: ignore[arg-type]
+    set_active_token("test-token")
+    app = FastAPI()
+    err_handlers.register(app)
+    app.include_router(mcp_router)
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"X-Coffer-Token": "test-token"},
+        ) as client:
+            r = await client.post(
+                "/mcp",
+                json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+                headers={"X-Coffer-Agent": "agentA"},
+            )
+            assert r.status_code == 200
+            assert bound == ["agentA"]
+
+            r2 = await client.post(
+                "/mcp",
+                json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+            )
+            assert r2.status_code == 200
+            assert bound[-1] is None
+    finally:
+        await shutdown_all_sessions()
+
+
+@pytest.mark.asyncio
 async def test_post_without_token_returns_401(
     http_client: AsyncClient,
 ) -> None:

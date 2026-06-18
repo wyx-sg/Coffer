@@ -114,7 +114,12 @@ class AgentMcpService:
         shim = self._resolve_shim()  # raises ShimNotFound (→ 422) before any write
         text = self._store.read_text(spec.path) or ""
         new_text = apply_install(
-            spec.format, text, shim, container_key=inj.container_key, entry_style=inj.entry_style
+            spec.format,
+            text,
+            shim,
+            container_key=inj.container_key,
+            entry_style=inj.entry_style,
+            agent_name=name,
         )
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(

@@ -141,6 +141,33 @@ async def _log(
         _logger.debug("mcp.gateway.builtin_invocation_log_failed", exc_info=True)
 
 
+def inject_session_cwd(
+    builtin: BuiltinToolRegistry,
+    prefixed_name: str,
+    params: dict[str, Any],
+    session_cwd: str | None,
+) -> dict[str, Any]:
+    """Thread the session's launch cwd into a built-in tool call.
+
+    Generic: a tool opts in by declaring a ``cwd`` property in its input
+    schema (the memory tools do). The gateway never special-cases the memory
+    kind (Contract 5/6). A client-supplied ``cwd`` is left untouched. When
+    the session never reported a cwd, NOTHING is injected — scope resolution
+    then rejects project scope / serves global only, which is correct; the
+    daemon's own cwd would silently scope agent memory to whatever project
+    the daemon happens to run in."""
+    tool = builtin.get(prefixed_name)
+    if tool is None:
+        return params
+    props = tool.input_schema.get("properties", {})
+    if not isinstance(props, dict) or "cwd" not in props:
+        return params
+    args = dict(params.get("arguments") or {})
+    if not args.get("cwd") and session_cwd:
+        args["cwd"] = session_cwd
+    return {**params, "arguments": args}
+
+
 def append_builtin_tools(tools: list[dict[str, Any]], builtin: BuiltinToolRegistry) -> None:
     """Append Coffer's own built-in tools + the tool-search meta-tool to a
     ``tools/list`` result (kept here so the gateway session stays small)."""

@@ -9,6 +9,7 @@
 | `0001`   | `20260520_0001_initial.py`           | `resources`、`audit_log`、`retention_policies`  |
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`、`mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
+| `0023`   | `20260619_0023_agent_mcp_scope.py`   | `agent_mcp_scope`、`agent_mcp_scope_server`     |
 
 ## Domain entities (`backend/coffer/domain/`)
 
@@ -74,27 +75,27 @@ frozen dataclass。一个资源 kind 的纯描述符。只属于 domain——不
 
 字符串值枚举（使用 `StrEnum`）：
 
-| Value                     | When emitted                                     |
-| ------------------------- | ------------------------------------------------ |
-| `"resource_created"`      | `ResourceService.register` 之后                  |
-| `"resource_updated"`      | config 或 description 变更之后                   |
-| `"resource_enabled"`      | `set_enabled(True)` 之后且状态确实翻转           |
-| `"resource_disabled"`     | `set_enabled(False)` 之后且状态确实翻转          |
-| `"resource_deleted"`      | `delete` 之后（`details` 含 pre-delete 快照）    |
-| `"capability_first_seen"` | discovery 首次看到一个 capability                |
-| `"capability_enabled"`    | 用户启用了原本禁用的 capability                  |
-| `"capability_disabled"`   | 用户禁用了一个 capability                        |
-| `"daemon_started"`        | daemon 启动并进入 ready 后                       |
-| `"daemon_stopped"`        | daemon 优雅关闭时                                |
-| `"token_rotated"`         | `POST /api/v1/daemon/rotate-token` 之后          |
-| `"retention_updated"`     | retention policy 变更时                          |
-| `"backup_created"`        | `POST /api/v1/daemon/backup` 之后                |
-| `"credential_set"`        | `POST /api/v1/credentials` 存储 secret 之后      |
-| `"credential_read"`       | `GET /api/v1/credentials/{ref}` 读取 secret 之后 |
-| `"credential_deleted"`    | `DELETE /api/v1/credentials/{ref}` 删除 secret 之后 |
-| `"credential_migrated"`   | 每个 ref：legacy 钥匙串密钥迁入存储时            |
-| `"master_key_relocated"`  | `PUT /api/v1/settings/credentials` 迁移主密钥之后 |
-| `"keychain_set"` / `"keychain_read"` / `"keychain_deleted"` | _Legacy_（信封加密之前）；对历史记录仍可渲染 |
+| Value                                                       | When emitted                                        |
+| ----------------------------------------------------------- | --------------------------------------------------- |
+| `"resource_created"`                                        | `ResourceService.register` 之后                     |
+| `"resource_updated"`                                        | config 或 description 变更之后                      |
+| `"resource_enabled"`                                        | `set_enabled(True)` 之后且状态确实翻转              |
+| `"resource_disabled"`                                       | `set_enabled(False)` 之后且状态确实翻转             |
+| `"resource_deleted"`                                        | `delete` 之后（`details` 含 pre-delete 快照）       |
+| `"capability_first_seen"`                                   | discovery 首次看到一个 capability                   |
+| `"capability_enabled"`                                      | 用户启用了原本禁用的 capability                     |
+| `"capability_disabled"`                                     | 用户禁用了一个 capability                           |
+| `"daemon_started"`                                          | daemon 启动并进入 ready 后                          |
+| `"daemon_stopped"`                                          | daemon 优雅关闭时                                   |
+| `"token_rotated"`                                           | `POST /api/v1/daemon/rotate-token` 之后             |
+| `"retention_updated"`                                       | retention policy 变更时                             |
+| `"backup_created"`                                          | `POST /api/v1/daemon/backup` 之后                   |
+| `"credential_set"`                                          | `POST /api/v1/credentials` 存储 secret 之后         |
+| `"credential_read"`                                         | `GET /api/v1/credentials/{ref}` 读取 secret 之后    |
+| `"credential_deleted"`                                      | `DELETE /api/v1/credentials/{ref}` 删除 secret 之后 |
+| `"credential_migrated"`                                     | 每个 ref：legacy 钥匙串密钥迁入存储时               |
+| `"master_key_relocated"`                                    | `PUT /api/v1/settings/credentials` 迁移主密钥之后   |
+| `"keychain_set"` / `"keychain_read"` / `"keychain_deleted"` | _Legacy_（信封加密之前）；对历史记录仍可渲染        |
 
 ### `RetentionPolicy` (`domain/retention.py`)
 
@@ -126,24 +127,24 @@ frozen dataclass。一个资源 kind 的纯描述符。只属于 domain——不
 
 Pydantic `BaseModel`。Discriminator 值：`"stdio"`。
 
-| Field             | Type               | Notes                                                      |
-| ----------------- | ------------------ | ---------------------------------------------------------- |
-| `type`            | `Literal["stdio"]` | discriminator                                              |
-| `command`         | `str`              | 可执行文件，例如 `"npx"`                                   |
-| `args`            | `list[str]`        | 默认 `[]`                                                  |
-| `env`             | `dict[str, str]`   | 静态 env，绝不含 secret；若值长得像 token（按正则）即被拒  |
+| Field             | Type               | Notes                                                                    |
+| ----------------- | ------------------ | ------------------------------------------------------------------------ |
+| `type`            | `Literal["stdio"]` | discriminator                                                            |
+| `command`         | `str`              | 可执行文件，例如 `"npx"`                                                 |
+| `args`            | `list[str]`        | 默认 `[]`                                                                |
+| `env`             | `dict[str, str]`   | 静态 env，绝不含 secret；若值长得像 token（按正则）即被拒                |
 | `credential_refs` | `dict[str, str]`   | 把 `env_var_name → ref`（指向加密凭据存储）映射；在 spawn 时解析（解密） |
-| `cwd`             | `str \| None`      | 可选工作目录                                               |
+| `cwd`             | `str \| None`      | 可选工作目录                                                             |
 
 ### `HttpTransport` (`domain/mcp/server_config.py`)
 
 Pydantic `BaseModel`。Discriminator 值：`"http"`。
 
-| Field             | Type               | Notes                                    |
-| ----------------- | ------------------ | ---------------------------------------- |
-| `type`            | `Literal["http"]`  | discriminator                            |
-| `url`             | `pydantic.HttpUrl` | 上游 MCP HTTP/SSE 端点                   |
-| `headers`         | `dict[str, str]`   | 静态 header；与 `env` 同样的 secret 正则 |
+| Field             | Type               | Notes                                          |
+| ----------------- | ------------------ | ---------------------------------------------- |
+| `type`            | `Literal["http"]`  | discriminator                                  |
+| `url`             | `pydantic.HttpUrl` | 上游 MCP HTTP/SSE 端点                         |
+| `headers`         | `dict[str, str]`   | 静态 header；与 `env` 同样的 secret 正则       |
 | `credential_refs` | `dict[str, str]`   | 把 `header_name → ref`（指向加密凭据存储）映射 |
 
 ### `MCPServerConfig` (`domain/mcp/server_config.py`)
@@ -211,6 +212,16 @@ Pydantic `BaseModel`。上游查询返回的实时表示；从不持久化（按
 | `session_id`      | `str \| None`                                 | 按会话的关联 id            |
 
 **绝不存参数或返回值**——schema 中没有可承载它们的字段。
+
+### `AgentMcpScope` (`domain/agent/scope.py`)
+
+普通 dataclass。网关强制执行的每 agent 可见性策略（FR-019..FR-022）。
+
+| Field        | Type                         | Notes                                                              |
+| ------------ | ---------------------------- | ------------------------------------------------------------------ |
+| `agent_name` | `str`                        | 该 agent 的资源名（对应 `--agent <name>` / `X-Coffer-Agent` 身份） |
+| `mode`       | `Literal["auto","selected"]` | `auto` = 每一台启用的服务器（默认）；`selected` = 仅 allowlist     |
+| `servers`    | `list[str]`                  | `mcp_server` 名的 allowlist；非 `selected` 时为空                  |
 
 ## SQLite schema（跨三次 Alembic revision）
 
@@ -290,20 +301,41 @@ CREATE TABLE mcp_server_health (
     status         TEXT      NOT NULL,                    -- 'healthy' | 'failing' | 'unknown'
     checked_at     TIMESTAMP NOT NULL
 );
+
+-- Per-agent MCP scoping: an agent's mode (auto = all enabled servers; selected = allowlist)
+CREATE TABLE agent_mcp_scope (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    mode              TEXT    NOT NULL DEFAULT 'auto',   -- 'auto' | 'selected'
+    created_at        TIMESTAMP NOT NULL,
+    updated_at        TIMESTAMP NOT NULL,
+    UNIQUE (agent_resource_id),
+    CHECK (mode IN ('auto', 'selected'))
+);
+-- Per-agent MCP scoping: the allowlist used when mode = 'selected'
+CREATE TABLE agent_mcp_scope_server (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_resource_id  INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    server_resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+    UNIQUE (agent_resource_id, server_resource_id)
+);
+CREATE INDEX idx_agent_scope_server_agent ON agent_mcp_scope_server(agent_resource_id);
 ```
 
 ## SQLAlchemy mapping (summary)
 
 ORM 模型存放于 `backend/coffer/infrastructure/persistence/models.py`（kind-agnostic）和 `backend/coffer/infrastructure/mcp/persistence.py`（MCP 专属），全部注册到同一份 `Base.metadata` 之下：
 
-| ORM class                      | Table                        | Lives in                               |
-| ------------------------------ | ---------------------------- | -------------------------------------- |
-| `ResourceModel`                | `resources`                  | `infrastructure/persistence/models.py` |
-| `AuditLogModel`                | `audit_log`                  | `infrastructure/persistence/models.py` |
-| `RetentionPolicyModel`         | `retention_policies`         | `infrastructure/persistence/models.py` |
-| `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`    |
-| `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/persistence.py`    |
-| `McpServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/persistence.py`    |
+| ORM class                      | Table                        | Lives in                                    |
+| ------------------------------ | ---------------------------- | ------------------------------------------- |
+| `ResourceModel`                | `resources`                  | `infrastructure/persistence/models.py`      |
+| `AuditLogModel`                | `audit_log`                  | `infrastructure/persistence/models.py`      |
+| `RetentionPolicyModel`         | `retention_policies`         | `infrastructure/persistence/models.py`      |
+| `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`         |
+| `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/persistence.py`         |
+| `McpServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/persistence.py`         |
+| `AgentMcpScopeModel`           | `agent_mcp_scope`            | `infrastructure/agent/scope_persistence.py` |
+| `AgentMcpScopeServerModel`     | `agent_mcp_scope_server`     | `infrastructure/agent/scope_persistence.py` |
 
 每个 ORM 模型提供：
 
@@ -312,12 +344,14 @@ ORM 模型存放于 `backend/coffer/infrastructure/persistence/models.py`（kind
 
 ## Cascade and integrity rules
 
-| Action                             | Effect                                                                                                        |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `DELETE FROM resources WHERE id=?` | 级联到 `mcp_capability_preferences`（通过 FK）。**不会**级联到 `audit_log` 或 `mcp_invocations`（保留历史）。 |
-| `UPDATE resources SET kind=?`      | 禁止——application 层永不更新 `kind`。                                                                         |
-| `UPDATE resources SET name=?`      | 禁止——rename = delete + register。                                                                            |
-| `DELETE FROM retention_policies`   | 禁止——policy 在启动时 upsert，永不删除。                                                                      |
+| Action                             | Effect                                                                                                                                   |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `DELETE FROM resources WHERE id=?` | 级联到 `mcp_capability_preferences`（通过 FK）。**不会**级联到 `audit_log` 或 `mcp_invocations`（保留历史）。                            |
+| 删除一个 **agent** 资源            | 级联到 `agent_mcp_scope` 及其 `agent_mcp_scope_server` 行（通过 `agent_resource_id` FK）。                                               |
+| 删除一个 **mcp_server** 资源       | 级联到把它列入 allowlist 的 `agent_mcp_scope_server` 行（通过 `server_resource_id` FK）；拥有它的 agent scope 仍在，只是少了那台服务器。 |
+| `UPDATE resources SET kind=?`      | 禁止——application 层永不更新 `kind`。                                                                                                    |
+| `UPDATE resources SET name=?`      | 禁止——rename = delete + register。                                                                                                       |
+| `DELETE FROM retention_policies`   | 禁止——policy 在启动时 upsert，永不删除。                                                                                                 |
 
 ## Default retention policy seed (run on first daemon startup)
 
@@ -341,8 +375,8 @@ for table_name, days in defaults:
 
 `/api/v1/*` 下的每条路由都要求 `X-Coffer-Token` header。唯一刻意豁免的是：
 
-| Endpoint                    | 为什么免鉴权                                                                                                                                                                                                                      |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Endpoint                    | 为什么免鉴权                                                                                                                                                                                                                           |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/v1/daemon/status` | 被 CLI 与 `coffer-mcp-shim` 用作廉价的就绪探针，在还没从 `~/.coffer/daemon.json` 读到任何 token 之前调用。只返回生命周期阶段、版本、端口、started-at 以及一个聚合的 upstream 概要 —— 不含 secret、不含逐 resource 细节、不含审计数据。 |
 
 所有改动型 endpoint（包括 `/daemon/backup`、`/daemon/rotate-token`、

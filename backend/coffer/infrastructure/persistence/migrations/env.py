@@ -14,6 +14,9 @@ from sqlalchemy.engine import Connection
 from coffer.infrastructure.agent import (
     projection_persistence as _agent_projection,  # noqa: F401 — projection-binding model
 )
+from coffer.infrastructure.agent import (
+    scope_persistence as _agent_scope,  # noqa: F401 — per-agent MCP scope models
+)
 from coffer.infrastructure.channel import (
     persistence as _channel_persistence,  # noqa: F401 — channel_peers model
 )

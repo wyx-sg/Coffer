@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0022"
+HEAD_REVISION = "0023"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -37,9 +37,10 @@ HEAD_REVISION = "0022"
 # encryption); 0017 adds no table — it rekeys ``chunks.id`` /
 # ``documents_fts.chunk_id`` to the per-store namespaced form (cross-store
 # chunk-id collision fix); 0018 adds no table (conversation agent-config column);
-# 0019 adds ``sync_config`` + ``sync_state`` for multi-machine sync (spec 010).
-# The ``documents_fts_*`` shadow tables FTS5 creates under the hood are excluded
-# — the assertions speak to the logical schema.
+# 0019 adds ``sync_config`` + ``sync_state`` for multi-machine sync (spec 010);
+# 0023 adds ``agent_mcp_scope`` + ``agent_mcp_scope_server`` for per-agent MCP
+# server scoping (ADR-026). The ``documents_fts_*`` shadow tables FTS5 creates
+# under the hood are excluded — the assertions speak to the logical schema.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -61,6 +62,8 @@ EXPECTED_TABLES = {
     "channel_peers",
     "sync_config",
     "sync_state",
+    "agent_mcp_scope",
+    "agent_mcp_scope_server",
 }
 
 # FTS5 creates these shadow tables for ``documents_fts``; they are an
@@ -148,7 +151,12 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
 
-    # head (0020) -> 0016: drops sync_config + sync_state (spec 010); the
+    # head (0023) -> 0022: drops the per-agent MCP scope tables (ADR-026).
+    command.downgrade(cfg, "0022")
+    assert "agent_mcp_scope" not in _user_tables(db_path)
+    assert "agent_mcp_scope_server" not in _user_tables(db_path)
+
+    # 0022 -> 0016: drops sync_config + sync_state (spec 010); the
     # intervening 0017 (chunk-id rekey), 0018 (conversation agent-config
     # column) and 0020 (conversation-retention reset) add no tables.
     command.downgrade(cfg, "0016")
@@ -174,6 +182,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
     assert "archived_at" not in cols
     assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "agent_mcp_scope",
+        "agent_mcp_scope_server",
         "credentials",
         "channel_peers",
         "sync_config",
@@ -183,6 +193,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
     command.downgrade(cfg, "0011")
     assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "agent_mcp_scope",
+        "agent_mcp_scope_server",
         "credentials",
         "channel_peers",
         "sync_config",
@@ -223,6 +235,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # 0004 -> 0003: index-only revision, table set otherwise unchanged.
     command.downgrade(cfg, "0003")
     assert _user_tables(db_path) == EXPECTED_TABLES - {
+        "agent_mcp_scope",
+        "agent_mcp_scope_server",
         "credentials",
         "channel_peers",
         "sync_config",

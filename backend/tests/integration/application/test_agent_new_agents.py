@@ -72,7 +72,8 @@ async def test_cursor_writes_mcpservers_command_map(agent_bundle, tmp_path, monk
     await _register(agent_bundle, tmp_path, AgentType.CURSOR, "cur")
     await agent_bundle.mcp.install("cur", actor="ui")
     data = json.loads((tmp_path / ".cursor" / "mcp.json").read_text())
-    assert data["mcpServers"]["coffer"] == {"command": SHIM}
+    # ADR-026: install embeds the agent identity as an `--agent <name>` arg.
+    assert data["mcpServers"]["coffer"] == {"command": SHIM, "args": ["--agent", "cur"]}
 
 
 async def test_opencode_writes_mcp_typed_command_array(agent_bundle, tmp_path, monkeypatch):
@@ -80,8 +81,9 @@ async def test_opencode_writes_mcp_typed_command_array(agent_bundle, tmp_path, m
     await _register(agent_bundle, tmp_path, AgentType.OPENCODE, "oc")
     await agent_bundle.mcp.install("oc", actor="ui")
     data = json.loads((tmp_path / ".config" / "opencode" / "opencode.json").read_text())
-    # OpenCode: container `mcp`, typed command-array entry
-    assert data["mcp"]["coffer"] == {"type": "local", "command": [SHIM]}
+    # OpenCode: container `mcp`, typed command-array entry; ADR-026 appends
+    # the `--agent <name>` arg to the command array.
+    assert data["mcp"]["coffer"] == {"type": "local", "command": [SHIM, "--agent", "oc"]}
 
 
 async def test_openclaw_writes_mcp_command_map(agent_bundle, tmp_path, monkeypatch):
@@ -89,7 +91,7 @@ async def test_openclaw_writes_mcp_command_map(agent_bundle, tmp_path, monkeypat
     await _register(agent_bundle, tmp_path, AgentType.OPENCLAW, "claw")
     await agent_bundle.mcp.install("claw", actor="ui")
     data = json.loads((tmp_path / ".openclaw" / "openclaw.json").read_text())
-    assert data["mcp"]["coffer"] == {"command": SHIM}
+    assert data["mcp"]["coffer"] == {"command": SHIM, "args": ["--agent", "claw"]}
 
 
 async def test_hermes_writes_yaml_mcp_servers_preserving_comments(

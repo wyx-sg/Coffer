@@ -14,6 +14,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import contextlib
 import json as _json
@@ -141,9 +142,12 @@ async def _ensure_daemon() -> DaemonInfo:
 class _Bridge:
     """One run of the bridge — stdin → POST, SSE → stdout."""
 
-    def __init__(self, info: DaemonInfo) -> None:
+    def __init__(self, info: DaemonInfo, agent_name: str | None = None) -> None:
         self._base = f"http://127.0.0.1:{info.port}"
         self._headers = {"X-Coffer-Token": info.token}
+        if agent_name:
+            # ADR-026: tell the gateway which agent this shim serves (scope).
+            self._headers["X-Coffer-Agent"] = agent_name
         self._session_id: str | None = None
         self._stop = asyncio.Event()
 
@@ -203,9 +207,8 @@ class _Bridge:
                 continue
             # FR-004: report the agent's launch cwd at session handshake so the
             # daemon can resolve the per-project memory store. We tuck it into
-            # the ``initialize`` params under ``_meta`` (an MCP-reserved
-            # extension key) so it rides the existing handshake without a custom
-            # method; the gateway threads it into memory built-in tool calls.
+            # the ``initialize`` params under ``_meta`` (an MCP-reserved extension
+            # key) so it rides the handshake; the gateway threads it into tools.
             if envelope.get("method") == "initialize":
                 _inject_cwd(envelope)
             _logger.info(
@@ -215,9 +218,8 @@ class _Bridge:
             )
 
             # Establish the session synchronously on the first request so every
-            # pipelined follow-up carries the same Mcp-Session-Id. MCP clients
-            # wait for the initialize response before pipelining, but be
-            # defensive. Once the id is known, dispatch concurrently.
+            # pipelined follow-up carries the same Mcp-Session-Id (clients wait
+            # for initialize, but be defensive). Then dispatch concurrently.
             if self._session_id is None:
                 await self._handle_envelope(client, envelope)
             else:
@@ -227,8 +229,7 @@ class _Bridge:
 
         # Drain in-flight handlers BEFORE signalling stop (CODE-R1): run()'s
         # FIRST_COMPLETED wait cancels this task the moment _stop fires, so
-        # setting it first would abort the drain mid-POST and silently drop
-        # replies to pipelined requests on stdin EOF.
+        # setting it first would abort the drain mid-POST and drop replies.
         if inflight:
             await asyncio.gather(*inflight, return_exceptions=True)
         self._stop.set()
@@ -362,12 +363,12 @@ class _Bridge:
             return False
 
 
-async def _async_main() -> int:
+async def _async_main(agent_name: str | None = None) -> int:
     _setup_shim_log()
     _logger.info("shim.start pid=%s", os.getpid())
     info = await _ensure_daemon()
     _logger.info("shim.daemon port=%s", info.port)
-    bridge = _Bridge(info)
+    bridge = _Bridge(info, agent_name)
 
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -379,8 +380,12 @@ async def _async_main() -> int:
 
 def run() -> None:
     """Entry point for `coffer-mcp-shim`."""
+    # `--agent <name>` (ADR-026); tolerate other host args, `add_help=False`.
+    parser = argparse.ArgumentParser(prog="coffer-mcp-shim", add_help=False)
+    parser.add_argument("--agent", default=None)
+    agent_name = parser.parse_known_args()[0].agent
     try:
-        code = asyncio.run(_async_main())
+        code = asyncio.run(_async_main(agent_name))
     except KeyboardInterrupt:
         code = 0
     except SystemExit as e:

@@ -578,6 +578,18 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **When** 用户列出插件并随后尝试切换或卸载某个，
 - **Then** 列表为空，切换与卸载均以 `unprocessable_entity`（422）拒绝。
 
+### Scenario: set an agent's MCP scope to selected
+
+- **Given** 一个已注册的 agent 与两台已注册的 MCP 服务器（ADR-026），
+- **When** 用户用 PUT 把该 agent 的 MCP scope 设为 `selected` 并只含其中一台服务器，再重新读取它，
+- **Then** scope 被持久化，GET 返回 `mode: selected` 且只含那一台服务器；指定一台不存在的服务器会以 `MCP_SCOPE_SERVER_UNKNOWN`（422）拒绝，对未知 agent 操作返回 404。
+
+### Scenario: install embeds the agent identity
+
+- **Given** 一个已在 Coffer 中注册的 agent，
+- **When** Coffer 的 MCP shim 条目被写入该 agent 的配置，
+- **Then** 该条目带上该 agent 的身份，作为一个 `--agent <name>` 参数，使 shim 把它转发给网关（驱动每 agent 的服务器作用域），且安装后的 shim 命令仍可解析。
+
 ## Requirements
 
 ### Functional Requirements
@@ -614,6 +626,11 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **FR-020**: 安装 MUST 幂等——重复安装就地更新已有的 `coffer` 条目，绝不产生重复。系统 MUST 暴露一个状态操作，报告该 agent 当前是否已安装 Coffer 的 MCP。
 - **FR-021**: 用户 MUST 能卸载 Coffer 的 MCP，从 agent 的 MCP 配置中移除 `coffer` 条目。未安装时卸载为空操作（no-op）成功。
 - **FR-022**: 安装与卸载 MUST 复用 FR-017 的原子写入 + `.bak` 机制，并写一条 audit 条目（`agent_mcp_installed` / `agent_mcp_uninstalled`）。
+
+**每 agent 的 MCP scope**
+
+- **FR-039**: 用户 MUST 能从 agent 详情页与经由 API 查看并设置某个 agent 的 MCP 服务器 scope——它的 mode（`auto` 或 `selected`），以及 `selected` 时的 MCP 服务器 allowlist。
+- **FR-040**: 把 Coffer 的 MCP 安装进某个 agent 时，系统 MUST 在写入的 `coffer` 条目中嵌入该 agent 的身份（一个 `--agent <name>` 参数），使网关能把会话归属到该 agent 并应用其 scope。
 
 **Agent MCP 条目（工作区增补）**
 
