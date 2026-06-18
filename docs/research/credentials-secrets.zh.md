@@ -94,3 +94,38 @@ agent/MCP 的密钥管理跨四种姿态：
 - infisical.com/docs/documentation/platform/secret-reference
 - developer.hashicorp.com（Vault 动态密钥）· getsops.io · github.com/AGWA/git-crypt
 - github.com/sigbit/mcp-auth-proxy
+
+## 核查更新（2026-06-19）
+
+> 轻量复核（2026-06-16 那轮在投票核验前撞上会话上限）。四项受检 claim 均与一手来源相符，无一需要
+> 实质性修正。
+
+### ✅ 已确认
+
+- **Coffer 仅存密文 + "访问而不暴露"。** `EncryptedCredentialStore` 仅以 Fernet 密文形式把密钥
+  存进 SQLite 的 `credentials` 表——`set()` 加密、`get()` 仅解密进内存、`exists()` 是从不解密的
+  存在性探测。模块 docstring："明文仅在解密与消费它的 spawn 之间存在于内存。密文列从不进入日志或
+  审计行。" ADR-015（2026-06-12 已接受）重申"静态密文……从不进入日志、审计或结构化事件"，主密钥
+  默认放在 0600 文件 / 可选 OS keychain（与"主解锁模型"一行相符）。
+  [repo:backend/coffer/infrastructure/credentials/encrypted_store.py;
+  repo:docs/decisions/ADR-015-envelope-encrypted-credential-store.md]
+- **1Password `op run` 在 spawn 时物化。** 文档："载入指定的密钥，然后在子进程中运行所给命令，密钥
+  仅在进程存续期间作为环境变量可用。"它解析 `op://` 引用并注入子进程；值不会持久化到 shell env 或
+  磁盘。https://www.1password.dev/cli/secrets-environment-variables/
+- **1Password + Runlayer 的 header 注入。** 博客（原文）："凭证仅存在于客户的 1Password 保险库。
+  Runlayer 只存引用，从不存原始值。"以及："当 MCP 代理处理一次工具调用时，它会扫描传输 header 中的
+  `op://` 引用。每命中一个，就调用 1Password SDK 解析出实时值并注入上游连接。"明文仅在请求期间留在
+  内存；磁盘或网关数据库上无任何持久化。发布于 2026-03-17。
+  https://1password.com/blog/secure-mcp-credentials-1password-runlayer
+- **许可证姿态。** Infisical 核心默认为 MIT（Expat）；任何 `ee/` 目录下的内容受单独的企业许可证
+  约束。HashiCorp Vault 为 BSL/BUSL 1.1（源可见），2023 年 8 月采用（由 MPL 2.0 变更而来）；在
+  Change Date / 发布满 4 周年时转为开源。
+  https://raw.githubusercontent.com/Infisical/infisical/main/LICENSE;
+  https://www.hashicorp.com/en/blog/hashicorp-adopts-business-source-license
+
+### ✏️ 已修正
+
+- **出处："spec 015" → ADR-015 + spec 001-mcp-gateway。** 抬头引用了"spec 015 / ADR-015"；ADR
+  确实存在，但并无 `specs/015-*` 目录。凭证功能由 ADR-015 加 spec 001-mcp-gateway 记录（credentials
+  表、审计事件）。不影响该 claim 的实质。
+  [repo:docs/decisions/ADR-015-envelope-encrypted-credential-store.md]

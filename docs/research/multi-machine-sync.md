@@ -110,3 +110,57 @@ Primary:
 - github.com/lbb00/ai-rules-sync (AIS)
 - github.com/dyoshikawa/rulesync · github.com/pathintegral-institute/mcpm.sh
 - VS Code Settings Sync docs · JetBrains Backup & Sync docs
+
+## Verification update (2026-06-19)
+
+> Light fact-check pass over the four targeted claims flagged by the 2026-06-16
+> provenance caveat (1 local headline claim + 3 web claims), plus an independent
+> re-verification of the chezmoi encryption-backend list. All hold; no
+> corrections needed.
+
+**Lead:** Every targeted claim is confirmed against primary sources — and the
+headline reconcile-not-overwrite differentiator is **implemented in code**, not
+just spec'd.
+
+### ✅ Confirmed
+
+- **Reconcile-not-overwrite is real, not aspirational.** Config resources are
+  reconciled by `(kind, name)` through the kind-agnostic resource service —
+  `update_config` + `set_enabled` for existing, `register` for new, `delete` for
+  removed-upstream — never a blind file overwrite. `update_config` re-validates
+  config, probes credential refs, and runs per-kind cross-version hooks, so it is
+  a validated kind-aware reconcile. [`backend/coffer/application/sync/importer.py:71-110`;
+  `backend/coffer/application/resource_service.py:206-243`; ADR-016; spec 010]
+- **chezmoi whole-file encryption via four backends** — age, git-crypt, gpg,
+  transcrypt; encrypted files stored ASCII-armored with the `encrypted_`
+  attribute, auto-decrypted only when needed.
+  https://github.com/twpayne/chezmoi/blob/master/assets/chezmoi.io/docs/user-guide/encryption.md
+- **chezmoi per-machine templating** via Go `text/template` with
+  `.chezmoi.hostname` / `.chezmoi.os` conditionals; machine-local `[data]` in
+  `~/.config/chezmoi/chezmoi.{toml,yaml,json}`.
+  https://www.chezmoi.io/user-guide/manage-machine-to-machine-differences/
+- **chezmoi `onepasswordDocument`** retrieves documents from 1Password at _apply_
+  time (output cached per uuid); secrets stay in 1Password, not the dotfiles.
+  https://www.chezmoi.io/reference/templates/1password-functions/onepassworddocument/
+- **Only chezmoi and yadm support whole-file encryption** among the surveyed
+  dotfile tools; dotbot, rcm, vcsh, and bare git do not (`✅`/`❌` per chezmoi's
+  comparison table). https://www.chezmoi.io/comparison-table/
+- **AIS (`ai-rules-sync`)** syncs AI rules/skills/commands/subagents across many
+  agents (Cursor, Claude Code, Copilot, OpenCode, Trae AI, Codex, Gemini CLI,
+  Warp) by managing rules in git repos and materializing them into projects via
+  symbolic links (default targets `.cursor/rules/`, `.github/instructions/`) —
+  confirming git + symlink, not file copy. https://github.com/lbb00/ai-rules-sync
+
+### ✏️ Corrected
+
+- **Nuance, not a factual fix (§3.1):** the 3-way _content_ merge happens at the
+  git/YAML text layer (deterministic serialization — one YAML per resource,
+  sorted keys, normalized timestamps, local-only fields stripped — makes diffs
+  mergeable); the importer then reconciles the local SQLite DB _to_ the
+  already-merged workspace. The report's "semantic merge, not a blind overwrite"
+  framing stands; the merge and the reconcile are two distinct layers.
+  [ADR-016; `backend/coffer/application/sync/importer.py:71-110`]
+- The chezmoi **FAQ** encryption page lists only age/gpg/rage, but the
+  **user-guide/encryption** page names all four backends, matching the report —
+  cite the user-guide, not the FAQ, for the four-backend claim.
+  https://github.com/twpayne/chezmoi/blob/master/assets/chezmoi.io/docs/user-guide/encryption.md

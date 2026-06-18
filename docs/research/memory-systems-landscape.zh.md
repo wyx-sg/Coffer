@@ -155,3 +155,31 @@ _置信度:high(3-0)。_
 ---
 
 _由 Coffer 的 `deep-research` 工作流跑三轮生成。第一轮:广义全景(25 条 claim)。第二轮:claude-mem 已投票核实。第三轮:Letta + `jayzeng/agentmemory` 已投票核实(24 确认 / 1 驳回);`rohitg00/agentmemory` + Zep 未复核。置信度标签是工作流给的,非人工指定。_
+
+---
+
+## 核查更新（2026-06-19）
+
+> 对照实时来源与 Coffer 自身的代码/规格做了一遍新核查。全部 web 主张都站得住;mem0 移除 Neo4j 比报告所说更彻底,另有三个 A 阵营竞品现已补上刻画。**最大的本地变化:** Coffer 的原生投射层 —— 也就是报告点名为其第 3 块新颖性的那个精确机制 —— 已被**移除**(PR #110 / [ADR-026](../decisions/ADR-026-memory-via-mcp-not-native-projection.md),2026-06-18),因此下面关于投射的条目已按当前现实重写、新颖性裁决也随之修订:这个 fan-out 不再是 Coffer 自己在做的事了。
+
+### ✅ 已确认
+
+- **Coffer 投射的一致性语义(开放问题 3)现已不适用 —— 因为根本不存在投射了。** 自 [ADR-026](../decisions/ADR-026-memory-via-mcp-not-native-projection.md)(2026-06-18,取代 ADR-013)起,Coffer **不再把记忆投射进任何 agent 的原生文件**。整个投射层 —— 带 `projection_mode ∈ {SYMLINK, RENDER, NONE}` 的 `AgentMemoryAdapter` 协议、投射引擎、各 agent 适配器、FS 适配器、绑定持久化/绑定表(由迁移 `0024` 删除)、投射 REST 路由,以及接管/关闭原生记忆的那条路径 —— 都已删除(`projection_service.py` 与 `new_agent_adapters.py` 已不存在)。Coffer 保留它自己的逐事实 markdown canonical 库,**绝不写入、symlink 进、或关掉任何 agent 的原生记忆**。agent **只能通过 MCP 网关工具**(`coffer__recall` / `remember` / `update_memory` / `forget` / `list_memory`)读写 Coffer 记忆;作用域(global + per-project,git-root)由 MCP shim 的 cwd 解析得到。于是"单向 render vs 双向同步、本地编辑是否回流"这个问题自行消解:根本没有原生副本可供回流。(把记忆索引在会话开始时**注入**进上下文、永不写文件的环境式 hook,是 ADR-026 推迟的后续项,**尚未实现**;在它落地前,MCP `recall` 是唯一访问路径。)`repo:docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md`、`repo:specs/007-memory/spec.md`(Input 节;FR-010)、`repo:backend/coffer/application/memory/recall.py`、`repo:backend/coffer/application/memory/builtin_tools.py`
+- **投射时的冲突消解 —— 已不再适用。** 既然不碰原生文件,就没有第二个写者、也没有什么要关掉的;canonical 库平凡地成为唯一一份库。Coffer 的逐事实 markdown 依旧是**直写、写时不用 LLM、无自动去重/合并 —— 人工策展**(B 阵营),经 MCP 访问。上一版草稿里描述的 ADR-013"接管—先合并—再 symlink"行为已随投射层一并消失。`repo:backend/coffer/application/memory/writes.py`、`repo:specs/007-memory/spec.md`(US-4 策展)
+- **rohitg00/agentmemory 唯一写原生文件的桥确为单目标(只 Claude)** —— "与 MEMORY.md 双向同步"只为 Claude Code 提供(由 `CLAUDE_MEMORY_BRIDGE` 控制);其余 agent 拿到的是 MCP/skill 访问,而非原生文件写入。报告的单目标定性成立。https://github.com/rohitg00/agentmemory/blob/main/README.md
+- **被调研的系统里没有谁做原生多目标 fan-out 投射** —— 这条*业界*结论本轮幸存(不过,见下方 ✏️ 已修正:Coffer 自己也不再做了,所以这个设计点如今谁都没占,包括 Coffer)。Letta Context Repositories 的 `/init` 会从既有的 Claude Code 与 Codex 历史里*单向*学习,但记忆随后落在 Letta 自家的 git 后端 MemFS 仓库(内部、按 agent 经 `/memfs`);不会持续写回外部 agent 的原生文件。https://www.letta.com/blog/context-repositories/
+- **Zep/Graphiti 仍是经 MCP/API 提供的中心时序知识图谱库** —— 架构上与原生 fan-out 正相反。https://help.getzep.com/graphiti/getting-started/mcp-server
+
+### ✏️ 已修正
+
+- **报告称作 Coffer 新颖性的那套投射模型已被取代并移除(PR #110 / [ADR-026](../decisions/ADR-026-memory-via-mcp-not-native-projection.md),2026-06-18)。** 本核查更新的上一版草稿 —— 以及其上方的报告正文 —— 都是对照 ADR-013 来描述 Coffer 的多目标原生 fan-out(格式吻合处 symlink、不吻合处托管块,并关掉 agent 自带记忆防发散)。**ADR-026 取代 ADR-013,并把这一整层彻底移除:** Coffer 如今保留自己的逐事实 markdown 库,通过 MCP 网关工具触达每个 agent,绝不碰原生记忆文件(`repo:docs/decisions/ADR-026-memory-via-mcp-not-native-projection.md`、`repo:specs/007-memory/spec.md`)。该 ADR 正是引用*本研究*的那面黄旗 —— 整个业界都刻意避开写原生文件(Letta 的 `claude-subconscious` 拒绝碰 `CLAUDE.md`)—— 作为做此反转的理由之一。**对报告论点的诚实结论:** 第 3 块"多目标原生 fan-out 新颖、没人做"这一*关于业界*的发现仍然成立 —— 被调研的系统没有谁做。但它**不再是 Coffer 在做的事**,所以这份新颖性对 Coffer 而言如今已成空谈:Coffer 已经加入了它先前被区分出来的那个业界默认阵营 —— 中心库 + 工具(MCP)访问。这个 fan-out 设计点依旧无人占据;只是 Coffer 出于可读性/侵入性的权衡,选择了不去占它。
+- **mem0 移除 Neo4j 被低估。** 旧:"OSS v2→v3 弃用了独立 Neo4j 图存储"。修正:外部图库(Neo4j 等)在 v3 中已被**完全移除(删了约 4000 行,PR #4805,约 2026 年 4 月)**,代之以内置的实体关联图记忆、不再依赖外部图数据库。v3 检索是 multi-signal hybrid:语义(唯一的候选生成路径)+ BM25(仅做 boost)+ 实体匹配,融合成单一分值;`agent_id` 范围现已落进一个 `filters` 字典,使 OSS 与 Platform API 对齐。https://docs.mem0.ai/migration/oss-v2-to-v3
+- **rohitg00/agentmemory 的背景注脚低估了它的覆盖面。** 报告把它定性为一个小型中心服务器;它如今还会把 **SKILL shim**(不是记忆内容)扇出装进 50+ 个 agent 的原生技能目录(Claude Code、Cursor、Codex、Gemini CLI、OpenCode、Windsurf 等)。这属于技能分发,不是记忆的原生文件投射 —— 因此不影响 fan-out 的新颖性主张。https://github.com/rohitg00/agentmemory/blob/main/README.md
+
+### ➕ 新增覆盖
+
+- **Cognee** —— memory-first 知识图谱引擎:从数据出发,经 embeddings + 图抽取 + 本体生成,构建自托管 KG(主语-关系-宾语三元组);向量检索作为"提示"定位相关图三元组,再遍历图取得结构化上下文。Custom Graph Model = 抽取用的领域 schema。多后端(图:Neo4j/FalkorDB/KuzuDB/NetworkX;向量:Redis/Qdrant/Weaviate;元数据:SQLite/Postgres)。**A 阵营** —— 图即真相、写时用 LLM/本体、中心库,无原生文件投射。https://github.com/topoteretes/cognee
+- **LangMem(LangChain SDK)** —— 给 LangGraph agent 提供三类人类认知式长期记忆:语义(collections + 画像)、情景(few-shot 示例 / 会话摘要)、程序(规则/行为)。后端无关的 store(向量库/KV/Postgres)。自动 consolidation 合并相关事实并消解矛盾(写时用 LLM)。**A 阵营** —— 无原生文件投射。https://www.langchain.com/blog/langmem-sdk-launch
+- **LlamaIndex memory 模块** —— 一个 `Memory` 类 = 短期(token 上限内的最近 X 条消息)+ 长期(从短期 flush 出的 Memory Block 对象):StaticMemoryBlock、FactExtractionMemoryBlock(LLM 抽取事实)、VectorMemoryBlock(向量库存取消息批次);按优先级截断。**A 阵营** —— 会话/agent 作用域的对话缓冲 + 向量库,无跨 agent 共享,无原生文件投射。https://developers.llamaindex.ai/python/framework/module_guides/deploying/agents/memory/
+
+三者都强化了报告"A 阵营 = 中心库、写时用 LLM/抽取、向量/图检索、无原生投射"的论点,所以加上它们不削弱 Coffer 第 3 块的新颖性主张。

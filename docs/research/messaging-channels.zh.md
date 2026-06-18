@@ -93,3 +93,78 @@
 - github.com/anthropics/claude-plugins-official —— external_plugins/telegram（README、ACCESS.md）
 - github.com/jsayubi/ccgram · dev.to（从 Telegram/Discord/Slack 控制 Claude Code）
 - docs.slack.dev/interactivity · docs.n8n.io/advanced-ai/human-in-the-loop-tools · docs.langchain.com（deepagents HITL）· github.com/humanlayer/humanlayer
+
+## 核查更新（2026-06-19）
+
+> 复核一轮。本地那条两段式论断现已部分过时：渠道即受管资源、单 owner 隐身配对仍成立，
+> 但"被 web 控制台复用的共享审批闸"已被提交 `165f0e6`（PR #101，2026-06-18 合入）删除
+> ——这比本报告 2026-06-16 的日期晚两天——该提交移除了整个工具审批系统。三条 web 论断
+> （Anthropic Telegram 插件、Twilio"最多 5 个"webhook、Azure Bot SDK 已归档）均对照一手
+> 来源确认无误。
+
+### ✅ 已确认
+
+- **渠道 = 受管资源。** ADR-014 §决策第 1 条把渠道做成一种资源类型（`channel:<name>`，
+  ADR-007），跑在通用的生命周期/审计/凭证引用机制上；`kind.py` 在注册时探测 `*_ref`
+  凭证字段。（`repo:docs/decisions/ADR-014-channel-adapter-framework.md`、
+  `repo:backend/coffer/application/channel/kind.py`）
+- **单 owner 隐身配对。** `pairing.py` 实现每渠道一个待用配对码（8 位、1 小时 TTL、限次、
+  失败即关闭、仅内存）；`inbound.py` 是 owner 门禁桥，对错误成员/陌生人消息静默忽略
+  （165–202 行）；spec.md User Story 2 明文规定"bot 从不向陌生人暴露自己活着"。
+  （`repo:backend/coffer/application/channel/pairing.py`、
+  `repo:backend/coffer/application/channel/inbound.py`）
+- **Anthropic 官方 Telegram 插件**与 Coffer 的配对/隐身姿态吻合：私聊 bot 取一个 6 位配对码；
+  默认 `pairing` 策略，随后切到 `allowlist`，使"陌生人收不到配对码回复"；访问状态存于
+  `~/.claude/channels/telegram/access.json`。如报告所言，它是一个自托管插件，而非受管多渠道
+  框架。（https://github.com/anthropics/claude-plugins-official/blob/main/external_plugins/telegram/README.md）
+- **Twilio Conversations"最多 5 个"按会话 webhook** 精确无误：每个 Conversation 最多可挂
+  5 个会话作用域 webhook，第 6 个会被 50361 错误"Too many conversation webhooks"拒绝。
+  作用域 webhook 正是按会话 bot 的文档化机制。
+  （https://www.twilio.com/docs/conversations/api/conversation-scoped-webhook-resource、
+  https://www.twilio.com/docs/api/errors/50361）
+- **Azure Bot SDK 于 2025-12 归档，渠道仍 GA。** Microsoft Learn 写明 Bot Framework SDK
+  计划不晚于 2025 年 12 月底归档，新工作转向 Microsoft 365 Agents SDK，而渠道基础设施
+  （V3）保持兼容、无 EOL/中断计划。
+  （https://learn.microsoft.com/en-us/azure/bot-service/what-is-new?view=azure-bot-service-4.0）
+
+### ✏️ 已修正
+
+- **"被 web 控制台复用的共享审批闸"——已移除，不再存在。** 旧（报告 2026-06-16）：聊天内审批
+  跑在与 web 控制台相同的接缝上（一条审批路径、两个界面），被列为差异化特性——关键发现条目、
+  能力表"聊天内审批——与 web 控制台共享闸"一行、§3 第 3 条、§4 第 1 条结论。修正（当前代码树，
+  在 `165f0e6` / PR #101，2026-06-18 16:48 +0800 合入之后）：整个工具审批系统被删除——
+  `ApprovalGate`/`ApprovalChannel`/`ApprovalRequest`/`ApprovalDecision`、渠道
+  `send`/`resolve_approval_prompt` + `on_approval_click` 中继、web `ApprovalCard` + 审批席位、
+  `/conversations/{id}/approvals` 路由、以及 `CHANNEL_APPROVAL_RESOLVED` 审计事件均被删除；
+  `backend/coffer/application/chat/approvals.py` 已不存在；`backend/coffer/` 与
+  `specs/009-channels/` 下不再有 `ApprovalGate`/"审批闸"相关符号；agent 现以全权限运行。
+  该提交的理由恰是报告自己的说法反过来：该中继"与 owner 配对冗余（只有配对的 owner 能驱动
+  渠道，而 web 控制台也是 owner）"。本地论断 #1 的另两条腿（渠道 = 资源；单 owner 隐身配对）
+  仍是承重的差异化点；审批闸这一条应删除或改写为历史。（git 提交 `165f0e6`）
+- **"Azure Bot SDK"** —— 准确产品名是 **Bot Framework SDK**（Azure Bot Service 背后的 SDK）。
+  （同上 Microsoft Learn 来源）
+
+### ➕ 新增覆盖
+
+- **Rasa** —— 与 Coffer 的 N+M 解耦在结构上最接近的开源对应物。把 `InputChannel`（接收）与
+  `OutputChannel`（发送）分开；自定义连接器继承 `rasa.core.channels.channel.InputChannel`。
+  内置连接器（Slack、Messenger、Telegram、Twilio、web 聊天），可接任意数量渠道而不改对话模型
+  ——与"新渠道不碰 agent 代码"是同一性质。区别：它是服务器/团队托管框架，没有单 owner 隐身配对
+  的安全姿态，访问控制留给部署方。（https://rasa.com/docs/reference/channels/custom-connectors/、
+  https://rasa.com/docs/reference/channels/messaging-and-voice-channels/）
+- **Chatwoot** —— 开源全渠道客服台（约 2.2 万星），把在线聊天、邮件、WhatsApp、Instagram、
+  Messenger、Telegram 统一进一个收件箱。渠道绑定是按收件箱的：一个 AgentBot 接到某个收件箱，
+  配合按可用性/语言/地区的自动分配路由及 SLA 升级；内置 AI agent "Captain"。这是团队/CX 全渠道
+  模型——与 Coffer 单 owner 个人金库姿态相反。（https://www.chatwoot.com/features/channels、
+  https://github.com/chatwoot/chatwoot/wiki/Connecting-Agent-Bot-to-an-Inbox）
+- **Voiceflow** —— 无代码平台，构建并"跨任意渠道"部署聊天与语音 agent：web 组件、电话
+  （Twilio 语音）、移动端（API）、原生 WhatsApp、经连接器接 Instagram/Messenger/Telegram。
+  一个 agent、经连接器接多渠道——但完全托管 SaaS，没有自托管签名监听器或 owner 配对模型；
+  面向的是客户侧 bot 而非个人金库。（https://www.voiceflow.com/integrations/whatsapp、
+  https://docs.voiceflow.com/docs/welcome）
+- **HumanLayer（+ n8n）HITL 审批** —— 工具层人工审批，作为独立平面。HumanLayer 的
+  `@hl.require_approval()` 装饰器在人工批准前阻塞调用，回复经 Slack/邮件/Discord 收集，与框架
+  无关；n8n 以"发送消息并等待回复"工作流节点（Slack/Telegram/Teams 等）提供同形态，按工具强制。
+  二者都是叠加在 agent 之上的外部审批平面——对比 Coffer 此前折进金库的闸（已在 PR #101 移除）；
+  这些 HITL 工具仍是聊天内审批的活样本。（https://pypi.org/project/humanlayer/、
+  https://docs.n8n.io/advanced-ai/human-in-the-loop-tools/）

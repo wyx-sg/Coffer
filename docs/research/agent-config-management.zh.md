@@ -108,3 +108,60 @@ ai-agent-config），在纯规则工具（airul、vibe-rules）和 AGENTS.md 标
 - airul、vibe-rules、ai-agent-config（项目 README）
 - agents.md / AGENTS.md 标准；OpenAI Codex 文档（AGENTS.md 发现）
 - cursor.directory
+
+## 核查更新（2026-06-19）
+
+> 对上文标记的五条关键论断做了一次轻量事实核查。五条全部成立；其中两个数字下界
+> 已低估当前现实，一处本地表述需修正，并且——最关键的是——本报告的**头号结论被推翻**：
+> "Coffer 不分发指令"这一缺口（§3 / §4）已由 PR #112 补上，不再成立。
+
+### ✅ 已确认
+
+- **Coffer 的隐藏 agent 集合。** manifest 中 4 个被禁用的 agent 恰好是
+  Cursor / OpenCode / OpenClaw / Hermes（`enabled=False`），启用的恰好是 2 个
+  （Claude Code、Codex）。`repo:backend/coffer/domain/agent/descriptor.py`
+- **Coffer 双向采集配置（即"采集那一半"）。** spec 004 把工作区修订表述为
+  采集→中枢→投递；US10 / FR-028 将"把直连 MCP server 采纳进 Coffer"定义为
+  "Coffer 中枢-辐射模型的采集那一半"。`adopt()` 会注册一个 `mcp_server` 资源、
+  通过 `self._rs.get(...)` 验证可回读，然后移除直连条目——而漂移感知由"派生而从不
+  存储"的 Agent MCP Entry 视图（`cache_present=false` 示例）支撑。技能侧也存在一条
+  平行的 `adopt_unmanaged` 路径。`repo:specs/004-agent-registry/spec.md`、
+  `repo:backend/coffer/application/agent/mcp_entry_service.py`
+- **ai-rulez 自带内置 MCP server。** README 称："ai-rulez 包含一个带 35+ 工具的内置
+  MCP server，让 AI 助手自行管理其治理"，通过 `[[mcp_servers]]` 名为 `ai-rulez`
+  接入各 agent。"19+ 平台"数目与报告一致。https://github.com/Goldziher/ai-rulez
+- **Ruler 从中心配置传播 MCP server**（合并或覆盖，推荐 `.ruler/` TOML，兼容旧版
+  JSON）。https://github.com/intellectronica/ruler
+- **rulesync 的功能集与目标清单。** 逐字吻合："rules、ignore、mcp、commands、
+  subagents、skills、hooks、permissions"；点名的目标均在列，且 Windsurf / Aider
+  确实缺席。https://github.com/dyoshikawa/rulesync
+
+### ✏️ 已修正
+
+- **头号结论被推翻 —— Coffer 现已分发指令（§3 缺口 #1、§4 结论 #1、§2"规则/指令分发"行）。**
+  本报告最重要的那条结论——"Coffer 不把规则/指令从一个源分发到多个 agent，而这正是整个
+  品类的定义性功能"——**自 PR #112 起已不再成立**（"master-instructions 中枢 + per-agent
+  投递"，spec 004 US13 / FR-041–FR-046）。Coffer 现在在中枢里保存一份规范的**母指令**文档
+  （`~/.coffer/instructions/AGENTS.md`），并将其**投递**进每个 agent 的原生指令文件
+  （`CLAUDE.md` / `AGENTS.md` / `SOUL.md`），形式为一个由专属标记包围的 Coffer 托管块
+  （`<!-- coffer:instructions:start (managed, do not edit) -->` … `<!-- coffer:instructions:end -->`）。
+  投递是**合并、而非覆盖**——只就地（幂等地）upsert 该托管块，标记之外的每个字节都原样保留，
+  且该块的标记刻意与 spec-007 的记忆标记区分，使两者在同一文件中共存。Coffer 按 agent 在读时
+  派生 `delivered` / `in_sync` 状态（具漂移感知），并且——以 Coffer 标志性的双向操作——可把某
+  agent 已有的指令**采纳（adopt）**回母指令。这使 §2"规则/指令分发"行从"❌ 不是中枢资产"翻转为
+  一种具合并语义的中枢投递资产，并补上了报告其余部分视为 Coffer 核心差异化缺口的 §3 缺口 #1 /
+  §4 结论 #1（加上 adopt，这条轴线上 Coffer 现已堪称同类最佳，而非缺席）。
+  `repo:backend/coffer/application/agent/instructions_service.py`、
+  `repo:backend/coffer/domain/agent/instructions.py`、
+  `repo:backend/coffer/domain/agent/managed_block.py`、
+  `repo:backend/coffer/surfaces/http/agent_instructions_routes.py`、
+  `repo:specs/004-agent-registry/spec.md`（US13、FR-041–FR-046）
+- **Coffer 的 agent 数（§4 结论 #4 / 概览表格）。** 旧："4 个接好、2 个启用"
+  → 修正为：**共接入 6 个，2 个启用，4 个隐藏。** manifest 定义了 6 条
+  `AgentDescriptor` 记录，而非 4 条；点名的隐藏集合与"2 个启用"原本就正确。
+  （结论 #4 的措辞"4 个接好但隐藏的 agent"本身是准确的。）
+  `repo:backend/coffer/domain/agent/descriptor.py`
+- **Ruler"28+ agent"** → 仍是有效下界，但 README 现已列出 **31** 个点名 agent。
+  https://github.com/intellectronica/ruler
+- **rulesync"12+ agent"** → 仍是有效下界，但 README 现已列出 **约 25+** 个目标
+  （含 Antigravity、AugmentCode、Warp、Qwen Code 等）。https://github.com/dyoshikawa/rulesync

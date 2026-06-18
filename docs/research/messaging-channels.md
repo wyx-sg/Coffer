@@ -114,3 +114,104 @@ Primary:
 - github.com/anthropics/claude-plugins-official — external_plugins/telegram (README, ACCESS.md)
 - github.com/jsayubi/ccgram · dev.to (control Claude Code from Telegram/Discord/Slack)
 - docs.slack.dev/interactivity · docs.n8n.io/advanced-ai/human-in-the-loop-tools · docs.langchain.com (deepagents HITL) · github.com/humanlayer/humanlayer
+
+## Verification update (2026-06-19)
+
+> Re-verification pass. The two-part local claim is now partly stale:
+> channel-as-managed-resource and single-owner stealth pairing hold, but the
+> "shared approval gate reused by the web console" was removed by commit
+> `165f0e6` (PR #101, merged 2026-06-18) — two days after this report's
+> 2026-06-16 date — which deleted the entire tool-approval system. All three
+> web claims (Anthropic Telegram plugin, Twilio "up to five" webhooks, Azure
+> Bot SDK archived) confirmed against primary sources.
+
+### ✅ Confirmed
+
+- **Channel = managed resource.** ADR-014 §Decision item 1 makes a channel a
+  resource kind (`channel:<name>`, ADR-007) on the generic
+  lifecycle/audit/credential-ref machinery; `kind.py` probes `*_ref` credential
+  fields at registration. (`repo:docs/decisions/ADR-014-channel-adapter-framework.md`,
+  `repo:backend/coffer/application/channel/kind.py`)
+- **Single-owner stealth pairing.** `pairing.py` implements one pending pairing
+  code per channel (8 chars, 1-hour TTL, bounded attempts, fail-closed,
+  memory-only); `inbound.py` is an owner-gated bridge that silently ignores
+  wrong-member/stranger messages (lines 165–202); spec.md User Story 2 codifies
+  "the bot never reveals it is alive to strangers."
+  (`repo:backend/coffer/application/channel/pairing.py`,
+  `repo:backend/coffer/application/channel/inbound.py`)
+- **Anthropic's official Telegram plugin** matches Coffer's pairing/stealth
+  posture: DM the bot for a 6-char pairing code; default `pairing` policy then
+  switch to `allowlist` so "strangers don't get pairing-code replies"; access
+  state in `~/.claude/channels/telegram/access.json`. One self-host plugin, not
+  a managed multi-channel framework — as the report states.
+  (https://github.com/anthropics/claude-plugins-official/blob/main/external_plugins/telegram/README.md)
+- **Twilio Conversations "up to five" per-conversation webhooks** is exact: each
+  Conversation can have as many as five conversation-scoped webhooks; a sixth is
+  rejected with error 50361 "Too many conversation webhooks." Scoped webhooks
+  are the documented mechanism for a per-conversation bot.
+  (https://www.twilio.com/docs/conversations/api/conversation-scoped-webhook-resource,
+  https://www.twilio.com/docs/api/errors/50361)
+- **Azure Bot SDK archived Dec 2025, channels still GA.** Microsoft Learn states
+  the Bot Framework SDK is planned to be archived no later than end of December
+  2025, with new work directed to the Microsoft 365 Agents SDK, while channel
+  infrastructure (V3) stays compatible with no EOL/disruption plan.
+  (https://learn.microsoft.com/en-us/azure/bot-service/what-is-new?view=azure-bot-service-4.0)
+
+### ✏️ Corrected
+
+- **"Shared approval gate reused by the web console" — removed, no longer
+  exists.** OLD (report 2026-06-16): in-chat approval runs over the same seams
+  as the web console (one approval path, two surfaces), listed as a distinctive
+  feature — key-findings bullet, capability table row "In-chat approval — shared
+  gate w/ web console," §3 item 3, §4 takeaway 1. CORRECTED (current tree, post
+  `165f0e6` / PR #101 merged 2026-06-18 16:48 +0800): the entire tool-approval
+  system was deleted — `ApprovalGate`/`ApprovalChannel`/`ApprovalRequest`/
+  `ApprovalDecision`, the channel `send`/`resolve_approval_prompt` +
+  `on_approval_click` relay, the web `ApprovalCard` + approval seat, the
+  `/conversations/{id}/approvals` route, and the `CHANNEL_APPROVAL_RESOLVED`
+  audit event; `backend/coffer/application/chat/approvals.py` is gone; no
+  `ApprovalGate`/"approval gate" symbols remain under `backend/coffer/` or
+  `specs/009-channels/`; agents now run with full permissions. The commit's
+  rationale is the report's own framing turned against it: the relay was
+  "redundant with owner-pairing (only the paired owner can drive a channel, and
+  the web console is the owner too)." The other two legs of local claim #1
+  (channel = resource; single-owner stealth pairing) remain the load-bearing
+  differentiators; the approval-gate leg should be struck or rewritten as
+  historical. (git commit `165f0e6`)
+- **"Azure Bot SDK"** — precise product name is the **Bot Framework SDK** (the
+  SDK behind Azure Bot Service). (same Microsoft Learn source above)
+
+### ➕ Coverage added
+
+- **Rasa** — closest open-source structural analog to Coffer's N+M decoupling.
+  Separates `InputChannel` (receives) from `OutputChannel` (sends); a custom
+  connector subclasses `rasa.core.channels.channel.InputChannel`. Built-in
+  connectors (Slack, Messenger, Telegram, Twilio, web chat) and any number of
+  channels with no change to the dialogue model — same "new channel never
+  touches agent code" property. Difference: server/team-hosted, no single-owner
+  stealth-pairing posture; access control left to the deployment.
+  (https://rasa.com/docs/reference/channels/custom-connectors/,
+  https://rasa.com/docs/reference/channels/messaging-and-voice-channels/)
+- **Chatwoot** — open-source omnichannel support desk (~22k stars) unifying live
+  chat, email, WhatsApp, Instagram, Messenger, Telegram into one inbox. Channel
+  binding is per-inbox: an AgentBot connects to an inbox, with auto-assignment
+  routing by availability/language/region plus SLA escalation; built-in AI agent
+  "Captain." Team/CX omnichannel model — the opposite of Coffer's single-owner
+  personal-vault posture. (https://www.chatwoot.com/features/channels,
+  https://github.com/chatwoot/chatwoot/wiki/Connecting-Agent-Bot-to-an-Inbox)
+- **Voiceflow** — no-code platform to build/deploy chat and voice agents "across
+  any channel": web widgets, phone (Twilio voice), mobile (API), WhatsApp
+  natively, Instagram/Messenger/Telegram via connectors. One agent, many
+  channels via connectors — but fully hosted SaaS, no self-host signed-listener
+  or owner-pairing model; oriented at customer-facing bots, not a personal
+  vault. (https://www.voiceflow.com/integrations/whatsapp,
+  https://docs.voiceflow.com/docs/welcome)
+- **HumanLayer (+ n8n) HITL approval** — tool-layer human-in-the-loop approval
+  as a separate plane. HumanLayer's `@hl.require_approval()` decorator blocks a
+  call until a human approves over Slack/Email/Discord, framework-agnostic; n8n
+  offers the same shape as a "Send a message and wait for response" workflow node
+  (Slack/Telegram/Teams/etc.), enforced per-tool. Both are EXTERNAL approval
+  planes layered onto an agent — contrast with Coffer's old in-vault gate (now
+  removed in PR #101); these HITL tools remain the live exemplars of in-chat
+  approval. (https://pypi.org/project/humanlayer/,
+  https://docs.n8n.io/advanced-ai/human-in-the-loop-tools/)
