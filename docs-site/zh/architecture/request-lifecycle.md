@@ -197,11 +197,9 @@ MCP 客户端（Claude Code、Codex）期望通过 stdio 与 MCP 服务器通信
 
 2. **进程内 agent。** 对于内置 agent，编排器驱动一个进程内 LangGraph agent（`infrastructure/chat/langgraph_agent.py`）。该 agent 的工具就是 Coffer 自己的网关工具，通过网关工具 provider（`infrastructure/chat/gateway_tool_provider.py`）暴露给模型——因此对话 agent 可以在进程内、无需 shim 地调用与外部 MCP 客户端相同的聚合 MCP 能力。
 
-3. **审批桥接。** 当 agent 想运行一个需要确认的工具时，LangGraph 运行会在一个 interrupt 处暂停，并向客户端流式发送一个审批请求。客户端通过 `submit_approval` 解决它；`interrupt_turn` 取消进行中的回合。编排器将这些转换为 LangGraph 的恢复/取消信号。
+3. **流式返回。** 随着运行推进，token 和工具调用事件通过 SSE 流式发送给客户端；`interrupt_turn` 取消进行中的回合，完成时持久化最终的 assistant 回合。
 
-4. **流式返回。** 随着运行推进，token、工具调用事件和审批提示通过 SSE 流式发送给客户端；完成时持久化最终的 assistant 回合。
-
-**CLI-agent 变体。** 对话 agent 也可以不用进程内 LangGraph agent，而是通过 `infrastructure/chat/cli_agent.py` 和 `infrastructure/chat/cli_providers.py` 驱动一个**外部编码 agent 子进程**（Claude Code 或 Codex）。编排器接缝完全相同——相同的回合持久化、相同的审批与流式契约——只是模型循环运行在外部 CLI 进程中，而非进程内。
+**CLI-agent 变体。** 对话 agent 也可以不用进程内 LangGraph agent，而是通过 `infrastructure/chat/cli_agent.py` 和 `infrastructure/chat/cli_providers.py` 驱动一个**外部编码 agent 子进程**（Claude Code 或 Codex）。编排器接缝完全相同——相同的回合持久化、相同的流式契约——只是模型循环运行在外部 CLI 进程中，而非进程内。
 
 ## Channel 入站全链路
 

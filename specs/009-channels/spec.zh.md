@@ -7,7 +7,7 @@
 **Status**: Accepted
 **Input**: 用户描述: "Coffer needs messaging channels — Telegram and
 SeaTalk first — so the owner can talk to any agent on the chat platform from
-the IM apps they already use, approve tool calls without leaving the chat, and
+the IM apps they already use and
 receive notifications pushed by Coffer. The architecture must stay uniform:
 more channels and more agents will be added, so a new channel never touches
 agent code and a new agent never touches channel code."
@@ -15,15 +15,15 @@ agent code and a new agent never touches channel code."
 channel 是一种已注册的资源（`channel:<name>`），它把一个 IM 账号接到
 Coffer 的聊天平台（spec 008）。来自已配对 owner 的消息成为一段普通对话
 (conversation) 中的 turn；agent 的回复送回 IM 聊天。channel 层与 agent 层
-只在聊天平台既有的接缝处相遇 —— 对话创建、turn 事件流、审批门 (approval
-gate) —— 因此 N 个 channel 与 M 个 agent 的成本是 N + M，而永远不是
+只在聊天平台既有的接缝处相遇 —— 对话创建、turn 事件流 —— 因此 N 个
+channel 与 M 个 agent 的成本是 N + M，而永远不是
 N × M。
 
 > **注（[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)）。**
 > 下文把 `builtin` agent 当作可路由 channel 目标的提及，反映的是本 spec 落地时已交付的
 > 行为。ADR-024 让内置 agent 退出聊天人格，因此 channel **只**路由到**受管** agent
 > （Claude Code、Codex……）；内置模型现在是内部 `coffer__*` 能力，而非聊天目标。channel
-> 旁观/审批在共享接缝上的机制不变。
+> 旁观在共享接缝上的机制不变。
 
 ## User Scenarios & Testing
 
@@ -123,26 +123,6 @@ interrupted 结束；发送 `/new`，观察为该 peer 记录了一段新对话�
 
 ---
 
-### User Story 5 — Approve a tool call from the IM app (Priority: P2)
-
-当 agent 为等待人工审批而暂停 turn 时，channel 会把该请求投递为交互式
-提示 —— Telegram 上是内联的 Approve/Deny 按钮，SeaTalk 上是交互式卡片。
-owner 的点按会像在 web UI 里点击一样解决平台的审批门，提示消息也会被
-更新以显示决定。非 owner 的点按一律被忽略。
-
-**Why this priority**: 聊天平台带有审批能力；一个无法应答审批的 channel
-会让任何用到它的 agent 静默挂起。
-
-**Independent Test**: 用一个会请求审批的脚本化 agent 跑一个 turn，点击伪造
-IM 的 Approve 按钮，观察决定送达 agent 且提示被更新；再用 Deny 重复一遍。
-
-**Covering scenarios**:
-
-- an approval prompt is answered from the IM chat
-- a denied approval is delivered to the agent
-
----
-
 ### User Story 6 — Receive notifications (Priority: P2)
 
 Coffer 可以在没有任何入站消息的情况下，向 channel 的已配对 owner 推送
@@ -237,9 +217,9 @@ workspace 发 `/cwd <name>` 观察在该目录建的新会话；发 `/cwd /etc` 
 
 ### User Story 10 — 知道谁驱动了什么、以及一个 turn 何时完成（优先级：P2）
 
-因为入口可远程触达，channel 消息驱动的每个 turn、owner 从 chat 回答的每个审批，
+因为入口可远程触达，channel 消息驱动的每个 turn
 都连同 channel、peer、agent 记入审计日志——回答「谁经哪个 channel 驱动了哪个
-agent、批准了什么」。又因为某些平台不能编辑消息、长桥接 turn 运行期间什么都不
+agent」。又因为某些平台不能编辑消息、长桥接 turn 运行期间什么都不
 显示，每个 turn 都以一条推到 chat 的紧凑摘要收尾：done + 工具数、耗时、token，
 或错误，或停止。
 
@@ -247,13 +227,11 @@ agent、批准了什么」。又因为某些平台不能编辑消息、长桥接
 完成信号；二者必须在每个 channel 上为真，包括沉默的那些。
 
 **Independent Test**：从已配对 channel 驱动一个 turn，观察一条带 channel、peer、
-agent 的 turn-started 审计记录；回答一个审批提示，观察一条 approval-resolved
-审计记录；在不能编辑消息的 channel 上观察 turn 后的完成摘要消息。
+agent 的 turn-started 审计记录；在不能编辑消息的 channel 上观察 turn 后的完成摘要消息。
 
 **Covering scenarios**:
 
 - a channel-driven turn is audited with channel, peer, and agent
-- an approval resolved from chat is audited
 - a completion summary is sent after every turn
 - a group member who is not the paired sender is ignored
 
@@ -293,7 +271,7 @@ agent 的 turn-started 审计记录；回答一个审批提示，观察一条 ap
 - **FR-004**: 来自已配对 peer 的入站文本路由到该 peer 的活跃对话，首次
   使用时经聊天平台标准的对话创建路径创建（默认 agent 由 agent registry
   校验）。channel 层只通过聊天平台的接缝触达 agent：conversation
-  service、turn orchestrator、approval gate。
+  service、turn orchestrator。
 - **FR-005**: 回复按 channel 能力渲染：Telegram 把 markdown 转成 Telegram
   HTML（带纯文本回退），按段落边界以 4000 字符分块，并把工具进度以节流
   方式流式写入一条可编辑的状态消息；SeaTalk 发送 markdown，按 4096 字节
@@ -302,9 +280,6 @@ agent 的 turn-started 审计记录；回答一个审批提示，观察一条 ap
 - **FR-006**: `/new`、`/stop`、`/status`、`/help` 命令在任何已配对的聊天里
   可用。`/stop` 与 `/new` 即使在 turn 运行中也立即生效；其他消息排队
   （FIFO，上限 10）并按序运行。
-- **FR-007**: turn 流中的 `approval_request` 事件变成一条交互式提示
-  （Telegram 内联按钮、SeaTalk 交互式卡片）；owner 的响应解决平台审批
-  门；提示随结果更新；非 owner 的点按被忽略。
 - **FR-008**: 一个 notify 入口（REST + CLI）把任意文本投递给 channel 的
   已配对 peer，与任何对话无关。
 - **FR-009**: SeaTalk 回调监听器是只服务 `POST /seatalk/{channel}` 的独立
@@ -329,9 +304,8 @@ status / notify`。
   携带 `sender_id`（Telegram `from.id`、SeaTalk `employee_code`）；pairing 把它
   记到 peer，一条 inbound 消息只有在 `chat_id` 匹配且（当 peer 有已存
   `sender_id` 时）发送者匹配时才被接受。本要求之前配对的 peer（无已存
-  `sender_id`）退化为 chat-id-only 闸。在 FR-012 之外审计两个 channel 驱动事件：
-  一条 inbound 消息驱动的 turn（channel、peer、agent、conversation），与从 chat
-  解决的审批（channel、peer、工具、决定）。
+  `sender_id`）退化为 chat-id-only 闸。在 FR-012 之外审计一个 channel 驱动事件：
+  一条 inbound 消息驱动的 turn（channel、peer、agent、conversation）。
 - **FR-015**: 每个 turn 后，channel 发一条紧凑的完成摘要作为新消息，与消息
   编辑能力无关：成功时报告 done 标记 + 工具数、耗时、token 用量；失败的 turn
   报告错误；被中断的 turn 报告停止。在不能编辑消息、且长桥接 turn 运行期间什么
@@ -363,7 +337,7 @@ status / notify`。
   信封 (envelope)；内核永远看不到平台原始载荷。inbound 为 owner gate 携带
   发送者身份（`sender_id`）。
 - **ChannelCapabilities** — adapter 声明自己能做什么（编辑消息、交互
-  按钮、typing indicator）；内核据此选择渲染与审批策略。
+  按钮、typing indicator）；内核据此选择渲染策略。
 - **PairingCode** — 内存态、一次性、按 channel；从不持久化。
 
 ## Success Criteria
@@ -375,7 +349,7 @@ status / notify`。
 - **SC-002**: 陌生人给 bot 发消息产生零可观察响应、零 turn，而 owner 的
   流量不受影响。
 - **SC-003**: 新增一个假想的第三种 channel 类型，只需实现一个 adapter +
-  一份配置 schema，不触碰任何 agent、对话或审批代码（由测试套件使用的
+  一份配置 schema，不触碰任何 agent 或对话代码（由测试套件使用的
   test-only 假 channel 演示）。
 - **SC-004**: 任何注册在聊天平台上的 agent 都能从任何 channel 触达，
   channel 侧无需任何代码改动（通过在测试里用一个脚本化的第二 provider
@@ -386,7 +360,7 @@ status / notify`。
   所选预授权 workspace 里、用一个所选 model，且一条 chat 消息绝不能把 agent
   指向 operator 未预授权的目录（用驱动两个脚本化 provider 与一次被拒裸路径来
   演示）。
-- **SC-007**: 每个 channel 驱动的 turn、每个从 chat 回答的审批，都能按 channel、
+- **SC-007**: 每个 channel 驱动的 turn 都能按 channel、
   peer、agent 在审计日志里查到；且每个 turn——包括在不能编辑消息的 channel 上
   ——都以一条 chat 里的完成摘要收尾（用不能编辑的假 adapter 来演示）。
 
@@ -491,18 +465,6 @@ status / notify`。
 - **When** peer 再发一条消息
 - **Then** 这条消息被丢弃，并告知 peer 该 channel 正忙
 
-### Scenario: an approval prompt is answered from the IM chat
-
-- **Given** 一个会请求工具审批的脚本化 agent
-- **When** peer 在投递来的提示上点按 Approve
-- **Then** 审批门解析为 allow，turn 继续，提示显示出该决定
-
-### Scenario: a denied approval is delivered to the agent
-
-- **Given** 一条待处理的审批提示
-- **When** peer 点按 Deny
-- **Then** agent 收到 deny 决定，提示显示该结果
-
 ### Scenario: notify delivers to the paired owner
 
 - **Given** 一个已配对的 channel
@@ -590,12 +552,6 @@ status / notify`。
 - **When** peer 发一条驱动 turn 的消息
 - **Then** 一条审计记录写下 channel、peer、agent 与 conversation
 
-### Scenario: an approval resolved from chat is audited
-
-- **Given** 一个请求审批的脚本化 agent
-- **When** peer 回答审批提示
-- **Then** 一条审计记录写下 channel、peer、工具与决定
-
 ### Scenario: a completion summary is sent after every turn
 
 - **Given** 一个在不能编辑消息的 adapter 上的已配对 channel
@@ -616,6 +572,3 @@ status / notify`。
 - 对 SeaTalk，用户自行运行一条隧道（cloudflared、ngrok 或等价物）把公网
   URL 通到本地回调端口；Coffer 在 quickstart 中给出做法，但不管理隧道。
 - channel 承载文本对话；富媒体会收到一条礼貌的「只支持文本」回复。
-- 内置 agent 今天经 MCP 网关给工具调用把关，因此实时审批提示只出现在
-  使用平台审批门的 agent 上；channel 侧的能力用脚本化 provider 验证，
-  与 spec 008 验证平台接缝的方式相同。

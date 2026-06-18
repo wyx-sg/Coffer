@@ -92,12 +92,6 @@ export interface AgentListOut {
   agents: AgentInfo[];
 }
 
-export interface ApprovalSubmit {
-  request_id: string;
-  behavior: "allow" | "deny";
-  message?: string | null;
-}
-
 // ---------------------------------------------------------------------------
 // Internal fetch helper
 // ---------------------------------------------------------------------------
@@ -165,9 +159,6 @@ export const chatApi = {
     call<MessageListOut>("GET", `/chat/conversations/${conversationId}/messages`),
 
   // Turn control
-  submitApproval: (conversationId: string, body: ApprovalSubmit) =>
-    call<void>("POST", `/chat/conversations/${conversationId}/approvals`, body),
-
   interruptTurn: (conversationId: string) =>
     call<void>("POST", `/chat/conversations/${conversationId}/interrupt`),
 };

@@ -59,7 +59,9 @@ class ClaudeCodeDialect:
         self, prompt: str, *, resume_session: str | None, extra: dict[str, Any]
     ) -> list[str]:
         argv = [self.binary, "-p", prompt, "--output-format", "stream-json", "--verbose"]
-        argv += ["--permission-mode", str(extra.get("permission_mode") or "default")]
+        # Full permissions — Coffer does not gate individual tool calls; the owner
+        # driving the conversation is the trust boundary.
+        argv += ["--permission-mode", "bypassPermissions"]
         if resume_session:
             argv += ["--resume", resume_session]
         return argv
@@ -295,8 +297,6 @@ class _CliAgentProvider:
                 message=f"agent_config.cwd is not an existing directory: {cwd!r}",
             )
         stored: dict[str, Any] = {"cwd": str(pathlib.Path(cwd).expanduser())}
-        if isinstance(agent_config.get("permission_mode"), str):
-            stored["permission_mode"] = agent_config["permission_mode"]
         await self._conversations.set_agent_config(conversation_id, stored)
 
     async def build_adapter(self, conversation_id: str) -> AgentAdapter:

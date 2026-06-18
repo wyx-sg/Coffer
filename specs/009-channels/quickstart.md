@@ -2,8 +2,8 @@
 
 > 中文版: [quickstart.zh.md](./quickstart.zh.md)
 
-Talk to your Coffer agents from Telegram or SeaTalk, approve tool calls with
-a tap, and let Coffer push notifications to you.
+Talk to your Coffer agents from Telegram or SeaTalk, and let Coffer push
+notifications to you.
 
 ## Telegram
 
@@ -92,8 +92,7 @@ exact port and path at any time.
 ### 4. Pair and chat
 
 Same as Telegram: `coffer channel pair my-seatalk`, send the code to the bot
-in SeaTalk, then just talk. Tool-approval prompts arrive as interactive
-cards; replies render SeaTalk Markdown.
+in SeaTalk, then just talk. Replies render SeaTalk Markdown.
 
 ## Notifications
 

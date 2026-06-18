@@ -14,7 +14,6 @@ from typing import Any
 
 import pytest
 
-from coffer.application.chat.ports import ApprovalGate
 from coffer.application.chat.turn_orchestrator import active_turns, clear_active_turns
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Role, TextBlock
@@ -27,7 +26,7 @@ class _BlockingAdapter:
 
     model_id = None
 
-    async def run_turn(self, *, history: Any, approvals: ApprovalGate) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, *, history: Any) -> AsyncIterator[AgentEvent]:
         async def gen() -> AsyncIterator[AgentEvent]:
             yield TurnStarted()
             yield TextDelta(text="partial answer")

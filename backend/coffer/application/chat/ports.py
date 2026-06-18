@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+from typing import Any, Protocol
 
 from coffer.domain.chat.events import AgentEvent
 from coffer.domain.chat.message import Message
@@ -41,41 +41,13 @@ class ToolGateway(Protocol):
     async def call_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]: ...
 
 
-@dataclass(frozen=True)
-class ApprovalDecision:
-    """A user's answer to an ``ApprovalRequest`` — the human half of approval."""
-
-    behavior: Literal["allow", "deny"]
-    message: str | None = None
-
-
-class ApprovalGate(Protocol):
-    """Inbound channel a running turn waits on for a human approval decision.
-
-    A turn that needs permission emits an ``ApprovalRequest`` event and then
-    ``await``s ``wait(request_id)``; it resumes when a decision is delivered.
-    When the turn is interrupted the awaiting task is cancelled and ``wait``
-    raises ``asyncio.CancelledError``.
-
-    Contract: an adapter that emits an ``ApprovalRequest`` MUST eventually
-    ``wait()`` on that ``request_id`` (or end the turn). The platform
-    pre-registers the request when forwarding the event so an immediate
-    decision is accepted; a decision posted for a request the adapter
-    abandoned without waiting is accepted but discarded with the turn.
-    """
-
-    async def wait(self, request_id: str) -> ApprovalDecision:
-        """Suspend until a decision for ``request_id`` is delivered."""
-        ...
-
-
 class AgentAdapter(Protocol):
     """One agent's handling of one turn.
 
     The adapter is **self-contained**: it carries its own model, tools, and
     configuration, injected by its ``AgentProvider`` when the adapter is built.
-    ``run_turn`` is given only the conversation history and the approval
-    channel, and yields a stream of ``AgentEvent``s.
+    ``run_turn`` is given only the conversation history and yields a stream of
+    ``AgentEvent``s.
 
     It MUST yield a terminal ``TurnDone`` or ``TurnError`` before the iterator
     ends (unless cancelled), and on ``asyncio.CancelledError`` it MUST clean up
@@ -91,7 +63,6 @@ class AgentAdapter(Protocol):
         self,
         *,
         history: Sequence[Message],
-        approvals: ApprovalGate,
     ) -> AsyncIterator[AgentEvent]:
         """Run one turn and yield its events."""
         ...

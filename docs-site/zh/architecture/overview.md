@@ -55,21 +55,21 @@ flowchart TD
 
 ## 组件与接口说明
 
-| 组件                            | 类型                                      | 职责                                                                                                               |
-| ------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `coffer-daemon`                 | 长生命周期进程                            | FastAPI 服务，监听 `127.0.0.1:<auto-port>`。持有六种资源 kind 以及横切特性（聊天、渠道、同步）的全部状态，是唯一的 SQLite 写入者。 |
+| 组件                            | 类型                                      | 职责                                                                                                                                                                                                                                                         |
+| ------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `coffer-daemon`                 | 长生命周期进程                            | FastAPI 服务，监听 `127.0.0.1:<auto-port>`。持有六种资源 kind 以及横切特性（聊天、渠道、同步）的全部状态，是唯一的 SQLite 写入者。                                                                                                                           |
 | 资源 kind                       | 守护进程承载的抽象                        | 构建于一个与 kind 无关的 Resource 框架之上的六种 kind：`mcp_server`（网关上游）、`agent`（已注册的编码 agent）、`skill`（投递进 agent 的主技能包）、`knowledge_base` 与 `memory`（文件即真理 + SQLite 检索底座的两面）、`channel`（Telegram/SeaTalk 绑定）。 |
-| 聊天 / 渠道 / 同步              | 守护进程的横切特性                        | 进程内 LangGraph 聊天 agent 以及 Claude Code/Codex CLI agent（spec 008）；从 IM 应用中转聊天与审批的消息渠道（ADR-014）；基于用户自有 git 仓库、opt-in 的多机同步（ADR-016）。它们不是 kind——而是横跨各 kind。 |
-| `coffer` 回调监听              | 守护进程拉起的子进程                      | 仅服务经过签名校验的渠道 webhook（`POST /seatalk/{channel}`），监听一个位于用户自运行隧道之后的 loopback 端口；校验 SeaTalk 签名并将事件转发给守护进程。当某个 SeaTalk 渠道启用时运行（ADR-014）。 |
-| `coffer-mcp-shim`               | 短生命周期进程（每个 MCP 客户端会话一份） | 桥接 MCP 客户端 stdio ↔ 守护进程 HTTP/SSE。检测已运行的守护进程，或在需要时拉起一个。                             |
-| `coffer` CLI                    | 短生命周期子进程                          | 面向用户的管理命令。通过 loopback HTTP 调用守护进程。                                                              |
-| Web UI                          | 浏览器进程                                | 管理界面。开发时由 `http://localhost:5173` 的 Vite 开发服务器提供；生产时由 Tauri 桌面 shell 内嵌。调用 REST API。 |
-| Desktop 应用                    | 原生进程（Tauri 2，Rust + WebView）       | 将 Web UI 内嵌在原生桌面窗口中。通过 REST 与守护进程通信。                                                         |
-| REST API（`/api/v1`）           | 守护进程上的 HTTP 接口面                  | 管理面：资源 CRUD、审计日志、设置。Token + CORS 鉴权。                                                             |
-| MCP 端点（`/mcp`）              | 守护进程上的 HTTP/SSE 接口面              | MCP JSON-RPC 端点。shim 连接此处。将命名空间化的工具调用转发给上游子进程。                                         |
-| SQLite（`~/.coffer/coffer.db`） | 持久化存储                                | 控制面状态：资源注册、能力偏好、审计日志、保留策略，以及 `credentials` 表中以 Fernet 密文形式存储的密钥。WAL 模式，单写入者。 |
-| `master.key` / 操作系统钥匙串   | 主密钥存储                                | 唯一的 Fernet 主密钥。默认：DB 旁的 `0600` `~/.coffer/master.key` 文件；操作系统钥匙串为 opt-in。密钥用它解密，并在上游进程拉起时物化进上游 env / header。 |
-| `~/.coffer/daemon.json`         | 发现文件（权限 0600）                     | PID + 端口 + token。守护进程启动时写入；shim 和 CLI 读取此文件以定位运行中的守护进程。                             |
+| 聊天 / 渠道 / 同步              | 守护进程的横切特性                        | 进程内 LangGraph 聊天 agent 以及 Claude Code/Codex CLI agent（spec 008）；从 IM 应用中转聊天的消息渠道（ADR-014）；基于用户自有 git 仓库、opt-in 的多机同步（ADR-016）。它们不是 kind——而是横跨各 kind。                                                     |
+| `coffer` 回调监听               | 守护进程拉起的子进程                      | 仅服务经过签名校验的渠道 webhook（`POST /seatalk/{channel}`），监听一个位于用户自运行隧道之后的 loopback 端口；校验 SeaTalk 签名并将事件转发给守护进程。当某个 SeaTalk 渠道启用时运行（ADR-014）。                                                           |
+| `coffer-mcp-shim`               | 短生命周期进程（每个 MCP 客户端会话一份） | 桥接 MCP 客户端 stdio ↔ 守护进程 HTTP/SSE。检测已运行的守护进程，或在需要时拉起一个。                                                                                                                                                                        |
+| `coffer` CLI                    | 短生命周期子进程                          | 面向用户的管理命令。通过 loopback HTTP 调用守护进程。                                                                                                                                                                                                        |
+| Web UI                          | 浏览器进程                                | 管理界面。开发时由 `http://localhost:5173` 的 Vite 开发服务器提供；生产时由 Tauri 桌面 shell 内嵌。调用 REST API。                                                                                                                                           |
+| Desktop 应用                    | 原生进程（Tauri 2，Rust + WebView）       | 将 Web UI 内嵌在原生桌面窗口中。通过 REST 与守护进程通信。                                                                                                                                                                                                   |
+| REST API（`/api/v1`）           | 守护进程上的 HTTP 接口面                  | 管理面：资源 CRUD、审计日志、设置。Token + CORS 鉴权。                                                                                                                                                                                                       |
+| MCP 端点（`/mcp`）              | 守护进程上的 HTTP/SSE 接口面              | MCP JSON-RPC 端点。shim 连接此处。将命名空间化的工具调用转发给上游子进程。                                                                                                                                                                                   |
+| SQLite（`~/.coffer/coffer.db`） | 持久化存储                                | 控制面状态：资源注册、能力偏好、审计日志、保留策略，以及 `credentials` 表中以 Fernet 密文形式存储的密钥。WAL 模式，单写入者。                                                                                                                                |
+| `master.key` / 操作系统钥匙串   | 主密钥存储                                | 唯一的 Fernet 主密钥。默认：DB 旁的 `0600` `~/.coffer/master.key` 文件；操作系统钥匙串为 opt-in。密钥用它解密，并在上游进程拉起时物化进上游 env / header。                                                                                                   |
+| `~/.coffer/daemon.json`         | 发现文件（权限 0600）                     | PID + 端口 + token。守护进程启动时写入；shim 和 CLI 读取此文件以定位运行中的守护进程。                                                                                                                                                                       |
 
 ## 鉴权模型
 
@@ -101,17 +101,17 @@ flowchart TD
 
 后续页面各自深入探讨系统的一个切面：
 
-| 页面                                                 | 主题                                             |
-| ---------------------------------------------------- | ------------------------------------------------ |
-| [守护进程与进程模型](/zh/architecture/processes)     | 进程模型、detect-or-spawn、上游子进程生命周期    |
-| [Resource 框架](/zh/architecture/resource-framework) | 统一身份、生命周期与审计的与 kind 无关的抽象     |
-| [分层与边界](/zh/architecture/layering)              | import 规则、各层职责、强制执行                  |
-| [Surfaces](/zh/architecture/surfaces)                | REST API、MCP 端点、CLI、Web UI、Desktop         |
-| [请求全链路](/zh/architecture/request-lifecycle)     | 工具调用从客户端到上游的端到端追踪               |
-| [持久化](/zh/architecture/persistence)               | SQLite schema、WAL、Alembic、JSON 字段处理       |
+| 页面                                                 | 主题                                               |
+| ---------------------------------------------------- | -------------------------------------------------- |
+| [守护进程与进程模型](/zh/architecture/processes)     | 进程模型、detect-or-spawn、上游子进程生命周期      |
+| [Resource 框架](/zh/architecture/resource-framework) | 统一身份、生命周期与审计的与 kind 无关的抽象       |
+| [分层与边界](/zh/architecture/layering)              | import 规则、各层职责、强制执行                    |
+| [Surfaces](/zh/architecture/surfaces)                | REST API、MCP 端点、CLI、Web UI、Desktop           |
+| [请求全链路](/zh/architecture/request-lifecycle)     | 工具调用从客户端到上游的端到端追踪                 |
+| [持久化](/zh/architecture/persistence)               | SQLite schema、WAL、Alembic、JSON 字段处理         |
 | [安全](/zh/architecture/security)                    | Token 鉴权、加密凭据存储、SSRF 防护、loopback 强制 |
-| [可观测性](/zh/architecture/observability)           | 结构化日志、trace ID、审计日志、保留策略         |
-| [分发](/zh/architecture/distribution)                | 包结构、安装方式、平台支持                       |
+| [可观测性](/zh/architecture/observability)           | 结构化日志、trace ID、审计日志、保留策略           |
+| [分发](/zh/architecture/distribution)                | 包结构、安装方式、平台支持                         |
 
 ---
 

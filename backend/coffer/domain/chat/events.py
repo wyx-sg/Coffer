@@ -7,7 +7,6 @@ the SSE event name on the wire:
   TextDelta        → ``text_delta``
   ToolCall         → ``tool_call``
   ToolResult       → ``tool_result``
-  ApprovalRequest  → ``approval_request``
   TurnDone         → ``turn_done``
   TurnError        → ``turn_error``
 """
@@ -55,23 +54,6 @@ class ToolResult:
 
 
 @dataclass(frozen=True)
-class ApprovalRequest:
-    """The agent is asking the user to allow or deny a tool call before it runs.
-
-    The turn pauses after this event until a decision is delivered through the
-    approval channel (``ApprovalGate``). ``request_id`` correlates the decision
-    with this request. Coffer's built-in agent does not emit this event; it is
-    a platform capability for any agent that requires per-call approval.
-    """
-
-    request_id: str
-    tool_use_id: str
-    tool_name: str
-    tool_input: dict[str, Any]
-    type: Literal["approval_request"] = "approval_request"
-
-
-@dataclass(frozen=True)
 class TurnDone:
     """The turn completed.
 
@@ -96,6 +78,4 @@ class TurnError:
     type: Literal["turn_error"] = "turn_error"
 
 
-AgentEvent = (
-    TurnStarted | TextDelta | ToolCall | ToolResult | ApprovalRequest | TurnDone | TurnError
-)
+AgentEvent = TurnStarted | TextDelta | ToolCall | ToolResult | TurnDone | TurnError

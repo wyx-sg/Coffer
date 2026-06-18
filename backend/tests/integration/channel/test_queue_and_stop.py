@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Sequence
-from typing import Any
 
 import pytest
 
@@ -29,9 +28,7 @@ class GatedAdapter:
         self.release = asyncio.Event()
         self.runs: list[str] = []
 
-    async def run_turn(
-        self, *, history: Sequence[Message], approvals: Any
-    ) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, *, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
         last = history[-1]
         text = "".join(b.text for b in last.content if isinstance(b, TextBlock))
 

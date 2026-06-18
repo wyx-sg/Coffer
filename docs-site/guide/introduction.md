@@ -12,15 +12,15 @@ Coffer is the single source of truth instead. Register a tool, deliver a skill, 
 
 ### What Coffer manages
 
-| Kind | What it is |
-| --- | --- |
-| [MCP servers](/guide/register-server) | Aggregate upstream MCP servers; re-expose their tools namespaced through one endpoint. |
-| [Agents](/guide/agents) | Detect and register Claude Code / Codex; edit their config, deliver skills, install Coffer's MCP server. |
-| [Skills](/guide/skills) | One master skill library, delivered into the agents you choose. |
-| [Knowledge bases](/guide/knowledge-base) | Document stores your agents can search (grep / keyword / vector), never write. |
-| [Memory](/guide/memory) | One shared set of facts across all agents, projected natively into each. |
-| [Chat](/guide/chat) | Talk to Coffer's built-in agent, or drive Claude Code / Codex, with tool-call approval. |
-| [Channels](/guide/channels) | Reach your agents from Telegram or SeaTalk. |
+| Kind                                     | What it is                                                                                               |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [MCP servers](/guide/register-server)    | Aggregate upstream MCP servers; re-expose their tools namespaced through one endpoint.                   |
+| [Agents](/guide/agents)                  | Detect and register Claude Code / Codex; edit their config, deliver skills, install Coffer's MCP server. |
+| [Skills](/guide/skills)                  | One master skill library, delivered into the agents you choose.                                          |
+| [Knowledge bases](/guide/knowledge-base) | Document stores your agents can search (grep / keyword / vector), never write.                           |
+| [Memory](/guide/memory)                  | One shared set of facts across all agents, projected natively into each.                                 |
+| [Chat](/guide/chat)                      | Talk to Coffer's built-in agent, or drive Claude Code / Codex.                                           |
+| [Channels](/guide/channels)              | Reach your agents from Telegram or SeaTalk.                                                              |
 
 Plus two cross-cutting capabilities: an [encrypted credential store](/guide/credentials) and [multi-machine sync](/guide/sync).
 

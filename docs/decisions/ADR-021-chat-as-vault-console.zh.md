@@ -2,15 +2,18 @@
 
 > English: [ADR-021-chat-as-vault-console.md](./ADR-021-chat-as-vault-console.md)
 
-- **状态：** 已接受 —— 部分被 [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md) 取代（2026-06-14）
+- **状态：** 已接受 —— 被 [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md) 取代（2026-06-14，`builtin` 人格职责）与 [ADR-025](./ADR-025-remove-tool-approval.md) 取代（2026-06-18，审批席位职责）
 - **Spec:** [008-agent-chat](../../specs/008-agent-chat/spec.md)（重定位 —— 不分配新 spec 编号；实现前先更新 Spec 008 `spec.md`）
-- **关联：** [009-channels](../../specs/009-channels/spec.md)（[ADR-014](./ADR-014-channel-adapter-framework.md)，共享 turn/审批 seam）、[007-memory](../../specs/007-memory/spec.md)（控制台对话的金库）
+- **关联：** [009-channels](../../specs/009-channels/spec.md)（[ADR-014](./ADR-014-channel-adapter-framework.md)，共享 turn seam）、[007-memory](../../specs/007-memory/spec.md)（控制台对话的金库）
 
 > **注（2026-06-14）：** [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md)
-> 取代下文中**"通过 `builtin` agent 与金库对话"**这一职责 —— 内置 agent 退出聊天人格，
+> 取代下文中**"通过 `builtin` agent 与金库对话"**这一职责 —— 内置 agent 退出聊天人格,
 > 重塑为 Coffer 内部能力（`coffer__search_tools` 语义排序、`coffer__ask`）；聊天面从
-> _Vault Console（金库控制台）_ 改回 _Chat（聊天）_。**渠道旁观/审批**职责（职责 2）
-> 原样存续。
+> _Vault Console（金库控制台）_ 改回 _Chat（聊天）_。
+>
+> **注（2026-06-18）：** [ADR-025](./ADR-025-remove-tool-approval.md) 取代下文的**「审批
+> 席位」**职责（职责 2）—— 整套交互式工具审批系统被移除。agent 以全权运行；owner 配对
+> 是信任边界。控制台剩下的职责是**旁观** channel 驱动的会话，而非审批其工具调用。
 
 ## 背景
 

@@ -3,8 +3,8 @@
 //
 // Implements an async generator that yields typed AgentEvent objects parsed
 // from the text/event-stream response. Handles:
-//   - All 7 SSE event names: turn_start, text_delta, tool_call, tool_result,
-//     approval_request, turn_done, turn_error
+//   - All SSE event names: turn_start, text_delta, tool_call, tool_result,
+//     turn_done, turn_error
 //   - Stream end (done: true from reader)
 //   - Network errors (fetch throws)
 //   - HTTP error responses (non-200, e.g. 409 TurnInProgress — JSON body)
@@ -47,16 +47,6 @@ export interface ToolResultEvent {
   };
 }
 
-export interface ApprovalRequestEvent {
-  event: "approval_request";
-  data: {
-    request_id: string;
-    tool_use_id: string;
-    tool_name: string;
-    tool_input: Record<string, unknown>;
-  };
-}
-
 export interface TurnDoneEvent {
   event: "turn_done";
   // Backend TurnDone: prompt_tokens, completion_tokens, stop_reason, type.
@@ -77,7 +67,6 @@ export type AgentEvent =
   | TextDeltaEvent
   | ToolCallEvent
   | ToolResultEvent
-  | ApprovalRequestEvent
   | TurnDoneEvent
   | TurnErrorEvent;
 
@@ -88,7 +77,6 @@ const KNOWN_EVENTS: ReadonlySet<string> = new Set([
   "text_delta",
   "tool_call",
   "tool_result",
-  "approval_request",
   "turn_done",
   "turn_error",
 ]);

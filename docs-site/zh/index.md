@@ -19,9 +19,9 @@ features:
   - title: 技能 · 知识 · 记忆
     details: 维护一份主技能库并投递给每个 agent;整理可被 agent 检索的知识库;让所有 agent 共享同一份记忆。
   - title: 与任意 agent 对话
-    details: 在 Web 或桌面应用里,与 Coffer 内置 agent 对话 —— 或驱动 Claude Code、Codex —— 流式输出、工具调用可审批。
+    details: 在 Web 或桌面应用里,与 Coffer 内置 agent 对话 —— 或驱动 Claude Code、Codex —— 流式输出。
   - title: 随处触达你的 agent
-    details: 配对一个 Telegram 或 SeaTalk 渠道,在手机上与 agent 对话(并审批其工具调用)。多机同步通过你自己拥有的 git 仓库,让每台机器保持一致。
+    details: 配对一个 Telegram 或 SeaTalk 渠道,在手机上与 agent 对话。多机同步通过你自己拥有的 git 仓库,让每台机器保持一致。
   - title: CLI · Web · 桌面端
     details: 用终端、本地 Web UI 或桌面应用驱动整个保险库。agent 自动发现守护进程,无需配置端口或 token。
 ---

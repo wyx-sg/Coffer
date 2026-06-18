@@ -1,6 +1,6 @@
 # Channels
 
-A **channel** lets you reach your Coffer agents from a messaging app — **Telegram** or **SeaTalk**. Pair the channel to your own account, then chat with an agent, approve its tool calls with a tap, and receive notifications Coffer pushes you, all from inside the IM chat.
+A **channel** lets you reach your Coffer agents from a messaging app — **Telegram** or **SeaTalk**. Pair the channel to your own account, then chat with an agent and receive notifications Coffer pushes you, all from inside the IM chat.
 
 ## Register a channel
 

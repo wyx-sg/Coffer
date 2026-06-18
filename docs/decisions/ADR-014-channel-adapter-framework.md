@@ -8,8 +8,8 @@
 ## Context
 
 Coffer needs messaging channels (Telegram, SeaTalk, more later) through which
-the single owner talks to any agent on the chat platform (spec 008), approves
-tool calls, and receives notifications. More channels AND more agents are
+the single owner talks to any agent on the chat platform (spec 008) and
+receives notifications. More channels AND more agents are
 expected, so the integration cost must stay N + M: a new channel must not
 touch agent code, and a new agent must not touch channel code.
 
@@ -30,14 +30,14 @@ Two platform constraints shape the design:
    only: lifecycle, outbound send/edit, inbound normalization into common
    envelopes, and a `ChannelCapabilities` declaration (can it edit messages?
    show buttons? type?). Pairing, the owner gate, commands, queueing,
-   conversation mapping, rendering strategy, and approval bridging live in
+   conversation mapping, and rendering strategy live in
    the kind-agnostic channel core. The core selects behavior from
    capabilities, never from adapter type — Telegram streams progress by
    editing one message, SeaTalk degrades to ack-then-final, with zero
    platform conditionals in the core.
 3. **The chat platform is reached only through its existing seams** —
    `ChatService.create_conversation`, `TurnOrchestrator.start_turn` /
-   `submit_approval` / `interrupt_turn` — in-process, exactly as the web UI
+   `interrupt_turn` — in-process, exactly as the web UI
    does over HTTP. Channels know nothing about agents; agents cannot tell a
    channel turn from a UI turn. Any registered agent is reachable from any
    channel with no code change on either side.

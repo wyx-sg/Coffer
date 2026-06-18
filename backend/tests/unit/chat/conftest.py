@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
-from coffer.application.chat.ports import ApprovalGate, ToolSpec
+from coffer.application.chat.ports import ToolSpec
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.audit import AuditEntry
 from coffer.domain.chat.conversation import Conversation
@@ -224,22 +224,18 @@ class FakeToolGateway:
 class FakeAgentAdapter:
     """Scripted ``AgentAdapter``: yields a fixed sequence of ``AgentEvent``s.
 
-    Records the history and approval gate received on each ``run_turn`` so
-    tests can assert on them. ``model_id`` is exposed because the orchestrator
-    reads it (best-effort) to stamp the assistant message.
+    Records the history received on each ``run_turn`` so tests can assert on
+    it. ``model_id`` is exposed because the orchestrator reads it (best-effort)
+    to stamp the assistant message.
     """
 
     def __init__(self, events: list[AgentEvent], *, model_id: str | None = None) -> None:
         self._events = events
         self.model_id = model_id
         self.recorded_histories: list[list[Message]] = []
-        self.recorded_gate: ApprovalGate | None = None
 
-    async def run_turn(
-        self, *, history: Sequence[Message], approvals: ApprovalGate
-    ) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, *, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
         self.recorded_histories.append(list(history))
-        self.recorded_gate = approvals
         return self._yield_events()
 
     async def _yield_events(self) -> AsyncIterator[AgentEvent]:

@@ -1,6 +1,6 @@
 # 渠道
 
-**渠道**(channel)让你从一个即时通讯应用 —— **Telegram** 或 **SeaTalk** —— 触达你的 Coffer agent。把渠道配对到你自己的账号,然后就能在 IM 聊天里与 agent 对话、一键审批其工具调用,并接收 Coffer 推送给你的通知。
+**渠道**(channel)让你从一个即时通讯应用 —— **Telegram** 或 **SeaTalk** —— 触达你的 Coffer agent。把渠道配对到你自己的账号,然后就能在 IM 聊天里与 agent 对话,并接收 Coffer 推送给你的通知。
 
 ## 注册渠道
 

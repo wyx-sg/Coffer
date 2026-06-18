@@ -43,8 +43,8 @@ IM 没有持久使用场景，还悄悄重新打开了 ADR-021 自己想关掉�
 - 聊天面**只**与 Coffer 受管 agent（`claude_code`、`codex`，及将来的受管 agent）对话。
   `builtin` provider 从聊天 agent 注册表和选择器中移除。
 - 侧边栏标签从*金库控制台 / Vault Console* 改回 **聊天 / Chat**。
-- ADR-021 的**第二**职责原样保留：聊天页仍是观测/审批渠道/IM 驱动会话的 human-in-the-loop
-  席位，走同一套 `ConversationPort` / `TurnPort` / `submit_approval` 接缝。"聊天"命名的是
+- ADR-021 的**第二**职责原样保留：聊天页仍是观测渠道/IM 驱动会话的
+  席位，走同一套 `ConversationPort` / `TurnPort` 接缝。"聊天"命名的是
   会话集合——无论由谁驱动——所以名字仍贴切。
 
 ### 2. "内置 agent"概念离开 UI
@@ -89,8 +89,8 @@ defer Capability B 是*针对工具选择*的——那里下游 frontier 模型�
 - **附加的、可审计的工具。** `coffer__ask` 与升级后的 `coffer__search_tools` 像任何 `coffer__`
   内置工具一样在 `tools/list` 中通告，记入调用日志（who/when/how-long/outcome，无参数/结果），
   并优雅降级（搜索回退 BM25；未配置模型时给出明确错误而非崩溃）。
-- **审批/接缝对等性保留。** 移除 `builtin` 聊天 provider 不触碰渠道与受管 agent 聊天共享的
-  `ConversationPort` / `TurnPort` / 审批机器。
+- **接缝对等性保留。** 移除 `builtin` 聊天 provider 不触碰渠道与受管 agent 聊天共享的
+  `ConversationPort` / `TurnPort` 机器。
 
 ## 备选方案
 
@@ -118,7 +118,7 @@ defer Capability B 是*针对工具选择*的——那里下游 frontier 模型�
 
 - Spec 008（`spec.md`、验收场景）与 Spec 004（agent registry）更新：聊天只列受管 agent；内置
   agent 不再是注册的聊天 agent。
-- ADR-021 标记为**部分被取代**：渠道观测/审批职责存续；"通过 builtin agent 与金库对话"职责移除。
+- ADR-021 标记为**部分被取代**：渠道观测职责存续；"通过 builtin agent 与金库对话"职责移除。
 - ADR-018 被**修订**：`coffer__search_tools` 获得带 BM25 回退的语义排序路径；Capability B 针对
   知识/记忆 un-defer 为 `coffer__ask`。
 - UI：`/chat` 改回「聊天」；移除 `/agents/builtin` 路由与内置卡片；Settings → Models 重构为

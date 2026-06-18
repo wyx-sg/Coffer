@@ -135,13 +135,8 @@ def _user_turn(text: str, conv_id: str = "c1") -> list[Message]:
     ]
 
 
-class _NoApprovals:
-    async def wait(self, request_id: str) -> Any:  # pragma: no cover
-        raise AssertionError("no approval expected")
-
-
 async def _collect(adapter: ClaudeSdkAgentAdapter, history: list[Message]) -> list[Any]:
-    stream = await adapter.run_turn(history=history, approvals=_NoApprovals())
+    stream = await adapter.run_turn(history=history)
     return [ev async for ev in stream]
 
 
@@ -185,21 +180,7 @@ async def test_init_conversation_rejects_non_directory_cwd(tmp_path) -> None:  #
 
 
 @pytest.mark.asyncio
-async def test_init_conversation_stores_cwd_and_permission_mode(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv())
-    provider = ClaudeSdkProvider(conversations=repo)
-
-    await provider.init_conversation(conv.id, {"cwd": str(tmp_path), "permission_mode": "plan"})
-    stored = await repo.get_agent_config(conv.id)
-    assert stored["cwd"] == str(tmp_path)
-    assert stored["permission_mode"] == "plan"
-
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_init_conversation_omits_permission_mode_when_absent(tmp_path) -> None:  # type: ignore[no-untyped-def]
+async def test_init_conversation_stores_cwd(tmp_path) -> None:  # type: ignore[no-untyped-def]
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv())
     provider = ClaudeSdkProvider(conversations=repo)
@@ -207,7 +188,7 @@ async def test_init_conversation_omits_permission_mode_when_absent(tmp_path) -> 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
     stored = await repo.get_agent_config(conv.id)
     assert stored["cwd"] == str(tmp_path)
-    assert "permission_mode" not in stored
+    assert "permission_mode" not in stored  # agents always run with full permissions
 
     await engine.dispose()
 

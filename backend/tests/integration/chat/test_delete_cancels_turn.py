@@ -16,7 +16,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from coffer.application.chat.ports import ApprovalGate
 from coffer.application.chat.turn_orchestrator import (
     TurnOrchestrator,
     active_turns,
@@ -44,7 +43,7 @@ class _BlockingAdapter:
 
     model_id = None
 
-    async def run_turn(self, *, history: Any, approvals: ApprovalGate) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, *, history: Any) -> AsyncIterator[AgentEvent]:
         async def gen() -> AsyncIterator[AgentEvent]:
             yield TextDelta(text="partial")
             await asyncio.sleep(3600)

@@ -52,9 +52,9 @@ capabilities.** Three moves.
   `codex`, and future managed agents). The `builtin` provider is removed from
   the chat agent registry and from the agent picker.
 - The sidebar label reverts from _Vault Console_ / 金库控制台 to **Chat** / 聊天.
-- ADR-021's **second** job survives unchanged: Chat remains the human-in-the-loop
-  seat to **observe and approve** channel/IM-driven conversations, over the same
-  `ConversationPort` / `TurnPort` / `submit_approval` seams. "Chat" names the set
+- ADR-021's **second** job survives unchanged: Chat remains the seat to
+  **observe** channel/IM-driven conversations, over the same
+  `ConversationPort` / `TurnPort` seams. "Chat" names the set
   of conversations — whoever drove them — so the name still fits.
 
 ### 2. The "built-in agent" concept leaves the UI
@@ -115,8 +115,8 @@ agent calls, never a chat partner.
   built-in, logged in the invocation log (who/when/how-long/outcome, no
   args/results), and degrade gracefully (search falls back to BM25; an
   unconfigured model surfaces a clear error, never a crash).
-- **Approval/seam parity preserved.** Removing the `builtin` chat provider does
-  not touch the `ConversationPort` / `TurnPort` / approval machinery that
+- **Seam parity preserved.** Removing the `builtin` chat provider does
+  not touch the `ConversationPort` / `TurnPort` machinery that
   channels and managed-agent chat share.
 
 ## Alternatives considered
@@ -151,7 +151,7 @@ keeps the very "built-in agent is a thing" framing this ADR removes.
 - Spec 008 (`spec.md`, acceptance scenarios) and Spec 004 (agent registry) are
   updated: chat lists managed agents only; the built-in agent is no longer a
   registered chat agent.
-- ADR-021 is marked **partially superseded**: its channel-observe/approve job
+- ADR-021 is marked **partially superseded**: its channel-observe job
   stands; its "converse with the vault through the builtin agent" job is removed.
 - ADR-018 is **amended**: `coffer__search_tools` gains a semantic ranking path
   with BM25 fallback; Capability B is un-deferred for knowledge/memory as

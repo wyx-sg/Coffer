@@ -578,8 +578,7 @@
     "MODEL_NOT_FOUND": "Model not found",
     "MODEL_REJECTED": "The model configuration was rejected",
     "NO_MODEL_CONFIGURED": "No model is configured yet. Add one to start chatting.",
-    "TURN_IN_PROGRESS": "A turn is already in progress in this conversation",
-    "APPROVAL_NOT_FOUND": "That approval request is no longer pending"
+    "TURN_IN_PROGRESS": "A turn is already in progress in this conversation"
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -1157,12 +1156,6 @@
       "title": "Archive this conversation?",
       "body": "It will be moved to the archive. You can restore it anytime.",
       "confirm": "Archive"
-    },
-    "approval": {
-      "title": "Approval required",
-      "tool": "Tool",
-      "allow": "Allow",
-      "deny": "Deny"
     }
   },
   "channels": {
@@ -1188,7 +1181,7 @@
     },
     "welcome": {
       "title": "Talk to your agents from the IM apps you live in",
-      "body": "A channel connects one Telegram bot or SeaTalk app to Coffer's chat platform. Pair it with your own account, then message the bot to chat with an agent — replies, approvals, and notifications all arrive in the IM chat.",
+      "body": "A channel connects one Telegram bot or SeaTalk app to Coffer's chat platform. Pair it with your own account, then message the bot to chat with an agent — replies and notifications all arrive in the IM chat.",
       "featureChat": {
         "title": "Chat anywhere",
         "body": "Messages route into an ordinary conversation; the agent's reply comes back to the IM chat."

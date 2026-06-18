@@ -32,7 +32,7 @@ This restriction is not just architectural taste — it is what makes the domain
 
 ### application/
 
-The application layer orchestrates domain entities with infrastructure and surfaces. It defines the services that implement Coffer's use cases: `resource_service.py` for kind-agnostic CRUD (create/read/update/enable/disable/delete for resources of any kind), `audit_service.py` for recording lifecycle events, `retention_service.py` for the background log-pruning worker, and one subdirectory per kind — `application/mcp/` (session management, capability curation, invocation recording), `application/agent/`, `application/skill/`, `application/channel/`, `application/knowledge/`, `application/knowledge_base/`, `application/memory/`, and `application/chat/` (the `TurnOrchestrator`, approvals, and turn history). Alongside the kinds sit cross-cutting service slices that are **not** kinds: `application/sync/` (multi-machine sync), `application/credentials/` (the shared `CredentialResolver`), and `application/fs/` (filesystem-browse).
+The application layer orchestrates domain entities with infrastructure and surfaces. It defines the services that implement Coffer's use cases: `resource_service.py` for kind-agnostic CRUD (create/read/update/enable/disable/delete for resources of any kind), `audit_service.py` for recording lifecycle events, `retention_service.py` for the background log-pruning worker, and one subdirectory per kind — `application/mcp/` (session management, capability curation, invocation recording), `application/agent/`, `application/skill/`, `application/channel/`, `application/knowledge/`, `application/knowledge_base/`, `application/memory/`, and `application/chat/` (the `TurnOrchestrator` and turn history). Alongside the kinds sit cross-cutting service slices that are **not** kinds: `application/sync/` (multi-machine sync), `application/credentials/` (the shared `CredentialResolver`), and `application/fs/` (filesystem-browse).
 
 Application services receive their infrastructure dependencies as constructor arguments (repositories, keychain adapters, upstream clients) — they do not instantiate them. This is the dependency-inversion pattern: the application layer defines what it needs (via interfaces or protocol classes in `domain/`), and the composition root provides the concrete implementation.
 
@@ -111,7 +111,7 @@ backend/coffer/
 │   ├── knowledge/                # KB ingest + retrieval services
 │   ├── knowledge_base/           # KB collection services
 │   ├── memory/                   # recall/remember services
-│   ├── chat/                     # TurnOrchestrator, approvals, history
+│   ├── chat/                     # TurnOrchestrator, history
 │   ├── sync/                     # cross-cutting — multi-machine sync (not a kind)
 │   ├── credentials/              # cross-cutting — CredentialResolver (refs → secrets)
 │   └── fs/                       # cross-cutting — filesystem-browse service

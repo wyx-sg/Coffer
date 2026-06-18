@@ -174,7 +174,6 @@ class ChannelRuntime:
             await adapter.start(
                 AdapterCallbacks(
                     on_message=self._processor.on_message,
-                    on_approval_click=self._processor.on_approval_click,
                 )
             )
         except Exception:

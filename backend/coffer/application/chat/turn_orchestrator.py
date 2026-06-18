@@ -3,8 +3,8 @@
 The orchestrator is pure chat-platform plumbing: it knows the agent-provider
 registry and nothing about any specific agent. For each turn it asks the
 registry for the conversation's provider, has the provider build a configured
-adapter, drives ``adapter.run_turn(history, approvals)``, streams the events,
-and persists the assistant message.
+adapter, drives ``adapter.run_turn(history)``, streams the events, and persists
+the assistant message.
 
 Responsibilities
 ----------------
@@ -16,7 +16,6 @@ Responsibilities
   ``chat_turn_completed`` audit event, and signal end-of-stream.
 - ``interrupt_turn``: stop a running turn but keep its partial output.
 - ``cancel_turn``: stop and discard a running turn (used on conversation delete).
-- ``submit_approval``: deliver a human approval decision to a waiting turn.
 - ``sweep_streaming_messages``: startup recovery for crash-left ``streaming`` rows.
 
 Architecture notes
@@ -40,8 +39,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from coffer.application.audit_service import AuditService
-from coffer.application.chat.approvals import ApprovalChannel
-from coffer.application.chat.ports import AgentAdapter, ApprovalDecision
+from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService, MessageRepo
 from coffer.application.chat.turn_persistence import (
@@ -50,7 +48,6 @@ from coffer.application.chat.turn_persistence import (
 )
 from coffer.domain.chat.events import (
     AgentEvent,
-    ApprovalRequest,
     TextDelta,
     ToolCall,
     ToolResult,
@@ -64,7 +61,7 @@ from coffer.domain.chat.message import (
     ToolResultBlock,
     ToolUseBlock,
 )
-from coffer.domain.errors import ApprovalNotFound, TurnInProgress
+from coffer.domain.errors import TurnInProgress
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +71,6 @@ class _ActiveTurn:
     """In-process record of one conversation's in-flight turn."""
 
     queue: asyncio.Queue[AgentEvent | None]
-    approvals: ApprovalChannel
     task: asyncio.Task[None] | None = None
     interrupted: bool = field(default=False)
 
@@ -121,7 +117,7 @@ class TurnOrchestrator:
         # Reserve the slot synchronously — there is no ``await`` between the
         # guard above and this insert, so a concurrent ``start_turn`` for the
         # same conversation cannot also pass the guard.
-        active = _ActiveTurn(queue=asyncio.Queue(), approvals=ApprovalChannel())
+        active = _ActiveTurn(queue=asyncio.Queue())
         _ACTIVE_TURNS[conversation_id] = active
 
         try:
@@ -172,19 +168,6 @@ class TurnOrchestrator:
         if active is not None and active.task is not None and not active.task.done():
             active.task.cancel()
             log.debug("Cancelled turn for conversation %s", conversation_id)
-
-    def submit_approval(
-        self, conversation_id: str, request_id: str, decision: ApprovalDecision
-    ) -> None:
-        """Deliver a human approval decision to the conversation's in-flight turn.
-
-        Raises ``ApprovalNotFound`` when the conversation has no active turn, or
-        the turn has no pending request matching ``request_id``.
-        """
-        active = _ACTIVE_TURNS.get(conversation_id)
-        if active is None:
-            raise ApprovalNotFound(request_id)
-        active.approvals.resolve(request_id, decision)
 
     @staticmethod
     async def sweep_streaming_messages(message_repo: MessageRepo) -> int:
@@ -240,12 +223,7 @@ class TurnOrchestrator:
             )
             placeholder_id = (await asyncio.shield(append_task)).id
 
-            async for event in await adapter.run_turn(history=history, approvals=active.approvals):
-                if isinstance(event, ApprovalRequest):
-                    # Register before forwarding so a decision posted the moment
-                    # the client sees the event is accepted, not rejected for a
-                    # not-yet-awaited request (see ApprovalChannel.register).
-                    active.approvals.register(event.request_id)
+            async for event in await adapter.run_turn(history=history):
                 await queue.put(event)
                 if isinstance(event, TextDelta):
                     text_parts.append(event.text)
@@ -278,7 +256,7 @@ class TurnOrchestrator:
                         event.code,
                         event.message,
                     )
-                # TurnStarted / ApprovalRequest: forwarded only, not message content.
+                # TurnStarted: forwarded only, not message content.
 
             await self._finalize_assistant_message(
                 conversation_id=conversation_id,

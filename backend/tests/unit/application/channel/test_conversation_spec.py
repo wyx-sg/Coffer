@@ -25,7 +25,7 @@ def _resolve(**overrides):  # type: ignore[no-untyped-def]
     return resolve_conversation_spec(**kwargs)
 
 
-def test_builtin_default_yields_no_config():
+def test_builtin_default_resolves_with_no_config():
     spec = _resolve()
     assert spec == ConversationSpec(agent_key="builtin", agent_config=None)
 
@@ -67,11 +67,11 @@ def test_unknown_preferred_workspace_falls_back_to_default():
 def test_default_agent_config_merged_with_cwd():
     spec = _resolve(
         preferred_agent="claude_code",
-        default_agent_config={"permission_mode": "plan"},
+        default_agent_config={"k": "v"},
         workspaces={"proj": "/srv/proj"},
         default_workspace="proj",
     )
-    assert spec.agent_config == {"permission_mode": "plan", "cwd": "/srv/proj"}
+    assert spec.agent_config == {"k": "v", "cwd": "/srv/proj"}
 
 
 def test_no_workspace_resolved_keeps_default_config():

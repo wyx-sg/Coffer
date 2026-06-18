@@ -121,15 +121,6 @@ class FakeKeyring:
         return self._values.get(ref)
 
 
-@dataclass(frozen=True)
-class ApprovalPromptRecord:
-    chat_id: str
-    text: str
-    allow_value: str
-    deny_value: str
-    message_id: str
-
-
 class FakeChannelAdapter:
     """Recording ``ChannelAdapter`` — the only fake the channel core needs."""
 
@@ -137,13 +128,11 @@ class FakeChannelAdapter:
         self,
         *,
         supports_edit: bool = True,
-        supports_buttons: bool = True,
         supports_typing: bool = True,
         max_message_chars: int = 4096,
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
-            supports_buttons=supports_buttons,
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
         )
@@ -154,8 +143,6 @@ class FakeChannelAdapter:
         self.edits: list[tuple[str, str, str]] = []  # (chat_id, message_id, text)
         self.deleted: list[tuple[str, str]] = []  # (chat_id, message_id)
         self.typing: list[str] = []  # chat_ids
-        self.approval_prompts: list[ApprovalPromptRecord] = []
-        self.resolved: list[tuple[str, str, str]] = []  # (chat_id, message_id, outcome)
         self._next_id = 0
 
     @property
@@ -190,26 +177,6 @@ class FakeChannelAdapter:
 
     async def send_typing(self, chat_id: str) -> None:
         self.typing.append(chat_id)
-
-    async def send_approval_prompt(
-        self, chat_id: str, text: str, *, allow_value: str, deny_value: str
-    ) -> SentMessage:
-        message_id = self._new_id()
-        self.approval_prompts.append(
-            ApprovalPromptRecord(
-                chat_id=chat_id,
-                text=text,
-                allow_value=allow_value,
-                deny_value=deny_value,
-                message_id=message_id,
-            )
-        )
-        return SentMessage(message_id=message_id)
-
-    async def resolve_approval_prompt(
-        self, chat_id: str, message_id: str, outcome_text: str
-    ) -> None:
-        self.resolved.append((chat_id, message_id, outcome_text))
 
 
 class FakeModelCatalog:

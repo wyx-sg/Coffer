@@ -1,18 +1,15 @@
-"""SDK-backed Claude adapter — drive Claude Code via ``claude-agent-sdk`` and
-relay per-tool approvals through Coffer's approval seam (spec 008).
+"""SDK-backed Claude adapter — drive Claude Code via ``claude-agent-sdk``.
 
-Unlike ``cli_agent.py`` (which shells out to ``claude -p`` with no approval
-bridging), this adapter drives Claude Code through the Python ``ClaudeSDKClient``.
-The SDK's ``can_use_tool`` callback is the relay point: the adapter emits an
-``ApprovalRequest`` and awaits the decision on the ``ApprovalGate``, then answers
-with ``PermissionResultAllow`` / ``PermissionResultDeny``. The SDK dispatches each
-control request in its own task, so awaiting there never stalls streaming.
+Unlike ``cli_agent.py`` (which shells out to ``claude -p``), this adapter drives
+Claude Code through the Python ``ClaudeSDKClient``. The agent runs with full
+permissions (``bypassPermissions``): Coffer does not gate individual tool calls —
+the paired owner driving the conversation is the trust boundary.
 
-Streamed messages and ``can_use_tool`` both feed one ``asyncio.Queue`` so they
-interleave in arrival order; ``_stream`` drains it into ``AgentEvent``s. The
-concrete ``ClaudeSDKClient`` is wrapped behind the ``ClaudeSdkSession`` protocol
-so turns are testable without a real ``claude`` binary. Per Contract 9 this file
-is the only one that imports the real ``ClaudeSDKClient``.
+Streamed messages feed an ``asyncio.Queue``; ``_stream`` drains it into
+``AgentEvent``s. The concrete ``ClaudeSDKClient`` is wrapped behind the
+``ClaudeSdkSession`` protocol so turns are testable without a real ``claude``
+binary. Per Contract 9 this file is the only one that imports the real
+``ClaudeSDKClient``.
 """
 
 from __future__ import annotations
@@ -21,16 +18,12 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import AsyncIterator, Callable, Sequence
-from typing import Any, Protocol, cast
-from uuid import uuid4
+from typing import Any, Protocol
 
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
-    PermissionMode,
-    PermissionResultAllow,
-    PermissionResultDeny,
     ResultMessage,
     SystemMessage,
     UserMessage,
@@ -45,10 +38,8 @@ from claude_agent_sdk import (
     ToolUseBlock as SdkToolUseBlock,
 )
 
-from coffer.application.chat.ports import ApprovalGate
 from coffer.domain.chat.events import (
     AgentEvent,
-    ApprovalRequest,
     TextDelta,
     ToolCall,
     ToolResult,
@@ -99,9 +90,9 @@ class ClaudeSdkClientSession:
         self._client = ClaudeSDKClient(options=options)
 
     async def connect(self, prompt: str) -> None:
-        # ``can_use_tool`` requires streaming mode, so pass the single user turn
-        # as a one-message async stream rather than a plain string (the SDK
-        # streams it, waits for the result, then ends input).
+        # Pass the single user turn as a one-message async stream rather than a
+        # plain string (the SDK streams it, waits for the result, then ends
+        # input).
         async def _stream() -> AsyncIterator[dict[str, Any]]:
             msg = {"role": "user", "content": prompt}
             yield {"type": "user", "session_id": "", "message": msg, "parent_tool_use_id": None}
@@ -230,7 +221,7 @@ _SENTINEL = object()
 
 
 class ClaudeSdkAgentAdapter:
-    """One turn of an SDK-backed Claude agent, with per-tool approval relay.
+    """One turn of an SDK-backed Claude agent.
 
     Mirrors ``CliAgentAdapter``: an injected ``session_factory`` seam, a
     ``run_turn`` that returns ``self._stream(...)``, best-effort logged session
@@ -259,12 +250,11 @@ class ClaudeSdkAgentAdapter:
         self,
         *,
         history: Sequence[Message],
-        approvals: ApprovalGate,
     ) -> AsyncIterator[AgentEvent]:
         # Match the platform's ``async def -> AsyncIterator`` seam: delegate to
         # ``_stream`` so the coroutine machinery runs at yield points rather than
         # at the ``await run_turn(...)`` call site (cli_agent does the same).
-        return self._stream(history, approvals)
+        return self._stream(history)
 
     async def _persist_session(self, state: ParseState) -> None:
         """Write a newly-discovered SDK session id back for the next ``resume``.
@@ -283,48 +273,20 @@ class ClaudeSdkAgentAdapter:
                 exc_info=True,
             )
 
-    def _build_options(
-        self, approvals: ApprovalGate, queue: asyncio.Queue[Any]
-    ) -> ClaudeAgentOptions:
-        async def can_use_tool(
-            tool_name: str, tool_input: dict[str, Any], context: Any
-        ) -> PermissionResultAllow | PermissionResultDeny:
-            # The SDK runs this in its own task, so awaiting the human decision
-            # here does not stall message streaming.
-            request_id = context.tool_use_id or uuid4().hex
-            await queue.put(
-                ApprovalRequest(
-                    request_id=request_id,
-                    tool_use_id=context.tool_use_id or request_id,
-                    tool_name=tool_name,
-                    tool_input=tool_input,
-                )
-            )
-            decision = await approvals.wait(request_id)
-            if decision.behavior == "allow":
-                return PermissionResultAllow()
-            return PermissionResultDeny(message=decision.message or "Denied by user")
-
-        # Force ``default`` so the SDK routes every tool call through
-        # ``can_use_tool``; ``bypassPermissions``/``acceptEdits`` would skip the
-        # relay and silently auto-approve. We still honor an explicit
-        # ``permission_mode`` the user set — they have opted out of the relay
-        # and accept that those tools run without per-call approval.
-        permission_mode = cast(PermissionMode, self._extra.get("permission_mode") or "default")
+    def _build_options(self) -> ClaudeAgentOptions:
+        # Run with full permissions — Coffer does not gate individual tool calls;
+        # the paired owner driving the conversation is the trust boundary.
         opts = ClaudeAgentOptions(
             cwd=self._cwd,
             resume=self._resume,
-            permission_mode=permission_mode,
+            permission_mode="bypassPermissions",
             model=self._extra.get("model"),
-            can_use_tool=can_use_tool,
         )
         if self._env is not None:
             opts.env = self._env
         return opts
 
-    async def _stream(
-        self, history: Sequence[Message], approvals: ApprovalGate
-    ) -> AsyncIterator[AgentEvent]:
+    async def _stream(self, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
         prompt = last_user_text(history)
         if not prompt:
             yield TurnError(code="empty_prompt", message="no user message to send")
@@ -334,13 +296,12 @@ class ClaudeSdkAgentAdapter:
         queue: asyncio.Queue[Any] = asyncio.Queue()
         yield TurnStarted()
 
-        options = self._build_options(approvals, queue)
+        options = self._build_options()
         session = self._session_factory(options)
 
         async def pump() -> None:
-            # Map streamed SDK messages onto the queue; the can_use_tool closure
-            # pushes ApprovalRequests onto the same queue so events interleave in
-            # arrival order. A sentinel after the terminal event ends the drain.
+            # Map streamed SDK messages onto the queue. A sentinel after the
+            # terminal event ends the drain.
             try:
                 async for msg in session.receive_messages():
                     for event in map_sdk_message(msg, state):

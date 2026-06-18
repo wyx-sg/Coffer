@@ -11,15 +11,15 @@
 
 Frozen dataclass —— domain 保持纯净。
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `id` | `str` | uuid4 hex |
-| `agent_key` | `str` | 该线程对话所用的 agent；默认 `"builtin"` |
-| `title` | `str` | 从首条用户消息自动生成；用户可编辑 |
-| `model_id` | `str \| None` | `chat_models.id` 覆盖项；`None` → 默认模型。内置 agent 的每对话模型存储。 |
-| `agent_config` | `str \| None` (JSON) | provider 自有的每对话状态（Alembic `0018`）。CLI agent 在此存储 `{cwd, session_id, permission_mode?}`；内置 agent 不存储任何东西（它使用 `model_id`）。通过 `ConversationRepo.get_agent_config` / `set_agent_config` 读/写。 |
-| `archived_at` | `datetime \| None` | `None` = 活跃；时间戳 = 已归档（Alembic `0013`）。驱动活跃/已归档过滤器与两阶段保留生命周期。 |
-| `created_at` / `updated_at` | `datetime` | UTC；每条新消息都会 bump `updated_at` |
+| 字段                        | 类型                 | 说明                                                                                                                                                                                                                         |
+| --------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | `str`                | uuid4 hex                                                                                                                                                                                                                    |
+| `agent_key`                 | `str`                | 该线程对话所用的 agent；默认 `"builtin"`                                                                                                                                                                                     |
+| `title`                     | `str`                | 从首条用户消息自动生成；用户可编辑                                                                                                                                                                                           |
+| `model_id`                  | `str \| None`        | `chat_models.id` 覆盖项；`None` → 默认模型。内置 agent 的每对话模型存储。                                                                                                                                                    |
+| `agent_config`              | `str \| None` (JSON) | provider 自有的每对话状态（Alembic `0018`）。CLI agent 在此存储 `{cwd, session_id, permission_mode?}`；内置 agent 不存储任何东西（它使用 `model_id`）。通过 `ConversationRepo.get_agent_config` / `set_agent_config` 读/写。 |
+| `archived_at`               | `datetime \| None`   | `None` = 活跃；时间戳 = 已归档（Alembic `0013`）。驱动活跃/已归档过滤器与两阶段保留生命周期。                                                                                                                                |
+| `created_at` / `updated_at` | `datetime`           | UTC；每条新消息都会 bump `updated_at`                                                                                                                                                                                        |
 
 ### `Message`（`domain/chat/message.py`）
 
@@ -37,19 +37,16 @@ Frozen dataclass —— domain 保持纯净。
 
 ### `AgentEvent`（`domain/chat/events.py`）
 
-由一个 `AgentAdapter` 在一个回合期间流出的 frozen dataclass 的 union。
-**`ApprovalRequest` 由本次修订新增**；其余全部未变：
+由一个 `AgentAdapter` 在一个回合期间流出的 frozen dataclass 的 union：
 
 - `TurnStarted()`
 - `TextDelta(text: str)`
 - `ToolCall(tool_use_id, tool_name, tool_input)`
 - `ToolResult(tool_use_id, tool_name, output, error)`
-- `ApprovalRequest(request_id, tool_use_id, tool_name, tool_input)` —— **新增**
 - `TurnDone(prompt_tokens, completion_tokens, stop_reason)`
 - `TurnError(code, message)`
 
-每个都携带一个 `type` 判别符，原样复用为 SSE 事件名；
-`ApprovalRequest.type == "approval_request"`。
+每个都携带一个 `type` 判别符，原样复用为 SSE 事件名。
 
 ## 冻结的平台契约
 
@@ -57,26 +54,7 @@ Frozen dataclass —— domain 保持纯净。
 这些、且仅针对这些来构建。
 
 ```python
-# domain/chat/events.py
-@dataclass(frozen=True)
-class ApprovalRequest:
-    request_id: str
-    tool_use_id: str
-    tool_name: str
-    tool_input: dict[str, Any]
-    type: Literal["approval_request"] = "approval_request"
-
 # application/chat/ports.py
-@dataclass(frozen=True)
-class ApprovalDecision:
-    behavior: Literal["allow", "deny"]
-    message: str | None = None
-
-class ApprovalGate(Protocol):
-    """Inbound channel a running turn waits on for a human approval decision.
-    wait() raises CancelledError when the turn is interrupted."""
-    async def wait(self, request_id: str) -> ApprovalDecision: ...
-
 class AgentAdapter(Protocol):
     """One agent's handling of one turn. The adapter is self-contained — it
     carries its own model, tools, and configuration (injected by its provider
@@ -89,7 +67,7 @@ class AgentAdapter(Protocol):
     message when present. It is optional (adapters with no Coffer-registered
     model omit it) and therefore not part of this frozen Protocol."""
     async def run_turn(
-        self, *, history: Sequence[Message], approvals: ApprovalGate,
+        self, *, history: Sequence[Message],
     ) -> AsyncIterator[AgentEvent]: ...
 
 class AgentProvider(Protocol):
@@ -115,10 +93,6 @@ class AgentProvider(Protocol):
 - **`AgentProviderRegistry`**（`application/chat/registry.py`）—— 将
   `agent_key` → provider + display name。`register(provider, display_name)`、
   `get(agent_key)`（抛出 `UnknownAgent`）、`entries()`（供 `GET /agents`）。
-- **`ApprovalChannel`**（`application/chat/approvals.py`）—— 具体的
-  `ApprovalGate`。持有 `dict[request_id, Future[ApprovalDecision]]`。
-  `wait(request_id)` 等待该 future；`resolve(request_id, decision)` 设置它
-  （当没有待决 future 匹配时抛出 `ApprovalNotFound`）。纯 asyncio。
 - **`BuiltinAgentProvider`**（`infrastructure/chat/builtin_provider.py`）——
   唯一注册的 provider。`init_conversation` 校验 `agent_config` 中可选的
   `model_id` 并把它存到 `conversations.model_id`。`build_adapter` 解析模型
@@ -127,9 +101,8 @@ class AgentProvider(Protocol):
   `True`。
 - **`LangGraphBuiltinAgent`**（`infrastructure/chat/langgraph_agent.py`）——
   内置 agent 的 `AgentAdapter`。每回合连同它的模型、工具 gateway、system prompt
-  与已解析的 `model_id` 一并构建。`run_turn(history, approvals)` 将历史裁剪到
-  上下文预算，驱动 LangGraph ReAct 循环，并忽略 `approvals`（内置 agent 不使用
-  审批通道）。
+  与已解析的 `model_id` 一并构建。`run_turn(history)` 将历史裁剪到
+  上下文预算，并驱动 LangGraph ReAct 循环。
 
 ## 领域错误（`domain/errors.py`）
 
@@ -141,8 +114,6 @@ class AgentProvider(Protocol):
 - `UnknownAgent` —— code `"UNKNOWN_AGENT"` → 400；`agent_key` 没有对应 provider。
 - `AgentConfigRejected` —— code `"AGENT_CONFIG_REJECTED"` → 400；一个 provider
   拒绝它的 `agent_config`（携带一个 `reason`）。
-- `ApprovalNotFound` —— code `"APPROVAL_NOT_FOUND"` → 409；一个审批决策引用了一个
-  未知或已决的 `request_id`。
 
 ## SQLite schema
 
@@ -157,14 +128,13 @@ CLI agent 需要每对话的工作目录 + session 状态，通过同一个 `ini
 
 ## 级联与完整性规则
 
-| 动作 | 效果 |
-|---|---|
-| 创建一个对话 | 持久化该行，然后 `provider.init_conversation`。若 provider 拒绝该配置，对话行被回滚（删除）且错误浮现。 |
-| 中断一个回合 | 取消该回合任务；任务的 handler 持久化**部分的**助手消息（`status='complete'`、`stop_reason='interrupted'`）并发出一个终结的 `TurnDone`。 |
-| 删除一个对话 | 取消任何活跃回合（丢弃 —— 不持久化部分内容）；`provider.on_conversation_deleted`；`MessageRepo.delete_by_conversation`；删除对话行；审计 `conversation_deleted`。 |
-| 提交一个审批 | 路由到该对话活跃回合的 `ApprovalChannel`；当没有待决请求匹配时 `ApprovalNotFound`（409）。 |
-| 删除一个在用的模型 | 允许；引用它的对话在回合时解析为默认模型。 |
-| 守护进程启动 | 清扫：任何 `chat_messages.status='streaming'` → `failed`。 |
+| 动作               | 效果                                                                                                                                                              |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 创建一个对话       | 持久化该行，然后 `provider.init_conversation`。若 provider 拒绝该配置，对话行被回滚（删除）且错误浮现。                                                           |
+| 中断一个回合       | 取消该回合任务；任务的 handler 持久化**部分的**助手消息（`status='complete'`、`stop_reason='interrupted'`）并发出一个终结的 `TurnDone`。                          |
+| 删除一个对话       | 取消任何活跃回合（丢弃 —— 不持久化部分内容）；`provider.on_conversation_deleted`；`MessageRepo.delete_by_conversation`；删除对话行；审计 `conversation_deleted`。 |
+| 删除一个在用的模型 | 允许；引用它的对话在回合时解析为默认模型。                                                                                                                        |
+| 守护进程启动       | 清扫：任何 `chat_messages.status='streaming'` → `failed`。                                                                                                        |
 
 ## 审计事件（`domain/audit.py`）
 
@@ -178,12 +148,10 @@ CLI agent 需要每对话的工作目录 + session 状态，通过同一个 `ini
 
 - `GET /api/v1/chat/agents` —— 列出已注册的 agent —— **新增**
 - `POST /api/v1/chat/conversations` —— body `{agent_key?, agent_config?}` —— **改动**
-- `POST /api/v1/chat/conversations/{id}/approvals` —— `{request_id, behavior, message?}` → 204 / 409 —— **新增**
 - `POST /api/v1/chat/conversations/{id}/interrupt` → 204 —— **新增**
 
 未变路由：对话 list/get/patch/delete、消息历史、`POST .../messages` SSE 回合
-端点（其流现在也可能携带 `approval_request` 事件），以及 `/api/v1/models` CRUD。
+端点，以及 `/api/v1/models` CRUD。
 
 message POST 上的 SSE 事件名：`turn_start`、`text_delta`、`tool_call`、
-`tool_result`、`approval_request`、`turn_done`、`turn_error` —— 每个
-`AgentEvent` 变体一个。
+`tool_result`、`turn_done`、`turn_error` —— 每个 `AgentEvent` 变体一个。

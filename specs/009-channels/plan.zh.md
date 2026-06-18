@@ -6,7 +6,7 @@
 
 新增一个 `channel` resource kind，把 IM 账号（Telegram、SeaTalk）接到
 spec-008 的聊天平台上。channel 内核（配对、路由、命令、排队、渲染策略、
-审批桥接、notify）建立在一个小巧的 adapter 协议之上、与具体类型无关；
+notify）建立在一个小巧的 adapter 协议之上、与具体类型无关；
 Telegram 与 SeaTalk 是头两个 adapter。一个独立的回调监听器进程为 SeaTalk
 提供 webhook ingress，遵循章程的公网 surface 规则。前端在 Agents 导航组
 里新增一个 Channels 页面。
@@ -15,7 +15,7 @@ Telegram 与 SeaTalk 是头两个 adapter。一个独立的回调监听器进程
 
 - **进程内直接驱动平台** —— `ChatService.create_conversation`、
   `TurnOrchestrator.start_turn`（把返回的队列消费到 `None` 哨兵）、
-  `submit_approval`、`interrupt_turn`。channel 内核与聊天平台之间不走
+  `interrupt_turn`。channel 内核与聊天平台之间不走
   HTTP。
 - **不引入新 SDK。** Telegram 与 SeaTalk 都用 `httpx` 对固定 host
   （`api.telegram.org`、`openapi.seatalk.io`）通信。channel 配置中不存在
@@ -48,7 +48,7 @@ Telegram 与 SeaTalk 是头两个 adapter。一个独立的回调监听器进程
 backend/coffer/
 ├── domain/channel/
 │   ├── config.py        # ChannelConfig discriminated union + ref validation
-│   ├── envelopes.py     # InboundMessage, ApprovalClick, ChannelCapabilities
+│   ├── envelopes.py     # InboundMessage, ChannelCapabilities
 │   └── signing.py       # seatalk_signature(body, secret) — pure hashlib
 ├── application/
 │   ├── credentials/resolver.py   # CredentialResolver (hoisted from mcp)
@@ -58,7 +58,7 @@ backend/coffer/
 │       ├── pairing.py   # PairingManager (codes, TTL, attempt bounds)
 │       ├── service.py   # ChannelService: pairing API, notify, status, peers
 │       ├── inbound.py   # InboundProcessor: owner gate, commands, queueing,
-│       │                #   conversation mapping, turn driving, approval bridge
+│       │                #   conversation mapping, turn driving
 │       └── runtime.py   # ChannelRuntime: reconciler loop + listener lifecycle
 ├── infrastructure/channel/
 │   ├── persistence.py   # ChannelPeerModel + repo
@@ -80,11 +80,11 @@ backend/coffer/
 关键接缝：
 
 - `ChannelAdapter` 协议：`capabilities`、`start(callbacks)`、`stop()`、
-  `send_text`、`edit_text`、`delete_message`、`send_approval_prompt`、
-  `resolve_approval_prompt`、`send_typing`。可选的 surface 由
+  `send_text`、`edit_text`、`delete_message`、
+  `send_typing`。可选的 surface 由
   `ChannelCapabilities` 声明；内核只查询能力，永不查询 adapter 类型。
-- `AdapterCallbacks`（交给 adapter）：`on_message(InboundMessage)`、
-  `on_approval_click(ApprovalClick)`。adapter 永不 import chat 模块。
+- `AdapterCallbacks`（交给 adapter）：`on_message(InboundMessage)`。
+  adapter 永不 import chat 模块。
 - SeaTalk adapter 没有轮询循环；daemon 的事件接收路由经 runtime 的注册表
   调用 adapter 上的 `handle_event`。
 - 监听器子进程在拉起时经 env 拿到逐 channel 的 signing secret、daemon
@@ -116,7 +116,7 @@ namespace（由 parity 测试强制对齐）。
   能力驱动的策略选择。
 - **Integration**（真实 SQLite、假传输）：一个 `FakeChannelAdapter` 对着
   一个脚本化 `AgentProvider` 驱动完整入站管线（register → pair →
-  message → reply → /new → /stop → queue → approval allow/deny →
+  message → reply → /new → /stop → queue →
   notify）；Telegram adapter 对着本地假 Bot API（ASGI httpx
   transport）：轮询、offset 提交、HTML 回退、按钮；SeaTalk adapter 对着
   假 openapi host：token 刷新、发送、卡片、429 退避；回调监听器 app：

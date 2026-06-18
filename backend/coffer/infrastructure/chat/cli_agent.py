@@ -8,8 +8,8 @@ written back to the conversation's ``agent_config`` so the next turn resumes the
 same session. The subprocess spawner is injected so turns can be tested without
 a real CLI installed.
 
-v1 does not bridge per-tool approval: the CLI runs under its own permission mode
-(configurable, default conservative). Approval bridging is a later increment.
+The CLI runs with full permissions — Coffer does not gate individual tool calls;
+the owner driving the conversation is the trust boundary.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from coffer.application.chat.ports import ApprovalGate
 from coffer.domain.chat.events import (
     AgentEvent,
     TurnDone,
@@ -149,7 +148,6 @@ class CliAgentAdapter:
         self,
         *,
         history: Sequence[Message],
-        approvals: ApprovalGate,
     ) -> AsyncIterator[AgentEvent]:
         # Match the platform's ``async def -> AsyncIterator`` seam: return the
         # async generator rather than being one (the builtin adapter does the same).

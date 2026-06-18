@@ -2,7 +2,7 @@
 
 > English: [research.md](./research.md)
 
-针对聊天平台与内置 agent 的设计决策。前四项是本次修订的平台接缝（seam）决策；
+针对聊天平台与内置 agent 的设计决策。前三项是本次修订的平台接缝（seam）决策；
 其余记录内置 agent 仍然成立的决策。
 
 ## 1. 作为接缝的 agent-provider 注册表
@@ -17,13 +17,13 @@
 
 **被否决的备选**：把内置 agent 直接接进 orchestrator，并"以后再加接缝"。未经测试
 的接缝不是接缝；只有当第二个 provider 今天就能被加入时平台才是真实的，而
-approval-flow 测试中的 fake provider 正好证明了这一点。
+测试中使用的 fake provider 正好证明了这一点。
 
 ## 2. 一个自包含的 `AgentAdapter`
 
 **问题**：一个回合交给 agent 的是什么？
 
-**决策**：`run_turn(*, history, approvals)` —— 仅此而已。一个 agent 的模型、工具、
+**决策**：`run_turn(*, history)` —— 仅此而已。一个 agent 的模型、工具、
 system prompt 与配置都是它自己的；它的 provider 在构建 adapter 时注入它们
 （`build_adapter`，每回合一次）。一个自带模型与工具（而非 Coffer 配置的模型 +
 gateway）的 agent 可以原样接入。历史裁剪移入内置 adapter，因为上下文预算是一个
@@ -33,25 +33,7 @@ agent 特定的关注点。
 抛出，而该方法在 `start_turn` 内、用户消息被持久化之前被调用，因此一个无模型的
 回合仍然作为一个 pre-stream 409 失败。
 
-## 3. 人工审批通道
-
-**问题**：一个回合如何为一次人工决策而暂停？
-
-**决策**：一个入站通道。`ApprovalGate.wait(request_id)` 等待一个
-`asyncio.Future`；当 `POST .../approvals` 送达一个决策时，具体的
-`ApprovalChannel` 解析（resolve）该 future。agent 发出一个 `ApprovalRequest`
-事件（作为 `approval_request` 转发到 SSE 流）并 `await` `wait(...)`。中断该回合
-会取消该任务，从而在 `wait()` 内部抛出 `CancelledError` —— 这是契约所声明的行为。
-
-该通道是一个**平台**能力，而非内置 agent 的特性：内置 agent 依赖 gateway 的能力
-门控，从不调用 `wait()`。该通道仍然完整交付，并由一个集成测试端到端地证明 ——
-该测试中 fake provider 的 adapter 确实会请求审批。
-
-**被否决的备选**：一个由 orchestrator 传给 agent 的出站回调。基于拉取的
-`wait()` 让 agent 掌控自己何时阻塞，并让取消（cancellation）自然地从 asyncio
-中得来。
-
-## 4. 中断 vs. 删除
+## 3. 中断 vs. 删除
 
 **问题**：一个回合任务可能因两种原因被取消 —— 如何区分它们？
 
@@ -65,7 +47,7 @@ agent 特定的关注点。
 `_ActiveTurn` 记录携带一个 `interrupted` 标志，任务的 `CancelledError` handler
 读取它来选择路径。
 
-## 5. agent 配置存储
+## 4. agent 配置存储
 
 **问题**：一个 agent 的每对话配置存放在哪里？
 
@@ -78,7 +60,7 @@ agent 特定的关注点。
 `model_id`（每回合切换模型仍使用 `PATCH /conversations {model_id}`，这是同一列
 上的一个内置 agent 便利功能）。
 
-## 6. agent 框架、多 provider、进程内 gateway（未变）
+## 5. agent 框架、多 provider、进程内 gateway（未变）
 
 内置 agent 的循环是 LangGraph `create_react_agent`；LLM 客户端通过 LangChain 的
 provider 包构建（`anthropic`、`openai`、`ollama`）；凭据是在运行时解析（解密）的
@@ -86,14 +68,14 @@ provider 包构建（`anthropic`、`openai`、`ollama`）；凭据是在运行�
 进程内地消费 Coffer 的 MCP gateway。所有 LangGraph/LangChain import 都限制在
 `infrastructure/chat`（Contract 9）。这些决策从早先的 008 草案原样沿用。
 
-## 7. 对话持久化与流式（未变）
+## 6. 对话持久化与流式（未变）
 
 对话、消息与模型是 Coffer 自有的 SQLite 表，而非 Resource。LangGraph 每回合无
 状态运行；Coffer 的表是 system of record。回合作为一个分离的 `asyncio.Task` 运行,
 将一个 `asyncio.Queue` 排空到一个 `EventSourceResponse`；客户端断连只取消排空。
 一次启动清扫会把任何 `streaming` 行翻转为 `failed`。
 
-## 8. 不在范围内
+## 7. 不在范围内
 
-用户创建/编辑的 agent；一个注册表管理 GUI；远程通道；超出 gateway 门控 + 审批
-通道的每 agent 能力作用域；对话摘要、搜索、导出。
+用户创建/编辑的 agent；一个注册表管理 GUI；远程通道；超出 gateway 门控的
+每 agent 能力作用域；对话摘要、搜索、导出。

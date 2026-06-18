@@ -1,14 +1,10 @@
-"""App-server-backed Codex adapter tests (spec 008 — per-tool approval relay).
+"""App-server-backed Codex adapter tests (spec 008).
 
 Drives ``CodexAppServerAdapter`` through a ``FakeCodexAppServer`` — a fake
 JSON-RPC peer implementing the same reader/writer seam ``CodexRpcClient``
 consumes, with NO real ``codex`` subprocess. The fake answers the
 ``initialize`` / ``thread/start`` / ``thread/resume`` / ``turn/start`` requests
-and emits scripted notifications, and (for the approval cases) sends an
-unsolicited ``item/commandExecution/requestApproval`` / ``item/fileChange/...``
-server→client REQUEST mid-turn that the adapter must answer.
-
-Mirrors ``FakeSdkSession`` / ``_ApprovalScript`` in ``test_claude_sdk_agent.py``.
+and emits scripted notifications.
 """
 
 from __future__ import annotations
@@ -23,10 +19,7 @@ from typing import Any
 
 import pytest
 
-from coffer.application.chat.approvals import ApprovalChannel
-from coffer.application.chat.ports import ApprovalDecision
 from coffer.domain.chat.events import (
-    ApprovalRequest,
     TextDelta,
     TurnDone,
     TurnStarted,
@@ -42,18 +35,15 @@ from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
 
 @dataclass
 class _Frame:
-    """A scripted notification or server→client request the fake emits.
+    """A scripted notification the fake emits.
 
     ``after_request`` names the client request method after whose result the
-    frame is emitted (e.g. emit ``turn/started`` after ``turn/start``). A
-    ``request_method`` makes the frame an unsolicited server→client REQUEST
-    (carries an id, expects a reply); otherwise it is a notification.
+    frame is emitted (e.g. emit ``turn/started`` after ``turn/start``).
     """
 
     after_request: str
     method: str
     params: dict[str, Any]
-    request_method: bool = False
 
 
 class _FakePipe:
@@ -104,13 +94,8 @@ class FakeCodexAppServer:
         self._frames = frames or []
         # Observed client requests, for assertions.
         self.requests: list[tuple[str, dict[str, Any]]] = []
-        # Approval reply decisions captured by approvalId -> decision dict.
-        self.approval_replies: dict[Any, dict[str, Any]] = {}
-        self._next_req_id = 1000
         self._task: asyncio.Task[None] | None = None
         self._emit_tasks: set[asyncio.Task[None]] = set()
-        # Map of server-request id -> (approval key, reply-arrived event).
-        self._pending_approvals: dict[int, tuple[str, asyncio.Event]] = {}
 
     # The adapter builds its RPC client over (reader=server_to_client,
     # writer=client_to_server).
@@ -138,34 +123,7 @@ class FakeCodexAppServer:
         for frame in self._frames:
             if frame.after_request != after_request:
                 continue
-            if frame.request_method:
-                req_id = self._next_req_id
-                self._next_req_id += 1
-                # Track this id so we can capture the adapter's reply by key —
-                # match the request_id the adapter derives (approvalId / itemId
-                # for v2, callId for the legacy methods).
-                key = (
-                    frame.params.get("approvalId")
-                    or frame.params.get("itemId")
-                    or frame.params.get("callId")
-                    or frame.method
-                )
-                replied = asyncio.Event()
-                self._pending_approvals[req_id] = (key, replied)
-                await self._send(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": req_id,
-                        "method": frame.method,
-                        "params": frame.params,
-                    }
-                )
-                # Mirror real codex: it sends ``turn/completed`` only AFTER the
-                # approval is answered, so block the rest of this batch until the
-                # adapter's reply round-trips.
-                await replied.wait()
-            else:
-                await self._send({"jsonrpc": "2.0", "method": frame.method, "params": frame.params})
+            await self._send({"jsonrpc": "2.0", "method": frame.method, "params": frame.params})
 
     async def _run(self) -> None:
         while True:
@@ -182,13 +140,6 @@ class FakeCodexAppServer:
             req_id = frame.get("id")
             if method is not None and req_id is not None:
                 await self._handle_client_request(method, req_id, frame.get("params") or {})
-            elif req_id is not None and "result" in frame:
-                # A reply to one of our server→client approval requests.
-                pending = self._pending_approvals.pop(req_id, None)
-                if pending is not None:
-                    key, replied = pending
-                    self.approval_replies[key] = frame.get("result") or {}
-                    replied.set()
             # client notifications (e.g. ``initialized``) need no reply.
 
     async def _handle_client_request(
@@ -310,15 +261,8 @@ def _adapter(
     )
 
 
-class _NoApprovals:
-    async def wait(self, request_id: str) -> ApprovalDecision:  # pragma: no cover
-        raise AssertionError("this turn requests no approval")
-
-
-async def _collect(
-    adapter: CodexAppServerAdapter, history: list[Message], approvals: Any
-) -> list[Any]:
-    stream = await adapter.run_turn(history=history, approvals=approvals)
+async def _collect(adapter: CodexAppServerAdapter, history: list[Message]) -> list[Any]:
+    stream = await adapter.run_turn(history=history)
     return [ev async for ev in stream]
 
 
@@ -359,7 +303,7 @@ async def test_adapter_streams_events_and_persists_thread_id():
     server = FakeCodexAppServer(frames=_basic_frames())
     factory = _Factory(server)
     adapter = _adapter(factory, on_session=on_session)
-    events = await asyncio.wait_for(_collect(adapter, _user_turn("hi"), _NoApprovals()), timeout=5)
+    events = await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
 
     assert isinstance(events[0], TurnStarted)
     assert isinstance(events[-1], TurnDone)
@@ -373,10 +317,10 @@ async def test_adapter_streams_events_and_persists_thread_id():
     # turn/start carried the prompt text.
     turn_params = next(p for m, p in server.requests if m == "turn/start")
     assert turn_params["input"][0]["text"] == "hi"
-    # thread/start used on-request + workspace-write so approvals surface.
+    # Agents always run unattended: never ask for approval, full access.
     start_params = next(p for m, p in server.requests if m == "thread/start")
-    assert start_params["approvalPolicy"] == "on-request"
-    assert start_params["sandbox"] == "workspace-write"
+    assert start_params["approvalPolicy"] == "never"
+    assert start_params["sandbox"] == "danger-full-access"
     assert factory.session is not None
     assert factory.session.closed is True
 
@@ -386,7 +330,7 @@ async def test_adapter_empty_prompt_is_rejected():
     server = FakeCodexAppServer(frames=[])
     factory = _Factory(server)
     adapter = _adapter(factory)
-    events = await _collect(adapter, [], _NoApprovals())
+    events = await _collect(adapter, [])
     assert len(events) == 1
     from coffer.domain.chat.events import TurnError
 
@@ -407,209 +351,13 @@ async def test_resume_uses_thread_resume_with_thread_id():
     )
     factory = _Factory(server)
     adapter = _adapter(factory, resume="thread-existing")
-    await asyncio.wait_for(_collect(adapter, _user_turn("hi"), _NoApprovals()), timeout=5)
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
 
     methods = [m for m, _ in server.requests]
     assert "thread/resume" in methods
     assert "thread/start" not in methods
     resume_params = next(p for m, p in server.requests if m == "thread/resume")
     assert resume_params["threadId"] == "thread-existing"
-
-
-# ---------------------------------------------------------------------------
-# T5 — approval relay (command)
-# ---------------------------------------------------------------------------
-
-
-def _command_approval_frames(*, approval_id: str | None = None) -> list[_Frame]:
-    params: dict[str, Any] = {
-        "threadId": "thread-1",
-        "turnId": "turn-1",
-        "itemId": "cmd-item-1",
-        "command": "rm -rf build",
-        "cwd": "/tmp/proj",
-    }
-    if approval_id is not None:
-        params["approvalId"] = approval_id
-    return [
-        _Frame(
-            "turn/start",
-            "item/commandExecution/requestApproval",
-            params,
-            request_method=True,
-        ),
-        _Frame(
-            "turn/start",
-            "turn/completed",
-            {"threadId": "thread-1", "turn": {"id": "turn-1"}},
-        ),
-    ]
-
-
-async def _drive_with_decision(
-    adapter: CodexAppServerAdapter,
-    channel: ApprovalChannel,
-    decision: ApprovalDecision,
-) -> list[Any]:
-    stream = await adapter.run_turn(history=_user_turn("go"), approvals=channel)
-    out: list[Any] = []
-    async for ev in stream:
-        out.append(ev)
-        if isinstance(ev, ApprovalRequest):
-            channel.resolve(ev.request_id, decision)
-    return out
-
-
-@pytest.mark.asyncio
-async def test_command_approval_allow_writes_accept():
-    server = FakeCodexAppServer(frames=_command_approval_frames())
-    factory = _Factory(server)
-    adapter = _adapter(factory)
-    channel = ApprovalChannel()
-
-    events = await asyncio.wait_for(
-        _drive_with_decision(adapter, channel, ApprovalDecision(behavior="allow")),
-        timeout=5,
-    )
-
-    reqs = [e for e in events if isinstance(e, ApprovalRequest)]
-    assert len(reqs) == 1
-    assert reqs[0].tool_name == "shell"
-    assert reqs[0].tool_input == {"command": "rm -rf build", "cwd": "/tmp/proj"}
-    assert reqs[0].request_id == "cmd-item-1"
-    assert reqs[0].tool_use_id == "cmd-item-1"
-    assert server.approval_replies["cmd-item-1"] == {"decision": "accept"}
-    assert isinstance(events[-1], TurnDone)
-
-
-@pytest.mark.asyncio
-async def test_command_approval_deny_writes_decline():
-    server = FakeCodexAppServer(frames=_command_approval_frames())
-    factory = _Factory(server)
-    adapter = _adapter(factory)
-    channel = ApprovalChannel()
-
-    events = await asyncio.wait_for(
-        _drive_with_decision(adapter, channel, ApprovalDecision(behavior="deny", message="no")),
-        timeout=5,
-    )
-
-    reqs = [e for e in events if isinstance(e, ApprovalRequest)]
-    assert len(reqs) == 1
-    assert server.approval_replies["cmd-item-1"] == {"decision": "decline"}
-
-
-@pytest.mark.asyncio
-async def test_command_approval_prefers_approval_id_as_request_id():
-    server = FakeCodexAppServer(frames=_command_approval_frames(approval_id="appr-99"))
-    factory = _Factory(server)
-    adapter = _adapter(factory)
-    channel = ApprovalChannel()
-
-    events = await asyncio.wait_for(
-        _drive_with_decision(adapter, channel, ApprovalDecision(behavior="allow")),
-        timeout=5,
-    )
-    reqs = [e for e in events if isinstance(e, ApprovalRequest)]
-    assert reqs[0].request_id == "appr-99"
-    assert server.approval_replies["appr-99"] == {"decision": "accept"}
-
-
-# ---------------------------------------------------------------------------
-# T5 — approval relay (fileChange — join by itemId)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_file_change_approval_joins_changes_by_item_id():
-    changes = [{"path": "a.py", "kind": "modify"}]
-    frames = [
-        # The fileChange item starts first, carrying the changes payload.
-        _Frame(
-            "turn/start",
-            "item/started",
-            {
-                "threadId": "thread-1",
-                "turnId": "turn-1",
-                "item": {"id": "fc-1", "type": "fileChange", "changes": changes},
-            },
-        ),
-        # Then the approval request arrives, carrying ONLY the itemId.
-        _Frame(
-            "turn/start",
-            "item/fileChange/requestApproval",
-            {"threadId": "thread-1", "turnId": "turn-1", "itemId": "fc-1"},
-            request_method=True,
-        ),
-        _Frame(
-            "turn/start",
-            "turn/completed",
-            {"threadId": "thread-1", "turn": {"id": "turn-1"}},
-        ),
-    ]
-    server = FakeCodexAppServer(frames=frames)
-    factory = _Factory(server)
-    adapter = _adapter(factory)
-    channel = ApprovalChannel()
-
-    events = await asyncio.wait_for(
-        _drive_with_decision(adapter, channel, ApprovalDecision(behavior="allow")),
-        timeout=5,
-    )
-    reqs = [e for e in events if isinstance(e, ApprovalRequest)]
-    assert len(reqs) == 1
-    assert reqs[0].tool_name == "file_change"
-    assert reqs[0].request_id == "fc-1"
-    assert reqs[0].tool_input == {"changes": changes}
-    assert server.approval_replies["fc-1"] == {"decision": "accept"}
-
-
-@pytest.mark.asyncio
-async def test_file_change_approval_prefers_approval_id_as_request_id():
-    """When the fileChange request params include ``approvalId``, it takes precedence."""
-    changes = [{"path": "b.py", "kind": "add"}]
-    frames = [
-        _Frame(
-            "turn/start",
-            "item/started",
-            {
-                "threadId": "thread-1",
-                "turnId": "turn-1",
-                "item": {"id": "fc-2", "type": "fileChange", "changes": changes},
-            },
-        ),
-        # approvalId is distinct from itemId — the adapter must use approvalId.
-        _Frame(
-            "turn/start",
-            "item/fileChange/requestApproval",
-            {
-                "threadId": "thread-1",
-                "turnId": "turn-1",
-                "itemId": "fc-2",
-                "approvalId": "appr-fc-42",
-            },
-            request_method=True,
-        ),
-        _Frame(
-            "turn/start",
-            "turn/completed",
-            {"threadId": "thread-1", "turn": {"id": "turn-1"}},
-        ),
-    ]
-    server = FakeCodexAppServer(frames=frames)
-    factory = _Factory(server)
-    adapter = _adapter(factory)
-    channel = ApprovalChannel()
-
-    events = await asyncio.wait_for(
-        _drive_with_decision(adapter, channel, ApprovalDecision(behavior="allow")),
-        timeout=5,
-    )
-    reqs = [e for e in events if isinstance(e, ApprovalRequest)]
-    assert len(reqs) == 1
-    assert reqs[0].request_id == "appr-fc-42"
-    assert reqs[0].tool_input == {"changes": changes}
-    assert server.approval_replies["appr-fc-42"] == {"decision": "accept"}
 
 
 # ---------------------------------------------------------------------------
@@ -631,9 +379,8 @@ async def test_cancel_interrupts_and_closes_and_persists_thread():
     )
     factory = _Factory(server)
     adapter = _adapter(factory, on_session=on_session)
-    channel = ApprovalChannel()
 
-    stream = await adapter.run_turn(history=_user_turn("go"), approvals=channel)
+    stream = await adapter.run_turn(history=_user_turn("go"))
 
     async def consume() -> None:
         async for _ in stream:
@@ -668,7 +415,7 @@ async def test_stream_end_without_terminal_synthesizes_turn_done():
     factory = _Factory(server)
     adapter = _adapter(factory)
 
-    stream = await adapter.run_turn(history=_user_turn("hi"), approvals=_NoApprovals())
+    stream = await adapter.run_turn(history=_user_turn("hi"))
     out: list[Any] = []
 
     async def drive() -> None:
@@ -706,7 +453,7 @@ async def test_stream_end_without_terminal_no_pending_task_warning(recwarn: Any)
     factory = _Factory(server)
     adapter = _adapter(factory)
 
-    stream = await adapter.run_turn(history=_user_turn("hi"), approvals=_NoApprovals())
+    stream = await adapter.run_turn(history=_user_turn("hi"))
     out: list[Any] = []
 
     with warnings.catch_warnings(record=True) as caught:
@@ -730,79 +477,3 @@ async def test_stream_end_without_terminal_no_pending_task_warning(recwarn: Any)
         w for w in caught if "Task was destroyed but it is pending" in str(w.message)
     ]
     assert pending_warnings == [], f"Unexpected pending-task warnings: {pending_warnings}"
-
-
-# ---------------------------------------------------------------------------
-# T9 — legacy protocol-version guard
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_legacy_exec_command_approval_returns_review_decision():
-    # An older/future codex sends the legacy ``execCommandApproval`` request
-    # shape; the adapter must answer with the ``ReviewDecision`` shape.
-    frames = [
-        _Frame(
-            "turn/start",
-            "execCommandApproval",
-            {
-                "threadId": "thread-1",
-                "turnId": "turn-1",
-                "callId": "legacy-1",
-                "command": ["rm", "x"],
-                "cwd": "/tmp",
-            },
-            request_method=True,
-        ),
-        _Frame(
-            "turn/start",
-            "turn/completed",
-            {"threadId": "thread-1", "turn": {"id": "turn-1"}},
-        ),
-    ]
-    server = FakeCodexAppServer(frames=frames)
-    factory = _Factory(server)
-    adapter = _adapter(factory)
-    channel = ApprovalChannel()
-
-    events = await asyncio.wait_for(
-        _drive_with_decision(adapter, channel, ApprovalDecision(behavior="allow")),
-        timeout=5,
-    )
-    reqs = [e for e in events if isinstance(e, ApprovalRequest)]
-    assert len(reqs) == 1
-    assert server.approval_replies["legacy-1"] == {"decision": "approved"}
-
-
-@pytest.mark.asyncio
-async def test_legacy_apply_patch_approval_denied_returns_review_decision():
-    frames = [
-        _Frame(
-            "turn/start",
-            "applyPatchApproval",
-            {
-                "threadId": "thread-1",
-                "turnId": "turn-1",
-                "callId": "legacy-patch",
-                "changes": {"a.py": {}},
-            },
-            request_method=True,
-        ),
-        _Frame(
-            "turn/start",
-            "turn/completed",
-            {"threadId": "thread-1", "turn": {"id": "turn-1"}},
-        ),
-    ]
-    server = FakeCodexAppServer(frames=frames)
-    factory = _Factory(server)
-    adapter = _adapter(factory)
-    channel = ApprovalChannel()
-
-    events = await asyncio.wait_for(
-        _drive_with_decision(adapter, channel, ApprovalDecision(behavior="deny")),
-        timeout=5,
-    )
-    reqs = [e for e in events if isinstance(e, ApprovalRequest)]
-    assert len(reqs) == 1
-    assert server.approval_replies["legacy-patch"] == {"decision": "denied"}

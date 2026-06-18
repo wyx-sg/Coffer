@@ -53,17 +53,17 @@ Workspace: { name: str, path: str (绝对路径) }
 已配对的 owner 与对话指针。目前每个 channel 一行；以 chat id 为键，使
 未来支持群聊时只需新增一行，而不是做迁移。
 
-| column | type | notes |
-| --- | --- | --- |
-| `id` | INTEGER PK | |
-| `resource_id` | INTEGER, FK `resources.id` ON DELETE CASCADE | 所属 channel |
-| `chat_id` | TEXT | Telegram chat id / SeaTalk employee_code |
-| `display_name` | TEXT | 配对时发送者的名字，用于 UI/status |
-| `paired_at` | DATETIME (UTC) | |
-| `active_conversation_id` | TEXT NULL | 当前对话；对话消失时清空 |
-| `sender_id` | TEXT NULL | 已配对发送者的稳定 id（Telegram from.id、SeaTalk employee_code）；owner gate 在其存在时校验它。NULL → chat-id-only 闸（旧 peer） |
-| `preferred_agent` | TEXT NULL | 粘性 agent 选择（`/agent`）；NULL → channel `default_agent` |
-| `preferred_workspace` | TEXT NULL | 粘性 workspace 选择（`/cwd`）；NULL → channel `default_workspace` |
+| column                   | type                                         | notes                                                                                                                            |
+| ------------------------ | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                     | INTEGER PK                                   |                                                                                                                                  |
+| `resource_id`            | INTEGER, FK `resources.id` ON DELETE CASCADE | 所属 channel                                                                                                                     |
+| `chat_id`                | TEXT                                         | Telegram chat id / SeaTalk employee_code                                                                                         |
+| `display_name`           | TEXT                                         | 配对时发送者的名字，用于 UI/status                                                                                               |
+| `paired_at`              | DATETIME (UTC)                               |                                                                                                                                  |
+| `active_conversation_id` | TEXT NULL                                    | 当前对话；对话消失时清空                                                                                                         |
+| `sender_id`              | TEXT NULL                                    | 已配对发送者的稳定 id（Telegram from.id、SeaTalk employee_code）；owner gate 在其存在时校验它。NULL → chat-id-only 闸（旧 peer） |
+| `preferred_agent`        | TEXT NULL                                    | 粘性 agent 选择（`/agent`）；NULL → channel `default_agent`                                                                      |
+| `preferred_workspace`    | TEXT NULL                                    | 粘性 workspace 选择（`/cwd`）；NULL → channel `default_workspace`                                                                |
 
 约束：`UNIQUE (resource_id, chat_id)`；对 `resource_id` 建索引。
 
@@ -81,13 +81,12 @@ channel 默认值。
 
 ## 内存态（从不持久化）
 
-| object | scope | content |
-| --- | --- | --- |
-| `PairingCode` | 按 channel | 码、过期时间、剩余尝试次数；重新签发即替换，成功/过期/耗尽即丢弃 |
-| message queue | 按 peer | 有界 FIFO（10），存放等待轮到自己的入站文本 |
-| progress state | 按运行中的 turn | 可编辑状态消息的 IM message id、上次编辑时间戳 |
-| approval routing | 按待处理审批 | `request_id ↔ (chat, prompt message id)`，让一次按钮点按能解决正确的审批门并更新正确的消息 |
-| seatalk token cache | 按 channel | app access token + 过期时间 |
+| object              | scope           | content                                                          |
+| ------------------- | --------------- | ---------------------------------------------------------------- |
+| `PairingCode`       | 按 channel      | 码、过期时间、剩余尝试次数；重新签发即替换，成功/过期/耗尽即丢弃 |
+| message queue       | 按 peer         | 有界 FIFO（10），存放等待轮到自己的入站文本                      |
+| progress state      | 按运行中的 turn | 可编辑状态消息的 IM message id、上次编辑时间戳                   |
+| seatalk token cache | 按 channel      | app access token + 过期时间                                      |
 
 崩溃行为：这一切都随 daemon 一起蒸发；turn 由聊天平台的启动清扫标记为
 failed，配对码重新签发，队列归零。用户依赖的任何东西都不会只活在内存
@@ -98,8 +97,6 @@ failed，配对码重新签发，队列归零。用户依赖的任何东西都�
 ```
 InboundMessage:  channel name, chat_id, sender display name, text,
                  platform message id, timestamp
-ApprovalClick:   channel name, chat_id, value (request id + decision),
-                 prompt message id
 OutboundText:    markdown text (rendered per adapter capability)
 ChannelCapabilities: supports_edit, supports_buttons, supports_typing,
                  max_message_chars
@@ -110,11 +107,11 @@ Telegram update 或 SeaTalk event 的形状。
 
 ## 审计事件（spec 009）
 
-| event | when |
-| --- | --- |
-| `channel_pairing_issued` | 生成一个配对码时 |
-| `channel_paired` | 某个发送者认领该码并成为 peer 时 |
-| `channel_notify_sent` | notify 把文本投递给 peer 时 |
+| event                    | when                             |
+| ------------------------ | -------------------------------- |
+| `channel_pairing_issued` | 生成一个配对码时                 |
+| `channel_paired`         | 某个发送者认领该码并成为 peer 时 |
+| `channel_notify_sent`    | notify 把文本投递给 peer 时      |
 
 资源生命周期事件（`resource_created` … `resource_deleted`）由框架自动
 产生。对话/turn 活动由聊天平台审计；channel 层不在那里添加任何东西。

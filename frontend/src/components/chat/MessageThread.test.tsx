@@ -228,24 +228,4 @@ describe("MessageThread", () => {
     await waitFor(() => expect(screen.getByText("Other Agent")).toBeInTheDocument());
     expect(screen.queryByRole("combobox", { name: /select.*model/i })).not.toBeInTheDocument();
   });
-
-  test("renders the approval card when a turn is paused on approval", async () => {
-    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
-    const onApprovalDecide = vi.fn();
-    renderThread({
-      isStreaming: true,
-      pendingApproval: {
-        request_id: "r1",
-        tool_use_id: "t1",
-        tool_name: "run_command",
-        tool_input: { cmd: "ls" },
-      },
-      onApprovalDecide,
-    });
-    await waitFor(() => expect(screen.getByText("Approval required")).toBeInTheDocument());
-    expect(screen.getByText("run_command")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /allow/i }));
-    await waitFor(() => expect(onApprovalDecide).toHaveBeenCalledWith("allow"));
-  });
 });

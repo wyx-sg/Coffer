@@ -11,18 +11,16 @@ than one kind of agent can be reached from that page without re-architecture.
 Coffer ships one agent on the platform out of the box — a general-purpose
 built-in agent that uses every resource in the vault (MCP tools, skills,
 memory, knowledge bases) through Coffer's own MCP gateway, on a user-chosen LLM
-provider. The platform also carries the capabilities an agent needs that the
-built-in agent's own gating makes optional — a human-approval channel for tool
-calls — and the controls every conversation needs: streamed turns, one
-in-flight turn at a time, and user interruption."
+provider. The platform also carries the controls every conversation needs:
+streamed turns, one in-flight turn at a time, and user interruption."
 
 本规格把 Coffer 从一个*存储* AI 资产的 vault 变成一个*使用*它们的 vault，而且
 它以一个**平台**的方式实现，而非一个单一的硬接功能。它一次交付两件事：
 
-1. **一个聊天平台。** 一个一等的聊天界面、持久化的多对话历史、一个流式回合协议、
-   人在环中的工具审批，以及用户中断 —— 全部针对一个 **agent-provider 注册表**
-   表达。一个 agent 只通过该注册表被触达，因此新增另一种 agent 是一个新的注册表
-   条目，而非对聊天页面、持久化层或 REST/SSE 契约的改动。
+1. **一个聊天平台。** 一个一等的聊天界面、持久化的多对话历史、一个流式回合协议，
+   以及用户中断 —— 全部针对一个 **agent-provider 注册表** 表达。一个 agent 只通过
+   该注册表被触达，因此新增另一种 agent 是一个新的注册表条目，而非对聊天页面、
+   持久化层或 REST/SSE 契约的改动。
 2. **该平台上的 agent。** Coffer 的内置通用 agent，"Coffer Assistant" —— 一个
    进程内的 agentic 循环，由用户自己的 MCP server、skills、memory 与知识库通过
    Coffer 的 MCP gateway 驱动，运行在一个用户配置的 LLM provider 上 ——
@@ -32,9 +30,8 @@ in-flight turn at a time, and user interruption."
    新增一个 agent 是一个注册表条目，无需改动聊天界面、持久化或 wire 契约。
 
 平台的各部分与它的 agent 被共同交付，因为一个没有 agent 的平台无法被演练，而一个
-没有平台的 agent 无法被触达。每一个内置 agent 自身并不需要的平台能力 ——
-最重要的是审批通道 —— 仍然完整交付并被端到端证明，因此接缝在它落地的那一天就是
-真实的，而非一个承诺。
+没有平台的 agent 无法被触达。agent 以完整权限运行；owner-pairing（属主配对）是安全
+闸门。接缝在它落地的那一天就是真实的，而非一个承诺。
 
 ## 定位 —— Vault Console（金库控制台，[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md)）
 
@@ -45,13 +42,12 @@ IM 竞争的日常编码聊天。它的两个耐久职责是：
 1. **对金库说话。** 通过内置 agent（Coffer 自有网关的进程内 MCP 客户端），用户与
    自己的 memory、skills、knowledge、聚合 MCP 工具对话并检视它们。每个回合 surface
    它碰了哪些金库资源，让控制台同时成为"查看一个 agent 能从金库拿到什么"的地方。
-2. **旁观并审批 channel 驱动的会话。** Channels（Spec 009）创建会话、转发工具审批走
-   的是与本界面**同一套** `ConversationPort` / `TurnPort` 接缝。控制台是
-   human-in-the-loop 审批席：它呈现会话来源（网页草稿 vs channel peer），让用户为 IM
-   peer 正在驱动的回合接管审批席。
+2. **观测 channel 驱动的会话。** Channels（Spec 009）通过与本界面**同一套**
+   `ConversationPort` / `TurnPort` 接缝创建会话。控制台呈现会话来源（网页草稿 vs
+   channel peer），让用户观看 IM peer 正在驱动的回合。
 
 CLI agent（Claude Code、Codex）**不**被重定位为日常编码聊天；它们仍然是 (a) 让
-provider 接缝保持诚实的 test-drive 目标，(b) IM peer 驱动、用户在这里旁观/审批的
+provider 接缝保持诚实的 test-drive 目标，(b) IM peer 驱动、用户在这里旁观的
 会话。**移出范围：** 把 Coffer 当作主力的浏览器内编码聊天；只对那个定位才有意义的
 能力保持在范围外，除非未来某个 spec 重开它。
 
@@ -63,9 +59,9 @@ provider 接缝保持诚实的 test-drive 目标，(b) IM peer 驱动、用户�
 （`claude_code`、`codex`，及将来的受管 agent）对话，界面从 _Vault Console（金库控制
 台）_ 改回 **Chat（聊天）**。"通过内置 agent 与金库对话"这一职责被去掉；本地模型重塑
 为**仅内部**能力，只能通过 `coffer__*` MCP 工具触达——即对 `coffer__search_tools` 的
-语义升级，与一个对知识/记忆的新 `coffer__ask` agentic-RAG 工具（见 ADR-024）。**旁观
-并审批 channel 驱动会话**这一职责（ADR-021 职责 2）原样存续，走同一套
-`ConversationPort` / `TurnPort` / `submit_approval` 接缝。
+语义升级，与一个对知识/记忆的新 `coffer__ask` agentic-RAG 工具（见 ADR-024）。**观测
+channel 驱动会话**这一职责（ADR-021 职责 2）原样存续，走同一套
+`ConversationPort` / `TurnPort` 接缝。
 
 下文用户故事、验收场景与功能需求中仍把内置 agent 描述为可选聊天 agent 的部分（它的
 model 选择器、它在聊天里的金库工具调用、对它的 `coffer chat`），应读作 ADR-024 从聊天
@@ -186,31 +182,6 @@ local-first、SQLite-as-record 立场。
 
 ---
 
-### 用户故事 6 —— 批准或拒绝一个 agent 的工具调用（优先级：P2）
-
-一些 agent 在用户说可以之前不得运行一个工具。当一个 agent 到达一个需要权限的
-工具调用时，该回合暂停，且聊天界面显示一张命名该工具及其输入的**审批卡片**。
-用户点击 **Allow** 或 **Deny**；agent 收到该决策并继续 —— 在 allow 时运行该工具,
-或在 deny 时把拒绝当作该工具的结果对待。Coffer 的内置 agent 依赖 gateway 自己的
-能力门控，不为每次调用的审批而暂停；审批通道是一个为任何确实使用它的 agent 完整
-交付的平台能力。
-
-**为何此优先级**：一个能在用户机器上行动的 agent 只有在用户能介入时才安全。把该
-通道建进平台 —— 而非建进某个 agent —— 正是保持接缝诚实的东西。不阻塞核心循环。
-
-**独立测试**：用一个为工具调用请求审批的 agent 驱动一个回合；观察审批卡片；
-点击 Allow；观察工具运行且回合结束。用 Deny 重复；观察 agent 收到拒绝。
-
-**覆盖的场景**：
-
-- 一个 agent 回合暂停并发出一个界面渲染的审批请求
-- allow 一个请求让 agent 运行该工具并结束回合
-- deny 一个请求把拒绝作为工具结果返回给 agent
-- 一个针对未知或已决请求的审批决策被拒绝
-- SDK 驱动的 Claude Code 的逐工具审批中转正常工作
-
----
-
 ### 用户故事 7 —— 停止一个正在运行的回合（优先级：P2）
 
 一个回合耗时过长或走错了方向。用户点击 **Stop**。回合立即结束；agent 已经产生的
@@ -268,27 +239,6 @@ agent 使用哪一个。
 
 ---
 
-### 用户故事 11 —— 旁观并审批 channel 驱动的会话（优先级：P2）
-
-一个 IM peer（Spec 009）正在驱动一个针对某 agent 的会话。在 Vault Console 里，用户
-在历史列表中看到该会话**带有来源与 peer 身份标记**，看它的回合流式推进，并在 agent
-因工具审批暂停时**从网页接管审批席**，与 IM 按钮等价。
-
-**为何此优先级**：Channels 已经把审批走平台的审批通道；给人一个在网页旁观并审批的
-席位，才让控制台的第二个角色变真。不阻塞核心循环。
-
-**独立测试**：配对一个 IM peer，让它发起一个请求审批的回合；打开 Vault Console，看到
-该会话带着 channel 来源与 peer 标记；点 Allow；观察工具运行、IM peer 收到结果。
-
-**覆盖的场景**：
-
-- 会话列表标记每个会话的来源（网页 vs channel），并对 channel 会话标记 peer 身份
-- channel 驱动回合上的待审批可从网页审批卡片解决，与 IM 按钮等价（两者解决同一审批
-  通道）
-- 旁观一个 channel 驱动回合，流式收到与网页 composer 相同的回合事件
-
----
-
 ### 边界情况
 
 - **没有配置模型**：Chat 页面渲染一个链接到 Settings → Models 的可操作空状态；
@@ -302,10 +252,6 @@ agent 使用哪一个。
   状态，失败作为一个工具结果返回给 agent，且 agent 可以重试、绕过它，或报告它。
 - **失控的工具循环**：一个回合由一个工具迭代上限约束；达到它时回合作为一个正常
   回合完成干净地结束（携带 stop reason `max_iterations`），而非作为一个错误。
-- **没有匹配请求的审批决策**：一个为不存在的 request id、或一个已决请求发布的
-  决策被拒绝；回合不受影响。
-- **一个回合在等待审批时被中断**：待决的审批等待随回合一并被取消；agent 在暂停
-  之前产生的一切按下面的中断规则被保留。
 - **对话长于模型上下文窗口**：内置 agent 发送适配进一个上下文预算（由一个字符
   预算近似，约 4 字符/token）的最近历史；较旧的回合带一个标记从模型输入中省略，
   而完整对话仍被存储。
@@ -381,38 +327,6 @@ agent 使用哪一个。
 - **Then** `coffer__list_skills` 与 `coffer__load_skill` 存在，且
   `coffer__load_skill` 返回该 skill 的内容。
 
-### 场景：一个 agent 回合为人工审批而暂停
-
-- **Given** 一个其回合在运行一个工具前请求审批的 agent，
-- **When** 回合到达该工具调用，
-- **Then** 流携带一个聊天界面渲染为卡片的审批请求，回合等待，且在用户 allow 它时
-  agent 运行该工具且回合完成。
-
-### 场景：一次被拒绝的工具调用被报告给 agent
-
-- **Given** 一个暂停在审批请求上的 agent 回合，
-- **When** 用户 deny 它，
-- **Then** 拒绝作为该工具的结果被递交给 agent 且回合在不运行该工具的情况下完成。
-
-### 场景：SDK 驱动的 Claude Code 的逐工具审批中转
-
-- **Given** 一个由 SDK 支持的 Claude Code provider 驱动的回合，其中工具调用请求审批，
-- **When** `can_use_tool` 回调触发，且用户通过平台审批通道提交 allow 或 deny 决策，
-- **Then** 在 allow 时 SDK 回调解析为 `PermissionResultAllow` 且回合以 `TurnDone`
-  完成；在 deny 时回调解析为 `PermissionResultDeny`（携带拒绝消息），且回合也以
-  `TurnDone` 干净完成。
-
-### 场景：app-server 驱动的 Codex 的逐工具审批中转
-
-- **Given** 一个由 app-server 支持的 Codex provider 驱动的回合，其中 Codex 在回合
-  进行中发送 `item/commandExecution/requestApproval` 或
-  `item/fileChange/requestApproval` 请求，
-- **When** 平台发出一个 `ApprovalRequest` 事件，且用户通过平台审批通道提交 allow
-  或 deny 决策，
-- **Then** 在 allow 时 adapter 向 Codex 写回 `{decision: "accept"}`，回合继续并以
-  `TurnDone` 完成；在 deny 时 adapter 向 Codex 写回 `{decision: "decline"}`，回合
-  也以 `TurnDone` 干净完成。
-
 ### 场景：停止一个正在运行的回合
 
 - **Given** 一个正在流式输出的回合，
@@ -469,12 +383,12 @@ agent 使用哪一个。
 - **When** 用户测试连接，
 - **Then** Coffer 向 provider 发一个最小请求并报告成功或人性化的失败信息，且不持久化任何内容。
 
-### 场景：channel 驱动的会话可从控制台旁观与审批
+### 场景：channel 驱动的会话可从控制台观测
 
-- **Given** 一个 IM peer 驱动的会话，其回合因工具审批而暂停，
+- **Given** 一个 IM peer 驱动的会话，
 - **When** 用户打开 Vault Console，
-- **Then** 该会话带着 channel 来源与 peer 身份标记出现，且从网页审批卡片提交
-  allow/deny 解决的是与 IM 按钮相同的那个待审批。
+- **Then** 该会话带着 channel 来源与 peer 身份标记出现，且它的回合流式输出与网页
+  composer 相同的回合事件。
 
 ## 需求
 
@@ -495,7 +409,7 @@ agent 使用哪一个。
 - **FR-004**：平台 MUST 通过 REST API 与 GUI 的新对话对话框暴露已注册 agent 的
   列表 —— 每个带一个稳定的 key、一个显示名与一个当前可用性标志。
 - **FR-005**：一个 agent 通过一个**agent adapter**为一个回合被寻址，该 adapter
-  是自包含的：仅给定对话历史与一个审批通道，它产出一个类型化回合事件的流。adapter
+  是自包含的：仅给定对话历史，它产出一个类型化回合事件的流。adapter
   携带它自己的模型、工具与配置；orchestrator MUST NOT 注入它们。平台在此接缝背后
   交付三个 agent —— 内置 agent 加两个 CLI 支持的 agent（Claude Code、Codex）——
   因此接缝由真实的额外 provider 验证，而非一个单一占用者。
@@ -508,14 +422,8 @@ agent 使用哪一个。
   守护进程的 PATH 上解析；一个不可用的 agent 被列出但不可选。一个 CLI 回合 MUST
   在该目录中运行该工具、把它的行分隔 JSON 输出流式映射到平台的回合事件，并持久化
   上游 session id 以便下一个回合延续同一 session。Claude Code 通过 Claude Agent
-  SDK 驱动：每个 `can_use_tool` 权限回调都桥接至平台的人工审批通道
-  （`can_use_tool` → `ApprovalRequest` 事件 → allow/deny 决策 → SDK 结果），
-  从而每次调用的工具审批对 SDK 支持的 Claude Code 端到端工作。Codex 通过
-  `codex app-server`（stdio 上的 JSON-RPC 2.0，NDJSON 帧）驱动：服务端→客户端
-  审批请求（`item/commandExecution/requestApproval` 与
-  `item/fileChange/requestApproval`）桥接至同一人工审批通道（allow → `"accept"`
-  决策，deny → `"decline"` 决策），从而逐工具审批对 app-server 支持的 Codex 通过
-  与 Claude Code 相同的平台通道端到端工作。
+  SDK 驱动，Codex 通过 `codex app-server`（stdio 上的 JSON-RPC 2.0，NDJSON 帧）
+  驱动；两者都以完整权限运行（owner-pairing 是安全闸门）。
 
 **内置 agent 与 agentic 循环**
 
@@ -566,16 +474,12 @@ agent 使用哪一个。
   `tool_result` 类型的有序内容块列表；助手消息 MUST 在 agent 报告时也存储 token
   用量与产生它们的模型。
 
-**回合生命周期：流式、审批、中断**
+**回合生命周期：流式、中断**
 
 - **FR-018**：System MUST 每个对话只允许一个进行中回合并在当前回合结束前拒绝
   第二条消息。
 - **FR-019**：System MUST 把一个回合作为一个类型化事件序列流式给客户端，至少覆盖
-  文本增量、工具调用、工具结果、审批请求、回合完成与回合错误。
-- **FR-020**：平台 MUST 提供一个**人工审批通道**：一个 agent 回合可以发出一个
-  暂停该回合的审批请求；用户通过一个专用端点提交一个 allow/deny 决策；该决策被
-  递交给等待中的回合。一个针对未知或已决请求的决策 MUST 被拒绝。该通道 MUST 交付
-  并被端到端验证，即便内置 agent 不使用它。
+  文本增量、工具调用、工具结果、回合完成与回合错误。
 - **FR-021**：System MUST 让用户中断一个正在运行的回合：回合立即停止且部分助手
   消息（已产生的任何文本与工具块）MUST 被持久化。中断区别于对话删除，后者丢弃
   进行中回合。
@@ -598,7 +502,7 @@ agent 使用哪一个。
 
 - **FR-027**：System MUST 在桌面应用中提供一个 Chat 页面：一个可折叠的对话历史
   列表、一个带 agent picker 与一个每 agent 配置区域的新对话对话框、一个带流式
-  文本的消息线索、内联可展开工具调用卡片与审批卡片、一个模型选择器、一个 composer,
+  文本的消息线索、内联可展开工具调用卡片、一个模型选择器、一个 composer,
   以及一个用于进行中回合的停止控制。
 - **FR-028**：System MUST 把一个 "Chat" 条目作为主（最顶部）导航项加入应用侧边栏;
   现有的 002-ui-shell IA 在其余方面不变。
@@ -619,14 +523,12 @@ agent 使用哪一个。
 
 - **FR-033**：Chat 界面（标签为 **Chat（聊天）**，按 [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)
   从 _Vault Console_ 改回）MUST **只**与 Coffer 受管 agent 对话，并 MUST 呈现、让用户
-  旁观/审批 channel 驱动的会话。`builtin` agent MUST NOT 作为聊天 agent 提供；其模型是
+  观测 channel 驱动的会话。`builtin` agent MUST NOT 作为聊天 agent 提供；其模型是
   仅内部能力，只能通过 `coffer__*` 工具触达（ADR-024），而非聊天人格。Chat 界面 MUST
   NOT 把自己定位为主力的浏览器内编码聊天；受管 agent 仍作为 provider 接缝验证、以及
   channel 驱动会话的目标而保留。
 - **FR-034**：会话历史 MUST 呈现每个会话的来源（网页草稿 vs channel peer），并对
-  channel 来源的会话呈现 peer 身份；任一会话上的待审批工具调用 MUST 可从网页审批
-  卡片解决，与 channel 自身的审批控件等价（两者解决 FR-020 的同一 human-approval
-  通道）。
+  channel 来源的会话呈现 peer 身份。
 
 ### 关键实体
 
@@ -634,7 +536,7 @@ agent 使用哪一个。
   稳定的 `agent_key`，在对话创建时校验并存储一个对话的 agent 特定配置，为每个回合
   构建一个配置好的 agent adapter，在删除时拆除每对话状态，并报告它当前是否可用。
   provider 被持于 **agent-provider 注册表** 中；聊天界面只知道注册表。
-- **Agent Adapter**：一个 agent 对一个回合的处理。给定对话历史与一个审批通道，
+- **Agent Adapter**：一个 agent 对一个回合的处理。给定对话历史，
   它产出一个 agent 事件流。它是自包含的 —— 它携带它自己的模型、工具与配置，由它
   的 provider 在 adapter 被构建时提供。
 - **Built-in Agent**：Coffer 单一的、代码定义的通用 agent（"Coffer Assistant"），
@@ -650,9 +552,7 @@ agent 使用哪一个。
   provider 类型（`anthropic` | `openai` | `ollama`）、model id、凭据引用（云端）、
   base URL（Ollama / 自定义）、默认标志。
 - **Agent Event**：一个流式回合中的一个类型化事件 —— 文本增量、工具调用、工具
-  结果、审批请求、回合完成，或回合错误。
-- **Approval Request / Approval Decision**：人工审批通道的两半。一个请求命名一个
-  等待权限的工具调用；一个决策是用户携带回等待中回合的 allow/deny 答复。
+  结果、回合完成，或回合错误。
 
 ## 成功标准
 
@@ -675,10 +575,6 @@ agent 使用哪一个。
   schema、回合 orchestrator 或聊天页面 —— 通过针对 agent-provider 注册表、
   `AgentProvider` / `AgentAdapter` 接口与 `agent_key` 字段的评审验证，并由一个
   仅在测试中使用的第二 provider 演示。
-- **SC-008**：人工审批通道端到端工作 —— 一个发出审批请求的 agent 回合暂停，决策
-  端点递交用户的答复，且回合继续 —— 且一个正在运行的回合可被停止并保留其部分输出;
-  两者都由验收测试证明。审批通道额外由一个真实 provider（SDK 支持的 Claude Code）
-  而非仅脚本化假对象来行使，确认每次调用的工具审批对生产 agent adapter 端到端工作。
 
 ## 假设
 
@@ -700,7 +596,7 @@ agent 使用哪一个。
 - agent-provider 注册表在启动时由代码填充；v1 注册一个 provider（内置 agent）。
   注册表是接缝 —— 从用户管理的配置填充它不在本规格内。
 - 以下被明确**列为不在范围**：用户创建或用户编辑的 agent；一个管理 agent 注册表的
-  GUI；超出 gateway 现有门控与审批通道的每 agent 能力作用域；对话摘要与导出；过去
+  GUI；超出 gateway 现有门控的每 agent 能力作用域；对话摘要与导出；过去
   外部 agent 会话的恢复/继续；以及任何跨 agent 的原始 transcript 浏览/搜索界面（跨
   agent 的共享由蒸馏后的 memory 承担，[ADR-020](../../docs/decisions/ADR-020-transcript-distillation.zh.md)）。
   远程通道由 Spec 009 单独交付。

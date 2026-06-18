@@ -17,7 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from coffer.application.channel.ports import AdapterCallbacks
-from coffer.domain.channel.envelopes import ApprovalClick, InboundMessage
+from coffer.domain.channel.envelopes import InboundMessage
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 
@@ -40,18 +40,12 @@ class RecordingCallbacks:
 
     def __init__(self) -> None:
         self.messages: list[InboundMessage] = []
-        self.clicks: list[ApprovalClick] = []
 
     async def on_message(self, message: InboundMessage) -> None:
         self.messages.append(message)
 
-    async def on_approval_click(self, click: ApprovalClick) -> None:
-        self.clicks.append(click)
-
     def as_callbacks(self) -> AdapterCallbacks:
-        return AdapterCallbacks(
-            on_message=self.on_message, on_approval_click=self.on_approval_click
-        )
+        return AdapterCallbacks(on_message=self.on_message)
 
 
 class FakeTelegram:

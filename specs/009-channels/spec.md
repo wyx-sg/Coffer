@@ -7,7 +7,7 @@
 **Status**: Accepted
 **Input**: User description: "Coffer needs messaging channels — Telegram and
 SeaTalk first — so the owner can talk to any agent on the chat platform from
-the IM apps they already use, approve tool calls without leaving the chat, and
+the IM apps they already use and
 receive notifications pushed by Coffer. The architecture must stay uniform:
 more channels and more agents will be added, so a new channel never touches
 agent code and a new agent never touches channel code."
@@ -16,15 +16,15 @@ A channel is a registered resource (`channel:<name>`) that connects one IM
 account to Coffer's chat platform (spec 008). Messages from the paired owner
 become turns in an ordinary conversation; the agent's reply goes back to the
 IM chat. The channel layer and the agent layer meet only at the chat
-platform's existing seams — conversation creation, the turn event stream, the
-approval gate — so the cost of N channels and M agents is N + M, never N × M.
+platform's existing seams — conversation creation and the turn event stream
+— so the cost of N channels and M agents is N + M, never N × M.
 
 > **Note ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)).**
 > Mentions of the `builtin` agent below as a routable channel target reflect the
 > behaviour shipped when this spec landed. ADR-024 retires the built-in agent as a
 > chat persona, so channels route to **managed** agents (Claude Code, Codex, …)
 > only; the built-in model is now an internal `coffer__*` capability, not a chat
-> target. The channel observe/approve mechanics over the shared seams are
+> target. The channel observe mechanics over the shared seams are
 > unchanged.
 
 ## User Scenarios & Testing
@@ -133,28 +133,6 @@ an overflow notice.
 
 ---
 
-### User Story 5 — Approve a tool call from the IM app (Priority: P2)
-
-When an agent pauses a turn for human approval, the channel delivers the
-request as an interactive prompt — inline Approve/Deny buttons on Telegram,
-an interactive card on SeaTalk. The owner's tap resolves the platform's
-approval gate exactly as a click in the web UI would, and the prompt message
-is updated to show the decision. Taps from anyone but the owner are ignored.
-
-**Why this priority**: The chat platform carries an approval capability;
-a channel that cannot answer it would silently hang any agent that uses it.
-
-**Independent Test**: With a scripted agent that requests approval, run a
-turn, click the fake IM's Approve button, observe the decision delivered to
-the agent and the prompt updated; repeat with Deny.
-
-**Covering scenarios**:
-
-- an approval prompt is answered from the IM chat
-- a denied approval is delivered to the agent
-
----
-
 ### User Story 6 — Receive notifications (Priority: P2)
 
 Coffer can push a message to a channel's paired owner without any inbound
@@ -259,9 +237,9 @@ observe it is refused; send `/model <name>` and observe the next turn use it.
 ### User Story 10 — Know who drove what, and when a turn is done (Priority: P2)
 
 Because the entrypoint is remote-reachable, every turn a channel message drives
-and every approval the owner answers from chat is recorded in the audit log
+is recorded in the audit log
 with the channel, peer, and agent — answering "who drove which agent through
-which channel, and what did they approve". And because some platforms cannot
+which channel". And because some platforms cannot
 edit messages and show nothing while a long bridged turn runs, every turn ends
 with one compact summary pushed to the chat: done with tool count, duration,
 and tokens, or the error, or the stop.
@@ -271,14 +249,12 @@ first-class auth/audit and a reliable completion signal; both must be true on
 every channel, including the silent ones.
 
 **Independent Test**: Drive a turn from a paired channel and observe a
-turn-started audit record with the channel, peer, and agent; answer an approval
-prompt and observe an approval-resolved audit record; observe a completion
+turn-started audit record with the channel, peer, and agent; observe a completion
 summary message after the turn on a channel that cannot edit messages.
 
 **Covering scenarios**:
 
 - a channel-driven turn is audited with channel, peer, and agent
-- an approval resolved from chat is audited
 - a completion summary is sent after every turn
 - a group member who is not the paired sender is ignored
 
@@ -324,7 +300,7 @@ summary message after the turn on a channel that cannot edit messages.
   conversation, creating one on first use via the chat platform's standard
   conversation-creation path (default agent validated by the agent registry).
   The channel layer reaches agents only through the chat platform's seams:
-  conversation service, turn orchestrator, approval gate.
+  conversation service, turn orchestrator.
 - **FR-005**: Replies render per channel capability: Telegram converts
   markdown to Telegram HTML with a plain-text fallback and 4000-character
   paragraph-boundary chunking, and streams tool progress into one throttled
@@ -334,10 +310,6 @@ summary message after the turn on a channel that cannot edit messages.
 - **FR-006**: Commands `/new`, `/stop`, `/status`, `/help` work from any
   paired chat. `/stop` and `/new` take effect even while a turn is running;
   other messages queue (FIFO, bounded at 10) and run in order.
-- **FR-007**: An `approval_request` event in the turn stream becomes an
-  interactive prompt (Telegram inline buttons, SeaTalk interactive card); the
-  owner's response resolves the platform approval gate; the prompt is updated
-  with the outcome; non-owner clicks are ignored.
 - **FR-008**: A notify entry point (REST + CLI) delivers arbitrary text to a
   channel's paired peer, independent of any conversation.
 - **FR-009**: The SeaTalk callback listener is a separate process serving only
@@ -369,10 +341,9 @@ status / notify`.
   `employee_code`); pairing records it on the peer, and an inbound message is
   accepted only when its `chat_id` matches and — when the peer has a stored
   `sender_id` — its sender matches. A peer paired before this requirement (no
-  stored `sender_id`) degrades to the chat-id-only gate. Two channel-driven
-  events are audited beyond FR-012: a turn started by an inbound message
-  (channel, peer, agent, conversation) and an approval resolved from the chat
-  (channel, peer, tool, decision).
+  stored `sender_id`) degrades to the chat-id-only gate. One channel-driven
+  event is audited beyond FR-012: a turn started by an inbound message
+  (channel, peer, agent, conversation).
 - **FR-015**: After every turn the channel sends one compact completion summary
   as a fresh message, independent of message-edit capability: success reports a
   done marker with tool count, duration, and token usage; a failed turn reports
@@ -415,7 +386,7 @@ status / notify`.
   Inbound carries the sender's identity (`sender_id`) for the owner gate.
 - **ChannelCapabilities** — what an adapter declares it can do
   (edit messages, interactive buttons, typing indicator); the core picks
-  rendering and approval strategies from it.
+  rendering strategies from it.
 - **PairingCode** — in-memory, single-use, per-channel; never persisted.
 
 ## Success Criteria
@@ -427,8 +398,8 @@ status / notify`.
 - **SC-002**: A stranger messaging the bot produces zero observable response
   and zero turns, while the owner's traffic is unaffected.
 - **SC-003**: Adding a hypothetical third channel type requires implementing
-  one adapter + one config schema and touching no agent, conversation, or
-  approval code (demonstrated by the test-only fake channel the suite uses).
+  one adapter + one config schema and touching no agent or conversation
+  code (demonstrated by the test-only fake channel the suite uses).
 - **SC-004**: Any agent registered on the chat platform is reachable from any
   channel with no channel-side code change (demonstrated by driving a channel
   against a scripted second provider in tests).
@@ -439,7 +410,7 @@ status / notify`.
   message can never point an agent at a directory the operator did not
   pre-authorize (demonstrated by driving two scripted providers and a refused
   bare path in tests).
-- **SC-007**: Every channel-driven turn and every approval answered from chat
+- **SC-007**: Every channel-driven turn
   is queryable in the audit log by channel, peer, and agent; and every turn,
   including on a channel that cannot edit messages, ends with a completion
   summary in the chat (demonstrated against the edit-incapable fake adapter).
@@ -548,19 +519,6 @@ status / notify`.
 - **When** the peer sends another message
 - **Then** the message is dropped and the peer is told the channel is busy
 
-### Scenario: an approval prompt is answered from the IM chat
-
-- **Given** a scripted agent that requests tool approval
-- **When** the peer taps Approve on the delivered prompt
-- **Then** the approval gate resolves allow, the turn continues, and the
-  prompt shows the decision
-
-### Scenario: a denied approval is delivered to the agent
-
-- **Given** a pending approval prompt
-- **When** the peer taps Deny
-- **Then** the agent receives the deny decision and the prompt shows it
-
 ### Scenario: notify delivers to the paired owner
 
 - **Given** a paired channel
@@ -652,13 +610,6 @@ status / notify`.
 - **Then** an audit record names the channel, the peer, the agent, and the
   conversation
 
-### Scenario: an approval resolved from chat is audited
-
-- **Given** a scripted agent that requests approval
-- **When** the peer answers the approval prompt
-- **Then** an audit record names the channel, the peer, the tool, and the
-  decision
-
 ### Scenario: a completion summary is sent after every turn
 
 - **Given** a paired channel on an adapter that cannot edit messages
@@ -682,7 +633,3 @@ status / notify`.
   quickstart but does not manage the tunnel.
 - Channels carry text conversations; rich media arrives as a polite
   "text only" reply.
-- The built-in agent gates tool calls through the MCP gateway today, so live
-  approval prompts appear only for agents that use the platform's approval
-  gate; the channel-side capability is proven with a scripted provider, the
-  same way spec 008 proved the platform seam.

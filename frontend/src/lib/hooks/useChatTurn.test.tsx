@@ -12,10 +12,9 @@ vi.mock("@/lib/chat/streamClient", () => ({
   streamChatTurn: vi.fn(),
 }));
 
-// Mock chatApi — useChatTurn calls submitApproval / interruptTurn on it.
+// Mock chatApi — useChatTurn calls interruptTurn on it.
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
-    submitApproval: vi.fn(),
     interruptTurn: vi.fn(),
   },
 }));
@@ -350,50 +349,6 @@ describe("useChatTurn", () => {
     expect(result.current.error).toBeNull();
   });
 
-  test("approval_request pauses the turn; submitApproval delivers the decision", async () => {
-    let release!: () => void;
-    const gate = new Promise<void>((r) => {
-      release = r;
-    });
-    streamChatTurnMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      yield {
-        event: "approval_request",
-        data: { request_id: "r1", tool_use_id: "t1", tool_name: "run", tool_input: {} },
-      };
-      await gate; // park here — the turn is awaiting the decision
-      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
-    });
-    chatApiMock.submitApproval.mockResolvedValue(undefined);
-
-    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
-
-    // Kick off the turn; it parks at the gate after emitting approval_request.
-    let sendPromise!: Promise<void>;
-    act(() => {
-      sendPromise = result.current.send("hi");
-    });
-
-    await waitFor(() => expect(result.current.pendingApproval).not.toBeNull());
-    expect(result.current.pendingApproval?.request_id).toBe("r1");
-
-    await act(async () => {
-      await result.current.submitApproval("allow");
-    });
-    expect(chatApiMock.submitApproval).toHaveBeenCalledWith("conv-1", {
-      request_id: "r1",
-      behavior: "allow",
-    });
-    expect(result.current.pendingApproval).toBeNull();
-
-    release();
-    await act(async () => {
-      await sendPromise;
-    });
-    expect(result.current.isStreaming).toBe(false);
-    expect(result.current.error).toBeNull();
-  });
-
   test("switching conversation mid-stream resets state and aborts the old stream", async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => {
@@ -427,7 +382,6 @@ describe("useChatTurn", () => {
     // Conv-A's turn state must not bleed into conv-B.
     expect(result.current.isStreaming).toBe(false);
     expect(result.current.liveMessage).toBeNull();
-    expect(result.current.pendingApproval).toBeNull();
     // The previous conversation's stream was aborted.
     expect(capturedSignal?.aborted).toBe(true);
 

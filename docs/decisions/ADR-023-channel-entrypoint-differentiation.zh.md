@@ -9,8 +9,7 @@
 
 Spec 009 让 Coffer 成为 channel 入口管理者：owner 把一个 IM 账号配对到
 `channel:<name>` 资源,通过 chat 平台的接缝驱动任一已注册 agent（`builtin`、
-`claude_code`、`codex`）。两个桥接 agent 的逐工具审批中转此前已交付（Claude
-Code 走 Agent SDK,Codex 走 `app-server`）,owner 已能从 IM 里批准工具调用。
+`claude_code`、`codex`）。
 
 入口管理者仍缺的是把它从「一根固定线」变成「交换机」的那一层：owner 只能跟
 channel 配置里写死的那一个 agent、在（operator 写死的）那一个工作目录里对话,
@@ -28,10 +27,10 @@ channel 配置里写死的那一个 agent、在（operator 写死的）那一个
 ## 决策
 
 1. **结构维 vs 参数维——所有切换统一一个心智模型。**
-   - *结构维*（`agent_key`、`cwd`）在建会话时 pin,中途不可改。切换其一会
+   - _结构维_（`agent_key`、`cwd`）在建会话时 pin,中途不可改。切换其一会
      **开一个新会话**,带上另一维的粘性值;旧会话留在历史里。`/agent` 和
      `/cwd` 属结构维。
-   - *参数维*（`model`）每 turn 重读。切换其一**在同会话下条 turn 生效**。
+   - _参数维_（`model`）每 turn 重读。切换其一**在同会话下条 turn 生效**。
      `/model` 属参数维。
 
    这对应 provider 的真实契约（cwd/agent 固定于 `init_conversation`;model 读于
@@ -60,11 +59,10 @@ channel 配置里写死的那一个 agent、在（operator 写死的）那一个
    错误回传到 chat。（这同时修了 Claude Code provider 此前接受 `model` 选项却
    从不持久化、导致永远由 CLI 自选的问题。）
 
-5. **channel 驱动的工作在审计日志里是一等的。** 两个新事件类型记录通用 per-turn
+5. **channel 驱动的工作在审计日志里是一等的。** 一个新事件类型记录通用 per-turn
    审计记不下的东西：`CHANNEL_TURN_STARTED`（一条 inbound 消息驱动一个 turn 时
-   ——谁/何时/哪个 channel/哪个 agent/哪个 conversation）与
-   `CHANNEL_APPROVAL_RESOLVED`（owner 从 chat 回答工具审批时——channel/peer/
-   工具/决定）。审计落在 channel 层,因为只有那里有 channel + peer 上下文;现有
+   ——谁/何时/哪个 channel/哪个 agent/哪个 conversation）。审计落在 channel 层,
+   因为只有那里有 channel + peer 上下文;现有
    自由格式的 `details_json` 承载结构化上下文,无需改 schema。
 
 6. **owner gate 校验发送者身份,而非只看会话身份。** inbound 信封携带
@@ -87,9 +85,6 @@ channel 配置里写死的那一个 agent、在（operator 写死的）那一个
   入口把 agent 指向任意主机目录,正是 allowlist 要守的边界。
 - **对桥接 model 串按精选列表校验**——作为 cargo-cult 否决;Coffer 不拥有上游
   CLI 的 model 命名空间,还得追着它跑。透传 + 回传 CLI 错误更诚实更便宜。
-- **在平台接缝（`submit_approval`）审计审批以统一覆盖 web + IM**——推迟;让记录
-  有用的 channel + peer 上下文只存在于 channel 层。若 web 面需要,可再补一个
-  surface-agnostic 的审批审计。
 - **turn 期间 token 级流式 + 刷心跳**——暂否决;单条完成摘要才是高价值低噪声的
   信号,且块级工具进度在平台可编辑处已存在。
 
@@ -102,4 +97,4 @@ channel 配置里写死的那一个 agent、在（operator 写死的）那一个
 - 命令集增 `/agent`、`/cwd`、`/model`;三者都骑现有 slash 命令接缝、在 channel
   core 里按能力选行为,因此没有 adapter 学到它们——差异化层是 channel-agnostic
   的,任何未来 channel 都继承它（spec 009 SC-003 保持）。
-- 审计日志能回答「谁经哪个 channel 驱动了哪个 agent、批准了什么」,无需改 schema。
+- 审计日志能回答「谁经哪个 channel 驱动了哪个 agent」,无需改 schema。

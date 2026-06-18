@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 import pytest
 
 from coffer.domain.channel.envelopes import (
-    ApprovalClick,
     ChannelCapabilities,
     InboundMessage,
     SentMessage,
@@ -39,26 +38,12 @@ def test_inbound_message_value_equality():
     assert _inbound(text="other") != _inbound()
 
 
-def test_approval_click_is_frozen_with_value_equality():
-    click = ApprovalClick(
-        channel="tg-main", chat_id="42", value="approve:1", prompt_message_id="p1"
-    )
-    assert click == ApprovalClick(
-        channel="tg-main", chat_id="42", value="approve:1", prompt_message_id="p1"
-    )
-    with pytest.raises(FrozenInstanceError):
-        click.value = "deny:1"  # type: ignore[misc]
-
-
 def test_channel_capabilities_carries_strategy_fields():
-    caps = ChannelCapabilities(
-        supports_edit=True, supports_buttons=False, supports_typing=True, max_message_chars=4096
-    )
-    assert (caps.supports_edit, caps.supports_buttons, caps.supports_typing) == (True, False, True)
+    caps = ChannelCapabilities(supports_edit=True, supports_typing=True, max_message_chars=4096)
+    assert (caps.supports_edit, caps.supports_typing) == (True, True)
     assert caps.max_message_chars == 4096
     assert {f.name for f in fields(ChannelCapabilities)} == {
         "supports_edit",
-        "supports_buttons",
         "supports_typing",
         "max_message_chars",
     }

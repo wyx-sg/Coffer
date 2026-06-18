@@ -4,20 +4,18 @@
 //
 // API:
 //   const { send, isStreaming, liveMessage, error,
-//           pendingApproval, submitApproval, interrupt } = useChatTurn(convId);
+//           interrupt } = useChatTurn(convId);
 //
 // `liveMessage` is non-null while a turn is in flight (it carries the user's
 // just-sent prompt as an optimistic echo plus the streaming reply) and is
 // cleared after the persisted messages are loaded — via messages query
 // invalidation on turn_done, or on stream failure (the persisted failed row
 // is authoritative).
-// `pendingApproval` is non-null while a turn is paused on a human-approval
-// request — the platform capability; Coffer's built-in agent does not use it.
 
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { streamChatTurn, type AgentEvent, type ApprovalRequestEvent } from "@/lib/chat/streamClient";
+import { streamChatTurn, type AgentEvent } from "@/lib/chat/streamClient";
 import { chatApi, type ContentBlock, type Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
 import { CONVERSATIONS_KEY, messagesKey } from "./useConversations";
@@ -41,9 +39,6 @@ export interface LiveMessage {
   streaming: boolean;
 }
 
-/** A turn paused awaiting a human allow/deny decision on a tool call. */
-export type PendingApproval = ApprovalRequestEvent["data"];
-
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -59,10 +54,6 @@ export interface UseChatTurnResult {
   error: Error | null;
   /** Clear any error to allow a retry. */
   clearError: () => void;
-  /** Non-null while the turn is paused on a human-approval request. */
-  pendingApproval: PendingApproval | null;
-  /** Answer the pending approval request; the paused turn then resumes. */
-  submitApproval: (behavior: "allow" | "deny") => Promise<void>;
   /** Stop the in-flight turn; its partial output is kept server-side. */
   interrupt: () => Promise<void>;
 }
@@ -72,7 +63,6 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveMessage, setLiveMessage] = useState<LiveMessage | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
 
   // Abort controller allows cancellation on unmount / conversation switch.
   const abortRef = useRef<AbortController | null>(null);
@@ -80,13 +70,12 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
   // Bind turn state to the conversation it belongs to: when the active
   // conversation changes (or the hook unmounts), abort any in-flight stream
   // for the previous conversation and reset the visible turn state, so a
-  // streaming message, lock, approval, or error never bleeds into another
-  // thread (nor gets its interrupt/approval POSTed to the wrong conversation).
+  // streaming message, lock, or error never bleeds into another
+  // thread (nor gets its interrupt POSTed to the wrong conversation).
   useEffect(() => {
     setIsStreaming(false);
     setLiveMessage(null);
     setError(null);
-    setPendingApproval(null);
     return () => {
       abortRef.current?.abort();
       abortRef.current = null;
@@ -100,7 +89,6 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
       setError(null);
       setIsStreaming(true);
       setLiveMessage({ userText: text, text: "", toolBlocks: [], streaming: true });
-      setPendingApproval(null);
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -119,13 +107,8 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
         let assistantText = "";
         for await (const event of gen) {
           if (!isCurrent()) return;
-          if (event.event === "approval_request") {
-            // The turn paused — surface the request so the user can decide.
-            setPendingApproval(event.data);
-          } else {
-            if (event.event === "text_delta") assistantText += event.data.text;
-            handleEvent(event, setLiveMessage);
-          }
+          if (event.event === "text_delta") assistantText += event.data.text;
+          handleEvent(event, setLiveMessage);
         }
 
         // Turn completed — refetch the persisted messages, then drop the live
@@ -155,7 +138,6 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
       } finally {
         if (isCurrent()) {
           setIsStreaming(false);
-          setPendingApproval(null);
         }
         // The first turn renames the conversation server-side (auto-title);
         // refresh the list whether the turn succeeded or failed.
@@ -163,29 +145,6 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
       }
     },
     [conversationId, isStreaming, qc],
-  );
-
-  const submitApproval = useCallback(
-    async (behavior: "allow" | "deny") => {
-      const approval = pendingApproval;
-      if (!approval) return;
-      try {
-        await chatApi.submitApproval(conversationId, {
-          request_id: approval.request_id,
-          behavior,
-        });
-        // Clear only the request we answered — a later turn may have raised a
-        // fresh one in the meantime.
-        setPendingApproval((cur) => (cur === approval ? null : cur));
-      } catch (err) {
-        // The decision did not reach the turn — keep the card so the user can
-        // retry, and surface the failure.
-        const wrapped =
-          err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
-        setError(wrapped);
-      }
-    },
-    [conversationId, pendingApproval],
   );
 
   const interrupt = useCallback(async () => {
@@ -204,8 +163,6 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     liveMessage,
     error,
     clearError,
-    pendingApproval,
-    submitApproval,
     interrupt,
   };
 }
@@ -240,7 +197,7 @@ function assistantReplyLanded(messages: Message[], streamedText: string): boolea
 // ---------------------------------------------------------------------------
 
 function handleEvent(
-  event: Exclude<AgentEvent, ApprovalRequestEvent>,
+  event: AgentEvent,
   setLiveMessage: Dispatch<SetStateAction<LiveMessage | null>>,
 ): void {
   switch (event.event) {

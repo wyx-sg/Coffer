@@ -18,7 +18,6 @@ import httpx
 
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import (
-    ApprovalClick,
     ChannelCapabilities,
     InboundMessage,
     SentMessage,
@@ -65,7 +64,6 @@ class TelegramAdapter:
     def capabilities(self) -> ChannelCapabilities:
         return ChannelCapabilities(
             supports_edit=True,
-            supports_buttons=True,
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
         )
@@ -95,7 +93,7 @@ class TelegramAdapter:
             try:
                 params: dict[str, Any] = {
                     "timeout": self._poll_timeout,
-                    "allowed_updates": ["message", "callback_query"],
+                    "allowed_updates": ["message"],
                 }
                 if offset is not None:
                     params["offset"] = offset
@@ -147,22 +145,6 @@ class TelegramAdapter:
                     sender_id=str(sender.get("id") or ""),
                 )
             )
-            return
-        callback_query = update.get("callback_query")
-        if isinstance(callback_query, dict):
-            with contextlib.suppress(Exception):
-                await self._call("answerCallbackQuery", callback_query_id=callback_query["id"])
-            prompt = callback_query.get("message") or {}
-            clicker = callback_query.get("from") or {}
-            await self._callbacks.on_approval_click(
-                ApprovalClick(
-                    channel=self._name,
-                    chat_id=str(prompt.get("chat", {}).get("id", "")),
-                    value=str(callback_query.get("data") or ""),
-                    prompt_message_id=str(prompt.get("message_id", "")),
-                    sender_id=str(clicker.get("id") or ""),
-                )
-            )
 
     # -- outbound ------------------------------------------------------------
 
@@ -198,31 +180,6 @@ class TelegramAdapter:
 
     async def send_typing(self, chat_id: str) -> None:
         await self._call("sendChatAction", chat_id=chat_id, action="typing")
-
-    async def send_approval_prompt(
-        self, chat_id: str, text: str, *, allow_value: str, deny_value: str
-    ) -> SentMessage:
-        sent = await self._call(
-            "sendMessage",
-            chat_id=chat_id,
-            text=text,
-            reply_markup={
-                "inline_keyboard": [
-                    [
-                        {"text": "✅ Approve", "callback_data": allow_value},
-                        {"text": "❌ Deny", "callback_data": deny_value},
-                    ]
-                ]
-            },
-        )
-        return SentMessage(message_id=str(sent.get("message_id", "")))
-
-    async def resolve_approval_prompt(
-        self, chat_id: str, message_id: str, outcome_text: str
-    ) -> None:
-        await self._call(
-            "editMessageText", chat_id=chat_id, message_id=message_id, text=outcome_text
-        )
 
     # -- transport -------------------------------------------------------------
 

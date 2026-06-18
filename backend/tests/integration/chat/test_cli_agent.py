@@ -67,11 +67,6 @@ def _spawner(lines: list[str], code: int = 0):
     return spawn
 
 
-class _NoApprovals:
-    async def wait(self, request_id: str):  # pragma: no cover - never used here
-        raise AssertionError("CLI agents do not request approval in v1")
-
-
 def _user_turn(text: str) -> list[Message]:
     return [
         Message(
@@ -90,7 +85,7 @@ def _user_turn(text: str) -> list[Message]:
 
 
 async def _collect(adapter: CliAgentAdapter, history: list[Message]):
-    stream = await adapter.run_turn(history=history, approvals=_NoApprovals())
+    stream = await adapter.run_turn(history=history)
     return [ev async for ev in stream]
 
 
@@ -224,14 +219,15 @@ async def test_resume_session_is_passed_and_not_re_saved():
         dialect=ClaudeCodeDialect(),
         cwd="/work",
         resume_session="sess-1",
-        extra={"permission_mode": "acceptEdits"},
+        extra={},
         spawn=spawn,
         on_session=on_session,
     )
     await _collect(adapter, _user_turn("continue"))
     argv = spawn.captured["argv"]  # type: ignore[attr-defined]
     assert "--resume" in argv and "sess-1" in argv
-    assert "--permission-mode" in argv and "acceptEdits" in argv
+    # The CLI dialect always runs with full permissions.
+    assert "--permission-mode" in argv and "bypassPermissions" in argv
     assert spawn.captured["cwd"] == "/work"  # type: ignore[attr-defined]
     assert saved == []  # unchanged session id is not re-saved (stream == resume)
 

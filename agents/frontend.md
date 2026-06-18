@@ -52,12 +52,12 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 
 ## 3. State Management
 
-| State kind | Where it lives |
-| --- | --- |
-| Server data (anything from the daemon) | TanStack Query, via a `useX` hook |
-| Ephemeral UI state (open/collapsed, draft input) | local `useState` in the component |
-| User preference that must survive reload | `localStorage` via `src/lib/preferences.ts` / `auth.ts` |
-| **Addressable** app state (which conversation/resource is open) | the **URL** (router param), not `useState` |
+| State kind                                                      | Where it lives                                          |
+| --------------------------------------------------------------- | ------------------------------------------------------- |
+| Server data (anything from the daemon)                          | TanStack Query, via a `useX` hook                       |
+| Ephemeral UI state (open/collapsed, draft input)                | local `useState` in the component                       |
+| User preference that must survive reload                        | `localStorage` via `src/lib/preferences.ts` / `auth.ts` |
+| **Addressable** app state (which conversation/resource is open) | the **URL** (router param), not `useState`              |
 
 The last row matters: anything a user would expect to survive a refresh, deep-link,
 or back-button MUST be a route param (`/chat/:id`, `/agents/:name`), not local
@@ -72,7 +72,7 @@ providers are `QueryClientProvider` and `ToastProvider`.
 Hierarchical arrays, first segment = the feature noun. A detail/sub-resource
 extends the parent key so a prefix invalidation catches the whole subtree:
 
-```ts
+```text
 ["agents"]                       // list
 ["agents", name]                 // one agent
 ["agents", name, "config-files"] // a sub-resource of that agent
@@ -142,8 +142,8 @@ return useMutation({
   a documented theming bridge.
 - **Semantic tokens only** (`text-muted-foreground`, `bg-card`, `border-border`).
   Health/status surfaces use the `status.ok|warn|err` tokens — **not** raw
-  `green/amber/emerald` palette classes. (`statusColors.ts`, `ToolCallCard`,
-  `ApprovalCard` currently bypass this — fix on touch.)
+  `green/amber/emerald` palette classes. (`statusColors.ts`, `ToolCallCard`
+  currently bypass this — fix on touch.)
 - **Type scale only** — `text-sm`/`text-xs`/… never `text-[11px]`. Radius from
   the prescribed set (`rounded-lg` cards, `rounded-md` controls, `rounded-sm`
   chips). See [`visual-language.md`](./visual-language.md).

@@ -14,7 +14,6 @@ from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 from coffer.domain.channel.envelopes import (
-    ApprovalClick,
     ChannelCapabilities,
     InboundMessage,
     SentMessage,
@@ -26,7 +25,6 @@ class AdapterCallbacks:
     """What an adapter calls when the platform delivers something."""
 
     on_message: Callable[[InboundMessage], Awaitable[None]]
-    on_approval_click: Callable[[ApprovalClick], Awaitable[None]]
 
 
 class ChannelAdapter(Protocol):
@@ -52,14 +50,6 @@ class ChannelAdapter(Protocol):
     async def delete_message(self, chat_id: str, message_id: str) -> None: ...
 
     async def send_typing(self, chat_id: str) -> None: ...
-
-    async def send_approval_prompt(
-        self, chat_id: str, text: str, *, allow_value: str, deny_value: str
-    ) -> SentMessage: ...
-
-    async def resolve_approval_prompt(
-        self, chat_id: str, message_id: str, outcome_text: str
-    ) -> None: ...
 
 
 @dataclass(frozen=True)

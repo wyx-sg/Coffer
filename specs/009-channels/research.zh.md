@@ -13,7 +13,7 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
 
 - **薄 adapter，共享内核。** adapter 只实现生命周期（connect/
   disconnect）、出站发送，以及把入站消息规范化成标准信封 (envelope)。
-  会话路由、命令解析、配对/安全、审批处理与渲染策略都放在共享内核。
+  会话路由、命令解析、配对/安全与渲染策略都放在共享内核。
   Hermes 的 `BaseAdapter` 恰好只有三个方法；OpenClaw 的 `ChannelPlugin`
   从 `id` + `setup` 起步，再加可选的能力 surface。
 - **声明能力而非特判。** OpenClaw 的 adapter 声明传输层支持什么（编辑、
@@ -48,8 +48,7 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
 - `editMessageText` 支撑进度消息模式；编辑有速率限制，因此把编辑节流到
   间隔 ≥ 1.5 s。
 - 内联键盘（`InlineKeyboardMarkup`）会送来带按钮 `callback_data` 的
-  `callback_query` update；`answerCallbackQuery` 确认这次点按。这就是
-  审批提示的机制。
+  `callback_query` update；`answerCallbackQuery` 确认这次点按。
 - `setMyCommands` 注册原生命令菜单；`sendChatAction` 显示 typing
   indicator。
 
@@ -79,20 +78,20 @@ NousResearch hermes-agent 文档与源码、SeaTalk 官方 `cs-bot` 仓库与开
 - **交互式卡片**：`tag: "interactive_message"`，按钮用
   `button_type: "callback"` 并携带自定义 `value`；点按以
   `interactive_message_click` 事件回传，带 `value`、`message_id` 与
-  `employee_code` —— 一个完整的 approve/deny 闭环。
+  `employee_code`。
 - **Typing indicator**：存在 `single_chat_typing` 端点。
 - **组织审批**：自建 app 的 scope（Send Message to Bot User 等）需要组织
   管理员审批；出站 IP allowlist 是可选项，动态 IP 的机器应保持留空。
 
 ## 由调研得出的决策
 
-| 决策 | 选择 | 理由 |
-| --- | --- | --- |
-| Telegram 传输 | 用裸 httpx 做 long polling | local-first、无需 ingress；用到的 API 面只有 7 个小方法 —— 引入 SDK 毫无收益，还要多一条 import 限界契约 |
-| SeaTalk 传输 | webhook → 独立监听器进程 + 用户自行运行的隧道 | webhook 是唯一选项；章程要求公网可达 surface 必须是独立进程、只服务带签名的回调路径 |
-| SeaTalk SDK | 不用（裸 httpx） | 官方仓库本身就是一个薄 httpx 等价物；token 缓存约 20 行 |
-| 配对参数 | 8 字符、排除 `0O1I`、1 h TTL、有界猜测次数、fail closed | 与两个先例一致，并对齐 Hermes 事故后的加固 |
-| Telegram 渲染 | markdown → HTML，被拒收时用纯文本重试 | OpenClaw 验证过的路线；MarkdownV2 的转义是著名的 bug 农场 |
-| 进度体验 | 一条可编辑状态消息、节流；先确认；最终回复单独发 | 两个先例皆如此；在 SeaTalk 上经能力标志自然降级 |
-| turn 中输入 | 有界 FIFO 队列，控制命令绕行 | 可预期；避免 Hermes「默认打断」带来的意外 |
-| 会话范围 | 每个 `(channel, chat)` 一段长生命周期对话，`/new` 重置 | 匹配 1:1 的产品决策；群聊将来作为新行加入 |
+| 决策          | 选择                                                    | 理由                                                                                                     |
+| ------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Telegram 传输 | 用裸 httpx 做 long polling                              | local-first、无需 ingress；用到的 API 面只有 7 个小方法 —— 引入 SDK 毫无收益，还要多一条 import 限界契约 |
+| SeaTalk 传输  | webhook → 独立监听器进程 + 用户自行运行的隧道           | webhook 是唯一选项；章程要求公网可达 surface 必须是独立进程、只服务带签名的回调路径                      |
+| SeaTalk SDK   | 不用（裸 httpx）                                        | 官方仓库本身就是一个薄 httpx 等价物；token 缓存约 20 行                                                  |
+| 配对参数      | 8 字符、排除 `0O1I`、1 h TTL、有界猜测次数、fail closed | 与两个先例一致，并对齐 Hermes 事故后的加固                                                               |
+| Telegram 渲染 | markdown → HTML，被拒收时用纯文本重试                   | OpenClaw 验证过的路线；MarkdownV2 的转义是著名的 bug 农场                                                |
+| 进度体验      | 一条可编辑状态消息、节流；先确认；最终回复单独发        | 两个先例皆如此；在 SeaTalk 上经能力标志自然降级                                                          |
+| turn 中输入   | 有界 FIFO 队列，控制命令绕行                            | 可预期；避免 Hermes「默认打断」带来的意外                                                                |
+| 会话范围      | 每个 `(channel, chat)` 一段长生命周期对话，`/new` 重置  | 匹配 1:1 的产品决策；群聊将来作为新行加入                                                                |
