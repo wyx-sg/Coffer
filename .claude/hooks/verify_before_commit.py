@@ -7,6 +7,13 @@ this asks for confirmation rather than letting a possibly-unverified commit land
 silently. It never hard-blocks — `make verify` is slow, and a hook that traps
 every commit just trains people to bypass it — and it never breaks the agent: on
 any error or for any non-commit command it exits 0 with no decision.
+
+The freshness check targets the *working tree the commit runs in* (resolved from
+the command's cwd), not ``CLAUDE_PROJECT_DIR`` — which stays pinned to the main
+checkout even when the commit runs in a linked worktree. Checking the main
+checkout from a worktree judged every worktree commit against a baseline that is
+perpetually stale during active development, so the guard nagged on every single
+commit. A worktree with no stamp now reads as "unknown" and stays quiet.
 """
 
 from __future__ import annotations
@@ -14,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -24,6 +32,30 @@ _GIT_COMMIT = re.compile(r"\bgit\s+commit\b")
 
 def _is_commit(command: str) -> bool:
     return bool(_GIT_COMMIT.search(command)) and "--dry-run" not in command
+
+
+def _commit_tree(payload: dict) -> Path:
+    """The git working-tree root the commit will run in.
+
+    ``git commit`` operates on the repo containing the command's cwd, so that —
+    not ``CLAUDE_PROJECT_DIR`` (which points at the main checkout even in a linked
+    worktree) — is the tree to check. Prefer the hook payload's ``cwd``, fall back
+    to the hook process's own cwd, then resolve to the enclosing working-tree root
+    so a subdirectory commit still finds the right stamp.
+    """
+    start = Path(payload.get("cwd") or os.getcwd())
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(start), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        root = out.stdout.strip()
+        return Path(root) if root else start
+    except Exception:
+        return start
 
 
 def _is_fresh(target: Path) -> bool | None:
@@ -58,8 +90,7 @@ def main() -> int:
     if not _is_commit(command):
         return 0
 
-    target = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
-    fresh = _is_fresh(target)
+    fresh = _is_fresh(_commit_tree(data))
     if fresh is None or fresh:
         return 0  # can't tell, or genuinely fresh -> don't get in the way
 

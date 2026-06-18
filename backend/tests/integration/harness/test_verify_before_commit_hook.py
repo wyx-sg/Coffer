@@ -104,3 +104,57 @@ def test_survives_malformed_stdin(repo: Path) -> None:
     )
     assert proc.returncode == 0
     assert proc.stdout.strip() == ""
+
+
+def _run_in(command: str, *, cwd: Path, project_dir: Path, payload_cwd: Path | None) -> str | None:
+    """Run the hook with explicit process cwd, CLAUDE_PROJECT_DIR, and payload cwd."""
+    tool_input = {"command": command}
+    payload = {"tool_name": "Bash", "tool_input": tool_input}
+    if payload_cwd is not None:
+        payload["cwd"] = str(payload_cwd)
+    proc = subprocess.run(
+        [sys.executable, str(_HOOK)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        cwd=str(cwd),
+        env={**os.environ, "CLAUDE_PROJECT_DIR": str(project_dir)},
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    return _decision(proc)
+
+
+def test_silent_in_worktree_even_when_main_checkout_is_stale(repo: Path, tmp_path: Path) -> None:
+    # Reproduces the real bug: the verify baseline lives in the main checkout and
+    # is stale, but the commit runs in a linked worktree that has no stamp.
+    # CLAUDE_PROJECT_DIR still points at the (stale) main checkout — the guard must
+    # NOT nag, because it now checks the tree the commit actually runs in.
+    _stamp(repo)
+    (repo / "mod.py").write_text("x = 2  # main checkout went stale\n")
+    worktree = tmp_path / "linked-wt"
+    _git(repo, "worktree", "add", "-b", "feature", str(worktree))
+
+    decision = _run_in("git commit -am wip", cwd=worktree, project_dir=repo, payload_cwd=worktree)
+    assert decision is None  # worktree has no stamp -> unknown -> silent
+
+
+def test_payload_cwd_takes_precedence_over_process_cwd(repo: Path, tmp_path: Path) -> None:
+    # Even when the hook process itself sits in the stale main checkout, the
+    # payload's cwd (the worktree the command runs in) wins.
+    _stamp(repo)
+    (repo / "mod.py").write_text("x = 3  # main checkout went stale\n")
+    worktree = tmp_path / "linked-wt"
+    _git(repo, "worktree", "add", "-b", "feature", str(worktree))
+
+    decision = _run_in("git commit -am wip", cwd=repo, project_dir=repo, payload_cwd=worktree)
+    assert decision is None  # payload cwd -> worktree (no stamp) -> silent
+
+
+def test_asks_in_main_checkout_via_process_cwd(repo: Path) -> None:
+    # Sanity: with no worktree and a stale main checkout, the guard still asks,
+    # resolving the tree from the process cwd when the payload omits one.
+    _stamp(repo)
+    (repo / "mod.py").write_text("x = 4  # stale\n")
+    decision = _run_in("git commit -am wip", cwd=repo, project_dir=repo, payload_cwd=None)
+    assert decision == "ask"

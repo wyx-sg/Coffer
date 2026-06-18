@@ -6,13 +6,13 @@ Coffer 提交了一套 checked-in 的控制层，让 agent-facing harness 被强
 
 ## 接入了什么（`.claude/`）
 
-| 文件 | 作用 |
-| ---- | ---- |
-| `.claude/settings.json` | 权限（allow 安全命令、deny 破坏性命令）+ hook 接线。已提交、团队共享。 |
-| `.claude/hooks/auto_format.py` | PostToolUse（Edit/Write）—— 格式化改动的文件（`.py` 用 ruff，`.ts/.tsx/.js/.jsx/.css/.json/.md` 用 prettier）。尽力而为，绝不阻断。 |
-| `.claude/hooks/block_dangerous_bash.py` | PreToolUse（Bash）—— 拦截一小撮破坏性命令（递归删 root/home、force/直推保护分支、pipe-to-shell、裸写块设备）。 |
-| `.claude/hooks/verify_before_commit.py` | PreToolUse（Bash）—— 当 `git commit` 时 `make verify` 已 stale（源码相对上次通过的 verify 有变，按 `scripts/verify_stamp.py` 的内容指纹判定），要求确认。绝不硬阻塞；绝不弄坏 agent。 |
-| `.claude/hooks/session_context.py` | SessionStart —— 注入分支、worktree 状态、未提交文件数、session 协议提醒。 |
+| 文件                                    | 作用                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.claude/settings.json`                 | 权限（allow 安全命令、deny 破坏性命令）+ hook 接线。已提交、团队共享。                                                                                                                                                                                                                                                             |
+| `.claude/hooks/auto_format.py`          | PostToolUse（Edit/Write）—— 格式化改动的文件。Python：先 `ruff check --fix` 再 `ruff format`（先修后格、以格式化为准），全仓适用。Prettier（`.ts/.tsx/.js/.jsx/.css/.json/.md`）：仅限 `frontend/`；仓库其余 prettier 类型由固定版本的 pre-commit 接管（prettier 版本不同），hook 不碰它们以免与 CI 互相打架。尽力而为，绝不阻断。 |
+| `.claude/hooks/block_dangerous_bash.py` | PreToolUse（Bash）—— 拦截一小撮破坏性命令（递归删 root/home，含反序 flag 与带引号目标；force/直推保护分支；pipe-to-shell；`dd of=/dev/<disk>` 与裸重定向写块设备，含 macOS `disk`/`rdisk` 及 `nvme`）。                                                                                                                            |
+| `.claude/hooks/verify_before_commit.py` | PreToolUse（Bash）—— 当 `git commit` 时 `make verify` 已 stale（源码相对上次通过的 verify 有变，按 `scripts/verify_stamp.py` 的内容指纹判定），要求确认。检查的是提交真正所在的工作树（由命令 cwd 解析），而非 `CLAUDE_PROJECT_DIR`——因此 linked worktree 以自己的 stamp 判定，而非主 checkout。绝不硬阻塞；绝不弄坏 agent。       |
+| `.claude/hooks/session_context.py`      | SessionStart —— 注入分支、worktree 状态、未提交文件数、`make verify` 过期提示（仅当已有基线且已 stale 时）、session 协议提醒。                                                                                                                                                                                                     |
 
 ## Skills
 
