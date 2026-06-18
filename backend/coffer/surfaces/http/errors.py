@@ -54,6 +54,7 @@ _STATUS: dict[str, int] = {
     "SSRF_BLOCKED": 422,
     "TARGET_CONFLICT": 409,
     "SKILL_NAME_MISMATCH": 409,
+    "SKILL_RISK_NOT_ACKNOWLEDGED": 409,
     "UPDATE_NOT_SUPPORTED": 400,
     # agent workspace (specs 004/005 amendment)
     "MCP_ENTRY_NOT_FOUND": 404,

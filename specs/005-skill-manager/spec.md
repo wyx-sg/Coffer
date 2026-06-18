@@ -286,6 +286,24 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user runs update without `--allow-rename`,
 - **Then** the update is rejected with the new name in the error message; with `--allow-rename`, the master folder is renamed and every enabled symlink is recreated under the new name.
 
+### Scenario: scan flags risky content on import
+
+- **Given** a skill folder whose bundled script pipes a download into a shell,
+- **When** the user imports it,
+- **Then** the skill is registered with a `critical` scan verdict, the scan is audited, and the skill is NOT auto-delivered to following agents (auto-bind is skipped) until the risk is acknowledged.
+
+### Scenario: refuse to enable an unacknowledged risky skill
+
+- **Given** an imported skill with a `high`/`critical` scan verdict that has not been acknowledged,
+- **When** the user tries to enable it for an agent,
+- **Then** the request is rejected with `conflict` (409) and no link is created.
+
+### Scenario: acknowledge risk then enable a flagged skill
+
+- **Given** a flagged skill whose risk the user has explicitly acknowledged,
+- **When** the user enables it for an agent,
+- **Then** the link is created and the binding is recorded; a later content change resets the acknowledgment.
+
 ### Scenario: detect drift in agent skill directories
 
 - **Given** a binding exists but its target on disk has been deleted, replaced, or relinked,
@@ -444,6 +462,11 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **FR-003**: System MUST store each managed skill's content under `~/.coffer/skills/<name>/`, with that path as the single editable source of truth.
 - **FR-004**: System MUST validate every imported or fetched skill folder against the AgentSkills specification: `SKILL.md` present; frontmatter `name` present and non-empty (lowercase alphanumerics, hyphen, or underscore, ≤64 chars) and `description` present, non-empty, and ≤1024 chars; no path-escape symlinks; total size within a configurable limit (default 50 MB). A folder that violates any of these is rejected with `unprocessable_entity` (422) and nothing is persisted.
 - **FR-027**: System MUST recognize the optional agentskills.io frontmatter fields it understands — `license` and the experimental `allowed-tools` — parsing and retaining them rather than discarding them, while tolerating any other unrecognized frontmatter field so non-Coffer-authored skills validate cleanly. `allowed-tools` accepts either a list or a comma/whitespace-separated string and is normalized to a list of tool names; a malformed value is tolerated (treated as absent), never a validation failure. Likewise a non-string `license` scalar (e.g. an unquoted year or version) is coerced to a string rather than rejected.
+
+**Content trust (trust layer L2)**
+
+- **FR-028**: System MUST run a heuristic content scan over a skill's files on every ingest (import, fetch, adopt) and on every content-changing operation (update that changes `SKILL.md`, and in-place file edits), and MUST cache the result on the skill — a verdict (`low`/`medium`/`high`/`critical` or none), a findings count, the ruleset version, and the scan time. The scan is advisory: it never blocks ingest and a clean result is not a safety guarantee (Coffer delivers skills but does not execute them, so it cannot enforce runtime behavior — see ADR-027). A user MUST be able to re-scan a managed skill on demand. Every scan is audited.
+- **FR-029**: When a skill's scan verdict is `high` or `critical`, System MUST refuse to enable it for an agent until the user explicitly acknowledges the risk; the refusal is reported as `conflict` (409) and the follow/auto-bind reconcilers skip such a skill (audited) rather than delivering it. Acknowledgment is an explicit, audited action and MUST be reset whenever the skill's content subsequently changes (an acknowledgment is for the content it was made against). Adoption is exempt — it consolidates a skill already present in the agent's workspace, so it records the verdict but is not blocked.
 
 **Sources**
 
