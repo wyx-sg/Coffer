@@ -228,6 +228,18 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **When** 用户导入一个 symlink 解析到文件夹外的目录，
 - **Then** 请求被拒绝并列出越界路径，不持久化任何东西。
 
+### Scenario: 拒绝 description 过长的 skill
+
+- **Given** daemon 在运行，
+- **When** 用户导入一个 SKILL.md `description` 超过 1024 字符的文件夹，
+- **Then** 请求以 frontmatter 不合法被拒绝，不向 `~/.coffer/skills/` 或数据库写入任何东西。
+
+### Scenario: 识别 agentskills.io 可选 frontmatter 字段
+
+- **Given** 一个还声明了 `license` 与实验性 `allowed-tools` 的合法 SKILL.md，
+- **When** 校验该文件夹，
+- **Then** 校验通过，且解析出的 frontmatter 保留 `license` 与归一化后的 `allowed-tools` 列表（而非丢弃）。
+
 ### Scenario: 拉取公开 Git skill 仓库
 
 - **Given** daemon 在运行，且某公开 Git URL 在已知 subpath 处提供合法 skill，
@@ -432,7 +444,8 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 **规范存储**
 
 - **FR-003**：系统必须把每个被管理 skill 的内容存到 `~/.coffer/skills/<name>/`，并以此为唯一可编辑的事实来源。
-- **FR-004**：系统必须按 AgentSkills 规范校验每一个被导入或拉取的 skill 文件夹：存在 `SKILL.md`、frontmatter `name` 与 `description` 非空、不含越界 symlink、总大小不超过可配置上限（默认 50 MB）。
+- **FR-004**：系统必须按 AgentSkills 规范校验每一个被导入或拉取的 skill 文件夹：存在 `SKILL.md`；frontmatter `name` 非空（小写字母数字、连字符或下划线，≤64 字符）、`description` 非空且 ≤1024 字符；不含越界 symlink；总大小不超过可配置上限（默认 50 MB）。违反任一项的文件夹以 `unprocessable_entity`（422）拒绝，且不写入任何内容。
+- **FR-027**：系统必须识别它理解的 agentskills.io 可选 frontmatter 字段——`license` 与实验性的 `allowed-tools`——解析并保留它们而非丢弃，同时容忍任何其他未识别字段，让非 Coffer 编写的 skill 也能干净通过校验。`allowed-tools` 接受列表或以逗号/空白分隔的字符串，归一化为工具名列表；格式异常的值被容忍（视作缺省），绝不构成校验失败。同理，非字符串的 `license` 标量（如未加引号的年份或版本号）会被转为字符串而非拒绝。
 
 **源**
 
@@ -512,7 +525,7 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - spec 004-agent-registry 已上线（PR #25）；agent kind 及其 CRUD、审计、`on_delete` 钩子均已可用。
 - spec 001-mcp-gateway 引入的 kind-agnostic Resource 框架、审计日志与 `<kind>:<name>` 标识方案已就位。
 - spec 002-ui-shell 的应用外壳——侧栏 IA、布局、路由骨架、设计系统——已就位；桌面 Skills 页是渲染在该外壳之上的功能 surface，填上 002-ui-shell 预留的 `/skills` 导航位。
-- skill 遵循开放 AgentSkills 标准（SKILL.md 至少含 `name`/`description` frontmatter，见 agentskills.io）；不符合规范的文件夹不在本规范处理之列。
+- skill 遵循开放 AgentSkills 标准（SKILL.md 至少含 `name`/`description` frontmatter，见 agentskills.io），并按标准的精确约束校验（`name` ≤64 字符、`description` ≤1024 字符），同时识别可选的 `license` 与实验性 `allowed-tools` 字段；不符合规范的文件夹不在本规范处理之列。
 - v1 仅支持公开 Git URL；需鉴权的上游 skill 源留给后续工作。
 - 本地导入的 skill 是时间点拷贝；原路径仅用于追溯，不用于同步。
 - Windows 用户的文件系统支持目录 junction；FAT32 与网络共享降级为 copy 模式。

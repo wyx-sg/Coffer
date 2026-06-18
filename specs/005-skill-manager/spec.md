@@ -226,6 +226,18 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user imports a folder containing a symlink that resolves outside the folder,
 - **Then** the request is rejected with the offending paths listed, and nothing is persisted.
 
+### Scenario: reject a skill with an over-long description
+
+- **Given** the daemon is running,
+- **When** the user imports a folder whose SKILL.md `description` exceeds 1024 characters,
+- **Then** the request is rejected as invalid frontmatter, and nothing is written to `~/.coffer/skills/` or the database.
+
+### Scenario: recognize optional agentskills.io frontmatter fields
+
+- **Given** a valid SKILL.md that also declares `license` and the experimental `allowed-tools`,
+- **When** the folder is validated,
+- **Then** validation succeeds and the parsed frontmatter retains `license` and a normalized `allowed-tools` list (rather than discarding them).
+
 ### Scenario: fetch a public Git skill repo
 
 - **Given** the daemon is running and a public Git URL hosts a valid skill at a known subpath,
@@ -430,7 +442,8 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 **Canonical storage**
 
 - **FR-003**: System MUST store each managed skill's content under `~/.coffer/skills/<name>/`, with that path as the single editable source of truth.
-- **FR-004**: System MUST validate every imported or fetched skill folder against the AgentSkills specification: `SKILL.md` present, frontmatter `name` and `description` present and non-empty, no path-escape symlinks, total size within a configurable limit (default 50 MB).
+- **FR-004**: System MUST validate every imported or fetched skill folder against the AgentSkills specification: `SKILL.md` present; frontmatter `name` present and non-empty (lowercase alphanumerics, hyphen, or underscore, ≤64 chars) and `description` present, non-empty, and ≤1024 chars; no path-escape symlinks; total size within a configurable limit (default 50 MB). A folder that violates any of these is rejected with `unprocessable_entity` (422) and nothing is persisted.
+- **FR-027**: System MUST recognize the optional agentskills.io frontmatter fields it understands — `license` and the experimental `allowed-tools` — parsing and retaining them rather than discarding them, while tolerating any other unrecognized frontmatter field so non-Coffer-authored skills validate cleanly. `allowed-tools` accepts either a list or a comma/whitespace-separated string and is normalized to a list of tool names; a malformed value is tolerated (treated as absent), never a validation failure. Likewise a non-string `license` scalar (e.g. an unquoted year or version) is coerced to a string rather than rejected.
 
 **Sources**
 
@@ -510,7 +523,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - Spec 004-agent-registry has shipped (PR #25); the agent kind, its CRUD, audit, and `on_delete` hook are available.
 - The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec 001-mcp-gateway are in place.
 - The application shell from spec 002-ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place; the desktop Skills page is a feature surface that renders within that shell and fills the `/skills` nav slot 002-ui-shell reserved as a placeholder.
-- Skills follow the open AgentSkills standard (`SKILL.md` with `name`/`description` frontmatter at minimum) as published at agentskills.io; non-conforming folders are out of scope.
+- Skills follow the open AgentSkills standard (`SKILL.md` with `name`/`description` frontmatter at minimum) as published at agentskills.io, validated against the standard's exact constraints (`name` ≤64 chars, `description` ≤1024 chars) with the optional `license` and experimental `allowed-tools` fields recognized; non-conforming folders are out of scope.
 - v1 supports public Git URLs only; authenticated upstream skill sources are future work.
 - Local-imported skills are point-in-time copies; the source path is recorded for traceability, not for sync.
 - Windows users have directory-junction support on their filesystem; FAT32 and network shares fall back to copy mode.
