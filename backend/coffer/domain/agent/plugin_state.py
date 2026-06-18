@@ -51,6 +51,13 @@ class PluginInfo:
     # config / Claude installed_plugins.json) — settings-only orphans get
     # False. Drives cache_present without re-parsing in the service.
     installed: bool = True
+    # Resolved install version + path, when the inventory records them (Claude
+    # ``installed_plugins.json`` carries both per plugin). ``install_path`` is
+    # the seam the service hands to the detail reader to enumerate bundled
+    # skills/commands/MCP. Both stay ``None`` for settings-only orphans and for
+    # agents whose inventory does not record a path (e.g. Codex).
+    version: str | None = None
+    install_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -205,11 +212,26 @@ def parse_claude(
         for k, v in raw_enabled.items():
             enabled_map[str(k)] = bool(v)
 
-    # Build ordered union: installed first, then settings-only extras
+    # Build ordered union: installed first, then settings-only extras.
+    # Each inventory value is a list of install records; the first records the
+    # active install's ``version`` + ``installPath`` (later entries are other
+    # scopes/versions — always trust the path the inventory names, never the
+    # newest dir on disk).
     installed_plugins_raw = installed.get("plugins")
     installed_ids: list[str] = []
+    install_meta: dict[str, tuple[str | None, str | None]] = {}
     if isinstance(installed_plugins_raw, dict):
         installed_ids = [str(k) for k in installed_plugins_raw]
+        for pid, records in installed_plugins_raw.items():
+            version: str | None = None
+            install_path: str | None = None
+            if isinstance(records, list) and records and isinstance(records[0], dict):
+                rec = records[0]
+                raw_version = rec.get("version")
+                version = str(raw_version) if raw_version is not None else None
+                raw_path = rec.get("installPath")
+                install_path = str(raw_path) if raw_path is not None else None
+            install_meta[str(pid)] = (version, install_path)
 
     installed_set: set[str] = set(installed_ids)
     seen: set[str] = set(installed_ids)
@@ -223,6 +245,7 @@ def parse_claude(
     for pid in all_ids:
         enabled = enabled_map.get(pid, True)
         name, marketplace = _split_id(pid)
+        meta_version, meta_path = install_meta.get(pid, (None, None))
         plugins.append(
             PluginInfo(
                 id=pid,
@@ -230,6 +253,8 @@ def parse_claude(
                 marketplace=marketplace,
                 enabled=enabled,
                 installed=pid in installed_set,
+                version=meta_version,
+                install_path=meta_path,
             )
         )
 

@@ -13,10 +13,10 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from coffer.application.agent.mcp_entry_service import ParseErrorInfo
-from coffer.application.agent.plugin_service import PluginView
+from coffer.application.agent.plugin_views import PluginView
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.mcp_entries import McpEntry, secret_env_keys
 from coffer.domain.agent.plugin_state import MarketplaceInfo
@@ -90,6 +90,15 @@ class PluginOut(BaseModel):
     marketplace: str
     enabled: bool
     cache_present: bool
+    # Best-effort detail read from the plugin's install dir (Claude only today;
+    # null/empty otherwise).
+    version: str | None = None
+    description: str | None = None
+    author: str | None = None
+    homepage: str | None = None
+    skills: list[str] = Field(default_factory=list)
+    commands: list[str] = Field(default_factory=list)
+    mcp_servers: list[str] = Field(default_factory=list)
 
 
 class MarketplaceOut(BaseModel):
@@ -102,6 +111,9 @@ class PluginsOut_(BaseModel):  # noqa: N801 — avoids clashing with the service
     items: list[PluginOut]
     marketplaces: list[MarketplaceOut]
     parse_errors: list[ParseErrorOut]
+    # Whether in-app uninstall is available for this agent now (capability + CLI
+    # presence for CLI-strategy agents). Drives the UI's uninstall affordance.
+    can_uninstall: bool = False
 
 
 class PluginPatch(BaseModel):
@@ -136,6 +148,13 @@ def _plugin_out(p: PluginView) -> PluginOut:
         marketplace=p.marketplace,
         enabled=p.enabled,
         cache_present=p.cache_present,
+        version=p.version,
+        description=p.description,
+        author=p.author,
+        homepage=p.homepage,
+        skills=list(p.skills),
+        commands=list(p.commands),
+        mcp_servers=list(p.mcp_servers),
     )
 
 
@@ -236,6 +255,7 @@ async def list_plugins(
         items=[_plugin_out(p) for p in out.items],
         marketplaces=[_marketplace_out(m) for m in out.marketplaces],
         parse_errors=[_parse_error_out(p) for p in out.parse_errors],
+        can_uninstall=out.can_uninstall,
     )
 
 

@@ -73,6 +73,7 @@ function stub(overrides: Partial<PluginsResponse> = {}) {
     items: [PLUGIN_A, PLUGIN_B],
     marketplaces: MARKETPLACES,
     parse_errors: [],
+    can_uninstall: false,
     ...overrides,
   });
   api.togglePlugin.mockResolvedValue(undefined);
@@ -90,20 +91,22 @@ function renderTab(agent: AgentOut = CODEX_AGENT) {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentPluginsTab", () => {
-  test("renders plugins grouped by marketplace with group headers", async () => {
+  test("renders all plugins in one table with the marketplace shown per row", async () => {
     stub();
     renderTab();
 
-    // Both plugin names appear.
+    // Both plugin names appear in the single table.
     expect(await screen.findByText("plugin-a")).toBeInTheDocument();
     expect(screen.getByText("plugin-b")).toBeInTheDocument();
 
-    // Marketplace group headers appear.
-    expect(screen.getByText(/Marketplace: npm/)).toBeInTheDocument();
-    expect(screen.getByText(/Marketplace: github/)).toBeInTheDocument();
+    // Marketplace is a COLUMN now, not a per-section header: one "Marketplace"
+    // column header plus each plugin's marketplace rendered as a cell value.
+    expect(screen.getByText(en.agents.workspace.pluginsTab.marketplace)).toBeInTheDocument();
+    expect(screen.getByText("npm")).toBeInTheDocument();
+    expect(screen.getByText("github")).toBeInTheDocument();
   });
 
-  test("marketplace source shown in group header when available", async () => {
+  test("marketplace source shown in the marketplace column when available", async () => {
     stub();
     renderTab();
 
@@ -111,8 +114,8 @@ describe("AgentPluginsTab", () => {
     expect(screen.getByText(/registry\.npmjs\.org/)).toBeInTheDocument();
   });
 
-  test("per-marketplace search filters rows by plugin name", async () => {
-    // Two plugins in the same marketplace so the search has something to hide.
+  test("search filters rows by plugin name", async () => {
+    // Two plugins so the single search box has something to hide.
     const PLUGIN_C = {
       id: "npm:@scope/plugin-c",
       name: "plugin-c",
@@ -142,11 +145,7 @@ describe("AgentPluginsTab", () => {
     // plugin-a is enabled (true) → toggling should flip to false.
     fireEvent.click(switches[0]);
     await waitFor(() =>
-      expect(api.togglePlugin).toHaveBeenCalledWith(
-        CODEX_AGENT.name,
-        PLUGIN_A.id,
-        false,
-      ),
+      expect(api.togglePlugin).toHaveBeenCalledWith(CODEX_AGENT.name, PLUGIN_A.id, false),
     );
   });
 
@@ -166,8 +165,9 @@ describe("AgentPluginsTab", () => {
     expect(screen.queryByText(/cache missing/i)).not.toBeInTheDocument();
   });
 
-  test("codex agent: Uninstall button shown; confirm dialog calls the API", async () => {
-    stub();
+  test("Uninstall button shown when can_uninstall; confirm dialog calls the API", async () => {
+    // Button visibility is data-driven (can_uninstall), not agent type.
+    stub({ can_uninstall: true });
     renderTab(CODEX_AGENT);
 
     await screen.findByText("plugin-a");
@@ -177,9 +177,7 @@ describe("AgentPluginsTab", () => {
     // Click the first Uninstall button.
     fireEvent.click(buttons[0]);
     const dialog = await screen.findByRole("dialog");
-    expect(
-      within(dialog).getByText(/config entry and the cache directory/i),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/config entry and the cache directory/i)).toBeInTheDocument();
 
     expect(api.uninstallPlugin).not.toHaveBeenCalled();
     // Confirm uninstall.
@@ -189,8 +187,17 @@ describe("AgentPluginsTab", () => {
     );
   });
 
-  test("claude_code agent: no Uninstall button; hint text shown instead", async () => {
-    stub();
+  test("Claude with the CLI present shows the Uninstall button", async () => {
+    // can_uninstall=true reflects `claude plugin` being on PATH.
+    stub({ can_uninstall: true });
+    renderTab(CLAUDE_AGENT);
+
+    await screen.findByText("plugin-a");
+    expect(screen.getAllByRole("button", { name: /uninstall/i }).length).toBeGreaterThan(0);
+  });
+
+  test("no Uninstall button when can_uninstall is false; hint shown instead", async () => {
+    stub({ can_uninstall: false });
     renderTab(CLAUDE_AGENT);
 
     await screen.findByText("plugin-a");
@@ -215,6 +222,38 @@ describe("AgentPluginsTab", () => {
     stub({ items: [], marketplaces: [] });
     renderTab();
     expect(await screen.findByText(/no plugins installed/i)).toBeInTheDocument();
+  });
+
+  test("expanding a plugin row reveals its description and bundled components", async () => {
+    const PLUGIN_DETAIL = {
+      id: "npm:@scope/plugin-d",
+      name: "plugin-d",
+      marketplace: "npm",
+      enabled: true,
+      cache_present: true,
+      version: "1.2.3",
+      description: "Does detailed things",
+      author: "Ada",
+      homepage: "https://example/d",
+      skills: ["alpha", "beta"],
+      commands: ["doit"],
+      mcp_servers: [],
+    };
+    stub({ items: [PLUGIN_DETAIL], marketplaces: [MARKETPLACES[0]] });
+    renderTab();
+
+    // Detail stays hidden until the row is expanded.
+    expect(await screen.findByText("plugin-d")).toBeInTheDocument();
+    expect(screen.queryByText("Does detailed things")).not.toBeInTheDocument();
+
+    // Clicking the row expands the inline detail panel.
+    fireEvent.click(screen.getByText("plugin-d"));
+
+    expect(screen.getByText("Does detailed things")).toBeInTheDocument();
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+    expect(screen.getByText("beta")).toBeInTheDocument();
+    expect(screen.getByText("doit")).toBeInTheDocument();
+    expect(screen.getByText(/1\.2\.3/)).toBeInTheDocument();
   });
 
   test("en and zh locales carry the same agents.workspace.pluginsTab keys", () => {

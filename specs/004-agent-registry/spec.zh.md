@@ -185,18 +185,18 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 ### User Story 11 —— 管理 agent 的插件（优先级 P2）
 
-有以文件落盘插件体系的 agent，都在 agent 的插件 tab 暴露：按 marketplace 分组的全部已安装插件，带启用状态与磁盘缓存是否存在。插件 facet 通过能力清单（capability manifest）做了泛化——每个 agent 记录带一个 `PluginCapability`（插件模型判别符、写入面的 allowlist key，以及 `can_toggle`/`can_uninstall` 标志），服务按数据分派而非按 agent 分支。每个能力映射到该 agent 的文档化配置面；内部状态文件只读、绝不写入。安装新插件与 marketplace 管理留给 agent 自己的工具链。
+有以文件落盘插件体系的 agent，都在 agent 的插件 tab 暴露：全部已安装插件在同一张表里列出——所属 marketplace 是其中一列，而非按 marketplace 分组的若干区块——带启用状态与磁盘缓存是否存在。每一行可展开，显示该插件的清单信息（描述、版本、作者、主页）以及它附带的 skill、命令、MCP server，这些信息只读地从插件的安装目录（agent 插件清单里记录的 `installPath`）读取。由于这些组件属于该插件，它们在此处展示，而不在 agent 的 Skill / MCP 页面出现——后者只列出 agent 自己的独立资源。插件 facet 通过能力清单（capability manifest）做了泛化——每个 agent 记录带一个 `PluginCapability`（插件模型判别符、写入面的 allowlist key，以及 `can_toggle`/`can_uninstall` 标志），服务按数据分派而非按 agent 分支。每个能力映射到该 agent 的文档化配置面；内部状态文件只读、绝不写入。安装新插件与 marketplace 管理留给 agent 自己的工具链。
 
 各 agent 的插件支持：
 
-| Agent       | 插件模型                                                                                                   | 写入面          | 列出 | 开关 | 卸载                  |
-| ----------- | ---------------------------------------------------------------------------------------------------------- | --------------- | ---- | ---- | --------------------- |
-| Claude Code | `settings.json` 的 `enabledPlugins` 映射（内部 `installed_plugins.json` / `known_marketplaces.json` 只读） | `settings.json` | 是   | 是   | 否（用 agent 工具链） |
-| Codex       | `[plugins."<name>@<marketplace>"]` 表 + 缓存目录                                                           | `config.toml`   | 是   | 是   | 是（条目 + 缓存）     |
-| Cursor      | `extensions/extensions.json` 的 VSIX 列表（启停在 SQLite）                                                 | 无（只读）      | 是   | 否   | 否                    |
-| OpenCode    | `opencode.json` 的 `plugin` 数组                                                                           | `opencode.json` | 是   | 是   | 是（从数组移除）      |
-| OpenClaw    | `openclaw.json` 的 `plugins{}` 块                                                                          | `openclaw.json` | 是   | 是   | 是                    |
-| Hermes      | 无——MCP 即插件机制                                                                                         | 无              | 空   | 否   | 否                    |
+| Agent       | 插件模型                                                                                                   | 写入面          | 列出 | 开关 | 卸载                         |
+| ----------- | ---------------------------------------------------------------------------------------------------------- | --------------- | ---- | ---- | ---------------------------- |
+| Claude Code | `settings.json` 的 `enabledPlugins` 映射（内部 `installed_plugins.json` / `known_marketplaces.json` 只读） | `settings.json` | 是   | 是   | 是（经 `claude plugin` CLI） |
+| Codex       | `[plugins."<name>@<marketplace>"]` 表 + 缓存目录                                                           | `config.toml`   | 是   | 是   | 是（条目 + 缓存）            |
+| Cursor      | `extensions/extensions.json` 的 VSIX 列表（启停在 SQLite）                                                 | 无（只读）      | 是   | 否   | 否                           |
+| OpenCode    | `opencode.json` 的 `plugin` 数组                                                                           | `opencode.json` | 是   | 是   | 是（从数组移除）             |
+| OpenClaw    | `openclaw.json` 的 `plugins{}` 块                                                                          | `openclaw.json` | 是   | 是   | 是                           |
+| Hermes      | 无——MCP 即插件机制                                                                                         | 无              | 空   | 否   | 否                           |
 
 **为什么是这个优先级**：插件是真实、持久的 agent 配置，而今天 Coffer 对其完全不可见。可见性加上便宜又安全的写操作（开关、受支持处的卸载）覆盖了日常需求；安装留在它本来就好用的地方。
 
@@ -205,9 +205,11 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 **代表性场景**：
 
 - list an agent's plugins with enabled state
+- surface a plugin's manifest detail (version/description/author) and the skills, commands, and MCP servers it bundles, read from its install directory
 - toggle a plugin's enabled state
 - uninstall a Codex plugin
-- reject uninstalling a Claude Code plugin
+- uninstall a Claude Code plugin via its CLI (Coffer never hand-writes Claude's internal files)
+- reject Claude uninstall when its plugin CLI is unavailable
 - flag a plugin whose cache is missing
 - list, toggle, and uninstall OpenCode and OpenClaw plugins via their documented config surfaces
 - list Cursor extensions read-only, rejecting toggle and uninstall
@@ -494,11 +496,17 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 - **When** 用户卸载它，
 - **Then** `[plugins."…"]` 条目从 `config.toml` 中移除（原子 + `.bak`），该插件在 `~/.codex/plugins/cache/` 下的缓存目录被删除，并写一条 `agent_plugin_uninstalled` audit 条目。
 
-### Scenario: reject uninstalling a Claude Code plugin
+### Scenario: uninstall a Claude Code plugin via its CLI
 
-- **Given** 一个带已安装插件的已注册 `claude_code` agent，
-- **When** 用户尝试卸载它，
-- **Then** 请求以 `unprocessable_entity`（422）与错误码 `PLUGIN_UNINSTALL_UNSUPPORTED` 被拒绝，且不写任何内容——完全卸载需要 agent 自己的工具链。
+- **Given** 一个带已安装插件的已注册 `claude_code` agent，且 `claude` CLI 在 PATH 上，
+- **When** 用户卸载它，
+- **Then** Coffer 运行 `claude plugin uninstall <id>`（绝不亲手写 Claude 的内部 `installed_plugins.json` / `settings.json`），请求成功，并写一条 `agent_plugin_uninstalled` audit 条目。
+
+### Scenario: reject Claude uninstall when its CLI is unavailable
+
+- **Given** 一个 `claude` CLI 不在 PATH 上的已注册 `claude_code` agent，
+- **When** 用户尝试卸载某插件，
+- **Then** 请求以 `unprocessable_entity`（422）与错误码 `PLUGIN_UNINSTALL_UNSUPPORTED` 被拒绝，且不写任何内容——此时列表也隐藏应用内的卸载入口。
 
 ### Scenario: flag a plugin whose cache is missing
 
@@ -622,7 +630,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看并调整该 agent �
 
 - **FR-031**: 系统 MUST 列出 agent 的已安装插件及启用状态，按 marketplace 分组。`codex` 的列表从 `config.toml`（`[plugins."<name>@<marketplace>"]`、`[marketplaces.*]`）加上文档化缓存目录 `~/.codex/plugins/cache/<marketplace>/<plugin>/` 的存在性派生；`claude_code` 的清单从 `~/.claude/plugins/installed_plugins.json` 与 `known_marketplaces.json` 只读派生，启用状态来自 `settings.json` 的 `enabledPlugins`。已配置但缓存缺失的插件标记 `cache_present=false`；不尝试修复。
 - **FR-032**: 用户 MUST 能启用/禁用插件。写操作只触碰文档化位置——Codex 条目的 `enabled` 字段；Claude Code `settings.json` 的 `enabledPlugins` 映射——且 MUST 绝不写 agent 的内部状态文件。审计为 `agent_plugin_toggled`。
-- **FR-033**: 用户 MUST 能卸载 `codex` 插件：从 `config.toml` 移除 `[plugins."…"]` 条目并删除该插件的缓存目录；审计为 `agent_plugin_uninstalled`。`claude_code` 的卸载以 `unprocessable_entity`（422）与错误码 `PLUGIN_UNINSTALL_UNSUPPORTED` 拒绝——完全卸载需要 agent 自己的工具链；UI 改为提供禁用加提示。Coffer 不提供插件安装与 marketplace 管理；二者都留给 agent 自己的工具链。
+- **FR-033**: 用户 MUST 能卸载插件，按每个 agent 的策略分派。`codex`：从 `config.toml` 移除 `[plugins."…"]` 条目并删除该插件的缓存目录。`claude_code`：Coffer 委派给 `claude plugin uninstall <id>`——绝不亲手写 Claude 的内部 `installed_plugins.json`，由该 CLI 拥有这部分状态。当 `claude` CLI 不在 PATH 上时，操作以 `unprocessable_entity`（422）/ `PLUGIN_UNINSTALL_UNSUPPORTED` 拒绝，且应用内卸载入口被隐藏（列表上报 `can_uninstall=false`）；CLI 报错则以 `PLUGIN_UNINSTALL_FAILED`（422）呈现。两条成功路径都审计为 `agent_plugin_uninstalled`。Coffer 不提供插件安装与 marketplace 管理；二者都留给 agent 自己的工具链。
 
 **目录型配置条目（工作区增补）**
 
