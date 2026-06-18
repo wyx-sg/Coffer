@@ -654,7 +654,13 @@
         "empty": "No plugins installed",
         "parseError": "Failed to parse config — this file is read-only",
         "marketplace": "Marketplace",
-        "searchPlaceholder": "Search plugins"
+        "searchPlaceholder": "Search plugins",
+        "version": "Version",
+        "author": "Author",
+        "bundledSkills": "Bundled skills",
+        "bundledCommands": "Bundled commands",
+        "bundledMcp": "Bundled MCP servers",
+        "noDetail": "No additional detail for this plugin."
       },
       "mcp": {
         "gatewayTitle": "Via Coffer gateway",
@@ -807,7 +813,8 @@
       "foreignLink": "Foreign link",
       "locationSkills": "skills directory",
       "locationAgentsDir": "~/.agents/skills",
-      "adoptSuccess": "Adopted into the master library: {{name}}"
+      "adoptSuccess": "Adopted into the master library: {{name}}",
+      "unmanagedNoMatch": "No unmanaged skills match your search."
     },
     "mcpTab": {
       "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to expose Coffer's MCP servers here.",

@@ -31,6 +31,8 @@ from coffer.domain.agent.skill_delivery import SkillDeliveryMode
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.skill.external_dir import ExternalDirRegistration
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
+from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
 from coffer.infrastructure.skill.external_dir_registrar import YamlExternalDirRegistrar
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
@@ -179,7 +181,11 @@ def wire_agent_and_skill_kinds(
         credentials=credential_store,
     )
     agent_plugin_svc = AgentPluginService(
-        agent_service=agent_svc, audit=audit, store=config_file_store
+        agent_service=agent_svc,
+        audit=audit,
+        store=config_file_store,
+        detail_reader=FsPluginDetailReader(),
+        cli_runner=ClaudePluginCli(),
     )
 
     async def _agent_on_delete(ref: ResourceRef) -> None:

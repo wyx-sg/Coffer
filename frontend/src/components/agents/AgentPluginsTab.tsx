@@ -1,11 +1,14 @@
 // frontend/src/components/agents/AgentPluginsTab.tsx
-// "Plugins" tab on the agent detail page. Shows the installed plugins for the
-// agent, grouped by marketplace. Each row has a name, enabled Switch, cache
-// status badge, and an uninstall action (codex only — claude_code agents must
-// use the `claude plugin` CLI to uninstall).
+// "Plugins" tab on the agent detail page. Shows ALL installed plugins for the
+// agent in a single table — the marketplace each plugin came from is a column,
+// not a per-marketplace section — so it reads like the other resource surfaces.
+// Each row has name, marketplace (+ source), an enabled Switch, a cache-status
+// badge, and an uninstall action (codex only — claude_code agents must use the
+// `claude plugin` CLI to uninstall).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { PluginDetailRow } from "@/components/agents/AgentPluginDetail";
 import { DataTable, type Column } from "@/components/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -22,11 +25,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut, PluginOut } from "@/lib/api/agents";
-import {
-  useAgentPlugins,
-  useTogglePlugin,
-  useUninstallPlugin,
-} from "@/lib/hooks/useAgents";
+import { useAgentPlugins, useTogglePlugin, useUninstallPlugin } from "@/lib/hooks/useAgents";
 
 export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
@@ -35,7 +34,17 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
   const uninstall = useUninstallPlugin(agent.name);
   const [uninstallTarget, setUninstallTarget] = useState<PluginOut | null>(null);
 
-  const isCodex = agent.type === "codex";
+  const items = plugins.data?.items ?? [];
+  const marketplaces = plugins.data?.marketplaces ?? [];
+  const parseErrors = plugins.data?.parse_errors ?? [];
+  // Show the uninstall button on the agent's reported capability (Codex edits
+  // its config; Claude shells out to `claude plugin uninstall` when present),
+  // not on the agent type. When unavailable, keep the "use the CLI" hint.
+  const canUninstall = plugins.data?.can_uninstall ?? false;
+
+  // marketplace name → source (e.g. "jarrodwatts/claude-hud"), so the
+  // marketplace column can show the origin alongside the name.
+  const sourceOf = new Map(marketplaces.map((m) => [m.name, m.source ?? ""]));
 
   const columns: Column<PluginOut>[] = [
     {
@@ -45,6 +54,21 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
       cell: (p) => <span className="font-medium">{p.name}</span>,
     },
     {
+      key: "marketplace",
+      header: t("agents.workspace.pluginsTab.marketplace"),
+      cell: (p) => {
+        const source = sourceOf.get(p.marketplace);
+        return (
+          <span className="flex items-center gap-2">
+            <span>{p.marketplace}</span>
+            {source ? (
+              <span className="font-mono text-xs text-muted-foreground">({source})</span>
+            ) : null}
+          </span>
+        );
+      },
+    },
+    {
       key: "enabled",
       header: t("agents.workspace.pluginsTab.enabled"),
       className: "whitespace-nowrap",
@@ -52,6 +76,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
         <Switch
           checked={p.enabled}
           disabled={toggle.isPending}
+          onClick={(e) => e.stopPropagation()}
           onCheckedChange={(checked) => toggle.mutate({ id: p.id, enabled: checked })}
           aria-label={`${t("agents.workspace.pluginsTab.enabled")}: ${p.name}`}
         />
@@ -70,12 +95,15 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
       header: "",
       className: "text-right",
       cell: (p) =>
-        isCodex ? (
+        canUninstall ? (
           <Button
             size="sm"
             variant="outline"
             className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => setUninstallTarget(p)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setUninstallTarget(p);
+            }}
           >
             {t("agents.workspace.pluginsTab.uninstall")}
           </Button>
@@ -86,21 +114,6 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
         ),
     },
   ];
-
-  const items = plugins.data?.items ?? [];
-  const marketplaces = plugins.data?.marketplaces ?? [];
-  const parseErrors = plugins.data?.parse_errors ?? [];
-
-  // Build a map from marketplace name → source for group headers.
-  const marketplaceMap = new Map(marketplaces.map((m) => [m.name, m]));
-
-  // Group items by marketplace.
-  const grouped = new Map<string, PluginOut[]>();
-  for (const item of items) {
-    const list = grouped.get(item.marketplace) ?? [];
-    list.push(item);
-    grouped.set(item.marketplace, list);
-  }
 
   return (
     <div className="space-y-6">
@@ -119,48 +132,25 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
         </Alert>
       )}
 
-      {plugins.isPending ? (
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-      ) : plugins.error ? (
-        <p className="text-sm text-destructive">{translateApiError(t, plugins.error)}</p>
-      ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("agents.workspace.pluginsTab.empty")}</p>
-      ) : grouped.size === 0 ? (
-        <DataTable
-          rows={items}
-          columns={columns}
-          rowKey={(p) => p.id}
-          search={{
-            accessor: (p) => p.name,
-            placeholder: t("agents.workspace.pluginsTab.searchPlaceholder"),
-          }}
-          emptyMessage={t("agents.workspace.pluginsTab.empty")}
-        />
-      ) : (
-        Array.from(grouped.entries()).map(([marketplaceName, rows]) => {
-          const mp = marketplaceMap.get(marketplaceName);
-          return (
-            <Card key={marketplaceName} className="space-y-3 p-4">
-              <h3 className="text-sm font-medium text-muted-foreground">
-                {t("agents.workspace.pluginsTab.marketplace")}: {marketplaceName}
-                {mp?.source ? (
-                  <span className="ml-2 font-mono text-xs">({mp.source})</span>
-                ) : null}
-              </h3>
-              <DataTable
-                rows={rows}
-                columns={columns}
-                rowKey={(p) => p.id}
-                search={{
-                  accessor: (p) => p.name,
-                  placeholder: t("agents.workspace.pluginsTab.searchPlaceholder"),
-                }}
-                emptyMessage={t("agents.workspace.pluginsTab.empty")}
-              />
-            </Card>
-          );
-        })
-      )}
+      <Card className="space-y-3 p-4">
+        {plugins.isPending ? (
+          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+        ) : plugins.error ? (
+          <p className="text-sm text-destructive">{translateApiError(t, plugins.error)}</p>
+        ) : (
+          <DataTable
+            rows={items}
+            columns={columns}
+            rowKey={(p) => p.id}
+            search={{
+              accessor: (p) => `${p.name} ${p.marketplace} ${sourceOf.get(p.marketplace) ?? ""}`,
+              placeholder: t("agents.workspace.pluginsTab.searchPlaceholder"),
+            }}
+            getRowDetail={(p) => <PluginDetailRow plugin={p} />}
+            emptyMessage={t("agents.workspace.pluginsTab.empty")}
+          />
+        )}
+      </Card>
 
       <Dialog
         open={uninstallTarget !== null}

@@ -30,6 +30,7 @@ import pytest_asyncio
 from coffer.application.agent.plugin_service import AgentPluginService
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config_files import FileStat, spec_for
+from coffer.domain.agent.plugin_bundle import PluginDetail
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound
@@ -37,6 +38,7 @@ from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import (
     PluginNotFound,
     PluginToggleUnsupported,
+    PluginUninstallFailed,
     PluginUninstallUnsupported,
 )
 
@@ -168,12 +170,43 @@ async def audit_svc() -> AuditService:
     return AuditService(FakeAuditRepo())
 
 
+class FakeDetailReader:
+    """Maps install paths to PluginDetail and records which paths were read."""
+
+    def __init__(self, by_path: dict[str, PluginDetail]) -> None:
+        self._by_path = by_path
+        self.calls: list[str] = []
+
+    def read(self, install_path: str) -> PluginDetail | None:
+        self.calls.append(install_path)
+        return self._by_path.get(install_path)
+
+
+class FakeCliRunner:
+    """Stands in for the agent's plugin CLI (Claude). Records uninstall calls."""
+
+    def __init__(self, *, available: bool = True, fail: Exception | None = None) -> None:
+        self._available = available
+        self._fail = fail
+        self.calls: list[str] = []
+
+    def available(self) -> bool:
+        return self._available
+
+    def uninstall(self, plugin_id: str) -> None:
+        self.calls.append(plugin_id)
+        if self._fail is not None:
+            raise self._fail
+
+
 def _make_svc(
     store: FakeStore,
     audit_svc: AuditService,
     *,
     cache_dirs: set[pathlib.Path] | None = None,
     rmtree_calls: list[pathlib.Path] | None = None,
+    detail_reader: FakeDetailReader | None = None,
+    cli_runner: FakeCliRunner | None = None,
 ) -> AgentPluginService:
     _cache_dirs: set[pathlib.Path] = cache_dirs if cache_dirs is not None else set()
     _rmtree_calls: list[pathlib.Path] = rmtree_calls if rmtree_calls is not None else []
@@ -191,6 +224,8 @@ def _make_svc(
         store=store,
         dir_exists=_dir_exists,
         rmtree=_rmtree,
+        detail_reader=detail_reader,
+        cli_runner=cli_runner,
     )
 
 
@@ -264,6 +299,37 @@ async def test_list_codex_groups_and_cache_flag(store, audit_svc):
     assert mkt_names == {"npm", "pypi"}
 
 
+async def test_list_codex_surfaces_detail_from_reader(store, audit_svc):
+    """Codex plugins get the same bundled detail as Claude: the service hands
+    the reader the cache <marketplace>/<name> dir (Codex records no path)."""
+    store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_PLUGINS
+    name_dir = str(_CODEX_CONFIG_DIR / "plugins" / "cache" / "npm" / "lint-tool")
+    reader = FakeDetailReader(
+        {
+            name_dir: PluginDetail(
+                version="1.0.0",
+                description="Lints things",
+                author="OpenAI",
+                skills=("lint",),
+            )
+        }
+    )
+    svc = _make_svc(store, audit_svc, detail_reader=reader)
+
+    out = await svc.list_plugins("cx")
+
+    by_id = {v.id: v for v in out.items}
+    lint = by_id["lint-tool@npm"]
+    assert lint.version == "1.0.0"
+    assert lint.description == "Lints things"
+    assert lint.author == "OpenAI"
+    assert lint.skills == ("lint",)
+    # The reader was asked using the cache <marketplace>/<name> path.
+    assert name_dir in reader.calls
+    # The other plugin has no mapped detail → empty, no crash.
+    assert by_id["format-tool@pypi"].description is None
+
+
 # ---------------------------------------------------------------------------
 # 2. list_codex_missing_config_empty
 # ---------------------------------------------------------------------------
@@ -326,6 +392,66 @@ async def test_list_claude_inventory_and_enabled(store, audit_svc):
     assert by_id["plugin-b@pypi"].cache_present is True
     # marketplaces come from known_marketplaces.json
     assert any(m.name == "npm" for m in out.marketplaces)
+
+
+async def test_list_claude_surfaces_detail_from_reader(store, audit_svc):
+    """Claude listing carries version + bundled detail from the install path;
+    a plugin with no install path (empty inventory record) reads nothing."""
+    installed = json.dumps(
+        {
+            "version": 2,
+            "plugins": {
+                "plugin-a@npm": [{"installPath": "/cache/npm/plugin-a/1.2.3", "version": "1.2.3"}],
+                "plugin-b@pypi": [],
+            },
+        }
+    )
+    store._files[_CLAUDE_INSTALLED] = installed
+    reader = FakeDetailReader(
+        {
+            "/cache/npm/plugin-a/1.2.3": PluginDetail(
+                description="Does A",
+                author="Ada",
+                homepage="https://example/a",
+                skills=("alpha", "beta"),
+                commands=("doit",),
+                mcp_servers=(),
+            )
+        }
+    )
+    svc = _make_svc(store, audit_svc, detail_reader=reader)
+
+    out = await svc.list_plugins("cc")
+
+    by_id = {v.id: v for v in out.items}
+    a = by_id["plugin-a@npm"]
+    assert a.version == "1.2.3"
+    assert a.description == "Does A"
+    assert a.author == "Ada"
+    assert a.homepage == "https://example/a"
+    assert a.skills == ("alpha", "beta")
+    assert a.commands == ("doit",)
+    # plugin-b has no install path → reader never asked, detail empty.
+    b = by_id["plugin-b@pypi"]
+    assert b.version is None
+    assert b.description is None
+    assert b.skills == ()
+    assert reader.calls == ["/cache/npm/plugin-a/1.2.3"]
+
+
+async def test_list_claude_without_reader_has_no_detail(store, audit_svc):
+    """With no detail reader wired, the listing carries only config-derived
+    fields — the bundled-detail fields stay empty (no crash)."""
+    store._files[_CLAUDE_INSTALLED] = _INSTALLED_JSON
+    svc = _make_svc(store, audit_svc)  # detail_reader=None
+
+    out = await svc.list_plugins("cc")
+
+    assert out.parse_errors == []
+    for v in out.items:
+        assert v.version is None
+        assert v.description is None
+        assert v.skills == () and v.commands == () and v.mcp_servers == ()
 
 
 async def test_list_claude_settings_only_orphan_gets_false_cache(store, audit_svc):
@@ -402,21 +528,67 @@ async def test_toggle_claude_writes_settings_only_internal_untouched(store, audi
 
 
 # ---------------------------------------------------------------------------
-# 7. uninstall_claude_rejected
+# 7. uninstall_claude — CLI-mediated (never hand-writes internal files)
 # ---------------------------------------------------------------------------
 
 
-async def test_uninstall_claude_rejected(store, audit_svc):
+async def test_uninstall_claude_via_cli_calls_runner(store, audit_svc):
     store._files[_CLAUDE_INSTALLED] = _INSTALLED_JSON
-    svc = _make_svc(store, audit_svc)
+    runner = FakeCliRunner(available=True)
+    svc = _make_svc(store, audit_svc, cli_runner=runner)
 
+    await svc.uninstall("cc", "plugin-a@npm", actor="cli")
+
+    # Delegated to `claude plugin uninstall`; Coffer wrote no config files itself.
+    assert runner.calls == ["plugin-a@npm"]
+    assert store._writes == []
+    entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
+    assert len(entries) == 1
+    assert entries[0].details == {"plugin": "plugin-a@npm", "cache_removed": True, "via": "cli"}
+
+
+async def test_uninstall_claude_without_cli_runner_rejected(store, audit_svc):
+    # No runner wired → uninstall is unavailable (the listing hides the button).
+    svc = _make_svc(store, audit_svc)
     with pytest.raises(PluginUninstallUnsupported):
         await svc.uninstall("cc", "plugin-a@npm")
-
-    # No writes, no audit events.
     assert store._writes == []
     entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
     assert entries == []
+
+
+async def test_uninstall_claude_cli_unavailable_rejected(store, audit_svc):
+    runner = FakeCliRunner(available=False)
+    svc = _make_svc(store, audit_svc, cli_runner=runner)
+    with pytest.raises(PluginUninstallUnsupported):
+        await svc.uninstall("cc", "plugin-a@npm")
+    assert runner.calls == []  # never attempted when the CLI is absent
+
+
+async def test_uninstall_claude_cli_failure_propagates(store, audit_svc):
+    runner = FakeCliRunner(available=True, fail=PluginUninstallFailed("plugin-a@npm", "boom"))
+    svc = _make_svc(store, audit_svc, cli_runner=runner)
+    with pytest.raises(PluginUninstallFailed):
+        await svc.uninstall("cc", "plugin-a@npm")
+    # A failed uninstall records no success audit event.
+    entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
+    assert entries == []
+
+
+async def test_list_can_uninstall_gating(store, audit_svc):
+    # Claude (CLI strategy): can_uninstall follows the CLI's availability.
+    store._files[_CLAUDE_INSTALLED] = _INSTALLED_JSON
+    with_cli = await _make_svc(
+        store, audit_svc, cli_runner=FakeCliRunner(available=True)
+    ).list_plugins("cc")
+    assert with_cli.can_uninstall is True
+    without_cli = await _make_svc(store, audit_svc).list_plugins("cc")
+    assert without_cli.can_uninstall is False
+
+    # Codex (config-edit strategy): always available, no CLI needed.
+    store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_PLUGINS
+    codex = await _make_svc(store, audit_svc).list_plugins("cx")
+    assert codex.can_uninstall is True
 
 
 # ---------------------------------------------------------------------------

@@ -114,6 +114,15 @@ export interface PluginOut {
   marketplace: string;
   enabled: boolean;
   cache_present: boolean;
+  // Best-effort detail read from the plugin's install dir (Claude only today;
+  // null / empty otherwise).
+  version?: string | null;
+  description?: string | null;
+  author?: string | null;
+  homepage?: string | null;
+  skills?: string[];
+  commands?: string[];
+  mcp_servers?: string[];
 }
 
 export interface MarketplaceOut {
@@ -126,6 +135,9 @@ export interface PluginsResponse {
   items: PluginOut[];
   marketplaces: MarketplaceOut[];
   parse_errors: unknown[];
+  // Whether in-app uninstall is available for this agent now (capability +, for
+  // CLI-strategy agents like Claude, the agent's CLI being on PATH).
+  can_uninstall?: boolean;
 }
 
 export interface UnmanagedSkillOut {
@@ -259,11 +271,9 @@ export const agentsApi = {
   unmanagedSkills: (name: string) =>
     call<UnmanagedSkillsResponse>("GET", `/agents/${enc(name)}/unmanaged-skills`),
   adoptUnmanagedSkill: (name: string, skill: string, location: string) =>
-    call<{ name: string }>(
-      "POST",
-      `/agents/${enc(name)}/unmanaged-skills/${enc(skill)}/adopt`,
-      { location },
-    ),
+    call<{ name: string }>("POST", `/agents/${enc(name)}/unmanaged-skills/${enc(skill)}/adopt`, {
+      location,
+    }),
   deleteUnmanagedSkill: (name: string, skill: string, location: string) =>
     call<void>(
       "DELETE",

@@ -103,6 +103,17 @@ class PluginToggleUnsupported(CofferError):  # noqa: N818
         self.agent_type = agent_type
 
 
+class PluginUninstallFailed(CofferError):  # noqa: N818
+    """A CLI-mediated uninstall (e.g. ``claude plugin uninstall``) failed. Maps to 422."""
+
+    code = "PLUGIN_UNINSTALL_FAILED"
+
+    def __init__(self, plugin_id: str, reason: str) -> None:
+        super().__init__(f"failed to uninstall {plugin_id}: {reason}")
+        self.plugin_id = plugin_id
+        self.reason = reason
+
+
 class McpInstallUnsupported(CofferError):  # noqa: N818
     """The agent type does not declare an MCP injection target. Maps to 422."""
 

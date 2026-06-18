@@ -484,13 +484,17 @@ paths:
     delete:
       tags: [agents]
       operationId: uninstallAgentPlugin
-      summary: Uninstall a plugin (Codex only)
+      summary: Uninstall a plugin
       description: |
-        Removes the `[plugins."…"]` entry from `config.toml` and deletes the
-        plugin's cache directory; audited as `agent_plugin_uninstalled`
-        (FR-033). For `claude_code` the operation is rejected with 422
-        (`PLUGIN_UNINSTALL_UNSUPPORTED`) — full uninstall requires the
-        agent's own tooling.
+        Uninstalls a plugin, dispatching on the agent's uninstall strategy.
+        For Codex, removes the `[plugins."…"]` entry from `config.toml` and
+        deletes the plugin's cache directory. For Claude Code, delegates to
+        `claude plugin uninstall <id>` — Coffer never hand-writes Claude's
+        internal `installed_plugins.json`; the CLI owns that state. Audited as
+        `agent_plugin_uninstalled` (FR-033). Rejected with 422
+        (`PLUGIN_UNINSTALL_UNSUPPORTED`) when the agent can't uninstall or the
+        required CLI is not on PATH; a CLI uninstall that errors returns 422
+        (`PLUGIN_UNINSTALL_FAILED`) with the CLI's message.
       responses:
         "204":
           description: No Content
@@ -922,6 +926,34 @@ components:
           description: >-
             Whether the plugin's cache directory is present on disk; false
             flags a configured-without-cache plugin (no repair is attempted).
+        version:
+          type: string
+          nullable: true
+          description: Installed version, when the inventory records one (Claude).
+        description:
+          type: string
+          nullable: true
+          description: From the plugin's `.claude-plugin/plugin.json` manifest.
+        author:
+          type: string
+          nullable: true
+          description: Author name from the manifest (object `name` or bare string).
+        homepage:
+          type: string
+          nullable: true
+          description: Manifest `homepage`, falling back to `repository`.
+        skills:
+          type: array
+          items: { type: string }
+          description: Names of skills the plugin bundles (its `skills/` subfolders).
+        commands:
+          type: array
+          items: { type: string }
+          description: Names of slash-commands the plugin bundles (`commands/*.md`).
+        mcp_servers:
+          type: array
+          items: { type: string }
+          description: Names of MCP servers the plugin bundles (its `.mcp.json`).
 
     Marketplace:
       type: object
@@ -944,6 +976,13 @@ components:
         parse_errors:
           type: array
           items: { $ref: "#/components/schemas/ParseError" }
+        can_uninstall:
+          type: boolean
+          default: false
+          description: >-
+            Whether in-app uninstall is available for this agent now — the
+            capability allows it AND, for CLI-strategy agents (Claude Code), the
+            agent's plugin CLI is on PATH. Drives the UI's uninstall affordance.
 
     PluginPatch:
       type: object

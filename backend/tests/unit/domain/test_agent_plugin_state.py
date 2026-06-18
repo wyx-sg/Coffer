@@ -109,6 +109,41 @@ def test_parse_claude_enabled_defaults_true_for_installed() -> None:
     assert all(p.enabled for p in plugins)
 
 
+def test_parse_claude_surfaces_version_and_install_path() -> None:
+    # The first inventory record carries the active install's version + path;
+    # a plugin with an empty record list (and a settings-only orphan) get None.
+    installed = json.dumps(
+        {
+            "version": 2,
+            "plugins": {
+                "hud@m": [
+                    {
+                        "scope": "user",
+                        "installPath": "/cache/m/hud/0.1.0",
+                        "version": "0.1.0",
+                    }
+                ],
+                "bare@m": [],
+            },
+        }
+    )
+    plugins, _ = ps.parse_claude(
+        installed_json=installed,
+        marketplaces_json="{}",
+        settings_json='{"enabledPlugins": {"orphan@m": false}}',
+    )
+    by_id = {p.id: p for p in plugins}
+    assert by_id["hud@m"].version == "0.1.0"
+    assert by_id["hud@m"].install_path == "/cache/m/hud/0.1.0"
+    # Empty record list → no version/path, but still inventory-installed.
+    assert by_id["bare@m"].version is None
+    assert by_id["bare@m"].install_path is None
+    assert by_id["bare@m"].installed is True
+    # Settings-only orphan → not installed, no path.
+    assert by_id["orphan@m"].installed is False
+    assert by_id["orphan@m"].install_path is None
+
+
 def test_toggle_claude_plugin_writes_settings_only() -> None:
     out = ps.set_claude_enabled(CLAUDE_SETTINGS, "warp@claude-code-warp", True)
     assert json.loads(out)["enabledPlugins"]["warp@claude-code-warp"] is True

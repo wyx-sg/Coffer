@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import pathlib
 import tomllib
+import types
 
 import pytest
 from starlette.testclient import TestClient
@@ -458,19 +459,50 @@ def test_uninstall_codex_plugin(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="004-agent-registry", scenario="reject uninstalling a Claude Code plugin"
+    spec="004-agent-registry", scenario="uninstall a Claude Code plugin via its CLI"
 )
-def test_reject_uninstall_claude_plugin(tmp_path, monkeypatch):
+def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59950)
+    with _client(app) as c:
+        _register_claude(c, tmp_path)
+        installed = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
+        settings = tmp_path / ".claude" / "settings.json"
+        installed_before, settings_before = installed.read_bytes(), settings.read_bytes()
+
+        # `claude` present and the CLI succeeds — Coffer delegates, never writing
+        # Claude's internal files itself.
+        monkeypatch.setattr("shutil.which", lambda _exe: "/usr/bin/claude")
+        monkeypatch.setattr(
+            "subprocess.run",
+            lambda *a, **k: types.SimpleNamespace(returncode=0, stdout="", stderr=""),
+        )
+
+        r = c.delete("/api/v1/agents/cc/plugins/q1@mk")
+        assert r.status_code == 204, r.text
+        # Coffer wrote neither the internal inventory nor settings.json.
+        assert installed.read_bytes() == installed_before
+        assert settings.read_bytes() == settings_before
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry", scenario="reject Claude uninstall when its CLI is unavailable"
+)
+def test_reject_claude_uninstall_no_cli(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59955)
     with _client(app) as c:
         _register_claude(c, tmp_path)
         settings = tmp_path / ".claude" / "settings.json"
         before = settings.read_bytes()
 
+        # No `claude` on PATH → uninstall is unavailable.
+        monkeypatch.setattr("shutil.which", lambda _exe: None)
+
         r = c.delete("/api/v1/agents/cc/plugins/q1@mk")
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "PLUGIN_UNINSTALL_UNSUPPORTED"
         assert settings.read_bytes() == before
+        # The listing also hides the affordance.
+        assert c.get("/api/v1/agents/cc/plugins").json()["can_uninstall"] is False
 
 
 @pytest.mark.acceptance(spec="004-agent-registry", scenario="flag a plugin whose cache is missing")
