@@ -19,11 +19,13 @@ from coffer.application.skill.delivery_ops import (
     delivers_skill_folders,
     reconcile_external_registration,
 )
+from coffer.application.skill.scan_ops import record_scan_audit, scan_config_fields
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CofferError, ResourceAlreadyExists
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.skill.binding import LinkMode
 from coffer.domain.skill.config import SkillConfig
+from coffer.domain.skill.content_scan import scan_skill_folder
 from coffer.domain.skill.source import GitSource, LocalImportSource
 from coffer.domain.skill.validator import ValidationOk
 
@@ -72,12 +74,17 @@ async def register_from_validated(
         raise ResourceAlreadyExists("skill", name)
 
     now = datetime.now(tz=UTC)
+    # Trust layer L2 (FR-028): scan the source content before it enters the
+    # master store, caching the verdict on the config. A new skill is never
+    # pre-acknowledged, so a high/critical verdict gates auto-bind below.
+    report = scan_skill_folder(src)
     cfg = SkillConfig(
         source=source_meta,
         skill_md_name=name,
         skill_md_description=validation.frontmatter.description,
         version_hash=validation.skill_md_sha256,
         last_synced_from_source_at=now,
+        **scan_config_fields(report, scanned_at=now),
     )
 
     # Stage master folder
@@ -111,8 +118,11 @@ async def register_from_validated(
         actor=actor,
         details={"version_hash": validation.skill_md_sha256},
     )
+    await record_scan_audit(service=service, name=name, report=report, actor=actor)
 
-    # Auto-bind for every enabled, following agent (FR-025).
+    # Auto-bind for every enabled, following agent (FR-025). A skill whose scan
+    # requires acknowledgment is skipped here (the enable gate raises and
+    # auto-bind records SKILL_AUTOBIND_SKIPPED) until the risk is acknowledged.
     await auto_bind_all(service=service, skill=r, actor=actor)
     return r
 

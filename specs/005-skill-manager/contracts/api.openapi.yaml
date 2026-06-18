@@ -165,7 +165,10 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Target path already exists and is not a Coffer-managed link
+          description: >
+            Target path already exists and is not a Coffer-managed link
+            (TARGET_CONFLICT), or the skill's scan risk is not acknowledged
+            (SKILL_RISK_NOT_ACKNOWLEDGED, FR-029).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorOut" }
@@ -272,6 +275,44 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DriftReport" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /skills/{name}/scan:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: scanSkill
+      summary: Re-scan a skill's content for risky patterns (trust layer L2, FR-028)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScanReportOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /skills/{name}/acknowledge-risk:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: acknowledgeSkillRisk
+      summary: Acknowledge a skill's scan risk so it can be enabled (FR-029)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /agents/{name}/unmanaged-skills:
     parameters:
@@ -492,6 +533,43 @@ components:
         bindings:
           type: array
           items: { $ref: "#/components/schemas/SkillBindingOut" }
+        scan_verdict:
+          type: string
+          nullable: true
+          enum: [low, medium, high, critical]
+          description: Trust layer L2 (FR-028) worst severity, or null.
+        scan_findings_count: { type: integer }
+        last_scanned_at: { type: string, format: date-time, nullable: true }
+        risk_acknowledged: { type: boolean }
+        requires_acknowledgment:
+          type: boolean
+          description: Verdict gates enabling and risk not yet acknowledged (FR-029).
+
+    ScanFindingOut:
+      type: object
+      required: [severity, rule_id, file, line, message]
+      properties:
+        severity: { type: string, enum: [low, medium, high, critical] }
+        rule_id: { type: string }
+        file: { type: string }
+        line: { type: integer }
+        message: { type: string }
+
+    ScanReportOut:
+      type: object
+      required:
+        [verdict, findings, ruleset_version, truncated, requires_acknowledgment]
+      properties:
+        verdict:
+          type: string
+          nullable: true
+          enum: [low, medium, high, critical]
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/ScanFindingOut" }
+        ruleset_version: { type: string }
+        truncated: { type: boolean }
+        requires_acknowledgment: { type: boolean }
 
     SkillBindingOut:
       type: object

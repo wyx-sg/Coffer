@@ -32,6 +32,26 @@ export function SkillOverview({ skill }: { skill: SkillOut }) {
           <dt className="text-muted-foreground">{t("skills.detail.versionHash")}</dt>
           <dd className="font-mono text-xs">{skill.version_hash.slice(0, 12)}</dd>
 
+          <dt className="text-muted-foreground">{t("skills.detail.scan")}</dt>
+          <dd>
+            {skill.scan_verdict ? (
+              <span>
+                {t(`skills.scanVerdict.${skill.scan_verdict}`)}
+                {" · "}
+                {t("skills.detail.findingsCount", {
+                  count: skill.scan_findings_count ?? 0,
+                })}
+                {skill.requires_acknowledgment
+                  ? ` · ${t("skills.detail.needsAck")}`
+                  : skill.risk_acknowledged
+                    ? ` · ${t("skills.detail.acknowledged")}`
+                    : ""}
+              </span>
+            ) : (
+              t("skills.detail.scanClean")
+            )}
+          </dd>
+
           <dt className="text-muted-foreground">{t("skills.detail.masterPath")}</dt>
           <dd className="font-mono text-xs">{skill.master_path}</dd>
 

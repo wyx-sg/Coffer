@@ -893,7 +893,12 @@
         "overview": "概览",
         "bindings": "绑定",
         "files": "文件"
-      }
+      },
+      "scan": "内容扫描",
+      "scanClean": "干净——无 findings",
+      "findingsCount": "{{count}} 条 findings",
+      "needsAck": "需确认",
+      "acknowledged": "风险已确认"
     },
     "bindings": {
       "noAgents": "尚未注册任何 Agent。请先添加 Agent，再绑定此 Skill。",
@@ -930,6 +935,12 @@
         "title": "漂移检测",
         "body": "校验每个已启用的绑定是否仍与磁盘上的链接一致。"
       }
+    },
+    "scanVerdict": {
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "critical": "严重"
     }
   },
   "knowledgeBases": {
