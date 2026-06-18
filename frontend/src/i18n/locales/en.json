@@ -869,7 +869,12 @@
         "overview": "Overview",
         "bindings": "Bindings",
         "files": "Files"
-      }
+      },
+      "scan": "Content scan",
+      "scanClean": "Clean — no findings",
+      "findingsCount": "{{count}} findings",
+      "needsAck": "needs acknowledgment",
+      "acknowledged": "risk acknowledged"
     },
     "bindings": {
       "noAgents": "No agents registered yet. Add an agent first to bind this skill.",
@@ -906,6 +911,12 @@
         "title": "Drift detection",
         "body": "Verify that every enabled binding still matches its on-disk link."
       }
+    },
+    "scanVerdict": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
     }
   },
   "knowledgeBases": {

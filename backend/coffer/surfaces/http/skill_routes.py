@@ -9,10 +9,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
+from coffer.application.skill.scan_ops import acknowledge_risk, rescan_skill
 from coffer.application.skill.service import SkillService, UpdateOutcome
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
+from coffer.domain.skill.content_scan import ScanReport, verdict_requires_ack
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_skill_service
 
@@ -71,10 +73,33 @@ class SkillOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     bindings: list[SkillBindingOut]
+    # Trust layer L2 (FR-028/FR-029).
+    scan_verdict: str | None = None
+    scan_findings_count: int = 0
+    last_scanned_at: datetime | None = None
+    risk_acknowledged: bool = False
+    # True when the verdict gates enabling and the risk is not yet acknowledged.
+    requires_acknowledgment: bool = False
 
 
 class SkillListOut(BaseModel):
     items: list[SkillOut]
+
+
+class ScanFindingOut(BaseModel):
+    severity: str
+    rule_id: str
+    file: str
+    line: int
+    message: str
+
+
+class ScanReportOut(BaseModel):
+    verdict: str | None
+    findings: list[ScanFindingOut]
+    ruleset_version: str
+    truncated: bool
+    requires_acknowledgment: bool
 
 
 class SkillUpdateResult(BaseModel):
@@ -162,6 +187,13 @@ async def _to_skill_out(
         last_synced_from_source_at=cfg.last_synced_from_source_at,
         created_at=r.created_at,
         updated_at=r.updated_at,
+        scan_verdict=cfg.scan_verdict,
+        scan_findings_count=cfg.scan_findings_count,
+        last_scanned_at=cfg.last_scanned_at,
+        risk_acknowledged=cfg.risk_acknowledged,
+        requires_acknowledgment=(
+            verdict_requires_ack(cfg.scan_verdict) and not cfg.risk_acknowledged
+        ),
         bindings=[
             SkillBindingOut(
                 agent_name=agents_by_id.get(b.agent_resource_id, str(b.agent_resource_id)),
@@ -316,3 +348,44 @@ async def verify_skills(
             for e in report.entries
         ]
     )
+
+
+def _to_scan_report_out(report: ScanReport) -> ScanReportOut:
+    return ScanReportOut(
+        verdict=report.verdict.value if report.verdict is not None else None,
+        findings=[
+            ScanFindingOut(
+                severity=f.severity.value,
+                rule_id=f.rule_id,
+                file=f.file,
+                line=f.line,
+                message=f.message,
+            )
+            for f in report.findings
+        ],
+        ruleset_version=report.ruleset_version,
+        truncated=report.truncated,
+        requires_acknowledgment=report.requires_acknowledgment,
+    )
+
+
+@router.post("/{name}/scan", response_model=ScanReportOut)
+async def scan_skill(
+    name: str,
+    svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> ScanReportOut:
+    name = _validate_skill_name(name)
+    report = await rescan_skill(service=svc, name=name, actor=actor)
+    return _to_scan_report_out(report)
+
+
+@router.post("/{name}/acknowledge-risk", response_model=SkillOut)
+async def acknowledge_skill_risk(
+    name: str,
+    svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> SkillOut:
+    name = _validate_skill_name(name)
+    r = await acknowledge_risk(service=svc, name=name, actor=actor)
+    return await _to_skill_out(svc, r, await _agents_by_id(svc))

@@ -13,11 +13,13 @@ import pathlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from coffer.application.skill.scan_ops import record_scan_audit, scan_config_fields
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import SkillNameMismatch
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.skill.binding import LinkMode
 from coffer.domain.skill.config import SkillConfig
+from coffer.domain.skill.content_scan import scan_skill_folder
 from coffer.domain.skill.validator import ValidationOk
 
 if TYPE_CHECKING:
@@ -54,12 +56,17 @@ async def apply_update(
         return UpdateOutcome(skill=existing, changed=False)
 
     old_name = existing.name
+    # Content changed → re-scan (FR-028) and reset any prior acknowledgment:
+    # an acknowledgment was for the OLD content and must not carry over.
+    report = scan_skill_folder(src)
     new_cfg = cfg.model_copy(
         update={
             "skill_md_name": new_name,
             "skill_md_description": validation.frontmatter.description,
             "version_hash": validation.skill_md_sha256,
             "last_synced_from_source_at": now,
+            "risk_acknowledged": False,
+            **scan_config_fields(report, scanned_at=now),
         }
     )
 
@@ -100,6 +107,9 @@ async def apply_update(
             "after_hash": validation.skill_md_sha256,
             "renamed_from": old_name if renamed else None,
         },
+    )
+    await record_scan_audit(
+        service=service, name=new_name if renamed else old_name, report=report, actor=actor
     )
     return UpdateOutcome(skill=updated, changed=True, renamed_from=old_name if renamed else None)
 

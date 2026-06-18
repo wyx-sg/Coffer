@@ -23,7 +23,9 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import TargetConflict
 from coffer.domain.resource import ResourceRef
 from coffer.domain.skill.binding import BindingState
-from coffer.domain.workspace_errors import SkillDeliveryUnsupported
+from coffer.domain.skill.config import SkillConfig
+from coffer.domain.skill.content_scan import verdict_requires_ack
+from coffer.domain.workspace_errors import SkillDeliveryUnsupported, SkillRiskNotAcknowledged
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
@@ -36,9 +38,20 @@ async def enable_skill_for_agent(
     agent_name: str,
     force: bool,
     actor: str,
+    skip_risk_gate: bool = False,
 ) -> BindingState:
     skill = await service._rs.get(ResourceRef("skill", skill_name))
     agent = await service._rs.get(ResourceRef("agent", agent_name))
+    # Trust gate (FR-029): refuse to enable a skill whose content scan flagged
+    # high/critical risk that hasn't been acknowledged. The follow / auto-bind
+    # reconcilers catch this and record SKILL_AUTOBIND_SKIPPED, so a flagged
+    # skill is simply not delivered until acknowledged. ``skip_risk_gate`` is
+    # the adoption carve-out: adopting consolidates a skill the agent already
+    # had, so it must not be blocked (and must not silently set the ack flag).
+    if not skip_risk_gate:
+        cfg = SkillConfig.model_validate(skill.config)
+        if not cfg.risk_acknowledged and verdict_requires_ack(cfg.scan_verdict):
+            raise SkillRiskNotAcknowledged(skill_name, cfg.scan_verdict or "high")
     # Gate delivery modes that have no on-disk folder delivery wired BEFORE any
     # filesystem work. FOLDER (own skills dir) and EXTERNAL_DIR (a Coffer-owned
     # dir the agent scans — Hermes) are both folder-style; Cursor's rules_mdc is

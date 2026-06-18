@@ -288,6 +288,24 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **When** 用户运行 update 时未加 `--allow-rename`，
 - **Then** 更新被拒绝并在错误信息中告知新名字；若加 `--allow-rename`，master 文件夹被重命名，所有已启用的 symlink 在新名字下被重建。
 
+### Scenario: 导入时扫描标记风险内容
+
+- **Given** 一个 bundled 脚本把下载内容管道进 shell 的 skill 文件夹，
+- **When** 用户导入它，
+- **Then** 该 skill 以 `critical` verdict 注册、扫描被审计，且在风险被确认前不会自动投递给跟随的 agent（auto-bind 被跳过）。
+
+### Scenario: 拒绝启用未确认风险的 skill
+
+- **Given** 一个 verdict 为 `high`/`critical` 且未确认的已导入 skill，
+- **When** 用户尝试为某 agent 启用它，
+- **Then** 请求以 `conflict`（409）被拒绝，不创建链接。
+
+### Scenario: 确认风险后启用被标记的 skill
+
+- **Given** 一个用户已显式确认风险的被标记 skill，
+- **When** 用户为某 agent 启用它，
+- **Then** 链接被创建、binding 被记录；之后内容变化会重置该确认。
+
 ### Scenario: 检测 agent skill 目录中的 drift
 
 - **Given** 某 binding 存在但其磁盘目标已被删除、被替换或被重指向，
@@ -446,6 +464,11 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **FR-003**：系统必须把每个被管理 skill 的内容存到 `~/.coffer/skills/<name>/`，并以此为唯一可编辑的事实来源。
 - **FR-004**：系统必须按 AgentSkills 规范校验每一个被导入或拉取的 skill 文件夹：存在 `SKILL.md`；frontmatter `name` 非空（小写字母数字、连字符或下划线，≤64 字符）、`description` 非空且 ≤1024 字符；不含越界 symlink；总大小不超过可配置上限（默认 50 MB）。违反任一项的文件夹以 `unprocessable_entity`（422）拒绝，且不写入任何内容。
 - **FR-027**：系统必须识别它理解的 agentskills.io 可选 frontmatter 字段——`license` 与实验性的 `allowed-tools`——解析并保留它们而非丢弃，同时容忍任何其他未识别字段，让非 Coffer 编写的 skill 也能干净通过校验。`allowed-tools` 接受列表或以逗号/空白分隔的字符串，归一化为工具名列表；格式异常的值被容忍（视作缺省），绝不构成校验失败。同理，非字符串的 `license` 标量（如未加引号的年份或版本号）会被转为字符串而非拒绝。
+
+**内容信任（信任层 L2）**
+
+- **FR-028**：系统必须在每次入库（import、fetch、adopt）以及每次内容变更操作（改动 `SKILL.md` 的 update、就地文件编辑）时，对 skill 文件运行启发式内容扫描，并把结果缓存到 skill 上——verdict（`low`/`medium`/`high`/`critical` 或无）、findings 数、ruleset 版本、扫描时间。扫描是建议性的：从不阻断入库，干净结果也不构成安全保证（Coffer 只交付不执行 skill，无法强制运行时行为——见 ADR-026）。用户必须能按需对已管理 skill 重新扫描。每次扫描都审计。
+- **FR-029**：当 skill 的扫描 verdict 为 `high` 或 `critical` 时，系统必须拒绝为某 agent 启用它，直到用户显式确认风险；拒绝以 `conflict`（409）报告，follow/auto-bind 调和器跳过此类 skill（审计）而非投递。确认是显式且审计的动作，并且每当 skill 内容随后变化时必须重置（确认只对当时的内容生效）。收编是例外——它只是把 agent workspace 中已存在的 skill 归并，所以记录 verdict 但不阻断。
 
 **源**
 
