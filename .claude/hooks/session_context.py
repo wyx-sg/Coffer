@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""SessionStart hook: inject current git context so the agent honours the session protocol."""
+"""SessionStart hook: inject current git context so the agent honours the session protocol.
+
+Reports the branch, worktree status, uncommitted-file count, and — when a
+`make verify` baseline exists and has gone stale — a heads-up so the agent knows
+upfront it will need to re-verify before committing (the verify-before-commit
+hook would otherwise only surface this at commit time).
+"""
 
 from __future__ import annotations
 
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 
 def _git(*args: str) -> str:
@@ -16,6 +23,32 @@ def _git(*args: str) -> str:
         return out.stdout.strip()
     except Exception:
         return ""
+
+
+def _verify_stale() -> bool:
+    """True only when a verify stamp exists for the working tree and is stale.
+
+    No stamp (fresh clone / new worktree) or any error reads as "not stale" so the
+    line stays absent rather than nagging — mirroring the verify-before-commit
+    hook, which is silent without a baseline.
+    """
+    root = _git("rev-parse", "--show-toplevel")
+    if not root:
+        return False
+    repo = Path(root)
+    scripts = repo / "scripts"
+    sys.path.insert(0, str(scripts))
+    try:
+        import verify_stamp  # type: ignore[import-not-found]
+
+        if not (repo / verify_stamp.STAMP_NAME).exists():
+            return False
+        return not verify_stamp.is_fresh(repo)
+    except Exception:
+        return False
+    finally:
+        if sys.path and sys.path[0] == str(scripts):
+            sys.path.pop(0)
 
 
 def main() -> int:
@@ -33,6 +66,10 @@ def main() -> int:
         f"Uncommitted changes: {dirty_count} file(s).",
         "Session protocol: confirm scope, work in small committable chunks, run `make verify` before opening a PR. See agents/harness.md.",
     ]
+    if _verify_stale():
+        lines.append(
+            "`make verify` is stale (source changed since the last pass) — re-run it before committing."
+        )
     print(
         json.dumps(
             {

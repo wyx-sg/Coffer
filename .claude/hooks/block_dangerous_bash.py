@@ -9,7 +9,15 @@ import sys
 
 # (regex, human reason). Patterns are intentionally narrow to avoid false denials.
 RULES: list[tuple[str, str]] = [
-    (r"\brm\s+-rf?\s+(/|~|\$HOME|\*|\.\s*$|\.\.)", "recursive delete of root/home/cwd"),
+    # Recursive rm of root/home/cwd. The flag bundle must contain `r` (force is
+    # optional and may sit on either side, so `-rf`, `-fr`, `-Rf`, plain `-r` all
+    # match); an optional `--` and an optional opening quote before the target are
+    # tolerated so `rm -fr -- "/"` is caught while scoped paths like
+    # `rm -rf ./build/cache` stay allowed.
+    (
+        r"""\brm\s+-[a-zA-Z]*[rR][a-zA-Z]*\s+(?:--\s+)?["']?(/|~|\$HOME|\*|\.\s*$|\.\.)""",
+        "recursive delete of root/home/cwd",
+    ),
     (
         r"\bgit\s+push\b.*(--force|\s-f\b).*\b(main|master)\b",
         "force-push to a protected branch",
@@ -21,7 +29,16 @@ RULES: list[tuple[str, str]] = [
     (r"\bcurl\b.*\|\s*(sudo\s+)?(ba)?sh\b", "pipe-to-shell from the network"),
     (r"\bwget\b.*\|\s*(sudo\s+)?(ba)?sh\b", "pipe-to-shell from the network"),
     (r"\bchmod\s+-R\s+777\s+/", "world-writable recursive chmod on an absolute path"),
-    (r">\s*/dev/sd[a-z]", "raw write to a block device"),
+    # `dd of=/dev/<disk>` overwrites a raw disk (Linux sd/nvme, macOS disk/rdisk).
+    # Reading FROM a device (`if=/dev/...`) or writing to a file is left alone.
+    (
+        r"""\bdd\b[^|;&\n]*\bof=["']?/dev/(disk|rdisk|sd[a-z]|nvme)""",
+        "raw write to a block device (dd)",
+    ),
+    (
+        r"""(>>?)\s*["']?/dev/(sd[a-z]|nvme\d|r?disk\d)""",
+        "raw write to a block device",
+    ),
 ]
 
 
