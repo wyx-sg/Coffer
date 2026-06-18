@@ -77,9 +77,7 @@ describe("useAgentTranscripts", () => {
   });
 
   test("fetches sessions from GET /api/v1/agents/{name}/transcripts", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse(200, { sessions: [SAMPLE_SESSION] }));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { sessions: [SAMPLE_SESSION] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const { result } = renderHook(() => useAgentTranscripts("claude"), {
@@ -88,7 +86,11 @@ describe("useAgentTranscripts", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.sessions).toHaveLength(1);
     expect(result.current.data?.sessions[0].session_id).toBe("s1");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/api\/v1\/agents\/claude\/transcripts$/);
+    const url = String(fetchMock.mock.calls[0][0]);
+    // The base URL already carries the /api/v1 prefix; the path must not repeat
+    // it (a doubled /api/v1/api/v1 hits no route → 404 NOT_FOUND).
+    expect(url).not.toContain("/api/v1/api/v1");
+    expect(url).toMatch(/\/api\/v1\/agents\/claude\/transcripts$/);
   });
 
   test("is disabled when name is empty", () => {
@@ -130,6 +132,7 @@ describe("useDistillTranscript", () => {
     expect(data?.insights).toHaveLength(1);
     expect(data?.fact_ids).toEqual(["fact-1"]);
     const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).not.toContain("/api/v1/api/v1");
     expect(String(url)).toMatch(/\/api\/v1\/agents\/claude\/transcripts\/distill$/);
     expect((init as RequestInit).method).toBe("POST");
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ session_id: "s1" });
