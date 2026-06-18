@@ -885,7 +885,11 @@
       "scanClean": "干净——无 findings",
       "findingsCount": "{{count}} 条 findings",
       "needsAck": "需确认",
-      "acknowledged": "风险已确认"
+      "acknowledged": "风险已确认",
+      "update": "更新",
+      "updateAvailable": "有可用更新",
+      "pinned": "已固定",
+      "upToDate": "已是最新"
     },
     "bindings": {
       "noAgents": "尚未注册任何 Agent。请先添加 Agent，再绑定此 Skill。",

@@ -240,3 +240,30 @@ def test_skill_trust_scan_gate_and_acknowledge_via_http(tmp_path, monkeypatch):
         assert r.json()["risk_acknowledged"] is True
         r = c.post("/api/v1/skills/risky/enable", json={"agent_name": "cur"})
         assert r.status_code == 200, r.text
+
+
+def test_skill_pin_and_check_update_via_http(tmp_path, monkeypatch):
+    """Pin toggles the SkillOut flags; check-update on a local import is 400."""
+    app = _app(tmp_path, monkeypatch, 59640)
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="local")
+    with _client(app) as c:
+        r = c.post("/api/v1/skills/import", json={"path": str(src)})
+        assert r.status_code == 201, r.text
+        assert r.json()["pinned"] is False
+
+        # Pin → reflected on SkillOut.
+        r = c.post("/api/v1/skills/local/pin")
+        assert r.status_code == 200, r.text
+        assert r.json()["pinned"] is True
+        assert r.json()["update_pending"] is False
+
+        # Unpin.
+        r = c.post("/api/v1/skills/local/unpin")
+        assert r.status_code == 200, r.text
+        assert r.json()["pinned"] is False
+
+        # check-update on a local_import source is unsupported (400).
+        r = c.post("/api/v1/skills/local/check-update")
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "UPDATE_NOT_SUPPORTED"

@@ -10,17 +10,19 @@ from __future__ import annotations
 import contextlib
 import logging
 import pathlib
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from coffer.application.skill.scan_ops import record_scan_audit, scan_config_fields
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import SkillNameMismatch
+from coffer.domain.errors import SkillNameMismatch, SkillValidationError, UpdateNotSupported
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.skill.binding import LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.content_scan import scan_skill_folder
-from coffer.domain.skill.validator import ValidationOk
+from coffer.domain.skill.source import GitSource
+from coffer.domain.skill.validator import ValidationFailure, ValidationOk, validate_skill_folder
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService, UpdateOutcome
@@ -66,6 +68,10 @@ async def apply_update(
             "version_hash": validation.skill_md_sha256,
             "last_synced_from_source_at": now,
             "risk_acknowledged": False,
+            # Applying an update clears any pending "update available" signal.
+            "update_available": False,
+            "available_version_hash": None,
+            "last_update_check_at": now,
             **scan_config_fields(report, scanned_at=now),
         }
     )
@@ -211,3 +217,90 @@ async def _rename_master_and_bindings(
         actor=actor,
         details={"from": old_name, "to": new_name},
     )
+
+
+# ---------- update detection + pinning (FR-030/FR-031) ----------
+
+
+@dataclass(frozen=True)
+class UpdateStatus:
+    """Result of an on-demand upstream update check (no changes applied)."""
+
+    available: bool
+    current_hash: str
+    available_hash: str | None
+    rename_detected: bool
+
+
+async def check_for_updates(*, service: SkillService, name: str, actor: str) -> UpdateStatus:
+    """Re-fetch a Git-sourced skill and compare upstream against the stored
+    version WITHOUT applying anything; cache the result on the config (FR-030).
+
+    Only Git sources can be checked; local-imported skills raise
+    ``UpdateNotSupported`` (re-import to refresh), mirroring ``update``.
+    """
+    ref = ResourceRef("skill", name)
+    existing = await service._rs.get(ref)
+    cfg = SkillConfig.model_validate(existing.config)
+    if not isinstance(cfg.source, GitSource):
+        raise UpdateNotSupported("local_import sources cannot be checked for updates; re-import")
+
+    async with service._fetcher.fetched(
+        git_url=str(cfg.source.git_url),
+        git_ref=cfg.source.git_ref,
+        git_subpath=cfg.source.git_subpath,
+    ) as folder:
+        result = validate_skill_folder(folder, size_limit_bytes=service._size_limit)
+        if isinstance(result, ValidationFailure):
+            raise SkillValidationError(result.reason, result.details)
+        available_hash = result.skill_md_sha256
+        rename_detected = result.frontmatter.name != name
+
+    available = available_hash != cfg.version_hash or rename_detected
+    now = datetime.now(tz=UTC)
+    new_cfg = cfg.model_copy(
+        update={
+            "update_available": available,
+            "available_version_hash": available_hash if available else None,
+            "last_update_check_at": now,
+        }
+    )
+    await service._rs.update_config(
+        ref,
+        new_config=new_cfg.model_dump(mode="json"),
+        actor=actor,
+        allow_lifecycle_kind=True,  # CODE-REG: config-only; master folder untouched
+    )
+    await service._audit.record(
+        AuditEventType.SKILL_UPDATE_CHECKED.value,
+        ref=ref,
+        actor=actor,
+        details={"available": available, "available_hash": available_hash if available else None},
+    )
+    return UpdateStatus(
+        available=available,
+        current_hash=cfg.version_hash,
+        available_hash=available_hash if available else None,
+        rename_detected=rename_detected,
+    )
+
+
+async def set_pinned(*, service: SkillService, name: str, pinned: bool, actor: str) -> Resource:
+    """Pin/unpin a skill (FR-031). Pinning suppresses the update-available
+    signal so a deliberately-frozen skill stops nagging."""
+    ref = ResourceRef("skill", name)
+    existing = await service._rs.get(ref)
+    cfg = SkillConfig.model_validate(existing.config)
+    new_cfg = cfg.model_copy(update={"pinned": pinned})
+    updated = await service._rs.update_config(
+        ref,
+        new_config=new_cfg.model_dump(mode="json"),
+        actor=actor,
+        allow_lifecycle_kind=True,  # CODE-REG: config-only; master folder untouched
+    )
+    await service._audit.record(
+        (AuditEventType.SKILL_PINNED if pinned else AuditEventType.SKILL_UNPINNED).value,
+        ref=ref,
+        actor=actor,
+    )
+    return updated

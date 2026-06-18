@@ -52,6 +52,15 @@ export function SkillOverview({ skill }: { skill: SkillOut }) {
             )}
           </dd>
 
+          <dt className="text-muted-foreground">{t("skills.detail.update")}</dt>
+          <dd>
+            {skill.update_pending
+              ? t("skills.detail.updateAvailable")
+              : skill.pinned
+                ? t("skills.detail.pinned")
+                : t("skills.detail.upToDate")}
+          </dd>
+
           <dt className="text-muted-foreground">{t("skills.detail.masterPath")}</dt>
           <dd className="font-mono text-xs">{skill.master_path}</dd>
 

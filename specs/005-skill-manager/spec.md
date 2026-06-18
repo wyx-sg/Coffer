@@ -304,6 +304,18 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user enables it for an agent,
 - **Then** the link is created and the binding is recorded; a later content change resets the acknowledgment.
 
+### Scenario: detect an available update without applying it
+
+- **Given** a Git-sourced skill whose upstream content has changed,
+- **When** the user runs a check-for-updates,
+- **Then** the result reports an update is available and the signal is cached on the skill, but the master content is unchanged (nothing is applied) until the user runs update.
+
+### Scenario: pin a skill to suppress the update signal
+
+- **Given** a skill the user has pinned,
+- **When** the skill list/detail is rendered,
+- **Then** no "update available" signal is surfaced for it; unpinning restores the signal.
+
 ### Scenario: detect drift in agent skill directories
 
 - **Given** a binding exists but its target on disk has been deleted, replaced, or relinked,
@@ -486,6 +498,8 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 - **FR-013**: System MUST support refreshing a Git-sourced skill on user demand; local-imported skills MUST be re-imported rather than updated.
 - **FR-014**: System MUST detect and reject updates that change SKILL.md frontmatter `name` unless the user passes `--allow-rename`, which triggers an atomic master-folder rename and rebuild of every enabled symlink.
+- **FR-030**: System MUST provide an on-demand "check for updates" operation for a Git-sourced skill that re-fetches the source and compares it against the stored version WITHOUT applying any change, caching the result (an update-available flag, the available content hash, and the check time) on the skill. Local-imported skills do not support the check (re-import to refresh). Applying an update clears the cached signal. Every check is audited.
+- **FR-031**: Users MUST be able to pin a skill. While pinned, the update-available signal is suppressed (a deliberately-frozen skill stops surfacing as out-of-date); pin and unpin are explicit, audited actions.
 
 **Drift**
 

@@ -46,6 +46,10 @@ Pydantic v2 `BaseModel`。
 | `scan_ruleset_version`       | `str \| None`      | 产出该 verdict 的 ruleset 版本                       |
 | `last_scanned_at`            | `datetime \| None` | UTC；每次扫描时写入                                  |
 | `risk_acknowledged`          | `bool`             | FR-029；确认时置位，内容变化时重置                   |
+| `update_available`           | `bool`             | FR-030；检查更新时置位，应用更新时清除               |
+| `available_version_hash`     | `str \| None`      | 有更新时上游较新的 SKILL.md 哈希                     |
+| `last_update_check_at`       | `datetime \| None` | UTC；每次检查更新时写入                              |
+| `pinned`                     | `bool`             | FR-031；抑制 update-available 信号                   |
 
 信任层字段全部可选且有默认值，因此序列化进既有的不透明 `config_json`，无需迁移，
 旧的（信任层之前的）行也仍能通过校验。
