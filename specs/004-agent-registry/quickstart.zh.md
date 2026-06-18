@@ -90,7 +90,7 @@ coffer agent config ls claude-code --json
 ```
 
 | Agent       | key                                                                 |
-| ----------- | -------------------------------------------------------------------- |
+| ----------- | ------------------------------------------------------------------- |
 | Claude Code | `settings`、`settings_local`、`global`、`instructions`、`subagents` |
 | Codex       | `config`、`instructions`、`hooks`                                   |
 
@@ -206,6 +206,62 @@ coffer agent mcp uninstall claude-code   # 移除它
 `~/.claude.json`，Codex 写 `~/.codex/config.toml`），指向 `coffer-mcp-shim`
 的绝对路径。它是幂等的、会把先前配置备份到 `.bak`，并且在桌面 Agents 页面
 上也以一键按钮形式提供。安装后请重启你的 agent 以加载 Coffer 的工具。
+
+## 把共享 instructions 投递给每个 agent
+
+只维护一份 house instructions（编码规范、语气、「总是做 X」），把它一次性
+铺给每个 agent，而不必把同样的文本手工粘进每个 agent 的指令文件。Coffer 把
+单个 **master instructions** 文档保存在其 hub 中：`~/.coffer/instructions/AGENTS.md`。
+
+从某个文件设置（或替换）master：
+
+```bash
+coffer agent instructions set-master --file rules.md
+# REST: PUT /api/v1/instructions   { "content": "...", "fingerprint": "<from last read>" }
+```
+
+master 读写时携带内容指纹；带着过期指纹的写入会被 `409 Conflict` 拒绝，以免
+覆盖并发编辑——重新读取后再写。
+
+把 master 投递进某个 agent 的指令文件（`CLAUDE.md` / `AGENTS.md` / `SOUL.md`）：
+
+```bash
+coffer agent instructions deliver claude-code
+# REST: POST /api/v1/agents/{name}/instructions
+```
+
+投递会把 master 写进一个由
+`<!-- coffer:instructions:start (managed, do not edit) -->` /
+`<!-- coffer:instructions:end -->` 围栏的 Coffer 受管块，块外的一切按字节保留
+（先前文件保留 `.bak`）。它是幂等的——master 编辑后再次投递会就地重写该块，
+绝不重复。受管块使用自己的标记，与 spec-007 memory-projection 块不同，因此
+二者在同一个文件中共存、互不干扰。
+
+查看投递状态（实时派生，从不存储）：
+
+```bash
+coffer agent instructions status claude-code
+coffer agent instructions status claude-code --json
+# REST: GET /api/v1/agents/{name}/instructions
+```
+
+状态在没有块时报告 `delivered=false`，已投递块与 master 一致时报告
+`delivered=true, in_sync=true`，块已漂移时报告 `in_sync=false`（编辑 master 后
+再次投递即可重新同步）。
+
+反方向地，把某个 agent 现有的 instructions **adopt** 进 master——取 agent 受管
+块的块体，或无块时取整个指令文件，写为新的 master（agent 自身文件保持不变）：
+
+```bash
+coffer agent instructions adopt claude-code
+# REST: POST /api/v1/agents/{name}/instructions/adopt
+```
+
+用 `coffer agent instructions remove claude-code`
+（`DELETE /api/v1/agents/{name}/instructions`）移除已投递的块——只剥除
+`coffer:instructions` 块，其它内容保留。投递、状态、移除与 adopt 都要求 agent
+类型定义了指令文件；没有该文件的类型（如当前的 `openclaw`）会以
+`422 Unprocessable Entity` 拒绝。
 
 ## 背后发生了什么
 

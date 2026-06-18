@@ -216,6 +216,15 @@ workspace 修订新增：
 | `agent_plugin_toggled`      | 一个 plugin 的启用状态在其文档化的配置面上被更改（FR-032）       |
 | `agent_plugin_uninstalled`  | 一个 Codex plugin 条目 + 缓存目录被移除（FR-033）                |
 
+instructions 投递修订新增：
+
+| 值                                  | 触发时机                                                                          |
+| ----------------------------------- | --------------------------------------------------------------------------------- |
+| `agent_instructions_master_written` | 写入了 hub 中的 master instructions 文档（原子写入 + `.bak`）（FR-041）           |
+| `agent_instructions_delivered`      | master 被作为受管块投递进某个 agent 的 `instructions` 文件（FR-042）              |
+| `agent_instructions_removed`        | `coffer:instructions` 受管块被从某个 agent 的 `instructions` 文件中剥除（FR-044） |
+| `agent_instructions_adopted`        | 某个 agent 的 instructions 被 adopt 回 master（FR-045）                           |
+
 FR-011 要求的生命周期步骤——注册、更新与移除——通过已有的 kind-agnostic `resource_created`、`resource_updated`、`resource_deleted` 事件发出（每条都携带对应的 `agent:<name>` 引用）。这些不新增 `agent_*` 重复事件；surfaces 按 `kind='agent'` 加 kind-agnostic 事件类型过滤。一次成功的配置文件保存会发出 `agent_config_file_written`（引用 `agent:<name>`，details 为 `{key}`）。agent 没有启用/禁用的概念，且发现（discovery）是只读的、不注册任何内容，因此二者都不发出任何 audit 事件。
 
 ## Application 服务契约 (`backend/coffer/application/agent/`)
@@ -260,7 +269,7 @@ allowlist 上操作。
 
 | 方法                                                                                              | 用途                                                                                                                                                                                                                                                                                                                                                  |
 | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_files(name) -> list[ConfigFileInfo]`                                                        | 对该 agent 类型的每个 `ConfigFileSpec`，返回 key、显示名、路径、所在文件夹的 `folder_path`（支撑只读 UI 的 打开/显示/复制路径，FR-038）、格式、`kind`、`exists`，存在时附带大小 + mtime。目录条目额外携带 `files`（递归 `.md` 列表，`DirEntryInfo` 行）。                                                                                            |
+| `list_files(name) -> list[ConfigFileInfo]`                                                        | 对该 agent 类型的每个 `ConfigFileSpec`，返回 key、显示名、路径、所在文件夹的 `folder_path`（支撑只读 UI 的 打开/显示/复制路径，FR-038）、格式、`kind`、`exists`，存在时附带大小 + mtime。目录条目额外携带 `files`（递归 `.md` 列表，`DirEntryInfo` 行）。                                                                                             |
 | `read_file(name, key) -> ConfigFileContent`                                                       | 解析 `spec_for(type, key)`；返回内容 + `path` + `folder_path` + 格式 + `exists` + `fingerprint` + `memory_block`（`path`/`folder_path` 这一对支撑「在外部编辑器中打开 / 显示 / 复制路径」，FR-038）。文件不存在 → 空内容、`exists=False`、`fingerprint=""`、不创建文件。                                                                              |
 | `write_file(name, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo`           | 解析 `spec_for(type, key)`；`validate_content(format, content)`（畸形 json/toml → `ConfigFileFormatInvalid` → 422，文件不变）；提供 `expected_fingerprint` 时，若磁盘内容自读取后已变化则以 `ConfigFileStale`（→ 409）拒绝（FR-036）；`store.write_text_atomic`（原子 + `.bak`）；写一条 `agent_config_file_written`；返回刷新后的 `ConfigFileInfo`。 |
 | `read_child(name, key, relpath) -> ConfigFileContent`                                             | 先 `validate_child_relpath`，再读取目录条目的一个子文件；返回形状同 `read_file`。                                                                                                                                                                                                                                                                     |
@@ -357,6 +366,36 @@ Cursor `CURSOR_RO`/`None`/只读；OpenCode `OPENCODE`/`config`/完整；OpenCla
 （`PluginView`）用 `cache_present`（plugin 的缓存目录是否在磁盘上）替代
 `installed`——不做任何修复（FR-031）。
 
+### Master Instructions (`domain/agent/instructions.py` —— `MasterInstructions`)
+
+用户的「house instructions」，作为**Coffer hub 中的单个 Markdown 文档**保存在
+`~/.coffer/instructions/AGENTS.md`。它**不是 SQLite 行**——hub 文件即为事实来源，
+按需读写（读取绝不自动创建；全新安装时为空）。读写时携带内容指纹，以便捕获并拒绝
+并发编辑（FR-041）。
+
+| 字段          | 类型  | 说明                                                                  |
+| ------------- | ----- | --------------------------------------------------------------------- |
+| `content`     | `str` | master Markdown 文本（hub 文件不存在时为 `""`）                       |
+| `fingerprint` | `str` | sha256 内容指纹；文件不存在时为 `""`——写入带回它以做 409 过期写入检查 |
+
+### Agent Instructions Delivery (`domain/agent/instructions.py` —— `InstructionsStatus`)
+
+一个派生的（从不存储）按 agent 视图，描述 master 如何投递进某个 agent 的
+`instructions` 配置文件（`CLAUDE.md` / `AGENTS.md` / `SOUL.md`）。它在读取时由
+agent 的文件与当前 master 计算得出（FR-043）。
+
+| 字段        | 类型   | 说明                                                                                                                     |
+| ----------- | ------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `delivered` | `bool` | agent 文件中存在 `<!-- coffer:instructions:start (managed, do not edit) -->` / `<!-- coffer:instructions:end -->` 受管块 |
+| `in_sync`   | `bool` | 块体等于当前 master（仅在 `delivered` 时有意义）                                                                         |
+
+受管块通过与其它所有配置文件写入相同的原子写入 + `.bak` 机制投递、就地重写或剥除
+（FR-017），其标记之外的所有内容按字节保留。它的标记与 spec-007 memory-projection
+块**不同**，因此两个受管区域在同一个文件中共存（FR-042/FR-037）。这些操作**仅**适用于
+其 allowlist 定义了 `instructions` 配置文件的 agent 类型；没有该文件的类型
+（如当前的 `openclaw`）会以 `unprocessable_entity`（422）拒绝
+deliver/status/remove/adopt，且不写入任何内容（FR-046）。
+
 ### `AgentMcpEntryService` (`application/agent/mcp_entry_service.py`)
 
 | 方法                                                                  | 用途                                                                                                                                                                                                   |
@@ -373,6 +412,26 @@ Cursor `CURSOR_RO`/`None`/只读；OpenCode `OPENCODE`/`config`/完整；OpenCla
 | `list_plugins(name)`                           | 按 `descriptor.plugins.model` 分派；从文档化文件解析 plugin + marketplace 状态；计算 `cache_present`；收集 `parse_errors`。无能力 → 空列表。                                                    |
 | `set_enabled(name, plugin_id, enabled, actor)` | 按 `PluginModel` 分派；只写能力的 `config_key` 面；`can_toggle=false`（Cursor）或无能力（Hermes）→ `PluginToggleUnsupported` → 422；audit `agent_plugin_toggled`。                              |
 | `uninstall(name, plugin_id, actor)`            | 按 `PluginModel` 分派；移除条目（Codex 还删除缓存目录）；`can_uninstall=false`（Claude Code、Cursor）或无能力（Hermes）→ `PluginUninstallUnsupported` → 422；audit `agent_plugin_uninstalled`。 |
+
+### `AgentInstructionsService` (`application/agent/instructions_service.py`)
+
+负责 master-instructions hub 文档及其向每个 agent 的 `instructions` 文件的投递。
+通过与 `AgentConfigFileService` 相同的 `ConfigFileStorePort` 及原子写入 + `.bak`
+机制读写 hub 文件（`~/.coffer/instructions/AGENTS.md`）与 agent 的 `instructions`
+配置文件。
+
+| 方法                                                                             | 用途                                                                                                                                                                           |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `get_master() -> MasterInstructions`                                             | 读取 hub 文件；返回内容 + `fingerprint`。文件不存在 → `content=""`、`fingerprint=""`、不创建文件（FR-041）。                                                                   |
+| `set_master(content, *, expected_fingerprint=None, actor) -> MasterInstructions` | 提供 `expected_fingerprint` 时，若 hub 内容自读取后已变化则以 `InstructionsMasterStale`（→ 409）拒绝；原子写入 + `.bak`；audit `agent_instructions_master_written`（FR-041）。 |
+| `status(name) -> InstructionsStatus`                                             | 解析 agent 的 `instructions` spec（否则 `InstructionsUnsupported` → 422）；读取时由 agent 文件与 master 派生 `delivered` / `in_sync`（FR-043）。                               |
+| `deliver(name, *, actor) -> InstructionsStatus`                                  | 写入/重写携带 master 内容的 `coffer:instructions` 受管块（原子 + `.bak`，幂等，块外内容保留）；audit `agent_instructions_delivered`（FR-042）。                                |
+| `remove(name, *, actor) -> InstructionsStatus`                                   | 仅剥除 `coffer:instructions` 块（其它内容与 spec-007 memory 块保留，保留 `.bak`）；audit `agent_instructions_removed`；块不存在时为空操作成功（FR-044）。                      |
+| `adopt(name, *, actor) -> MasterInstructions`                                    | 取 agent 块体，或无块时取整个 `instructions` 文件，写为新的 master（audit `agent_instructions_adopted`）；agent 自身文件保持不变（FR-045）。                                   |
+
+`status`、`deliver`、`remove` 与 `adopt` 要求 agent 类型定义了 `instructions`
+配置文件；没有该文件的类型抛出 `InstructionsUnsupported`（→ 422）且不写入任何
+内容（FR-046）。
 
 ### `ConfigFileStorePort`（Protocol，定义在 application）
 

@@ -238,6 +238,15 @@ The workspace amendment adds:
 | `agent_plugin_toggled`      | A plugin's enabled state was changed on its documented config surface (FR-032)  |
 | `agent_plugin_uninstalled`  | A Codex plugin entry + cache directory were removed (FR-033)                    |
 
+The instructions-delivery amendment adds:
+
+| Value                               | When emitted                                                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `agent_instructions_master_written` | The master instructions document in the hub was written (atomic write + `.bak`) (FR-041)          |
+| `agent_instructions_delivered`      | The master was delivered into an agent's `instructions` file as a managed block (FR-042)          |
+| `agent_instructions_removed`        | The `coffer:instructions` managed block was stripped from an agent's `instructions` file (FR-044) |
+| `agent_instructions_adopted`        | An agent's instructions were adopted back into the master (FR-045)                                |
+
 The lifecycle steps required by FR-011 — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected `agent:<name>` reference). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (ref `agent:<name>`, details `{key}`). Agents have no enable/disable concept, and discovery is read-only and registers nothing, so neither emits an audit event of its own.
 
 ## Application service contracts (`backend/coffer/application/agent/`)
@@ -286,8 +295,8 @@ allowlist via a `ConfigFileStorePort`.
 
 | Method                                                                                            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_files(name) -> list[ConfigFileInfo]`                                                        | For each `ConfigFileSpec` of the agent's type, return key, display name, path, containing-folder `folder_path` (backs the read-only UI's open/reveal/copy-path, FR-038), format, `kind`, `exists`, and (when present) size + mtime. Directory entries additionally carry `files` (recursive `.md` listing as `DirEntryInfo` rows).                                                                          |
-| `read_file(name, key) -> ConfigFileContent`                                                       | Resolve `spec_for(type, key)`; return content + `path` + `folder_path` + format + `exists` + `fingerprint` + `memory_block` (the `path`/`folder_path` pair backs open-in-external-editor / reveal / copy-path, FR-038). Missing file → empty content, `exists=False`, `fingerprint=""`, no file created.                                                                                                    |
+| `list_files(name) -> list[ConfigFileInfo]`                                                        | For each `ConfigFileSpec` of the agent's type, return key, display name, path, containing-folder `folder_path` (backs the read-only UI's open/reveal/copy-path, FR-038), format, `kind`, `exists`, and (when present) size + mtime. Directory entries additionally carry `files` (recursive `.md` listing as `DirEntryInfo` rows).                                                                         |
+| `read_file(name, key) -> ConfigFileContent`                                                       | Resolve `spec_for(type, key)`; return content + `path` + `folder_path` + format + `exists` + `fingerprint` + `memory_block` (the `path`/`folder_path` pair backs open-in-external-editor / reveal / copy-path, FR-038). Missing file → empty content, `exists=False`, `fingerprint=""`, no file created.                                                                                                   |
 | `write_file(name, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo`           | Resolve `spec_for(type, key)`; `validate_content(format, content)` (malformed json/toml → `ConfigFileFormatInvalid` → 422, file unchanged); when `expected_fingerprint` is supplied, reject with `ConfigFileStale` (→ 409) if the on-disk content changed since the read (FR-036); `store.write_text_atomic` (atomic + `.bak`); record `agent_config_file_written`; return the refreshed `ConfigFileInfo`. |
 | `read_child(name, key, relpath) -> ConfigFileContent`                                             | `validate_child_relpath`, then read one child of a directory entry; same shape as `read_file`.                                                                                                                                                                                                                                                                                                             |
 | `write_child(name, key, relpath, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | Create-on-write save of one child file; same validation / staleness / atomic-write / audit machinery as `write_file` (FR-035).                                                                                                                                                                                                                                                                             |
@@ -391,6 +400,39 @@ Agents without a marketplace concept return an empty `marketplaces` list.
 HTTP view (`PluginView`) replaces `installed` with `cache_present` — whether
 the plugin's cache directory exists on disk (no repair is attempted, FR-031).
 
+### Master Instructions (`domain/agent/instructions.py` — `MasterInstructions`)
+
+The user's house instructions, kept as a **single Markdown document in Coffer's
+hub** at `~/.coffer/instructions/AGENTS.md`. It is **not a SQLite row** — the hub
+file is the source of truth, read and written on demand (never auto-created by a
+read; empty on a fresh install). It is read/written with a content fingerprint
+so a concurrent edit is caught and rejected (FR-041).
+
+| Field         | Type  | Notes                                                                                                         |
+| ------------- | ----- | ------------------------------------------------------------------------------------------------------------- |
+| `content`     | `str` | the master Markdown text (`""` when the hub file is absent)                                                   |
+| `fingerprint` | `str` | sha256 content fingerprint; `""` when the file is absent — writes carry it back for the 409 stale-write check |
+
+### Agent Instructions Delivery (`domain/agent/instructions.py` — `InstructionsStatus`)
+
+A derived (never stored) per-agent view of how the master is delivered into one
+agent's `instructions` config file (`CLAUDE.md` / `AGENTS.md` / `SOUL.md`). It is
+computed from the agent's file and the current master at read time (FR-043).
+
+| Field       | Type   | Notes                                                                                                                                             |
+| ----------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `delivered` | `bool` | the `<!-- coffer:instructions:start (managed, do not edit) -->` / `<!-- coffer:instructions:end -->` managed block is present in the agent's file |
+| `in_sync`   | `bool` | the block body equals the current master (only meaningful when `delivered`)                                                                       |
+
+The managed block is delivered, rewritten, or stripped through the same
+atomic-write + `.bak` machinery as every other config-file write (FR-017), and
+all content outside its markers is preserved byte-for-byte. Its markers are
+**distinct** from the spec-007 memory-projection block, so both managed regions
+coexist in the one file (FR-042/FR-037). These operations apply **only** to agent
+types whose allowlist defines an `instructions` config-file; a type without one
+(e.g. `openclaw` today) rejects deliver/status/remove/adopt with
+`unprocessable_entity` (422) and writes nothing (FR-046).
+
 ### `AgentMcpEntryService` (`application/agent/mcp_entry_service.py`)
 
 | Method                                                                | Purpose                                                                                                                                                                                                                                                                     |
@@ -407,6 +449,26 @@ the plugin's cache directory exists on disk (no repair is attempted, FR-031).
 | `list_plugins(name)`                           | Dispatch on `descriptor.plugins.model`; parse plugin + marketplace state from the documented file(s); compute `cache_present`; collect `parse_errors`. No capability → empty listing.                                                    |
 | `set_enabled(name, plugin_id, enabled, actor)` | Dispatch on the `PluginModel`; write only the capability's `config_key` surface; `can_toggle=false` (Cursor) or no capability (Hermes) → `PluginToggleUnsupported` → 422; audits `agent_plugin_toggled`.                                 |
 | `uninstall(name, plugin_id, actor)`            | Dispatch on the `PluginModel`; remove the entry (Codex also deletes the cache directory); `can_uninstall=false` (Claude Code, Cursor) or no capability (Hermes) → `PluginUninstallUnsupported` → 422; audits `agent_plugin_uninstalled`. |
+
+### `AgentInstructionsService` (`application/agent/instructions_service.py`)
+
+Owns the master-instructions hub document and its delivery into each agent's
+`instructions` file. Reads/writes the hub file (`~/.coffer/instructions/AGENTS.md`)
+and the agent's `instructions` config-file through the same `ConfigFileStorePort`
+and atomic-write + `.bak` machinery as `AgentConfigFileService`.
+
+| Method                                                                           | Purpose                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_master() -> MasterInstructions`                                             | Read the hub file; return content + `fingerprint`. Missing file → `content=""`, `fingerprint=""`, no file created (FR-041).                                                                                    |
+| `set_master(content, *, expected_fingerprint=None, actor) -> MasterInstructions` | Reject with `InstructionsMasterStale` (→ 409) when `expected_fingerprint` is supplied and the hub content changed since the read; atomic write + `.bak`; audits `agent_instructions_master_written` (FR-041).  |
+| `status(name) -> InstructionsStatus`                                             | Resolve the agent's `instructions` spec (else `InstructionsUnsupported` → 422); derive `delivered` / `in_sync` from the agent's file and the master at read time (FR-043).                                     |
+| `deliver(name, *, actor) -> InstructionsStatus`                                  | Write/rewrite the `coffer:instructions` managed block carrying the master content (atomic + `.bak`, idempotent, content outside the block preserved); audits `agent_instructions_delivered` (FR-042).          |
+| `remove(name, *, actor) -> InstructionsStatus`                                   | Strip only the `coffer:instructions` block (other content + the spec-007 memory block preserved, `.bak` kept); audits `agent_instructions_removed`; removing when absent is a no-op success (FR-044).          |
+| `adopt(name, *, actor) -> MasterInstructions`                                    | Take the agent's block body, or the whole `instructions` file when no block is present, and write it as the new master (audits `agent_instructions_adopted`); the agent's own file is left unchanged (FR-045). |
+
+`status`, `deliver`, `remove`, and `adopt` require the agent's type to define an
+`instructions` config-file; a type without one raises `InstructionsUnsupported`
+(→ 422) and writes nothing (FR-046).
 
 ### `ConfigFileStorePort` (Protocol, defined in application)
 

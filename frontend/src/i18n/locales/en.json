@@ -705,7 +705,8 @@
         "unknownServer": "One of the selected servers no longer exists."
       },
       "memory": "Memory",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "instructions": "Instructions"
     },
     "conversationsTab": {
       "title": "Transcript sessions",
@@ -719,6 +720,22 @@
       "distilledCount": "Distilled {{count}} insight(s) to memory.",
       "noInsights": "No durable insights found in this session.",
       "distillAria": "Distill session {{session}} to memory"
+    },
+    "instructions": {
+      "title": "Shared instructions",
+      "description": "Maintain one master instructions document and deliver it into this agent's instructions file as a Coffer-managed block.",
+      "masterLabel": "Master instructions",
+      "masterPlaceholder": "House rules every agent should follow…",
+      "saveMaster": "Save master",
+      "deliveryHeading": "Delivery to this agent",
+      "unsupported": "This agent type has no instructions file to manage.",
+      "statusNotDelivered": "Not delivered to this agent.",
+      "statusInSync": "Delivered and in sync with the master.",
+      "statusDrifted": "Delivered, but the master has changed — re-deliver to update.",
+      "deliver": "Deliver",
+      "remove": "Remove",
+      "adopt": "Adopt into master",
+      "adoptHelp": "Adopt copies this agent's instructions into the master document."
     },
     "memoryTab": {
       "title": "Memory",

@@ -224,24 +224,23 @@ def test_candidates_endpoint_reports_marker_present_agents(tmp_path, monkeypatch
 
 
 def test_candidates_excludes_disabled_agent_types(tmp_path, monkeypatch):
-    """Only enabled agent types (Claude Code, Codex) are offered for registration.
+    """Only the exposed agent types (Claude Code, Codex) are offered as candidates.
 
-    The other manifest entries (Cursor, OpenCode, …) are wired in the backend
-    but hidden from the UI until validated — even an on-disk marker must not
-    surface them as candidates.
+    The other manifest entries (Cursor, OpenCode, OpenClaw, Hermes) are wired
+    end-to-end on the backend but hidden from discovery (``enabled=False``) until
+    each is validated and exposed — even an on-disk marker must not surface them.
     """
     app = _app(tmp_path, monkeypatch, 59621)
-    (tmp_path / ".claude").mkdir()
-    (tmp_path / ".cursor").mkdir()
-    (tmp_path / ".openclaw").mkdir()
+    for subpath in (".claude", ".codex", ".cursor", ".config/opencode", ".openclaw", ".hermes"):
+        (tmp_path / subpath).mkdir(parents=True)
 
     with _client(app) as c:
         r = c.get("/api/v1/agents/candidates")
         assert r.status_code == 200, r.text
         types = {cand["type"] for cand in r.json()["candidates"]}
-        assert "claude_code" in types
-        assert "cursor" not in types
-        assert "openclaw" not in types
+        assert types == {"claude_code", "codex"}, types
+        # Discovery is read-only — nothing was registered.
+        assert c.get("/api/v1/agents").json()["items"] == []
 
 
 # ---------------------------------------------------------------------------

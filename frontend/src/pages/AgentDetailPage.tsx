@@ -10,9 +10,11 @@ import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEditor";
 import { AgentConversationsTab } from "@/components/agents/AgentConversationsTab";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
+import { AgentInstructionsTab } from "@/components/agents/AgentInstructionsTab";
 import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
 import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
+import { AgentOverviewTab } from "@/components/agents/AgentOverviewTab";
 import { AgentPluginsTab } from "@/components/agents/AgentPluginsTab";
 import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
 import { Badge } from "@/components/ui/badge";
@@ -125,19 +127,11 @@ export function AgentDetailPage() {
           <TabsTrigger value="memory">{t("agents.workspace.memory")}</TabsTrigger>
           <TabsTrigger value="conversations">{t("agents.workspace.conversations")}</TabsTrigger>
           <TabsTrigger value="config">{t("agents.workspace.config")}</TabsTrigger>
+          <TabsTrigger value="instructions">{t("agents.workspace.instructions")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="pt-6">
-          <Card>
-            <CardContent className="py-6">
-              <dl className="grid grid-cols-[10rem_1fr] gap-y-3 text-sm">
-                <dt className="text-muted-foreground">{t("agents.type")}</dt>
-                <dd>{agent.type}</dd>
-                <dt className="text-muted-foreground">{t("agents.configDir")}</dt>
-                <dd className="font-mono text-xs">{agent.config_dir}</dd>
-              </dl>
-            </CardContent>
-          </Card>
+          <AgentOverviewTab agent={agent} />
         </TabsContent>
 
         <TabsContent value="skills" className="pt-6">
@@ -162,6 +156,10 @@ export function AgentDetailPage() {
 
         <TabsContent value="config" className="pt-6">
           <AgentConfigFilesEditor name={name} />
+        </TabsContent>
+
+        <TabsContent value="instructions" className="pt-6">
+          <AgentInstructionsTab name={name} />
         </TabsContent>
       </Tabs>
 

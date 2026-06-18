@@ -65,22 +65,24 @@ class AgentDescriptor:
     #: ``FOLDER`` delivery mode.
     skill_subpath: str = "skills"
     #: How Coffer hands a managed skill to this agent. ``FOLDER`` symlinks the
-    #: master folder into ``skill_subpath``; the others (Cursor ``RULES_MDC``,
-    #: Hermes ``EXTERNAL_DIR``) are recognized extension points not yet
-    #: delivered — skill-enable for them fails cleanly rather than mis-delivers.
+    #: master folder into ``skill_subpath``; ``EXTERNAL_DIR`` (Hermes) does the
+    #: same into a Coffer-owned directory the agent scans (also folder-style,
+    #: wired via the external-dir registrar). Cursor's ``RULES_MDC`` is a
+    #: recognized extension point not yet wired — skill-enable for it fails
+    #: cleanly (422) rather than mis-delivers.
     skill_delivery_mode: SkillDeliveryMode = SkillDeliveryMode.FOLDER
     #: How Coffer manages this agent's plugins (``None`` = no plugin concept,
     #: e.g. Hermes where MCP *is* the plugin mechanism — empty listing, toggle
     #: and uninstall unsupported).
     plugins: PluginCapability | None = None
-    #: Whether this agent is surfaced in the UI. Only Claude Code and Codex are
-    #: fully tested today; the rest are wired in the manifest (so the retained
-    #: distill/projection/skill-delivery code can still reference them) but
-    #: hidden from discovery — the only UI entry point that enumerates agents —
-    #: until they are validated. The backend still accepts a direct registration
-    #: of any manifest type (the retained multi-agent features depend on it);
-    #: this flag gates discovery/visibility, not registration. Flipping it back
-    #: to ``True`` re-exposes the agent.
+    #: Whether this agent is surfaced in discovery — the only UI entry point that
+    #: enumerates agents. Only Claude Code and Codex are exposed today; the other
+    #: four (Cursor, OpenCode, OpenClaw, Hermes) are fully wired in the manifest
+    #: and work end-to-end on the backend (register / config files / MCP /
+    #: instructions / plugins), but stay hidden from discovery until each is
+    #: validated and exposed one at a time. The flag gates discovery/visibility
+    #: only, never registration — the backend accepts a direct registration of
+    #: any manifest type regardless of this flag.
     enabled: bool = True
 
     def default_config_dir(self) -> pathlib.Path:
@@ -342,8 +344,9 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             format=ConfigFileFormat.YAML,
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
-        # Hermes registers skills as external directories, not symlinked
-        # folders — a recognized extension point not yet delivered.
+        # Hermes registers skills as external directories (a Coffer-owned dir
+        # the agent scans) rather than symlinked folders — folder-style
+        # delivery, wired via the external-dir registrar.
         skill_delivery_mode=SkillDeliveryMode.EXTERNAL_DIR,
         enabled=False,
     ),
@@ -358,7 +361,8 @@ def descriptor_for(agent_type: AgentType) -> AgentDescriptor:
 
 
 def is_agent_enabled(agent_type: AgentType) -> bool:
-    """Whether this agent is surfaced in the UI and accepted for registration."""
+    """Whether this agent is surfaced in discovery/UI. Gates visibility only,
+    not registration (see the ``AgentDescriptor.enabled`` field)."""
     return descriptor_for(agent_type).enabled
 
 

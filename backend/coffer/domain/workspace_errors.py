@@ -134,6 +134,27 @@ class ConfigFileStale(CofferError):  # noqa: N818
         self.key = key
 
 
+class InstructionsUnsupported(CofferError):  # noqa: N818
+    """The agent type has no ``instructions`` config-file, so instructions
+    delivery/adopt/status do not apply (e.g. ``openclaw``). Maps to 422."""
+
+    code = "INSTRUCTIONS_UNSUPPORTED"
+
+    def __init__(self, agent_type: str) -> None:
+        super().__init__(f"agent type {agent_type!r} has no instructions file to manage")
+        self.agent_type = agent_type
+
+
+class InstructionsMasterStale(CofferError):  # noqa: N818
+    """The master instructions changed since they were read; re-read and retry.
+    Maps to 409."""
+
+    code = "INSTRUCTIONS_MASTER_STALE"
+
+    def __init__(self) -> None:
+        super().__init__("master instructions changed since last read; re-read and retry")
+
+
 class UnmanagedSkillNotFound(CofferError):  # noqa: N818
     """An unmanaged skill name does not correspond to any discovered skill. Maps to 404."""
 

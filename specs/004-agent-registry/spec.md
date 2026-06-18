@@ -229,6 +229,27 @@ Some agent configuration is a directory of prose files, not a single file — Cl
 
 ---
 
+### User Story 13 — Deliver shared instructions to every agent (Priority: P2)
+
+The user maintains one set of house instructions (coding standards, tone, "always do X") they want every agent to follow. Today they would paste the same text into each agent's instruction file (`CLAUDE.md`, `AGENTS.md`, `SOUL.md`) by hand and re-paste on every edit. Instead, Coffer keeps a single **master instructions** document in its hub and delivers it into each agent's instruction file as a Coffer-managed block — fenced by marker comments so the agent's own surrounding notes are preserved, and rewritten in place when the master changes. Per agent the user sees whether the master is delivered, in sync, or drifted, and can deliver, remove, or — the other direction — **adopt** an agent's existing instructions into the master. This is the **hub → deliver** half of Coffer's model applied to prose instructions, mirroring how skills and MCP servers already fan out from the hub.
+
+**Why this priority**: "Edit once, apply everywhere" is the defining feature of the multi-agent-config category. Coffer already hubs-and-spokes MCP and skills; instructions are the remaining shareable asset, and the managed-block approach keeps each agent's own content intact while staying drift-aware.
+
+**Independent Test**: Set the master instructions; deliver to a registered `claude_code` agent; observe a `coffer:instructions` managed block written into `CLAUDE.md` carrying the master content with any prior file content preserved; check status (in sync); edit the master; observe status reports drift until re-delivered; remove and observe only the block stripped.
+
+**Covering scenarios**:
+
+- read and write the master instructions
+- deliver master instructions to an agent
+- instructions delivery is idempotent and re-delivers on master change
+- instructions delivery coexists with the memory-projection block
+- report instructions delivery status
+- remove delivered instructions
+- adopt an agent's instructions into the master
+- reject instructions delivery for an agent without an instructions file
+
+---
+
 ### Edge Cases
 
 - **Discovery on a second scan**: Already-registered types are not offered as candidates; discovery never duplicates existing entries.
@@ -588,6 +609,54 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** Coffer's MCP shim entry is written into the agent's config,
 - **Then** the entry carries the agent's identity as an `--agent <name>` argument so the shim forwards it to the gateway (driving per-agent server scoping), and the installed shim command is still resolvable.
 
+### Scenario: read and write the master instructions
+
+- **Given** the daemon is running,
+- **When** the user reads the master instructions (empty on a fresh install) and then writes new content,
+- **Then** the new content reads back with a fresh fingerprint, an `agent_instructions_master_written` audit entry is recorded, and a stale write (a write carrying an outdated fingerprint) is rejected with `conflict` (409).
+
+### Scenario: deliver master instructions to an agent
+
+- **Given** a registered `claude_code` agent whose `CLAUDE.md` already holds the user's own notes, and a non-empty master,
+- **When** the user delivers the master instructions to that agent,
+- **Then** a `coffer:instructions` managed block carrying the master content is written into `CLAUDE.md` (atomic write, `.bak` kept), the user's notes outside the block are preserved byte-for-byte, and an `agent_instructions_delivered` audit entry is recorded.
+
+### Scenario: instructions delivery is idempotent and re-delivers on master change
+
+- **Given** an agent that already has the master delivered,
+- **When** the user edits the master and delivers again,
+- **Then** the existing block is rewritten in place with the new content (never duplicated) and content outside the block is still preserved.
+
+### Scenario: instructions delivery coexists with the memory-projection block
+
+- **Given** an agent whose instructions file already contains the spec-007 memory-projection managed block,
+- **When** the user delivers (and later removes) the master instructions,
+- **Then** the `coffer:instructions` block is written/stripped using its own distinct markers and the memory-projection block is left untouched — both managed regions coexist in the one file.
+
+### Scenario: report instructions delivery status
+
+- **Given** a registered agent,
+- **When** the user checks instructions delivery status,
+- **Then** Coffer reports `delivered=false` when no block is present, `delivered=true, in_sync=true` when the delivered block matches the master, and `in_sync=false` when the block has drifted from the master — derived from the file at read time, never stored.
+
+### Scenario: remove delivered instructions
+
+- **Given** an agent that has the master delivered,
+- **When** the user removes delivered instructions,
+- **Then** only the `coffer:instructions` block is stripped from the file (other content preserved, `.bak` kept), an `agent_instructions_removed` audit entry is recorded, and removing again is a no-op success.
+
+### Scenario: adopt an agent's instructions into the master
+
+- **Given** a registered agent whose instructions file holds content (inside a delivered block, or the whole file when no block is present),
+- **When** the user adopts that agent's instructions into the master,
+- **Then** the master is updated with that content, an `agent_instructions_adopted` audit entry is recorded, and the agent's own file is left unchanged.
+
+### Scenario: reject instructions delivery for an agent without an instructions file
+
+- **Given** a registered agent of a type whose allowlist has no `instructions` config-file (e.g. `openclaw`),
+- **When** the user attempts to deliver, adopt, or read instructions status for it,
+- **Then** the request is rejected with `unprocessable_entity` (422) and an explanatory error code, and nothing is written.
+
 ## Requirements
 
 ### Functional Requirements
@@ -650,17 +719,26 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **FR-034**: A config-file allowlist entry MAY be a **directory entry** (`kind=directory`): it resolves to a directory and lists its files (entry-relative path, size, modified time) instead of carrying content. v1 directory entries: Claude Code `agents/` (one Markdown file per personal subagent, nested paths allowed). A missing directory lists as `exists=false` with no files; the read never creates it.
 - **FR-035**: Users MUST be able to read individual files inside a directory entry; this read is available to the UI's read-only viewer. Write (create-on-write) and delete of individual files are programmatic, available through the REST API and the `coffer agent` CLI. Child paths are validated server-side before any filesystem access: they MUST resolve inside the entry's directory (no `..`, no absolute paths, no symlink escape) and carry the `.md` extension. Writes reuse FR-017's machinery; deletion preserves the prior content as `.bak`. Audited as `agent_config_file_written` / `agent_config_file_deleted`.
 - **FR-036**: Config-file reads (single files and directory children) MUST return a content fingerprint; writes MUST carry it back and are rejected with `conflict` (409) when the on-disk content changed since the read, leaving the file untouched.
-- **FR-037**: When an instructions file contains the managed memory-projection block defined by spec 007, the read-only viewer MUST annotate that the block is owned by the memory feature. The marker format is defined by spec 007; this spec only requires the notice.
+- **FR-037**: When an instructions file contains a managed block defined by another feature — the spec-007 memory-projection block, or the instructions-delivery block of FR-042 — the read-only viewer MUST annotate that the block is owned by that feature. Each block uses its own distinct markers and is rewritten independently; the marker format is owned by the defining feature.
+
+**Instructions delivery (workspace amendment)**
+
+- **FR-041**: System MUST keep a single **master instructions** document in Coffer's hub (a Markdown file under `~/.coffer/instructions/`). Users MUST be able to read it (empty on a fresh install, never auto-created by a read) and write it. Each read returns a content fingerprint; a write MUST carry it back and is rejected with `conflict` (409) when the stored content changed since the read. A successful write records an `agent_instructions_master_written` audit entry.
+- **FR-042**: Users MUST be able to **deliver** the master instructions into an agent's `instructions` config file (`CLAUDE.md` / `AGENTS.md` / `SOUL.md`). Delivery writes the master content into a Coffer-managed block fenced by `<!-- coffer:instructions:start (managed, do not edit) -->` / `<!-- coffer:instructions:end -->` — distinct from the spec-007 memory markers so both coexist — preserving all content outside the block byte-for-byte. Delivery reuses FR-017's atomic-write + `.bak` machinery, is idempotent (re-delivering rewrites the block in place, never duplicates it), and records an `agent_instructions_delivered` audit entry.
+- **FR-043**: System MUST expose a derived (never stored) instructions delivery **status** for an agent: whether the managed block is present (`delivered`), and whether its body matches the current master (`in_sync`). It is computed from the agent's file and the master at read time.
+- **FR-044**: Users MUST be able to **remove** delivered instructions, stripping only the `coffer:instructions` block (other content preserved, `.bak` kept) and recording an `agent_instructions_removed` audit entry. Removing when no block is present is a no-op success.
+- **FR-045**: Users MUST be able to **adopt** an agent's instructions into the master — taking the body of the agent's `coffer:instructions` block, or the whole instructions file when no block is present, and writing it as the new master (audited `agent_instructions_adopted`). Adoption leaves the agent's own file unchanged.
+- **FR-046**: Instructions delivery, status, removal, and adoption require the agent's type to define an `instructions` config-file in its allowlist. For a type without one (e.g. `openclaw` today), these operations are rejected with `unprocessable_entity` (422) and an explanatory error code; nothing is written.
 
 **Surfaces**
 
-- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, and plugin list/toggle/uninstall — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The desktop Agents page MUST expose all of these EXCEPT config-file content writes (single files and directory children): in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager / copy-path affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path.
+- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, plugin list/toggle/uninstall, master-instructions read/write, and per-agent instructions status/deliver/remove/adopt — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The desktop Agents page MUST expose all of these EXCEPT config-file content writes (single files and directory children): in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager / copy-path affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path. The master-instructions editor and per-agent instructions deliver/remove/adopt ARE available in the desktop UI.
 - **FR-010**: The CLI MUST support `--json` for machine-readable output on every read operation.
 - **FR-038**: For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor**, **reveal-in-file-manager**, and **copy-path** actions for both the file itself and its containing folder, using the `path`/`folder_path` pair from FR-014/FR-015. In the packaged desktop app (Tauri) open and reveal perform the real OS action; on the web they fall back to copy-path. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by spec 002-ui-shell (not re-specified here).
 
 **Observability**
 
-- **FR-011**: System MUST record an audit entry for every lifecycle event: agent created, updated, removed; config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). (Agents have no enable/disable concept; discovery and all workspace listings are read-only — none emits an audit event.)
+- **FR-011**: System MUST record an audit entry for every lifecycle event: agent created, updated, removed; config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`); master instructions written (`agent_instructions_master_written`); instructions delivered/removed/adopted (`agent_instructions_delivered` / `agent_instructions_removed` / `agent_instructions_adopted`). (Agents have no enable/disable concept; discovery, instructions status, and all workspace listings are read-only — none emits an audit event.)
 - **FR-012**: System MUST expose a read-only discovery operation listing installed-but-unregistered agents as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer agent detect` CLI, and the desktop Agents page.
 
 **Config-directory picker**
@@ -678,6 +756,8 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **Agent MCP Entry**: A derived (never stored) view of one MCP server configured in the agent's own files — name, source file, transport, `enabled` (Codex), `is_coffer`, `matches_resource`. The file is the source of truth; Coffer reads, edits, removes, or adopts entries but keeps no copy.
 - **Agent Plugin**: A derived (never stored) view of one installed plugin — id (`<name>@<marketplace>`), marketplace, enabled state, `cache_present`. Enabled state lives in each agent's documented config surface; the inventory files of Claude Code are read-only inputs.
 - **Directory Config Entry**: An allowlisted config entry that resolves to a directory of files rather than a single file. Children are addressed by validated entry-relative paths; the directory on disk is the source of truth.
+- **Master Instructions**: A single Markdown document in Coffer's hub (`~/.coffer/instructions/`) holding the user's house instructions. The hub copy is the editable source of truth; delivery fans it out to agents. Read/written with a content fingerprint for stale-write protection.
+- **Agent Instructions Delivery**: A derived (never stored) view of one agent's instructions delivery — `delivered` (is the `coffer:instructions` managed block present in the agent's instructions file) and `in_sync` (does the block body match the master). The agent's file is the source of truth; Coffer reads, writes, strips, or adopts the block but keeps no per-agent copy.
 
 ## Success Criteria
 
@@ -693,12 +773,13 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **SC-008**: The MCP tab lists exactly the entries present in the agent's real config files, and adopting a direct entry completes the full round trip — resource registered, gateway serving it, direct entry gone — in one user action plus at most one confirmation.
 - **SC-009**: Plugin toggles change only the documented config surface: a test asserts the agents' internal state files are byte-identical before and after every toggle.
 - **SC-010**: No directory-entry operation can read or write a path outside its entry's directory; validated by dedicated security tests covering `..` traversal, absolute paths, symlink escape, and disallowed extensions.
+- **SC-011**: A user can write the master instructions once and deliver them to every registered agent that supports an instructions file; a test asserts the delivered managed block matches the master, that agent content outside the block (including a spec-007 memory block) is byte-identical before and after, and that re-delivering after a master edit updates the block in place without duplication.
 
 ## Assumptions
 
 - The user runs Coffer on their own machine; there is no multi-tenant or remote-access requirement.
-- v1's two supported agent types (`claude_code`, `codex`) cover the user's installed agents; adding a new type (e.g. the Claude Desktop chat app, Cursor, Gemini CLI) is a future-spec change that adds another enum value, install-marker scanner, and config-file allowlist.
-- Each supported agent's CLI and app/IDE form read one shared config directory (`~/.claude/` for Claude Code, `~/.codex/` for Codex), so Coffer manages one config set per agent.
+- Six agent types are wired in the capability manifest (`AGENT_DESCRIPTORS`) — `claude_code`, `codex`, `cursor`, `opencode`, `openclaw`, `hermes` — each one `AgentType` enum value plus one record (install marker, config-file allowlist, MCP injection shape). Only `claude_code` and `codex` are **exposed** today (surfaced in discovery and the desktop add-flow); the other four are fully wired and work end-to-end on the backend — registration, config files, Coffer-MCP install, instructions delivery, plugins — but stay hidden behind `enabled=False` until each is validated and exposed one at a time. Adding a further product (e.g. the Claude Desktop chat app, Gemini CLI) is the same one-record change.
+- Each supported agent's CLI and app/IDE form read one shared config directory (`~/.claude/`, `~/.codex/`, `~/.cursor/`, `~/.config/opencode/`, `~/.openclaw/`, `~/.hermes/`), so Coffer manages one config set per agent.
 - Config files are surfaced as raw text the user can view read-only; editing happens in the user's external editor (opened from the viewer), while the programmatic write path (REST/CLI) keeps the validate + atomic-write + `.bak` safety net. The read-only viewer plus open-in-external-editor is the escape hatch for the long tail; recurring structured needs graduate into facets (MCP entries, plugins) per the workspace amendment. The credential/state file `~/.codex/auth.json` is intentionally excluded from the allowlist.
 - The agents' internal state files (`~/.claude.json` beyond its `mcpServers` map, `~/.claude/plugins/*.json`, Codex's `[marketplaces.*]` / `[hooks.state.*]` / `[projects.*]` tables) are read as inputs where needed and never written by the workspace facets; the documented configuration surfaces verified against each vendor's docs are the only write targets. In practice (verified on a real machine) user-scope Claude Code MCP servers live in `~/.claude.json` `mcpServers` and may also appear in `settings.json` `mcpServers` — both are parsed.
 - Workspace facets follow the ingest → hub → deliver principle: shareable content found in an agent's workspace is adoptable into Coffer's hub (MCP gateway here; the master skill store via spec 005's companion amendment) rather than managed as per-agent one-offs. Cross-machine sharing of the hub itself is a future spec (and constitutional amendment); these facets are designed so their state serializes to declarative manifests when that lands.
