@@ -43,15 +43,12 @@ export interface DistillResponse {
 // ---------------------------------------------------------------------------
 
 export function listTranscripts(agentName: string): Promise<TranscriptSessionListResponse> {
-  return call<TranscriptSessionListResponse>(
-    "GET",
-    `/api/v1/agents/${enc(agentName)}/transcripts`,
-  );
+  return call<TranscriptSessionListResponse>("GET", `/agents/${enc(agentName)}/transcripts`);
 }
 
 export function distillTranscript(
   agentName: string,
   body: DistillRequest,
 ): Promise<DistillResponse> {
-  return call<DistillResponse>("POST", `/api/v1/agents/${enc(agentName)}/transcripts/distill`, body);
+  return call<DistillResponse>("POST", `/agents/${enc(agentName)}/transcripts/distill`, body);
 }
