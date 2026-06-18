@@ -49,6 +49,11 @@ export interface SkillOut {
   last_scanned_at?: string | null;
   risk_acknowledged?: boolean;
   requires_acknowledgment?: boolean;
+  // Update detection (FR-030/FR-031). Optional for the same fixture-compat reason.
+  update_available?: boolean;
+  last_update_check_at?: string | null;
+  pinned?: boolean;
+  update_pending?: boolean;
 }
 
 export interface SkillListOut {

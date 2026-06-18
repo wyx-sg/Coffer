@@ -60,6 +60,9 @@ class AuditEventType(StrEnum):
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
     SKILL_SCANNED = "skill_scanned"
     SKILL_RISK_ACKNOWLEDGED = "skill_risk_acknowledged"
+    SKILL_UPDATE_CHECKED = "skill_update_checked"
+    SKILL_PINNED = "skill_pinned"
+    SKILL_UNPINNED = "skill_unpinned"
     # spec 006-knowledge-base
     KB_DOCUMENT_INGESTED = "kb_document_ingested"
     KB_DOCUMENT_UPDATED = "kb_document_updated"

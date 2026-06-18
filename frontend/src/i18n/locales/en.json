@@ -885,7 +885,11 @@
       "scanClean": "Clean — no findings",
       "findingsCount": "{{count}} findings",
       "needsAck": "needs acknowledgment",
-      "acknowledged": "risk acknowledged"
+      "acknowledged": "risk acknowledged",
+      "update": "Update",
+      "updateAvailable": "Update available",
+      "pinned": "Pinned",
+      "upToDate": "Up to date"
     },
     "bindings": {
       "noAgents": "No agents registered yet. Add an agent first to bind this skill.",

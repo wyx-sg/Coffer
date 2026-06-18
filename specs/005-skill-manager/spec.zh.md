@@ -306,6 +306,18 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **When** 用户为某 agent 启用它，
 - **Then** 链接被创建、binding 被记录；之后内容变化会重置该确认。
 
+### Scenario: 检测有可用更新但不应用
+
+- **Given** 一个上游内容已变化的 Git 源 skill，
+- **When** 用户运行检查更新，
+- **Then** 结果报告有可用更新且该信号被缓存到 skill 上，但 master 内容未变（什么都没应用），直到用户运行 update。
+
+### Scenario: 固定 skill 以抑制更新信号
+
+- **Given** 一个被用户固定的 skill，
+- **When** 渲染 skill 列表/详情，
+- **Then** 不为它显示「有可用更新」信号；取消固定后信号恢复。
+
 ### Scenario: 检测 agent skill 目录中的 drift
 
 - **Given** 某 binding 存在但其磁盘目标已被删除、被替换或被重指向，
@@ -488,6 +500,8 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 
 - **FR-013**：系统必须支持按用户指令刷新 Git 源 skill；本地导入的 skill 应通过重新导入而非更新来刷新。
 - **FR-014**：系统必须检测并拒绝改动 SKILL.md frontmatter `name` 的更新，除非用户传 `--allow-rename`；该开关触发对 master 文件夹的原子重命名与所有已启用 symlink 的重建。
+- **FR-030**：系统必须为 Git 源 skill 提供按需的「检查更新」操作：重新拉取源并与已存版本比较，但**不应用**任何变更，并把结果（update-available 标志、可用内容哈希、检查时间）缓存到 skill 上。本地导入的 skill 不支持该检查（重新导入以刷新）。应用一次更新会清除该缓存信号。每次检查都审计。
+- **FR-031**：用户必须能固定（pin）一个 skill。固定期间，update-available 信号被抑制（被刻意冻结的 skill 不再显示为过期）；pin 与 unpin 都是显式且审计的动作。
 
 **Drift**
 

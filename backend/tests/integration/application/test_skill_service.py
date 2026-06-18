@@ -22,6 +22,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.scan_ops import acknowledge_risk, rescan_skill
 from coffer.application.skill.service import SkillService
+from coffer.application.skill.update_ops import check_for_updates, set_pinned
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
@@ -1161,4 +1162,83 @@ async def test_rescan_persists_new_verdict(tmp_path):
     report = await rescan_skill(service=skill_svc, name="clean", actor="cli")
     assert report.verdict is not None and report.verdict.value == "critical"
     assert (await _skill_cfg(skill_svc, "clean")).scan_verdict == "critical"
+    await engine.dispose()
+
+
+# ---------- update detection + pinning (FR-030/FR-031) ----------
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="005-skill-manager", scenario="detect an available update without applying it"
+)
+async def test_check_for_updates_detects_change_without_applying(tmp_path):
+    src = tmp_path / "remote"
+    _write_skill_folder(src, name="gitskill", body="v1")
+    skill_svc, _, _, _, engine = await _setup(tmp_path, fake_fetch={"https://github.com/x/y": src})
+    await skill_svc.fetch_git(git_url="https://github.com/x/y", git_ref="main", actor="cli")
+    before = await _skill_cfg(skill_svc, "gitskill")
+    # Upstream changes.
+    _write_skill_folder(src, name="gitskill", body="v2-new-content")
+    status = await check_for_updates(service=skill_svc, name="gitskill", actor="cli")
+    assert status.available is True
+    assert status.available_hash is not None and status.available_hash != before.version_hash
+    # Cached on the config, but NOT applied: version_hash unchanged.
+    after = await _skill_cfg(skill_svc, "gitskill")
+    assert after.update_available is True
+    assert after.last_update_check_at is not None
+    assert after.version_hash == before.version_hash
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_check_for_updates_clean_when_unchanged(tmp_path):
+    src = tmp_path / "remote"
+    _write_skill_folder(src, name="gitskill")
+    skill_svc, _, _, _, engine = await _setup(tmp_path, fake_fetch={"https://github.com/x/y": src})
+    await skill_svc.fetch_git(git_url="https://github.com/x/y", git_ref="main", actor="cli")
+    status = await check_for_updates(service=skill_svc, name="gitskill", actor="cli")
+    assert status.available is False
+    assert (await _skill_cfg(skill_svc, "gitskill")).update_available is False
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_check_for_updates_local_import_unsupported(tmp_path):
+    skill_svc, _, _, _, engine = await _setup(tmp_path)
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="local")
+    await skill_svc.import_local(path=str(src), actor="cli")
+    with pytest.raises(UpdateNotSupported):
+        await check_for_updates(service=skill_svc, name="local", actor="cli")
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_update_clears_update_available(tmp_path):
+    src = tmp_path / "remote"
+    _write_skill_folder(src, name="gitskill", body="v1")
+    skill_svc, _, _, _, engine = await _setup(tmp_path, fake_fetch={"https://github.com/x/y": src})
+    await skill_svc.fetch_git(git_url="https://github.com/x/y", git_ref="main", actor="cli")
+    _write_skill_folder(src, name="gitskill", body="v2")
+    await check_for_updates(service=skill_svc, name="gitskill", actor="cli")
+    assert (await _skill_cfg(skill_svc, "gitskill")).update_available is True
+    await skill_svc.update(name="gitskill", actor="cli")
+    assert (await _skill_cfg(skill_svc, "gitskill")).update_available is False
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="005-skill-manager", scenario="pin a skill to suppress the update signal"
+)
+async def test_pin_and_unpin(tmp_path):
+    skill_svc, _, _, _, engine = await _setup(tmp_path)
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="local")
+    await skill_svc.import_local(path=str(src), actor="cli")
+    await set_pinned(service=skill_svc, name="local", pinned=True, actor="cli")
+    assert (await _skill_cfg(skill_svc, "local")).pinned is True
+    await set_pinned(service=skill_svc, name="local", pinned=False, actor="cli")
+    assert (await _skill_cfg(skill_svc, "local")).pinned is False
     await engine.dispose()

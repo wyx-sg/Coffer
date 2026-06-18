@@ -46,6 +46,10 @@ Pydantic v2 `BaseModel`.
 | `scan_ruleset_version`       | `str \| None`      | ruleset version the verdict was produced under      |
 | `last_scanned_at`            | `datetime \| None` | UTC; set on each scan                               |
 | `risk_acknowledged`          | `bool`             | FR-029; set by acknowledge, reset on content change |
+| `update_available`           | `bool`             | FR-030; set by check-for-updates, cleared on update |
+| `available_version_hash`     | `str \| None`      | the newer upstream SKILL.md hash when available     |
+| `last_update_check_at`       | `datetime \| None` | UTC; set on each update check                       |
+| `pinned`                     | `bool`             | FR-031; suppresses the update-available signal      |
 
 The trust-layer fields are all optional with defaults, so they serialize into
 the existing opaque `config_json` with no migration and pre-trust-layer rows

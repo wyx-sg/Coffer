@@ -314,6 +314,64 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /skills/{name}/check-update:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: checkSkillUpdate
+      summary: Check upstream for a newer version without applying it (FR-030)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpdateStatusOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /skills/{name}/pin:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: pinSkill
+      summary: Pin a skill to suppress the update-available signal (FR-031)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /skills/{name}/unpin:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: unpinSkill
+      summary: Unpin a skill so update checks surface again (FR-031)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /agents/{name}/unmanaged-skills:
     parameters:
       - in: path
@@ -544,6 +602,22 @@ components:
         requires_acknowledgment:
           type: boolean
           description: Verdict gates enabling and risk not yet acknowledged (FR-029).
+        update_available: { type: boolean }
+        last_update_check_at:
+          { type: string, format: date-time, nullable: true }
+        pinned: { type: boolean }
+        update_pending:
+          type: boolean
+          description: Update available and the skill is not pinned (FR-030/FR-031).
+
+    UpdateStatusOut:
+      type: object
+      required: [available, current_hash, available_hash, rename_detected]
+      properties:
+        available: { type: boolean }
+        current_hash: { type: string }
+        available_hash: { type: string, nullable: true }
+        rename_detected: { type: boolean }
 
     ScanFindingOut:
       type: object
@@ -698,7 +772,8 @@ components:
 
     SkillFileContentOut:
       type: object
-      required: [path, abs_path, folder_abs_path, content, truncated, binary, size]
+      required:
+        [path, abs_path, folder_abs_path, content, truncated, binary, size]
       properties:
         path:
           type: string

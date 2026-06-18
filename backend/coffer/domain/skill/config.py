@@ -34,3 +34,11 @@ class SkillConfig(BaseModel):
     # Set True only by an explicit acknowledge action; reset on any content
     # change so a prior acknowledgment never carries over to new content.
     risk_acknowledged: bool = False
+
+    # Update detection (FR-030/FR-031). Set by an on-demand check; cleared when
+    # an update is applied. `pinned` suppresses the "update available" signal.
+    # All optional with defaults — no migration (config_json is opaque).
+    update_available: bool = False
+    available_version_hash: str | None = None
+    last_update_check_at: datetime | None = None
+    pinned: bool = False

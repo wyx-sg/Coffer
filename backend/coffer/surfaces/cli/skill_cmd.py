@@ -14,6 +14,17 @@ app = typer.Typer(help="Manage skills (AgentSkills standard)")
 _console = Console()
 
 
+def _post_action(path: str, ok_msg: str) -> None:
+    """POST a no-body skill action, surface a clean error, then echo ok_msg."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(path)
+        if r.status_code >= 400:
+            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
+            raise typer.Exit(2)
+    typer.echo(ok_msg)
+
+
 @app.command("list")
 def list_cmd(
     output_json: bool = typer.Option(False, "--json"),
@@ -109,6 +120,10 @@ def show(
         if data.get("requires_acknowledgment"):
             ack = " (NEEDS ACKNOWLEDGMENT)"
         typer.echo(f"scan:        {verdict}, {data.get('scan_findings_count', 0)} finding(s){ack}")
+    if data.get("update_pending"):
+        typer.echo("update:      available")
+    elif data.get("pinned"):
+        typer.echo("update:      pinned")
     if data["bindings"]:
         typer.echo("bindings:")
         for b in data["bindings"]:
@@ -205,17 +220,44 @@ def scan(
 
 
 @app.command("acknowledge-risk")
-def acknowledge_risk(
-    name: str = typer.Argument(...),
-) -> None:
+def acknowledge_risk(name: str = typer.Argument(...)) -> None:
     """Acknowledge a skill's scan risk so it can be enabled for agents."""
+    _post_action(f"/skills/{name}/acknowledge-risk", f"risk acknowledged: skill:{name}")
+
+
+@app.command("check-update")
+def check_update(
+    name: str = typer.Argument(...),
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Check upstream for a newer version without applying it."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/skills/{name}/acknowledge-risk")
+        r = c.post(f"/skills/{name}/check-update", timeout=120)
         if r.status_code >= 400:
             typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
             raise typer.Exit(2)
-    typer.echo(f"risk acknowledged: skill:{name}")
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+    elif data["available"]:
+        extra = " (name change)" if data["rename_detected"] else ""
+        typer.echo(f"update available: {name}{extra}")
+    else:
+        typer.echo(f"up to date: {name}")
+    raise typer.Exit(3 if data["available"] else 0)
+
+
+@app.command("pin")
+def pin(name: str = typer.Argument(...)) -> None:
+    """Pin a skill so the update-available signal is suppressed."""
+    _post_action(f"/skills/{name}/pin", f"pinned: skill:{name}")
+
+
+@app.command("unpin")
+def unpin(name: str = typer.Argument(...)) -> None:
+    """Unpin a skill so update checks surface again."""
+    _post_action(f"/skills/{name}/unpin", f"unpinned: skill:{name}")
 
 
 @app.command("rm")
