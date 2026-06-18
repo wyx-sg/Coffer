@@ -607,6 +607,118 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
+  /instructions:
+    get:
+      tags: [agents]
+      operationId: getMasterInstructions
+      summary: Read the hub master instructions
+      description: |
+        The single master-instructions document. Empty content (and an empty
+        fingerprint) when it has never been written; the read never creates it.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MasterInstructions" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    put:
+      tags: [agents]
+      operationId: setMasterInstructions
+      summary: Write the hub master instructions
+      description: |
+        When `expected_fingerprint` is supplied and no longer matches the stored
+        content, the write is rejected with 409 INSTRUCTIONS_MASTER_STALE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MasterInstructionsWrite" }
+      responses:
+        "200":
+          description: Written
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MasterInstructions" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /agents/{name}/instructions:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: getAgentInstructionsStatus
+      summary: Whether the master is delivered to this agent and in sync
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InstructionsStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    post:
+      tags: [agents]
+      operationId: deliverAgentInstructions
+      summary: Deliver the master into this agent's instructions block
+      description: |
+        Writes the master content into a Coffer-managed block (marker-fenced,
+        distinct from the spec-007 memory block) in the agent's instructions
+        file, atomically and with a `.bak`. Idempotent — re-delivering rewrites
+        the block in place. 422 for an agent type without an instructions file.
+      responses:
+        "200":
+          description: Delivered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InstructionsStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: removeAgentInstructions
+      summary: Strip the Coffer-managed instructions block from this agent
+      description: No-op success when no block is present.
+      responses:
+        "200":
+          description: Removed (or was not present)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InstructionsStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{name}/instructions/adopt:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [agents]
+      operationId: adoptAgentInstructions
+      summary: Make this agent's instructions the new hub master
+      description: |
+        Adopts the agent's managed-block body, or its whole instructions file
+        when no block is present, as the new master. The agent's own file is
+        left unchanged. 422 for an agent type without an instructions file.
+      responses:
+        "200":
+          description: Adopted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MasterInstructions" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /fs/browse:
     get:
       tags: [fs]
@@ -789,7 +901,11 @@ components:
             description: "Stable allowlist key (e.g. settings, global, instructions, subagents, config, hooks).",
           }
         display_name: { type: string }
-        path: { type: string, description: "Resolved absolute path of the file (or directory, for kind=directory entries)." }
+        path:
+          {
+            type: string,
+            description: "Resolved absolute path of the file (or directory, for kind=directory entries).",
+          }
         folder_path:
           type: string
           description: >-
@@ -820,7 +936,17 @@ components:
 
     ConfigFileContent:
       type: object
-      required: [key, path, folder_path, format, exists, content, fingerprint, memory_block]
+      required:
+        [
+          key,
+          path,
+          folder_path,
+          format,
+          exists,
+          content,
+          fingerprint,
+          memory_block,
+        ]
       properties:
         key: { type: string }
         path:
@@ -1106,6 +1232,38 @@ components:
           items: { type: string }
           default: []
           description: "Allowlisted mcp_server names; ignored (cleared) unless mode = selected."
+    MasterInstructions:
+      type: object
+      required: [content, fingerprint]
+      properties:
+        content:
+          type: string
+          description: "The master-instructions document (empty when never written)."
+        fingerprint:
+          type: string
+          description: "sha256 of the content (empty string when the master is absent)."
+
+    MasterInstructionsWrite:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        expected_fingerprint:
+          type: string
+          nullable: true
+          description: "When set, the write is rejected (409) if the master changed since."
+
+    InstructionsStatus:
+      type: object
+      required: [delivered, in_sync]
+      properties:
+        delivered:
+          type: boolean
+          description: "Whether the coffer:instructions managed block is present in the agent's file."
+        in_sync:
+          type: boolean
+          description: "Whether the delivered block's body matches the current master."
 
     FsEntry:
       type: object

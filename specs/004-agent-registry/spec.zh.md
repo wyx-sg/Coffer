@@ -231,6 +231,27 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 ---
 
+### User Story 13 —— 向每个 agent 投递共享指令（优先级 P2）
+
+用户维护着一套统一的「家规」指令（编码规范、语气、「总是做 X」），希望每个 agent 都遵循。今天他们只能把同样的文本手工粘贴进每个 agent 的指令文件（`CLAUDE.md`、`AGENTS.md`、`SOUL.md`），并在每次修改后重新粘贴。取而代之，Coffer 在其中枢里保存一份单一的**主指令（master instructions）**文档，并把它投递进每个 agent 的指令文件，作为一个 Coffer 受管块——由标记注释围起，使 agent 自己周边的笔记得以保留，并在主指令变化时就地改写。每个 agent 上用户都能看到主指令是已投递、已同步还是已漂移，并可投递、移除，或者——反方向——把某个 agent 现有的指令**收编**进主指令。这就是 Coffer 模型「主库 → 投递（hub → deliver）」那一半应用到 prose 指令上，与 skill 和 MCP server 已从中枢扇出的方式如出一辙。
+
+**为什么是这个优先级**：「编辑一次，处处生效」是多 agent 配置这一品类的标志性功能。Coffer 已经把 MCP 与 skill 做成了 hub-and-spoke；指令是剩下的可共享资产，而受管块的做法在保持漂移感知的同时，让每个 agent 自己的内容完好无损。
+
+**独立可测**：设置主指令；投递给一个已注册的 `claude_code` agent；观察一个 `coffer:instructions` 受管块被写入 `CLAUDE.md`、携带主指令内容且原有文件内容得以保留；查看状态（已同步）；编辑主指令；观察状态在重新投递前报告漂移；移除并观察仅该块被剥离。
+
+**代表性场景**：
+
+- read and write the master instructions
+- deliver master instructions to an agent
+- instructions delivery is idempotent and re-delivers on master change
+- instructions delivery coexists with the memory-projection block
+- report instructions delivery status
+- remove delivered instructions
+- adopt an agent's instructions into the master
+- reject instructions delivery for an agent without an instructions file
+
+---
+
 ### Edge Cases
 
 - **第二次扫描时的发现**：已注册的类型不会作为候选项被提供；发现绝不重复已有条目。
@@ -590,6 +611,54 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **When** Coffer 的 MCP shim 条目被写入该 agent 的配置，
 - **Then** 该条目带上该 agent 的身份，作为一个 `--agent <name>` 参数，使 shim 把它转发给网关（驱动每 agent 的服务器作用域），且安装后的 shim 命令仍可解析。
 
+### Scenario: read and write the master instructions
+
+- **Given** daemon 正在运行，
+- **When** 用户读取主指令（全新安装时为空）随后写入新内容，
+- **Then** 新内容连同一个新指纹可读回，写一条 `agent_instructions_master_written` audit 条目，且过期写入（携带过时指纹的写入）以 `conflict`（409）被拒绝。
+
+### Scenario: deliver master instructions to an agent
+
+- **Given** 一个已注册的 `claude_code` agent，其 `CLAUDE.md` 中已存有用户自己的笔记，且主指令非空，
+- **When** 用户把主指令投递给该 agent，
+- **Then** 一个携带主指令内容的 `coffer:instructions` 受管块被写入 `CLAUDE.md`（原子写入、保留 `.bak`），块之外的用户笔记逐字节保留，并写一条 `agent_instructions_delivered` audit 条目。
+
+### Scenario: instructions delivery is idempotent and re-delivers on master change
+
+- **Given** 一个已投递主指令的 agent，
+- **When** 用户编辑主指令并再次投递，
+- **Then** 已有的块以新内容就地改写（绝不重复），块之外的内容仍得以保留。
+
+### Scenario: instructions delivery coexists with the memory-projection block
+
+- **Given** 一个其指令文件中已含 spec 007 记忆投影受管块的 agent，
+- **When** 用户投递（随后又移除）主指令，
+- **Then** `coffer:instructions` 块以其自身独有的标记写入/剥离，记忆投影块原封不动——两个受管区域在同一个文件中共存。
+
+### Scenario: report instructions delivery status
+
+- **Given** 一个已注册的 agent，
+- **When** 用户查询指令投递状态，
+- **Then** 当不存在块时 Coffer 报告 `delivered=false`，当已投递的块与主指令一致时报告 `delivered=true, in_sync=true`，当块已偏离主指令时报告 `in_sync=false`——在读取时从文件派生，绝不存储。
+
+### Scenario: remove delivered instructions
+
+- **Given** 一个已投递主指令的 agent，
+- **When** 用户移除已投递的指令，
+- **Then** 仅 `coffer:instructions` 块从文件中被剥离（其它内容保留、保留 `.bak`），写一条 `agent_instructions_removed` audit 条目，再次移除为空操作（no-op）成功。
+
+### Scenario: adopt an agent's instructions into the master
+
+- **Given** 一个其指令文件持有内容的已注册 agent（位于已投递的块内，或当不存在块时为整个文件），
+- **When** 用户把该 agent 的指令收编进主指令，
+- **Then** 主指令以该内容更新，写一条 `agent_instructions_adopted` audit 条目，agent 自己的文件保持不变。
+
+### Scenario: reject instructions delivery for an agent without an instructions file
+
+- **Given** 一个其类型 allowlist 中没有 `instructions` 配置文件的已注册 agent（例如 `openclaw`），
+- **When** 用户尝试为它投递、收编或读取指令状态，
+- **Then** 请求以 `unprocessable_entity`（422）与说明性错误码被拒绝，且不写入任何内容。
+
 ## Requirements
 
 ### Functional Requirements
@@ -652,17 +721,26 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **FR-034**: 配置文件 allowlist 条目 MAY 是**目录条目**（`kind=directory`）：解析到一个目录并列出其文件（条目相对路径、大小、修改时间），而非携带内容。v1 目录条目：Claude Code `agents/`（每个个人 subagent 一个 Markdown 文件，允许嵌套路径）。目录缺失时以 `exists=false`、零文件列出；读取绝不创建它。
 - **FR-035**: 用户 MUST 能读取目录条目内的单个文件；该读取对 UI 的只读查看器可用。单个文件的写入（写即创建）与删除是程序化的，通过 REST API 与 `coffer agent` CLI 提供。子路径在任何文件系统访问之前于服务端校验：MUST 解析在条目目录之内（无 `..`、无绝对路径、无 symlink 逃逸）且带 `.md` 扩展名。写入复用 FR-017 机制；删除把先前内容保留为 `.bak`。审计为 `agent_config_file_written` / `agent_config_file_deleted`。
 - **FR-036**: 配置文件读取（单文件与目录子文件）MUST 返回内容指纹；写入 MUST 带回该指纹，且当磁盘内容自读取后已变化时以 `conflict`（409）拒绝、文件保持不变。
-- **FR-037**: 当指令文件包含 spec 007 定义的记忆投影受管块时，只读查看器 MUST 标注该区块由记忆功能管理。标记格式由 spec 007 定义；本 spec 只要求该提示。
+- **FR-037**: 当指令文件包含由另一个功能定义的受管块——spec 007 的记忆投影块，或 FR-042 的指令投递块——时，只读查看器 MUST 标注该区块由那个功能拥有。每个块使用其各自独有的标记并被独立改写；标记格式由定义它的功能拥有。
+
+**指令投递（工作区增补）**
+
+- **FR-041**: 系统 MUST 在 Coffer 的中枢里保存一份单一的**主指令（master instructions）**文档（`~/.coffer/instructions/` 之下的一个 Markdown 文件）。用户 MUST 能读取它（全新安装时为空，读取绝不自动创建）并写入它。每次读取返回一个内容指纹；写入 MUST 带回该指纹，且当存储内容自读取后已变化时以 `conflict`（409）拒绝。成功写入写一条 `agent_instructions_master_written` audit 条目。
+- **FR-042**: 用户 MUST 能把主指令**投递（deliver）**进 agent 的 `instructions` 配置文件（`CLAUDE.md` / `AGENTS.md` / `SOUL.md`）。投递把主指令内容写入一个由 `<!-- coffer:instructions:start (managed, do not edit) -->` / `<!-- coffer:instructions:end -->` 围起的 Coffer 受管块——与 spec 007 的记忆标记不同，故二者共存——并把块之外的所有内容逐字节保留。投递复用 FR-017 的原子写入 + `.bak` 机制，具有幂等性（重新投递就地改写块、绝不重复），并写一条 `agent_instructions_delivered` audit 条目。
+- **FR-043**: 系统 MUST 为某个 agent 暴露一个派生（绝不存储）的指令投递**状态（status）**：受管块是否存在（`delivered`），以及其正文是否与当前主指令一致（`in_sync`）。它在读取时由 agent 的文件与主指令计算得出。
+- **FR-044**: 用户 MUST 能**移除（remove）**已投递的指令，仅剥离 `coffer:instructions` 块（其它内容保留、保留 `.bak`），并写一条 `agent_instructions_removed` audit 条目。不存在块时移除为空操作（no-op）成功。
+- **FR-045**: 用户 MUST 能把某个 agent 的指令**收编（adopt）**进主指令——取该 agent 的 `coffer:instructions` 块的正文，或不存在块时取整个指令文件，并把它写为新的主指令（审计为 `agent_instructions_adopted`）。收编保持 agent 自己的文件不变。
+- **FR-046**: 指令的投递、状态、移除与收编都要求该 agent 的类型在其 allowlist 中定义了一个 `instructions` 配置文件。对没有该文件的类型（例如今天的 `openclaw`），这些操作以 `unprocessable_entity`（422）与说明性错误码被拒绝；不写入任何内容。
 
 **界面**
 
-- **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/移除/切换/收编、以及插件列出/切换/卸载——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。桌面 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示 / 复制路径」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。
+- **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/移除/切换/收编、插件列出/切换/卸载、主指令读取/写入，以及逐 agent 的指令状态/投递/移除/收编——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。桌面 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示 / 复制路径」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。主指令编辑器与逐 agent 的指令投递/移除/收编则**在桌面 UI 中可用**。
 - **FR-010**: CLI MUST 在每个读取类操作上支持 `--json` 以提供机器可读输出。
 - **FR-038**: 对每个配置文件（及每个目录条目子文件），UI MUST 为文件本身及其所在文件夹提供**在外部编辑器中打开**、**在文件管理器中显示**与**复制路径**操作，使用 FR-014/FR-015 的 `path`/`folder_path` 这一对。在打包桌面应用（Tauri）中，打开与显示执行真实的 OS 动作；在 Web 上回退为复制路径。用于「在外部编辑器中打开」的编辑器引用 spec 002-ui-shell 定义的用户「首选外部编辑器」偏好（此处不再重新规定）。
 
 **可观测性**
 
-- **FR-011**: 系统 MUST 为每一个生命周期事件写入一条 audit 条目：agent 创建、更新、移除；配置文件写入/删除（`agent_config_file_written` / `agent_config_file_deleted`）；Coffer MCP 安装/卸载；MCP 条目移除/收编（`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`）；插件切换/卸载（`agent_plugin_toggled` / `agent_plugin_uninstalled`）。（agent 没有启用/禁用的概念；发现与全部工作区列表都是只读的——均不发出任何 audit 事件。）
+- **FR-011**: 系统 MUST 为每一个生命周期事件写入一条 audit 条目：agent 创建、更新、移除；配置文件写入/删除（`agent_config_file_written` / `agent_config_file_deleted`）；Coffer MCP 安装/卸载；MCP 条目移除/收编（`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`）；插件切换/卸载（`agent_plugin_toggled` / `agent_plugin_uninstalled`）；主指令写入（`agent_instructions_master_written`）；指令投递/移除/收编（`agent_instructions_delivered` / `agent_instructions_removed` / `agent_instructions_adopted`）。（agent 没有启用/禁用的概念；发现、指令状态与全部工作区列表都是只读的——均不发出任何 audit 事件。）
 - **FR-012**: 系统 MUST 暴露一个只读的发现操作，把已安装但未注册的 agent 列为候选项，可通过 REST API（`GET /api/v1/agents/candidates`）、`coffer agent detect` CLI 与桌面 Agents 页面访问。
 
 **配置目录选择器**
@@ -680,6 +758,8 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **Agent MCP Entry（agent MCP 条目）**：agent 自己文件中所配置的一个 MCP server 的派生（绝不存储）视图——名称、来源文件、传输方式、`enabled`（Codex）、`is_coffer`、`matches_resource`。文件是事实来源；Coffer 读取、编辑、移除或收编条目，但不保留副本。
 - **Agent Plugin（agent 插件）**：一个已安装插件的派生（绝不存储）视图——id（`<name>@<marketplace>`）、marketplace、启用状态、`cache_present`。启用状态存在于各 agent 的文档化配置面；Claude Code 的清单文件是只读输入。
 - **Directory Config Entry（目录型配置条目）**：解析到一个文件目录而非单个文件的 allowlist 配置条目。子文件以校验过的条目相对路径寻址；磁盘上的目录是事实来源。
+- **Master Instructions（主指令）**：Coffer 中枢里（`~/.coffer/instructions/`）持有用户家规指令的一份单一 Markdown 文档。中枢副本是可编辑的事实来源；投递把它扇出给各 agent。读写时带一个内容指纹用于过期写入保护。
+- **Agent Instructions Delivery（agent 指令投递）**：一个 agent 指令投递的派生（绝不存储）视图——`delivered`（agent 指令文件中是否存在 `coffer:instructions` 受管块）与 `in_sync`（块正文是否与主指令一致）。agent 的文件是事实来源；Coffer 读取、写入、剥离或收编该块，但不保留任何逐 agent 副本。
 
 ## Success Criteria
 
@@ -695,12 +775,13 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **SC-008**：MCP tab 恰好列出 agent 真实配置文件中存在的条目；收编一条直连条目即完成完整回路——资源已注册、网关在服务它、直连条目已消失——只需一次用户操作加至多一次确认。
 - **SC-009**：插件开关只改动文档化配置面：测试断言每次切换前后 agent 的内部状态文件逐字节一致。
 - **SC-010**：任何目录条目操作都无法读写其条目目录之外的路径；由覆盖 `..` 穿越、绝对路径、symlink 逃逸与不允许扩展名的专门安全测试验证。
+- **SC-011**：用户能把主指令写入一次，并把它投递给每个支持指令文件的已注册 agent；测试断言已投递的受管块与主指令一致、块之外的 agent 内容（包括 spec 007 记忆块）在前后逐字节一致，且在主指令编辑后重新投递会就地更新该块而不重复。
 
 ## Assumptions
 
 - 用户在自己的机器上运行 Coffer；不存在多租户或远程访问需求。
-- 受支持的 agent 类型（`claude_code`、`codex`、`cursor`、`opencode`、`openclaw`、`hermes`）覆盖用户已安装的 agent；再增加新类型（例如 Claude Desktop 聊天应用、Gemini CLI）只需在能力清单里新增一个 enum 值 + 一条描述符记录（安装标记、配置文件 allowlist、MCP 注入形态）。
-- 每个受支持 agent 的 CLI 与 app/IDE 形态读取同一个共享配置目录（Claude Code 用 `~/.claude/`，Codex 用 `~/.codex/`），因此 Coffer 对每个 agent 管理一份配置集合。
+- 六种 agent 类型已在能力清单（`AGENT_DESCRIPTORS`）中接线——`claude_code`、`codex`、`cursor`、`opencode`、`openclaw`、`hermes`——每种都是一个 `AgentType` 枚举值加一条记录（安装标记、配置文件 allowlist、MCP 注入形态）。目前只**暴露** `claude_code` 与 `codex`（出现在发现与桌面添加流程中）；另外四个已在后端完整接线并端到端可用——注册、配置文件、Coffer-MCP 安装、指令交付、插件——但以 `enabled=False` 隐藏，待逐个验证后再逐一暴露。再增加一个产品（例如 Claude Desktop 聊天应用、Gemini CLI）也是同样的一条记录变更。
+- 每个受支持 agent 的 CLI 与 app/IDE 形态读取同一个共享配置目录（`~/.claude/`、`~/.codex/`、`~/.cursor/`、`~/.config/opencode/`、`~/.openclaw/`、`~/.hermes/`），因此 Coffer 对每个 agent 管理一份配置集合。
 - 配置文件以原始文本方式只读呈现，供用户查看；编辑发生在用户的外部编辑器中（从查看器打开），而程序化写入路径（REST/CLI）保留校验 + 原子写入 + `.bak` 兜底。只读查看器加上「在外部编辑器中打开」是长尾需求的兜底入口；反复出现的结构化需求按工作区增补「毕业」为 facet（MCP 条目、插件）。凭据/状态文件 `~/.codex/auth.json` 被有意排除在 allowlist 之外。
 - agent 的内部状态文件（`~/.claude.json` 中 `mcpServers` 映射之外的部分、`~/.claude/plugins/*.json`、Codex 的 `[marketplaces.*]` / `[hooks.state.*]` / `[projects.*]` 表）在需要时作为输入读取，工作区 facet 绝不写入它们；唯一的写目标是按各厂商文档核实过的文档化配置面。实际情况（已在真实机器上验证）：Claude Code 的 user 级 MCP server 存在于 `~/.claude.json` 的 `mcpServers`，也可能出现在 `settings.json` 的 `mcpServers`——两处都解析。
 - 工作区 facet 遵循收编 → 主库 → 投递原则：在 agent 工作区发现的可共享内容收编进 Coffer 的中枢（此处是 MCP 网关；skill 主库经由 spec 005 的配套增补），而非作为各 agent 的一次性配置来管理。中枢本身的跨机器共享属于未来 spec（需修宪）；这些 facet 的设计保证其状态在那一天到来时可直接序列化为声明式清单。

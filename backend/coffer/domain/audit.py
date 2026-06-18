@@ -45,6 +45,11 @@ class AuditEventType(StrEnum):
     AGENT_MCP_ENTRY_ADOPTED = "agent_mcp_entry_adopted"
     AGENT_PLUGIN_TOGGLED = "agent_plugin_toggled"
     AGENT_PLUGIN_UNINSTALLED = "agent_plugin_uninstalled"
+    # instructions delivery (spec 004 item 1)
+    AGENT_INSTRUCTIONS_MASTER_WRITTEN = "agent_instructions_master_written"
+    AGENT_INSTRUCTIONS_DELIVERED = "agent_instructions_delivered"
+    AGENT_INSTRUCTIONS_REMOVED = "agent_instructions_removed"
+    AGENT_INSTRUCTIONS_ADOPTED = "agent_instructions_adopted"
     # spec 005-skill-manager
     SKILL_IMPORTED = "skill_imported"
     SKILL_FETCHED = "skill_fetched"

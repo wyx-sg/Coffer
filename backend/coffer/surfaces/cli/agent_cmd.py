@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import agent_instructions_cmd as _instructions
 from coffer.surfaces.cli import agent_workspace_cmd as _workspace
 
 app = typer.Typer(help="Manage registered AI agents")
@@ -344,3 +345,4 @@ def mcp_uninstall(
 # Implemented in agent_workspace_cmd.py to keep this file under the size cap.
 
 _workspace.attach(app, config_app=config_app, mcp_app=mcp_app)
+_instructions.attach(app)

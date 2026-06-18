@@ -7,7 +7,7 @@
 
 ## Summary
 
-Add the `agent` Resource kind to Coffer: a registry of locally-installed AI agents. v1 supports two types — **Claude Code** (`claude_code`) and **OpenAI Codex** (`codex`) — each covering both the CLI and the app/IDE form of the product, which share one config directory. Discovery is read-only: a scan reports installed-but-unregistered agents as candidates and the user confirms which to add — nothing is auto-registered (including on startup). Users can also add, edit, and remove agents manually.
+Add the `agent` Resource kind to Coffer: a registry of locally-installed AI agents. Six types are wired in the capability manifest — **Claude Code** (`claude_code`), **OpenAI Codex** (`codex`), **Cursor** (`cursor`), **OpenCode** (`opencode`), **OpenClaw** (`openclaw`), and **Hermes** (`hermes`) — each covering both the CLI and the app/IDE form of the product, which share one config directory. Only Claude Code and Codex are **exposed** in the UI today; the other four work end-to-end on the backend but stay hidden from discovery (`enabled=False`) until each is validated and exposed one at a time. Discovery is read-only: a scan reports installed-but-unregistered agents as candidates and the user confirms which to add — nothing is auto-registered (including on startup). Users can also add, edit, and remove agents manually.
 
 On top of the registry, the feature adds two capabilities:
 
@@ -175,6 +175,6 @@ files at read time.
 
 ## Open items deferred to future specs
 
-- Agent **type** extension beyond v1's two (Claude Desktop chat app, Cursor, Gemini CLI, GitHub Copilot) — each adds an enum value, scanner, and config-file allowlist.
+- Agent **type** extension beyond the six supported (Claude Desktop chat app, Gemini CLI, GitHub Copilot) — each adds an enum value, scanner, and config-file allowlist.
 - Agent **health check** (is the install still present at the registered path) — separate spec.
 - Agent **as MCP peer** (expose another agent as a callable tool through Coffer's MCP gateway) — exploratory.

@@ -11,6 +11,10 @@ from fastapi import FastAPI
 
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.agent_config_routes import router as agent_config_router
+from coffer.surfaces.http.agent_instructions_routes import agent_instructions_router
+from coffer.surfaces.http.agent_instructions_routes import (
+    master_router as instructions_master_router,
+)
 from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.agent_unmanaged_skill_routes import (
     router as agent_unmanaged_skill_router,
@@ -53,6 +57,8 @@ def include_all_routers(app: FastAPI) -> None:
         # agent + skill (specs 004/005)
         agent_router,
         agent_config_router,
+        agent_instructions_router,
+        instructions_master_router,
         agent_workspace_router,
         agent_unmanaged_skill_router,
         fs_router,
