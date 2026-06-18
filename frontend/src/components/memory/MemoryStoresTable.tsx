@@ -13,7 +13,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
-import { deriveScope, type MemoryStoreOut } from "@/kinds/memory/api";
+import { deriveScope, projectDirName, type MemoryStoreOut } from "@/kinds/memory/api";
 
 export function MemoryStoresTable({ items }: { items: MemoryStoreOut[] }) {
   const { t } = useTranslation();
@@ -35,7 +35,21 @@ export function MemoryStoresTable({ items }: { items: MemoryStoreOut[] }) {
     {
       key: "name",
       header: t("memory.cols.name"),
-      cell: (r) => <span className="font-medium">{r.name}</span>,
+      // Show the project's directory basename (derived from project_root) as the
+      // primary label with the absolute path beneath it, so a per-project store
+      // reads as e.g. "coffer" instead of the opaque project-<ULID> name
+      // (FR-017a). Falls back to the raw store name when the root is unknown
+      // (the global store reads as "global"; an untracked project keeps its id).
+      cell: (r) => (
+        <div className="min-w-0">
+          <span className="font-medium">{projectDirName(r.project_root) ?? r.name}</span>
+          {r.project_root ? (
+            <span className="block truncate font-mono text-xs text-muted-foreground">
+              {r.project_root}
+            </span>
+          ) : null}
+        </div>
+      ),
     },
     {
       key: "scope",
@@ -85,7 +99,10 @@ export function MemoryStoresTable({ items }: { items: MemoryStoreOut[] }) {
         columns={columns}
         rowKey={(r) => r.name}
         search={{
-          accessor: (r) => `${r.name} ${r.description ?? ""}`,
+          // Search the readable label + absolute path too, so users can find a
+          // project store by its directory name or path (not just the ULID).
+          accessor: (r) =>
+            `${projectDirName(r.project_root) ?? ""} ${r.project_root ?? ""} ${r.name} ${r.description ?? ""}`,
           placeholder: t("memory.searchPlaceholder"),
         }}
         onRowClick={(r) => navigate(`/memory/${r.name}`)}
