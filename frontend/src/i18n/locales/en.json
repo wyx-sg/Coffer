@@ -206,6 +206,22 @@
       "errBadEnvValue": "Server \"{{name}}\" env variable \"{{key}}\" must be a string.",
       "errEnvNotObject": "Server \"{{name}}\" env must be an object of string values."
     },
+    "registry": {
+      "tabSearch": "Search registry",
+      "tabJson": "Paste JSON",
+      "searchPlaceholder": "Search the official MCP registry…",
+      "search": "Search",
+      "searching": "Searching…",
+      "noResults": "No matching servers",
+      "unavailable": "The MCP registry is unavailable — try Paste JSON",
+      "use": "Use",
+      "notInstallable": "Not auto-installable",
+      "homepage": "Homepage",
+      "nameLabel": "Name",
+      "configure": "Configure {{name}}",
+      "add": "Add server",
+      "poweredBy": "Official MCP Registry"
+    },
     "edit": {
       "title": "Edit MCP server",
       "subtitle": "Update this server's description, configuration, and credentials.",

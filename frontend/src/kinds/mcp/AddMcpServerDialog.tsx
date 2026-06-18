@@ -12,9 +12,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { getApiClient } from "@/lib/api/client";
 import { translateApiError, throwApiError } from "@/lib/api/errors";
 import { JsonImportPanel } from "./JsonImportPanel";
+import { RegistrySearchPanel } from "./RegistrySearchPanel";
 import type { ParsedServer } from "./jsonImport";
 
 interface ServerPlan {
@@ -181,13 +183,33 @@ export function AddMcpServerDialog() {
             {serverError}
           </div>
         ) : null}
-        <JsonImportPanel
-          onImport={(servers) => {
-            setServerError(null);
-            importBatch.mutate(servers);
-          }}
-          importing={importBatch.isPending}
-        />
+        {/* Default to the paste-JSON tab: it preserves the established add
+            flow (and the e2e that fills #json-input); the registry browse tab
+            is one click away. */}
+        <Tabs defaultValue="json">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="search">{t("mcp.registry.tabSearch")}</TabsTrigger>
+            <TabsTrigger value="json">{t("mcp.registry.tabJson")}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="search">
+            <RegistrySearchPanel
+              onImport={(servers) => {
+                setServerError(null);
+                importBatch.mutate(servers);
+              }}
+              importing={importBatch.isPending}
+            />
+          </TabsContent>
+          <TabsContent value="json">
+            <JsonImportPanel
+              onImport={(servers) => {
+                setServerError(null);
+                importBatch.mutate(servers);
+              }}
+              importing={importBatch.isPending}
+            />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

@@ -31,8 +31,16 @@ function wrap() {
 
 const SAMPLE = JSON.stringify({ mcpServers: { fs: { command: "npx" } } });
 
-function openAndReview() {
+function openJsonTab() {
   fireEvent.click(screen.getByRole("button", { name: /add mcp server/i }));
+  // The dialog opens on the registry-search tab; switch to Paste JSON.
+  // Radix Tabs activate on pointer-down; inside the Dialog the body gets
+  // `pointer-events: none`, so a synthetic click doesn't toggle the trigger.
+  fireEvent.mouseDown(screen.getByRole("tab", { name: /paste json/i }));
+}
+
+function openAndReview() {
+  openJsonTab();
   fireEvent.change(screen.getByLabelText("MCP server JSON"), {
     target: { value: SAMPLE },
   });
@@ -44,13 +52,13 @@ describe("AddMcpServerDialog", () => {
     vi.clearAllMocks();
   });
 
-  test("opens the JSON import panel when the trigger is clicked", () => {
+  test("opens the JSON import panel when the Paste JSON tab is selected", () => {
     getApiClientMock.mockReturnValue({
       POST: vi.fn(),
     } as unknown as ReturnType<typeof getApiClient>);
     render(wrap());
     expect(screen.queryByLabelText("MCP server JSON")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /add mcp server/i }));
+    openJsonTab();
     expect(screen.getByLabelText("MCP server JSON")).toBeInTheDocument();
   });
 
@@ -122,7 +130,7 @@ describe("AddMcpServerDialog", () => {
     } as unknown as ReturnType<typeof getApiClient>);
 
     render(wrap());
-    fireEvent.click(screen.getByRole("button", { name: /add mcp server/i }));
+    openJsonTab();
     fireEvent.change(screen.getByLabelText("MCP server JSON"), {
       target: {
         value: JSON.stringify({
@@ -173,7 +181,7 @@ describe("AddMcpServerDialog", () => {
     } as unknown as ReturnType<typeof getApiClient>);
 
     render(wrap());
-    fireEvent.click(screen.getByRole("button", { name: /add mcp server/i }));
+    openJsonTab();
     fireEvent.change(screen.getByLabelText("MCP server JSON"), {
       target: {
         value: JSON.stringify({

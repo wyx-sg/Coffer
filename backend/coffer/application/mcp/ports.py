@@ -121,3 +121,12 @@ class AgentMcpScopePort(Protocol):
     """
 
     async def allowed_server_names(self, agent_name: str) -> set[str] | None: ...
+
+
+class MCPRegistryClientPort(Protocol):
+    """Fetches raw server entries from the official MCP Registry (ADR-029).
+
+    Concrete implementation is ``infrastructure.mcp.registry_client``; it raises
+    ``RegistryUnavailable`` on any network / HTTP / JSON failure."""
+
+    async def fetch_servers(self, query: str, limit: int) -> list[dict[str, Any]]: ...
