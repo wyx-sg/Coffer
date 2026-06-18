@@ -50,6 +50,9 @@ def test_list_and_read_config_file(tmp_path, monkeypatch):
     with _client(app) as c:
         _register_claude(c, tmp_path)
 
+        settings_path = tmp_path / ".claude" / "settings.json"
+        claude_dir = tmp_path / ".claude"
+
         r = c.get("/api/v1/agents/cc/config-files")
         assert r.status_code == 200, r.text
         items = {i["key"]: i for i in r.json()["items"]}
@@ -57,12 +60,22 @@ def test_list_and_read_config_file(tmp_path, monkeypatch):
         assert items["settings"]["kind"] == "file"
         assert items["settings"]["files"] is None
         assert items["subagents"]["kind"] == "directory"
+        # The read-only viewer needs absolute paths for open/reveal/copy-path
+        # (FR-038): a file entry exposes its own path + its containing folder.
+        assert items["settings"]["path"] == str(settings_path)
+        assert items["settings"]["folder_path"] == str(claude_dir)
+        # A directory entry's path IS the folder; folder_path is its parent.
+        assert items["subagents"]["path"] == str(claude_dir / "agents")
+        assert items["subagents"]["folder_path"] == str(claude_dir)
 
         # Read a not-yet-created file -> empty + exists false, empty fingerprint.
+        # path/folder_path are still resolved even when the file is absent.
         r = c.get("/api/v1/agents/cc/config-files/settings")
         assert r.status_code == 200
         assert r.json() == {
             "key": "settings",
+            "path": str(settings_path),
+            "folder_path": str(claude_dir),
             "format": "json",
             "exists": False,
             "content": "",
@@ -71,14 +84,16 @@ def test_list_and_read_config_file(tmp_path, monkeypatch):
         }
 
         # Read an existing file -> current content, exists true, sha256 fingerprint.
-        (tmp_path / ".claude").mkdir(exist_ok=True)
-        (tmp_path / ".claude" / "settings.json").write_text('{"theme": "dark"}', encoding="utf-8")
+        claude_dir.mkdir(exist_ok=True)
+        settings_path.write_text('{"theme": "dark"}', encoding="utf-8")
         r = c.get("/api/v1/agents/cc/config-files/settings")
         assert r.status_code == 200
         assert r.json()["exists"] is True
         assert r.json()["content"] == '{"theme": "dark"}'
         assert r.json()["fingerprint"] == hashlib.sha256(b'{"theme": "dark"}').hexdigest()
         assert r.json()["memory_block"] is False
+        assert r.json()["path"] == str(settings_path)
+        assert r.json()["folder_path"] == str(claude_dir)
 
 
 @pytest.mark.acceptance(spec="004-agent-registry", scenario="save a config file with valid content")

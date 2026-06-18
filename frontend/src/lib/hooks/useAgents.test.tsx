@@ -23,9 +23,7 @@ import {
   usePatchAgent,
   useRegisterAgent,
   useRemoveAgent,
-  useSaveAgentConfigFile,
   useTogglePlugin,
-  useWriteConfigChild,
 } from "./useAgents";
 
 function wrapper() {
@@ -233,25 +231,6 @@ describe("useAgentConfigFiles / useAgentConfigFile", () => {
   });
 });
 
-describe("useSaveAgentConfigFile", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  test("PUTs the content to the keyed config file", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse(200, { key: "settings.json", path: "/x", exists: true, size: 2 }),
-      );
-    vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useSaveAgentConfigFile("cur"), { wrapper: wrapper() });
-    await result.current.mutateAsync({ key: "settings.json", content: "{}" });
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/cur\/config-files\/settings.json$/);
-    expect((init as RequestInit).method).toBe("PUT");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ content: "{}" });
-  });
-});
-
 describe("useAgentMcpStatus / useAgentMcpInstall", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -380,37 +359,6 @@ describe("useAdoptUnmanagedSkill", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/agents\/my-agent\/unmanaged-skills\/my-skill\/adopt$/);
     expect((init as RequestInit).method).toBe("POST");
-  });
-});
-
-describe("useWriteConfigChild", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  test("on success, invalidates config-files keys", async () => {
-    const responsePayload = {
-      key: "settings",
-      display_name: "Settings",
-      path: "/home/u/.config/settings.json",
-      format: "json",
-      exists: true,
-      size: 42,
-      modified_at: "2026-05-22T00:00:00Z",
-    };
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, responsePayload));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { result } = renderHook(() => useWriteConfigChild("my-agent"), {
-      wrapper: wrapper(),
-    });
-    await result.current.mutateAsync({
-      key: "settings",
-      relpath: "foo/bar.json",
-      content: '{"x": 1}',
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/my-agent\/config-files\/settings\/files\/foo\/bar\.json$/);
-    expect((init as RequestInit).method).toBe("PUT");
   });
 });
 

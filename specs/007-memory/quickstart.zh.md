@@ -102,10 +102,10 @@ coffer memory unbind project-01J… my-claude
 1. 侧栏 → **Memory**。页面以表格列出所有记忆 store（global store 加每项目一个 —— 自动置备，所以没有「New store」操作）。
 2. 点一行 store 进入它的逐 store 详情页。
 3. 事实列表是主视图，顶部有 recall 框（模式选择器默认 keyword）。
-4. 点一条事实展开 / 就地编辑 / 删除；**Add fact** 写一个新 markdown 文件（actor=user）。
-5. 头部显示事实条数与落盘大小；kebab 菜单提供「Clear scope」。
+4. 点一条事实展开 **只读** 渲染（UI 不在应用内编辑事实内容）。每条事实及其所在文件夹提供 **在外部编辑器中打开**、**在文件管理器中显示**（桌面）以及 **复制绝对路径**（web 回退）；打开哪个编辑器由全局首选编辑器偏好决定（见 spec 002-ui-shell）。要纠正一条事实，就在自己的编辑器里打开它 —— 下一次 recall 经 lazy reindex-on-read 拾取改动。
+5. 头部显示事实条数与落盘大小；kebab 菜单提供「Clear scope」。要添加或删除事实，用 `coffer memory add` / `coffer memory delete`（或 REST API）。
 
-每次用户写入都会重新生成 `MEMORY.md`、重建索引、对已绑定 agent 重新投影并审计。
+每次写入 —— agent（MCP）、CLI 或 REST —— 都会重新生成 `MEMORY.md`、重建索引、对已绑定 agent 重新投影并审计；桌面 UI 本身是只读视图。
 
 ## 可选：vector recall
 
@@ -214,12 +214,12 @@ coffer__recall("deployment tagging", scope="project")
 
 ### 选项
 
-| Flag | 说明 |
-| --- | --- |
-| `--session ID` | 提炼指定 session；省略则提炼该项目的所有 session。 |
-| `--project PATH` | 只处理 project path 匹配 PATH 的 session。 |
-| `--model ID` | 覆盖用于提炼的 LLM 模型。 |
-| `--dry-run` | 预览洞察，不写入任何事实。 |
+| Flag             | 说明                                               |
+| ---------------- | -------------------------------------------------- |
+| `--session ID`   | 提炼指定 session；省略则提炼该项目的所有 session。 |
+| `--project PATH` | 只处理 project path 匹配 PATH 的 session。         |
+| `--model ID`     | 覆盖用于提炼的 LLM 模型。                          |
+| `--dry-run`      | 预览洞察，不写入任何事实。                         |
 
 ## Limits
 

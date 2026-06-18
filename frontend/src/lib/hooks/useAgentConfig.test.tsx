@@ -14,7 +14,6 @@ import {
   usePatchAgent,
   useAgentConfigFiles,
   useAgentConfigFile,
-  useSaveAgentConfigFile,
   useAgentMcpStatus,
   useAgentMcpInstall,
 } from "./useAgents";
@@ -149,42 +148,6 @@ describe("useAgentConfigFile", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.content).toBe("{}");
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/cur\/config-files\/settings$/);
-  });
-});
-
-describe("useSaveAgentConfigFile", () => {
-  test("PUTs the new content and invalidates both the file and list queries", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, {
-        key: "settings",
-        display_name: "settings.json",
-        path: "/home/u/.codex/settings.json",
-        format: "json",
-        exists: true,
-        size: 20,
-        modified_at: "2026-05-23T00:00:00Z",
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const qc = makeClient();
-    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
-    const { result } = renderHook(() => useSaveAgentConfigFile("cur"), {
-      wrapper: wrapperFor(qc),
-    });
-    await result.current.mutateAsync({ key: "settings", content: '{"a":1}' });
-
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/cur\/config-files\/settings$/);
-    expect((init as RequestInit).method).toBe("PUT");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ content: '{"a":1}' });
-
-    // Both the per-file content query and the metadata list query are refreshed.
-    const invalidated = invalidateSpy.mock.calls.map((c) =>
-      JSON.stringify((c[0] as { queryKey: unknown }).queryKey),
-    );
-    expect(invalidated).toContain(JSON.stringify(["agents", "cur", "config-files", "settings"]));
-    expect(invalidated).toContain(JSON.stringify(["agents", "cur", "config-files"]));
   });
 });
 

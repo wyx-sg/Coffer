@@ -94,6 +94,9 @@ export interface MemoryStoreOut {
   description: string | null;
   config: MemoryStoreConfigOut;
   enabled: boolean;
+  // Absolute on-disk directory holding this store's fact files, exposed so the
+  // UI can offer open/reveal/copy-path affordances on the store folder.
+  store_dir?: string;
   /** Number of facts in the store (shown in the stores table). */
   fact_count?: number;
   created_at: string;
@@ -119,7 +122,10 @@ export interface FactOut {
   type?: string | null;
   actor: MemoryActor;
   origin_session_id?: string | null;
+  /** Absolute on-disk path of the fact's Markdown file (FileActions). */
   path?: string;
+  /** Absolute on-disk path of the fact file's containing folder. */
+  folder_path?: string;
   created_at: string;
   updated_at: string;
 }

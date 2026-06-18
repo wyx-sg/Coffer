@@ -50,10 +50,16 @@ async def test_list_files_reports_existence(agent_bundle, tmp_path, monkeypatch)
     assert by_key["settings"].size == len('{"theme": "dark"}')
     assert by_key["settings"].modified_at is not None
     assert by_key["settings"].kind == "file"
+    # Absolute path + containing folder for the read-only open/reveal/copy-path
+    # affordances (FR-038).
+    assert by_key["settings"].path == str(settings)
+    assert by_key["settings"].folder_path == str(tmp_path / ".claude")
     assert by_key["instructions"].exists is False
     assert by_key["instructions"].size is None
     # subagents is a directory entry
     assert by_key["subagents"].kind == "directory"
+    assert by_key["subagents"].path == str(tmp_path / ".claude" / "agents")
+    assert by_key["subagents"].folder_path == str(tmp_path / ".claude")
     # agents/ dir doesn't exist yet → exists=False, files=None
     assert by_key["subagents"].exists is False
     assert by_key["subagents"].files is None
@@ -88,6 +94,10 @@ async def test_read_existing(agent_bundle, tmp_path, monkeypatch):
     assert out.format.value == "json"
     assert out.fingerprint != ""
     assert out.memory_block is False
+    # The content view carries the file's absolute path + containing folder so
+    # the read-only viewer can open/reveal/copy-path (FR-038).
+    assert out.path == str(tmp_path / ".claude" / "settings.json")
+    assert out.folder_path == str(tmp_path / ".claude")
 
 
 @pytest.mark.acceptance(spec="004-agent-registry", scenario="read a not-yet-created config file")

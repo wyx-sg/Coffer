@@ -96,7 +96,7 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 ### User Story 6 —— 在桌面 App 中管理 skill（优先级 P2）
 
-用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入或粘贴 Git URL 拉取，并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 文件查看器：渲染 Markdown 并支持编辑已存在的文本文件）。按 agent 的启用/禁用在 agent 详情页上进行——该 agent 的「Skills」tab 列出绑定到该 agent 的 skill，并带每条 binding 的开关。
+用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入或粘贴 Git URL 拉取，并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」「复制绝对路径」三种操作。按 agent 的启用/禁用在 agent 详情页上进行——该 agent 的「Skills」tab 列出绑定到该 agent 的 skill，并带每条 binding 的开关。
 
 **为什么是这个优先级**：非 CLI 用户需要一个可视化日常管理面板。
 
@@ -195,7 +195,7 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **Git 拉取遇到私有仓库或需鉴权的 URL**：拒绝；v1 不处理上游 skill 源的凭据。
 - **Git 拉取目标不可达 / DNS 失败 / 超时**：操作干净地失败，返回网络错误；不会留下半写的 master 文件夹，也不会留下 DB 记录。
 - **Windows 下 symlink/junction 创建失败（FAT32 或网络共享）**：该目标降级为复制模式，审计带 `degraded=true`；UI 显示警告标记。
-- **用户在某 agent 的 `config_dir/skills` 文件夹内编辑 SKILL.md**：由于 agent 路径是指向 master 的 symlink，该编辑实际落在 master 上，其他 agent 下次读取时即可见；不会被识别为 drift。
+- **用户在外部编辑器中、从某 agent 的 `config_dir/skills` 文件夹内编辑 SKILL.md**：Coffer 的 UI 从不编辑文件内容；用户在自己的编辑器中改动（可经 Coffer 的「在外部编辑器中打开」/「在文件管理器中显示」操作进入，或直接打开）。由于 agent 路径是指向 master 的 symlink，该外部编辑实际落在 master 上，其他 agent 下次读取时即可见；不会被识别为 drift。
 - **用户从某 agent 的 `config_dir/skills` 文件夹内删除一个由 Coffer 管理的文件**：同样会作用到 master；下次 `verify` 会标记其他 agent 上对应 link 是否仍能一致解析。
 - **移除一个还带 skill binding 的 agent（spec 004）**：spec 004 定义了 agent kind 的 `on_delete` 接缝；the 005-skill-manager spec 在组装根处提供 `cleanup_bindings_for_agent` 回调，先清掉该 agent 的所有 binding 与 symlink，再删掉 agent 行本身。
 - **agent 的 `config_dir` 在外部被移走或删除**：下一次同步操作会暴露失败；`verify` 报告受影响的 binding；用户通过更新 agent 的 `config_dir` 或移除该 agent 来处置。
@@ -310,13 +310,13 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 
 - **Given** 一个已导入的 skill，其 master 文件夹含 `SKILL.md` 及一个内含文件的嵌套子目录，
 - **When** 用户请求该 skill 的文件列表，
-- **Then** Coffer 返回以 master 文件夹为根的递归只读树，每个节点带 name、相对路径、type（`file`/`dir`）、文件大小与 children，按目录优先再按名称排序，且不包含任何越界 symlink 目标。
+- **Then** Coffer 返回以 master 文件夹为根的递归只读树，每个节点带 name、相对路径、磁盘绝对路径、type（`file`/`dir`）、文件大小与 children，按目录优先再按名称排序，且不包含任何越界 symlink 目标。
 
 ### Scenario: view a single skill file's contents（查看单个 skill 文件内容）
 
 - **Given** 一个含可读文本文件的已导入 skill，
 - **When** 用户按相对路径请求该文件内容，
-- **Then** Coffer 返回该文件文本、真实字节大小，以及 `binary=false`/`truncated=false`；不存在的路径返回 not-found 错误。
+- **Then** Coffer 返回该文件文本、真实字节大小、该文件的磁盘绝对路径及其所在文件夹的绝对路径，以及 `binary=false`/`truncated=false`；不存在的路径返回 not-found 错误。
 
 ### Scenario: reject reading a path outside the skill folder（拒绝读取 skill 文件夹之外的路径）
 
@@ -324,11 +324,11 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **When** 用户请求一个解析后位于 master 文件夹之外的路径（`..` 穿越、绝对路径或越界 symlink）的文件内容，
 - **Then** 请求在任何文件被读取前以 `400` 错误拒绝，且不返回任何内容。
 
-### Scenario: edit a skill file（编辑 skill 文件）
+### Scenario: programmatically overwrite a skill file via the write API（通过写入 API 以编程方式覆盖 skill 文件）
 
 - **Given** 一个已导入、含有某个已存在文本文件的 skill，
-- **When** 用户按相对路径为该文件保存新内容，
-- **Then** Coffer 原子地覆盖该文件，随后读取返回新内容；写入不存在的路径、master 文件夹之外的路径、已存在的二进制文件，或超过大小上限的内容都会被拒绝（`404`/`400`），且文件保持不变。
+- **When** 编程客户端（REST/CLI）按相对路径为该文件保存新内容，
+- **Then** Coffer 原子地覆盖该文件，随后读取返回新内容；写入不存在的路径、master 文件夹之外的路径、已存在的二进制文件，或超过大小上限的内容都会被拒绝（`404`/`400`），且文件保持不变。（应用内 UI 不调用该端点编辑内容；它仅是编程写入 surface。）
 
 ### Scenario: list unmanaged skills across an agent's skill locations（列出 agent 各 skill 位置的非托管 skill）
 
@@ -477,7 +477,9 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 **Surface**
 
 - **FR-019**：每一项管理操作必须可通过（a）REST API、（b）`coffer skill ...` CLI（含 `--json`）、（c）桌面 Skills 页 三种 surface 完成。
-- **FR-021**：系统必须提供 skill master 文件夹的视图：一棵递归文件树（name、相对路径、type、size、children）以及单个文件的内容。Markdown 文件渲染为格式化 Markdown，其他文本文件以原文显示。读取必须限制在 master 文件夹内——任何解析后位于其外的路径（`..` 穿越、绝对路径或越界 symlink）必须被拒绝。文件读取必须做大小上限（超限时截断并带 `truncated` 标记），并把非 UTF-8 / 含 NUL 字节的文件标记为 binary 且内容为空。系统还必须允许在同样的限制与大小上限下**覆盖 master 文件夹中已存在的文本文件**；必须拒绝在此创建新文件/目录、写到文件夹之外、或用文本覆盖二进制文件。写入必须是原子的。不跟随越界 symlink。
+- **FR-021**：系统必须提供 skill master 文件夹的**只读**视图：一棵递归文件树（name、相对路径、磁盘绝对路径、type、size、children）以及单个文件的内容（含其磁盘绝对路径与所在文件夹的绝对路径）。Markdown 文件渲染为格式化 Markdown，其他文本文件以原文显示。应用内 UI 查看器为只读，从不编辑文件内容。读取必须限制在 master 文件夹内——任何解析后位于其外的路径（`..` 穿越、绝对路径或越界 symlink）必须被拒绝。文件读取必须做大小上限（超限时截断并带 `truncated` 标记），并把非 UTF-8 / 含 NUL 字节的文件标记为 binary 且内容为空。不跟随越界 symlink。
+- **FR-027**：应用内文件查看器必须在文件与所在文件夹两种粒度上提供以下操作：（a）在用户首选的外部编辑器中打开目标（该全局首选项在 002-ui-shell 中定义；默认为操作系统默认应用），（b）在操作系统文件管理器（Finder / 资源管理器）中显示目标，（c）复制目标的绝对路径。在桌面端（Tauri）上，打开与显示执行真正的操作系统动作；在 web surface 上无法触及宿主操作系统时，三者都回退为复制绝对路径。这些操作取代了应用内的内容编辑：用户在自己的外部编辑器中编辑。
+- **FR-028**：系统必须提供**编程式**（REST/CLI）写入，在与 FR-021 相同的限制与大小上限下**覆盖 master 文件夹中已存在的文本文件**；必须拒绝在此创建新文件/目录、写到文件夹之外、或用文本覆盖二进制文件。写入必须是原子的，且不跟随越界 symlink。该写入 surface 仅供编程客户端使用；应用内 UI 不用它编辑内容（见 FR-027）。
 
 **可观测**
 

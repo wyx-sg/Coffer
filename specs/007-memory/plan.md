@@ -10,7 +10,7 @@
 
 Memory is the **memory face** of one unified knowledge substrate shared with the knowledge base (spec 006). Each memory scope is a Resource of kind `memory`. Facts are per-fact markdown files (YAML frontmatter + body) plus a regenerated `MEMORY.md` index — Claude Code's auto-memory format — under `~/.coffer/memory/`. **Files are the source of truth; SQLite (`documents` + FTS5 + sqlite-vec) is a rebuildable index.** There are two scopes: global (sentinel ULID) and per-project (project ULID resolved from the agent's working directory).
 
-No LLM runs at write time — the agent writes a clean fact directly. Sharing is hybrid: every agent reads/writes through Coffer's MCP gateway (`coffer__recall/remember/update_memory/forget/list_memory`), and the canonical files are **projected** into each agent's native location by an `AgentMemoryAdapter` (Claude Code = directory symlink; Codex = marker-fenced managed block in `AGENTS.md` with native `memories` disabled). The user does full CRUD in the Coffer UI/CLI.
+No LLM runs at write time — the agent writes a clean fact directly. Sharing is hybrid: every agent reads/writes through Coffer's MCP gateway (`coffer__recall/remember/update_memory/forget/list_memory`), and the canonical files are **projected** into each agent's native location by an `AgentMemoryAdapter` (Claude Code = directory symlink; Codex = marker-fenced managed block in `AGENTS.md` with native `memories` disabled). The user does full CRUD through the CLI/REST write surface; the Coffer UI is a **read-only** viewer that offers open-in-editor / reveal / copy-path for each fact and its folder (curation happens in the user's own editor, picked up by lazy reindex-on-read).
 
 This redesign **drops mem0, chroma, and LlamaIndex** and replaces `memory_records` with the unified `documents` table. There is no data migration (branch unreleased).
 
@@ -95,7 +95,7 @@ frontend/src/kinds/memory/
 ├── index.tsx                            # MEMORY_KIND_UI
 ├── MemoryStoreDetailPage.tsx            # per-store detail page (route /memory/:name)
 ├── MemoryFactList.tsx                   # DataTable (name, description, type, actor, updated)
-├── MemoryAddFactForm.tsx                # add / edit (markdown body + name/description/type)
+├── MemoryFactViewer.tsx                 # read-only fact render + open-in-editor / reveal / copy-path (file + folder)
 ├── MemoryRecallPanel.tsx                # recall box with mode selector (keyword default)
 ├── MemoryMetricsHeader.tsx              # fact count + disk bytes
 ├── api.ts / types.ts
@@ -126,7 +126,7 @@ backend/tests/
 
 frontend/src/kinds/memory/
 ├── FactList.test.tsx
-├── FactEditor.test.tsx
+├── FactViewer.test.tsx                       # read-only render + open/reveal/copy-path affordances
 └── RecallBox.test.tsx
 ```
 
@@ -137,13 +137,13 @@ frontend/src/kinds/memory/
 
 ## Risks & mitigations
 
-| Risk                                                                   | Mitigation                                                                                                                               |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| MCP shim cwd does not propagate on some agent (scope resolution fails) | Open item #1 in [research.md](./research.md) (§11); verify on Claude/Codex during impl. An unresolved project scope is REJECTED with `ScopeUnresolved` (clear error; nothing written); `scope=global` still works.      |
-| Claude rewrites `MEMORY.md` or fact files out of band                  | `MEMORY.md` is a derived index regenerated idempotently; lazy reindex-on-read reconciles fact deltas by content hash — no watcher.       |
-| Existing native memory files would be lost on first projection         | Adapter merges existing files into canonical first, then symlinks; never overwrites (FR-012).                                            |
-| sqlite-vec packaging/loading on macOS arm64 / Linux                    | Open item #2 in [research.md](./research.md) (§11); default retrieval is keyword+grep (no native ext needed); vector is opt-in and degrades gracefully when the ext is absent. |
-| Embedding model embeds Chinese poorly                                  | Default is keyword+grep (language-agnostic); recommend local `bge-m3` or a cloud provider for bilingual vector recall.                   |
+| Risk                                                                   | Mitigation                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| MCP shim cwd does not propagate on some agent (scope resolution fails) | Open item #1 in [research.md](./research.md) (§11); verify on Claude/Codex during impl. An unresolved project scope is REJECTED with `ScopeUnresolved` (clear error; nothing written); `scope=global` still works. |
+| Claude rewrites `MEMORY.md` or fact files out of band                  | `MEMORY.md` is a derived index regenerated idempotently; lazy reindex-on-read reconciles fact deltas by content hash — no watcher.                                                                                 |
+| Existing native memory files would be lost on first projection         | Adapter merges existing files into canonical first, then symlinks; never overwrites (FR-012).                                                                                                                      |
+| sqlite-vec packaging/loading on macOS arm64 / Linux                    | Open item #2 in [research.md](./research.md) (§11); default retrieval is keyword+grep (no native ext needed); vector is opt-in and degrades gracefully when the ext is absent.                                     |
+| Embedding model embeds Chinese poorly                                  | Default is keyword+grep (language-agnostic); recommend local `bge-m3` or a cloud provider for bilingual vector recall.                                                                                             |
 
 ## Out of scope (deferred)
 

@@ -82,9 +82,13 @@ def test_writing_a_fact_regenerates_memory_index(tmp_path, monkeypatch):
     assert "deploy" in index.read_text(encoding="utf-8")
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="user edits a fact")
-def test_user_edits_a_fact(tmp_path, monkeypatch):
+@pytest.mark.acceptance(spec="007-memory", scenario="user corrects a fact out-of-band")
+def test_user_corrects_a_fact_via_write_api(tmp_path, monkeypatch):
+    """The programmatic write path (REST PATCH) — the in-app viewer is
+    read-only. (The external-edit-on-disk + lazy-reindex half of this scenario
+    is covered at the service level in test_memory_service.py.)"""
     app = _app(tmp_path, monkeypatch, 59630)
+    store_dir = tmp_path / "memory" / "global"
     with TestClient(app) as c:
         set_active_token(_TOKEN)
         created = c.post(
@@ -93,6 +97,10 @@ def test_user_edits_a_fact(tmp_path, monkeypatch):
             headers=_USER,
         ).json()
         fid = created["id"]
+        # The read-only viewer needs absolute paths for open/reveal/copy-path:
+        # the fact carries its file path + containing folder (the store dir).
+        assert created["path"].endswith(".md")
+        assert created["folder_path"] == str(store_dir)
         r = c.patch(
             f"/api/v1/memory_stores/global/facts/{fid}",
             json={"text": "new corrected text"},
@@ -100,8 +108,12 @@ def test_user_edits_a_fact(tmp_path, monkeypatch):
         )
         assert r.status_code == 200, r.text
         assert r.json()["text"] == "new corrected text"
+        assert r.json()["folder_path"] == str(store_dir)
         got = c.get(f"/api/v1/memory_stores/global/facts/{fid}", headers=_HEADERS)
         assert got.json()["text"] == "new corrected text"
+        # The store read carries the on-disk store dir (reveal/copy-path).
+        store = c.get("/api/v1/memory_stores/global", headers=_HEADERS).json()
+        assert store["store_dir"] == str(store_dir)
 
 
 @pytest.mark.acceptance(spec="007-memory", scenario="user deletes a fact")

@@ -66,7 +66,9 @@ def _scope_of(store_name: str) -> tuple[Scope, str]:
     return "project", store_name
 
 
-def _to_store_out(r: Resource, *, project_root: str | None = None) -> MemoryStoreOut:
+def _to_store_out(
+    r: Resource, *, store_dir: str, project_root: str | None = None
+) -> MemoryStoreOut:
     scope, project_id = _scope_of(r.name)
     return MemoryStoreOut(
         ref=str(r.ref),
@@ -75,6 +77,7 @@ def _to_store_out(r: Resource, *, project_root: str | None = None) -> MemoryStor
         scope=scope,
         project_id=project_id,
         project_root=project_root,
+        store_dir=store_dir,
         description=r.description,
         config=MemoryStoreConfigOut.from_config(MemoryStoreConfig.model_validate(r.config)),
         enabled=r.enabled,
@@ -84,14 +87,15 @@ def _to_store_out(r: Resource, *, project_root: str | None = None) -> MemoryStor
 
 
 async def _store_out(r: Resource, roots: object, mem_svc: MemoryService) -> MemoryStoreOut:
-    """``_to_store_out`` plus the persisted project root + fact count."""
+    """``_to_store_out`` plus the persisted project root, store dir + fact count."""
     scope, _ = _scope_of(r.name)
     project_root = None if scope == "global" else await roots.get(r.name)  # type: ignore[attr-defined]
     try:
         fact_count = cast(int, (await mem_svc.metrics(store_name=r.name)).get("fact_count", 0))
     except Exception:
         fact_count = 0
-    out = _to_store_out(r, project_root=project_root)
+    store_dir = str((await mem_svc.resolved_store(r.name)).store_dir)
+    out = _to_store_out(r, store_dir=store_dir, project_root=project_root)
     out.fact_count = fact_count
     return out
 

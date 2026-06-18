@@ -98,9 +98,9 @@ The audit log is NOT **Observability** — system health / metrics is a distinct
 
 ### User Story 4 — Settings is organised around the user, not the daemon (Priority: P2)
 
-A developer opens Settings and finds tabs grouped by what they manage, not by how Coffer is built: **General** (the default rows-per-page preference for list tables), **Data** (retention policy, manual prune, and backups), and **About** (version, license, source). In the desktop (Tauri) build an extra **App** tab (launch-at-login) appears between Data and About; it is hidden in the browser, where those capabilities don't exist. Settings opens on the General tab. The daemon is an implementation detail — there is no "Daemon" tab and no read-only daemon-status panel. A user never needs to know Coffer runs a background daemon.
+A developer opens Settings and finds tabs grouped by what they manage, not by how Coffer is built: **General** (display preferences — the default rows-per-page for list tables, and the preferred external editor for opening managed files), **Data** (retention policy, manual prune, and backups), and **About** (version, license, source). In the desktop (Tauri) build an extra **App** tab (launch-at-login) appears between Data and About; it is hidden in the browser, where those capabilities don't exist. Settings opens on the General tab. The daemon is an implementation detail — there is no "Daemon" tab and no read-only daemon-status panel. A user never needs to know Coffer runs a background daemon.
 
-The **General** tab MUST expose the default page-size preference (the rows-per-page every list table seeds from), persisted in `localStorage`.
+The **General** tab MUST expose the default page-size preference (the rows-per-page every list table seeds from), persisted in `localStorage`. It MUST also expose a **preferred external editor** preference — the application Coffer uses when the user opens a managed file (or its containing folder) from a read-only file viewer. The default is the operating system's default application; the user MAY override it by choosing an application or entering a launch command. Like the other display preferences it is persisted in `localStorage` and never sent to the daemon.
 
 **Why this priority**: P2 — the underlying controls already function; this story is reorganisation and subtraction, not new capability. An unorganised Settings page is exactly the "feels like a scaffold" signal US2 fights, and the user flagged it as confusing.
 
@@ -119,6 +119,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 - settings layout uses the redesigned tabbed sidebar
 - settings drops the confusing controls
+- the General tab persists a preferred-editor choice
 
 ---
 
@@ -254,6 +255,13 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **Then** no tab exposes a "Shutdown daemon" control or a "Rotate token" control
 - **And** there is no "Daemon" tab and no read-only daemon-status panel
 - **And** the About tab shows version / license / source only — no language picker, no resource-kind list
+
+### Scenario: general tab persists the preferred editor
+
+- **Given** the user opens the General settings tab
+- **When** they set a preferred external editor (by choosing an application or entering a launch command)
+- **Then** reloading the page shows the same preferred-editor value
+- **And** clearing the override restores the operating-system default
 
 ### Scenario: retention period persists across reload
 

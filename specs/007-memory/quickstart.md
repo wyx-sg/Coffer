@@ -102,10 +102,10 @@ coffer memory unbind project-01J… my-claude
 1. Sidebar → **Memory**. The page shows a table of all memory stores (the global store plus one per project — auto-provisioned, so there is no "New store" action).
 2. Click a store row to open its per-store detail page.
 3. The fact list is the main view, with a recall box at the top (mode selector defaults to keyword).
-4. Click a fact to expand / edit-in-place / delete; **Add fact** writes a new markdown file (actor=user).
-5. The header shows fact count and on-disk size; a kebab-menu offers "Clear scope".
+4. Click a fact to expand a **read-only** render (the UI does not edit fact content in-app). Each fact and its containing folder offer **open in external editor**, **reveal in file manager** (desktop), and **copy absolute path** (web fallback); which editor opens is the global preferred-editor preference (see spec 002-ui-shell). Correct a fact by opening it in your own editor — the next recall picks up the change via lazy reindex-on-read.
+5. The header shows fact count and on-disk size; a kebab-menu offers "Clear scope". To add or delete facts, use `coffer memory add` / `coffer memory delete` (or the REST API).
 
-Every user write regenerates `MEMORY.md`, reindexes, re-projects to bound agents, and audits.
+Every write — agent (MCP), CLI, or REST — regenerates `MEMORY.md`, reindexes, re-projects to bound agents, and audits; the desktop UI itself is a read-only viewer.
 
 ## Optional: vector recall
 
@@ -214,12 +214,12 @@ coffer__recall("deployment tagging", scope="project")
 
 ### Options
 
-| Flag | Description |
-| --- | --- |
-| `--session ID` | Distil a specific session; omit to distil all sessions for the project. |
-| `--project PATH` | Filter to sessions whose project path matches PATH. |
-| `--model ID` | Override the LLM model used for distillation. |
-| `--dry-run` | Preview insights without writing any facts. |
+| Flag             | Description                                                             |
+| ---------------- | ----------------------------------------------------------------------- |
+| `--session ID`   | Distil a specific session; omit to distil all sessions for the project. |
+| `--project PATH` | Filter to sessions whose project path matches PATH.                     |
+| `--model ID`     | Override the LLM model used for distillation.                           |
+| `--dry-run`      | Preview insights without writing any facts.                             |
 
 ## Limits
 

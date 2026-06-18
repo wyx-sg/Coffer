@@ -246,39 +246,48 @@ workspace 修订的新增能力（以自由函数实现于 `unmanaged_ops.py` /
 
 ### 文件查看器（`application/skill/file_ops.py`）
 
-紧邻 `service.py` 的只读、无状态辅助函数（与 `verify_ops.py` / `update_ops.py`
-同一模式），向 surface 暴露 skill 的 master 文件夹。无 DB、无审计、无写入；
-containment 通过解析每个候选路径并要求其位于解析后的 master 文件夹内来强制，
-沿用 `domain/skill/validator.py` 的越界路径检查方式。
+紧邻 `service.py` 的无状态辅助函数（与 `verify_ops.py` / `update_ops.py`
+同一模式），向 surface 暴露 skill 的 master 文件夹。**读取**辅助函数
+（`build_file_tree`、`read_skill_file`）支撑只读的应用内查看器，并为每个节点
+暴露磁盘绝对路径，使 UI 能提供「在外部编辑器中打开」/「在文件管理器中显示」/
+「复制路径」操作（FR-027）；UI 查看器从不编辑内容。另一个**写入**辅助函数
+（`write_skill_file`）支撑编程式 REST/CLI 覆盖（FR-028），是此处唯一的写入——
+应用内 UI 不用它编辑内容。无 DB、无审计；containment 通过解析每个候选路径并要求
+其位于解析后的 master 文件夹内来强制，沿用 `domain/skill/validator.py` 的越界
+路径检查方式。
 
-| 函数                                                     | 用途                                                                                                 |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `build_file_tree(master_folder) -> FileNode`             | 递归列出 master 文件夹；跳过真实目标越界的 symlink；不跟进 symlink 目录。                            |
-| `read_skill_file(master_folder, relpath) -> FileContent` | 解析 `master_folder/relpath`，校验其位于文件夹内（否则 `ValueError`），带大小上限读取并检测 binary。 |
+| 函数                                                               | 用途                                                                                                                                                              |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build_file_tree(master_folder) -> FileNode`                       | 递归列出 master 文件夹；跳过真实目标越界的 symlink；不跟进 symlink 目录。每个节点带磁盘绝对路径。                                                                 |
+| `read_skill_file(master_folder, relpath) -> FileContent`           | 解析 `master_folder/relpath`，校验其位于文件夹内（否则 `ValueError`），带大小上限读取并检测 binary；返回文件绝对路径及所在文件夹绝对路径。                        |
+| `write_skill_file(master_folder, relpath, content) -> FileContent` | FR-028 编程式（REST/CLI）覆盖已存在文本文件，使用与读取相同的 containment 与大小上限；拒绝创建新文件/目录、写到文件夹之外或覆盖二进制文件；原子。应用内 UI 不用。 |
 
 #### 文件节点结构（`FileNode` / `SkillFileNodeOut`）
 
 递归树中的一个节点。根节点的 `path == ""`。
 
-| 字段       | 类型              | 说明                                           |
-| ---------- | ----------------- | ---------------------------------------------- |
-| `name`     | `str`             | 条目的基名                                     |
-| `path`     | `str`             | 相对 master 文件夹根的 POSIX 路径（根为 `""`） |
-| `type`     | `"file" \| "dir"` | 节点类型                                       |
-| `size`     | `int \| None`     | 文件为字节大小；目录为 `null`                  |
-| `children` | `list[FileNode]`  | 目录有值（目录优先再按名称排序）；文件为 `[]`  |
+| 字段       | 类型              | 说明                                                             |
+| ---------- | ----------------- | ---------------------------------------------------------------- |
+| `name`     | `str`             | 条目的基名                                                       |
+| `path`     | `str`             | 相对 master 文件夹根的 POSIX 路径（根为 `""`）                   |
+| `abs_path` | `str`             | 磁盘绝对路径（用于在外部编辑器中打开 / 显示 / 复制路径，FR-027） |
+| `type`     | `"file" \| "dir"` | 节点类型                                                         |
+| `size`     | `int \| None`     | 文件为字节大小；目录为 `null`                                    |
+| `children` | `list[FileNode]`  | 目录有值（目录优先再按名称排序）；文件为 `[]`                    |
 
 #### 文件内容结构（`FileContent` / `SkillFileContentOut`）
 
-单个文件的只读内容。
+单个文件的内容。应用内查看器只读渲染；编程式写入（FR-028）返回相同结构。
 
-| 字段        | 类型   | 说明                                         |
-| ----------- | ------ | -------------------------------------------- |
-| `path`      | `str`  | 相对 master 文件夹根的 POSIX 路径            |
-| `content`   | `str`  | 文件文本；`binary` 为真时为空（`""`）        |
-| `truncated` | `bool` | 文件超出 256 KiB 读取上限、仅返回前缀时为真  |
-| `binary`    | `bool` | 文件非 UTF-8 或含 NUL 字节时为真（内容为空） |
-| `size`      | `int`  | 磁盘上文件的真实字节大小（与是否截断无关）   |
+| 字段              | 类型   | 说明                                         |
+| ----------------- | ------ | -------------------------------------------- |
+| `path`            | `str`  | 相对 master 文件夹根的 POSIX 路径            |
+| `abs_path`        | `str`  | 文件的磁盘绝对路径（FR-027）                 |
+| `folder_abs_path` | `str`  | 文件所在文件夹的磁盘绝对路径（FR-027）       |
+| `content`         | `str`  | 文件文本；`binary` 为真时为空（`""`）        |
+| `truncated`       | `bool` | 文件超出 256 KiB 读取上限、仅返回前缀时为真  |
+| `binary`          | `bool` | 文件非 UTF-8 或含 NUL 字节时为真（内容为空） |
+| `size`            | `int`  | 磁盘上文件的真实字节大小（与是否截断无关）   |
 
 ### `SourceFetcher` (`infrastructure/skill/source_fetcher.py`)
 

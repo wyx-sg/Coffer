@@ -287,16 +287,23 @@ to the skill subpackage, same style as `lifecycle_ops.py`):
 
 ### File viewer (`application/skill/file_ops.py`)
 
-Read-only, stateless helpers beside `service.py` (same pattern as
+Stateless helpers beside `service.py` (same pattern as
 `verify_ops.py` / `update_ops.py`) that expose a skill's master folder to
-surfaces. No DB, no audit, no mutation; containment is enforced by resolving
-every candidate path and requiring it to stay inside the resolved master
-folder, reusing the path-escape approach from `domain/skill/validator.py`.
+surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
+read-only in-app viewer and surface each node's absolute on-disk path so the UI
+can offer open-in-external-editor / reveal-in-file-manager / copy-path
+affordances (FR-027); the UI viewer never edits content. A separate **write**
+helper (`write_skill_file`) backs the programmatic REST/CLI overwrite (FR-028)
+and is the only mutation here — the in-app UI does not call it to edit content.
+No DB, no audit; containment is enforced by resolving every candidate path and
+requiring it to stay inside the resolved master folder, reusing the path-escape
+approach from `domain/skill/validator.py`.
 
-| Function                                                 | Purpose                                                                                                                      |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `build_file_tree(master_folder) -> FileNode`             | Recursively list the master folder; skip symlinks whose real target escapes the folder; never descend symlinked dirs.        |
-| `read_skill_file(master_folder, relpath) -> FileContent` | Resolve `master_folder/relpath`, verify it stays inside the folder (else `ValueError`), read with a size cap, detect binary. |
+| Function                                                           | Purpose                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build_file_tree(master_folder) -> FileNode`                       | Recursively list the master folder; skip symlinks whose real target escapes the folder; never descend symlinked dirs. Each node carries its absolute on-disk path.                                                                                 |
+| `read_skill_file(master_folder, relpath) -> FileContent`           | Resolve `master_folder/relpath`, verify it stays inside the folder (else `ValueError`), read with a size cap, detect binary; returns the file's absolute path and containing folder's absolute path.                                               |
+| `write_skill_file(master_folder, relpath, content) -> FileContent` | FR-028 programmatic (REST/CLI) overwrite of an existing text file under the same containment guard and size cap; refuses to create new files/dirs, write outside the folder, or overwrite a binary file; atomic. Not used by the in-app UI viewer. |
 
 #### File-node shape (`FileNode` / `SkillFileNodeOut`)
 
@@ -306,21 +313,25 @@ One node in the recursive tree. The root node has `path == ""`.
 | ---------- | ----------------- | -------------------------------------------------------------------------- |
 | `name`     | `str`             | entry's base name                                                          |
 | `path`     | `str`             | POSIX path relative to the master folder root (`""` for the root)          |
+| `abs_path` | `str`             | absolute on-disk path (for open-in-editor / reveal / copy-path, FR-027)    |
 | `type`     | `"file" \| "dir"` | node kind                                                                  |
 | `size`     | `int \| None`     | byte size for files; `null` for directories                                |
 | `children` | `list[FileNode]`  | populated for directories (sorted dirs-first then by name); `[]` for files |
 
 #### File-content shape (`FileContent` / `SkillFileContentOut`)
 
-A single file's contents, read-only.
+A single file's contents. The in-app viewer renders these read-only; the same
+shape is returned by the programmatic write (FR-028).
 
-| Field       | Type   | Notes                                                                            |
-| ----------- | ------ | -------------------------------------------------------------------------------- |
-| `path`      | `str`  | POSIX path relative to the master folder root                                    |
-| `content`   | `str`  | file text; empty (`""`) when `binary` is true                                    |
-| `truncated` | `bool` | true when the file exceeded the 256 KiB read cap and only the prefix is returned |
-| `binary`    | `bool` | true when the file is non-UTF-8 or contains a NUL byte (content is empty)        |
-| `size`      | `int`  | true byte size of the file on disk (independent of any truncation)               |
+| Field             | Type   | Notes                                                                            |
+| ----------------- | ------ | -------------------------------------------------------------------------------- |
+| `path`            | `str`  | POSIX path relative to the master folder root                                    |
+| `abs_path`        | `str`  | absolute on-disk path of the file (FR-027)                                       |
+| `folder_abs_path` | `str`  | absolute on-disk path of the file's containing folder (FR-027)                   |
+| `content`         | `str`  | file text; empty (`""`) when `binary` is true                                    |
+| `truncated`       | `bool` | true when the file exceeded the 256 KiB read cap and only the prefix is returned |
+| `binary`          | `bool` | true when the file is non-UTF-8 or contains a NUL byte (content is empty)        |
+| `size`            | `int`  | true byte size of the file on disk (independent of any truncation)               |
 
 ### `SourceFetcher` (`infrastructure/skill/source_fetcher.py`)
 

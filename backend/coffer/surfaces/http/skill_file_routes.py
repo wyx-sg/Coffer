@@ -31,6 +31,8 @@ router = APIRouter(
 class SkillFileNodeOut(BaseModel):
     name: str
     path: str  # POSIX, relative to the master folder root ("" for the root)
+    abs_path: str  # resolved absolute path of this entry on disk
+    folder_abs_path: str  # absolute path of this entry's containing folder
     type: str  # "file" | "dir"
     size: int | None = None
     truncated: bool = False  # directory clipped at the max walk depth
@@ -43,6 +45,8 @@ class SkillFileTreeOut(BaseModel):
 
 class SkillFileContentOut(BaseModel):
     path: str  # POSIX, relative to the master folder root
+    abs_path: str  # resolved absolute path of the file on disk
+    folder_abs_path: str  # absolute path of the file's containing folder
     content: str  # empty when ``binary`` is true
     truncated: bool
     binary: bool
@@ -57,20 +61,38 @@ class SkillFileWriteRequest(BaseModel):
 # ---------- helpers ----------
 
 
-def _node_to_out(node: file_ops.FileNode) -> SkillFileNodeOut:
+def _abs_paths(root: pathlib.Path, relpath: str) -> tuple[str, str]:
+    """Resolve an entry's absolute path and its containing-folder path.
+
+    ``relpath`` is POSIX-relative to the master folder ``root`` (``""`` for the
+    root node itself). Returns ``(abs_path, folder_abs_path)`` as strings; the
+    UI viewer is read-only and uses these for open-in-editor / reveal /
+    copy-path.
+    """
+    target = root if relpath == "" else root / relpath
+    return str(target), str(target.parent)
+
+
+def _node_to_out(node: file_ops.FileNode, root: pathlib.Path) -> SkillFileNodeOut:
+    abs_path, folder_abs_path = _abs_paths(root, node.path)
     return SkillFileNodeOut(
         name=node.name,
         path=node.path,
+        abs_path=abs_path,
+        folder_abs_path=folder_abs_path,
         type=node.type,
         size=node.size,
         truncated=node.truncated,
-        children=[_node_to_out(c) for c in node.children],
+        children=[_node_to_out(c, root) for c in node.children],
     )
 
 
-def _content_out(result: file_ops.FileContent) -> SkillFileContentOut:
+def _content_out(result: file_ops.FileContent, root: pathlib.Path) -> SkillFileContentOut:
+    abs_path, folder_abs_path = _abs_paths(root, result.path)
     return SkillFileContentOut(
         path=result.path,
+        abs_path=abs_path,
+        folder_abs_path=folder_abs_path,
         content=result.content,
         truncated=result.truncated,
         binary=result.binary,
@@ -91,8 +113,9 @@ async def list_skill_files(
     # 404 if the skill isn't registered (raises ResourceNotFound → 404).
     await svc.get_skill(name)
 
-    root = file_ops.build_file_tree(pathlib.Path(svc.master_path(name)))
-    return SkillFileTreeOut(root=_node_to_out(root))
+    master = pathlib.Path(svc.master_path(name)).resolve()
+    root = file_ops.build_file_tree(master)
+    return SkillFileTreeOut(root=_node_to_out(root, master))
 
 
 @router.get("/{name}/files/content", response_model=SkillFileContentOut)
@@ -105,7 +128,7 @@ async def read_skill_file(
     name = _validate_skill_name(name)
     await svc.get_skill(name)  # 404 if the skill isn't registered.
 
-    master = pathlib.Path(svc.master_path(name))
+    master = pathlib.Path(svc.master_path(name)).resolve()
     try:
         result = file_ops.read_skill_file(master, path)
     except ValueError as exc:
@@ -119,7 +142,7 @@ async def read_skill_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"no such file in skill: {path}",
         ) from exc
-    return _content_out(result)
+    return _content_out(result, master)
 
 
 @router.put("/{name}/files/content", response_model=SkillFileContentOut)
@@ -143,4 +166,5 @@ async def write_skill_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"no such file in skill: {body.path}",
         ) from exc
-    return _content_out(result)
+    master = pathlib.Path(svc.master_path(name)).resolve()
+    return _content_out(result, master)

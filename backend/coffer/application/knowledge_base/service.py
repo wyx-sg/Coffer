@@ -218,10 +218,22 @@ class KnowledgeBaseService:
 
     # ----- reads -----
 
+    async def _reconcile_on_read(self, kb_name: str, config: KnowledgeBaseConfig) -> None:
+        """Lazy reindex-on-read (FR-008a / FR-016): reconcile the on-disk
+        markdown against the SQLite index before serving a read/search.
+
+        The in-app viewer is read-only, so users edit ``docs/<doc-id>.md``
+        directly in their external editor with no filesystem watcher. This
+        mirrors the memory face's reconcile-before-recall: it funnels through
+        the SAME idempotent reindex scan (``content_sha256`` no-op gate +
+        file-vanished pruning), so an unchanged corpus is a cheap no-op."""
+        await self._pipeline.reindex_scan(kb_name=kb_name, config=config)
+
     async def list_documents(
         self, *, kb_name: str, limit: int, offset: int
     ) -> tuple[list[Document], int]:
-        await self.get_kb_config(kb_name)
+        config = await self.get_kb_config(kb_name)
+        await self._reconcile_on_read(kb_name, config)
         docs = await self._documents.list_documents(
             KIND_KNOWLEDGE_BASE, kb_name, limit=limit, offset=offset
         )
@@ -229,12 +241,21 @@ class KnowledgeBaseService:
         return docs, total
 
     async def get_document(self, *, kb_name: str, document_id: str) -> Document:
-        await self.get_kb_config(kb_name)
+        config = await self.get_kb_config(kb_name)
+        await self._reconcile_on_read(kb_name, config)
         return await self._require_document(kb_name, document_id)
 
     async def chunk_counts(self, *, kb_name: str) -> dict[str, int]:
         """Per-document chunk counts for the KB (the wire ``chunk_count``)."""
         return await self._documents.chunk_counts(KIND_KNOWLEDGE_BASE, kb_name)
+
+    def doc_paths(self, *, kb_name: str, document_id: str) -> tuple[str, str]:
+        """Absolute markdown path + its containing folder for a document.
+
+        The in-app viewer is read-only; surfaces hand these to the desktop for
+        open-in-external-editor / reveal / copy-path."""
+        path = self._paths.doc_path(kb_name, document_id)
+        return str(path), str(path.parent)
 
     async def read_document(self, *, kb_name: str, document_id: str) -> tuple[Document, str]:
         """Return the document row + its full markdown (frontmatter + body)."""
@@ -254,6 +275,9 @@ class KnowledgeBaseService:
         self, *, kb_name: str, query: str, top_k: int = 5, mode: RetrievalMode | None = None
     ) -> SearchResult:
         config = await self.get_kb_config(kb_name)
+        # Lazy reindex-on-read: surface out-of-band edits before searching the
+        # index (FR-008a). No-op when the corpus is unchanged.
+        await self._reconcile_on_read(kb_name, config)
         # An explicit mode the store cannot serve is a caller error (400), never
         # a silent rewrite. ``vector`` is the one exception: it always reaches
         # the facade so the keyword fallback is FLAGGED per the spec.
@@ -276,7 +300,11 @@ class KnowledgeBaseService:
         )
 
     async def grep(self, *, kb_name: str, pattern: str, max_matches: int = 200) -> GrepResult:
-        await self.get_kb_config(kb_name)
+        config = await self.get_kb_config(kb_name)
+        # Grep reads ``docs/`` live, so it already reflects out-of-band edits;
+        # we still reconcile (cheap no-op when unchanged) so the documents table
+        # stays consistent with the files on the search path (FR-008a).
+        await self._reconcile_on_read(kb_name, config)
         return await self._retrieval.grep(
             self._store_ref(kb_name), pattern, max_matches=max_matches
         )

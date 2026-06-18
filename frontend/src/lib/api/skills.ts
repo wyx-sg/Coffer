@@ -90,6 +90,8 @@ export interface DriftReportOut {
 export interface SkillFileNode {
   name: string;
   path: string;
+  /** Absolute on-disk path of this node (file viewers hand it to FileActions). */
+  abs_path?: string;
   type: "file" | "dir";
   size: number | null;
   /** True on a dir whose children were clipped at the max tree depth. */
@@ -103,6 +105,10 @@ export interface SkillFileTreeOut {
 
 export interface SkillFileContentOut {
   path: string;
+  /** Absolute on-disk path of the file (handed to FileActions). */
+  abs_path?: string;
+  /** Absolute on-disk path of the file's containing folder. */
+  folder_abs_path?: string;
   content: string;
   truncated: boolean;
   binary: boolean;
@@ -159,6 +165,4 @@ export const skillsApi = {
   filesTree: (name: string) => call<SkillFileTreeOut>("GET", `/skills/${enc(name)}/files`),
   fileContent: (name: string, path: string) =>
     call<SkillFileContentOut>("GET", `/skills/${enc(name)}/files/content?path=${enc(path)}`),
-  writeFileContent: (name: string, path: string, content: string) =>
-    call<SkillFileContentOut>("PUT", `/skills/${enc(name)}/files/content`, { path, content }),
 };

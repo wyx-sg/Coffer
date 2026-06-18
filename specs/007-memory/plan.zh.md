@@ -10,7 +10,7 @@
 
 memory 是与 knowledge base（spec 006）共用同一套统一知识底座的 **memory 面**。每个记忆作用域是一个 kind 为 `memory` 的 Resource。事实 = 每条事实一个 markdown 文件（YAML frontmatter + 正文）加一个重新生成的 `MEMORY.md` 索引 —— 即 Claude Code 的 auto-memory 格式 —— 放在 `~/.coffer/memory/` 下。**文件是真相源；SQLite（`documents` + FTS5 + sqlite-vec）是可重建的索引。** 有两种作用域：global（sentinel ULID）与 per-project（由 agent 工作目录解析出的项目 ULID）。
 
-写入时不调 LLM —— agent 直接写一条干净的事实。共享是混合式：每个 agent 经 Coffer MCP 网关读写（`coffer__recall/remember/update_memory/forget/list_memory`），且规范化文件由 `AgentMemoryAdapter` **投影** 进各 agent 的原生位置（Claude Code = 目录 symlink；Codex = `AGENTS.md` 中带标记栅栏的 managed block，并禁用原生 `memories`）。用户在 Coffer UI/CLI 里做完整 CRUD。
+写入时不调 LLM —— agent 直接写一条干净的事实。共享是混合式：每个 agent 经 Coffer MCP 网关读写（`coffer__recall/remember/update_memory/forget/list_memory`），且规范化文件由 `AgentMemoryAdapter` **投影** 进各 agent 的原生位置（Claude Code = 目录 symlink；Codex = `AGENTS.md` 中带标记栅栏的 managed block，并禁用原生 `memories`）。用户经 CLI/REST 写入面做完整 CRUD；Coffer UI 是 **只读** 视图，为每条事实及其文件夹提供「在外部编辑器打开 / 显示 / 复制路径」（维护在用户自己的编辑器里完成，经 lazy reindex-on-read 拾取）。
 
 本次重设计 **删除 mem0、chroma、LlamaIndex**，并用统一 `documents` 表取代 `memory_records`。没有数据迁移（分支未发布）。
 
@@ -95,7 +95,7 @@ frontend/src/kinds/memory/
 ├── index.tsx                            # MEMORY_KIND_UI
 ├── MemoryStoreDetailPage.tsx            # 逐 store 详情页（路由 /memory/:name）
 ├── MemoryFactList.tsx                   # DataTable（name、description、type、actor、updated）
-├── MemoryAddFactForm.tsx                # 添加 / 编辑（markdown 正文 + name/description/type）
+├── MemoryFactViewer.tsx                 # 只读事实渲染 + 在外部编辑器打开 / 显示 / 复制路径（文件 + 文件夹）
 ├── MemoryRecallPanel.tsx                # 带模式选择的 recall 框（默认 keyword）
 ├── MemoryMetricsHeader.tsx              # 事实条数 + 磁盘字节
 ├── api.ts / types.ts
@@ -126,7 +126,7 @@ backend/tests/
 
 frontend/src/kinds/memory/
 ├── FactList.test.tsx
-├── FactEditor.test.tsx
+├── FactViewer.test.tsx                       # 只读渲染 + 打开/显示/复制路径能力
 └── RecallBox.test.tsx
 ```
 
@@ -137,13 +137,13 @@ frontend/src/kinds/memory/
 
 ## Risks & mitigations
 
-| 风险                                                 | 缓解                                                                                                |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 风险                                                 | 缓解                                                                                                                                                                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | MCP shim cwd 在某些 agent 上不传播（作用域解析失败） | [research.zh.md](./research.zh.md)（§11）open item #1；实现期在 Claude/Codex 上验证。无法解析的 project 作用域被以 `ScopeUnresolved` **拒绝**（清晰错误；不写任何东西）；`scope=global` 仍可用。 |
-| Claude 带外改写 `MEMORY.md` 或事实文件               | `MEMORY.md` 是幂等重生的派生索引；lazy reindex-on-read 按内容哈希对账事实增量 —— 无需 watcher。     |
-| 首次投影会丢失已存在的原生记忆文件                   | adapter 先把已存在文件合并进规范化，再 symlink；绝不覆盖（FR-012）。                                |
-| sqlite-vec 在 macOS arm64 / Linux 上打包/加载        | [research.zh.md](./research.zh.md)（§11）open item #2；默认检索是 keyword+grep（无需原生扩展）；vector 为可选项，扩展缺失时优雅降级。        |
-| embedding 模型对中文嵌入效果差                       | 默认是 keyword+grep（语言无关）；双语 vector recall 推荐本地 `bge-m3` 或某云端 provider。           |
+| Claude 带外改写 `MEMORY.md` 或事实文件               | `MEMORY.md` 是幂等重生的派生索引；lazy reindex-on-read 按内容哈希对账事实增量 —— 无需 watcher。                                                                                                  |
+| 首次投影会丢失已存在的原生记忆文件                   | adapter 先把已存在文件合并进规范化，再 symlink；绝不覆盖（FR-012）。                                                                                                                             |
+| sqlite-vec 在 macOS arm64 / Linux 上打包/加载        | [research.zh.md](./research.zh.md)（§11）open item #2；默认检索是 keyword+grep（无需原生扩展）；vector 为可选项，扩展缺失时优雅降级。                                                            |
+| embedding 模型对中文嵌入效果差                       | 默认是 keyword+grep（语言无关）；双语 vector recall 推荐本地 `bge-m3` 或某云端 provider。                                                                                                        |
 
 ## Out of scope（推迟）
 

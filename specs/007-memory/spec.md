@@ -66,18 +66,19 @@ The developer keeps Claude Code's auto-memory on. Coffer makes the project's can
 
 ### User Story 4 — User curates memory in Coffer (Priority: P2)
 
-The developer wants to see and correct what agents remember: browse facts per scope, fix one that drifted, add a fact by hand, delete a wrong one — all from the Coffer UI or CLI.
+The developer wants to see and correct what agents remember: browse facts per scope in a **read-only** viewer, then fix one that drifted **in their own external editor** (or via the API/CLI), add a fact by hand, delete a wrong one. The Coffer UI never edits fact content in-app; instead each fact and its containing folder offer "open in external editor", "reveal in file manager", and (web fallback) "copy absolute path", and any out-of-band correction is picked up by the existing lazy reindex-on-read (FR-010).
 
-**Why this priority**: Memory without human curation is uncomfortable; agents sometimes record wrong things. Curation makes the feature safe to leave on.
+**Why this priority**: Memory without human curation is uncomfortable; agents sometimes record wrong things. Curation makes the feature safe to leave on — and routing edits through the user's own editor keeps the markdown files the sole source of truth without a second editing surface to keep in sync.
 
-**Independent Test**: After agents have written facts, open the memory view, edit one fact's text, save, and observe the next `recall` returns the edited version. Add a fact (actor=user), then delete a different one and observe it gone from disk and recall.
+**Independent Test**: After agents have written facts, open the memory view (read-only) and confirm fact content renders but is not editable in-app. Open one fact in an external editor (or `coffer memory edit`/PATCH), correct its text outside Coffer, and observe the next `recall` returns the corrected version (lazy reindex-on-read). Add a fact (actor=user) via the CLI/API, then delete a different one and observe it gone from disk and recall.
 
 **Covering scenarios**:
 
 - user adds a fact
-- user edits a fact
+- user corrects a fact out-of-band
 - user deletes a fact
 - writing a fact regenerates MEMORY.md
+- read-only viewer offers open/reveal/copy-path affordances
 
 ---
 
@@ -263,17 +264,23 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **When** the user adds a fact via the Coffer UI or CLI,
 - **Then** the canonical markdown is written with `metadata.actor = "user"`, `MEMORY.md` is regenerated, the document is indexed, and an audit entry is recorded.
 
-### Scenario: user edits a fact
+### Scenario: user corrects a fact out-of-band
 
 - **Given** a fact exists,
-- **When** the user edits its text and saves,
-- **Then** the canonical markdown is rewritten, the document is reindexed, and recall reflects the new text.
+- **When** the user corrects its text outside the in-app viewer — via the REST/CLI write surface (`PATCH …/facts/{id}` / `coffer memory edit`) or by editing the canonical markdown directly in an external editor,
+- **Then** the canonical markdown is rewritten, the document is reindexed (immediately for the REST/CLI path; on the next `recall` via lazy reindex-on-read for a direct file edit), and recall reflects the new text.
 
 ### Scenario: user deletes a fact
 
 - **Given** a fact exists,
 - **When** the user deletes it,
 - **Then** the markdown file and its index rows are removed, `MEMORY.md` is regenerated, and recall no longer returns it.
+
+### Scenario: read-only viewer offers open/reveal/copy-path affordances
+
+- **Given** a fact viewed in the Coffer UI,
+- **When** the user inspects the fact (and its containing folder),
+- **Then** the content renders read-only (no in-app content editing), the read responses surface the fact's absolute on-disk `.md` path and its containing folder's absolute path, and the UI offers "open in external editor" + "reveal in file manager" for both the file and the folder on desktop (Tauri) and a "copy absolute path" fallback on web; which editor opens is decided by the global preferred-editor preference (see 002-ui-shell).
 
 ### Scenario: writing a fact regenerates MEMORY.md
 
@@ -313,7 +320,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   any persisted fact; `coffer__recall` subsequently returns the new facts; and
   when `dry_run=true`, insights are returned but nothing is written to disk.
 
-> **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, desktop edit-in-place, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
+> **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, the desktop read-only fact viewer's open-in-editor / reveal / copy-path affordances, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
 
 ## Requirements
 
@@ -329,14 +336,14 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 **Fact lifecycle**
 
 - **FR-005**: Agents and users MUST be able to write a fact directly (no LLM at write time). Fact text MUST be at least 1 char and at most `max_fact_chars` (default 8192); empty or over-long text is rejected at the API boundary with nothing persisted.
-- **FR-006**: Users and agents MUST be able to list facts (per scope), get a single fact by id, edit a fact's text, delete a single fact, and clear all facts in a scope. Clearing preserves the store Resource.
+- **FR-006**: Users and agents MUST be able to list facts (per scope), get a single fact by id, edit a fact's text (via the REST/CLI write surface or by editing the canonical markdown directly — the Coffer UI renders fact content read-only and does not edit it in-app), delete a single fact, and clear all facts in a scope. Clearing preserves the store Resource.
 - **FR-007**: Every fact carries `metadata.actor` (`agent` | `user`) and an optional `metadata.type` (e.g. `project` / `feedback` / `reference` / `user`); the writer sets these.
 
 **Retrieval**
 
 - **FR-008**: Recall MUST use the unified retrieval engine shared with the knowledge base: `grep` (served for real — ripgrep over the store's fact files; essential for content FTS5 cannot tokenize, e.g. CJK), `keyword` (FTS5 BM25, the default), and `vector` (sqlite-vec with a configurable embedding provider). When `vector` is requested but no embedding provider is configured, recall MUST fall back to `keyword` and flag the fallback as a boolean in the response — never block. The MCP `coffer__recall` response includes that `fallback` boolean.
 - **FR-009**: `coffer__recall` MUST default to spanning both the project and global stores (an explicit `scope` narrows recall to one store: `project` = the project store only, `global` = the global store only); cross-store results are merged by reciprocal rank fusion (per-store scores are not comparable across modes/stores; each hit keeps its per-store score, only the merged order comes from the fusion). Results carry id, text, score, source, and time — `time` is the fact's `updated_at` and `source` is `<scope>:<fact file path>`. Default `top_k` is 5; callers MAY specify 1–20.
-- **FR-010**: Memory MUST use **lazy reindex-on-read**: `recall` first scans the fact directory for deltas (added/changed/removed files by content hash) and reconciles the index before searching, so out-of-band edits (including Claude's symlink edits) are visible immediately with no filesystem watcher.
+- **FR-010**: Memory MUST use **lazy reindex-on-read**: `recall` first scans the fact directory for deltas (added/changed/removed files by content hash) and reconciles the index before searching, so out-of-band edits — Claude's symlink edits **and a human's corrections made in their own external editor** — are visible immediately with no filesystem watcher. This is the mechanism that makes external corrections appear, so the UI can stay a read-only viewer (FR-017) while curation happens in the user's editor.
 
 **Projection & binding**
 
@@ -353,8 +360,10 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Surfaces**
 
-- **FR-017**: Users MUST be able to perform full memory CRUD through (a) a REST API under `/api/v1/memory_stores/`, (b) `coffer memory …` subcommands, and (c) a desktop UI. User writes set `metadata.actor = "user"`, write the canonical markdown, regenerate `MEMORY.md`, reindex, and audit. Store names on these surfaces are validated: only `global` or `project-<26-char ULID>` are legal — a well-formed name lazily provisions its store; anything else returns 404 (`MEMORY_STORE_NOT_FOUND`).
+- **FR-017**: Users MUST be able to perform full memory CRUD through the programmatic write surfaces — (a) a REST API under `/api/v1/memory_stores/` and (b) `coffer memory …` subcommands. (The REST write endpoints are also what agents author facts through via the MCP gateway.) User writes set `metadata.actor = "user"`, write the canonical markdown, regenerate `MEMORY.md`, reindex, and audit. The desktop/web UI surfaces facts **read-only** (it does not edit fact content in-app); humans curate by editing the canonical markdown in their own external editor (picked up by lazy reindex-on-read, FR-010) or via the REST/CLI write surface. Store names on these surfaces are validated: only `global` or `project-<26-char ULID>` are legal — a well-formed name lazily provisions its store; anything else returns 404 (`MEMORY_STORE_NOT_FOUND`).
 - **FR-017a**: Surfaces MUST present a per-project store by a **human-readable identity derived from its `project_root`** — the root directory's basename as the primary label and the absolute root path as a secondary detail — never only the opaque `project-<ULID>` store name (the project ULID is a one-way digest of the root and is not human-recognisable). When the root is unknown (a store provisioned before the root was tracked) the surface falls back to the store name; the global store needs no derivation (its name `global` is already readable). The underlying store name stays `project-<ULID>` (FR-017) — this is a **display** concern. Verified by frontend tests; desktop acceptance is deferred to e2e like the other desktop-view items.
+- **FR-021**: The read-only fact viewer MUST offer, for both a fact file and its containing folder, affordances to (a) **open in external editor**, (b) **reveal in file manager / Finder**, and (c) **copy the absolute path** (the web fallback). On the desktop (Tauri) build (a) and (b) perform a real open/reveal; on the web build the UI falls back to copy-path. Which editor opens is decided by the global preferred-editor preference (specced in 002-ui-shell; not re-specified here). The read responses MUST surface the absolute paths these affordances act on (see FR-022).
+- **FR-022**: Read responses MUST surface the on-disk truth: the fact read endpoints (`GET …/facts`, `GET …/facts/{id}`) MUST include each fact file's absolute `.md` path and its containing folder's absolute path, and the store read endpoint (`GET …/{name}`) MUST include the store's absolute on-disk directory. These power the FR-021 open/reveal/copy-path affordances and let a human locate the canonical file to correct out-of-band.
 
 **Substrate isolation**
 
@@ -371,7 +380,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 ### Key Entities
 
 - **Memory Store** (a resource of kind `memory`): one store per scope — the global store (sentinel ULID) or a per-project store (project ULID). Config holds enabled retrieval modes, embedding config, and `max_fact_chars`.
-- **Memory Fact** (one markdown file = one `documents` row): `id`, `name`, `description`, body, `metadata` (`type`, `actor`, `origin_session_id`), `path`, `content_sha256`, `created_at`, `updated_at`. The markdown file is the source of truth.
+- **Memory Fact** (one markdown file = one `documents` row): `id`, `name`, `description`, body, `metadata` (`type`, `actor`, `origin_session_id`), `path` (absolute `.md` path), `content_sha256`, `created_at`, `updated_at`. The markdown file is the source of truth. Read responses additionally surface the containing folder's absolute path so the UI can open/reveal/copy it.
 - **Memory Hit** (recall result, not persisted): `id`, `text`/passage, `score`, `source`, `time`.
 - **Projection** (per agent × scope): a `projection_mode` (`SYMLINK` | `RENDER` | `NONE`) plus the native target path the adapter owns.
 

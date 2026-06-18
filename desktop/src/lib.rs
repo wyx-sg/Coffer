@@ -50,6 +50,9 @@ fn get_autostart_enabled(app: AppHandle) -> Result<bool, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Lets the read-only file viewers reveal a managed file in Finder and
+        // open it (or its folder) in the user's preferred external editor.
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             Some(vec![]),

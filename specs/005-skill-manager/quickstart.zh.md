@@ -127,7 +127,7 @@ coffer skill verify
 
 ## 浏览 skill 文件（只读）
 
-桌面应用把 skill 的 master 文件夹以文件树展示，并支持查看单个文件。同样的数据也可通过 REST API 获取。
+桌面应用把 skill 的 master 文件夹以文件树展示，并在只读查看器中查看单个文件。要修改文件，经查看器的「在外部编辑器中打开」/「在文件管理器中显示」/「复制路径」操作，在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）。同样的读取数据也可通过 REST API 获取，且每个条目都带磁盘绝对路径。
 
 以递归树列出 master 文件夹：
 
@@ -141,18 +141,21 @@ curl -s http://127.0.0.1:8000/api/v1/skills/my-skill/files \
   "root": {
     "name": "my-skill",
     "path": "",
+    "abs_path": "/Users/me/.coffer/skills/my-skill",
     "type": "dir",
     "size": null,
     "children": [
       {
         "name": "scripts",
         "path": "scripts",
+        "abs_path": "/Users/me/.coffer/skills/my-skill/scripts",
         "type": "dir",
         "size": null,
         "children": [
           {
             "name": "run.py",
             "path": "scripts/run.py",
+            "abs_path": "/Users/me/.coffer/skills/my-skill/scripts/run.py",
             "type": "file",
             "size": 42,
             "children": []
@@ -162,6 +165,7 @@ curl -s http://127.0.0.1:8000/api/v1/skills/my-skill/files \
       {
         "name": "SKILL.md",
         "path": "SKILL.md",
+        "abs_path": "/Users/me/.coffer/skills/my-skill/SKILL.md",
         "type": "file",
         "size": 87,
         "children": []
@@ -181,6 +185,8 @@ curl -s "http://127.0.0.1:8000/api/v1/skills/my-skill/files/content?path=SKILL.m
 ```json
 {
   "path": "SKILL.md",
+  "abs_path": "/Users/me/.coffer/skills/my-skill/SKILL.md",
+  "folder_abs_path": "/Users/me/.coffer/skills/my-skill",
   "content": "---\nname: my-skill\n...",
   "truncated": false,
   "binary": false,

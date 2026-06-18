@@ -90,20 +90,6 @@ export async function addFact(store: string, input: FactInput): Promise<FactOut>
   return (await r.json()) as FactOut;
 }
 
-export async function updateFact(
-  store: string,
-  factId: string,
-  input: FactInput,
-): Promise<FactOut> {
-  const r = await fetch(`${storeBase(store)}/facts/${enc(factId)}`, {
-    method: "PATCH",
-    headers: { ...headers(), "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  await checkOk(r);
-  return (await r.json()) as FactOut;
-}
-
 export async function deleteFact(store: string, factId: string): Promise<void> {
   const r = await fetch(`${storeBase(store)}/facts/${enc(factId)}`, {
     method: "DELETE",

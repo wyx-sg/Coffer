@@ -171,7 +171,10 @@ async def ingest_document(
         replace=replace,
     )
     counts = await kb_svc.chunk_counts(kb_name=name)
-    return DocumentOut.from_domain(doc, chunk_count=counts.get(doc.id, 0))
+    path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=doc.id)
+    return DocumentOut.from_domain(
+        doc, chunk_count=counts.get(doc.id, 0), path=path, folder_path=folder_path
+    )
 
 
 @router.get("/{name}/documents", response_model=DocumentListOut)
@@ -183,10 +186,15 @@ async def list_documents(
 ) -> DocumentListOut:
     docs, total = await kb_svc.list_documents(kb_name=name, limit=limit, offset=offset)
     counts = await kb_svc.chunk_counts(kb_name=name)
-    return DocumentListOut(
-        documents=[DocumentOut.from_domain(d, chunk_count=counts.get(d.id, 0)) for d in docs],
-        total=total,
-    )
+    out = []
+    for d in docs:
+        path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=d.id)
+        out.append(
+            DocumentOut.from_domain(
+                d, chunk_count=counts.get(d.id, 0), path=path, folder_path=folder_path
+            )
+        )
+    return DocumentListOut(documents=out, total=total)
 
 
 @router.get("/{name}/documents/{document_id}", response_model=DocumentDetailOut)
@@ -197,7 +205,10 @@ async def get_document(
 ) -> DocumentDetailOut:
     doc, markdown = await kb_svc.get_document_text(kb_name=name, document_id=document_id)
     counts = await kb_svc.chunk_counts(kb_name=name)
-    return DocumentDetailOut.from_domain_with_body(doc, markdown, chunk_count=counts.get(doc.id, 0))
+    path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=doc.id)
+    return DocumentDetailOut.from_domain_with_body(
+        doc, markdown, chunk_count=counts.get(doc.id, 0), path=path, folder_path=folder_path
+    )
 
 
 @router.put("/{name}/documents/{document_id}", response_model=DocumentOut)
@@ -212,7 +223,10 @@ async def edit_document(
         kb_name=name, document_id=document_id, new_markdown=body.markdown, actor=actor
     )
     counts = await kb_svc.chunk_counts(kb_name=name)
-    return DocumentOut.from_domain(doc, chunk_count=counts.get(doc.id, 0))
+    path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=doc.id)
+    return DocumentOut.from_domain(
+        doc, chunk_count=counts.get(doc.id, 0), path=path, folder_path=folder_path
+    )
 
 
 @router.post("/{name}/documents/{document_id}/reconvert", response_model=DocumentOut)
@@ -224,7 +238,10 @@ async def reconvert_document(
 ) -> DocumentOut:
     doc = await kb_svc.reconvert_document(kb_name=name, document_id=document_id, actor=actor)
     counts = await kb_svc.chunk_counts(kb_name=name)
-    return DocumentOut.from_domain(doc, chunk_count=counts.get(doc.id, 0))
+    path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=doc.id)
+    return DocumentOut.from_domain(
+        doc, chunk_count=counts.get(doc.id, 0), path=path, folder_path=folder_path
+    )
 
 
 @router.delete(

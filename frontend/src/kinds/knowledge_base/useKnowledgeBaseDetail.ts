@@ -11,7 +11,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/lib/api/errors";
 import {
   deleteDocument,
-  editDocument,
   getDocument,
   getKnowledgeBase,
   getKnowledgeBaseMetrics,
@@ -41,8 +40,6 @@ export function useKnowledgeBaseDetail(name: string) {
   const [grepResult, setGrepResult] = useState<GrepResponse | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [editText, setEditText] = useState("");
 
   const [showSettings, setShowSettings] = useState(false);
   const [lastFile, setLastFile] = useState<File | null>(null);
@@ -109,18 +106,7 @@ export function useKnowledgeBaseDetail(name: string) {
     mutationFn: (id: string) => deleteDocument(name, id),
     onSuccess: () => {
       setSelectedId(null);
-      setEditing(false);
       invalidate();
-    },
-  });
-  const edit = useMutation({
-    mutationFn: (input: { id: string; markdown: string }) =>
-      editDocument(name, input.id, input.markdown),
-    onSuccess: () => {
-      setEditing(false);
-      setEditText("");
-      invalidate();
-      invalidateSelected();
     },
   });
   const reindex = useMutation({
@@ -143,10 +129,7 @@ export function useKnowledgeBaseDetail(name: string) {
   });
 
   const runSearch = () => (mode === "grep" ? grep.mutate() : search.mutate());
-  const selectDoc = (id: string) => {
-    setSelectedId(id);
-    setEditing(false);
-  };
+  const selectDoc = (id: string) => setSelectedId(id);
   // Open the styled confirmation dialog (no native window.confirm). The page
   // renders <ConfirmDialog open={deleteOpen} .../> and calls performDelete.
   const confirmDelete = () => {
@@ -156,17 +139,6 @@ export function useKnowledgeBaseDetail(name: string) {
     if (selectedId) del.mutate(selectedId, { onSuccess: () => setDeleteOpen(false) });
   };
   const deleteTitle = docDetailQuery.data?.title ?? selectedId ?? "";
-  const startEdit = () => {
-    setEditText(docDetailQuery.data?.markdown ?? "");
-    setEditing(true);
-  };
-  const cancelEdit = () => {
-    setEditing(false);
-    setEditText("");
-  };
-  const saveEdit = () => {
-    if (selectedId) edit.mutate({ id: selectedId, markdown: editText });
-  };
 
   const handlePickFile = () => fileInputRef.current?.click();
   const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
@@ -195,9 +167,6 @@ export function useKnowledgeBaseDetail(name: string) {
     searchResult,
     grepResult,
     selectedId,
-    editing,
-    editText,
-    setEditText,
     showSettings,
     setShowSettings,
     docsQuery,
@@ -209,7 +178,6 @@ export function useKnowledgeBaseDetail(name: string) {
     updateConfig,
     reconvert,
     del,
-    edit,
     reindex,
     search,
     grep,
@@ -220,9 +188,6 @@ export function useKnowledgeBaseDetail(name: string) {
     deleteOpen,
     setDeleteOpen,
     deleteTitle,
-    startEdit,
-    cancelEdit,
-    saveEdit,
     handlePickFile,
     handleFileChange,
     retryReplace,

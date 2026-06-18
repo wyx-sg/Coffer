@@ -1,8 +1,9 @@
 // frontend/src/components/skills/SkillFileTree.tsx
 // Two-pane file browser for a skill's master folder (the Files tab): a recursive
 // left tree (expand/collapse dirs, click a file to select it) and a right
-// content pane (SkillFileViewer) that renders Markdown nicely, shows other text
-// files raw, and supports editing. Mirrors the AgentConfigFilesEditor layout.
+// content pane (SkillFileViewer) that renders Markdown nicely and shows other
+// text files raw, READ-ONLY (editing happens in the user's own editor via the
+// viewer's FileActions bar). Mirrors the AgentConfigFilesEditor layout.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";

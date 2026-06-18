@@ -87,7 +87,7 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 
 **问题**：用户的编辑与重新上传如何保持一致？
 
-**决策**：KB **由用户策展、对 agent 只读**（设计 option A）。两条编辑路径：重新上传新源（重新转换 → 新 Markdown）或直接编辑 Markdown。`source_mode` 为 `converted`（Markdown 由 raw 派生；可重新转换）或 `edited`（手工编辑；禁止重新转换以免覆盖；重新上传重置为 `converted`）。一个幂等 re-index 例程服务 ingest、re-upload、edit 与 reindex scan：`content_sha256` 未变 ⇒ no-op；变 ⇒ 删旧 chunks/FTS5/vec、重新切块、重新 embedding（若 vector）、upsert `documents` 行、audit。一致性触发：Coffer 中介的编辑 + 显式 `coffer kb reindex`（重扫增量）+ 可选文件系统 watcher（默认关）。
+**决策**：KB **由用户策展、对 agent 只读**（设计 option A）。两条编辑路径：重新上传新源（重新转换 → 新 Markdown）或直接编辑 Markdown——经编辑 API（REST/CLI）或在用户自己的外部编辑器中打开磁盘文件。Coffer UI 查看器为**只读**；它提供在编辑器中打开 / 显示 / 复制路径等操作，而非应用内文本编辑器。`source_mode` 为 `converted`（Markdown 由 raw 派生；可重新转换）或 `edited`（禁止重新转换以免覆盖；重新上传重置为 `converted`）。一个幂等 re-index 例程服务 ingest、re-upload、edit 与 reindex scan：`content_sha256` 未变 ⇒ no-op；变 ⇒ 删旧 chunks/FTS5/vec、重新切块、重新 embedding（若 vector）、upsert `documents` 行、audit。一致性触发：API 编辑 + 显式 `coffer kb reindex`（重扫增量）+ **读取时惰性重建索引**（读取 / 检索检测到 `content_sha256` 漂移并在服务前先对齐）——无文件系统 watcher，因此外部编辑器的编辑在下次读取时浮现。
 
 ## 8. 内置 MCP 工具表面（只读）
 

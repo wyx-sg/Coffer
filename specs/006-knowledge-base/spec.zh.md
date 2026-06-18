@@ -47,13 +47,13 @@
 
 ### User Story 4 —— 策展语料：编辑、重建索引、重新 embedding（优先级 P2）
 
-用户直接编辑 Markdown 修掉一处转换瑕疵，然后重建索引。他重新上传更新的源文件以重新转换。他改动 chunk 参数或 embedding 模型，Coffer 重新索引 / 重新 embedding 整个语料。一旦某文档被手工编辑（`source_mode = edited`），就**禁止**从原始 raw 重新转换，以免覆盖编辑。
+用户在自己的外部编辑器中打开文档的 Markdown（或通过编辑 API）修掉一处转换瑕疵，改动随后被拾取。他重新上传更新的源文件以重新转换。他改动 chunk 参数或 embedding 模型，Coffer 重新索引 / 重新 embedding 整个语料。Coffer UI 以**只读**方式渲染 Markdown——它从不提供应用内文本编辑器——而是提供在外部编辑器中打开文档（或其所在文件夹）、在文件管理器 / 访达中显示、复制其绝对路径等操作。一旦某文档被编辑（`source_mode = edited`），就**禁止**从原始 raw 重新转换，以免覆盖编辑。
 
 **为什么是这个优先级**：KB 是随时间策展的；一次性 ingest 不够。但它不是展示核心价值所必需。
 
-**独立可测**：通过 API 编辑某文档的 Markdown，重建索引，确认检索反映了编辑；尝试重新转换该文档，观察被阻止；改动 KB 的 chunk size，确认语料被重新切块并重新索引。
+**独立可测**：通过编辑 API（或在外部编辑器中编辑磁盘上的文件）编辑某文档的 Markdown，确认下一次读取 / 检索经由读取时惰性重建索引（lazy reindex-on-read）反映了编辑；尝试重新转换该文档，观察被阻止；改动 KB 的 chunk size，确认语料被重新切块并重新索引。
 
-**代表性场景**：edit a document and reindex；re-conversion blocked once edited；changing chunk params re-indexes；changing embedding model re-embeds。
+**代表性场景**：edit a document and reindex；external edit picked up by reindex-on-read；re-conversion blocked once edited；changing chunk params re-indexes；changing embedding model re-embeds。
 
 ---
 
@@ -130,8 +130,14 @@
 ### Scenario: edit a document and reindex
 
 - **Given** a converted document exists,
-- **When** the user edits its Markdown body and triggers reindex,
+- **When** the user replaces its Markdown body through the edit API,
 - **Then** `source_mode` becomes `edited`, the single re-index routine deletes old chunks/FTS5/vec rows and re-chunks (re-embedding if vector is enabled), and subsequent search reflects the edit.
+
+### Scenario: external edit picked up by reindex-on-read
+
+- **Given** a document whose Markdown file is edited out-of-band in the user's external editor (no API call),
+- **When** the user next reads or searches that document,
+- **Then** the lazy reindex-on-read scan detects the drifted `content_sha256`, re-indexes through the single idempotent routine, and the read/search reflects the edit — with no filesystem watcher running.
 
 ### Scenario: re-conversion blocked once edited
 
@@ -222,6 +228,7 @@
 **Storage as source of truth**
 
 - **FR-008**: Markdown files MUST be the sole source of truth; SQLite (`documents`, `chunks`, FTS5, sqlite-vec) is a derived, rebuildable index. A reindex routine MUST be able to reconstruct all SQLite state from the files.
+- **FR-008a**: The KB MUST use **lazy reindex-on-read**: a read or search first detects on-disk drift by `content_sha256` and reconciles the index through the single idempotent re-index routine (FR-016) before serving, so out-of-band edits — including edits made in the user's external editor — are visible immediately with no filesystem watcher running.
 - **FR-009**: System MUST use one unified `documents` table shared with the `memory` kind, discriminated by `kind` and a per-face JSON `metadata` column. There is no `kb_documents` table.
 
 **Retrieval**
@@ -238,8 +245,8 @@
 
 **Curation & consistency**
 
-- **FR-015**: Each document MUST carry a `source_mode` of `converted` (Markdown derived from raw, re-convertible) or `edited` (hand-edited; re-conversion blocked). Document ids are content-addressed (the first 16 hex chars of the source's sha256), so re-uploading the **identical** source with `replace=true` resets `source_mode` to `converted`; uploading a different source creates a new document and the edited one remains `edited`. Users MUST be able to edit a document's Markdown, re-upload its source, delete it, and reindex.
-- **FR-016**: All write paths (re-upload, edit, reindex scan) MUST funnel through one idempotent re-index routine: if `content_sha256` is unchanged it is a no-op; if changed it deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector enabled), updates the `documents` row, and audits `KB_DOCUMENT_UPDATED`. The KB is **agent-read-only**; agents MUST NOT write KB documents.
+- **FR-015**: Each document MUST carry a `source_mode` of `converted` (Markdown derived from raw, re-convertible) or `edited` (re-conversion blocked). Document ids are content-addressed (the first 16 hex chars of the source's sha256), so re-uploading the **identical** source with `replace=true` resets `source_mode` to `converted`; uploading a different source creates a new document and the edited one remains `edited`. Document edits arrive either through the edit API or by editing the on-disk Markdown in the user's external editor — the Coffer UI does NOT provide an in-app text editor. An edit through the edit API sets `source_mode=edited`; an external edit is picked up by lazy reindex-on-read (FR-008a). Users MUST be able to edit a document's Markdown (via API or external editor), re-upload its source, delete it, and reindex.
+- **FR-016**: All write paths (re-upload, edit API, external edit, reindex scan) MUST funnel through one idempotent re-index routine, invoked lazily on read when the on-disk `content_sha256` has drifted: if `content_sha256` is unchanged it is a no-op; if changed it deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector enabled), updates the `documents` row, and audits `KB_DOCUMENT_UPDATED`. The KB is **agent-read-only**; agents MUST NOT write KB documents.
 
 **Agent integration via MCP**
 
@@ -249,6 +256,7 @@
 **Surfaces**
 
 - **FR-019**: Users MUST be able to perform every KB operation through (a) a REST API under `/api/v1/knowledge_bases/`, (b) `coffer kb …` subcommands, and (c) a desktop UI under the existing `Resources` navigation.
+- **FR-020**: The UI document viewer MUST render the Markdown **read-only** — it MUST NOT offer an in-app text editor for document content. Instead, at both file and containing-folder granularity, the viewer MUST offer affordances to **open in external editor**, **reveal in file manager / Finder**, and **copy the absolute path**. On desktop (Tauri) open/reveal perform the real OS action (open/reveal honouring the global preferred-editor preference specced in `002-ui-shell`); on the web client, where the daemon cannot act on the user's machine, the affordance falls back to copy-path. To support these affordances, read API responses (FR/§Wire) MUST surface the document's absolute on-disk path and its containing folder's absolute path.
 
 ### Key Entities
 

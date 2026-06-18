@@ -1,14 +1,16 @@
 // frontend/src/kinds/knowledge_base/KnowledgeBaseDocViewer.tsx
 //
-// Right-hand preview/editor for the selected KB document. Shows the rendered
-// Markdown source read-only; Edit swaps in a textarea (sets source_mode=edited
-// on save). Reconvert (converted docs only) re-runs conversion from the raw
-// original; Delete removes the document. State + mutations live in the page.
+// Right-hand preview for the selected KB document. Renders the Markdown source
+// READ-ONLY — editing happens in the user's own editor via the <FileActions>
+// bar (open / reveal / copy the absolute path). Reconvert (converted docs only)
+// re-runs conversion from the raw original; Delete removes the document. State +
+// mutations live in the page.
 import { useTranslation } from "react-i18next";
-import { Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FileActions } from "@/components/FileActions";
 import { Markdown } from "@/components/Markdown";
 import { translateApiError } from "@/lib/api/errors";
 import type { DocumentDetailOut } from "./api";
@@ -16,16 +18,9 @@ import type { DocumentDetailOut } from "./api";
 interface Props {
   doc: DocumentDetailOut | undefined;
   isLoading: boolean;
-  editing: boolean;
-  editText: string;
-  isEditPending: boolean;
   isReconvertPending: boolean;
   isDeletePending: boolean;
   reconvertError: unknown;
-  onStartEdit: () => void;
-  onEditTextChange: (value: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
   onReconvert: () => void;
   onDelete: () => void;
 }
@@ -33,16 +28,9 @@ interface Props {
 export function KnowledgeBaseDocViewer({
   doc,
   isLoading,
-  editing,
-  editText,
-  isEditPending,
   isReconvertPending,
   isDeletePending,
   reconvertError,
-  onStartEdit,
-  onEditTextChange,
-  onSave,
-  onCancel,
   onReconvert,
   onDelete,
 }: Props) {
@@ -76,39 +64,24 @@ export function KnowledgeBaseDocViewer({
           </Badge>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {editing ? (
-            <>
-              <Button size="sm" onClick={onSave} disabled={isEditPending}>
-                {t("knowledgeBases.detail.save")}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={onCancel} disabled={isEditPending}>
-                {t("knowledgeBases.detail.cancel")}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button size="sm" variant="outline" onClick={onStartEdit}>
-                <Pencil className="mr-1.5 size-3.5" /> {t("knowledgeBases.detail.edit")}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onReconvert}
-                disabled={!canReconvert || isReconvertPending}
-              >
-                <RefreshCw className="mr-1.5 size-3.5" /> {t("knowledgeBases.detail.reconvert")}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-                onClick={onDelete}
-                disabled={isDeletePending}
-              >
-                <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
-              </Button>
-            </>
-          )}
+          {doc.path ? <FileActions filePath={doc.path} folderPath={doc.folder_path} /> : null}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onReconvert}
+            disabled={!canReconvert || isReconvertPending}
+          >
+            <RefreshCw className="mr-1.5 size-3.5" /> {t("knowledgeBases.detail.reconvert")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+            onClick={onDelete}
+            disabled={isDeletePending}
+          >
+            <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
+          </Button>
         </div>
       </div>
 
@@ -118,20 +91,9 @@ export function KnowledgeBaseDocViewer({
         </p>
       ) : null}
 
-      {editing ? (
-        // Editing drops back to the raw Markdown source.
-        <textarea
-          value={editText}
-          onChange={(e) => onEditTextChange(e.target.value)}
-          className="h-[55vh] w-full resize-none border-0 bg-transparent p-4 font-mono text-sm focus:outline-none"
-          spellCheck={false}
-        />
-      ) : (
-        // Viewing renders the Markdown.
-        <div className="max-h-[60vh] overflow-auto p-4">
-          <Markdown>{doc.markdown}</Markdown>
-        </div>
-      )}
+      <div className="max-h-[60vh] overflow-auto p-4">
+        <Markdown>{doc.markdown}</Markdown>
+      </div>
     </div>
   );
 }

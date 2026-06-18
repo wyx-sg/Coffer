@@ -240,15 +240,15 @@ When an embed degrades (embedding provider unavailable), the routine indexes the
 
 ## Cascade & integrity rules
 
-| Action                                | Effect                                                                                                                                                                             |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Delete a Document                     | Remove `docs/<id>.md` + `raw/<id>.<ext>`; delete its `chunks`/`documents_fts`/`vec_chunks` rows; delete the `documents` row; audit `KB_DOCUMENT_DELETED`.                          |
-| Delete a KB                           | `on_delete` hook: `delete_resource(kind, name)` (documents + chunks + fts + vec); `rmtree(kb_dir(name))`; delete the `resources` row; audit `RESOURCE_DELETED` with a KB snapshot. |
-| Rename a KB                           | Forbidden (Resource name immutable; framework enforces).                                                                                                                           |
-| Change `chunk_size` / `chunk_overlap` | Allowed → re-chunk + re-index the corpus.                                                                                                                                          |
-| Change `embedding` model / dimensions | Allowed → re-embed the corpus (rebuild `vec_chunks` if width changes).                                                                                                             |
-| Edit a document's markdown            | `source_mode = edited` → reindex routine.                                                                                                                                          |
-| Re-convert a document                 | Allowed only if `source_mode == converted`; `edited` ⇒ `ReconversionBlocked`. Re-uploading a new source resets to `converted`.                                                     |
+| Action                                | Effect                                                                                                                                                                                   |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Delete a Document                     | Remove `docs/<id>.md` + `raw/<id>.<ext>`; delete its `chunks`/`documents_fts`/`vec_chunks` rows; delete the `documents` row; audit `KB_DOCUMENT_DELETED`.                                |
+| Delete a KB                           | `on_delete` hook: `delete_resource(kind, name)` (documents + chunks + fts + vec); `rmtree(kb_dir(name))`; delete the `resources` row; audit `RESOURCE_DELETED` with a KB snapshot.       |
+| Rename a KB                           | Forbidden (Resource name immutable; framework enforces).                                                                                                                                 |
+| Change `chunk_size` / `chunk_overlap` | Allowed → re-chunk + re-index the corpus.                                                                                                                                                |
+| Change `embedding` model / dimensions | Allowed → re-embed the corpus (rebuild `vec_chunks` if width changes).                                                                                                                   |
+| Edit a document's markdown            | Via the edit API → `source_mode = edited` → reindex routine. An external-editor edit to the on-disk file is picked up by lazy reindex-on-read (drifted `content_sha256` ⇒ same routine). |
+| Re-convert a document                 | Allowed only if `source_mode == converted`; `edited` ⇒ `ReconversionBlocked`. Re-uploading a new source resets to `converted`.                                                           |
 
 ## Audit events added
 
@@ -283,9 +283,9 @@ Lives in `contracts/api.openapi.yaml`. Highlights (app-wide error envelope `{err
 - `GET /api/v1/knowledge_bases` — list KBs
 - `GET /api/v1/knowledge_bases/{name}` — get one KB
 - `POST /api/v1/knowledge_bases/{name}/documents` — multipart upload + ingest (any format)
-- `GET /api/v1/knowledge_bases/{name}/documents` — paginated list
-- `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` — markdown body + frontmatter
-- `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` — edit markdown (sets `source_mode=edited`, reindexes)
+- `GET /api/v1/knowledge_bases/{name}/documents` — paginated list (each row carries its absolute `path` + containing-folder `folder_path`)
+- `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` — read-only markdown body + frontmatter + absolute `path` + `folder_path`
+- `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` — edit markdown via API (sets `source_mode=edited`, reindexes); the UI is read-only and edits otherwise arrive via the external editor (picked up by reindex-on-read)
 - `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` — re-run conversion from `raw/` (blocked with `RECONVERSION_BLOCKED` once hand-edited)
 - `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` — delete one document
 - `POST /api/v1/knowledge_bases/{name}/reindex` — rescan + rebuild index from files

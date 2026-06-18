@@ -64,6 +64,7 @@ marked **[shared]** are delivered by the substrate and reused here.
 - [x] T-0082 `MemoryFactList.tsx`, `MemoryAddFactForm.tsx`, `MemoryRecallPanel.tsx`, `MemoryMetricsHeader.tsx`
 - [x] T-0083 `index.tsx` (MEMORY_KIND_UI); register in `frontend/src/kinds.ts`
 - [x] T-0084 Frontend tests
+- [ ] T-0085 Read-only-UI pivot: replace `MemoryAddFactForm.tsx` (in-app add/edit) with a read-only `MemoryFactViewer.tsx` (renders fact content; no in-app content editing). Add open-in-editor / reveal / copy-path affordances for the fact file and its containing folder (desktop = real open/reveal via Tauri; web = copy-path), driven by `FactOut.path`/`folder_path` and `MemoryStoreOut.store_dir`, using the global preferred-editor preference (002-ui-shell). Rename `FactEditor.test.tsx` → `FactViewer.test.tsx`. (FR-021/FR-022, US4.)
 
 ## Phase 10 — Tests
 

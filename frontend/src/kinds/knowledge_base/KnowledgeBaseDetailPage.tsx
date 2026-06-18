@@ -92,16 +92,9 @@ export function KnowledgeBaseDetailPage() {
         <KnowledgeBaseDocViewer
           doc={kb.docDetailQuery.data}
           isLoading={Boolean(kb.selectedId) && kb.docDetailQuery.isPending}
-          editing={kb.editing}
-          editText={kb.editText}
-          isEditPending={kb.edit.isPending}
           isReconvertPending={kb.reconvert.isPending}
           isDeletePending={kb.del.isPending}
           reconvertError={kb.reconvert.error}
-          onStartEdit={kb.startEdit}
-          onEditTextChange={kb.setEditText}
-          onSave={kb.saveEdit}
-          onCancel={kb.cancelEdit}
           onReconvert={() => kb.selectedId && kb.reconvert.mutate(kb.selectedId)}
           onDelete={kb.confirmDelete}
         />

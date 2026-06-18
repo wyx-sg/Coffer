@@ -1,37 +1,42 @@
 // frontend/src/components/agents/ConfigEditorPane.test.tsx
-// The right-hand pane shows the file's path plus an optional one-line
-// description (moved here from the left tree). The description renders only
-// when provided.
-import { createRef } from "react";
-import { describe, expect, test, vi } from "vitest";
+// The right-hand pane is READ-ONLY: it previews the file's content (no
+// editable textarea, no Save, no find/replace), shows the path plus an
+// optional one-line description, and renders the FileActions bar so the user
+// can open the file in their own editor. On the web (jsdom, no Tauri) that bar
+// falls back to a "copy path" button.
+import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ConfigEditorPane, type ConfigEditorPaneProps } from "./ConfigEditorPane";
 
 function baseProps(overrides: Partial<ConfigEditorPaneProps> = {}): ConfigEditorPaneProps {
   return {
     pathLabel: "/home/u/.claude/settings.json",
+    filePath: "/home/u/.claude/settings.json",
+    folderPath: "/home/u/.claude",
     formatLabel: "json",
     editorKey: "settings",
-    draft: "{}",
+    content: "{}",
     loading: false,
-    onDraftChange: vi.fn(),
-    textareaRef: createRef<HTMLTextAreaElement>(),
-    showFind: false,
-    onToggleFind: vi.fn(),
-    onDeleteChild: null,
-    stale: false,
-    onReloadStale: vi.fn(),
     memoryBlock: false,
-    saveError: null,
-    saved: false,
-    savePending: false,
-    saveDisabled: true,
-    onSave: vi.fn(),
     ...overrides,
   };
 }
 
 describe("ConfigEditorPane", () => {
+  test("renders the content read-only (no textarea, Save, or find/replace)", () => {
+    render(<ConfigEditorPane {...baseProps({ content: '{"theme":"dark"}' })} />);
+    // The content shows, but never in an editable control.
+    expect(screen.getByText('{"theme":"dark"}')).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /find ?\/ ?replace/i })).not.toBeInTheDocument();
+  });
+
+  test("renders the FileActions bar (copy-path fallback on the web)", () => {
+    render(<ConfigEditorPane {...baseProps()} />);
+    expect(screen.getByRole("button", { name: /copy path/i })).toBeInTheDocument();
+  });
+
   test("renders the description next to the content when provided", () => {
     render(<ConfigEditorPane {...baseProps({ description: "What this file is for." })} />);
     expect(screen.getByText("What this file is for.")).toBeInTheDocument();
@@ -40,5 +45,10 @@ describe("ConfigEditorPane", () => {
   test("renders no description when none is provided", () => {
     render(<ConfigEditorPane {...baseProps()} />);
     expect(screen.queryByText("What this file is for.")).not.toBeInTheDocument();
+  });
+
+  test("renders the memory-projection annotation when memoryBlock is set", () => {
+    render(<ConfigEditorPane {...baseProps({ memoryBlock: true })} />);
+    expect(screen.getByText(/memory-projection block/i)).toBeInTheDocument();
   });
 });

@@ -19,7 +19,6 @@ import {
   listFacts,
   projectDirName,
   recall,
-  updateFact,
   type FactOut,
   type RecallResponse,
   type RetrievalMode,
@@ -44,8 +43,6 @@ export function MemoryStoreDetailPage() {
   const [recallResult, setRecallResult] = useState<RecallResponse | null>(null);
 
   const [selected, setSelected] = useState<FactOut | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [editText, setEditText] = useState("");
 
   // Styled confirmation dialogs replace native window.confirm for the two
   // destructive actions (delete a fact, clear the whole store).
@@ -86,16 +83,6 @@ export function MemoryStoreDetailPage() {
     mutationFn: (id: string) => deleteFact(store, id),
     onSuccess: () => {
       setSelected(null);
-      setEditing(false);
-      invalidate();
-    },
-  });
-  const upd = useMutation({
-    mutationFn: (input: { id: string; text: string }) =>
-      updateFact(store, input.id, { text: input.text }),
-    onSuccess: () => {
-      setEditing(false);
-      setEditText("");
       invalidate();
     },
   });
@@ -111,10 +98,7 @@ export function MemoryStoreDetailPage() {
     },
   });
 
-  const selectFact = (f: FactOut) => {
-    setSelected(f);
-    setEditing(false);
-  };
+  const selectFact = (f: FactOut) => setSelected(f);
   const confirmDelete = () => {
     if (!liveSelected) return;
     setDeleteOpen(true);
@@ -161,20 +145,7 @@ export function MemoryStoreDetailPage() {
         />
         <MemoryFactViewer
           fact={liveSelected ?? undefined}
-          editing={editing}
-          editText={editText}
-          isEditPending={upd.isPending}
           isDeletePending={del.isPending}
-          onStartEdit={() => {
-            setEditText(liveSelected?.text ?? "");
-            setEditing(true);
-          }}
-          onEditTextChange={setEditText}
-          onSave={() => liveSelected && upd.mutate({ id: liveSelected.id, text: editText })}
-          onCancel={() => {
-            setEditing(false);
-            setEditText("");
-          }}
           onDelete={confirmDelete}
         />
       </div>

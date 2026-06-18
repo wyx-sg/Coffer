@@ -20,7 +20,6 @@ function renderTree(files: ConfigFileInfo[]) {
       onSelectFile={noop}
       onSelectDirectory={noop}
       onSelectChild={vi.fn()}
-      onNewFile={noop}
     />,
   );
 }

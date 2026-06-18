@@ -2,9 +2,9 @@
 //
 // Exercises the redesigned KB detail surface: the unified retrieval bar
 // (one input + a keyword/vector/grep mode dropdown), and the document tree →
-// preview/editor flow (select a doc on the left, then edit / reconvert /
-// delete it on the right). The `./api` module is mocked so the component
-// renders deterministically without a backend.
+// READ-ONLY preview flow (select a doc on the left; the right pane renders the
+// Markdown with FileActions + reconvert / delete, no in-app editing). The
+// `./api` module is mocked so the component renders without a backend.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -19,7 +19,6 @@ vi.mock("./api", () => ({
   getKnowledgeBase: vi.fn(),
   getKnowledgeBaseMetrics: vi.fn(),
   ingestDocument: vi.fn(),
-  editDocument: vi.fn(),
   deleteDocument: vi.fn(),
   reconvertDocument: vi.fn(),
   reindexKnowledgeBase: vi.fn(),
@@ -118,10 +117,14 @@ describe("KnowledgeBaseDetailPage", () => {
     expect(await screen.findByText(/make release/)).toBeVisible();
   });
 
-  test("selecting a document loads its markdown, and editing PUTs the new body", async () => {
+  test("selecting a document renders its markdown READ-ONLY with file affordances", async () => {
     seedBaseQueries();
-    vi.mocked(api.getDocument).mockResolvedValue({ ...DOC, markdown: "# Deploys\n\nbody" });
-    vi.mocked(api.editDocument).mockResolvedValue(DOC);
+    vi.mocked(api.getDocument).mockResolvedValue({
+      ...DOC,
+      markdown: "# Deploys\n\nbody",
+      path: "/abs/kb/designs/deploys.md",
+      folder_path: "/abs/kb/designs",
+    });
     renderPage();
 
     const tree = screen.getByRole("complementary");
@@ -129,14 +132,11 @@ describe("KnowledgeBaseDetailPage", () => {
     // Viewing renders the Markdown: the body text is shown (the raw "# " is gone).
     expect(await screen.findByText("body")).toBeVisible();
 
-    // Editing drops back to the raw Markdown source in a textarea.
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    const textarea = await screen.findByDisplayValue(/# Deploys/);
-    fireEvent.change(textarea, { target: { value: "# Deploys\n\nedited" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
-    await waitFor(() =>
-      expect(api.editDocument).toHaveBeenCalledWith("designs", "d1", "# Deploys\n\nedited"),
-    );
+    // There is no in-app editing — no Edit/Save controls.
+    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+    // The read-only viewer offers the copy-path affordance (jsdom is not Tauri).
+    expect(screen.getByRole("button", { name: /copy path/i })).toBeInTheDocument();
   });
 
   test("deleting a selected document calls delete after confirmation", async () => {

@@ -202,16 +202,16 @@ Managed block markers (Next.js / claude-mem precedent):
 
 ## Cascade & integrity rules
 
-| Action                      | Effect                                                                                                                            |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `remember` / user add       | Write `<fact-slug>.md` → regenerate `MEMORY.md` → index into `documents`/`chunks`/FTS5/(vec) → audit → re-project.                |
-| `update_memory` / user edit | Rewrite `.md` → single re-index routine (sha256 changed → re-chunk/-embed) → regenerate `MEMORY.md` → audit → re-project.         |
-| `forget` / user delete      | Delete `.md` → remove `documents`/`chunks`/FTS5/vec rows → regenerate `MEMORY.md` → audit → re-project.                           |
-| Clear a scope               | Delete all `.md` for the store → remove all index rows → empty `MEMORY.md` → re-project empty → audit. Store Resource preserved.  |
-| Delete the store Resource   | Remove `documents` rows for the store, `rmtree(store_dir)`, tear down projections (replace symlink / strip managed block), audit. |
-| Recall                      | **Lazy reindex-on-read**: scan `store_dir` for deltas (by `content_sha256`) → `reconcile` → search. No write to `MEMORY.md`.      |
-| Change embedding model      | Allowed → re-embed the store on next index (files are truth).                                                                     |
-| Change `max_fact_chars`     | Allowed.                                                                                                                          |
+| Action                                                | Effect                                                                                                                                                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `remember` / user add                                 | Write `<fact-slug>.md` → regenerate `MEMORY.md` → index into `documents`/`chunks`/FTS5/(vec) → audit → re-project.                                                                                       |
+| `update_memory` / user edit (API/CLI/external editor) | Rewrite `.md` → single re-index routine (sha256 changed → re-chunk/-embed) → regenerate `MEMORY.md` → audit → re-project. (A direct external-editor edit takes effect on the next lazy reindex-on-read.) |
+| `forget` / user delete                                | Delete `.md` → remove `documents`/`chunks`/FTS5/vec rows → regenerate `MEMORY.md` → audit → re-project.                                                                                                  |
+| Clear a scope                                         | Delete all `.md` for the store → remove all index rows → empty `MEMORY.md` → re-project empty → audit. Store Resource preserved.                                                                         |
+| Delete the store Resource                             | Remove `documents` rows for the store, `rmtree(store_dir)`, tear down projections (replace symlink / strip managed block), audit.                                                                        |
+| Recall                                                | **Lazy reindex-on-read**: scan `store_dir` for deltas (by `content_sha256`) → `reconcile` → search. No write to `MEMORY.md`.                                                                             |
+| Change embedding model                                | Allowed → re-embed the store on next index (files are truth).                                                                                                                                            |
+| Change `max_fact_chars`                               | Allowed.                                                                                                                                                                                                 |
 
 ## The single re-index routine (`application/knowledge/reindex.py`, shared with KB)
 
@@ -297,4 +297,4 @@ distillation-specific audit event is emitted.
 
 ## Wire contract (REST)
 
-Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall) plus projection endpoints (list/establish/remove). The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.
+Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall) plus projection endpoints (list/establish/remove). The write endpoints (add/edit/delete/clear) are retained — they are how agents (via MCP) and the CLI author facts; the desktop/web UI is a read-only viewer. Read DTOs surface on-disk truth: `FactOut` carries the fact's absolute `.md` `path` and its containing folder's `folder_path`, and `MemoryStoreOut` carries the store's absolute `store_dir`, so the read-only viewer can offer open-in-editor / reveal / copy-path. The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.
