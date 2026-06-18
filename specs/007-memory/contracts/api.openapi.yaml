@@ -261,66 +261,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
-  /api/v1/memory_stores/{name}/projections:
-    parameters:
-      - $ref: "#/components/parameters/StoreName"
-    get:
-      summary: List projections of this store into bound agents
-      operationId: listProjections
-      tags: [projection]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProjectionListOut"
-
-    post:
-      summary: Establish (or refresh) a projection into an agent's native location
-      description: |
-        Dispatches on the agent's AgentMemoryAdapter.projection_mode
-        (SYMLINK | RENDER | NONE). For SYMLINK, existing native files are merged
-        into the canonical store before the directory is replaced by a symlink.
-        For RENDER, a marker-fenced managed block is written idempotently and
-        native memory is disabled. NONE is a no-op.
-      operationId: establishProjection
-      tags: [projection]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ProjectionRequest"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProjectionOut"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /api/v1/memory_stores/{name}/projections/{agent_ref}:
-    parameters:
-      - $ref: "#/components/parameters/StoreName"
-      - in: path
-        name: agent_ref
-        required: true
-        schema: { type: string }
-    delete:
-      summary: Remove a projection (restore symlink target / strip managed block)
-      operationId: removeProjection
-      tags: [projection]
-      responses:
-        "204":
-          description: No Content
-        "404":
-          $ref: "#/components/responses/NotFound"
-
 components:
   securitySchemes:
     cofferToken:
@@ -364,7 +304,8 @@ components:
 
     MemoryStoreConfig:
       type: object
-      required: [retrieval_modes, default_mode, embedding_dimensions, max_fact_chars]
+      required:
+        [retrieval_modes, default_mode, embedding_dimensions, max_fact_chars]
       properties:
         retrieval_modes:
           type: array
@@ -594,50 +535,6 @@ components:
           type: boolean
           default: false
           description: True when vector was requested but degraded to keyword (embedding unconfigured).
-
-    ProjectionRequest:
-      type: object
-      required: [agent_ref]
-      properties:
-        agent_ref:
-          type: string
-          description: Identifier of the bound agent (selects the AgentMemoryAdapter).
-        project_root:
-          type: string
-          nullable: true
-          description: |
-            Absolute project root for a SYMLINK projection of a project store
-            (locates the agent's native per-project memory dir). Omitted for the
-            global store / RENDER adapters.
-
-    ProjectionOut:
-      type: object
-      required:
-        [agent_ref, projection_mode, target_path, native_memory_disabled]
-      properties:
-        agent_ref: { type: string }
-        projection_mode:
-          type: string
-          enum: [SYMLINK, RENDER, NONE]
-        target_path:
-          type: string
-          description: Native location the adapter owns (symlink path or managed-block file).
-        native_memory_disabled:
-          type: boolean
-          description: True when the agent's native memory was disabled to prevent a divergent copy.
-        merged_existing:
-          type: boolean
-          default: false
-          description: True when pre-existing native files were merged into the canonical store first.
-
-    ProjectionListOut:
-      type: object
-      required: [projections]
-      properties:
-        projections:
-          type: array
-          items:
-            $ref: "#/components/schemas/ProjectionOut"
 
     ErrorEnvelope:
       type: object

@@ -290,7 +290,6 @@
       "memory_updated": "更新了 {{resource}} 中的一条记忆",
       "memory_deleted": "从 {{resource}} 删除了一条记忆",
       "memory_cleared": "清空了 {{resource}} 中的所有记忆",
-      "memory_projected": "将 {{resource}} 投射到某个智能体",
       "conversation_created": "开始了一段对话",
       "conversation_deleted": "删除了一段对话",
       "conversation_archived": "归档了一段对话",
@@ -722,22 +721,10 @@
       "distillAria": "将会话 {{session}} 蒸馏到记忆"
     },
     "memoryTab": {
-      "title": "记忆投影",
-      "subtitle": "将记忆库投影到该 agent 的原生记忆位置，使其自身的编辑保持为权威来源并共享。",
+      "title": "记忆",
+      "subtitle": "该 agent 可访问的 Coffer 记忆库（全局与按项目）。",
       "empty": "还没有记忆库。",
-      "notProjected": "尚未投影到该 agent。",
-      "nativeDisabled": "已禁用原生记忆，以避免产生分叉副本。",
-      "merged": "已先将原有的原生文件合并进记忆库。",
-      "missingProjectRoot": "该项目记忆库尚无已知根目录，无法投影。",
-      "toggleAria": "切换将 {{store}} 投影到该 agent",
-      "colProjection": "投影",
-      "colEnabled": "已投影",
-      "facts": "记忆（{{count}}）",
-      "factsEmpty": "暂无记忆。",
-      "nativeDiscovered": "发现 Claude Code 在 {{projects}} 个项目里原生写入的 {{count}} 条记忆,尚未被 Coffer 接管。",
-      "takeOver": "接管",
-      "takingOver": "接管中…",
-      "takeOverDone": "已接管 {{imported}} 个项目,跳过 {{skipped}} 个。原始记忆已在各记忆目录旁备份。"
+      "accessViaGateway": "该 agent 通过 MCP 网关访问 Coffer 记忆；请在记忆库详情页管理其内容。"
     },
     "configDirOverride": "配置目录（可选）",
     "configDirPlaceholder": "留空则使用默认目录（~/.claude）",

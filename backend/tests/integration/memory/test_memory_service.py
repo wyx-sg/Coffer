@@ -319,11 +319,11 @@ async def test_fact_too_long_rejected(mem) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="007-memory", scenario="edits through the Claude symlink are visible on recall"
+    spec="007-memory", scenario="out-of-band fact-file edits are visible on recall"
 )
 async def test_lazy_reindex_picks_up_out_of_band_edit(mem) -> None:
-    """An out-of-band edit to a fact file (e.g. Claude editing through a
-    symlink) is reflected on the next recall, no watcher running."""
+    """An out-of-band edit to a fact file (the user editing it directly on disk,
+    or another process) is reflected on the next recall, no watcher running."""
     fact = await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
         cwd=mem.project_cwd,

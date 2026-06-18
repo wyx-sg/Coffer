@@ -1,11 +1,11 @@
 // frontend/src/components/agents/AgentMemoryTab.test.tsx
 //
 // The "Memory" tab on the agent detail page renders memory stores as a compact
-// DataTable (like the Skills/MCP tabs): each row shows scope + projection state
-// and a projection Switch; clicking a row navigates to the store's detail page
-// (/memory/:name) while flipping the Switch toggles projection WITHOUT
-// navigating. We mock the projection hooks so the component renders
-// deterministically and assert the table + establish/remove wiring.
+// READ-ONLY DataTable (like the read-only MCP-servers list): each row shows the
+// store's readable name, scope, and fact count; clicking a row navigates to the
+// store's detail page (/memory/:name). The tab no longer projects a store into
+// the agent's native memory, so there are no projection toggles or takeover
+// banner. We mock useMemoryStores so the component renders deterministically.
 
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -15,8 +15,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AgentMemoryTab } from "./AgentMemoryTab";
 import type { AgentOut } from "@/lib/api/agents";
 
-const establishMutate = vi.fn();
-const removeMutate = vi.fn();
 const navigateMock = vi.fn();
 
 vi.mock("react-router-dom", async (importOriginal) => ({
@@ -24,19 +22,10 @@ vi.mock("react-router-dom", async (importOriginal) => ({
   useNavigate: () => navigateMock,
 }));
 
-vi.mock("@/lib/hooks/useMemoryProjections", () => ({
+vi.mock("@/lib/hooks/useMemoryStores", () => ({
   useMemoryStores: vi.fn(),
-  useMemoryProjections: vi.fn(),
-  useEstablishProjection: vi.fn(() => ({ mutate: establishMutate, isPending: false, error: null })),
-  useRemoveProjection: vi.fn(() => ({ mutate: removeMutate, isPending: false, error: null })),
 }));
-const hooks = await import("@/lib/hooks/useMemoryProjections");
-
-// The native-memory discovery banner: default to "nothing unmanaged".
-vi.mock("@/lib/api/nativeMemory", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api/nativeMemory")>()),
-  getAgentNativeMemory: vi.fn(async () => ({ projects: [], unmanaged_fact_count: 0 })),
-}));
+const hooks = await import("@/lib/hooks/useMemoryStores");
 
 function wrap({ children }: PropsWithChildren) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -65,6 +54,7 @@ const STORE = {
   description: null,
   config: { retrieval_modes: ["grep", "keyword"], default_mode: "keyword", max_fact_chars: 8192 },
   enabled: true,
+  fact_count: 3,
   created_at: "2026-05-29T00:00:00Z",
   updated_at: "2026-05-29T00:00:00Z",
 };
@@ -72,10 +62,11 @@ const STORE = {
 const PROJECT_STORE = {
   ...STORE,
   ref: "memory:project-x",
-  name: "project-x",
+  name: "project-01HXYZPROJECTULID0000000000",
   scope: "project" as const,
   project_id: "01HXYZPROJECTULID0000000000",
   project_root: "/home/u/code/project-x",
+  fact_count: 7,
 };
 
 function stubStores(stores: unknown[] = [STORE]) {
@@ -89,26 +80,26 @@ function stubStores(stores: unknown[] = [STORE]) {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentMemoryTab", () => {
-  test("renders a store row and shows 'not projected' when no projection exists", () => {
+  test("shows the access-via-gateway note (read-only access)", () => {
     stubStores();
-    vi.mocked(hooks.useMemoryProjections).mockReturnValue({
-      data: [],
-      isPending: false,
-    } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
-
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    expect(screen.getByRole("row", { name: /global/i })).toBeInTheDocument();
-    expect(screen.getByText(/not projected/i)).toBeInTheDocument();
-    expect(screen.getByRole("switch")).not.toBeChecked();
+    expect(screen.getByText(/accesses coffer memory via the mcp gateway/i)).toBeInTheDocument();
   });
 
-  test("clicking a store row navigates to its memory detail page", () => {
-    stubStores();
-    vi.mocked(hooks.useMemoryProjections).mockReturnValue({
-      data: [],
-      isPending: false,
-    } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
+  test("renders the store list with readable names and fact counts", () => {
+    stubStores([STORE, PROJECT_STORE]);
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
 
+    // Global store reads as "global"; the per-project store reads as its
+    // directory basename, not the opaque project-<ULID> name.
+    expect(screen.getByRole("row", { name: /global/i })).toBeInTheDocument();
+    expect(screen.getByText("project-x")).toBeInTheDocument();
+    expect(screen.getByText("/home/u/code/project-x")).toBeInTheDocument();
+    expect(screen.getByText("7")).toBeInTheDocument();
+  });
+
+  test("clicking a store row navigates to its memory detail page with back-state", () => {
+    stubStores();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("row", { name: /global/i }));
     expect(navigateMock).toHaveBeenCalledWith("/memory/global", {
@@ -116,72 +107,16 @@ describe("AgentMemoryTab", () => {
     });
   });
 
-  test("toggling the projection Switch establishes a projection WITHOUT navigating", () => {
-    stubStores();
-    vi.mocked(hooks.useMemoryProjections).mockReturnValue({
-      data: [],
-      isPending: false,
-    } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
-
+  test("renders no projection toggles or takeover controls", () => {
+    stubStores([STORE, PROJECT_STORE]);
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("switch"));
-    expect(establishMutate).toHaveBeenCalledWith({ agentRef: "claude" });
-    // Flipping the switch must not trigger the row's navigate-to-detail click.
-    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    expect(screen.queryByText(/take over/i)).not.toBeInTheDocument();
   });
 
-  test("shows projection mode/target and toggling off removes it", () => {
-    stubStores();
-    vi.mocked(hooks.useMemoryProjections).mockReturnValue({
-      data: [
-        {
-          agent_ref: "claude",
-          projection_mode: "SYMLINK",
-          target_path: "/home/u/.claude/projects/x/memory",
-          native_memory_disabled: false,
-        },
-      ],
-      isPending: false,
-    } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
-
+  test("shows the empty message when there are no stores", () => {
+    stubStores([]);
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    expect(screen.getByText("SYMLINK")).toBeInTheDocument();
-    expect(screen.getByText("/home/u/.claude/projects/x/memory")).toBeInTheDocument();
-
-    const sw = screen.getByRole("switch");
-    expect(sw).toBeChecked();
-    fireEvent.click(sw);
-    expect(removeMutate).toHaveBeenCalledWith("claude");
-    expect(navigateMock).not.toHaveBeenCalled();
-  });
-
-  test("project-scoped store passes its project_root when establishing", () => {
-    stubStores([PROJECT_STORE]);
-    vi.mocked(hooks.useMemoryProjections).mockReturnValue({
-      data: [],
-      isPending: false,
-    } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
-
-    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("switch"));
-    expect(establishMutate).toHaveBeenCalledWith({
-      agentRef: "claude",
-      projectRoot: "/home/u/code/project-x",
-    });
-  });
-
-  test("project store with no known root disables the toggle and does not establish", () => {
-    stubStores([{ ...PROJECT_STORE, project_root: null }]);
-    vi.mocked(hooks.useMemoryProjections).mockReturnValue({
-      data: [],
-      isPending: false,
-    } as unknown as ReturnType<typeof hooks.useMemoryProjections>);
-
-    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    const sw = screen.getByRole("switch");
-    expect(sw).toBeDisabled();
-    fireEvent.click(sw);
-    expect(establishMutate).not.toHaveBeenCalled();
-    expect(screen.getAllByText(/no known root/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/no memory stores yet/i)).toBeInTheDocument();
   });
 });

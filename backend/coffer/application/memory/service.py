@@ -69,7 +69,7 @@ _logger = logging.getLogger(__name__)
 #: functions, so the service does not import ``infrastructure.knowledge.paths``).
 StoreDirFn = Callable[[str], Path]
 FactPathFn = Callable[[Path, str], Path]
-#: Post-write hook: ``store_name -> awaitable`` (re-render native projections).
+#: Post-write hook: ``store_name -> awaitable`` (generic post-write extension).
 OnChangeFn = Callable[[str], Awaitable[None]]
 
 
@@ -99,7 +99,7 @@ class MemoryService:
         self._store_dir = store_dir
         self._fact_path = fact_path
         self._resolve_embedding = embedding_resolver  # global embedding config
-        self._on_change = on_change  # post-write projection re-render hook
+        self._on_change = on_change  # generic post-write hook (no consumer today)
         # Bundle the collaborators the write + recall orchestrators need.
         store_ref_fn = partial(build_store_ref_for, store_dir=store_dir)
         self._writes = WriteDeps(
@@ -130,10 +130,10 @@ class MemoryService:
         try:
             await self._on_change(store_name)
         except Exception:
-            # A failed projection re-render leaves stale agent-visible state;
-            # the write itself succeeded, so log loudly instead of raising.
+            # The write itself succeeded; a post-write hook failure must not
+            # surface to the caller, so log loudly instead of raising.
             _logger.warning(
-                "memory.on_change.projection_failed",
+                "memory.on_change.hook_failed",
                 extra={"store": store_name},
                 exc_info=True,
             )

@@ -30,8 +30,6 @@ from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
 from coffer.surfaces.http.memory import router as memory_router
-from coffer.surfaces.http.projection_routes import agent_native_router
-from coffer.surfaces.http.projection_routes import router as projection_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.settings_routes import router as settings_router
@@ -65,8 +63,6 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_capability_router,
         mcp_invocation_router,
         memory_router,  # spec 007
-        projection_router,
-        agent_native_router,
         distill_router,  # spec 007 extension — transcript distillation
         # chat (008)
         chat_conversation_router,

@@ -2,7 +2,7 @@
 
 > English: [quickstart.md](./quickstart.md)
 
-memory 是 Coffer 统一知识底座的 **memory 面**。事实是 markdown 文件（真相源），跨所有 agent 共享 —— 经 MCP 读写、并投影进各 agent 的原生位置。写入时不调 LLM；agent 直接写一条干净的事实。
+memory 是 Coffer 统一知识底座的 **memory 面**。事实是 markdown 文件（真相源），跨所有 agent 共享 —— **只经 MCP 读写**（Coffer 保留自己的规范化格式，不触碰各 agent 的原生记忆文件）。写入时不调 LLM；agent 直接写一条干净的事实。
 
 ## 通过 MCP 客户端（主要 surface）
 
@@ -26,40 +26,7 @@ coffer__remember("Prefers tabs over spaces.", scope="global", type="user")
 coffer__recall("how do we deploy?")
 ```
 
-`recall` 在每次调用时惰性重建事实目录索引，因此另一个 agent（或 Claude 经其 symlink）所做的编辑会即时可见。
-
-## 原生投影（一份记忆，所有 agent）
-
-规范化文件被投影进各 agent 的原生位置，于是你继续用各 agent 自己的记忆 UX：
-
-| Agent       | Project 层                                                | Global 层                           |
-| ----------- | --------------------------------------------------------- | ----------------------------------- |
-| Claude Code | 目录 **symlink** → `~/.claude/projects/<slug>/memory/`    | 渲染 block 进 `~/.claude/CLAUDE.md` |
-| Codex       | 渲染 block 进 `<project>/AGENTS.md`（原生 `memories` 关） | 渲染 block 进 `~/.codex/AGENTS.md`  |
-
-对 Claude，保持 auto-memory **开启** —— 被 symlink 的目录 _就是_ 规范化 store，于是 Claude 自己的编辑成为规范化内容。对 Codex，Coffer 渲染一个 managed block：
-
-```
-<!-- coffer:memory:start (managed, do not edit) -->
-# Memory
-
-- deploy-via-make-release — This repo deploys via make release.
-<!-- coffer:memory:end -->
-```
-
-标记之外的内容绝不被触碰；重渲染是幂等的。若你绑定项目时 Claude 的记忆目录已有真实文件，Coffer 先把它们 **合并** 进规范化 store，再把该目录替换为 symlink —— 不覆盖任何内容。
-
-### 接管已有的原生记忆
-
-Claude Code 可能早在装 Coffer 之前就已原生写入记忆（每个项目一个 `~/.claude/projects/<slug>/memory/` 目录）。agent 的 **记忆** 标签页会发现它们（`GET /api/v1/agents/{name}/native-memory`），点一下 **接管** 即可全部导入（`POST /api/v1/agents/{name}/native-memory/import`）：
-
-- 每个项目的 `<slug>` 通过遍历文件系统反解回真实的项目根目录（slug 编码是有损的，因此无法反解的 slug 会被报告并原样保留 —— 绝不臆测）；
-- 在动任何东西之前，原始 `memory/` 目录会先被复制为同级的 `memory.bak-<时间戳>`；
-- 为该项目预置规范化 store（按 git-root 取键，与之后从该仓库 `remember` 的解析方式一致），并建立 SYMLINK 投影（上面的「合并优先」会把已有事实迁入）。
-
-返回结果会列出每个项目的处置（`imported` / `skipped_undecodable` / `error`）及其 store 名与备份路径。重复运行是幂等的 —— 已被管理（已 symlink）的目录会被跳过。
-
-新增一个 agent 就是一个 `AgentMemoryAdapter`；memory 底座不动。
+`recall` 在每次调用时惰性重建事实目录索引，因此另一个 agent（经 MCP）、用户在 Coffer UI、或直接在磁盘上所做的编辑会即时可见。
 
 ## CLI
 
@@ -88,11 +55,6 @@ coffer memory recall global "部署流程" --mode grep        # 对事实文件�
 coffer memory edit global <fact-id> "API base path is /api/v3."
 coffer memory delete global <fact-id>
 coffer memory clear project-01J… --yes
-
-# 投影（建立 / 列出 / 移除一个原生绑定）。
-coffer memory bind project-01J… my-claude --project-root /abs/path/to/repo
-coffer memory projections project-01J…
-coffer memory unbind project-01J… my-claude
 ```
 
 `--json` 在每个读命令上都可用。`--mode` 是 `grep` | `keyword` | `vector`（默认 `keyword`）。`grep` recall 是真实服务的 —— ripgrep 扫事实文件，无索引、无分词器，所以在 FTS5 失效的地方（如 CJK）也能用。未配置 embedding provider 时 `vector` 回退到 `keyword`（带标注）。
@@ -105,7 +67,7 @@ coffer memory unbind project-01J… my-claude
 4. 点一条事实展开 **只读** 渲染（UI 不在应用内编辑事实内容）。每条事实及其所在文件夹提供 **在外部编辑器中打开**、**在文件管理器中显示**（桌面）以及 **复制绝对路径**（web 回退）；打开哪个编辑器由全局首选编辑器偏好决定（见 spec 002-ui-shell）。要纠正一条事实，就在自己的编辑器里打开它 —— 下一次 recall 经 lazy reindex-on-read 拾取改动。
 5. 头部显示事实条数与落盘大小；kebab 菜单提供「Clear scope」。要添加或删除事实，用 `coffer memory add` / `coffer memory delete`（或 REST API）。
 
-每次写入 —— agent（MCP）、CLI 或 REST —— 都会重新生成 `MEMORY.md`、重建索引、对已绑定 agent 重新投影并审计；桌面 UI 本身是只读视图。
+每次写入 —— agent（MCP）、CLI 或 REST —— 都会重新生成 `MEMORY.md`、重建索引并审计；桌面 UI 本身是只读视图。
 
 ## 可选：vector recall
 

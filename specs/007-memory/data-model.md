@@ -73,16 +73,7 @@ Cross-store recall merges per-store hit lists by **reciprocal rank fusion** (k=6
 
 Retrieval is **shared** with the KB face. The value objects (`StoreRef`, `Passage`, `GrepHit`, `GrepResult`, `MemoryHit`, `SearchResult`, `RetrievalMode`) live in `domain/knowledge/retrieval.py`; the protocols (`KnowledgeIndex`, `GrepPort`, `RetrievalPort`) live in `domain/knowledge/index.py`. The concrete facade is `KnowledgeRetrieval` (`application/knowledge/retrieval.py`): it composes the chunk index (`infrastructure/knowledge/sqlite_index.py` + `vec_index.py`), the ripgrep wrapper (`grep.py`), and the embedder clients (`embeddings.py`), and owns the keyword↔vector decision including the flagged vector→keyword fallback — so neither face duplicates it. The lazy reindex-on-read reconcile is the memory-side `MemoryReconciler` (`application/memory/sync.py`) driving the single re-index routine (`application/knowledge/reindex.py`).
 
-`AgentMemoryAdapter` lives with the agent driver (`application/agent/projection/adapters.py`, with the engine in `application/agent/projection/engine.py`), not the memory kind:
-
-```python
-class AgentMemoryAdapter(Protocol):
-    def memory_location(self, project: ProjectRef) -> Path | None: ...
-    @property
-    def projection_mode(self) -> Literal["SYMLINK", "RENDER", "NONE"]: ...
-    def disable_native_memory(self, agent_config) -> None: ...   # only when native memory would be a separate copy
-    def render(self, facts: Sequence[MemoryFact]) -> bytes: ...  # RENDER mode
-```
+Agents read and write memory only through the MCP gateway tools (`coffer__recall`/`remember`/`update_memory`/`forget`/`list_memory`); Coffer never mutates an agent's native memory files (native projection was removed — see ADR-026).
 
 ### Domain errors (canonical classes in `domain/errors.py`, re-exported via `domain/knowledge/errors.py`)
 
@@ -181,37 +172,18 @@ release target tags and pushes atomically.
 
 `infrastructure/memory/paths.py` is the only module that constructs these paths. `infrastructure/memory/files.py` is the only module that reads/writes the per-fact `.md` files, renders `MEMORY.md`, and scans the dir for deltas.
 
-## Native projection targets (owned by the agent adapter, not the substrate)
-
-| Agent       | Project layer                                               | Global layer                                            |
-| ----------- | ----------------------------------------------------------- | ------------------------------------------------------- |
-| Claude Code | SYMLINK canonical dir → `~/.claude/projects/<slug>/memory/` | RENDER block into `~/.claude/CLAUDE.md`                 |
-| Codex       | RENDER block into `<project>/AGENTS.md`; disable `memories` | RENDER block into `~/.codex/AGENTS.md`                  |
-| OpenCode    | RENDER block into `<project>/AGENTS.md`                     | RENDER block into `~/.config/opencode/AGENTS.md`        |
-| OpenClaw    | RENDER block into `<project>/MEMORY.md`                     | RENDER block into `~/.openclaw/MEMORY.md`               |
-| Hermes      | RENDER block into `~/.hermes/memories/coffer-<slug>.md`     | RENDER block into `~/.hermes/memories/coffer-global.md` |
-| Cursor      | N/A (memory removed in Cursor 2.1)                          | N/A (memory removed in Cursor 2.1)                      |
-
-Managed block markers (Next.js / claude-mem precedent):
-
-```
-<!-- coffer:memory:start (managed, do not edit) -->
-… rendered facts …
-<!-- coffer:memory:end -->
-```
-
 ## Cascade & integrity rules
 
-| Action                                                | Effect                                                                                                                                                                                                   |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `remember` / user add                                 | Write `<fact-slug>.md` → regenerate `MEMORY.md` → index into `documents`/`chunks`/FTS5/(vec) → audit → re-project.                                                                                       |
-| `update_memory` / user edit (API/CLI/external editor) | Rewrite `.md` → single re-index routine (sha256 changed → re-chunk/-embed) → regenerate `MEMORY.md` → audit → re-project. (A direct external-editor edit takes effect on the next lazy reindex-on-read.) |
-| `forget` / user delete                                | Delete `.md` → remove `documents`/`chunks`/FTS5/vec rows → regenerate `MEMORY.md` → audit → re-project.                                                                                                  |
-| Clear a scope                                         | Delete all `.md` for the store → remove all index rows → empty `MEMORY.md` → re-project empty → audit. Store Resource preserved.                                                                         |
-| Delete the store Resource                             | Remove `documents` rows for the store, `rmtree(store_dir)`, tear down projections (replace symlink / strip managed block), audit.                                                                        |
-| Recall                                                | **Lazy reindex-on-read**: scan `store_dir` for deltas (by `content_sha256`) → `reconcile` → search. No write to `MEMORY.md`.                                                                             |
-| Change embedding model                                | Allowed → re-embed the store on next index (files are truth).                                                                                                                                            |
-| Change `max_fact_chars`                               | Allowed.                                                                                                                                                                                                 |
+| Action                                                | Effect                                                                                                                                                                                      |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `remember` / user add                                 | Write `<fact-slug>.md` → regenerate `MEMORY.md` → index into `documents`/`chunks`/FTS5/(vec) → audit.                                                                                       |
+| `update_memory` / user edit (API/CLI/external editor) | Rewrite `.md` → single re-index routine (sha256 changed → re-chunk/-embed) → regenerate `MEMORY.md` → audit. (A direct external-editor edit takes effect on the next lazy reindex-on-read.) |
+| `forget` / user delete                                | Delete `.md` → remove `documents`/`chunks`/FTS5/vec rows → regenerate `MEMORY.md` → audit.                                                                                                  |
+| Clear a scope                                         | Delete all `.md` for the store → remove all index rows → empty `MEMORY.md` → audit. Store Resource preserved.                                                                               |
+| Delete the store Resource                             | Remove `documents` rows for the store, `rmtree(store_dir)`, audit.                                                                                                                          |
+| Recall                                                | **Lazy reindex-on-read**: scan `store_dir` for deltas (by `content_sha256`) → `reconcile` → search. No write to `MEMORY.md`.                                                                |
+| Change embedding model                                | Allowed → re-embed the store on next index (files are truth).                                                                                                                               |
+| Change `max_fact_chars`                               | Allowed.                                                                                                                                                                                    |
 
 ## The single re-index routine (`application/knowledge/reindex.py`, shared with KB)
 
@@ -228,13 +200,12 @@ When a vector-enabled store's embed degrades (embedding provider unavailable), t
 
 ## Audit events added
 
-| Value                | When emitted                               |
-| -------------------- | ------------------------------------------ |
-| `"memory_added"`     | After a successful `remember`/user add     |
-| `"memory_updated"`   | After a successful `update`/user edit      |
-| `"memory_deleted"`   | After a successful `forget`/user delete    |
-| `"memory_cleared"`   | After clearing a scope                     |
-| `"memory_projected"` | After establishing/refreshing a projection |
+| Value              | When emitted                            |
+| ------------------ | --------------------------------------- |
+| `"memory_added"`   | After a successful `remember`/user add  |
+| `"memory_updated"` | After a successful `update`/user edit   |
+| `"memory_deleted"` | After a successful `forget`/user delete |
+| `"memory_cleared"` | After clearing a scope                  |
 
 ## Transcript distillation (Spec 007 extension)
 
@@ -297,4 +268,4 @@ distillation-specific audit event is emitted.
 
 ## Wire contract (REST)
 
-Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall) plus projection endpoints (list/establish/remove). The write endpoints (add/edit/delete/clear) are retained — they are how agents (via MCP) and the CLI author facts; the desktop/web UI is a read-only viewer. Read DTOs surface on-disk truth: `FactOut` carries the fact's absolute `.md` `path` and its containing folder's `folder_path`, and `MemoryStoreOut` carries the store's absolute `store_dir`, so the read-only viewer can offer open-in-editor / reveal / copy-path. The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.
+Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall). The write endpoints (add/edit/delete/clear) are retained — they are how agents (via MCP) and the CLI author facts; the desktop/web UI is a read-only viewer. Read DTOs surface on-disk truth: `FactOut` carries the fact's absolute `.md` `path` and its containing folder's `folder_path`, and `MemoryStoreOut` carries the store's absolute `store_dir`, so the read-only viewer can offer open-in-editor / reveal / copy-path. The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.

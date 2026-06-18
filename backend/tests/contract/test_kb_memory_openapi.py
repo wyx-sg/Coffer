@@ -22,7 +22,6 @@ import yaml
 
 from coffer.surfaces.http.knowledge_base import schemas as kb_schemas
 from coffer.surfaces.http.memory import schemas as mem_schemas
-from coffer.surfaces.http.projection_routes import ProjectionEstablishRequest
 
 _SPECS = Path(__file__).resolve().parents[3] / "specs"
 _KB_CONTRACT = _SPECS / "006-knowledge-base/contracts/api.openapi.yaml"
@@ -66,9 +65,6 @@ _MEM_MODELS: dict[str, type | None] = {
     "RecallRequest": mem_schemas.RecallRequest,
     "RecallHit": mem_schemas.RecallHit,
     "RecallResponse": mem_schemas.RecallResponse,
-    "ProjectionRequest": ProjectionEstablishRequest,
-    "ProjectionOut": mem_schemas.ProjectionOut,
-    "ProjectionListOut": mem_schemas.ProjectionListOut,
     "RetrievalMode": None,
     "Scope": None,
     "ErrorEnvelope": None,

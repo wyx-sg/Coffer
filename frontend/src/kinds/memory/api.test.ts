@@ -10,14 +10,11 @@ import {
   addFact,
   clearFacts,
   deleteFact,
-  establishProjection,
   getMemoryStore,
   getMemoryStoreMetrics,
   listFacts,
   listMemoryStores,
-  listProjections,
   recall,
-  removeProjection,
 } from "./api";
 
 const BASE = "http://test-host/api/v1";
@@ -204,42 +201,5 @@ describe("getMemoryStoreMetrics", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ fact_count: 5, disk_bytes: 4096 }));
     const out = await getMemoryStoreMetrics("prefs");
     expect(out).toEqual({ fact_count: 5, disk_bytes: 4096 });
-  });
-});
-
-describe("projections", () => {
-  test("listProjections GETs /projections", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ projections: [] }));
-    const out = await listProjections("global");
-    expect(out.projections).toEqual([]);
-    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/memory_stores/global/projections`);
-  });
-
-  test("establishProjection POSTs the agent_ref (+ optional project_root)", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      okJson({
-        agent_ref: "claude",
-        projection_mode: "SYMLINK",
-        target_path: "/p",
-        native_memory_disabled: false,
-      }),
-    );
-    const out = await establishProjection("global", "claude", "/root");
-    expect(out.projection_mode).toBe("SYMLINK");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/memory_stores/global/projections`);
-    expect(init?.method).toBe("POST");
-    expect(JSON.parse(init!.body as string)).toEqual({
-      agent_ref: "claude",
-      project_root: "/root",
-    });
-  });
-
-  test("removeProjection DELETEs /projections/<agent_ref>", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({}));
-    await removeProjection("global", "claude");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/memory_stores/global/projections/claude`);
-    expect(init?.method).toBe("DELETE");
   });
 });

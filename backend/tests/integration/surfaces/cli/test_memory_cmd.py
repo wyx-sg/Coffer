@@ -1,7 +1,7 @@
 """Integration tests for `coffer memory ...` CLI subcommands (spec 007 redesign).
 
 Every verb (`list` / `describe` / `add` / `list` / `get` / `edit` / `delete` /
-`clear` / `recall` / `bind` / `unbind` / `projections`) plus the ``--json``
+`clear` / `recall`) plus the ``--json``
 switch where it exists. No LLM-provider flags and no 503 path.
 
 We boot the full FastAPI app (via ``create_app``) so the memory kind is wired
@@ -157,31 +157,6 @@ def test_recall(memory_cli_daemon):
 def test_describe_missing_store_exit_code_4(memory_cli_daemon):
     result = _runner.invoke(cli_app, ["memory", "describe", "project-NOPE"])
     assert result.exit_code == 4, result.output
-
-
-def test_bind_and_unbind_projection(memory_cli_daemon, tmp_path):
-    # Register a Claude Code agent so it can be projected into.
-    agent_dir = tmp_path / ".claude"
-    agent_dir.mkdir(parents=True, exist_ok=True)
-    reg = _runner.invoke(
-        cli_app,
-        ["agent", "add", "claude_code", "--name", "claude-x", "--config-dir", str(agent_dir)],
-    )
-    assert reg.exit_code == 0, reg.output
-
-    # Global memory → Codex-style render is for codex; for Claude global, a
-    # managed block in CLAUDE.md. Bind the global store into the agent.
-    bind = _runner.invoke(cli_app, ["memory", "bind", "global", "claude-x"])
-    assert bind.exit_code == 0, bind.output
-    assert "projected" in bind.output
-
-    projections = _runner.invoke(cli_app, ["memory", "projections", "global", "--json"])
-    assert projections.exit_code == 0, projections.output
-    data = json.loads(_extract_json(projections.output))
-    assert any(p["agent_ref"] == "claude-x" for p in data["projections"])
-
-    unbind = _runner.invoke(cli_app, ["memory", "unbind", "global", "claude-x"])
-    assert unbind.exit_code == 0, unbind.output
 
 
 def test_memory_configure_enables_vector(memory_cli_daemon):

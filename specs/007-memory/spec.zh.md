@@ -5,13 +5,13 @@
 **Feature Branch**: `feature/kb-memory-redesign`
 **Created**: 2026-05-22
 **Status**: Accepted (redesign — in development)
-**Input**: Coffer memory feature 的重设计 —— 与 knowledge base（spec 006）共用同一套统一底座（unified substrate）的 **memory 面**。memory 不再是「写入时调 LLM 的 mem0 向量库」；它变成 **跨 agent 的单一真相源**（没有各 agent 间互相漂移的副本），在格式匹配处做到 agent 原生。规范化存储 = 每条事实一个 markdown 文件，加上一个 `MEMORY.md` 索引 —— 即 Claude Code 的 auto-memory 格式 —— 放在 `~/.coffer/memory/` 下，并带两层作用域（global + per-project）。agent 通过 Coffer 的 MCP 网关读写；规范化文件还会 **投影（projection）** 进各 agent 的原生位置（Claude Code 用目录 symlink，Codex 用 `AGENTS.md` 中带标记栅栏的 managed block）。用户在 Coffer UI 里做完整 CRUD。检索复用与 knowledge base 相同的引擎（grep / keyword FTS5+BM25 / vector sqlite-vec）。完整设计依据见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) 与 [ADR-013](../../docs/decisions/ADR-013-agent-native-shared-memory.md)。
+**Input**: Coffer memory feature 的重设计 —— 与 knowledge base（spec 006）共用同一套统一底座（unified substrate）的 **memory 面**。memory 不再是「写入时调 LLM 的 mem0 向量库」；它变成 **跨 agent 的单一真相源**（没有各 agent 间互相漂移的副本）。规范化存储 = 每条事实一个 markdown 文件，加上一个 `MEMORY.md` 索引，放在 `~/.coffer/memory/` 下，并带两层作用域（global + per-project）。agent **只通过 Coffer 的 MCP 网关读写记忆**（`coffer__recall`/`remember`/`update_memory`/`forget`/`list_memory`）；Coffer 保留自己的规范化格式，不触碰各 agent 的原生记忆文件（原生投影已移除 —— 见 ADR-026）。用户在 Coffer UI 里做完整 CRUD。检索复用与 knowledge base 相同的引擎（grep / keyword FTS5+BM25 / vector sqlite-vec）。完整设计依据见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)。
 
 ## 用户场景与测试
 
 ### User Story 1 —— 一份记忆，所有 agent 共享（优先级 P1）
 
-开发者上午用 Claude Code、下午用 Codex 在同一个项目上工作。用 Claude Code 时 agent 学到「这个 repo 通过 `make release` 发版，绝不直接 `git push --tags`」，并通过 Coffer 的 `coffer__remember` 工具记下来。下午 Codex —— 另一个 agent —— 召回了同一条事实，因为两个 agent 读写的是 **同一个共享 store**，而且这条事实还被投影进各 agent 的原生记忆位置。没有任何副本漂移。
+开发者上午用 Claude Code、下午用 Codex 在同一个项目上工作。用 Claude Code 时 agent 学到「这个 repo 通过 `make release` 发版，绝不直接 `git push --tags`」，并通过 Coffer 的 `coffer__remember` 工具记下来。下午 Codex —— 另一个 agent —— 召回了同一条事实，因为两个 agent 读写的是 **同一个共享 store**。没有任何副本漂移。
 
 **为什么是这个优先级**：这是本次重设计的核心。各 agent 之间互相漂移的私有 silo 正是要解决的问题；没有单一真相源就没有这条 feature。
 
@@ -46,24 +46,6 @@
 
 ---
 
-### User Story 3 —— 投影进各 agent 的原生位置（优先级 P1）
-
-开发者保持 Claude Code 的 auto-memory 开启。Coffer 让项目的规范化记忆目录 **就是** Claude 的项目记忆（一个目录 symlink），于是 Claude 自己的编辑就是规范化内容、并对所有其它 agent 即时可见。对 Codex，Coffer 把同一批事实渲染进 `AGENTS.md` 里带标记栅栏的 managed block，并禁用 Codex 原生 `memories`，使第二份副本不会累积。
-
-**为什么是这个优先级**：投影是让记忆「agent 原生」而非「又一个需要叮嘱 agent 去用的 MCP store」的关键。没有它，这个共享 store 其实并没有真正共享进 agent 自己的界面。
-
-**独立可测**：把一个项目绑到 Claude Code；确认 `~/.claude/projects/<slug>/memory/` 是指向规范化目录的 symlink，且经由 symlink 编辑一条事实能被 `coffer__recall` 返回。再绑到 Codex；确认 `AGENTS.md` 多出一个含这些事实的 `<!-- coffer:memory:start -->…<!-- coffer:memory:end -->` block，且 Codex `memories` 被禁用。
-
-**代表性场景**：
-
-- 项目记忆以 symlink 投影进 Claude
-- 全局记忆向 Codex AGENTS.md 渲染 managed block
-- 经由 Claude symlink 的编辑在 recall 中可见
-- 重新渲染 managed block 是幂等的
-- 已存在的原生记忆文件被合并、绝不覆盖
-
----
-
 ### User Story 4 —— 用户在 Coffer 里维护记忆（优先级 P2）
 
 开发者要看见并纠正 agent 记下的东西：在一个 **只读** 视图里按作用域浏览事实，然后 **在自己的外部编辑器里**（或经 API/CLI）改一条漂移的、手动加一条、删掉一条错的。Coffer UI 从不在应用内编辑事实内容；相反，每条事实及其所在文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」以及（web 回退）「复制绝对路径」，任何带外的纠正都会被既有的 lazy reindex-on-read 拾取（FR-010）。
@@ -86,7 +68,7 @@
 
 开发者已用 Claude Code 在某个项目上工作了数周。那些会话中讨论并确定了大量工程决策、失败路径和项目约定，但从未被显式记录为 memory 事实。开发者运行 `coffer transcript distill claude_code --project /repo`（或在 Coffer UI 中点击「提炼进 memory」）。Coffer 读取本地 `.jsonl` 对话记录文件，清洗工具调用载荷和密钥，请 LLM 提取耐久性洞察，并将它们写为项目作用域的 memory 事实。此后，任何 agent —— 包括第二台机器上的 Codex —— 都能通过 `coffer__recall` 召回这些事实，因为 memory 是共享的（Spec 007）且已同步（Spec 010）。原始对话内容从不被存储或传输。当对话记录的工作目录能解析到某个 git 项目时，提取的事实写入该项目作用域的记忆 store；若路径不在任何 git 工作树内，则回退写入全局记忆 store。
 
-**为什么是这个优先级**：agent 在本地对话记录中积累了机构知识，这些知识原本孤立于每个会话、对其他 agent 不可见。提炼是挖掘这些知识最无侵入性的机制：它产出标准 memory 事实，免费继承跨 agent 共享和多机同步能力。它是 P2 而非 P1，因为核心共享 memory 流程（Story 1–3）必须先就位 —— 提炼是在其之上叠加的能力。完整决策依据和被否决的备选方案见 [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.zh.md)。
+**为什么是这个优先级**：agent 在本地对话记录中积累了机构知识，这些知识原本孤立于每个会话、对其他 agent 不可见。提炼是挖掘这些知识最无侵入性的机制：它产出标准 memory 事实，免费继承跨 agent 共享和多机同步能力。它是 P2 而非 P1，因为核心共享 memory 流程（Story 1–2）必须先就位 —— 提炼是在其之上叠加的能力。完整决策依据和被否决的备选方案见 [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.zh.md)。
 
 **支持的对话记录读取器**：提炼通过版本化、防御式的 per-agent 读取器读取每个 agent 的原生本地存储。**Claude Code** 与 **Codex** 读取 agent 配置目录下每会话一个的 `.jsonl` 文件；**OpenCode** 读取 XDG data 目录下的多文件 JSON 存储树（`~/.local/share/opencode/storage/{project,session,message,part}`），将记录拼接成会话，工作目录取自 project 记录。**Cursor**、**OpenClaw**、**Hermes** 的读取器被推迟：它们的格式当前无法可靠地用于项目作用域提炼 —— Cursor 的 `agent-transcripts/*.jsonl` 是临时的（重启即清空），耐久状态在内部 `vscdb` SQLite 中；OpenClaw 的会话格式无文档；Hermes 的会话是跨平台 chat 会话、不记录工作目录，无法按项目作用域归类。对这些 agent 提炼会返回明确的「不支持的 agent」错误，而非臆测。
 
@@ -104,7 +86,7 @@
 
 **为什么是这个优先级**：卫生级别；不挡核心流程。
 
-**独立可测**：查看 per-store 度量（事实条数、磁盘字节）。清空 project 作用域；确认所有事实都没了但 store 保留下来、随时可装新事实，且投影重新渲染为空。
+**独立可测**：查看 per-store 度量（事实条数、磁盘字节）。清空 project 作用域；确认所有事实都没了但 store 保留下来、随时可装新事实。
 
 **代表性场景**：
 
@@ -117,13 +99,10 @@
 ### Edge Cases
 
 - **请求 vector 但 embedding 未配置**：`recall` 带 `mode=vector` 时回退到 keyword，并在响应里标注此次回退；它从不阻塞。默认检索是 keyword+grep（零配置、离线）。
-- **Claude 记忆目录里已经有真实文件**：首次投影时 Coffer 先把这些文件合并进规范化 store，再把该目录替换成 symlink —— 绝不静默覆盖。
-- **Claude 改写了 `MEMORY.md`**：无害 —— 下次写入或 recall 时 Coffer 会幂等地从事实 frontmatter 重新生成 `MEMORY.md`。
 - **直接在磁盘上编辑事实文件**：下一次 `recall` 会惰性扫描这个小事实目录、找出增量并重建索引，因此带外编辑会被拾取，无需 watcher。
 - **空事实文本**：在 API 边界被拒；不写任何内容。
 - **事实文本过长**：在 API 边界按 `max_fact_chars`（默认 8192）约束；写入前即被拒。
 - **project 作用域无法解析**：若 agent 的工作目录不在某个 git 项目里，`scope=project` 被拒并给出清晰错误；`scope=global` 仍然可用。
-- **某 agent 没有投影（`projection_mode = NONE`）**：记忆仍可经 MCP 完整工作；只是跳过原生投影。
 
 ## Acceptance Scenarios
 
@@ -169,55 +148,13 @@
 
 - **Given** 一条事实已存在，
 - **When** 某 MCP 客户端用事实 id 调 `coffer__forget`，
-- **Then** markdown 文件被删除、其索引行被移除、`MEMORY.md` 被重新生成、投影重新渲染，且 recall 不再返回它。
+- **Then** markdown 文件被删除、其索引行被移除、`MEMORY.md` 被重新生成，且 recall 不再返回它。
 
-### Scenario: project memory projects into Claude as a symlink
+### Scenario: out-of-band fact-file edits are visible on recall
 
-- **Given** 一个绑到 Claude Code agent 的项目，
-- **When** 建立投影，
-- **Then** `~/.claude/projects/<slug>/memory/` 是指向规范化项目记忆目录的目录 symlink，且 Claude auto-memory 保持开启。
-
-### Scenario: edits through the Claude symlink are visible on recall
-
-- **Given** 一个 symlink 进 Claude 的项目记忆 store，
-- **When** 经由 symlink 路径编辑某个事实文件，
+- **Given** 一个有事实的项目记忆 store，
+- **When** 直接在磁盘上带外编辑某个事实文件（保留 frontmatter），
 - **Then** 下一次 `coffer__recall` 返回编辑后的内容（惰性 reindex-on-read），且没有任何文件系统 watcher 在跑。
-
-### Scenario: global memory renders a managed block into Codex AGENTS.md
-
-- **Given** global 层的一个 Codex agent，
-- **When** 投影运行，
-- **Then** `~/.codex/AGENTS.md` 含一个持有已渲染事实的 `<!-- coffer:memory:start (managed, do not edit) -->…<!-- coffer:memory:end -->` block，标记之外的内容不被触碰，且 Codex 原生 `memories` 被禁用。
-
-### Scenario: re-rendering a managed block is idempotent
-
-- **Given** 一个已带 managed block 的 `AGENTS.md`，
-- **When** 事实未变而投影再次运行，
-- **Then** 文件内容逐字节相同（幂等渲染）。
-
-### Scenario: existing native memory files are merged, never overwritten
-
-- **Given** 绑定前 Claude 的项目记忆目录里已经有真实事实文件，
-- **When** Coffer 建立投影，
-- **Then** 这些文件先被合并进规范化 store，然后该目录被替换为 symlink —— 没有任何文件被静默覆盖。
-
-### Scenario: memory renders a managed block into OpenCode AGENTS.md
-
-- **Given** 一个 OpenCode agent，
-- **When** 投影运行，
-- **Then** `~/.config/opencode/AGENTS.md`（global）或 `<project>/AGENTS.md`（project）获得一个承载渲染事实的 managed block，标记之外的内容不被触碰，移除时只剥除该块。
-
-### Scenario: memory renders a managed block into OpenClaw MEMORY.md
-
-- **Given** 一个 OpenClaw agent，
-- **When** 投影运行，
-- **Then** `~/.openclaw/MEMORY.md`（global）或 `<project>/MEMORY.md`（project）获得一个承载渲染事实的 managed block，OpenClaw 自身的 `memory/*.md` 索引不被触碰。
-
-### Scenario: memory renders a managed block into a Hermes memories file
-
-- **Given** 一个 Hermes agent，
-- **When** 投影运行，
-- **Then** Coffer 在 `~/.hermes/memories/` 下按 scope 各持有一个有界文件（global 为 `coffer-global.md`，project 为 `coffer-<slug>.md`），事实写在 managed 标记之间，尊重 Hermes 的单文件大小上限。
 
 ### Scenario: user adds a fact
 
@@ -253,7 +190,7 @@
 
 - **Given** 一个有事实的记忆 store，
 - **When** 用户清空该作用域，
-- **Then** 每个事实文件与其索引行被移除、`MEMORY.md` 变空、投影重新渲染为空，但 store 这个 Resource 保留。
+- **Then** 每个事实文件与其索引行被移除、`MEMORY.md` 变空，但 store 这个 Resource 保留。
 
 ### Scenario: built-in memory tools appear in client tool list
 
@@ -296,15 +233,7 @@
 
 - **FR-008**：recall MUST 使用与 knowledge base 共享的统一检索引擎：`grep`（真实服务 —— ripgrep 扫该 store 的事实文件；对 FTS5 无法分词的内容必不可少，如 CJK）、`keyword`（FTS5 BM25，默认）、`vector`（sqlite-vec 配可配置的 embedding provider）。当请求 `vector` 但未配置 embedding provider 时，recall MUST 回退到 `keyword` 并以布尔值在响应里标注此次回退 —— 绝不阻塞。MCP `coffer__recall` 的响应包含该 `fallback` 布尔值。
 - **FR-009**：`coffer__recall` MUST 默认跨 project 与 global 两个 store（显式给出 `scope` 时收窄到单个 store：`project` = 仅项目 store，`global` = 仅 global store）；跨 store 的结果用倒数排名融合（reciprocal rank fusion）合并（逐 store 的分数跨模式/跨 store 不可比；每条命中保留其逐 store 分数，只有合并后的顺序来自融合）。结果带 id、text、score、source、time —— `time` 是事实的 `updated_at`，`source` 是 `<scope>:<fact file path>`。默认 `top_k` 为 5；调用方 MAY 指定 1–20。
-- **FR-010**：memory MUST 用 **lazy reindex-on-read**：`recall` 先按内容哈希扫描事实目录的增量（新增/变更/删除文件）并对账索引，再搜索，使带外编辑 —— Claude 的 symlink 编辑 **以及人类在自己外部编辑器里做的纠正** —— 即时可见，无需文件系统 watcher。这正是让外部纠正得以显现的机制，于是 UI 可以保持为只读视图（FR-017），而维护在用户的编辑器里完成。
-
-**投影与绑定**
-
-- **FR-011**：`AgentMemoryAdapter`（随 agent driver 而非 memory kind）MUST 声明 `projection_mode` 为 `SYMLINK`、`RENDER` 或 `NONE`，投影引擎 MUST 据此分派。新增一个 agent MUST 只需新增一个 adapter —— 不改动 memory 底座。
-- **FR-012**：对 Claude Code，project 层 MUST 把规范化项目记忆目录作为 **目录 symlink** 投影进 `~/.claude/projects/<slug>/memory/`（双向；auto-memory 保持开启）。若那里已存在真实记忆目录，Coffer MUST 先把其文件合并进规范化 store，再替换为 symlink —— 绝不静默覆盖。
-- **FR-013**：对 Codex，Coffer MUST 把事实渲染进 `<project>/AGENTS.md`（project 层）与 `~/.codex/AGENTS.md`（global 层）中带标记栅栏的 managed block `<!-- coffer:memory:start (managed, do not edit) -->…<!-- coffer:memory:end -->`，MUST 不触碰标记之外的内容，MUST 幂等重渲染，并 MUST 禁用 Codex 原生 `memories`，使第二份副本不累积。
-- **FR-013a**：OpenCode、OpenClaw、Hermes MUST 经 `RENDER` managed block 投影（标记与 FR-013 一致），不触碰标记之外的内容并幂等重渲染。OpenCode 渲染进 `<project>/AGENTS.md`（project）与 `~/.config/opencode/AGENTS.md`（global）。OpenClaw 渲染进 `<project>/MEMORY.md`（project）与 `~/.openclaw/MEMORY.md`（global），只拥有 managed block（其 `memory/*.md` 索引不被触碰）。Hermes 在其 `memories/` store 内按 scope 各持有一个有界 managed-block 文件 —— `~/.hermes/memories/coffer-global.md`（global）与 `~/.hermes/memories/coffer-<slug>.md`（project）—— 以尊重单文件大小上限。Cursor 投影 N/A（Cursor 在 2.1 移除了记忆功能）。
-- **FR-014**：adapter（agent 层）MUST 执行所有原生文件改动；memory 底座 MUST 只提供规范化文件加已渲染 markdown，保持 memory 与 agent 无关、L1 config 边界干净。
+- **FR-010**：memory MUST 用 **lazy reindex-on-read**：`recall` 先按内容哈希扫描事实目录的增量（新增/变更/删除文件）并对账索引，再搜索，使带外编辑 —— 人类在自己外部编辑器里做的纠正，或任何直接在磁盘上的编辑 —— 即时可见，无需文件系统 watcher。这正是让外部纠正得以显现的机制，于是 UI 可以保持为只读视图（FR-017），而维护在用户的编辑器里完成。
 
 **通过 MCP 集成 agent**
 
@@ -326,26 +255,19 @@
 
 - **FR-019**：本分支未发布；**没有数据迁移**。单个迁移 MUST 删除 `memory_records` 并创建全新统一 schema。预发布构建遗留在磁盘上的旧引擎目录（chroma/LlamaIndex）原地废弃 —— 没有任何代码再读它们 —— 而非删除。旧的 mem0/chroma 文本不迁移。
 
-**投影 surface**
-
-- **FR-020**：投影 MUST 经 REST 管理：`GET /api/v1/memory_stores/{name}/projections` 列出某 store 的绑定，`POST /api/v1/memory_stores/{name}/projections` 建立绑定（先把已存在的原生文件合并进规范 store —— 绝不覆盖），`DELETE /api/v1/memory_stores/{name}/projections/{agent_ref}` 移除绑定。移除 MUST 撤销原生目标（删 symlink / 剥除受管块）；若撤销失败，绑定行被**保留**（确保原生产物不会被永久遗弃）且错误向上抛出以便重试。每次建立/移除 MUST 写一条 `memory_projected` 审计事件。对 Claude Code，GLOBAL 层经 RENDER 受管块投影进 `~/.claude/CLAUDE.md`（project 层是 FR-012 的 SYMLINK）。
-
 ### Key Entities
 
 - **Memory Store**（kind 为 `memory` 的 resource）：每个作用域一个 store —— global store（sentinel ULID）或 per-project store（项目 ULID）。config 持有启用的检索模式、embedding 配置与 `max_fact_chars`。
 - **Memory Fact**（一个 markdown 文件 = 一行 `documents`）：`id`、`name`、`description`、正文、`metadata`（`type`、`actor`、`origin_session_id`）、`path`（绝对 `.md` 路径）、`content_sha256`、`created_at`、`updated_at`。markdown 文件是真相源。读响应还额外携带所在文件夹的绝对路径，供 UI 打开/显示/复制。
 - **Memory Hit**（recall 结果，不持久化）：`id`、`text`/passage、`score`、`source`、`time`。
-- **Projection**（每 agent × 作用域）：一个 `projection_mode`（`SYMLINK` | `RENDER` | `NONE`）加上 adapter 所拥有的原生目标路径。
 
 ## Success Criteria
 
 ### Measurable Outcomes
 
 - **SC-001**：某 agent 经 `coffer__remember` 写入的事实，能在同一项目、同一会话内被另一个 agent 经 `coffer__recall` 召回，且没有任何 per-agent 副本漂移。
-- **SC-002**：经 Claude 项目记忆 symlink 编辑的事实，能在下一次 `coffer__recall` 被返回，且没有任何文件系统 watcher 在跑。
 - **SC-003**：某作用域 200 条事实下，典型 keyword query 的 recall wall-clock 延迟 ≤ 300 ms（开发者笔记本）。
 - **SC-004**：默认检索零配置离线可用（keyword + grep）；vector recall 为可选项，未配置时降级到 keyword（带标注），绝不报错。
-- **SC-005**：新增一个 agent 的投影只需一个新的 `AgentMemoryAdapter`，不改动 memory 底座（由 adapter 分派测试验证）。
 - **SC-006**：每条 Acceptance Scenario 至少有一个 `acceptance(spec="007-memory", scenario="…")` 标记的测试覆盖。
 - **SC-007**：底座隔离由 importlinter 强制：`coffer.application.*` 与 `coffer.domain.*` 下任何模块都不 import 索引引擎，且 `mem0`/`chroma`/`llama_index` 任何地方都不被 import。
 - **SC-008**：`make verify` 本地与 CI 都过。
@@ -353,7 +275,7 @@
 ## Assumptions
 
 - 用户在自己的机器上跑 Coffer；记忆数据留在本地。为可选的 vector recall 调用已配置的云端 embedding provider 是允许的（local-first ≠ 不调远程 API）。
-- 规范化格式即 Claude Code 的 auto-memory 格式，采用它使 Claude 投影为原生 symlink。
+- 规范化格式是每条事实一个 markdown 文件（YAML frontmatter + 正文）加一个重新生成的 `MEMORY.md` 索引。
 - coffer-mcp-shim 在会话握手时把其启动 cwd 传给 daemon（在支持的 agent 上实现期验证）。
 - knowledge base（spec 006）与 memory 共用一套统一底座（`documents` 表按 `kind` + JSON `metadata` 区分）；二者是两个面，不是重复代码。
 - 单用户并发量很小。
