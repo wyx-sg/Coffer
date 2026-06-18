@@ -2,7 +2,7 @@
 
 > 中文版: [ADR-013-agent-native-shared-memory.zh.md](./ADR-013-agent-native-shared-memory.zh.md)
 
-**Status**: Accepted
+**Status**: Superseded by [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) (2026-06-18) — native projection was removed; memory is now accessed only via the MCP gateway. The design below is kept for history.
 **Date**: 2026-06-09
 **Deciders**: Yuxing Wu
 **Related**: spec `007-memory`, [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md), [ADR-007](ADR-007-everything-is-a-resource-kind.md), [ADR-009](ADR-009-cross-platform-skill-delivery.md)

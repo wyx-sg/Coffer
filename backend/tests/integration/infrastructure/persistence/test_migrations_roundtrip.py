@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0023"
+HEAD_REVISION = "0024"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -28,10 +28,11 @@ HEAD_REVISION = "0023"
 # 006-knowledge-base) replaces the old per-kind ``kb_documents`` table with the
 # unified ``documents`` + ``chunks`` + ``documents_fts`` (FTS5) schema in 0006;
 # the memory kind (spec 007-memory) reuses that same unified schema (0007 adds
-# no table of its own), 0008 adds ``memory_projection_bindings`` for the
-# agent-side memory projection (which agents a store is projected into), and
-# 0009 adds ``memory_store_project_roots`` mapping a project store to the
-# absolute git-root it was provisioned from. 0015 adds ``channel_peers``
+# no table of its own); 0008 added ``memory_projection_bindings`` for the old
+# native-memory projection, which 0024 DROPS again (projection removed — Coffer
+# keeps its own memory format, agents read/write via MCP), so the binding table
+# is ABSENT at head; 0009 adds ``memory_store_project_roots`` mapping a project
+# store to the absolute git-root it was provisioned from. 0015 adds ``channel_peers``
 # (spec 009-channels: the paired owner of a messaging channel); 0016 adds the
 # ``credentials`` table for the Fernet-encrypted secret store (envelope
 # encryption); 0017 adds no table — it rekeys ``chunks.id`` /
@@ -53,7 +54,6 @@ EXPECTED_TABLES = {
     "documents",
     "chunks",
     "documents_fts",
-    "memory_projection_bindings",
     "memory_store_project_roots",
     "embedding_config",
     "conversations",
@@ -150,8 +150,17 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     cfg = _alembic_config()
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
+    # 0024 drops memory_projection_bindings, so it is absent at head; its
+    # downgrade recreates it, so it reappears once we step below 0024 (until
+    # 0008's downgrade drops it again at 0007).
+    assert "memory_projection_bindings" not in _user_tables(db_path)
 
-    # head (0023) -> 0022: drops the per-agent MCP scope tables (ADR-026).
+    # head (0024) -> 0023: 0024's downgrade recreates memory_projection_bindings,
+    # so it reappears here (and is dropped again at 0008's downgrade at 0007).
+    command.downgrade(cfg, "0023")
+    assert "memory_projection_bindings" in _user_tables(db_path)
+
+    # 0023 -> 0022: drops the per-agent MCP scope tables (#108).
     command.downgrade(cfg, "0022")
     assert "agent_mcp_scope" not in _user_tables(db_path)
     assert "agent_mcp_scope_server" not in _user_tables(db_path)
@@ -181,7 +190,9 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     with sqlite3.connect(db_path) as conn:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
     assert "archived_at" not in cols
-    assert _user_tables(db_path) == EXPECTED_TABLES - {
+    # memory_projection_bindings is back (recreated by 0024's downgrade); the
+    # per-agent MCP scope tables were dropped at 0022 — so neither is present.
+    assert _user_tables(db_path) == (EXPECTED_TABLES | {"memory_projection_bindings"}) - {
         "agent_mcp_scope",
         "agent_mcp_scope_server",
         "credentials",
@@ -192,7 +203,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
 
     # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
     command.downgrade(cfg, "0011")
-    assert _user_tables(db_path) == EXPECTED_TABLES - {
+    assert _user_tables(db_path) == (EXPECTED_TABLES | {"memory_projection_bindings"}) - {
         "agent_mcp_scope",
         "agent_mcp_scope_server",
         "credentials",
@@ -246,7 +257,6 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "chat_messages",
         "chat_models",
         "memory_store_project_roots",
-        "memory_projection_bindings",
         "skill_agent_bindings",
         "documents",
         "chunks",

@@ -4,8 +4,9 @@
 // Stores are AUTO-PROVISIONED (global + per-project) — there is no create.
 // There is NO llm_provider anymore: facts are written directly (no LLM at
 // write time). Each fact carries name/description/body/type/actor. Retrieval
-// is the shared engine (grep / keyword / vector). Projections push the
-// canonical store into each agent's native memory location.
+// is the shared engine (grep / keyword / vector). Agents access these stores
+// only via the Coffer MCP gateway — Coffer keeps its own memory format and no
+// longer projects into agents' native memory locations.
 
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import { ApiError } from "@/lib/api/errors";
@@ -18,8 +19,6 @@ import type {
   FactInput,
   FactOut,
   RecallResponse,
-  ProjectionListOut,
-  ProjectionOut,
 } from "./types";
 
 // Re-export the wire types + scope helpers so existing `import { … } from
@@ -123,34 +122,4 @@ export async function recall(
   });
   await checkOk(r);
   return (await r.json()) as RecallResponse;
-}
-
-export async function listProjections(store: string): Promise<ProjectionListOut> {
-  const r = await fetch(`${storeBase(store)}/projections`, { headers: headers() });
-  await checkOk(r);
-  return (await r.json()) as ProjectionListOut;
-}
-
-export async function establishProjection(
-  store: string,
-  agentRef: string,
-  projectRoot?: string | null,
-): Promise<ProjectionOut> {
-  const body: Record<string, unknown> = { agent_ref: agentRef };
-  if (projectRoot) body.project_root = projectRoot;
-  const r = await fetch(`${storeBase(store)}/projections`, {
-    method: "POST",
-    headers: { ...headers(), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  await checkOk(r);
-  return (await r.json()) as ProjectionOut;
-}
-
-export async function removeProjection(store: string, agentRef: string): Promise<void> {
-  const r = await fetch(`${storeBase(store)}/projections/${enc(agentRef)}`, {
-    method: "DELETE",
-    headers: headers(),
-  });
-  await checkOk(r);
 }

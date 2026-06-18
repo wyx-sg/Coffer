@@ -2,7 +2,7 @@
 
 > English: [ADR-013-agent-native-shared-memory.md](./ADR-013-agent-native-shared-memory.md)
 
-**Status**: Accepted
+**Status**: 已被 [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md) 取代（2026-06-18）—— 原生投射已移除，记忆现在只经 MCP 网关访问。以下设计保留作历史。
 **Date**: 2026-06-09
 **Deciders**: Yuxing Wu
 **Related**: spec `007-memory`、[ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md)、[ADR-007](ADR-007-everything-is-a-resource-kind.md)、[ADR-009](ADR-009-cross-platform-skill-delivery.md)

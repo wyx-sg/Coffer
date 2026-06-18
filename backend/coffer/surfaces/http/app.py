@@ -87,7 +87,6 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
 from coffer.surfaces.http.migrations_runner import run_migrations
-from coffer.surfaces.http.projection_wiring import wire_projection
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_wiring import start_sync, stop_sync
 from coffer.surfaces.http.wiring import (
@@ -227,11 +226,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         substrate=substrate,
         embedding_resolver=_resolve_embedding,  # type: ignore[arg-type]
     )
-
-    # Wire the composition-root projection service (bridges memory + agent so
-    # neither kind imports the other — Contract 5e). Re-renders established
-    # projections whenever the memory store changes.
-    wire_projection(app, sm, memory_service, audit=audit)
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).

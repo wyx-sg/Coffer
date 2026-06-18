@@ -14,7 +14,7 @@ import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
 import { MemoryStoresTable } from "@/components/memory/MemoryStoresTable";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useMemoryStores } from "@/lib/hooks/useMemoryProjections";
+import { useMemoryStores } from "@/lib/hooks/useMemoryStores";
 import { translateApiError } from "@/lib/api/errors";
 
 export function MemoryPage() {

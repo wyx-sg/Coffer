@@ -190,21 +190,3 @@ class RecallResponse(BaseModel):
     hits: list[RecallHit]
     mode: RetrievalMode
     fallback: bool = False
-
-
-# --- projection -------------------------------------------------------------
-
-
-ProjectionMode = Literal["SYMLINK", "RENDER", "NONE"]
-
-
-class ProjectionOut(BaseModel):
-    agent_ref: str
-    projection_mode: ProjectionMode
-    target_path: str
-    native_memory_disabled: bool
-    merged_existing: bool = False
-
-
-class ProjectionListOut(BaseModel):
-    projections: list[ProjectionOut]

@@ -73,16 +73,7 @@ frozen dataclass；recall 结果。
 
 检索与 KB 面**共享**。值对象（`StoreRef`、`Passage`、`GrepHit`、`GrepResult`、`MemoryHit`、`SearchResult`、`RetrievalMode`）在 `domain/knowledge/retrieval.py`；协议（`KnowledgeIndex`、`GrepPort`、`RetrievalPort`）在 `domain/knowledge/index.py`。具体门面是 `KnowledgeRetrieval`（`application/knowledge/retrieval.py`）：它组合 chunk 索引（`infrastructure/knowledge/sqlite_index.py` + `vec_index.py`）、ripgrep 包装器（`grep.py`）与 embedder 客户端（`embeddings.py`），并持有 keyword↔vector 的决策（包括带标注的 vector→keyword 回退）—— 两个面都不重复这段逻辑。读时惰性 reindex 的对账由 memory 侧的 `MemoryReconciler`（`application/memory/sync.py`）驱动单一 re-index 例程（`application/knowledge/reindex.py`）完成。
 
-`AgentMemoryAdapter` 跟着 agent driver 走（`application/agent/projection/adapters.py`，引擎在 `application/agent/projection/engine.py`），不属于 memory kind：
-
-```python
-class AgentMemoryAdapter(Protocol):
-    def memory_location(self, project: ProjectRef) -> Path | None: ...
-    @property
-    def projection_mode(self) -> Literal["SYMLINK", "RENDER", "NONE"]: ...
-    def disable_native_memory(self, agent_config) -> None: ...   # only when native memory would be a separate copy
-    def render(self, facts: Sequence[MemoryFact]) -> bytes: ...  # RENDER mode
-```
+agent 只通过 MCP 网关工具（`coffer__recall`/`remember`/`update_memory`/`forget`/`list_memory`）读写记忆；Coffer 从不改动 agent 的原生记忆文件（原生投影已移除 —— 见 ADR-026）。
 
 ### Domain 错误（规范类在 `domain/errors.py`，经 `domain/knowledge/errors.py` 再导出）
 
@@ -181,37 +172,18 @@ release target tags and pushes atomically.
 
 `infrastructure/memory/paths.py` 是唯一构造这些路径的模块。`infrastructure/memory/files.py` 是唯一读写每条事实 `.md`、渲染 `MEMORY.md`、扫描目录找增量的模块。
 
-## 原生投影目标（归 agent adapter 所有，不属于基底）
-
-| Agent       | Project 层                                             | Global 层                                           |
-| ----------- | ------------------------------------------------------ | --------------------------------------------------- |
-| Claude Code | SYMLINK 规范目录 → `~/.claude/projects/<slug>/memory/` | RENDER 块写进 `~/.claude/CLAUDE.md`                 |
-| Codex       | RENDER 块写进 `<project>/AGENTS.md`；禁用 `memories`   | RENDER 块写进 `~/.codex/AGENTS.md`                  |
-| OpenCode    | RENDER 块写进 `<project>/AGENTS.md`                    | RENDER 块写进 `~/.config/opencode/AGENTS.md`        |
-| OpenClaw    | RENDER 块写进 `<project>/MEMORY.md`                    | RENDER 块写进 `~/.openclaw/MEMORY.md`               |
-| Hermes      | RENDER 块写进 `~/.hermes/memories/coffer-<slug>.md`    | RENDER 块写进 `~/.hermes/memories/coffer-global.md` |
-| Cursor      | N/A（Cursor 2.1 移除了记忆功能）                       | N/A（Cursor 2.1 移除了记忆功能）                    |
-
-受管块标记（Next.js / claude-mem 先例）：
-
-```
-<!-- coffer:memory:start (managed, do not edit) -->
-… rendered facts …
-<!-- coffer:memory:end -->
-```
-
 ## 级联与完整性规则
 
-| 动作                                             | 效果                                                                                                                                                                   |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `remember` / 用户新增                            | 写 `<fact-slug>.md` → 重新生成 `MEMORY.md` → 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计 → 重投影。                                                                 |
-| `update_memory` / 用户编辑（API/CLI/外部编辑器） | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 重新生成 `MEMORY.md` → 审计 → 重投影。（直接的外部编辑器编辑在下一次 lazy reindex-on-read 时生效。） |
-| `forget` / 用户删除                              | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 重新生成 `MEMORY.md` → 审计 → 重投影。                                                                            |
-| 清空一个 scope                                   | 删除该 store 全部 `.md` → 移除全部索引行 → `MEMORY.md` 置空 → 重投影为空 → 审计。store Resource 保留。                                                                 |
-| 删除 store Resource                              | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、拆掉投影（替换 symlink / 剥除受管块）、审计。                                                                     |
-| Recall                                           | **读时惰性 reindex**：扫 `store_dir` 找增量（按 `content_sha256`）→ `reconcile` → 搜索。不写 `MEMORY.md`。                                                             |
-| 修改 embedding 模型                              | 允许 → 下次索引时对 store 重新 embedding（文件是真相）。                                                                                                               |
-| 修改 `max_fact_chars`                            | 允许。                                                                                                                                                                 |
+| 动作                                             | 效果                                                                                                                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `remember` / 用户新增                            | 写 `<fact-slug>.md` → 重新生成 `MEMORY.md` → 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计。                                                                 |
+| `update_memory` / 用户编辑（API/CLI/外部编辑器） | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 重新生成 `MEMORY.md` → 审计。（直接的外部编辑器编辑在下一次 lazy reindex-on-read 时生效。） |
+| `forget` / 用户删除                              | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 重新生成 `MEMORY.md` → 审计。                                                                            |
+| 清空一个 scope                                   | 删除该 store 全部 `.md` → 移除全部索引行 → `MEMORY.md` 置空 → 审计。store Resource 保留。                                                                     |
+| 删除 store Resource                              | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、审计。                                                                                                   |
+| Recall                                           | **读时惰性 reindex**：扫 `store_dir` 找增量（按 `content_sha256`）→ `reconcile` → 搜索。不写 `MEMORY.md`。                                                    |
+| 修改 embedding 模型                              | 允许 → 下次索引时对 store 重新 embedding（文件是真相）。                                                                                                      |
+| 修改 `max_fact_chars`                            | 允许。                                                                                                                                                        |
 
 ## 单一 re-index 例程（`application/knowledge/reindex.py`，与 KB 共享）
 
@@ -228,13 +200,12 @@ memory 的所有写路径（remember、update、用户编辑、惰性 reindex �
 
 ## 新增审计事件
 
-| 值                   | 何时发出                  |
-| -------------------- | ------------------------- |
-| `"memory_added"`     | `remember`/用户新增成功后 |
-| `"memory_updated"`   | `update`/用户编辑成功后   |
-| `"memory_deleted"`   | `forget`/用户删除成功后   |
-| `"memory_cleared"`   | 清空一个 scope 后         |
-| `"memory_projected"` | 建立/刷新一个投影后       |
+| 值                 | 何时发出                  |
+| ------------------ | ------------------------- |
+| `"memory_added"`   | `remember`/用户新增成功后 |
+| `"memory_updated"` | `update`/用户编辑成功后   |
+| `"memory_deleted"` | `forget`/用户删除成功后   |
+| `"memory_cleared"` | 清空一个 scope 后         |
 
 ## 对话记录提炼（Spec 007 扩展）
 
@@ -296,4 +267,4 @@ Coffer 读取 `~/.claude/projects/`、`~/.codex/sessions/` 以及 OpenCode 的�
 
 ## 线上契约（REST）
 
-位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall），外加投影端点（list/establish/remove）。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写入事实的途径；桌面/web UI 是只读视图。读 DTO 携带磁盘真相：`FactOut` 带事实的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使只读视图能提供「在外部编辑器打开 / 显示 / 复制路径」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。
+位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall）。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写入事实的途径；桌面/web UI 是只读视图。读 DTO 携带磁盘真相：`FactOut` 带事实的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使只读视图能提供「在外部编辑器打开 / 显示 / 复制路径」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。

@@ -2,7 +2,7 @@
 
 > 中文版: [quickstart.zh.md](./quickstart.zh.md)
 
-Memory is the **memory face** of Coffer's unified knowledge substrate. Facts are markdown files (the source of truth) shared across every agent — read/written over MCP and projected into each agent's native location. No LLM runs at write time; the agent writes a clean fact.
+Memory is the **memory face** of Coffer's unified knowledge substrate. Facts are markdown files (the source of truth) shared across every agent — read and written **only over MCP** (Coffer keeps its own canonical format and does not touch agents' native memory files). No LLM runs at write time; the agent writes a clean fact.
 
 ## Through an MCP client (the primary surface)
 
@@ -26,40 +26,7 @@ coffer__remember("Prefers tabs over spaces.", scope="global", type="user")
 coffer__recall("how do we deploy?")
 ```
 
-`recall` lazily reindexes the fact directory on every call, so edits made by another agent (or by Claude through its symlink) are visible immediately.
-
-## Native projection (one memory, every agent)
-
-The canonical files are projected into each agent's native location, so you keep using each agent's own memory UX:
-
-| Agent       | Project layer                                                   | Global layer                            |
-| ----------- | --------------------------------------------------------------- | --------------------------------------- |
-| Claude Code | directory **symlink** → `~/.claude/projects/<slug>/memory/`     | rendered block in `~/.claude/CLAUDE.md` |
-| Codex       | rendered block in `<project>/AGENTS.md` (native `memories` off) | rendered block in `~/.codex/AGENTS.md`  |
-
-For Claude, keep auto-memory **on** — the symlinked dir _is_ the canonical store, so Claude's own edits become canonical. For Codex, Coffer renders a managed block:
-
-```
-<!-- coffer:memory:start (managed, do not edit) -->
-# Memory
-
-- deploy-via-make-release — This repo deploys via make release.
-<!-- coffer:memory:end -->
-```
-
-Content outside the markers is never touched; re-rendering is idempotent. If Claude's memory dir already has real files when you bind a project, Coffer **merges** them into the canonical store first, then replaces the dir with a symlink — nothing is overwritten.
-
-### Taking over existing native memory
-
-Claude Code may have written memory natively long before Coffer was installed (one `~/.claude/projects/<slug>/memory/` dir per project). The agent **Memory** tab discovers these (`GET /api/v1/agents/{name}/native-memory`) and, with one **Take over** click, imports them all (`POST /api/v1/agents/{name}/native-memory/import`):
-
-- each project's `<slug>` is decoded back to a real project root by walking the filesystem (the slug encoding is lossy, so an undecodable slug is reported and left untouched — never guessed);
-- the original `memory/` dir is copied to `memory.bak-<timestamp>` beside it before anything is touched;
-- the project's canonical store is provisioned (keyed by git-root, matching how a later `remember` from that repo resolves) and a SYMLINK projection is established (the merge-first step above moves the existing facts in).
-
-The result lists each project's outcome (`imported` / `skipped_undecodable` / `error`) with its store name and backup path. Re-running is idempotent — already-managed (symlinked) dirs are skipped.
-
-Adding a new agent is one `AgentMemoryAdapter`; the memory substrate is untouched.
+`recall` lazily reindexes the fact directory on every call, so edits made by another agent (over MCP), by the user in the Coffer UI, or directly on disk are visible immediately.
 
 ## CLI
 
@@ -88,11 +55,6 @@ coffer memory recall global "部署流程" --mode grep        # exact/regex over
 coffer memory edit global <fact-id> "API base path is /api/v3."
 coffer memory delete global <fact-id>
 coffer memory clear project-01J… --yes
-
-# Projections (establish / list / remove a native binding).
-coffer memory bind project-01J… my-claude --project-root /abs/path/to/repo
-coffer memory projections project-01J…
-coffer memory unbind project-01J… my-claude
 ```
 
 `--json` works on every read command. `--mode` is `grep` | `keyword` | `vector` (default `keyword`). `grep` recall is real — ripgrep over the fact files, no index, no tokenizer, so it works where FTS5 cannot (e.g. CJK). `vector` falls back to `keyword` (flagged) if no embedding provider is configured.
@@ -105,7 +67,7 @@ coffer memory unbind project-01J… my-claude
 4. Click a fact to expand a **read-only** render (the UI does not edit fact content in-app). Each fact and its containing folder offer **open in external editor**, **reveal in file manager** (desktop), and **copy absolute path** (web fallback); which editor opens is the global preferred-editor preference (see spec 002-ui-shell). Correct a fact by opening it in your own editor — the next recall picks up the change via lazy reindex-on-read.
 5. The header shows fact count and on-disk size; a kebab-menu offers "Clear scope". To add or delete facts, use `coffer memory add` / `coffer memory delete` (or the REST API).
 
-Every write — agent (MCP), CLI, or REST — regenerates `MEMORY.md`, reindexes, re-projects to bound agents, and audits; the desktop UI itself is a read-only viewer.
+Every write — agent (MCP), CLI, or REST — regenerates `MEMORY.md`, reindexes, and audits; the desktop UI itself is a read-only viewer.
 
 ## Optional: vector recall
 

@@ -6,9 +6,9 @@ marked **[shared]** are delivered by the substrate and reused here.
 
 ## Phase 1 — Spec docs
 
-- [x] T-0001 Rewrite spec.md / spec.zh.md to the redesign (shared single source of truth, two-layer scope, projection, lazy reindex-on-read)
+- [x] T-0001 Rewrite spec.md / spec.zh.md to the redesign (shared single source of truth, two-layer scope, lazy reindex-on-read)
 - [x] T-0002 Rewrite plan.md / plan.zh.md, data-model.md / data-model.zh.md, research.md / research.zh.md, quickstart.md / quickstart.zh.md
-- [x] T-0003 Rewrite contracts/api.openapi.yaml (facts + recall + projection; app-wide error envelope)
+- [x] T-0003 Rewrite contracts/api.openapi.yaml (facts + recall; app-wide error envelope)
 - [x] T-0004 Commit `docs(007-memory): redesign spec — shared agent memory`
 
 ## Phase 2 — Migration (no data migration)
@@ -36,14 +36,7 @@ marked **[shared]** are delivered by the substrate and reused here.
 
 - [x] T-0040 `application/memory/scope.py` — `ScopeResolver`: cwd → git-root → project ULID → store (lazy provision); global sentinel; store-name validation (`global` | `project-<26-char ULID>`)
 - [x] T-0041 `application/memory/service.py` (+ `writes.py` / `queries.py` / `recall.py` / `sync.py`) — remember / recall (lazy reindex-on-read + RRF cross-store merge) / update / forget / list / clear + MEMORY.md regen
-- [x] T-0042 `application/agent/projection/engine.py` — projection engine dispatch on AgentMemoryAdapter.projection_mode
 - [x] T-0043 `application/memory/kind.py` — make_memory_kind(...)
-
-## Phase 6 — Agent projection adapters (with the agent driver)
-
-- [x] T-0050 `application/agent/projection/types.py` — AgentMemoryAdapter protocol + ProjectionMode
-- [x] T-0051 `application/agent/projection/adapters.py` (Claude) — project layer: SYMLINK into `~/.claude/projects/<slug>/memory/` (merge-existing-files-then-symlink); global layer: RENDER managed block into `~/.claude/CLAUDE.md`
-- [x] T-0052 `application/agent/projection/adapters.py` (Codex) — RENDER marker-fenced managed block into AGENTS.md; disable native `memories`
 
 ## Phase 7 — MCP built-in tools (shared file with KB)
 
@@ -53,8 +46,8 @@ marked **[shared]** are delivered by the substrate and reused here.
 
 ## Phase 8 — Surfaces
 
-- [x] T-0070 `surfaces/http/memory/schemas.py` + `routes.py` — `/api/v1/memory_stores/*` (facts, recall); `surfaces/http/projection_routes.py` (+ `projection_service.py`) — `/api/v1/memory_stores/{name}/projections`
-- [x] T-0071 `surfaces/cli/memory_cmd.py` — `coffer memory list/describe/add/facts/get/edit/delete/clear/configure/recall/bind/unbind/projections`
+- [x] T-0070 `surfaces/http/memory/schemas.py` + `routes.py` — `/api/v1/memory_stores/*` (facts, recall)
+- [x] T-0071 `surfaces/cli/memory_cmd.py` — `coffer memory list/describe/add/facts/get/edit/delete/clear/configure/recall`
 - [x] T-0072 `surfaces/http/app.py` — `_wire_memory_kind(...)`; `surfaces/cli/main.py` — register `memory` typer
 
 ## Phase 9 — Frontend
@@ -68,8 +61,8 @@ marked **[shared]** are delivered by the substrate and reused here.
 
 ## Phase 10 — Tests
 
-- [x] T-0090 Unit: config / fact-frontmatter-roundtrip / MEMORY.md regeneration / scope resolver / projection dispatch
-- [x] T-0091 Integration: remember→recall (keyword/vector-fake/grep) / lazy-reindex-on-read / two-layer scope / projection symlink (Claude) / projection render (Codex)
+- [x] T-0090 Unit: config / fact-frontmatter-roundtrip / MEMORY.md regeneration / scope resolver
+- [x] T-0091 Integration: remember→recall (keyword/vector-fake/grep) / lazy-reindex-on-read / two-layer scope
 - [x] T-0092 Contract: OpenAPI conformance
 - [x] T-0093 Importlinter: index engine confined to infrastructure; `mem0`/`chroma`/`llama_index` imported nowhere
 

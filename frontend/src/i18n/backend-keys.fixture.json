@@ -108,7 +108,6 @@
     "memory_added",
     "memory_cleared",
     "memory_deleted",
-    "memory_projected",
     "memory_updated",
     "model_created",
     "model_deleted",

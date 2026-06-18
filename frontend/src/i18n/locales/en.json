@@ -290,7 +290,6 @@
       "memory_updated": "Updated a memory in {{resource}}",
       "memory_deleted": "Deleted a memory from {{resource}}",
       "memory_cleared": "Cleared all memories in {{resource}}",
-      "memory_projected": "Projected {{resource}} into an agent",
       "conversation_created": "Started a conversation",
       "conversation_deleted": "Deleted a conversation",
       "conversation_archived": "Archived a conversation",
@@ -722,22 +721,10 @@
       "distillAria": "Distill session {{session}} to memory"
     },
     "memoryTab": {
-      "title": "Memory projection",
-      "subtitle": "Project a memory store into this agent's native memory location so its own edits stay canonical and shared.",
+      "title": "Memory",
+      "subtitle": "Coffer memory stores (global and per-project) available to this agent.",
       "empty": "No memory stores yet.",
-      "notProjected": "Not projected into this agent.",
-      "nativeDisabled": "Native memory disabled to prevent a divergent copy.",
-      "merged": "Pre-existing native files were merged into the store first.",
-      "missingProjectRoot": "This project store has no known root yet, so it can't be projected.",
-      "toggleAria": "Toggle projection of {{store}} into this agent",
-      "colProjection": "Projection",
-      "colEnabled": "Projected",
-      "facts": "Memories ({{count}})",
-      "factsEmpty": "No memories yet.",
-      "nativeDiscovered": "Found {{count}} memories Claude Code wrote natively across {{projects}} project(s) that Coffer is not managing yet.",
-      "takeOver": "Take over",
-      "takingOver": "Taking over…",
-      "takeOverDone": "Took over {{imported}} project(s); skipped {{skipped}}. Originals backed up alongside each memory dir."
+      "accessViaGateway": "This agent accesses Coffer memory via the MCP gateway; manage a store's facts from its detail page."
     },
     "configDirOverride": "Config directory (optional)",
     "configDirPlaceholder": "Leave blank for the default (~/.claude)",

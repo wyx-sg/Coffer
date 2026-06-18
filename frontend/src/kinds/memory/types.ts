@@ -88,8 +88,8 @@ export interface MemoryStoreOut {
   scope: Scope;
   project_id: string;
   // Absolute filesystem root of a project-scoped store, exposed by the backend
-  // so a SYMLINK/RENDER projection can be anchored under that project. Absent
-  // (null) for the global store and for project stores whose root is unknown.
+  // so surfaces can show the project's directory name/path. Absent (null) for
+  // the global store and for project stores whose root is unknown.
   project_root?: string | null;
   description: string | null;
   config: MemoryStoreConfigOut;
@@ -147,18 +147,6 @@ export interface RecallResponse {
   hits: RecallHit[];
   mode: RetrievalMode;
   fallback?: boolean;
-}
-
-export interface ProjectionOut {
-  agent_ref: string;
-  projection_mode: "SYMLINK" | "RENDER" | "NONE";
-  target_path: string;
-  native_memory_disabled: boolean;
-  merged_existing?: boolean;
-}
-
-export interface ProjectionListOut {
-  projections: ProjectionOut[];
 }
 
 export interface FactInput {
