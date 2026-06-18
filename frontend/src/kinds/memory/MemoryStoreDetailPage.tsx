@@ -17,6 +17,7 @@ import {
   getMemoryStore,
   getMemoryStoreMetrics,
   listFacts,
+  projectDirName,
   recall,
   updateFact,
   type FactOut,
@@ -67,6 +68,9 @@ export function MemoryStoreDetailPage() {
     queryFn: () => getMemoryStore(store),
     enabled: Boolean(store),
   });
+  // Readable identity for user-facing strings (FR-017a): the project directory
+  // basename, falling back to the raw store name (global / untracked root).
+  const storeLabel = projectDirName(storeQuery.data?.project_root) ?? store;
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["memory-facts", store] });
@@ -193,7 +197,7 @@ export function MemoryStoreDetailPage() {
         open={clearOpen}
         onOpenChange={setClearOpen}
         title={t("memory.detail.clearTitle")}
-        description={t("memory.detail.clearConfirm", { store })}
+        description={t("memory.detail.clearConfirm", { store: storeLabel })}
         confirmLabel={t("memory.detail.clearAll")}
         pending={clear.isPending}
         onConfirm={() => clear.mutate(undefined, { onSuccess: () => setClearOpen(false) })}

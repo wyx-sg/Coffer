@@ -42,9 +42,7 @@ export function deriveScope(source: {
   // generic ResourceOut config, a test fixture) is accepted; read defensively.
   config?: unknown;
 }): Scope | null {
-  const cfg = (source.config ?? undefined) as
-    | { scope?: unknown; project_id?: unknown }
-    | undefined;
+  const cfg = (source.config ?? undefined) as { scope?: unknown; project_id?: unknown } | undefined;
   const explicit = source.scope ?? cfg?.scope;
   if (explicit === "global" || explicit === "project") return explicit;
   const projectId = source.project_id ?? cfg?.project_id;
@@ -52,6 +50,24 @@ export function deriveScope(source: {
     return projectId === WORKSPACE_GLOBAL_PROJECT_ID ? "global" : "project";
   }
   return null;
+}
+
+/**
+ * Human-readable label for a per-project memory store's identity: the basename
+ * of its absolute `project_root` (e.g. `/Users/me/code/coffer` → `coffer`), or
+ * `null` when the root is unknown — the global store, or a project store
+ * provisioned before its root was tracked. Surfaces render
+ * `projectDirName(project_root) ?? name` so a per-project store reads as e.g.
+ * "coffer" with the full path as a secondary detail, instead of the opaque
+ * `project-<ULID>` store name (spec 007 FR-017a). Handles POSIX and Windows
+ * separators and trailing slashes.
+ */
+export function projectDirName(projectRoot?: string | null): string | null {
+  if (!projectRoot) return null;
+  const trimmed = projectRoot.replace(/[/\\]+$/, "");
+  const parts = trimmed.split(/[/\\]/);
+  const base = parts[parts.length - 1];
+  return base || null;
 }
 
 export interface MemoryStoreConfigOut {

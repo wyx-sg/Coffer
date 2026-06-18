@@ -354,6 +354,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 **Surfaces**
 
 - **FR-017**: Users MUST be able to perform full memory CRUD through (a) a REST API under `/api/v1/memory_stores/`, (b) `coffer memory …` subcommands, and (c) a desktop UI. User writes set `metadata.actor = "user"`, write the canonical markdown, regenerate `MEMORY.md`, reindex, and audit. Store names on these surfaces are validated: only `global` or `project-<26-char ULID>` are legal — a well-formed name lazily provisions its store; anything else returns 404 (`MEMORY_STORE_NOT_FOUND`).
+- **FR-017a**: Surfaces MUST present a per-project store by a **human-readable identity derived from its `project_root`** — the root directory's basename as the primary label and the absolute root path as a secondary detail — never only the opaque `project-<ULID>` store name (the project ULID is a one-way digest of the root and is not human-recognisable). When the root is unknown (a store provisioned before the root was tracked) the surface falls back to the store name; the global store needs no derivation (its name `global` is already readable). The underlying store name stays `project-<ULID>` (FR-017) — this is a **display** concern. Verified by frontend tests; desktop acceptance is deferred to e2e like the other desktop-view items.
 
 **Substrate isolation**
 

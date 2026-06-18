@@ -10,7 +10,7 @@ import { ArrowLeft, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/utils";
-import { deriveScope, type MemoryStoreMetrics, type MemoryStoreOut } from "./api";
+import { deriveScope, projectDirName, type MemoryStoreMetrics, type MemoryStoreOut } from "./api";
 
 interface Props {
   store: string;
@@ -30,6 +30,10 @@ export function MemoryDetailHeader({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const scope = storeResource ? deriveScope(storeResource) : null;
+  // Readable identity (FR-017a): the project directory's basename, falling back
+  // to the raw store name (the global store, or an untracked project root).
+  const label = (storeResource && projectDirName(storeResource.project_root)) ?? store;
+  const projectRoot = storeResource?.project_root ?? null;
 
   return (
     <header className="space-y-2">
@@ -44,7 +48,7 @@ export function MemoryDetailHeader({
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-serif text-3xl tracking-tight">{store}</h1>
+          <h1 className="font-serif text-3xl tracking-tight">{label}</h1>
           <div className="flex flex-wrap items-center gap-1.5">
             {scope ? <Badge variant="secondary">{t(`memory.scope.${scope}`)}</Badge> : null}
             {metrics ? (
@@ -67,6 +71,10 @@ export function MemoryDetailHeader({
           <Trash2 className="mr-1.5 size-3.5" /> {t("memory.detail.clearAll")}
         </Button>
       </div>
+
+      {projectRoot ? (
+        <p className="truncate font-mono text-xs text-muted-foreground">{projectRoot}</p>
+      ) : null}
     </header>
   );
 }
