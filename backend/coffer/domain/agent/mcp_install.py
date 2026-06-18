@@ -41,11 +41,22 @@ from coffer.domain.agent.mcp_entries import (
 from coffer.domain.agent.mcp_injection import McpEntryStyle, default_container_key
 
 
-def _entry_fields(shim_path: str, entry_style: McpEntryStyle) -> dict[str, Any]:
-    """The key/value pairs of a single stdio ``coffer`` entry for the style."""
+def _entry_fields(
+    shim_path: str, entry_style: McpEntryStyle, agent_name: str | None = None
+) -> dict[str, Any]:
+    """The key/value pairs of a single stdio ``coffer`` entry for the style.
+
+    When ``agent_name`` is given, the entry carries the agent's identity as an
+    ``--agent <name>`` argument so the shim forwards it to the gateway as an
+    ``X-Coffer-Agent`` header, driving per-agent server scoping (ADR-026).
+    """
+    args = ["--agent", agent_name] if agent_name else []
     if entry_style is McpEntryStyle.TYPED_COMMAND_ARRAY:
-        return {"type": "local", "command": [shim_path]}
-    return {"command": shim_path}
+        return {"type": "local", "command": [shim_path, *args]}
+    fields: dict[str, Any] = {"command": shim_path}
+    if args:
+        fields["args"] = args
+    return fields
 
 
 def _coffer_command(entry: Any) -> str | None:
@@ -69,14 +80,15 @@ def apply_install(
     *,
     container_key: str | None = None,
     entry_style: McpEntryStyle = McpEntryStyle.COMMAND_MAP,
+    agent_name: str | None = None,
 ) -> str:
     """Return new config text with the ``coffer`` stdio entry inserted/updated.
 
     Idempotent: an existing ``coffer`` entry is replaced in place, never
-    duplicated.
+    duplicated. ``agent_name`` is embedded as an ``--agent`` argument (ADR-026).
     """
     ck = container_key or default_container_key(fmt)
-    fields = _entry_fields(shim_path, entry_style)
+    fields = _entry_fields(shim_path, entry_style, agent_name)
 
     if fmt is ConfigFileFormat.JSON:
         data = _parse_json(text)

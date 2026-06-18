@@ -695,7 +695,15 @@
         "parseError": "配置解析失败，该文件降级只读",
         "empty": "没有直连 MCP server",
         "adoptSuccess": "已收编 {{name}}，现经网关服务于所有 agent",
-        "searchPlaceholder": "搜索 server"
+        "searchPlaceholder": "搜索 server",
+        "modeAuto": "全部 server",
+        "modeSelected": "指定 server",
+        "modeAutoHint": "所有已启用的 MCP server 都会暴露给该 agent。",
+        "modeSelectedHint": "只有勾选的 server 会暴露给该 agent。",
+        "save": "保存范围",
+        "saved": "范围已保存",
+        "saveError": "保存范围失败",
+        "unknownServer": "所选 server 中有一项已不存在。"
       },
       "memory": "记忆",
       "conversations": "对话记录"

@@ -35,6 +35,7 @@ from coffer.domain.mcp.namespace import (
     parse_prefixed_uri,
 )
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope_errors import AgentMcpServerNotInScope
 
 if TYPE_CHECKING:
     from coffer.application.mcp.supervisor import SubprocessSupervisor
@@ -163,12 +164,34 @@ async def _invoke(
     clock: Callable[[], datetime],
     ensure_subscribed: Callable[[str], Any],
     on_evict: Callable[[str], None] | None = None,
+    authorize_server: Callable[[str], Any] | None = None,
 ) -> Any:
     prefixed = params.get(spec.param_key, "")
     try:
         server_name, original = spec.parse(prefixed)
     except InvalidPrefix as e:
         raise ToolDisabled(f"unrecognised {spec.label}: {prefixed!r}") from e
+
+    # ADR-026: a selected-mode agent may not call/read/get an out-of-scope
+    # server even by naming it directly. Runs before the upstream is touched; a
+    # rejection is logged as a denied invocation for security observability,
+    # mirroring the ToolDisabled path below.
+    if authorize_server is not None:
+        try:
+            await authorize_server(server_name)
+        except AgentMcpServerNotInScope:
+            await record_invocation(
+                invocations,
+                session_id=session_id,
+                clock=clock,
+                resource_name=server_name,
+                capability_type=spec.capability_type,
+                capability_key=original,
+                duration_ms=0,
+                status="denied",
+                error_message=None,
+            )
+            raise
 
     resource = await resources.get(ResourceRef("mcp_server", server_name))
     try:

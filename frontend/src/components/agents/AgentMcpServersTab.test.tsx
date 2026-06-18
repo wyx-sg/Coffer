@@ -29,6 +29,13 @@ vi.mock("@/lib/api/agents", () => ({
     removeMcpEntry: vi.fn(),
     adoptMcpEntry: vi.fn(),
   },
+  // The gateway section loads/saves the per-agent MCP scope via these named
+  // exports; default them to "auto" so this tab's tests stay focused on the
+  // direct-entries behaviour.
+  getAgentMcpScope: vi.fn(async () => ({ mode: "auto", servers: [] })),
+  putAgentMcpScope: vi.fn(
+    async (_name: string, scope: { mode: string; servers: string[] }) => scope,
+  ),
 }));
 vi.mock("@/lib/hooks/useResources", () => ({
   useResources: vi.fn(() => ({

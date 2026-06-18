@@ -561,6 +561,52 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /agents/{name}/mcp-scope:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: getAgentMcpScope
+      summary: Read this agent's MCP server scope
+      description: |
+        Returns the agent's MCP scope (ADR-026). An agent with no scope row
+        defaults to `mode: auto` (every enabled server) with an empty `servers`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentMcpScope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [agents]
+      operationId: putAgentMcpScope
+      summary: Set this agent's MCP server scope
+      description: |
+        Replaces the agent's MCP scope. With `mode: selected`, only the named
+        `servers` are exposed through the gateway to this agent; with
+        `mode: auto` the allowlist is cleared and every enabled server is
+        exposed. Returns 422 (`MCP_SCOPE_SERVER_UNKNOWN`) when a named server is
+        not registered, and 404 when the agent does not exist.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentMcpScopeUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentMcpScope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /fs/browse:
     get:
       tags: [fs]
@@ -1028,6 +1074,38 @@ components:
           type: string
           nullable: true
           description: "The resolved coffer-mcp-shim command written/found, when installed."
+
+    AgentMcpScope:
+      type: object
+      required: [mode, servers]
+      description: "An agent's per-agent MCP server scope (ADR-026)."
+      properties:
+        mode:
+          type: string
+          enum: [auto, selected]
+          description: |
+            `auto` exposes every enabled MCP server to this agent (the default,
+            and the legacy whole-gateway behaviour). `selected` exposes only the
+            servers named in `servers`.
+        servers:
+          type: array
+          items: { type: string }
+          description: "Allowlisted mcp_server resource names; empty unless mode = selected."
+
+    AgentMcpScopeUpdate:
+      type: object
+      required: [mode]
+      additionalProperties: false
+      description: "Set an agent's MCP server scope (ADR-026)."
+      properties:
+        mode:
+          type: string
+          enum: [auto, selected]
+        servers:
+          type: array
+          items: { type: string }
+          default: []
+          description: "Allowlisted mcp_server names; ignored (cleared) unless mode = selected."
 
     FsEntry:
       type: object
