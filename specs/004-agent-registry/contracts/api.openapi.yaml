@@ -140,9 +140,12 @@ paths:
       summary: List an agent's curated config files
       description: |
         Returns the curated config-file allowlist for the agent's type, each
-        with its key, display name, resolved path, format, and existence
-        metadata. The set is fixed per agent type; files that do not exist yet
-        are listed with `exists=false`.
+        with its key, display name, resolved absolute path, containing-folder
+        absolute path (`folder_path`), format, and existence metadata. The set
+        is fixed per agent type; files that do not exist yet are listed with
+        `exists=false`. The `path`/`folder_path` pair backs the read-only UI's
+        open-in-external-editor / reveal-in-file-manager / copy-path
+        affordances (FR-038).
       responses:
         "200":
           description: OK
@@ -174,9 +177,12 @@ paths:
       operationId: readAgentConfigFile
       summary: Read one config file's content
       description: |
-        Returns the file's text content, format, existence, and a content
-        fingerprint for optimistic-concurrency writes (FR-036). A file that
-        does not exist returns empty content with `exists=false` and
+        Returns the file's text content, its resolved absolute path and
+        containing-folder path (`folder_path`), format, existence, and a content
+        fingerprint for optimistic-concurrency writes (FR-036). The in-app UI
+        renders this content read-only; the `path`/`folder_path` pair backs the
+        open-in-external-editor / reveal / copy-path affordances (FR-038). A
+        file that does not exist returns empty content with `exists=false` and
         `fingerprint=""` and is not created. A key outside the agent type's
         allowlist returns 404.
       responses:
@@ -243,9 +249,12 @@ paths:
       operationId: readAgentConfigDirFile
       summary: Read one child file of a directory config entry
       description: |
-        Returns the child file's text content, format, existence, and content
-        fingerprint, like the single-file read. A child that does not exist
-        returns empty content with `exists=false` and is not created.
+        Returns the child file's text content, its resolved absolute path and
+        containing-folder path (`folder_path`), format, existence, and content
+        fingerprint, like the single-file read. The in-app UI renders this
+        content read-only (`path`/`folder_path` back open-in-editor / reveal /
+        copy-path, FR-038). A child that does not exist returns empty content
+        with `exists=false` and is not created.
       responses:
         "200":
           description: OK
@@ -726,7 +735,7 @@ components:
 
     ConfigFileInfo:
       type: object
-      required: [key, display_name, path, format, kind, exists]
+      required: [key, display_name, path, folder_path, format, kind, exists]
       properties:
         key:
           {
@@ -734,7 +743,14 @@ components:
             description: "Stable allowlist key (e.g. settings, global, instructions, subagents, config, hooks).",
           }
         display_name: { type: string }
-        path: { type: string, description: "Resolved absolute path." }
+        path: { type: string, description: "Resolved absolute path of the file (or directory, for kind=directory entries)." }
+        folder_path:
+          type: string
+          description: >-
+            Absolute path of the file's containing folder (its parent
+            directory). The in-app viewer is read-only; the `path`/`folder_path`
+            pair backs open-in-external-editor / reveal-in-file-manager /
+            copy-path (FR-038).
         format: { $ref: "#/components/schemas/ConfigFileFormat" }
         kind: { $ref: "#/components/schemas/ConfigFileKind" }
         exists: { type: boolean }
@@ -758,9 +774,19 @@ components:
 
     ConfigFileContent:
       type: object
-      required: [key, format, exists, content, fingerprint, memory_block]
+      required: [key, path, folder_path, format, exists, content, fingerprint, memory_block]
       properties:
         key: { type: string }
+        path:
+          type: string
+          description: >-
+            Resolved absolute path of the file on disk (for a directory child,
+            the resolved absolute path of that child). The in-app viewer is
+            read-only; this path backs open-in-external-editor /
+            reveal-in-file-manager / copy-path (FR-038).
+        folder_path:
+          type: string
+          description: "Absolute path of the file's containing folder (FR-038)."
         format: { $ref: "#/components/schemas/ConfigFileFormat" }
         exists: { type: boolean }
         content:

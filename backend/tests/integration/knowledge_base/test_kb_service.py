@@ -152,6 +152,49 @@ async def test_edit_sets_edited_mode_and_reflects_in_search(kb) -> None:
     assert len((await kb.service.search(kb_name="kb1", query="cherry", top_k=5)).passages) == 1
 
 
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="external edit picked up by reindex-on-read"
+)
+async def test_out_of_band_edit_visible_on_reindex_on_read(kb) -> None:
+    """The in-app viewer is read-only, so users edit ``docs/<id>.md`` directly
+    in their external editor. The next read/search reconciles the on-disk file
+    against the index by content hash and reflects the edit — no watcher, no
+    explicit reindex call (FR-008a)."""
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# Orig\n\noriginal narwhal content")
+    # Sanity: the original is indexed and searchable.
+    assert len((await kb.service.search(kb_name="kb1", query="narwhal", top_k=5)).passages) == 1
+
+    # Edit the normalized markdown body directly on disk (frontmatter intact),
+    # bypassing the write API entirely — as an external editor would.
+    md = paths.doc_path("kb1", doc.id)
+    text = md.read_text()
+    md.write_text(text.replace("original narwhal content", "edited platypus content"))
+
+    # No explicit reindex: the search path reconciles on read.
+    assert (await kb.service.search(kb_name="kb1", query="narwhal", top_k=5)).passages == ()
+    hits = (await kb.service.search(kb_name="kb1", query="platypus", top_k=5)).passages
+    assert len(hits) == 1
+    assert "platypus" in hits[0].text
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="external edit picked up by reindex-on-read"
+)
+async def test_out_of_band_file_removal_pruned_on_read(kb) -> None:
+    """A document whose markdown file is removed out-of-band is pruned from the
+    index on the next read (files are truth in both directions)."""
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# Gone\n\nsoon to vanish content")
+    assert len((await kb.service.search(kb_name="kb1", query="vanish", top_k=5)).passages) == 1
+    paths.doc_path("kb1", doc.id).unlink()
+    # Reconcile-on-read prunes the now-orphaned row.
+    docs, total = await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    assert total == 0
+    assert docs == []
+    assert (await kb.service.search(kb_name="kb1", query="vanish", top_k=5)).passages == ()
+
+
 @pytest.mark.acceptance(spec="006-knowledge-base", scenario="re-conversion blocked once edited")
 async def test_reconversion_blocked_after_edit(kb) -> None:
     await kb.create_kb("kb1")

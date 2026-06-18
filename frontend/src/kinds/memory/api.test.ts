@@ -18,7 +18,6 @@ import {
   listProjections,
   recall,
   removeProjection,
-  updateFact,
 } from "./api";
 
 const BASE = "http://test-host/api/v1";
@@ -136,20 +135,6 @@ describe("addFact", () => {
     const err = await addFact("prefs", { text: "x" }).catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).code).toBe("INTERNAL_ERROR");
-  });
-});
-
-describe("updateFact", () => {
-  test("PATCHes the new text to the fact id URL", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ id: "m-1", name: "x", text: "new", actor: "user" }));
-
-    await updateFact("prefs", "m-1", { text: "new" });
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/memory_stores/prefs/facts/m-1`);
-    expect(init?.method).toBe("PATCH");
-    expect(JSON.parse(init!.body as string)).toEqual({ text: "new" });
   });
 });
 

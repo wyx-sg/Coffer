@@ -202,16 +202,16 @@ release target tags and pushes atomically.
 
 ## 级联与完整性规则
 
-| 动作                       | 效果                                                                                                       |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `remember` / 用户新增      | 写 `<fact-slug>.md` → 重新生成 `MEMORY.md` → 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计 → 重投影。     |
-| `update_memory` / 用户编辑 | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 重新生成 `MEMORY.md` → 审计 → 重投影。   |
-| `forget` / 用户删除        | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 重新生成 `MEMORY.md` → 审计 → 重投影。                |
-| 清空一个 scope             | 删除该 store 全部 `.md` → 移除全部索引行 → `MEMORY.md` 置空 → 重投影为空 → 审计。store Resource 保留。     |
-| 删除 store Resource        | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、拆掉投影（替换 symlink / 剥除受管块）、审计。         |
-| Recall                     | **读时惰性 reindex**：扫 `store_dir` 找增量（按 `content_sha256`）→ `reconcile` → 搜索。不写 `MEMORY.md`。 |
-| 修改 embedding 模型        | 允许 → 下次索引时对 store 重新 embedding（文件是真相）。                                                   |
-| 修改 `max_fact_chars`      | 允许。                                                                                                     |
+| 动作                                             | 效果                                                                                                                                                                   |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `remember` / 用户新增                            | 写 `<fact-slug>.md` → 重新生成 `MEMORY.md` → 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计 → 重投影。                                                                 |
+| `update_memory` / 用户编辑（API/CLI/外部编辑器） | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 重新生成 `MEMORY.md` → 审计 → 重投影。（直接的外部编辑器编辑在下一次 lazy reindex-on-read 时生效。） |
+| `forget` / 用户删除                              | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 重新生成 `MEMORY.md` → 审计 → 重投影。                                                                            |
+| 清空一个 scope                                   | 删除该 store 全部 `.md` → 移除全部索引行 → `MEMORY.md` 置空 → 重投影为空 → 审计。store Resource 保留。                                                                 |
+| 删除 store Resource                              | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、拆掉投影（替换 symlink / 剥除受管块）、审计。                                                                     |
+| Recall                                           | **读时惰性 reindex**：扫 `store_dir` 找增量（按 `content_sha256`）→ `reconcile` → 搜索。不写 `MEMORY.md`。                                                             |
+| 修改 embedding 模型                              | 允许 → 下次索引时对 store 重新 embedding（文件是真相）。                                                                                                               |
+| 修改 `max_fact_chars`                            | 允许。                                                                                                                                                                 |
 
 ## 单一 re-index 例程（`application/knowledge/reindex.py`，与 KB 共享）
 
@@ -296,4 +296,4 @@ Coffer 读取 `~/.claude/projects/`、`~/.codex/sessions/` 以及 OpenCode 的�
 
 ## 线上契约（REST）
 
-位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall），外加投影端点（list/establish/remove）。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。
+位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall），外加投影端点（list/establish/remove）。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写入事实的途径；桌面/web UI 是只读视图。读 DTO 携带磁盘真相：`FactOut` 带事实的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使只读视图能提供「在外部编辑器打开 / 显示 / 复制路径」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。

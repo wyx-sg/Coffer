@@ -28,29 +28,29 @@ Pydantic v2 `BaseModel`。当 `kind == "knowledge_base"` 时存在 `Resource.con
 DevPilot 风格的 OpenAI 兼容 provider 抽象（一个 `AsyncOpenAI` 客户端，可换 `base_url`），外加一个 in-process `local` 选项。
 
 | Field            | Type          | Notes                                                                                                                                         |
-| ---------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| ---------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `provider`       | `str`         | `"openai"`、`"openrouter"`、`"voyage"`、`"jina"`、`"gemini"`、`"azure"`、`"dashscope"`、`"ollama"`、`"lmstudio"`，或 `"local"`（fastembed）。 |
-| `model`          | `str`         | embedding 模型 id，如 `text-embedding-3-small`、`bge-m3`。                                                                                     |
-| `base_url`       | `str \| None` | OpenAI 兼容端点；`None` 用 provider 默认值；`local` 时忽略。                                                                                    |
-| `credential_ref` | `str \| None` | 加密存储引用（绝不明文）；`local` / 免 key 端点用 `None`。可选回退到 LLM 凭据引用。                                                            |
-| `dimensions`     | `int`         | 向量宽度；决定 `vec_chunks` 的列宽。宽度变化时重新 embedding 会重建 vec 表。                                                                    |
+| `model`          | `str`         | embedding 模型 id，如 `text-embedding-3-small`、`bge-m3`。                                                                                    |
+| `base_url`       | `str \| None` | OpenAI 兼容端点；`None` 用 provider 默认值；`local` 时忽略。                                                                                  |
+| `credential_ref` | `str \| None` | 加密存储引用（绝不明文）；`local` / 免 key 端点用 `None`。可选回退到 LLM 凭据引用。                                                           |
+| `dimensions`     | `int`         | 向量宽度；决定 `vec_chunks` 的列宽。宽度变化时重新 embedding 会重建 vec 表。                                                                  |
 
 ### `Document` (`domain/knowledge/document.py`)
 
 frozen dataclass；一个 Markdown 文件一条，**按 `kind` 区分**。KB 与 memory 共享该实体；KB 专属数据放在 `metadata` 里。
 
-| Field                       | Type          | Notes                                                                            |
-| --------------------------- | ------------- | --------------------------------------------------------------------------------- |
-| `id`                        | `str`         | `source_sha256` 的前 16 个 hex 字符（KB）—— 即 doc id 与 `<doc-id>.md` 文件名。  |
-| `kind`                      | `str`         | KB 行是 `"knowledge_base"`。                                                     |
-| `resource_name`             | `str`         | KB 资源名。                                                                      |
-| `path`                      | `str`         | Markdown 文件的相对路径，`docs/<doc-id>.md`。                                    |
-| `title`                     | `str`         | 来自 frontmatter / 第一个标题 / 文件名。                                          |
-| `description`               | `str \| None` | 可选摘要。                                                                       |
-| `content_sha256`            | `str`         | **Markdown** 正文的哈希 —— reindex 的 no-op 闸门。                               |
-| `source_mode`               | `str`         | `"converted"` 或 `"edited"`。                                                    |
-| `metadata`                  | `dict`        | 按面区分的 JSON；KB 的 key 见下。                                                |
-| `created_at` / `updated_at` | `datetime`    | UTC。                                                                            |
+| Field                       | Type          | Notes                                                                           |
+| --------------------------- | ------------- | ------------------------------------------------------------------------------- |
+| `id`                        | `str`         | `source_sha256` 的前 16 个 hex 字符（KB）—— 即 doc id 与 `<doc-id>.md` 文件名。 |
+| `kind`                      | `str`         | KB 行是 `"knowledge_base"`。                                                    |
+| `resource_name`             | `str`         | KB 资源名。                                                                     |
+| `path`                      | `str`         | Markdown 文件的相对路径，`docs/<doc-id>.md`。                                   |
+| `title`                     | `str`         | 来自 frontmatter / 第一个标题 / 文件名。                                        |
+| `description`               | `str \| None` | 可选摘要。                                                                      |
+| `content_sha256`            | `str`         | **Markdown** 正文的哈希 —— reindex 的 no-op 闸门。                              |
+| `source_mode`               | `str`         | `"converted"` 或 `"edited"`。                                                   |
+| `metadata`                  | `dict`        | 按面区分的 JSON；KB 的 key 见下。                                               |
+| `created_at` / `updated_at` | `datetime`    | UTC。                                                                           |
 
 KB 的 `metadata` key：`original_filename`、`original_format`、`source_sha256`、`converted_at`、`conversion_engine`。
 
@@ -240,40 +240,40 @@ compute content_sha256 of the new markdown body
 
 ## 级联与完整性规则
 
-| 动作                                | 效果                                                                                                                                                       |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 删除一个 Document                   | 移除 `docs/<id>.md` + `raw/<id>.<ext>`；删除其 `chunks`/`documents_fts`/`vec_chunks` 行；删除 `documents` 行；审计 `KB_DOCUMENT_DELETED`。                |
+| 动作                                | 效果                                                                                                                                                                 |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 删除一个 Document                   | 移除 `docs/<id>.md` + `raw/<id>.<ext>`；删除其 `chunks`/`documents_fts`/`vec_chunks` 行；删除 `documents` 行；审计 `KB_DOCUMENT_DELETED`。                           |
 | 删除一个 KB                         | `on_delete` 钩子：`delete_resource(kind, name)`（documents + chunks + fts + vec）；`rmtree(kb_dir(name))`；删除 `resources` 行；审计 `RESOURCE_DELETED` 带 KB 快照。 |
-| 重命名 KB                           | 禁止（Resource 名不可变；框架强制）。                                                                                                                       |
-| 修改 `chunk_size` / `chunk_overlap` | 允许 → 对语料 re-chunk + re-index。                                                                                                                         |
-| 修改 `embedding` 模型 / dimensions  | 允许 → 对语料重新 embedding（宽度变化时重建 `vec_chunks`）。                                                                                                |
-| 编辑文档的 markdown                 | `source_mode = edited` → reindex 例程。                                                                                                                     |
-| 重转换文档                          | 仅当 `source_mode == converted` 时允许；`edited` ⇒ `ReconversionBlocked`。重新上传新 source 会重置为 `converted`。                                          |
+| 重命名 KB                           | 禁止（Resource 名不可变；框架强制）。                                                                                                                                |
+| 修改 `chunk_size` / `chunk_overlap` | 允许 → 对语料 re-chunk + re-index。                                                                                                                                  |
+| 修改 `embedding` 模型 / dimensions  | 允许 → 对语料重新 embedding（宽度变化时重建 `vec_chunks`）。                                                                                                         |
+| 编辑文档的 markdown                 | 经编辑 API → `source_mode = edited` → reindex 例程。在外部编辑器中对磁盘文件的编辑由读取时惰性重建索引拾取（`content_sha256` 漂移 ⇒ 同一例程）。                     |
+| 重转换文档                          | 仅当 `source_mode == converted` 时允许；`edited` ⇒ `ReconversionBlocked`。重新上传新 source 会重置为 `converted`。                                                   |
 
 ## 新增审计事件
 
 `AuditEventType` 是可扩展的 `StrEnum`。新增：
 
-| 值                       | 何时发出                                                       |
-| ------------------------ | ---------------------------------------------------------------- |
-| `"kb_document_ingested"` | 新文档首次索引后                                                 |
-| `"kb_document_updated"`  | reindex 例程对变更文档重建索引后（编辑 / 重新上传）              |
-| `"kb_document_deleted"`  | 文档删除后                                                       |
-| `"kb_reindexed"`         | 一次完整 `coffer kb reindex` 后（携带逐文档计数）                |
+| 值                       | 何时发出                                            |
+| ------------------------ | --------------------------------------------------- |
+| `"kb_document_ingested"` | 新文档首次索引后                                    |
+| `"kb_document_updated"`  | reindex 例程对变更文档重建索引后（编辑 / 重新上传） |
+| `"kb_document_deleted"`  | 文档删除后                                          |
+| `"kb_reindexed"`         | 一次完整 `coffer kb reindex` 后（携带逐文档计数）   |
 
 KB 生命周期由 kind 无关核心的 `resource_created` / `resource_deleted` 覆盖。内建 MCP 工具调用记录到 `mcp_invocations`（仅工具名 + who/when/duration/outcome）。
 
 ## Importlinter 契约（新增或修订）
 
-| 契约                                                | 效果                                                                                                                                                                |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 —— 分层架构                                       | 不变                                                                                                                                                                  |
-| 2 —— infrastructure ↛ surfaces                      | 不变                                                                                                                                                                  |
-| 3 —— domain 纯净                                    | 不变；`domain/knowledge/*` 只 import 标准库 + Pydantic                                                                                                                |
-| 4 —— keyring 限定于 infrastructure                  | 不变（embedding `credential_ref` 经凭据模块解析）                                                                                                                     |
-| 5 —— 禁止跨 kind import                             | **扩展**：加入 `coffer.{application,surfaces.http}.knowledge_base`；共享的 `coffer.{domain,infrastructure}.knowledge` 基底豁免（kind 无关）                           |
-| 6 —— kind 无关核心 ↛ kind 专属                      | **扩展**：把 `knowledge_base` 模块加入 `forbidden_modules`                                                                                                            |
-| 7（取代旧 LlamaIndex 规则）—— 引擎限定              | `coffer.application.*` 与 `coffer.domain.*` 不得 import `markitdown`、`docling`、`sqlite_vec`、`openai` 或 `fastembed`；只有 `coffer.infrastructure.knowledge.*` 可以 |
+| 契约                                   | 效果                                                                                                                                                                  |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 —— 分层架构                          | 不变                                                                                                                                                                  |
+| 2 —— infrastructure ↛ surfaces         | 不变                                                                                                                                                                  |
+| 3 —— domain 纯净                       | 不变；`domain/knowledge/*` 只 import 标准库 + Pydantic                                                                                                                |
+| 4 —— keyring 限定于 infrastructure     | 不变（embedding `credential_ref` 经凭据模块解析）                                                                                                                     |
+| 5 —— 禁止跨 kind import                | **扩展**：加入 `coffer.{application,surfaces.http}.knowledge_base`；共享的 `coffer.{domain,infrastructure}.knowledge` 基底豁免（kind 无关）                           |
+| 6 —— kind 无关核心 ↛ kind 专属         | **扩展**：把 `knowledge_base` 模块加入 `forbidden_modules`                                                                                                            |
+| 7（取代旧 LlamaIndex 规则）—— 引擎限定 | `coffer.application.*` 与 `coffer.domain.*` 不得 import `markitdown`、`docling`、`sqlite_vec`、`openai` 或 `fastembed`；只有 `coffer.infrastructure.knowledge.*` 可以 |
 
 ## 线上契约（REST）
 
@@ -283,9 +283,9 @@ KB 生命周期由 kind 无关核心的 `resource_created` / `resource_deleted` 
 - `GET /api/v1/knowledge_bases` —— 列出 KB
 - `GET /api/v1/knowledge_bases/{name}` —— 获取单个 KB
 - `POST /api/v1/knowledge_bases/{name}/documents` —— multipart 上传 + ingest（任意格式）
-- `GET /api/v1/knowledge_bases/{name}/documents` —— 分页列表
-- `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— markdown 正文 + frontmatter
-- `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 编辑 markdown（置 `source_mode=edited`，重建索引）
+- `GET /api/v1/knowledge_bases/{name}/documents` —— 分页列表（每行携带绝对 `path` + 所在文件夹 `folder_path`）
+- `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 只读 markdown 正文 + frontmatter + 绝对 `path` + `folder_path`
+- `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 经 API 编辑 markdown（置 `source_mode=edited`，重建索引）；UI 为只读，其余编辑经外部编辑器进行（由读取时惰性重建索引拾取）
 - `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` —— 从 `raw/` 重跑转换（一旦手工编辑过即被 `RECONVERSION_BLOCKED` 拦截）
 - `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 删除单个文档
 - `POST /api/v1/knowledge_bases/{name}/reindex` —— 重扫描 + 从文件重建索引

@@ -357,16 +357,27 @@ def test_document_flow_ingest_get_edit_reconvert_reindex_grep(tmp_path, monkeypa
         doc = ing.json()
         assert doc["source_mode"] == "converted"
         doc_id = doc["id"]
+        # The in-app viewer is read-only: each document carries the absolute
+        # path of its normalized markdown + the containing folder so the desktop
+        # can open-in-external-editor / reveal / copy-path.
+        docs_dir = tmp_path / ".coffer" / "knowledge" / "kb" / "docs"
+        assert doc["path"] == str(docs_dir / f"{doc_id}.md")
+        assert doc["folder_path"] == str(docs_dir)
 
         # list-docs
         listed = c.get("/api/v1/knowledge_bases/kb/documents", headers=_HEADERS)
         assert listed.status_code == 200
         assert listed.json()["total"] == 1
+        listed_doc = listed.json()["documents"][0]
+        assert listed_doc["path"] == str(docs_dir / f"{doc_id}.md")
+        assert listed_doc["folder_path"] == str(docs_dir)
 
         # get-doc (markdown body)
         got = c.get(f"/api/v1/knowledge_bases/kb/documents/{doc_id}", headers=_HEADERS)
         assert got.status_code == 200
         assert "make release" in got.json()["markdown"]
+        assert got.json()["path"] == str(docs_dir / f"{doc_id}.md")
+        assert got.json()["folder_path"] == str(docs_dir)
 
         # edit -> source_mode becomes edited
         ed = c.put(

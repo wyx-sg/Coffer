@@ -100,6 +100,7 @@ class ConfigFileInfo:
     key: str
     display_name: str
     path: str
+    folder_path: str
     format: ConfigFileFormat
     kind: str
     exists: bool
@@ -113,6 +114,8 @@ class ConfigFileContent:
     """Content view of one config file."""
 
     key: str
+    path: str
+    folder_path: str
     format: ConfigFileFormat
     exists: bool
     content: str
@@ -163,6 +166,7 @@ class AgentConfigFileService:
                 key=spec.key,
                 display_name=spec.display_name,
                 path=str(spec.path),
+                folder_path=str(spec.path.parent),
                 format=spec.format,
                 kind=spec.kind.value,
                 exists=listing is not None,
@@ -175,6 +179,7 @@ class AgentConfigFileService:
             key=spec.key,
             display_name=spec.display_name,
             path=str(spec.path),
+            folder_path=str(spec.path.parent),
             format=spec.format,
             kind=spec.kind.value,
             exists=st is not None,
@@ -194,6 +199,8 @@ class AgentConfigFileService:
         text = self._store.read_text(spec.path)
         return ConfigFileContent(
             key=spec.key,
+            path=str(spec.path),
+            folder_path=str(spec.path.parent),
             format=spec.format,
             exists=text is not None,
             content=text or "",
@@ -253,6 +260,8 @@ class AgentConfigFileService:
         text = self._store.read_text(path)
         return ConfigFileContent(
             key=key,
+            path=str(path),
+            folder_path=str(path.parent),
             format=spec.format,
             exists=text is not None,
             content=text or "",

@@ -138,20 +138,6 @@ export async function ingestDocument(
   return (await r.json()) as DocumentOut;
 }
 
-export async function editDocument(
-  kbName: string,
-  documentId: string,
-  markdown: string,
-): Promise<DocumentOut> {
-  const r = await fetch(`${kbBase(kbName)}/documents/${enc(documentId)}`, {
-    method: "PUT",
-    headers: { ...headers(), "Content-Type": "application/json" },
-    body: JSON.stringify({ markdown }),
-  });
-  await checkOk(r);
-  return (await r.json()) as DocumentOut;
-}
-
 export async function deleteDocument(kbName: string, documentId: string): Promise<void> {
   const r = await fetch(`${kbBase(kbName)}/documents/${enc(documentId)}`, {
     method: "DELETE",

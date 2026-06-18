@@ -148,7 +148,10 @@ or update.
 ## Browse a skill's files (read-only)
 
 The desktop app shows a skill's master folder as a file tree and lets you read
-individual files. The same data is available over the REST API.
+individual files in a read-only viewer. To change a file, open it (or its
+containing folder) in your own external editor or file manager via the viewer's
+open / reveal / copy-path affordances. The same read data is available over the
+REST API, and each entry carries its absolute on-disk path.
 
 List the master folder as a recursive tree:
 
@@ -162,18 +165,21 @@ curl -s http://127.0.0.1:8000/api/v1/skills/my-skill/files \
   "root": {
     "name": "my-skill",
     "path": "",
+    "abs_path": "/Users/me/.coffer/skills/my-skill",
     "type": "dir",
     "size": null,
     "children": [
       {
         "name": "scripts",
         "path": "scripts",
+        "abs_path": "/Users/me/.coffer/skills/my-skill/scripts",
         "type": "dir",
         "size": null,
         "children": [
           {
             "name": "run.py",
             "path": "scripts/run.py",
+            "abs_path": "/Users/me/.coffer/skills/my-skill/scripts/run.py",
             "type": "file",
             "size": 42,
             "children": []
@@ -183,6 +189,7 @@ curl -s http://127.0.0.1:8000/api/v1/skills/my-skill/files \
       {
         "name": "SKILL.md",
         "path": "SKILL.md",
+        "abs_path": "/Users/me/.coffer/skills/my-skill/SKILL.md",
         "type": "file",
         "size": 87,
         "children": []
@@ -203,6 +210,8 @@ curl -s "http://127.0.0.1:8000/api/v1/skills/my-skill/files/content?path=SKILL.m
 ```json
 {
   "path": "SKILL.md",
+  "abs_path": "/Users/me/.coffer/skills/my-skill/SKILL.md",
+  "folder_abs_path": "/Users/me/.coffer/skills/my-skill",
   "content": "---\nname: my-skill\n...",
   "truncated": false,
   "binary": false,

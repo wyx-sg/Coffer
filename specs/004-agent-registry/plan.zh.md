@@ -13,7 +13,7 @@
 
 在 registry 之上，本功能新增两项能力：
 
-1. **配置文件查看 + 编辑** —— 每个 agent 类型暴露一份精选的自有配置文件 allowlist（Claude Code：`settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`；Codex：`config.toml`、`AGENTS.md`）。用户以原始文本读取并保存它们；保存会按格式校验、原子写入并保留 `.bak`。同一套原子写入 + `.bak` 机制也支撑 Coffer-MCP 的安装/卸载。
+1. **配置文件只读查看 + 在外部打开** —— 每个 agent 类型暴露一份精选的自有配置文件 allowlist（Claude Code：`settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`；Codex：`config.toml`、`AGENTS.md`）。UI 以只读方式渲染它们，并为每个文件及其所在文件夹提供「在外部编辑器中打开 / 在文件管理器中显示 / 复制路径」（`path`/`folder_path` 这一对）。程序化保存（REST/CLI）按格式校验、原子写入并保留 `.bak`。同一套原子写入 + `.bak` 机制也支撑 Coffer-MCP 的安装/卸载。
 2. **一键安装 Coffer-MCP** —— 把一个 `coffer` stdio MCP-server 条目（指向 `coffer-mcp-shim`）写入/移除到 agent 的 MCP 配置，带状态查询与幂等性。
 
 该 kind 暴露一个 `on_delete` 钩子，由 the 005-skill-manager spec 接入用于 skill binding 的级联清理。同时交付 REST 路由、CLI 子命令与桌面 Agents 页面。
@@ -98,7 +98,7 @@ frontend/src/pages/AgentsPage.tsx                 # 现有列表页
 frontend/src/components/agents/
   AgentAddForm.tsx / AgentEditForm.tsx / AgentTable.tsx   # 现有
   FolderPicker.tsx         # config-dir 文件夹选择器（桌面用 OS 原生对话框；Web 用 GET /fs/browse 文件夹浏览器）
-  AgentConfigPanel.tsx     # 单 agent 的配置文件列表 + 编辑器（文件列表 + 可编辑内容视图，带保存、查找/替换、格式标签）
+  AgentConfigPanel.tsx     # 单 agent 的配置文件列表 + 只读查看器（文件列表 + 只读内容视图，带格式标签，并为文件及其文件夹提供 在外部编辑器中打开 / 显示 / 复制路径）
   AgentMcpInstall.tsx      # 一键安装/卸载开关 + 状态徽标
 frontend/src/lib/api/agents.ts                     # 扩展配置文件 + MCP 安装调用
 frontend/src/lib/hooks/useAgents.ts                # 新增 useAgentConfigFiles / useAgentConfigFile / useAgentMcpInstall
@@ -106,8 +106,9 @@ frontend/src/i18n/locales/{en,zh}.json             # agents.config.* / agents.mc
 ```
 
 agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files** 详情页：
-一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 在可编辑查看器中
-呈现其已知配置文件，带保存控件与一个编辑器内查找/替换便利功能。
+一个 Overview tab 汇总 agent 已注册的配置，一个 Config files tab 在**只读**查看器中
+呈现其已知配置文件，带格式标签，并为每个文件及其所在文件夹提供「在外部编辑器中
+打开 / 在文件管理器中显示 / 复制路径」操作。
 
 ## 阶段
 
@@ -141,11 +142,11 @@ agent 详情页（`/agents/:name`）是一个简单的 **Overview + Config files
 
 ### Phase 4 —— 前端
 
-- `AgentConfigPanel` —— 列出配置文件、在可编辑内容视图里打开某个文件，带保存控件、内联校验错误与一个编辑器内查找/替换（带格式标签）。`AgentMcpInstall` —— 状态徽标 + 安装/卸载开关。
+- `AgentConfigPanel` —— 列出配置文件、在只读内容视图里打开某个文件（带格式标签），并为该文件及其所在文件夹提供「在外部编辑器中打开 / 在文件管理器中显示 / 复制路径」。`AgentMcpInstall` —— 状态徽标 + 安装/卸载开关。
 - agent 详情页是一个简单的 Overview + Config files 详情页。
 - `FolderPicker` —— 无需输入路径即可选择自定义 `config_dir`：打包桌面应用用 OS 原生目录对话框，Web 用 daemon 支撑的 `GET /fs/browse` 文件夹浏览器。add/edit 表单把 agent 名称设为可选（省略时由服务端按类型派生默认名）。
 - 用 TanStack Query + openapi-fetch 接 hooks；英文 + 简体中文 i18n 字符串（`agents.config.*`、`agents.mcp.*`）。
-- e2e（`e2e/web/specs/shell_agents.spec.ts`）：查看一个配置文件；安装 Coffer MCP 并观察状态翻转。
+- e2e（`e2e/web/specs/shell_agents.spec.ts`）：只读查看一个配置文件（及其 打开/显示/复制路径 操作）；安装 Coffer MCP 并观察状态翻转。
 
 ### Phase 5 —— Acceptance + verify
 
@@ -166,7 +167,7 @@ workspace。各层新增模块：
 - **Domain**：`agent/mcp_entries.py`（MCP 条目的解析/移除/开关 + 密钥键检测 + adopt 传输映射）、`agent/plugin_state.py`（Codex/Claude plugin + marketplace 解析，只写文档化的面）、`agent/scan.py`（按类型的 skill 扫描位置，供 spec 005 的未托管扫描使用）以及 `config_files.py` v2（`ConfigFileKind` 目录条目、`instructions` 更名、`subagents`/`hooks` 条目、`validate_child_relpath`）。
 - **Application**：`agent/mcp_entry_service.py`（list/toggle/remove/adopt，密钥经 keychain 路由、注册优先并可回滚）、`agent/plugin_service.py`（list/toggle/Codex 卸载 + 缓存处理）、`config_file_service.py` v2（目录子文件读/写/删、内容指纹与 `ConfigFileStale` → 409、memory-block 提示）。
 - **Surfaces**：`http/agent_workspace_routes.py`（`/agents/{name}/mcp-entries*`、`/agents/{name}/plugins*`）、`agent_config_routes.py` v2（`/config-files/{key}/files/{relpath}` GET/PUT/DELETE + 指纹字段）、`agent_routes.py`（AgentPatch/AgentOut 的 follow 策略字段）；CLI `cli/agent_workspace_cmd.py` 挂接到 `agent_cmd.py` 的既有 typer 上（`coffer agent mcp entries|remove-entry|toggle-entry|adopt`、`coffer agent plugin list|enable|disable|uninstall`、`coffer agent config files|write|rm`、`coffer agent follow`）。
-- **前端**：agent 详情标签页 `AgentMcpServersTab`（gateway + 直连条目、adopt 对话框）、`AgentPluginsTab`，以及 `AgentConfigFilesEditor` v2（目录子文件、过期写入防护、memory-block 提示）。
+- **前端**：agent 详情标签页 `AgentMcpServersTab`（gateway + 直连条目、adopt 对话框）、`AgentPluginsTab`，以及 `AgentConfigFilesEditor`（覆盖单文件与目录子文件的只读查看器——内容只读渲染，为文件及其文件夹提供 在外部编辑器中打开 / 显示 / 复制路径，外加 memory-block 提示；程序化写入/创建/删除仍走 REST/CLI）。
 
 新增 audit 事件：`agent_config_file_deleted`、`agent_mcp_entry_removed`、
 `agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled`。

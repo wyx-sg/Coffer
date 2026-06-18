@@ -8,6 +8,7 @@ MEMORY.md, two scopes (global + per-project), no LLM at write time.
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -79,6 +80,10 @@ class MemoryStoreOut(BaseModel):
     # Absolute git-root a project store was provisioned from; ``None`` for the
     # global store (and for project stores provisioned before this was tracked).
     project_root: str | None = None
+    # Absolute on-disk directory holding the store's per-fact markdown files.
+    # The in-app viewer is read-only; this backs reveal-in-file-manager /
+    # copy-path for the whole store.
+    store_dir: str
     description: str | None = None
     config: MemoryStoreConfigOut
     enabled: bool
@@ -125,6 +130,10 @@ class FactOut(BaseModel):
     actor: Actor
     origin_session_id: str | None = None
     path: str
+    # Absolute path of the fact file's containing folder (the store dir). The
+    # in-app viewer is read-only; the pair backs open-in-external-editor /
+    # reveal-in-file-manager / copy-path.
+    folder_path: str
     created_at: datetime
     updated_at: datetime
 
@@ -141,6 +150,7 @@ class FactOut(BaseModel):
             actor=f.actor,
             origin_session_id=f.origin_session_id,
             path=path,
+            folder_path=str(Path(path).parent),
             created_at=f.created_at,
             updated_at=f.updated_at,
         )

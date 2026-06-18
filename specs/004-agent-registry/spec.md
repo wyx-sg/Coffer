@@ -3,7 +3,7 @@
 **Feature Branch**: `feature/004-agent-registry`
 **Created**: 2026-05-22
 **Status**: Accepted
-**Input**: User description: "Manage which locally-installed AI agents Coffer knows about, so later features (skills, memory, knowledge bases) can deliver assets to them. Each agent is a Resource of kind `agent` in the kind-agnostic Resource framework introduced by spec 001-mcp-gateway. v1 supports two agent types: Claude Code and OpenAI Codex — each covering both its CLI and its desktop/IDE form, which share one on-disk config. Beyond registering agents, the user can view and edit each agent's known config files and install Coffer's own MCP server into an agent with one click."
+**Input**: User description: "Manage which locally-installed AI agents Coffer knows about, so later features (skills, memory, knowledge bases) can deliver assets to them. Each agent is a Resource of kind `agent` in the kind-agnostic Resource framework introduced by spec 001-mcp-gateway. v1 supports two agent types: Claude Code and OpenAI Codex — each covering both its CLI and its desktop/IDE form, which share one on-disk config. Beyond registering agents, the user can view (read-only) each agent's known config files and open them in an external editor, and install Coffer's own MCP server into an agent with one click."
 
 > **Note on agent types.** Supported products: **Claude Code** (`claude_code`, `~/.claude/`), **OpenAI Codex** (`codex`, `~/.codex/`), **Cursor** (`cursor`, `~/.cursor/`), **OpenCode** (`opencode`, `~/.config/opencode/`), **OpenClaw** (`openclaw`, `~/.openclaw/`), and **Hermes** (`hermes`, `~/.hermes/`). Each spans its CLI _and_ its app/IDE form because they read one shared config directory. Per-type behaviour lives in the capability manifest (`AGENT_DESCRIPTORS`) — adding a product is one enum value + one descriptor record (config-file allowlist, MCP injection shape, etc.). The separate **Claude Desktop** chat app (its own `~/Library/Application Support/Claude/` config) is out of scope.
 
@@ -108,13 +108,13 @@ Every add / edit / remove / auto-detection is recorded with timestamp and actor,
 
 ---
 
-### User Story 7 — View and edit an agent's config files (Priority: P2)
+### User Story 7 — View an agent's config files and open them in an external editor (Priority: P2)
 
-After an agent is registered, the user wants to see and adjust that agent's own configuration files (e.g. Claude Code's `settings.json`, Codex's `config.toml`) directly inside Coffer, without leaving the app to hunt for dotfiles. Coffer shows the agent type's curated set of known config files, lets the user open one to read its current content, edit it in place, and save it back. On save, Coffer validates the content against the file's format (malformed JSON/TOML is rejected and the file is left unchanged), writes it atomically, and keeps a `.bak` of the prior version so a bad edit is always recoverable. A dependency-free in-editor find / replace tool is offered as a convenience while editing.
+After an agent is registered, the user wants to see that agent's own configuration files (e.g. Claude Code's `settings.json`, Codex's `config.toml`) directly inside Coffer, without leaving the app to hunt for dotfiles. Coffer shows the agent type's curated set of known config files and lets the user open one to read its current content in a **read-only** viewer. For each file (and its containing folder) Coffer offers open-in-external-editor, reveal-in-file-manager, and copy-path affordances, so the user makes any edits in their own editor. Coffer does not edit config-file content in place; the programmatic write path (REST/CLI) keeps the validate + atomic-write + `.bak` safety net.
 
-**Why this priority**: Locating agent config by hand means remembering where each file lives and what format it uses. Surfacing the curated set in one place — viewable and editable at a glance, with a safety net for bad edits — is the first feature that makes the registry useful beyond bookkeeping.
+**Why this priority**: Locating agent config by hand means remembering where each file lives and what format it uses. Surfacing the curated set in one place — viewable at a glance, one click from the user's own editor — is the first feature that makes the registry useful beyond bookkeeping.
 
-**Independent Test**: Register a `claude_code` agent; list its config files; open `settings.json`; edit and save it; observe the new content reads back and a `.bak` was kept; open a not-yet-created file (e.g. `CLAUDE.md`) and observe it reads as empty without being created.
+**Independent Test**: Register a `claude_code` agent; list its config files; open `settings.json` in the read-only viewer and observe the response surfaces the file's `path` and containing-folder `folder_path` (backing open/reveal/copy-path); open a not-yet-created file (e.g. `CLAUDE.md`) and observe it reads as empty without being created.
 
 **Covering scenarios**:
 
@@ -122,8 +122,6 @@ After an agent is registered, the user wants to see and adjust that agent's own 
 - read the content of an existing config file
 - read a not-yet-created config file as empty
 - reject reading a key outside the agent type's allowlist
-- save a config file with valid content
-- reject malformed config-file content
 
 ---
 
@@ -217,7 +215,7 @@ Per-agent plugin support:
 
 ### User Story 12 — Manage directory-type config entries (Priority: P2)
 
-Some agent configuration is a directory of prose files, not a single file — Claude Code's `agents/` directory holds one Markdown file per personal subagent, OpenCode keeps both an `agents/` (subagents) and a `commands/` (slash commands) directory, and Hermes keeps a `cron/` directory of scheduled jobs. The user expands such an entry in the config-files tab, sees its files, opens one to edit, creates a new one, or deletes one — with the same validation, atomic-write, and `.bak` safety net as single-file entries. The allowlist also gains Codex's `hooks.json`; the `memory` key is renamed `instructions` (CLAUDE.md / AGENTS.md are human-authored instructions, not agent-written memory); and each agent's instructions/identity surfaces are allowlisted (Cursor's global `.cursorrules` + `AGENTS.md`, Hermes's `SOUL.md` + `USER.md`).
+Some agent configuration is a directory of prose files, not a single file — Claude Code's `agents/` directory holds one Markdown file per personal subagent, OpenCode keeps both an `agents/` (subagents) and a `commands/` (slash commands) directory, and Hermes keeps a `cron/` directory of scheduled jobs. The user expands such an entry in the config-files tab and sees its files, opening one in the read-only viewer (with open-in-external-editor / reveal / copy-path for the child file and its folder). Creating, writing, and deleting individual files is available programmatically through the REST API / `coffer agent` CLI — with the same validation, atomic-write, and `.bak` safety net as single-file entries. The allowlist also gains Codex's `hooks.json`; the `memory` key is renamed `instructions` (CLAUDE.md / AGENTS.md are human-authored instructions, not agent-written memory); and each agent's instructions/identity surfaces are allowlisted (Cursor's global `.cursorrules` + `AGENTS.md`, Hermes's `SOUL.md` + `USER.md`).
 
 **Why this priority**: Subagent definitions are exactly the kind of shareable prose the hub model wants visible first, adoptable later; today they are invisible.
 
@@ -251,7 +249,7 @@ Some agent configuration is a directory of prose files, not a single file — Cl
 - **Adoption requested for an entry equivalent to an existing resource**: Coffer reports the match (`matches_resource`) and offers removing the redundant direct entry instead of creating a duplicate resource.
 - **Plugin configured but cache directory missing**: Listed with `cache_present=false` so the user sees the drift; Coffer does not attempt repair (reinstalling is the agent's own tooling).
 - **The agent's own process rewrites a config file between Coffer's read and write**: The write is rejected as stale (fingerprint mismatch, 409); the user re-reads and retries. The `.bak` of every Coffer write keeps the prior content recoverable in the reverse race.
-- **Instructions file contains the spec-007 memory-projection managed block**: The editor surfaces that the block is owned by the memory feature; editing outside the block is unrestricted.
+- **Instructions file contains the spec-007 memory-projection managed block**: The read-only viewer annotates that the block is owned by the memory feature; any editing happens in the user's external editor.
 - **`~/.codex/auth.json` and other credential/state files**: Never enter any allowlist or listing; plugin and MCP parsing never reads them.
 
 ## Acceptance Scenarios
@@ -360,7 +358,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 - **Given** a registered `claude_code` agent,
 - **When** the user lists its config files,
-- **Then** Coffer returns the curated set for the type — `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md` (key `instructions`), and the `agents/` directory entry — each with its resolved path, format, and an `exists` flag (with size + modified time when present).
+- **Then** Coffer returns the curated set for the type — `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md` (key `instructions`), and the `agents/` directory entry — each with its resolved path, its containing-folder absolute path (`folder_path`), format, and an `exists` flag (with size + modified time when present).
 
 ### Scenario: read an existing config file
 
@@ -383,13 +381,13 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 ### Scenario: save a config file with valid content
 
 - **Given** a registered `claude_code` agent whose `settings.json` exists,
-- **When** the user writes new, well-formed content to that config-file key,
+- **When** the user writes new, well-formed content to that config-file key through the REST API or `coffer agent` CLI (the in-app UI is read-only),
 - **Then** Coffer validates the content against the file's format, writes it atomically while keeping a `.bak` of the prior version, records an `agent_config_file_written` audit entry, and the new content reads back on the next read.
 
 ### Scenario: reject malformed config-file content
 
 - **Given** a registered agent whose `settings.json` (a `json` file) exists,
-- **When** the user writes malformed content (e.g. invalid JSON) to that key,
+- **When** the user writes malformed content (e.g. invalid JSON) to that key through the REST API or `coffer agent` CLI (the in-app UI is read-only),
 - **Then** Coffer responds `unprocessable_entity` (422), leaves the on-disk file unchanged, writes no `.bak`, and records no write audit entry.
 
 ### Scenario: report Coffer-MCP install status
@@ -521,13 +519,13 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 ### Scenario: create a file inside a directory entry
 
 - **Given** a registered `claude_code` agent with an `agents/` directory entry,
-- **When** the user writes content to a new `.md` file path inside the entry,
+- **When** the user writes content to a new `.md` file path inside the entry through the REST API or `coffer agent` CLI (the in-app UI is read-only),
 - **Then** the file is created via the atomic-write machinery, an `agent_config_file_written` audit entry is recorded, and the next listing includes it.
 
 ### Scenario: delete a file inside a directory entry
 
 - **Given** a directory entry containing a file,
-- **When** the user deletes that file,
+- **When** the user deletes that file through the REST API or `coffer agent` CLI (the in-app UI is read-only),
 - **Then** the file is removed with its prior content preserved as `.bak`, an `agent_config_file_deleted` audit entry is recorded, and the next listing no longer shows it.
 
 ### Scenario: reject directory file paths outside the entry
@@ -602,9 +600,9 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 **Config files**
 
 - **FR-013**: Each supported agent type MUST define a curated allowlist of config files (in its capability-manifest record), each entry carrying a stable `key`, a display name, a resolved absolute path, and a `format` (`json`, `toml`, `yaml`, `markdown`, or `text`). Claude Code → `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md` (key `instructions`), and the `agents/` directory entry (FR-034); Codex → `config.toml`, `AGENTS.md` (key `instructions`), and `hooks.json`; Cursor → `mcp.json`, `.cursorrules` (key `rules`), `AGENTS.md` (key `instructions`); OpenCode → `opencode.json`, `AGENTS.md`, and the `agents/` (key `subagents`) and `commands/` directory entries (FR-034); OpenClaw → `openclaw.json` (its instructions/identity file is not reliably documented, so none is added until confirmed); Hermes → `config.yaml`, `SOUL.md` (key `instructions`), `USER.md` (key `identity_user`), and the `cron/` directory entry (FR-034). The allowlist for the newer agents covers each agent's config, instructions/identity, and managed directory surfaces, and grows as their other facets land. The former `memory` key is renamed `instructions` — these files are human-authored instructions, distinct from agent-written memory (spec 007's domain).
-- **FR-014**: Users MUST be able to list an agent's config files with, for each, its key, display name, path, format, and existence (plus size and modified time when the file exists).
+- **FR-014**: Users MUST be able to list an agent's config files with, for each, its key, display name, path, the containing-folder absolute path (`folder_path`), format, and existence (plus size and modified time when the file exists). The `path`/`folder_path` pair feeds the read-only UI's open-in-external-editor / reveal-in-file-manager / copy-path affordances (FR-038).
 - **FR-015**: Users MUST be able to read the content of any allowlisted config file. A file that does not exist reads as empty content with `exists=false` and is not created by the read.
-- **FR-016**: Users MUST be able to write (save) the content of any allowlisted config file. The content MUST be validated against the file's `format` before any write; malformed `json`/`toml` MUST be rejected (`unprocessable_entity`, 422) and the on-disk file left unchanged. `markdown`/`text` files accept any content.
+- **FR-016**: The system MUST expose a programmatic write (save) for the content of any allowlisted config file through the REST API and the `coffer agent` CLI; the in-app UI is read-only and does not write config-file content. The content MUST be validated against the file's `format` before any write; malformed `json`/`toml` MUST be rejected (`unprocessable_entity`, 422) and the on-disk file left unchanged. `markdown`/`text` files accept any content.
 - **FR-017**: Writes MUST be atomic (temp file + rename) and MUST keep a `.bak` copy of the prior content so a bad edit is recoverable; each successful write MUST record an `agent_config_file_written` audit entry. The Coffer-MCP install/uninstall operations (FR-022) reuse the same atomic-write + `.bak` machinery.
 - **FR-018**: Config-file read and write MUST be addressable only by allowlisted `key` (never by caller-supplied path); an unknown key returns `not_found` (404) and performs no filesystem access.
 
@@ -633,14 +631,15 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 **Directory config entries (workspace amendment)**
 
 - **FR-034**: A config-file allowlist entry MAY be a **directory entry** (`kind=directory`): it resolves to a directory and lists its files (entry-relative path, size, modified time) instead of carrying content. v1 directory entries: Claude Code `agents/` (one Markdown file per personal subagent, nested paths allowed). A missing directory lists as `exists=false` with no files; the read never creates it.
-- **FR-035**: Users MUST be able to read, write (create-on-write), and delete individual files inside a directory entry. Child paths are validated server-side before any filesystem access: they MUST resolve inside the entry's directory (no `..`, no absolute paths, no symlink escape) and carry the `.md` extension. Writes reuse FR-017's machinery; deletion preserves the prior content as `.bak`. Audited as `agent_config_file_written` / `agent_config_file_deleted`.
+- **FR-035**: Users MUST be able to read individual files inside a directory entry; this read is available to the UI's read-only viewer. Write (create-on-write) and delete of individual files are programmatic, available through the REST API and the `coffer agent` CLI. Child paths are validated server-side before any filesystem access: they MUST resolve inside the entry's directory (no `..`, no absolute paths, no symlink escape) and carry the `.md` extension. Writes reuse FR-017's machinery; deletion preserves the prior content as `.bak`. Audited as `agent_config_file_written` / `agent_config_file_deleted`.
 - **FR-036**: Config-file reads (single files and directory children) MUST return a content fingerprint; writes MUST carry it back and are rejected with `conflict` (409) when the on-disk content changed since the read, leaving the file untouched.
-- **FR-037**: When an instructions file contains the managed memory-projection block defined by spec 007, the editor MUST surface that the block is owned by the memory feature. The marker format is defined by spec 007; this spec only requires the notice.
+- **FR-037**: When an instructions file contains the managed memory-projection block defined by spec 007, the read-only viewer MUST annotate that the block is owned by the memory feature. The marker format is defined by spec 007; this spec only requires the notice.
 
 **Surfaces**
 
-- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, and plugin list/toggle/uninstall — MUST be available through (a) the REST API, (b) the `coffer agent ...` CLI, and (c) the desktop Agents page.
+- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, and plugin list/toggle/uninstall — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The desktop Agents page MUST expose all of these EXCEPT config-file content writes (single files and directory children): in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager / copy-path affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path.
 - **FR-010**: The CLI MUST support `--json` for machine-readable output on every read operation.
+- **FR-038**: For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor**, **reveal-in-file-manager**, and **copy-path** actions for both the file itself and its containing folder, using the `path`/`folder_path` pair from FR-014/FR-015. In the packaged desktop app (Tauri) open and reveal perform the real OS action; on the web they fall back to copy-path. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by spec 002-ui-shell (not re-specified here).
 
 **Observability**
 
@@ -657,7 +656,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **Agent**: A Resource of kind `agent`. Represents one locally-installed AI agent. Config: `type` (supported enum), `config_dir` (optional absolute-path override; defaults to the type's standard location). Skills are delivered to `<config_dir>/skills`. Identified by `agent:<name>`.
 - **Agent Type**: An enum value identifying a known agent product (`claude_code`, `codex`, `cursor`, `opencode`, `openclaw`, `hermes`). Each value maps to a record in the **capability manifest** (`AGENT_DESCRIPTORS`) carrying its default `config_dir`, display name, install-marker (for discovery), curated **config-file allowlist**, and **MCP injection shape**.
 - **Agent Candidate**: A discovered installed-but-unregistered agent — `type`, `display_name`, `config_dir` (the type's default config directory), `default_skill_dir`, and `suggested_name`. Derived at scan time, never stored; the user confirms a candidate to register it.
-- **Config File**: A curated, allowlisted file belonging to an agent type, identified by a stable `key`. Carries a display name, a resolved absolute path, a `format` (`json` / `toml` / `markdown` / `text`), and (when present) size and modified time. Read/written by key, never by arbitrary path. Not persisted in SQLite — the file on disk is the source of truth.
+- **Config File**: A curated, allowlisted file belonging to an agent type, identified by a stable `key`. Carries a display name, a resolved absolute path, its containing-folder absolute path (`folder_path`), a `format` (`json` / `toml` / `markdown` / `text`), and (when present) size and modified time. Surfaced read-only in the UI (view its content, open it / its folder in an external editor); read and programmatically written by key (REST/CLI), never by arbitrary path. Not persisted in SQLite — the file on disk is the source of truth.
 - **Coffer MCP Install Status**: Derived (not stored) state for an agent: whether a `coffer` MCP-server entry is present in that agent's MCP config file.
 - **Agent MCP Entry**: A derived (never stored) view of one MCP server configured in the agent's own files — name, source file, transport, `enabled` (Codex), `is_coffer`, `matches_resource`. The file is the source of truth; Coffer reads, edits, removes, or adopts entries but keeps no copy.
 - **Agent Plugin**: A derived (never stored) view of one installed plugin — id (`<name>@<marketplace>`), marketplace, enabled state, `cache_present`. Enabled state lives in each agent's documented config surface; the inventory files of Claude Code are read-only inputs.
@@ -672,7 +671,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **SC-003**: Every Acceptance Scenario in this spec is covered by at least one test marked `acceptance(spec="004-agent-registry", scenario="…")`, and `make verify-acceptance` reports zero uncovered scenarios.
 - **SC-004**: The full `make verify` suite passes locally and in CI; `make verify-all` (adding e2e) passes on macOS and Linux.
 - **SC-005**: No `config_dir` value ever permits writing outside the directory itself (path-traversal check); validated by a dedicated security test.
-- **SC-006**: A user can open, edit, and save an agent's `settings.json` (Claude Code) or `config.toml` (Codex) from both the desktop app and the CLI; a malformed save is rejected with the file left unchanged, and a `.bak` of the prior version is kept on a successful save.
+- **SC-006**: A user can open an agent's `settings.json` (Claude Code) or `config.toml` (Codex) read-only in Coffer and, from the desktop app, open it in their external editor; the programmatic save (REST/CLI) still validates the content (a malformed save is rejected with the file left unchanged) and keeps a `.bak` of the prior version on a successful save.
 - **SC-007**: A user can install Coffer's MCP into a freshly-registered agent in one click and, after restarting that agent, the agent lists Coffer's aggregated tools; re-installing never duplicates the entry, and uninstall removes it.
 - **SC-008**: The MCP tab lists exactly the entries present in the agent's real config files, and adopting a direct entry completes the full round trip — resource registered, gateway serving it, direct entry gone — in one user action plus at most one confirmation.
 - **SC-009**: Plugin toggles change only the documented config surface: a test asserts the agents' internal state files are byte-identical before and after every toggle.
@@ -683,7 +682,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - The user runs Coffer on their own machine; there is no multi-tenant or remote-access requirement.
 - v1's two supported agent types (`claude_code`, `codex`) cover the user's installed agents; adding a new type (e.g. the Claude Desktop chat app, Cursor, Gemini CLI) is a future-spec change that adds another enum value, install-marker scanner, and config-file allowlist.
 - Each supported agent's CLI and app/IDE form read one shared config directory (`~/.claude/` for Claude Code, `~/.codex/` for Codex), so Coffer manages one config set per agent.
-- Config files are surfaced as raw text the user can edit and save (with a `.bak` safety net); an in-editor find / replace is a UI convenience. The raw editor is the escape hatch for the long tail; recurring structured needs graduate into facets (MCP entries, plugins) per the workspace amendment. The credential/state file `~/.codex/auth.json` is intentionally excluded from the allowlist.
+- Config files are surfaced as raw text the user can view read-only; editing happens in the user's external editor (opened from the viewer), while the programmatic write path (REST/CLI) keeps the validate + atomic-write + `.bak` safety net. The read-only viewer plus open-in-external-editor is the escape hatch for the long tail; recurring structured needs graduate into facets (MCP entries, plugins) per the workspace amendment. The credential/state file `~/.codex/auth.json` is intentionally excluded from the allowlist.
 - The agents' internal state files (`~/.claude.json` beyond its `mcpServers` map, `~/.claude/plugins/*.json`, Codex's `[marketplaces.*]` / `[hooks.state.*]` / `[projects.*]` tables) are read as inputs where needed and never written by the workspace facets; the documented configuration surfaces verified against each vendor's docs are the only write targets. In practice (verified on a real machine) user-scope Claude Code MCP servers live in `~/.claude.json` `mcpServers` and may also appear in `settings.json` `mcpServers` — both are parsed.
 - Workspace facets follow the ingest → hub → deliver principle: shareable content found in an agent's workspace is adoptable into Coffer's hub (MCP gateway here; the master skill store via spec 005's companion amendment) rather than managed as per-agent one-offs. Cross-machine sharing of the hub itself is a future spec (and constitutional amendment); these facets are designed so their state serializes to declarative manifests when that lands.
 - Agents store their skill libraries on the local filesystem under `<config_dir>/skills`. Web-only agents (e.g., claude.ai) are out of scope for v1 and require a future spec to add API-based sync.

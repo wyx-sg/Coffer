@@ -535,12 +535,23 @@ components:
 
     SkillFileNodeOut:
       type: object
-      required: [name, path, type]
+      required: [name, path, abs_path, folder_abs_path, type]
       properties:
         name: { type: string }
         path:
           type: string
           description: POSIX path relative to the master folder root ("" for the root).
+        abs_path:
+          type: string
+          description: >-
+            Resolved absolute path of this entry on disk. The in-app file
+            viewer is read-only; this path backs open-in-external-editor /
+            reveal-in-file-manager / copy-path.
+        folder_abs_path:
+          type: string
+          description: >-
+            Absolute path of this entry's containing folder (its parent
+            directory). For the root node it equals the master folder's parent.
         type: { type: string, enum: [file, dir] }
         size:
           type: integer
@@ -609,11 +620,20 @@ components:
 
     SkillFileContentOut:
       type: object
-      required: [path, content, truncated, binary, size]
+      required: [path, abs_path, folder_abs_path, content, truncated, binary, size]
       properties:
         path:
           type: string
           description: POSIX path relative to the master folder root.
+        abs_path:
+          type: string
+          description: >-
+            Resolved absolute path of the file on disk. The in-app viewer is
+            read-only; this path backs open-in-external-editor /
+            reveal-in-file-manager / copy-path.
+        folder_abs_path:
+          type: string
+          description: Absolute path of the file's containing folder (its parent directory).
         content:
           type: string
           description: File text; empty when `binary` is true.

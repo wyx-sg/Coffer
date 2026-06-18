@@ -14,15 +14,15 @@
 
 ## Technical Context
 
-| Dimension                                        | Value                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Language / Version**                           | Python 3.12+, TypeScript 5.x                                                                                                                                                                                                                                                                                                                                                                       |
+| Dimension                                        | Value                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Language / Version**                           | Python 3.12+, TypeScript 5.x                                                                                                                                                                                                                                                                                                                                      |
 | **Primary Dependencies (added by the redesign)** | `markitdown`（默认 Markdown 转换器，藏在 `MarkdownConverter` 端口后）；`sqlite-vec`（`coffer.db` 里的向量索引）；FTS5（SQLite 自带）；`openai`（一个 `AsyncOpenAI` 客户端，可换 `base_url`，用于 embedding）；可选 `fastembed`（in-process 本地 embedding）；grep 用的 `ripgrep` 二进制。**移除**：`llama-index-*`、`sentence-transformers`、`chromadb`、`mem0`。 |
-| **Storage**                                      | `~/.coffer/coffer.db` 的 SQLite（resources / documents / chunks / FTS5 / sqlite-vec / audit）；`~/.coffer/knowledge/<name>/` 下的 Markdown + raw 文件。                                                                                                                                                                                                                                            |
-| **Testing**                                      | 4 层。Acceptance 标记把测试绑定到 `spec.md` 场景。集成层用真实 SQLite（FTS5 + sqlite-vec）；`FakeMarkdownConverter` + `FakeEmbedder` 保持单元测试纯净；一个集成测试在 `pytest.importorskip` 后跑真实 MarkItDown。                                                                                                                                                                                  |
-| **Performance Goals**                            | SC-002：50 文档 KB 上 keyword ≤ 200 ms、grep ≤ 500 ms 的 REST 墙钟。                                                                                                                                                                                                                                                                                                                               |
-| **Constraints**                                  | 转换器 + sqlite-vec + embedding SDK 限制在 `coffer.infrastructure.*`（importlinter）；keyword+grep 零配置离线工作；vector 可调用第三方 embedding API；某转换库缺失时 daemon 照常启动（该格式降级为 `EngineUnavailable`）。                                                                                                                                                                         |
-| **Scale / Scope**                                | 单用户；≤ 20 个 KB；每个 KB ≤ 500 文档；每文档 ≤ 25 MB（默认）。                                                                                                                                                                                                                                                                                                                                   |
+| **Storage**                                      | `~/.coffer/coffer.db` 的 SQLite（resources / documents / chunks / FTS5 / sqlite-vec / audit）；`~/.coffer/knowledge/<name>/` 下的 Markdown + raw 文件。                                                                                                                                                                                                           |
+| **Testing**                                      | 4 层。Acceptance 标记把测试绑定到 `spec.md` 场景。集成层用真实 SQLite（FTS5 + sqlite-vec）；`FakeMarkdownConverter` + `FakeEmbedder` 保持单元测试纯净；一个集成测试在 `pytest.importorskip` 后跑真实 MarkItDown。                                                                                                                                                 |
+| **Performance Goals**                            | SC-002：50 文档 KB 上 keyword ≤ 200 ms、grep ≤ 500 ms 的 REST 墙钟。                                                                                                                                                                                                                                                                                              |
+| **Constraints**                                  | 转换器 + sqlite-vec + embedding SDK 限制在 `coffer.infrastructure.*`（importlinter）；keyword+grep 零配置离线工作；vector 可调用第三方 embedding API；某转换库缺失时 daemon 照常启动（该格式降级为 `EngineUnavailable`）。                                                                                                                                        |
+| **Scale / Scope**                                | 单用户；≤ 20 个 KB；每个 KB ≤ 500 文档；每文档 ≤ 25 MB（默认）。                                                                                                                                                                                                                                                                                                  |
 
 ## Constitution Check
 
@@ -122,7 +122,7 @@ frontend/src/kinds/knowledge_base/
 ├── KnowledgeBaseForm.tsx     # name, description, enabled modes, chunk params, embedding provider
 ├── KnowledgeBaseDetailPage.tsx
 ├── DocumentTable.tsx         # shared DataTable; source_mode badge
-├── DocumentViewer.tsx        # render + edit Markdown; reindex action
+├── DocumentViewer.tsx        # read-only Markdown render + open-in-editor / reveal / copy-path
 ├── UploadDropzone.tsx
 ├── SearchPanel.tsx           # mode selector (grep/keyword/vector) + results
 └── schema.ts
@@ -166,7 +166,7 @@ backend/tests/
 
 ## Phase 4 — Frontend
 
-`KnowledgeBaseForm`（zod 对齐 `KnowledgeBaseConfig`）→ `KnowledgeBaseDetailPage`（DocumentTable + UploadDropzone + DocumentViewer 编辑/重建索引 + 带模式选择器的 SearchPanel）→ 注册 `KNOWLEDGE_BASE_KIND_UI` → 每个 UI acceptance 场景一个测试。
+`KnowledgeBaseForm`（zod 对齐 `KnowledgeBaseConfig`）→ `KnowledgeBaseDetailPage`（DocumentTable + UploadDropzone + 只读 DocumentViewer，含在编辑器中打开 / 显示 / 复制路径 + 带模式选择器的 SearchPanel）→ 注册 `KNOWLEDGE_BASE_KIND_UI` → 每个 UI acceptance 场景一个测试。
 
 ## Phase 5 — Verification
 
@@ -181,14 +181,14 @@ backend/tests/
 
 ## Risks & mitigations
 
-| Risk                                                              | Mitigation                                                                                                                             |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| PDF 上 MarkItDown 的转换保真度(open item) | 转换器藏在端口 + 按格式注册表后；未来切换或为某格式接入更高保真引擎，只是在 `infrastructure/knowledge/converters/` 下新增一个转换器。    |
-| sqlite-vec 在 macOS arm64 + Linux 的打包/加载         | `vec_index.py` 是唯一加载者；集成测试用 `pytest.importorskip` 守护；vector 模式可选，加载失败降级为 keyword（FR-012），不阻塞 daemon。 |
-| embedding API 成本/延迟/可用性                                    | 默认 keyword+grep（无 embedding）。请求 vector 但未配置时回退 keyword 并标注。出站调用走 SSRF 防护客户端并带超时。                     |
-| 本地 embedding 模型对中文的质量                   | 双语语料推荐 `bge-m3`（fastembed）或云 provider；在 quickstart 中记录。                                                                |
-| 运行时转换库缺失                                                  | 按格式给出 `EngineUnavailable` 并指明缺失依赖；其他格式照常 ingest；daemon 不挂。                                                      |
-| 参数变化时的重新切块/重新 embedding 成本                          | 文件是真相源，单一 reindex 例程便宜地重导；`content_sha256` no-op 跳过未变文档。                                                       |
+| Risk                                          | Mitigation                                                                                                                             |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| PDF 上 MarkItDown 的转换保真度(open item)     | 转换器藏在端口 + 按格式注册表后；未来切换或为某格式接入更高保真引擎，只是在 `infrastructure/knowledge/converters/` 下新增一个转换器。  |
+| sqlite-vec 在 macOS arm64 + Linux 的打包/加载 | `vec_index.py` 是唯一加载者；集成测试用 `pytest.importorskip` 守护；vector 模式可选，加载失败降级为 keyword（FR-012），不阻塞 daemon。 |
+| embedding API 成本/延迟/可用性                | 默认 keyword+grep（无 embedding）。请求 vector 但未配置时回退 keyword 并标注。出站调用走 SSRF 防护客户端并带超时。                     |
+| 本地 embedding 模型对中文的质量               | 双语语料推荐 `bge-m3`（fastembed）或云 provider；在 quickstart 中记录。                                                                |
+| 运行时转换库缺失                              | 按格式给出 `EngineUnavailable` 并指明缺失依赖；其他格式照常 ingest；daemon 不挂。                                                      |
+| 参数变化时的重新切块/重新 embedding 成本      | 文件是真相源，单一 reindex 例程便宜地重导；`content_sha256` no-op 跳过未变文档。                                                       |
 
 ## Out of scope (deferred)
 

@@ -77,7 +77,7 @@ The substrate (`coffer.{domain,infrastructure}.knowledge`) is **shared with spec
 - [x] T-0080 `frontend/src/kinds/knowledge_base/schema.ts` (zod mirrors `KnowledgeBaseConfig` incl. embedding)
 - [x] T-0081 `KnowledgeBaseForm.tsx` (enabled modes, chunk params, optional embedding provider)
 - [x] T-0082 `KnowledgeBaseDetailPage.tsx` (DocumentTable + UploadDropzone + DocumentViewer + SearchPanel)
-- [x] T-0083 `DocumentTable.tsx`, `DocumentViewer.tsx` (render + edit + reindex), `UploadDropzone.tsx`, `SearchPanel.tsx` (mode selector)
+- [x] T-0083 `DocumentTable.tsx`, `DocumentViewer.tsx` (read-only render + open-in-editor / reveal / copy-path), `UploadDropzone.tsx`, `SearchPanel.tsx` (mode selector)
 - [x] T-0084 `frontend/src/kinds/knowledge_base/index.tsx` (`KNOWLEDGE_BASE_KIND_UI`) + register in `frontend/src/kinds.ts`
 - [x] T-0085 Frontend tests for form, table, detail page, search panel
 

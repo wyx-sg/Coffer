@@ -86,25 +86,9 @@ export function useAgentConfigFile(name: string, key: string | null) {
   });
 }
 
-// Save (atomic write + `.bak`). On success, refetch both the per-file content
-// query (key/size/mtime change) and the list query (existence/size metadata).
-// `expected_fingerprint` (when the content query supplied one) makes the
-// server reject the write with 409 CONFIG_FILE_STALE if the file changed on
-// disk since it was read.
-export function useSaveAgentConfigFile(name: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { key: string; content: string; expected_fingerprint?: string }) =>
-      agentsApi.writeConfigFile(name, vars.key, {
-        content: vars.content,
-        expected_fingerprint: vars.expected_fingerprint,
-      }),
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: configFileKey(name, vars.key) });
-      qc.invalidateQueries({ queryKey: configFilesKey(name) });
-    },
-  });
-}
+// Config files are read-only in the UI (editing happens in the user's own
+// editor). There is no save/write hook — only the read queries above and the
+// child read query below.
 
 // --- Coffer MCP install (spec 004 v2) ---
 
@@ -205,45 +189,13 @@ export function useUninstallPlugin(agentName: string) {
   });
 }
 
-// --- Config-file children (specs 004/005 workspace amendment) ---
+// --- Config-file children (specs 004/005 workspace amendment) — read-only ---
 
 export function useAgentConfigChild(name: string, key: string, relpath: string) {
   return useQuery({
     queryKey: ["agents", name, "config-files", key, relpath],
     queryFn: () => agentsApi.readConfigChild(name, key, relpath),
     enabled: !!name && !!key && !!relpath,
-  });
-}
-
-export function useWriteConfigChild(agentName: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      key,
-      relpath,
-      content,
-      expected_fingerprint,
-    }: {
-      key: string;
-      relpath: string;
-      content: string;
-      expected_fingerprint?: string;
-    }) => agentsApi.writeConfigChild(agentName, key, relpath, { content, expected_fingerprint }),
-    onSuccess: (_data, { key, relpath }) => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "config-files"] });
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "config-files", key, relpath] });
-    },
-  });
-}
-
-export function useDeleteConfigChild(agentName: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ key, relpath }: { key: string; relpath: string }) =>
-      agentsApi.deleteConfigChild(agentName, key, relpath),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "config-files"] });
-    },
   });
 }
 

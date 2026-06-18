@@ -9,7 +9,6 @@ import { ApiError } from "@/lib/api/errors";
 import {
   createKnowledgeBase,
   deleteDocument,
-  editDocument,
   getDocument,
   getKnowledgeBase,
   getKnowledgeBaseMetrics,
@@ -176,22 +175,6 @@ describe("ingestDocument", () => {
     const body = init?.body as FormData;
     expect(body.get("replace")).toBe("true");
     expect((body.get("file") as File).name).toBe("a.md");
-  });
-});
-
-describe("editDocument", () => {
-  test("PUTs the new markdown to the document URL", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ id: "d1", title: "a", source_mode: "edited" }));
-
-    const out = await editDocument("kb1", "d1", "# edited");
-    expect(out.source_mode).toBe("edited");
-
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/knowledge_bases/kb1/documents/d1`);
-    expect(init?.method).toBe("PUT");
-    expect(JSON.parse(init!.body as string)).toEqual({ markdown: "# edited" });
   });
 });
 

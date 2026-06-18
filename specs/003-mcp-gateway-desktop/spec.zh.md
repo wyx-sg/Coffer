@@ -140,6 +140,7 @@
 - **FR-D08**: Tauri bundle MUST 把 `coffer-daemon` 与 `coffer-mcp-shim` 声明为 PyInstaller sidecar，写在 `desktop/tauri.conf.json` 的 `bundle.externalBin` 中。运行时无系统 Python 依赖。
 - **FR-D09**: release 流水线 MUST 在每个 `v*` tag 上、基于同一组 PyInstaller 二进制，**仅为 macOS arm64**产出两个下载层级：(a) **CLI+desktop** 层级 —— 一份未签名 macOS arm64 `.dmg`（命名为 `*-unsigned.dmg`）外加一份打包的 `Coffer-unsigned-<triple>.app.zip`；(b) **CLI-only** 层级 —— 一份 `coffer-cli-<triple>.tar.gz`，含 `coffer`、`coffer-daemon` 与 `coffer-mcp-shim`。macOS x64（Intel）以及 Linux / Windows bundle 刻意不构建 —— 那些 leg 从未验证过，且 Intel runner 池正在被弃用；acceptance 矩阵断言只构建 macOS-arm64。
 - **FR-D10**: release 流水线 MUST 产出一份聚合的 `SHA256SUMS` 文件（在 CI 中生成；release job 跨矩阵 leg 拼接），覆盖每一份制品，使下载者无需仅信任 GitHub Release UI 即可校验完整性。
+- **FR-D11**: 桌面外壳 MUST 集成 `tauri-plugin-opener`，具备在外部应用中打开文件系统路径（`opener:allow-open-path`）以及在操作系统文件管理器中显示某路径（`opener:allow-reveal-item-in-dir`）的能力。这让只读文件查看器能提供"在编辑器中打开"（用用户的首选外部编辑器打开该文件或其所在文件夹——见 002 General 设置）与"在 Finder 中显示"；在 Web 上这些操作系统能力不可用，查看器降级为"复制路径"。
 
 ## Success Criteria
 

@@ -82,6 +82,13 @@ def test_list_skill_files_returns_tree(tmp_path, monkeypatch):
         assert root["type"] == "dir"
         assert root["path"] == ""
 
+        # The master folder lives at ~/.coffer/skills/<name>/ (HOME=tmp_path).
+        master = (tmp_path / ".coffer" / "skills" / "tree-skill").resolve()
+        # The read-only viewer backs open/reveal/copy-path with absolute paths:
+        # the root node's abs_path IS the master folder; its folder is the parent.
+        assert root["abs_path"] == str(master)
+        assert root["folder_abs_path"] == str(master.parent)
+
         names = {child["name"]: child for child in root["children"]}
         # Both the imported tree and the master store's provenance file appear.
         assert "SKILL.md" in names
@@ -92,12 +99,16 @@ def test_list_skill_files_returns_tree(tmp_path, monkeypatch):
         assert types == sorted(types, key=lambda t: t != "dir")
 
         # The scripts dir is recursive and carries its nested file with a
-        # POSIX relative path + byte size.
+        # POSIX relative path + byte size, plus resolved absolute paths.
         scripts = names["scripts"]
         assert scripts["type"] == "dir"
+        assert scripts["abs_path"] == str(master / "scripts")
+        assert scripts["folder_abs_path"] == str(master)
         run = next(c for c in scripts["children"] if c["name"] == "run.py")
         assert run["type"] == "file"
         assert run["path"] == "scripts/run.py"
+        assert run["abs_path"] == str(master / "scripts" / "run.py")
+        assert run["folder_abs_path"] == str(master / "scripts")
         assert run["size"] == len("print('hi')\n")
 
         # A regular file records its size; directories carry none.
@@ -127,6 +138,11 @@ def test_read_single_skill_file(tmp_path, monkeypatch):
         assert body["binary"] is False
         assert body["truncated"] is False
         assert body["size"] == len("print('hi')\n")
+        # Absolute path + containing folder for the read-only viewer's
+        # open/reveal/copy-path affordances.
+        master = (tmp_path / ".coffer" / "skills" / "read-skill").resolve()
+        assert body["abs_path"] == str(master / "scripts" / "run.py")
+        assert body["folder_abs_path"] == str(master / "scripts")
 
     # A file that does not exist in the skill is a 404.
     with _client(app) as c:
@@ -196,7 +212,10 @@ def test_binary_file_returns_binary_true(tmp_path, monkeypatch):
         assert body["size"] == len(b"\x00\x01\x02PNG\x00")
 
 
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="edit a skill file")
+@pytest.mark.acceptance(
+    spec="005-skill-manager",
+    scenario="programmatically overwrite a skill file via the write API",
+)
 def test_write_skill_file_roundtrip(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59760)
     src = tmp_path / "src"

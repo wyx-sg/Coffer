@@ -46,6 +46,7 @@ class ConfigFileInfoOut(BaseModel):
     key: str
     display_name: str
     path: str
+    folder_path: str
     format: ConfigFileFormat
     kind: str
     exists: bool
@@ -60,6 +61,8 @@ class ConfigFileListOut(BaseModel):
 
 class ConfigFileContentOut(BaseModel):
     key: str
+    path: str
+    folder_path: str
     format: ConfigFileFormat
     exists: bool
     content: str
@@ -82,6 +85,7 @@ def _info_out(i: ConfigFileInfo) -> ConfigFileInfoOut:
         key=i.key,
         display_name=i.display_name,
         path=i.path,
+        folder_path=i.folder_path,
         format=i.format,
         kind=i.kind,
         exists=i.exists,
@@ -101,6 +105,8 @@ def _info_out(i: ConfigFileInfo) -> ConfigFileInfoOut:
 def _content_out(c: ConfigFileContent) -> ConfigFileContentOut:
     return ConfigFileContentOut(
         key=c.key,
+        path=c.path,
+        folder_path=c.folder_path,
         format=c.format,
         exists=c.exists,
         content=c.content,

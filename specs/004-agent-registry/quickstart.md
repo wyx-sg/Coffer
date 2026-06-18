@@ -128,8 +128,11 @@ On save, Coffer validates the content against the file's format (malformed
 atomically, and keeps a `.bak` of the prior version so a bad edit is
 recoverable. If the file changed on disk since you read it, the save is
 rejected and the editor offers a reload instead of silently overwriting. The
-desktop Config-files tab offers the same edit + save, plus an in-editor
-find / replace convenience.
+desktop Config-files tab shows each file **read-only** and offers
+open-in-external-editor / reveal-in-file-manager / copy-path for the file and
+its containing folder, so you edit in your own editor (Coffer uses your
+"preferred external editor" preference from Settings); the `coffer agent config
+edit` CLI above is the programmatic edit route.
 
 ## Edit directory config entries
 

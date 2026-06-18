@@ -11,7 +11,7 @@ Add the `agent` Resource kind to Coffer: a registry of locally-installed AI agen
 
 On top of the registry, the feature adds two capabilities:
 
-1. **Config-file view + edit** — each agent type exposes a curated allowlist of its own config files (Claude Code: `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md`; Codex: `config.toml`, `AGENTS.md`). Users read and save them as raw text; saves are validated per format, atomic, and keep a `.bak`. The same atomic-write + `.bak` machinery also backs the Coffer-MCP install/uninstall.
+1. **Config-file read-only view + open externally** — each agent type exposes a curated allowlist of its own config files (Claude Code: `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md`; Codex: `config.toml`, `AGENTS.md`). The UI renders them read-only and offers open-in-external-editor / reveal-in-file-manager / copy-path for each file and its containing folder (the `path`/`folder_path` pair). Programmatic save (REST/CLI) validates per format, writes atomically, and keeps a `.bak`. The same atomic-write + `.bak` machinery also backs the Coffer-MCP install/uninstall.
 2. **One-click Coffer-MCP install** — write/remove a `coffer` stdio MCP-server entry (pointing at `coffer-mcp-shim`) into the agent's MCP config, with status/idempotency.
 
 The kind exposes an `on_delete` hook that the 005-skill-manager spec wires for skill-binding cleanup. Ships with REST routes, CLI subcommands, and a desktop Agents page.
@@ -96,7 +96,7 @@ frontend/src/pages/AgentsPage.tsx                 # existing list page
 frontend/src/components/agents/
   AgentAddForm.tsx / AgentEditForm.tsx / AgentTable.tsx   # existing
   FolderPicker.tsx         # config-dir folder picker (OS-native dialog on desktop; GET /fs/browse folder browser on web)
-  AgentConfigPanel.tsx     # per-agent config-file list + editor (file list + editable content view with save, find/replace, format label)
+  AgentConfigPanel.tsx     # per-agent config-file list + read-only viewer (file list + read-only content view with format label and open-in-external-editor / reveal / copy-path for the file and its folder)
   AgentMcpInstall.tsx      # one-click install/uninstall toggle + status badge
 frontend/src/lib/api/agents.ts                     # extend with config-file + mcp-install calls
 frontend/src/lib/hooks/useAgents.ts                # add useAgentConfigFiles / useAgentConfigFile / useAgentMcpInstall
@@ -105,8 +105,9 @@ frontend/src/i18n/locales/{en,zh}.json             # agents.config.* / agents.mc
 
 The agent detail page (`/agents/:name`) is a simple **Overview + Config files**
 detail page: an Overview tab summarising the agent's registered config and a
-Config files tab rendering its known config files in an editable viewer with a
-save control and an in-editor find / replace convenience.
+Config files tab rendering its known config files in a **read-only** viewer
+with a format label and open-in-external-editor / reveal-in-file-manager /
+copy-path affordances for each file and its containing folder.
 
 ## Phasing
 
@@ -140,11 +141,11 @@ save control and an in-editor find / replace convenience.
 
 ### Phase 4 — Frontend
 
-- `AgentConfigPanel` — list config files and open one in an editable content view with a save control, inline validation errors, and an in-editor find / replace (with a format label). `AgentMcpInstall` — status badge + install/uninstall toggle.
+- `AgentConfigPanel` — list config files and open one in a read-only content view (with a format label) plus open-in-external-editor / reveal-in-file-manager / copy-path for the file and its containing folder. `AgentMcpInstall` — status badge + install/uninstall toggle.
 - The agent detail page is a simple Overview + Config files detail page.
 - `FolderPicker` — pick a custom `config_dir` without typing a path: the OS-native directory dialog in the packaged desktop app, the daemon-backed `GET /fs/browse` folder browser on the web. The add/edit forms make the agent name optional (server derives the per-type default when omitted).
 - Hooks via TanStack Query + openapi-fetch; i18n strings in English + Simplified Chinese (`agents.config.*`, `agents.mcp.*`).
-- e2e (`e2e/web/specs/shell_agents.spec.ts`): view a config file; install Coffer MCP and observe the status flip.
+- e2e (`e2e/web/specs/shell_agents.spec.ts`): view a config file read-only (and its open/reveal/copy-path affordances); install Coffer MCP and observe the status flip.
 
 ### Phase 5 — Acceptance + verify
 
@@ -165,7 +166,7 @@ into a full workspace. New modules per layer:
 - **Domain**: `agent/mcp_entries.py` (parse/remove/toggle MCP entries + secret-key detection + adopt transport mapping), `agent/plugin_state.py` (Codex/Claude plugin + marketplace parsing, documented-surface-only writes), `agent/scan.py` (per-type skill scan locations for spec 005's unmanaged scan), and `config_files.py` v2 (`ConfigFileKind` directory entries, `instructions` rename, `subagents`/`hooks` entries, `validate_child_relpath`).
 - **Application**: `agent/mcp_entry_service.py` (list/toggle/remove/adopt with keychain-routed secrets and registration-first rollback), `agent/plugin_service.py` (list/toggle/Codex-uninstall + cache handling), `config_file_service.py` v2 (directory children read/write/delete, content fingerprints with `ConfigFileStale` → 409, memory-block notice).
 - **Surfaces**: `http/agent_workspace_routes.py` (`/agents/{name}/mcp-entries*`, `/agents/{name}/plugins*`), `agent_config_routes.py` v2 (`/config-files/{key}/files/{relpath}` GET/PUT/DELETE + fingerprint fields), `agent_routes.py` (AgentPatch/AgentOut follow-policy fields); CLI `cli/agent_workspace_cmd.py` attached onto `agent_cmd.py`'s typers (`coffer agent mcp entries|remove-entry|toggle-entry|adopt`, `coffer agent plugin list|enable|disable|uninstall`, `coffer agent config files|write|rm`, `coffer agent follow`).
-- **Frontend**: agent detail tabs `AgentMcpServersTab` (gateway + direct entries, adopt dialog), `AgentPluginsTab`, and `AgentConfigFilesEditor` v2 (directory children, stale-write guard, memory-block notice).
+- **Frontend**: agent detail tabs `AgentMcpServersTab` (gateway + direct entries, adopt dialog), `AgentPluginsTab`, and `AgentConfigFilesEditor` (read-only viewer over single files and directory children — content rendered read-only with open-in-external-editor / reveal / copy-path for the file and its folder, plus the memory-block notice; programmatic write/create/delete stays on REST/CLI).
 
 New audit events: `agent_config_file_deleted`, `agent_mcp_entry_removed`,
 `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled`.

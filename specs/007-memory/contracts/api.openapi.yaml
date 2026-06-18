@@ -413,6 +413,7 @@ components:
           kind,
           scope,
           project_id,
+          store_dir,
           config,
           enabled,
           created_at,
@@ -433,6 +434,12 @@ components:
             Absolute git-root the project store was provisioned from. Null for
             the global store (and for project stores provisioned before the root
             was tracked).
+        store_dir:
+          type: string
+          description: >-
+            Absolute on-disk directory holding the store's per-fact markdown
+            files. The in-app viewer is read-only; this backs
+            reveal-in-file-manager / copy-path for the whole store.
         description: { type: string, nullable: true }
         config:
           $ref: "#/components/schemas/MemoryStoreConfig"
@@ -503,6 +510,8 @@ components:
           description,
           text,
           actor,
+          path,
+          folder_path,
           created_at,
           updated_at,
         ]
@@ -517,7 +526,14 @@ components:
         actor: { type: string, enum: [agent, user] }
         origin_session_id: { type: string, nullable: true }
         path:
-          { type: string, description: Canonical .md path (source of truth). }
+          type: string
+          description: >-
+            Absolute canonical .md path of the fact file (source of truth). The
+            in-app viewer is read-only; this backs open-in-external-editor /
+            reveal-in-file-manager / copy-path.
+        folder_path:
+          type: string
+          description: Absolute path of the fact file's containing folder (the store dir).
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 

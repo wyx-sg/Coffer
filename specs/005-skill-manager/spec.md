@@ -94,7 +94,7 @@ Files in agents' `config_dir/skills` folders can be tampered with (deleted, repl
 
 ### User Story 6 — Manage skills through the desktop app (Priority: P2)
 
-The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker or paste a Git URL, and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + file viewer that renders Markdown and supports editing existing text files). Per-agent enable/disable lives on the agent detail page — the agent's "Skills" tab lists the skills bound to that agent with per-binding toggles.
+The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker or paste a Git URL, and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + a read-only file viewer that renders Markdown and shows other text files raw). The viewer does not edit content; to change a file the user opens it (or its containing folder) in their own external editor or file manager — every file and folder offers "open in external editor", "reveal in file manager", and "copy absolute path" affordances. Per-agent enable/disable lives on the agent detail page — the agent's "Skills" tab lists the skills bound to that agent with per-binding toggles.
 
 **Why this priority**: Non-CLI users need a visual surface for daily management.
 
@@ -193,7 +193,7 @@ Per-skill bindings are precise but chatty: every new skill must be enabled agent
 - **Git fetch hits a private repo or auth-required URL**: Rejected; v1 does not handle credentials for upstream skill sources.
 - **Git fetch hits an unreachable host, DNS failure, or timeout**: Operation aborts cleanly with a network error; no master folder is partially written and no Resource row is persisted.
 - **Symlink/junction creation fails on Windows (FAT32 or network share)**: Falls back to copy mode for that target with an audit flag `degraded=true`; UI shows a warning chip.
-- **User edits `SKILL.md` inside an agent's `config_dir/skills` folder**: Because the agent's path is a symlink to master, the edit lands in master and is visible to all other agents on next read; no drift is detected.
+- **User edits `SKILL.md` in an external editor from inside an agent's `config_dir/skills` folder**: Coffer's UI never edits file content; the user makes the change in their own editor (reached via Coffer's "open in external editor" / "reveal in file manager" affordances or directly). Because the agent's path is a symlink to master, the external edit lands in master and is visible to all other agents on next read; no drift is detected.
 - **User deletes a Coffer-managed file from inside an agent's `config_dir/skills` folder**: Master is affected (same reason); next `verify` flags any other agents whose links no longer resolve consistently.
 - **Removing an agent (per spec 004) while it has skill bindings**: Spec 004 defines the agent kind's `on_delete` seam; the 005-skill-manager spec supplies the `cleanup_bindings_for_agent` callback at the composition root, so removing an agent first cleans up that agent's bindings and any associated symlinks before the agent row is deleted.
 - **Agent's `config_dir` is moved or removed externally**: The next sync operation surfaces the failure; `verify` reports the affected bindings; user remediates by updating the agent's `config_dir` or removing the agent.
@@ -308,13 +308,13 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 - **Given** an imported skill whose master folder contains `SKILL.md` and a nested subdirectory with a file,
 - **When** the user requests the skill's file listing,
-- **Then** Coffer returns a recursive read-only tree rooted at the master folder, each node carrying its name, folder-relative path, type (`file`/`dir`), file size, and children, sorted directories-first then by name, with no symlink target that escapes the folder included.
+- **Then** Coffer returns a recursive read-only tree rooted at the master folder, each node carrying its name, folder-relative path, absolute on-disk path, type (`file`/`dir`), file size, and children, sorted directories-first then by name, with no symlink target that escapes the folder included.
 
 ### Scenario: view a single skill file's contents
 
 - **Given** an imported skill that contains a readable text file,
 - **When** the user requests that file's contents by its folder-relative path,
-- **Then** Coffer returns the file's text, its true byte size, and `binary=false`/`truncated=false`; a non-existent file path returns a not-found error.
+- **Then** Coffer returns the file's text, its true byte size, its absolute on-disk path and its containing folder's absolute path, and `binary=false`/`truncated=false`; a non-existent file path returns a not-found error.
 
 ### Scenario: reject reading a path outside the skill folder
 
@@ -322,11 +322,11 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user requests file contents for a path that resolves outside the master folder (`..` traversal, an absolute path, or an escaping symlink),
 - **Then** the request is rejected with a `400` error before any file is read, and no content is returned.
 
-### Scenario: edit a skill file
+### Scenario: programmatically overwrite a skill file via the write API
 
 - **Given** an imported skill that contains an existing text file,
-- **When** the user saves new contents for that file by its folder-relative path,
-- **Then** Coffer overwrites the file atomically and a subsequent read returns the new contents; writing a non-existent path, a path outside the master folder, an existing binary file, or content over the size cap is rejected (`404`/`400`) and the file is left unchanged.
+- **When** a programmatic client (REST/CLI) saves new contents for that file by its folder-relative path,
+- **Then** Coffer overwrites the file atomically and a subsequent read returns the new contents; writing a non-existent path, a path outside the master folder, an existing binary file, or content over the size cap is rejected (`404`/`400`) and the file is left unchanged. (The in-app UI does not call this endpoint to edit content; it is a programmatic write surface only.)
 
 ### Scenario: list unmanaged skills across an agent's skill locations
 
@@ -475,7 +475,9 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 **Surfaces**
 
 - **FR-019**: Every management operation MUST be available through (a) the REST API, (b) the `coffer skill ...` CLI with `--json`, and (c) the desktop Skills page.
-- **FR-021**: System MUST expose a view of a skill's master folder: a recursive file tree (name, folder-relative path, type, size, children) and the contents of an individual file. Markdown files render as formatted Markdown; other text files show raw. Reads MUST be contained to the master folder — any path that resolves outside it (`..` traversal, absolute path, or escaping symlink) MUST be rejected. File reads MUST be size-capped (truncating with a `truncated` flag) and MUST flag non-UTF-8 / NUL-containing files as binary with empty content. The system MUST also allow overwriting an **existing text file** in the master folder, under the same containment guard and size cap; it MUST refuse to create new files/directories here, to write outside the folder, or to overwrite a binary file with text. The write MUST be atomic. No symlink-following out of the folder.
+- **FR-021**: System MUST expose a **read-only** view of a skill's master folder: a recursive file tree (name, folder-relative path, absolute on-disk path, type, size, children) and the contents of an individual file (with its absolute on-disk path and containing folder's absolute path). Markdown files render as formatted Markdown; other text files show raw. The in-app UI viewer is read-only and never edits file content. Reads MUST be contained to the master folder — any path that resolves outside it (`..` traversal, absolute path, or escaping symlink) MUST be rejected. File reads MUST be size-capped (truncating with a `truncated` flag) and MUST flag non-UTF-8 / NUL-containing files as binary with empty content. No symlink-following out of the folder.
+- **FR-027**: The in-app file viewer MUST offer, at both file and containing-folder granularity, affordances to (a) open the target in the user's preferred external editor (the global preference is specced in 002-ui-shell; default = the OS default application), (b) reveal the target in the OS file manager (Finder / Explorer), and (c) copy the target's absolute path. On desktop (Tauri) open and reveal perform the real OS action; on the web surface, where the host OS is out of reach, all three fall back to copy-absolute-path. These affordances replace in-app content editing: the user edits in their own external editor.
+- **FR-028**: System MUST provide a **programmatic** (REST/CLI) write that overwrites an **existing text file** in the master folder, under the same containment guard and size cap as FR-021; it MUST refuse to create new files/directories here, to write outside the folder, or to overwrite a binary file with text. The write MUST be atomic with no symlink-following out of the folder. This write surface is for programmatic clients only; the in-app UI does not use it to edit content (see FR-027).
 
 **Observability**
 

@@ -13,6 +13,8 @@ export interface ConfigFileInfo {
   key: string;
   display_name: string;
   path: string;
+  /** Absolute path of the containing folder (for "open folder" / "copy folder path"). */
+  folder_path?: string;
   format: ConfigFileFormat;
   exists: boolean;
   size: number | null;
@@ -30,6 +32,10 @@ export interface ConfigFileContent {
   format: ConfigFileFormat;
   exists: boolean;
   content: string;
+  /** Absolute path of the file being viewed (for the external-editor actions). */
+  path?: string;
+  /** Absolute path of its containing folder. */
+  folder_path?: string;
   fingerprint?: string;
   memory_block?: boolean;
 }
@@ -196,20 +202,13 @@ export const agentsApi = {
   // Read-only discovery: installed-but-unregistered agents the user can add.
   candidates: () => call<AgentCandidatesOut>("GET", "/agents/candidates"),
 
+  // Config files are read-only in the UI: viewing happens in-app, editing in the
+  // user's own editor (the write endpoint still exists server-side, but the UI
+  // no longer calls it).
   listConfigFiles: (name: string) =>
     call<ConfigFileListOut>("GET", `/agents/${enc(name)}/config-files`),
   readConfigFile: (name: string, key: string) =>
     call<ConfigFileContent>("GET", `/agents/${enc(name)}/config-files/${enc(key)}`),
-  // Atomic write (a `.bak` of the prior content is kept). Returns the refreshed
-  // metadata view. Malformed JSON/TOML is rejected server-side (422) and the
-  // on-disk file is left unchanged. When `expected_fingerprint` is supplied,
-  // the server rejects the write with 409 CONFIG_FILE_STALE if the file
-  // changed on disk since that fingerprint was read (stale-write protection).
-  writeConfigFile: (
-    name: string,
-    key: string,
-    body: { content: string; expected_fingerprint?: string },
-  ) => call<ConfigFileInfo>("PUT", `/agents/${enc(name)}/config-files/${enc(key)}`, body),
 
   mcpStatus: (name: string) => call<McpInstallStatus>("GET", `/agents/${enc(name)}/mcp-install`),
   mcpInstall: (name: string) => call<McpInstallStatus>("POST", `/agents/${enc(name)}/mcp-install`),
@@ -238,31 +237,11 @@ export const agentsApi = {
   uninstallPlugin: (name: string, id: string) =>
     call<void>("DELETE", `/agents/${enc(name)}/plugins/${encodeURIComponent(id)}`),
 
-  // Config-file child (per-file inside a directory-backed config key)
+  // Config-file child (per-file inside a directory-backed config key) — read-only.
   readConfigChild: (name: string, key: string, relpath: string) => {
     const encodedRelpath = relpath.split("/").map(encodeURIComponent).join("/");
     return call<ConfigFileContent>(
       "GET",
-      `/agents/${enc(name)}/config-files/${enc(key)}/files/${encodedRelpath}`,
-    );
-  },
-  writeConfigChild: (
-    name: string,
-    key: string,
-    relpath: string,
-    body: { content: string; expected_fingerprint?: string },
-  ) => {
-    const encodedRelpath = relpath.split("/").map(encodeURIComponent).join("/");
-    return call<ConfigFileInfo>(
-      "PUT",
-      `/agents/${enc(name)}/config-files/${enc(key)}/files/${encodedRelpath}`,
-      body,
-    );
-  },
-  deleteConfigChild: (name: string, key: string, relpath: string) => {
-    const encodedRelpath = relpath.split("/").map(encodeURIComponent).join("/");
-    return call<void>(
-      "DELETE",
       `/agents/${enc(name)}/config-files/${enc(key)}/files/${encodedRelpath}`,
     );
   },

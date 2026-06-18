@@ -66,18 +66,19 @@
 
 ### User Story 4 —— 用户在 Coffer 里维护记忆（优先级 P2）
 
-开发者要看见并纠正 agent 记下的东西：按作用域浏览事实、改一条漂移的、手动加一条、删掉一条错的 —— 全在 Coffer UI 或 CLI 里完成。
+开发者要看见并纠正 agent 记下的东西：在一个 **只读** 视图里按作用域浏览事实，然后 **在自己的外部编辑器里**（或经 API/CLI）改一条漂移的、手动加一条、删掉一条错的。Coffer UI 从不在应用内编辑事实内容；相反，每条事实及其所在文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」以及（web 回退）「复制绝对路径」，任何带外的纠正都会被既有的 lazy reindex-on-read 拾取（FR-010）。
 
-**为什么是这个优先级**：没有人工维护的记忆让人不放心；agent 偶尔会记错。能维护，这条 feature 才足够安全到可以一直开着。
+**为什么是这个优先级**：没有人工维护的记忆让人不放心；agent 偶尔会记错。能维护，这条 feature 才足够安全到可以一直开着 —— 而把编辑路由到用户自己的编辑器，使 markdown 文件保持唯一真相源，无需再维护第二个编辑界面。
 
-**独立可测**：agent 写了若干事实后，打开记忆视图，改一条事实的文本并保存，观察下一次 `recall` 返回改后的版本。加一条事实（actor=user），再删另一条，观察它从磁盘和 recall 中消失。
+**独立可测**：agent 写了若干事实后，打开记忆视图（只读），确认事实内容能渲染但在应用内不可编辑。在外部编辑器里（或用 `coffer memory edit`/PATCH）打开一条事实、在 Coffer 之外纠正其文本，观察下一次 `recall` 返回纠正后的版本（lazy reindex-on-read）。经 CLI/API 加一条事实（actor=user），再删另一条，观察它从磁盘和 recall 中消失。
 
 **代表性场景**：
 
 - 用户添加一条事实
-- 用户编辑一条事实
+- 用户带外纠正一条事实
 - 用户删除一条事实
 - 写入一条事实会重新生成 MEMORY.md
+- 只读视图提供打开/显示/复制路径的能力
 
 ---
 
@@ -224,17 +225,23 @@
 - **When** 用户经 Coffer UI 或 CLI 添加一条事实，
 - **Then** 写出 `metadata.actor = "user"` 的规范化 markdown，重新生成 `MEMORY.md`，索引该文档，并写入一条审计。
 
-### Scenario: user edits a fact
+### Scenario: user corrects a fact out-of-band
 
 - **Given** 一条事实已存在，
-- **When** 用户改它的文本并保存，
-- **Then** 规范化 markdown 被重写、文档被重建索引，且 recall 反映新文本。
+- **When** 用户在应用内只读视图之外纠正其文本 —— 经 REST/CLI 写入面（`PATCH …/facts/{id}` / `coffer memory edit`），或在外部编辑器里直接编辑规范化 markdown，
+- **Then** 规范化 markdown 被重写、文档被重建索引（REST/CLI 路径立即重建；直接改文件则在下一次 `recall` 经 lazy reindex-on-read 重建），且 recall 反映新文本。
 
 ### Scenario: user deletes a fact
 
 - **Given** 一条事实已存在，
 - **When** 用户删除它，
 - **Then** markdown 文件与其索引行被移除、`MEMORY.md` 被重新生成，且 recall 不再返回它。
+
+### Scenario: read-only viewer offers open/reveal/copy-path affordances
+
+- **Given** 在 Coffer UI 中查看一条事实，
+- **When** 用户检视该事实（及其所在文件夹），
+- **Then** 内容只读渲染（应用内不编辑事实内容），读响应携带该事实的绝对 `.md` 磁盘路径及其所在文件夹的绝对路径，且 UI 在桌面（Tauri）端为文件与文件夹各提供「在外部编辑器中打开」+「在文件管理器中显示」，在 web 端回退为「复制绝对路径」；打开哪个编辑器由全局首选编辑器偏好决定（见 002-ui-shell）。
 
 ### Scenario: writing a fact regenerates MEMORY.md
 
@@ -266,7 +273,7 @@
 - **When** 调用 `POST /api/v1/agents/{name}/transcripts/distill`（或 CLI 中的 `coffer transcript distill <agent>`），且 `dry_run=false`，
 - **Then** 对话记录被读取，工具调用载荷和密钥在 LLM 调用前被清洗，LLM 返回结构化洞察，每条洞察被写为项目作用域的 memory 事实，携带 `actor="agent"`、`origin_session_id=<对话记录会话 id>`，且 `type` ∈ `{decision, gotcha, convention, todo}`；任何已持久化事实中均不出现原始对话内容；`coffer__recall` 此后返回这些新事实；当 `dry_run=true` 时，洞察被返回但不向磁盘写入任何内容。
 
-> **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：桌面记忆列表按作用域展示、桌面就地编辑、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
+> **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：桌面记忆列表按作用域展示、桌面只读事实视图的打开/显示/复制路径能力、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
 
 ## Requirements
 
@@ -282,14 +289,14 @@
 **事实生命周期**
 
 - **FR-005**：agent 与用户 MUST 能直接写入一条事实（写入时不调 LLM）。事实文本 MUST 至少 1 个字符、至多 `max_fact_chars`（默认 8192）；空或超长在 API 边界被拒，不持久化任何内容。
-- **FR-006**：用户与 agent MUST 能列出事实（按作用域）、按 id 取单条、改一条事实的文本、删除单条事实、清空某作用域全部事实。清空保留 store 这个 Resource。
+- **FR-006**：用户与 agent MUST 能列出事实（按作用域）、按 id 取单条、改一条事实的文本（经 REST/CLI 写入面，或直接编辑规范化 markdown —— Coffer UI 只读渲染事实内容、不在应用内编辑它）、删除单条事实、清空某作用域全部事实。清空保留 store 这个 Resource。
 - **FR-007**：每条事实带 `metadata.actor`（`agent` | `user`）与可选的 `metadata.type`（如 `project` / `feedback` / `reference` / `user`）；由写入者设定。
 
 **检索**
 
 - **FR-008**：recall MUST 使用与 knowledge base 共享的统一检索引擎：`grep`（真实服务 —— ripgrep 扫该 store 的事实文件；对 FTS5 无法分词的内容必不可少，如 CJK）、`keyword`（FTS5 BM25，默认）、`vector`（sqlite-vec 配可配置的 embedding provider）。当请求 `vector` 但未配置 embedding provider 时，recall MUST 回退到 `keyword` 并以布尔值在响应里标注此次回退 —— 绝不阻塞。MCP `coffer__recall` 的响应包含该 `fallback` 布尔值。
 - **FR-009**：`coffer__recall` MUST 默认跨 project 与 global 两个 store（显式给出 `scope` 时收窄到单个 store：`project` = 仅项目 store，`global` = 仅 global store）；跨 store 的结果用倒数排名融合（reciprocal rank fusion）合并（逐 store 的分数跨模式/跨 store 不可比；每条命中保留其逐 store 分数，只有合并后的顺序来自融合）。结果带 id、text、score、source、time —— `time` 是事实的 `updated_at`，`source` 是 `<scope>:<fact file path>`。默认 `top_k` 为 5；调用方 MAY 指定 1–20。
-- **FR-010**：memory MUST 用 **lazy reindex-on-read**：`recall` 先按内容哈希扫描事实目录的增量（新增/变更/删除文件）并对账索引，再搜索，使带外编辑（含 Claude 的 symlink 编辑）即时可见，无需文件系统 watcher。
+- **FR-010**：memory MUST 用 **lazy reindex-on-read**：`recall` 先按内容哈希扫描事实目录的增量（新增/变更/删除文件）并对账索引，再搜索，使带外编辑 —— Claude 的 symlink 编辑 **以及人类在自己外部编辑器里做的纠正** —— 即时可见，无需文件系统 watcher。这正是让外部纠正得以显现的机制，于是 UI 可以保持为只读视图（FR-017），而维护在用户的编辑器里完成。
 
 **投影与绑定**
 
@@ -306,8 +313,10 @@
 
 **Surfaces**
 
-- **FR-017**：用户 MUST 能通过 (a) `/api/v1/memory_stores/` 下的 REST API、(b) `coffer memory …` 子命令、(c) 桌面 UI 完成完整记忆 CRUD。用户写入设 `metadata.actor = "user"`，写规范化 markdown、重新生成 `MEMORY.md`、重建索引并审计。这些 surface 上的 store 名会被校验：只有 `global` 或 `project-<26 字符 ULID>` 合法 —— 形状合法的名字会惰性 provision 其 store；其余返回 404（`MEMORY_STORE_NOT_FOUND`）。
+- **FR-017**：用户 MUST 能通过编程写入面完成完整记忆 CRUD —— (a) `/api/v1/memory_stores/` 下的 REST API 与 (b) `coffer memory …` 子命令。（这些 REST 写入端点也是 agent 经 MCP 网关写入事实的途径。）用户写入设 `metadata.actor = "user"`，写规范化 markdown、重新生成 `MEMORY.md`、重建索引并审计。桌面/web UI 以 **只读** 方式呈现事实（不在应用内编辑事实内容）；人类维护时在自己的外部编辑器里编辑规范化 markdown（经 lazy reindex-on-read（FR-010）拾取），或经 REST/CLI 写入面。这些 surface 上的 store 名会被校验：只有 `global` 或 `project-<26 字符 ULID>` 合法 —— 形状合法的名字会惰性 provision 其 store；其余返回 404（`MEMORY_STORE_NOT_FOUND`）。
 - **FR-017a**：各 surface MUST 用**从 `project_root` 推导的可读身份**来呈现 per-project store —— 以根目录的 basename 作为主标签、绝对根路径作为次要细节 —— 而**不**只显示不可读的 `project-<ULID>` store 名（项目 ULID 是根路径的单向摘要，人无法辨认）。当根路径未知（store 在记录根路径之前就被 provision）时退回显示 store 名；global store 无需推导（其名 `global` 本就可读）。底层 store 名仍是 `project-<ULID>`（FR-017）—— 这是**展示**层的事。由前端测试验证；桌面验收与其它桌面视图项一样延后到 e2e。
+- **FR-021**：只读事实视图 MUST 为「事实文件」与「其所在文件夹」两者各提供以下能力：(a) **在外部编辑器中打开**、(b) **在文件管理器 / Finder 中显示**、(c) **复制绝对路径**（web 回退）。在桌面（Tauri）端 (a) 与 (b) 执行真实的打开/显示；在 web 端 UI 回退为复制路径。打开哪个编辑器由全局首选编辑器偏好决定（在 002-ui-shell 规范，本处不再重复规范）。读响应 MUST 携带这些能力所作用的绝对路径（见 FR-022）。
+- **FR-022**：读响应 MUST 携带磁盘真相：事实读端点（`GET …/facts`、`GET …/facts/{id}`）MUST 包含每个事实文件的绝对 `.md` 路径及其所在文件夹的绝对路径，store 读端点（`GET …/{name}`）MUST 包含 store 的绝对磁盘目录。它们驱动 FR-021 的打开/显示/复制路径能力，并让人类能定位规范化文件以带外纠正。
 
 **底座隔离**
 
@@ -324,7 +333,7 @@
 ### Key Entities
 
 - **Memory Store**（kind 为 `memory` 的 resource）：每个作用域一个 store —— global store（sentinel ULID）或 per-project store（项目 ULID）。config 持有启用的检索模式、embedding 配置与 `max_fact_chars`。
-- **Memory Fact**（一个 markdown 文件 = 一行 `documents`）：`id`、`name`、`description`、正文、`metadata`（`type`、`actor`、`origin_session_id`）、`path`、`content_sha256`、`created_at`、`updated_at`。markdown 文件是真相源。
+- **Memory Fact**（一个 markdown 文件 = 一行 `documents`）：`id`、`name`、`description`、正文、`metadata`（`type`、`actor`、`origin_session_id`）、`path`（绝对 `.md` 路径）、`content_sha256`、`created_at`、`updated_at`。markdown 文件是真相源。读响应还额外携带所在文件夹的绝对路径，供 UI 打开/显示/复制。
 - **Memory Hit**（recall 结果，不持久化）：`id`、`text`/passage、`score`、`source`、`time`。
 - **Projection**（每 agent × 作用域）：一个 `projection_mode`（`SYMLINK` | `RENDER` | `NONE`）加上 adapter 所拥有的原生目标路径。
 

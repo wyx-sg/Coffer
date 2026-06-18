@@ -93,9 +93,9 @@
 
 ### User Story 4 — Settings 按用户角度组织，不是按 daemon 内部 (Priority: P2)
 
-开发者打开 Settings，看到的 tab 是按"他在管什么"分组，不是按"Coffer 怎么搭的"：**General**（列表表格的默认每页条数偏好）、**Data**（retention 策略、手动清理、备份）与 **About**（版本、许可证、源代码）。在桌面 (Tauri) 构建中，Data 与 About 之间会多出一个 **App** tab（开机自启），它在浏览器里隐藏，因为那些能力不存在。Settings 打开时落在 General tab。daemon 是实现细节——没有 "Daemon" tab，没有只读的 daemon 状态面板。用户永远不需要知道 Coffer 跑了一个后台 daemon。
+开发者打开 Settings，看到的 tab 是按"他在管什么"分组，不是按"Coffer 怎么搭的"：**General**（显示偏好——列表表格的默认每页条数，以及打开受管文件所用的首选外部编辑器）、**Data**（retention 策略、手动清理、备份）与 **About**（版本、许可证、源代码）。在桌面 (Tauri) 构建中，Data 与 About 之间会多出一个 **App** tab（开机自启），它在浏览器里隐藏，因为那些能力不存在。Settings 打开时落在 General tab。daemon 是实现细节——没有 "Daemon" tab，没有只读的 daemon 状态面板。用户永远不需要知道 Coffer 跑了一个后台 daemon。
 
-**General** tab 必须暴露默认每页条数偏好（每个列表表格据此初始化的 rows-per-page），持久化在 `localStorage`。
+**General** tab 必须暴露默认每页条数偏好（每个列表表格据此初始化的 rows-per-page），持久化在 `localStorage`。它还必须暴露一个**首选外部编辑器**偏好——当用户从只读文件查看器中打开一个受管文件（或其所在文件夹）时，Coffer 用来打开它的应用。默认是操作系统的默认应用；用户可以通过选择一个应用或填入一条启动命令来覆盖。与其他显示偏好一样，它持久化在 `localStorage`，绝不发送给 daemon。
 
 **Why this priority**: P2——底层控件已能工作；本故事是重新组织 + 删除，不是新能力。一个没组织好的 Settings 页恰是 US2 反对的"像脚手架"信号，用户也明确反馈过它令人困惑。
 
@@ -114,6 +114,7 @@
 
 - settings layout uses the redesigned tabbed sidebar
 - settings drops the confusing controls
+- the General tab persists a preferred-editor choice
 
 ---
 
@@ -249,6 +250,13 @@
 - **Then** 任何 tab 都不暴露 "Shutdown daemon" 或 "Rotate token" 控件
 - **And** 没有 "Daemon" tab，也没有只读 daemon 状态面板
 - **And** About tab 只展示 version / license / source——没有语言选择器，没有 resource-kind 列表
+
+### Scenario: general tab persists the preferred editor
+
+- **Given** 用户打开 General settings tab
+- **When** 他们设置一个首选外部编辑器（选择一个应用，或填入一条启动命令）
+- **Then** 刷新页面后显示同一个首选编辑器值
+- **And** 清除覆盖后恢复为操作系统默认应用
 
 ### Scenario: retention period persists across reload
 

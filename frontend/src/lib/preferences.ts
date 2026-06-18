@@ -38,3 +38,37 @@ export function useDefaultPageSize(): number {
 export function useSetDefaultPageSize(): (size: number) => void {
   return useCallback((size: number) => setDefaultPageSize(size), []);
 }
+
+const PREFERRED_EDITOR_KEY = "coffer.preferredEditor";
+
+/**
+ * The user's preferred external editor for opening managed files. The stored
+ * value is an application name / path or a launch command (e.g. "code",
+ * "cursor", or a full ".app" path). An empty string means "use the operating
+ * system's default application". Like the page-size preference this lives in
+ * the browser, never the daemon.
+ */
+export function getPreferredEditor(): string {
+  return localStorage.getItem(PREFERRED_EDITOR_KEY) ?? "";
+}
+
+export function setPreferredEditor(editor: string): void {
+  const trimmed = editor.trim();
+  if (trimmed) {
+    localStorage.setItem(PREFERRED_EDITOR_KEY, trimmed);
+  } else {
+    // Empty / whitespace clears the override → fall back to the OS default.
+    localStorage.removeItem(PREFERRED_EDITOR_KEY);
+  }
+  listeners.forEach((cb) => cb());
+}
+
+/** Reactive read of the preferred external editor ("" = OS default). */
+export function usePreferredEditor(): string {
+  return useSyncExternalStore(subscribe, getPreferredEditor, () => "");
+}
+
+/** Setter hook for the Settings control. */
+export function useSetPreferredEditor(): (editor: string) => void {
+  return useCallback((editor: string) => setPreferredEditor(editor), []);
+}

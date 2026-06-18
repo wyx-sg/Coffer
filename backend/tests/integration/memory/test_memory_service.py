@@ -181,8 +181,13 @@ async def test_user_add_sets_actor_user(mem) -> None:
     assert got.actor == "user"
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="user edits a fact")
-async def test_user_edit_fact(mem) -> None:
+@pytest.mark.acceptance(spec="007-memory", scenario="user corrects a fact out-of-band")
+async def test_user_corrects_fact_via_write_api(mem) -> None:
+    """The programmatic write path (REST/CLI) — the in-app viewer is read-only.
+
+    The external-edit-on-disk + lazy-reindex half of this scenario is covered
+    by ``test_lazy_reindex_picks_up_out_of_band_edit`` below.
+    """
     fact = await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,

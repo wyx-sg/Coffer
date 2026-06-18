@@ -135,20 +135,3 @@ export function useSkillFileContent(name: string, path: string | null) {
     enabled: !!name && !!path,
   });
 }
-
-export function useWriteSkillFile(name: string) {
-  const qc = useQueryClient();
-  const onError = useSkillToastError();
-  return useMutation({
-    mutationFn: ({ path, content }: { path: string; content: string }) =>
-      skillsApi.writeFileContent(name, path, content),
-    onSuccess: () => {
-      // Refresh the file content (size/truncated may change) and the tree. Use
-      // a prefix key for the content query so the refetch matches regardless of
-      // the exact path the read used (which may differ from the echoed path).
-      qc.invalidateQueries({ queryKey: ["skills", name, "file"] });
-      qc.invalidateQueries({ queryKey: ["skills", name, "files"] });
-    },
-    onError,
-  });
-}

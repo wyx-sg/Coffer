@@ -1,15 +1,17 @@
 // frontend/src/kinds/memory/MemoryStoreDetailPage.test.tsx
 //
 // Exercises the redesigned memory store detail surface: metrics header, recall
-// with a mode toggle, the add-fact form (name/description/body/type), and the
-// fact list with inline edit, delete, and clear-all. The `./api` module is
-// mocked so the component renders without a backend.
+// with a mode toggle, and the fact list → READ-ONLY preview flow (select a fact
+// on the left; the right pane renders the Markdown with FileActions + delete, no
+// in-app editing) plus clear-all. The `./api` module is mocked so the component
+// renders without a backend.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ApiError } from "@/lib/api/errors";
+import { acceptance } from "@/test/acceptance";
 import { MemoryStoreDetailPage } from "./MemoryStoreDetailPage";
 
 vi.mock("./api", async (importOriginal) => ({
@@ -18,7 +20,6 @@ vi.mock("./api", async (importOriginal) => ({
   getMemoryStore: vi.fn(),
   getMemoryStoreMetrics: vi.fn(),
   addFact: vi.fn(),
-  updateFact: vi.fn(),
   deleteFact: vi.fn(),
   clearFacts: vi.fn(),
   recall: vi.fn(),
@@ -34,6 +35,8 @@ const FACT = {
   text: "uses tabs over spaces",
   type: "user",
   actor: "user" as const,
+  path: "/abs/memory/global/tabs-f1.md",
+  folder_path: "/abs/memory/global",
   created_at: "2026-05-29T00:00:00Z",
   updated_at: "2026-05-29T00:00:00Z",
 };
@@ -108,22 +111,33 @@ describe("MemoryStoreDetailPage", () => {
     );
   });
 
-  test("editing a selected fact PATCHes the new text", async () => {
+  test("a selected fact renders READ-ONLY: no Edit/Save controls", async () => {
     stubLists();
-    vi.mocked(api.updateFact).mockResolvedValue(FACT);
-
     renderPage();
     const tree = screen.getByRole("complementary");
     fireEvent.click(await within(tree).findByText("tabs"));
-    fireEvent.click(await screen.findByRole("button", { name: /^edit$/i }));
-    const editor = await screen.findByDisplayValue("uses tabs over spaces");
-    fireEvent.change(editor, { target: { value: "uses spaces now" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
-
-    await waitFor(() =>
-      expect(api.updateFact).toHaveBeenCalledWith("global", "f1", { text: "uses spaces now" }),
-    );
+    expect(await screen.findByText("uses tabs over spaces")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
   });
+
+  // Spec 007 scenario: the human-facing memory viewer is read-only and routes
+  // edits to the user's own editor — it surfaces open/reveal/copy-path
+  // affordances instead of an in-app editor. jsdom is not Tauri, so the
+  // copy-path fallback is what renders here.
+  acceptance(
+    "007-memory",
+    "read-only viewer offers open/reveal/copy-path affordances",
+    async () => {
+      stubLists();
+      renderPage();
+      const tree = screen.getByRole("complementary");
+      fireEvent.click(await within(tree).findByText("tabs"));
+      await screen.findByText("uses tabs over spaces");
+      expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /copy path/i })).toBeInTheDocument();
+    },
+  );
 
   test("deleting a selected fact calls delete after confirming in the dialog", async () => {
     stubLists();

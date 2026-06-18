@@ -85,7 +85,7 @@ If you request `--mode vector` on a KB with no embedding configured, the search 
 3. Fill the form: name, description, enabled retrieval modes (keyword + grep by default), chunk params, and — only if you enable vector — an embedding provider/model and credential. Submit.
 4. Click into the KB. Drag files of any format into the upload area; each becomes Markdown.
 5. Use the **Search** panel; pick a mode (grep / keyword / vector) from the selector.
-6. Open a document to view its rendered Markdown; edit it inline and **Reindex** to apply (marks it `edited`).
+6. Open a document to view its rendered Markdown (read-only). To change it, use **Open in editor** to edit the file in your external editor (or **Reveal in Finder** / **Copy path**); your edit is picked up automatically on the next read via reindex-on-read. Editing via `coffer kb edit` / the REST API works too and marks it `edited`.
 7. Document actions live on each row (read, delete, copy id, re-upload source).
 8. Delete the KB via the kebab menu on the detail header.
 

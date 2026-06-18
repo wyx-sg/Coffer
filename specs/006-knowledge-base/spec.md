@@ -47,13 +47,13 @@ The developer's coding agent connects to Coffer's MCP endpoint and gets built-in
 
 ### User Story 4 — Curate the corpus: edit, reindex, re-embed (Priority: P2)
 
-The user fixes a conversion artifact by editing the Markdown directly, then reindexes. They re-upload a newer source to re-convert. They change chunk parameters or the embedding model and Coffer re-indexes/re-embeds the corpus. Once a document is hand-edited (`source_mode = edited`), re-conversion from the raw original is blocked to avoid clobbering edits.
+The user fixes a conversion artifact by opening the document's Markdown in their own external editor (or via the edit API), then the change is picked up. They re-upload a newer source to re-convert. They change chunk parameters or the embedding model and Coffer re-indexes/re-embeds the corpus. The Coffer UI renders the Markdown read-only — it never offers an in-app text editor — and instead offers affordances to open the document (or its containing folder) in the user's external editor, reveal it in the file manager, or copy its absolute path. Once a document is edited (`source_mode = edited`), re-conversion from the raw original is blocked to avoid clobbering edits.
 
 **Why this priority**: A KB is curated over time; one-shot ingest is not enough. Not required to demonstrate the core value.
 
-**Independent Test**: Edit a doc's Markdown via the API, reindex, confirm search reflects the edit; attempt re-conversion of that doc and observe it is blocked; change the KB's chunk size and confirm the corpus is re-chunked and re-indexed.
+**Independent Test**: Edit a doc's Markdown via the edit API (or by editing the on-disk file in an external editor), confirm the next read/search reflects the edit via lazy reindex-on-read; attempt re-conversion of that doc and observe it is blocked; change the KB's chunk size and confirm the corpus is re-chunked and re-indexed.
 
-**Covering scenarios**: edit a document and reindex; re-conversion blocked once edited; changing chunk params re-indexes; changing embedding model re-embeds.
+**Covering scenarios**: edit a document and reindex; external edit picked up by reindex-on-read; re-conversion blocked once edited; changing chunk params re-indexes; changing embedding model re-embeds.
 
 ---
 
@@ -130,8 +130,14 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 ### Scenario: edit a document and reindex
 
 - **Given** a converted document exists,
-- **When** the user edits its Markdown body and triggers reindex,
+- **When** the user replaces its Markdown body through the edit API,
 - **Then** `source_mode` becomes `edited`, the single re-index routine deletes old chunks/FTS5/vec rows and re-chunks (re-embedding if vector is enabled), and subsequent search reflects the edit.
+
+### Scenario: external edit picked up by reindex-on-read
+
+- **Given** a document whose Markdown file is edited out-of-band in the user's external editor (no API call),
+- **When** the user next reads or searches that document,
+- **Then** the lazy reindex-on-read scan detects the drifted `content_sha256`, re-indexes through the single idempotent routine, and the read/search reflects the edit — with no filesystem watcher running.
 
 ### Scenario: re-conversion blocked once edited
 
@@ -222,6 +228,7 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 **Storage as source of truth**
 
 - **FR-008**: Markdown files MUST be the sole source of truth; SQLite (`documents`, `chunks`, FTS5, sqlite-vec) is a derived, rebuildable index. A reindex routine MUST be able to reconstruct all SQLite state from the files.
+- **FR-008a**: The KB MUST use **lazy reindex-on-read**: a read or search first detects on-disk drift by `content_sha256` and reconciles the index through the single idempotent re-index routine (FR-016) before serving, so out-of-band edits — including edits made in the user's external editor — are visible immediately with no filesystem watcher running.
 - **FR-009**: System MUST use one unified `documents` table shared with the `memory` kind, discriminated by `kind` and a per-face JSON `metadata` column. There is no `kb_documents` table.
 
 **Retrieval**
@@ -238,8 +245,8 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 **Curation & consistency**
 
-- **FR-015**: Each document MUST carry a `source_mode` of `converted` (Markdown derived from raw, re-convertible) or `edited` (hand-edited; re-conversion blocked). Document ids are content-addressed (the first 16 hex chars of the source's sha256), so re-uploading the **identical** source with `replace=true` resets `source_mode` to `converted`; uploading a different source creates a new document and the edited one remains `edited`. Users MUST be able to edit a document's Markdown, re-upload its source, delete it, and reindex.
-- **FR-016**: All write paths (re-upload, edit, reindex scan) MUST funnel through one idempotent re-index routine: if `content_sha256` is unchanged it is a no-op; if changed it deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector enabled), updates the `documents` row, and audits `KB_DOCUMENT_UPDATED`. The KB is **agent-read-only**; agents MUST NOT write KB documents.
+- **FR-015**: Each document MUST carry a `source_mode` of `converted` (Markdown derived from raw, re-convertible) or `edited` (re-conversion blocked). Document ids are content-addressed (the first 16 hex chars of the source's sha256), so re-uploading the **identical** source with `replace=true` resets `source_mode` to `converted`; uploading a different source creates a new document and the edited one remains `edited`. Document edits arrive either through the edit API or by editing the on-disk Markdown in the user's external editor — the Coffer UI does NOT provide an in-app text editor. An edit through the edit API sets `source_mode=edited`; an external edit is picked up by lazy reindex-on-read (FR-008a). Users MUST be able to edit a document's Markdown (via API or external editor), re-upload its source, delete it, and reindex.
+- **FR-016**: All write paths (re-upload, edit API, external edit, reindex scan) MUST funnel through one idempotent re-index routine, invoked lazily on read when the on-disk `content_sha256` has drifted: if `content_sha256` is unchanged it is a no-op; if changed it deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector enabled), updates the `documents` row, and audits `KB_DOCUMENT_UPDATED`. The KB is **agent-read-only**; agents MUST NOT write KB documents.
 
 **Agent integration via MCP**
 
@@ -249,6 +256,7 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 **Surfaces**
 
 - **FR-019**: Users MUST be able to perform every KB operation through (a) a REST API under `/api/v1/knowledge_bases/`, (b) `coffer kb …` subcommands, and (c) a desktop UI under the existing `Resources` navigation.
+- **FR-020**: The UI document viewer MUST render the Markdown **read-only** — it MUST NOT offer an in-app text editor for document content. Instead, at both file and containing-folder granularity, the viewer MUST offer affordances to **open in external editor**, **reveal in file manager / Finder**, and **copy the absolute path**. On desktop (Tauri) open/reveal perform the real OS action (open/reveal honouring the global preferred-editor preference specced in `002-ui-shell`); on the web client, where the daemon cannot act on the user's machine, the affordance falls back to copy-path. To support these affordances, read API responses (FR/§Wire) MUST surface the document's absolute on-disk path and its containing folder's absolute path.
 
 ### Key Entities
 

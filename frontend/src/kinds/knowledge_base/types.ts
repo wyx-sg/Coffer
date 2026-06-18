@@ -63,6 +63,10 @@ export interface DocumentListOut {
 
 export interface DocumentDetailOut extends DocumentOut {
   markdown: string;
+  /** Absolute on-disk path of the document's Markdown file (FileActions). */
+  path?: string;
+  /** Absolute on-disk path of the document's containing folder. */
+  folder_path?: string;
 }
 
 export interface Passage {

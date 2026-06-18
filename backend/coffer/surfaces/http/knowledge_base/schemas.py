@@ -68,11 +68,18 @@ class DocumentOut(BaseModel):
     content_sha256: str
     chunk_count: int = 0
     metadata: dict[str, Any]
+    # Absolute path of the normalized markdown on disk (the source of truth) and
+    # its containing folder. The in-app viewer is read-only; the pair backs
+    # open-in-external-editor / reveal-in-file-manager / copy-path.
+    path: str
+    folder_path: str
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_domain(cls, d: Document, *, chunk_count: int = 0) -> DocumentOut:
+    def from_domain(
+        cls, d: Document, *, chunk_count: int = 0, path: str, folder_path: str
+    ) -> DocumentOut:
         return cls(
             id=d.id,
             kind=d.kind,
@@ -83,6 +90,8 @@ class DocumentOut(BaseModel):
             content_sha256=d.content_sha256,
             chunk_count=chunk_count,
             metadata=dict(d.metadata),
+            path=path,
+            folder_path=folder_path,
             created_at=d.created_at,
             updated_at=d.updated_at,
         )
@@ -93,9 +102,11 @@ class DocumentDetailOut(DocumentOut):
 
     @classmethod
     def from_domain_with_body(
-        cls, d: Document, markdown: str, *, chunk_count: int = 0
+        cls, d: Document, markdown: str, *, chunk_count: int = 0, path: str, folder_path: str
     ) -> DocumentDetailOut:
-        base = DocumentOut.from_domain(d, chunk_count=chunk_count)
+        base = DocumentOut.from_domain(
+            d, chunk_count=chunk_count, path=path, folder_path=folder_path
+        )
         return cls(**base.model_dump(), markdown=markdown)
 
 
