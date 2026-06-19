@@ -426,3 +426,93 @@ async def test_adapter_omits_env_from_options_when_none():
     # ClaudeAgentOptions.env defaults to {} via default_factory=dict.
     # When self._env is None we skip the kwarg entirely, so the default applies.
     assert factory.last_options.env == {}
+
+
+# ---------------------------------------------------------------------------
+# Resume-failure fallback (spec 008) — a poisoned session id must not brick the
+# conversation. A turn that never persisted a session (e.g. a /model slash
+# command the CLI rejects in headless mode) leaves an id the CLI can't resume,
+# so every later --resume exits non-zero; the adapter retries fresh.
+# ---------------------------------------------------------------------------
+
+
+class _FailingSdkSession:
+    """A session whose connect() fails — mimics the CLI exiting non-zero (e.g.
+    ``--resume`` of a session it can't find)."""
+
+    def __init__(self, options: ClaudeAgentOptions) -> None:
+        self.options = options
+        self.disconnected = False
+
+    async def connect(self, prompt: str) -> None:
+        raise RuntimeError("Command failed with exit code 1")
+
+    async def receive_messages(self) -> AsyncIterator[Any]:
+        for _ in ():  # pragma: no cover - connect fails first
+            yield _
+
+    async def interrupt(self) -> None: ...
+
+    async def disconnect(self) -> None:
+        self.disconnected = True
+
+
+@dataclass
+class _ResumeThenFreshFactory:
+    """First built session (carrying a resume) fails to connect; the second
+    (fresh, resume=None) replays the basic stream."""
+
+    messages: list[Any]
+    options_seen: list[ClaudeAgentOptions] = field(default_factory=list, init=False)
+
+    def __call__(self, options: ClaudeAgentOptions) -> Any:
+        self.options_seen.append(options)
+        if len(self.options_seen) == 1:
+            return _FailingSdkSession(options)
+        return FakeSdkSession(options, self.messages)
+
+
+@pytest.mark.asyncio
+async def test_resume_failure_falls_back_to_fresh_session():
+    factory = _ResumeThenFreshFactory(_basic_messages())
+    saved: list[str] = []
+
+    async def sink(sid: str) -> None:
+        saved.append(sid)
+
+    adapter = _adapter(factory, on_session=sink, resume="poisoned-session-id")
+    events = await _collect(adapter, _user_turn("hi"))
+
+    # Two sessions built: first resumed the poisoned id, second went fresh.
+    assert len(factory.options_seen) == 2
+    assert factory.options_seen[0].resume == "poisoned-session-id"
+    assert factory.options_seen[1].resume is None
+    # The turn recovered: real events, no TurnError, terminal TurnDone.
+    assert any(isinstance(e, TurnStarted) for e in events)
+    assert any(isinstance(e, TextDelta) for e in events)
+    assert not any(isinstance(e, TurnError) for e in events)
+    assert isinstance(events[-1], TurnDone)
+    # The fresh session id replaces the poisoned one.
+    assert saved == ["sess-1"]
+
+
+@dataclass
+class _AlwaysFailFactory:
+    calls: int = field(default=0, init=False)
+
+    def __call__(self, options: ClaudeAgentOptions) -> Any:
+        self.calls += 1
+        return _FailingSdkSession(options)
+
+
+@pytest.mark.asyncio
+async def test_connect_failure_without_resume_yields_turn_error():
+    factory = _AlwaysFailFactory()
+    adapter = _adapter(factory, resume=None)
+    events = await _collect(adapter, _user_turn("hi"))
+    # No resume to drop → no retry; a single TurnError, not an unhandled raise.
+    assert factory.calls == 1
+    errs = [e for e in events if isinstance(e, TurnError)]
+    assert len(errs) == 1
+    assert errs[0].code == "sdk_connect_error"
+    assert "failed to start" in errs[0].message

@@ -48,7 +48,7 @@ def install(app: FastAPI) -> None:
         CORSMiddleware,
         allow_origins=_resolve_origins(),
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["X-Coffer-Token", "X-Coffer-Actor", "Content-Type", "Accept"],
         expose_headers=["X-Coffer-Trace"],
         max_age=600,

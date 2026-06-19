@@ -220,6 +220,12 @@ def _stringify(content: Any) -> str:
 _SENTINEL = object()
 
 
+def _connect_error_message(exc: Exception) -> str:
+    # The SDK's ProcessError swallows the CLI's stderr, so we surface the
+    # exception text — still better than the orchestrator's "unexpected error".
+    return f"the agent process failed to start: {exc}"
+
+
 class ClaudeSdkAgentAdapter:
     """One turn of an SDK-backed Claude agent.
 
@@ -273,18 +279,30 @@ class ClaudeSdkAgentAdapter:
                 exc_info=True,
             )
 
-    def _build_options(self) -> ClaudeAgentOptions:
+    def _build_options(self, *, resume: str | None) -> ClaudeAgentOptions:
         # Run with full permissions — Coffer does not gate individual tool calls;
         # the paired owner driving the conversation is the trust boundary.
         opts = ClaudeAgentOptions(
             cwd=self._cwd,
-            resume=self._resume,
+            resume=resume,
             permission_mode="bypassPermissions",
             model=self._extra.get("model"),
         )
         if self._env is not None:
             opts.env = self._env
         return opts
+
+    async def _connect(self, prompt: str, *, resume: str | None) -> ClaudeSdkSession:
+        """Build a session and connect it; disconnect + re-raise on failure so a
+        caller can retry cleanly."""
+        session = self._session_factory(self._build_options(resume=resume))
+        try:
+            await session.connect(prompt)
+        except Exception:
+            with contextlib.suppress(Exception):
+                await session.disconnect()
+            raise
+        return session
 
     async def _stream(self, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
         prompt = last_user_text(history)
@@ -296,8 +314,28 @@ class ClaudeSdkAgentAdapter:
         queue: asyncio.Queue[Any] = asyncio.Queue()
         yield TurnStarted()
 
-        options = self._build_options()
-        session = self._session_factory(options)
+        # Connect, with a one-shot fallback to a fresh session when resuming a
+        # session the CLI can't find (a prior turn — e.g. a rejected ``/model``
+        # slash command — leaves an id that makes every later ``--resume`` exit
+        # non-zero). The fallback keeps the conversation usable; a hard failure
+        # becomes a TurnError rather than an unhandled "unexpected error".
+        try:
+            session = await self._connect(prompt, resume=self._resume)
+        except Exception as exc:
+            if self._resume is None:
+                yield TurnError(code="sdk_connect_error", message=_connect_error_message(exc))
+                return
+            _logger.warning(
+                "claude_sdk_agent.resume_failed_retrying_fresh",
+                extra={"resume": self._resume},
+                exc_info=True,
+            )
+            state = ParseState(session_id=None)
+            try:
+                session = await self._connect(prompt, resume=None)
+            except Exception as exc2:
+                yield TurnError(code="sdk_connect_error", message=_connect_error_message(exc2))
+                return
 
         async def pump() -> None:
             # Map streamed SDK messages onto the queue. A sentinel after the
@@ -318,7 +356,6 @@ class ClaudeSdkAgentAdapter:
 
         pump_task: asyncio.Task[None] | None = None
         try:
-            await session.connect(prompt)
             pump_task = asyncio.create_task(pump())
             while True:
                 item = await queue.get()

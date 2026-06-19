@@ -16,7 +16,11 @@ _FENCE = "---"
 def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     """Return ``(frontmatter_dict, body)``.
 
-    If the text has no leading ``---`` fence, returns ``({}, text)``.
+    If the text has no leading ``---`` fence, returns ``({}, text)``. A fenced
+    block whose YAML is malformed degrades the same way — ``({}, body)`` with the
+    fence stripped — rather than raising: a single hand-/agent-written file with
+    a stray colon must not crash a whole store/KB scan. Callers fall back to
+    filename / first-body-line defaults for the missing keys.
     """
     if not text.startswith(_FENCE):
         return {}, text
@@ -26,7 +30,10 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         if lines[i].strip() == _FENCE:
             raw = "\n".join(lines[1:i])
             body = "\n".join(lines[i + 1 :])
-            loaded = yaml.safe_load(raw) if raw.strip() else {}
+            try:
+                loaded = yaml.safe_load(raw) if raw.strip() else {}
+            except yaml.YAMLError:
+                loaded = {}
             fm = loaded if isinstance(loaded, dict) else {}
             return fm, body.lstrip("\n")
     return {}, text

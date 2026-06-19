@@ -80,6 +80,27 @@ def test_parse_degrades_gracefully_for_out_of_band_file() -> None:
     assert "preferences" in parsed.body
 
 
+def test_parse_tolerates_malformed_frontmatter() -> None:
+    # An agent-written file whose frontmatter value has an unquoted colon —
+    # invalid YAML. It must degrade (filename id, first-body-line description),
+    # never raise, so one bad file cannot 500 the whole /facts listing.
+    text = (
+        "---\n"
+        "name: Engineering conventions\n"
+        "description: catalogued in `agents/` (10 topic files: storage, testing)\n"
+        "type: feedback\n"
+        "---\n"
+        "The repo holds a living set of operating manuals.\n"
+    )
+    parsed = parse_fact_markdown(
+        text, fallback_id="feedback_x", mtime=datetime(2026, 6, 9, tzinfo=UTC)
+    )
+    assert parsed.id == "feedback_x"
+    assert parsed.name == "feedback_x"  # frontmatter unparseable → filename fallback
+    assert "operating manuals" in parsed.description
+    assert "operating manuals" in parsed.body
+
+
 def test_render_omits_optional_fields_when_absent() -> None:
     fact = _fact(type=None, origin_session_id=None)
     text = render_fact_markdown(fact)

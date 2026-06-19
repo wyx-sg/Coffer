@@ -17,6 +17,10 @@ class TranscriptReaderPort(Protocol):
         self, *, agent_type_value: str, config_dir: str
     ) -> list[TranscriptSession]: ...
 
+    def list_session_summaries(
+        self, *, agent_type_value: str, config_dir: str, limit: int, offset: int
+    ) -> tuple[int, list[TranscriptSession]]: ...
+
     def read_session(
         self, *, agent_type_value: str, config_dir: str, session_id: str
     ) -> TranscriptSession: ...

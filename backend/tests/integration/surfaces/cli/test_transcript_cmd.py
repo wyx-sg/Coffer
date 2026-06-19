@@ -44,8 +44,10 @@ class _FakeDistillService:
         self._sessions = sessions or []
         self._distill_result = distill_result or DistillResult()
 
-    async def list_sessions(self, agent_name: str) -> list[TranscriptSession]:
-        return self._sessions
+    async def list_sessions(
+        self, agent_name: str, *, limit: int = 100, offset: int = 0
+    ) -> tuple[int, list[TranscriptSession]]:
+        return len(self._sessions), self._sessions[offset : offset + limit]
 
     async def distill(
         self,

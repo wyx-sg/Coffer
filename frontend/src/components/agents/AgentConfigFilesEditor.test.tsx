@@ -15,9 +15,8 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentConfigFile: vi.fn(),
   useAgentConfigChild: vi.fn(),
 }));
-const { useAgentConfigFiles, useAgentConfigFile, useAgentConfigChild } = await import(
-  "@/lib/hooks/useAgents"
-);
+const { useAgentConfigFiles, useAgentConfigFile, useAgentConfigChild } =
+  await import("@/lib/hooks/useAgents");
 const filesMock = vi.mocked(useAgentConfigFiles);
 const fileMock = vi.mocked(useAgentConfigFile);
 const childMock = vi.mocked(useAgentConfigChild);
@@ -127,7 +126,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     expect(screen.getByRole("button", { name: /copy folder path/i })).toBeInTheDocument();
   });
 
-  test("lists not-yet-created allowlisted files and opens one (empty)", () => {
+  test("hides not-yet-created allowlisted files from the read-only viewer", () => {
     filesMock.mockReturnValue({
       data: [
         ...FILES,
@@ -145,21 +144,14 @@ describe("AgentConfigFilesEditor (read-only)", () => {
       isPending: false,
       error: null,
     } as unknown as ReturnType<typeof useAgentConfigFiles>);
-    fileMock.mockReturnValue({
-      data: { key: "memory", format: "markdown", exists: false, content: "" },
-      isPending: false,
-    } as unknown as ReturnType<typeof useAgentConfigFile>);
     stubChild(undefined);
 
     render(<AgentConfigFilesEditor name="cc" />);
 
-    const memoryBtn = screen.getByText("User memory (CLAUDE.md)").closest("button")!;
-    expect(memoryBtn).toBeInTheDocument();
-    expect(screen.getByText(/not created/i)).toBeInTheDocument();
-
-    // Opening it shows an empty preview, still read-only.
-    fireEvent.click(memoryBtn);
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    // exists=false → not surfaced in the viewer at all (the list API still
+    // returns it for the REST/CLI write path; the UI just doesn't show it).
+    expect(screen.queryByText("User memory (CLAUDE.md)")).not.toBeInTheDocument();
+    expect(screen.queryByText(/not created/i)).not.toBeInTheDocument();
   });
 
   test("directory node expands to list its children; the node itself shows the hint", () => {

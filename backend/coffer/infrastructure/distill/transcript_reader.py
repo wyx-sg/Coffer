@@ -231,6 +231,19 @@ def parse_codex(lines: Iterable[str], *, source_path: str) -> TranscriptSession:
 # ---------------------------------------------------------------------------
 
 
+def _recent_first(sessions: list[TranscriptSession]) -> list[TranscriptSession]:
+    """Order sessions most-recent first; those without a timestamp sort last,
+    keeping their relative order. Used for tree-sourced agents, which can only
+    be paged in memory."""
+    with_ts = sorted(
+        (s for s in sessions if s.started_at is not None),
+        key=lambda s: s.started_at,  # type: ignore[arg-type,return-value]
+        reverse=True,
+    )
+    without_ts = [s for s in sessions if s.started_at is None]
+    return with_ts + without_ts
+
+
 class FileTranscriptReader:
     """Read-only adapter that discovers and parses agent transcript files.
 
@@ -296,6 +309,38 @@ class FileTranscriptReader:
             except Exception:
                 log.warning("transcript_reader: failed to parse %s; skipping", path, exc_info=True)
         return sessions
+
+    def list_session_summaries(
+        self, *, agent_type_value: str, config_dir: str, limit: int, offset: int
+    ) -> tuple[int, list[TranscriptSession]]:
+        """Return ``(total, page)`` — the total session count and one page of
+        sessions, most-recent first.
+
+        For file-per-session agents this sorts the transcript *files* by mtime
+        (a cheap ``stat``) and parses only the requested window, so listing
+        stays fast no matter how many thousand past sessions sit on disk —
+        unlike :meth:`list_sessions`, which parses every file. Tree-sourced
+        agents (whose storage can't be paged file-wise) build all sessions and
+        slice in memory.
+        """
+        if agent_type_value in self._TREE_SOURCES:
+            ordered = _recent_first(self._tree_sessions(agent_type_value))
+            return len(ordered), ordered[offset : offset + limit]
+
+        files: list[tuple[float, Path]] = []
+        for path in self._iter_files(agent_type_value, config_dir):
+            try:
+                files.append((path.stat().st_mtime, path))
+            except OSError:
+                log.warning("transcript_reader: failed to stat %s; skipping", path, exc_info=True)
+        files.sort(key=lambda f: f[0], reverse=True)
+        page: list[TranscriptSession] = []
+        for _, path in files[offset : offset + limit]:
+            try:
+                page.append(self._parse_file(agent_type_value, path))
+            except Exception:
+                log.warning("transcript_reader: failed to parse %s; skipping", path, exc_info=True)
+        return len(files), page
 
     def read_session(
         self, *, agent_type_value: str, config_dir: str, session_id: str

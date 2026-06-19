@@ -17,6 +17,9 @@ export interface TranscriptSessionSummary {
 
 export interface TranscriptSessionListResponse {
   sessions: TranscriptSessionSummary[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface DistillRequest {
@@ -42,8 +45,16 @@ export interface DistillResponse {
 // Request functions
 // ---------------------------------------------------------------------------
 
-export function listTranscripts(agentName: string): Promise<TranscriptSessionListResponse> {
-  return call<TranscriptSessionListResponse>("GET", `/agents/${enc(agentName)}/transcripts`);
+export function listTranscripts(
+  agentName: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<TranscriptSessionListResponse> {
+  const limit = opts.limit ?? 100;
+  const offset = opts.offset ?? 0;
+  return call<TranscriptSessionListResponse>(
+    "GET",
+    `/agents/${enc(agentName)}/transcripts?limit=${limit}&offset=${offset}`,
+  );
 }
 
 export function distillTranscript(

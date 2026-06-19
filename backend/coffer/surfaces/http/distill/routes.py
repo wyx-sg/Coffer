@@ -10,7 +10,7 @@ envelope. The ``X-Coffer-Token`` / ``require_token`` guard and the
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from coffer.application.distill.service import (
     NoModelConfiguredError,
@@ -42,11 +42,17 @@ router = APIRouter(
 )
 async def list_transcripts(
     name: str,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     svc: TranscriptDistillationService = Depends(get_distill_service),  # noqa: B008
 ) -> TranscriptSessionListResponse:
-    """List all transcript sessions for the named agent."""
+    """List an agent's transcript sessions, most-recent first.
+
+    Paged by ``limit`` / ``offset``: only the requested window is parsed, so an
+    agent with thousands of past sessions lists fast (no full-tree scan).
+    """
     try:
-        sessions = await svc.list_sessions(agent_name=name)
+        total, sessions = await svc.list_sessions(agent_name=name, limit=limit, offset=offset)
     except ResourceNotFound:
         return error_response("RESOURCE_NOT_FOUND", f"agent {name!r} not found")  # type: ignore[return-value]
     except UnsupportedAgentTypeError as exc:
@@ -63,7 +69,10 @@ async def list_transcripts(
                 started_at=s.started_at,
             )
             for s in sessions
-        ]
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
     )
 
 

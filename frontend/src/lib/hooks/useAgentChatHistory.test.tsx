@@ -90,7 +90,8 @@ describe("useAgentTranscripts", () => {
     // The base URL already carries the /api/v1 prefix; the path must not repeat
     // it (a doubled /api/v1/api/v1 hits no route → 404 NOT_FOUND).
     expect(url).not.toContain("/api/v1/api/v1");
-    expect(url).toMatch(/\/api\/v1\/agents\/claude\/transcripts$/);
+    // Listing is paged (most-recent first) — the request carries limit/offset.
+    expect(url).toMatch(/\/api\/v1\/agents\/claude\/transcripts\?limit=\d+&offset=\d+$/);
   });
 
   test("is disabled when name is empty", () => {
