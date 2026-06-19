@@ -1,6 +1,8 @@
 # Skill Manager — Improvements Roadmap
 
-Status: planning. Derived from the competitive-landscape research in
+Status: **delivered** — all four items shipped (#4 → #3 → #2 → #1). FRs and
+acceptance scenarios live in `spec.md`; the trust-layer decision is ADR-027.
+Derived from the competitive-landscape research in
 [`docs/research/agent-skills.md`](../../docs/research/agent-skills.md) (Report #3
 in [`docs/research/README.md`](../../docs/research/README.md)). The research
 ranks Coffer ahead on cross-agent delivery and SSRF-hardened ingest, and behind

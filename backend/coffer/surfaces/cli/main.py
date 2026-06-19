@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typer
 
+# Side-effect import: registers `coffer skill search` / `install` on skill_cmd.app.
 from coffer.surfaces.cli import (
     agent_cmd,
     audit_cmd,
@@ -16,6 +17,7 @@ from coffer.surfaces.cli import (
     model_cmd,
     resource_cmd,
     retention_cmd,
+    skill_catalog_cmd,  # noqa: F401
     skill_cmd,
     sync_cmd,
     transcript_cmd,

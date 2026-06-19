@@ -316,6 +316,18 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the skill list/detail is rendered,
 - **Then** no "update available" signal is surfaced for it; unpinning restores the signal.
 
+### Scenario: browse and search the skill catalog
+
+- **Given** the bundled skill catalog,
+- **When** the user lists it and then searches with a substring,
+- **Then** the full catalog is returned for an empty query and a narrowed, name-sorted subset for a matching substring.
+
+### Scenario: install a skill from the catalog
+
+- **Given** a catalog entry,
+- **When** the user installs it by name,
+- **Then** Coffer fetches the entry's Git source through the normal validated, scanned fetch path and registers the skill.
+
 ### Scenario: detect drift in agent skill directories
 
 - **Given** a binding exists but its target on disk has been deleted, replaced, or relinked,
@@ -501,6 +513,11 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **FR-030**: System MUST provide an on-demand "check for updates" operation for a Git-sourced skill that re-fetches the source and compares it against the stored version WITHOUT applying any change, caching the result (an update-available flag, the available content hash, and the check time) on the skill. Local-imported skills do not support the check (re-import to refresh). Applying an update clears the cached signal. Every check is audited.
 - **FR-031**: Users MUST be able to pin a skill. While pinned, the update-available signal is suppressed (a deliberately-frozen skill stops surfacing as out-of-date); pin and unpin are explicit, audited actions.
 
+**Discovery**
+
+- **FR-032**: System MUST provide a browsable catalog of installable skills (name, description, Git coordinates, publisher) with a case-insensitive substring search. v1 ships a curated bundled starter catalog; fetching a remote index is future work.
+- **FR-033**: Users MUST be able to install a catalog entry by name. Install resolves the entry's Git coordinates and rides the existing fetch path (FR-006) — same SSRF guard, AgentSkills validation (FR-004), and content scan (FR-028) — adding no new ingest or trust surface. An unknown entry is rejected with `not_found` (404); an entry whose coordinates no longer resolve fails cleanly at fetch/validate time.
+
 **Drift**
 
 - **FR-015**: System MUST provide a `verify` operation that compares each enabled binding to its on-disk target and reports drift categories (missing link, tampered link, missing master, orphan master) with suggested remedies.
@@ -568,4 +585,5 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - Windows users have directory-junction support on their filesystem; FAT32 and network shares fall back to copy mode.
 - Delivery stays at `<config_dir>/skills` for both agent types. Codex additionally reads `~/.agents/skills` (its newer standard location) and treats `<config_dir>/skills` as a backward-compatible legacy location — the unmanaged scan covers both; migrating Coffer's delivery target is a recorded decision deferred to a future change.
 - The follow-master-library flag and exclusion list live on the agent resource's config (spec 004's schema); this spec owns their delivery semantics.
-- v2 will explore: marketplace browsing (agentskills.io API), agent-to-agent skill recommendations, project-local skills (`.claude/skills/` in repo), and private Git sources via credential refs.
+- Discovery ships a curated bundled starter catalog (FR-032/FR-033); a remote/fetched catalog index (e.g. the agentskills.io API) is future work.
+- v2 will explore: a remote catalog index, agent-to-agent skill recommendations, project-local skills (`.claude/skills/` in repo), and private Git sources via credential refs.
