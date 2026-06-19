@@ -38,20 +38,21 @@
 
 ## The reports
 
-| #   | Report                                                                                                        | Coffer area              | One-line headline                                                                                                                     |
-| --- | ------------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | [MCP ecosystem](./mcp-ecosystem.md) · [zh](./mcp-ecosystem.zh.md)                                             | MCP gateway (001)        | Coffer is the only gateway with **no per-client scoping** — every rival curates per-client.                                           |
-| 2   | [Agent config & rules mgmt](./agent-config-management.md) · [zh](./agent-config-management.zh.md)             | Agent registry (004)     | Coffer is structurally ahead (bi-directional, safe-edit) but **doesn't distribute instructions** — the category's core feature.       |
-| 3   | [Agent skills](./agent-skills.md) · [zh](./agent-skills.zh.md)                                                | Skill manager (005)      | Cross-agent delivery + SSRF-hardened ingest lead; **no skill scanner / standard-alignment** is the gap.                               |
-| 4   | [Agent plugins](./agent-plugins.md) · [zh](./agent-plugins.zh.md)                                             | Plugin facet (004)       | "Visibility + safe toggle, no install" is **validated**; the **plugin→hub bridge** is the novel move.                                 |
-| 5   | [Local-first control plane](./local-first-control-plane.md) · [zh](./local-first-control-plane.zh.md)         | Whole-product            | "Vault for **all** assets" is unique (rivals are MCP-only); borrow **upstream sandboxing** + **profiles**.                            |
-| 6   | [Knowledge base / RAG](./knowledge-base-rag.md) · [zh](./knowledge-base-rag.zh.md)                            | KB (006)                 | Files-as-truth + reindex beats locked-embedding rivals; borrow **RRF fusion + reranking**.                                            |
-| 7   | [Messaging channels](./messaging-channels.md) · [zh](./messaging-channels.zh.md)                              | Channels (009)           | Channel-as-resource + stealth pairing is distinctive (Anthropic's TG plugin is the only analog); borrow **per-conversation binding**. |
-| 8   | [Multi-machine sync](./multi-machine-sync.md) · [zh](./multi-machine-sync.zh.md)                              | Sync (010)               | **Reconcile-not-overwrite** is unique; borrow chezmoi's **per-machine templating**.                                                   |
-| 9   | [Credentials & secrets](./credentials-secrets.md) · [zh](./credentials-secrets.zh.md)                         | Credentials (015)        | Coffer already implements 1Password's "**access without exposure**" ideal; borrow **external-provider refs** (`op://`).               |
-| 10  | [Observability, audit & MCP security](./observability-governance.md) · [zh](./observability-governance.zh.md) | Audit/retention/security | Governance/audit is **ahead** (free vs Langfuse's paywall); borrow **MCP tool-pinning** (mcp-scan).                                   |
-| 11  | [Agent evaluation](./agent-evaluation.md) · [zh](./agent-evaluation.zh.md)                                    | Eval (ADR-019/017)       | **Correction: the flywheel shipped** (ADR-019 accepted, `evals/` exists); borrow **LLM-as-judge**.                                    |
-| 12  | [Memory systems](./memory-systems-landscape.md) · [zh](./memory-systems-landscape.zh.md)                      | Memory (007)             | _Parallel session._ Field splits file-truth vs vector-truth; Coffer is a deliberate hybrid.                                           |
+| #   | Report                                                                                                        | Coffer area              | One-line headline                                                                                                                                                     |
+| --- | ------------------------------------------------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | [MCP ecosystem](./mcp-ecosystem.md) · [zh](./mcp-ecosystem.zh.md)                                             | MCP gateway (001)        | Coffer is the only gateway with **no per-client scoping** — every rival curates per-client.                                                                           |
+| 2   | [Agent config & rules mgmt](./agent-config-management.md) · [zh](./agent-config-management.zh.md)             | Agent registry (004)     | Coffer is structurally ahead (bi-directional, safe-edit) but **doesn't distribute instructions** — the category's core feature.                                       |
+| 3   | [Agent skills](./agent-skills.md) · [zh](./agent-skills.zh.md)                                                | Skill manager (005)      | Cross-agent delivery + SSRF-hardened ingest lead; **no skill scanner / standard-alignment** is the gap.                                                               |
+| 4   | [Agent plugins](./agent-plugins.md) · [zh](./agent-plugins.zh.md)                                             | Plugin facet (004)       | "Visibility + safe toggle, no install" is **validated**; the **plugin→hub bridge** is the novel move.                                                                 |
+| 5   | [Local-first control plane](./local-first-control-plane.md) · [zh](./local-first-control-plane.zh.md)         | Whole-product            | "Vault for **all** assets" is unique (rivals are MCP-only); borrow **upstream sandboxing** + **profiles**.                                                            |
+| 6   | [Knowledge base / RAG](./knowledge-base-rag.md) · [zh](./knowledge-base-rag.zh.md)                            | KB (006)                 | Files-as-truth + reindex beats locked-embedding rivals; borrow **RRF fusion + reranking**.                                                                            |
+| 7   | [Messaging channels](./messaging-channels.md) · [zh](./messaging-channels.zh.md)                              | Channels (009)           | Channel-as-resource + stealth pairing is distinctive (Anthropic's TG plugin is the only analog); borrow **per-conversation binding**.                                 |
+| 8   | [Multi-machine sync](./multi-machine-sync.md) · [zh](./multi-machine-sync.zh.md)                              | Sync (010)               | **Reconcile-not-overwrite** is unique; borrow chezmoi's **per-machine templating**.                                                                                   |
+| 9   | [Credentials & secrets](./credentials-secrets.md) · [zh](./credentials-secrets.zh.md)                         | Credentials (015)        | Coffer already implements 1Password's "**access without exposure**" ideal; borrow **external-provider refs** (`op://`).                                               |
+| 10  | [Observability, audit & MCP security](./observability-governance.md) · [zh](./observability-governance.zh.md) | Audit/retention/security | Governance/audit is **ahead** (free vs Langfuse's paywall); borrow **MCP tool-pinning** (mcp-scan).                                                                   |
+| 11  | [Agent evaluation](./agent-evaluation.md) · [zh](./agent-evaluation.zh.md)                                    | Eval (ADR-019/017)       | **Correction: the flywheel shipped** (ADR-019 accepted, `evals/` exists); borrow **LLM-as-judge**.                                                                    |
+| 12  | [Memory systems](./memory-systems-landscape.md) · [zh](./memory-systems-landscape.zh.md)                      | Memory (007)             | _Parallel session._ Field splits file-truth vs vector-truth; Coffer is a deliberate hybrid.                                                                           |
+| 13  | [Platform-level competitors](./platform-competitors.md) · [zh](./platform-competitors.zh.md)                  | Whole-product (re-sweep) | **Blind-spot fix (2026-06-20):** the prior 12 reports missed cc-switch (~105k) + the whole Chinese ecosystem; no incumbent covers Coffer's full 10-capability matrix. |
 
 ## Cross-cutting themes
 
@@ -118,6 +119,14 @@ note it's still pre-GA).
 One flagged coverage gap from the KB run — AnythingLLM, Onyx, Khoj, Morphik,
 LlamaIndex were under-evidenced — has a **targeted follow-up** whose results are
 folded back into [knowledge-base-rag.md](./knowledge-base-rag.md).
+
+A larger, structural coverage gap — the per-area shape of reports 1–12 missed
+**platform-level competitors** (tools spanning many categories at once) and the
+**Chinese desktop-switcher / relay / IM ecosystem** entirely, including the
+market leader **cc-switch (~105k)** — is addressed by report #13,
+[platform-competitors.md](./platform-competitors.md) (a stars-first +
+capability-matrix re-sweep, 2026-06-20). Re-run competitive scans stars-first
+across the keyword space and include the Chinese ecosystem by default.
 
 ## Method
 
