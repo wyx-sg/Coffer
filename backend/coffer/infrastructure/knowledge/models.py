@@ -44,9 +44,6 @@ class DocumentModel(Base):
     source_mode: Mapped[str] = mapped_column(String, nullable=False)
     # Co-management lock (ADR-028): a locked document refuses every mutation.
     locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    # Recoverable soft-delete (ADR-030): NULL = live; set = in trash. Live reads
-    # filter deleted_at IS NULL. Memory never sets it.
-    deleted_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 

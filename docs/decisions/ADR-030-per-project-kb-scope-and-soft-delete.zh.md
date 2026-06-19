@@ -2,10 +2,20 @@
 
 > English: [ADR-030-per-project-kb-scope-and-soft-delete.md](ADR-030-per-project-kb-scope-and-soft-delete.md)
 
-**状态**：Accepted
-**日期**：2026-06-19
+**状态**：已回退（2026-06-20）—— 见下方回退说明
+**日期**：2026-06-19 · 2026-06-20 回退
 **决策者**：Yuxing Wu
 **关联**：spec `006-knowledge-base`、`007-memory`；完成 [ADR-028（文档共管）](ADR-028-knowledge-base-documents-co-managed.md)；构建于 [ADR-012（文件即真相）](ADR-012-files-as-truth-sqlite-retrieval.md) 之上；与 [ADR-026（memory 经 MCP）](ADR-026-memory-via-mcp-not-native-projection.md) 同源；属于完成统一知识重设计的切片（知识 = 记忆 + 文档 × 全局 / 项目）
+
+> **⚠️ 2026-06-20 已回退。** 本 ADR 的决定在落地一天后被撤回。它当初要支撑的统一
+> **知识**界面,被发现混淆了两种不同的工作流——用户上传的文档(知识库)与智能体写入的
+> 记忆(记忆)——因此 UI 被拆回两个独立界面。统一视图一旦消失,逐项目**文档** scope
+> 与文档软删除存在的唯一理由(两者都只是为了在那个合并视图里让文档对齐记忆的项目轴)便
+> 不再成立,于是一并回退。系统回到
+> [ADR-028](ADR-028-knowledge-base-documents-co-managed.md) 基线:知识库文档在**全局
+> scope** 下共管、采用**硬删除**。**记忆自身的全局 / 逐项目 scope 不受影响**——它早于
+> 本 ADR(见 [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md))。原始决定原文
+> 保留于下方备查。
 
 ## 背景
 

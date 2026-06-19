@@ -13,7 +13,6 @@ from coffer.surfaces.cli import (
     credentials_cmd,
     daemon_cmd,
     knowledge_base_cmd,
-    knowledge_base_trash_cmd,  # noqa: F401  (registers delete/trash/restore onto the kb app)
     memory_cmd,
     model_cmd,
     resource_cmd,

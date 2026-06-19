@@ -68,12 +68,9 @@ class DocumentOut(BaseModel):
     content_sha256: str
     # Co-management lock (ADR-028): a locked document refuses every mutation.
     locked: bool
-    # Document scope (ADR-030/FR-022): the WORKSPACE_GLOBAL sentinel for a global
-    # document, or a project ULID for a per-project one. The UI scopes by it.
+    # WORKSPACE_GLOBAL sentinel for global KB documents (per-project scope is a
+    # later slice); surfaced so the UI can group/scope documents.
     project_id: str
-    # Recoverable soft-delete (ADR-030): null for a live document; set when in the
-    # trash. The trash list (?deleted=true) surfaces it; live reads omit it.
-    deleted_at: datetime | None = None
     chunk_count: int = 0
     metadata: dict[str, Any]
     # Absolute path of the normalized markdown on disk (the source of truth) and
@@ -98,7 +95,6 @@ class DocumentOut(BaseModel):
             content_sha256=d.content_sha256,
             locked=d.locked,
             project_id=d.project_id,
-            deleted_at=d.deleted_at,
             chunk_count=chunk_count,
             metadata=dict(d.metadata),
             path=path,
@@ -151,9 +147,6 @@ class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=4096)
     top_k: int = Field(default=5, ge=1, le=20)
     mode: RetrievalMode | None = None
-    # Scope (ADR-030/FR-022): omit for global; a project ULID restricts the
-    # search to that scope. The keyword/vector index filters at the SQL layer.
-    project_id: str | None = None
 
 
 class Passage(BaseModel):
@@ -190,9 +183,6 @@ class SearchResponse(BaseModel):
 class GrepRequest(BaseModel):
     pattern: str = Field(min_length=1, max_length=1024)
     max_matches: int = Field(default=100, ge=1, le=1000)
-    # Scope (ADR-030/FR-022): omit for global; a project ULID greps only that
-    # scope's docs/ subtree.
-    project_id: str | None = None
 
 
 class GrepHitOut(BaseModel):

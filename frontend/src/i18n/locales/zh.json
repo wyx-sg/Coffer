@@ -56,6 +56,8 @@
     },
     "mcpServers": "MCP 服务器",
     "skills": "Skill",
+    "knowledgeBases": "知识库",
+    "memory": "记忆",
     "settings": "设置",
     "language": "语言",
     "collapse": "折叠侧边栏",
@@ -63,8 +65,7 @@
     "agents": "Agent",
     "channels": "渠道",
     "audit": "审计日志",
-    "chat": "聊天",
-    "knowledge": "知识"
+    "chat": "聊天"
   },
   "resources": {
     "title": "MCP 服务器",
@@ -300,8 +301,6 @@
       "kb_document_ingested": "向 {{resource}} 摄入了一个文档",
       "kb_document_updated": "更新了 {{resource}} 中的一个文档",
       "kb_document_deleted": "从 {{resource}} 删除了一个文档",
-      "kb_document_restored": "在 {{resource}} 中恢复了一个文档",
-      "kb_document_purged": "从 {{resource}} 永久清除了一个文档",
       "kb_reindexed": "重建了 {{resource}} 的索引",
       "memory_added": "向 {{resource}} 添加了一条记忆",
       "memory_updated": "更新了 {{resource}} 中的一条记忆",
@@ -1349,57 +1348,5 @@
     },
     "deleteTitle": "删除渠道",
     "deleteConfirm": "确定删除渠道“{{name}}”？其适配器将停止，配对关系也会被移除。"
-  },
-  "knowledge": {
-    "title": "知识",
-    "subtitle": "记忆（笔记）与文档，智能体通过 MCP 网关读写，按范围组织。",
-    "searchPlaceholder": "搜索笔记与文档…",
-    "empty": "此范围下暂无内容。在上方粘贴笔记或拖入文件。",
-    "untitled": "（无标题）",
-    "scope": {
-      "aria": "知识范围",
-      "heading": "范围",
-      "global": "全局",
-      "project": "项目"
-    },
-    "type": {
-      "note": "笔记",
-      "document": "文档"
-    },
-    "cols": {
-      "type": "类型",
-      "title": "标题",
-      "source": "来源"
-    },
-    "source": {
-      "note": "记忆"
-    },
-    "filter": {
-      "allTypes": "全部类型"
-    },
-    "add": {
-      "placeholder": "粘贴链接或写下笔记…（将作为笔记）",
-      "notesUnavailable": "该范围的记忆库尚未创建，暂无法添加笔记。",
-      "dropHint": "拖入文件以添加文档 →",
-      "uploadUnavailable": "请先创建知识库以上传文档。",
-      "uploadFile": "上传文件",
-      "addNote": "添加笔记"
-    },
-    "viewer": {
-      "locked": "已锁定",
-      "close": "关闭",
-      "deleteDocHint": "将该文档移入回收站（可恢复）。"
-    },
-    "deleteNoteConfirm": "删除笔记“{{title}}”？此操作无法撤销。",
-    "deleteDocConfirm": "将文档“{{title}}”移入回收站？稍后可以恢复。",
-    "trash": {
-      "open": "回收站",
-      "title": "回收站",
-      "hint": "已软删除的文档。恢复将从保留的原件重新转换（正文编辑不会恢复）；彻底删除将永久移除。",
-      "empty": "回收站为空。",
-      "restore": "恢复",
-      "purge": "彻底删除",
-      "purgeHint": "永久删除该文档及其原件——此操作无法撤销。"
-    }
   }
 }

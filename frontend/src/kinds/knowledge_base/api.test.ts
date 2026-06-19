@@ -17,7 +17,6 @@ import {
   listDocuments,
   reconvertDocument,
   reindexKnowledgeBase,
-  restoreDocument,
   searchKnowledgeBase,
   setDocumentLock,
   updateKnowledgeBaseConfig,
@@ -132,21 +131,11 @@ describe("listDocuments", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(okJson({ documents: [], total: 0 }));
 
-    const out = await listDocuments("kb1", { limit: 25, offset: 50 });
+    const out = await listDocuments("kb1", 25, 50);
     expect(out).toEqual({ documents: [], total: 0 });
 
     const [url] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/knowledge_bases/kb1/documents?limit=25&offset=50`);
-  });
-
-  test("forwards project_id scope and the deleted (trash) flag", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ documents: [], total: 0 }));
-    await listDocuments("kb1", { projectId: "00000000000000000000000000", deleted: true });
-    const [url] = fetchMock.mock.calls[0];
-    expect(url).toContain("project_id=00000000000000000000000000");
-    expect(url).toContain("deleted=true");
   });
 
   test("URL-encodes the kb name to defend against weird characters", async () => {
@@ -178,7 +167,7 @@ describe("ingestDocument", () => {
       .mockResolvedValue(okJson({ id: "abc123", title: "a.md", source_mode: "converted" }));
 
     const file = new File([new Blob(["alpha"])], "a.md", { type: "text/markdown" });
-    const out = await ingestDocument("kb1", file, { replace: true });
+    const out = await ingestDocument("kb1", file, true);
     expect(out.id).toBe("abc123");
 
     const [url, init] = fetchMock.mock.calls[0];
@@ -187,29 +176,6 @@ describe("ingestDocument", () => {
     const body = init?.body as FormData;
     expect(body.get("replace")).toBe("true");
     expect((body.get("file") as File).name).toBe("a.md");
-  });
-
-  test("appends a project_id form field when a scope is given", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ id: "abc123", title: "a.md", source_mode: "converted" }));
-    const file = new File([new Blob(["alpha"])], "a.md", { type: "text/markdown" });
-    await ingestDocument("kb1", file, { projectId: "01J2PROJECTULID0000000000" });
-    const body = fetchMock.mock.calls[0][1]?.body as FormData;
-    expect(body.get("project_id")).toBe("01J2PROJECTULID0000000000");
-  });
-});
-
-describe("restoreDocument", () => {
-  test("POSTs the restore URL for a trashed document", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ id: "doc-1", title: "a.md", source_mode: "converted" }));
-    const out = await restoreDocument("kb1", "doc-1");
-    expect(out.id).toBe("doc-1");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/knowledge_bases/kb1/documents/doc-1/restore`);
-    expect(init?.method).toBe("POST");
   });
 });
 

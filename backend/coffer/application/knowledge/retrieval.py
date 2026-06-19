@@ -130,11 +130,7 @@ class KnowledgeRetrieval:
             return await self._vector_search(store, query, top_k=top_k, embedding=embedding)
 
         index = self.index_for(store, dimensions=None)
-        # Pass the store's scope so KB project searches filter at the SQL layer
-        # (ADR-030); for memory it's the store's own scope, so it's a no-op.
-        passages = await index.keyword_search(
-            store.resource_name, query, top_k, project_id=store.project_id
-        )
+        passages = await index.keyword_search(store.resource_name, query, top_k)
         return SearchResult(mode="keyword", passages=tuple(passages), fallback=None)
 
     async def _vector_search(
@@ -156,18 +152,14 @@ class KnowledgeRetrieval:
             return await self._fallback_to_keyword(store, query, top_k=top_k)
 
         index = self.index_for(store, dimensions=embedding.dimensions)
-        passages = await index.vector_search(
-            store.resource_name, vectors[0], top_k, project_id=store.project_id
-        )
+        passages = await index.vector_search(store.resource_name, vectors[0], top_k)
         return SearchResult(mode="vector", passages=tuple(passages), fallback=None)
 
     async def _fallback_to_keyword(
         self, store: StoreRef, query: str, *, top_k: int
     ) -> SearchResult:
         index = self.index_for(store, dimensions=None)
-        passages = await index.keyword_search(
-            store.resource_name, query, top_k, project_id=store.project_id
-        )
+        passages = await index.keyword_search(store.resource_name, query, top_k)
         # mode stays ``vector`` (what the caller requested) while ``fallback``
         # records the degrade — surfaces report both.
         return SearchResult(mode="vector", passages=tuple(passages), fallback="keyword")

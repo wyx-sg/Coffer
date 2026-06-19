@@ -207,24 +207,3 @@ def test_kb_set_chunking_and_reconvert(kb_cli_daemon, tmp_path):
     doc_id = ing.output.split("id=")[1].split(" ")[0]
     rc = _runner.invoke(cli_app, ["kb", "reconvert", "kb1", doc_id])
     assert rc.exit_code == 0, rc.output
-
-
-def test_trash_restore_and_project_scope_cli(kb_cli_daemon, tmp_path):
-    """`kb ingest --project-id`, then delete-doc -> `kb trash` -> `kb restore`
-    round-trips the recoverable soft-delete over the real CLI (ADR-030)."""
-    _runner.invoke(cli_app, ["kb", "create", "kb"])
-    doc = tmp_path / "a.md"
-    doc.write_text("# A\n\ngrape soda")
-    proj = "0123456789ABCDEFGHJKMNPQRS"  # a valid 26-char Crockford ULID
-    ing = _runner.invoke(cli_app, ["kb", "ingest", "kb", str(doc), "--project-id", proj])
-    assert ing.exit_code == 0, ing.output
-    doc_id = ing.output.split("id=")[1].split(" ")[0].strip()
-    # the project-scoped list shows it
-    plist = _runner.invoke(cli_app, ["kb", "list-docs", "kb", "--project-id", proj, "--json"])
-    assert plist.exit_code == 0 and doc_id in plist.output
-    # delete -> trash, then restore
-    assert _runner.invoke(cli_app, ["kb", "delete-doc", "kb", doc_id]).exit_code == 0
-    trash = _runner.invoke(cli_app, ["kb", "trash", "kb", "--json"])
-    assert trash.exit_code == 0 and doc_id in trash.output
-    rs = _runner.invoke(cli_app, ["kb", "restore", "kb", doc_id])
-    assert rs.exit_code == 0 and "restored" in rs.output

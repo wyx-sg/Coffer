@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import shutil
 from dataclasses import replace as dc_replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,19 +29,14 @@ from coffer.application.knowledge_base.pipeline_helpers import (
     KBPaths,
     Prepared,
     build_kb_document,
-    check_size,
     chunker_for,
     document_from_frontmatter,
     extension_of,
-    list_md_files,
     mkparent_write,
     render_doc_markdown,
-    safe_rmtree_kb,
-    scope_docs_dirs,
     set_frontmatter_locked,
     title_of,
 )
-from coffer.application.knowledge_base.pipeline_trash import TrashRebuildMixin
 from coffer.domain.errors import DocumentLocked, IngestRejected
 from coffer.domain.knowledge.converter import MarkdownConverter
 from coffer.domain.knowledge.document import (
@@ -57,8 +53,8 @@ from coffer.infrastructure.knowledge.frontmatter import (
 from coffer.infrastructure.knowledge.ids import new_ulid
 
 
-class KBPipeline(TrashRebuildMixin):
-    """The KB write/reindex paths (soft-delete / restore / purge in the mixin)."""
+class KBPipeline:
+    """The KB write/reindex paths."""
 
     def __init__(
         self,
@@ -83,14 +79,12 @@ class KBPipeline(TrashRebuildMixin):
     def _lock(self, kb_name: str) -> asyncio.Lock:
         return self._locks.lock(KIND_KNOWLEDGE_BASE, kb_name)
 
-    def _store_ref(self, kb_name: str, project_id: str = WORKSPACE_GLOBAL_PROJECT_ID) -> StoreRef:
-        # The keyword/vector index is keyed by (kind, resource_name) and shared
-        # across scopes; ``docs_dir`` is scope-specific and backs grep (ADR-030).
+    def _store_ref(self, kb_name: str) -> StoreRef:
         return StoreRef(
             kind=KIND_KNOWLEDGE_BASE,
             resource_name=kb_name,
-            project_id=project_id,
-            docs_dir=str(self._paths.docs_dir(kb_name, project_id)),
+            project_id=WORKSPACE_GLOBAL_PROJECT_ID,
+            docs_dir=str(self._paths.docs_dir(kb_name)),
         )
 
     # ----- ingest -----
@@ -103,7 +97,6 @@ class KBPipeline(TrashRebuildMixin):
         raw_bytes: bytes,
         config: KnowledgeBaseConfig,
         replace: bool,
-        project_id: str = WORKSPACE_GLOBAL_PROJECT_ID,
     ) -> tuple[Document, str]:
         """Ingest one upload. Returns ``(document, status)`` where ``status`` is:
 
@@ -117,11 +110,11 @@ class KBPipeline(TrashRebuildMixin):
         is matched to an existing document by ``original_filename`` in scope, not
         by its bytes, so an updated source updates the same document in place.
         """
-        check_size(raw_bytes, config)
+        self._check_size(raw_bytes, config)
         prepared = await self._prepare(filename, raw_bytes)
         async with self._lock(kb_name):
             existing = await self._documents.find_by_filename(
-                KIND_KNOWLEDGE_BASE, kb_name, project_id, filename
+                KIND_KNOWLEDGE_BASE, kb_name, WORKSPACE_GLOBAL_PROJECT_ID, filename
             )
             doc_id = prepared.doc_id
             status = "ingested"
@@ -145,7 +138,7 @@ class KBPipeline(TrashRebuildMixin):
                 status = "updated"
                 created_at = existing.created_at
             now = datetime.now(tz=UTC)
-            await self._write_files(kb_name, doc_id, prepared, raw_bytes, filename, project_id)
+            await self._write_files(kb_name, doc_id, prepared, raw_bytes, filename)
             doc = build_kb_document(
                 kb_name=kb_name,
                 doc_id=doc_id,
@@ -154,7 +147,6 @@ class KBPipeline(TrashRebuildMixin):
                 source_mode="converted",
                 created_at=created_at or now,
                 updated_at=now,
-                project_id=project_id,
             )
             # previous_sha=None forces the row upsert even when the markdown body
             # is unchanged, so the new source_sha256 provenance always lands.
@@ -174,8 +166,7 @@ class KBPipeline(TrashRebuildMixin):
             raise IngestRejected("empty", "edited markdown is empty")
         async with self._lock(kb_name):
             full = render_doc_markdown(doc, body, source_mode="edited")
-            dp = self._paths.doc_path(kb_name, doc.id, doc.project_id)
-            await asyncio.to_thread(dp.write_text, full, "utf-8")
+            await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
             edited = dc_replace(
                 doc,
                 source_mode="edited",
@@ -188,60 +179,71 @@ class KBPipeline(TrashRebuildMixin):
             stored = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
             return stored or edited
 
-    # ----- reconvert / restore (both rebuild docs/ from the kept raw original) -----
+    # ----- reconvert -----
 
     async def reconvert(
         self, *, kb_name: str, doc: Document, config: KnowledgeBaseConfig
     ) -> Document:
+        raw_ext = extension_of(str(doc.metadata.get("original_filename", "")))
+        raw_path = self._paths.raw_path(kb_name, doc.id, raw_ext)
+        raw_bytes = await asyncio.to_thread(raw_path.read_bytes)
+        fmt = raw_ext.lstrip(".") or str(doc.metadata.get("original_format", ""))
+        markdown, _meta = await self._converters.convert(raw_bytes, fmt)
+        body = markdown.strip()
         async with self._lock(kb_name):
-            return await self._rebuild_from_raw(
-                kb_name=kb_name, doc=doc, config=config, clear_deleted=False
+            full = render_doc_markdown(doc, body, source_mode="converted")
+            await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
+            reconv = dc_replace(
+                doc,
+                source_mode="converted",
+                updated_at=datetime.now(tz=UTC),
+                title=title_of(body, doc.title),
             )
+            await self._index_and_persist(
+                kb_name, reconv, body, config, previous_sha=doc.content_sha256
+            )
+            stored = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
+            return stored or reconv
 
     # ----- reindex scan -----
 
     async def reindex_scan(
         self, *, kb_name: str, config: KnowledgeBaseConfig, force: bool = False
     ) -> dict[str, int]:
+        docs_dir = self._paths.docs_dir(kb_name)
         reindexed = 0
         skipped = 0
         removed = 0
         degraded = 0
         async with self._lock(kb_name):
+            paths: list[Path] = []
+            if docs_dir.exists():
+                paths = await asyncio.to_thread(lambda: sorted(docs_dir.glob("*.md")))
             on_disk_ids: set[str] = set()
-            # Walk the global docs/ AND every projects/<ulid>/docs/ (ADR-030);
-            # the file's scope dir tells a DB-loss rebuild which project it is.
-            for project_id, scope_dir in scope_docs_dirs(self._paths, kb_name):
-                if not scope_dir.exists():
-                    continue
-                paths: list[Path] = await asyncio.to_thread(list_md_files, scope_dir)
-                for path in paths:
-                    doc_id = path.stem
-                    on_disk_ids.add(doc_id)
-                    doc = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc_id)
-                    frontmatter, body = split_frontmatter(
-                        await asyncio.to_thread(path.read_text, "utf-8")
-                    )
-                    if doc is None:
-                        # No row (DB loss / restore-from-backup): reconstruct it
-                        # from the file's frontmatter — files are the source of
-                        # truth for the documents table too (FR-008/SC-005).
-                        doc = document_from_frontmatter(kb_name, doc_id, frontmatter, project_id)
-                    # ``force`` bypasses the sha no-op gate (chunk params changed).
-                    previous = None if force else doc.content_sha256
-                    changed, was_degraded = await self._index_and_persist(
-                        kb_name, doc, body, config, previous_sha=previous
-                    )
-                    if changed:
-                        reindexed += 1
-                    else:
-                        skipped += 1
-                    if was_degraded:
-                        degraded += 1
-            # Files are truth in BOTH directions: LIVE rows whose markdown
-            # vanished are pruned. ``list_documents`` defaults to live-only and
-            # all scopes, so a soft-deleted tombstone (no docs/ file, kept raw/)
-            # is excluded here and is never resurrected nor pruned (ADR-030).
+            for path in paths:
+                doc_id = path.stem
+                on_disk_ids.add(doc_id)
+                doc = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc_id)
+                frontmatter, body = split_frontmatter(
+                    await asyncio.to_thread(path.read_text, "utf-8")
+                )
+                if doc is None:
+                    # No row (DB loss / restore-from-backup): reconstruct it
+                    # from the file's frontmatter — files are the source of
+                    # truth for the documents table too (FR-008/SC-005).
+                    doc = document_from_frontmatter(kb_name, doc_id, frontmatter)
+                # ``force`` bypasses the sha no-op gate (chunk params changed).
+                previous = None if force else doc.content_sha256
+                changed, was_degraded = await self._index_and_persist(
+                    kb_name, doc, body, config, previous_sha=previous
+                )
+                if changed:
+                    reindexed += 1
+                else:
+                    skipped += 1
+                if was_degraded:
+                    degraded += 1
+            # Files are truth in BOTH directions: rows whose markdown vanished are pruned.
             index = self._retrieval.index_for(self._store_ref(kb_name), dimensions=None)
             known = await self._documents.list_documents(
                 KIND_KNOWLEDGE_BASE, kb_name, limit=100_000, offset=0
@@ -262,14 +264,23 @@ class KBPipeline(TrashRebuildMixin):
         frontmatter ``locked`` key (survives a files-only rebuild — ADR-028)."""
         async with self._lock(kb_name):
             await asyncio.to_thread(
-                set_frontmatter_locked,
-                self._paths.doc_path(kb_name, doc.id, doc.project_id),
-                locked,
+                set_frontmatter_locked, self._paths.doc_path(kb_name, doc.id), locked
             )
             updated = await self._documents.set_locked(KIND_KNOWLEDGE_BASE, kb_name, doc.id, locked)
             return updated or dc_replace(doc, locked=locked)
 
-    # ----- cleanup (full KB drop — hard) -----
+    # ----- delete / cleanup -----
+
+    async def delete(self, *, kb_name: str, doc: Document) -> None:
+        async with self._lock(kb_name):
+            index = self._retrieval.index_for(self._store_ref(kb_name), dimensions=None)
+            await index.delete_chunks(doc.id)
+            await self._documents.delete_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
+            raw_ext = extension_of(str(doc.metadata.get("original_filename", "")))
+            with contextlib.suppress(OSError, ValueError):
+                await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).unlink, True)
+            with contextlib.suppress(OSError, ValueError):
+                await asyncio.to_thread(self._paths.raw_path(kb_name, doc.id, raw_ext).unlink, True)
 
     async def cleanup(self, kb_name: str) -> None:
         async with self._lock(kb_name):
@@ -282,11 +293,29 @@ class KBPipeline(TrashRebuildMixin):
         # same-name re-create. Maintenance mode — no embedding width needed.
         with contextlib.suppress(Exception):
             await self._retrieval.drop_store(self._store_ref(kb_name), dimensions=None)
-        await asyncio.to_thread(
-            safe_rmtree_kb, self._paths.kb_dir(kb_name), self._paths.knowledge_root()
-        )
+        kb_dir = self._paths.kb_dir(kb_name)
+        if not kb_dir.exists():
+            return
+        resolved = kb_dir.resolve()
+        root = self._paths.knowledge_root().resolve()
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            return
+        if resolved == root:
+            return
+        await asyncio.to_thread(shutil.rmtree, resolved, ignore_errors=True)
 
     # ----- internals -----
+
+    def _check_size(self, raw_bytes: bytes, config: KnowledgeBaseConfig) -> None:
+        if not raw_bytes:
+            raise IngestRejected("empty", "uploaded file is empty")
+        if len(raw_bytes) > config.max_document_bytes:
+            raise IngestRejected(
+                "too_large",
+                f"file size {len(raw_bytes)} exceeds KB limit {config.max_document_bytes}",
+            )
 
     async def _prepare(self, filename: str, raw_bytes: bytes) -> Prepared:
         source_sha = hashlib.sha256(raw_bytes).hexdigest()
@@ -307,16 +336,10 @@ class KBPipeline(TrashRebuildMixin):
         )
 
     async def _write_files(
-        self,
-        kb_name: str,
-        doc_id: str,
-        prepared: Prepared,
-        raw_bytes: bytes,
-        filename: str,
-        project_id: str = WORKSPACE_GLOBAL_PROJECT_ID,
+        self, kb_name: str, doc_id: str, prepared: Prepared, raw_bytes: bytes, filename: str
     ) -> None:
-        raw_path = self._paths.raw_path(kb_name, doc_id, prepared.extension, project_id)
-        doc_path = self._paths.doc_path(kb_name, doc_id, project_id)
+        raw_path = self._paths.raw_path(kb_name, doc_id, prepared.extension)
+        doc_path = self._paths.doc_path(kb_name, doc_id)
 
         def _write() -> None:
             raw_path.parent.mkdir(parents=True, exist_ok=True)
