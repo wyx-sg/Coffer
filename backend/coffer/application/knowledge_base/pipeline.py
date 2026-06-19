@@ -28,13 +28,16 @@ from coffer.application.knowledge_base.pipeline_helpers import (
     DocumentRepoPort,
     KBPaths,
     Prepared,
+    build_kb_document,
     chunker_for,
     document_from_frontmatter,
     extension_of,
     mkparent_write,
+    render_doc_markdown,
+    set_frontmatter_locked,
     title_of,
 )
-from coffer.domain.errors import IngestRejected
+from coffer.domain.errors import DocumentLocked, IngestRejected
 from coffer.domain.knowledge.converter import MarkdownConverter
 from coffer.domain.knowledge.document import (
     KIND_KNOWLEDGE_BASE,
@@ -47,6 +50,7 @@ from coffer.infrastructure.knowledge.frontmatter import (
     render_frontmatter,
     split_frontmatter,
 )
+from coffer.infrastructure.knowledge.ids import new_ulid
 
 
 class KBPipeline:
@@ -93,28 +97,64 @@ class KBPipeline:
         raw_bytes: bytes,
         config: KnowledgeBaseConfig,
         replace: bool,
-    ) -> tuple[Document, bool]:
-        """Ingest one upload. Returns ``(document, replaced)`` — ``replaced`` is
-        True for a replace overwrite (audited as UPDATE, not a second INGEST)."""
+    ) -> tuple[Document, str]:
+        """Ingest one upload. Returns ``(document, status)`` where ``status`` is:
+
+        - ``"ingested"`` — a brand-new document (new ULID id), audited INGEST;
+        - ``"updated"``  — a changed re-upload of an existing filename, updated
+          in place under the same id (``replace=true``), audited UPDATE;
+        - ``"unchanged"`` — a byte-identical re-upload, an idempotent no-op (no
+          write, no audit).
+
+        Identity is a stable ULID decoupled from content (ADR-028): a re-upload
+        is matched to an existing document by ``original_filename`` in scope, not
+        by its bytes, so an updated source updates the same document in place.
+        """
         self._check_size(raw_bytes, config)
         prepared = await self._prepare(filename, raw_bytes)
         async with self._lock(kb_name):
-            existed = await self._dedup_guard(kb_name, prepared.source_sha256, replace)
-            await self._write_files(kb_name, prepared, raw_bytes, filename)
+            existing = await self._documents.find_by_filename(
+                KIND_KNOWLEDGE_BASE, kb_name, WORKSPACE_GLOBAL_PROJECT_ID, filename
+            )
+            doc_id = prepared.doc_id
+            status = "ingested"
+            created_at: datetime | None = None
+            if existing is not None:
+                if existing.locked:
+                    raise DocumentLocked(kb_name, existing.id)
+                if str(existing.metadata.get("source_sha256", "")) == prepared.source_sha256:
+                    # Byte-identical re-upload → idempotent no-op (FR-007).
+                    return existing, "unchanged"
+                if not replace:
+                    raise IngestRejected(
+                        "duplicate",
+                        f"a document named {filename!r} already exists; "
+                        "pass replace=true to update it in place",
+                    )
+                # Changed source, same filename → update the SAME doc in place:
+                # reuse the id, overwrite docs/+raw/ (keep only the latest
+                # original), reset source_mode to converted.
+                doc_id = existing.id
+                status = "updated"
+                created_at = existing.created_at
             now = datetime.now(tz=UTC)
-            doc = self._build_document(
+            await self._write_files(kb_name, doc_id, prepared, raw_bytes, filename)
+            doc = build_kb_document(
                 kb_name=kb_name,
+                doc_id=doc_id,
                 prepared=prepared,
                 filename=filename,
                 source_mode="converted",
-                created_at=now,
+                created_at=created_at or now,
                 updated_at=now,
             )
+            # previous_sha=None forces the row upsert even when the markdown body
+            # is unchanged, so the new source_sha256 provenance always lands.
             await self._index_and_persist(
                 kb_name, doc, prepared.markdown, config, previous_sha=None
             )
             stored = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc.id)
-            return stored or doc, existed
+            return stored or doc, status
 
     # ----- edit -----
 
@@ -125,7 +165,7 @@ class KBPipeline:
         if not body:
             raise IngestRejected("empty", "edited markdown is empty")
         async with self._lock(kb_name):
-            full = self._render_doc_markdown(doc, body, source_mode="edited")
+            full = render_doc_markdown(doc, body, source_mode="edited")
             await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
             edited = dc_replace(
                 doc,
@@ -151,7 +191,7 @@ class KBPipeline:
         markdown, _meta = await self._converters.convert(raw_bytes, fmt)
         body = markdown.strip()
         async with self._lock(kb_name):
-            full = self._render_doc_markdown(doc, body, source_mode="converted")
+            full = render_doc_markdown(doc, body, source_mode="converted")
             await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
             reconv = dc_replace(
                 doc,
@@ -217,6 +257,18 @@ class KBPipeline:
             "degraded": degraded,
         }
 
+    # ----- lock -----
+
+    async def set_lock(self, *, kb_name: str, doc: Document, locked: bool) -> Document:
+        """Persist a lock toggle under the per-store lock: flip the on-disk
+        frontmatter ``locked`` key (survives a files-only rebuild — ADR-028)."""
+        async with self._lock(kb_name):
+            await asyncio.to_thread(
+                set_frontmatter_locked, self._paths.doc_path(kb_name, doc.id), locked
+            )
+            updated = await self._documents.set_locked(KIND_KNOWLEDGE_BASE, kb_name, doc.id, locked)
+            return updated or dc_replace(doc, locked=locked)
+
     # ----- delete / cleanup -----
 
     async def delete(self, *, kb_name: str, doc: Document) -> None:
@@ -273,7 +325,9 @@ class KBPipeline:
         body = markdown.strip()
         title = title_of(body, filename)
         return Prepared(
-            doc_id=source_sha[:16],
+            # Stable ULID, decoupled from content (ADR-028) — minted for a new
+            # document; a re-upload reuses the matched document's existing id.
+            doc_id=new_ulid(),
             source_sha256=source_sha,
             extension=ext,
             markdown=body,
@@ -281,22 +335,11 @@ class KBPipeline:
             conversion_engine=str(meta.get("conversion_engine", "unknown")),
         )
 
-    async def _dedup_guard(self, kb_name: str, source_sha: str, replace: bool) -> bool:
-        """Reject a duplicate source unless ``replace``; returns whether the
-        source already existed (a replace overwrite)."""
-        exists = await self._documents.exists_source(KIND_KNOWLEDGE_BASE, kb_name, source_sha)
-        if exists and not replace:
-            raise IngestRejected(
-                "duplicate",
-                "a document with the same source content already exists; pass replace=true",
-            )
-        return exists
-
     async def _write_files(
-        self, kb_name: str, prepared: Prepared, raw_bytes: bytes, filename: str
+        self, kb_name: str, doc_id: str, prepared: Prepared, raw_bytes: bytes, filename: str
     ) -> None:
-        raw_path = self._paths.raw_path(kb_name, prepared.doc_id, prepared.extension)
-        doc_path = self._paths.doc_path(kb_name, prepared.doc_id)
+        raw_path = self._paths.raw_path(kb_name, doc_id, prepared.extension)
+        doc_path = self._paths.doc_path(kb_name, doc_id)
 
         def _write() -> None:
             raw_path.parent.mkdir(parents=True, exist_ok=True)
@@ -311,41 +354,13 @@ class KBPipeline:
                 "source_sha256": prepared.source_sha256,
                 "converter": prepared.conversion_engine,
                 "source_mode": "converted",
+                # A new / replaced document is always unlocked (a locked one
+                # rejects replace); persisted so a files-only rebuild keeps it.
+                "locked": False,
             },
             prepared.markdown,
         )
         await asyncio.to_thread(mkparent_write, doc_path, full)
-
-    def _build_document(
-        self,
-        *,
-        kb_name: str,
-        prepared: Prepared,
-        filename: str,
-        source_mode: str,
-        created_at: datetime,
-        updated_at: datetime,
-    ) -> Document:
-        return Document(
-            id=prepared.doc_id,
-            kind=KIND_KNOWLEDGE_BASE,
-            resource_name=kb_name,
-            project_id=WORKSPACE_GLOBAL_PROJECT_ID,
-            path=f"docs/{prepared.doc_id}.md",
-            title=prepared.title,
-            description=None,
-            content_sha256="",  # set by the reindex routine
-            source_mode=source_mode,
-            created_at=created_at,
-            updated_at=updated_at,
-            metadata={
-                "original_filename": filename,
-                "original_format": prepared.extension.lstrip("."),
-                "source_sha256": prepared.source_sha256,
-                "converted_at": created_at.isoformat(),
-                "conversion_engine": prepared.conversion_engine,
-            },
-        )
 
     async def _index_and_persist(
         self,
@@ -383,16 +398,3 @@ class KBPipeline:
             dc_replace(doc, content_sha256=outcome.content_sha256)
         )
         return True, degraded
-
-    def _render_doc_markdown(self, doc: Document, body: str, *, source_mode: str) -> str:
-        return render_frontmatter(
-            {
-                "title": title_of(body, doc.title),
-                "source_filename": str(doc.metadata.get("original_filename", "")),
-                "source_format": str(doc.metadata.get("original_format", "")),
-                "source_sha256": str(doc.metadata.get("source_sha256", "")),
-                "converter": str(doc.metadata.get("conversion_engine", "")),
-                "source_mode": source_mode,
-            },
-            body,
-        )

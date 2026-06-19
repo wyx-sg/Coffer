@@ -9,6 +9,7 @@ the substrate-relevant ones so importers can use the documented path.
 from __future__ import annotations
 
 from coffer.domain.errors import (
+    DocumentLocked,
     DocumentNotFound,
     EmbeddingUnavailable,
     EngineUnavailable,
@@ -22,6 +23,7 @@ from coffer.domain.errors import (
 )
 
 __all__ = [
+    "DocumentLocked",
     "DocumentNotFound",
     "EmbeddingUnavailable",
     "EngineUnavailable",

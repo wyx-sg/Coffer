@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0024"
+HEAD_REVISION = "0025"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -40,8 +40,11 @@ HEAD_REVISION = "0024"
 # chunk-id collision fix); 0018 adds no table (conversation agent-config column);
 # 0019 adds ``sync_config`` + ``sync_state`` for multi-machine sync (spec 010);
 # 0023 adds ``agent_mcp_scope`` + ``agent_mcp_scope_server`` for per-agent MCP
-# server scoping (ADR-026). The ``documents_fts_*`` shadow tables FTS5 creates
-# under the hood are excluded — the assertions speak to the logical schema.
+# server scoping (ADR-026). 0025 adds NO table — it ADDs the ``documents.locked``
+# column for the co-management lock (ADR-028), so EXPECTED_TABLES is unchanged
+# (the column is asserted separately below). The ``documents_fts_*`` shadow
+# tables FTS5 creates under the hood are excluded — the assertions speak to the
+# logical schema.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -155,7 +158,19 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # 0008's downgrade drops it again at 0007).
     assert "memory_projection_bindings" not in _user_tables(db_path)
 
-    # head (0024) -> 0023: 0024's downgrade recreates memory_projection_bindings,
+    def _documents_columns() -> set[str]:
+        with sqlite3.connect(db_path) as conn:
+            return {r[1] for r in conn.execute("PRAGMA table_info(documents)")}
+
+    # 0025 adds the co-management lock column (ADR-028); it exists at head.
+    assert "locked" in _documents_columns()
+
+    # head (0025) -> 0024: 0025's downgrade drops documents.locked.
+    command.downgrade(cfg, "0024")
+    assert "locked" not in _documents_columns()
+    assert _user_tables(db_path) == EXPECTED_TABLES  # column-only change, table set intact
+
+    # 0024 -> 0023: 0024's downgrade recreates memory_projection_bindings,
     # so it reappears here (and is dropped again at 0008's downgrade at 0007).
     command.downgrade(cfg, "0023")
     assert "memory_projection_bindings" in _user_tables(db_path)

@@ -94,9 +94,17 @@ export function KnowledgeBaseDetailPage() {
           isLoading={Boolean(kb.selectedId) && kb.docDetailQuery.isPending}
           isReconvertPending={kb.reconvert.isPending}
           isDeletePending={kb.del.isPending}
+          isLockPending={kb.setLock.isPending}
           reconvertError={kb.reconvert.error}
           onReconvert={() => kb.selectedId && kb.reconvert.mutate(kb.selectedId)}
           onDelete={kb.confirmDelete}
+          onToggleLock={() =>
+            kb.docDetailQuery.data &&
+            kb.setLock.mutate({
+              id: kb.docDetailQuery.data.id,
+              locked: !kb.docDetailQuery.data.locked,
+            })
+          }
         />
       </div>
 

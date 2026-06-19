@@ -4,6 +4,8 @@
 
 Background and rationale for the technology choices in this redesign. Each section closes with the **decision**; alternatives are recorded so future readers know the path not taken. This redesign **supersedes** the original 006 choices (LlamaIndex + sentence-transformers) and is captured in a new ADR that supersedes ADR-010 and ADR-011.
 
+> **Later amendment — [ADR-028](../../docs/decisions/ADR-028-knowledge-base-documents-co-managed.md) (2026-06-19):** two decisions recorded below were subsequently reversed. The **doc id** is now a stable ULID (not the source-sha256 prefix in §3), and the KB is **co-managed** — agents may write documents via MCP, not read-only (§4) — guarded by a per-document lock and F01 audit. The text below is kept as the original record; ADR-028 is the authority where they differ.
+
 ## 1. Retrieval stack: files + SQLite, no RAG framework
 
 **Question**: What is Coffer's backbone for storing, indexing, and retrieving knowledge?

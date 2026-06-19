@@ -14,11 +14,20 @@ from coffer.domain.knowledge.document import (
 )
 
 
-def _doc(doc_id: str, kind: str, resource: str, *, source_sha: str | None = None) -> Document:
+def _doc(
+    doc_id: str,
+    kind: str,
+    resource: str,
+    *,
+    source_sha: str | None = None,
+    filename: str | None = None,
+) -> Document:
     now = datetime.now(UTC)
     meta: dict[str, object] = {}
     if source_sha:
         meta["source_sha256"] = source_sha
+    if filename:
+        meta["original_filename"] = filename
     return Document(
         id=doc_id,
         kind=kind,
@@ -61,16 +70,45 @@ async def test_upsert_updates_existing(substrate) -> None:
 
 
 @pytest.mark.asyncio
-async def test_exists_source_dedup(substrate) -> None:
+async def test_find_by_filename_matches_in_scope(substrate) -> None:
+    """ADR-028 re-upload match: a document is found by its original_filename
+    within (kind, resource, project_id), the stable key for re-upload."""
     repo = substrate.repo
-    await repo.upsert_document(_doc("aaaa", KIND_KNOWLEDGE_BASE, "kb1", source_sha="deadbeef"))
-    assert await repo.exists_source(KIND_KNOWLEDGE_BASE, "kb1", "deadbeef") is True
-    assert await repo.exists_source(KIND_KNOWLEDGE_BASE, "kb1", "other") is False
+    await repo.upsert_document(_doc("ulid-aaaa", KIND_KNOWLEDGE_BASE, "kb1", filename="a.md"))
+    found = await repo.find_by_filename(
+        KIND_KNOWLEDGE_BASE, "kb1", WORKSPACE_GLOBAL_PROJECT_ID, "a.md"
+    )
+    assert found is not None and found.id == "ulid-aaaa"
+    # A different filename, or the same filename in another KB, does not match.
+    assert (
+        await repo.find_by_filename(
+            KIND_KNOWLEDGE_BASE, "kb1", WORKSPACE_GLOBAL_PROJECT_ID, "other.md"
+        )
+        is None
+    )
+    assert (
+        await repo.find_by_filename(KIND_KNOWLEDGE_BASE, "kb2", WORKSPACE_GLOBAL_PROJECT_ID, "a.md")
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_set_locked_flips_and_persists(substrate) -> None:
+    """ADR-028: set_locked flips the per-document lock and round-trips."""
+    repo = substrate.repo
+    await repo.upsert_document(_doc("ulid-lock", KIND_KNOWLEDGE_BASE, "kb1", filename="a.md"))
+    locked = await repo.set_locked(KIND_KNOWLEDGE_BASE, "kb1", "ulid-lock", True)
+    assert locked is not None and locked.locked is True
+    assert (await repo.get_document(KIND_KNOWLEDGE_BASE, "kb1", "ulid-lock")).locked is True
+    unlocked = await repo.set_locked(KIND_KNOWLEDGE_BASE, "kb1", "ulid-lock", False)
+    assert unlocked is not None and unlocked.locked is False
+    # Unknown id → None (no row touched).
+    assert await repo.set_locked(KIND_KNOWLEDGE_BASE, "kb1", "missing", True) is None
 
 
 @pytest.mark.asyncio
 async def test_kind_isolation_same_id(substrate) -> None:
-    """Same content-addressed id may appear under both faces (composite PK)."""
+    """The same id string may appear under both faces (composite PK)."""
     repo = substrate.repo
     await repo.upsert_document(_doc("shared01", KIND_KNOWLEDGE_BASE, "kb1"))
     await repo.upsert_document(_doc("shared01", KIND_MEMORY, "global"))

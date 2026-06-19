@@ -82,6 +82,7 @@ _STATUS: dict[str, int] = {
     "INGEST_REJECTED": 400,  # `_status_for` refines this by reason
     "ENGINE_UNAVAILABLE": 503,
     "RECONVERSION_BLOCKED": 409,
+    "DOCUMENT_LOCKED": 409,
     "SEARCH_MODE_INVALID": 400,
     "GREP_PATTERN_INVALID": 400,
     # memory kind (spec 007)

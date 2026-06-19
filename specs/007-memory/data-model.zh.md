@@ -92,7 +92,7 @@ agent 只通过 MCP 网关工具（`coffer__recall`/`remember`/`update_memory`/`
 ```sql
 -- Shared across KB (kind='knowledge_base') and memory (kind='memory').
 CREATE TABLE documents (
-    id             TEXT NOT NULL,               -- ULID (memory) | 16-hex (KB)
+    id             TEXT NOT NULL,               -- ULID (KB + memory), minted at first write
     kind           TEXT NOT NULL,               -- 'knowledge_base' | 'memory'
     resource_name  TEXT NOT NULL,               -- store name (memory: scope store)
     project_id     TEXT NOT NULL,               -- WORKSPACE_GLOBAL sentinel | project ULID
@@ -102,6 +102,7 @@ CREATE TABLE documents (
     metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {type, actor, origin_session_id}
     content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
     source_mode    TEXT NOT NULL DEFAULT 'native', -- memory: 'native'
+    locked         BOOLEAN NOT NULL DEFAULT 0,  -- KB co-management lock (ADR-028); memory ignores it
     created_at     TIMESTAMP NOT NULL,
     updated_at     TIMESTAMP NOT NULL,
     PRIMARY KEY (kind, resource_name, id)        -- composite (memory ULIDs are globally unique too)

@@ -39,20 +39,21 @@ DevPilot-style OpenAI-compatible provider abstraction (one `AsyncOpenAI` client 
 
 Frozen dataclass; one per Markdown file, **discriminated by `kind`**. KB and memory share this entity; KB-specific data lives in `metadata`.
 
-| Field                       | Type          | Notes                                                                               |
-| --------------------------- | ------------- | ----------------------------------------------------------------------------------- |
-| `id`                        | `str`         | First 16 hex chars of `source_sha256` (KB) — the doc id and `<doc-id>.md` filename. |
-| `kind`                      | `str`         | `"knowledge_base"` for KB rows.                                                     |
-| `resource_name`             | `str`         | KB resource name.                                                                   |
-| `path`                      | `str`         | Relative path of the Markdown file, `docs/<doc-id>.md`.                             |
-| `title`                     | `str`         | From frontmatter / first heading / filename.                                        |
-| `description`               | `str \| None` | Optional summary.                                                                   |
-| `content_sha256`            | `str`         | Hash of the **Markdown** body — the reindex no-op gate.                             |
-| `source_mode`               | `str`         | `"converted"` or `"edited"`.                                                        |
-| `metadata`                  | `dict`        | Per-face JSON; KB keys below.                                                       |
-| `created_at` / `updated_at` | `datetime`    | UTC.                                                                                |
+| Field                       | Type          | Notes                                                                                                                                                             |
+| --------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | `str`         | Stable **ULID** minted at first ingest (KB + memory) — the doc id and `<doc-id>.md` filename. Decoupled from content; the source hash is kept as provenance only. |
+| `kind`                      | `str`         | `"knowledge_base"` for KB rows.                                                                                                                                   |
+| `resource_name`             | `str`         | KB resource name.                                                                                                                                                 |
+| `path`                      | `str`         | Relative path of the Markdown file, `docs/<doc-id>.md`.                                                                                                           |
+| `title`                     | `str`         | From frontmatter / first heading / filename.                                                                                                                      |
+| `description`               | `str \| None` | Optional summary.                                                                                                                                                 |
+| `content_sha256`            | `str`         | Hash of the **Markdown** body — the reindex no-op gate.                                                                                                           |
+| `source_mode`               | `str`         | `"converted"` or `"edited"`.                                                                                                                                      |
+| `locked`                    | `bool`        | When `true`, every mutation (edit / reconvert / replace / delete) is refused (FR-021). Default `false`.                                                           |
+| `metadata`                  | `dict`        | Per-face JSON; KB keys below.                                                                                                                                     |
+| `created_at` / `updated_at` | `datetime`    | UTC.                                                                                                                                                              |
 
-KB `metadata` keys: `original_filename`, `original_format`, `source_sha256`, `converted_at`, `conversion_engine`.
+KB `metadata` keys: `original_filename` (the re-upload match key), `original_format`, `source_sha256` (provenance), `converted_at`, `conversion_engine`.
 
 ### `Passage`, `GrepHit`, `SearchResult` (`domain/knowledge/retrieval.py`)
 
@@ -95,16 +96,17 @@ Grep is a separate `infrastructure/knowledge/grep.py` ripgrep wrapper (no index)
 - `IngestRejected` — code `"INGEST_REJECTED"`; reason ∈ `{"empty","too_large","unsupported_type","duplicate"}`.
 - `EngineUnavailable` — code `"ENGINE_UNAVAILABLE"`; raised when a converter library / sqlite-vec / embedding provider needed for the requested operation is unavailable.
 - `ReconversionBlocked` — code `"RECONVERSION_BLOCKED"`; raised when re-converting a document whose `source_mode == "edited"`.
+- `DocumentLocked` — code `"DOCUMENT_LOCKED"` (HTTP 409); raised when any mutation (edit / reconvert / re-upload replace / delete) targets a `locked` document (FR-021).
 - `SearchModeInvalid` — code `"SEARCH_MODE_INVALID"` (HTTP 400); raised when a search request names an EXPLICIT `mode=grep` (grep has its own endpoint) or any explicit mode not in the KB's `enabled_modes`. `vector` is the exception — it degrades to keyword with a flagged fallback instead of erroring.
 
-## SQLite schema (one Alembic migration; **drops** `kb_documents`)
+## SQLite schema (unified substrate + the `locked` column)
 
-The migration drops the old `kb_documents` / `memory_records` tables and creates the unified schema. **No data migration** (the branch is unreleased).
+The substrate migration (`0006`) drops the old `kb_documents` / `memory_records` tables and creates the unified schema below (**no data migration** — the branch is unreleased). A later additive migration (`0025`) adds the `locked` column to `documents` for the co-management lock (FR-021), guarded by an idempotent `_has_column` check.
 
 ```sql
 -- One row per Markdown file, shared by KB and memory, discriminated by `kind`.
 CREATE TABLE documents (
-    id              TEXT      NOT NULL,             -- 16-hex doc id (KB) / ULID (memory)
+    id              TEXT      NOT NULL,             -- ULID (KB + memory), minted at first ingest
     kind            TEXT      NOT NULL,             -- 'knowledge_base' | 'memory'
     resource_name   TEXT      NOT NULL,             -- KB name (or memory scope store name)
     project_id      TEXT      NOT NULL,             -- WORKSPACE_GLOBAL sentinel (KB/global) | project ULID
@@ -113,6 +115,7 @@ CREATE TABLE documents (
     description     TEXT,
     content_sha256  TEXT      NOT NULL,             -- hash of the markdown body (reindex no-op gate)
     source_mode     TEXT      NOT NULL,             -- 'converted' | 'edited' (KB) | 'native' (memory)
+    locked          BOOLEAN   NOT NULL DEFAULT 0,   -- co-management opt-out: blocks all mutations (FR-021)
     metadata        TEXT      NOT NULL DEFAULT '{}',-- JSON, per-face
     created_at      TIMESTAMP NOT NULL,
     updated_at      TIMESTAMP NOT NULL,
@@ -125,8 +128,8 @@ CREATE INDEX idx_documents_project ON documents(project_id);
 
 CREATE TABLE chunks (
     id              TEXT      NOT NULL PRIMARY KEY, -- '<store-scope>:<doc-id>:<position>'
-    -- store-scope = 12-hex digest of (kind, resource_name): the same content-addressed
-    -- doc id may repeat across stores, so a bare '<doc-id>:<position>' id would collide
+    -- store-scope = 12-hex digest of (kind, resource_name): retained as defense-in-depth
+    -- (doc ids are now globally-unique ULIDs, but this keeps chunk ids store-scoped)
     document_id     TEXT      NOT NULL,
     kind            TEXT      NOT NULL,
     resource_name   TEXT      NOT NULL,
@@ -155,7 +158,7 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 );
 ```
 
-**Why a composite `(kind, resource_name, id)` PK**: a single content-addressed doc id can appear under both faces and across resources; the composite key keeps the unified table unambiguous and lets `on_delete` scope a cascade to one resource. Memory ids are globally-unique ULIDs, so the composite key is also unique per memory store.
+**Why a composite `(kind, resource_name, id)` PK**: doc ids are now globally-unique ULIDs (so a bare `id` would already be unique), but the composite key keeps the unified table unambiguous across faces/resources and lets `on_delete` scope a cascade to one resource. The same source file uploaded into two KBs is two independent documents with two ULIDs (no cross-store dedup — ADR-028).
 
 **Why `project_id`**: the memory face keys stores by project (sentinel ULID for global, a project ULID otherwise). KB rows carry the global sentinel — the column is required by the unified table so memory scope queries have an index (`idx_documents_project`).
 
@@ -167,14 +170,14 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 
 `repository.py` — `DocumentRepo` (document-row CRUD):
 
-- `async upsert_document(d: Document) -> Document` (insert or update by `(kind, resource_name, id)`)
+- `async upsert_document(d: Document) -> Document` (insert or update by `(kind, resource_name, id)`; carries `locked`)
 - `async list_documents(kind, resource_name, *, limit, offset) -> list[Document]`
 - `async count_documents(kind, resource_name) -> int`
 - `async get_document(kind, resource_name, doc_id) -> Document | None`
-- `async exists_source(kind, resource_name, source_sha256) -> bool` (reads `metadata->>'source_sha256'`)
+- `async find_by_filename(kind, resource_name, project_id, original_filename) -> Document | None` (re-upload match key — reads `metadata->>'original_filename'`; replaces the old `exists_source` sha lookup)
+- `async set_locked(kind, resource_name, doc_id, locked) -> Document | None` (flip the lock; returns the updated row)
 - `async delete_document(kind, resource_name, doc_id) -> bool`
 - `async delete_resource(kind, resource_name) -> int`
-- `async all_document_ids(kind, resource_name) -> Sequence[str]`
 
 `sqlite_index.py` — `SqliteKnowledgeIndex` (chunk + FTS5 + optional vec), bound to one `(kind, resource_name)`:
 
@@ -240,15 +243,18 @@ When an embed degrades (embedding provider unavailable), the routine indexes the
 
 ## Cascade & integrity rules
 
-| Action                                | Effect                                                                                                                                                                                   |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Delete a Document                     | Remove `docs/<id>.md` + `raw/<id>.<ext>`; delete its `chunks`/`documents_fts`/`vec_chunks` rows; delete the `documents` row; audit `KB_DOCUMENT_DELETED`.                                |
-| Delete a KB                           | `on_delete` hook: `delete_resource(kind, name)` (documents + chunks + fts + vec); `rmtree(kb_dir(name))`; delete the `resources` row; audit `RESOURCE_DELETED` with a KB snapshot.       |
-| Rename a KB                           | Forbidden (Resource name immutable; framework enforces).                                                                                                                                 |
-| Change `chunk_size` / `chunk_overlap` | Allowed → re-chunk + re-index the corpus.                                                                                                                                                |
-| Change `embedding` model / dimensions | Allowed → re-embed the corpus (rebuild `vec_chunks` if width changes).                                                                                                                   |
-| Edit a document's markdown            | Via the edit API → `source_mode = edited` → reindex routine. An external-editor edit to the on-disk file is picked up by lazy reindex-on-read (drifted `content_sha256` ⇒ same routine). |
-| Re-convert a document                 | Allowed only if `source_mode == converted`; `edited` ⇒ `ReconversionBlocked`. Re-uploading a new source resets to `converted`.                                                           |
+| Action                                | Effect                                                                                                                                                                                                                                                         |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Delete a Document                     | Remove `docs/<id>.md` + `raw/<id>.<ext>`; delete its `chunks`/`documents_fts`/`vec_chunks` rows; delete the `documents` row; audit `KB_DOCUMENT_DELETED`. Refused if `locked`.                                                                                 |
+| Delete a KB                           | `on_delete` hook: `delete_resource(kind, name)` (documents + chunks + fts + vec); `rmtree(kb_dir(name))`; delete the `resources` row; audit `RESOURCE_DELETED` with a KB snapshot.                                                                             |
+| Rename a KB                           | Forbidden (Resource name immutable; framework enforces).                                                                                                                                                                                                       |
+| Change `chunk_size` / `chunk_overlap` | Allowed → re-chunk + re-index the corpus.                                                                                                                                                                                                                      |
+| Change `embedding` model / dimensions | Allowed → re-embed the corpus (rebuild `vec_chunks` if width changes).                                                                                                                                                                                         |
+| Edit a document's markdown            | Via the edit API or MCP `edit_document` → `source_mode = edited` → reindex routine. An external-editor edit to the on-disk file is picked up by lazy reindex-on-read (drifted `content_sha256` ⇒ same routine). Refused if `locked`.                           |
+| Re-upload a changed source            | Matched by `original_filename` in-store → updates the SAME document in place (reuse ULID, overwrite `docs/`+`raw/`, keep only the latest original, `source_mode` → `converted`) with `replace=true`; byte-identical re-upload is a no-op. Refused if `locked`. |
+| Re-convert a document                 | Allowed only if `source_mode == converted`; `edited` ⇒ `ReconversionBlocked`. Refused if `locked`.                                                                                                                                                             |
+| Add / edit / delete via MCP           | Agents call `coffer__add_document` / `edit_document` / `delete_document`; same service paths as REST, audited with the agent as actor; refused if `locked`.                                                                                                    |
+| Lock / unlock a document              | `locked` flips; audited `KB_DOCUMENT_LOCKED` / `KB_DOCUMENT_UNLOCKED`. Always allowed (it is how a document is unlocked).                                                                                                                                      |
 
 ## Audit events added
 
@@ -259,6 +265,8 @@ When an embed degrades (embedding provider unavailable), the routine indexes the
 | `"kb_document_ingested"` | After first index of a new document                                        |
 | `"kb_document_updated"`  | After the reindex routine re-indexes a changed document (edit / re-upload) |
 | `"kb_document_deleted"`  | After a document delete                                                    |
+| `"kb_document_locked"`   | After a document is locked                                                 |
+| `"kb_document_unlocked"` | After a document is unlocked                                               |
 | `"kb_reindexed"`         | After a full `coffer kb reindex` (carries per-doc counts)                  |
 
 `resource_created` / `resource_deleted` from the kind-agnostic core cover KB lifecycle. Built-in MCP tool calls log to `mcp_invocations` (tool name + who/when/duration/outcome only).
@@ -285,9 +293,10 @@ Lives in `contracts/api.openapi.yaml`. Highlights (app-wide error envelope `{err
 - `POST /api/v1/knowledge_bases/{name}/documents` — multipart upload + ingest (any format)
 - `GET /api/v1/knowledge_bases/{name}/documents` — paginated list (each row carries its absolute `path` + containing-folder `folder_path`)
 - `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` — read-only markdown body + frontmatter + absolute `path` + `folder_path`
-- `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` — edit markdown via API (sets `source_mode=edited`, reindexes); the UI is read-only and edits otherwise arrive via the external editor (picked up by reindex-on-read)
-- `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` — re-run conversion from `raw/` (blocked with `RECONVERSION_BLOCKED` once hand-edited)
-- `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` — delete one document
+- `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` — edit markdown via API (sets `source_mode=edited`, reindexes; `409 DOCUMENT_LOCKED` when locked); the UI is read-only and edits otherwise arrive via the external editor (picked up by reindex-on-read) or agent MCP
+- `PATCH /api/v1/knowledge_bases/{name}/documents/{doc_id}` — `{locked: bool}` → lock / unlock the document (audited)
+- `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` — re-run conversion from `raw/` (blocked with `RECONVERSION_BLOCKED` once hand-edited, `DOCUMENT_LOCKED` when locked)
+- `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` — delete one document (`409 DOCUMENT_LOCKED` when locked)
 - `POST /api/v1/knowledge_bases/{name}/reindex` — rescan + rebuild index from files
 - `POST /api/v1/knowledge_bases/{name}/search` — `{query, top_k?, mode?}` → ranked passages (+ `fallback`)
 - `POST /api/v1/knowledge_bases/{name}/grep` — `{pattern, max_matches?}` → file/line hits

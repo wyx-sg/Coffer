@@ -281,6 +281,22 @@ def edit(
     typer.echo(f"edited document {document_id}")
 
 
+@app.command("lock")
+def lock(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+    document_id: str = typer.Argument(...),
+    unlock: bool = typer.Option(False, "--unlock", help="Unlock instead of lock."),
+) -> None:
+    """Lock a document (freezes it against edits/deletes); --unlock reverses it."""
+    locked = not unlock
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.patch(f"/knowledge_bases/{name}/documents/{document_id}", json={"locked": locked})
+        _cli_client.check(r, verbose=_verbose(ctx))
+    typer.echo(f"{'locked' if locked else 'unlocked'} document {document_id}")
+
+
 @app.command("reindex")
 def reindex(
     ctx: typer.Context,

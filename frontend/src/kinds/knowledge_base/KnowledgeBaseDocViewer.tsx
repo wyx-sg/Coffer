@@ -6,7 +6,7 @@
 // re-runs conversion from the raw original; Delete removes the document. State +
 // mutations live in the page.
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { Lock, RefreshCw, Trash2, Unlock } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,9 +20,11 @@ interface Props {
   isLoading: boolean;
   isReconvertPending: boolean;
   isDeletePending: boolean;
+  isLockPending: boolean;
   reconvertError: unknown;
   onReconvert: () => void;
   onDelete: () => void;
+  onToggleLock: () => void;
 }
 
 export function KnowledgeBaseDocViewer({
@@ -30,9 +32,11 @@ export function KnowledgeBaseDocViewer({
   isLoading,
   isReconvertPending,
   isDeletePending,
+  isLockPending,
   reconvertError,
   onReconvert,
   onDelete,
+  onToggleLock,
 }: Props) {
   const { t } = useTranslation();
 
@@ -52,7 +56,9 @@ export function KnowledgeBaseDocViewer({
     );
   }
 
-  const canReconvert = doc.source_mode !== "edited";
+  // A locked document refuses reconvert/delete server-side (ADR-028); reflect
+  // that in the UI by disabling those actions until it is unlocked.
+  const canReconvert = doc.source_mode !== "edited" && !doc.locked;
 
   return (
     <div className="rounded-md border border-border">
@@ -62,9 +68,33 @@ export function KnowledgeBaseDocViewer({
           <Badge variant="outline">
             {t(`knowledgeBases.sourceMode.${doc.source_mode}`, { defaultValue: doc.source_mode })}
           </Badge>
+          {doc.locked ? (
+            <Badge variant="outline" className="gap-1 text-amber-600 dark:text-amber-500">
+              <Lock className="size-3" /> {t("knowledgeBases.detail.locked")}
+            </Badge>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {doc.path ? <FileActions filePath={doc.path} folderPath={doc.folder_path} /> : null}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onToggleLock}
+            disabled={isLockPending}
+            title={t(
+              doc.locked ? "knowledgeBases.detail.unlockHint" : "knowledgeBases.detail.lockHint",
+            )}
+          >
+            {doc.locked ? (
+              <>
+                <Unlock className="mr-1.5 size-3.5" /> {t("knowledgeBases.detail.unlock")}
+              </>
+            ) : (
+              <>
+                <Lock className="mr-1.5 size-3.5" /> {t("knowledgeBases.detail.lock")}
+              </>
+            )}
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -78,7 +108,7 @@ export function KnowledgeBaseDocViewer({
             variant="outline"
             className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
             onClick={onDelete}
-            disabled={isDeletePending}
+            disabled={isDeletePending || doc.locked}
           >
             <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
           </Button>
