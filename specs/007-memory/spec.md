@@ -119,17 +119,18 @@ payloads, file contents, or secret-like strings.
 
 ---
 
-### User Story 5 — Inspect and reset memory (Priority: P3)
+### User Story 5 — Inspect, name, and reset memory (Priority: P3)
 
-The developer wants to know how much memory has accumulated per scope and to clear a scope without deleting the store.
+The developer wants to know how much memory has accumulated per scope, to give a store a readable name when its originating folder is unknown, and to clear a scope without deleting the store.
 
 **Why this priority**: Hygiene; not blocking the core flow.
 
-**Independent Test**: View per-store metrics (fact count, disk bytes). Clear the project scope; confirm every fact is gone but the store remains, ready for new facts.
+**Independent Test**: View per-store metrics (fact count, disk bytes). Rename a store whose folder is unknown and confirm the chosen name shows in the list and survives a reload. Clear the project scope; confirm every fact is gone but the store remains, ready for new facts.
 
 **Covering scenarios**:
 
 - clear a memory scope
+- user renames a memory store
 
 (The per-store metrics HTTP route is exercised by the independent test but its dedicated acceptance test is deferred — see the note after the scenarios.)
 
@@ -231,6 +232,12 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **When** the user clears that scope,
 - **Then** every fact file and its index rows are removed, `MEMORY.md` becomes empty, but the store Resource is preserved.
 
+### Scenario: user renames a memory store
+
+- **Given** a memory store (e.g. one whose originating folder was never recorded, so it would otherwise show as `project-<ULID>`),
+- **When** the user sets a display label via `PATCH /memory_stores/{name}/label`,
+- **Then** the label is trimmed, echoed back, surfaced on the store read + list as the readable name, and an empty / whitespace label clears it (reverting to the FR-017a derivation); renaming an unknown store is a 404, not an autocreate.
+
 ### Scenario: built-in memory tools appear in client tool list
 
 - **Given** an MCP client connects to coffer's gateway,
@@ -291,6 +298,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **FR-017**: Users MUST be able to perform full memory CRUD through the programmatic write surfaces — (a) a REST API under `/api/v1/memory_stores/` and (b) `coffer memory …` subcommands. (The REST write endpoints are also what agents author facts through via the MCP gateway.) User writes set `metadata.actor = "user"`, write the canonical markdown, regenerate `MEMORY.md`, reindex, and audit. The desktop/web UI surfaces facts **read-only** (it does not edit fact content in-app); humans curate by editing the canonical markdown in their own external editor (picked up by lazy reindex-on-read, FR-010) or via the REST/CLI write surface. Store names on these surfaces are validated: only `global` or `project-<26-char ULID>` are legal — a well-formed name lazily provisions its store; anything else returns 404 (`MEMORY_STORE_NOT_FOUND`).
 - **FR-017a**: Surfaces MUST present a per-project store by a **human-readable identity derived from its `project_root`** — the root directory's basename as the primary label and the absolute root path as a secondary detail — never only the opaque `project-<ULID>` store name (the project ULID is a one-way digest of the root and is not human-recognisable). When the root is unknown (a store provisioned before the root was tracked) the surface falls back to the store name; the global store needs no derivation (its name `global` is already readable). The underlying store name stays `project-<ULID>` (FR-017) — this is a **display** concern. Verified by frontend tests; desktop acceptance is deferred to e2e like the other desktop-view items.
+- **FR-017c**: A user MUST be able to set a **display label** for any memory store — a chosen name that takes precedence over the FR-017a `project_root` derivation in every surface. This gives a readable identity to a store whose originating folder was never recorded (where FR-017a would otherwise fall back to the opaque `project-<ULID>` name). Setting an empty / whitespace label clears it, reverting to the FR-017a derivation or fallback. The label is **display metadata**: it does not change the store name (FR-017) or `project_id`, and is set via `PATCH /memory_stores/{name}/label`. Verified by an HTTP acceptance test; the desktop rename view is deferred to e2e like the other desktop-view items.
 - **FR-021**: The read-only fact viewer MUST offer, for both a fact file and its containing folder, affordances to (a) **open in external editor**, (b) **reveal in file manager / Finder**, and (c) **copy the absolute path** (the web fallback). On the desktop (Tauri) build (a) and (b) perform a real open/reveal; on the web build the UI falls back to copy-path. Which editor opens is decided by the global preferred-editor preference (specced in 002-ui-shell; not re-specified here). The read responses MUST surface the absolute paths these affordances act on (see FR-022).
 - **FR-022**: Read responses MUST surface the on-disk truth: the fact read endpoints (`GET …/facts`, `GET …/facts/{id}`) MUST include each fact file's absolute `.md` path and its containing folder's absolute path, and the store read endpoint (`GET …/{name}`) MUST include the store's absolute on-disk directory. These power the FR-021 open/reveal/copy-path affordances and let a human locate the canonical file to correct out-of-band.
 

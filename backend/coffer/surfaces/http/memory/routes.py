@@ -25,8 +25,11 @@ from coffer.domain.resource import Resource, ResourceRef
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import (
     get_memory_service,
-    get_project_root_repo,
     get_resource_service,
+)
+from coffer.surfaces.http.memory.dependencies import (
+    get_project_root_repo,
+    get_store_label_repo,
 )
 from coffer.surfaces.http.memory.schemas import (
     ClearResponse,
@@ -36,6 +39,7 @@ from coffer.surfaces.http.memory.schemas import (
     FactUpdate,
     MemoryStoreConfigOut,
     MemoryStoreConfigPatch,
+    MemoryStoreLabelPatch,
     MemoryStoreListOut,
     MemoryStoreMetrics,
     MemoryStoreOut,
@@ -67,7 +71,7 @@ def _scope_of(store_name: str) -> tuple[Scope, str]:
 
 
 def _to_store_out(
-    r: Resource, *, store_dir: str, project_root: str | None = None
+    r: Resource, *, store_dir: str, project_root: str | None = None, label: str | None = None
 ) -> MemoryStoreOut:
     scope, project_id = _scope_of(r.name)
     return MemoryStoreOut(
@@ -77,6 +81,7 @@ def _to_store_out(
         scope=scope,
         project_id=project_id,
         project_root=project_root,
+        label=label,
         store_dir=store_dir,
         description=r.description,
         config=MemoryStoreConfigOut.from_config(MemoryStoreConfig.model_validate(r.config)),
@@ -86,8 +91,13 @@ def _to_store_out(
     )
 
 
-async def _store_out(r: Resource, roots: object, mem_svc: MemoryService) -> MemoryStoreOut:
-    """``_to_store_out`` plus the persisted project root, store dir + fact count."""
+async def _store_out(
+    r: Resource, roots: object, mem_svc: MemoryService, *, label: str | None = None
+) -> MemoryStoreOut:
+    """``_to_store_out`` plus the persisted project root, store dir + fact count.
+
+    ``label`` is the user-set display name (007 FR-017c), resolved by the caller
+    so the list endpoint can batch the lookup."""
     scope, _ = _scope_of(r.name)
     project_root = None if scope == "global" else await roots.get(r.name)  # type: ignore[attr-defined]
     try:
@@ -95,7 +105,7 @@ async def _store_out(r: Resource, roots: object, mem_svc: MemoryService) -> Memo
     except Exception:
         fact_count = 0
     store_dir = str((await mem_svc.resolved_store(r.name)).store_dir)
-    out = _to_store_out(r, store_dir=store_dir, project_root=project_root)
+    out = _to_store_out(r, store_dir=store_dir, project_root=project_root, label=label)
     out.fact_count = fact_count
     return out
 
@@ -108,12 +118,17 @@ async def list_stores(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
     mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     roots: object = Depends(get_project_root_repo),
+    labels: object = Depends(get_store_label_repo),
 ) -> MemoryStoreListOut:
     # The global store always exists conceptually — auto-provision it so a fresh
     # install lists it (the per-project stores appear once an agent uses them).
     await mem_svc.ensure_store(GLOBAL_STORE_NAME)
     rs = await svc.list(kind=KIND_MEMORY)
-    return MemoryStoreListOut(memory_stores=[await _store_out(r, roots, mem_svc) for r in rs])
+    # One batched lookup for all display labels instead of one query per store.
+    label_map = await labels.get_many([r.name for r in rs])  # type: ignore[attr-defined]
+    return MemoryStoreListOut(
+        memory_stores=[await _store_out(r, roots, mem_svc, label=label_map.get(r.name)) for r in rs]
+    )
 
 
 @router.get("/{name}", response_model=MemoryStoreOut)
@@ -122,6 +137,7 @@ async def get_store(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
     mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     roots: object = Depends(get_project_root_repo),
+    labels: object = Depends(get_store_label_repo),
 ) -> MemoryStoreOut:
     if name == GLOBAL_STORE_NAME:
         await mem_svc.ensure_store(name)
@@ -129,7 +145,8 @@ async def get_store(
         r = await svc.get(ResourceRef(KIND_MEMORY, name))
     except ResourceNotFound as exc:
         raise MemoryStoreNotFound(name) from exc
-    return await _store_out(r, roots, mem_svc)
+    label = await labels.get(name)  # type: ignore[attr-defined]
+    return await _store_out(r, roots, mem_svc, label=label)
 
 
 @router.patch("/{name}", response_model=MemoryStoreOut)
@@ -140,6 +157,7 @@ async def update_store(
     mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     actor: Actor = Depends(_actor),  # noqa: B008
     roots: object = Depends(get_project_root_repo),
+    labels: object = Depends(get_store_label_repo),
 ) -> MemoryStoreOut:
     try:
         existing = await svc.get(ResourceRef(KIND_MEMORY, name))
@@ -155,7 +173,35 @@ async def update_store(
         new_config=validated.model_dump(mode="json"),
         actor=actor,
     )
-    return await _store_out(updated, roots, mem_svc)
+    label = await labels.get(name)  # type: ignore[attr-defined]
+    return await _store_out(updated, roots, mem_svc, label=label)
+
+
+@router.patch("/{name}/label", response_model=MemoryStoreOut)
+async def update_store_label(
+    name: str,
+    body: MemoryStoreLabelPatch,
+    svc: ResourceService = Depends(get_resource_service),  # noqa: B008
+    mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
+    roots: object = Depends(get_project_root_repo),
+    labels: object = Depends(get_store_label_repo),
+) -> MemoryStoreOut:
+    """Set or clear a store's display label (007 FR-017c). An empty / whitespace
+    body clears it, reverting to the derived (project-dir) or fallback name."""
+    if name == GLOBAL_STORE_NAME:
+        await mem_svc.ensure_store(name)
+    try:
+        r = await svc.get(ResourceRef(KIND_MEMORY, name))
+    except ResourceNotFound as exc:
+        raise MemoryStoreNotFound(name) from exc
+    cleaned = (body.label or "").strip()
+    if cleaned:
+        await labels.set(name, cleaned)  # type: ignore[attr-defined]
+        label: str | None = cleaned
+    else:
+        await labels.clear(name)  # type: ignore[attr-defined]
+        label = None
+    return await _store_out(r, roots, mem_svc, label=label)
 
 
 @router.get("/{name}/metrics", response_model=MemoryStoreMetrics)

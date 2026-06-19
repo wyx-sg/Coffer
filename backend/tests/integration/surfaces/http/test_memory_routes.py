@@ -154,6 +154,39 @@ def test_clear_a_memory_scope(tmp_path, monkeypatch):
         assert c.get("/api/v1/memory_stores/global", headers=_HEADERS).status_code == 200
 
 
+@pytest.mark.acceptance(spec="007-memory", scenario="user renames a memory store")
+def test_user_renames_a_memory_store(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59760)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        # A fresh store carries no display label.
+        assert c.get("/api/v1/memory_stores/global", headers=_HEADERS).json()["label"] is None
+        # Setting a label trims surrounding whitespace and echoes it back.
+        r = c.patch(
+            "/api/v1/memory_stores/global/label",
+            json={"label": "  My notes  "},
+            headers=_USER,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["label"] == "My notes"
+        # It survives a re-read and shows up in the list.
+        assert c.get("/api/v1/memory_stores/global", headers=_HEADERS).json()["label"] == "My notes"
+        listed = c.get("/api/v1/memory_stores", headers=_HEADERS).json()["memory_stores"]
+        assert any(s["name"] == "global" and s["label"] == "My notes" for s in listed)
+        # An empty / whitespace label clears it (reverts to the fallback name).
+        r = c.patch("/api/v1/memory_stores/global/label", json={"label": "   "}, headers=_USER)
+        assert r.status_code == 200, r.text
+        assert r.json()["label"] is None
+        # Renaming an unknown store is a 404 envelope, not an autocreate.
+        miss = c.patch(
+            "/api/v1/memory_stores/project-2K8S7KVJ0SJEZX0P0KSXWAN0KZ/label",
+            json={"label": "x"},
+            headers=_USER,
+        )
+        assert miss.status_code == 404
+        _assert_envelope(miss.json(), "MEMORY_STORE_NOT_FOUND")
+
+
 def test_per_store_metrics(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59660)
     with TestClient(app) as c:
@@ -330,7 +363,7 @@ def test_project_store_get_returns_recorded_project_root(tmp_path, monkeypatch):
     # repo the resolver writes to, then assert GET surfaces it.
     import anyio
 
-    from coffer.surfaces.http.dependencies import get_project_root_repo
+    from coffer.surfaces.http.memory.dependencies import get_project_root_repo
 
     app = _app(tmp_path, monkeypatch, 59740)
     with TestClient(app) as c:

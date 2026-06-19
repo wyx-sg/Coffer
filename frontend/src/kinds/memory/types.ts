@@ -70,6 +70,26 @@ export function projectDirName(projectRoot?: string | null): string | null {
   return base || null;
 }
 
+/**
+ * The store's readable display name, applying the FR-017c → FR-017a precedence:
+ * a user-set `label` wins, else the `project_root` basename, else the global
+ * store's already-readable `name`. Returns `null` for a project store with
+ * neither a label nor a known root (an "orphan") — the caller shows a graceful
+ * placeholder rather than the opaque `project-<ULID>` store name.
+ */
+export function storeDisplayName(store: {
+  label?: string | null;
+  project_root?: string | null;
+  scope: Scope;
+  name: string;
+}): string | null {
+  if (store.label) return store.label;
+  const basename = projectDirName(store.project_root);
+  if (basename) return basename;
+  if (store.scope === "global") return store.name;
+  return null;
+}
+
 export interface MemoryStoreConfigOut {
   retrieval_modes: RetrievalMode[];
   default_mode: RetrievalMode;
@@ -91,6 +111,9 @@ export interface MemoryStoreOut {
   // so surfaces can show the project's directory name/path. Absent (null) for
   // the global store and for project stores whose root is unknown.
   project_root?: string | null;
+  // User-set display label (007 FR-017c). When present it is the store's
+  // readable name, taking precedence over the project_root-derived basename.
+  label?: string | null;
   description: string | null;
   config: MemoryStoreConfigOut;
   enabled: boolean;

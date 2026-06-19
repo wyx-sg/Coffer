@@ -17,7 +17,7 @@ import {
   getMemoryStore,
   getMemoryStoreMetrics,
   listFacts,
-  projectDirName,
+  storeDisplayName,
   recall,
   type FactOut,
   type RecallResponse,
@@ -25,6 +25,7 @@ import {
 } from "./api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MemoryDetailHeader } from "./MemoryDetailHeader";
+import { MemoryRenameDialog } from "./MemoryRenameDialog";
 import { MemoryFactTree } from "./MemoryFactTree";
 import { MemoryFactViewer } from "./MemoryFactViewer";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
@@ -48,6 +49,7 @@ export function MemoryStoreDetailPage() {
   // destructive actions (delete a fact, clear the whole store).
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
 
   const [factLimit, setFactLimit] = useState(FACTS_PAGE_SIZE);
   const factsQuery = useQuery({
@@ -65,9 +67,9 @@ export function MemoryStoreDetailPage() {
     queryFn: () => getMemoryStore(store),
     enabled: Boolean(store),
   });
-  // Readable identity for user-facing strings (FR-017a): the project directory
-  // basename, falling back to the raw store name (global / untracked root).
-  const storeLabel = projectDirName(storeQuery.data?.project_root) ?? store;
+  // Readable identity for user-facing strings: a user-set label (FR-017c), else
+  // the project-dir basename (FR-017a), else the raw store name.
+  const storeLabel = (storeQuery.data && storeDisplayName(storeQuery.data)) ?? store;
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["memory-facts", store] });
@@ -115,6 +117,7 @@ export function MemoryStoreDetailPage() {
         metrics={metricsQuery.data}
         isClearPending={clear.isPending}
         onClearAll={confirmClear}
+        onRename={() => setRenameOpen(true)}
       />
 
       {loadError ? (
@@ -172,6 +175,13 @@ export function MemoryStoreDetailPage() {
         confirmLabel={t("memory.detail.clearAll")}
         pending={clear.isPending}
         onConfirm={() => clear.mutate(undefined, { onSuccess: () => setClearOpen(false) })}
+      />
+
+      <MemoryRenameDialog
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+        store={store}
+        currentLabel={storeQuery.data?.label ?? null}
       />
     </div>
   );

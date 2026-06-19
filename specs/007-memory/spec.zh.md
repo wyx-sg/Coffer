@@ -80,17 +80,18 @@
 
 ---
 
-### User Story 5 —— 查看并重置记忆（优先级 P3）
+### User Story 5 —— 查看、命名并重置记忆（优先级 P3）
 
-开发者想知道每个作用域累积了多少记忆，并能在不删除 store 的前提下清空某个作用域。
+开发者想知道每个作用域累积了多少记忆，想在 store 的来源文件夹未知时给它起个可读的名字，并能在不删除 store 的前提下清空某个作用域。
 
 **为什么是这个优先级**：卫生级别；不挡核心流程。
 
-**独立可测**：查看 per-store 度量（事实条数、磁盘字节）。清空 project 作用域；确认所有事实都没了但 store 保留下来、随时可装新事实。
+**独立可测**：查看 per-store 度量（事实条数、磁盘字节）。重命名一个文件夹未知的 store，确认所选名字出现在列表里并在重载后仍在。清空 project 作用域；确认所有事实都没了但 store 保留下来、随时可装新事实。
 
 **代表性场景**：
 
 - 清空一个记忆作用域
+- 用户重命名一个记忆 store
 
 （per-store 度量的 HTTP 路由由独立可测覆盖，但其专属 acceptance 测试延后 —— 见场景后的说明。）
 
@@ -192,6 +193,12 @@
 - **When** 用户清空该作用域，
 - **Then** 每个事实文件与其索引行被移除、`MEMORY.md` 变空，但 store 这个 Resource 保留。
 
+### Scenario: user renames a memory store
+
+- **Given** 一个记忆 store（例如来源文件夹从未被记录、否则会显示为 `project-<ULID>` 的那种），
+- **When** 用户通过 `PATCH /memory_stores/{name}/label` 设置显示标签，
+- **Then** 标签被去除首尾空白、原样回显，并在 store 读取 + 列表中作为可读名呈现；空 / 纯空白标签会清除它（退回 FR-017a 推导）；重命名一个不存在的 store 返回 404，而非自动创建。
+
 ### Scenario: built-in memory tools appear in client tool list
 
 - **Given** 一个 MCP 客户端接入 coffer 网关，
@@ -244,6 +251,7 @@
 
 - **FR-017**：用户 MUST 能通过编程写入面完成完整记忆 CRUD —— (a) `/api/v1/memory_stores/` 下的 REST API 与 (b) `coffer memory …` 子命令。（这些 REST 写入端点也是 agent 经 MCP 网关写入事实的途径。）用户写入设 `metadata.actor = "user"`，写规范化 markdown、重新生成 `MEMORY.md`、重建索引并审计。桌面/web UI 以 **只读** 方式呈现事实（不在应用内编辑事实内容）；人类维护时在自己的外部编辑器里编辑规范化 markdown（经 lazy reindex-on-read（FR-010）拾取），或经 REST/CLI 写入面。这些 surface 上的 store 名会被校验：只有 `global` 或 `project-<26 字符 ULID>` 合法 —— 形状合法的名字会惰性 provision 其 store；其余返回 404（`MEMORY_STORE_NOT_FOUND`）。
 - **FR-017a**：各 surface MUST 用**从 `project_root` 推导的可读身份**来呈现 per-project store —— 以根目录的 basename 作为主标签、绝对根路径作为次要细节 —— 而**不**只显示不可读的 `project-<ULID>` store 名（项目 ULID 是根路径的单向摘要，人无法辨认）。当根路径未知（store 在记录根路径之前就被 provision）时退回显示 store 名；global store 无需推导（其名 `global` 本就可读）。底层 store 名仍是 `project-<ULID>`（FR-017）—— 这是**展示**层的事。由前端测试验证；桌面验收与其它桌面视图项一样延后到 e2e。
+- **FR-017c**：用户 MUST 能为任意 memory store 设置一个**显示标签**——一个用户自选、在所有 surface 中优先于 FR-017a 的 `project_root` 推导的名字。它为来源文件夹从未被记录的 store（FR-017a 否则会退回不可读的 `project-<ULID>` 名）提供可读身份。设置空 / 纯空白标签会清除它，退回 FR-017a 的推导或回退名。该标签是**展示元数据**：不改变 store 名（FR-017）或 `project_id`，通过 `PATCH /memory_stores/{name}/label` 设置。由 HTTP 验收测试验证；桌面重命名视图与其它桌面视图项一样延后到 e2e。
 - **FR-021**：只读事实视图 MUST 为「事实文件」与「其所在文件夹」两者各提供以下能力：(a) **在外部编辑器中打开**、(b) **在文件管理器 / Finder 中显示**、(c) **复制绝对路径**（web 回退）。在桌面（Tauri）端 (a) 与 (b) 执行真实的打开/显示；在 web 端 UI 回退为复制路径。打开哪个编辑器由全局首选编辑器偏好决定（在 002-ui-shell 规范，本处不再重复规范）。读响应 MUST 携带这些能力所作用的绝对路径（见 FR-022）。
 - **FR-022**：读响应 MUST 携带磁盘真相：事实读端点（`GET …/facts`、`GET …/facts/{id}`）MUST 包含每个事实文件的绝对 `.md` 路径及其所在文件夹的绝对路径，store 读端点（`GET …/{name}`）MUST 包含 store 的绝对磁盘目录。它们驱动 FR-021 的打开/显示/复制路径能力，并让人类能定位规范化文件以带外纠正。
 

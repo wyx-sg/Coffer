@@ -1077,6 +1077,14 @@
     "loadFailed": "Failed to load memory stores",
     "searchPlaceholder": "Search memory stores…",
     "noMatches": "No memory stores match your search.",
+    "unnamedStore": "Unnamed memory",
+    "rename": {
+      "title": "Rename memory store",
+      "description": "Give this store a readable display name. This is a label only — it doesn't change the store's id or where agents read and write.",
+      "label": "Display name",
+      "placeholder": "e.g. My research notes",
+      "clear": "Clear name"
+    },
     "modes": {
       "grep": "Grep",
       "keyword": "Keyword",

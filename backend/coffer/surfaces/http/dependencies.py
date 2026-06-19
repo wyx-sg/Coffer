@@ -373,19 +373,8 @@ def get_memory_service() -> Any:
     return _memory_service
 
 
-_project_root_repo: Any | None = None
-
-
-def set_project_root_repo(repo: Any) -> None:
-    global _project_root_repo
-    _project_root_repo = repo
-
-
-def get_project_root_repo() -> Any:
-    if _project_root_repo is None:
-        raise RuntimeError("project-root repo not initialised")
-    return _project_root_repo
-
+# Memory-store side-repo providers (project_root + display label) live in
+# coffer.surfaces.http.memory.dependencies (extracted to keep this file ≤400).
 
 # Agent-chat (spec 008) dependency providers are re-exported from
 # surfaces/http/chat/dependencies.py (see the import at the top of this module),

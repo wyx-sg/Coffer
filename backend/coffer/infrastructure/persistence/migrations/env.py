@@ -26,6 +26,9 @@ from coffer.infrastructure.mcp import (
 from coffer.infrastructure.memory import (
     project_root_repo as _memory_project_roots,  # noqa: F401 — store→project-root model
 )
+from coffer.infrastructure.memory import (
+    store_label_repo as _memory_store_labels,  # noqa: F401 — store→display-label model
+)
 from coffer.infrastructure.persistence import models  # noqa: F401 — kind-agnostic models
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas

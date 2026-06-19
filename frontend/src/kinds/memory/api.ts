@@ -71,6 +71,21 @@ export async function getMemoryStoreMetrics(store: string): Promise<MemoryStoreM
   return (await r.json()) as MemoryStoreMetrics;
 }
 
+// Set or clear a store's display label (007 FR-017c). Passing null / "" clears
+// it (revert to the project_root-derived or fallback name).
+export async function renameMemoryStore(
+  store: string,
+  label: string | null,
+): Promise<MemoryStoreOut> {
+  const r = await fetch(`${storeBase(store)}/label`, {
+    method: "PATCH",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify({ label }),
+  });
+  await checkOk(r);
+  return (await r.json()) as MemoryStoreOut;
+}
+
 export async function listFacts(store: string, limit = 50, offset = 0): Promise<FactListOut> {
   const r = await fetch(`${storeBase(store)}/facts?limit=${limit}&offset=${offset}`, {
     headers: headers(),

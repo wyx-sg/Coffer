@@ -1077,6 +1077,14 @@
     "loadFailed": "加载记忆库失败",
     "searchPlaceholder": "搜索记忆库…",
     "noMatches": "没有匹配的记忆库。",
+    "unnamedStore": "未命名记忆库",
+    "rename": {
+      "title": "重命名记忆库",
+      "description": "给这个记忆库起一个可读的显示名。这只是一个标签——不会改变记忆库的 id，也不影响 agent 的读写位置。",
+      "label": "显示名",
+      "placeholder": "例如：我的研究笔记",
+      "clear": "清除名字"
+    },
     "modes": {
       "grep": "Grep",
       "keyword": "关键词",

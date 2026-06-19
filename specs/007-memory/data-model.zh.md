@@ -138,6 +138,23 @@ document 删除时的级联是**应用层的**（索引的 `delete_chunks` + 仓
 
 memory 面的 `documents.metadata` 经 Pydantic 校验为 `{type, actor, origin_session_id}`。按工程惯例，metadata JSON 用 `model_dump(mode="json")` 构造，使 `datetime`/`AnyUrl` 值能序列化进 SQLite。
 
+### Store 展示侧表
+
+两张以 `store_name` 为主键的小侧表保存 memory store 的**展示元数据**（不属于规范的 `documents` 基底；二者互为镜像）：
+
+```sql
+CREATE TABLE memory_store_project_roots (
+    store_name   TEXT PRIMARY KEY,   -- 例如 'project-<ULID>'
+    project_root TEXT NOT NULL       -- provision 时记录的来源 git-root（FR-017a）
+);
+CREATE TABLE memory_store_labels (
+    store_name TEXT PRIMARY KEY,     -- 例如 'project-<ULID>' 或 'global'
+    label      TEXT NOT NULL         -- 用户设置的显示名（FR-017c）
+);
+```
+
+渲染 store 的可读身份时，`label` 优先于由 `project_root` 推导的 basename；清除 label 即删除其行，退回 FR-017a 的推导 / 回退名。两张表都不改变 store 名（`project-<ULID>`）或 `project_id`。
+
 ## 落盘规范布局（真相源）
 
 ```

@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0025"
+HEAD_REVISION = "0026"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -42,7 +42,8 @@ HEAD_REVISION = "0025"
 # 0023 adds ``agent_mcp_scope`` + ``agent_mcp_scope_server`` for per-agent MCP
 # server scoping (ADR-026). 0025 adds NO table — it ADDs the ``documents.locked``
 # column for the co-management lock (ADR-028), so EXPECTED_TABLES is unchanged
-# (the column is asserted separately below). The ``documents_fts_*`` shadow
+# (the column is asserted separately below). 0026 adds ``memory_store_labels``
+# (a store's user-set display name, 007 FR-017c). The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
 EXPECTED_TABLES = {
@@ -58,6 +59,7 @@ EXPECTED_TABLES = {
     "chunks",
     "documents_fts",
     "memory_store_project_roots",
+    "memory_store_labels",
     "embedding_config",
     "conversations",
     "chat_messages",
@@ -162,13 +164,20 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(documents)")}
 
-    # 0025 adds the co-management lock column (ADR-028); it exists at head.
+    # 0025 adds the co-management lock column (ADR-028); 0026 adds the
+    # memory_store_labels table (007 FR-017c) — both exist at head.
     assert "locked" in _documents_columns()
+    assert "memory_store_labels" in _user_tables(db_path)
 
-    # head (0025) -> 0024: 0025's downgrade drops documents.locked.
+    # head (0026) -> 0025: 0026's downgrade drops the memory_store_labels table.
+    command.downgrade(cfg, "0025")
+    assert "memory_store_labels" not in _user_tables(db_path)
+    assert _user_tables(db_path) == EXPECTED_TABLES - {"memory_store_labels"}
+
+    # 0025 -> 0024: 0025's downgrade drops documents.locked (column-only).
     command.downgrade(cfg, "0024")
     assert "locked" not in _documents_columns()
-    assert _user_tables(db_path) == EXPECTED_TABLES  # column-only change, table set intact
+    assert _user_tables(db_path) == EXPECTED_TABLES - {"memory_store_labels"}
 
     # 0024 -> 0023: 0024's downgrade recreates memory_projection_bindings,
     # so it reappears here (and is dropped again at 0008's downgrade at 0007).
@@ -214,6 +223,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "channel_peers",
         "sync_config",
         "sync_state",
+        "memory_store_labels",
     }
 
     # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
@@ -228,6 +238,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "conversations",
         "chat_messages",
         "chat_models",
+        "memory_store_labels",
     }
 
     # 0011 -> 0010: drops embedding_config (global embedding singleton).
@@ -272,6 +283,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "chat_messages",
         "chat_models",
         "memory_store_project_roots",
+        "memory_store_labels",
         "skill_agent_bindings",
         "documents",
         "chunks",
