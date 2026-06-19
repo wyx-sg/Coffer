@@ -180,3 +180,23 @@ export const skillsApi = {
   fileContent: (name: string, path: string) =>
     call<SkillFileContentOut>("GET", `/skills/${enc(name)}/files/content?path=${enc(path)}`),
 };
+
+// Discovery / catalog (FR-032/FR-033).
+export interface CatalogEntry {
+  name: string;
+  description: string;
+  git_url: string;
+  git_ref: string;
+  git_subpath: string;
+  publisher: string;
+}
+
+export interface CatalogListOut {
+  items: CatalogEntry[];
+}
+
+export const catalogApi = {
+  list: (query?: string) =>
+    call<CatalogListOut>("GET", `/catalog/skills${query ? `?q=${enc(query)}` : ""}`),
+  install: (name: string) => call<SkillOut>("POST", `/catalog/skills/${enc(name)}/install`),
+};

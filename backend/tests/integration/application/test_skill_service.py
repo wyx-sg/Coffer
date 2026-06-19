@@ -19,6 +19,7 @@ from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
+from coffer.application.skill.catalog_ops import find_entry, install_from_catalog
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.scan_ops import acknowledge_risk, rescan_skill
 from coffer.application.skill.service import SkillService
@@ -1241,4 +1242,35 @@ async def test_pin_and_unpin(tmp_path):
     assert (await _skill_cfg(skill_svc, "local")).pinned is True
     await set_pinned(service=skill_svc, name="local", pinned=False, actor="cli")
     assert (await _skill_cfg(skill_svc, "local")).pinned is False
+    await engine.dispose()
+
+
+# ---------- catalog discovery (FR-032/FR-033) ----------
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="005-skill-manager", scenario="install a skill from the catalog")
+async def test_install_from_catalog(tmp_path):
+    # Serve the catalog entry's Git URL from the fake fetcher (install rides the
+    # normal fetch path: SSRF guard + validation + scan).
+    entry = find_entry("pdf")
+    remote = tmp_path / "remote"
+    _write_skill_folder(remote, name="pdf", body="from catalog")
+    skill_svc, _, audit, _, engine = await _setup(tmp_path, fake_fetch={entry.git_url: remote})
+    r = await install_from_catalog(service=skill_svc, name="pdf", actor="cli")
+    assert r.kind == "skill" and r.name == "pdf"
+    cfg = SkillConfig.model_validate(r.config)
+    assert cfg.source.type == "git"
+    # Rode the fetch path → a fetch was audited.
+    assert await audit.query(event_type=AuditEventType.SKILL_FETCHED.value)
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_install_unknown_catalog_entry_raises(tmp_path):
+    from coffer.domain.errors import ResourceNotFound
+
+    skill_svc, _, _, _, engine = await _setup(tmp_path)
+    with pytest.raises(ResourceNotFound):
+        await install_from_catalog(service=skill_svc, name="does-not-exist", actor="cli")
     await engine.dispose()

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
 import {
+  catalogApi,
   skillsApi,
   type SkillDisableRequest,
   type SkillEnableRequest,
@@ -54,6 +55,25 @@ export function useFetchSkill() {
   const onError = useSkillToastError();
   return useMutation({
     mutationFn: (body: SkillFetchRequest) => skillsApi.fetchGit(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: SKILLS_KEY });
+    },
+    onError,
+  });
+}
+
+export function useCatalog(query: string) {
+  return useQuery({
+    queryKey: ["skill-catalog", query],
+    queryFn: async () => (await catalogApi.list(query)).items,
+  });
+}
+
+export function useInstallCatalogSkill() {
+  const qc = useQueryClient();
+  const onError = useSkillToastError();
+  return useMutation({
+    mutationFn: (name: string) => catalogApi.install(name),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SKILLS_KEY });
     },

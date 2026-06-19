@@ -372,6 +372,45 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /catalog/skills:
+    get:
+      tags: [skills]
+      operationId: listCatalogSkills
+      summary: Browse/search the installable skill catalog (FR-032)
+      parameters:
+        - in: query
+          name: q
+          required: false
+          description: Case-insensitive substring over name/description/publisher.
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /catalog/skills/{name}/install:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [skills]
+      operationId: installCatalogSkill
+      summary: Install a catalog entry via the validated, scanned fetch path (FR-033)
+      responses:
+        "201":
+          description: Installed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
   /agents/{name}/unmanaged-skills:
     parameters:
       - in: path
@@ -618,6 +657,25 @@ components:
         current_hash: { type: string }
         available_hash: { type: string, nullable: true }
         rename_detected: { type: boolean }
+
+    CatalogEntryOut:
+      type: object
+      required: [name, description, git_url, git_ref, git_subpath, publisher]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        git_url: { type: string }
+        git_ref: { type: string }
+        git_subpath: { type: string }
+        publisher: { type: string }
+
+    CatalogListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CatalogEntryOut" }
 
     ScanFindingOut:
       type: object

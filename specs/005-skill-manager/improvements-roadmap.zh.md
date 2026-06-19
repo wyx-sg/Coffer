@@ -1,6 +1,7 @@
 # Skill Manager —— 改进 Roadmap
 
-状态：规划中。源自
+状态：**已交付**——四项全部落地（#4 → #3 → #2 → #1）。FR 与验收场景见
+`spec.md`；信任层决策见 ADR-027。源自
 [`docs/research/agent-skills.md`](../../docs/research/agent-skills.md) 的竞品调研
 （[`docs/research/README.md`](../../docs/research/README.md) 中的报告 #3）。调研判定
 Coffer 在跨 agent 交付与 SSRF 加固摄取上领先，在四个点上落后。本 roadmap 把这四点
