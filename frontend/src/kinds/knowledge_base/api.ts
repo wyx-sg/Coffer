@@ -103,17 +103,10 @@ export async function updateKnowledgeBaseConfig(
 
 export async function listDocuments(
   kbName: string,
-  opts: { limit?: number; offset?: number; projectId?: string; deleted?: boolean } = {},
+  limit = 50,
+  offset = 0,
 ): Promise<DocumentListOut> {
-  const params = new URLSearchParams({
-    limit: String(opts.limit ?? 50),
-    offset: String(opts.offset ?? 0),
-  });
-  // Scope (ADR-030/FR-022): null/undefined = unscoped (every scope); a sentinel
-  // or project ULID narrows to that scope. `deleted=true` returns the trash.
-  if (opts.projectId != null) params.set("project_id", opts.projectId);
-  if (opts.deleted) params.set("deleted", "true");
-  const r = await fetch(`${kbBase(kbName)}/documents?${params.toString()}`, {
+  const r = await fetch(`${kbBase(kbName)}/documents?limit=${limit}&offset=${offset}`, {
     headers: headers(),
   });
   await checkOk(r);
@@ -131,29 +124,15 @@ export async function getDocument(kbName: string, documentId: string): Promise<D
 export async function ingestDocument(
   kbName: string,
   file: File,
-  opts: { replace?: boolean; projectId?: string } = {},
+  replace = false,
 ): Promise<DocumentOut> {
   const form = new FormData();
   form.append("file", file);
-  form.append("replace", String(opts.replace ?? false));
-  // Scope (ADR-030/FR-022): omit to default to global server-side; set to a
-  // project ULID to ingest into that project's subtree.
-  if (opts.projectId != null) form.append("project_id", opts.projectId);
+  form.append("replace", String(replace));
   const r = await fetch(`${kbBase(kbName)}/documents`, {
     method: "POST",
     headers: headers(),
     body: form,
-  });
-  await checkOk(r);
-  return (await r.json()) as DocumentOut;
-}
-
-export async function restoreDocument(kbName: string, documentId: string): Promise<DocumentOut> {
-  // Recoverable soft-delete (ADR-030/FR-023): re-converts the document from its
-  // kept raw original, regenerates docs/, re-indexes, and clears deleted_at.
-  const r = await fetch(`${kbBase(kbName)}/documents/${enc(documentId)}/restore`, {
-    method: "POST",
-    headers: headers(),
   });
   await checkOk(r);
   return (await r.json()) as DocumentOut;

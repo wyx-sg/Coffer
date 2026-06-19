@@ -29,19 +29,6 @@ A later slice reverses the original "agent-read-only, content-addressed id" stan
 - **Recoverable soft-delete** (trash/restore). For now delete is hard, with an F01 audit trail; the lock guards curated docs.
 - **In-app Markdown editor** — the viewer stays read-only with external-editor affordances (per the read-only-viewers decision); humans edit via external editor / edit API, agents via MCP.
 
-## Amendment — per-project scope + soft-delete + unified 知识 UI (ADR-030, 2026-06-19)
-
-The unified-知识 slice lands the two deferred backend pieces and the unified presentation, per [ADR-030](../../docs/decisions/ADR-030-per-project-kb-scope-and-soft-delete.md). User decisions this slice (recorded per AGENTS.md §4): ship as **one PR**; the **in-app editor stays dropped** (FR-020 read-only viewer is NOT reversed).
-
-**Shipped in this slice:**
-
-- **Per-project document scope (FR-022)**: a real `project_id` (global sentinel | git-root project ULID) threaded through `_store_ref` / `build_kb_document` / `document_from_frontmatter` / `find_by_filename` / `_write_files`; on-disk `knowledge/<kb>/projects/<ulid>/{docs,raw}/` alongside the existing global layout; list/read/grep/search scoped by `project_id`. `scope_fs` (`git_root`/`project_ulid`) lifts from `infrastructure/memory/` into the shared `infrastructure/knowledge/` substrate (no cross-kind import).
-- **Recoverable soft-delete (FR-023)**: nullable `deleted_at` (migration `0026`); a live-document delete becomes a soft-delete (clear `docs/<id>.md` + index, keep `raw/` + row); restore re-converts from `raw/`; a trashed-document delete purges; reindex-on-read never resurrects (rebuild branch has no file; prune branch reads live rows only). New audit `KB_DOCUMENT_RESTORED` / `KB_DOCUMENT_PURGED`. The shared-repo `deleted_at IS NULL` filter is a no-op for memory.
-- **Unified 知识 UI**: one nav entry (全局/项目 scope axis, notes+documents intermixed, add-by-shape input, trash/restore) replacing the split 记忆/知识库 pages; `/memory`+`/knowledge-bases` kept as legacy redirects (007 FR-017b).
-- Surfaces: `POST …/documents/{id}/restore`; `project_id` ingest field; `deleted`/`project_id` list filters; `DocumentOut += deleted_at`; `coffer kb trash` / `coffer kb restore` CLI.
-
-**Still deferred:** in-app Markdown editor; trash auto-expiry (purge is explicit; KB-delete clears trash).
-
 ## Technical Context
 
 | Dimension                                        | Value                                                                                                                                                                                                                                                                                                                                                                                      |

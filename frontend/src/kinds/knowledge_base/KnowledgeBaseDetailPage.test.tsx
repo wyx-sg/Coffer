@@ -227,10 +227,8 @@ describe("KnowledgeBaseDetailPage", () => {
       id: `d${i}`,
       title: `doc-${i}`,
     }));
-    vi.mocked(api.listDocuments).mockImplementation(async (_kb, opts) =>
-      (opts?.limit ?? 0) > 100
-        ? { documents: page2, total: 150 }
-        : { documents: page1, total: 150 },
+    vi.mocked(api.listDocuments).mockImplementation(async (_kb, limit) =>
+      (limit ?? 0) > 100 ? { documents: page2, total: 150 } : { documents: page1, total: 150 },
     );
     vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
       document_count: 150,
@@ -246,9 +244,7 @@ describe("KnowledgeBaseDetailPage", () => {
     expect(await screen.findByText("doc-99")).toBeVisible();
 
     fireEvent.click(loadMore);
-    await waitFor(() =>
-      expect(api.listDocuments).toHaveBeenCalledWith("designs", { limit: 200, offset: 0 }),
-    );
+    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 200, 0));
     expect(await screen.findByText("doc-149")).toBeVisible();
   });
 

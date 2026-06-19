@@ -2,10 +2,24 @@
 
 > 中文版: [ADR-030-per-project-kb-scope-and-soft-delete.zh.md](ADR-030-per-project-kb-scope-and-soft-delete.zh.md)
 
-**Status**: Accepted
-**Date**: 2026-06-19
+**Status**: Reverted (2026-06-20) — see the revert note below
+**Date**: 2026-06-19 · reverted 2026-06-20
 **Deciders**: Yuxing Wu
 **Related**: specs `006-knowledge-base`, `007-memory`; completes [ADR-028 (co-managed documents)](ADR-028-knowledge-base-documents-co-managed.md); builds on [ADR-012 (files as truth)](ADR-012-files-as-truth-sqlite-retrieval.md); sibling of [ADR-026 (memory via MCP)](ADR-026-memory-via-mcp-not-native-projection.md); the slice that completes the unified-knowledge redesign (知识 = 记忆 + 文档 × 全局 / 项目)
+
+> **⚠️ Reverted 2026-06-20.** This ADR's decisions were withdrawn one day after
+> they landed. The unified **知识** surface they were built to support proved to
+> conflate two distinct workflows — user-uploaded documents (知识库) vs
+> agent-written memory (记忆) — so the UI was split back into two separate
+> surfaces. With the unified view gone, the rationale for per-project **document**
+> scope and document soft-delete (both of which existed *only* to align documents
+> with memory's project axis inside that one merged view) no longer held, and both
+> were reverted along with it. The system returns to the
+> [ADR-028](ADR-028-knowledge-base-documents-co-managed.md) baseline: knowledge-base
+> documents are co-managed at **global scope** with **hard delete**. **Memory's own
+> global / per-project scoping is unaffected** — it predates this ADR (see
+> [ADR-026](ADR-026-memory-via-mcp-not-native-projection.md)). The original decision
+> is preserved verbatim below for the record.
 
 ## Context
 

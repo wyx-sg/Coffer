@@ -41,23 +41,14 @@ class KnowledgeIndex(Protocol):
         """Remove a document's chunk / FTS5 / vec rows."""
         ...
 
-    async def keyword_search(
-        self, resource_name: str, query: str, top_k: int, *, project_id: str | None = None
-    ) -> Sequence[Passage]:
-        """FTS5 MATCH ordered by ``bm25()``. ``project_id`` (when given) restricts
-        to that document scope (ADR-030); ``None`` searches the whole store."""
+    async def keyword_search(self, resource_name: str, query: str, top_k: int) -> Sequence[Passage]:
+        """FTS5 MATCH ordered by ``bm25()``."""
         ...
 
     async def vector_search(
-        self,
-        resource_name: str,
-        vector: Sequence[float],
-        top_k: int,
-        *,
-        project_id: str | None = None,
+        self, resource_name: str, vector: Sequence[float], top_k: int
     ) -> Sequence[Passage]:
-        """sqlite-vec KNN over chunk embeddings, optionally restricted to a
-        document scope (ADR-030)."""
+        """sqlite-vec KNN over chunk embeddings."""
         ...
 
 

@@ -62,43 +62,28 @@ def kb_dir(name: str) -> pathlib.Path:
     return _guard(knowledge_root(), name, "knowledge base")
 
 
-def kb_store_dir(name: str, project_id: str = WORKSPACE_GLOBAL_PROJECT_ID) -> pathlib.Path:
-    """The on-disk root for one document scope of a KB (ADR-030).
-
-    Global scope is the KB root itself (``knowledge/<kb>/``, leaving existing
-    global documents in place — back-compatible); a project scope nests under
-    ``knowledge/<kb>/projects/<project-ulid>/``.
-    """
-    base = kb_dir(name)
-    if project_id == WORKSPACE_GLOBAL_PROJECT_ID:
-        return base
-    return _guard(base / "projects", project_id, "project")
+def docs_dir(name: str) -> pathlib.Path:
+    return kb_dir(name) / "docs"
 
 
-def docs_dir(name: str, project_id: str = WORKSPACE_GLOBAL_PROJECT_ID) -> pathlib.Path:
-    return kb_store_dir(name, project_id) / "docs"
+def raw_dir(name: str) -> pathlib.Path:
+    return kb_dir(name) / "raw"
 
 
-def raw_dir(name: str, project_id: str = WORKSPACE_GLOBAL_PROJECT_ID) -> pathlib.Path:
-    return kb_store_dir(name, project_id) / "raw"
-
-
-def doc_path(name: str, doc_id: str, project_id: str = WORKSPACE_GLOBAL_PROJECT_ID) -> pathlib.Path:
-    """Path of the normalized markdown ``[projects/<ulid>/]docs/<doc-id>.md``."""
+def doc_path(name: str, doc_id: str) -> pathlib.Path:
+    """Path of the normalized markdown ``docs/<doc-id>.md``."""
     _safe_segment(doc_id, "doc id")
-    d = docs_dir(name, project_id)
+    d = docs_dir(name)
     candidate = (d / f"{doc_id}.md").resolve()
     if not candidate.is_relative_to(d.resolve()):
         raise ValueError(f"doc id {doc_id!r} escapes the docs dir")
     return d / f"{doc_id}.md"
 
 
-def raw_path(
-    name: str, doc_id: str, ext: str, project_id: str = WORKSPACE_GLOBAL_PROJECT_ID
-) -> pathlib.Path:
-    """Path of the original upload ``[projects/<ulid>/]raw/<doc-id>.<ext>``."""
+def raw_path(name: str, doc_id: str, ext: str) -> pathlib.Path:
+    """Path of the original upload ``raw/<doc-id>.<ext>``."""
     _safe_segment(doc_id, "doc id")
-    d = raw_dir(name, project_id)
+    d = raw_dir(name)
     bare_ext = ext.lstrip(".")
     if bare_ext:
         # A slashed/traversing ext (from an upload filename) would otherwise nest

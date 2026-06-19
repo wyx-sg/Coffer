@@ -72,9 +72,6 @@ class AuditEventType(StrEnum):
     KB_DOCUMENT_INGESTED = "kb_document_ingested"
     KB_DOCUMENT_UPDATED = "kb_document_updated"
     KB_DOCUMENT_DELETED = "kb_document_deleted"
-    # recoverable soft-delete (ADR-030): restore from trash / permanent purge
-    KB_DOCUMENT_RESTORED = "kb_document_restored"
-    KB_DOCUMENT_PURGED = "kb_document_purged"
     # documents co-managed (ADR-028): per-document lock transitions
     KB_DOCUMENT_LOCKED = "kb_document_locked"
     KB_DOCUMENT_UNLOCKED = "kb_document_unlocked"

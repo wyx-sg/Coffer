@@ -111,9 +111,6 @@ paths:
                   type: boolean
                   default: false
                   description: If true, a changed re-upload of a filename already in the KB updates that document in place. Byte-identical re-uploads are a no-op regardless.
-                project_id:
-                  type: string
-                  description: Scope for the document (FR-022). Omit or pass the WORKSPACE_GLOBAL sentinel for global; pass a project ULID for a per-project document. Re-upload matching is scoped to (kb, project_id).
       responses:
         "201":
           description: Document ingested
@@ -161,16 +158,6 @@ paths:
         - in: query
           name: offset
           schema: { type: integer, minimum: 0, default: 0 }
-        - in: query
-          name: project_id
-          required: false
-          schema: { type: string }
-          description: Filter to one scope (FR-022). Omit for all scopes; pass the WORKSPACE_GLOBAL sentinel for global-only or a project ULID for that project.
-        - in: query
-          name: deleted
-          required: false
-          schema: { type: boolean, default: false }
-          description: When true, return the trash (soft-deleted documents) instead of live documents (FR-023).
       responses:
         "200":
           description: OK
@@ -256,45 +243,12 @@ paths:
           $ref: "#/components/responses/NotFound"
 
     delete:
-      summary: Delete a document (soft-delete a live one; purge a trashed one)
-      description: |
-        Deleting a LIVE document is a recoverable soft-delete: its `docs/<id>.md`
-        and index rows are removed but `raw/<id>.<ext>` and the row are kept with
-        `deleted_at` set, and it leaves all live reads (FR-023). Deleting an
-        ALREADY-TRASHED document purges it permanently (removes `raw/` + the row).
-        Refused with `DOCUMENT_LOCKED` (409) when the document is locked.
+      summary: Delete a document
       operationId: deleteDocument
       tags: [knowledge_bases]
       responses:
         "204":
           description: No Content
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/DocumentLocked"
-
-  /api/v1/knowledge_bases/{name}/documents/{document_id}/restore:
-    parameters:
-      - $ref: "#/components/parameters/KBName"
-      - $ref: "#/components/parameters/DocumentId"
-
-    post:
-      summary: Restore a trashed document
-      description: |
-        Re-converts a soft-deleted document from its kept `raw/` original,
-        regenerates `docs/<id>.md`, re-indexes it, and clears `deleted_at`
-        (`source_mode` resets to `converted`). Audited `KB_DOCUMENT_RESTORED`.
-        Refused with `DOCUMENT_LOCKED` (409) when locked; `404` when the document
-        is not in the trash (FR-023).
-      operationId: restoreDocument
-      tags: [knowledge_bases]
-      responses:
-        "200":
-          description: Restored and reindexed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DocumentOut"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -659,13 +613,8 @@ components:
         project_id:
           {
             type: string,
-            description: "Document scope (FR-022): the WORKSPACE_GLOBAL sentinel for a global document, or a project ULID for a per-project document.",
+            description: "WORKSPACE_GLOBAL sentinel for global KB documents (per-project scope is a later slice).",
           }
-        deleted_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: "Null for a live document; set when the document is soft-deleted (in the trash — FR-023)."
         chunk_count: { type: integer }
         metadata:
           type: object
@@ -764,10 +713,6 @@ components:
             requesting it here (or any mode not in `enabled_modes`) is a 400
             `SEARCH_MODE_INVALID`. `vector` is the exception — it degrades to
             keyword with a flagged fallback.
-        project_id:
-          type: string
-          nullable: true
-          description: "Scope (FR-022): omit for global; a project ULID restricts the search to that scope (filtered at the SQL layer)."
 
     Passage:
       type: object
@@ -805,10 +750,6 @@ components:
           minimum: 1
           maximum: 1000
           default: 100
-        project_id:
-          type: string
-          nullable: true
-          description: "Scope (FR-022): omit for global; a project ULID greps only that scope's docs/ subtree."
 
     GrepHit:
       type: object

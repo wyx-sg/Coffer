@@ -36,9 +36,6 @@ from coffer.application.knowledge_base.pipeline_helpers import (
     du_bytes,
     read_markdown_body,
 )
-from coffer.application.knowledge_base.service_lifecycle import (
-    KBDocumentLifecycleMixin,
-)
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
@@ -49,11 +46,7 @@ from coffer.domain.errors import (
     SearchModeInvalid,
 )
 from coffer.domain.knowledge.converter import MarkdownConverter
-from coffer.domain.knowledge.document import (
-    KIND_KNOWLEDGE_BASE,
-    WORKSPACE_GLOBAL_PROJECT_ID,
-    Document,
-)
+from coffer.domain.knowledge.document import KIND_KNOWLEDGE_BASE, Document
 from coffer.domain.knowledge.retrieval import (
     GrepResult,
     RetrievalMode,
@@ -64,9 +57,8 @@ from coffer.domain.knowledge_base.config import KnowledgeBaseConfig
 from coffer.domain.resource import ResourceRef
 
 
-class KnowledgeBaseService(KBDocumentLifecycleMixin):
-    """Application service for KB operations (lock / soft-delete / restore /
-    purge + search scope-isolation live in ``KBDocumentLifecycleMixin``)."""
+class KnowledgeBaseService:
+    """Application service for KB operations."""
 
     def __init__(
         self,
@@ -106,12 +98,12 @@ class KnowledgeBaseService(KBDocumentLifecycleMixin):
             raise KBNotFound(kb_name) from exc
         return KnowledgeBaseConfig.model_validate(resource.config)
 
-    def _store_ref(self, kb_name: str, project_id: str = WORKSPACE_GLOBAL_PROJECT_ID) -> StoreRef:
+    def _store_ref(self, kb_name: str) -> StoreRef:
         return StoreRef(
             kind=KIND_KNOWLEDGE_BASE,
             resource_name=kb_name,
-            project_id=project_id,
-            docs_dir=str(self._paths.docs_dir(kb_name, project_id)),
+            project_id="00000000000000000000000000",
+            docs_dir=str(self._paths.docs_dir(kb_name)),
         )
 
     # ----- document writes -----
@@ -124,13 +116,11 @@ class KnowledgeBaseService(KBDocumentLifecycleMixin):
         raw_bytes: bytes,
         actor: str,
         replace: bool = False,
-        project_id: str = WORKSPACE_GLOBAL_PROJECT_ID,
     ) -> Document:
         """Ingest one uploaded file: size check → convert → clean → frontmatter →
         write ``docs/``+``raw/`` → reindex → audit. A re-upload is matched to an
-        existing document by filename within ``project_id`` (ADR-028): identical
-        bytes are a no-op, a changed file updates that document in place
-        (``replace``). ``project_id`` selects the scope (ADR-030; default global)."""
+        existing document by filename (ADR-028): identical bytes are a no-op, a
+        changed file updates that document in place (``replace``)."""
         config = await self.get_kb_config(kb_name)
         doc, status = await self._pipeline.ingest(
             kb_name=kb_name,
@@ -138,7 +128,6 @@ class KnowledgeBaseService(KBDocumentLifecycleMixin):
             raw_bytes=raw_bytes,
             config=config,
             replace=replace,
-            project_id=project_id,
         )
         # A byte-identical re-upload is an idempotent no-op — nothing changed, so
         # nothing is audited (FR-007). A changed re-upload of an existing filename
@@ -226,6 +215,41 @@ class KnowledgeBaseService(KBDocumentLifecycleMixin):
         )
         return updated
 
+    async def delete_document(self, *, kb_name: str, document_id: str, actor: str) -> None:
+        await self.get_kb_config(kb_name)
+        doc = await self._require_document(kb_name, document_id)
+        self._ensure_unlocked(kb_name, doc)
+        await self._pipeline.delete(kb_name=kb_name, doc=doc)
+        await self._audit.record(
+            AuditEventType.KB_DOCUMENT_DELETED.value,
+            ref=ResourceRef(KIND_KNOWLEDGE_BASE, kb_name),
+            actor=actor,
+            details={"document_id": document_id, "title": doc.title},
+        )
+
+    async def set_document_lock(
+        self, *, kb_name: str, document_id: str, locked: bool, actor: str
+    ) -> Document:
+        """Lock or unlock a document (ADR-028). A locked document refuses every
+        mutation (edit / reconvert / re-upload replace / delete) until unlocked;
+        lock/unlock itself is always allowed. Idempotent: setting the lock to its
+        current value is a no-op (no audit)."""
+        await self.get_kb_config(kb_name)
+        doc = await self._require_document(kb_name, document_id)
+        if doc.locked == locked:
+            return doc
+        # Persist through the pipeline so the flag lands in BOTH the row and the
+        # on-disk frontmatter (files are truth — a files-only rebuild restores it).
+        updated = await self._pipeline.set_lock(kb_name=kb_name, doc=doc, locked=locked)
+        event = AuditEventType.KB_DOCUMENT_LOCKED if locked else AuditEventType.KB_DOCUMENT_UNLOCKED
+        await self._audit.record(
+            event.value,
+            ref=ResourceRef(KIND_KNOWLEDGE_BASE, kb_name),
+            actor=actor,
+            details={"document_id": document_id},
+        )
+        return updated
+
     # ----- reads -----
 
     async def _reconcile_on_read(self, kb_name: str, config: KnowledgeBaseConfig) -> None:
@@ -240,29 +264,14 @@ class KnowledgeBaseService(KBDocumentLifecycleMixin):
         await self._pipeline.reindex_scan(kb_name=kb_name, config=config)
 
     async def list_documents(
-        self,
-        *,
-        kb_name: str,
-        limit: int,
-        offset: int,
-        project_id: str | None = None,
-        deleted: bool = False,
+        self, *, kb_name: str, limit: int, offset: int
     ) -> tuple[list[Document], int]:
-        """List documents. ``project_id=None`` spans all scopes; a value filters
-        to that scope (FR-022). ``deleted=True`` lists the trash (FR-023)."""
         config = await self.get_kb_config(kb_name)
         await self._reconcile_on_read(kb_name, config)
         docs = await self._documents.list_documents(
-            KIND_KNOWLEDGE_BASE,
-            kb_name,
-            limit=limit,
-            offset=offset,
-            project_id=project_id,
-            deleted=deleted,
+            KIND_KNOWLEDGE_BASE, kb_name, limit=limit, offset=offset
         )
-        total = await self._documents.count_documents(
-            KIND_KNOWLEDGE_BASE, kb_name, project_id=project_id, deleted=deleted
-        )
+        total = await self._documents.count_documents(KIND_KNOWLEDGE_BASE, kb_name)
         return docs, total
 
     async def get_document(self, *, kb_name: str, document_id: str) -> Document:
@@ -274,21 +283,18 @@ class KnowledgeBaseService(KBDocumentLifecycleMixin):
         """Per-document chunk counts for the KB (the wire ``chunk_count``)."""
         return await self._documents.chunk_counts(KIND_KNOWLEDGE_BASE, kb_name)
 
-    def doc_paths(
-        self, *, kb_name: str, document_id: str, project_id: str = WORKSPACE_GLOBAL_PROJECT_ID
-    ) -> tuple[str, str]:
-        """Absolute markdown path + its containing folder for a document, scoped
-        by ``project_id`` (ADR-030).
+    def doc_paths(self, *, kb_name: str, document_id: str) -> tuple[str, str]:
+        """Absolute markdown path + its containing folder for a document.
 
         The in-app viewer is read-only; surfaces hand these to the desktop for
         open-in-external-editor / reveal / copy-path."""
-        path = self._paths.doc_path(kb_name, document_id, project_id)
+        path = self._paths.doc_path(kb_name, document_id)
         return str(path), str(path.parent)
 
     async def read_document(self, *, kb_name: str, document_id: str) -> tuple[Document, str]:
         """Return the document row + its full markdown (frontmatter + body)."""
         doc = await self.get_document(kb_name=kb_name, document_id=document_id)
-        path = self._paths.doc_path(kb_name, document_id, doc.project_id)
+        path = self._paths.doc_path(kb_name, document_id)
         if not path.exists():
             raise DocumentNotFound(kb_name, document_id)
         text = await asyncio.to_thread(path.read_text, "utf-8")
@@ -300,13 +306,7 @@ class KnowledgeBaseService(KBDocumentLifecycleMixin):
         return doc, read_markdown_body(full)
 
     async def search(
-        self,
-        *,
-        kb_name: str,
-        query: str,
-        top_k: int = 5,
-        mode: RetrievalMode | None = None,
-        project_id: str = WORKSPACE_GLOBAL_PROJECT_ID,
+        self, *, kb_name: str, query: str, top_k: int = 5, mode: RetrievalMode | None = None
     ) -> SearchResult:
         config = await self.get_kb_config(kb_name)
         # Lazy reindex-on-read: surface out-of-band edits before searching the
@@ -325,33 +325,22 @@ class KnowledgeBaseService(KBDocumentLifecycleMixin):
         if chosen == "grep":
             chosen = "keyword"
         embedding = await self._resolve_embedding() if config.vector_enabled else None
-        # The store ref carries the resolved project_id; the retrieval facade
-        # filters keyword/vector results to that scope at the SQL layer so search
-        # is scope-isolated and returns the true top_k in-scope (FR-022/ADR-030).
         return await self._retrieval.search(
-            self._store_ref(kb_name, project_id),
+            self._store_ref(kb_name),
             query,
             mode=chosen,
             top_k=top_k,
             embedding=embedding,
         )
 
-    async def grep(
-        self,
-        *,
-        kb_name: str,
-        pattern: str,
-        max_matches: int = 200,
-        project_id: str = WORKSPACE_GLOBAL_PROJECT_ID,
-    ) -> GrepResult:
+    async def grep(self, *, kb_name: str, pattern: str, max_matches: int = 200) -> GrepResult:
         config = await self.get_kb_config(kb_name)
         # Grep reads ``docs/`` live, so it already reflects out-of-band edits;
         # we still reconcile (cheap no-op when unchanged) so the documents table
-        # stays consistent with the files on the search path (FR-008a). The
-        # store ref's docs_dir is the scope's dir, so grep is naturally scoped.
+        # stays consistent with the files on the search path (FR-008a).
         await self._reconcile_on_read(kb_name, config)
         return await self._retrieval.grep(
-            self._store_ref(kb_name, project_id), pattern, max_matches=max_matches
+            self._store_ref(kb_name), pattern, max_matches=max_matches
         )
 
     async def metrics(self, *, kb_name: str) -> dict[str, object]:
@@ -375,12 +364,8 @@ class KnowledgeBaseService(KBDocumentLifecycleMixin):
 
     # ----- internals -----
 
-    async def _require_document(
-        self, kb_name: str, document_id: str, *, include_deleted: bool = False
-    ) -> Document:
-        doc = await self._documents.get_document(
-            KIND_KNOWLEDGE_BASE, kb_name, document_id, include_deleted=include_deleted
-        )
+    async def _require_document(self, kb_name: str, document_id: str) -> Document:
+        doc = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, document_id)
         if doc is None:
             raise DocumentNotFound(kb_name, document_id)
         return doc

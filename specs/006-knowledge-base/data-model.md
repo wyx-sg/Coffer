@@ -50,8 +50,6 @@ Frozen dataclass; one per Markdown file, **discriminated by `kind`**. KB and mem
 | `content_sha256`            | `str`         | Hash of the **Markdown** body — the reindex no-op gate.                                                                                                           |
 | `source_mode`               | `str`         | `"converted"` or `"edited"`.                                                                                                                                      |
 | `locked`                    | `bool`        | When `true`, every mutation (edit / reconvert / replace / delete) is refused (FR-021). Default `false`.                                                           |
-| `project_id`                | `str`         | Scope: `WORKSPACE_GLOBAL` sentinel (global) or a project ULID (FR-022). For KB this now varies; memory already varies it.                                          |
-| `deleted_at`                | `datetime \| None` | `None` for a live document; set when the document is soft-deleted (in the trash — FR-023). Reads filter `deleted_at IS NULL`.                                  |
 | `metadata`                  | `dict`        | Per-face JSON; KB keys below.                                                                                                                                     |
 | `created_at` / `updated_at` | `datetime`    | UTC.                                                                                                                                                              |
 
@@ -85,13 +83,9 @@ class KnowledgeIndex(Protocol):
     async def upsert_chunks(self, document_id: str, chunks: Sequence[str],
                             vectors: Sequence[Sequence[float]] | None) -> int: ...
     async def delete_chunks(self, document_id: str) -> None: ...
-    async def keyword_search(self, resource_name: str, query: str, top_k: int,
-                             *, project_id: str | None = None) -> Sequence[Passage]: ...
-    async def vector_search(self, resource_name: str, vector: Sequence[float], top_k: int,
-                            *, project_id: str | None = None) -> Sequence[Passage]: ...
+    async def keyword_search(self, resource_name: str, query: str, top_k: int) -> Sequence[Passage]: ...
+    async def vector_search(self, resource_name: str, vector: Sequence[float], top_k: int) -> Sequence[Passage]: ...
 ```
-
-The optional `project_id` scopes a search to one document scope at the SQL layer (ADR-030): keyword filters the FTS↔`documents` JOIN so `LIMIT k` is exact; vector over-fetches the KNN (no `project_id` on the vec table) then filters + truncates. Memory passes the store's own scope, so it is a no-op there.
 
 Grep is a separate `infrastructure/knowledge/grep.py` ripgrep wrapper (no index), bounded by max-matches + a timeout.
 
@@ -105,9 +99,9 @@ Grep is a separate `infrastructure/knowledge/grep.py` ripgrep wrapper (no index)
 - `DocumentLocked` — code `"DOCUMENT_LOCKED"` (HTTP 409); raised when any mutation (edit / reconvert / re-upload replace / delete) targets a `locked` document (FR-021).
 - `SearchModeInvalid` — code `"SEARCH_MODE_INVALID"` (HTTP 400); raised when a search request names an EXPLICIT `mode=grep` (grep has its own endpoint) or any explicit mode not in the KB's `enabled_modes`. `vector` is the exception — it degrades to keyword with a flagged fallback instead of erroring.
 
-## SQLite schema (unified substrate + the `locked` and `deleted_at` columns)
+## SQLite schema (unified substrate + the `locked` column)
 
-The substrate migration (`0006`) drops the old `kb_documents` / `memory_records` tables and creates the unified schema below (**no data migration** — the branch is unreleased). Two later additive migrations extend `documents`, each guarded by an idempotent `_has_column` check: `0025` adds the `locked` column for the co-management lock (FR-021); `0026` adds the nullable `deleted_at` column for the recoverable soft-delete (FR-023).
+The substrate migration (`0006`) drops the old `kb_documents` / `memory_records` tables and creates the unified schema below (**no data migration** — the branch is unreleased). A later additive migration (`0025`) adds the `locked` column to `documents` for the co-management lock (FR-021), guarded by an idempotent `_has_column` check.
 
 ```sql
 -- One row per Markdown file, shared by KB and memory, discriminated by `kind`.
@@ -115,14 +109,13 @@ CREATE TABLE documents (
     id              TEXT      NOT NULL,             -- ULID (KB + memory), minted at first ingest
     kind            TEXT      NOT NULL,             -- 'knowledge_base' | 'memory'
     resource_name   TEXT      NOT NULL,             -- KB name (or memory scope store name)
-    project_id      TEXT      NOT NULL,             -- WORKSPACE_GLOBAL sentinel (global) | project ULID (FR-022)
+    project_id      TEXT      NOT NULL,             -- WORKSPACE_GLOBAL sentinel (KB/global) | project ULID
     path            TEXT      NOT NULL,             -- relative path of the markdown file
     title           TEXT      NOT NULL,
     description     TEXT,
     content_sha256  TEXT      NOT NULL,             -- hash of the markdown body (reindex no-op gate)
     source_mode     TEXT      NOT NULL,             -- 'converted' | 'edited' (KB) | 'native' (memory)
     locked          BOOLEAN   NOT NULL DEFAULT 0,   -- co-management opt-out: blocks all mutations (FR-021)
-    deleted_at      TIMESTAMP,                      -- NULL = live; set = soft-deleted / in trash (FR-023)
     metadata        TEXT      NOT NULL DEFAULT '{}',-- JSON, per-face
     created_at      TIMESTAMP NOT NULL,
     updated_at      TIMESTAMP NOT NULL,
@@ -130,8 +123,6 @@ CREATE TABLE documents (
 );
 CREATE INDEX idx_documents_kind_res_time ON documents(kind, resource_name, updated_at DESC);
 CREATE INDEX idx_documents_project ON documents(project_id);
--- Live reads add a `deleted_at IS NULL` predicate; the trash view filters `deleted_at IS NOT NULL`.
--- No dedicated index: corpora are small (SC-002 ≤ 50 docs) so the filter rides the existing scans.
 -- KB dedup is on metadata->>'source_sha256'; enforced in the repo, not a SQL unique index,
 -- because memory rows have no source file.
 
@@ -169,9 +160,7 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 
 **Why a composite `(kind, resource_name, id)` PK**: doc ids are now globally-unique ULIDs (so a bare `id` would already be unique), but the composite key keeps the unified table unambiguous across faces/resources and lets `on_delete` scope a cascade to one resource. The same source file uploaded into two KBs is two independent documents with two ULIDs (no cross-store dedup — ADR-028).
 
-**Why `project_id`**: the memory face keys stores by project (sentinel ULID for global, a project ULID otherwise). KB rows now also carry a real scope (FR-022): global documents keep the sentinel, project documents carry the git-root project ULID. `idx_documents_project` serves the scope-filtered reads for both faces.
-
-**Why `deleted_at` (and not a `status` enum)**: it doubles as the trash-ordering key and the "when" for restore / audit UX. A soft-deleted document keeps its row and `raw/` original but loses `docs/<id>.md` + index rows; restore re-converts from `raw/`. The reindex-on-read scan never resurrects a tombstone (the rebuild branch needs a `docs/<id>.md` that is gone; the prune branch reads live rows only). The shared repo's `deleted_at IS NULL` filter is a no-op for memory (memory never tombstones). See [ADR-030](../../docs/decisions/ADR-030-per-project-kb-scope-and-soft-delete.md).
+**Why `project_id`**: the memory face keys stores by project (sentinel ULID for global, a project ULID otherwise). KB rows carry the global sentinel — the column is required by the unified table so memory scope queries have an index (`idx_documents_project`).
 
 **Cascade is application-level** (the kind's `on_delete` hook), not FK: the hook deletes the resource's `documents`/`chunks`/`documents_fts`/`vec_chunks` rows, then `rmtree`s the on-disk directory.
 
@@ -179,24 +168,23 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 
 `DocumentModel` and `ChunkModel` (`models.py`) map to `documents` / `chunks`, registered on the same `Base.metadata` as the rest. `documents_fts` is created via a `Base.metadata` `after_create` DDL hook (`ddl.py`) so `create_all` and the migration both build it. The repo surface is split across two modules to stay under the file-size limit:
 
-`repository.py` — `DocumentRepo` (document-row CRUD). Reads filter `deleted_at IS NULL` by default (live); a `deleted` / `include_deleted` flag opts into the trash, and an optional `project_id` filters by scope (FR-022):
+`repository.py` — `DocumentRepo` (document-row CRUD):
 
-- `async upsert_document(d: Document) -> Document` (insert or update by `(kind, resource_name, id)`; carries `locked`, `project_id`, `deleted_at`)
-- `async list_documents(kind, resource_name, *, limit, offset, project_id=None, deleted=False) -> list[Document]` (`project_id=None` ⇒ all scopes; `deleted=True` ⇒ trash view)
-- `async count_documents(kind, resource_name, *, project_id=None, deleted=False) -> int`
-- `async get_document(kind, resource_name, doc_id, *, include_deleted=False) -> Document | None`
-- `async find_by_filename(kind, resource_name, project_id, original_filename) -> Document | None` (re-upload match within `(kind, resource_name, project_id)`, live rows only — a tombstone never blocks a re-ingest)
+- `async upsert_document(d: Document) -> Document` (insert or update by `(kind, resource_name, id)`; carries `locked`)
+- `async list_documents(kind, resource_name, *, limit, offset) -> list[Document]`
+- `async count_documents(kind, resource_name) -> int`
+- `async get_document(kind, resource_name, doc_id) -> Document | None`
+- `async find_by_filename(kind, resource_name, project_id, original_filename) -> Document | None` (re-upload match key — reads `metadata->>'original_filename'`; replaces the old `exists_source` sha lookup)
 - `async set_locked(kind, resource_name, doc_id, locked) -> Document | None` (flip the lock; returns the updated row)
-- `async soft_delete_document(kind, resource_name, doc_id) -> bool` (UPDATE `deleted_at = now()` WHERE live; the row + `raw/` are kept)
-- `async delete_document(kind, resource_name, doc_id) -> bool` (HARD row delete — used for purge + KB cleanup)
+- `async delete_document(kind, resource_name, doc_id) -> bool`
 - `async delete_resource(kind, resource_name) -> int`
 
 `sqlite_index.py` — `SqliteKnowledgeIndex` (chunk + FTS5 + optional vec), bound to one `(kind, resource_name)`:
 
 - `async upsert_chunks(doc_id, chunks, vectors|None) -> int` (FTS5 + optional vec; replaces existing)
 - `async delete_chunks(doc_id) -> None`
-- `async keyword_search(resource_name, query, top_k, *, project_id=None) -> Sequence[Passage]` (bm25; `project_id` scopes via the JOIN — ADR-030)
-- `async vector_search(resource_name, vector, top_k, *, project_id=None) -> Sequence[Passage]` (sqlite-vec KNN; scoped via over-fetch + JOIN filter)
+- `async keyword_search(resource_name, query, top_k) -> Sequence[Passage]` (bm25)
+- `async vector_search(resource_name, vector, top_k) -> Sequence[Passage]` (sqlite-vec KNN)
 
 `vec_chunks` writes/reads are confined to `infrastructure/knowledge/vec_index.py` (the only importer of `sqlite_vec`); the chunk text deletion + FTS5 lives in `sqlite_index.py`. The application layer composes these repos plus `grep.py` and the embedder clients (`infrastructure/knowledge/embeddings.py`) behind the shared retrieval facade `KnowledgeRetrieval` (`application/knowledge/retrieval.py`), which owns the keyword↔vector decision including the flagged vector→keyword fallback.
 
@@ -207,25 +195,17 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 ├── coffer.db                       # resources / documents / chunks / documents_fts / vec_chunks / audit
 └── knowledge/
     └── <kb-name>/
-        ├── docs/                   # GLOBAL-scope documents
+        ├── docs/
         │   └── <doc-id>.md         # normalized markdown = truth (YAML frontmatter + body)
-        ├── raw/
-        │   └── <doc-id>.<ext>      # original upload (provenance / re-convert / restore)
-        └── projects/               # PER-PROJECT documents (FR-022)
-            └── <project-ulid>/
-                ├── docs/
-                │   └── <doc-id>.md
-                └── raw/
-                    └── <doc-id>.<ext>
+        └── raw/
+            └── <doc-id>.<ext>      # original upload (provenance / re-convert)
 ```
 
-The per-project subtree mirrors memory's `global/` + `projects/<ulid>/` split (the global layout is left in place — back-compatible). No per-corpus `index/`, `text/`, or `chroma/` directories — all indexing lives in `coffer.db`. `infrastructure/knowledge/paths.py` is the **only** module that constructs these paths; the scope-bearing builders take an optional `project_id` (default `WORKSPACE_GLOBAL` ⇒ the global path):
+No per-corpus `index/`, `text/`, or `chroma/` directories — all indexing lives in `coffer.db`. `infrastructure/knowledge/paths.py` is the **only** module that constructs these paths:
 
 - `knowledge_root() -> Path` — `~/.coffer/knowledge/` (override via `COFFER_KNOWLEDGE_ROOT` for tests)
-- `kb_dir(name) -> Path` — the KB root (scope-independent)
-- `docs_dir(name, project_id=WORKSPACE_GLOBAL) -> Path` / `raw_dir(name, project_id=WORKSPACE_GLOBAL) -> Path`
-- `doc_path(name, doc_id, project_id=WORKSPACE_GLOBAL) -> Path` / `raw_path(name, doc_id, ext, project_id=WORKSPACE_GLOBAL) -> Path`
-- The sentinel→global / ULID→`projects/<ulid>/` routing lives in one helper (mirrors memory's `memory_store_dir`). The git-root→ULID helpers (`git_root`, `project_ulid`) move from `infrastructure/memory/scope_fs.py` into the shared `infrastructure/knowledge/scope_fs.py` substrate so both faces share one implementation (no cross-kind import).
+- `kb_dir(name) -> Path` / `docs_dir(name) -> Path` / `raw_dir(name) -> Path`
+- `doc_path(name, doc_id) -> Path` / `raw_path(name, doc_id, ext) -> Path`
 
 ### Markdown frontmatter
 
@@ -265,9 +245,7 @@ When an embed degrades (embedding provider unavailable), the routine indexes the
 
 | Action                                | Effect                                                                                                                                                                                                                                                         |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Delete a live Document (soft-delete)  | Remove `docs/<id>.md` + its `chunks`/`documents_fts`/`vec_chunks` rows; KEEP `raw/<id>.<ext>` + the `documents` row with `deleted_at` set; audit `KB_DOCUMENT_DELETED`. The document leaves all live reads. Refused if `locked`. (FR-023)                       |
-| Restore a trashed Document            | Re-convert from the kept `raw/<id>.<ext>`; regenerate `docs/<id>.md`; re-index; clear `deleted_at`; `source_mode` → `converted`; audit `KB_DOCUMENT_RESTORED`. Refused if `locked`.                                                                            |
-| Purge a trashed Document              | Delete on an already-trashed document: remove `raw/<id>.<ext>` + the `documents` row for good; audit `KB_DOCUMENT_PURGED`. Refused if `locked`.                                                                                                               |
+| Delete a Document                     | Remove `docs/<id>.md` + `raw/<id>.<ext>`; delete its `chunks`/`documents_fts`/`vec_chunks` rows; delete the `documents` row; audit `KB_DOCUMENT_DELETED`. Refused if `locked`.                                                                                 |
 | Delete a KB                           | `on_delete` hook: `delete_resource(kind, name)` (documents + chunks + fts + vec); `rmtree(kb_dir(name))`; delete the `resources` row; audit `RESOURCE_DELETED` with a KB snapshot.                                                                             |
 | Rename a KB                           | Forbidden (Resource name immutable; framework enforces).                                                                                                                                                                                                       |
 | Change `chunk_size` / `chunk_overlap` | Allowed → re-chunk + re-index the corpus.                                                                                                                                                                                                                      |
@@ -286,9 +264,7 @@ When an embed degrades (embedding provider unavailable), the routine indexes the
 | ------------------------ | -------------------------------------------------------------------------- |
 | `"kb_document_ingested"` | After first index of a new document                                        |
 | `"kb_document_updated"`  | After the reindex routine re-indexes a changed document (edit / re-upload) |
-| `"kb_document_deleted"`  | After a document soft-delete (moved to trash)                              |
-| `"kb_document_restored"` | After a trashed document is restored from its kept original                |
-| `"kb_document_purged"`   | After a trashed document is permanently purged (`raw/` + row removed)      |
+| `"kb_document_deleted"`  | After a document delete                                                    |
 | `"kb_document_locked"`   | After a document is locked                                                 |
 | `"kb_document_unlocked"` | After a document is unlocked                                               |
 | `"kb_reindexed"`         | After a full `coffer kb reindex` (carries per-doc counts)                  |
@@ -314,14 +290,13 @@ Lives in `contracts/api.openapi.yaml`. Highlights (app-wide error envelope `{err
 - `POST /api/v1/knowledge_bases` — create KB
 - `GET /api/v1/knowledge_bases` — list KBs
 - `GET /api/v1/knowledge_bases/{name}` — get one KB
-- `POST /api/v1/knowledge_bases/{name}/documents` — multipart upload + ingest (any format); optional `project_id` form field selects the scope (default global — FR-022)
-- `GET /api/v1/knowledge_bases/{name}/documents` — paginated list (each row carries its absolute `path` + containing-folder `folder_path`); optional `project_id` query filters by scope and `deleted=true` returns the trash (FR-022/FR-023)
+- `POST /api/v1/knowledge_bases/{name}/documents` — multipart upload + ingest (any format)
+- `GET /api/v1/knowledge_bases/{name}/documents` — paginated list (each row carries its absolute `path` + containing-folder `folder_path`)
 - `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` — read-only markdown body + frontmatter + absolute `path` + `folder_path`
 - `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` — edit markdown via API (sets `source_mode=edited`, reindexes; `409 DOCUMENT_LOCKED` when locked); the UI is read-only and edits otherwise arrive via the external editor (picked up by reindex-on-read) or agent MCP
 - `PATCH /api/v1/knowledge_bases/{name}/documents/{doc_id}` — `{locked: bool}` → lock / unlock the document (audited)
 - `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` — re-run conversion from `raw/` (blocked with `RECONVERSION_BLOCKED` once hand-edited, `DOCUMENT_LOCKED` when locked)
-- `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` — delete one document: a live document is **soft-deleted** (moved to trash); an already-trashed document is **purged** for good (`409 DOCUMENT_LOCKED` when locked — FR-023)
-- `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/restore` — restore a trashed document (re-convert from `raw/`, re-index, clear `deleted_at`; `409 DOCUMENT_LOCKED` when locked, `404 DOCUMENT_NOT_FOUND` when not trashed)
+- `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` — delete one document (`409 DOCUMENT_LOCKED` when locked)
 - `POST /api/v1/knowledge_bases/{name}/reindex` — rescan + rebuild index from files
 - `POST /api/v1/knowledge_bases/{name}/search` — `{query, top_k?, mode?}` → ranked passages (+ `fallback`)
 - `POST /api/v1/knowledge_bases/{name}/grep` — `{pattern, max_matches?}` → file/line hits

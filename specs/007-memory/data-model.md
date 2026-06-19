@@ -87,7 +87,7 @@ Agents read and write memory only through the MCP gateway tools (`coffer__recall
 
 The redesign revision **drops** `memory_records` and any chroma/LlamaIndex dirs, then creates the unified `documents`-based schema shared with the KB. There is no data migration.
 
-The schema below is the **same unified schema** created by the KB redesign migration (spec 006 owns the migration; this is the memory view of it). The redesign revision **drops** `memory_records` and creates these tables. Two later additive migrations extend the shared `documents` table — `0025` (`locked`, ADR-028) and `0026` (`deleted_at`, ADR-030); the memory face uses **neither** column (it never locks a fact and `forget` is a hard delete, so `deleted_at` is always NULL for memory rows).
+The schema below is the **same unified schema** created by the KB redesign migration (spec 006 owns the migration; this is the memory view of it). The redesign revision **drops** `memory_records` and creates these tables.
 
 ```sql
 -- Shared across KB (kind='knowledge_base') and memory (kind='memory').
@@ -103,7 +103,6 @@ CREATE TABLE documents (
     content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
     source_mode    TEXT NOT NULL DEFAULT 'native', -- memory: 'native'
     locked         BOOLEAN NOT NULL DEFAULT 0,  -- KB co-management lock (ADR-028); memory ignores it
-    deleted_at     TIMESTAMP,                   -- KB soft-delete/trash (ADR-030); memory never sets it (forget is hard)
     created_at     TIMESTAMP NOT NULL,
     updated_at     TIMESTAMP NOT NULL,
     PRIMARY KEY (kind, resource_name, id)        -- composite (memory ULIDs are globally unique too)

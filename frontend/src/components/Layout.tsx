@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   Bot,
   Boxes,
+  Brain,
   MessageSquare,
   Library,
   PanelLeftClose,
@@ -66,9 +67,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server, end: true },
       { to: "/skills", labelKey: "nav.skills", icon: Sparkles, end: true },
-      // ONE unified 知识 entry (ADR-030) — replaces the split Knowledge-base +
-      // Memory entries. Prefix-match so /knowledge/:scopeId stays highlighted.
-      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library },
+      { to: "/knowledge-bases", labelKey: "nav.knowledgeBases", icon: Library, end: true },
+      { to: "/memory", labelKey: "nav.memory", icon: Brain, end: true },
     ],
   },
   {

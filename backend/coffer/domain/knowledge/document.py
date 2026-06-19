@@ -48,9 +48,4 @@ class Document:
     #: (edit / reconvert / re-upload replace / delete) until unlocked. Memory
     #: rows carry the ``False`` default and ignore it.
     locked: bool = False
-    #: KB recoverable soft-delete (ADR-030): ``None`` for a live document; set to
-    #: the deletion time when the document is in the trash. Live reads filter
-    #: ``deleted_at IS NULL``. Memory never tombstones (``forget`` is a hard
-    #: delete), so memory rows always carry ``None``.
-    deleted_at: datetime | None = None
     metadata: dict[str, object] = field(default_factory=dict)

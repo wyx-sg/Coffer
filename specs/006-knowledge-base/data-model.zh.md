@@ -50,8 +50,6 @@ frozen dataclass；一个 Markdown 文件一条，**按 `kind` 区分**。KB 与
 | `content_sha256`            | `str`         | **Markdown** 正文的哈希 —— reindex 的 no-op 闸门。                                                                       |
 | `source_mode`               | `str`         | `"converted"` 或 `"edited"`。                                                                                            |
 | `locked`                    | `bool`        | 为 `true` 时拒绝一切变更（编辑 / 重转换 / 替换 / 删除）（FR-021）。默认 `false`。                                        |
-| `project_id`                | `str`         | scope：`WORKSPACE_GLOBAL` 哨兵（全局）或一个项目 ULID（FR-022）。KB 现在会变化它；memory 本就变化它。                    |
-| `deleted_at`                | `datetime \| None` | 活动文档为 `None`；文档被软删除（在回收站——FR-023）时置值。读取过滤 `deleted_at IS NULL`。                          |
 | `metadata`                  | `dict`        | 按面区分的 JSON；KB 的 key 见下。                                                                                        |
 | `created_at` / `updated_at` | `datetime`    | UTC。                                                                                                                    |
 
@@ -85,13 +83,9 @@ class KnowledgeIndex(Protocol):
     async def upsert_chunks(self, document_id: str, chunks: Sequence[str],
                             vectors: Sequence[Sequence[float]] | None) -> int: ...
     async def delete_chunks(self, document_id: str) -> None: ...
-    async def keyword_search(self, resource_name: str, query: str, top_k: int,
-                             *, project_id: str | None = None) -> Sequence[Passage]: ...
-    async def vector_search(self, resource_name: str, vector: Sequence[float], top_k: int,
-                            *, project_id: str | None = None) -> Sequence[Passage]: ...
+    async def keyword_search(self, resource_name: str, query: str, top_k: int) -> Sequence[Passage]: ...
+    async def vector_search(self, resource_name: str, vector: Sequence[float], top_k: int) -> Sequence[Passage]: ...
 ```
-
-可选的 `project_id` 在 SQL 层把搜索限定到某个文档作用域（ADR-030）：keyword 在 FTS↔`documents` JOIN 上过滤，因此 `LIMIT k` 是精确的；vector 先多取 KNN（vec 表上没有 `project_id`）再在 JOIN 处过滤并截断。memory 传入其存储自身的作用域，故对它是空操作。
 
 grep 是独立的 `infrastructure/knowledge/grep.py` ripgrep 包装器（无索引），受 max-matches + 超时约束。
 
@@ -105,9 +99,9 @@ grep 是独立的 `infrastructure/knowledge/grep.py` ripgrep 包装器（无索�
 - `DocumentLocked` —— code `"DOCUMENT_LOCKED"`（HTTP 409）；任何变更（编辑 / 重转换 / 重新上传覆盖 / 删除）作用于 `locked` 文档时抛出（FR-021）。
 - `SearchModeInvalid` —— code `"SEARCH_MODE_INVALID"`（HTTP 400）；当搜索请求**显式**指定 `mode=grep`（grep 有自己的端点）或任何不在该 KB `enabled_modes` 里的显式模式时抛出。`vector` 是例外 —— 它降级为 keyword 并标注 fallback，而不是报错。
 
-## SQLite schema（统一基底 + `locked` 与 `deleted_at` 列）
+## SQLite schema（统一基底 + `locked` 列）
 
-基底迁移（`0006`）删除旧的 `kb_documents` / `memory_records` 表并创建下面的统一 schema（**没有数据迁移** —— 分支未发布）。后续两个追加迁移扩展 `documents`，各自由幂等的 `_has_column` 检查守护：`0025` 为共管锁加上 `locked` 列（FR-021）；`0026` 为可恢复软删除加上可空的 `deleted_at` 列（FR-023）。
+基底迁移（`0006`）删除旧的 `kb_documents` / `memory_records` 表并创建下面的统一 schema（**没有数据迁移** —— 分支未发布）。后续一个追加迁移（`0025`）为 `documents` 加上共管锁的 `locked` 列（FR-021），由幂等的 `_has_column` 检查守护。
 
 ```sql
 -- One row per Markdown file, shared by KB and memory, discriminated by `kind`.
@@ -115,14 +109,13 @@ CREATE TABLE documents (
     id              TEXT      NOT NULL,             -- ULID (KB + memory), minted at first ingest
     kind            TEXT      NOT NULL,             -- 'knowledge_base' | 'memory'
     resource_name   TEXT      NOT NULL,             -- KB name (or memory scope store name)
-    project_id      TEXT      NOT NULL,             -- WORKSPACE_GLOBAL sentinel (global) | project ULID (FR-022)
+    project_id      TEXT      NOT NULL,             -- WORKSPACE_GLOBAL sentinel (KB/global) | project ULID
     path            TEXT      NOT NULL,             -- relative path of the markdown file
     title           TEXT      NOT NULL,
     description     TEXT,
     content_sha256  TEXT      NOT NULL,             -- hash of the markdown body (reindex no-op gate)
     source_mode     TEXT      NOT NULL,             -- 'converted' | 'edited' (KB) | 'native' (memory)
     locked          BOOLEAN   NOT NULL DEFAULT 0,   -- co-management opt-out: blocks all mutations (FR-021)
-    deleted_at      TIMESTAMP,                      -- NULL = live; set = soft-deleted / in trash (FR-023)
     metadata        TEXT      NOT NULL DEFAULT '{}',-- JSON, per-face
     created_at      TIMESTAMP NOT NULL,
     updated_at      TIMESTAMP NOT NULL,
@@ -130,8 +123,6 @@ CREATE TABLE documents (
 );
 CREATE INDEX idx_documents_kind_res_time ON documents(kind, resource_name, updated_at DESC);
 CREATE INDEX idx_documents_project ON documents(project_id);
--- Live reads add a `deleted_at IS NULL` predicate; the trash view filters `deleted_at IS NOT NULL`.
--- No dedicated index: corpora are small (SC-002 ≤ 50 docs) so the filter rides the existing scans.
 -- KB dedup is on metadata->>'source_sha256'; enforced in the repo, not a SQL unique index,
 -- because memory rows have no source file.
 
@@ -169,9 +160,7 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 
 **为什么用 `(kind, resource_name, id)` 复合主键**：doc id 现在是全局唯一的 ULID（裸 `id` 本就唯一），但复合键让统一表在跨面/跨资源时无歧义，并让 `on_delete` 能把级联限定在单个资源内。同一源文件上传到两个 KB 是两个独立文档、两个 ULID（不跨 store 去重 —— ADR-028）。
 
-**为什么要 `project_id`**：memory 面按 project 给 store 定键（global 用 sentinel ULID，其余用 project ULID）。KB 行现在也携带一个真实的 scope（FR-022）：全局文档保留哨兵，项目文档携带 git-root 的项目 ULID。`idx_documents_project` 为两面服务于按 scope 过滤的读取。
-
-**为什么是 `deleted_at`（而非 `status` 枚举）**：它兼作回收站排序键以及恢复 / 审计 UX 的「何时」。一份被软删除的文档保留其行与 `raw/` 原件，但失去 `docs/<id>.md` + 索引行；恢复从 `raw/` 重新转换。读取时重建索引的扫描永不复活墓碑（重建分支需要一个已经没了的 `docs/<id>.md`；剪枝分支只读活动行）。共享 repo 的 `deleted_at IS NULL` 过滤对 memory 是 no-op（memory 从不打墓碑）。见 [ADR-030](../../docs/decisions/ADR-030-per-project-kb-scope-and-soft-delete.md)。
+**为什么要 `project_id`**：memory 面按 project 给 store 定键（global 用 sentinel ULID，其余用 project ULID）。KB 行携带 global sentinel —— 统一表需要这一列，让 memory 的 scope 查询有索引可用（`idx_documents_project`）。
 
 **级联在应用层**（kind 的 `on_delete` 钩子），不是外键：钩子删除该资源的 `documents`/`chunks`/`documents_fts`/`vec_chunks` 行，然后 `rmtree` 掉磁盘目录。
 
@@ -179,24 +168,23 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 
 `DocumentModel` 与 `ChunkModel`（`models.py`）映射到 `documents` / `chunks`，与其余模型注册在同一个 `Base.metadata` 上。`documents_fts` 经 `Base.metadata` 的 `after_create` DDL 钩子（`ddl.py`）创建，使 `create_all` 与迁移都会建出它。仓储面拆成两个模块以满足文件大小上限：
 
-`repository.py` —— `DocumentRepo`（document 行 CRUD）。读取默认过滤 `deleted_at IS NULL`（活动）；`deleted` / `include_deleted` 标志可选入回收站，可选的 `project_id` 按 scope 过滤（FR-022）：
+`repository.py` —— `DocumentRepo`（document 行 CRUD）：
 
-- `async upsert_document(d: Document) -> Document`（按 `(kind, resource_name, id)` 插入或更新；携带 `locked`、`project_id`、`deleted_at`）
-- `async list_documents(kind, resource_name, *, limit, offset, project_id=None, deleted=False) -> list[Document]`（`project_id=None` ⇒ 所有 scope；`deleted=True` ⇒ 回收站视图）
-- `async count_documents(kind, resource_name, *, project_id=None, deleted=False) -> int`
-- `async get_document(kind, resource_name, doc_id, *, include_deleted=False) -> Document | None`
-- `async find_by_filename(kind, resource_name, project_id, original_filename) -> Document | None`（在 `(kind, resource_name, project_id)` 内的重新上传匹配，仅活动行——墓碑永不阻挡重新 ingest）
+- `async upsert_document(d: Document) -> Document`（按 `(kind, resource_name, id)` 插入或更新；携带 `locked`）
+- `async list_documents(kind, resource_name, *, limit, offset) -> list[Document]`
+- `async count_documents(kind, resource_name) -> int`
+- `async get_document(kind, resource_name, doc_id) -> Document | None`
+- `async find_by_filename(kind, resource_name, project_id, original_filename) -> Document | None`（重新上传的匹配键——读 `metadata->>'original_filename'`；取代旧的 `exists_source` sha 查找）
 - `async set_locked(kind, resource_name, doc_id, locked) -> Document | None`（翻转锁；返回更新后的行）
-- `async soft_delete_document(kind, resource_name, doc_id) -> bool`（对活动行 UPDATE `deleted_at = now()`；该行 + `raw/` 被保留）
-- `async delete_document(kind, resource_name, doc_id) -> bool`（**硬**删除行——用于清除 + KB 清理）
+- `async delete_document(kind, resource_name, doc_id) -> bool`
 - `async delete_resource(kind, resource_name) -> int`
 
 `sqlite_index.py` —— `SqliteKnowledgeIndex`（chunk + FTS5 + 可选 vec），绑定到一个 `(kind, resource_name)`：
 
 - `async upsert_chunks(doc_id, chunks, vectors|None) -> int`（FTS5 + 可选 vec；替换既有行）
 - `async delete_chunks(doc_id) -> None`
-- `async keyword_search(resource_name, query, top_k, *, project_id=None) -> Sequence[Passage]`（bm25；`project_id` 通过 JOIN 限定作用域 —— ADR-030）
-- `async vector_search(resource_name, vector, top_k, *, project_id=None) -> Sequence[Passage]`（sqlite-vec KNN；通过多取 + JOIN 过滤限定作用域）
+- `async keyword_search(resource_name, query, top_k) -> Sequence[Passage]`（bm25）
+- `async vector_search(resource_name, vector, top_k) -> Sequence[Passage]`（sqlite-vec KNN）
 
 `vec_chunks` 的读写限定在 `infrastructure/knowledge/vec_index.py`（`sqlite_vec` 的唯一 importer）；chunk 文本删除 + FTS5 在 `sqlite_index.py`。应用层把这些仓储加上 `grep.py` 与 embedder 客户端（`infrastructure/knowledge/embeddings.py`）组合在共享检索门面 `KnowledgeRetrieval`（`application/knowledge/retrieval.py`）之后，由它持有 keyword↔vector 的决策（包括带标注的 vector→keyword 回退）。
 
@@ -207,25 +195,17 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 ├── coffer.db                       # resources / documents / chunks / documents_fts / vec_chunks / audit
 └── knowledge/
     └── <kb-name>/
-        ├── docs/                   # GLOBAL-scope documents
+        ├── docs/
         │   └── <doc-id>.md         # normalized markdown = truth (YAML frontmatter + body)
-        ├── raw/
-        │   └── <doc-id>.<ext>      # original upload (provenance / re-convert / restore)
-        └── projects/               # PER-PROJECT documents (FR-022)
-            └── <project-ulid>/
-                ├── docs/
-                │   └── <doc-id>.md
-                └── raw/
-                    └── <doc-id>.<ext>
+        └── raw/
+            └── <doc-id>.<ext>      # original upload (provenance / re-convert)
 ```
 
-逐项目子树镜像 memory 的 `global/` + `projects/<ulid>/` 切分（全局布局原地保留——向后兼容）。没有逐语料的 `index/`、`text/` 或 `chroma/` 目录 —— 所有索引都在 `coffer.db` 里。`infrastructure/knowledge/paths.py` 是**唯一**构造这些路径的模块；带 scope 的构造器接受一个可选的 `project_id`（默认 `WORKSPACE_GLOBAL` ⇒ 全局路径）：
+没有逐语料的 `index/`、`text/` 或 `chroma/` 目录 —— 所有索引都在 `coffer.db` 里。`infrastructure/knowledge/paths.py` 是**唯一**构造这些路径的模块：
 
 - `knowledge_root() -> Path` —— `~/.coffer/knowledge/`（测试可经 `COFFER_KNOWLEDGE_ROOT` 覆盖）
-- `kb_dir(name) -> Path` —— KB 根（与 scope 无关）
-- `docs_dir(name, project_id=WORKSPACE_GLOBAL) -> Path` / `raw_dir(name, project_id=WORKSPACE_GLOBAL) -> Path`
-- `doc_path(name, doc_id, project_id=WORKSPACE_GLOBAL) -> Path` / `raw_path(name, doc_id, ext, project_id=WORKSPACE_GLOBAL) -> Path`
-- 哨兵→全局 / ULID→`projects/<ulid>/` 的路由集中在一个辅助函数（镜像 memory 的 `memory_store_dir`）。git-root→ULID 的辅助函数（`git_root`、`project_ulid`）从 `infrastructure/memory/scope_fs.py` 移入共享的 `infrastructure/knowledge/scope_fs.py` 基底，使两面共用一份实现（不引入跨 kind 导入）。
+- `kb_dir(name) -> Path` / `docs_dir(name) -> Path` / `raw_dir(name) -> Path`
+- `doc_path(name, doc_id) -> Path` / `raw_path(name, doc_id, ext) -> Path`
 
 ### Markdown frontmatter
 
@@ -265,9 +245,7 @@ compute content_sha256 of the new markdown body
 
 | 动作                                | 效果                                                                                                                                                                                                      |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 删除一个活动 Document（软删除）     | 移除 `docs/<id>.md` + 其 `chunks`/`documents_fts`/`vec_chunks` 行；**保留** `raw/<id>.<ext>` + 置了 `deleted_at` 的 `documents` 行；审计 `KB_DOCUMENT_DELETED`。该文档离开所有活动读取。被锁则拒绝。（FR-023） |
-| 恢复一个回收站中的 Document         | 从保留的 `raw/<id>.<ext>` 重新转换；重新生成 `docs/<id>.md`；重新索引；清空 `deleted_at`；`source_mode` → `converted`；审计 `KB_DOCUMENT_RESTORED`。被锁则拒绝。                                          |
-| 清除一个回收站中的 Document         | 对已在回收站的文档执行删除：永久移除 `raw/<id>.<ext>` + `documents` 行；审计 `KB_DOCUMENT_PURGED`。被锁则拒绝。                                                                                            |
+| 删除一个 Document                   | 移除 `docs/<id>.md` + `raw/<id>.<ext>`；删除其 `chunks`/`documents_fts`/`vec_chunks` 行；删除 `documents` 行；审计 `KB_DOCUMENT_DELETED`。被锁则拒绝。                                                    |
 | 删除一个 KB                         | `on_delete` 钩子：`delete_resource(kind, name)`（documents + chunks + fts + vec）；`rmtree(kb_dir(name))`；删除 `resources` 行；审计 `RESOURCE_DELETED` 带 KB 快照。                                      |
 | 重命名 KB                           | 禁止（Resource 名不可变；框架强制）。                                                                                                                                                                     |
 | 修改 `chunk_size` / `chunk_overlap` | 允许 → 对语料 re-chunk + re-index。                                                                                                                                                                       |
@@ -286,9 +264,7 @@ compute content_sha256 of the new markdown body
 | ------------------------ | --------------------------------------------------- |
 | `"kb_document_ingested"` | 新文档首次索引后                                    |
 | `"kb_document_updated"`  | reindex 例程对变更文档重建索引后（编辑 / 重新上传） |
-| `"kb_document_deleted"`  | 文档软删除后（移入回收站）                          |
-| `"kb_document_restored"` | 回收站中的文档从保留的原件恢复后                    |
-| `"kb_document_purged"`   | 回收站中的文档被永久清除后（`raw/` + 行被移除）     |
+| `"kb_document_deleted"`  | 文档删除后                                          |
 | `"kb_document_locked"`   | 文档被锁定后                                        |
 | `"kb_document_unlocked"` | 文档被解锁后                                        |
 | `"kb_reindexed"`         | 一次完整 `coffer kb reindex` 后（携带逐文档计数）   |
@@ -314,14 +290,13 @@ KB 生命周期由 kind 无关核心的 `resource_created` / `resource_deleted` 
 - `POST /api/v1/knowledge_bases` —— 创建 KB
 - `GET /api/v1/knowledge_bases` —— 列出 KB
 - `GET /api/v1/knowledge_bases/{name}` —— 获取单个 KB
-- `POST /api/v1/knowledge_bases/{name}/documents` —— multipart 上传 + ingest（任意格式）；可选的 `project_id` 表单字段选择 scope（默认全局——FR-022）
-- `GET /api/v1/knowledge_bases/{name}/documents` —— 分页列表（每行携带绝对 `path` + 所在文件夹 `folder_path`）；可选的 `project_id` 查询参数按 scope 过滤，`deleted=true` 返回回收站（FR-022/FR-023）
+- `POST /api/v1/knowledge_bases/{name}/documents` —— multipart 上传 + ingest（任意格式）
+- `GET /api/v1/knowledge_bases/{name}/documents` —— 分页列表（每行携带绝对 `path` + 所在文件夹 `folder_path`）
 - `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 只读 markdown 正文 + frontmatter + 绝对 `path` + `folder_path`
 - `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 经 API 编辑 markdown（置 `source_mode=edited`，重建索引；被锁时 `409 DOCUMENT_LOCKED`）；UI 为只读，其余编辑经外部编辑器或 agent MCP 进行（由读取时惰性重建索引拾取）
 - `PATCH /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— `{locked: bool}` → 锁定 / 解锁文档（审计）
 - `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` —— 从 `raw/` 重跑转换（一旦手工编辑过即被 `RECONVERSION_BLOCKED` 拦截，被锁时 `DOCUMENT_LOCKED`）
-- `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 删除单个文档：活动文档被**软删除**（移入回收站）；已在回收站的文档被永久**清除**（被锁时 `409 DOCUMENT_LOCKED`——FR-023）
-- `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/restore` —— 恢复一个回收站中的文档（从 `raw/` 重新转换、重新索引、清空 `deleted_at`；被锁时 `409 DOCUMENT_LOCKED`，不在回收站时 `404 DOCUMENT_NOT_FOUND`）
+- `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 删除单个文档（被锁时 `409 DOCUMENT_LOCKED`）
 - `POST /api/v1/knowledge_bases/{name}/reindex` —— 重扫描 + 从文件重建索引
 - `POST /api/v1/knowledge_bases/{name}/search` —— `{query, top_k?, mode?}` → 排序 passage（+ `fallback`）
 - `POST /api/v1/knowledge_bases/{name}/grep` —— `{pattern, max_matches?}` → 文件/行命中

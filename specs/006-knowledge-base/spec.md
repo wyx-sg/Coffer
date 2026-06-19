@@ -5,7 +5,7 @@
 **Feature Branch**: `feature/kb-memory-redesign`
 **Created**: 2026-06-09
 **Status**: Accepted (redesign — in development)
-**Input**: A from-scratch redesign of the `knowledge_base` resource kind. A Knowledge Base is one face of a shared **knowledge substrate**: the user uploads files in **any format**, Coffer cleans and normalizes each to **Markdown on disk** (the source of truth), and serves them back over three retrieval modes (`grep`, `keyword`, `vector`). SQLite is a rebuildable index only. Documents are **co-managed by humans and agents** ([ADR-028](../../docs/decisions/ADR-028-knowledge-base-documents-co-managed.md)): both read AND write through Coffer's MCP gateway, every write is audited (F01), and a per-document **lock** opts an authoritative document out of all mutation. Documents live at **global or per-project scope** and deletion is a **recoverable soft-delete** (trash / restore) ([ADR-030](../../docs/decisions/ADR-030-per-project-kb-scope-and-soft-delete.md)) — together completing the unified 知识 model (知识 = 记忆 + 文档 × 全局 / 项目). See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) for the substrate rationale and [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) for architecture.
+**Input**: A from-scratch redesign of the `knowledge_base` resource kind. A Knowledge Base is one face of a shared **knowledge substrate**: the user uploads files in **any format**, Coffer cleans and normalizes each to **Markdown on disk** (the source of truth), and serves them back over three retrieval modes (`grep`, `keyword`, `vector`). SQLite is a rebuildable index only. Documents are **co-managed by humans and agents** ([ADR-028](../../docs/decisions/ADR-028-knowledge-base-documents-co-managed.md)): both read AND write through Coffer's MCP gateway, every write is audited (F01), and a per-document **lock** opts an authoritative document out of all mutation. See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) for the substrate rationale and [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) for architecture.
 
 ## User Scenarios & Testing
 
@@ -47,13 +47,13 @@ The developer's coding agent connects to Coffer's MCP endpoint and gets built-in
 
 ### User Story 4 — Curate the corpus: edit, reindex, re-embed (Priority: P2)
 
-The user fixes a conversion artifact by opening the document's Markdown in their own external editor (or via the edit API), then the change is picked up. They re-upload an updated version of a file under the same name and Coffer updates the **same document in place** (stable ULID id — no duplicate). They change chunk parameters or the embedding model and Coffer re-indexes/re-embeds the corpus. They **lock** an authoritative document so neither a human nor an agent can mutate it until it is unlocked. They **delete** a document and it goes to a recoverable **trash**; they can **restore** it later (re-converted from the kept original) or **purge** it for good. The Coffer UI renders the Markdown read-only — it never offers an in-app text editor — and instead offers affordances to open the document (or its containing folder) in the user's external editor, reveal it in the file manager, copy its absolute path, or toggle its lock. Once a document is edited (`source_mode = edited`), re-conversion from the raw original is blocked to avoid clobbering edits.
+The user fixes a conversion artifact by opening the document's Markdown in their own external editor (or via the edit API), then the change is picked up. They re-upload an updated version of a file under the same name and Coffer updates the **same document in place** (stable ULID id — no duplicate). They change chunk parameters or the embedding model and Coffer re-indexes/re-embeds the corpus. They **lock** an authoritative document so neither a human nor an agent can mutate it until it is unlocked. The Coffer UI renders the Markdown read-only — it never offers an in-app text editor — and instead offers affordances to open the document (or its containing folder) in the user's external editor, reveal it in the file manager, copy its absolute path, or toggle its lock. Once a document is edited (`source_mode = edited`), re-conversion from the raw original is blocked to avoid clobbering edits.
 
 **Why this priority**: A KB is curated over time; one-shot ingest is not enough. Not required to demonstrate the core value.
 
-**Independent Test**: Edit a doc's Markdown via the edit API (or by editing the on-disk file in an external editor), confirm the next read/search reflects the edit via lazy reindex-on-read; re-upload a changed version of the same file with `replace=true` and observe the SAME document id updated in place; lock the document and observe edits/deletes refused; delete a document, confirm it leaves the live list but appears in trash, restore it, and confirm it is searchable again; change the KB's chunk size and confirm the corpus is re-chunked and re-indexed.
+**Independent Test**: Edit a doc's Markdown via the edit API (or by editing the on-disk file in an external editor), confirm the next read/search reflects the edit via lazy reindex-on-read; re-upload a changed version of the same file with `replace=true` and observe the SAME document id updated in place; lock the document and observe edits/deletes refused; change the KB's chunk size and confirm the corpus is re-chunked and re-indexed.
 
-**Covering scenarios**: edit a document and reindex; external edit picked up by reindex-on-read; re-conversion blocked once edited; re-upload of an updated file updates the document in place; re-upload of an identical file is a no-op; a locked document rejects mutations; lock and unlock a document; restore a trashed document; reindex-on-read does not resurrect a trashed document; purge a trashed document permanently; changing chunk params re-indexes; changing embedding model re-embeds.
+**Covering scenarios**: edit a document and reindex; external edit picked up by reindex-on-read; re-conversion blocked once edited; re-upload of an updated file updates the document in place; re-upload of an identical file is a no-op; a locked document rejects mutations; lock and unlock a document; changing chunk params re-indexes; changing embedding model re-embeds.
 
 ---
 
@@ -66,18 +66,6 @@ The user manages KBs from the desktop UI under `Resources` and from `coffer kb �
 **Independent Test**: Create a KB in the UI, drag files in, search; from the terminal ingest a directory, grep, and read metrics as JSON.
 
 **Covering scenarios**: KB metrics report counts and disk usage; (UI/CLI flows deferred to e2e — see note).
-
----
-
-### User Story 6 — Scope documents to a project (Priority: P2)
-
-A developer keeps some documents **global** (shared across all their work) and others scoped to a specific **project** — the git checkout they are working in. Coffer derives the project from the working directory (git-root → a stable project ULID, the same identity the memory face uses) and stores that project's documents under a per-project subtree. The unified 知识 UI presents a 全局 / 项目 axis and lists each project by its readable name; within a scope, a project's notes (memory) and documents (KB) sit together. The same filename uploaded at two scopes is two independent documents.
-
-**Why this priority**: organizes a growing corpus and powers the unified 知识 project view; not required to demonstrate the single-scope core.
-
-**Independent Test**: Ingest `notes.md` at global scope, then ingest a different `notes.md` into a project scope (resolved from a git checkout path); observe two independent documents stored under `knowledge/<kb>/docs/` and `knowledge/<kb>/projects/<ulid>/docs/` respectively; list the project scope and see only its document; grep and search the project scope and get only its matches.
-
-**Covering scenarios**: ingest a document into a project scope; global and project documents are isolated; list documents filtered by scope; search is scoped to a project.
 
 ---
 
@@ -94,11 +82,6 @@ A developer keeps some documents **global** (shared across all their work) and o
 - **Re-conversion after edit**: Re-converting a document whose `source_mode == edited` is rejected; re-uploading a changed source (with `replace=true`) updates it in place and resets it to `converted`.
 - **Reindex of unchanged content**: Reindexing a document whose Markdown `content_sha256` is unchanged is a no-op.
 - **Concurrent searches**: Multiple searches against one KB run independently; no per-KB lock degrades read latency.
-- **Delete is recoverable**: Deleting a live document moves it to **trash** — its Markdown (`docs/<id>.md`) and index rows are removed but the original (`raw/`) and the row (with `deleted_at`) are kept; it leaves every live read. Deleting an **already-trashed** document **purges** it permanently (removes `raw/` + the row). A KB-level delete still hard-removes everything, including the trash.
-- **Restore loses body edits**: Restoring a trashed document re-converts it from the kept original (`source_mode` resets to `converted`), so a pre-deletion hand-edit is **not** recovered — there is no version history. To protect a curated/edited document, **lock** it (a locked document cannot be deleted at all).
-- **Reindex never resurrects trash**: The lazy reindex-on-read scan neither rebuilds a trashed document (its `docs/<id>.md` is gone) nor prunes its tombstone row (prune operates over live rows only). A trashed document stays trashed until restored or purged.
-- **Project scope with no git root**: An ingest whose reported `cwd` resolves to no git root (or that reports no `cwd`) falls back to **global** scope; the document is stored under `knowledge/<kb>/docs/`.
-- **Same filename across scopes**: The same filename ingested at global scope and at a project scope (or across two projects) yields independent documents — re-upload matching is scoped to `(kb, project)`.
 
 ## Acceptance Scenarios
 
@@ -179,8 +162,8 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 ### Scenario: delete a single document
 
 - **Given** a KB has documents,
-- **When** the user deletes one live document by id,
-- **Then** it is soft-deleted: `docs/<doc-id>.md` and its chunks/FTS5/vec rows are removed, the original `raw/<doc-id>.<ext>` and the `documents` row are KEPT with `deleted_at` set, audit `KB_DOCUMENT_DELETED` is recorded, and list/search no longer return it.
+- **When** the user deletes one document by id,
+- **Then** the `docs/<doc-id>.md` and `raw/<doc-id>.<ext>` files are removed, its chunks/FTS5/vec rows are deleted, the `documents` row is removed, audit `KB_DOCUMENT_DELETED` is recorded, and search no longer returns it.
 
 ### Scenario: delete a knowledge base cleans up files and index
 
@@ -228,7 +211,7 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 - **Given** a document exists in a KB,
 - **When** the client calls `coffer__delete_document(kb, doc_id)`,
-- **Then** the document is soft-deleted (moved to the recoverable trash), audit `KB_DOCUMENT_DELETED` is recorded with the agent as actor, and search no longer returns it.
+- **Then** the document's files and index rows are removed, audit `KB_DOCUMENT_DELETED` is recorded with the agent as actor, and search no longer returns it.
 
 ### Scenario: an agent write to a locked document is refused
 
@@ -273,48 +256,6 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 - **Then** Coffer requests one embedding and reports success with the returned
   vector dimension, or a humanized failure message, without persisting anything.
 
-### Scenario: restore a trashed document
-
-- **Given** a document that has been soft-deleted (in the trash, its original kept in `raw/`),
-- **When** the user restores it,
-- **Then** Coffer re-converts it from the kept original, regenerates `docs/<doc-id>.md`, re-indexes it, clears `deleted_at` (`source_mode` resets to `converted`), records audit `KB_DOCUMENT_RESTORED`, and the document is searchable again.
-
-### Scenario: reindex-on-read does not resurrect a trashed document
-
-- **Given** a soft-deleted document (no `docs/<doc-id>.md`, `raw/` kept, row tombstoned with `deleted_at`),
-- **When** the KB is read or searched (triggering the lazy reindex-on-read scan),
-- **Then** the scan neither rebuilds the document nor prunes its tombstone row; the document stays in the trash and out of every live read.
-
-### Scenario: purge a trashed document permanently
-
-- **Given** a document already in the trash,
-- **When** the user deletes it again (purge),
-- **Then** its `raw/<doc-id>.<ext>` original and its `documents` row are removed for good, audit `KB_DOCUMENT_PURGED` is recorded, and it no longer appears in the trash.
-
-### Scenario: ingest a document into a project scope
-
-- **Given** a knowledge base exists,
-- **When** the user uploads a file under a resolved project scope (a project ULID),
-- **Then** the document is stored under `knowledge/<kb>/projects/<ulid>/docs/` + `raw/`, its `documents` row carries that `project_id`, and it is searchable within that scope.
-
-### Scenario: global and project documents are isolated
-
-- **Given** the same filename ingested once at global scope and once into a project scope,
-- **When** the documents are listed,
-- **Then** they are two independent documents with distinct ids, stored under `knowledge/<kb>/docs/` and `knowledge/<kb>/projects/<ulid>/docs/` respectively (re-upload matching is scoped to `(kb, project)`).
-
-### Scenario: list documents filtered by scope
-
-- **Given** a KB with both global and project-scoped documents,
-- **When** the user lists documents for a specific scope (global or a project ULID),
-- **Then** only that scope's documents are returned.
-
-### Scenario: search is scoped to a project
-
-- **Given** a KB with documents in two different scopes,
-- **When** the user searches (keyword/vector) or greps within one project scope,
-- **Then** only that scope's passages / file matches are returned.
-
 > **Deferred to future test work** (frontend Playwright + full-CLI e2e): create/upload/search/delete a KB through the desktop app; CLI covers every desktop operation; CLI search/grep return machine-readable JSON. Listed for completeness; `make verify-acceptance` does not gate on them.
 
 ## Requirements
@@ -325,14 +266,14 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 - **FR-001**: System MUST support the resource kind `knowledge_base` on the shared knowledge substrate; users MUST create, list, view, update (description + retrieval config), enable, disable, and delete KBs through the kind-agnostic Resource framework.
 - **FR-002**: System MUST validate each KB's config (enabled retrieval modes, chunk size/overlap, embedding provider/model/base_url/credential_ref) against a Pydantic schema by `kind`, reject duplicate names, and persist nothing on failure.
-- **FR-003**: System MUST store each KB under `~/.coffer/knowledge/<name>/`. **Global** documents keep normalized Markdown at `docs/<doc-id>.md` (source of truth) and the original at `raw/<doc-id>.<ext>` (provenance); **project-scoped** documents live under a per-project subtree at `projects/<project-ulid>/docs/<doc-id>.md` + `projects/<project-ulid>/raw/<doc-id>.<ext>` (FR-022). There are NO per-corpus `index/`/`chroma/` directories — all indexing lives in `coffer.db`.
+- **FR-003**: System MUST store each KB under `~/.coffer/knowledge/<name>/` with normalized Markdown at `docs/<doc-id>.md` (source of truth) and the original at `raw/<doc-id>.<ext>` (provenance). There are NO per-corpus `index/`/`chroma/` directories — all indexing lives in `coffer.db`.
 
 **Ingestion & conversion**
 
 - **FR-004**: Users MUST be able to upload a file of any supported format; the system MUST detect format, convert to Markdown via a pluggable `MarkdownConverter` port, clean the output, prepend YAML frontmatter, write `docs/`+`raw/`, and index it.
 - **FR-005**: Conversion MUST dispatch through a per-format converter registry confined to `infrastructure/`: Markdown/text/source files pass through unchanged, `csv` has a dedicated converter, and everything else (pdf / docx / pptx / xlsx / html / epub / odt / rtf / …) goes through the default MarkItDown engine. A higher-fidelity engine for a format is a new converter in the registry, not a substrate change.
 - **FR-006**: System MUST reject files over `max_document_bytes` (default 25 MB, configurable), files of unsupported type, and files whose conversion yields empty Markdown.
-- **FR-007**: Each document MUST be identified by a **stable ULID** minted at first ingest (not a content hash). The system MUST compute `source_sha256` of the original (kept in `metadata` as provenance) and match a re-upload to an existing document by `original_filename` within the store's resolved scope `(kb, project_id)`: a **byte-identical** re-upload is an idempotent no-op; a **changed** re-upload of a filename already present updates the **same document in place** (reuse the id) only when `replace=true`, otherwise it is rejected (`duplicate`); a **new** filename is a new document. The same filename across two scopes (global vs a project, or two projects), or into two different KBs, yields independent documents — KB documents are not deduplicated across stores or scopes.
+- **FR-007**: Each document MUST be identified by a **stable ULID** minted at first ingest (not a content hash). The system MUST compute `source_sha256` of the original (kept in `metadata` as provenance) and match a re-upload to an existing document by `original_filename` within the store: a **byte-identical** re-upload is an idempotent no-op; a **changed** re-upload of a filename already present updates the **same document in place** (reuse the id) only when `replace=true`, otherwise it is rejected (`duplicate`); a **new** filename is a new document. Re-uploading the SAME file (same name) into two different KBs yields two independent documents (KB documents are not deduplicated across stores).
 
 **Storage as source of truth**
 
@@ -364,19 +305,14 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 **Surfaces**
 
-- **FR-019**: Users MUST be able to perform every KB operation through (a) a REST API under `/api/v1/knowledge_bases/`, (b) `coffer kb …` subcommands (including `coffer kb trash` to list the trash and `coffer kb restore` to recover a document), and (c) a desktop UI. In the UI, KB documents are presented through the unified **知识** navigation — the 全局 / 项目 scope axis with notes (memory) and documents (KB) intermixed (see 007) — rather than a standalone Knowledge Base page; the trash (list / restore / purge) and per-project scope are reachable from that surface.
+- **FR-019**: Users MUST be able to perform every KB operation through (a) a REST API under `/api/v1/knowledge_bases/`, (b) `coffer kb …` subcommands, and (c) a desktop UI under the existing `Resources` navigation.
 - **FR-020**: The UI document viewer MUST render the Markdown **read-only** — it MUST NOT offer an in-app text editor for document content (humans edit via the external editor or the edit API; agents via MCP). Instead, at both file and containing-folder granularity, the viewer MUST offer affordances to **open in external editor**, **reveal in file manager / Finder**, and **copy the absolute path**, plus a **lock / unlock toggle** (FR-021) and a `locked` badge. On desktop (Tauri) open/reveal perform the real OS action (open/reveal honouring the global preferred-editor preference specced in `002-ui-shell`); on the web client, where the daemon cannot act on the user's machine, the open/reveal affordance falls back to copy-path. To support these affordances, read API responses (FR/§Wire) MUST surface the document's absolute on-disk path, its containing folder's absolute path, and its `locked` flag.
 - **FR-021**: Each document MUST carry a `locked` flag (default `false`). While a document is locked, every mutation — edit (API or MCP), reconvert, re-upload replace, and delete (API or MCP) — MUST be refused with `DOCUMENT_LOCKED` (409) for human and agent callers alike; only locking/unlocking and reads are permitted. The lock is the per-document opt-out from co-management (ADR-028). Lock and unlock transitions MUST be audited (`KB_DOCUMENT_LOCKED` / `KB_DOCUMENT_UNLOCKED`).
-
-**Scope & recoverable delete** ([ADR-030](../../docs/decisions/ADR-030-per-project-kb-scope-and-soft-delete.md))
-
-- **FR-022**: Each document MUST be scoped to either **global** (the `WORKSPACE_GLOBAL` sentinel `project_id`) or a **project** (a stable project ULID derived from a git-root path — the same `project_ulid` the memory face uses), carried in the `documents.project_id` column. Project-scoped documents MUST be stored under `knowledge/<name>/projects/<project-ulid>/{docs,raw}/`; global documents under `knowledge/<name>/{docs,raw}/`. Ingest MUST resolve scope from an explicit `project_id` (REST / UI) or from the caller's reported `cwd` (agent MCP: git-root → ULID), defaulting to **global** when unresolvable. List, read, grep, and keyword / vector search MUST be scoped to a resolved `project_id`; re-upload identity (FR-007) is scoped to `(kb, project_id)`.
-- **FR-023**: Deleting a **live** document MUST be a recoverable **soft-delete**: remove `docs/<doc-id>.md` and its index rows (chunks / FTS5 / vec) but KEEP `raw/<doc-id>.<ext>` and the `documents` row with a non-null `deleted_at`; the document leaves every live read (list / get / search / grep / metrics / re-upload match — all filtering `deleted_at IS NULL`) and audits `KB_DOCUMENT_DELETED`. **Restore** MUST re-convert the document from the kept original, regenerate `docs/`, re-index, clear `deleted_at` (resetting `source_mode` to `converted`), and audit `KB_DOCUMENT_RESTORED`. Deleting an **already-trashed** document MUST **purge** it (remove `raw/` + the row, audit `KB_DOCUMENT_PURGED`). A **locked** document (FR-021) cannot be soft-deleted, purged, or restored. The lazy reindex-on-read scan (FR-008a) MUST NOT resurrect a tombstone nor prune its row. (A KB-level delete remains a hard cleanup of all documents, including the trash.)
 
 ### Key Entities
 
 - **Knowledge Base** (resource of kind `knowledge_base`): config = enabled retrieval modes, chunk size/overlap, embedding provider/model/base_url/credential_ref, max document bytes, description.
-- **Document** (unified `documents` row, `kind="knowledge_base"`): doc id (stable ULID), KB resource name, on-disk path, title, description, `content_sha256`, `source_mode`, `locked` flag, `project_id` (global sentinel or a project ULID — FR-022), `deleted_at` (null unless trashed — FR-023), per-face `metadata` (`original_filename`, `original_format`, `source_sha256`, `converted_at`, `conversion_engine`), timestamps.
+- **Document** (unified `documents` row, `kind="knowledge_base"`): doc id (stable ULID), KB resource name, on-disk path, title, description, `content_sha256`, `source_mode`, `locked` flag, per-face `metadata` (`original_filename`, `original_format`, `source_sha256`, `converted_at`, `conversion_engine`), timestamps.
 - **Chunk** (`chunks` row): position within a document. The chunk text is stored once inside the regular FTS5 index (`documents_fts`), not duplicated into a base SQLite table; it remains rebuildable from the Markdown files, which stay the source of truth.
 - **Passage** (retrieval result, not persisted): passage text, source doc id, title, score, position.
 - **Grep hit** (retrieval result, not persisted): path, line number, line.
@@ -392,8 +328,6 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 - **SC-005**: `coffer kb reindex <name>` rebuilds all SQLite index state for the KB purely from the Markdown files (drop the rows, reindex, search returns identical results).
 - **SC-006**: Every Acceptance Scenario is covered by at least one `acceptance(spec="006-knowledge-base", scenario="…")` test; `make verify-acceptance` reports zero uncovered scenarios.
 - **SC-007**: Engine isolation holds: no module under `coffer.application.*` or `coffer.domain.*` imports `markitdown`, `docling`, `sqlite_vec`, or an embedding-provider SDK (importlinter contract).
-- **SC-008**: A deleted document is recoverable: after delete → restore, the document is searchable again with its original content; a reindex-on-read performed while the document is in the trash does NOT resurrect it (verified by a test that deletes, reindexes, asserts absence, then restores and asserts presence).
-- **SC-009**: Scopes are isolated: a document ingested into one scope (global or a specific project ULID) never appears in another scope's list, search, or grep; the same filename ingested at two scopes is two independent documents.
 
 ## Assumptions
 
@@ -407,5 +341,5 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 - **Shared substrate**: `documents`/`chunks`/FTS5/sqlite-vec and the converter port are shared with spec 007 (memory). This spec owns the KB face (any-format→Markdown, three-mode read, human+agent co-managed writes — ADR-028); 007 owns the memory face. Keep the substrate description in sync across both specs; architecture lives in the constitution and the redesign ADR, not restated here.
 - **Embedding default**: vector is opt-in; the zero-config default is `keyword`+`grep` (offline, language-agnostic). For bilingual corpora a local `bge-m3` or a cloud provider is recommended (English-only small models embed Chinese poorly).
-- **Co-management (ADR-028 + ADR-030)**: documents are co-managed by humans and agents. The co-management **core** (stable ULID identity + re-upload-updates-in-place (FR-007), agent MCP write tools (FR-017), the per-document lock (FR-021)) shipped at global scope under ADR-028. This unified-知识 slice completes it under [ADR-030](../../docs/decisions/ADR-030-per-project-kb-scope-and-soft-delete.md): **per-project document scope** (the 全局/项目 axis — FR-022) and a **recoverable soft-delete** (trash / restore / purge — FR-023), both surfaced through the unified 知识 UI (FR-019). Per-project scope reuses the memory face's `project_ulid`; the soft-delete `deleted_at IS NULL` filter is shared with the memory face but is a no-op for memory rows (memory never tombstones).
-- **Deferred**: reranking / HyDE / multi-query / LLM synthesis on retrieval; an in-app Markdown editor (the viewer stays read-only with external-editor affordances — FR-020); image OCR by default; a filesystem watcher on by default; trash auto-expiry (purge is explicit; a KB-delete clears the trash).
+- **Co-management (ADR-028)**: documents are co-managed by humans and agents. This spec slice ships the co-management core at **global scope** — stable ULID identity + re-upload-updates-in-place (FR-007), agent MCP write tools (FR-017), and the per-document lock (FR-021). Two related pieces land with the later unified-知识 UI slice that surfaces them: **per-project document scope** (the 全局/项目 axis, co-dependent with that UI) and a **recoverable soft-delete** (trash/restore, which needs its own UI — for now delete is a hard delete with an F01 audit trail, and the lock guards curated documents).
+- **Deferred**: reranking / HyDE / multi-query / LLM synthesis on retrieval; per-project KB document scope and recoverable soft-delete (next slice, above); an in-app Markdown editor (the viewer stays read-only with external-editor affordances); image OCR by default; a filesystem watcher on by default.

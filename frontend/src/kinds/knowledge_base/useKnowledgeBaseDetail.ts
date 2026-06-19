@@ -51,7 +51,7 @@ export function useKnowledgeBaseDetail(name: string) {
   const [docLimit, setDocLimit] = useState(DOCS_PAGE_SIZE);
   const docsQuery = useQuery({
     queryKey: ["kb-documents", name, docLimit],
-    queryFn: () => listDocuments(name, { limit: docLimit, offset: 0 }),
+    queryFn: () => listDocuments(name, docLimit, 0),
     enabled: Boolean(name),
   });
   const loadMoreDocuments = () => setDocLimit((n) => n + DOCS_PAGE_SIZE);
@@ -81,7 +81,7 @@ export function useKnowledgeBaseDetail(name: string) {
 
   const ingest = useMutation({
     mutationFn: (input: { file: File; replace: boolean }) =>
-      ingestDocument(name, input.file, { replace: input.replace }),
+      ingestDocument(name, input.file, input.replace),
     onSuccess: (doc) => {
       setLastFile(null);
       setSelectedId(doc.id);
