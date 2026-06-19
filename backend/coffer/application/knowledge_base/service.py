@@ -39,6 +39,7 @@ from coffer.application.knowledge_base.pipeline_helpers import (
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
+    DocumentLocked,
     DocumentNotFound,
     KBNotFound,
     ReconversionBlocked,
@@ -116,20 +117,27 @@ class KnowledgeBaseService:
         actor: str,
         replace: bool = False,
     ) -> Document:
-        """Ingest one uploaded file: size check → source dedup → convert →
-        clean → frontmatter → write ``docs/``+``raw/`` → reindex → audit."""
+        """Ingest one uploaded file: size check → convert → clean → frontmatter →
+        write ``docs/``+``raw/`` → reindex → audit. A re-upload is matched to an
+        existing document by filename (ADR-028): identical bytes are a no-op, a
+        changed file updates that document in place (``replace``)."""
         config = await self.get_kb_config(kb_name)
-        doc, replaced = await self._pipeline.ingest(
+        doc, status = await self._pipeline.ingest(
             kb_name=kb_name,
             filename=filename,
             raw_bytes=raw_bytes,
             config=config,
             replace=replace,
         )
-        # A replace overwrite of an existing source is an UPDATE in the audit
-        # trail (FR-016), not a second ingest.
+        # A byte-identical re-upload is an idempotent no-op — nothing changed, so
+        # nothing is audited (FR-007). A changed re-upload of an existing filename
+        # is an UPDATE in the audit trail (FR-016), not a second ingest.
+        if status == "unchanged":
+            return doc
         event = (
-            AuditEventType.KB_DOCUMENT_UPDATED if replaced else AuditEventType.KB_DOCUMENT_INGESTED
+            AuditEventType.KB_DOCUMENT_UPDATED
+            if status == "updated"
+            else AuditEventType.KB_DOCUMENT_INGESTED
         )
         await self._audit.record(
             event.value,
@@ -150,6 +158,7 @@ class KnowledgeBaseService:
         reindex → audit ``KB_DOCUMENT_UPDATED``."""
         config = await self.get_kb_config(kb_name)
         doc = await self._require_document(kb_name, document_id)
+        self._ensure_unlocked(kb_name, doc)
         updated = await self._pipeline.edit(
             kb_name=kb_name, doc=doc, new_markdown=new_markdown, config=config
         )
@@ -194,6 +203,7 @@ class KnowledgeBaseService:
         """Re-convert a document from its raw original (blocked once edited)."""
         config = await self.get_kb_config(kb_name)
         doc = await self._require_document(kb_name, document_id)
+        self._ensure_unlocked(kb_name, doc)
         if doc.source_mode == "edited":
             raise ReconversionBlocked(kb_name, document_id)
         updated = await self._pipeline.reconvert(kb_name=kb_name, doc=doc, config=config)
@@ -208,6 +218,7 @@ class KnowledgeBaseService:
     async def delete_document(self, *, kb_name: str, document_id: str, actor: str) -> None:
         await self.get_kb_config(kb_name)
         doc = await self._require_document(kb_name, document_id)
+        self._ensure_unlocked(kb_name, doc)
         await self._pipeline.delete(kb_name=kb_name, doc=doc)
         await self._audit.record(
             AuditEventType.KB_DOCUMENT_DELETED.value,
@@ -215,6 +226,29 @@ class KnowledgeBaseService:
             actor=actor,
             details={"document_id": document_id, "title": doc.title},
         )
+
+    async def set_document_lock(
+        self, *, kb_name: str, document_id: str, locked: bool, actor: str
+    ) -> Document:
+        """Lock or unlock a document (ADR-028). A locked document refuses every
+        mutation (edit / reconvert / re-upload replace / delete) until unlocked;
+        lock/unlock itself is always allowed. Idempotent: setting the lock to its
+        current value is a no-op (no audit)."""
+        await self.get_kb_config(kb_name)
+        doc = await self._require_document(kb_name, document_id)
+        if doc.locked == locked:
+            return doc
+        # Persist through the pipeline so the flag lands in BOTH the row and the
+        # on-disk frontmatter (files are truth — a files-only rebuild restores it).
+        updated = await self._pipeline.set_lock(kb_name=kb_name, doc=doc, locked=locked)
+        event = AuditEventType.KB_DOCUMENT_LOCKED if locked else AuditEventType.KB_DOCUMENT_UNLOCKED
+        await self._audit.record(
+            event.value,
+            ref=ResourceRef(KIND_KNOWLEDGE_BASE, kb_name),
+            actor=actor,
+            details={"document_id": document_id},
+        )
+        return updated
 
     # ----- reads -----
 
@@ -335,6 +369,11 @@ class KnowledgeBaseService:
         if doc is None:
             raise DocumentNotFound(kb_name, document_id)
         return doc
+
+    def _ensure_unlocked(self, kb_name: str, doc: Document) -> None:
+        """Refuse a mutation on a locked document (ADR-028 / FR-021)."""
+        if doc.locked:
+            raise DocumentLocked(kb_name, doc.id)
 
 
 __all__ = ["DocumentRepoPort", "KnowledgeBaseService", "chunker_for"]

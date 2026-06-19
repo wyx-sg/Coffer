@@ -72,6 +72,9 @@ class AuditEventType(StrEnum):
     KB_DOCUMENT_INGESTED = "kb_document_ingested"
     KB_DOCUMENT_UPDATED = "kb_document_updated"
     KB_DOCUMENT_DELETED = "kb_document_deleted"
+    # documents co-managed (ADR-028): per-document lock transitions
+    KB_DOCUMENT_LOCKED = "kb_document_locked"
+    KB_DOCUMENT_UNLOCKED = "kb_document_unlocked"
     KB_REINDEXED = "kb_reindexed"
     # memory kind (spec 007)
     MEMORY_ADDED = "memory_added"

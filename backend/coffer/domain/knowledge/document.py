@@ -44,4 +44,8 @@ class Document:
     updated_at: datetime
     description: str | None = None
     project_id: str = WORKSPACE_GLOBAL_PROJECT_ID
+    #: KB co-management lock (ADR-028): a locked document refuses every mutation
+    #: (edit / reconvert / re-upload replace / delete) until unlocked. Memory
+    #: rows carry the ``False`` default and ignore it.
+    locked: bool = False
     metadata: dict[str, object] = field(default_factory=dict)

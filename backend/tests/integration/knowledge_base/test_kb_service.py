@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.domain.errors import IngestRejected, ReconversionBlocked
+from coffer.domain.errors import DocumentLocked, IngestRejected, ReconversionBlocked
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge import paths
 
@@ -68,14 +68,56 @@ async def test_ingest_rejects_unsupported_type(kb) -> None:
     assert exc.value.reason == "unsupported_type"
 
 
-async def test_ingest_dedup_blocks_without_replace(kb) -> None:
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="re-upload of an identical file is a no-op"
+)
+async def test_reupload_identical_file_is_noop(kb) -> None:
     await kb.create_kb("kb1")
-    await _ingest(kb, "kb1", "a.md", b"# Hello\n\nworld")
+    first = await _ingest(kb, "kb1", "a.md", b"# Hello\n\nworld")
+    # A byte-identical re-upload (matched by filename) is an idempotent no-op:
+    # same document id, still one document, no error — no replace flag needed.
+    again = await _ingest(kb, "kb1", "a.md", b"# Hello\n\nworld")
+    assert again.id == first.id
+    assert await kb.documents.count_documents("knowledge_base", "kb1") == 1
+    # The no-op re-uploads NOTHING, so no second audit event is recorded.
+    events = await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
+    types = [e.event_type for e in events]
+    assert types.count("kb_document_ingested") == 1
+    assert "kb_document_updated" not in types
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base",
+    scenario="re-upload of an updated file updates the document in place",
+)
+async def test_reupload_updated_file_updates_in_place(kb) -> None:
+    await kb.create_kb("kb1")
+    first = await _ingest(kb, "kb1", "a.md", b"# Hello\n\noriginal apple body")
+    # A CHANGED re-upload of the same filename is rejected without replace=true,
     with pytest.raises(IngestRejected) as exc:
-        await _ingest(kb, "kb1", "a.md", b"# Hello\n\nworld")
+        await _ingest(kb, "kb1", "a.md", b"# Hello\n\nchanged banana body")
     assert exc.value.reason == "duplicate"
-    # replace=true succeeds.
-    await _ingest(kb, "kb1", "a.md", b"# Hello\n\nworld", replace=True)
+    # ...and updates the SAME document in place with replace=true (no duplicate).
+    updated = await _ingest(kb, "kb1", "a.md", b"# Hello\n\nchanged banana body", replace=True)
+    assert updated.id == first.id
+    assert updated.source_mode == "converted"
+    assert await kb.documents.count_documents("knowledge_base", "kb1") == 1
+    # New content searchable; old content gone.
+    assert (await kb.service.search(kb_name="kb1", query="apple", top_k=5)).passages == ()
+    assert len((await kb.service.search(kb_name="kb1", query="banana", top_k=5)).passages) == 1
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="ingest converts any format to markdown"
+)
+async def test_doc_id_is_ulid_not_content_hash(kb) -> None:
+    """ADR-028: the doc id is a stable ULID (26-char Crockford base32), not the
+    source sha256 prefix; the sha is kept in metadata as provenance only."""
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\nbody")
+    assert len(doc.id) == 26
+    assert doc.id != doc.metadata["source_sha256"][:16]
+    assert doc.metadata["source_sha256"]  # provenance retained
 
 
 @pytest.mark.acceptance(spec="006-knowledge-base", scenario="list documents in a knowledge base")
@@ -263,16 +305,16 @@ async def test_delete_document_removes_files_and_rows(kb) -> None:
 
 
 async def test_same_file_in_two_kbs_keeps_both_searchable(kb) -> None:
-    """Doc ids are content-addressed (sha256[:16] of the file), so the same
-    file in two KBs shares one id. The second ingest must not corrupt the first
-    KB's index, and deleting the doc from one KB must not wipe the other's
-    chunks (P0: cross-KB chunk-id collision)."""
+    """Doc ids are stable ULIDs (ADR-028), so the same file uploaded into two
+    KBs gets two distinct ids — no cross-store dedup. The second ingest must not
+    corrupt the first KB's index, and deleting the doc from one KB must not wipe
+    the other's chunks (per-store chunk-id namespacing)."""
     await kb.create_kb("kb1")
     await kb.create_kb("kb2")
     payload = b"# Mango\n\nshared mango facts"
     doc1 = await _ingest(kb, "kb1", "mango.md", payload)
     doc2 = await _ingest(kb, "kb2", "mango.md", payload)
-    assert doc1.id == doc2.id  # content-addressed: same file => same doc id
+    assert doc1.id != doc2.id  # stable ULIDs: independent documents per store
 
     assert (await kb.service.search(kb_name="kb1", query="mango", top_k=5)).passages
     assert (await kb.service.search(kb_name="kb2", query="mango", top_k=5)).passages
@@ -455,16 +497,18 @@ async def test_list_documents_offset_past_total(kb) -> None:
 
 
 async def test_replace_reupload_audits_document_updated(kb) -> None:
-    """FR-016: a replace re-upload of an existing source is an UPDATE in the
-    audit trail, not a second INGEST (review: audit can't distinguish them)."""
+    """FR-016: a changed replace re-upload of an existing filename is an UPDATE
+    in the audit trail, not a second INGEST (and a byte-identical no-op re-upload
+    audits nothing)."""
     await kb.create_kb("kb1")
-    await _ingest(kb, "kb1", "a.md", b"# A\n\naudited body")
-    await _ingest(kb, "kb1", "a.md", b"# A\n\naudited body", replace=True)
+    await _ingest(kb, "kb1", "a.md", b"# A\n\noriginal audited body")
+    await _ingest(kb, "kb1", "a.md", b"# A\n\noriginal audited body")  # identical → no-op
+    await _ingest(kb, "kb1", "a.md", b"# A\n\nchanged audited body", replace=True)
 
     events = await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
     types = [e.event_type for e in events]
-    assert types.count("kb_document_ingested") == 1
-    assert "kb_document_updated" in types
+    assert types.count("kb_document_ingested") == 1  # the no-op did not re-audit
+    assert types.count("kb_document_updated") == 1
 
 
 async def test_reindex_prunes_rows_whose_file_was_removed(kb) -> None:
@@ -482,3 +526,76 @@ async def test_reindex_prunes_rows_whose_file_was_removed(kb) -> None:
     assert await kb.documents.get_document("knowledge_base", "kb1", gone.id) is None
     assert await kb.documents.get_document("knowledge_base", "kb1", keep.id) is not None
     assert (await kb.service.search(kb_name="kb1", query="vanishing", top_k=5)).passages == ()
+
+
+@pytest.mark.acceptance(spec="006-knowledge-base", scenario="a locked document rejects mutations")
+async def test_locked_document_rejects_mutations(kb) -> None:
+    """FR-021/ADR-028: a locked document refuses edit, reconvert, re-upload
+    replace, and delete — for every caller — until it is unlocked."""
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\nlocked body")
+    locked = await kb.service.set_document_lock(
+        kb_name="kb1", document_id=doc.id, locked=True, actor="user"
+    )
+    assert locked.locked is True
+
+    with pytest.raises(DocumentLocked):
+        await kb.service.edit_document(
+            kb_name="kb1", document_id=doc.id, new_markdown="# A\n\nhacked", actor="user"
+        )
+    with pytest.raises(DocumentLocked):
+        await kb.service.reconvert_document(kb_name="kb1", document_id=doc.id, actor="user")
+    with pytest.raises(DocumentLocked):
+        await _ingest(kb, "kb1", "a.md", b"# A\n\nchanged body", replace=True)
+    with pytest.raises(DocumentLocked):
+        await kb.service.delete_document(kb_name="kb1", document_id=doc.id, actor="user")
+
+    # The document is unchanged and still present.
+    assert await kb.documents.count_documents("knowledge_base", "kb1") == 1
+    assert len((await kb.service.search(kb_name="kb1", query="locked", top_k=5)).passages) == 1
+
+
+async def test_locked_survives_db_loss_rebuild(kb) -> None:
+    """FR-021 + files-are-truth (FR-008): the lock is persisted in the document's
+    frontmatter, so a full DB loss + reindex-from-files restores it LOCKED — it
+    does not silently unlock (review finding)."""
+    from sqlalchemy import text
+
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\ncurated body")
+    await kb.service.set_document_lock(kb_name="kb1", document_id=doc.id, locked=True, actor="user")
+
+    async with kb.sm() as session:
+        await session.execute(text("DELETE FROM documents_fts"))
+        await session.execute(text("DELETE FROM chunks"))
+        await session.execute(text("DELETE FROM documents"))
+        await session.commit()
+
+    await kb.service.reindex(kb_name="kb1", actor="user")
+    restored = await kb.documents.get_document("knowledge_base", "kb1", doc.id)
+    assert restored is not None and restored.locked is True
+
+
+@pytest.mark.acceptance(spec="006-knowledge-base", scenario="lock and unlock a document")
+async def test_lock_and_unlock_audits_and_restores_mutability(kb) -> None:
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\noriginal body")
+
+    await kb.service.set_document_lock(kb_name="kb1", document_id=doc.id, locked=True, actor="user")
+    # Idempotent re-lock is a no-op (no second audit).
+    await kb.service.set_document_lock(kb_name="kb1", document_id=doc.id, locked=True, actor="user")
+    unlocked = await kb.service.set_document_lock(
+        kb_name="kb1", document_id=doc.id, locked=False, actor="user"
+    )
+    assert unlocked.locked is False
+
+    events = await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
+    types = [e.event_type for e in events]
+    assert types.count("kb_document_locked") == 1
+    assert types.count("kb_document_unlocked") == 1
+
+    # After unlock, edits work again.
+    edited = await kb.service.edit_document(
+        kb_name="kb1", document_id=doc.id, new_markdown="# A\n\nedited body", actor="user"
+    )
+    assert edited.source_mode == "edited"

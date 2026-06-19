@@ -22,15 +22,19 @@ async def _registry(kb) -> BuiltinToolRegistry:
 async def test_kb_tools_registered(kb) -> None:
     reg = await _registry(kb)
     names = {t.name for t in reg.list()}
+    # Documents are co-managed (ADR-028): read AND write tools are present.
     assert names == {
         "list_knowledge_bases",
         "search_knowledge",
         "grep_knowledge",
         "read_document",
+        "add_document",
+        "edit_document",
+        "delete_document",
     }
-    # gateway prefixes on list; no write tool exists.
+    # gateway prefixes on list.
     assert reg.is_builtin(f"{COFFER_TOOL_PREFIX}search_knowledge")
-    assert not any("ingest" in n or "delete" in n or "write" in n for n in names)
+    assert reg.is_builtin(f"{COFFER_TOOL_PREFIX}add_document")
 
 
 @pytest.mark.acceptance(spec="006-knowledge-base", scenario="agent searches a knowledge base")
@@ -89,3 +93,78 @@ async def test_list_tool(kb) -> None:
     assert len(out["knowledge_bases"]) == 1
     assert out["knowledge_bases"][0]["name"] == "kb1"
     assert out["knowledge_bases"][0]["document_count"] == 1
+
+
+@pytest.mark.acceptance(spec="006-knowledge-base", scenario="agent adds a document via MCP")
+async def test_add_document_tool(kb) -> None:
+    await kb.create_kb("kb1")
+    reg = await _registry(kb)
+    tool = reg.get(f"{COFFER_TOOL_PREFIX}add_document")
+    assert tool is not None
+    out = await tool.handler(
+        {"kb": "kb1", "filename": "agent-note.md", "content": "# Note\n\nwombat facts"}
+    )
+    assert out["document_id"] and out["source_mode"] == "converted" and out["locked"] is False
+    # The added document is searchable, and an INGEST was audited with the agent actor.
+    assert len((await kb.service.search(kb_name="kb1", query="wombat", top_k=5)).passages) == 1
+    events = await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
+    ingested = [e for e in events if e.event_type == "kb_document_ingested"]
+    assert ingested and ingested[0].actor == "agent"
+
+
+@pytest.mark.acceptance(spec="006-knowledge-base", scenario="agent edits a document via MCP")
+async def test_edit_document_tool(kb) -> None:
+    await kb.create_kb("kb1")
+    doc = await kb.service.ingest_bytes(
+        kb_name="kb1", filename="a.md", raw_bytes=b"# A\n\noriginal otter body", actor="user"
+    )
+    reg = await _registry(kb)
+    tool = reg.get(f"{COFFER_TOOL_PREFIX}edit_document")
+    out = await tool.handler(
+        {"kb": "kb1", "document_id": doc.id, "content": "# A\n\nedited seal body"}
+    )
+    assert out["document_id"] == doc.id and out["source_mode"] == "edited"
+    assert (await kb.service.search(kb_name="kb1", query="otter", top_k=5)).passages == ()
+    assert len((await kb.service.search(kb_name="kb1", query="seal", top_k=5)).passages) == 1
+    # The MCP write is audited with the agent as actor (FR-018).
+    events = await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
+    updated = [e for e in events if e.event_type == "kb_document_updated"]
+    assert updated and updated[0].actor == "agent"
+
+
+@pytest.mark.acceptance(spec="006-knowledge-base", scenario="agent deletes a document via MCP")
+async def test_delete_document_tool(kb) -> None:
+    await kb.create_kb("kb1")
+    doc = await kb.service.ingest_bytes(
+        kb_name="kb1", filename="a.md", raw_bytes=b"# A\n\nephemeral body", actor="user"
+    )
+    reg = await _registry(kb)
+    tool = reg.get(f"{COFFER_TOOL_PREFIX}delete_document")
+    out = await tool.handler({"kb": "kb1", "document_id": doc.id})
+    assert out["deleted"] is True and out["document_id"] == doc.id
+    assert await kb.documents.count_documents("knowledge_base", "kb1") == 0
+    # The MCP delete is audited with the agent as actor (FR-018).
+    events = await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
+    deleted = [e for e in events if e.event_type == "kb_document_deleted"]
+    assert deleted and deleted[0].actor == "agent"
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="an agent write to a locked document is refused"
+)
+async def test_write_tool_refused_on_locked_document(kb) -> None:
+    from coffer.domain.errors import DocumentLocked
+
+    await kb.create_kb("kb1")
+    doc = await kb.service.ingest_bytes(
+        kb_name="kb1", filename="a.md", raw_bytes=b"# A\n\nfrozen body", actor="user"
+    )
+    await kb.service.set_document_lock(kb_name="kb1", document_id=doc.id, locked=True, actor="user")
+    reg = await _registry(kb)
+    edit = reg.get(f"{COFFER_TOOL_PREFIX}edit_document")
+    delete = reg.get(f"{COFFER_TOOL_PREFIX}delete_document")
+    with pytest.raises(DocumentLocked):
+        await edit.handler({"kb": "kb1", "document_id": doc.id, "content": "# A\n\nhacked"})
+    with pytest.raises(DocumentLocked):
+        await delete.handler({"kb": "kb1", "document_id": doc.id})
+    assert await kb.documents.count_documents("knowledge_base", "kb1") == 1

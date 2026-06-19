@@ -24,6 +24,7 @@ vi.mock("./api", () => ({
   reindexKnowledgeBase: vi.fn(),
   searchKnowledgeBase: vi.fn(),
   grepKnowledgeBase: vi.fn(),
+  setDocumentLock: vi.fn(),
   updateKnowledgeBaseConfig: vi.fn(),
 }));
 const api = await import("./api");
@@ -35,6 +36,8 @@ const DOC = {
   title: "Deploys",
   source_mode: "converted" as const,
   content_sha256: "abc",
+  locked: false,
+  project_id: "00000000000000000000000000",
   chunk_count: 3,
   metadata: {},
   created_at: "2026-05-29T00:00:00Z",
@@ -166,6 +169,31 @@ describe("KnowledgeBaseDetailPage", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /^cancel$/i }));
     expect(api.deleteDocument).not.toHaveBeenCalled();
+  });
+
+  test("locking a selected document calls setDocumentLock(true)", async () => {
+    seedBaseQueries();
+    vi.mocked(api.getDocument).mockResolvedValue({ ...DOC, locked: false, markdown: "body" });
+    vi.mocked(api.setDocumentLock).mockResolvedValue({ ...DOC, locked: true });
+    renderPage();
+
+    const tree = screen.getByRole("complementary");
+    fireEvent.click(await within(tree).findByText("Deploys"));
+    fireEvent.click(await screen.findByRole("button", { name: /^lock$/i }));
+    await waitFor(() => expect(api.setDocumentLock).toHaveBeenCalledWith("designs", "d1", true));
+  });
+
+  test("a locked document shows the locked badge and disables delete", async () => {
+    seedBaseQueries();
+    vi.mocked(api.getDocument).mockResolvedValue({ ...DOC, locked: true, markdown: "body" });
+    renderPage();
+
+    const tree = screen.getByRole("complementary");
+    fireEvent.click(await within(tree).findByText("Deploys"));
+    // The locked badge renders, the toggle now offers Unlock, and Delete is disabled.
+    expect(await screen.findByText(/^locked$/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: /^unlock$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^delete$/i })).toBeDisabled();
   });
 
   test("grep mode calls the grep helper", async () => {

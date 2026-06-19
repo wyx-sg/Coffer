@@ -50,6 +50,10 @@ export interface DocumentOut {
   description?: string | null;
   source_mode: SourceMode;
   content_sha256: string;
+  /** Co-management lock (ADR-028): a locked document refuses every mutation. */
+  locked: boolean;
+  /** WORKSPACE_GLOBAL sentinel for global KB documents (per-project scope is a later slice). */
+  project_id: string;
   chunk_count?: number;
   metadata: Record<string, unknown>;
   created_at: string;

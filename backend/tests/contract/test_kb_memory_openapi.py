@@ -37,6 +37,7 @@ _KB_MODELS: dict[str, type | None] = {
     "DocumentDetailOut": kb_schemas.DocumentDetailOut,
     "DocumentListOut": kb_schemas.DocumentListOut,
     "DocumentEditRequest": kb_schemas.DocumentEditRequest,
+    "DocumentLockRequest": kb_schemas.DocumentLockRequest,
     "ReindexResult": kb_schemas.ReindexResult,
     "SearchRequest": kb_schemas.SearchRequest,
     "SearchResponse": kb_schemas.SearchResponse,

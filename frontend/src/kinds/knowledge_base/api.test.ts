@@ -18,6 +18,7 @@ import {
   reconvertDocument,
   reindexKnowledgeBase,
   searchKnowledgeBase,
+  setDocumentLock,
   updateKnowledgeBaseConfig,
   type RetrievalMode,
 } from "./api";
@@ -366,6 +367,33 @@ describe("reconvertDocument", () => {
     const err = await reconvertDocument("kb1", "d1").catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).code).toBe("RECONVERSION_BLOCKED");
+  });
+});
+
+describe("setDocumentLock", () => {
+  test("PATCHes the per-document URL with the locked flag", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        okJson({ id: "d1", title: "a.md", source_mode: "converted", locked: true }),
+      );
+
+    const out = await setDocumentLock("kb1", "d1", true);
+    expect(out.locked).toBe(true);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/knowledge_bases/kb1/documents/d1`);
+    expect(init?.method).toBe("PATCH");
+    expect(JSON.parse(String(init?.body))).toEqual({ locked: true });
+  });
+
+  test("surfaces DOCUMENT_LOCKED (409) as a typed ApiError", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      notOkJson(409, { error: { code: "DOCUMENT_LOCKED", message: "locked" } }),
+    );
+    const err = await setDocumentLock("kb1", "d1", false).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).code).toBe("DOCUMENT_LOCKED");
   });
 });
 

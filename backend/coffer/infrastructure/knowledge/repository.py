@@ -32,6 +32,7 @@ def _to_domain(row: DocumentModel) -> Document:
         description=row.description,
         content_sha256=row.content_sha256,
         source_mode=row.source_mode,
+        locked=bool(row.locked),
         metadata=json.loads(row.metadata_json or "{}"),
         created_at=_tz(row.created_at),
         updated_at=_tz(row.updated_at),
@@ -65,6 +66,7 @@ class DocumentRepo:
                     metadata_json=payload,
                     content_sha256=d.content_sha256,
                     source_mode=d.source_mode,
+                    locked=d.locked,
                     created_at=d.created_at,
                     updated_at=d.updated_at,
                 )
@@ -77,6 +79,7 @@ class DocumentRepo:
                 row.metadata_json = payload
                 row.content_sha256 = d.content_sha256
                 row.source_mode = d.source_mode
+                row.locked = d.locked
                 row.updated_at = d.updated_at
             await session.commit()
             await session.refresh(row)
@@ -149,20 +152,49 @@ class DocumentRepo:
             rows = (await session.execute(stmt)).all()
             return {str(doc_id): int(n) for doc_id, n in rows}
 
-    async def exists_source(self, kind: str, resource_name: str, source_sha256: str) -> bool:
-        """KB dedup: is there a row whose ``metadata->>'source_sha256'`` matches?
+    async def find_by_filename(
+        self, kind: str, resource_name: str, project_id: str, original_filename: str
+    ) -> Document | None:
+        """KB re-upload match (ADR-028): the document in this store/scope whose
+        ``metadata->>'original_filename'`` matches, or ``None``.
 
-        Enforced in the repo (not a SQL unique index) because memory rows have
-        no source file.
+        The doc id is a stable ULID decoupled from content, so a re-upload is
+        identified by its filename (within ``project_id``), not its bytes —
+        letting a changed source update the same document in place. At most one
+        document per filename per scope is maintained by the ingest path.
         """
         async with self._sm() as session:
-            stmt = select(DocumentModel.id).where(
+            stmt = (
+                select(DocumentModel)
+                .where(
+                    DocumentModel.kind == kind,
+                    DocumentModel.resource_name == resource_name,
+                    DocumentModel.project_id == project_id,
+                    text("json_extract(documents.metadata, '$.original_filename') = :fn"),
+                )
+                .order_by(DocumentModel.created_at, DocumentModel.id)
+            )
+            row = (await session.execute(stmt, {"fn": original_filename})).scalars().first()
+            return _to_domain(row) if row else None
+
+    async def set_locked(
+        self, kind: str, resource_name: str, doc_id: str, locked: bool
+    ) -> Document | None:
+        """Flip a document's co-management lock (ADR-028); returns the updated
+        row, or ``None`` if it does not exist."""
+        async with self._sm() as session:
+            stmt = select(DocumentModel).where(
                 DocumentModel.kind == kind,
                 DocumentModel.resource_name == resource_name,
-                text("json_extract(documents.metadata, '$.source_sha256') = :sha"),
+                DocumentModel.id == doc_id,
             )
-            result = await session.execute(stmt, {"sha": source_sha256})
-            return result.first() is not None
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                return None
+            row.locked = locked
+            await session.commit()
+            await session.refresh(row)
+            return _to_domain(row)
 
     async def delete_document(self, kind: str, resource_name: str, doc_id: str) -> bool:
         async with self._sm() as session:

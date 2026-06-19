@@ -8,9 +8,26 @@
 
 ## Summary
 
-Rebuild the `knowledge_base` resource kind as the **KB face of a shared knowledge substrate**. A KB is a Resource holding retrieval config (enabled modes, chunk params, embedding provider). Ingestion accepts **any file format**, converts it to **Markdown on disk** (`~/.coffer/knowledge/<name>/docs/<doc-id>.md` = source of truth), keeps the original under `raw/`, and indexes the Markdown into the same `coffer.db` (unified `documents` + `chunks` + FTS5 + sqlite-vec). Retrieval has three modes — `grep` (ripgrep over files), `keyword` (FTS5 + BM25), `vector` (sqlite-vec + a configurable OpenAI-compatible embedding provider). The agent reads the KB through four read-only built-in MCP tools; the KB is user-curated.
+Rebuild the `knowledge_base` resource kind as the **KB face of a shared knowledge substrate**. A KB is a Resource holding retrieval config (enabled modes, chunk params, embedding provider). Ingestion accepts **any file format**, converts it to **Markdown on disk** (`~/.coffer/knowledge/<name>/docs/<doc-id>.md` = source of truth), keeps the original under `raw/`, and indexes the Markdown into the same `coffer.db` (unified `documents` + `chunks` + FTS5 + sqlite-vec). Retrieval has three modes — `grep` (ripgrep over files), `keyword` (FTS5 + BM25), `vector` (sqlite-vec + a configurable OpenAI-compatible embedding provider). Documents are **co-managed by humans and agents** (ADR-028): both read AND write through the MCP gateway, with a per-document lock and full F01 audit.
 
 This redesign **drops LlamaIndex** and the per-corpus persist dirs, and shares its substrate (table, converter port, retrieval engine, embedding config) with the `memory` kind (spec 007). Both layers — converters and the vector/embedding stack — stay confined to `infrastructure/`.
+
+## Amendment — documents co-managed (ADR-028, 2026-06-19)
+
+A later slice reverses the original "agent-read-only, content-addressed id" stance per [ADR-028](../../docs/decisions/ADR-028-knowledge-base-documents-co-managed.md). Scope decision (within-spec, recorded here per AGENTS.md §4):
+
+**Shipped in this slice (global scope):**
+
+- **Stable ULID identity** (was `source_sha256[:16]`). `content_sha256` stays the reindex gate; `source_sha256` stays in `metadata` as provenance. Re-upload is matched by `original_filename` in-store: identical bytes = no-op; changed bytes + same name = in-place update of the same id (needs `replace=true`); new name = new doc (FR-007/FR-015).
+- **Agent MCP write tools** `coffer__add_document` / `edit_document` / `delete_document` alongside the read tools (FR-017), sharing the REST service paths (lock + audit honoured).
+- **Per-document lock** (`locked` column via migration `0025`): a locked doc refuses edit / reconvert / replace / delete for everyone (FR-021); lock/unlock audited (`KB_DOCUMENT_LOCKED` / `_UNLOCKED`).
+- `DocumentLocked` (409) domain error; `DocumentOut` gains `locked` + `project_id`; `PATCH …/documents/{id}` lock endpoint; viewer gains a lock badge + toggle (stays read-only otherwise).
+
+**Deferred to the unified-知识 UI slice (co-dependent with the UI that surfaces them):**
+
+- **Per-project document scope** (the 全局/项目 axis for KB documents).
+- **Recoverable soft-delete** (trash/restore). For now delete is hard, with an F01 audit trail; the lock guards curated docs.
+- **In-app Markdown editor** — the viewer stays read-only with external-editor affordances (per the read-only-viewers decision); humans edit via external editor / edit API, agents via MCP.
 
 ## Technical Context
 
@@ -70,7 +87,7 @@ backend/coffer/
 │   │   └── errors.py                            # re-exports of the substrate errors (canonical classes in domain/errors.py)
 │   └── knowledge_base/
 │       ├── config.py                            # KnowledgeBaseConfig (Pydantic v2)
-│       └── document.py                          # kb_doc_id (16-hex doc-id helper)
+│       └── document.py                          # KB doc-id = ULID (infrastructure/knowledge/ids.new_ulid; ADR-028)
 ├── application/
 │   ├── knowledge/                               # (shared) substrate application layer
 │   │   ├── retrieval.py                         # KnowledgeRetrieval facade (keyword/vector + flagged fallback)
@@ -193,7 +210,8 @@ For each acceptance scenario: failing test in the right tier with the acceptance
 ## Out of scope (deferred)
 
 - Reranking, multi-query expansion, HyDE, LLM synthesis on retrieval (the agent synthesizes).
-- Agents editing KB documents (KB is user-curated; revisit later).
+- ~~Agents editing KB documents~~ — **shipped** via the co-management amendment (ADR-028, above).
+- Per-project KB document scope, recoverable soft-delete, and an in-app Markdown editor — deferred to the unified-知识 UI slice (see the amendment).
 - Hybrid (RRF) fusion of keyword+vector in one call — listed as optional in the design; ships behind the same port if added.
 - Image OCR / audio transcription by default.
 - A filesystem watcher on by default.

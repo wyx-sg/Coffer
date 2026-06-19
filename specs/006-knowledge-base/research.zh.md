@@ -4,6 +4,8 @@
 
 本次重新设计中各项技术选择的背景与理由。每节末尾给出 **决策**；并记录未选方案让后续读者知道走过哪些岔路。本次重新设计**取代**原始 006 的选择（LlamaIndex + sentence-transformers），并由一个新 ADR 承载，该 ADR 取代 ADR-010 与 ADR-011。
 
+> **后续修订 —— [ADR-028](../../docs/decisions/ADR-028-knowledge-base-documents-co-managed.md)（2026-06-19）：** 下文记录的两项决策随后被反转。**doc id** 现在是稳定 ULID（不再是 §3 的 source-sha256 前缀），且 KB **由人与 agent 共管** —— agent 可经 MCP 写文档，而非只读（§4）—— 由逐文档锁与 F01 审计守护。下文保留为原始记录；两者不一致处以 ADR-028 为准。
+
 ## 1. 检索栈：文件 + SQLite，无 RAG 框架
 
 **问题**：Coffer 存储、索引、检索知识的骨干是什么？

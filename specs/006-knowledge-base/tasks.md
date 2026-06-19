@@ -63,7 +63,7 @@ The substrate (`coffer.{domain,infrastructure}.knowledge`) is **shared with spec
 
 - [x] T-0060 `application/knowledge_base/builtin_tools.py` — register `coffer__list_knowledge_bases`, `coffer__search_knowledge`, `coffer__grep_knowledge`, `coffer__read_document`
 - [x] T-0061 Update `application/mcp/gateway.py` / `gateway_builtin.py` to route the four `coffer__*_knowledge` tools; keep `coffer` server-name reservation
-- [x] T-0062 Integration test: `test_mcp_builtin_tools.py` — list/search/grep/read via the gateway; assert no KB write tool exists
+- [x] T-0062 Integration test: `test_mcp_builtin_tools.py` — list/search/grep/read via the gateway; assert no KB write tool exists _(superseded by T-0106/T-0108 — write tools now exist, ADR-028)_
 
 ## Phase 8 — Composition root + dependencies
 
@@ -89,3 +89,19 @@ The substrate (`coffer.{domain,infrastructure}.knowledge`) is **shared with spec
 - [x] T-0093 `make verify-contract`
 - [x] T-0094 `make lint` — including importlinter contracts 1-7
 - [x] T-0095 Final squash + PR per `agents/workflow.md` (KB + memory land together in the redesign PR)
+
+## Phase 11 — Documents co-managed (ADR-028; unified-knowledge slice)
+
+Reverses the agent-read-only + content-addressed-id stance. Global scope only; per-project scope, soft-delete, and an in-app editor are deferred to the unified-知识 UI slice (see `plan.md` amendment).
+
+- [x] T-0100 Spec surgery: `spec.md`/`spec.zh.md` (US3 read+write, FR-007/015/016/017 + new FR-021 lock, edge cases, scenarios), `data-model.md`/`.zh.md` (ULID id, `locked`, `DocumentLocked`, `find_by_filename`/`set_locked`, audit events), `plan.md`/`.zh.md` (amendment), `quickstart.md`/`.zh.md`, `contracts/api.openapi.yaml`; new ADR-028 (+zh)
+- [ ] T-0101 Migration `0025` — add `documents.locked BOOLEAN NOT NULL DEFAULT 0` (idempotent `_has_column`); bump `HEAD_REVISION` + assert the column in `test_migrations_roundtrip.py`
+- [ ] T-0102 Domain: `Document.locked`; `DocumentModel.locked`; `DocumentLocked` error (409); audit `KB_DOCUMENT_LOCKED` / `KB_DOCUMENT_UNLOCKED`
+- [ ] T-0103 Repo: `_to_domain`/`upsert` carry `locked`; add `find_by_filename` + `set_locked`; drop dead `exists_source`
+- [ ] T-0104 Pipeline: ULID doc id (`new_ulid()`); re-upload match-by-filename (no-op / in-place update / new); lock enforcement
+- [ ] T-0105 Service: ingest status → audit (ingested/updated/skip); lock guards on edit/reconvert/delete; `set_document_lock` (+audit)
+- [ ] T-0106 MCP write tools `coffer__add_document` / `edit_document` / `delete_document`; reverse the read-only docstring
+- [ ] T-0107 Surfaces: `PATCH …/documents/{id}` lock endpoint; `DocumentOut` += `locked` + `project_id`; `coffer kb lock/unlock` CLI (FR-019 parity)
+- [ ] T-0108 Backend tests: identity/update-replace, lock-blocks-mutation, set-lock audit, agent-write tools (+ lock respect); update dedup + cross-KB tests for ULID semantics
+- [ ] T-0109 Frontend: `setDocumentLock` api + `locked`/`project_id` types; lock badge + toggle in the viewer; i18n; api/schema tests
+- [ ] T-0110 `make verify` (with optional engines + `rg`); self-review; squash + PR + CI + merge

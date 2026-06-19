@@ -8,9 +8,26 @@
 
 ## Summary
 
-把 `knowledge_base` 资源 kind 重建为**共享知识基底的 KB 面**。一个 KB 是承载检索配置（启用的模式、chunk 参数、embedding provider）的 Resource。ingestion 接受**任意文件格式**，将其转换为**磁盘上的 Markdown**（`~/.coffer/knowledge/<name>/docs/<doc-id>.md` = 真相源），把原件留在 `raw/` 下，并把 Markdown 索引进同一个 `coffer.db`（统一的 `documents` + `chunks` + FTS5 + sqlite-vec）。检索有三种模式 —— `grep`（对文件跑 ripgrep）、`keyword`（FTS5 + BM25）、`vector`（sqlite-vec + 一个可配置的 OpenAI 兼容 embedding provider）。agent 通过四个只读内置 MCP 工具读取 KB；KB 由用户策展。
+把 `knowledge_base` 资源 kind 重建为**共享知识基底的 KB 面**。一个 KB 是承载检索配置（启用的模式、chunk 参数、embedding provider）的 Resource。ingestion 接受**任意文件格式**，将其转换为**磁盘上的 Markdown**（`~/.coffer/knowledge/<name>/docs/<doc-id>.md` = 真相源），把原件留在 `raw/` 下，并把 Markdown 索引进同一个 `coffer.db`（统一的 `documents` + `chunks` + FTS5 + sqlite-vec）。检索有三种模式 —— `grep`（对文件跑 ripgrep）、`keyword`（FTS5 + BM25）、`vector`（sqlite-vec + 一个可配置的 OpenAI 兼容 embedding provider）。文档**由人与 agent 共管**（ADR-028）：双方都通过 MCP 网关读 _和_ 写，带逐文档锁与完整 F01 审计。
 
 本次重新设计**移除 LlamaIndex** 以及 per-corpus persist 目录，并把它的基底（表、转换器端口、检索引擎、embedding 配置）与 `memory` kind（spec 007）共享。两层 —— 转换器与 vector/embedding 栈 —— 都限制在 `infrastructure/` 内。
+
+## 修订 —— 文档共管（ADR-028，2026-06-19）
+
+后续一个切片按 [ADR-028](../../docs/decisions/ADR-028-knowledge-base-documents-co-managed.md) 反转最初"对 agent 只读 + 内容寻址 id"的立场。范围决策（spec 内，依 AGENTS.md §4 记录于此）：
+
+**本切片交付（全局 scope）：**
+
+- **稳定 ULID 标识**（原为 `source_sha256[:16]`）。`content_sha256` 仍是 reindex 闸门；`source_sha256` 仍在 `metadata` 中作出处。重新上传在 store 内按 `original_filename` 匹配：字节相同 = no-op；同名内容变化 = 就地更新同一 id（需 `replace=true`）；新文件名 = 新文档（FR-007/FR-015）。
+- **agent MCP 写工具** `coffer__add_document` / `edit_document` / `delete_document`，与读工具并列（FR-017），共用 REST 服务路径（遵守锁 + 审计）。
+- **逐文档锁**（经迁移 `0025` 加 `locked` 列）：被锁文档对所有人拒绝 编辑 / 重转换 / 替换 / 删除（FR-021）；锁定/解锁审计（`KB_DOCUMENT_LOCKED` / `_UNLOCKED`）。
+- `DocumentLocked`（409）domain 错误；`DocumentOut` 增加 `locked` + `project_id`；`PATCH …/documents/{id}` 锁端点；查看器增加锁徽章 + 切换（其余保持只读）。
+
+**推迟到统一知识 UI 切片（与呈现它们的 UI 相互依赖）：**
+
+- **逐项目文档 scope**（KB 文档的 全局/项目 轴）。
+- **可恢复软删除**（回收站/恢复）。目前删除是硬删除，带 F01 审计痕迹；锁守护策展文档。
+- **应用内 Markdown 编辑器** —— 查看器保持只读 + 外部编辑器入口（依只读查看器决策）；人类经外部编辑器 / 编辑 API，agent 经 MCP。
 
 ## Technical Context
 
@@ -70,7 +87,7 @@ backend/coffer/
 │   │   └── errors.py                            # re-exports of the substrate errors (canonical classes in domain/errors.py)
 │   └── knowledge_base/
 │       ├── config.py                            # KnowledgeBaseConfig (Pydantic v2)
-│       └── document.py                          # kb_doc_id (16-hex doc-id helper)
+│       └── document.py                          # KB doc-id = ULID (infrastructure/knowledge/ids.new_ulid; ADR-028)
 ├── application/
 │   ├── knowledge/                               # (shared) substrate application layer
 │   │   ├── retrieval.py                         # KnowledgeRetrieval facade (keyword/vector + flagged fallback)
@@ -193,7 +210,8 @@ backend/tests/
 ## Out of scope (deferred)
 
 - 检索时的 reranking、multi-query 扩展、HyDE、LLM 综合（由 agent 综合）。
-- agent 编辑 KB 文档（KB 由用户策展；后续再议）。
+- ~~agent 编辑 KB 文档~~ —— 已经由文档共管修订（ADR-028，见上）**交付**。
+- 逐项目 KB 文档 scope、可恢复软删除、应用内 Markdown 编辑器 —— 推迟到统一知识 UI 切片（见修订一节）。
 - 在一次调用里对 keyword+vector 做 hybrid（RRF）融合 —— 设计里列为可选；若加入，沿用同一端口。
 - 默认的图像 OCR / 音频转写。
 - 默认开启的文件系统 watcher。
