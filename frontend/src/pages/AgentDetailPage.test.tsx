@@ -78,6 +78,9 @@ describe("AgentDetailPage", () => {
     expect(screen.getByRole("tab", { name: /config files/i })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /subagents & commands/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /memory & rules/i })).not.toBeInTheDocument();
+    // The Instructions tab was removed as redundant with Config files; master-
+    // instructions delivery stays available via the API/CLI.
+    expect(screen.queryByRole("tab", { name: /instructions/i })).not.toBeInTheDocument();
 
     // The Coffer-MCP install control lives in the header.
     expect(screen.getByRole("button", { name: /install coffer mcp/i })).toBeInTheDocument();
