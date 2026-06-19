@@ -108,3 +108,67 @@ web 产品。
 - github.com/cloudshipai/station
 - plugged.in（文档）· gettoolbase.ai（弃用通告）
 - mcp-auth-proxy（项目 README）· unrelated-ai/mcp-gateway
+
+## 核查更新（2026-06-19）
+
+> 对照仓库与一手厂商文档的再核查。关于 Coffer MCP 处理方式的三条本地 claim 中，有两条仍然成立
+> （裸的、无沙箱的子进程上游；SSRF 防护只覆盖 Coffer 自身的出站）。"每 agent 全有或全无" 这条
+> 已经反转：per-agent MCP 服务器范围已在 PR #108 / ADR-026（2026-06-18）落地——下移至 ✏️ 已修正。
+> vMCP "于 2025-12-11 GA" 这一日期仍需修正（一手 Stacklok 文档并不支持）。
+
+### ✅ 已确认
+
+- **裸的、无沙箱的子进程上游。** 每个 stdio 上游都经
+  `mcp.client.stdio.stdio_client(StdioServerParameters(command, args, env, cwd))`
+  作为直接子进程 spawn。唯一的加固是 env 范围限定（CODE-027 最小白名单）加 PID 跟踪 / 孤儿回收
+  ——`backend/coffer` 中没有任何 Docker/Podman/seccomp/namespace/firejail/bubblewrap/chroot。
+  代码库中唯一的 `sandbox` 字符串是 Codex CLI agent provider 里的
+  `"sandbox": "danger-full-access"`（它*关闭*沙箱——与 MCP spawn 无关）。
+  `repo:backend/coffer/infrastructure/mcp/subprocess.py`
+- **SSRF 防护只覆盖 Coffer 自身的出站，不覆盖它 spawn 的上游。** `ssrf_guard.py`
+  （`check_url` / `is_blocked_host`）只有两个调用方——`skill/source_fetcher.py`（技能拉取时的
+  git URL 校验）与 `providers/provider_introspector.py`（provider URL 探查）。MCP 子进程路径与
+  网关都没有应用它；被 spawn 的上游可不受限制地出站。
+  `repo:backend/coffer/infrastructure/skill/ssrf_guard.py`
+- **ToolHive MCPRemoteProxy 仍在开发中。** 逐字确认："MCPRemoteProxy support in vMCP is
+  currently in development. vMCP can discover MCPRemoteProxy backends, but authentication between
+  vMCP and MCPRemoteProxy is not yet fully implemented."
+  https://docs.stacklok.com/toolhive/concepts/vmcp
+- **mcpm v2.15.0，2026-05-22。** PyPI 上最新版为 2.15.0，发布于 2026-05-22（此前：2.14.0 于
+  2026-03-27、2.13.0 于 2026-01-15）。https://pypi.org/project/mcpm/
+- **1MCP 未记录任何内建密钥库 / 信封加密。** README 把鉴权定位为把守*访问 1MCP 聚合器*，并未展示
+  任何针对上游凭证的内建密钥库或信封加密。（负向发现——缺少文档化的特性，而非厂商明确否认。）
+  https://github.com/1mcp-app/agent
+
+### ✏️ 已修正
+
+- **"每 agent 全有或全无" → 已解决：per-agent MCP 服务器范围已落地。** 原 ✅ 条目（以及 §2
+  能力对比表、§3.2 与 §4.3 的 "借鉴" 建议）把 Coffer 的网关注入称为全有或全无——每个装了网关的
+  agent 都能看到全部已启用的服务器，没有子集/profile 机制。该限制现已**关闭**：per-agent MCP
+  服务器范围已在 **PR #108 / ADR-026**（2026-06-18）落地。每个 agent 带一个范围**模式**——`auto`
+  （默认；全部已启用服务器，新服务器自动纳入）或 `selected`（一份显式的服务器白名单）。安装写入的
+  `coffer` 条目通过 `--agent <name>`（转发为 `X-Coffer-Agent` 请求头）标记 agent 身份，网关在
+  `tools/list` / `resources/list` / `prompts/list`、`coffer__search_tools` 排序，**以及**直接的
+  `tools/call` / `resources/read` / `prompts/get` 调用路径上强制执行**有效范围**（已启用 ∩ 白名单）
+  ——因此超出范围的工具既不会被列出、也不会被排序或调用。"全有或全无" 的缺口已解决；§3.2 / §4.3
+  指出的竞品缺口（mcpm profiles、ToolHive vMCP 虚拟服务器）现已对齐。
+  `repo:docs/decisions/ADR-026-per-agent-mcp-scoping.md` ·
+  `repo:backend/coffer/application/agent/scope_service.py` ·
+  `repo:backend/coffer/application/mcp/gateway.py`
+  （`_effective_mcp_servers` / `authorize_server`）。_未变：_ 上文的沙箱缺口——上游仍是裸子进程、
+  无容器隔离——依然存在，本次范围功能并不解决它。
+- **vMCP "于 2025-12-11 GA" → 于 2025-12-08 推出；无明确 GA 日期文档。** MCPRemoteProxy
+  "仍在开发中" 的那半成立，但 GA 日期无据：推出公告日期为 2025-12-08，且没有任何一手 Stacklok
+  文档载明"12-11 GA"的明确说法。https://docs.stacklok.com/toolhive/concepts/vmcp
+
+### ➕ 新增覆盖
+
+- **Station**（`cloudshipai/station`）——开源 agent 运行时，跑在你自己的基础设施上，但明确被
+  设计为向*上*连接到 CloudShip Platform（云）以做集中管理、OAuth、分析与管理层报表；印证
+  "推向 CloudShip 后端" 的说法。https://www.cloudshipai.com/station
+- **Toolbase**（gettoolbase.ai）——开源桌面 app 已弃用；用户被引导至 web 产品（旧桌面版保留在
+  `old.gettoolbase.ai`），平台现已为 web/Cloudflare 托管；印证 "弃用开源桌面，转托管 web 产品。"
+  https://gettoolbase.ai/
+- **Plugged.in**（`VeriTeknik/pluggedin-mcp-proxy`）——该代理需要来自托管 plugged.in App 的
+  API key，并从该后端拉取全部 tool/prompt/resource 配置；它依赖后端，并非独立本地；印证
+  "代理依赖独立托管 app + API key。" https://github.com/VeriTeknik/pluggedin-mcp-proxy

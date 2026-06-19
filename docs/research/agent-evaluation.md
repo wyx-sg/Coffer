@@ -138,3 +138,90 @@ Primary:
 - Galileo (galileo.ai) · Arize Phoenix (docs.arize.com/phoenix)
 
 Coffer repo verified: `evals/` (suites, baselines, `curate.py`), `.github/workflows/evals.yml`, ADR-019, ADR-017.
+
+## Verification update (2026-06-19)
+
+> Re-verification pass: Coffer's local eval-flywheel claims all check out against
+> the repo; web claims are mostly confirmed, with one correction (Braintrust's
+> `eval-action` reports rather than gates) and two coverage adds (Galileo,
+> Arize Phoenix).
+
+### ✅ Confirmed
+
+- **The shipped eval flywheel.** `evals/` holds deterministic suites
+  (`retrieval_eval.py`, `tool_search_eval.py`) plus a model-bearing routing suite
+  (`routing_eval.py`, kept out of CI); the `COFFER_EVAL_CAPTURE` JSONL sink is
+  off by default — emit side `record_tool_search` in
+  `repo:backend/coffer/application/eval_capture.py`, handler in
+  `repo:backend/coffer/infrastructure/logging/eval_capture.py`, wired into
+  `coffer__search_tools` via `repo:backend/coffer/application/mcp/gateway_builtin.py`;
+  interactive `repo:evals/curate.py` promotes captured traces into
+  `datasets/tool_search.jsonl`.
+- **Committed baselines + relative-regression CI gate.**
+  `evals/baselines/{retrieval,tool_search,routing}.json` exist; `repo:evals/run.py`
+  gates on `floor = baseline - tolerance` (retrieval 0.01 / tool_search 0.05 /
+  routing 0.10) with non-zero exit on regression; `repo:.github/workflows/evals.yml`
+  runs the deterministic model-free retrieval + tool-search gate on PRs,
+  path-filtered (routing suite is on-demand only).
+- **ADR statuses underpinning the borrows.** ADR-019 (close the eval flywheel)
+  Accepted, 2026-06-14; ADR-020 (transcript distillation) Accepted — borrow #4 /
+  takeaway #5; ADR-024 (built-in agent is internal capability) Accepted,
+  2026-06-14 — local LLM-judge borrow #1.
+  `repo:docs/decisions/ADR-019-close-the-eval-flywheel.md`,
+  `repo:docs/decisions/ADR-020-transcript-distillation.md`,
+  `repo:docs/decisions/ADR-024-builtin-agent-is-internal-capability.md`
+- **Promptfoo — MIT, OpenAI-acquired Mar 2026.** Acquisition announced 2026-03-09;
+  Promptfoo "will remain open source ... under the current license." MIT is
+  confirmed from the repo license (the announcement affirms open-source continuity
+  without naming the license). https://www.promptfoo.dev/blog/promptfoo-joining-openai/ ;
+  https://github.com/promptfoo/promptfoo
+- **LangSmith Align Evals.** Calibrates LLM judges against human labels; alignment
+  score = % of examples where the evaluator matches the human expert; UI
+  corrections are stored as few-shot examples feeding future prompts — confirmed
+  verbatim. https://blog.langchain.com/introducing-align-evals/ ;
+  https://docs.langchain.com/langsmith/improve-judge-evaluator-feedback
+- **Braintrust online scoring is opt-in.** Online scoring rules are created at the
+  project level (scorers, span/trace scope, sampling rate) and run async on
+  production traces with no app-latency impact — confirms "on once a scoring rule +
+  sampling rate are configured, not by default."
+  https://www.braintrust.dev/docs/evaluate/score-online ;
+  https://www.braintrust.dev/foundations/online-scoring
+
+### ✏️ Corrected
+
+- **Braintrust `eval-action` reports, it does not gate.** Old: "gates offline evals
+  on every PR ... that blocks merges below thresholds." → Corrected: the
+  `braintrustdata/eval-action` runs evals in CI and posts an experiment-comparison
+  **comment** on the PR (score deltas, regression indicators); it does **not** itself
+  block merges on thresholds — merge-gating needs separate workflow/branch-protection
+  controls. The per-PR offline-eval run is real; the auto-block-below-threshold claim
+  is overstated. https://github.com/braintrustdata/eval-action
+
+### ❓ Still uncertain
+
+- **ADR-017 status nuance.** ADR-017 (industrial-grade harness in layers) is
+  Status: **Proposed** (Date 2026-06-13), **not** Accepted. The report references it
+  only as the "AI-eval layer" related context and never asserts it is Accepted, so
+  no in-text fix is needed — flagged here per the verification brief.
+  `repo:docs/decisions/ADR-017-industrial-grade-harness-in-layers.md`
+- **Promptfoo license naming.** MIT is confirmed only from the repo license itself;
+  the OpenAI/Promptfoo statements say "remain open source under the current license"
+  without naming MIT.
+
+### ➕ Coverage added
+
+- **Galileo** (commercial) — Agent Reliability platform: observe / evaluate /
+  guardrail / improve agents, with purpose-built agentic metrics (tool selection
+  quality, tool error rate, action advancement/completion, flow adherence) and
+  **Luna-2** small-LM judges (sub-200ms, ~0.95 accuracy) that make 100%-traffic
+  online scoring economically feasible. **Material update the report's bare
+  "Galileo (galileo.ai)" line omits: Cisco completed its acquisition of Galileo on
+  2026-05-22.** https://galileo.ai/ ;
+  https://blogs.cisco.com/news/cisco-announces-the-intent-to-acquire-galileo
+- **Arize Phoenix** (OSS) — Apache-2.0 LLM observability + evaluation built on
+  OpenTelemetry; runs locally / self-hosted / in a notebook (or Arize cloud), with
+  LLM-as-judge evals (relevance, toxicity, hallucination, RAG, tool-calling). Widely
+  framed as "LangSmith-level features without sending data to a third party" — the
+  closest external analog to Coffer's local-first, no-payloads stance, though
+  Phoenix captures full traces whereas Coffer keeps metadata-only.
+  https://github.com/Arize-ai/phoenix ; https://arize.com/phoenix/

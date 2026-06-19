@@ -103,3 +103,43 @@ MCP 安全：
 
 - github.com/invariantlabs-ai/mcp-scan（Tool Pinning；Snyk 收购）· lasso.security（MCP Gateway）· prompt.security（SentinelOne 收购）
 - arXiv 2506.01333（ETDI —— 工具定义完整性）
+
+## 核查更新（2026-06-19）
+
+> 五条主要论断（1 条本地 + 4 条网络）均经一手来源**确认**；仅本地"强制"
+> 措辞上还有一处细节存疑。
+
+### ✅ 已确认
+
+- **Coffer 免费且无载荷的调用日志。** `MCPInvocation` 领域模型明确写着
+  "NEVER carries args or result content"（绝不携带参数或结果内容）；其字段为
+  timestamp / resource_name / capability_type / capability_key / duration_ms /
+  status / error_message / session_id —— 没有参数/结果列，持久化模型与之一致。
+  `repo:backend/coffer/domain/mcp/capability.py:57-69` · `repo:backend/coffer/infrastructure/mcp/invocation_writer.py:32-49`
+- **免费、actor 标记的审计日志。** `AuditService`/`AuditEntry` 记录带 actor 标记的
+  生命周期事件（event_type、resource_kind/name、actor、details），代码中无任何
+  分层限制 —— 即在自托管产品中免费。`repo:backend/coffer/application/audit_service.py:13-58`
+- **Langfuse 把治理面设为付费墙。** 审计日志查看器是企业版功能；细粒度的项目级
+  RBAC 需要企业版授权密钥；SSO/SCIM + 高级审计日志都在企业版（SSO 也可经付费
+  Teams 附加项获得）。定价：Hobby $0 / Core $29 / Pro $199 / Enterprise 定制
+  （约 $2,499+）。https://langfuse.com/docs/administration/audit-logs · https://github.com/orgs/langfuse/discussions/8147
+- **OTel GenAI 约定仍为 "Development"（非 GA）且已迁仓。** 新仓库的
+  `gen-ai-agent-spans.md` 在文档级与各 span 级（Create agent、Invoke agent、
+  Invoke workflow、Plan、Execute tool）都标注 "Status: Development"；旧的
+  `opentelemetry.io/docs/specs/semconv/gen-ai/` 页面现已显示"已迁移……不再维护"。
+  https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md · https://opentelemetry.io/docs/specs/semconv/gen-ai/
+- **两起收购均已完成（closed）。** Snyk 于 2025 年 6 月宣布收购 Invariant Labs
+  （mcp-scan 作者）；mcp-scan 在 Snyk Agent Scan 下仍开源。SentinelOne 于
+  2025-09-05 完成对 Prompt Security 的收购（约 $1.8 亿，8 月 5 日宣布）。
+  https://snyk.io/news/snyk-acquires-invariant-labs-to-accelerate-agentic-ai-security-innovation/ · https://investors.sentinelone.com/press-releases/news-details/2025/SentinelOne-to-Acquire-Prompt-Security-to-Advance-GenAI-Security-and-Agent-Security-Strategy/default.aspx
+- **mcp-scan Tool Pinning 能捕获 rug-pull。** 它在首次扫描时对每个工具的定义
+  （来自 `tools/list` 清单的 name、description、input schema）做哈希，并在后续
+  扫描时比对；任何差异即告警 —— 正对准"一次性批准后被静默改定义"的工具。
+  https://invariantlabs.ai/blog/introducing-mcp-scan · https://github.com/invariantlabs-ai/mcp-scan
+
+### ❓ 仍待核查
+
+- **日志是否"强制"/ 不可禁用。** "免费"与"无载荷"两点已在代码中确认（无载荷是
+  docstring 明示的硬领域不变量），但未找到强制"记录本身不可被禁用"的代码（未见
+  opt-out 开关或配置闸门）。因此"强制"措辞相对代码可直接确认性而言略带愿景色彩。
+  `repo:backend/coffer/infrastructure/mcp/invocation_writer.py:139-152`

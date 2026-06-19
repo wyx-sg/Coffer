@@ -129,3 +129,46 @@ MCP security:
 
 - github.com/invariantlabs-ai/mcp-scan (Tool Pinning; Snyk acquisition) · lasso.security (MCP Gateway) · prompt.security (SentinelOne acquisition)
 - arXiv 2506.01333 (ETDI — tool-definition integrity)
+
+## Verification update (2026-06-19)
+
+> All five primary claims (1 local + 4 web) are **confirmed** against primary
+> sources; one minor wording nuance on the local "mandatory" framing remains
+> open.
+
+### ✅ Confirmed
+
+- **Coffer's free, payload-free invocation log.** The `MCPInvocation` domain
+  model is explicitly documented "NEVER carries args or result content"; its
+  fields are timestamp / resource_name / capability_type / capability_key /
+  duration_ms / status / error_message / session_id — no args/result columns,
+  and the persistence model mirrors this. `repo:backend/coffer/domain/mcp/capability.py:57-69` · `repo:backend/coffer/infrastructure/mcp/invocation_writer.py:32-49`
+- **Free, actor-tagged audit log.** `AuditService`/`AuditEntry` record
+  actor-tagged lifecycle events (event_type, resource_kind/name, actor, details)
+  with no tier gating in code — i.e. free in the self-hosted product. `repo:backend/coffer/application/audit_service.py:13-58`
+- **Langfuse paywalls the governance surface.** Audit-log viewer is an
+  Enterprise Edition feature; fine-grained project-level RBAC needs an Enterprise
+  license key; SSO/SCIM + advanced audit logging sit in Enterprise (SSO also via
+  a paid Teams add-on). Pricing: Hobby $0 / Core $29 / Pro $199 / Enterprise
+  custom (~$2,499+). https://langfuse.com/docs/administration/audit-logs · https://github.com/orgs/langfuse/discussions/8147
+- **OTel GenAI conventions are still "Development" (not GA) and relocated.** The
+  new repo's `gen-ai-agent-spans.md` carries "Status: Development" at document
+  and per-span level (Create agent, Invoke agent, Invoke workflow, Plan, Execute
+  tool); the legacy `opentelemetry.io/docs/specs/semconv/gen-ai/` page now reads
+  "moved … no longer maintained." https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md · https://opentelemetry.io/docs/specs/semconv/gen-ai/
+- **Both acquisitions closed.** Snyk announced acquiring Invariant Labs
+  (mcp-scan makers) in June 2025; mcp-scan stays open-source under Snyk Agent
+  Scan. SentinelOne completed its Prompt Security acquisition on 2025-09-05
+  (~$180M, announced Aug 5 2025). https://snyk.io/news/snyk-acquires-invariant-labs-to-accelerate-agentic-ai-security-innovation/ · https://investors.sentinelone.com/press-releases/news-details/2025/SentinelOne-to-Acquire-Prompt-Security-to-Advance-GenAI-Security-and-Agent-Security-Strategy/default.aspx
+- **mcp-scan Tool Pinning catches rug-pulls.** It hashes each tool's definition
+  (name, description, input schema from the `tools/list` manifest) on first scan
+  and compares on subsequent scans; any delta alerts — directly targeting tools
+  silently redefined after one-time approval. https://invariantlabs.ai/blog/introducing-mcp-scan · https://github.com/invariantlabs-ai/mcp-scan
+
+### ❓ Still uncertain
+
+- **The log being "mandatory" / non-disableable.** The "free" and "payload-free"
+  properties are confirmed in code (payload-free is a hard domain invariant per
+  the docstring), but no code was found enforcing that recording itself cannot be
+  disabled (no opt-out toggle or config gate observed). The "mandatory" framing
+  is thus mildly aspirational vs. directly confirmable code. `repo:backend/coffer/infrastructure/mcp/invocation_writer.py:139-152`

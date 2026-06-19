@@ -184,3 +184,122 @@ Commentary:
 
 - simonwillison.net/2025/Dec/19/agent-skills/
 - unite.ai — "Anthropic Opens Agent Skills Standard"
+
+## Verification update (2026-06-19)
+
+> Light fact-check pass against primary sources: 1 local claim and 3 web claims
+> verified. All hold up; one web claim needs a framing fix (the scanners are
+> third-party, not Anthropic-built). **Re-verified 2026-06-19 against
+> `main` after PR #105 (frontmatter alignment), PR #111 (skill content
+> trust layer), and PR #115 (skill update detection + pinning) merged:**
+> §2/§3/§4's "no skill scanner / content not scanned" headline gap is now
+> **closed** (#111), the §4 "no update-detection / pinning UX" gap is now
+> **closed** (#115, see ✏️ below), and the frontmatter-alignment status is
+> refined below (#105 capped `description` and recognized `allowed-tools` but
+> kept the underscore as a deliberate backward-compat superset).
+
+### ✅ Confirmed
+
+- **Coffer pins a skill's source to a `git_ref`.** `GitSource` carries
+  `git_url`/`git_ref`/`git_subpath` (`repo:backend/coffer/domain/skill/source.py`),
+  and a fetch/clone resolves and copies exactly that ref into the master store
+  (spec FR-006). This pinning fact still holds on `main`; the report's
+  accompanying claim that there is **no** update-detection / out-of-date signal
+  is now stale — PR #115 added one (see ✏️ below).
+  [`repo:backend/coffer/domain/skill/source.py`,
+  `repo:specs/005-skill-manager/{spec,plan}.md`]
+- **SKILL.md frontmatter is now aligned to the agentskills.io constraints
+  (PR #105, 2026-06-18) — partially.** As of #105, `SkillFrontmatter`
+  enforces the standard's caps (`name` ≤64, `description` ≤1024) and now
+  **recognizes and retains** the optional `license` and experimental
+  `allowed-tools` fields rather than dropping them under `extra="allow"`
+  (`allowed-tools` is normalized to a list and is the data the trust layer
+  consumes). Two gaps the report flagged remain by design, not omission: it
+  still does **not** enforce `name == parent-directory`, and the `name` regex
+  still tolerates underscores (see ✏️ below). [`repo:backend/coffer/domain/skill/frontmatter.py`,
+  `repo:specs/005-skill-manager/{spec,data-model,plan}.md`, spec FR-004/FR-027]
+- **Reversec "Skill Issues" post is real and as described.** "Skill Issues:
+  Compromising Claude Code with malicious skills & agents — Part 1," James
+  Henderson, published **May 5, 2026** (report's "May 2026" is correct). Thesis
+  matches: skills/agents are executable instructions with file/command access,
+  comparable to running untrusted binaries / pip packages; RCE pathways include
+  the `allowed-tools` frontmatter and agent permission overrides.
+  [labs.reversec.com/posts/2026/05/skill-issues-compromising-claude-code-with-malicious-skills-agents-part-1]
+- **agentskills.io frontmatter constraints are exact.** `name` required, ≤64
+  chars, lowercase `a-z`/`0-9`/hyphens only (no leading/trailing or consecutive
+  hyphens) **and must match the parent directory name**; `description` required,
+  ≤1024 chars, non-empty; **no top-level `version` field** (the only `version`
+  is inside the optional `metadata` example); `allowed-tools` is an optional
+  space-separated string explicitly marked "(Experimental)."
+  [agentskills.io/specification]
+
+### ✏️ Corrected
+
+- **§1 Security / §5 Sources framing of the scanner-evasion story.** Old: "a
+  malicious-code test file reportedly passed every one of **Anthropic's** skill
+  scanners." Corrected: the scanners are **third-party** tools that audit
+  Anthropic/Claude skills — **Snyk Agent Scan, Cisco's AI Agent Security
+  Scanner, and VirusTotal Code Insight** — not scanners built by Anthropic. The
+  substance holds: a payload bundled in a `*.test.ts` file passed all of them
+  because none inspects bundled test files as an execution surface (test files
+  run with full local permissions via standard test runners / `npm test` / CI).
+  Underlying research attributed to Gecko Security (surfaced via CrowdStrike at
+  RSAC 2026).
+  [venturebeat.com/security/anthropic-skill-scanners-passed-every-check-malicious-code-test-file]
+- **Internal nit: §1 says `name` is "lowercase alphanumeric + hyphens," but
+  Coffer's regex `^[a-z0-9][a-z0-9_-]{0,63}$` also permits underscores**, which
+  the standard does not. PR #105 (frontmatter alignment) did **not** remove the
+  underscore — it is now documented in-code and in spec FR-004 as a _deliberate
+  backward-compat superset_ (to keep skills already on disk valid), so the
+  divergence stands by design, not as an oversight. [`repo:backend/coffer/domain/skill/frontmatter.py`,
+  spec FR-004, agentskills.io/specification]
+- **§2/§3/§4's headline "no skill scanner / content not scanned" gap is now
+  CLOSED (PR #111, 2026-06-18 — skill content trust layer L2).** The report's
+  capability table marked Coffer "None (content not scanned)" and named a
+  content scanner as the highest-leverage missing piece. Coffer now ships a
+  heuristic content scanner: `scan_skill_folder` walks a skill's text files and
+  applies single-line regex rules for remote-exec pipes (`curl|wget … | sh`),
+  base64/obfuscated payloads, secret/credential access (`~/.ssh`, `~/.aws`,
+  `id_rsa`, `AWS_SECRET_ACCESS_KEY`), dangerous recursive `rm`, shell `eval`,
+  network egress, and privilege escalation, yielding a verdict
+  (`low`/`medium`/`high`/`critical` or none). It runs on **every ingest**
+  (import, fetch, adopt) and every content-changing op (update/edit), caches
+  the verdict on `SkillConfig`, and a **`high`/`critical` verdict gates
+  enabling a skill for an agent until the user explicitly acknowledges the risk
+  (409; follow/auto-bind reconcilers skip un-acked skills)**. It is explicitly
+  advisory and non-authoritative — Coffer delivers but never executes skills,
+  so a clean report is not a safety guarantee (ADR-027). Note this is Coffer's
+  _own_ scanner; it is unrelated to the external scanner-evasion story above
+  (Snyk/Cisco/VirusTotal), which concerns third-party auditors missing payloads
+  in bundled test files. [`repo:backend/coffer/domain/skill/content_scan.py`,
+  `repo:backend/coffer/domain/skill/config.py`,
+  `repo:backend/coffer/application/skill/{scan_ops,lifecycle_ops,update_ops,binding_ops}.py`,
+  `repo:backend/coffer/surfaces/http/skill_routes.py`, spec FR-028/FR-029,
+  `repo:docs/decisions/ADR-027-skill-content-trust-layer.md`]
+- **§4's "no update-detection / pinning UX" gap is now CLOSED (PR #115,
+  2026-06-18 — skill update detection + pinning).** The report listed
+  "no 'update available' signal" as one of the two UX gaps versus
+  ClaudeKit/ccpi and recommended exactly "update-detection + explicit
+  pin/unpin." Coffer now ships both. An on-demand `check_for_updates`
+  (spec FR-030) re-fetches a Git-sourced skill at its pinned `git_ref`,
+  re-validates the upstream SKILL.md, and compares the upstream content hash
+  (and frontmatter `name`, to catch renames) against the stored
+  `version_hash` — **without applying anything** — then caches the result
+  (`update_available`, `available_version_hash`, `last_update_check_at`) on
+  `SkillConfig`; applying an update clears the signal, and every check is
+  audited (`skill_update_checked`). A `pinned` flag (spec FR-031,
+  `coffer skill pin`/`unpin`, audited `skill_pinned`/`skill_unpinned`)
+  suppresses the signal so a deliberately-frozen skill stops surfacing as
+  out-of-date; `SkillOut` exposes the resolved `update_pending =
+  update_available and not pinned`. It is surfaced across all three surfaces:
+  `POST /skills/{name}/check-update` · `/pin` · `/unpin` (HTTP), the
+  `coffer skill check-update`/`pin`/`unpin` CLI plus an `update:` row in
+  `skill show`, and an update row on the desktop skill detail. Local-imported
+  skills cannot be checked (`UpdateNotSupported` — re-import to refresh), and
+  `plan.md`'s deferral now scopes only to commit-level pinning / multi-version
+  coexistence, not update detection. [`repo:backend/coffer/application/skill/update_ops.py`,
+  `repo:backend/coffer/domain/skill/config.py`,
+  `repo:backend/coffer/surfaces/http/skill_trust_routes.py`,
+  `repo:backend/coffer/surfaces/cli/skill_cmd.py`,
+  `repo:frontend/src/components/skills/SkillDetailTabs.tsx`,
+  spec FR-030/FR-031]

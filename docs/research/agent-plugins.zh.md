@@ -115,3 +115,28 @@ Coffer 的插件 facet **有意做最小**：读时列出某 agent 的插件（�
 - thehackernews.com/2026/03 —— GlassWorm 供应链攻击（72 个扩展）
 - ox.security —— "Can you trust that verified symbol"（IDE 扩展利用）
 - developer.microsoft.com/blog —— VS 市场的安全与信任
+
+## 核查更新（2026-06-19）
+
+> 对本报告核心论断做了一次一手来源核查：结论总体成立，仅两处需精修（GlassWorm 数字统一为 72，并收紧 Claude Code 的 issue 引用）。
+
+### ✅ 已确认
+
+- **Coffer 在插件描述符里按 agent 建模 `can_toggle`/`can_uninstall`。** `PluginCapability` 携带这两个标志（`repo:backend/coffer/domain/agent/plugin_capability.py:45-64`），并在描述符表中按 agent 设置（`repo:backend/coffer/domain/agent/descriptor.py:236-332`）。
+- **"跨 agent 插件视图——可行（未建）"准确。** spec 004 只描述了 per-agent 的 Plugins 标签页（`repo:specs/004-agent-registry/spec.md:184`）；代码与 FR 中均无跨 agent 聚合。
+- **Codex 的"toggle + 卸载"能力真实且有一手来源。** 由 Coffer 自身描述符背书（`PluginModel.CODEX`、`can_toggle=True`、`can_uninstall=True` —— `repo:backend/coffer/domain/agent/descriptor.py:259-264`）及 FR-033（`repo:specs/004-agent-registry/spec.md:191`、`:629`），外部则有 OpenAI 文档：在 `~/.codex/config.toml` 中以 `enabled = false` 禁用，经插件浏览器 / `codex plugin` CLI 卸载。https://developers.openai.com/codex/plugins
+- **OpenCode 无内建启停命令；`disabled_plugins[]` 仅为提案。** issue #11743（"Feature Request: CLI Support for Plugin Enable/Disable"）仍是开放的功能请求、尚未实现；用户当前靠改 `opencode.json` 来禁用。https://github.com/anomalyco/opencode/issues/11743
+- **Windsurf 已更名为 "Devin Desktop"。** Cognition 于 2026-06-02 宣布"Windsurf is now Devin Desktop"，以 OTA 更新发布（Cascade 由 Devin Local 取代）。截至 2026-06-19 仍现行。https://devin.ai/blog/windsurf-is-now-devin-desktop/
+
+### ✏️ 已修正
+
+- **GlassWorm 扩展数量："70+"（§1 安全）→ 统一为 "72"。** 报告自己引用的来源标题即为 "GlassWorm Supply-Chain Attack Abuses 72 Open VSX Extensions"（故 §2 的 "72" 正确，§1 的 "70+" 是宽泛措辞——并非量级冲突）。补充背景：一手来源给出随波次不同的数字——7（2025-10 首波，Fluid Attacks）、72（2026 年 1–2 月波次，The Hacker News）、约 73 个潜伏扩展（2026-04 波次，Socket/SecurityWeek）。https://thehackernews.com/2026/03/glassworm-supply-chain-attack-abuses-72.html
+- **Claude Code 静默丢弃的引用："#15524, #25086" → #25086 是主依据；#15524 是另一个相邻 bug。** #25086（"enabledPlugins in settings.local.json silently ignored unless key also exists in settings.json"）逐字描述了静默丢弃。#15524 讲的是安装命令未更新 project 级 `settings.json`——相关但不同。两个 issue 现均已 CLOSED（另有较新的重复项 #27247），故"有记录的坑"仍成立，但"是否仍现行"在关闭后存疑。https://github.com/anthropics/claude-code/issues/25086
+
+### ❓ 仍待核查
+
+- Claude Code 的 `enabledPlugins` 静默丢弃是否**仍现行**：#25086 与 #15524 均已 CLOSED，且有较新的重复项 #27247——行为可能在报告快照之后已改变。
+
+### ➕ 新增覆盖
+
+- **OpenAI Codex** —— Codex CLI 具备含市场的完整插件系统：从市场来源 install/list/remove 插件，在 `~/.codex/config.toml` 中以 `enabled = false` 禁用（或 `features.plugins=false` / `--disable plugins`），并经插件浏览器 / `codex plugin` CLI 卸载。这印证了报告能力矩阵中的 "Codex（toggle + 卸载）"，而仓库描述符亦如此建模。注意：尽管 Codex 文档为该能力论断的依据，§5 来源中目前**缺失**它——建议补上。https://developers.openai.com/codex/plugins

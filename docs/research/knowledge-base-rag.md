@@ -169,3 +169,57 @@ Follow-up:
 - github.com/Mintplex-Labs/anything-llm
 
 Coffer code verified: backend/coffer/application/knowledge_base/service.py · builtin_tools.py
+
+## Verification update (2026-06-19)
+
+> Re-verification pass against this report. The central local claim and four of
+> five web claims hold; one competitor row (Onyx MCP) is corrected; the
+> AnythingLLM coverage bullet checks out.
+
+### ✅ Confirmed
+
+- **Coffer KB has no hybrid/RRF fusion — modes are strictly separate.**
+  `RetrievalMode = Literal["grep","keyword","vector"]`
+  (`repo:backend/coffer/domain/knowledge/retrieval.py:11`); `search()` dispatches
+  exactly one mode per call, with a vector→keyword _fallback_ (not a fusion) and
+  no reciprocal-rank or bm25+vec score combination anywhere
+  (`repo:backend/coffer/application/knowledge/retrieval.py:109-169`;
+  `repo:backend/coffer/application/knowledge_base/service.py:274-300`). FTS5
+  bm25 and sqlite-vec KNN exist as separate engines, never combined.
+- **LlamaIndex `QueryFusionRetriever(mode="reciprocal_rerank")`** still documents
+  fusing BM25 + vector retrievers via RRF.
+  https://docs.llamaindex.ai/en/stable/examples/retrievers/reciprocal_rerank_fusion/
+- **RAGFlow per-dataset embedding lock + thresholds** — embedding model cannot
+  change once a dataset has chunks (delete chunks to switch); similarity
+  threshold default 0.2, vector weight default 0.3.
+  https://ragflow.io/docs/configure_knowledge_base
+- **Morphik license** — `morphik-core` LICENSE is BSL 1.1; Additional Use Grant
+  permits production use while gross revenue from that use is < US$2000/month;
+  Change License Apache-2.0; Change Date June 18 2029 (~4 yrs).
+  https://raw.githubusercontent.com/morphik-org/morphik-core/main/LICENSE
+- **Khoj default models** — bi-encoder `thenlper/gte-small` → cross-encoder
+  `mixedbread-ai/mxbai-rerank-xsmall-v1`, set in
+  https://raw.githubusercontent.com/khoj-ai/khoj/master/src/khoj/processor/embeddings.py
+
+### ✏️ Corrected
+
+- **Onyx MCP access:** old → §5 table marks Onyx MCP access "not evidenced".
+  Corrected → Onyx officially supports MCP both as a **client** (agents invoke
+  tools) and as a **server** (connect Claude/Cursor to the Onyx knowledge base);
+  the row understates current state. https://docs.onyx.app/admins/actions/mcp
+- **RAGFlow lock — refinement (not a contradiction):** as of RAGFlow 0.22.1 an
+  opt-in compatibility check can permit switching the embedding model on a
+  data-containing dataset when re-encoded sample cosine similarity ≥ 0.9. The
+  per-dataset lock is the _default_ behavior, now with a newer guarded escape
+  hatch. https://ragflow.io/docs/configure_knowledge_base
+
+### ➕ Coverage added
+
+- **AnythingLLM** — reranker is coupled to **LanceDB only**
+  (`NativeEmbeddingReranker`, default cross-encoder
+  `Xenova/ms-marco-MiniLM-L-6-v2`), with an open feature request to extend
+  reranking to other vector DBs (Pinecone/Weaviate/FAISS); native/local
+  embedding = ONNX `all-MiniLM-L6-v2` (Xenova quantized, 384-d), the bundled CPU
+  embedder in the desktop app — matching the §5 bullet.
+  https://deepwiki.com/Mintplex-Labs/anything-llm/6.4-similarity-search-and-reranking
+  · https://github.com/Mintplex-Labs/anything-llm/issues/3941

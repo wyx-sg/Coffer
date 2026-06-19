@@ -120,3 +120,49 @@ Primary:
 - infisical.com/docs/documentation/platform/secret-reference
 - developer.hashicorp.com (Vault dynamic secrets) · getsops.io · github.com/AGWA/git-crypt
 - github.com/sigbit/mcp-auth-proxy
+
+## Verification update (2026-06-19)
+
+> Light fact-check pass (the 2026-06-16 run hit a session limit before
+> vote-verification). All four checked claims hold against primary sources; none
+> needed a substantive correction.
+
+### ✅ Confirmed
+
+- **Coffer ciphertext-only + "access without exposure."** `EncryptedCredentialStore`
+  stores secrets only as Fernet ciphertext in the SQLite `credentials` table —
+  `set()` encrypts, `get()` decrypts into memory only, `exists()` is a presence
+  probe that never decrypts. Docstring: "Plaintext exists only in memory between
+  decrypt and the spawn that consumes it. The ciphertext column never reaches logs
+  or audit rows." ADR-015 (Accepted 2026-06-12) restates "Ciphertext at rest…
+  never in logs, audit, or structured events," with the master key in a 0600 file
+  by default / OS keychain opt-in (matches the "Master-unlock model" row).
+  [repo:backend/coffer/infrastructure/credentials/encrypted_store.py;
+  repo:docs/decisions/ADR-015-envelope-encrypted-credential-store.md]
+- **1Password `op run` materialize-at-spawn.** Docs: "loads the specified secrets,
+  then runs the provided command in a subprocess with the secrets made available as
+  environment variables only for the duration of the process." It resolves `op://`
+  references and injects them into the child process; values are not persisted to
+  the shell env or disk. https://www.1password.dev/cli/secrets-environment-variables/
+- **1Password + Runlayer header injection.** Blog (verbatim): "Credentials live
+  exclusively in the customer's 1Password vault. Runlayer stores a reference, never
+  the raw value." And: "When the MCP proxy handles a tool call, it scans transport
+  headers for `op://` references. For each match, it calls the 1Password SDK to
+  resolve the live value and injects it into the upstream connection." Plaintext in
+  memory only for the request; nothing persists on disk or in the gateway DB.
+  Announced 2026-03-17.
+  https://1password.com/blog/secure-mcp-credentials-1password-runlayer
+- **License posture.** Infisical core is MIT (Expat) by default; content under any
+  `ee/` directory is governed by a separate enterprise license. HashiCorp Vault is
+  BSL/BUSL 1.1 (source-available), adopted August 2023 (changed from MPL 2.0);
+  converts to open source on the Change Date / 4th anniversary of release.
+  https://raw.githubusercontent.com/Infisical/infisical/main/LICENSE;
+  https://www.hashicorp.com/en/blog/hashicorp-adopts-business-source-license
+
+### ✏️ Corrected
+
+- **Provenance: "spec 015" → ADR-015 + spec 001-mcp-gateway.** The header cites
+  "spec 015 / ADR-015"; the ADR exists, but there is no `specs/015-*` folder. The
+  credentials feature is documented via ADR-015 plus spec 001-mcp-gateway
+  (credentials table, audit events). Does not change the substance of the claim.
+  [repo:docs/decisions/ADR-015-envelope-encrypted-credential-store.md]

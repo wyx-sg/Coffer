@@ -135,3 +135,48 @@
 - github.com/Mintplex-Labs/anything-llm
 
 已核对 Coffer 代码：backend/coffer/application/knowledge_base/service.py · builtin_tools.py
+
+## 核查更新（2026-06-19）
+
+> 对本报告的复核。核心本地论断与五个网络论断中的四个成立；一处竞品条目（Onyx MCP）已修正；
+> AnythingLLM 覆盖条目核对无误。
+
+### ✅ 已确认
+
+- **Coffer KB 无混合/RRF 融合——各模式严格分离。**
+  `RetrievalMode = Literal["grep","keyword","vector"]`
+  （`repo:backend/coffer/domain/knowledge/retrieval.py:11`）；`search()` 每次调用只分发到一个
+  模式，向量会*降级回退*到关键词（并非融合），检索路径中任何位置都没有倒数排名或 bm25+向量
+  打分组合（`repo:backend/coffer/application/knowledge/retrieval.py:109-169`；
+  `repo:backend/coffer/application/knowledge_base/service.py:274-300`）。FTS5 bm25 与
+  sqlite-vec KNN 作为两个独立引擎存在，从不合并。
+- **LlamaIndex `QueryFusionRetriever(mode="reciprocal_rerank")`** 仍记载经 RRF 融合
+  BM25 + 向量检索器。
+  https://docs.llamaindex.ai/en/stable/examples/retrievers/reciprocal_rerank_fusion/
+- **RAGFlow 按 dataset 锁定 embedding + 阈值**——dataset 一旦有分块就不能换 embedding 模型
+  （需删分块才能切换）；相似度阈值默认 0.2，向量权重默认 0.3。
+  https://ragflow.io/docs/configure_knowledge_base
+- **Morphik 许可证**——`morphik-core` LICENSE 为 BSL 1.1；Additional Use Grant 允许在该用途
+  总营收 < 2000 美元/月时投入生产；Change License 为 Apache-2.0；Change Date 为 2029 年 6 月 18 日
+  （约 4 年）。https://raw.githubusercontent.com/morphik-org/morphik-core/main/LICENSE
+- **Khoj 默认模型**——bi-encoder `thenlper/gte-small` → cross-encoder
+  `mixedbread-ai/mxbai-rerank-xsmall-v1`，定义于
+  https://raw.githubusercontent.com/khoj-ai/khoj/master/src/khoj/processor/embeddings.py
+
+### ✏️ 已修正
+
+- **Onyx MCP 访问：** 原文 → §5 表格标记 Onyx MCP 访问"未取证"。修正 → Onyx 官方支持 MCP，既可
+  作为**客户端**（agent 调用工具），也可作为**服务端**（把 Claude/Cursor 接到 Onyx 知识库）；
+  该条目低估了现状。https://docs.onyx.app/admins/actions/mcp
+- **RAGFlow 锁定——补充（非矛盾）：** 自 RAGFlow 0.22.1 起，一个可选的兼容性检查可在重新编码的
+  样本余弦相似度 ≥ 0.9 时，允许在已含数据的 dataset 上切换 embedding 模型。按 dataset 锁定是
+  *默认*行为，如今多了一个有约束的逃生通道。https://ragflow.io/docs/configure_knowledge_base
+
+### ➕ 新增覆盖
+
+- **AnythingLLM**——重排器**仅与 LanceDB 耦合**（`NativeEmbeddingReranker`，默认 cross-encoder
+  `Xenova/ms-marco-MiniLM-L-6-v2`），并有一个开放的 feature request 请求把重排扩展到其他向量库
+  （Pinecone/Weaviate/FAISS）；原生/本地 embedding = ONNX `all-MiniLM-L6-v2`（Xenova 量化，384 维），
+  是桌面应用内置的 CPU embedder——与 §5 条目一致。
+  https://deepwiki.com/Mintplex-Labs/anything-llm/6.4-similarity-search-and-reranking
+  · https://github.com/Mintplex-Labs/anything-llm/issues/3941

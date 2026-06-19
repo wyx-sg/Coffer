@@ -16,6 +16,25 @@
 > per report are 3-vote confirmed; the rest are single-primary-source (cited
 > inline). **Treat as a well-sourced first pass; do a light fact-check before
 > quoting anything externally.**
+>
+> **Verification update (2026-06-19).** Every report now ends with a
+> `Verification update (2026-06-19)` section — a re-verification pass that
+> re-checked each report's decision-relevant claims against **current primary
+> sources** (vendor docs, official repos) and **Coffer's own code / specs /
+> ADRs**, recording what was ✅ confirmed, ✏️ corrected, ❓ still uncertain, or
+> ➕ added (previously-uncovered competitors). Most claims held; a few
+> corrections are material — e.g. the channels report's "shared approval gate"
+> was removed in PR #101 (2026-06-18, two days after the report); the MCP "only
+> gateway with tool-search" claim is narrowed to the tool-search-**plus**-
+> agentic-`ask` combination. Read each report's update section alongside its body.
+>
+> _Snapshot caveat._ Coffer's skill / agent / knowledge-base subsystems are
+> shipping rapidly. The per-report sections reflect `main` as re-verified on
+> **2026-06-19**; two PRs that landed while this was being prepared — **#116**
+> (skill discovery — browse + install from a catalog) and **#117** (co-managed
+> KB documents) — are NOT folded into the per-report sections, so agent-skills'
+> "no discovery" gap and parts of the KB report are already overtaken. Re-check
+> against current `main` before relying on any "gap" or "we lead here" claim.
 
 ## The reports
 

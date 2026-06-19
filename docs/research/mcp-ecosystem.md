@@ -143,3 +143,122 @@ Tool overload / commentary:
 - pulsemcp.com/posts/virtual-mcp-servers-and-gateways
 - heyitworks.tech/blog/mcp-aggregation-gateway-proxy-tools-q1-2026 · truefoundry.com/blog/best-mcp-registries
 - developers.redhat.com/articles/2025/12/12 (advanced auth for MCP gateway)
+
+## Verification update (2026-06-19)
+
+> Re-verification pass: claims hold except one that was overtaken by shipped
+> code — the "no per-agent scoping" LOCAL headline finding flipped (PR #108 /
+> ADR-026, merged 2026-06-18) and moves to ✏️ Corrected below; the
+> `search_tools`/`ask` LOCAL finding still holds. WEB claims confirmed with two
+> source upgrades and one scoping correction.
+
+### ✅ Confirmed
+
+- **Coffer ships both `search_tools` and `ask`.** `search_tools` is the built-in
+  meta-tool (`tool_search_descriptor()` appended in `append_builtin_tools()`,
+  dispatched by `dispatch_tool_search()` — BM25 default, semantic when an
+  embedder is provided, per ADR-024); `ask` is a `BuiltinTool` (exposed as
+  `coffer__ask`) built by `make_ask_tool()` — a bounded ReAct
+  retrieve-and-synthesize loop over knowledge base + memory (read-only retrieval
+  only). Both surface through the same gateway.
+  `repo:backend/coffer/application/mcp/gateway_builtin.py:144-201`,
+  `repo:backend/coffer/infrastructure/chat/agentic_rag.py:53-165`,
+  `repo:backend/coffer/surfaces/http/wiring.py:253-293`
+- **ToolHive vMCP per-instance tool filtering** (the report flagged the exact
+  mechanism as unverified) — now confirmed from primary Stacklok docs: each
+  `VirtualMCPServer` references an `MCPGroup` and defines its own aggregation, so
+  distinct vMCP instances over the same backends expose different curated
+  subsets. Keys: `aggregation.tools[].filter` (per-backend allowlist),
+  `aggregation.tools[].excludeAll`, `aggregation.excludeAllTools` (global hide),
+  `aggregation.tools[].overrides` (rename/redescribe). Filtered tools drop from
+  `tools/list` but stay in the internal routing table for composite workflows.
+  https://docs.stacklok.com/toolhive/guides-vmcp/tool-aggregation
+- **Official MCP Registry still in preview as of 2026-06.** The Sept 2025 launch
+  post frames it as a preview ahead of GA (possible breaking changes / data
+  resets), an open read-only REST catalog of server metadata with an OpenAPI
+  spec (~9,652 records as of 2026-05-24).
+  https://blog.modelcontextprotocol.io/posts/2025-09-08-mcp-registry-preview/
+
+### ✏️ Corrected
+
+- **"No per-client/per-agent scoping" is now stale — Coffer shipped it.** This
+  report's headline differentiator ("the lone whole-gateway-per-agent; the only
+  gateway with no per-client scoping," §1/§2 table/§3/§4) was overtaken by
+  **PR #108 / ADR-026** (`docs/decisions/ADR-026-per-agent-mcp-scoping.md`),
+  merged **2026-06-18**. Coffer now supports **per-agent MCP server scoping**
+  with two modes: `auto` (default — every enabled server, fully backward
+  compatible) and `selected` (an explicit per-agent allowlist). Agent identity
+  travels with the session: the install writer stamps `--agent <name>` into the
+  agent's `coffer` MCP entry, the shim forwards it as an **`X-Coffer-Agent`**
+  request header, and the gateway binds the session to that agent and enforces
+  the effective scope (enabled ∩ allowlist) at `tools/list` /
+  `resources/list` / `prompts/list`, in `coffer__search_tools` ranking, **and**
+  on direct `tools/call` / `resources/read` / `prompts/get` (the call path is
+  the real boundary, not list-time hiding). A session with no identity (e.g. the
+  in-process built-in agent) stays unscoped. The agent gateway-MCP UI is now an
+  **editable scope picker** (auto/selected radio + a per-server allowlist
+  checkbox). So this report's headline "only gateway with no per-client scoping"
+  finding should be read as **historical** — a gap Coffer has since **closed**;
+  it no longer differentiates Coffer from ContextForge / MetaMCP / MCPJungle /
+  Docker.
+  `repo:backend/coffer/domain/agent/mcp_install.py:44-91`,
+  `repo:backend/coffer/surfaces/shim/main.py:145-150`,
+  `repo:backend/coffer/surfaces/http/mcp/protocol_routes.py:150,247`,
+  `repo:backend/coffer/application/agent/scope_service.py:33-96`,
+  `repo:backend/coffer/application/mcp/gateway.py:165-222`,
+  `repo:frontend/src/components/agents/AgentGatewayMcpSection.tsx`,
+  `repo:docs/decisions/ADR-026-per-agent-mcp-scoping.md`
+- **"Only gateway with runtime tool-search" overstated for the broader field.**
+  Old: the table marks runtime tool-search as a Coffer-unique `—` across all five
+  rivals. Corrected: tool-search / progressive disclosure is not unique even
+  beyond the surveyed five — AIRIS ships 7 meta-tools (find/exec/schema/suggest/
+  route…), MarimerLLC/mcp-aggregator advertises "lazy tool discovery", MetaMCP
+  markets "Elasticsearch for MCP tool selection", and MCPJungle/ContextForge have
+  discovery/progressive-disclosure features. What is genuinely distinctive is the
+  _combination_: a runtime tool-search tool **plus** an agentic retrieve-and-
+  synthesize `ask` (RAG-style) answer tool over a knowledge/memory vault — no
+  surveyed gateway ships a RAG answer tool. Reword §1/§3 from "only gateway with
+  tool-search" to "distinctive in pairing tool-search with an agentic ask/RAG
+  answer tool."
+  https://www.heyitworks.tech/blog/mcp-aggregation-gateway-proxy-tools-q1-2026 ·
+  https://github.com/MarimerLLC/mcp-aggregator
+- **Claude Code MCP tool-search now has a primary source.** Old: cited only the
+  tessl.io commentary blog. Corrected: official Claude Code docs section "Scale
+  with MCP Tool Search" states tool search is enabled by default, MCP tools are
+  deferred rather than loaded upfront, and Claude discovers relevant ones on
+  demand (`ENABLE_TOOL_SEARCH`: unset/true/auto/false; `auto` = load upfront if
+  within 10% of context window). Shipped in Claude Code 2.1.7 on 2026-01-14.
+  https://code.claude.com/docs/en/mcp (section "Scale with MCP Tool Search")
+- **"In preview through 2026" is an interpretation, not an official statement.**
+  The launch post gives no GA timeline and does not literally say
+  "unauthenticated" (the API is open/read-only). The phrasing is consistent with
+  current state but should be marked as inference, not a quoted commitment.
+  https://blog.modelcontextprotocol.io/posts/2025-09-08-mcp-registry-preview/
+
+### ➕ Coverage added
+
+- **IBM ContextForge** — confirmed per-client curated subsets via named "virtual
+  servers" over a unified endpoint; OSS registry+proxy federating
+  MCP/A2A/REST/gRPC with 40+ plugins, guardrails, full OAuth; supports
+  progressive-disclosure/discovery, so runtime tool-search is not Coffer-unique.
+  https://github.com/IBM/mcp-context-forge
+- **MetaMCP** — confirmed three-level Servers → Namespaces → Endpoints hierarchy;
+  namespaces are the per-endpoint curated aggregate, with description overrides
+  and middleware filtering; marketed as "Elasticsearch for MCP tool selection."
+  https://github.com/metatool-ai/metamcp
+- **MCPJungle** — confirmed self-hosted registry+gateway with "Tool Groups"
+  supporting include/exclude and per-client allowlisting (per-client curated
+  subsets), matching the report.
+  https://www.heyitworks.tech/blog/mcp-aggregation-gateway-proxy-tools-q1-2026
+- **Docker MCP Toolkit/Gateway + Catalog** — runs MCP servers as containers;
+  custom catalogs and "profiles" scope which servers a client sees, with built-in
+  secrets/security (per-client subset = profiles). Characterized from the
+  report's cited Docker sources; not independently re-fetched this pass.
+  https://docs.docker.com/ai/mcp-catalog-and-toolkit
+- **ToolHive vMCP (Stacklok)** — confirmed per-instance curated subsets: each
+  `VirtualMCPServer` over an `MCPGroup` applies its own
+  `aggregation.tools[].filter` allowlists / `excludeAll(Tools)` / `overrides`;
+  container-isolated backends; vMCP introduced Dec 2025 (Stacklok docs give no
+  explicit GA date — see the correction in `local-first-control-plane.md`) with
+  a K8s-oriented production path.
+  https://docs.stacklok.com/toolhive/guides-vmcp/tool-aggregation

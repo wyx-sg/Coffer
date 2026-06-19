@@ -87,3 +87,44 @@
 - github.com/lbb00/ai-rules-sync（AIS）
 - github.com/dyoshikawa/rulesync · github.com/pathintegral-institute/mcpm.sh
 - VS Code Settings Sync 文档 · JetBrains Backup & Sync 文档
+
+## 核查更新（2026-06-19）
+
+> 针对 2026-06-16 来源说明所标记的四条 claim（1 条本地头条 claim + 3 条 web claim）做
+> 轻量核查，并对 chezmoi 加密后端清单做了独立复核。全部成立，无需修正。
+
+**导语：** 所有目标 claim 均经一手来源确认——而对账而非覆盖这一头条差异点是在**代码中已实现**，
+并非仅停留在规格层面。
+
+### ✅ 已确认
+
+- **对账而非覆盖确有其事，并非空想。** 配置资源经与 kind 无关的资源服务按 `(kind, name)` 对账
+  ——已存在的走 `update_config` + `set_enabled`，新增的走 `register`，上游删除的走 `delete`
+  ——绝非对文件的盲目覆盖。`update_config` 会重新校验配置、探测凭证引用并运行各 kind 的跨版本
+  钩子，因此这是一次经校验、感知 kind 的对账。[`backend/coffer/application/sync/importer.py:71-110`；
+  `backend/coffer/application/resource_service.py:206-243`；ADR-016；spec 010]
+- **chezmoi 整文件加密经四种后端**——age、git-crypt、gpg、transcrypt；加密文件以
+  ASCII-armored 形态存于源目录并带 `encrypted_` 属性，仅在需要时自动解密。
+  https://github.com/twpayne/chezmoi/blob/master/assets/chezmoi.io/docs/user-guide/encryption.md
+- **chezmoi 按机器模板**经 Go `text/template`，以 `.chezmoi.hostname` / `.chezmoi.os`
+  条件实现；机器本地 `[data]` 存于 `~/.config/chezmoi/chezmoi.{toml,yaml,json}`。
+  https://www.chezmoi.io/user-guide/manage-machine-to-machine-differences/
+- **chezmoi `onepasswordDocument`** 在*应用*时从 1Password 取文档（按 uuid 缓存输出）；
+  密钥留在 1Password，而非进入 dotfiles。
+  https://www.chezmoi.io/reference/templates/1password-functions/onepassworddocument/
+- 在受访的 dotfile 工具中，**只有 chezmoi 和 yadm 支持整文件加密**；dotbot、rcm、vcsh 与裸
+  git 不支持（chezmoi 对比表中分别为 `✅`/`❌`）。https://www.chezmoi.io/comparison-table/
+- **AIS（`ai-rules-sync`）** 跨众多 agent（Cursor、Claude Code、Copilot、OpenCode、
+  Trae AI、Codex、Gemini CLI、Warp）同步 AI 规则/skills/命令/子 agent——在 git repo 中管理
+  规则，并经软链接物化进项目（默认目标 `.cursor/rules/`、`.github/instructions/`）——确认是
+  git + symlink 而非文件复制。https://github.com/lbb00/ai-rules-sync
+
+### ✏️ 已修正
+
+- **属补充说明，并非事实修正（§3.1）：** 三方*内容*合并发生在 git/YAML 文本层（确定性序列化
+  ——每个资源一份 YAML、键排序、时间戳归一化、剥离仅本地字段——使 diff 可合并）；importer 随后
+  把本地 SQLite 库对账*到*已合并的工作区。报告"语义合并而非盲目覆盖"的表述成立；合并与对账是两个
+  不同的层。[ADR-016；`backend/coffer/application/sync/importer.py:71-110`]
+- chezmoi 的 **FAQ** 加密页只列出 age/gpg/rage，但 **user-guide/encryption** 页列出了全部
+  四种后端，与报告一致——四后端 claim 应引用 user-guide 而非 FAQ。
+  https://github.com/twpayne/chezmoi/blob/master/assets/chezmoi.io/docs/user-guide/encryption.md

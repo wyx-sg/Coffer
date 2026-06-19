@@ -101,3 +101,71 @@
 - Galileo（galileo.ai）· Arize Phoenix（docs.arize.com/phoenix）
 
 已核对 Coffer 仓库：`evals/`（套件、基线、`curate.py`）、`.github/workflows/evals.yml`、ADR-019、ADR-017。
+
+## 核查更新（2026-06-19）
+
+> 复核一轮：Coffer 本地 eval 飞轮的各项主张对仓库逐条成立；网络主张大体确认，仅一处修正
+> （Braintrust 的 `eval-action` 是报告而非门禁）和两处新增覆盖（Galileo、Arize Phoenix）。
+
+### ✅ 已确认
+
+- **已落地的 eval 飞轮。** `evals/` 含确定性套件（`retrieval_eval.py`、
+  `tool_search_eval.py`）及一个带模型的路由套件（`routing_eval.py`，不进 CI）；
+  `COFFER_EVAL_CAPTURE` 的 JSONL 捕获 sink 默认关闭——发射端
+  `record_tool_search` 在 `repo:backend/coffer/application/eval_capture.py`、
+  handler 在 `repo:backend/coffer/infrastructure/logging/eval_capture.py`、经
+  `repo:backend/coffer/application/mcp/gateway_builtin.py` 接入
+  `coffer__search_tools`；交互式 `repo:evals/curate.py` 把捕获的迹提升进
+  `datasets/tool_search.jsonl`。
+- **提交基线 + 相对回归 CI 门禁。** `evals/baselines/{retrieval,tool_search,routing}.json`
+  均存在；`repo:evals/run.py` 以 `floor = baseline - tolerance` 做门禁（检索 0.01 /
+  工具检索 0.05 / 路由 0.10），回归时非零退出；`repo:.github/workflows/evals.yml` 在 PR
+  上跑确定性、无模型的检索 + 工具检索门禁，按路径过滤（路由套件仅按需触发）。
+- **支撑各项借鉴的 ADR 状态。** ADR-019（闭合 eval 飞轮）已 Accepted，2026-06-14；
+  ADR-020（迹蒸馏）已 Accepted——对应借鉴 #4 / 结论 #5；ADR-024（内置 agent 是内部能力）
+  已 Accepted，2026-06-14——对应本地 LLM 评判借鉴 #1。
+  `repo:docs/decisions/ADR-019-close-the-eval-flywheel.md`、
+  `repo:docs/decisions/ADR-020-transcript-distillation.md`、
+  `repo:docs/decisions/ADR-024-builtin-agent-is-internal-capability.md`
+- **Promptfoo —— MIT、2026-03 被 OpenAI 收购。** 收购于 2026-03-09 宣布；Promptfoo
+  "将保持开源……在当前许可证下"。MIT 由仓库许可证本身确认（公告只确认开源延续、未点名许可证）。
+  https://www.promptfoo.dev/blog/promptfoo-joining-openai/ ;
+  https://github.com/promptfoo/promptfoo
+- **LangSmith Align Evals。** 把 LLM 评判器对齐到人工标注；对齐分 = 评判器与人类专家匹配的样本
+  百分比；UI 中的更正会作为 few-shot 样本喂入后续 prompt——逐字确认。
+  https://blog.langchain.com/introducing-align-evals/ ;
+  https://docs.langchain.com/langsmith/improve-judge-evaluator-feedback
+- **Braintrust 在线打分是显式开启。** 在线打分规则在项目级创建（打分器、span/trace 范围、采样率），
+  异步跑在生产迹上、对应用无延迟影响——确认"配置打分规则 + 采样率后才开启，非默认"。
+  https://www.braintrust.dev/docs/evaluate/score-online ;
+  https://www.braintrust.dev/foundations/online-scoring
+
+### ✏️ 已修正
+
+- **Braintrust `eval-action` 是报告，不是门禁。** 旧："在每个 PR 上做离线评估门禁……低于阈值
+  阻止合并。" → 修正：`braintrustdata/eval-action` 在 CI 中跑评估，并在 PR 上贴一条实验对比
+  **评论**（分数差、回归指示），它本身**不**按阈值阻止合并——合并门禁需要单独的工作流/分支保护
+  设置。每个 PR 的离线评估运行属实；自动按阈值阻止合并的说法被夸大。
+  https://github.com/braintrustdata/eval-action
+
+### ❓ 仍待核查
+
+- **ADR-017 状态细节。** ADR-017（分层工业级 harness）状态为 **Proposed**（日期 2026-06-13），
+  **并非** Accepted。报告只把它当作"AI-eval 层"的相关背景引用，从未声称其已 Accepted，故无需正文
+  改动——此处按核查要求标注。
+  `repo:docs/decisions/ADR-017-industrial-grade-harness-in-layers.md`
+- **Promptfoo 许可证命名。** MIT 仅由仓库许可证本身确认；OpenAI/Promptfoo 的声明只说"在当前许可证
+  下保持开源"，未点名 MIT。
+
+### ➕ 新增覆盖
+
+- **Galileo**（商业）—— Agent Reliability 平台：观测 / 评估 / 护栏 / 改进 agent，含专为 agent 设计
+  的指标（工具选择质量、工具错误率、动作推进/完成、流程遵循）以及 **Luna-2** 小模型评判器（亚 200ms、
+  约 0.95 准确率），使 100% 流量在线打分在经济上可行。**报告里光秃秃的"Galileo（galileo.ai）"一行
+  漏掉的重大更新：Cisco 于 2026-05-22 完成对 Galileo 的收购。** https://galileo.ai/ ;
+  https://blogs.cisco.com/news/cisco-announces-the-intent-to-acquire-galileo
+- **Arize Phoenix**（开源）—— 来自 Arize AI、基于 OpenTelemetry 的 Apache-2.0 LLM 可观测 + 评估
+  平台；可本地 / 自托管 / 在 notebook 中运行（或 Arize 云），带 LLM-as-judge 评估（相关性、毒性、
+  幻觉、RAG、工具调用）。常被描述为"拥有 LangSmith 级能力却不把数据发给第三方"——是最贴近 Coffer
+  本地优先、无载荷立场的外部类比，只是 Phoenix 捕获完整迹，而 Coffer 仅保留元数据。
+  https://github.com/Arize-ai/phoenix ; https://arize.com/phoenix/

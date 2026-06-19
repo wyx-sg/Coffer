@@ -146,3 +146,29 @@ Security:
 - thehackernews.com/2026/03 — GlassWorm supply-chain attack (72 extensions)
 - ox.security — "Can you trust that verified symbol" (IDE extension exploit)
 - developer.microsoft.com/blog — security & trust in VS Marketplace
+
+## Verification update (2026-06-19)
+
+> A primary-source fact-check of this report's substantive claims: they hold up, with two precision fixes (standardize the GlassWorm count on 72, and tighten the Claude Code issue citation).
+
+### ✅ Confirmed
+
+- **Coffer models per-agent `can_toggle`/`can_uninstall` in a plugin descriptor.**
+  `PluginCapability` carries both flags (`repo:backend/coffer/domain/agent/plugin_capability.py:45-64`) and they are set per agent in the descriptor table (`repo:backend/coffer/domain/agent/descriptor.py:236-332`).
+- **"Cross-agent plugin view — possible (not yet built)" is accurate.** Spec 004 describes only a per-agent Plugins tab (`repo:specs/004-agent-registry/spec.md:184`); no cross-agent aggregation exists in code or FRs.
+- **The Codex "toggle + uninstall" capability is real and primary-sourced.** Backed by Coffer's own descriptor (`PluginModel.CODEX`, `can_toggle=True`, `can_uninstall=True` — `repo:backend/coffer/domain/agent/descriptor.py:259-264`) and FR-033 (`repo:specs/004-agent-registry/spec.md:191`, `:629`), and externally by OpenAI's docs: disable via `enabled = false` in `~/.codex/config.toml`, uninstall via the plugin browser / `codex plugin` CLI. https://developers.openai.com/codex/plugins
+- **OpenCode has no built-in enable/disable command; `disabled_plugins[]` is only proposed.** Issue #11743 ("Feature Request: CLI Support for Plugin Enable/Disable") is still an open feature request, not implemented; users edit `opencode.json` to disable. https://github.com/anomalyco/opencode/issues/11743
+- **Windsurf was rebranded to "Devin Desktop."** Cognition announced "Windsurf is now Devin Desktop" on 2026-06-02, shipped as an over-the-air update (Cascade replaced by Devin Local). Current as of 2026-06-19. https://devin.ai/blog/windsurf-is-now-devin-desktop/
+
+### ✏️ Corrected
+
+- **GlassWorm extension count: "70+" (§1 security) → standardize on "72."** The report's own cited source headline is "GlassWorm Supply-Chain Attack Abuses 72 Open VSX Extensions" (so §2's "72" is correct, §1's "70+" is loose phrasing — not a magnitude conflict). For context, primary sources report wave-dependent counts: 7 (Oct-2025 initial wave, Fluid Attacks), 72 (Jan–Feb 2026 wave, The Hacker News), ~73 sleeper extensions (Apr-2026 wave, Socket/SecurityWeek). https://thehackernews.com/2026/03/glassworm-supply-chain-attack-abuses-72.html
+- **Claude Code silent-drop citation: "#15524, #25086" → #25086 is the primary support; #15524 is a different, adjacent bug.** #25086 ("enabledPlugins in settings.local.json silently ignored unless key also exists in settings.json") describes the silent-drop verbatim. #15524 is about the install command not updating project-level `settings.json` — related but distinct. Both issues are now CLOSED (a newer duplicate #27247 exists), so "documented gotcha" still stands but "still current" is uncertain post-close. https://github.com/anthropics/claude-code/issues/25086
+
+### ❓ Still uncertain
+
+- Whether the Claude Code `enabledPlugins` silent-drop is **still current**: #25086 and #15524 are both CLOSED, with a newer duplicate #27247 — behavior may have changed since the report's snapshot.
+
+### ➕ Coverage added
+
+- **OpenAI Codex** — the Codex CLI has a full plugin system with marketplaces: install/list/remove plugins from marketplace sources, disable via `enabled = false` in `~/.codex/config.toml` (or `features.plugins=false` / `--disable plugins`), and uninstall via the plugin browser / `codex plugin` CLI. Confirms the report's capability-matrix "Codex (toggle + uninstall)," which the repo's descriptor also models. Note: the Codex doc is currently **absent from §5 Sources** despite backing the Codex capability claims — recommend adding it. https://developers.openai.com/codex/plugins
