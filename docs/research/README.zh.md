@@ -27,20 +27,21 @@
 
 ## 报告清单
 
-| #   | 报告                                                                                              | 对应 Coffer 模块    | 一句话头条                                                                            |
-| --- | ------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------- |
-| 1   | [MCP 生态](./mcp-ecosystem.zh.md) · [en](./mcp-ecosystem.md)                                      | MCP 网关（001）     | Coffer 是唯一**无按客户端范围**的网关——每个对手都按客户端定制。                       |
-| 2   | [Agent 配置与规则管理](./agent-config-management.zh.md) · [en](./agent-config-management.md)      | Agent 注册表（004） | Coffer 结构性领先（双向、安全编辑），但**不分发指令**——这是该品类核心功能。           |
-| 3   | [Agent 技能](./agent-skills.zh.md) · [en](./agent-skills.md)                                      | 技能管理（005）     | 跨 agent 投递 + SSRF 加固采集领先；**无技能扫描器 / 未对齐标准**是缺口。              |
-| 4   | [Agent 插件](./agent-plugins.zh.md) · [en](./agent-plugins.md)                                    | 插件 facet（004）   | "可见性+安全 toggle、不安装"被**验证**正确；**插件→中枢桥**是新颖一招。               |
-| 5   | [本地优先控制台](./local-first-control-plane.zh.md) · [en](./local-first-control-plane.md)        | 整体定位            | "管理**全部**资产的金库"独一无二（对手只管 MCP）；借鉴**上游沙箱** + **profiles**。   |
-| 6   | [知识库 / RAG](./knowledge-base-rag.zh.md) · [en](./knowledge-base-rag.md)                        | KB（006）           | 文件为真相 + reindex 胜过锁定 embedding 的对手；借鉴 **RRF 融合 + 重排**。            |
-| 7   | [消息渠道](./messaging-channels.zh.md) · [en](./messaging-channels.md)                            | 渠道（009）         | 渠道即资源 + 隐身配对有差异化（Anthropic TG 插件是唯一对应物）；借鉴**按会话绑定**。  |
-| 8   | [多机同步](./multi-machine-sync.zh.md) · [en](./multi-machine-sync.md)                            | 同步（010）         | **对账而非覆盖**独一无二；借鉴 chezmoi 的**按机器模板**。                             |
-| 9   | [凭证与密钥](./credentials-secrets.zh.md) · [en](./credentials-secrets.md)                        | 凭证（015）         | Coffer 已实现 1Password "**访问而不暴露**"理想；借鉴**外部提供者引用**（`op://`）。   |
-| 10  | [可观测、审计 + MCP 安全](./observability-governance.zh.md) · [en](./observability-governance.md) | 审计/retention/安全 | 治理/审计**领先**（免费 vs Langfuse 付费墙）；借鉴 **MCP tool-pinning**（mcp-scan）。 |
-| 11  | [Agent 评估](./agent-evaluation.zh.md) · [en](./agent-evaluation.md)                              | 评估（ADR-019/017） | **更正：飞轮已落地**（ADR-019 已 Accepted、`evals/` 存在）；借鉴 **LLM-as-judge**。   |
-| 12  | [记忆系统](./memory-systems-landscape.zh.md) · [en](./memory-systems-landscape.md)                | 记忆（007）         | _并行 session 产出。_ 该领域分文件为真相 vs 向量为真相两派；Coffer 是有意的混合。     |
+| #   | 报告                                                                                              | 对应 Coffer 模块    | 一句话头条                                                                                                                   |
+| --- | ------------------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 1   | [MCP 生态](./mcp-ecosystem.zh.md) · [en](./mcp-ecosystem.md)                                      | MCP 网关（001）     | Coffer 是唯一**无按客户端范围**的网关——每个对手都按客户端定制。                                                              |
+| 2   | [Agent 配置与规则管理](./agent-config-management.zh.md) · [en](./agent-config-management.md)      | Agent 注册表（004） | Coffer 结构性领先（双向、安全编辑），但**不分发指令**——这是该品类核心功能。                                                  |
+| 3   | [Agent 技能](./agent-skills.zh.md) · [en](./agent-skills.md)                                      | 技能管理（005）     | 跨 agent 投递 + SSRF 加固采集领先；**无技能扫描器 / 未对齐标准**是缺口。                                                     |
+| 4   | [Agent 插件](./agent-plugins.zh.md) · [en](./agent-plugins.md)                                    | 插件 facet（004）   | "可见性+安全 toggle、不安装"被**验证**正确；**插件→中枢桥**是新颖一招。                                                      |
+| 5   | [本地优先控制台](./local-first-control-plane.zh.md) · [en](./local-first-control-plane.md)        | 整体定位            | "管理**全部**资产的金库"独一无二（对手只管 MCP）；借鉴**上游沙箱** + **profiles**。                                          |
+| 6   | [知识库 / RAG](./knowledge-base-rag.zh.md) · [en](./knowledge-base-rag.md)                        | KB（006）           | 文件为真相 + reindex 胜过锁定 embedding 的对手；借鉴 **RRF 融合 + 重排**。                                                   |
+| 7   | [消息渠道](./messaging-channels.zh.md) · [en](./messaging-channels.md)                            | 渠道（009）         | 渠道即资源 + 隐身配对有差异化（Anthropic TG 插件是唯一对应物）；借鉴**按会话绑定**。                                         |
+| 8   | [多机同步](./multi-machine-sync.zh.md) · [en](./multi-machine-sync.md)                            | 同步（010）         | **对账而非覆盖**独一无二；借鉴 chezmoi 的**按机器模板**。                                                                    |
+| 9   | [凭证与密钥](./credentials-secrets.zh.md) · [en](./credentials-secrets.md)                        | 凭证（015）         | Coffer 已实现 1Password "**访问而不暴露**"理想；借鉴**外部提供者引用**（`op://`）。                                          |
+| 10  | [可观测、审计 + MCP 安全](./observability-governance.zh.md) · [en](./observability-governance.md) | 审计/retention/安全 | 治理/审计**领先**（免费 vs Langfuse 付费墙）；借鉴 **MCP tool-pinning**（mcp-scan）。                                        |
+| 11  | [Agent 评估](./agent-evaluation.zh.md) · [en](./agent-evaluation.md)                              | 评估（ADR-019/017） | **更正：飞轮已落地**（ADR-019 已 Accepted、`evals/` 存在）；借鉴 **LLM-as-judge**。                                          |
+| 12  | [记忆系统](./memory-systems-landscape.zh.md) · [en](./memory-systems-landscape.md)                | 记忆（007）         | _并行 session 产出。_ 该领域分文件为真相 vs 向量为真相两派；Coffer 是有意的混合。                                            |
+| 13  | [平台级竞品](./platform-competitors.zh.md) · [en](./platform-competitors.md)                      | 整体产品（补查）    | **盲区修正（2026-06-20）：** 前 12 份报告漏掉了 cc-switch（~105k）+ 整个中文生态；无在位者覆盖 Coffer 完整的 10 项能力矩阵。 |
 
 ## 跨报告共性主题
 
@@ -92,6 +93,11 @@
 
 KB run 标记的一处覆盖缺口——AnythingLLM、Onyx、Khoj、Morphik、LlamaIndex 取证不足——已有**针对性补跑**，
 其结论已并回 [knowledge-base-rag.zh.md](./knowledge-base-rag.zh.md)。
+
+一处更大、更结构性的覆盖缺口——报告 1–12 按功能区切分的形态完全漏掉了**平台级竞品**（同时横跨多个
+类目的工具）和**中文圈的桌面切换器 / 中转 / IM 生态**，包括市场领头羊 **cc-switch（~105k）**——由报告
+\#13、[platform-competitors.zh.md](./platform-competitors.zh.md)（按 star + 能力矩阵的补查，2026-06-20）
+解决。重做 competitive 调研时请按 star 横扫关键词空间，并默认纳入中文生态。
 
 ## 方法
 
