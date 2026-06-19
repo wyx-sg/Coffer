@@ -75,3 +75,20 @@ def test_frontmatter_absent_returns_whole_body() -> None:
     assert fm == {}
     assert body == "no frontmatter here"
     assert body_of("no frontmatter here") == "no frontmatter here"
+
+
+def test_frontmatter_malformed_yaml_degrades_to_empty() -> None:
+    """A fenced block whose YAML is invalid (e.g. an unquoted value with a
+    stray colon, as written by an out-of-band tool) must NOT raise — it
+    degrades to empty frontmatter with the body preserved, so one bad file
+    cannot crash a whole store scan."""
+    text = (
+        "---\n"
+        "name: Engineering conventions\n"
+        "description: catalogued in `agents/` (10 topic files: storage, testing)\n"
+        "---\n"
+        "the real body\n"
+    )
+    fm, body = split_frontmatter(text)
+    assert fm == {}
+    assert body.strip() == "the real body"
