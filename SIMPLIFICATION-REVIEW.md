@@ -24,6 +24,36 @@
 
 **Build/优化项 P1–P11**：见末尾附录 B。
 
+## 第二轮（2026-06-20）：极简化深扫 + 竞品 + 新功能
+
+> 在第一轮之上更激进地极简化，并新增供应商切换。**凡与上方"结论总账"或下方"决策表"冲突处，以本节为准。**
+
+**统领原则**：只做必要功能，无用即删；**深度优先**（先把 Claude Code + Codex 打磨好，agent/channel 以后再加）。安全模型 = **凭据隔离 + 审计**（per-agent / per-tool 权限删后）。
+
+**新删 / 改（覆盖第一轮的"留"）**
+
+- **1.6** per-agent MCP server 作用域 → ❌ **删**（回退 PR #108 / ADR-026）
+- **P11** per-agent 逐工具 → ❌ **取消**（未建）
+- **4.5** skill 内容信任扫描 → ❌ **删**
+- **Agent 类型** → ❌ **砍到 Claude Code + Codex**，删 Cursor/OpenCode/OpenClaw/Hermes。cascade：删 `plugin_state_extra.py` / `opencode_reader.py` / `external_dir_registrar.py` + 相关测试；改 `types.py` / `descriptor.py` / `plugin_capability.py` / `plugin_service.py` / `transcript_reader.py` / `agent_skill_wiring.py` + **spec 004**；**4.10** 随之收成 2 类型
+- **4.4** skill 包管理 → ✂️ **简化**：留 import + 重新拉取覆盖；删 rename 检测 / pin / check-update
+
+**延后（用到再做）**
+
+- **G3** OAuth、**G4** elicitation → 延后（撤销第一轮的"补"）
+- **G6** 用量/花费 + **本地代理** → 延后：用量计量的正确位置是代理，但代理重、在热路径、正撞 CC Switch 主场 → 不做；等将来真要做"完整 LLM 网关"再谈
+
+**增强 / 新功能**
+
+- **4.9** drift verify → 留 + opt-in **`--fix`**（fix = 从 master 重新投递那份，复用现成投递逻辑）
+- **G9 供应商切换（新）** → **共享 provider registry + 逐 agent 投影**：一个档案 `{name, base_url, key→Fernet 库, 模型映射, wire 格式}` 配一次、Claude Code/Codex 共用；切换 = 写原生配置（复用 config-file store，原子 + .bak）；审计 + 随 9.x 同步 + Claude 热切换；**不做代理/故障转移/格式转换**。差异化：比 CC Switch 的"逐工具独立配置"更统一、更治理化
+
+**重扫后确认保留**（极简下仍判定必要）：6.5 蒸馏 · 7.6 会话归档 · P10 自动 backup · 9.4 sync worker · 10.3 retention · 3.7 插件 · 8.4 switchboard · 4.6 · 4.7 · 4.3
+
+**战略 / 竞品**
+
+- **CC Switch**（farion1231，~105k★，Tauri 2 + Rust）是最近的重叠竞品：已覆盖 provider 切换 + MCP + skills + prompts + sessions + 用量 + 本地代理，支持 7 个 agent。**不追它的广度**；Coffer 护城河 = 它没有的 **知识库 + 记忆 + RAG + 治理（审计/加密/版本化）+ 真 MCP 网关 + channels**。
+
 ## 决策表
 
 | 编号 | 名称                                                 | 类型 | 为什么嫌重（一句话）                                                                                                                                                                     | 我的建议                     | 决定                                                                                                                                                                                                                            | 状态   |
