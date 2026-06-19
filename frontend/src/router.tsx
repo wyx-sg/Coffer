@@ -7,9 +7,8 @@ import { ChannelsPage } from "./pages/ChannelsPage";
 import { ChannelDetailPage } from "./pages/ChannelDetailPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { SkillDetailPage } from "./pages/SkillDetailPage";
-import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
+import { KnowledgePage } from "./pages/KnowledgePage";
 import { KnowledgeBaseDetailPage } from "./kinds/knowledge_base/KnowledgeBaseDetailPage";
-import { MemoryPage } from "./pages/MemoryPage";
 import { MemoryStoreDetailPage } from "./kinds/memory/MemoryStoreDetailPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ResourceDetailPage } from "./pages/ResourceDetailPage";
@@ -43,9 +42,17 @@ export const router = createBrowserRouter([
       { path: "channels/:name", element: <ChannelDetailPage /> },
       { path: "skills", element: <SkillsPage /> },
       { path: "skills/:name", element: <SkillDetailPage /> },
-      { path: "knowledge-bases", element: <KnowledgeBasesPage /> },
+      // The unified 知识 surface (ADR-030) replaces the split Memory +
+      // Knowledge-base pages. Scope is a route param so it deep-links.
+      { path: "knowledge", element: <KnowledgePage /> },
+      { path: "knowledge/:scopeId", element: <KnowledgePage /> },
+      // Legacy routes — these surfaces used to live at /memory and
+      // /knowledge-bases. Redirect old bookmarks to the unified page (mirrors
+      // the /resources and /observability redirects). The per-store / per-KB
+      // detail pages stay reachable for the in-page links into them.
+      { path: "memory", element: <Navigate to="/knowledge" replace /> },
+      { path: "knowledge-bases", element: <Navigate to="/knowledge" replace /> },
       { path: "knowledge-bases/:name", element: <KnowledgeBaseDetailPage /> },
-      { path: "memory", element: <MemoryPage /> },
       { path: "memory/:name", element: <MemoryStoreDetailPage /> },
       { path: "audit", element: <AuditLogPage /> },
       // Legacy route — this surface briefly lived at /observability. Keep the

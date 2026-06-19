@@ -56,8 +56,6 @@
     },
     "mcpServers": "MCP servers",
     "skills": "Skills",
-    "knowledgeBases": "Knowledge bases",
-    "memory": "Memory",
     "settings": "Settings",
     "language": "Language",
     "collapse": "Collapse sidebar",
@@ -65,7 +63,8 @@
     "agents": "Agents",
     "channels": "Channels",
     "audit": "Audit log",
-    "chat": "Chat"
+    "chat": "Chat",
+    "knowledge": "Knowledge"
   },
   "resources": {
     "title": "MCP servers",
@@ -301,6 +300,8 @@
       "kb_document_ingested": "Ingested a document into {{resource}}",
       "kb_document_updated": "Updated a document in {{resource}}",
       "kb_document_deleted": "Deleted a document from {{resource}}",
+      "kb_document_restored": "Restored a document in {{resource}}",
+      "kb_document_purged": "Permanently purged a document from {{resource}}",
       "kb_reindexed": "Reindexed {{resource}}",
       "memory_added": "Added a memory to {{resource}}",
       "memory_updated": "Updated a memory in {{resource}}",
@@ -1347,5 +1348,57 @@
     },
     "deleteTitle": "Delete channel",
     "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed."
+  },
+  "knowledge": {
+    "title": "Knowledge",
+    "subtitle": "Notes (memory) and documents your agents read and write through the MCP gateway, organized by scope.",
+    "searchPlaceholder": "Search notes and documents…",
+    "empty": "Nothing in this scope yet. Paste a note or drop a file above.",
+    "untitled": "(untitled)",
+    "scope": {
+      "aria": "Knowledge scopes",
+      "heading": "Scope",
+      "global": "Global",
+      "project": "Project"
+    },
+    "type": {
+      "note": "Note",
+      "document": "Document"
+    },
+    "cols": {
+      "type": "Type",
+      "title": "Title",
+      "source": "Source"
+    },
+    "source": {
+      "note": "Memory"
+    },
+    "filter": {
+      "allTypes": "All types"
+    },
+    "add": {
+      "placeholder": "Paste a link or write a note… (becomes a note)",
+      "notesUnavailable": "Notes are unavailable for this scope until its memory store is provisioned.",
+      "dropHint": "Drop a file to add a document →",
+      "uploadUnavailable": "Create a knowledge base to upload documents.",
+      "uploadFile": "Upload file",
+      "addNote": "Add note"
+    },
+    "viewer": {
+      "locked": "Locked",
+      "close": "Close",
+      "deleteDocHint": "Move this document to the trash (recoverable)."
+    },
+    "deleteNoteConfirm": "Delete note \"{{title}}\"? This cannot be undone.",
+    "deleteDocConfirm": "Move document \"{{title}}\" to the trash? You can restore it later.",
+    "trash": {
+      "open": "Trash",
+      "title": "Trash",
+      "hint": "Soft-deleted documents. Restore re-converts from the kept original (body edits are not recovered); Purge removes it for good.",
+      "empty": "The trash is empty.",
+      "restore": "Restore",
+      "purge": "Purge",
+      "purgeHint": "Permanently remove this document and its original — this cannot be undone."
+    }
   }
 }

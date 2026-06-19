@@ -168,7 +168,7 @@ class _SearchMetricsFakeKbService:
         self.searches: list[tuple[str, str, int]] = []
         self.metrics_calls: list[str] = []
 
-    async def search(self, *, kb_name: str, query: str, top_k: int, mode=None):
+    async def search(self, *, kb_name: str, query: str, top_k: int, mode=None, project_id=None):
         from coffer.domain.knowledge.retrieval import Passage, SearchResult
 
         self.searches.append((kb_name, query, top_k))
@@ -287,7 +287,7 @@ def test_search_engine_unavailable_returns_503(tmp_path, monkeypatch):
     from coffer.surfaces.http.dependencies import get_kb_service
 
     class _FailingKbService:
-        async def search(self, *, kb_name: str, query: str, top_k: int, mode=None):
+        async def search(self, *, kb_name: str, query: str, top_k: int, mode=None, project_id=None):
             raise EngineUnavailable(
                 "embedding",
                 "test: engine not installed",
@@ -499,3 +499,119 @@ def test_document_lock_endpoint_blocks_mutations(tmp_path, monkeypatch):
             c.delete(f"/api/v1/knowledge_bases/kb/documents/{doc_id}", headers=_HEADERS).status_code
             == 204
         )
+
+
+def test_soft_delete_restore_and_project_scope_flow(tmp_path, monkeypatch):
+    """Soft-delete -> trash list -> restore, plus a per-project ingest isolated
+    from global (ADR-030 / FR-022 / FR-023) over the real HTTP surface."""
+    app = _app(tmp_path, monkeypatch, 59550)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        _create_kb(c, "kb")
+        proj = "0123456789ABCDEFGHJKMNPQRS"  # a valid 26-char Crockford ULID
+
+        # ingest one global doc and one project-scoped doc (same filename)
+        g = c.post(
+            "/api/v1/knowledge_bases/kb/documents",
+            files={"file": ("notes.md", b"# G\n\nglobal pear\n", "text/markdown")},
+            headers=_HEADERS,
+        )
+        assert g.status_code == 201, g.text
+        assert g.json()["project_id"] == "00000000000000000000000000"
+        assert g.json()["deleted_at"] is None
+        p = c.post(
+            "/api/v1/knowledge_bases/kb/documents",
+            files={"file": ("notes.md", b"# P\n\nproject pear\n", "text/markdown")},
+            data={"project_id": proj},
+            headers=_HEADERS,
+        )
+        assert p.status_code == 201, p.text
+        pid_doc = p.json()
+        assert pid_doc["project_id"] == proj
+        assert g.json()["id"] != pid_doc["id"]  # same filename, two scopes
+        proj_docs_dir = tmp_path / ".coffer" / "knowledge" / "kb" / "projects" / proj / "docs"
+        assert pid_doc["path"] == str(proj_docs_dir / f"{pid_doc['id']}.md")
+
+        # list filtered by scope
+        glist = c.get(
+            "/api/v1/knowledge_bases/kb/documents",
+            params={"project_id": "00000000000000000000000000"},
+            headers=_HEADERS,
+        ).json()
+        assert [d["id"] for d in glist["documents"]] == [g.json()["id"]]
+        plist = c.get(
+            "/api/v1/knowledge_bases/kb/documents",
+            params={"project_id": proj},
+            headers=_HEADERS,
+        ).json()
+        assert [d["id"] for d in plist["documents"]] == [pid_doc["id"]]
+
+        # soft-delete the global doc -> leaves live list, appears in trash
+        gid = g.json()["id"]
+        assert (
+            c.delete(f"/api/v1/knowledge_bases/kb/documents/{gid}", headers=_HEADERS).status_code
+            == 204
+        )
+        live = c.get(
+            "/api/v1/knowledge_bases/kb/documents",
+            params={"project_id": "00000000000000000000000000"},
+            headers=_HEADERS,
+        ).json()
+        assert live["total"] == 0
+        trash = c.get(
+            "/api/v1/knowledge_bases/kb/documents", params={"deleted": "true"}, headers=_HEADERS
+        ).json()
+        assert [d["id"] for d in trash["documents"]] == [gid]
+        assert trash["documents"][0]["deleted_at"] is not None
+
+        # restore -> back in the live list, searchable
+        rs = c.post(f"/api/v1/knowledge_bases/kb/documents/{gid}/restore", headers=_HEADERS)
+        assert rs.status_code == 200, rs.text
+        assert rs.json()["deleted_at"] is None and rs.json()["source_mode"] == "converted"
+        back = c.get(
+            "/api/v1/knowledge_bases/kb/documents",
+            params={"project_id": "00000000000000000000000000"},
+            headers=_HEADERS,
+        ).json()
+        assert [d["id"] for d in back["documents"]] == [gid]
+
+        # restoring a live (not-trashed) doc -> 404
+        again = c.post(f"/api/v1/knowledge_bases/kb/documents/{gid}/restore", headers=_HEADERS)
+        assert again.status_code == 404, again.text
+
+
+def test_search_is_project_scoped_over_rest(tmp_path, monkeypatch):
+    """A REST keyword search with project_id returns only that scope's passages,
+    and the default (global) search excludes project docs (ADR-030/FR-022)."""
+    app = _app(tmp_path, monkeypatch, 59560)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        _create_kb(c, "kb")
+        proj = "0123456789ABCDEFGHJKMNPQRS"
+        c.post(
+            "/api/v1/knowledge_bases/kb/documents",
+            files={"file": ("g.md", b"# G\n\nshared pear fact\n", "text/markdown")},
+            headers=_HEADERS,
+        )
+        p = c.post(
+            "/api/v1/knowledge_bases/kb/documents",
+            files={"file": ("p.md", b"# P\n\nshared pear fact\n", "text/markdown")},
+            data={"project_id": proj},
+            headers=_HEADERS,
+        )
+        assert p.status_code == 201, p.text
+        pid = p.json()["id"]
+
+        scoped = c.post(
+            "/api/v1/knowledge_bases/kb/search",
+            json={"query": "pear", "top_k": 5, "project_id": proj},
+            headers=_HEADERS,
+        ).json()
+        assert {pas["document_id"] for pas in scoped["passages"]} == {pid}
+
+        glob = c.post(
+            "/api/v1/knowledge_bases/kb/search",
+            json={"query": "pear", "top_k": 5},
+            headers=_HEADERS,
+        ).json()
+        assert pid not in {pas["document_id"] for pas in glob["passages"]}

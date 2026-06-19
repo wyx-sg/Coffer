@@ -1,12 +1,15 @@
 // e2e/web/specs/shell_memory.spec.ts
 //
-// Spec 007 §User Story 5 — the desktop /memory surface (redesign).
+// Spec 007 §User Story 5 — the unified 知识 surface (ADR-030), which replaced
+// the standalone /memory page. Notes (memory facts) now live alongside
+// documents on ONE scope-keyed /knowledge surface; /memory redirects here.
 //
-// Walk through cold-start → /memory → add a fact to the global store →
-// list → clear the scope. State is provisioned via the daemon's REST API so
-// the test stays robust against UI churn, but the page render is exercised
-// against the real DOM. Memory stores are auto-provisioned per scope (global +
-// per-project); there is no user-created/deleted named store anymore.
+// Walk through cold-start → /knowledge (the redirect target) → add a fact to
+// the global store → list → clear the scope. State is provisioned via the
+// daemon's REST API so the test stays robust against UI churn, but the page
+// render is exercised against the real DOM. Memory stores are auto-provisioned
+// per scope (global + per-project); there is no user-created/deleted named
+// store anymore.
 //
 // The acceptance marker maps this walk to the spec scenario "clear a memory
 // scope" — a P3 scenario already covered by backend tests; this e2e ensures the
@@ -27,10 +30,13 @@ acceptance("007-memory", "clear a memory scope", async ({ page }) => {
     "X-Coffer-Actor": "e2e",
   };
 
-  // 1. Cold-start the /memory page — heading must render. This also
-  //    auto-provisions the global store on the list call the page makes.
+  // 1. Cold-start /memory — it redirects to the unified 知识 surface, whose
+  //    heading must render. This also auto-provisions the global store on the
+  //    memory-store list call the page makes to build its scope axis.
   await page.goto("/memory");
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Knowledge" }),
+  ).toBeVisible();
 
   // 2. Add a fact to the global store via the API (no LLM at write time).
   const addResp = await fetch(`${apiBase}/memory_stores/global/facts`, {
@@ -81,30 +87,42 @@ acceptance("007-memory", "user adds a fact", async ({ page }) => {
 
   try {
     // The fact is authored programmatically (the agent's `remember`).
-    const add = await fetch(`http://127.0.0.1:${port}/api/v1/memory_stores/global/facts`, {
-      method: "POST",
-      headers: {
-        "X-Coffer-Token": token,
-        "X-Coffer-Actor": "agent",
-        "Content-Type": "application/json",
+    const add = await fetch(
+      `http://127.0.0.1:${port}/api/v1/memory_stores/global/facts`,
+      {
+        method: "POST",
+        headers: {
+          "X-Coffer-Token": token,
+          "X-Coffer-Actor": "agent",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text: factText, name: "e2e-fact" }),
       },
-      body: JSON.stringify({ text: factText, name: "e2e-fact" }),
-    });
+    );
     expect(add.status).toBe(201);
 
-    // Navigate /memory → the global store's detail page via the stores table.
-    await page.goto("/memory");
-    await page.getByText("global", { exact: true }).first().click();
+    // Open the unified 知识 surface and select the 全局 (Global) scope on the
+    // left axis — its intermixed notes+documents list loads for that scope.
+    await page.goto("/knowledge");
+    await page.getByRole("button", { name: "Global" }).first().click();
 
-    // The fact shows in the tree; select it and confirm the body renders.
-    await page.getByText("e2e-fact", { exact: true }).first().click();
-    await expect(page.getByText(factText).first()).toBeVisible();
+    // The fact surfaces as a NOTE row (titled by its name) in the list; click
+    // it to open the read-only viewer, then confirm the fact body renders.
+    await page.getByRole("row").filter({ hasText: "e2e-fact" }).first().click();
+    const viewer = page
+      .locator("div.rounded-md.border")
+      .filter({ has: page.getByRole("button", { name: "Close" }) });
+    await expect(viewer.getByText(factText)).toBeVisible();
 
-    // The viewer is read-only — no in-app edit affordance — and offers the
-    // path hand-off to an external editor (Copy path on the web).
-    await expect(page.getByRole("button", { name: "Edit" })).toHaveCount(0);
-    await expect(page.locator("textarea")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /copy path/i })).toBeVisible();
+    // The viewer is read-only — no in-app edit affordance (no Edit button, no
+    // editable textarea inside it) — and offers the path hand-off to an
+    // external editor (Copy path on the web; the add-bar textarea outside the
+    // viewer is irrelevant, so the assertions are scoped to the viewer).
+    await expect(viewer.getByRole("button", { name: "Edit" })).toHaveCount(0);
+    await expect(viewer.locator("textarea")).toHaveCount(0);
+    await expect(
+      viewer.getByRole("button", { name: "Copy path" }),
+    ).toBeVisible();
   } finally {
     // Clear the scope even on failure so reruns against a reused daemon stay
     // isolated (safe under workers:1 — nothing else shares the store mid-run).

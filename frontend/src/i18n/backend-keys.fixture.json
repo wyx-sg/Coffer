@@ -99,6 +99,8 @@
     "embedding_config_updated",
     "kb_document_deleted",
     "kb_document_ingested",
+    "kb_document_purged",
+    "kb_document_restored",
     "kb_document_updated",
     "kb_reindexed",
     "keychain_deleted",

@@ -123,6 +123,7 @@ def ingest(
         ..., exists=True, dir_okay=False, readable=True
     ),
     replace: bool = typer.Option(False, "--replace"),
+    project_id: str = typer.Option("", "--project-id", help="Scope (project ULID); blank = global"),
 ) -> None:
     """Ingest a single file into the knowledge base (any format → Markdown)."""
     c, _info = _cli_client.client_or_exit()
@@ -130,6 +131,8 @@ def ingest(
         with path.open("rb") as fp:
             files = {"file": (path.name, fp, "application/octet-stream")}
             data = {"replace": str(replace).lower()}
+            if project_id:
+                data["project_id"] = project_id
             r = c.post(f"/knowledge_bases/{name}/documents", files=files, data=data)
         _cli_client.check(r, verbose=_verbose(ctx))
     out = r.json()
@@ -142,15 +145,16 @@ def list_docs(
     name: str = typer.Argument(...),
     limit: int = typer.Option(50, "--limit"),
     offset: int = typer.Option(0, "--offset"),
+    project_id: str = typer.Option("", "--project-id", help="Filter to a scope (project ULID)"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
     """List documents in a knowledge base."""
     c, _info = _cli_client.client_or_exit()
+    params: dict[str, str | int] = {"limit": limit, "offset": offset}
+    if project_id:
+        params["project_id"] = project_id
     with c:
-        r = c.get(
-            f"/knowledge_bases/{name}/documents",
-            params={"limit": limit, "offset": offset},
-        )
+        r = c.get(f"/knowledge_bases/{name}/documents", params=params)
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
     if output_json:
@@ -323,12 +327,15 @@ def search(
     query: str = typer.Argument(...),
     top_k: int = typer.Option(5, "--top-k"),
     mode: str | None = typer.Option(None, "--mode", help="keyword / vector (overrides default)."),
+    project_id: str = typer.Option("", "--project-id", help="Scope to a project ULID"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
     """Search a knowledge base (keyword / vector)."""
     payload: dict[str, object] = {"query": query, "top_k": top_k}
     if mode is not None:
         payload["mode"] = mode
+    if project_id:
+        payload["project_id"] = project_id
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post(f"/knowledge_bases/{name}/search", json=payload)
@@ -350,15 +357,16 @@ def grep(
     name: str = typer.Argument(...),
     pattern: str = typer.Argument(...),
     max_matches: int = typer.Option(100, "--max-matches"),
+    project_id: str = typer.Option("", "--project-id", help="Scope to a project ULID"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
     """Grep (ripgrep) over the KB's Markdown files."""
+    payload: dict[str, object] = {"pattern": pattern, "max_matches": max_matches}
+    if project_id:
+        payload["project_id"] = project_id
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(
-            f"/knowledge_bases/{name}/grep",
-            json={"pattern": pattern, "max_matches": max_matches},
-        )
+        r = c.post(f"/knowledge_bases/{name}/grep", json=payload)
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
     if output_json:
@@ -370,31 +378,6 @@ def grep(
         typer.echo("(results truncated)", err=True)
 
 
-@app.command("delete-doc")
-def delete_doc(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    document_id: str = typer.Argument(...),
-) -> None:
-    """Delete a single document by id."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.delete(f"/knowledge_bases/{name}/documents/{document_id}")
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"deleted document {document_id} from {name}")
-
-
-@app.command("delete-kb")
-def delete_kb(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    yes: bool = typer.Option(False, "--yes"),
-) -> None:
-    """Delete an entire knowledge base (raw files + index + rows)."""
-    if not yes and not typer.confirm(f"Really delete knowledge_base:{name} and all its documents?"):
-        raise typer.Exit(1)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.delete(f"/resources/knowledge_base/{name}")
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"deleted: knowledge_base:{name}")
+# delete-doc / delete-kb + the recoverable trash/restore commands live in
+# ``knowledge_base_trash_cmd`` (registered onto this same ``kb`` app), to keep
+# this module under the file-size cap.

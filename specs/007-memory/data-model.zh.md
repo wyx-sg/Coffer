@@ -87,7 +87,7 @@ agent 只通过 MCP 网关工具（`coffer__recall`/`remember`/`update_memory`/`
 
 重设计 revision **删除** `memory_records` 与所有 chroma/LlamaIndex 目录，然后创建与 KB 共享的、以 `documents` 为核心的统一 schema。没有数据迁移。
 
-下面的 schema 与 KB 重设计迁移创建的是**同一份统一 schema**（迁移归 spec 006 所有；这里是它的 memory 视角）。重设计 revision **删除** `memory_records` 并创建这些表。
+下面的 schema 与 KB 重设计迁移创建的是**同一份统一 schema**（迁移归 spec 006 所有；这里是它的 memory 视角）。重设计 revision **删除** `memory_records` 并创建这些表。后续两个追加迁移扩展共享的 `documents` 表 —— `0025`（`locked`，ADR-028）与 `0026`（`deleted_at`，ADR-030）；memory 面**两列都不用**（它从不锁定一条事实，且 `forget` 是硬删除，所以 memory 行的 `deleted_at` 始终为 NULL）。
 
 ```sql
 -- Shared across KB (kind='knowledge_base') and memory (kind='memory').
@@ -103,6 +103,7 @@ CREATE TABLE documents (
     content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
     source_mode    TEXT NOT NULL DEFAULT 'native', -- memory: 'native'
     locked         BOOLEAN NOT NULL DEFAULT 0,  -- KB co-management lock (ADR-028); memory ignores it
+    deleted_at     TIMESTAMP,                   -- KB soft-delete/trash (ADR-030); memory never sets it (forget is hard)
     created_at     TIMESTAMP NOT NULL,
     updated_at     TIMESTAMP NOT NULL,
     PRIMARY KEY (kind, resource_name, id)        -- composite (memory ULIDs are globally unique too)

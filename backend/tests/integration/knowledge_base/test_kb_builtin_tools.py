@@ -168,3 +168,39 @@ async def test_write_tool_refused_on_locked_document(kb) -> None:
     with pytest.raises(DocumentLocked):
         await delete.handler({"kb": "kb1", "document_id": doc.id})
     assert await kb.documents.count_documents("knowledge_base", "kb1") == 1
+
+
+async def test_add_document_scopes_to_project_via_cwd(kb) -> None:
+    """An agent's add_document resolves its document scope from the injected cwd
+    (ADR-030): a cwd inside a project lands the doc in that project scope."""
+    from coffer.domain.knowledge.document import WORKSPACE_GLOBAL_PROJECT_ID
+    from coffer.infrastructure.knowledge.scope_fs import project_ulid
+
+    await kb.create_kb("kb1")
+    proj = project_ulid("/work/proj")
+    reg = BuiltinToolRegistry()
+    register_kb_builtin_tools(
+        reg,
+        resources=kb.resources,
+        kb_service=kb.service,
+        resolve_project_id=lambda cwd: proj if cwd else WORKSPACE_GLOBAL_PROJECT_ID,
+    )
+    tool = reg.get(f"{COFFER_TOOL_PREFIX}add_document")
+    assert tool is not None
+    out = await tool.handler(
+        {
+            "kb": "kb1",
+            "filename": "n.md",
+            "content": "# N\n\nproject badger",
+            "cwd": "/work/proj/src",
+        }
+    )
+    scoped, total = await kb.service.list_documents(
+        kb_name="kb1", limit=50, offset=0, project_id=proj
+    )
+    assert total == 1 and [d.id for d in scoped] == [out["document_id"]]
+    # and it is absent from the global scope
+    _g, gtotal = await kb.service.list_documents(
+        kb_name="kb1", limit=50, offset=0, project_id=WORKSPACE_GLOBAL_PROJECT_ID
+    )
+    assert gtotal == 0

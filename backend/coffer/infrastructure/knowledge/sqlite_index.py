@@ -23,6 +23,11 @@ from coffer.domain.knowledge.retrieval import Passage
 from coffer.infrastructure.knowledge.models import ChunkModel
 from coffer.infrastructure.knowledge.vec_index import VecIndex
 
+#: When a vector search is project-scoped, the sqlite-vec KNN (which has no
+#: project_id) over-fetches to this ceiling, then the JOIN drops out-of-scope
+#: rows and the result truncates to top_k (ADR-030). Small-corpus assumption.
+_VEC_SCOPE_FETCH = 200
+
 
 def store_scope(kind: str, resource_name: str) -> str:
     """12-hex digest namespacing chunk ids per ``(kind, resource_name)`` store.
@@ -185,10 +190,24 @@ class SqliteKnowledgeIndex:
 
     # --- reads --------------------------------------------------------------
 
-    async def keyword_search(self, resource_name: str, query: str, top_k: int) -> Sequence[Passage]:
+    async def keyword_search(
+        self, resource_name: str, query: str, top_k: int, *, project_id: str | None = None
+    ) -> Sequence[Passage]:
         match = _fts_query(query)
         if not match:
             return []
+        # Per-project KB scope (ADR-030): when a project_id is given, filter the
+        # JOINed documents row by it so ``LIMIT :k`` selects the top-k IN-SCOPE
+        # passages directly (exact, no over-fetch). Memory passes None (no-op).
+        scope_clause = " AND d.project_id = :pid" if project_id is not None else ""
+        params: dict[str, object] = {
+            "q": match,
+            "rn": resource_name,
+            "kind": self._kind,
+            "k": top_k,
+        }
+        if project_id is not None:
+            params["pid"] = project_id
         async with self._sm() as session:
             rows = (
                 await session.execute(
@@ -202,10 +221,10 @@ class SqliteKnowledgeIndex:
                         "WHERE documents_fts MATCH :q AND f.resource_name = :rn "
                         # Scope by kind too: a KB and a memory store may share a
                         # resource name (UniqueConstraint is on (kind, name)).
-                        "  AND c.kind = :kind "
+                        "  AND c.kind = :kind " + scope_clause + " "
                         "ORDER BY rank LIMIT :k"
                     ),
-                    {"q": match, "rn": resource_name, "kind": self._kind, "k": top_k},
+                    params,
                 )
             ).all()
         return [
@@ -222,17 +241,31 @@ class SqliteKnowledgeIndex:
         ]
 
     async def vector_search(
-        self, resource_name: str, vector: Sequence[float], top_k: int
+        self,
+        resource_name: str,
+        vector: Sequence[float],
+        top_k: int,
+        *,
+        project_id: str | None = None,
     ) -> Sequence[Passage]:
         if self._vec is None or not self._vec.available():
             return []
-        knn = await self._vec.knn(vector, top_k)
+        # Per-project KB scope (ADR-030): the sqlite-vec table has no project_id,
+        # so the KNN can't pre-filter; over-fetch then drop out-of-scope rows via
+        # the JOINed documents row and truncate to top_k. (vector is opt-in and
+        # corpora are small — SC-002 — so the over-fetch ceiling is fine here.)
+        knn_k = top_k if project_id is None else max(top_k, _VEC_SCOPE_FETCH)
+        knn = await self._vec.knn(vector, knn_k)
         if not knn:
             return []
         # KNN ids are the bare '<doc-id>:<position>' (per-store vec table);
         # chunk/FTS rows are keyed by the store-scoped id.
         order = {cid: rank for rank, (cid, _dist) in enumerate(knn)}
         ids = [f"{self._scope}:{cid}" for cid in order]
+        scope_clause = " AND d.project_id = :pid" if project_id is not None else ""
+        params: dict[str, object] = {"ids": ids, "rn": resource_name, "kind": self._kind}
+        if project_id is not None:
+            params["pid"] = project_id
         async with self._sm() as session:
             rows = (
                 await session.execute(
@@ -246,9 +279,9 @@ class SqliteKnowledgeIndex:
                         # Scope by kind too (see keyword_search). The KNN is
                         # already per-store, but this defends against a stale
                         # chunk_id colliding across kinds.
-                        "  AND c.kind = :kind"
+                        "  AND c.kind = :kind" + scope_clause
                     ).bindparams(bindparam("ids", expanding=True)),
-                    {"ids": ids, "rn": resource_name, "kind": self._kind},
+                    params,
                 )
             ).all()
         dist = dict(knn)
@@ -264,7 +297,8 @@ class SqliteKnowledgeIndex:
             for r in rows
         ]
         passages.sort(key=lambda p: order.get(f"{p.document_id}:{p.position}", 0))
-        return passages
+        # When scoped we over-fetched the KNN; return only the top_k in-scope.
+        return passages[:top_k]
 
 
 def _fts_query(query: str) -> str:

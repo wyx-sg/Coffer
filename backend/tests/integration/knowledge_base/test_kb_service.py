@@ -4,11 +4,21 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.domain.errors import DocumentLocked, IngestRejected, ReconversionBlocked
+from coffer.domain.errors import (
+    DocumentLocked,
+    DocumentNotFound,
+    IngestRejected,
+    ReconversionBlocked,
+)
+from coffer.domain.knowledge.document import WORKSPACE_GLOBAL_PROJECT_ID
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.knowledge.scope_fs import project_ulid
 
 pytestmark = pytest.mark.asyncio
+
+#: A deterministic project scope ULID for the per-project tests (ADR-030).
+_PROJ = project_ulid("/work/proj-a")
 
 
 async def _ingest(kb, name: str, filename: str, data: bytes, **kw):
@@ -291,16 +301,23 @@ async def test_changing_embedding_model_re_embeds(kb, vector_config) -> None:
 
 
 @pytest.mark.acceptance(spec="006-knowledge-base", scenario="delete a single document")
-async def test_delete_document_removes_files_and_rows(kb) -> None:
+async def test_delete_document_soft_deletes_to_trash(kb) -> None:
+    """Deleting a LIVE document soft-deletes it (ADR-030): the docs/ markdown +
+    index rows go, but the raw/ original and the row are kept (tombstoned)."""
     await kb.create_kb("kb1")
     doc = await _ingest(kb, "kb1", "a.md", b"# A\n\ngrape soda")
     md = paths.doc_path("kb1", doc.id)
     raw = paths.raw_path("kb1", doc.id, ".md")
     assert md.exists() and raw.exists()
     await kb.service.delete_document(kb_name="kb1", document_id=doc.id, actor="user")
-    assert not md.exists()
-    assert not raw.exists()
-    assert await kb.documents.count_documents("knowledge_base", "kb1") == 0
+    assert not md.exists()  # markdown cleared
+    assert raw.exists()  # original KEPT for restore
+    assert await kb.documents.count_documents("knowledge_base", "kb1") == 0  # live count
+    trashed, total = await kb.service.list_documents(
+        kb_name="kb1", limit=50, offset=0, deleted=True
+    )
+    assert [d.id for d in trashed] == [doc.id] and total == 1
+    assert trashed[0].deleted_at is not None
     assert (await kb.service.search(kb_name="kb1", query="grape", top_k=5)).passages == ()
 
 
@@ -599,3 +616,158 @@ async def test_lock_and_unlock_audits_and_restores_mutability(kb) -> None:
         kb_name="kb1", document_id=doc.id, new_markdown="# A\n\nedited body", actor="user"
     )
     assert edited.source_mode == "edited"
+
+
+# ----- recoverable soft-delete: restore / no-resurrect / purge (ADR-030) -----
+
+
+@pytest.mark.acceptance(spec="006-knowledge-base", scenario="restore a trashed document")
+async def test_restore_recovers_from_trash(kb) -> None:
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\ngrape soda")
+    await kb.service.delete_document(kb_name="kb1", document_id=doc.id, actor="user")
+    assert not paths.doc_path("kb1", doc.id).exists()
+    restored = await kb.service.restore_document(kb_name="kb1", document_id=doc.id, actor="user")
+    assert restored.deleted_at is None
+    assert restored.source_mode == "converted"  # re-converted from the kept raw/
+    assert paths.doc_path("kb1", doc.id).exists()
+    live, total = await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    assert [d.id for d in live] == [doc.id] and total == 1
+    assert (await kb.service.search(kb_name="kb1", query="grape", top_k=5)).passages
+    # the restore is audited
+    events = [
+        e.event_type for e in await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
+    ]
+    assert "kb_document_restored" in events
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base",
+    scenario="reindex-on-read does not resurrect a trashed document",
+)
+async def test_reindex_does_not_resurrect_trashed(kb) -> None:
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\ngrape soda")
+    await kb.service.delete_document(kb_name="kb1", document_id=doc.id, actor="user")
+    # The read path runs reindex_scan; it must neither rebuild the tombstone
+    # (no docs/ file) nor prune its row (prune reads live rows only).
+    await kb.service.reindex(kb_name="kb1", actor="user")
+    _live, live_total = await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    assert live_total == 0  # still trashed, not resurrected
+    trashed, t_total = await kb.service.list_documents(
+        kb_name="kb1", limit=50, offset=0, deleted=True
+    )
+    assert [d.id for d in trashed] == [doc.id] and t_total == 1  # tombstone survived
+    assert (await kb.service.search(kb_name="kb1", query="grape", top_k=5)).passages == ()
+
+
+@pytest.mark.acceptance(spec="006-knowledge-base", scenario="purge a trashed document permanently")
+async def test_purge_removes_trashed_document(kb) -> None:
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\ngrape soda")
+    raw = paths.raw_path("kb1", doc.id, ".md")
+    await kb.service.delete_document(kb_name="kb1", document_id=doc.id, actor="user")  # trash
+    assert raw.exists()
+    await kb.service.delete_document(kb_name="kb1", document_id=doc.id, actor="user")  # purge
+    assert not raw.exists()  # original removed for good
+    _trashed, total = await kb.service.list_documents(
+        kb_name="kb1", limit=50, offset=0, deleted=True
+    )
+    assert total == 0  # gone from the trash too
+    events = [
+        e.event_type for e in await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
+    ]
+    assert "kb_document_purged" in events
+
+
+# ----- per-project document scope (ADR-030 / FR-022) -----
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="ingest a document into a project scope"
+)
+async def test_ingest_into_project_scope(kb) -> None:
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "notes.md", b"# Proj\n\nproject note", project_id=_PROJ)
+    assert doc.project_id == _PROJ
+    md = paths.doc_path("kb1", doc.id, _PROJ)
+    assert md.exists() and f"projects/{_PROJ}/docs" in str(md)
+    res = await kb.service.search(kb_name="kb1", query="project", top_k=5, project_id=_PROJ)
+    assert res.passages
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="global and project documents are isolated"
+)
+async def test_global_and_project_isolated(kb) -> None:
+    await kb.create_kb("kb1")
+    g = await _ingest(kb, "kb1", "notes.md", b"# Global\n\nglobal apple")
+    p = await _ingest(kb, "kb1", "notes.md", b"# Proj\n\nproject apple", project_id=_PROJ)
+    assert g.id != p.id  # same filename, two scopes → independent documents
+    gdocs, _gt = await kb.service.list_documents(
+        kb_name="kb1", limit=50, offset=0, project_id=WORKSPACE_GLOBAL_PROJECT_ID
+    )
+    pdocs, _pt = await kb.service.list_documents(
+        kb_name="kb1", limit=50, offset=0, project_id=_PROJ
+    )
+    assert [d.id for d in gdocs] == [g.id]
+    assert [d.id for d in pdocs] == [p.id]
+    # explicit isolation: neither scope leaks the other's document
+    assert p.id not in {d.id for d in gdocs}
+    assert g.id not in {d.id for d in pdocs}
+
+
+@pytest.mark.acceptance(spec="006-knowledge-base", scenario="list documents filtered by scope")
+async def test_list_filtered_by_scope(kb) -> None:
+    await kb.create_kb("kb1")
+    g = await _ingest(kb, "kb1", "g.md", b"# G\n\nglobal text")
+    p = await _ingest(kb, "kb1", "p.md", b"# P\n\nproject text", project_id=_PROJ)
+    all_docs, total = await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    assert {d.id for d in all_docs} == {g.id, p.id} and total == 2  # None → all scopes
+    pdocs, ptotal = await kb.service.list_documents(
+        kb_name="kb1", limit=50, offset=0, project_id=_PROJ
+    )
+    assert [d.id for d in pdocs] == [p.id] and ptotal == 1
+
+
+@pytest.mark.acceptance(spec="006-knowledge-base", scenario="search is scoped to a project")
+async def test_search_scoped_to_project(kb) -> None:
+    await kb.create_kb("kb1")
+    await _ingest(kb, "kb1", "g.md", b"# G\n\nshared banana fact")
+    p = await _ingest(kb, "kb1", "p.md", b"# P\n\nshared banana fact", project_id=_PROJ)
+    res = await kb.service.search(kb_name="kb1", query="banana", top_k=5, project_id=_PROJ)
+    assert res.passages and {pas.document_id for pas in res.passages} == {p.id}
+    grep = await kb.service.grep(kb_name="kb1", pattern="banana", project_id=_PROJ)
+    assert grep.hits and all(f"projects/{_PROJ}" in h.path for h in grep.hits)
+
+
+async def test_restore_refused_when_filename_now_live(kb) -> None:
+    """Restoring a trashed doc is refused if a live doc now holds its filename in
+    the same scope — restore must not create two live docs with one filename."""
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\noriginal")
+    await kb.service.delete_document(kb_name="kb1", document_id=doc.id, actor="user")  # trash
+    # re-upload the same filename → a fresh live doc occupies "a.md"
+    await _ingest(kb, "kb1", "a.md", b"# A2\n\nreplacement")
+    with pytest.raises(IngestRejected) as exc:
+        await kb.service.restore_document(kb_name="kb1", document_id=doc.id, actor="user")
+    assert exc.value.reason == "duplicate"
+
+
+async def test_restore_of_live_document_is_404(kb) -> None:
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\nbody")
+    with pytest.raises(DocumentNotFound):
+        await kb.service.restore_document(kb_name="kb1", document_id=doc.id, actor="user")
+
+
+async def test_restore_refused_when_locked(kb) -> None:
+    """Defense-in-depth: a locked trashed document refuses restore (the lock
+    blocks every mutation). Manufactured via the repo since the public service
+    can't lock a trashed row through normal ops."""
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\nbody")
+    await kb.service.delete_document(kb_name="kb1", document_id=doc.id, actor="user")
+    await kb.documents.set_locked("knowledge_base", "kb1", doc.id, True)
+    with pytest.raises(DocumentLocked):
+        await kb.service.restore_document(kb_name="kb1", document_id=doc.id, actor="user")
