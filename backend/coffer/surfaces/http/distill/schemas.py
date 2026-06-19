@@ -21,9 +21,16 @@ class TranscriptSessionSummary(BaseModel):
 
 
 class TranscriptSessionListResponse(BaseModel):
-    """Response for GET /api/v1/agents/{name}/transcripts."""
+    """Response for GET /api/v1/agents/{name}/transcripts.
+
+    ``sessions`` is one page (most-recent first); ``total`` is the count of all
+    sessions on disk so the UI can show "showing N of total".
+    """
 
     sessions: list[TranscriptSessionSummary]
+    total: int
+    limit: int
+    offset: int
 
 
 class DistillRequest(BaseModel):

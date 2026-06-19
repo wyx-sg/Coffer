@@ -736,7 +736,8 @@
       "distilling": "蒸馏中…",
       "distilledCount": "已蒸馏 {{count}} 条洞察到记忆。",
       "noInsights": "本次会话中未找到持久洞察。",
-      "distillAria": "将会话 {{session}} 蒸馏到记忆"
+      "distillAria": "将会话 {{session}} 蒸馏到记忆",
+      "showingRecent": "显示最近 {{count}} 条，共 {{total}} 条会话。"
     },
     "instructions": {
       "title": "共享指令",

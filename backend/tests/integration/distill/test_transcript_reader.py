@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 
 import pytest
@@ -150,3 +151,61 @@ class TestFileTranscriptReaderCodex:
         )
         assert [m.role for m in s.messages] == ["user", "assistant"]
         assert s.project_path == "/codex/repo"
+
+
+def _claude_line(session_id: str, cwd: str = "/my/project") -> str:
+    return json.dumps(
+        {
+            "type": "user",
+            "cwd": cwd,
+            "sessionId": session_id,
+            "timestamp": "2026-06-01T10:00:00Z",
+            "message": {"role": "user", "content": "hi"},
+        }
+    )
+
+
+class TestListSessionSummariesPaging:
+    """list_session_summaries pages by file mtime (most-recent first) and parses
+    only the requested window — the fix for the conversations tab hanging on an
+    agent with thousands of past sessions."""
+
+    def _make_sessions(self, tmp_path: pathlib.Path) -> pathlib.Path:
+        cfg = tmp_path / "claude_cfg"
+        proj = cfg / "projects" / "-my-project"
+        proj.mkdir(parents=True)
+        # Three sessions written oldest → newest by mtime.
+        for i, mtime in enumerate([1_000_000, 2_000_000, 3_000_000], start=1):
+            p = proj / f"s{i}.jsonl"
+            p.write_text(_claude_line(f"sess-{i}") + "\n")
+            os.utime(p, (mtime, mtime))
+        return cfg
+
+    def test_returns_total_and_most_recent_page(self, tmp_path: pathlib.Path) -> None:
+        reader = FileTranscriptReader()
+        cfg = self._make_sessions(tmp_path)
+        total, page = reader.list_session_summaries(
+            agent_type_value="claude_code", config_dir=str(cfg), limit=2, offset=0
+        )
+        assert total == 3
+        assert [s.session_id for s in page] == ["sess-3", "sess-2"]
+
+    def test_offset_reaches_older_sessions(self, tmp_path: pathlib.Path) -> None:
+        reader = FileTranscriptReader()
+        cfg = self._make_sessions(tmp_path)
+        total, page = reader.list_session_summaries(
+            agent_type_value="claude_code", config_dir=str(cfg), limit=2, offset=2
+        )
+        assert total == 3
+        assert [s.session_id for s in page] == ["sess-1"]
+
+    def test_missing_dir_is_empty(self, tmp_path: pathlib.Path) -> None:
+        reader = FileTranscriptReader()
+        total, page = reader.list_session_summaries(
+            agent_type_value="claude_code",
+            config_dir=str(tmp_path / "nope"),
+            limit=10,
+            offset=0,
+        )
+        assert total == 0
+        assert page == []

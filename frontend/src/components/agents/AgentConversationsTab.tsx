@@ -58,9 +58,7 @@ function DistillCell({ session, name }: DistillCellProps) {
       </Button>
 
       {factCount !== null && insights.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t("agents.conversationsTab.noInsights")}
-        </p>
+        <p className="text-xs text-muted-foreground">{t("agents.conversationsTab.noInsights")}</p>
       ) : null}
 
       {factCount !== null && insights.length > 0 ? (
@@ -106,6 +104,9 @@ export function AgentConversationsTab({ name }: Props) {
   const { data, isPending, error } = useAgentTranscripts(name);
 
   const rows = data?.sessions ?? [];
+  // The list is paged (most-recent first) so a many-thousand-session agent
+  // loads fast; tell the user when older sessions aren't shown.
+  const truncated = (data?.total ?? 0) > rows.length;
 
   const columns: Column<TranscriptSessionSummary>[] = [
     {
@@ -158,12 +159,22 @@ export function AgentConversationsTab({ name }: Props) {
       ) : error ? (
         <p className="text-sm text-destructive">{translateApiError(t, error)}</p>
       ) : (
-        <DataTable
-          rows={rows}
-          columns={columns}
-          rowKey={(s) => s.session_id}
-          emptyMessage={t("agents.conversationsTab.empty")}
-        />
+        <>
+          {truncated ? (
+            <p className="text-xs text-muted-foreground">
+              {t("agents.conversationsTab.showingRecent", {
+                count: rows.length,
+                total: data?.total ?? 0,
+              })}
+            </p>
+          ) : null}
+          <DataTable
+            rows={rows}
+            columns={columns}
+            rowKey={(s) => s.session_id}
+            emptyMessage={t("agents.conversationsTab.empty")}
+          />
+        </>
       )}
     </div>
   );

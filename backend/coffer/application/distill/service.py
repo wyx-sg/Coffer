@@ -48,10 +48,19 @@ class TranscriptDistillationService:
         self._models = models
         self._credential_resolver = credential_resolver
 
-    async def list_sessions(self, agent_name: str) -> list[TranscriptSession]:
-        """List all transcript sessions for *agent_name*."""
+    async def list_sessions(
+        self, agent_name: str, *, limit: int = 100, offset: int = 0
+    ) -> tuple[int, list[TranscriptSession]]:
+        """Return ``(total, page)`` of transcript sessions for *agent_name*,
+        most-recent first. Only the requested page is parsed, so listing an
+        agent with thousands of past sessions stays fast."""
         agent_type_value, config_dir = await self._agents.resolve(agent_name)
-        return self._reader.list_sessions(agent_type_value=agent_type_value, config_dir=config_dir)
+        return self._reader.list_session_summaries(
+            agent_type_value=agent_type_value,
+            config_dir=config_dir,
+            limit=limit,
+            offset=offset,
+        )
 
     async def distill(
         self,

@@ -47,10 +47,13 @@ class _FakeDistillService:
         self._raise_on_list = raise_on_list
         self._raise_on_distill = raise_on_distill
 
-    async def list_sessions(self, agent_name: str) -> list[TranscriptSession]:
+    async def list_sessions(
+        self, agent_name: str, *, limit: int = 100, offset: int = 0
+    ) -> tuple[int, list[TranscriptSession]]:
         if self._raise_on_list is not None:
             raise self._raise_on_list
-        return self._sessions
+        total = len(self._sessions)
+        return total, self._sessions[offset : offset + limit]
 
     async def distill(
         self,
@@ -121,6 +124,27 @@ def test_list_transcripts_returns_sessions() -> None:
     assert sess["project_path"] == "/home/user/my-repo"
     assert sess["message_count"] == 0
     assert sess["started_at"] is not None
+    # Paged response carries the total count + echoes the window.
+    assert body["total"] == 1
+    assert body["limit"] == 100
+    assert body["offset"] == 0
+
+
+def test_list_transcripts_honors_limit_and_offset() -> None:
+    set_active_token(_TOKEN)
+    svc = _FakeDistillService(sessions=[_SESSION, _SESSION, _SESSION])
+    app = _build_app(svc)
+    with TestClient(app) as c:
+        r = c.get(
+            "/api/v1/agents/my-agent/transcripts?limit=2&offset=1",
+            headers=_HEADERS,
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total"] == 3
+    assert body["limit"] == 2
+    assert body["offset"] == 1
+    assert len(body["sessions"]) == 2
 
 
 def test_list_transcripts_empty() -> None:

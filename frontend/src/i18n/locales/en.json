@@ -736,7 +736,8 @@
       "distilling": "Distilling…",
       "distilledCount": "Distilled {{count}} insight(s) to memory.",
       "noInsights": "No durable insights found in this session.",
-      "distillAria": "Distill session {{session}} to memory"
+      "distillAria": "Distill session {{session}} to memory",
+      "showingRecent": "Showing the {{count}} most recent of {{total}} sessions."
     },
     "instructions": {
       "title": "Shared instructions",

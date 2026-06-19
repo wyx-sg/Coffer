@@ -27,8 +27,30 @@ paths:
       - $ref: "#/components/parameters/AgentName"
     get:
       summary: List transcript sessions for an agent
+      description: |
+        Returns one page of sessions, most-recent first, plus the total count.
+        Only the requested window is parsed off disk, so agents with thousands
+        of past sessions list quickly.
       operationId: listTranscripts
       tags: [transcripts]
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          description: Max sessions to return (most-recent first).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - in: query
+          name: offset
+          required: false
+          description: Number of (most-recent-first) sessions to skip.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
       responses:
         "200":
           description: OK
@@ -128,12 +150,22 @@ components:
 
     TranscriptSessionListResponse:
       type: object
-      required: [sessions]
+      required: [sessions, total, limit, offset]
       properties:
         sessions:
           type: array
           items:
             $ref: "#/components/schemas/TranscriptSessionSummary"
+          description: One page of sessions, most-recent first.
+        total:
+          type: integer
+          description: Total number of sessions on disk for the agent.
+        limit:
+          type: integer
+          description: Echo of the applied page size.
+        offset:
+          type: integer
+          description: Echo of the applied page offset.
 
     DistillRequest:
       type: object
