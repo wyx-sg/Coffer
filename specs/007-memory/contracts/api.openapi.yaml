@@ -76,6 +76,29 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/memory_stores/{name}/label:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    patch:
+      summary: Set or clear the store's display label (FR-017c)
+      operationId: updateMemoryStoreLabel
+      tags: [memory_stores]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemoryStoreLabelPatch"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryStoreOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/memory_stores/{name}/metrics:
     parameters:
       - $ref: "#/components/parameters/StoreName"
@@ -345,6 +368,17 @@ components:
         embedding_dimensions: { type: integer, minimum: 1, maximum: 8192 }
         max_fact_chars: { type: integer, minimum: 64, maximum: 32768 }
 
+    MemoryStoreLabelPatch:
+      type: object
+      description: >-
+        Set or clear a store's display label (FR-017c). An empty or
+        whitespace-only label clears it, reverting to the derived / fallback name.
+      properties:
+        label:
+          type: string
+          nullable: true
+          maxLength: 200
+
     MemoryStoreOut:
       type: object
       required:
@@ -375,6 +409,13 @@ components:
             Absolute git-root the project store was provisioned from. Null for
             the global store (and for project stores provisioned before the root
             was tracked).
+        label:
+          type: string
+          nullable: true
+          description: |
+            User-set display label (FR-017c). When present it is the store's
+            readable name in the UI, taking precedence over the derived
+            project-dir basename. Null when the user has not named the store.
         store_dir:
           type: string
           description: >-

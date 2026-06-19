@@ -56,6 +56,7 @@ _KB_MODELS: dict[str, type | None] = {
 _MEM_MODELS: dict[str, type | None] = {
     "MemoryStoreConfig": mem_schemas.MemoryStoreConfigOut,
     "MemoryStoreConfigPatch": mem_schemas.MemoryStoreConfigPatch,
+    "MemoryStoreLabelPatch": mem_schemas.MemoryStoreLabelPatch,
     "MemoryStoreOut": mem_schemas.MemoryStoreOut,
     "MemoryStoreListOut": mem_schemas.MemoryStoreListOut,
     "MemoryStoreMetrics": mem_schemas.MemoryStoreMetrics,

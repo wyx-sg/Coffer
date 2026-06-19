@@ -5,12 +5,12 @@
 // "Add fact" action on the right (the form lives in a dialog). Presentational.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/utils";
-import { deriveScope, projectDirName, type MemoryStoreMetrics, type MemoryStoreOut } from "./api";
+import { deriveScope, storeDisplayName, type MemoryStoreMetrics, type MemoryStoreOut } from "./api";
 
 interface Props {
   store: string;
@@ -18,6 +18,7 @@ interface Props {
   metrics: MemoryStoreMetrics | undefined;
   isClearPending: boolean;
   onClearAll: () => void;
+  onRename: () => void;
 }
 
 export function MemoryDetailHeader({
@@ -26,13 +27,17 @@ export function MemoryDetailHeader({
   metrics,
   isClearPending,
   onClearAll,
+  onRename,
 }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const scope = storeResource ? deriveScope(storeResource) : null;
-  // Readable identity (FR-017a): the project directory's basename, falling back
-  // to the raw store name (the global store, or an untracked project root).
-  const label = (storeResource && projectDirName(storeResource.project_root)) ?? store;
+  // Readable identity: a user-set label (FR-017c), else the project_root
+  // basename (FR-017a), else a graceful placeholder for an orphan store — never
+  // the opaque project-<ULID> as the title. While loading, show the raw name.
+  const displayName = storeResource
+    ? (storeDisplayName(storeResource) ?? t("memory.unnamedStore"))
+    : store;
   const projectRoot = storeResource?.project_root ?? null;
 
   return (
@@ -48,7 +53,17 @@ export function MemoryDetailHeader({
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-serif text-3xl tracking-tight">{label}</h1>
+          <h1 className="font-serif text-3xl tracking-tight">{displayName}</h1>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-1 text-muted-foreground hover:text-foreground"
+            onClick={onRename}
+            disabled={!storeResource}
+            aria-label={t("memory.rename.title")}
+          >
+            <Pencil className="size-4" />
+          </Button>
           <div className="flex flex-wrap items-center gap-1.5">
             {scope ? <Badge variant="secondary">{t(`memory.scope.${scope}`)}</Badge> : null}
             {metrics ? (

@@ -55,6 +55,7 @@ from coffer.infrastructure.knowledge.sqlite_index import SqliteKnowledgeIndex
 from coffer.infrastructure.knowledge.vec_index import VecIndex
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
 from coffer.infrastructure.memory.scope_fs import git_root, project_ulid
+from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 from coffer.infrastructure.providers.provider_introspector import ProviderIntrospector
 from coffer.surfaces.http.chat.dependencies import set_introspection_service
 from coffer.surfaces.http.dependencies import (
@@ -63,8 +64,11 @@ from coffer.surfaces.http.dependencies import (
     set_kb_service,
     set_memory_service,
     set_model_service,
-    set_project_root_repo,
     set_turn_orchestrator,
+)
+from coffer.surfaces.http.memory.dependencies import (
+    set_project_root_repo,
+    set_store_label_repo,
 )
 
 if TYPE_CHECKING:
@@ -194,6 +198,7 @@ def wire_memory_kind(
     reconciler = MemoryReconciler(documents=documents, retrieval=retrieval, reindexer=reindexer)
     project_roots = ProjectRootRepo(sm)  # type: ignore[arg-type]
     set_project_root_repo(project_roots)
+    set_store_label_repo(StoreLabelRepo(sm))  # type: ignore[arg-type]
     scope = ScopeResolver(
         resources=resource_svc,
         git_root=git_root,

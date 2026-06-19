@@ -138,6 +138,23 @@ The cascade on document delete is **application-level** (the index's `delete_chu
 
 `documents.metadata` for the memory face is Pydantic-validated as `{type, actor, origin_session_id}`. Per the engineering convention, the metadata JSON is built with `model_dump(mode="json")` so `datetime`/`AnyUrl` values serialize for SQLite.
 
+### Store display side-tables
+
+Two tiny `store_name`-keyed side-tables hold **display metadata** for memory stores (not part of the canonical `documents` substrate; they mirror each other):
+
+```sql
+CREATE TABLE memory_store_project_roots (
+    store_name   TEXT PRIMARY KEY,   -- e.g. 'project-<ULID>'
+    project_root TEXT NOT NULL       -- originating git-root, recorded at provisioning (FR-017a)
+);
+CREATE TABLE memory_store_labels (
+    store_name TEXT PRIMARY KEY,     -- e.g. 'project-<ULID>' or 'global'
+    label      TEXT NOT NULL         -- user-set display name (FR-017c)
+);
+```
+
+The `label` takes precedence over the `project_root`-derived basename when rendering a store's readable identity; clearing the label deletes its row, reverting to the FR-017a derivation / fallback. Neither table touches the store's name (`project-<ULID>`) or `project_id`.
+
 ## On-disk canonical layout (source of truth)
 
 ```

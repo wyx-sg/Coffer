@@ -71,6 +71,18 @@ class MemoryStoreConfigPatch(BaseModel):
     max_fact_chars: int | None = Field(default=None, ge=64, le=32768)
 
 
+# Surface cap for a display label — long enough for a sentence, short enough to
+# render on one table row.
+_MAX_LABEL_CHARS = 200
+
+
+class MemoryStoreLabelPatch(BaseModel):
+    """Set or clear a store's display label (007 FR-017c). An empty or
+    whitespace-only label clears it, reverting to the derived / fallback name."""
+
+    label: str | None = Field(default=None, max_length=_MAX_LABEL_CHARS)
+
+
 class MemoryStoreOut(BaseModel):
     ref: str
     kind: str
@@ -80,6 +92,10 @@ class MemoryStoreOut(BaseModel):
     # Absolute git-root a project store was provisioned from; ``None`` for the
     # global store (and for project stores provisioned before this was tracked).
     project_root: str | None = None
+    # User-set display label (007 FR-017c). When present it is the store's
+    # readable name in the UI, taking precedence over the derived project-dir
+    # basename; ``None`` when the user has not named the store.
+    label: str | None = None
     # Absolute on-disk directory holding the store's per-fact markdown files.
     # The in-app viewer is read-only; this backs reveal-in-file-manager /
     # copy-path for the whole store.
