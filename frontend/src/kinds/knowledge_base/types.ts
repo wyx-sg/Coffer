@@ -52,10 +52,24 @@ export interface DocumentOut {
   content_sha256: string;
   /** Co-management lock (ADR-028): a locked document refuses every mutation. */
   locked: boolean;
-  /** WORKSPACE_GLOBAL sentinel for global KB documents (per-project scope is a later slice). */
+  /**
+   * Document scope (ADR-030 / FR-022): the WORKSPACE_GLOBAL sentinel for a
+   * global document, or a project ULID for a per-project one. The unified 知识
+   * UI lists documents under the matching scope.
+   */
   project_id: string;
+  /**
+   * Recoverable soft-delete (ADR-030 / FR-023): null for a live document; an
+   * ISO timestamp once the document is in the trash. Surfaced only by the trash
+   * list (`?deleted=true`); live reads omit it.
+   */
+  deleted_at?: string | null;
   chunk_count?: number;
   metadata: Record<string, unknown>;
+  /** Absolute on-disk path of the document's Markdown file (FileActions). */
+  path?: string;
+  /** Absolute on-disk path of the document's containing folder. */
+  folder_path?: string;
   created_at: string;
   updated_at: string;
 }

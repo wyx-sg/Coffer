@@ -14,11 +14,25 @@ audit trail with the agent as actor.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.application.knowledge_base.service import KnowledgeBaseService
 from coffer.application.resource_service import ResourceService
+from coffer.domain.knowledge.document import WORKSPACE_GLOBAL_PROJECT_ID
+
+#: Resolves an agent's reported cwd to a document scope (ADR-030): a project ULID
+#: when the cwd is inside a git checkout, else the global sentinel. Injected at
+#: composition (the git-root walk lives in infrastructure).
+ProjectResolver = Callable[[str | None], str]
+
+
+def _cwd(args: dict[str, Any]) -> str | None:
+    """The agent's working directory the gateway injects, or ``None``."""
+    cwd = args.get("cwd")
+    return str(cwd) if cwd else None
+
 
 # MCP callers send free-form JSON; mirror the surface-layer ceilings so an agent
 # cannot bypass them by hand-rolling the tool call.
@@ -37,8 +51,10 @@ def register_kb_builtin_tools(
     *,
     resources: ResourceService,
     kb_service: KnowledgeBaseService,
+    resolve_project_id: ProjectResolver = lambda _cwd: WORKSPACE_GLOBAL_PROJECT_ID,
 ) -> None:
-    """Wire the four read-only KB tools into the gateway's registry."""
+    """Wire the KB read + write tools into the gateway's registry. Agent writes
+    resolve their document scope from the reported ``cwd`` (ADR-030)."""
 
     async def list_knowledge_bases(_args: dict[str, Any]) -> dict[str, Any]:
         kbs = await resources.list(kind="knowledge_base")
@@ -74,6 +90,9 @@ def register_kb_builtin_tools(
             query=query,
             top_k=top_k,
             mode=mode,
+            # An agent searches its own project scope (ADR-030), resolved from the
+            # gateway-injected cwd — symmetric with add_document; global otherwise.
+            project_id=resolve_project_id(_cwd(args)),
         )
         return {
             "mode": result.mode,
@@ -94,7 +113,12 @@ def register_kb_builtin_tools(
         kb = str(args["kb"])
         pattern = str(args["pattern"])
         max_matches = max(1, min(_MAX_MATCHES, int(args.get("max_matches", 200))))
-        result = await kb_service.grep(kb_name=kb, pattern=pattern, max_matches=max_matches)
+        result = await kb_service.grep(
+            kb_name=kb,
+            pattern=pattern,
+            max_matches=max_matches,
+            project_id=resolve_project_id(_cwd(args)),
+        )
         return {
             "hits": [
                 {"path": h.path, "line_number": h.line_number, "line": h.line} for h in result.hits
@@ -130,6 +154,7 @@ def register_kb_builtin_tools(
             raw_bytes=content.encode("utf-8"),
             actor=_AGENT_ACTOR,
             replace=replace,
+            project_id=resolve_project_id(_cwd(args)),
         )
         return {
             "document_id": doc.id,
@@ -180,6 +205,13 @@ def register_kb_builtin_tools(
                     "query": {"type": "string"},
                     "top_k": {"type": "integer", "default": 5, "minimum": 1, "maximum": 20},
                     "mode": {"type": "string", "enum": ["keyword", "vector"]},
+                    "cwd": {
+                        "type": "string",
+                        "description": (
+                            "The agent's working directory; scopes the search to its "
+                            "project (a git checkout) or global. Injected by the gateway."
+                        ),
+                    },
                 },
                 "required": ["kb", "query"],
             },
@@ -200,6 +232,13 @@ def register_kb_builtin_tools(
                         "default": 200,
                         "minimum": 1,
                         "maximum": 500,
+                    },
+                    "cwd": {
+                        "type": "string",
+                        "description": (
+                            "The agent's working directory; scopes the grep to its "
+                            "project (a git checkout) or global. Injected by the gateway."
+                        ),
                     },
                 },
                 "required": ["kb", "pattern"],
@@ -247,6 +286,13 @@ def register_kb_builtin_tools(
                         "default": False,
                         "description": "Update an existing same-named document in place",
                     },
+                    "cwd": {
+                        "type": "string",
+                        "description": (
+                            "The agent's working directory; selects the project "
+                            "scope (a git checkout) or global. Injected by the gateway."
+                        ),
+                    },
                 },
                 "required": ["kb", "filename", "content"],
             },
@@ -276,7 +322,8 @@ def register_kb_builtin_tools(
         BuiltinTool(
             name="delete_document",
             description=(
-                "Delete a document from a knowledge base. Refused if the document is locked."
+                "Delete a document from a knowledge base. The document is moved to "
+                "a recoverable trash (a second delete purges it). Refused if locked."
             ),
             input_schema={
                 "type": "object",

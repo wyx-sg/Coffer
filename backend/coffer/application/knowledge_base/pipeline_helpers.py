@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import contextlib
 import re
+import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+from coffer.domain.errors import IngestRejected
 from coffer.domain.knowledge.document import (
     KIND_KNOWLEDGE_BASE,
     WORKSPACE_GLOBAL_PROJECT_ID,
@@ -34,11 +36,27 @@ class DocumentRepoPort(Protocol):
     infrastructure ``DocumentRepo`` plus ``count_chunks``)."""
 
     async def upsert_document(self, d: Document) -> Document: ...
-    async def get_document(self, kind: str, resource_name: str, doc_id: str) -> Document | None: ...
+    async def get_document(
+        self, kind: str, resource_name: str, doc_id: str, *, include_deleted: bool = False
+    ) -> Document | None: ...
     async def list_documents(
-        self, kind: str, resource_name: str, *, limit: int, offset: int
+        self,
+        kind: str,
+        resource_name: str,
+        *,
+        limit: int,
+        offset: int,
+        project_id: str | None = None,
+        deleted: bool = False,
     ) -> list[Document]: ...
-    async def count_documents(self, kind: str, resource_name: str) -> int: ...
+    async def count_documents(
+        self,
+        kind: str,
+        resource_name: str,
+        *,
+        project_id: str | None = None,
+        deleted: bool = False,
+    ) -> int: ...
     async def count_chunks(self, kind: str, resource_name: str) -> int: ...
     async def chunk_counts(self, kind: str, resource_name: str) -> dict[str, int]: ...
     async def find_by_filename(
@@ -47,18 +65,24 @@ class DocumentRepoPort(Protocol):
     async def set_locked(
         self, kind: str, resource_name: str, doc_id: str, locked: bool
     ) -> Document | None: ...
+    async def soft_delete_document(self, kind: str, resource_name: str, doc_id: str) -> bool: ...
     async def delete_document(self, kind: str, resource_name: str, doc_id: str) -> bool: ...
     async def delete_resource(self, kind: str, resource_name: str) -> int: ...
 
 
 class KBPaths(Protocol):
-    """The on-disk path layout (injected — ``infrastructure.knowledge.paths``)."""
+    """The on-disk path layout (injected — ``infrastructure.knowledge.paths``).
+
+    The scope-bearing builders take an optional ``project_id`` (default global ⇒
+    the existing top-level layout); a project ULID nests under
+    ``projects/<ulid>/`` (ADR-030)."""
 
     def kb_dir(self, name: str) -> Path: ...
-    def docs_dir(self, name: str) -> Path: ...
-    def raw_dir(self, name: str) -> Path: ...
-    def doc_path(self, name: str, doc_id: str) -> Path: ...
-    def raw_path(self, name: str, doc_id: str, ext: str) -> Path: ...
+    def kb_store_dir(self, name: str, project_id: str = ...) -> Path: ...
+    def docs_dir(self, name: str, project_id: str = ...) -> Path: ...
+    def raw_dir(self, name: str, project_id: str = ...) -> Path: ...
+    def doc_path(self, name: str, doc_id: str, project_id: str = ...) -> Path: ...
+    def raw_path(self, name: str, doc_id: str, ext: str, project_id: str = ...) -> Path: ...
     def knowledge_root(self) -> Path: ...
 
 
@@ -77,6 +101,11 @@ class Prepared:
 def mkparent_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def list_md_files(directory: Path) -> list[Path]:
+    """Sorted ``*.md`` files in a directory (offloaded to a thread by callers)."""
+    return sorted(directory.glob("*.md"))
 
 
 def extension_of(filename: str) -> str:
@@ -125,22 +154,36 @@ def du_bytes(path: Path) -> int:
     return total
 
 
+def rel_doc_path(doc_id: str, project_id: str) -> str:
+    """The ``documents.path`` value for a scope: ``docs/<id>.md`` for global,
+    ``projects/<ulid>/docs/<id>.md`` for a project (ADR-030)."""
+    if project_id == WORKSPACE_GLOBAL_PROJECT_ID:
+        return f"docs/{doc_id}.md"
+    return f"projects/{project_id}/docs/{doc_id}.md"
+
+
 def document_from_frontmatter(
-    kb_name: str, doc_id: str, frontmatter: dict[str, object]
+    kb_name: str,
+    doc_id: str,
+    frontmatter: dict[str, object],
+    project_id: str = WORKSPACE_GLOBAL_PROJECT_ID,
 ) -> Document:
     """Rebuild a ``documents`` row from a file's self-describing frontmatter.
 
-    Timestamps are not in the frontmatter; a rebuilt row gets ``now`` (the
-    rebuild time), which is honest — the original ingest time was lost with
-    the database."""
+    The ``project_id`` is derived from which scope directory the file was found
+    in (the reindex scan walks global + each ``projects/<ulid>/``), not from the
+    frontmatter. Timestamps are not in the frontmatter; a rebuilt row gets
+    ``now`` (the rebuild time), which is honest — the original ingest time was
+    lost with the database. A rebuilt row is always live (a tombstone has no
+    ``docs/`` file to scan)."""
     now = datetime.now(tz=UTC)
     source_filename = str(frontmatter.get("source_filename", ""))
     return Document(
         id=doc_id,
         kind=KIND_KNOWLEDGE_BASE,
         resource_name=kb_name,
-        project_id=WORKSPACE_GLOBAL_PROJECT_ID,
-        path=f"docs/{doc_id}.md",
+        project_id=project_id,
+        path=rel_doc_path(doc_id, project_id),
         title=str(frontmatter.get("title", "") or doc_id),
         description=None,
         content_sha256="",  # set by the reindex routine
@@ -170,16 +213,18 @@ def build_kb_document(
     source_mode: str,
     created_at: datetime,
     updated_at: datetime,
+    project_id: str = WORKSPACE_GLOBAL_PROJECT_ID,
 ) -> Document:
     """Build the in-memory ``Document`` for a freshly-converted upload. ``id`` is
     the stable ULID (new for an ingest, reused for an in-place update — ADR-028);
-    ``content_sha256`` is set by the reindex routine."""
+    ``content_sha256`` is set by the reindex routine; ``project_id`` is the
+    resolved scope (ADR-030)."""
     return Document(
         id=doc_id,
         kind=KIND_KNOWLEDGE_BASE,
         resource_name=kb_name,
-        project_id=WORKSPACE_GLOBAL_PROJECT_ID,
-        path=f"docs/{doc_id}.md",
+        project_id=project_id,
+        path=rel_doc_path(doc_id, project_id),
         title=prepared.title,
         description=None,
         content_sha256="",  # set by the reindex routine
@@ -221,3 +266,42 @@ def set_frontmatter_locked(path: Path, locked: bool) -> None:
         frontmatter, body = split_frontmatter(path.read_text("utf-8"))
         frontmatter["locked"] = locked
         path.write_text(render_frontmatter(frontmatter, body), "utf-8")
+
+
+def check_size(raw_bytes: bytes, config: KnowledgeBaseConfig) -> None:
+    """Reject an empty or oversize upload at the boundary (FR-006)."""
+    if not raw_bytes:
+        raise IngestRejected("empty", "uploaded file is empty")
+    if len(raw_bytes) > config.max_document_bytes:
+        raise IngestRejected(
+            "too_large",
+            f"file size {len(raw_bytes)} exceeds KB limit {config.max_document_bytes}",
+        )
+
+
+def safe_rmtree_kb(kb_dir: Path, knowledge_root: Path) -> None:
+    """Remove a KB's on-disk directory, refusing to escape or equal the
+    knowledge root (defense-in-depth for the KB-drop path)."""
+    if not kb_dir.exists():
+        return
+    resolved = kb_dir.resolve()
+    root = knowledge_root.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        return
+    if resolved == root:
+        return
+    shutil.rmtree(resolved, ignore_errors=True)
+
+
+def scope_docs_dirs(paths: KBPaths, kb_name: str) -> list[tuple[str, Path]]:
+    """Every ``(project_id, docs_dir)`` the reindex scan must walk: the global
+    scope plus each existing ``knowledge/<kb>/projects/<ulid>/`` (ADR-030)."""
+    scopes: list[tuple[str, Path]] = [(WORKSPACE_GLOBAL_PROJECT_ID, paths.docs_dir(kb_name))]
+    projects_root = paths.kb_dir(kb_name) / "projects"
+    if projects_root.is_dir():
+        for child in sorted(projects_root.iterdir()):
+            if child.is_dir():
+                scopes.append((child.name, paths.docs_dir(kb_name, child.name)))
+    return scopes

@@ -33,6 +33,7 @@ def _to_domain(row: DocumentModel) -> Document:
         content_sha256=row.content_sha256,
         source_mode=row.source_mode,
         locked=bool(row.locked),
+        deleted_at=_tz(row.deleted_at) if row.deleted_at is not None else None,
         metadata=json.loads(row.metadata_json or "{}"),
         created_at=_tz(row.created_at),
         updated_at=_tz(row.updated_at),
@@ -67,6 +68,7 @@ class DocumentRepo:
                     content_sha256=d.content_sha256,
                     source_mode=d.source_mode,
                     locked=d.locked,
+                    deleted_at=d.deleted_at,
                     created_at=d.created_at,
                     updated_at=d.updated_at,
                 )
@@ -80,39 +82,72 @@ class DocumentRepo:
                 row.content_sha256 = d.content_sha256
                 row.source_mode = d.source_mode
                 row.locked = d.locked
+                # Restore clears the tombstone by upserting with deleted_at=None.
+                row.deleted_at = d.deleted_at
                 row.updated_at = d.updated_at
             await session.commit()
             await session.refresh(row)
             return _to_domain(row)
 
-    async def get_document(self, kind: str, resource_name: str, doc_id: str) -> Document | None:
+    async def get_document(
+        self,
+        kind: str,
+        resource_name: str,
+        doc_id: str,
+        *,
+        include_deleted: bool = False,
+    ) -> Document | None:
         async with self._sm() as session:
             stmt = select(DocumentModel).where(
                 DocumentModel.kind == kind,
                 DocumentModel.resource_name == resource_name,
                 DocumentModel.id == doc_id,
             )
+            if not include_deleted:
+                stmt = stmt.where(DocumentModel.deleted_at.is_(None))
             row = (await session.execute(stmt)).scalar_one_or_none()
             return _to_domain(row) if row else None
 
     async def list_documents(
-        self, kind: str, resource_name: str, *, limit: int = 50, offset: int = 0
+        self,
+        kind: str,
+        resource_name: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        project_id: str | None = None,
+        deleted: bool = False,
     ) -> list[Document]:
+        """List a store's documents. ``project_id=None`` spans all scopes; a
+        value restricts to that scope (FR-022). ``deleted=False`` returns live
+        documents; ``deleted=True`` returns the trash (FR-023)."""
         async with self._sm() as session:
             stmt = (
                 select(DocumentModel)
                 .where(
                     DocumentModel.kind == kind,
                     DocumentModel.resource_name == resource_name,
+                    DocumentModel.deleted_at.isnot(None)
+                    if deleted
+                    else DocumentModel.deleted_at.is_(None),
                 )
                 .order_by(DocumentModel.updated_at.desc(), DocumentModel.id)
                 .limit(limit)
                 .offset(offset)
             )
+            if project_id is not None:
+                stmt = stmt.where(DocumentModel.project_id == project_id)
             rows = (await session.execute(stmt)).scalars().all()
             return [_to_domain(r) for r in rows]
 
-    async def count_documents(self, kind: str, resource_name: str) -> int:
+    async def count_documents(
+        self,
+        kind: str,
+        resource_name: str,
+        *,
+        project_id: str | None = None,
+        deleted: bool = False,
+    ) -> int:
         async with self._sm() as session:
             stmt = (
                 select(func.count())
@@ -120,8 +155,13 @@ class DocumentRepo:
                 .where(
                     DocumentModel.kind == kind,
                     DocumentModel.resource_name == resource_name,
+                    DocumentModel.deleted_at.isnot(None)
+                    if deleted
+                    else DocumentModel.deleted_at.is_(None),
                 )
             )
+            if project_id is not None:
+                stmt = stmt.where(DocumentModel.project_id == project_id)
             return int((await session.execute(stmt)).scalar_one())
 
     async def count_chunks(self, kind: str, resource_name: str) -> int:
@@ -170,6 +210,7 @@ class DocumentRepo:
                     DocumentModel.kind == kind,
                     DocumentModel.resource_name == resource_name,
                     DocumentModel.project_id == project_id,
+                    DocumentModel.deleted_at.is_(None),
                     text("json_extract(documents.metadata, '$.original_filename') = :fn"),
                 )
                 .order_by(DocumentModel.created_at, DocumentModel.id)
@@ -195,6 +236,27 @@ class DocumentRepo:
             await session.commit()
             await session.refresh(row)
             return _to_domain(row)
+
+    async def soft_delete_document(
+        self, kind: str, resource_name: str, doc_id: str, *, when: datetime | None = None
+    ) -> bool:
+        """Tombstone a live document (ADR-030): set ``deleted_at`` and keep the
+        row. Returns ``True`` if a live row was tombstoned, ``False`` otherwise
+        (already trashed or absent). The on-disk markdown + index rows are
+        cleared by the pipeline; the ``raw/`` original is kept for restore."""
+        async with self._sm() as session:
+            stmt = select(DocumentModel).where(
+                DocumentModel.kind == kind,
+                DocumentModel.resource_name == resource_name,
+                DocumentModel.id == doc_id,
+                DocumentModel.deleted_at.is_(None),
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                return False
+            row.deleted_at = when or datetime.now(UTC)
+            await session.commit()
+            return True
 
     async def delete_document(self, kind: str, resource_name: str, doc_id: str) -> bool:
         async with self._sm() as session:

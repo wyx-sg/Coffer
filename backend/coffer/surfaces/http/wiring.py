@@ -38,6 +38,7 @@ from coffer.application.memory.service import MemoryService
 from coffer.application.memory.sync import MemoryReconciler
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
+from coffer.domain.knowledge.document import WORKSPACE_GLOBAL_PROJECT_ID
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make_ask_tool
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
@@ -51,10 +52,10 @@ from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.embeddings import make_embedder
 from coffer.infrastructure.knowledge.grep import RipgrepGrep
 from coffer.infrastructure.knowledge.repository import DocumentRepo
+from coffer.infrastructure.knowledge.scope_fs import git_root, project_ulid
 from coffer.infrastructure.knowledge.sqlite_index import SqliteKnowledgeIndex
 from coffer.infrastructure.knowledge.vec_index import VecIndex
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
-from coffer.infrastructure.memory.scope_fs import git_root, project_ulid
 from coffer.infrastructure.providers.provider_introspector import ProviderIntrospector
 from coffer.surfaces.http.chat.dependencies import set_introspection_service
 from coffer.surfaces.http.dependencies import (
@@ -176,7 +177,20 @@ def wire_kb_kind(
     )
     app.state.kinds["knowledge_base"] = make_kb_kind(kb_service)
     set_kb_service(kb_service)
-    register_kb_builtin_tools(builtin_tools, resources=resource_svc, kb_service=kb_service)
+
+    def _resolve_kb_project(cwd: str | None) -> str:
+        # Agent KB writes scope to their git checkout (ADR-030), mirroring memory.
+        if not cwd:
+            return WORKSPACE_GLOBAL_PROJECT_ID
+        root = git_root(cwd)
+        return project_ulid(root) if root else WORKSPACE_GLOBAL_PROJECT_ID
+
+    register_kb_builtin_tools(
+        builtin_tools,
+        resources=resource_svc,
+        kb_service=kb_service,
+        resolve_project_id=_resolve_kb_project,
+    )
     return kb_service
 
 

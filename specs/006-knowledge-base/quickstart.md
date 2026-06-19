@@ -50,6 +50,11 @@ coffer kb reconvert design-notes 8a3f1c2b...
 # document in place (stable ULID id, no duplicate). --replace confirms the overwrite.
 coffer kb ingest design-notes ~/work/notes/architecture.md --replace
 
+# Scope a document to a project (default scope is global). The project id is the
+# stable ULID derived from a git checkout (the same identity the memory face uses).
+coffer kb ingest design-notes ~/proj/CONTRIBUTING.md --project-id 7h8j9k...    # per-project
+coffer kb list-docs design-notes --project-id 7h8j9k...                         # list one scope
+
 # Lock an authoritative document so neither a human nor an agent can mutate it
 # (edit / reconvert / replace / delete are refused until unlocked).
 coffer kb lock design-notes 8a3f1c2b...
@@ -61,8 +66,15 @@ coffer kb set-chunking design-notes --chunk-size 768 --chunk-overlap 96
 # Rescan files → rebuild index from disk.
 coffer kb reindex design-notes
 
-# Delete a single document, then the whole KB.
-coffer kb delete-doc design-notes 8a3f1c2b...
+# Delete a single document → moves it to the recoverable trash (clears the markdown
+# + index, keeps the original). List the trash and restore (re-converted from the
+# kept original). Deleting an already-trashed document purges it for good.
+coffer kb delete-doc design-notes 8a3f1c2b...        # soft-delete → trash
+coffer kb trash design-notes                          # list trashed documents
+coffer kb restore design-notes 8a3f1c2b...           # recover from trash
+coffer kb delete-doc design-notes 8a3f1c2b...        # again on a trashed doc → purge
+
+# Delete the whole KB (hard cleanup, including the trash).
 coffer kb delete-kb design-notes --yes
 ```
 
@@ -130,15 +142,19 @@ No additional MCP server install is required — these are built into Coffer's g
 ├── coffer.db                       # SQLite — resources / documents / chunks / FTS5 / sqlite-vec / audit
 └── knowledge/
     └── design-notes/
-        ├── docs/
+        ├── docs/                   # GLOBAL-scope documents
         │   ├── 8a3f1c2b....md      # normalized markdown = truth (frontmatter + body)
         │   └── a91bcd2e....md
-        └── raw/
-            ├── 8a3f1c2b....pdf     # original upload (provenance / re-convert)
-            └── a91bcd2e....docx
+        ├── raw/
+        │   ├── 8a3f1c2b....pdf     # original upload (provenance / re-convert / restore)
+        │   └── a91bcd2e....docx
+        └── projects/               # PER-PROJECT documents (scoped by git-root ULID)
+            └── 7h8j9k.../
+                ├── docs/
+                └── raw/
 ```
 
-Markdown files are the **source of truth**; SQLite is a rebuildable index. `coffer kb reindex <name>` reconstructs every SQLite row — including the `documents` rows, rebuilt from each file's YAML frontmatter — purely from the `docs/` files. Backing up a KB really is just copying its `knowledge/<name>/` directory: restore the directory and run `reindex` to regenerate the full index.
+Markdown files are the **source of truth**; SQLite is a rebuildable index. `coffer kb reindex <name>` reconstructs every SQLite row — including the `documents` rows, rebuilt from each file's YAML frontmatter — purely from the `docs/` files (global and every `projects/<ulid>/docs/`). A **trashed** document keeps its `raw/` original (so it can be restored) but has no `docs/` markdown; reindex never resurrects it. Backing up a KB really is just copying its `knowledge/<name>/` directory: restore the directory and run `reindex` to regenerate the full index.
 
 ## Limits (default)
 

@@ -29,6 +29,19 @@
 - **可恢复软删除**（回收站/恢复）。目前删除是硬删除，带 F01 审计痕迹；锁守护策展文档。
 - **应用内 Markdown 编辑器** —— 查看器保持只读 + 外部编辑器入口（依只读查看器决策）；人类经外部编辑器 / 编辑 API，agent 经 MCP。
 
+## 修订 —— 逐项目 scope + 软删除 + 统一知识 UI（ADR-030，2026-06-19）
+
+统一知识切片按 [ADR-030](../../docs/decisions/ADR-030-per-project-kb-scope-and-soft-delete.md) 落地那两块推迟的后端内容以及统一呈现。本切片的用户决策（依 AGENTS.md §4 记录）：作为**一个 PR** 交付；**应用内编辑器保持移除**（FR-020 只读查看器**不**反转）。
+
+**本切片交付：**
+
+- **逐项目文档 scope（FR-022）**：一个真实的 `project_id`（全局哨兵 | git-root 项目 ULID）穿过 `_store_ref` / `build_kb_document` / `document_from_frontmatter` / `find_by_filename` / `_write_files`；磁盘上 `knowledge/<kb>/projects/<ulid>/{docs,raw}/` 与既有全局布局并存；list/read/grep/search 按 `project_id` 划界。`scope_fs`（`git_root`/`project_ulid`）从 `infrastructure/memory/` 上提到共享的 `infrastructure/knowledge/` 基底（不引入跨 kind 导入）。
+- **可恢复软删除（FR-023）**：可空的 `deleted_at`（迁移 `0026`）；删除一份活动文档变成软删除（清除 `docs/<id>.md` + 索引，保留 `raw/` + 行）；恢复从 `raw/` 重新转换；删除一份回收站中的文档则清除；reindex-on-read 永不复活（重建分支没有文件；剪枝分支只读活动行）。新增审计 `KB_DOCUMENT_RESTORED` / `KB_DOCUMENT_PURGED`。共享 repo 的 `deleted_at IS NULL` 过滤对 memory 是 no-op。
+- **统一知识 UI**：一个导航入口（全局/项目 scope 轴，notes+文档混排，按形态添加输入，回收站/恢复）取代拆分的 记忆/知识库 页面；`/memory`+`/knowledge-bases` 保留为旧版重定向（007 FR-017b）。
+- 表面：`POST …/documents/{id}/restore`；`project_id` ingest 字段；`deleted`/`project_id` 列表过滤；`DocumentOut += deleted_at`；`coffer kb trash` / `coffer kb restore` CLI。
+
+**仍然推迟：**应用内 Markdown 编辑器；回收站自动过期（清除是显式的；删除 KB 会清空回收站）。
+
 ## Technical Context
 
 | Dimension                                        | Value                                                                                                                                                                                                                                                                                                                                                             |

@@ -25,11 +25,13 @@ class FakeIndex:
     async def delete_chunks(self, document_id):
         return None
 
-    async def keyword_search(self, resource_name, query, top_k):
+    async def keyword_search(self, resource_name, query, top_k, *, project_id=None):
+        self.keyword_project_id = project_id
         return self._keyword[:top_k]
 
-    async def vector_search(self, resource_name, vector, top_k):
+    async def vector_search(self, resource_name, vector, top_k, *, project_id=None):
         self.vector_called = True
+        self.vector_project_id = project_id
         return self._vector[:top_k]
 
 
