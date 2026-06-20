@@ -9,7 +9,9 @@ store without an actual ``.git`` (a separate test covers the real git walk).
 from __future__ import annotations
 
 import pathlib
+import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import pytest_asyncio
 
@@ -17,6 +19,7 @@ import coffer.infrastructure.knowledge  # noqa: F401 — register ORM + FTS5 DDL
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.reindex import Reindexer
 from coffer.application.knowledge.retrieval import KnowledgeRetrieval
+from coffer.application.memory.handoff import HandoffService
 from coffer.application.memory.kind import make_memory_kind
 from coffer.application.memory.scope import ScopeResolver
 from coffer.application.memory.service import MemoryService
@@ -27,7 +30,7 @@ from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.grep import RipgrepGrep
 from coffer.infrastructure.knowledge.repository import DocumentRepo
 from coffer.infrastructure.knowledge.sqlite_index import SqliteKnowledgeIndex
-from coffer.infrastructure.memory.scope_fs import project_ulid
+from coffer.infrastructure.memory.scope_fs import git_branch, git_root, project_ulid
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -173,6 +176,98 @@ async def mem(tmp_path: pathlib.Path, monkeypatch):
             audit=audit,
             project_cwd=str(project_root / "src"),
             vec_stores=vec_stores,
+        )
+    finally:
+        await engine.dispose()
+
+
+@dataclass
+class HandoffHarness:
+    svc: HandoffService
+    memory_service: MemoryService
+    audit: AuditService
+    cwd: str  # a path inside a REAL git repo (branch ``work``)
+    non_repo: str  # a path outside any git repo
+
+
+def _git(args: list[str], cwd: pathlib.Path) -> None:
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+
+@pytest_asyncio.fixture
+async def handoff(tmp_path: pathlib.Path, monkeypatch):
+    """A real-stack ``HandoffService`` over a temp store + a REAL ``.git`` repo.
+
+    Unlike ``mem`` (which fakes the git-root resolver), handoff needs an actual
+    ``.git`` so ``git_branch`` — which reads ``.git/HEAD`` — returns ``"work"``.
+    The ``ScopeResolver`` is wired with the REAL ``git_root``/``git_branch`` so
+    a cwd inside the repo resolves to a project store and an outside path does
+    not. Reuses the same temp-SQLite + ``$COFFER_MEMORY_ROOT`` wiring as ``mem``.
+    """
+    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
+    db_path = tmp_path / "h.db"
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{db_path}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+
+    documents = DocumentRepo(sm)
+    audit = AuditService(SqlAlchemyAuditRepo(sm))
+
+    def index_factory(kind: str, resource_name: str, *, dimensions):  # type: ignore[no-untyped-def]
+        return SqliteKnowledgeIndex(sm, kind=kind, resource_name=resource_name, vec=None)
+
+    retrieval = KnowledgeRetrieval(
+        index_factory=index_factory,
+        grep=RipgrepGrep(),
+        embedder_factory=_embedder_factory,
+    )
+    reindexer = Reindexer(embedder_factory=_embedder_factory)
+    reconciler = MemoryReconciler(documents=documents, retrieval=retrieval, reindexer=reindexer)
+
+    # A REAL git repo on branch "work" so git_branch reads .git/HEAD = work.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-q", "-b", "work"], repo)
+    src = repo / "src"
+    src.mkdir()
+    non_repo = tmp_path / "outside"
+    non_repo.mkdir()
+
+    resources = ResourceService({}, SqlAlchemyResourceRepo(sm), audit)
+    scope = ScopeResolver(
+        resources=resources,
+        git_root=git_root,
+        project_ulid=project_ulid,
+        store_dir=paths.memory_store_dir,
+    )
+    memory_service = MemoryService(
+        resource_service=resources,
+        documents=documents,
+        scope_resolver=scope,
+        reconciler=reconciler,
+        retrieval=retrieval,
+        audit=audit,
+        store_dir=paths.memory_store_dir,
+        fact_path=paths.fact_path,
+    )
+    resources._kinds["memory"] = make_memory_kind(memory_service)  # type: ignore[attr-defined]
+
+    svc = HandoffService(
+        scope=scope,
+        git_branch=git_branch,
+        store_dir=paths.memory_store_dir,
+        audit=audit,
+        now=lambda: datetime(2026, 6, 20, 12, 0, tzinfo=UTC),
+    )
+
+    try:
+        yield HandoffHarness(
+            svc=svc,
+            memory_service=memory_service,
+            audit=audit,
+            cwd=str(src),
+            non_repo=str(non_repo),
         )
     finally:
         await engine.dispose()
