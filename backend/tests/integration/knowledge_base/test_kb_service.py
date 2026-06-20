@@ -145,6 +145,23 @@ async def test_keyword_search_ranks(kb) -> None:
     assert result.passages[0].title == "Fox"
 
 
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="keyword search matches CJK (Chinese) content"
+)
+async def test_keyword_search_matches_cjk(kb) -> None:
+    await kb.create_kb("kb1")
+    await _ingest(kb, "kb1", "zh.md", "# 向量\n\n向量检索使用语义嵌入模型来匹配查询".encode())
+    # Multi-character CJK query: served by the FTS5 trigram index (unicode61
+    # would have returned nothing for a no-space Chinese run).
+    result = await kb.service.search(kb_name="kb1", query="向量检索", top_k=5)
+    assert result.mode == "keyword"
+    assert any("向量检索" in p.text for p in result.passages)
+    # Short (< 3 char) CJK query: trigram can't tokenize it, so the substring
+    # (LIKE) fallback serves it instead of returning empty.
+    short = await kb.service.search(kb_name="kb1", query="向量", top_k=5)
+    assert any("向量" in p.text for p in short.passages)
+
+
 @pytest.mark.acceptance(spec="006-knowledge-base", scenario="grep returns file/line matches")
 async def test_grep_returns_hits(kb) -> None:
     await kb.create_kb("kb1")

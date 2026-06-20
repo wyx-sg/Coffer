@@ -22,10 +22,17 @@ from coffer.infrastructure.knowledge.models import ChunkModel
 #: (A ``content=''`` contentless table cannot return its own column values, so
 #: snippets would require reading the files — we keep the text in the FTS index
 #: to serve passages directly.)
+#:
+#: Tokenizer is ``trigram`` (not ``unicode61``): ``unicode61`` does not segment
+#: CJK text — Chinese has no word-boundary spaces, so a whole run becomes one
+#: token and a query like ``向量检索`` never matches. ``trigram`` indexes
+#: 3-character sequences, matching CJK and arbitrary substrings; queries shorter
+#: than 3 characters use the LIKE fallback in ``sqlite_index.keyword_search``.
+#: Keep in sync with migration 0033, which rebuilds the table for existing DBs.
 CREATE_DOCUMENTS_FTS = (
     "CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5("
     "text, resource_name UNINDEXED, chunk_id UNINDEXED, "
-    "tokenize='unicode61'"
+    "tokenize='trigram'"
     ")"
 )
 

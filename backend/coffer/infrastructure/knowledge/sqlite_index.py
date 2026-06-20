@@ -187,8 +187,14 @@ class SqliteKnowledgeIndex:
 
     async def keyword_search(self, resource_name: str, query: str, top_k: int) -> Sequence[Passage]:
         match = _fts_query(query)
-        if not match:
-            return []
+        if match:
+            return await self._match_search(resource_name, match, top_k)
+        # No trigram-able term (every term is < 3 chars), e.g. a short CJK query
+        # like 向量 — the trigram index can't tokenize it. Fall back to a bounded
+        # substring scan so short Chinese queries still match. See _fts_query.
+        return await self._like_search(resource_name, query, top_k)
+
+    async def _match_search(self, resource_name: str, match: str, top_k: int) -> Sequence[Passage]:
         async with self._sm() as session:
             rows = (
                 await session.execute(
@@ -216,6 +222,47 @@ class SqliteKnowledgeIndex:
                 # bm25 returns a negative score (lower = better); flip so larger
                 # is more relevant for the caller.
                 score=-float(r.rank),
+                position=int(r.position),
+            )
+            for r in rows
+        ]
+
+    async def _like_search(self, resource_name: str, query: str, top_k: int) -> Sequence[Passage]:
+        """Substring (LIKE) fallback for queries with no trigram-able (>= 3 char)
+        term — chiefly short CJK queries like 向量. Unranked (bm25 needs a MATCH);
+        shorter chunks first as a crude match-density proxy.
+        """
+        terms = [t for t in query.split() if t.strip()]
+        if not terms:
+            return []
+        params: dict[str, object] = {"rn": resource_name, "kind": self._kind, "k": top_k}
+        clauses = []
+        for i, term in enumerate(terms):
+            params[f"p{i}"] = "%" + _like_escape(term) + "%"
+            clauses.append(f"f.text LIKE :p{i} ESCAPE '\\'")
+        where = " OR ".join(clauses)
+        async with self._sm() as session:
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT f.chunk_id, f.text, c.document_id, c.position, d.title "
+                        "FROM documents_fts f "
+                        "JOIN chunks c ON c.id = f.chunk_id "
+                        "JOIN documents d ON d.id = c.document_id "
+                        "  AND d.kind = c.kind AND d.resource_name = c.resource_name "
+                        f"WHERE ({where}) AND f.resource_name = :rn AND c.kind = :kind "
+                        "ORDER BY length(f.text) LIMIT :k"
+                    ),
+                    params,
+                )
+            ).all()
+        return [
+            Passage(
+                document_id=str(r.document_id),
+                title=str(r.title or ""),
+                text=str(r.text or ""),
+                # Substring fallback is unranked; report a uniform positive score.
+                score=1.0,
                 position=int(r.position),
             )
             for r in rows
@@ -268,11 +315,20 @@ class SqliteKnowledgeIndex:
 
 
 def _fts_query(query: str) -> str:
-    """Turn a free-text query into a safe FTS5 MATCH expression.
+    """Turn a free-text query into a safe FTS5 (trigram) MATCH expression.
 
-    Each whitespace-separated term is double-quoted (so punctuation/operators in
-    user input can't break the parser) and OR-joined.
+    Each whitespace term of >= 3 characters is double-quoted (so punctuation /
+    operators in user input can't break the parser) and OR-joined. The trigram
+    tokenizer indexes 3-character sequences, so terms shorter than 3 characters
+    produce no tokens — they are dropped here and served by the LIKE fallback in
+    ``keyword_search`` (this is what lets short CJK queries like 向量 match). An
+    empty result means "no trigram-able term", which routes to that fallback.
     """
-    terms = [t for t in query.split() if t.strip()]
+    terms = [t for t in query.split() if len(t.strip()) >= 3]
     quoted = ['"' + t.replace('"', '""') + '"' for t in terms]
     return " OR ".join(quoted)
+
+
+def _like_escape(term: str) -> str:
+    """Escape LIKE wildcards in a user term for use with ``ESCAPE '\\'``."""
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
