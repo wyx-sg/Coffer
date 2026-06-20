@@ -241,14 +241,14 @@ async def recall_store_with_mode(
     embedding = await deps.embedding_resolver() if config.vector_enabled else None
     await deps.reconciler.reconcile(store=store_ref, embedding=embedding)
     chosen = mode or config.default_mode
-    # A ``vector`` request the store cannot serve (vector not enabled / no
-    # embedding configured) degrades to keyword and is flagged — never an
+    # A ``vector``/``hybrid`` request the store cannot serve (vector not enabled
+    # / no embedding configured) degrades to keyword and is flagged — never an
     # error (FR-008). Track the degrade explicitly so it is reported even
     # though the facade only sees the already-keyword mode.
-    degraded = mode == "vector" and not config.vector_enabled
+    degraded = mode in ("vector", "hybrid") and not config.vector_enabled
     if chosen not in config.retrieval_modes:
         chosen = config.default_mode
-    if degraded and chosen == "vector":
+    if degraded and chosen in ("vector", "hybrid"):
         chosen = "keyword"
 
     if chosen == "grep":

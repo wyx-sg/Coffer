@@ -315,11 +315,16 @@ class KnowledgeBaseService:
         # index (FR-008a). No-op when the corpus is unchanged.
         await self._reconcile_on_read(kb_name, config)
         # An explicit mode the store cannot serve is a caller error (400), never
-        # a silent rewrite. ``vector`` is the one exception: it always reaches
-        # the facade so the keyword fallback is FLAGGED per the spec.
+        # a silent rewrite. ``vector`` and ``hybrid`` are the exceptions: they
+        # always reach the facade so the keyword fallback is FLAGGED (not
+        # rejected) when no embedder is available, per FR-011a / FR-012.
         if mode == "grep":
             raise SearchModeInvalid("grep", "grep is served by the grep endpoint")
-        if mode is not None and mode != "vector" and mode not in config.enabled_modes:
+        if (
+            mode is not None
+            and mode not in ("vector", "hybrid")
+            and mode not in config.enabled_modes
+        ):
             raise SearchModeInvalid(mode, "mode is not enabled for this knowledge base")
         chosen = mode or config.default_mode
         # An implicit search on a store whose default_mode is grep serves the

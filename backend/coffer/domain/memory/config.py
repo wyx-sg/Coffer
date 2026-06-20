@@ -43,7 +43,15 @@ class MemoryStoreConfig(BaseModel):
                 seen.append(mode)
         if not seen:
             raise ValueError("retrieval_modes must list at least one retrieval mode")
+        # Mirror the KB face (knowledge_base/config.py): enabling ``vector`` lets
+        # the store fuse, so ``hybrid`` is added automatically and becomes the
+        # default (unless the caller explicitly chose one) — keeps the shared
+        # substrate coherent. ``keyword`` stays the default when vector is off.
+        if "vector" in seen and "hybrid" not in seen:
+            seen.append("hybrid")
         object.__setattr__(self, "retrieval_modes", seen)
+        if "vector" in seen and "default_mode" not in self.model_fields_set:
+            object.__setattr__(self, "default_mode", "hybrid")
         if self.default_mode not in seen:
             raise ValueError(f"default_mode {self.default_mode!r} is not in retrieval_modes {seen}")
         return self
@@ -51,7 +59,7 @@ class MemoryStoreConfig(BaseModel):
     @property
     def vector_enabled(self) -> bool:
         # Embedding is GLOBAL now (not per-store): a store opts into vector by
-        # listing the mode; whether vector actually indexes depends on the
-        # global embedding config being active. The legacy ``embedding_*``
-        # fields are accepted but ignored.
-        return "vector" in self.retrieval_modes
+        # listing the mode (or ``hybrid``, which fuses vector); whether vector
+        # actually indexes depends on the global embedding config being active.
+        # The legacy ``embedding_*`` fields are accepted but ignored.
+        return "vector" in self.retrieval_modes or "hybrid" in self.retrieval_modes
