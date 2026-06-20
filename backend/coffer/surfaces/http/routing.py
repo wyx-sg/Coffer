@@ -34,7 +34,6 @@ from coffer.surfaces.http.knowledge_base import router as kb_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
-from coffer.surfaces.http.mcp.registry_routes import router as mcp_registry_router
 from coffer.surfaces.http.memory import router as memory_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
@@ -73,7 +72,6 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_protocol_router,
         mcp_capability_router,
         mcp_invocation_router,
-        mcp_registry_router,
         memory_router,  # spec 007
         distill_router,  # spec 007 extension — transcript distillation
         # chat (008)

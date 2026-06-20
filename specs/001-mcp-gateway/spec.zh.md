@@ -349,18 +349,6 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 - **When** 该会话通过网关列出工具,
 - **Then** 每一台启用服务器的工具都被暴露，因为作用域只对已知 agent 生效。
 
-### Scenario: search the official MCP registry
-
-- **Given** 官方 MCP Registry 可达（ADR-029）,
-- **When** 用户在 Add-MCP-server 流程中按关键词搜索,
-- **Then** 返回匹配的服务器，每个都带一份可安装的配置 draft（传输方式 + 运行命令 + 参数 + 声明的环境变量，secret 已标记），从包元数据推断而来。
-
-### Scenario: registry search degrades when the registry is unavailable
-
-- **Given** 注册表无法到达（不可达或超时）,
-- **When** 用户搜索,
-- **Then** 网关返回一个清晰的 `REGISTRY_UNAVAILABLE` 错误，且既有的 paste-JSON 添加路径仍然可用。
-
 ## Requirements
 
 ### Functional Requirements
@@ -390,11 +378,6 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 - **FR-020**: System MUST 支持每 agent 的 scope 模式：`auto`（该 agent 看到每一台启用的 MCP 服务器）或 `selected`（该 agent 只看到一份显式的服务器 allowlist）。Agent MUST 默认 `auto`；新增的服务器 MUST 自动对 `auto` agent 可见，但 MUST NOT 加入任何 `selected` agent 的 allowlist。
 - **FR-021**: System MUST 在列出 tools、resources、prompts 以及为 `coffer__search_tools` 排序时，应用每个 agent 的有效 scope（effective scope）——启用的服务器，在 `selected` 时再与 allowlist 求交集——使一台越界服务器的能力绝不被呈现给该 agent。
 - **FR-022**: System MUST 拒绝指向越界服务器的直接 `tools/call`、`resources/read` 或 `prompts/get`——即便能力名是直接给出的——返回错误而非调用上游。
-
-**Registry discovery**
-
-- **FR-023**: Users MUST 能在 Add-MCP-server 流程中按关键词搜索官方 MCP Registry，并看到匹配的服务器，每个都带一份开箱即用、可编辑的配置 draft（传输方式 + 参数 + 声明的环境变量，secret 已标记）。由 daemon 发起出站查询；注册表以只读、实时方式消费（无本地镜像）。
-- **FR-024**: 当注册表不可用时，System MUST 呈现一个清晰的、非致命的错误，且既有的手工录入（paste-JSON）路径 MUST 保持完全可用。
 
 **Credentials and safety**
 
@@ -449,4 +432,3 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 - Fernet 主密钥在 coffer 启动时可解析（默认为可读的 `~/.coffer/master.key`，钥匙串模式下则是已解锁的操作系统钥匙串）；如不可用，用户会看到明确提示（存在密文但无可解析密钥是致命的 `MasterKeyMissing` 启动错误）。
 - 本 spec 只引入一个 resource kind（`mcp_server`）。Resource 框架的设计允许后续 spec 在不重新建模现有数据的前提下加入更多 kind。
 - 并发 MCP 客户端负载较小（低个位数）；coffer 不是 fleet 规模的网关。
-- 注册表发现数据（FR-023/FR-024，ADR-029）**不持久化**——官方 MCP Registry 以实时方式查询，仅有一层短 TTL 的内存缓存，不向 SQLite 写入任何内容。注册表是 **preview** API，因此其 schema/字段被当作可选项、按防御性方式解析（例如 `runtimeHint` 常常缺失，故运行命令从 `registryType` 推断）。

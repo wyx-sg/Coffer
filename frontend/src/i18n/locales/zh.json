@@ -206,22 +206,6 @@
       "errBadEnvValue": "服务器「{{name}}」的环境变量「{{key}}」必须为字符串。",
       "errEnvNotObject": "服务器「{{name}}」的 env 必须是字符串值的对象。"
     },
-    "registry": {
-      "tabSearch": "搜索注册表",
-      "tabJson": "粘贴 JSON",
-      "searchPlaceholder": "搜索官方 MCP 注册表…",
-      "search": "搜索",
-      "searching": "搜索中…",
-      "noResults": "没有匹配的服务器",
-      "unavailable": "MCP 注册表暂不可用 —— 请改用「粘贴 JSON」",
-      "use": "使用",
-      "notInstallable": "无法自动安装",
-      "homepage": "主页",
-      "nameLabel": "名称",
-      "configure": "配置 {{name}}",
-      "add": "添加服务器",
-      "poweredBy": "官方 MCP 注册表"
-    },
     "edit": {
       "title": "编辑 MCP 服务器",
       "subtitle": "修改该服务器的描述、配置和凭证。",

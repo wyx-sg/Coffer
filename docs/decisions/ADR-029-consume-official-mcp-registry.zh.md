@@ -2,11 +2,13 @@
 
 > English: [ADR-029-consume-official-mcp-registry.md](./ADR-029-consume-official-mcp-registry.md)
 
-- **状态：** Accepted
+- **状态：** Reverted（2026-06-20）——见下方撤销说明
 - **日期：** 2026-06-19
 - **决策者：** Yuxing Wu
 - **Spec：** 001-mcp-gateway（实现前更新 spec.md）
 - **相关：** [ADR-004](./ADR-004-capability-state-model.md)（列表实时查询、不做镜像）、[ADR-015](./ADR-015-envelope-encrypted-credential-store.md)（secret 转为凭据引用）
+
+> **⚠️ 已撤销 2026-06-20。** 在线 MCP Registry 浏览/自动填充功能（PR #114）已移除（简化积压项 1.7）：它只省去了一次粘贴，却依赖一个外部 preview API。添加 MCP 服务器现在重新通过 **paste-JSON** 路径（标准 `mcpServers` 配置）完成。以下原始决策保留为历史记录。
 
 ## 背景
 

@@ -227,13 +227,6 @@ Plain dataclass. The per-agent visibility policy the gateway enforces (FR-019..F
 | `mode`       | `Literal["auto","selected"]` | `auto` = every enabled server (default); `selected` = the allowlist only       |
 | `servers`    | `list[str]`                  | allowlist of `mcp_server` names; empty unless `selected`                       |
 
-> **Registry discovery (FR-023/FR-024, ADR-029) adds no new tables and no
-> migration revision.** The official MCP Registry is queried live, backed only
-> by a short-TTL in-memory cache; nothing about registry results is written to
-> SQLite. Drafts the search builds (transport, command, args, env) are returned
-> to the client and never persisted on their own — only a server the user
-> actually adds lands in `resources` via the normal registration path.
-
 ## SQLite schema (across three Alembic revisions)
 
 Tables are created across three migrations; the schema below represents the
