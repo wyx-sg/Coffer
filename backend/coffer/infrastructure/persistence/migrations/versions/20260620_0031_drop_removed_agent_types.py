@@ -34,8 +34,6 @@ down_revision: str | None = "0030"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-_REMOVED_AGENT_TYPES = ("cursor", "opencode", "openclaw", "hermes")
-
 
 def upgrade() -> None:
     bind = op.get_bind()

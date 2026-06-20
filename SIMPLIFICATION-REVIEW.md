@@ -111,19 +111,20 @@
 
 ### 第四档 · 流程/CI/测试/强制仪式（已决 2026-06-20，Claude 复核后裁定）
 
-> **裁定原则**：只砍"去冗余/去摩擦但**不损失任何真实保证**"的；保留唯一**真承重**的那条（IM24）。
+> **裁定原则**：只砍"去冗余/去摩擦但**不损失任何真实保证**"的；真 harness 不瞎砍。
+> **二次复核（用户提醒"真需要的 harness 别瞎砍"后）**：撤回 IM22、IM25（经查是真 SDD harness，非冗余），软化 IM26a。只剩 **IM20/IM21/IM23** 三条是真冗余/去摩擦。
 
 | 编号 | 名称 | 位置 | ~LOC | 决定 |
 | ---- | ---- | ---- | ---- | ---- |
-| IM20 | import-linter 7 个 N×N 跨 kind 块（手维护 O(kinds²)；可塌成单个 `independence` 契约） | `backend/pyproject.toml` `[tool.importlinter]` Contracts 5–5f | 280 | ✂️ **改**——7 块 → 单个原生 `independence` 契约（~10 行）；保证不变、N² 维护消失。留 Contracts 1–3 + 引擎封闭 7/8 |
-| IM21 | 两个 CI workflow 每 PR 把 verify 5 个 tier **跑两遍**（push→ci.yml + pull_request→verify.yml） | `.github/workflows/{verify,ci}.yml` | CI 工时 | ✂️ **改**——ci.yml 去 `feature/**` push 触发（留 **main-push 冻结锁校验 + 周 canary**）；verify.yml 独占 PR 门。去掉双跑、不丢冻结校验 |
-| IM22 | benchmark tier = 1 个测试，却独占 verify target + 专用 CI job（perf 在共享 runner 上易抖） | `Makefile` verify-benchmark + verify.yml benchmark job + `tests/integration/perf/` | 25 + 1 job | ✂️ **删**——测试本身并进 integration tier；删 `verify-benchmark` target + `test-benchmark` job（**非 required**，零风险） |
-| IM23 | `desktop-build` 用桩二进制、却是**每个 PR 的 required check**（真覆盖在 release.yml）；最慢最脆 | verify.yml desktop job（required） | 1 job | ✂️ **改**——`tauri build --bundles deb` 步骤**改为仅 desktop/frontend 变更时跑**，`cargo test --lib` 常开；**job 仍常跑**保 required check 不卡 pending。后端 PR 不再等 deb 构建 |
-| IM24 | acceptance tier：293 个 byte-exact `@pytest.mark.acceptance` marker + 305 行审计脚本（required，改标题就 orphan 报错） | `scripts/audit_acceptance.py` + markers（required） | 305 + 293 串 | 🔒 **留**（**复核后推翻先前"降级 advisory"的倾向**）——SDD spec↔test 可追溯是项目脊梁、是自动 build loop 逼 AI 把每条场景写测试的硬门；改名 orphan 摩擦其实是"逼你同步 marker"的特性。唯一真承重的"仪式" |
-| IM25 | contract tier 独占 tier/target/required check（API 只有自家前端消费，且前端由同一 OpenAPI codegen） | `backend/tests/contract/` + verify-contract（required） | 1k | ✂️ **改**——6 个 OpenAPI 自洽测试并进 integration（撤 `test-contract` required，测试随 integration 仍跑）；**保留 `test_mcp_sdk_oracle.py`** 真外部契约 |
-| IM26 | `check_file_sizes.py` 反规避加固（对开发者自己威胁建模） + `verify_stamp.py` 指纹（为非阻塞 advisory 算精确指纹） | `scripts/check_file_sizes.py`、`scripts/verify_stamp.py` | ~180 | ✂️/🔒 **(a) `check_file_sizes` 改**：删反规避、glob 收成 3–4 条（~80→30）；**(b) `verify_stamp` 留**（属 harness，A 已定不改） |
+| IM20 | import-linter 7 个 N×N 跨 kind 块（手维护 O(kinds²)；可塌成单个 `independence` 契约） | `backend/pyproject.toml` `[tool.importlinter]` Contracts 5–5f | 280 | ✂️ **改**——7 块 → 单个原生 `independence` 契约（~10 行）；**保证完全不变**、只去掉 N² 手维护。留 Contracts 1–3 + 引擎封闭 7/8 |
+| IM21 | 两个 CI workflow 每 PR 把 verify 5 个 tier **跑两遍**（push→ci.yml + pull_request→verify.yml） | `.github/workflows/{verify,ci}.yml` | CI 工时 | ✂️ **改（谨慎）**——去掉双跑，但**须保住冻结锁覆盖**（让存活的 PR run 用 frozen deps）。不是纯冗余（frozen vs unfrozen 是真矩阵维度），低优先 |
+| IM22 | benchmark tier = SC-003 网关开销预算（job 注释：**该预算的唯一执行点**） | `Makefile` verify-benchmark + verify.yml benchmark job + `tests/integration/perf/` | 25 + 1 job | 🔒 **留（撤回先前"删"）**——删了 SC-003 预算就无人执行、acceptance marker 会绿着撒谎。是真 harness，不是冗余 |
+| IM23 | `desktop-build` 用桩二进制、却是**每个 PR 的 required check**（真覆盖在 release.yml）；最慢最脆 | verify.yml desktop job（required） | 1 job | ✂️ **改**——`tauri build --bundles deb` 步骤改为**仅 desktop/frontend 变更时跑**（含 package.json/tauri 配置），`cargo test --lib` 常开；**job 仍常跑**保 required check 不卡 pending。纯去冗余：后端 PR 改不动桩二进制 bundle |
+| IM24 | acceptance tier：293 个 byte-exact `@pytest.mark.acceptance` marker + 305 行审计脚本（required，改标题就 orphan 报错） | `scripts/audit_acceptance.py` + markers（required） | 305 + 293 串 | 🔒 **留**——SDD spec↔test 可追溯是项目脊梁、是自动 build loop 逼 AI 把每条场景写测试的硬门；orphan 摩擦其实是"逼你同步 marker"的特性 |
+| IM25 | contract tier：验 Pydantic conform **手写 OpenAPI 契约**（`specs/001/contracts/api.openapi.yaml`=SDD 真相源） | `backend/tests/contract/` + verify-contract（required） | 1k | 🔒 **留（撤回先前"改"）**——OpenAPI 是手写 SDD 契约不是 codegen 产物；测 Pydantic conform = IM24 的 wire 级对应，真 SDD harness |
+| IM26 | `check_file_sizes.py` 反规避加固 + `verify_stamp.py` 指纹 | `scripts/check_file_sizes.py`、`scripts/verify_stamp.py` | ~180 | 🔒 **基本留（软化先前"删反规避"）**——反规避在**自动 loop**里防 AI 绕过尺寸门，有 gate-integrity 价值；(b) `verify_stamp` 属 harness A 已定留。若哪天确认无价值再收 glob，低优先 |
 
-> 复核要点：IM21/IM23/IM25 都涉及 required check，处理方式刻意避开"required check 被 path-filter 跳过→永久 pending 卡合并"的坑——IM23 用**步骤级**条件（job 常跑、贵步骤跳）、IM25 把测试折叠进仍 required 的 integration、IM21 只动非 required 的 ci.yml。撤 required check（IM22 test-benchmark 非 required；IM25 test-contract 需改分支保护配置）。
+> 复核结论：第四档真正该动的只有 **IM20**（同义改写、零保证损失）、**IM23**（去无谓重复构建）、**IM21**（谨慎去重、保住冻结覆盖）。其余（IM22/24/25/26）都是真 harness，**留**。教训：CI/测试"仪式"里混着真 SDD 保证，逐条查清来源再动，别按体量拍脑袋。
 
 ### Scope 备注（并进 backlog `AGENT` 项，非新项）
 
@@ -138,14 +139,11 @@ agent 类型裁到 2 类的级联比文档列的更广：`EXTERNAL_DIR`/Hermes�
 - [ ] IM10–IM14 第二档重复/样板合并（执行时反复确认行为等价后排期）
 - [ ] IM15 迁移压单一 baseline（**择时机**：本轮简化 + agent 裁剪落地后；dev 库 `alembic stamp` 一次）
 - [ ] IM19 backup strict-mode 删 → 并进 **P10**
-- [ ] IM20 import-linter 7 块 → 单个 `independence` 契约
-- [ ] IM21 ci.yml 去 `feature/**` push（去 PR 双跑，留 main 冻结校验 + canary）
-- [ ] IM22 benchmark 单测并进 integration、删 `verify-benchmark` + `test-benchmark` job
+- [ ] IM20 import-linter 7 块 → 单个 `independence` 契约（同义改写、零保证损失）
 - [ ] IM23 desktop `tauri build` 步骤改"仅 desktop/frontend 变更触发"（job 常跑、`cargo test --lib` 常开）
-- [ ] IM25 contract 6 个自洽测并进 integration（留 `test_mcp_sdk_oracle`、撤 `test-contract` required 配置）
-- [ ] IM26a `check_file_sizes` 删反规避、glob 收成 3–4 条
+- [ ] IM21 ci.yml 去 PR 双跑（**谨慎**：存活的 PR run 须用 frozen deps 保冻结覆盖；低优先）
 
-**确定留、不执行：** IM16 · IM17 · IM18（provider 分支；去 langgraph 记远期）· **IM24**（SDD 硬门）· IM26b（verify_stamp）· H1 eval 飞轮全部 · 第四档其余未列项（B 文档仪式）。
+**确定留、不执行：** IM16 · IM17 · IM18（provider 分支；去 langgraph 记远期）· **IM22**（SC-003 唯一执行点）· **IM24**（SDD 硬门）· **IM25**（手写 OpenAPI SDD 契约）· **IM26**（反规避在自动 loop 有价值 + verify_stamp）· H1 eval 飞轮全部 · 第四档其余（B 文档仪式）。
 
 ## 执行 backlog
 
