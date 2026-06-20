@@ -7,8 +7,7 @@ Registered into ``BuiltinToolRegistry`` at startup under the reserved
   ``read_document``;
 - write: ``add_document``, ``edit_document``, ``delete_document``.
 
-The write tools share the REST surface's service paths, so they honour the
-per-document lock (a locked document refuses all mutation) and record the F01
+The write tools share the REST surface's service paths, so they record the F01
 audit trail with the agent as actor.
 """
 
@@ -110,14 +109,12 @@ def register_kb_builtin_tools(
             "document_id": doc.id,
             "title": doc.title,
             "source_mode": doc.source_mode,
-            "locked": doc.locked,
             "markdown": markdown,
         }
 
     # ----- write tools (documents are co-managed — ADR-028) -----
     # Every write funnels through the same service paths as the REST surface, so
-    # it honours the per-document lock (DOCUMENT_LOCKED) and the F01 audit. The
-    # acting agent is the audit actor.
+    # it records the F01 audit. The acting agent is the audit actor.
 
     async def add_document(args: dict[str, Any]) -> dict[str, Any]:
         kb = str(args["kb"])
@@ -135,7 +132,6 @@ def register_kb_builtin_tools(
             "document_id": doc.id,
             "title": doc.title,
             "source_mode": doc.source_mode,
-            "locked": doc.locked,
         }
 
     async def edit_document(args: dict[str, Any]) -> dict[str, Any]:
@@ -149,7 +145,6 @@ def register_kb_builtin_tools(
             "document_id": doc.id,
             "title": doc.title,
             "source_mode": doc.source_mode,
-            "locked": doc.locked,
         }
 
     async def delete_document(args: dict[str, Any]) -> dict[str, Any]:
@@ -230,8 +225,7 @@ def register_kb_builtin_tools(
                 "co-managed). Provide the Markdown body as 'content' and a "
                 "filename with an extension (e.g. 'notes.md'). Re-using a filename "
                 "already in the KB updates that document in place only when "
-                "replace=true; identical content is a no-op. Refused if the "
-                "document is locked."
+                "replace=true; identical content is a no-op."
             ),
             input_schema={
                 "type": "object",
@@ -256,10 +250,7 @@ def register_kb_builtin_tools(
     registry.register(
         BuiltinTool(
             name="edit_document",
-            description=(
-                "Replace a knowledge base document's Markdown body (marks it "
-                "'edited'). Refused if the document is locked."
-            ),
+            description=("Replace a knowledge base document's Markdown body (marks it 'edited')."),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -275,9 +266,7 @@ def register_kb_builtin_tools(
     registry.register(
         BuiltinTool(
             name="delete_document",
-            description=(
-                "Delete a document from a knowledge base. Refused if the document is locked."
-            ),
+            description=("Delete a document from a knowledge base."),
             input_schema={
                 "type": "object",
                 "properties": {

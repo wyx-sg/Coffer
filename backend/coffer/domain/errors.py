@@ -247,7 +247,6 @@ class DatabaseSchemaTooNew(CofferError):  # noqa: N818
 # Canonical classes live in coffer.domain.kb_errors (split for the file-size
 # limit); re-exported here so the coffer.domain.errors.X import paths keep working.
 from coffer.domain.kb_errors import (  # noqa: E402, I001
-    DocumentLocked as DocumentLocked,
     DocumentNotFound as DocumentNotFound,
     EngineUnavailable as EngineUnavailable,
     GrepPatternInvalid as GrepPatternInvalid,

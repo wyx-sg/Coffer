@@ -32,7 +32,6 @@ def _to_domain(row: DocumentModel) -> Document:
         description=row.description,
         content_sha256=row.content_sha256,
         source_mode=row.source_mode,
-        locked=bool(row.locked),
         metadata=json.loads(row.metadata_json or "{}"),
         created_at=_tz(row.created_at),
         updated_at=_tz(row.updated_at),
@@ -66,7 +65,6 @@ class DocumentRepo:
                     metadata_json=payload,
                     content_sha256=d.content_sha256,
                     source_mode=d.source_mode,
-                    locked=d.locked,
                     created_at=d.created_at,
                     updated_at=d.updated_at,
                 )
@@ -79,7 +77,6 @@ class DocumentRepo:
                 row.metadata_json = payload
                 row.content_sha256 = d.content_sha256
                 row.source_mode = d.source_mode
-                row.locked = d.locked
                 row.updated_at = d.updated_at
             await session.commit()
             await session.refresh(row)
@@ -176,25 +173,6 @@ class DocumentRepo:
             )
             row = (await session.execute(stmt, {"fn": original_filename})).scalars().first()
             return _to_domain(row) if row else None
-
-    async def set_locked(
-        self, kind: str, resource_name: str, doc_id: str, locked: bool
-    ) -> Document | None:
-        """Flip a document's co-management lock (ADR-028); returns the updated
-        row, or ``None`` if it does not exist."""
-        async with self._sm() as session:
-            stmt = select(DocumentModel).where(
-                DocumentModel.kind == kind,
-                DocumentModel.resource_name == resource_name,
-                DocumentModel.id == doc_id,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is None:
-                return None
-            row.locked = locked
-            await session.commit()
-            await session.refresh(row)
-            return _to_domain(row)
 
     async def delete_document(self, kind: str, resource_name: str, doc_id: str) -> bool:
         async with self._sm() as session:

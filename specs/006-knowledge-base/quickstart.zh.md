@@ -50,11 +50,6 @@ coffer kb reconvert design-notes 8a3f1c2b...
 # document in place (stable ULID id, no duplicate). --replace confirms the overwrite.
 coffer kb ingest design-notes ~/work/notes/architecture.md --replace
 
-# Lock an authoritative document so neither a human nor an agent can mutate it
-# (edit / reconvert / replace / delete are refused until unlocked).
-coffer kb lock design-notes 8a3f1c2b...
-coffer kb lock design-notes 8a3f1c2b... --unlock
-
 # Change chunk parameters (re-chunks + re-indexes the corpus).
 coffer kb set-chunking design-notes --chunk-size 768 --chunk-overlap 96
 
@@ -94,8 +89,8 @@ coffer kb search design-notes "service backoff strategy" --mode vector
 3. 填表单：name、description、启用的检索模式（默认 keyword + grep）、chunk 参数，以及 —— 仅当你启用 vector —— 一个 embedding provider/model 与凭据。提交。
 4. 点进 KB。把任意格式的文件拖入上传区；每个都变成 Markdown。
 5. 用 **Search** 面板；从选择器里挑模式（grep / keyword / vector）。
-6. 打开一个文档查看渲染后的 Markdown（只读）。要修改它，用**在编辑器中打开**在你的外部编辑器中编辑该文件（或**在访达中显示** / **复制路径**）；你的编辑会在下次读取时经读取时惰性重建索引自动拾取。也可通过 `coffer kb edit` / REST API / agent 编辑，并标记为 `edited`。查看器显示一个**锁**切换与一个 `locked` 徽章 —— 锁定某文档可冻结它，使其不受任何编辑（人或 agent）影响。
-7. 文档操作在每一行上（read、delete、copy id、re-upload source、lock/unlock）。
+6. 打开一个文档查看渲染后的 Markdown（只读）。要修改它，用**在编辑器中打开**在你的外部编辑器中编辑该文件（或**在访达中显示** / **复制路径**）；你的编辑会在下次读取时经读取时惰性重建索引自动拾取。也可通过 `coffer kb edit` / REST API / agent 编辑，并标记为 `edited`。
+7. 文档操作在每一行上（read、delete、copy id、re-upload source）。
 8. 在详情头部的 kebab 菜单删除 KB。
 
 ## 通过 MCP 客户端（Claude Code、Codex …）
@@ -107,7 +102,7 @@ coffer kb search design-notes "service backoff strategy" --mode vector
 - `coffer__grep_knowledge(kb, pattern, max_matches?)` —— 对 markdown 的 file/line 匹配。
 - `coffer__read_document(kb, doc_id)` —— 文档的完整 Markdown + frontmatter。
 
-写工具（每次写入都以 agent 为 actor 审计，且在被锁文档上被拒绝）：
+写工具（每次写入都以 agent 为 actor 审计）：
 
 - `coffer__add_document(kb, filename, content)` —— 以 Markdown 内容 ingest 一个新文档（复用文件名则就地更新同一文档）。
 - `coffer__edit_document(kb, doc_id, content)` —— 替换文档正文（标记为 `edited`）。

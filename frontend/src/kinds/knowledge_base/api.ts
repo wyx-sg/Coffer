@@ -157,22 +157,6 @@ export async function reconvertDocument(kbName: string, documentId: string): Pro
   return (await r.json()) as DocumentOut;
 }
 
-export async function setDocumentLock(
-  kbName: string,
-  documentId: string,
-  locked: boolean,
-): Promise<DocumentOut> {
-  // Lock / unlock a document (ADR-028). A locked document refuses edit /
-  // reconvert / replace / delete for everyone until unlocked.
-  const r = await fetch(`${kbBase(kbName)}/documents/${enc(documentId)}`, {
-    method: "PATCH",
-    headers: { ...headers(), "Content-Type": "application/json" },
-    body: JSON.stringify({ locked }),
-  });
-  await checkOk(r);
-  return (await r.json()) as DocumentOut;
-}
-
 export async function reindexKnowledgeBase(kbName: string): Promise<ReindexResult> {
   const r = await fetch(`${kbBase(kbName)}/reindex`, {
     method: "POST",

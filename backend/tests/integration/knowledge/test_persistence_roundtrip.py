@@ -93,20 +93,6 @@ async def test_find_by_filename_matches_in_scope(substrate) -> None:
 
 
 @pytest.mark.asyncio
-async def test_set_locked_flips_and_persists(substrate) -> None:
-    """ADR-028: set_locked flips the per-document lock and round-trips."""
-    repo = substrate.repo
-    await repo.upsert_document(_doc("ulid-lock", KIND_KNOWLEDGE_BASE, "kb1", filename="a.md"))
-    locked = await repo.set_locked(KIND_KNOWLEDGE_BASE, "kb1", "ulid-lock", True)
-    assert locked is not None and locked.locked is True
-    assert (await repo.get_document(KIND_KNOWLEDGE_BASE, "kb1", "ulid-lock")).locked is True
-    unlocked = await repo.set_locked(KIND_KNOWLEDGE_BASE, "kb1", "ulid-lock", False)
-    assert unlocked is not None and unlocked.locked is False
-    # Unknown id → None (no row touched).
-    assert await repo.set_locked(KIND_KNOWLEDGE_BASE, "kb1", "missing", True) is None
-
-
-@pytest.mark.asyncio
 async def test_kind_isolation_same_id(substrate) -> None:
     """The same id string may appear under both faces (composite PK)."""
     repo = substrate.repo

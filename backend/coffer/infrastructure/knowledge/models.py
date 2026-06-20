@@ -13,7 +13,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     TIMESTAMP,
-    Boolean,
     Index,
     Integer,
     PrimaryKeyConstraint,
@@ -42,8 +41,6 @@ class DocumentModel(Base):
     metadata_json: Mapped[str] = mapped_column("metadata", Text, nullable=False, default="{}")
     content_sha256: Mapped[str] = mapped_column(String, nullable=False)
     source_mode: Mapped[str] = mapped_column(String, nullable=False)
-    # Co-management lock (ADR-028): a locked document refuses every mutation.
-    locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 

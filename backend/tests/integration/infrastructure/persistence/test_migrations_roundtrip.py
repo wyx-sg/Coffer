@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0026"
+HEAD_REVISION = "0027"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -41,9 +41,11 @@ HEAD_REVISION = "0026"
 # 0019 adds ``sync_config`` + ``sync_state`` for multi-machine sync (spec 010);
 # 0023 adds ``agent_mcp_scope`` + ``agent_mcp_scope_server`` for per-agent MCP
 # server scoping (ADR-026). 0025 adds NO table — it ADDs the ``documents.locked``
-# column for the co-management lock (ADR-028), so EXPECTED_TABLES is unchanged
-# (the column is asserted separately below). 0026 adds ``memory_store_labels``
-# (a store's user-set display name, 007 FR-017c). The ``documents_fts_*`` shadow
+# column for the co-management lock (ADR-028); 0026 adds ``memory_store_labels``
+# (a store's user-set display name, 007 FR-017c); 0027 DROPs ``documents.locked``
+# again (per-document lock removed, simplification 5.7), so EXPECTED_TABLES is
+# unchanged and the column is ABSENT at head (asserted separately below). The
+# ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
 EXPECTED_TABLES = {
@@ -164,14 +166,22 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(documents)")}
 
-    # 0025 adds the co-management lock column (ADR-028); 0026 adds the
-    # memory_store_labels table (007 FR-017c) — both exist at head.
+    # 0027 drops documents.locked (per-document lock removed, 5.7), so the
+    # column is ABSENT at head; 0026 adds the memory_store_labels table
+    # (007 FR-017c), present at head.
+    assert "locked" not in _documents_columns()
+    assert "memory_store_labels" in _user_tables(db_path)
+
+    # head (0027) -> 0026: 0027's downgrade re-adds documents.locked.
+    command.downgrade(cfg, "0026")
     assert "locked" in _documents_columns()
     assert "memory_store_labels" in _user_tables(db_path)
 
-    # head (0026) -> 0025: 0026's downgrade drops the memory_store_labels table.
+    # 0026 -> 0025: 0026's downgrade drops the memory_store_labels table; the
+    # locked column (re-added by 0027's downgrade) is still present here.
     command.downgrade(cfg, "0025")
     assert "memory_store_labels" not in _user_tables(db_path)
+    assert "locked" in _documents_columns()
     assert _user_tables(db_path) == EXPECTED_TABLES - {"memory_store_labels"}
 
     # 0025 -> 0024: 0025's downgrade drops documents.locked (column-only).

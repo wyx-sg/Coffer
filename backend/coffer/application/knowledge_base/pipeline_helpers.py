@@ -44,9 +44,6 @@ class DocumentRepoPort(Protocol):
     async def find_by_filename(
         self, kind: str, resource_name: str, project_id: str, original_filename: str
     ) -> Document | None: ...
-    async def set_locked(
-        self, kind: str, resource_name: str, doc_id: str, locked: bool
-    ) -> Document | None: ...
     async def delete_document(self, kind: str, resource_name: str, doc_id: str) -> bool: ...
     async def delete_resource(self, kind: str, resource_name: str) -> int: ...
 
@@ -145,10 +142,6 @@ def document_from_frontmatter(
         description=None,
         content_sha256="",  # set by the reindex routine
         source_mode=str(frontmatter.get("source_mode", "converted")),
-        # The co-management lock is persisted in the frontmatter (files are
-        # truth — ADR-028), so a DB-loss rebuild restores it instead of silently
-        # unlocking. PyYAML round-trips the bool, so this is a real bool.
-        locked=bool(frontmatter.get("locked", False)),
         created_at=now,
         updated_at=now,
         metadata={
@@ -207,17 +200,6 @@ def render_doc_markdown(doc: Document, body: str, *, source_mode: str) -> str:
             "source_sha256": str(doc.metadata.get("source_sha256", "")),
             "converter": str(doc.metadata.get("conversion_engine", "")),
             "source_mode": source_mode,
-            "locked": doc.locked,
         },
         body,
     )
-
-
-def set_frontmatter_locked(path: Path, locked: bool) -> None:
-    """Best-effort flip of the on-disk ``locked`` frontmatter key (no-op if the
-    file is absent), so the co-management lock survives a files-only rebuild
-    (ADR-028). The body is untouched, so ``content_sha256`` is unchanged."""
-    with contextlib.suppress(OSError, ValueError):
-        frontmatter, body = split_frontmatter(path.read_text("utf-8"))
-        frontmatter["locked"] = locked
-        path.write_text(render_frontmatter(frontmatter, body), "utf-8")

@@ -5,7 +5,7 @@
 **Feature Branch**: `feature/kb-memory-redesign`
 **Created**: 2026-06-09
 **Status**: Accepted (redesign — in development)
-**Input**: A from-scratch redesign of the `knowledge_base` resource kind. A Knowledge Base is one face of a shared **knowledge substrate**: the user uploads files in **any format**, Coffer cleans and normalizes each to **Markdown on disk** (the source of truth), and serves them back over three retrieval modes (`grep`, `keyword`, `vector`). SQLite is a rebuildable index only. Documents are **co-managed by humans and agents** ([ADR-028](../../docs/decisions/ADR-028-knowledge-base-documents-co-managed.md)): both read AND write through Coffer's MCP gateway, every write is audited (F01), and a per-document **lock** opts an authoritative document out of all mutation. See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) for the substrate rationale and [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) for architecture.
+**Input**: A from-scratch redesign of the `knowledge_base` resource kind. A Knowledge Base is one face of a shared **knowledge substrate**: the user uploads files in **any format**, Coffer cleans and normalizes each to **Markdown on disk** (the source of truth), and serves them back over three retrieval modes (`grep`, `keyword`, `vector`). SQLite is a rebuildable index only. Documents are **co-managed by humans and agents** ([ADR-028](../../docs/decisions/ADR-028-knowledge-base-documents-co-managed.md)): both read AND write through Coffer's MCP gateway, every write is audited (F01). See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) for the substrate rationale and [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md) for architecture.
 
 ## User Scenarios & Testing
 
@@ -35,25 +35,25 @@ The same corpus is queried three ways: `grep` (exact/regex over the Markdown fil
 
 ### User Story 3 — Agent reads AND writes through the MCP gateway (Priority: P1)
 
-The developer's coding agent connects to Coffer's MCP endpoint and gets built-in KB tools: read tools (list KBs, search, grep, read a full document) AND write tools (add a document, edit a document, delete a document). Documents are co-managed: an agent can contribute and curate alongside the human. Every agent write is audited (F01) with the agent as actor, funnels through the same idempotent re-index routine humans use, and is refused on a **locked** document.
+The developer's coding agent connects to Coffer's MCP endpoint and gets built-in KB tools: read tools (list KBs, search, grep, read a full document) AND write tools (add a document, edit a document, delete a document). Documents are co-managed: an agent can contribute and curate alongside the human. Every agent write is audited (F01) with the agent as actor, funnels through the same idempotent re-index routine humans use.
 
 **Why this priority**: Agent-side retrieval is what makes the KB useful during coding; agent-side curation makes it a living, co-managed knowledge store rather than a static vault (ADR-028).
 
-**Independent Test**: With a populated KB, an MCP client sees `coffer__list_knowledge_bases`, `coffer__search_knowledge`, `coffer__grep_knowledge`, `coffer__read_document`, `coffer__add_document`, `coffer__edit_document`, and `coffer__delete_document`; calling `coffer__add_document` creates a searchable document; calling `coffer__edit_document` on a locked document is refused.
+**Independent Test**: With a populated KB, an MCP client sees `coffer__list_knowledge_bases`, `coffer__search_knowledge`, `coffer__grep_knowledge`, `coffer__read_document`, `coffer__add_document`, `coffer__edit_document`, and `coffer__delete_document`; calling `coffer__add_document` creates a searchable document.
 
-**Covering scenarios**: built-in KB tools appear in client tool list; agent searches a knowledge base; agent greps a knowledge base; agent reads a document; agent adds a document via MCP; agent edits a document via MCP; agent deletes a document via MCP; an agent write to a locked document is refused.
+**Covering scenarios**: built-in KB tools appear in client tool list; agent searches a knowledge base; agent greps a knowledge base; agent reads a document; agent adds a document via MCP; agent edits a document via MCP; agent deletes a document via MCP.
 
 ---
 
 ### User Story 4 — Curate the corpus: edit, reindex, re-embed (Priority: P2)
 
-The user fixes a conversion artifact by opening the document's Markdown in their own external editor (or via the edit API), then the change is picked up. They re-upload an updated version of a file under the same name and Coffer updates the **same document in place** (stable ULID id — no duplicate). They change chunk parameters or the embedding model and Coffer re-indexes/re-embeds the corpus. They **lock** an authoritative document so neither a human nor an agent can mutate it until it is unlocked. The Coffer UI renders the Markdown read-only — it never offers an in-app text editor — and instead offers affordances to open the document (or its containing folder) in the user's external editor, reveal it in the file manager, copy its absolute path, or toggle its lock. Once a document is edited (`source_mode = edited`), re-conversion from the raw original is blocked to avoid clobbering edits.
+The user fixes a conversion artifact by opening the document's Markdown in their own external editor (or via the edit API), then the change is picked up. They re-upload an updated version of a file under the same name and Coffer updates the **same document in place** (stable ULID id — no duplicate). They change chunk parameters or the embedding model and Coffer re-indexes/re-embeds the corpus. The Coffer UI renders the Markdown read-only — it never offers an in-app text editor — and instead offers affordances to open the document (or its containing folder) in the user's external editor, reveal it in the file manager, or copy its absolute path. Once a document is edited (`source_mode = edited`), re-conversion from the raw original is blocked to avoid clobbering edits.
 
 **Why this priority**: A KB is curated over time; one-shot ingest is not enough. Not required to demonstrate the core value.
 
-**Independent Test**: Edit a doc's Markdown via the edit API (or by editing the on-disk file in an external editor), confirm the next read/search reflects the edit via lazy reindex-on-read; re-upload a changed version of the same file with `replace=true` and observe the SAME document id updated in place; lock the document and observe edits/deletes refused; change the KB's chunk size and confirm the corpus is re-chunked and re-indexed.
+**Independent Test**: Edit a doc's Markdown via the edit API (or by editing the on-disk file in an external editor), confirm the next read/search reflects the edit via lazy reindex-on-read; re-upload a changed version of the same file with `replace=true` and observe the SAME document id updated in place; change the KB's chunk size and confirm the corpus is re-chunked and re-indexed.
 
-**Covering scenarios**: edit a document and reindex; external edit picked up by reindex-on-read; re-conversion blocked once edited; re-upload of an updated file updates the document in place; re-upload of an identical file is a no-op; a locked document rejects mutations; lock and unlock a document; changing chunk params re-indexes; changing embedding model re-embeds.
+**Covering scenarios**: edit a document and reindex; external edit picked up by reindex-on-read; re-conversion blocked once edited; re-upload of an updated file updates the document in place; re-upload of an identical file is a no-op; changing chunk params re-indexes; changing embedding model re-embeds.
 
 ---
 
@@ -77,7 +77,6 @@ The user manages KBs from the desktop UI under `Resources` and from `coffer kb �
 - **Oversized file**: A file over `max_document_bytes` (default 25 MB) is rejected at the API boundary before any conversion runs.
 - **Re-upload, identical bytes**: A re-upload of a file whose bytes are unchanged (its `source_sha256` matches the document already stored under that filename) is an idempotent no-op — the existing document is returned, nothing is re-written or re-audited.
 - **Re-upload, changed bytes, same filename**: A re-upload of an updated file under a name already in the KB updates the **same document in place** (the ULID id is reused, `docs/`+`raw/` are overwritten keeping only the latest original, `source_mode` resets to `converted`) — but only when the caller passes `replace=true`; without it the upload is rejected (`duplicate`) so the overwrite is always explicit.
-- **Locked document**: Any mutation of a locked document — edit, reconvert, re-upload replace, or delete — is rejected with `DOCUMENT_LOCKED` (409), for human and agent callers alike, until it is unlocked.
 - **Vector requested, embedding unconfigured**: Search falls back to keyword and flags `fallback="keyword"` in the response; it never errors.
 - **Re-conversion after edit**: Re-converting a document whose `source_mode == edited` is rejected; re-uploading a changed source (with `replace=true`) updates it in place and resets it to `converted`.
 - **Reindex of unchanged content**: Reindexing a document whose Markdown `content_sha256` is unchanged is a no-op.
@@ -213,12 +212,6 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 - **When** the client calls `coffer__delete_document(kb, doc_id)`,
 - **Then** the document's files and index rows are removed, audit `KB_DOCUMENT_DELETED` is recorded with the agent as actor, and search no longer returns it.
 
-### Scenario: an agent write to a locked document is refused
-
-- **Given** a locked document,
-- **When** an MCP client calls `coffer__edit_document` or `coffer__delete_document` on it,
-- **Then** Coffer refuses with `DOCUMENT_LOCKED` and the document is unchanged.
-
 ### Scenario: re-upload of an updated file updates the document in place
 
 - **Given** a document ingested from `report.md`,
@@ -230,18 +223,6 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 - **Given** a document ingested from `report.md`,
 - **When** the user re-uploads the byte-identical `report.md`,
 - **Then** it is an idempotent no-op: the existing document is returned, no second document is created, and no `KB_DOCUMENT_UPDATED` audit is recorded.
-
-### Scenario: a locked document rejects mutations
-
-- **Given** a document that has been locked,
-- **When** any caller attempts to edit, reconvert, re-upload-replace, or delete it,
-- **Then** Coffer rejects the mutation with `DOCUMENT_LOCKED` (409) and the document is unchanged.
-
-### Scenario: lock and unlock a document
-
-- **Given** a document exists,
-- **When** the user locks it then unlocks it,
-- **Then** `locked` flips `true` then `false`, each transition is audited (`KB_DOCUMENT_LOCKED` / `KB_DOCUMENT_UNLOCKED`), and mutations are refused only while locked.
 
 ### Scenario: KB metrics report counts and disk usage
 
@@ -295,24 +276,23 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 **Curation & consistency**
 
-- **FR-015**: Each document MUST carry a `source_mode` of `converted` (Markdown derived from raw, re-convertible) or `edited` (re-conversion blocked). Document ids are stable ULIDs (FR-007), so re-uploading a changed source under the same filename with `replace=true` updates the same document in place and resets `source_mode` to `converted`; uploading a different filename creates a new document and the edited one is untouched. Document edits arrive through the edit API, the agent MCP `edit_document` tool, or by editing the on-disk Markdown in the user's external editor — the Coffer UI does NOT provide an in-app text editor. An edit through the edit API or MCP sets `source_mode=edited`; an external edit is picked up by lazy reindex-on-read (FR-008a). Users and agents MUST be able to edit a document's Markdown, re-upload/replace its source, delete it, and reindex (all subject to the per-document lock, FR-021).
-- **FR-016**: All write paths (re-upload, edit API, agent MCP write, external edit, reindex scan) MUST funnel through one idempotent re-index routine, invoked lazily on read when the on-disk `content_sha256` has drifted: if `content_sha256` is unchanged it is a no-op; if changed it deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector enabled), updates the `documents` row, and audits `KB_DOCUMENT_UPDATED`. Documents are **co-managed** (ADR-028): both humans and agents may add, edit, and delete documents; every agent write is audited (FR-018) with the agent as actor and is refused on a locked document (FR-021).
+- **FR-015**: Each document MUST carry a `source_mode` of `converted` (Markdown derived from raw, re-convertible) or `edited` (re-conversion blocked). Document ids are stable ULIDs (FR-007), so re-uploading a changed source under the same filename with `replace=true` updates the same document in place and resets `source_mode` to `converted`; uploading a different filename creates a new document and the edited one is untouched. Document edits arrive through the edit API, the agent MCP `edit_document` tool, or by editing the on-disk Markdown in the user's external editor — the Coffer UI does NOT provide an in-app text editor. An edit through the edit API or MCP sets `source_mode=edited`; an external edit is picked up by lazy reindex-on-read (FR-008a). Users and agents MUST be able to edit a document's Markdown, re-upload/replace its source, delete it, and reindex.
+- **FR-016**: All write paths (re-upload, edit API, agent MCP write, external edit, reindex scan) MUST funnel through one idempotent re-index routine, invoked lazily on read when the on-disk `content_sha256` has drifted: if `content_sha256` is unchanged it is a no-op; if changed it deletes old chunks/FTS5/vec rows, re-chunks, re-embeds (if vector enabled), updates the `documents` row, and audits `KB_DOCUMENT_UPDATED`. Documents are **co-managed** (ADR-028): both humans and agents may add, edit, and delete documents; every agent write is audited (FR-018) with the agent as actor.
 
 **Agent integration via MCP**
 
-- **FR-017**: Coffer's MCP gateway MUST expose built-in KB tools to every connected client, namespaced under the reserved `coffer__` prefix: the read tools `coffer__list_knowledge_bases`, `coffer__search_knowledge`, `coffer__grep_knowledge`, `coffer__read_document`, AND the write tools `coffer__add_document` (ingest Markdown content under a filename), `coffer__edit_document` (replace a document's body), and `coffer__delete_document`. The write tools share the same service paths as the REST surface, so they honour the per-document lock (FR-021) and the F01 audit (FR-018).
+- **FR-017**: Coffer's MCP gateway MUST expose built-in KB tools to every connected client, namespaced under the reserved `coffer__` prefix: the read tools `coffer__list_knowledge_bases`, `coffer__search_knowledge`, `coffer__grep_knowledge`, `coffer__read_document`, AND the write tools `coffer__add_document` (ingest Markdown content under a filename), `coffer__edit_document` (replace a document's body), and `coffer__delete_document`. The write tools share the same service paths as the REST surface, so they honour the F01 audit (FR-018).
 - **FR-018**: Built-in KB tool invocations MUST be recorded in `mcp_invocations` exactly as upstream calls (tool name, who/when/duration/outcome — no arguments or returned content); the document-level effect of a write tool is additionally recorded in the F01 audit trail (`KB_DOCUMENT_INGESTED` / `_UPDATED` / `_DELETED`) with the agent as actor.
 
 **Surfaces**
 
 - **FR-019**: Users MUST be able to perform every KB operation through (a) a REST API under `/api/v1/knowledge_bases/`, (b) `coffer kb …` subcommands, and (c) a desktop UI under the existing `Resources` navigation.
-- **FR-020**: The UI document viewer MUST render the Markdown **read-only** — it MUST NOT offer an in-app text editor for document content (humans edit via the external editor or the edit API; agents via MCP). Instead, at both file and containing-folder granularity, the viewer MUST offer affordances to **open in external editor**, **reveal in file manager / Finder**, and **copy the absolute path**, plus a **lock / unlock toggle** (FR-021) and a `locked` badge. On desktop (Tauri) open/reveal perform the real OS action (open/reveal honouring the global preferred-editor preference specced in `002-ui-shell`); on the web client, where the daemon cannot act on the user's machine, the open/reveal affordance falls back to copy-path. To support these affordances, read API responses (FR/§Wire) MUST surface the document's absolute on-disk path, its containing folder's absolute path, and its `locked` flag.
-- **FR-021**: Each document MUST carry a `locked` flag (default `false`). While a document is locked, every mutation — edit (API or MCP), reconvert, re-upload replace, and delete (API or MCP) — MUST be refused with `DOCUMENT_LOCKED` (409) for human and agent callers alike; only locking/unlocking and reads are permitted. The lock is the per-document opt-out from co-management (ADR-028). Lock and unlock transitions MUST be audited (`KB_DOCUMENT_LOCKED` / `KB_DOCUMENT_UNLOCKED`).
+- **FR-020**: The UI document viewer MUST render the Markdown **read-only** — it MUST NOT offer an in-app text editor for document content (humans edit via the external editor or the edit API; agents via MCP). Instead, at both file and containing-folder granularity, the viewer MUST offer affordances to **open in external editor**, **reveal in file manager / Finder**, and **copy the absolute path**. On desktop (Tauri) open/reveal perform the real OS action (open/reveal honouring the global preferred-editor preference specced in `002-ui-shell`); on the web client, where the daemon cannot act on the user's machine, the open/reveal affordance falls back to copy-path. To support these affordances, read API responses (FR/§Wire) MUST surface the document's absolute on-disk path and its containing folder's absolute path.
 
 ### Key Entities
 
 - **Knowledge Base** (resource of kind `knowledge_base`): config = enabled retrieval modes, chunk size/overlap, embedding provider/model/base_url/credential_ref, max document bytes, description.
-- **Document** (unified `documents` row, `kind="knowledge_base"`): doc id (stable ULID), KB resource name, on-disk path, title, description, `content_sha256`, `source_mode`, `locked` flag, per-face `metadata` (`original_filename`, `original_format`, `source_sha256`, `converted_at`, `conversion_engine`), timestamps.
+- **Document** (unified `documents` row, `kind="knowledge_base"`): doc id (stable ULID), KB resource name, on-disk path, title, description, `content_sha256`, `source_mode`, per-face `metadata` (`original_filename`, `original_format`, `source_sha256`, `converted_at`, `conversion_engine`), timestamps.
 - **Chunk** (`chunks` row): position within a document. The chunk text is stored once inside the regular FTS5 index (`documents_fts`), not duplicated into a base SQLite table; it remains rebuildable from the Markdown files, which stay the source of truth.
 - **Passage** (retrieval result, not persisted): passage text, source doc id, title, score, position.
 - **Grep hit** (retrieval result, not persisted): path, line number, line.
@@ -324,7 +304,7 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 - **SC-001**: From a fresh install, a user creates a KB and ingests their first non-Markdown file (e.g. a PDF) within 60 seconds by following the quickstart alone.
 - **SC-002**: With a 50-document KB (≤ 50 MB), keyword search latency for a typical query is ≤ 200 ms and grep ≤ 500 ms wall-clock at the REST surface on a developer laptop.
 - **SC-003**: Deleting a KB removes 100% of its on-disk footprint and 100% of its SQLite rows; verified by a test that walks `~/.coffer/knowledge/` and queries `documents`/`chunks` before and after.
-- **SC-004**: An agent connected through the MCP gateway can list KBs, search, grep, read a document, AND add / edit / delete a document — all via built-in tools — in one MCP session, with no separate MCP server installed; a write to a locked document is refused.
+- **SC-004**: An agent connected through the MCP gateway can list KBs, search, grep, read a document, AND add / edit / delete a document — all via built-in tools — in one MCP session, with no separate MCP server installed.
 - **SC-005**: `coffer kb reindex <name>` rebuilds all SQLite index state for the KB purely from the Markdown files (drop the rows, reindex, search returns identical results).
 - **SC-006**: Every Acceptance Scenario is covered by at least one `acceptance(spec="006-knowledge-base", scenario="…")` test; `make verify-acceptance` reports zero uncovered scenarios.
 - **SC-007**: Engine isolation holds: no module under `coffer.application.*` or `coffer.domain.*` imports `markitdown`, `docling`, `sqlite_vec`, or an embedding-provider SDK (importlinter contract).
@@ -341,5 +321,5 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 - **Shared substrate**: `documents`/`chunks`/FTS5/sqlite-vec and the converter port are shared with spec 007 (memory). This spec owns the KB face (any-format→Markdown, three-mode read, human+agent co-managed writes — ADR-028); 007 owns the memory face. Keep the substrate description in sync across both specs; architecture lives in the constitution and the redesign ADR, not restated here.
 - **Embedding default**: vector is opt-in; the zero-config default is `keyword`+`grep` (offline, language-agnostic). For bilingual corpora a local `bge-m3` or a cloud provider is recommended (English-only small models embed Chinese poorly).
-- **Co-management (ADR-028)**: documents are co-managed by humans and agents. This spec slice ships the co-management core at **global scope** — stable ULID identity + re-upload-updates-in-place (FR-007), agent MCP write tools (FR-017), and the per-document lock (FR-021). Two related pieces land with the later unified-知识 UI slice that surfaces them: **per-project document scope** (the 全局/项目 axis, co-dependent with that UI) and a **recoverable soft-delete** (trash/restore, which needs its own UI — for now delete is a hard delete with an F01 audit trail, and the lock guards curated documents).
+- **Co-management (ADR-028)**: documents are co-managed by humans and agents. This spec slice ships the co-management core at **global scope** — stable ULID identity + re-upload-updates-in-place (FR-007), agent MCP write tools (FR-017). Two related pieces land with the later unified-知识 UI slice that surfaces them: **per-project document scope** (the 全局/项目 axis, co-dependent with that UI) and a **recoverable soft-delete** (trash/restore, which needs its own UI — for now delete is a hard delete with an F01 audit trail).
 - **Deferred**: reranking / HyDE / multi-query / LLM synthesis on retrieval; per-project KB document scope and recoverable soft-delete (next slice, above); an in-app Markdown editor (the viewer stays read-only with external-editor affordances); image OCR by default; a filesystem watcher on by default.

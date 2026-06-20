@@ -50,11 +50,6 @@ coffer kb reconvert design-notes 8a3f1c2b...
 # document in place (stable ULID id, no duplicate). --replace confirms the overwrite.
 coffer kb ingest design-notes ~/work/notes/architecture.md --replace
 
-# Lock an authoritative document so neither a human nor an agent can mutate it
-# (edit / reconvert / replace / delete are refused until unlocked).
-coffer kb lock design-notes 8a3f1c2b...
-coffer kb lock design-notes 8a3f1c2b... --unlock
-
 # Change chunk parameters (re-chunks + re-indexes the corpus).
 coffer kb set-chunking design-notes --chunk-size 768 --chunk-overlap 96
 
@@ -94,8 +89,8 @@ If you request `--mode vector` on a KB with no embedding configured, the search 
 3. Fill the form: name, description, enabled retrieval modes (keyword + grep by default), chunk params, and — only if you enable vector — an embedding provider/model and credential. Submit.
 4. Click into the KB. Drag files of any format into the upload area; each becomes Markdown.
 5. Use the **Search** panel; pick a mode (grep / keyword / vector) from the selector.
-6. Open a document to view its rendered Markdown (read-only). To change it, use **Open in editor** to edit the file in your external editor (or **Reveal in Finder** / **Copy path**); your edit is picked up automatically on the next read via reindex-on-read. Editing via `coffer kb edit` / the REST API / an agent works too and marks it `edited`. The viewer shows a **lock** toggle and a `locked` badge — lock a document to freeze it against all edits (human or agent).
-7. Document actions live on each row (read, delete, copy id, re-upload source, lock/unlock).
+6. Open a document to view its rendered Markdown (read-only). To change it, use **Open in editor** to edit the file in your external editor (or **Reveal in Finder** / **Copy path**); your edit is picked up automatically on the next read via reindex-on-read. Editing via `coffer kb edit` / the REST API / an agent works too and marks it `edited`.
+7. Document actions live on each row (read, delete, copy id, re-upload source).
 8. Delete the KB via the kebab menu on the detail header.
 
 ## Through an MCP client (Claude Code, Codex, ...)
@@ -107,7 +102,7 @@ Once Coffer is your client's MCP server, the KB tools appear. Documents are **co
 - `coffer__grep_knowledge(kb, pattern, max_matches?)` — file/line matches over the markdown.
 - `coffer__read_document(kb, doc_id)` — the document's full Markdown + frontmatter.
 
-Write tools (every write is audited with the agent as actor and refused on a locked document):
+Write tools (every write is audited with the agent as actor):
 
 - `coffer__add_document(kb, filename, content)` — ingest Markdown content as a new document (a re-used filename updates the same document in place).
 - `coffer__edit_document(kb, doc_id, content)` — replace a document's body (marks it `edited`).
