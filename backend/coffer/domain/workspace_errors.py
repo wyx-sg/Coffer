@@ -168,18 +168,3 @@ class SkillDeliveryUnsupported(CofferError):  # noqa: N818
         )
         self.agent_type = agent_type
         self.mode = mode
-
-
-class SkillRiskNotAcknowledged(CofferError):  # noqa: N818
-    """Enabling a skill with an unacknowledged high/critical scan verdict
-    (trust layer L2, FR-029). Maps to 409."""
-
-    code = "SKILL_RISK_NOT_ACKNOWLEDGED"
-
-    def __init__(self, name: str, verdict: str) -> None:
-        super().__init__(
-            f"skill {name!r} has an unacknowledged {verdict} scan verdict; "
-            f"acknowledge the risk before enabling it for an agent"
-        )
-        self.name = name
-        self.verdict = verdict

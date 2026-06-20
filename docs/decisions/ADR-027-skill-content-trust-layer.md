@@ -2,10 +2,12 @@
 
 > 中文版: [ADR-027-skill-content-trust-layer.zh.md](./ADR-027-skill-content-trust-layer.zh.md)
 
-- **Status:** Accepted
+- **Status:** Reverted (2026-06-20) — see the revert note below
 - **Date:** 2026-06-19
 - **Deciders:** Yuxing Wu
-- **Spec:** [005-skill-manager](../../specs/005-skill-manager/spec.md) (FR-028, FR-029)
+- **Spec:** [005-skill-manager](../../specs/005-skill-manager/spec.md) (FR-028, FR-029 — both removed)
+
+> **⚠️ Reverted (2026-06-20, simplification 4.5).** The skill content-trust scan layer is removed — Coffer no longer scans imported skills for risky content, no longer caches a verdict, and no longer gates enablement on an acknowledge. The heuristic was high-false-positive and, with the Git-fetch path already gone (4.3), the remaining local-import threat model did not justify the layer for a personal tool. The decision below is retained for history.
 
 > **Amended (2026-06-20, simplification 4.3).** Skill Git-fetch was removed; the scan-on-ingest layer now covers local import + adopt + in-place edits only.
 

@@ -2,10 +2,12 @@
 
 > English: [ADR-027-skill-content-trust-layer.md](./ADR-027-skill-content-trust-layer.md)
 
-- **状态：** Accepted
+- **状态：** Reverted（2026-06-20）—— 见下方撤销说明
 - **日期：** 2026-06-19
 - **决策者：** Yuxing Wu
-- **Spec：** [005-skill-manager](../../specs/005-skill-manager/spec.zh.md)（FR-028、FR-029）
+- **Spec：** [005-skill-manager](../../specs/005-skill-manager/spec.zh.md)（FR-028、FR-029 —— 均已移除）
+
+> **⚠️ 已撤销（2026-06-20，简化 4.5）。** Skill 内容信任扫描层已移除 —— Coffer 不再扫描导入 skill 的风险内容、不再缓存判定、不再用「确认」闸拦截启用。该启发式误报率高，且 Git-fetch 路径已先行移除（4.3），剩下的本地导入威胁模型不足以支撑这一层（个人工具）。以下决策内容保留作历史记录。
 
 > **修订（2026-06-20，简化 4.3）。** Skill Git-fetch 已移除；扫描层现在只覆盖本地导入、adopt 与就地文件编辑。
 

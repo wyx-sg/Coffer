@@ -28,15 +28,6 @@ Pydantic v2 `BaseModel`.
 | `skill_md_description`       | `str`              | frontmatter `description`                           |
 | `version_hash`               | `str`              | sha256 of SKILL.md content at last sync             |
 | `last_synced_from_source_at` | `datetime \| None` | UTC; set on import                                  |
-| `scan_verdict`               | `str \| None`      | trust layer L2 (FR-028): worst severity, or none    |
-| `scan_findings_count`        | `int`              | number of scan findings (default 0)                 |
-| `scan_ruleset_version`       | `str \| None`      | ruleset version the verdict was produced under      |
-| `last_scanned_at`            | `datetime \| None` | UTC; set on each scan                               |
-| `risk_acknowledged`          | `bool`             | FR-029; set by acknowledge, reset on content change |
-
-The trust-layer fields are all optional with defaults, so they serialize into
-the existing opaque `config_json` with no migration and pre-trust-layer rows
-still validate.
 
 ### `SkillFrontmatter` (`domain/skill/frontmatter.py`)
 

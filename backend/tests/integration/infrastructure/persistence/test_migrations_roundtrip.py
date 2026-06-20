@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0031"
+HEAD_REVISION = "0032"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -56,7 +56,12 @@ HEAD_REVISION = "0031"
 # them so 0023's downgrade can drop them again on the way down. 0031 is DATA-only:
 # it DELETEs ``kind='agent'`` rows whose ``config_json`` type is one of the four
 # removed agent types (cursor/opencode/openclaw/hermes — agent types cut to
-# claude_code + codex), so the table/column set is unchanged at head.
+# claude_code + codex), so the table/column set is unchanged at head. 0032 is
+# DATA-only: it strips the content-trust scan fields (scan_verdict /
+# scan_findings_count / scan_ruleset_version / last_scanned_at /
+# risk_acknowledged) from every ``kind='skill'`` ``config_json`` (skill
+# content-trust scanning removed, simplification 4.5) — no DDL, table/column set
+# unchanged at head.
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
@@ -162,7 +167,8 @@ def test_0029_rewrites_skill_config_to_local_import_only(tmp_path, monkeypatch):
     """0029 is a data migration (simplification 4.3): every ``kind='skill'``
     ``config_json`` loses the Git lifecycle — a git source becomes local_import
     (the URL kept as ``original_path``) and the update/pin bookkeeping keys are
-    stripped, while shared fields (version_hash, last_synced, scan/risk) survive."""
+    stripped, while shared fields (version_hash, last_synced, risk_acknowledged)
+    survive 0029 (risk_acknowledged is itself stripped later, by 0032)."""
     db_path = tmp_path / "skill_data.db"
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     cfg = _alembic_config()
@@ -194,9 +200,10 @@ def test_0029_rewrites_skill_config_to_local_import_only(tmp_path, monkeypatch):
         )
         conn.commit()
 
-    # Apply 0029.
-    command.upgrade(cfg, "head")
-    assert _alembic_version(db_path) == HEAD_REVISION
+    # Apply 0029 only (NOT head: 0032 later strips risk_acknowledged, which this
+    # test asserts survives 0029).
+    command.upgrade(cfg, "0029")
+    assert _alembic_version(db_path) == "0029"
 
     with sqlite3.connect(db_path) as conn:
         (raw,) = conn.execute(
@@ -275,6 +282,72 @@ def test_0031_deletes_removed_agent_type_rows(tmp_path, monkeypatch):
             r[0] for r in conn.execute("SELECT name FROM resources WHERE kind = 'agent'")
         }
     assert names_after == {"a-claude", "a-codex"}
+
+
+def test_0032_strips_skill_content_scan_fields(tmp_path, monkeypatch):
+    """0032 is a data migration (simplification 4.5): every ``kind='skill'``
+    ``config_json`` loses the content-trust scan fields (scan_verdict /
+    scan_findings_count / scan_ruleset_version / last_scanned_at /
+    risk_acknowledged) so the stored config still loads under the now-trimmed
+    ``extra='forbid'`` SkillConfig; shared fields survive untouched."""
+    db_path = tmp_path / "skill_scan.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    # Stop one revision BEFORE 0032 and seed a skill row carrying scan fields.
+    command.upgrade(cfg, "0031")
+    legacy_cfg = {
+        "source": {"type": "local_import", "original_path": "/tmp/pdf"},
+        "skill_md_name": "pdf",
+        "skill_md_description": "d",
+        "version_hash": "abc123",
+        "scan_verdict": "high",
+        "scan_findings_count": 3,
+        "scan_ruleset_version": "1",
+        "last_scanned_at": "2026-01-02T00:00:00+00:00",
+        "risk_acknowledged": True,
+    }
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
+            "VALUES ('skill', 'pdf', ?, 1, '2026-01-01', '2026-01-01')",
+            (json.dumps(legacy_cfg),),
+        )
+        conn.commit()
+
+    # Apply 0032.
+    command.upgrade(cfg, "head")
+    assert _alembic_version(db_path) == HEAD_REVISION
+
+    with sqlite3.connect(db_path) as conn:
+        (raw,) = conn.execute(
+            "SELECT config_json FROM resources WHERE kind = 'skill' AND name = 'pdf'"
+        ).fetchone()
+    migrated = json.loads(raw)
+    # All five scan/risk fields stripped.
+    for key in (
+        "scan_verdict",
+        "scan_findings_count",
+        "scan_ruleset_version",
+        "last_scanned_at",
+        "risk_acknowledged",
+    ):
+        assert key not in migrated
+    # Shared fields untouched.
+    assert migrated["version_hash"] == "abc123"
+    assert migrated["source"] == {"type": "local_import", "original_path": "/tmp/pdf"}
+
+    # Downgrade re-adds the scan fields with their pre-4.5 defaults (lossy: the
+    # original verdict/ack are not restored).
+    command.downgrade(cfg, "0031")
+    with sqlite3.connect(db_path) as conn:
+        (raw2,) = conn.execute(
+            "SELECT config_json FROM resources WHERE kind = 'skill' AND name = 'pdf'"
+        ).fetchone()
+    downgraded = json.loads(raw2)
+    assert downgraded["scan_verdict"] is None
+    assert downgraded["scan_findings_count"] == 0
+    assert downgraded["risk_acknowledged"] is False
 
 
 def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkeypatch):

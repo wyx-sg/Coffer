@@ -154,12 +154,6 @@ async def adopt_unmanaged(
     # folder (under its own name) is still removed — the folder name was
     # never the skill's identity.
     service._rmtree(entry.path)
-    # Adoption consolidates a skill the agent already had on disk, so the
-    # unacknowledged-risk gate (FR-029) must not block re-delivering its link —
-    # otherwise adoption would remove the skill and refuse to restore it. The
-    # scan still ran (via register_from_validated) and the verdict is recorded.
-    # Call the binding free function directly to pass the carve-out flag without
-    # widening SkillService.enable_for's signature.
     from coffer.application.skill.binding_ops import enable_skill_for_agent
 
     await enable_skill_for_agent(
@@ -168,7 +162,6 @@ async def adopt_unmanaged(
         agent_name=agent_name,
         force=False,
         actor=actor,
-        skip_risk_gate=True,
     )
     return resource
 

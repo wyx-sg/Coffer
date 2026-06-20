@@ -22,8 +22,6 @@ export interface SkillBindingOut {
   link_mode: LinkMode | null;
 }
 
-export type ScanVerdict = "low" | "medium" | "high" | "critical";
-
 export interface SkillOut {
   name: string;
   description: string;
@@ -35,13 +33,6 @@ export interface SkillOut {
   created_at: string;
   updated_at: string;
   bindings: SkillBindingOut[];
-  // Trust layer L2 (FR-028/FR-029). Always sent by the backend; optional here
-  // so existing fixtures/consumers predating the trust layer still type-check.
-  scan_verdict?: ScanVerdict | null;
-  scan_findings_count?: number;
-  last_scanned_at?: string | null;
-  risk_acknowledged?: boolean;
-  requires_acknowledgment?: boolean;
 }
 
 export interface SkillListOut {

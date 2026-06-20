@@ -90,12 +90,6 @@ def show(
     typer.echo(f"source:      {data['source']['type']}")
     typer.echo(f"master:      {data['master_path']}")
     typer.echo(f"hash:        {data['version_hash']}")
-    verdict = data.get("scan_verdict")
-    if verdict:
-        ack = " (risk acknowledged)" if data.get("risk_acknowledged") else ""
-        if data.get("requires_acknowledgment"):
-            ack = " (NEEDS ACKNOWLEDGMENT)"
-        typer.echo(f"scan:        {verdict}, {data.get('scan_findings_count', 0)} finding(s){ack}")
     if data["bindings"]:
         typer.echo("bindings:")
         for b in data["bindings"]:
@@ -135,46 +129,6 @@ def disable(
             typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
             raise typer.Exit(2)
     typer.echo(f"disabled: skill:{name} for agent:{agent}")
-
-
-@app.command("scan")
-def scan(
-    name: str = typer.Argument(...),
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """Re-scan a skill's content for risky patterns (trust layer)."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(f"/skills/{name}/scan")
-        if r.status_code >= 400:
-            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
-            raise typer.Exit(2)
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        raise typer.Exit(2 if data["requires_acknowledgment"] else 0)
-    verdict = data["verdict"] or "clean"
-    typer.echo(f"verdict: {verdict} ({len(data['findings'])} finding(s))")
-    if data["findings"]:
-        table = Table(title=f"Scan findings — {name}")
-        for col in ("Severity", "Rule", "File", "Line", "Message"):
-            table.add_column(col)
-        for f in data["findings"]:
-            table.add_row(f["severity"], f["rule_id"], f["file"], str(f["line"]), f["message"])
-        _console.print(table)
-    if data["requires_acknowledgment"]:
-        typer.echo(
-            "risk not acknowledged — run `coffer skill acknowledge-risk "
-            f"{name}` before enabling it for an agent",
-            err=True,
-        )
-        raise typer.Exit(2)
-
-
-@app.command("acknowledge-risk")
-def acknowledge_risk(name: str = typer.Argument(...)) -> None:
-    """Acknowledge a skill's scan risk so it can be enabled for agents."""
-    _post_action(f"/skills/{name}/acknowledge-risk", f"risk acknowledged: skill:{name}")
 
 
 @app.command("rm")
