@@ -30,7 +30,6 @@ from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
-from coffer.application.mcp.registry_service import MCPRegistrySearchService
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.infrastructure.agent.scope_persistence import AgentMcpScopeRepo
@@ -40,7 +39,6 @@ from coffer.infrastructure.mcp.persistence import (
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
-from coffer.infrastructure.mcp.registry_client import HttpMCPRegistryClient
 from coffer.infrastructure.persistence.retention import (
     PrunableRegistry,
     PrunableTable,
@@ -54,7 +52,6 @@ from coffer.surfaces.http.dependencies import (
     set_preferences_repo,
     set_supervisor,
 )
-from coffer.surfaces.http.mcp.registry_dependencies import set_mcp_registry_service
 
 
 def wire_mcp_kind(
@@ -77,10 +74,6 @@ def wire_mcp_kind(
     # session factory and the agent scope REST routes.
     scope_service = AgentMcpScopeService(AgentMcpScopeRepo(sm), resource_svc, audit)  # type: ignore[arg-type]
     set_agent_mcp_scope_service(scope_service)
-
-    # Official MCP Registry browse/autofill (ADR-029). A stateless daemon-side
-    # proxy; the service caches search results briefly.
-    set_mcp_registry_service(MCPRegistrySearchService(HttpMCPRegistryClient()))
 
     # 1. Build the MCP-side repos
     prefs_repo = MCPCapabilityPreferenceRepo(sm)  # type: ignore[arg-type]

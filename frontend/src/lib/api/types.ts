@@ -218,26 +218,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/mcp-registry/search": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Search the official MCP Registry and return installable config drafts.
-     * @description Daemon-side read-only proxy to the official MCP Registry (ADR-027). Queried live with a short in-memory cache; nothing is persisted. The registry is a preview API, so absent fields are tolerated and the run command is inferred from each package's registryType.
-     */
-    get: operations["searchMcpRegistry"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/audit": {
     parameters: {
       query?: never;
@@ -484,44 +464,6 @@ export interface components {
           [key: string]: unknown;
         };
       };
-    };
-    RegistrySearchOut: {
-      servers: components["schemas"]["RegistryServerOut"][];
-    };
-    RegistryServerOut: {
-      /**
-       * @description Registry id, e.g. io.github.user/srv.
-       * @example io.github.user/srv
-       */
-      name: string;
-      title?: string | null;
-      description: string;
-      version?: string | null;
-      /** @description The package registry type (npm, pypi, oci, nuget, cargo, mcpb). */
-      registry_type?: string | null;
-      /** @enum {string} */
-      transport_type: "stdio" | "http";
-      /** @description True when a runnable draft was produced from the package metadata. */
-      installable: boolean;
-      homepage?: string | null;
-      draft?: components["schemas"]["RegistryDraftOut"] | null;
-    };
-    RegistryDraftOut: {
-      /** @enum {string} */
-      transport_type: "stdio" | "http";
-      /** @description Run command for stdio; empty string for http. */
-      command: string;
-      args: string[];
-      /** @description Endpoint URL for http; empty string for stdio. */
-      url: string;
-      env: components["schemas"]["RegistryEnvVar"][];
-    };
-    RegistryEnvVar: {
-      key: string;
-      /** @description Secret vars become credential refs, never inlined. */
-      is_secret: boolean;
-      required: boolean;
-      description?: string | null;
     };
     /**
      * @description <kind>:<name>
@@ -791,15 +733,6 @@ export interface components {
     };
     /** @description Upstream MCP server unreachable */
     UpstreamUnavailable: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-    /** @description Official MCP Registry unreachable or timed out (REGISTRY_UNAVAILABLE) */
-    RegistryUnavailable: {
       headers: {
         [name: string]: unknown;
       };
@@ -1175,34 +1108,6 @@ export interface operations {
       };
       401: components["responses"]["Unauthorized"];
       404: components["responses"]["NotFound"];
-    };
-  };
-  searchMcpRegistry: {
-    parameters: {
-      query: {
-        /** @description Keyword substring to search the registry for. */
-        q: string;
-        /** @description Maximum number of servers to return. */
-        limit?: number;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK (an empty/no-match search returns an empty list) */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["RegistrySearchOut"];
-        };
-      };
-      401: components["responses"]["Unauthorized"];
-      422: components["responses"]["UnprocessableEntity"];
-      502: components["responses"]["RegistryUnavailable"];
     };
   };
   listAuditEntries: {

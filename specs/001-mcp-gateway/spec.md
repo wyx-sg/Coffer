@@ -347,18 +347,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** that session lists tools through the gateway,
 - **Then** every enabled server's tools are exposed, because scoping only applies to a known agent.
 
-### Scenario: search the official MCP registry
-
-- **Given** the official MCP Registry is reachable (ADR-029),
-- **When** the user searches for a keyword from the Add-MCP-server flow,
-- **Then** matching servers are returned each with an installable config draft (transport + run command + arguments + declared environment variables, secrets flagged) inferred from the package metadata.
-
-### Scenario: registry search degrades when the registry is unavailable
-
-- **Given** the registry cannot be reached (unreachable or timed out),
-- **When** the user searches,
-- **Then** the gateway returns a clear `REGISTRY_UNAVAILABLE` error and the existing paste-JSON add path still works.
-
 ## Requirements
 
 ### Functional Requirements
@@ -388,11 +376,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **FR-020**: System MUST support a per-agent scope mode of `auto` (the agent sees every enabled MCP server) or `selected` (the agent sees only an explicit allowlist of servers). Agents MUST default to `auto`; a newly added server MUST become visible to `auto` agents automatically but MUST NOT join any `selected` agent's allowlist.
 - **FR-021**: System MUST apply each agent's effective scope — enabled servers, intersected with the allowlist when `selected` — when listing tools, resources, and prompts and when ranking `coffer__search_tools`, so that an out-of-scope server's capabilities are never surfaced to that agent.
 - **FR-022**: System MUST reject a direct `tools/call`, `resources/read`, or `prompts/get` that targets an out-of-scope server — even when the capability name is supplied directly — returning an error instead of invoking the upstream.
-
-**Registry discovery**
-
-- **FR-023**: Users MUST be able to search the official MCP Registry by keyword from the Add-MCP-server flow and see matching servers with a ready-to-use, editable config draft (transport + arguments + declared environment variables, secrets flagged). The daemon performs the outbound query; the registry is consumed read-only and live (no local mirror).
-- **FR-024**: When the registry is unavailable, the system MUST surface a clear, non-fatal error and the existing hand-entered (paste-JSON) path MUST remain fully usable.
 
 **Credentials and safety**
 
@@ -447,4 +430,3 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - The Fernet master key is resolvable at coffer startup (a readable `~/.coffer/master.key` by default, or an unlocked OS keychain in keychain mode), or the user is shown a clear message when it isn't (ciphertext with no resolvable key is a fatal `MasterKeyMissing` startup error).
 - This spec ships with one resource kind (`mcp_server`). The Resource framework is designed so additional kinds can be added by later specs without re-modelling existing data.
 - Concurrent MCP client load is small (low single digits); coffer is not a fleet-scale gateway.
-- Registry-discovery data (FR-023/FR-024, ADR-029) is **not persisted** — the official MCP Registry is queried live with only a short-TTL in-memory cache, nothing written to SQLite. The registry is a **preview** API, so its schema/fields are treated as optional and parsed defensively (e.g. `runtimeHint` is often absent, so the run command is inferred from `registryType`).

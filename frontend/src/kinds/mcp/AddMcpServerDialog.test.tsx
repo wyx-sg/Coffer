@@ -33,10 +33,6 @@ const SAMPLE = JSON.stringify({ mcpServers: { fs: { command: "npx" } } });
 
 function openJsonTab() {
   fireEvent.click(screen.getByRole("button", { name: /add mcp server/i }));
-  // The dialog opens on the registry-search tab; switch to Paste JSON.
-  // Radix Tabs activate on pointer-down; inside the Dialog the body gets
-  // `pointer-events: none`, so a synthetic click doesn't toggle the trigger.
-  fireEvent.mouseDown(screen.getByRole("tab", { name: /paste json/i }));
 }
 
 function openAndReview() {
@@ -52,7 +48,7 @@ describe("AddMcpServerDialog", () => {
     vi.clearAllMocks();
   });
 
-  test("opens the JSON import panel when the Paste JSON tab is selected", () => {
+  test("renders the JSON import panel", () => {
     getApiClientMock.mockReturnValue({
       POST: vi.fn(),
     } as unknown as ReturnType<typeof getApiClient>);

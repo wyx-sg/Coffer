@@ -40,20 +40,6 @@ function isObject(v: unknown): v is Record<string, unknown> {
 }
 
 /**
- * Coerce a registry id (e.g. `io.github.user/server`) into a valid Coffer
- * resource name: allowed chars are `[a-zA-Z0-9_.-]`, length 1-64. Slashes
- * become hyphens, any other disallowed char is dropped, and the result is
- * truncated to 64. Returns `""` when nothing valid remains so the caller
- * can require the user to fill in a name.
- */
-export function sanitizeResourceName(raw: string): string {
-  return raw
-    .replace(/\//g, "-")
-    .replace(/[^a-zA-Z0-9_.-]/g, "")
-    .slice(0, 64);
-}
-
-/**
  * Returned by `parseEnv`. A present-but-non-object `env` (e.g. a string
  * "API_KEY=secret" or an array) and a non-string member value both reject
  * up front rather than silently dropping the env block / coercing via

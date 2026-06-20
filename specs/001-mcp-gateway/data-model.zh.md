@@ -223,11 +223,6 @@ Pydantic `BaseModel`。上游查询返回的实时表示；从不持久化（按
 | `mode`       | `Literal["auto","selected"]` | `auto` = 每一台启用的服务器（默认）；`selected` = 仅 allowlist     |
 | `servers`    | `list[str]`                  | `mcp_server` 名的 allowlist；非 `selected` 时为空                  |
 
-> **注册表发现（FR-023/FR-024，ADR-029）不引入新表，也不引入迁移 revision。**
-> 官方 MCP Registry 以实时方式查询，仅由一层短 TTL 的内存缓存支撑；注册表结果不向
-> SQLite 写入任何内容。搜索构建的 draft（transport、command、args、env）返回给客户端，
-> 自身从不持久化——只有用户真正添加的服务器才经由常规注册路径落入 `resources`。
-
 ## SQLite schema（跨三次 Alembic revision）
 
 表分散在三次迁移中创建；下面的 schema 是三次 revision 全部应用后的合并结果。

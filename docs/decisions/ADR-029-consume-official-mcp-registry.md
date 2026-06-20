@@ -2,11 +2,13 @@
 
 > 中文版: [ADR-029-consume-official-mcp-registry.zh.md](./ADR-029-consume-official-mcp-registry.zh.md)
 
-- **Status:** Accepted
+- **Status:** Reverted (2026-06-20) — see the revert note below
 - **Date:** 2026-06-19
 - **Deciders:** Yuxing Wu
 - **Spec:** 001-mcp-gateway (spec.md updated before implementation)
 - **Related:** [ADR-004](./ADR-004-capability-state-model.md) (list live-queried, not mirrored), [ADR-015](./ADR-015-envelope-encrypted-credential-store.md) (secrets become credential refs)
+
+> **⚠️ Reverted 2026-06-20.** The online MCP-Registry browse/autofill (PR #114) was removed (simplification backlog 1.7): it only saved one paste and depended on an external preview API. Adding an MCP server is once again done via the **paste-JSON** path (the standard `mcpServers` config). The original decision below is kept as the historical record.
 
 ## Context
 
