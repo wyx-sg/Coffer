@@ -61,10 +61,13 @@ Concrete shape:
     stores the chunk text once inside its index (still rebuildable from the
     markdown files, which remain the source of truth).
   - `vector` — sqlite-vec KNN over chunk embeddings.
-  - Optional hybrid via reciprocal rank fusion. Default retrieval is
-    `keyword`+`grep` (zero config, offline). Vector is opt-in; if vector is
-    requested but embeddings are unconfigured, retrieval falls back to keyword
-    and flags it — it never blocks.
+  - `hybrid` — reciprocal rank fusion of `keyword`+`vector` (`K = 60`, deduped
+    by `(document_id, position)`), so exact/CJK/identifier hits and paraphrase
+    hits reinforce each other. **Delivered** in spec 006 (FR-011b): enabling
+    `vector` auto-enables `hybrid` and makes it the KB's default mode. Default
+    retrieval is `keyword`+`grep` (zero config, offline). Vector is opt-in; if
+    vector or hybrid is requested but embeddings are unconfigured, retrieval
+    falls back to keyword and flags it — it never blocks.
 - **Configurable, OpenAI-compatible embeddings** (DevPilot-style: one
   `AsyncOpenAI` client with a swappable `base_url`). Per-corpus config:
   `embedding_provider`, `embedding_model`, `embedding_base_url`,

@@ -12,8 +12,8 @@ Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "memory"`. 
 
 | Field                      | Type                                       | Notes                                                                                              |
 | -------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| `retrieval_modes`          | `list[Literal["grep","keyword","vector"]]` | Enabled modes. Default `["grep","keyword"]` (zero config, offline). `vector` is opt-in.            |
-| `default_mode`             | `Literal["grep","keyword","vector"]`       | Default `"keyword"`.                                                                               |
+| `retrieval_modes`          | `list[Literal["grep","keyword","vector","hybrid"]]` | Enabled modes. Default `["grep","keyword"]` (zero config, offline). `vector` is opt-in; `hybrid` (RRF of keyword+vector) is shared with the KB face.            |
+| `default_mode`             | `Literal["grep","keyword","vector","hybrid"]`       | Default `"keyword"`.                                                                               |
 | `embedding_provider`       | `str \| None`                              | OpenAI-compatible provider id (e.g. `openai`, `voyage`, `local`). Required for `vector`.           |
 | `embedding_model`          | `str \| None`                              | e.g. `bge-m3` (local) or a cloud model. Required for `vector`.                                     |
 | `embedding_base_url`       | `str \| None`                              | Override base URL for OpenAI-compatible providers.                                                 |

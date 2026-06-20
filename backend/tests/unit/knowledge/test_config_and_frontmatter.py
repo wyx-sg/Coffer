@@ -35,6 +35,28 @@ def test_kb_default_mode_must_be_enabled() -> None:
         KnowledgeBaseConfig(enabled_modes=["grep"], default_mode="keyword")
 
 
+def test_kb_enabling_vector_auto_enables_hybrid_and_defaults_to_it() -> None:
+    # Enabling vector adds hybrid to the set automatically and makes hybrid the
+    # default (vector-enabled KBs get RRF fusion by default).
+    c = KnowledgeBaseConfig(enabled_modes=["keyword", "grep", "vector"])
+    assert "hybrid" in c.enabled_modes
+    assert c.default_mode == "hybrid"
+    assert c.vector_enabled is True
+
+
+def test_kb_explicit_default_mode_overrides_hybrid_auto_default() -> None:
+    # A caller who explicitly sets default_mode keeps it (no silent override).
+    c = KnowledgeBaseConfig(enabled_modes=["keyword", "grep", "vector"], default_mode="keyword")
+    assert c.default_mode == "keyword"
+    assert "hybrid" in c.enabled_modes
+
+
+def test_kb_keyword_stays_default_when_vector_off() -> None:
+    c = KnowledgeBaseConfig(enabled_modes=["keyword", "grep"])
+    assert c.default_mode == "keyword"
+    assert "hybrid" not in c.enabled_modes
+
+
 def test_memory_config_defaults_no_llm() -> None:
     c = MemoryStoreConfig()
     assert c.retrieval_modes == ["grep", "keyword"]
@@ -46,6 +68,19 @@ def test_memory_config_defaults_no_llm() -> None:
 def test_memory_vector_enabled_by_mode_only() -> None:
     # Embedding is GLOBAL now: listing the mode enables vector.
     assert MemoryStoreConfig(retrieval_modes=["keyword", "vector"]).vector_enabled is True
+
+
+def test_memory_enabling_vector_auto_enables_hybrid_and_defaults_to_it() -> None:
+    # Mirrors the KB face: a vector-enabled memory store fuses (RRF) by default.
+    c = MemoryStoreConfig(retrieval_modes=["grep", "keyword", "vector"])
+    assert "hybrid" in c.retrieval_modes
+    assert c.default_mode == "hybrid"
+
+
+def test_memory_explicit_default_mode_overrides_hybrid_auto_default() -> None:
+    c = MemoryStoreConfig(retrieval_modes=["keyword", "vector"], default_mode="keyword")
+    assert c.default_mode == "keyword"
+    assert "hybrid" in c.retrieval_modes
 
 
 def test_memory_legacy_embedding_fields_accepted_but_inert() -> None:

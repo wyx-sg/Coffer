@@ -16,8 +16,8 @@ Pydantic v2 `BaseModel`。当 `kind == "knowledge_base"` 时存在 `Resource.con
 
 | Field                | Type                      | Notes                                                                                              |
 | -------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| `enabled_modes`      | `list[RetrievalMode]`     | `{"grep","keyword","vector"}` 的子集。默认 `["keyword","grep"]`。`vector` 可选，需要 `embedding`。 |
-| `default_mode`       | `RetrievalMode`           | search 省略 `mode` 时使用的模式。默认 `"keyword"`。                                                |
+| `enabled_modes`      | `list[RetrievalMode]`     | `{"grep","keyword","vector","hybrid"}` 的子集。默认 `["keyword","grep"]`。`vector` 可选，需要 `embedding`；启用 `vector` 会自动加入 `hybrid`（对 keyword+vector 做 RRF 融合，ADR-012）。 |
+| `default_mode`       | `RetrievalMode`           | search 省略 `mode` 时使用的模式。默认 `"keyword"`；启用 `vector` 时（除非显式指定）自动变为 `"hybrid"`。                                                |
 | `chunk_size`         | `int`                     | 默认 `512`；范围 `64–2048`。                                                                       |
 | `chunk_overlap`      | `int`                     | 默认 `64`；范围 `0–chunk_size/2`。                                                                 |
 | `max_document_bytes` | `int`                     | 默认 `25 * 1024 * 1024`；范围 `1024–104857600`。                                                   |
@@ -62,7 +62,8 @@ frozen 值对象（不持久化）：
 - `Passage`：`document_id`、`title`、`text`、`score: float`、`position: int`。
 - `GrepHit`：`path`、`line_number: int`、`line`。
 - `GrepResult`：`hits: Sequence[GrepHit]`、`truncated: bool` —— 当存在超出 `max_matches` 的匹配，**或**服务端超时截断了扫描时，`truncated` 为 true（grep 超时会返回零命中且 `truncated=true`，同时 `rg` 进程被 kill）。
-- `SearchResult`：`mode: RetrievalMode`、`passages: Sequence[Passage]`、`fallback: RetrievalMode | None`（当请求的 `vector` 搜索降级为 `keyword` 时设置）。
+- `SearchResult`：`mode: RetrievalMode`、`passages: Sequence[Passage]`、`fallback: RetrievalMode | None`（当请求的 `vector` 或 `hybrid` 搜索降级为 `keyword` 时设置）。
+- `RetrievalMode`：`Literal["grep","keyword","vector","hybrid"]` —— `hybrid` 对 `keyword`+`vector` 结果列表做 reciprocal rank fusion（`K = 60`，按 `(document_id, position)` 去重）；融合是 `KnowledgeRetrieval` 门面里对索引已返回的两个列表所做的纯 Python 处理（不引入任何引擎）。与 memory 面（spec 007）共享。
 - `StoreRef`：`kind`、`resource_name`、`project_id`、`docs_dir` —— 为共享检索门面标识一个逻辑 store（一个 KB 或一个 memory scope）。
 
 ### 端口 (`domain/knowledge/`)
@@ -96,7 +97,7 @@ grep 是独立的 `infrastructure/knowledge/grep.py` ripgrep 包装器（无索�
 - `IngestRejected` —— code `"INGEST_REJECTED"`；reason ∈ `{"empty","too_large","unsupported_type","duplicate"}`。
 - `EngineUnavailable` —— code `"ENGINE_UNAVAILABLE"`；当请求操作所需的转换器库 / sqlite-vec / embedding provider 不可用时抛出。
 - `ReconversionBlocked` —— code `"RECONVERSION_BLOCKED"`；对 `source_mode == "edited"` 的文档执行重转换时抛出。
-- `SearchModeInvalid` —— code `"SEARCH_MODE_INVALID"`（HTTP 400）；当搜索请求**显式**指定 `mode=grep`（grep 有自己的端点）或任何不在该 KB `enabled_modes` 里的显式模式时抛出。`vector` 是例外 —— 它降级为 keyword 并标注 fallback，而不是报错。
+- `SearchModeInvalid` —— code `"SEARCH_MODE_INVALID"`（HTTP 400）；当搜索请求**显式**指定 `mode=grep`（grep 有自己的端点）或任何不在该 KB `enabled_modes` 里的显式模式时抛出。`vector` 与 `hybrid` 是例外 —— 它们降级为 keyword 并标注 fallback，而不是报错。
 
 ## SQLite schema（统一基底）
 
