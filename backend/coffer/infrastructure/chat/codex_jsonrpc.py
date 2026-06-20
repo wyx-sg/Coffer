@@ -6,7 +6,7 @@ verified against codex-cli 0.125.0 (``codex app-server generate-json-schema``)).
 is *not* the LSP ``Content-Length`` framing.
 
 The client drives that wire behind an injected reader/writer seam so turns are
-unit-testable with no subprocess (mirrors ``cli_agent.Spawner`` /
+unit-testable with no subprocess (mirrors
 ``claude_sdk_agent.SdkSessionFactory``). The subprocess that supplies a real
 reader/writer lives in ``codex_app_server.py``.
 

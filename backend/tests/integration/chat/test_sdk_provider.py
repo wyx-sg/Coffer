@@ -1,6 +1,6 @@
 """ClaudeSdkProvider integration tests (spec 008 — SDK-backed Claude provider).
 
-Mirrors ``test_cli_agent.py``'s provider suite but for ``ClaudeSdkProvider``:
+Covers the ``ClaudeSdkProvider`` surface:
 - ``init_conversation`` rejects a missing or non-directory cwd.
 - ``build_adapter`` returns a ``ClaudeSdkAgentAdapter`` with the right cwd / resume
   and a working session sink.
