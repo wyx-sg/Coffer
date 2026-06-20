@@ -108,16 +108,3 @@ class MCPInvocationRepoPort(Protocol):
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[MCPInvocation]: ...
-
-
-class AgentMcpScopePort(Protocol):
-    """Resolves an agent's effective MCP server allowlist for gateway scoping.
-
-    Returns ``None`` when the agent is unscoped (auto mode, or an unknown agent)
-    — meaning every enabled server is exposed. Returns the set of allowlisted
-    server *names* when the agent is in selected mode. Concrete implementation is
-    the agent-kind ``AgentMcpScopeService``, injected at the composition root so
-    the mcp kind never imports the agent kind (Contract 5).
-    """
-
-    async def allowed_server_names(self, agent_name: str) -> set[str] | None: ...

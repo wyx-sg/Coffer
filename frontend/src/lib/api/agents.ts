@@ -162,24 +162,6 @@ export interface UnmanagedSkillsResponse {
   items: UnmanagedSkillOut[];
 }
 
-// Per-agent MCP scope (spec: per-agent MCP server scoping).
-// `mode === "auto"`  → the agent sees every enabled mcp_server resource.
-// `mode === "selected"` → the agent sees only the allowlisted `servers`.
-// `servers` is the list of allowlisted mcp_server names; it is only
-// meaningful when `mode === "selected"`.
-export interface AgentMcpScope {
-  mode: "auto" | "selected";
-  servers: string[];
-}
-
-export async function getAgentMcpScope(name: string): Promise<AgentMcpScope> {
-  return call<AgentMcpScope>("GET", `/agents/${enc(name)}/mcp-scope`);
-}
-
-export async function putAgentMcpScope(name: string, scope: AgentMcpScope): Promise<AgentMcpScope> {
-  return call<AgentMcpScope>("PUT", `/agents/${enc(name)}/mcp-scope`, scope);
-}
-
 export async function call<T>(
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   path: string,
@@ -279,8 +261,4 @@ export const agentsApi = {
       "DELETE",
       `/agents/${enc(name)}/unmanaged-skills/${enc(skill)}?location=${encodeURIComponent(location)}`,
     ),
-
-  // Per-agent MCP scope (per-agent MCP server scoping)
-  getMcpScope: (name: string) => getAgentMcpScope(name),
-  putMcpScope: (name: string, scope: AgentMcpScope) => putAgentMcpScope(name, scope),
 };

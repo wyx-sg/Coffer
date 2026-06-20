@@ -2,12 +2,14 @@
 
 > 中文版: [ADR-026-per-agent-mcp-scoping.zh.md](./ADR-026-per-agent-mcp-scoping.zh.md)
 
-- **Status:** Accepted
+- **Status:** Reverted (2026-06-20) — see the revert note below
 - **Date:** 2026-06-19
 - **Deciders:** Yuxing Wu
 - **Spec:** 001-mcp-gateway and 004-agent-registry (both spec.md updated before implementation)
 - **Amends:** [ADR-007](./ADR-007-everything-is-a-resource-kind.md) (the agent kind now carries a scope) and [ADR-018](./ADR-018-tool-retrieval-for-overload.md) / [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md) (`coffer__search_tools` ranking is now scope-aware)
 - **Related:** [ADR-004](./ADR-004-capability-state-model.md) (capability preferences in DB), [ADR-005](./ADR-005-session-subprocess-model.md) (per-session upstream subprocesses)
+
+> **⚠️ Reverted (2026-06-20, simplification 1.6).** Per-agent MCP server scoping is removed — the gateway serves every enabled server to every agent again, with no per-agent identity or allowlist. The decision below is retained for history.
 
 ## Context
 

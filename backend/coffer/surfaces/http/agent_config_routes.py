@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Response, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from coffer.application.agent.config_file_service import (
     AgentConfigFileService,
@@ -21,10 +21,7 @@ from coffer.application.agent.config_file_service import (
     ConfigFileInfo,
 )
 from coffer.application.agent.mcp_service import AgentMcpService, McpInstallStatus
-from coffer.application.agent.scope_service import AgentMcpScopeService
 from coffer.domain.agent.config_files import ConfigFileFormat
-from coffer.domain.agent.scope import AgentMcpScope, ScopeMode
-from coffer.surfaces.http.agent_scope_dependencies import get_agent_mcp_scope_service
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
 from coffer.surfaces.http.dependencies import (
@@ -83,18 +80,6 @@ class McpInstallStatusOut(BaseModel):
     command: str | None
 
 
-class AgentMcpScopeOut(BaseModel):
-    mode: ScopeMode
-    servers: list[str]
-
-
-class AgentMcpScopeIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    mode: ScopeMode
-    servers: list[str] = []
-
-
 def _info_out(i: ConfigFileInfo) -> ConfigFileInfoOut:
     return ConfigFileInfoOut(
         key=i.key,
@@ -132,10 +117,6 @@ def _content_out(c: ConfigFileContent) -> ConfigFileContentOut:
 
 def _status_out(s: McpInstallStatus) -> McpInstallStatusOut:
     return McpInstallStatusOut(installed=s.installed, command=s.command)
-
-
-def _scope_out(s: AgentMcpScope) -> AgentMcpScopeOut:
-    return AgentMcpScopeOut(mode=s.mode, servers=list(s.servers))
 
 
 @router.get("/{name}/config-files", response_model=ConfigFileListOut)
@@ -243,21 +224,3 @@ async def uninstall_mcp(
     actor: str = Depends(_actor),
 ) -> McpInstallStatusOut:
     return _status_out(await svc.uninstall(name, actor=actor))
-
-
-@router.get("/{name}/mcp-scope", response_model=AgentMcpScopeOut)
-async def get_mcp_scope(
-    name: str,
-    svc: AgentMcpScopeService = Depends(get_agent_mcp_scope_service),  # noqa: B008
-) -> AgentMcpScopeOut:
-    return _scope_out(await svc.get_scope(name))
-
-
-@router.put("/{name}/mcp-scope", response_model=AgentMcpScopeOut)
-async def put_mcp_scope(
-    name: str,
-    body: AgentMcpScopeIn,
-    svc: AgentMcpScopeService = Depends(get_agent_mcp_scope_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> AgentMcpScopeOut:
-    return _scope_out(await svc.set_scope(name, body.mode, body.servers, actor=actor))

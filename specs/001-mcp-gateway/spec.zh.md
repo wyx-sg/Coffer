@@ -325,30 +325,6 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 - **When** daemon 启动,
 - **Then** 它在支持的端口范围内选择下一个空闲端口，把所选端口写入 `~/.coffer/daemon.json`，并使每个 Coffer 入口（shim、CLI）都无需手动配置就连上该端口。
 
-### Scenario: scope an agent to a subset of servers
-
-- **Given** 已注册两台启用的 MCP 服务器，且一个 agent 被绑定到某会话，其 MCP scope 为 `selected`、allowlist 中只含第一台服务器（ADR-026）,
-- **When** 该 agent 通过网关列出工具,
-- **Then** 只有第一台服务器的工具（外加 Coffer 内置）出现，第二台服务器的工具被隐藏，且 `coffer__search_tools` 同样只对 in-scope 的工具排序。
-
-### Scenario: reject an out-of-scope tool call
-
-- **Given** 一个 agent 的 MCP scope 为 `selected`，且某台服务器不在其 allowlist 中,
-- **When** 该 agent 用 `<server>__<tool>` 名称直接调用那台越界服务器的工具,
-- **Then** 网关以 `MCP_SERVER_OUT_OF_SCOPE` 拒绝该调用，且从不把请求转发给上游。
-
-### Scenario: auto-mode agent sees all enabled servers
-
-- **Given** 一个 MCP scope 为 `auto`（默认——没有 scope 行）的 agent,
-- **When** 该 agent 通过网关列出工具,
-- **Then** 每一台启用服务器的工具都被暴露，与每 agent 作用域出现之前完全一致。
-
-### Scenario: an anonymous session is unscoped
-
-- **Given** 一个没有绑定 agent 身份的网关会话（例如进程内的 `ask` agent，或一个没有发送 `X-Coffer-Agent` 的客户端）,
-- **When** 该会话通过网关列出工具,
-- **Then** 每一台启用服务器的工具都被暴露，因为作用域只对已知 agent 生效。
-
 ## Requirements
 
 ### Functional Requirements
@@ -371,13 +347,6 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 - **FR-008**: Users MUST 能在每台服务器上分别启用或禁用单个的 tool、resource 和 prompt。
 - **FR-009**: System MUST 在 daemon 重启、上游升级、上游临时消失等情况下保留用户的启用/禁用决定。
 - **FR-010**: System MUST 在发现一个先前未见过的能力时，按每服务器的 "auto-enable new capabilities" 策略（默认为 true）处理。
-
-**Per-agent scoping**
-
-- **FR-019**: System MUST 识别一个下游网关会话归属于哪个 agent——通过 `coffer` MCP 条目携带的 agent 身份（一个 `--agent <name>` 参数），由 shim 以 `X-Coffer-Agent` 请求头转发。不出示身份的会话 MUST 被视为 unscoped（完全访问），以保持向后兼容。
-- **FR-020**: System MUST 支持每 agent 的 scope 模式：`auto`（该 agent 看到每一台启用的 MCP 服务器）或 `selected`（该 agent 只看到一份显式的服务器 allowlist）。Agent MUST 默认 `auto`；新增的服务器 MUST 自动对 `auto` agent 可见，但 MUST NOT 加入任何 `selected` agent 的 allowlist。
-- **FR-021**: System MUST 在列出 tools、resources、prompts 以及为 `coffer__search_tools` 排序时，应用每个 agent 的有效 scope（effective scope）——启用的服务器，在 `selected` 时再与 allowlist 求交集——使一台越界服务器的能力绝不被呈现给该 agent。
-- **FR-022**: System MUST 拒绝指向越界服务器的直接 `tools/call`、`resources/read` 或 `prompts/get`——即便能力名是直接给出的——返回错误而非调用上游。
 
 **Credentials and safety**
 
@@ -407,7 +376,6 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 - **Audit Event**: 任意 resource 或 capability 的生命周期变更记录。包含 actor、target、event type、时间戳和结构化载荷。
 - **Invocation Record**: 通过网关进行的一次能力调用记录。包含 target、时间戳、耗时和结果——不含参数和返回内容。
 - **Retention Policy**: 控制某日志表保留时长的按表设置。audit 默认 365 天，invocation 默认 30 天；两者都可设为 "keep forever"。
-- **Agent MCP scope**: 在网关侧应用的每 agent 可见性策略——一个 `mode`（`auto` = 每一台启用的服务器；`selected` = 一份显式 allowlist）外加 `selected` 时使用的服务器名 allowlist。新 agent 默认 `auto`；不出示 agent 身份的会话为 unscoped。
 
 ## Success Criteria
 

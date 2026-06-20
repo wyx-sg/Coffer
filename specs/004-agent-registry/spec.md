@@ -576,18 +576,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user lists plugins and then attempts to toggle or uninstall one,
 - **Then** the listing is empty and both the toggle and uninstall are rejected with `unprocessable_entity` (422).
 
-### Scenario: set an agent's MCP scope to selected
-
-- **Given** a registered agent and two registered MCP servers (ADR-026),
-- **When** the user PUTs the agent's MCP scope as `selected` with one of those servers, then re-reads it,
-- **Then** the scope is persisted and the GET returns `mode: selected` with that server; naming a non-existent server is rejected with `MCP_SCOPE_SERVER_UNKNOWN` (422), and operating on an unknown agent returns 404.
-
-### Scenario: install embeds the agent identity
-
-- **Given** an agent registered with Coffer,
-- **When** Coffer's MCP shim entry is written into the agent's config,
-- **Then** the entry carries the agent's identity as an `--agent <name>` argument so the shim forwards it to the gateway (driving per-agent server scoping), and the installed shim command is still resolvable.
-
 ## Requirements
 
 ### Functional Requirements
@@ -624,11 +612,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **FR-020**: Install MUST be idempotent — re-installing updates the existing `coffer` entry in place and never creates a duplicate. System MUST expose a status operation reporting whether Coffer's MCP is currently installed for the agent.
 - **FR-021**: Users MUST be able to uninstall Coffer's MCP, removing the `coffer` entry from the agent's MCP config. Uninstalling when not installed is a no-op success.
 - **FR-022**: Install and uninstall MUST reuse the atomic-write + `.bak` machinery from FR-017 and record an audit entry (`agent_mcp_installed` / `agent_mcp_uninstalled`).
-
-**Per-agent MCP scope**
-
-- **FR-039**: Users MUST be able to view and set an agent's MCP server scope — its mode (`auto` or `selected`) and, when `selected`, the allowlist of MCP servers — from the agent's detail page and via the API.
-- **FR-040**: When installing Coffer's MCP into an agent, the system MUST embed the agent's identity in the written `coffer` entry (an `--agent <name>` argument) so the gateway can attribute the session to that agent and apply its scope.
 
 **Agent MCP entries (workspace amendment)**
 

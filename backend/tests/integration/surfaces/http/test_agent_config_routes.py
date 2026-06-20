@@ -295,11 +295,7 @@ def test_mcp_install_lifecycle(tmp_path, monkeypatch):
         assert r.json()["installed"] is True
         assert r.json()["command"] == str(shim)
         data = json.loads((tmp_path / ".claude.json").read_text())
-        # ADR-026: install embeds the agent identity as an `--agent <name>` arg.
-        assert data["mcpServers"]["coffer"] == {
-            "command": str(shim),
-            "args": ["--agent", "cc"],
-        }
+        assert data["mcpServers"]["coffer"] == {"command": str(shim)}
 
         r = c.get("/api/v1/agents/cc/mcp-install")
         assert r.json()["installed"] is True

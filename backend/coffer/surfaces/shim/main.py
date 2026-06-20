@@ -14,7 +14,6 @@ Exit codes:
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import contextlib
 import json as _json
@@ -142,12 +141,9 @@ async def _ensure_daemon() -> DaemonInfo:
 class _Bridge:
     """One run of the bridge — stdin → POST, SSE → stdout."""
 
-    def __init__(self, info: DaemonInfo, agent_name: str | None = None) -> None:
+    def __init__(self, info: DaemonInfo) -> None:
         self._base = f"http://127.0.0.1:{info.port}"
         self._headers = {"X-Coffer-Token": info.token}
-        if agent_name:
-            # ADR-026: tell the gateway which agent this shim serves (scope).
-            self._headers["X-Coffer-Agent"] = agent_name
         self._session_id: str | None = None
         self._stop = asyncio.Event()
 
@@ -363,12 +359,12 @@ class _Bridge:
             return False
 
 
-async def _async_main(agent_name: str | None = None) -> int:
+async def _async_main() -> int:
     _setup_shim_log()
     _logger.info("shim.start pid=%s", os.getpid())
     info = await _ensure_daemon()
     _logger.info("shim.daemon port=%s", info.port)
-    bridge = _Bridge(info, agent_name)
+    bridge = _Bridge(info)
 
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -380,12 +376,8 @@ async def _async_main(agent_name: str | None = None) -> int:
 
 def run() -> None:
     """Entry point for `coffer-mcp-shim`."""
-    # `--agent <name>` (ADR-026); tolerate other host args, `add_help=False`.
-    parser = argparse.ArgumentParser(prog="coffer-mcp-shim", add_help=False)
-    parser.add_argument("--agent", default=None)
-    agent_name = parser.parse_known_args()[0].agent
     try:
-        code = asyncio.run(_async_main(agent_name))
+        code = asyncio.run(_async_main())
     except KeyboardInterrupt:
         code = 0
     except SystemExit as e:

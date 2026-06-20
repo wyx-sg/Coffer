@@ -38,7 +38,6 @@ class AuditEventType(StrEnum):
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"
     AGENT_MCP_UNINSTALLED = "agent_mcp_uninstalled"
-    AGENT_MCP_SCOPE_SET = "agent_mcp_scope_set"
     # agent workspace (specs 004/005 amendment)
     AGENT_CONFIG_FILE_DELETED = "agent_config_file_deleted"
     AGENT_MCP_ENTRY_REMOVED = "agent_mcp_entry_removed"

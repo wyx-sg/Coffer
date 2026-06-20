@@ -11,9 +11,6 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy.engine import Connection
 
-from coffer.infrastructure.agent import (
-    scope_persistence as _agent_scope,  # noqa: F401 — per-agent MCP scope models
-)
 from coffer.infrastructure.channel import (
     persistence as _channel_persistence,  # noqa: F401 — channel_peers model
 )

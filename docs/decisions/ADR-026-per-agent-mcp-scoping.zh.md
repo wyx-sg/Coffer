@@ -2,12 +2,14 @@
 
 > English: [ADR-026-per-agent-mcp-scoping.md](./ADR-026-per-agent-mcp-scoping.md)
 
-- **状态：** Accepted
+- **状态：** 已撤销（2026-06-20）——见下方撤销说明
 - **日期：** 2026-06-19
 - **决策者：** Yuxing Wu
 - **Spec：** 001-mcp-gateway 与 004-agent-registry（实现前更新两份 spec.md）
 - **修订：** [ADR-007](./ADR-007-everything-is-a-resource-kind.md)（agent kind 现在携带 scope）以及 [ADR-018](./ADR-018-tool-retrieval-for-overload.md) / [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md)（`coffer__search_tools` 排序现在感知 scope）
 - **相关：** [ADR-004](./ADR-004-capability-state-model.md)（能力偏好存于 DB）、[ADR-005](./ADR-005-session-subprocess-model.md)（每会话独立上游子进程）
+
+> **⚠️ 已撤销（2026-06-20，simplification 1.6）。** 每 agent 的 MCP 服务器 scope 已移除——网关再次把每一台启用的服务器服务于每一个 agent，不再有 per-agent 身份或 allowlist。以下决策内容仅作历史存档保留。
 
 ## 背景
 
