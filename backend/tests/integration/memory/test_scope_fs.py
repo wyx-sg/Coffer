@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import subprocess
 
 import pytest
 
@@ -12,7 +13,26 @@ from coffer.infrastructure.memory.files import (
     scan_store_dir,
     write_fact_file,
 )
-from coffer.infrastructure.memory.scope_fs import git_root, project_ulid
+from coffer.infrastructure.memory.scope_fs import git_branch, git_root, project_ulid
+
+
+def _git(args: list[str], cwd: pathlib.Path) -> None:
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+
+def test_git_branch_reads_current_branch(tmp_path: pathlib.Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-q", "-b", "work"], repo)
+    assert git_branch(str(repo)) == "work"
+    # resolves from a subdirectory too
+    sub = repo / "src"
+    sub.mkdir()
+    assert git_branch(str(sub)) == "work"
+
+
+def test_git_branch_none_outside_repo(tmp_path: pathlib.Path) -> None:
+    assert git_branch(str(tmp_path)) is None
 
 
 def test_git_root_walks_up_to_dot_git(tmp_path: pathlib.Path) -> None:

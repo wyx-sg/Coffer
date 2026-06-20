@@ -31,6 +31,30 @@ def git_root(cwd: str | Path) -> Path | None:
     return None
 
 
+def git_branch(cwd: str | Path) -> str | None:
+    """Current git branch for ``cwd``'s repo, or ``None`` outside a repo or on
+    a detached HEAD with no branch. Pure filesystem read (handles linked
+    worktrees, whose ``.git`` is a file pointing at the real gitdir)."""
+    root = git_root(cwd)
+    if root is None:
+        return None
+    dot_git = root / ".git"
+    if dot_git.is_file():
+        # linked worktree: ".git" is "gitdir: <path>"
+        text = dot_git.read_text(encoding="utf-8").strip()
+        gitdir = Path(text.removeprefix("gitdir:").strip())
+        head = gitdir / "HEAD"
+    else:
+        head = dot_git / "HEAD"
+    try:
+        ref = head.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if ref.startswith("ref: refs/heads/"):
+        return ref[len("ref: refs/heads/") :] or None
+    return None  # detached HEAD (bare sha)
+
+
 def project_ulid(root: str | Path) -> str:
     """A deterministic 26-char Crockford-base32 id for a project root.
 
