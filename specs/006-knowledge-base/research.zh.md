@@ -35,7 +35,7 @@ LlamaIndex、mem0、chroma、手写的 keyword 词频扫描、dispatcher 全部�
 **决策**：三种模式、一个引擎、按面调优的工具：
 
 - **`grep`** —— 对 `docs/*.md` 跑 `ripgrep`，由 `max_matches` 和超时限制。无索引、无 embedding、正则/精确。返回 `{path, line_number, line}`。文件一存在就立即可用。
-- **`keyword`** —— FTS5 `MATCH(query) ORDER BY bm25() LIMIT top_k`。零配置、离线、语言无关（unicode61 分词器）。**默认**。
+- **`keyword`** —— FTS5 `MATCH(query) ORDER BY bm25() LIMIT top_k`。零配置、离线、支持 CJK（**trigram** 分词器，能匹配中文与任意子串；`unicode61` 不切分 CJK，中文查询会返空）。无 ≥3 字 token 的查询（如 2 字中文词）回退到有界子串扫描。**默认**。
 - **`vector`** —— embedding query → sqlite-vec KNN top_k。可选；需要已配置的 embedding provider。
 
 KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**Hybrid（keyword + vector 的 RRF 融合）**是同引擎后的可选未来增强 —— 列为非阻塞增强，MVP 不内建。

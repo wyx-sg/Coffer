@@ -134,3 +134,27 @@ async def test_punctuation_in_query_is_safe(substrate) -> None:
     # A query with FTS operators must not raise.
     hits = await idx.keyword_search("kb1", "make OR (release", top_k=5)
     assert any("make" in h.text for h in hits)
+
+
+@pytest.mark.asyncio
+async def test_keyword_search_matches_cjk_via_trigram(substrate) -> None:
+    """unicode61 made a no-space Chinese run one token, so a CJK query never
+    matched; the trigram tokenizer matches the substring."""
+    await substrate.repo.upsert_document(_doc("d1", "kb1", "向量"))
+    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    await idx.upsert_chunks("d1", ["向量检索使用语义嵌入模型来匹配查询"], None)
+    hits = await idx.keyword_search("kb1", "向量检索", top_k=5)
+    assert {h.document_id for h in hits} == {"d1"}
+
+
+@pytest.mark.asyncio
+async def test_short_cjk_query_uses_like_fallback(substrate) -> None:
+    """A < 3-character query produces no trigram tokens; keyword_search falls
+    back to a substring (LIKE) scan rather than returning empty."""
+    await substrate.repo.upsert_document(_doc("d1", "kb1", "A"))
+    idx = substrate.index(KIND_KNOWLEDGE_BASE, "kb1")
+    await idx.upsert_chunks("d1", ["向量检索很有用"], None)
+    hits = await idx.keyword_search("kb1", "向量", top_k=5)
+    assert {h.document_id for h in hits} == {"d1"}
+    # The fallback is still substring-scoped: a non-substring short query misses.
+    assert await idx.keyword_search("kb1", "查询", top_k=5) == []

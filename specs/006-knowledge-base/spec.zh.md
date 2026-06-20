@@ -110,6 +110,12 @@
 - **When** the user searches with `mode="keyword"` (or the KB default),
 - **Then** they receive passages ranked by `bm25()`, each carrying its source doc id, title, snippet, and score.
 
+### Scenario: keyword search matches CJK (Chinese) content
+
+- **Given** a knowledge base with a document whose Markdown body is Chinese (no word-boundary spaces),
+- **When** the user runs a keyword search with a CJK query,
+- **Then** a multi-character query (e.g. `向量检索`) matches via the FTS5 trigram index, and a short `< 3`-character query (e.g. `向量`) matches via the substring fallback — neither returns empty as the old `unicode61` tokenizer did.
+
 ### Scenario: grep returns file/line matches
 
 - **Given** documents are on disk,
@@ -265,7 +271,7 @@
 **Retrieval**
 
 - **FR-010**: Users MUST be able to search a KB and receive ranked passages (passage text + source doc id + title + score) via the requested or default mode. Default `top_k` is 5; callers MAY set `top_k` in 1–20.
-- **FR-011**: System MUST support three retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), and `vector` (sqlite-vec KNN over embeddings). Default enabled modes are `keyword`+`grep`; `vector` is opt-in. Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed).
+- **FR-011**: System MUST support three retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), and `vector` (sqlite-vec KNN over embeddings). Default enabled modes are `keyword`+`grep`; `vector` is opt-in. Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). The keyword index uses an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text (no word-boundary spaces), so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters (e.g. a 2-character CJK term) falls back to a bounded substring (LIKE) scan rather than returning empty.
 - **FR-011a**: An EXPLICIT `mode=grep` on the search endpoint — or any explicit mode not in the KB's `enabled_modes` — MUST be rejected with `400 SEARCH_MODE_INVALID` (grep is served by its own endpoint, never silently rewritten). `vector` is the one exception: it always reaches the retrieval facade so the keyword fallback is FLAGGED per FR-012. An implicit search (no `mode`) on a KB whose `default_mode` is `grep` serves `keyword` (grep is not a passage mode).
 - **FR-012**: When `vector` is requested but no embedding provider is configured, the system MUST fall back to `keyword` and flag the fallback in the response — it MUST NOT error or block.
 

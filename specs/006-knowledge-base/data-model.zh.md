@@ -144,7 +144,7 @@ CREATE VIRTUAL TABLE documents_fts USING fts5(
     text,
     resource_name UNINDEXED,
     chunk_id UNINDEXED,
-    tokenize='unicode61'
+    tokenize='trigram'  -- CJK-capable; unicode61 did not segment CJK (migration 0033)
 );
 
 -- sqlite-vec virtual table; one row per chunk with a vector. Created LAZILY by
