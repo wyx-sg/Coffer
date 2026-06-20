@@ -39,6 +39,9 @@ class FakeEmbedder:
     def __init__(self, dimensions=4, fail=False):
         self._dim = dimensions
         self._fail = fail
+        #: The exact texts handed to ``embed`` — lets a test assert the title was
+        #: prepended to the EMBEDDED text (KB5) while the stored chunks stay raw.
+        self.embedded: list[str] = []
 
     @property
     def dimensions(self):
@@ -47,6 +50,7 @@ class FakeEmbedder:
     async def embed(self, texts):
         if self._fail:
             raise EngineUnavailable("embedding", "down")
+        self.embedded = list(texts)
         return [[0.5] * self._dim for _ in texts]
 
 
@@ -214,3 +218,71 @@ async def test_unchanged_not_pending_is_true_noop_no_chunker_or_embed() -> None:
     assert chunker_calls == []  # chunker never called
     assert index.upserts == []
     assert index.vector_upserts == []
+
+
+@pytest.mark.asyncio
+async def test_title_prepended_to_embedded_text_only_fts_stays_raw() -> None:
+    """KB5: the document title is prepended as topic context to every EMBEDDED
+    text, but the chunks landing in FTS / the chunk rows stay RAW (no prefix), so
+    ``Passage.text`` is never polluted (title is surfaced via ``Passage.title``)."""
+    embedder = FakeEmbedder()
+    index = RecordingIndex()
+    outcome = await _reindexer(embedder).reindex(
+        index=index,
+        markdown="alpha\n\nbeta",
+        previous_sha=None,
+        embedding=EmbeddingConfig(provider="local", model="m", dimensions=4),
+        doc_id="d1",
+        chunker=_chunker,
+        title="My Title",
+    )
+    assert outcome.changed is True
+    # Every embedded text carries the title context prefix.
+    assert embedder.embedded == ["My Title\n\nalpha", "My Title\n\nbeta"]
+    assert all(t.startswith("My Title\n\n") for t in embedder.embedded)
+    # FTS / chunk rows received the RAW chunks (no title prefix).
+    assert index.upserts[0][1] == ["alpha", "beta"]
+
+
+@pytest.mark.asyncio
+async def test_empty_title_embeds_raw_chunk_unchanged() -> None:
+    """No title (default ``""``) ⇒ the embedded text is the raw chunk, unchanged."""
+    embedder = FakeEmbedder()
+    index = RecordingIndex()
+    await _reindexer(embedder).reindex(
+        index=index,
+        markdown="alpha\n\nbeta",
+        previous_sha=None,
+        embedding=EmbeddingConfig(provider="local", model="m", dimensions=4),
+        doc_id="d1",
+        chunker=_chunker,
+        title="",
+    )
+    assert embedder.embedded == ["alpha", "beta"]  # no prefix
+    assert index.upserts[0][1] == ["alpha", "beta"]
+
+
+@pytest.mark.asyncio
+async def test_pending_retry_prepends_title_to_reembedded_text() -> None:
+    """KB5 + KB8: the retry-embed-only path (unchanged content, was pending,
+    provider now up) ALSO prepends the title to the re-embedded text, so the
+    retried vectors are consistent with the content-changed path."""
+    embedder = FakeEmbedder()
+    index = RecordingIndex()
+    sha = content_sha256("alpha\n\nbeta")
+    retried = await _reindexer(embedder).reindex(
+        index=index,
+        markdown="alpha\n\nbeta",
+        previous_sha=sha,
+        embedding=EmbeddingConfig(provider="local", model="m", dimensions=4),
+        doc_id="d1",
+        chunker=_chunker,
+        title="My Title",
+        previous_embed_pending=True,
+    )
+    assert retried.changed is False
+    assert retried.embedded is True
+    assert embedder.embedded == ["My Title\n\nalpha", "My Title\n\nbeta"]
+    # Retry path writes ONLY vectors — chunks/FTS untouched (KB8 no-churn).
+    assert index.upserts == []
+    assert len(index.vector_upserts) == 1
