@@ -1,4 +1,4 @@
-"""On-disk handoff (working-state) files: one per (project store × branch).
+"""On-disk handoff (working-state) files: one per (project store x branch).
 
 Files-as-truth, frontmatter ``{branch, updated_at}`` + freeform body. Mirrors
 ``infrastructure/memory/files.py`` but a handoff is overwrite-per-branch and is
