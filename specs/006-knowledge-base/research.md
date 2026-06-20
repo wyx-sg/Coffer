@@ -75,9 +75,16 @@ Outbound embedding calls go through Coffer's SSRF-guarded HTTP client. Vector mo
 
 **Question**: How is Markdown split before indexing?
 
-**Decision**: **Markdown-aware chunking** — split on headings, then bound by `chunk_size` (default 512) and `chunk_overlap` (default 64). Both are **per-KB and mutable**: changing them re-chunks + re-indexes the corpus (cheap, files = truth). This removes the original spec's partial-immutability smell where chunk params were frozen at creation.
+**Decision**: **Boundary-aware (structure-preserving) Markdown chunking** — split on headings (a chunk never spans two sections), then **greedily pack whole structural blocks** (prose paragraphs, fenced code blocks, tables, list groups) into `chunk_size` windows (default 512) with `chunk_overlap` (default 64) carried between adjacent chunks. Both params are **per-KB and mutable**: changing them re-chunks + re-indexes the corpus (cheap, files = truth). This removes the original spec's partial-immutability smell where chunk params were frozen at creation.
 
-Semantic / hierarchical / source-code-aware splitters are out of scope for MVP; they add model-call cost disproportionate to expected corpus sizes and can be added behind the same chunker interface later.
+Boundary-awareness is a **chunk-quality** property (not a new wire contract — FR-014 already governs the mutable char-based params): chunk boundaries are the unit of retrieval, so they must respect structure rather than slice blindly at `start + chunk_size`. Concretely:
+
+- **Atomic blocks** — a fenced code block (```` ``` ```` / `~~~`, language tag included) or a Markdown table (a run of pipe-delimited rows — header, delimiter, body) is **never split internally**. The old char-window split mid-fence / mid-table, producing orphaned half-fences and headerless table fragments that embed and read poorly.
+- **Greedy block packing** — whole blocks pack into a chunk until the next would overflow `chunk_size`, then a new chunk opens; breaks prefer blank-line / block boundaries. An oversized prose paragraph breaks at the nearest **sentence** boundary (`. ` / `。` / newline) rather than mid-word, with a hard split only as a last resort for a break-less paragraph.
+- **Oversized atomic block** — a single fence or table larger than `chunk_size` is kept **whole** as its own (oversized) chunk; a half-fence is worse for retrieval than one big chunk.
+- **Overlap** — adjacent chunks share context by re-including the previous chunk's trailing sentence/block up to ~`chunk_overlap` chars (snapped to a boundary); char-exact overlap is necessarily approximate once whole blocks are packed.
+
+Sizing stays **char-based** (deterministic, dependency-free); token-based sizing is deferred (no tokenizer is pulled in). Semantic / hierarchical / source-code-aware splitters are out of scope for MVP; they add model-call cost disproportionate to expected corpus sizes and can be added behind the same chunker interface later.
 
 ## 6. Document storage layout & identifier
 
