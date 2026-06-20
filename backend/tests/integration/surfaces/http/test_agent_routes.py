@@ -231,7 +231,7 @@ def test_candidates_excludes_disabled_agent_types(tmp_path, monkeypatch):
     each is validated and exposed — even an on-disk marker must not surface them.
     """
     app = _app(tmp_path, monkeypatch, 59621)
-    for subpath in (".claude", ".codex", ".cursor", ".config/opencode", ".openclaw", ".hermes"):
+    for subpath in (".claude", ".codex"):
         (tmp_path / subpath).mkdir(parents=True)
 
     with _client(app) as c:

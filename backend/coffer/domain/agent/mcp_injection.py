@@ -7,11 +7,10 @@ Two orthogonal axes describe MCP configuration across agents:
 - **shape** — *where* the entries live (the ``container_key`` top-level table)
   and *how* a single entry is rendered (``entry_style``).
 
-The two are independent: Claude Code and Cursor are both JSON ``mcpServers``
-command-maps; OpenCode is JSON but its container is ``mcp`` with a typed
-command-array entry; Hermes is YAML with an ``mcp_servers`` command-map. Bundling
-them into one :class:`McpInjectionSpec` lets a single code path serve every
-agent — the agent descriptor (spec 004) carries one spec per agent.
+The two are independent: Claude Code uses JSON ``mcpServers`` command-maps;
+Codex uses TOML ``mcp_servers`` command-maps. Bundling them into one
+:class:`McpInjectionSpec` lets a single code path serve every agent — the agent
+descriptor (spec 004) carries one spec per agent.
 """
 
 from __future__ import annotations
@@ -25,18 +24,19 @@ from coffer.domain.agent.config_files import ConfigFileFormat
 class McpEntryStyle(StrEnum):
     """How a single stdio MCP server entry is rendered."""
 
-    #: ``{"command": <shim>, "args": [...]}`` — Claude Code, Cursor, Codex, Hermes.
+    #: ``{"command": <shim>, "args": [...]}`` — used by Claude Code and Codex.
     COMMAND_MAP = "command_map"
-    #: ``{"type": "local", "command": [<shim>, ...]}`` — OpenCode, where the
-    #: executable is the first element of a ``command`` array and the entry is
-    #: tagged with a transport ``type``.
+    #: ``{"type": "local", "command": [<shim>, ...]}`` — the executable is the
+    #: first element of a ``command`` array and the entry is tagged with a
+    #: transport ``type``. Recognized extension point reserved for a future agent
+    #: type; no current agent type uses it.
     TYPED_COMMAND_ARRAY = "typed_command_array"
 
 
 #: Default top-level container key per format, reproducing the pre-orthogonal
-#: behaviour (Claude Code JSON ``mcpServers``; Codex TOML ``mcp_servers``). YAML
-#: agents (Hermes) also use ``mcp_servers``. Agents that diverge (OpenCode/
-#: OpenClaw ``mcp``) pass an explicit ``container_key``.
+#: behaviour (Claude Code JSON ``mcpServers``; Codex TOML ``mcp_servers``). The
+#: YAML slot also defaults to ``mcp_servers`` as a reserved extension point.
+#: Agents that diverge from the default pass an explicit ``container_key``.
 _DEFAULT_CONTAINER_KEY: dict[ConfigFileFormat, str] = {
     ConfigFileFormat.JSON: "mcpServers",
     ConfigFileFormat.TOML: "mcp_servers",

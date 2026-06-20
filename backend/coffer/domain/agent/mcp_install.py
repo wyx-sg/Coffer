@@ -10,14 +10,14 @@ The write is driven by two orthogonal axes (see :mod:`mcp_injection`):
   (each preserving the user's other content: comments, ordering, unrelated
   keys).
 - **shape** — ``container_key`` (the top-level table: ``mcpServers`` /
-  ``mcp_servers`` / ``mcp``) and ``entry_style`` (how a single stdio entry is
-  rendered: a ``{"command": shim}`` map, or OpenCode's
-  ``{"type": "local", "command": [shim]}`` typed array).
+  ``mcp_servers``) and ``entry_style`` (how a single stdio entry is rendered:
+  a ``{"command": shim}`` command-map, or the typed-command-array shape
+  ``{"type": "local", "command": [shim]}``).
 
 Defaults reproduce the original behaviour — JSON ``mcpServers`` command-map
-(Claude Code / Cursor), TOML ``mcp_servers`` command-map (Codex) — so existing
-callers and tests need no change; new agents pass ``container_key`` /
-``entry_style``.
+(Claude Code), TOML ``mcp_servers`` command-map (Codex) — so existing callers
+and tests need no change; agents with non-default shapes pass ``container_key``
+/ ``entry_style``.
 
 Both wire Coffer via the stdio shim: ``command = <abs path to coffer-mcp-shim>``.
 """

@@ -106,7 +106,7 @@ class SyncEnginePort(Protocol):
 
 class ExternalDirRegistrarPort(Protocol):
     """Register / deregister a Coffer-owned external skill directory in an
-    agent's own config file (spec 005, EXTERNAL_DIR delivery — Hermes).
+    agent's own config file (spec 005, EXTERNAL_DIR delivery).
 
     Both operations are idempotent; ``deregister`` is a no-op when the entry,
     container path, or file is absent.

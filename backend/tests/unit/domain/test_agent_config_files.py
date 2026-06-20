@@ -134,65 +134,6 @@ def test_memory_key_is_gone() -> None:
         spec_for(AgentType.CLAUDE_CODE, "memory")
 
 
-def test_opencode_allowlist_dir_entries(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    specs = config_files_for(AgentType.OPENCODE)
-    by_key = {s.key: s for s in specs}
-    cfg = tmp_path / ".config" / "opencode"
-    # existing entries preserved
-    assert by_key["config"].path == cfg / "opencode.json"
-    assert by_key["instructions"].path == cfg / "AGENTS.md"
-    # the single RW directory entry (commands/ dropped — simplification 3.8)
-    sub = by_key["subagents"]
-    assert sub.path == cfg / "agents"
-    assert sub.kind is ConfigFileKind.DIRECTORY
-    assert sub.format is ConfigFileFormat.MARKDOWN
-    assert "commands" not in by_key
-
-
-def test_hermes_allowlist_identity_and_cron(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    specs = config_files_for(AgentType.HERMES)
-    by_key = {s.key: s for s in specs}
-    cfg = tmp_path / ".hermes"
-    # existing entries preserved
-    assert by_key["config"].path == cfg / "config.yaml"
-    assert by_key["instructions"].path == cfg / "SOUL.md"
-    # USER.md identity surface alongside SOUL.md
-    user = by_key["identity_user"]
-    assert user.path == cfg / "USER.md"
-    assert user.kind is ConfigFileKind.FILE
-    assert user.format is ConfigFileFormat.MARKDOWN
-    # new cron directory facet
-    cron = by_key["cron"]
-    assert cron.path == cfg / "cron"
-    assert cron.kind is ConfigFileKind.DIRECTORY
-
-
-def test_cursor_allowlist_instructions_and_rules(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    specs = config_files_for(AgentType.CURSOR)
-    by_key = {s.key: s for s in specs}
-    cfg = tmp_path / ".cursor"
-    # existing MCP entry preserved
-    assert by_key["mcp"].path == cfg / "mcp.json"
-    # global .cursorrules + AGENTS.md instructions
-    rules = by_key["rules"]
-    assert rules.path == cfg / ".cursorrules"
-    assert rules.format is ConfigFileFormat.MARKDOWN
-    instr = by_key["instructions"]
-    assert instr.path == cfg / "AGENTS.md"
-    assert instr.format is ConfigFileFormat.MARKDOWN
-
-
-def test_openclaw_allowlist_unchanged(monkeypatch, tmp_path) -> None:
-    # OpenClaw's identity/instructions file is unconfirmed; allowlist stays
-    # config-only (no invented instructions entry).
-    monkeypatch.setenv("HOME", str(tmp_path))
-    keys = [s.key for s in config_files_for(AgentType.OPENCLAW)]
-    assert keys == ["config"]
-
-
 def test_no_credential_files_in_any_allowlist() -> None:
     forbidden = {"auth.json", ".env"}
     for t in AgentType:

@@ -56,9 +56,9 @@ async def apply_follow_for_agent(*, service: SkillService, agent_name: str, acto
         agent = await service._rs.get(ResourceRef("agent", agent_name))
     except CofferError:
         return
-    # Non-folder agents (Cursor's rules_mdc) can't receive folder deliveries;
-    # skip reconciliation so registration / policy-change flows don't crash.
-    # FOLDER and EXTERNAL_DIR (Hermes) agents follow the master library.
+    # Non-folder agents (rules_mdc — recognized extension point) can't receive
+    # folder deliveries; skip reconciliation so registration / policy-change
+    # flows don't crash. FOLDER and EXTERNAL_DIR agents follow the master library.
     if not delivers_skill_folders(service, agent):
         return
     follow, exclusions = service._resolve_agent_skill_policy(agent)

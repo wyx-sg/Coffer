@@ -231,39 +231,22 @@ folder model, a `skill_subpath` under the agent's config dir. The skill service
 reads the mode through a composition-root resolver that returns a plain string
 (Contract 5: the service never imports the descriptor).
 
-| Agent       | Delivery mode  | Folder target                           | Status                                          |
-| ----------- | -------------- | --------------------------------------- | ----------------------------------------------- |
-| Claude Code | `folder`       | `<config_dir>/skills/<name>`            | Delivered                                       |
-| Codex       | `folder`       | `<config_dir>/skills/<name>`            | Delivered                                       |
-| OpenCode    | `folder`       | `<config_dir>/skills/<name>`            | Delivered                                       |
-| OpenClaw    | `folder`       | `<config_dir>/workspace/skills/<name>`  | Delivered                                       |
-| Hermes      | `external_dir` | `~/.coffer/agent-skills/<agent>/<name>` | Delivered (folder + `config.yaml` registration) |
-| Cursor      | `rules_mdc`    | —                                       | Recognized extension point (deferred)           |
+| Agent       | Delivery mode  | Folder target                | Status                              |
+| ----------- | -------------- | ---------------------------- | ----------------------------------- |
+| Claude Code | `folder`       | `<config_dir>/skills/<name>` | Delivered                           |
+| Codex       | `folder`       | `<config_dir>/skills/<name>` | Delivered                           |
+| `rules_mdc` | —              | —                            | Reserved extension point (no current agent type) |
+| `external_dir` | —           | —                            | Reserved extension point (no current agent type) |
 
 Folder delivery symlinks (copy-fallback) the master folder into the target, so
-the agent reads the canonical `SKILL.md` (e.g. OpenClaw sees
-`workspace/skills/<name>/SKILL.md`).
+the agent reads the canonical `SKILL.md` at `<config_dir>/skills/<name>/SKILL.md`.
 
-**`external_dir` (Hermes).** Hermes scans directories listed under
-`skills.external_dirs` in `~/.hermes/config.yaml`. Coffer folder-delivers each
-enabled skill into a Coffer-owned, agent-named directory and registers that
-directory in the config file (round-trip YAML, idempotent, de-duplicated by
-resolved path). The registration is pruned when the agent's last delivered
-skill is removed and when the agent is deleted. Because this is folder-style
-delivery, it reuses the symlink/copy primitive and flows through the same
-enable/disable/verify/relink/follow lifecycle as `folder` agents — only the
-target dir (resolved by the composition root) and the config registration
-differ.
-
-**`rules_mdc` (Cursor) — deferred.** Cursor's `.mdc` rules are project-scoped
-(`<project>/.cursor/rules/`); there is no officially-supported global/agent-level
-`.mdc` location to deliver an agent-wide skill into (global User Rules live in
-Cursor's internal settings, not files). Delivering an agent-level skill as an
-`.mdc` would therefore have no reliable target, so it stays a recognized
-extension point. Enabling a skill for a `rules_mdc` agent raises
-`SkillDeliveryUnsupported` (HTTP 422) before any filesystem write; the follow /
-relink reconcilers skip it so registration, config-dir-change, and policy-change
-flows never fail.
+**`external_dir` and `rules_mdc` — reserved extension points.** These are
+recognized `SkillDeliveryMode` values kept as intentional extension points; no
+current agent type uses them. Enabling a skill for a hypothetical agent with
+either mode raises `SkillDeliveryUnsupported` (HTTP 422) before any filesystem
+write; the follow / relink reconcilers skip such agents so registration,
+config-dir-change, and policy-change flows never fail.
 
 ## Application service contracts (`backend/coffer/application/skill/`)
 

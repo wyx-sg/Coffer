@@ -190,20 +190,19 @@ class AgentService:
         """Create the skill-delivery subpath under an EXISTING config dir, then
         assert it's usable.
 
-        The agent's config dir (``~/.claude``, ``~/.openclaw``, …) must already
+        The agent's config dir (``~/.claude``, ``~/.codex``, …) must already
         exist — we refuse to ``mkdir -p`` a mistyped config location (e.g.
         ``/Usrs/me/.claude``) into being, which would silently deliver skills to
         a directory the agent never reads. The Coffer-owned skill subpath under
-        it (``skills`` for most agents, ``workspace/skills`` for OpenClaw) IS
-        auto-created, including intermediate components. ``mkdir`` failures are
-        swallowed — ``assert_skill_dir_usable`` surfaces the precise reason
-        (privileged / not-writable / not-a-directory).
+        it (``skills``) IS auto-created, including intermediate components.
+        ``mkdir`` failures are swallowed — ``assert_skill_dir_usable`` surfaces
+        the precise reason (privileged / not-writable / not-a-directory).
         """
         if not config_dir.is_dir():
             raise SkillDirNotWritable(str(config_dir), "directory_missing")
         with contextlib.suppress(OSError):
-            # parents=True creates nested subpaths (OpenClaw's workspace/skills)
-            # but never the config_dir itself — that's guarded above.
+            # parents=True creates nested subpaths but never the config_dir
+            # itself — that's guarded above.
             skill_dir.mkdir(parents=True, exist_ok=True)
         assert_skill_dir_usable(skill_dir)
 

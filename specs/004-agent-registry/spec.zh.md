@@ -7,7 +7,7 @@
 **Status**: Accepted
 **Input**: 用户描述：「管理 Coffer 已知的本地安装 AI agent，让后续功能（skills、memory、knowledge base）能向它们投递资产。每个 agent 都是 kind-agnostic Resource 框架（由 spec 001-mcp-gateway 引入）下 kind 为 `agent` 的一种 Resource。v1 支持两种 agent 类型：Claude Code 与 OpenAI Codex——每种都同时涵盖其 CLI 与桌面/IDE 形态，因为它们共享同一份磁盘配置。除注册 agent 外，用户还能查看（只读）每个 agent 的已知配置文件并在外部编辑器中打开它们，并一键把 Coffer 自己的 MCP server 安装到某个 agent 上。」
 
-> **关于 agent 类型的说明。** 受支持的产品：**Claude Code**（`claude_code`，`~/.claude/`）、**OpenAI Codex**（`codex`，`~/.codex/`）、**Cursor**（`cursor`，`~/.cursor/`）、**OpenCode**（`opencode`，`~/.config/opencode/`）、**OpenClaw**（`openclaw`，`~/.openclaw/`）与 **Hermes**（`hermes`，`~/.hermes/`）。每种都同时覆盖其 CLI _与_ app/IDE 形态，因为它们读取同一个共享配置目录。每类型的行为都集中在能力清单（`AGENT_DESCRIPTORS`）里——新增一个产品 = 一个枚举值 + 一条描述符记录（配置文件 allowlist、MCP 注入形态等）。独立的 **Claude Desktop** 聊天应用（拥有自己的 `~/Library/Application Support/Claude/` 配置）不在范围内。
+> **关于 agent 类型的说明。** 受支持的产品：**Claude Code**（`claude_code`，`~/.claude/`）与 **OpenAI Codex**（`codex`，`~/.codex/`）。每种都同时覆盖其 CLI _与_ app/IDE 形态，因为它们读取同一个共享配置目录。每类型的行为都集中在能力清单（`AGENT_DESCRIPTORS`）里——新增一个产品 = 一个枚举值 + 一条描述符记录（配置文件 allowlist、MCP 注入形态等）。独立的 **Claude Desktop** 聊天应用（拥有自己的 `~/Library/Application Support/Claude/` 配置）不在范围内。
 
 > **工作区增补（Workspace amendment）。** Story 9–12 把 registry 扩展到 agent 真实的磁盘工作区：agent 自己文件里实际配置的 MCP server、agent 已安装的插件、以及目录型配置条目。指导原则是**收编 → 主库 → 投递（ingest → hub → deliver）**：在 agent 工作区里发现的任何可共享内容，都可以被收编进 Coffer 的中枢（MCP 网关、spec 005 的 skill 主库），再投递给任意 agent，而不是作为各 agent 各自为政的一次性配置存在。所有写操作只经由每个 agent 的文档化配置路径；内部状态文件只读、绝不写入。
 
@@ -191,14 +191,10 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 | ----------- | ---------------------------------------------------------------------------------------------------------- | --------------- | ---- | ---- | ---------------------------- |
 | Claude Code | `settings.json` 的 `enabledPlugins` 映射（内部 `installed_plugins.json` / `known_marketplaces.json` 只读） | `settings.json` | 是   | 是   | 是（经 `claude plugin` CLI） |
 | Codex       | `[plugins."<name>@<marketplace>"]` 表 + 缓存目录                                                           | `config.toml`   | 是   | 是   | 是（条目 + 缓存）            |
-| Cursor      | `extensions/extensions.json` 的 VSIX 列表（启停在 SQLite）                                                 | 无（只读）      | 是   | 否   | 否                           |
-| OpenCode    | `opencode.json` 的 `plugin` 数组                                                                           | `opencode.json` | 是   | 是   | 是（从数组移除）             |
-| OpenClaw    | `openclaw.json` 的 `plugins{}` 块                                                                          | `openclaw.json` | 是   | 是   | 是                           |
-| Hermes      | 无——MCP 即插件机制                                                                                         | 无              | 空   | 否   | 否                           |
 
 **为什么是这个优先级**：插件是真实、持久的 agent 配置，而今天 Coffer 对其完全不可见。可见性加上便宜又安全的写操作（开关、受支持处的卸载）覆盖了日常需求；安装留在它本来就好用的地方。
 
-**独立可测**：注册一个配置了插件的 `codex` agent；打开插件 tab；观察插件按 marketplace 分组并带启用状态；禁用一个并观察 `config.toml` 中写入 `enabled = false`；卸载一个并观察其配置条目与缓存目录都消失。对 `opencode` agent，开关一个插件并观察它从 `plugin` 数组移除；对 `cursor` agent，列出扩展并观察开关与卸载被拒绝。
+**独立可测**：注册一个配置了插件的 `codex` agent；打开插件 tab；观察插件按 marketplace 分组并带启用状态；禁用一个并观察 `config.toml` 中写入 `enabled = false`；卸载一个并观察其配置条目与缓存目录都消失。
 
 **代表性场景**：
 
@@ -209,15 +205,12 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - uninstall a Claude Code plugin via its CLI (Coffer never hand-writes Claude's internal files)
 - reject Claude uninstall when its plugin CLI is unavailable
 - flag a plugin whose cache is missing
-- list, toggle, and uninstall OpenCode and OpenClaw plugins via their documented config surfaces
-- list Cursor extensions read-only, rejecting toggle and uninstall
-- report an empty plugin listing for Hermes and reject toggle/uninstall
 
 ---
 
 ### User Story 12 —— 管理目录型配置条目（优先级 P2）
 
-有些 agent 配置不是单个文件而是一个 prose 文件目录——Claude Code 的 `agents/` 目录下每个个人 subagent 一个 Markdown 文件，OpenCode 保留 `agents/`（subagents）目录，Hermes 保留一个 `cron/` 定时任务目录。用户在配置文件 tab 展开这样的条目，看到其中的文件，在只读查看器中打开某个（带对该子文件及其文件夹的「在外部编辑器中打开」「显示」「复制路径」）。新建、写入与删除单个文件通过 REST API / `coffer agent` CLI 以程序化方式提供——校验、原子写入与 `.bak` 兜底与单文件条目完全一致。allowlist 还新增 Codex 的 `hooks.json`；把 `memory` key 改名为 `instructions`（CLAUDE.md / AGENTS.md 是人写的指令，不是 agent 自写的记忆）；并把各 agent 的指令/身份面纳入 allowlist（Cursor 的全局 `.cursorrules` + `AGENTS.md`，Hermes 的 `SOUL.md` + `USER.md`）。
+有些 agent 配置不是单个文件而是一个 prose 文件目录——Claude Code 的 `agents/` 目录下每个个人 subagent 一个 Markdown 文件。用户在配置文件 tab 展开这样的条目，看到其中的文件，在只读查看器中打开某个（带对该子文件及其文件夹的「在外部编辑器中打开」「显示」「复制路径」）。新建、写入与删除单个文件通过 REST API / `coffer agent` CLI 以程序化方式提供——校验、原子写入与 `.bak` 兜底与单文件条目完全一致。allowlist 还新增 Codex 的 `hooks.json`；把 `memory` key 改名为 `instructions`（CLAUDE.md / AGENTS.md 是人写的指令，不是 agent 自写的记忆）。
 
 **为什么是这个优先级**：subagent 定义正是 hub 模型希望「先可见、后可收编」的那类可共享 prose；今天它们完全不可见。
 
@@ -235,7 +228,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 - **第二次扫描时的发现**：已注册的类型不会作为候选项被提供；发现绝不重复已有条目。
 - **用户删除一个 agent**：移除并非永久。下次扫描会把该 agent 重新作为候选项呈现（删除可能是误操作）；Coffer 不保留任何抑制列表。用户再确认一次即可重新添加。
-- **agent 类型不在受支持列表中**：注册拒绝，给出清晰错误信息与受支持类型列表（`claude_code`、`codex`、`cursor`、`opencode`、`openclaw`、`hermes`）。
+- **agent 类型不在受支持列表中**：注册拒绝，给出清晰错误信息与受支持类型列表（`claude_code`、`codex`）。
 - **`config_dir` 路径不存在或不可写**：注册拒绝；不留下任何中间状态。
 - **`config_dir` 指向特权路径**（`/etc`、`/usr` 等）：注册拒绝。
 - **在 `agent` kind 内出现重名**：被 kind-agnostic Resource 框架拒绝。
@@ -542,42 +535,6 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **When** 用户携带先前读取的指纹写回内容，
 - **Then** 写入以 `conflict`（409）拒绝且磁盘文件不变；重新读取得到允许写入的新指纹。
 
-### Scenario: list OpenCode plugins
-
-- **Given** 一个已注册的 OpenCode agent，其 `opencode.json` 带有 `plugin` 数组，
-- **When** 用户列出其插件，
-- **Then** Coffer 为数组中每个成员返回一个条目且无解析错误。
-
-### Scenario: toggle an OpenCode plugin
-
-- **Given** 一个已注册的 OpenCode agent，其 `plugin` 数组中启用了某插件，
-- **When** 用户禁用该插件，
-- **Then** 该插件从 `plugin` 数组中移除，同时 `opencode.json` 中的同级键保持不变。
-
-### Scenario: uninstall an OpenCode plugin
-
-- **Given** 一个已注册的 OpenCode agent，其 `plugin` 数组中存在某插件，
-- **When** 用户卸载该插件，
-- **Then** 该插件从 `plugin` 数组中移除。
-
-### Scenario: list + toggle OpenClaw plugins
-
-- **Given** 一个已注册的 OpenClaw agent，其 `openclaw.json` 的 `plugins` 块带有条目、允许列表与拒绝列表，
-- **When** 用户列出插件并随后启用一个被拒绝的插件，
-- **Then** 列表反映各插件的启用状态，切换更新该块使该插件读为已启用。
-
-### Scenario: list Cursor extensions read-only
-
-- **Given** 一个已注册的 Cursor agent，带有已安装扩展，
-- **When** 用户列出其插件并随后尝试切换或卸载某个，
-- **Then** 扩展被列出，切换以 `unprocessable_entity`（422）拒绝，卸载以 `unprocessable_entity`（422）拒绝，且扩展文件从不被写入。
-
-### Scenario: Hermes has no plugin facet
-
-- **Given** 一个已注册的 Hermes agent（其插件机制即 MCP），
-- **When** 用户列出插件并随后尝试切换或卸载某个，
-- **Then** 列表为空，切换与卸载均以 `unprocessable_entity`（422）拒绝。
-
 ## Requirements
 
 ### Functional Requirements
@@ -586,7 +543,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 - **FR-001**: 系统 MUST 将每个已知的本地 agent 注册为 kind 为 `agent` 的 Resource，按 spec 001-mcp-gateway 的 `<kind>:<name>` 约定，标识为 `agent:<name>`。
 - **FR-002**: 系统 MUST 用一个 kind 专属 schema 校验 agent 配置，字段包括 `type`（enum）与 `config_dir`（path，可选的绝对路径覆盖；省略时回退到该类型的标准位置——`claude_code` 用 `~/.claude`，`codex` 用 `~/.codex`）。skill 投递到 `<config_dir>/skills`。
-- **FR-003**: 系统 MUST 支持 `claude_code`、`codex`、`cursor`、`opencode`、`openclaw`、`hermes` 这些 agent 类型；注册其它任何类型（例如 `claude_desktop` 聊天应用、某个 Gemini CLI）以 `unprocessable_entity`（422）被拒绝。每类型的行为由能力清单（`AGENT_DESCRIPTORS`）定义，因此新增一个类型 = 一个枚举值 + 一条描述符记录。每个受支持类型都同时覆盖该产品的 CLI 与 app/IDE 形态，二者共享同一个配置目录。
+- **FR-003**: 系统 MUST 支持 `claude_code` 与 `codex` 这些 agent 类型；注册其它任何类型（例如 `claude_desktop` 聊天应用、某个 Gemini CLI）以 `unprocessable_entity`（422）被拒绝。每类型的行为由能力清单（`AGENT_DESCRIPTORS`）定义，因此新增一个类型 = 一个枚举值 + 一条描述符记录。每个受支持类型都同时覆盖该产品的 CLI 与 app/IDE 形态，二者共享同一个配置目录。
 
 **发现（检测 = 发现 + 确认）**
 
@@ -601,7 +558,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **配置文件**
 
-- **FR-013**: 每个受支持 agent 类型 MUST 定义一份精选的配置文件 allowlist（在其能力清单记录中），每个条目携带稳定的 `key`、一个显示名、一个解析后的绝对路径与一个 `format`（`json`、`toml`、`yaml`、`markdown` 或 `text`）。Claude Code → `settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`（key 为 `instructions`）与 `agents/` 目录条目（FR-034）；Codex → `config.toml`、`AGENTS.md`（key 为 `instructions`）与 `hooks.json`；Cursor → `mcp.json`、`.cursorrules`（key 为 `rules`）、`AGENTS.md`（key 为 `instructions`）；OpenCode → `opencode.json`、`AGENTS.md` 以及 `agents/`（key 为 `subagents`）目录条目（FR-034）；OpenClaw → `openclaw.json`（其指令/身份文件未被可靠记录，确认前不添加）；Hermes → `config.yaml`、`SOUL.md`（key 为 `instructions`）、`USER.md`（key 为 `identity_user`）以及 `cron/` 目录条目（FR-034）。新增 agent 的 allowlist 覆盖各自的配置、指令/身份与受管目录面，随其它能力落地再扩充。原 `memory` key 改名为 `instructions`——这些文件是人写的指令，区别于 agent 自写的记忆（spec 007 的领域）。
+- **FR-013**: 每个受支持 agent 类型 MUST 定义一份精选的配置文件 allowlist（在其能力清单记录中），每个条目携带稳定的 `key`、一个显示名、一个解析后的绝对路径与一个 `format`（`json`、`toml`、`yaml`、`markdown` 或 `text`）。Claude Code → `settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`（key 为 `instructions`）与 `agents/` 目录条目（FR-034）；Codex → `config.toml`、`AGENTS.md`（key 为 `instructions`）与 `hooks.json`。原 `memory` key 改名为 `instructions`——这些文件是人写的指令，区别于 agent 自写的记忆（spec 007 的领域）。
 - **FR-014**: 用户 MUST 能列出一个 agent 的配置文件，并对每个文件给出其 key、显示名、路径、所在文件夹的绝对路径（`folder_path`）、格式与存在性（文件存在时附带大小与修改时间）。`path`/`folder_path` 这一对支撑只读 UI 的「在外部编辑器中打开 / 在文件管理器中显示 / 复制路径」（FR-038）。
 - **FR-015**: 用户 MUST 能读取任一 allowlist 内配置文件的内容。不存在的文件读为空内容、`exists=false`，且读取不会创建它。
 - **FR-016**: 系统 MUST 通过 REST API 与 `coffer agent` CLI 为任一 allowlist 内配置文件的内容暴露一个程序化写入（保存）；应用内 UI 是只读的，不写入配置文件内容。写入前 MUST 按文件的 `format` 校验内容；畸形的 `json`/`toml` MUST 被拒绝（`unprocessable_entity`，422）且磁盘文件保持不变。`markdown`/`text` 文件接受任意内容。
@@ -610,7 +567,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **Coffer MCP 安装**
 
-- **FR-019**: 用户 MUST 能一键把 Coffer 自己的 MCP server 安装到某个 agent。安装把一个 `coffer` stdio MCP-server 条目写进 agent 的 MCP 配置，按该 agent 清单中 `McpInjectionSpec` 声明的形态——`claude_code` 写 `~/.claude.json` 的 `mcpServers`、`cursor` 写 `~/.cursor/mcp.json` 的 `mcpServers`；`codex` 写 `~/.codex/config.toml` 的 `[mcp_servers.coffer]`；`opencode` 写 `opencode.json` 的 `mcp`（`{type:"local", command:[shim]}` 的 typed array）、`openclaw` 写 `openclaw.json` 的 `mcp`；`hermes` 写 `~/.hermes/config.yaml`（YAML）的 `mcp_servers`。`command` 设为 `coffer-mcp-shim` 二进制的绝对路径（先在 `PATH` 中解析，再查找当前解释器的脚本目录——这样即使守护进程的 `PATH` 不含 venv，也能找到装在 venv 里的 shim——最后回退到打包的二进制；环境变量 `COFFER_MCP_SHIM_PATH` 优先于以上全部）。若无法解析 shim，安装被拒绝且不写入任何内容。
+- **FR-019**: 用户 MUST 能一键把 Coffer 自己的 MCP server 安装到某个 agent。安装把一个 `coffer` stdio MCP-server 条目写进 agent 的 MCP 配置，按该 agent 清单中 `McpInjectionSpec` 声明的形态——`claude_code` 写 `~/.claude.json` 的 `mcpServers`；`codex` 写 `~/.codex/config.toml` 的 `[mcp_servers.coffer]`。`command` 设为 `coffer-mcp-shim` 二进制的绝对路径（先在 `PATH` 中解析，再查找当前解释器的脚本目录——这样即使守护进程的 `PATH` 不含 venv，也能找到装在 venv 里的 shim——最后回退到打包的二进制；环境变量 `COFFER_MCP_SHIM_PATH` 优先于以上全部）。若无法解析 shim，安装被拒绝且不写入任何内容。
 - **FR-020**: 安装 MUST 幂等——重复安装就地更新已有的 `coffer` 条目，绝不产生重复。系统 MUST 暴露一个状态操作，报告该 agent 当前是否已安装 Coffer 的 MCP。
 - **FR-021**: 用户 MUST 能卸载 Coffer 的 MCP，从 agent 的 MCP 配置中移除 `coffer` 条目。未安装时卸载为空操作（no-op）成功。
 - **FR-022**: 安装与卸载 MUST 复用 FR-017 的原子写入 + `.bak` 机制，并写一条 audit 条目（`agent_mcp_installed` / `agent_mcp_uninstalled`）。
@@ -632,7 +589,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **目录型配置条目（工作区增补）**
 
-- **FR-034**: 配置文件 allowlist 条目 MAY 是**目录条目**（`kind=directory`）：解析到一个目录并列出其文件（条目相对路径、大小、修改时间），而非携带内容。v1 目录条目：Claude Code `agents/`（每个个人 subagent 一个 Markdown 文件，允许嵌套路径）。目录缺失时以 `exists=false`、零文件列出；读取绝不创建它。
+- **FR-034**: 配置文件 allowlist 条目 MAY 是**目录条目**（`kind=directory`）：解析到一个目录并列出其文件（条目相对路径、大小、修改时间），而非携带内容。Claude Code 的目录条目是 `agents/`（每个个人 subagent 一个 Markdown 文件，允许嵌套路径）。目录缺失时以 `exists=false`、零文件列出；读取绝不创建它。
 - **FR-035**: 用户 MUST 能读取目录条目内的单个文件；该读取对 UI 的只读查看器可用。单个文件的写入（写即创建）与删除是程序化的，通过 REST API 与 `coffer agent` CLI 提供。子路径在任何文件系统访问之前于服务端校验：MUST 解析在条目目录之内（无 `..`、无绝对路径、无 symlink 逃逸）且带 `.md` 扩展名。写入复用 FR-017 机制；删除把先前内容保留为 `.bak`。审计为 `agent_config_file_written` / `agent_config_file_deleted`。
 - **FR-036**: 配置文件读取（单文件与目录子文件）MUST 返回内容指纹；写入 MUST 带回该指纹，且当磁盘内容自读取后已变化时以 `conflict`（409）拒绝、文件保持不变。
 - **FR-037**: 当指令文件包含由另一个功能定义的受管块——spec 007 的记忆投影块——时，只读查看器 MUST 标注该区块由那个功能拥有。每个块使用其各自独有的标记并被独立改写；标记格式由定义它的功能拥有。
@@ -656,7 +613,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 ### Key Entities
 
 - **Agent**：一个 kind 为 `agent` 的 Resource。代表一份本地安装的 AI agent。Config: `type`（受支持的 enum）、`config_dir`（可选的绝对路径覆盖；默认回退到该类型的标准位置）。skill 投递到 `<config_dir>/skills`。标识为 `agent:<name>`。
-- **Agent Type**：一个 enum 值，标识一个已知 agent 产品（`claude_code`、`codex`、`cursor`、`opencode`、`openclaw`、`hermes`）。每个值映射到**能力清单**（`AGENT_DESCRIPTORS`）中的一条记录，携带其默认 `config_dir`、显示名、用于发现的安装标记、精选的**配置文件 allowlist** 与 **MCP 注入形态**。
+- **Agent Type**：一个 enum 值，标识一个已知 agent 产品（`claude_code`、`codex`）。每个值映射到**能力清单**（`AGENT_DESCRIPTORS`）中的一条记录，携带其默认 `config_dir`、显示名、用于发现的安装标记、精选的**配置文件 allowlist** 与 **MCP 注入形态**。
 - **Agent Candidate（候选项）**：一个被发现的、已安装但尚未注册的 agent——`type`、`display_name`、`config_dir`（该类型的默认配置目录）、`default_skill_dir` 与 `suggested_name`。在扫描时派生，从不存储；用户确认某个候选项即可注册它。
 - **Config File（配置文件）**：属于某个 agent 类型、在 allowlist 内的精选文件，以稳定的 `key` 标识。携带显示名、解析后的绝对路径、其所在文件夹的绝对路径（`folder_path`）、`format`（`json` / `toml` / `markdown` / `text`），以及（存在时）大小与修改时间。在 UI 中只读呈现（查看其内容、在外部编辑器中打开该文件 / 其文件夹）；按 key 读取并程序化写入（REST/CLI），绝不按任意路径。不持久化到 SQLite——磁盘上的文件即为事实来源。
 - **Coffer MCP Install Status（安装状态）**：某个 agent 的派生（非存储）状态：其 MCP 配置文件中是否存在 `coffer` MCP-server 条目。
@@ -682,8 +639,8 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 ## Assumptions
 
 - 用户在自己的机器上运行 Coffer；不存在多租户或远程访问需求。
-- 六种 agent 类型已在能力清单（`AGENT_DESCRIPTORS`）中接线——`claude_code`、`codex`、`cursor`、`opencode`、`openclaw`、`hermes`——每种都是一个 `AgentType` 枚举值加一条记录（安装标记、配置文件 allowlist、MCP 注入形态）。目前只**暴露** `claude_code` 与 `codex`（出现在发现与桌面添加流程中）；另外四个已在后端完整接线并端到端可用——注册、配置文件、Coffer-MCP 安装、插件——但以 `enabled=False` 隐藏，待逐个验证后再逐一暴露。再增加一个产品（例如 Claude Desktop 聊天应用、Gemini CLI）也是同样的一条记录变更。
-- 每个受支持 agent 的 CLI 与 app/IDE 形态读取同一个共享配置目录（`~/.claude/`、`~/.codex/`、`~/.cursor/`、`~/.config/opencode/`、`~/.openclaw/`、`~/.hermes/`），因此 Coffer 对每个 agent 管理一份配置集合。
+- 两种 agent 类型已在能力清单（`AGENT_DESCRIPTORS`）中接线——`claude_code` 与 `codex`——每种都是一个 `AgentType` 枚举值加一条记录（安装标记、配置文件 allowlist、MCP 注入形态）。再增加一个产品（例如 Claude Desktop 聊天应用、Gemini CLI）也是同样的一条记录变更。
+- 每个受支持 agent 的 CLI 与 app/IDE 形态读取同一个共享配置目录（`~/.claude/` 与 `~/.codex/`），因此 Coffer 对每个 agent 管理一份配置集合。
 - 配置文件以原始文本方式只读呈现，供用户查看；编辑发生在用户的外部编辑器中（从查看器打开），而程序化写入路径（REST/CLI）保留校验 + 原子写入 + `.bak` 兜底。只读查看器加上「在外部编辑器中打开」是长尾需求的兜底入口；反复出现的结构化需求按工作区增补「毕业」为 facet（MCP 条目、插件）。凭据/状态文件 `~/.codex/auth.json` 被有意排除在 allowlist 之外。
 - agent 的内部状态文件（`~/.claude.json` 中 `mcpServers` 映射之外的部分、`~/.claude/plugins/*.json`、Codex 的 `[marketplaces.*]` / `[hooks.state.*]` / `[projects.*]` 表）在需要时作为输入读取，工作区 facet 绝不写入它们；唯一的写目标是按各厂商文档核实过的文档化配置面。实际情况（已在真实机器上验证）：Claude Code 的 user 级 MCP server 存在于 `~/.claude.json` 的 `mcpServers`，也可能出现在 `settings.json` 的 `mcpServers`——两处都解析。
 - 工作区 facet 遵循收编 → 主库 → 投递原则：在 agent 工作区发现的可共享内容收编进 Coffer 的中枢（此处是 MCP 网关；skill 主库经由 spec 005 的配套增补），而非作为各 agent 的一次性配置来管理。中枢本身的跨机器共享属于未来 spec（需修宪）；这些 facet 的设计保证其状态在那一天到来时可直接序列化为声明式清单。

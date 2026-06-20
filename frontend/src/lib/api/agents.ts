@@ -5,9 +5,8 @@
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
 
-// Backend supports more agent types (cursor/opencode/openclaw/hermes) but they
-// stay hidden from the UI until each is validated; widen this union (plus the
-// add-form types + table filter) when an agent is exposed.
+// The backend supports exactly two agent types (Claude Code, Codex); keep this
+// union in sync with `AgentType` in the backend domain (`domain/agent/types.py`).
 export type AgentType = "claude_code" | "codex";
 
 export type ConfigFileFormat = "json" | "toml" | "markdown" | "text";

@@ -62,8 +62,9 @@ AgentSkillPolicyResolver = Callable[[Resource], tuple[bool, list[str]]]
 # code — Contract 5). Built at the composition root from the descriptor.
 AgentSkillDeliveryResolver = Callable[[Resource], str]
 
-# Resolver for an agent's external-dir registration (spec 005 — Hermes): an
-# ``ExternalDirRegistration`` for EXTERNAL_DIR agents, ``None`` otherwise.
+# Resolver for an agent's external-dir registration (spec 005, EXTERNAL_DIR
+# mode): an ``ExternalDirRegistration`` for EXTERNAL_DIR agents, ``None``
+# otherwise.
 AgentExternalRegistrationResolver = Callable[[Resource], ExternalDirRegistration | None]
 
 
@@ -105,8 +106,8 @@ class SkillService:
         self._agent_skill_policy_resolver = agent_skill_policy_resolver
         # Skill-delivery-mode resolver (spec 005); unwired → folder model.
         self._agent_skill_delivery_resolver = agent_skill_delivery_resolver
-        # EXTERNAL_DIR delivery (spec 005 — Hermes): registrar edits the agent's
-        # config, resolver yields where/how; unwired → skip registration.
+        # EXTERNAL_DIR delivery (spec 005): registrar edits the agent's config,
+        # resolver yields where/how; unwired → skip registration.
         self._external_dir_registrar = external_dir_registrar
         self._agent_external_registration_resolver = agent_external_registration_resolver
         self._rmtree = rmtree

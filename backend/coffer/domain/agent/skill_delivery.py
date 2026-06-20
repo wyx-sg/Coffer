@@ -1,15 +1,15 @@
 """Skill-delivery facet of the capability manifest (spec 005).
 
 Split out of ``descriptor.py`` for the file-size limit, mirroring how
-``mcp_injection.py`` / ``plugin_state_extra.py`` carry their facet's value
-objects. The :class:`AgentDescriptor` references :class:`SkillDeliveryMode`
-to declare *how* Coffer hands a managed skill to each agent.
+``mcp_injection.py`` carries its facet's value objects. The
+:class:`AgentDescriptor` references :class:`SkillDeliveryMode` to declare *how*
+Coffer hands a managed skill to each agent.
 
-Coffer delivers a skill by symlinking (copy-fallback) the master skill folder
-into the agent's skill directory — the ``FOLDER`` mode. Agents that consume
-skills through a different surface (Cursor's ``.mdc`` rules, Hermes' external
-directories) declare a non-folder mode; their delivery is a recognized
-extension point that a follow-up wires end-to-end.
+Both supported agent types (Claude Code, Codex) use the ``FOLDER`` mode: Coffer
+delivers a skill by symlinking (copy-fallback) the master skill folder into the
+agent's skill directory. The non-folder modes are recognized extension points
+reserved for a future agent type that consumes skills through a different
+surface (rule files, external directories); no current agent type uses them.
 """
 
 from __future__ import annotations
@@ -26,12 +26,11 @@ class SkillDeliveryMode(StrEnum):
     """
 
     #: Symlink (copy-fallback) the master skill folder into the agent's skill
-    #: directory at ``<skill_dir>/<skill_name>`` — Claude Code, Codex, OpenCode,
-    #: OpenClaw.
+    #: directory at ``<skill_dir>/<skill_name>`` — used by Claude Code and Codex.
     FOLDER = "folder"
-    #: Cursor — skills are projected as ``.mdc`` rule files. Recognized
-    #: extension point; not yet delivered.
+    #: Skills projected as ``.mdc`` rule files. Recognized extension point for a
+    #: future agent type; no current agent type uses it.
     RULES_MDC = "rules_mdc"
-    #: Hermes — skills are registered as external directories. Recognized
-    #: extension point; not yet delivered.
+    #: Skills registered as external directories. Recognized extension point for
+    #: a future agent type; no current agent type uses it.
     EXTERNAL_DIR = "external_dir"

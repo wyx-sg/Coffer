@@ -124,8 +124,8 @@ def _servers_map(
 
 def _split_command(raw: MutableMapping[str, Any]) -> tuple[str | None, tuple[str, ...]]:
     """Resolve (command, args) from either a string command + args list, or a
-    single ``command`` array whose first element is the executable (OpenCode's
-    ``command: ["npx", "-y", "pkg"]`` shape)."""
+    single ``command`` array whose first element is the executable (the
+    ``TYPED_COMMAND_ARRAY`` shape: ``command: [<shim>, ...]``)."""
     cmd = raw.get("command")
     extra = raw.get("args")
     extra_args = tuple(str(a) for a in extra) if isinstance(extra, (list, tuple)) else ()
@@ -146,9 +146,9 @@ def parse_entries(
 
     ``container_key`` selects the top-level table (default: the format's
     conventional key — ``mcpServers`` for JSON, ``mcp_servers`` for TOML/YAML;
-    agents like OpenCode pass ``mcp``). Handles both the command-map and
-    command-array entry shapes and both ``env``/``environment`` key names.
-    Returns an empty list for an empty or absent section; raises
+    agents with a non-default container pass it explicitly). Handles both the
+    command-map and command-array entry shapes and both ``env``/``environment``
+    key names. Returns an empty list for an empty or absent section; raises
     ``AgentConfigParseError`` on malformed input.
     """
     out: list[McpEntry] = []
@@ -157,15 +157,15 @@ def parse_entries(
             continue
         url = raw.get("url")
         headers = raw.get("http_headers") if fmt is ConfigFileFormat.TOML else raw.get("headers")
-        # `enabled`: honour an explicit per-entry flag wherever it appears
-        # (TOML, plus OpenCode/Hermes). Absent → True for TOML (its historical
-        # default), None for formats whose entries carry no flag (Claude/Cursor).
+        # `enabled`: honour an explicit per-entry flag wherever it appears.
+        # Absent → True for TOML (its historical default), None for formats
+        # whose entries carry no per-entry flag (e.g. JSON).
         if "enabled" in raw:
             enabled: bool | None = bool(raw.get("enabled"))
         else:
             enabled = True if fmt is ConfigFileFormat.TOML else None
         command, args_seq = _split_command(raw)
-        # env or environment (OpenCode); first non-empty mapping wins
+        # env or environment (alternate key name); first non-empty mapping wins
         raw_env = raw.get("env")
         if not isinstance(raw_env, MutableMapping):
             raw_env = raw.get("environment")
