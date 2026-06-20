@@ -83,14 +83,6 @@ framework; on import/fetch it is seeded from the frontmatter `description`
 for parity with other kinds, but it is not re-synced on subsequent updates
 (treat it as a free-form human label after the initial write).
 
-### `CatalogEntry` (`domain/skill/catalog.py`)
-
-Discovery model (FR-032). A frozen dataclass describing one installable skill:
-`name`, `description`, `git_url`, `git_ref`, `git_subpath`, `publisher`. The
-bundled starter catalog lives in `application/skill/catalog_builtin.py`; install
-(`catalog_ops.install_from_catalog`) resolves an entry and delegates to
-`SkillService.fetch_git`, so it reuses the SSRF guard, validation, and scan.
-
 ### `BindingState` (`domain/skill/binding.py`)
 
 Plain dataclass; in-memory representation of one row from `skill_agent_bindings`.

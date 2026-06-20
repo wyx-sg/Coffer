@@ -869,8 +869,7 @@
     "removeConfirmBody": "This deletes the master folder and all per-agent links.",
     "add.tabs": {
       "local": "Local folder",
-      "git": "From Git",
-      "catalog": "Browse catalog"
+      "git": "From Git"
     },
     "verify.title": "Verify skill links",
     "verify.subtitle": "Check whether each enabled binding still matches its on-disk link.",
@@ -944,11 +943,6 @@
       "medium": "Medium",
       "high": "High",
       "critical": "Critical"
-    },
-    "catalog": {
-      "searchPlaceholder": "Search the skill catalog…",
-      "install": "Install",
-      "empty": "No matching catalog skills."
     }
   },
   "knowledgeBases": {

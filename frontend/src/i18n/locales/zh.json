@@ -869,8 +869,7 @@
     "removeConfirmBody": "这会删除主存储文件夹以及所有 agent 端链接。",
     "add.tabs": {
       "local": "本地文件夹",
-      "git": "从 Git",
-      "catalog": "浏览目录"
+      "git": "从 Git"
     },
     "verify.title": "校验 Skill 链接",
     "verify.subtitle": "检查每个已启用的绑定是否仍与磁盘上的链接一致。",
@@ -944,11 +943,6 @@
       "medium": "中",
       "high": "高",
       "critical": "严重"
-    },
-    "catalog": {
-      "searchPlaceholder": "搜索 skill 目录……",
-      "install": "安装",
-      "empty": "没有匹配的目录 skill。"
     }
   },
   "knowledgeBases": {

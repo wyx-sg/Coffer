@@ -19,8 +19,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
 import { useFetchSkill, useImportSkill } from "@/lib/hooks/useSkills";
 
-import { SkillCatalogTab } from "./SkillCatalogTab";
-
 export function SkillAddDialog({
   open,
   onOpenChange,
@@ -48,16 +46,12 @@ export function SkillAddDialog({
           <TabsList>
             <TabsTrigger value="local">{t("skills.add.tabs.local")}</TabsTrigger>
             <TabsTrigger value="git">{t("skills.add.tabs.git")}</TabsTrigger>
-            <TabsTrigger value="catalog">{t("skills.add.tabs.catalog")}</TabsTrigger>
           </TabsList>
           <TabsContent value="local" className="pt-4">
             <LocalImportTab onSuccess={close} onCancel={() => onOpenChange(false)} />
           </TabsContent>
           <TabsContent value="git" className="pt-4">
             <GitFetchTab onSuccess={close} onCancel={() => onOpenChange(false)} />
-          </TabsContent>
-          <TabsContent value="catalog" className="pt-4">
-            <SkillCatalogTab onSuccess={close} onCancel={() => onOpenChange(false)} />
           </TabsContent>
         </Tabs>
       </DialogContent>

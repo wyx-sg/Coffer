@@ -1,6 +1,7 @@
 # Skill Manager —— 改进 Roadmap
 
-状态：**已交付**——四项全部落地（#4 → #3 → #2 → #1）。FR 与验收场景见
+状态：#4/#3/#2 **已交付**；#1（发现机制）已交付后**撤回**
+（简化 4.8，2026-06-20）——缺乏内容生态。已交付项的 FR 与验收场景见
 `spec.md`；信任层决策见 ADR-027。源自
 [`docs/research/agent-skills.md`](../../docs/research/agent-skills.md) 的竞品调研
 （[`docs/research/README.md`](../../docs/research/README.md) 中的报告 #3）。调研判定
@@ -76,6 +77,8 @@ Coffer 在跨 agent 交付与 SSRF 加固摄取上领先，在四个点上落后
 - Surfaces：`POST /skills/{name}/check-update`、list 字段、CLI、UI 徽章。
 
 ## #1 —— 发现机制（浏览即装）
+
+> **已撤回（2026-06-20，简化 4.8）。** 本项已在 PR #116 落地后回滚：内置目录缺乏可供浏览的内容生态。以下设计仅作历史留档。
 
 当前必须知道 git URL；竞品提供浏览即装的目录。
 

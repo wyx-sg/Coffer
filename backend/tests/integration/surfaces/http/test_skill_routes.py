@@ -267,22 +267,3 @@ def test_skill_pin_and_check_update_via_http(tmp_path, monkeypatch):
         r = c.post("/api/v1/skills/local/check-update")
         assert r.status_code == 400, r.text
         assert r.json()["error"]["code"] == "UPDATE_NOT_SUPPORTED"
-
-
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="browse and search the skill catalog")
-def test_catalog_browse_and_search_via_http(tmp_path, monkeypatch):
-    """The catalog lists installable skills and supports a substring search."""
-    app = _app(tmp_path, monkeypatch, 59650)
-    with _client(app) as c:
-        r = c.get("/api/v1/catalog/skills")
-        assert r.status_code == 200, r.text
-        items = r.json()["items"]
-        assert len(items) >= 1
-        assert all({"name", "git_url", "publisher"} <= set(e) for e in items)
-
-        # Search narrows the list.
-        r = c.get("/api/v1/catalog/skills", params={"q": "pdf"})
-        assert r.status_code == 200, r.text
-        names = [e["name"] for e in r.json()["items"]]
-        assert "pdf" in names
-        assert all("pdf" in n or "pdf" in n.lower() for n in names)

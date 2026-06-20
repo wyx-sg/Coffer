@@ -69,13 +69,6 @@ Pydantic v2 模型，用于校验导入/拉取下来的文件夹，对齐 agents
 
 frontmatter 的 `description` 持久化在 skill kind 自己的 config 字段 `SkillConfig.skill_md_description` 中 —— 这是权威拷贝，frontmatter 改名也会覆盖它。`resources` 表自身的 `description` 列继承自 kind-agnostic Resource 框架；在 import/fetch 时从 frontmatter `description` 初始化以与其他 kind 保持一致，但**不**在后续 update 时重新同步（视作初次写入后用户可自由编辑的人类标签）。
 
-### `CatalogEntry` (`domain/skill/catalog.py`)
-
-发现模型（FR-032）。frozen dataclass，描述一个可安装 skill：`name`、`description`、
-`git_url`、`git_ref`、`git_subpath`、`publisher`。内置启动目录在
-`application/skill/catalog_builtin.py`；安装（`catalog_ops.install_from_catalog`）解析
-条目后委托给 `SkillService.fetch_git`，从而复用 SSRF guard、校验与扫描。
-
 ### `BindingState` (`domain/skill/binding.py`)
 
 普通 dataclass；`skill_agent_bindings` 一行在内存中的表达。
