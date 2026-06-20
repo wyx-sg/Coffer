@@ -316,8 +316,6 @@ class ChannelEnv:
         *,
         default_agent: str = "builtin",
         default_agent_config: dict[str, Any] | None = None,
-        workspaces: dict[str, str] | None = None,
-        default_workspace: str | None = None,
     ) -> FakeChannelAdapter:
         adapter = adapter or FakeChannelAdapter()
         self.processor.bind(
@@ -327,8 +325,6 @@ class ChannelEnv:
                 channel_type=str(resource.config.get("channel_type", "telegram")),
                 default_agent=default_agent,
                 default_agent_config=default_agent_config,
-                workspaces=workspaces or {},
-                default_workspace=default_workspace,
                 adapter=adapter,
             )
         )

@@ -1,9 +1,9 @@
-"""Slash-command handling for channels: /help /new /agent /cwd /model /stop /status.
+"""Slash-command handling for channels: /help /new /agent /model /stop /status.
 
-The router owns the structural switches (/agent, /cwd → a fresh conversation,
-sticky on the peer) and the parametric switch (/model → next turn, same
-conversation). Conversation creation is delegated to ``conversation_ops`` so the
-inbound turn-driver and this router agree on how a channel conversation is born.
+The router owns the structural switch (/agent → a fresh conversation, sticky on
+the peer) and the parametric switch (/model → next turn, same conversation).
+Conversation creation is delegated to ``conversation_ops`` so the inbound
+turn-driver and this router agree on how a channel conversation is born.
 """
 
 from __future__ import annotations
@@ -30,10 +30,9 @@ HELP_TEXT = (
     "Coffer channel commands:\n"
     "/new — start a fresh conversation\n"
     "/agent [key] — show or switch the agent (opens a fresh conversation)\n"
-    "/cwd [name] — show or switch the workspace (opens a fresh conversation)\n"
     "/model [name] — show or switch the model (next turn)\n"
     "/stop — interrupt the running turn\n"
-    "/status — active conversation, agent, workspace, and turn state\n"
+    "/status — active conversation, agent, and turn state\n"
     "/help — this list"
 )
 
@@ -74,8 +73,6 @@ class ChannelCommands:
             await self._open_and_report(binding, peer, send, "🆕 Started a fresh conversation.")
         elif command == "/agent":
             await self._cmd_agent(binding, peer, text, send)
-        elif command == "/cwd":
-            await self._cmd_cwd(binding, peer, text, send)
         elif command == "/model":
             await self._cmd_model(binding, peer, text, send)
         elif command == "/stop":
@@ -93,11 +90,10 @@ class ChannelCommands:
             running = session.drain_task is not None and not session.drain_task.done()
             conv = peer.active_conversation_id or "none yet"
             agent = peer.preferred_agent or binding.default_agent
-            workspace = peer.preferred_workspace or binding.default_workspace or "(none)"
             await send(
                 binding,
                 peer.chat_id,
-                f"Conversation: {conv}\nAgent: {agent}\nWorkspace: {workspace}\n"
+                f"Conversation: {conv}\nAgent: {agent}\n"
                 f"Turn running: {'yes' if running else 'no'}\nQueued: {len(session.queue)}",
             )
         else:
@@ -120,35 +116,9 @@ class ChannelCommands:
                 binding, peer.chat_id, f"Unknown agent '{key}'. Available: {', '.join(keys)}"
             )
             return
-        await self._peers.set_preferences(
-            binding.resource_id, preferred_agent=key, preferred_workspace=peer.preferred_workspace
-        )
+        await self._peers.set_preferences(binding.resource_id, preferred_agent=key)
         await self._open_and_report(
             binding, replace(peer, preferred_agent=key), send, f"🔀 Switched to agent '{key}'."
-        )
-
-    async def _cmd_cwd(
-        self, binding: ChannelBinding, peer: ChannelPeer, text: str, send: SafeSend
-    ) -> None:
-        parts = text.split()
-        available = ", ".join(sorted(binding.workspaces)) or "(none configured)"
-        if len(parts) < 2:
-            current = peer.preferred_workspace or binding.default_workspace or "(none)"
-            await send(binding, peer.chat_id, f"Workspace: {current}\nAvailable: {available}")
-            return
-        name = parts[1]
-        if name not in binding.workspaces:
-            # A bare path is never honored — only operator-authorized names.
-            await send(binding, peer.chat_id, f"Unknown workspace '{name}'. Available: {available}")
-            return
-        await self._peers.set_preferences(
-            binding.resource_id, preferred_agent=peer.preferred_agent, preferred_workspace=name
-        )
-        await self._open_and_report(
-            binding,
-            replace(peer, preferred_workspace=name),
-            send,
-            f"📁 Switched to workspace '{name}'.",
         )
 
     # -- parametric switch (/model: same conversation, next turn) -----------------
@@ -161,7 +131,7 @@ class ChannelCommands:
                 self._conversations, self._peers, binding, peer
             )
         except CofferError as e:
-            await send(binding, peer.chat_id, explain_conversation_error(binding, e))
+            await send(binding, peer.chat_id, explain_conversation_error(e))
             return
         parts = text.split()
         if len(parts) < 2:
@@ -188,6 +158,6 @@ class ChannelCommands:
         try:
             await open_conversation(self._conversations, self._peers, binding, peer)
         except CofferError as e:
-            await send(binding, peer.chat_id, explain_conversation_error(binding, e))
+            await send(binding, peer.chat_id, explain_conversation_error(e))
             return
         await send(binding, peer.chat_id, success)

@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0027"
+HEAD_REVISION = "0028"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -44,8 +44,10 @@ HEAD_REVISION = "0027"
 # column for the co-management lock (ADR-028); 0026 adds ``memory_store_labels``
 # (a store's user-set display name, 007 FR-017c); 0027 DROPs ``documents.locked``
 # again (per-document lock removed, simplification 5.7), so EXPECTED_TABLES is
-# unchanged and the column is ABSENT at head (asserted separately below). The
-# ``documents_fts_*`` shadow
+# unchanged and the column is ABSENT at head (asserted separately below). 0028
+# DROPs ``channel_peers.preferred_workspace`` (channel workspace switching
+# removed, simplification 8.4) — again a column-only change, table set unchanged.
+# The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
 EXPECTED_TABLES = {
@@ -166,13 +168,24 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(documents)")}
 
-    # 0027 drops documents.locked (per-document lock removed, 5.7), so the
-    # column is ABSENT at head; 0026 adds the memory_store_labels table
-    # (007 FR-017c), present at head.
+    def _channel_peers_columns() -> set[str]:
+        with sqlite3.connect(db_path) as conn:
+            return {r[1] for r in conn.execute("PRAGMA table_info(channel_peers)")}
+
+    # 0028 drops channel_peers.preferred_workspace (channel workspace switching
+    # removed, 8.4) and 0027 drops documents.locked (5.7), so both columns are
+    # ABSENT at head; 0026 adds the memory_store_labels table (007 FR-017c),
+    # present at head.
+    assert "preferred_workspace" not in _channel_peers_columns()
     assert "locked" not in _documents_columns()
     assert "memory_store_labels" in _user_tables(db_path)
 
-    # head (0027) -> 0026: 0027's downgrade re-adds documents.locked.
+    # head (0028) -> 0027: 0028's downgrade re-adds channel_peers.preferred_workspace.
+    command.downgrade(cfg, "0027")
+    assert "preferred_workspace" in _channel_peers_columns()
+    assert "locked" not in _documents_columns()
+
+    # 0027 -> 0026: 0027's downgrade re-adds documents.locked.
     command.downgrade(cfg, "0026")
     assert "locked" in _documents_columns()
     assert "memory_store_labels" in _user_tables(db_path)

@@ -5,6 +5,11 @@
 **状态**：已接受
 **Spec**：[009-channels](../../specs/009-channels/spec.zh.md)
 
+> **修订（2026-06-20，简化 8.4）。** per-binding workspace allowlist、`/cwd`
+> 切换命令，以及 peer 的 `preferred_workspace` 均已撤销：channel 统一运行在
+> Coffer 托管的默认工作目录（`~/.coffer/workspace`）。`/agent` + `/model`
+> 切换命令及入口差异化核心保持不变。
+
 ## 背景
 
 Spec 009 让 Coffer 成为 channel 入口管理者：owner 把一个 IM 账号配对到
@@ -28,8 +33,7 @@ channel 配置里写死的那一个 agent、在（operator 写死的）那一个
 
 1. **结构维 vs 参数维——所有切换统一一个心智模型。**
    - _结构维_（`agent_key`、`cwd`）在建会话时 pin,中途不可改。切换其一会
-     **开一个新会话**,带上另一维的粘性值;旧会话留在历史里。`/agent` 和
-     `/cwd` 属结构维。
+     **开一个新会话**,带上另一维的粘性值;旧会话留在历史里。`/agent` 属结构维。
    - _参数维_（`model`）每 turn 重读。切换其一**在同会话下条 turn 生效**。
      `/model` 属参数维。
 
@@ -43,14 +47,13 @@ channel 配置里写死的那一个 agent、在（operator 写死的）那一个
    `codex` 及未来注册的 agent）,且不为任何 agent 写 channel 侧代码（spec 009
    SC-004 保持）。
 
-3. **workspaces 是 channel 级 allowlist,也是 cwd 安全边界。** 一个 channel
+3. ~~**workspaces 是 channel 级 allowlist,也是 cwd 安全边界。** 一个 channel
    声明一组**命名 workspace**（`{name, path}`）,注册时校验存在;可选
    `default_workspace` 指定未选时使用的那个。`/cwd <name>` 在其中选择（结构维
    →开新会话）。**channel 永不接受来自 IM 消息的裸文件路径**——owner 只能挑
-   operator 预授权的名字。这既让 IM 驱动的桥接 agent 可用（总有 cwd）,又堵住
-   「任意主机目录」的洞：入口可远程触达,绝不能让一条消息把 agent 指向任意目录。
-   `builtin` agent 不需要 workspace,因此默认（builtin）channel 零 workspace
-   配置照常工作。
+   operator 预授权的名字。~~ —— **已撤销（2026-06-20，简化 8.4）。** channel
+   现在统一运行在 Coffer 托管的默认工作目录（`~/.coffer/workspace`）；不存在
+   per-channel allowlist，也没有 `/cwd` 命令。
 
 4. **model 选择是参数维透传,仅在有 registry 处走 registry。** 对 `builtin`,
    `/model <name>` 对 Coffer model registry 解析,设 conversation 的 `model_id`
@@ -90,11 +93,11 @@ channel 配置里写死的那一个 agent、在（operator 写死的）那一个
 
 ## 结果
 
-- peer 增列:已配对发送者身份（`sender_id`），以及粘性 agent/workspace 首选
-  （`preferred_agent`、`preferred_workspace`）;一个 migration 覆盖。无新表。
-- channel config 增 `workspaces` + `default_workspace`,注册时与现有 credential-ref
-  探测一并校验。
-- 命令集增 `/agent`、`/cwd`、`/model`;三者都骑现有 slash 命令接缝、在 channel
-  core 里按能力选行为,因此没有 adapter 学到它们——差异化层是 channel-agnostic
-  的,任何未来 channel 都继承它（spec 009 SC-003 保持）。
+- peer 增列：已配对发送者身份（`sender_id`）及粘性 agent 首选
+  （`preferred_agent`）；一个 migration 覆盖。无新表。（`preferred_workspace`
+  以及 config 上的 `workspaces`/`default_workspace` 已撤销，见上方修订。）
+- 命令集增 `/agent` 与 `/model`；二者都骑现有 slash 命令接缝、在 channel core
+  里按能力选行为,因此没有 adapter 学到它们——差异化层是 channel-agnostic 的,
+  任何未来 channel 都继承它（spec 009 SC-003 保持）。（`/cwd` 已撤销，见上方
+  修订。）
 - 审计日志能回答「谁经哪个 channel 驱动了哪个 agent」,无需改 schema。

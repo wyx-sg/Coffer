@@ -12,9 +12,7 @@ Channels are rows in the existing `resources` table (kind = `channel`).
 ChannelConfig (discriminator: channel_type)
 ├── common (both types, _CommonChannelFields)
 │   ├── default_agent: str = "claude_code"  # chat provider key; must name a registered agent
-│   ├── default_agent_config: dict | None
-│   ├── workspaces: list[Workspace] = []   # named cwd allowlist
-│   └── default_workspace: str | None      # one of workspaces[].name
+│   └── default_agent_config: dict | None
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register
@@ -23,8 +21,6 @@ ChannelConfig (discriminator: channel_type)
     ├── app_id: str
     ├── app_secret_ref: str            # credential-store ref
     └── signing_secret_ref: str        # credential-store ref
-
-Workspace: { name: str, path: str (absolute) }
 ```
 
 Validation rules:
@@ -44,15 +40,8 @@ Validation rules:
   Validation is skipped only when the registry is empty, so a misconfigured
   registry never blocks all channel writes. `default_agent_config` is still a
   pass-through.
-- `workspaces` are the cwd allowlist for agents chosen from this channel.
-  Shape (unique names, absolute paths, `default_workspace ∈ names`) is checked
-  by the Pydantic model; the kind's `validate_config` hook additionally
-  requires each `path` to be an existing directory at registration, so a bad
-  workspace aborts registration with nothing persisted. A chat message never
-  supplies a bare path — only a workspace name. When a channel declares no
-  workspace (and the peer picks none), a turn falls back to the Coffer-managed
-  workspace `~/.coffer/workspace` (created on first use) rather than failing —
-  so a channel works out of the box without configuring a workspace.
+- Channel turns run in the Coffer-managed default workspace `~/.coffer/workspace`
+  (created on first use).
 
 ## Table: `channel_peers`
 
@@ -69,7 +58,6 @@ keyed by chat id so future group support is a new row, not a migration.
 | `active_conversation_id` | TEXT NULL                                    | current conversation; cleared when the conversation disappears                                                                                      |
 | `sender_id`              | TEXT NULL                                    | paired sender's stable id (Telegram from.id, SeaTalk employee_code); the owner gate checks it when present. NULL → chat-id-only gate (legacy peers) |
 | `preferred_agent`        | TEXT NULL                                    | sticky agent choice (`/agent`); NULL → channel `default_agent`                                                                                      |
-| `preferred_workspace`    | TEXT NULL                                    | sticky workspace choice (`/cwd`); NULL → channel `default_workspace`                                                                                |
 
 Constraints: `UNIQUE (resource_id, chat_id)`; index on `resource_id`.
 
@@ -78,12 +66,12 @@ Constraints: `UNIQUE (resource_id, chat_id)`; index on `resource_id`.
 deleted from the Chat page, the next inbound message detects the dangling id
 and creates a fresh conversation.
 
-`sender_id` / `preferred_agent` / `preferred_workspace` are all nullable so a
-peer paired before this revision degrades gracefully: a null sender id means
-the chat-id-only gate, null preferences mean the channel defaults.
+`sender_id` / `preferred_agent` are nullable so a peer paired before this
+revision degrades gracefully: a null sender id means the chat-id-only gate,
+a null agent preference means the channel default.
 
 Migrations: `20260612_0015_channel_tables.py` (create + symmetric downgrade);
-`20260614_0022_channel_peer_differentiation.py` adds the three nullable
+`20260614_0022_channel_peer_differentiation.py` adds the two nullable
 columns above. The model module is imported by `migrations/env.py` so Alembic
 sees the metadata.
 

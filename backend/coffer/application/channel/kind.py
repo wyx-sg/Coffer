@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from coffer.application.channel.conversation_spec import validate_workspaces
 from coffer.domain.channel.config import ChannelConfigModel
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, ResourceRef
@@ -47,11 +46,7 @@ def _make_validator(
     agent_keys: Callable[[], list[str]] | None,
 ) -> Callable[[dict[str, Any]], None]:
     def _validate_channel_config(config: dict[str, Any]) -> None:
-        """Workspace directories must exist on disk at registration (the cwd
-        allowlist is only useful if its entries are real), and the default
-        agent must name a registered agent."""
-        workspaces = [(w["name"], w["path"]) for w in config.get("workspaces", [])]
-        validate_workspaces(workspaces, default=config.get("default_workspace"))
+        """The default agent must name a registered agent."""
         if agent_keys is not None:
             _validate_default_agent(config, agent_keys)
 
@@ -63,14 +58,13 @@ def _make_update_validator(
 ) -> Callable[[ResourceRef, dict[str, Any], dict[str, Any]], None] | None:
     """Update-time validation hook (``on_update_config``).
 
-    ``validate_config`` runs at registration only — it also probes workspace
-    directories on disk, which an edit deliberately must not re-check. But an
-    edit that re-binds the channel to an unknown ``default_agent`` would still
-    pass shape validation and only fail (silently) at the next turn. So when an
-    ``agent_keys`` provider is injected we also validate ``default_agent`` here,
-    converting the resolver's ``ValueError`` into the ``ConfigValidationError``
-    the resource service surfaces to the caller. Returns ``None`` when no
-    provider is injected (no hook wired — backward compatible).
+    An edit that re-binds the channel to an unknown ``default_agent`` would
+    still pass shape validation and only fail (silently) at the next turn. So
+    when an ``agent_keys`` provider is injected we also validate
+    ``default_agent`` here, converting the resolver's ``ValueError`` into the
+    ``ConfigValidationError`` the resource service surfaces to the caller.
+    Returns ``None`` when no provider is injected (no hook wired — backward
+    compatible).
     """
     if agent_keys is None:
         return None
