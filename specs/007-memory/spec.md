@@ -296,6 +296,37 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   any persisted fact; `coffer__recall` subsequently returns the new facts; and
   when `dry_run=true`, insights are returned but nothing is written to disk.
 
+### Scenario: the organizer drains the inbox into a topic document
+
+- **Given** a memory store with two freshly-remembered items in its
+  `knowledge/inbox/` and an internal model configured,
+- **When** `POST /api/v1/memory_stores/{name}/organize` (or `coffer memory
+  organize <name>`) is called,
+- **Then** the internal LLM organizer drains the inbox (no items remain), at
+  least one `knowledge/<topic>.md` topic document exists holding the merged
+  content, `knowledge/INDEX.md` lists that topic, a `memory_organized` audit
+  entry is recorded, and a subsequent `recall` returns content from the topic
+  document (not the now-empty inbox).
+
+### Scenario: organizing merges a note into an existing topic without clobbering it
+
+- **Given** a memory store that already has a hand-edited topic document
+  containing content X plus a new related item in its `knowledge/inbox/`,
+- **When** `organize` is called and the organizer merges the new item into that
+  topic,
+- **Then** the topic document still contains the original content X alongside
+  the newly integrated information, the inbox item has been removed, and the
+  consolidation changelog (`consolidation-log.md`) records the merge — the
+  organizer never regenerates from scratch and never clobbers a human edit.
+
+### Scenario: organize is a no-op when no internal model is configured
+
+- **Given** a memory store with items in its `knowledge/inbox/` but no internal
+  model configured,
+- **When** `organize` is called,
+- **Then** the call returns `status="no_model"`, the inbox is left untouched, no
+  topic document is written, and no error is raised.
+
 > **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, the desktop read-only fact viewer's open-in-editor / reveal / copy-path affordances, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
 
 ## Requirements
@@ -332,6 +363,14 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-024**: `coffer__set_handoff(body)` MUST **overwrite** the current branch's handoff file (no accumulation; one scene per branch), set `updated_at`, and record a `handoff_set` audit entry. The handoff body is files-as-truth on disk (it rides the git sync mirror like other memory files) and MUST NOT be returned by `coffer__recall` (it lives in the `handoff/` subdir, outside the recall glob).
 - **FR-025**: `coffer__resume()` MUST return the current branch's saved handoff — `found=true` with `branch`, `body`, `updated_at`, and a freshness `note` annotating that the scene may be stale — or `found=false` when no handoff exists for the branch (a fresh branch) or the cwd is not inside a git project. It MUST never error on a missing handoff and MUST NOT fabricate content.
 - **FR-026**: When the agent's cwd does not resolve to a git project (no project scope, no branch), `coffer__set_handoff` MUST be rejected (there is no store to write to and no global handoff) and `coffer__resume` MUST return `found=false`.
+
+**Consolidation — the internal organizer**
+
+- **FR-027**: The system MUST provide an **internal memory organizer** that, on an **explicit trigger only** (`POST /api/v1/memory_stores/{name}/organize` and `coffer memory organize <name>`; no automatic/background firing in this PR), drains a store's `knowledge/inbox/` of freshly-remembered items into a small set of coherent **topic documents** (`knowledge/<topic-slug>.md`, YAML frontmatter `title`/`description`/`updated_at` + a markdown body) using Coffer's **internal LLM** (Settings → Models) via a **one-shot completion per item** — never an agent-facing tool. The organizer MUST process items sequentially, and one item's LLM/parse failure MUST NOT abort the run (the other items still organize).
+- **FR-028**: For each inbox item the organizer MUST (a) retrieve up to the top-K (K=3) most-relevant **existing topic docs** via the shared retrieval engine (no LLM on this step) as merge candidates, (b) make **one LLM call** that either MERGES the item into the best-fitting candidate — **preserving all existing content and human edits**, integrating the new information, removing exact duplicates — or CREATES a new topic when none fits, and (c) write the returned full document body to `knowledge/<topic-slug>.md`. The organizer MUST be an **incremental merge into the existing document, never a from-scratch regeneration**: the LLM is given the full existing topic content to merge into, so human corrections survive. The organizer MUST NOT hard-delete an existing topic doc (it only creates or overwrites with merged content; git history is the audit trail).
+- **FR-029**: An inbox item MUST be **deleted only after** its content is successfully written into a topic doc. A malformed or unparseable LLM response (missing/empty required keys, an unsafe `topic_slug`, or non-JSON) MUST cause that item to be **skipped** — left in the inbox, no topic doc written or corrupted — and the run continues; the result reports the count of skipped items. `organize` on an empty inbox is a no-op (`status="empty"`); when no internal model is configured `organize` is a clean no-op (`status="no_model"`, inbox untouched, nothing written) rather than an error.
+- **FR-030**: After draining, the organizer MUST regenerate the store's `knowledge/INDEX.md` review catalog from all topic docs' frontmatter (`- [<title>](<slug>.md) — <description>`), reconcile the index (dropping the removed inbox rows and (re)indexing the new/updated topic docs so `recall` returns content from the topic docs, not the drained inbox), and record one `memory_organized` audit entry (store + counts only — no item content). `recall` MUST surface organized topic-doc content and MUST NOT surface `INDEX.md`.
+- **FR-031**: The organizer MUST keep a **non-blocking consolidation changelog** at the store ROOT (`<store>/consolidation-log.md`, append-only, human-readable: one line per merged/created topic with the timestamp and the source inbox item). The changelog is auditable, never a gate, and is **excluded from recall** (it lives outside the `knowledge/` lane) and **from the sync mirror** (machine-local, like `INDEX.md`; topic docs themselves DO sync as source-of-truth).
 
 **Surfaces**
 

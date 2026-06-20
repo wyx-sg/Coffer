@@ -72,4 +72,6 @@ async def test_divergent_memory_index_does_not_conflict(tmp_path, remote) -> Non
 
 
 def test_memory_index_excluded_from_mirror_constant() -> None:
-    assert "MEMORY.md" in DERIVED_INDEX_NAMES
+    # The legacy MEMORY.md plus the organizer's derived/machine-local artifacts:
+    # INDEX.md (regenerated per machine) and the store-root consolidation log.
+    assert {"MEMORY.md", "INDEX.md", "consolidation-log.md"} <= DERIVED_INDEX_NAMES
