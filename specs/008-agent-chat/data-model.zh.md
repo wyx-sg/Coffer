@@ -19,7 +19,13 @@ Frozen dataclass —— domain 保持纯净。
 | `model_id`                  | `str \| None`        | `chat_models.id` 覆盖项；`None` → 默认模型。内置 agent 的每对话模型存储。                                                                                                                                                    |
 | `agent_config`              | `str \| None` (JSON) | provider 自有的每对话状态（Alembic `0018`）。CLI agent 在此存储 `{cwd, session_id, permission_mode?}`；内置 agent 不存储任何东西（它使用 `model_id`）。通过 `ConversationRepo.get_agent_config` / `set_agent_config` 读/写。 |
 | `archived_at`               | `datetime \| None`   | `None` = 活跃；时间戳 = 已归档（Alembic `0013`）。驱动活跃/已归档过滤器与两阶段保留生命周期。                                                                                                                                |
+| `channel_name`              | `str \| None`        | 可选的 IM channel binding（ADR-031）：本对话同样从其被驱动的 channel。一个对话"有一个 channel binding"当且仅当本字段被设置（Alembic `0021`）。                                                                                |
+| `peer_chat_id`              | `str \| None`        | 用作回邮地址、把 agent 输出转发回 channel 的 IM chat id。与 `channel_name` 配对（Alembic `0021`）。                                                                                                                          |
 | `created_at` / `updated_at` | `datetime`           | UTC；每条新消息都会 bump `updated_at`                                                                                                                                                                                        |
+
+> **ADR-031** 移除了原先的 `origin`（web/channel）与 `peer_display_name`
+> 字段（Alembic `0033`）：在单属主前提下 IM peer 永远是属主，所以没有单独的 peer
+> 身份要显示；"这是不是一个 channel 对话"由 `channel_name` 是否被设置导出。
 
 ### `Message`（`domain/chat/message.py`）
 
@@ -45,8 +51,13 @@ Frozen dataclass —— domain 保持纯净。
 - `ToolResult(tool_use_id, tool_name, output, error)`
 - `TurnDone(prompt_tokens, completion_tokens, stop_reason)`
 - `TurnError(code, message)`
+- `QueueChanged(pending: list[str])` —— 有序的待处理队列文本（ADR-031）；广播以让每个
+  订阅者渲染相同的 pending chips。`type = "queue_changed"`。
 
-每个都携带一个 `type` 判别符，原样复用为 SSE 事件名。
+每个都携带一个 `type` 判别符，原样复用为 SSE 事件名。回合事件被发布到一个**每对话的
+broadcaster**（带一个当前回合事件的环形缓冲区，供迟到订阅者回放），任意数量的客户端
+通过 `GET /conversations/{id}/events` 挂接它（ADR-031）；orchestrator 不再把一个单一的
+消费者队列交给 POST 请求。
 
 ## 冻结的平台契约
 
@@ -131,8 +142,9 @@ CLI agent 需要每对话的工作目录 + session 状态，通过同一个 `ini
 | 动作               | 效果                                                                                                                                                              |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 创建一个对话       | 持久化该行，然后 `provider.init_conversation`。若 provider 拒绝该配置，对话行被回滚（删除）且错误浮现。                                                           |
-| 中断一个回合       | 取消该回合任务；任务的 handler 持久化**部分的**助手消息（`status='complete'`、`stop_reason='interrupted'`）并发出一个终结的 `TurnDone`。                          |
-| 删除一个对话       | 取消任何活跃回合（丢弃 —— 不持久化部分内容）；`provider.on_conversation_deleted`；`MessageRepo.delete_by_conversation`；删除对话行；审计 `conversation_deleted`。 |
+| 在一个回合运行时发送 | 在内存待处理队列上入队（ADR-031）；广播 `QueueChanged`。当进行中回合结束时，把队首出队、把它提交为下一条用户消息，并运行它的回合（顺序 FIFO）。不被拒绝。 |
+| 中断一个回合       | 取消该回合任务；任务的 handler 持久化**部分的**助手消息（`status='complete'`、`stop_reason='interrupted'`）并发出一个终结的 `TurnDone`。也**暂停**待处理队列 —— 排队的消息被保留、不自动运行（ADR-031）。 |
+| 删除一个对话       | 取消任何活跃回合（丢弃 —— 不持久化部分内容）；`provider.on_conversation_deleted`；`MessageRepo.delete_by_conversation`；删除对话行；审计 `conversation_deleted`。待处理队列被丢弃。 |
 | 删除一个在用的模型 | 允许；引用它的对话在回合时解析为默认模型。                                                                                                                        |
 | 守护进程启动       | 清扫：任何 `chat_messages.status='streaming'` → `failed`。                                                                                                        |
 
@@ -144,14 +156,17 @@ CLI agent 需要每对话的工作目录 + session 状态，通过同一个 `ini
 
 ## Wire 契约（REST + SSE）
 
-位于 `contracts/api.openapi.yaml`。本次修订新增/改动的路由：
+位于 `contracts/api.openapi.yaml`。**ADR-031** 新增/改动的路由：
 
-- `GET /api/v1/chat/agents` —— 列出已注册的 agent —— **新增**
-- `POST /api/v1/chat/conversations` —— body `{agent_key?, agent_config?}` —— **改动**
-- `POST /api/v1/chat/conversations/{id}/interrupt` → 204 —— **新增**
+- `GET /api/v1/chat/conversations/{id}/events` —— SSE 订阅该对话的实时回合事件
+  （回放-然后-实时）—— **新增**
+- `POST /api/v1/chat/conversations/{id}/messages` —— 现在是 **fire-and-return**：
+  发起或入队一个回合并返回 `202 {queued: bool}`；它不再是事件流 —— **改动**
+- `ConversationOut` 去掉 `origin`/`peer`；新增可选的 `channel_binding`
+  （`{channel, chat_id}`）—— **改动**
 
-未变路由：对话 list/get/patch/delete、消息历史、`POST .../messages` SSE 回合
-端点，以及 `/api/v1/models` CRUD。
+未变路由：`GET /chat/agents`、对话 list/get/patch/delete/archive/unarchive、消息
+历史、`POST .../interrupt` → 204，以及 `/api/v1/models` CRUD。
 
-message POST 上的 SSE 事件名：`turn_start`、`text_delta`、`tool_call`、
-`tool_result`、`turn_done`、`turn_error` —— 每个 `AgentEvent` 变体一个。
+订阅流上的 SSE 事件名：`turn_start`、`text_delta`、`tool_call`、`tool_result`、
+`turn_done`、`turn_error`、`queue_changed`。

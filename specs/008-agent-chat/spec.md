@@ -792,9 +792,10 @@ referenced by at least one test marked
   those SDKs stay confined to `infrastructure/chat/`, the turn orchestration and
   the agent-provider registry are `application/`, and `domain/chat/` imports
   neither.
-- The interaction model is sequential: one turn per conversation at a time, the
-  composer locked while a turn runs. Concurrent turns within one conversation
-  are out of scope.
+- The interaction model is sequential: one turn per conversation at a time. The
+  composer is **not** locked while a turn runs — a message sent during a turn is
+  enqueued and runs after it (FR-018, [ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md)).
+  Concurrent (overlapping) turns within one conversation are out of scope.
 - The agent-provider registry is populated in code at startup; v1 registers one
   provider (the built-in agent). The registry is the seam — populating it from
   user-managed configuration is not in this spec.

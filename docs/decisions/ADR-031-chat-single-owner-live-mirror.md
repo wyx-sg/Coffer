@@ -111,12 +111,18 @@ Telegram/SeaTalk" indicator when one exists.
 
 ### 4. Cleanup the dead positionings left behind
 
-Delete the legacy CLI adapters (`cli_agent.py`, `cli_providers.py`), first
-extracting the shared helpers (`ParseState`, `SessionSink`, `last_user_text`) the
-SDK adapter still imports. Replace the untyped `agent_config` blob with a typed
-`AgentConfig { cwd, session_id, model }`, provider-validated. Rewrite Spec 008
-`spec.md` / `data-model.md` to match ADR-024 + this positioning instead of the
-prose disclaimer.
+Rewrite Spec 008 `spec.md` / `data-model.md` / `contracts/api.openapi.yaml` to
+match ADR-024 + this positioning instead of the prose disclaimer (delivered with
+this change).
+
+Two further cleanups are **deferred to a follow-up** (they are independent of the
+live-mirror seam and touch the *active* coding-agent providers, so they are kept
+out of this already-large change to avoid risking the working `claude_code` /
+`codex` adapters): (a) deleting the legacy CLI adapters (`cli_agent.py`,
+`cli_providers.py`) after extracting the shared helpers (`ParseState`,
+`SessionSink`, `last_user_text`) the SDK adapter still imports, and (b) replacing
+the untyped `agent_config` blob with a typed `AgentConfig { cwd, session_id,
+model }`. Tracked for a subsequent PR.
 
 ### Invariants
 
@@ -178,7 +184,8 @@ dropping on restart matches the in-flight-turn-marked-failed story. Persisting a
 - The frontend replaces the per-turn POST SSE + 2-second polling with one
   persistent `GET .../events` subscribe stream; the composer never locks and
   renders pending chips.
-- Legacy CLI adapters are deleted; `agent_config` becomes typed.
+- Legacy CLI adapter deletion + `agent_config` typing are deferred to a
+  follow-up PR (move 3, part 4).
 - ADR-021 is **narrowed** (not superseded): its channel-observe job is widened to
   observe + interrupt + inject; its multi-human "approval seat" framing is already
   gone (ADR-025).
