@@ -14,7 +14,7 @@
 
 **定位校准**：Coffer 是**个人工具，非企业工具**——不做企业级安全/治理。"safe" = 凭据隔离 + 审计 + per-agent server 策展。RAG 是**战略投资**方向，不砍检索栈。
 
-**实删（8）**：`/cwd`（+工作区白名单）· commands 目录管理 · 4.8 skill catalog（回退 #116）· 3.9 instructions hub（回退 #112，待执行）· 1.7 MCP Registry 浏览（回退 #114）· 5.7 KB 逐文档锁 · 2.9 开机自启 · 10.5 死 ADR
+**实删（9）**：`/cwd`（+工作区白名单）· commands 目录管理 · 4.8 skill catalog（回退 #116）· 3.9 instructions hub（回退 #112，待执行）· 1.7 MCP Registry 浏览（回退 #114）· 5.7 KB 逐文档锁 · 2.9 开机自启 · 10.5 死 ADR · **4.3 从 Git URL 拉 skill**（用户不用,2026-06-20 加删）
 
 **简化/部分（3）**：3.8→删 commands 留 subagents/cron · 1.11 backup 简化 · 8.4→删 /cwd 留其余（3.5 撤回——读写保留,不简化）
 
@@ -48,7 +48,7 @@
 - **4.9** drift verify → 留 + opt-in **`--fix`**（fix = 从 master 重新投递那份，复用现成投递逻辑）
 - **G9 供应商切换（新）** → **共享 provider registry + 逐 agent 投影**：一个档案 `{name, base_url, key→Fernet 库, 模型映射, wire 格式}` 配一次、Claude Code/Codex 共用；切换 = 写原生配置（复用 config-file store，原子 + .bak）；审计 + 随 9.x 同步 + Claude 热切换；**不做代理/故障转移/格式转换**。差异化：比 CC Switch 的"逐工具独立配置"更统一、更治理化
 
-**重扫后确认保留**（极简下仍判定必要）：6.5 蒸馏 · 7.6 会话归档 · P10 自动 backup · 9.4 sync worker · 10.3 retention · 3.7 插件 · 8.4 switchboard · 4.6 · 4.7 · 4.3
+**重扫后确认保留**（极简下仍判定必要）：6.5 蒸馏 · 7.6 会话归档 · P10 自动 backup · 9.4 sync worker · 10.3 retention · 3.7 插件 · 8.4 switchboard · 4.6 · 4.7（4.3 后撤回——见实删）
 
 **战略 / 竞品**
 
@@ -57,7 +57,7 @@
 ## 执行 backlog
 
 > 由执行 loop 生成（2026-06-20）。每轮取**第一个未勾选**项,读相关 spec + agents/\*.md 界定范围,SDD 先 spec 后码后测,`make verify` 全绿,一个 squash commit 开 PR,独立评审 + CI 绿后合并,再把该项勾成 `[x]`。
-> **排除已延后/不做**：G1/G2(不补) · G3 OAuth · G4 elicitation · G5(不单列) · G6 用量+本地代理 · G7 Windows/Linux 桌面 · G8 收编向导 · P7(跨 agent 聊天,研究) · P11(per-tool,取消未建) · Claude Desktop。
+> **排除已延后/不做**：G1/G2(不补) · G3 OAuth · G4 elicitation · G5(不单列) · G6 用量+本地代理 · G7 Windows/Linux 桌面 · G8 收编向导 · P7(跨 agent 聊天,研究) · P11(per-tool,取消未建) · P12(Git 导入 UX,取消——Git 导入整体删除,见 4.3) · Claude Desktop。
 > **安全阀**：删除若牵动在用功能(channels/SeaTalk)、有歧义或需产品决策 → 停下确认,不猜。
 
 ### 阶段一 · 零风险删除
@@ -72,6 +72,7 @@
 
 - [ ] 1.7 — 删 MCP Registry 在线浏览（回退 PR #114），留粘贴 JSON 路径
 - [ ] 4.8 — 删内置 skill catalog / discovery（回退 PR #116）：无内容生态
+- [ ] 4.3 — 删 Git URL 拉 skill（用户不用；cascade：删 source_fetcher / ssrf_guard / `POST /skills/fetch` + SkillFetchRequest / `coffer skill fetch` CLI / 前端 GitFetchTab + fetchGit / spec 005 FR-006·007·013；catalog 4.8 的 install-by-name 同走此路径一并去）。取 GitHub skill 改走:下载 ZIP → P8 导入 .zip
 - [ ] 3.9 — 删 Master-instructions hub（回退 PR #112：instructions_service / instructions.py / routes / CLI / 前端 AgentConfigFilesEditor）
 
 ### 阶段三 · MCP 权限删 + agent 砍到 Claude Code + Codex
@@ -82,7 +83,7 @@
 
 ### 阶段四 · 简化
 
-- [ ] 4.4 — 简化 skill 包管理：留 import + 重 fetch 覆盖；删 rename 检测 / pin / check-update
+- [ ] 4.4 — 简化 skill 包管理：留 import（本地文件夹/zip）+ 重新导入覆盖；删 rename 检测 / pin / check-update / Git re-fetch（Git 导入已删）
 - [ ] 1.11/P10 — backup 简化为 `~/.coffer` 快照 tar（restore=解压）+ 评估可选定期自动 backup worker（滚动保留 N 份，排除 master key）
 
 ### 阶段五 · 增强 + 新功能（按杠杆）
@@ -95,9 +96,8 @@
 - [ ] P4 — agent→模型 选择 UX（web chat agent 选择器旁给模型 picker，候选来自 7.4 注册表 / provider introspection）
 - [ ] P1 — 插件跨机同步（声明式清单 id+来源+启用态 → B 机从源重装 → 接 sync worker + `coffer agent plugin` CLI；3.7 为地基，绑 9.x）
 - [ ] P2 — channel 同步设计（channel 单活：同步 config/binding，enabled 态机器本地 / 单活 ownership 锁可一键转移；只服务迁移不服务并发）
-- [ ] P8 — Skill 本地导入：原生选择器接受**文件夹或 `.zip`**（桌面 Tauri dialog 返回绝对路径；后端 import_local 嗅探 .zip → zip-slip 守护解压 → 验 SKILL.md → 收入；纯 web 回退上传 .zip + "浏览目录"tab）。新增 spec 005 FR（archive 当前不在 spec 范围）
+- [ ] P8 — Skill 本地导入：原生选择器接受**文件夹或 `.zip`**（桌面 Tauri dialog 返回绝对路径；后端 import_local 嗅探 .zip → zip-slip 守护解压 → 验 SKILL.md → 收入；纯 web 回退上传 .zip + "浏览目录"tab）。新增 spec 005 FR（archive 当前不在 spec 范围）。**Git 导入删除后这是取 GitHub skill 的主路径**（下载 ZIP → 导入 .zip）
 - [ ] P9 — 3.8 优化：subagents/cron 随 9.x 跨机同步 + 同类型 agent 多实例投递
-- [ ] P12 — Git 导入 UX：`git_ref` 改可选,省略时后端 `git ls-remote --symref HEAD` 解析默认分支（主机无关,不耦合 GitHub API）;接受 `owner/repo` 简写;ref/tag/commit pin 收进「Advanced」(+`owner/repo@ref` 简写);记录解析到的 commit SHA 便于复现。改 spec 005 FR-006（ref 必填→可选）
 
 ## 决策表
 
@@ -121,7 +121,7 @@
 | 4.7  | 跟随 master library 自动投递 + 排除表                | 🔴   | 声明式同步引擎，投入大心智重（用户选择保留）                                                                                                                                             | 删                           | ✅ 保留                                                                                                                                                                                                                         | 已决   |
 | 4.8  | 内置 skill catalog（搜索+install-by-name）           | 🔴   | "应用商店"雏形，早期无内容生态。⚠️是最近 PR #116 刚做的 skill discovery，删=回退                                                                                                         | 删/冻结                      | ❌ **删除**（无内容生态；回退 PR #116）                                                                                                                                                                                         | 已决   |
 | 4.9  | Skill drift 检测（verify）                           | 🟡   | 与 4.7 成对；4.7 留故 4.9 也留                                                                                                                                                           | 删（随 4.7）                 | ✅ 保留                                                                                                                                                                                                                         | 已决   |
-| 4.3  | 从 Git URL 拉 skill                                  | 🟡   | 本身不重，合理分发方式                                                                                                                                                                   | 留                           | ✅ 保留                                                                                                                                                                                                                         | 已决   |
+| 4.3  | 从 Git URL 拉 skill                                  | 🟡   | 本身不重，合理分发方式                                                                                                                                                                   | 留                           | ❌ **删除**（用户不用,2026-06-20；cascade 见 backlog 4.3）                                                                                                                                                                                                                         | 已改   |
 | 5.6  | MCP 让 agent 共管 KB 文档（add/edit/delete）         | 🟡   | "agent contributes"核心兑现；但写权限有风险                                                                                                                                              | 留（改默认只读）             | ✅ 保留                                                                                                                                                                                                                         | 已决   |
 | 5.7  | KB 逐文档锁                                          | 🔴   | 给 5.6 打的补丁；若默认只读则多余                                                                                                                                                        | 删（用 KB 级只读替代）       | ❌ **删除**（不加只读开关；agent 总可写,靠审计 + backup,回退 #117 该部分）                                                                                                                                                                                               | 已决   |
 | 5.4  | KB keyword FTS5/BM25                                 | 🟡   | SQLite 自带，几乎零依赖                                                                                                                                                                  | 留                           | ✅ 保留                                                                                                                                                                                                                         | 已决   |
@@ -172,7 +172,6 @@
 | P9   | 3.8 优化：subagents/cron 同步 + 同类型多投递 | **commands 已决删**（基本废弃）。subagents/cron agent 专属 → 不做跨 agent 共享，只做：① 随 9.x **跨机同步** ② 同类型 agent **多实例投递**。**设计原则**：跨-agent 通用的才做成"插件式"可共享单元（skill/plugin 已是）；agent 专属的留 per-agent。真·跨 agent 共享需 canonical 格式 + 逐 agent 投影 → 远期研究（类 P7）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 待做 |
 | P10  | 1.11 优化：backup 简化 + 定期自动 backup     | backup 简化为 ~/.coffer 快照 tar、restore=解压；评估加**可选的定期自动 backup**（仿 retention/sync worker 的后台 worker，滚动保留 N 份快照）。注意排除 master key（同现状）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 待做 |
 | P11  | per-agent 逐工具启用（扩展 1.6）             | 配置每个 agent 开启哪些 MCP server + 哪些**工具**。⚠️定位=**策展/便利**（减噪聚焦），**非** G1 拒绝的安全强制闸。难点：UI 避免 toggle 爆炸（agent×server×tool）→ 需设计（默认全开 + 按需收窄 / 分组 / 搜索选择 / 复用 1.6 的 auto/selected 模式延伸到工具层）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 待做 |
-| P12  | Git 导入 UX：省分支                          | `git_ref` 改可选;省略 → 后端 `git ls-remote --symref <url> HEAD` 解析默认分支（主机无关,不耦合 GitHub API）,fetch 该分支最新。接受 `owner/repo` 简写。ref/tag/commit **pin 收进「Advanced」**(+`owner/repo@ref` 简写)。记录解析到的 commit SHA → 重拉取/更新可复现。竞品参照:Claude Code(@ref opt-in) / Cursor(默认分支) / Obsidian BRAT(最新 release)。改 spec 005 FR-006(ref 必填→可选) | 待做 |
 
 ## 附录：缺口（补充候选，另行决策）
 
