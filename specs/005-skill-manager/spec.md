@@ -3,7 +3,7 @@
 **Feature Branch**: `feature/skill-manager`
 **Created**: 2026-05-22
 **Status**: Accepted
-**Input**: User description: "Coffer manages portable AI skills using the open AgentSkills standard (agentskills.io). One canonical store lives at `~/.coffer/skills/`; per-agent visibility is a directory symlink/junction into the `skills/` subfolder of each agent's config directory. Users can import skills from local paths or fetch them from public Git repositories, then enable or disable each skill per registered agent. v1 supports Claude Code and Codex CLI as sync targets (each registered as a Resource of kind `agent` per spec 004-agent-registry)."
+**Input**: User description: "Coffer manages portable AI skills using the open AgentSkills standard (agentskills.io). One canonical store lives at `~/.coffer/skills/`; per-agent visibility is a directory symlink/junction into the `skills/` subfolder of each agent's config directory. Users can import skills from local paths then enable or disable each skill per registered agent. v1 supports Claude Code and Codex CLI as sync targets (each registered as a Resource of kind `agent` per spec 004-agent-registry)."
 
 ## User Scenarios & Testing
 
@@ -24,22 +24,6 @@ A developer already has skills in `~/.claude/skills/` (or elsewhere on disk). Th
 
 ---
 
-### User Story 2 — Fetch a skill from a Git URL (Priority: P1)
-
-A developer finds a skill in a public GitHub repository and pulls it into Coffer.
-
-**Why this priority**: The AgentSkills ecosystem is collaborative; fetching from URLs is the primary distribution channel. Without it, users are locked to their own authored skills.
-
-**Independent Test**: From the command line, fetch a known public skill repo with a subpath; verify the canonical copy is created with `source.type=git`; verify the URL, ref, and subpath are persisted.
-
-**Covering scenarios**:
-
-- fetch a public Git skill repo by URL + ref + subpath
-- reject SSRF attempts (loopback / private IPs)
-- reject private repos in v1
-- reject fetched payloads that fail SKILL.md validation
-
----
 
 ### User Story 3 — Enable a skill for a specific agent (Priority: P1)
 
@@ -58,21 +42,6 @@ The developer wants this skill available in Claude Code but not in Codex. They e
 
 ---
 
-### User Story 4 — Update a skill from its source (Priority: P2)
-
-A developer wants the latest version of a Git-sourced skill.
-
-**Why this priority**: Without updates, fetched skills go stale and users distrust the system.
-
-**Independent Test**: Fetch a Git skill; bump the upstream content; run `coffer skill update`; verify the master content changes and every enabled agent sees the new version on next read.
-
-**Covering scenarios**:
-
-- update a Git-sourced skill to newer upstream content
-- detect and warn on SKILL.md frontmatter name change between versions
-- no-op update when content is unchanged
-
----
 
 ### User Story 5 — Detect and report drift (Priority: P2)
 
@@ -94,7 +63,7 @@ Files in agents' `config_dir/skills` folders can be tampered with (deleted, repl
 
 ### User Story 6 — Manage skills through the desktop app (Priority: P2)
 
-The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker or paste a Git URL, and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + a read-only file viewer that renders Markdown and shows other text files raw). The viewer does not edit content; to change a file the user opens it (or its containing folder) in their own external editor or file manager — every file and folder offers "open in external editor", "reveal in file manager", and "copy absolute path" affordances. Per-agent enable/disable lives on the agent detail page — the agent's "Skills" tab lists the skills bound to that agent with per-binding toggles.
+The user opens Coffer, sees the Skills page rendered as a data table (search, filter, pagination, row multi-select for bulk actions), can import via file picker and browse the list. The Skills page manages the skill resource itself, not its per-agent bindings: clicking a skill opens a detail view with an Overview metadata tab and a Files tab (file tree + a read-only file viewer that renders Markdown and shows other text files raw). The viewer does not edit content; to change a file the user opens it (or its containing folder) in their own external editor or file manager — every file and folder offers "open in external editor", "reveal in file manager", and "copy absolute path" affordances. Per-agent enable/disable lives on the agent detail page — the agent's "Skills" tab lists the skills bound to that agent with per-binding toggles.
 
 **Why this priority**: Non-CLI users need a visual surface for daily management.
 
@@ -103,7 +72,6 @@ The user opens Coffer, sees the Skills page rendered as a data table (search, fi
 **Covering scenarios**:
 
 - import a skill via desktop file picker
-- fetch a skill via desktop URL form
 - toggle per-agent enable via desktop toggle
 - surface drift count via a UI notification
 
@@ -113,7 +81,7 @@ The user opens Coffer, sees the Skills page rendered as a data table (search, fi
 
 The developer scripts skill setup across machines via `coffer skill ...` subcommands with `--json` output.
 
-**Independent Test**: A bash script imports a skill, fetches another, enables both for two agents, lists state, verifies drift, all without GUI.
+**Independent Test**: A bash script imports skills, enables both for two agents, lists state, verifies drift, all without GUI.
 
 **Covering scenarios**:
 
@@ -139,13 +107,13 @@ When the developer removes a skill, every per-agent symlink is removed and the c
 
 ### User Story 9 — Audit skill lifecycle (Priority: P3)
 
-Every import, fetch, enable, disable, update, and remove is auditable.
+Every import, enable, disable, and remove is auditable.
 
 **Independent Test**: Perform a representative sequence; view audit log; one row per change with actor, target, and event type.
 
 **Covering scenarios**:
 
-- audit import, fetch, enable, disable, update, remove
+- audit import, enable, disable, remove
 
 ---
 
@@ -188,10 +156,7 @@ Per-skill bindings are precise but chatty: every new skill must be enabled agent
 ### Edge Cases
 
 - **Skill name collision on import**: Rejected; user must rename via SKILL.md frontmatter and retry.
-- **Frontmatter name changes between updates**: Update rejected by default; `--allow-rename` performs an atomic rename of the master folder and rebuilds all enabled symlinks. The audit log retains the historical name on each prior event; the current Resource row's name reflects the post-rename value.
-- **Master folder size exceeds limit (default 50 MB)**: Import or fetch rejected with the configured cap and a hint to adjust settings.
-- **Git fetch hits a private repo or auth-required URL**: Rejected; v1 does not handle credentials for upstream skill sources.
-- **Git fetch hits an unreachable host, DNS failure, or timeout**: Operation aborts cleanly with a network error; no master folder is partially written and no Resource row is persisted.
+- **Master folder size exceeds limit (default 50 MB)**: Import rejected with the configured cap and a hint to adjust settings.
 - **Symlink/junction creation fails on Windows (FAT32 or network share)**: Falls back to copy mode for that target with an audit flag `degraded=true`; UI shows a warning chip.
 - **User edits `SKILL.md` in an external editor from inside an agent's `config_dir/skills` folder**: Coffer's UI never edits file content; the user makes the change in their own editor (reached via Coffer's "open in external editor" / "reveal in file manager" affordances or directly). Because the agent's path is a symlink to master, the external edit lands in master and is visible to all other agents on next read; no drift is detected.
 - **User deletes a Coffer-managed file from inside an agent's `config_dir/skills` folder**: Master is affected (same reason); next `verify` flags any other agents whose links no longer resolve consistently.
@@ -238,18 +203,6 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the folder is validated,
 - **Then** validation succeeds and the parsed frontmatter retains `license` and a normalized `allowed-tools` list (rather than discarding them).
 
-### Scenario: fetch a public Git skill repo
-
-- **Given** the daemon is running and a public Git URL hosts a valid skill at a known subpath,
-- **When** the user runs `coffer skill fetch <url> --ref <ref> --subpath <path>`,
-- **Then** Coffer shallow-clones the repo, validates the SKILL.md, copies the subpath to `~/.coffer/skills/<name>/`, and persists `source.type=git` with `git_url`, `git_ref`, `git_subpath`.
-
-### Scenario: reject SSRF in fetch
-
-- **Given** the daemon is running,
-- **When** the user attempts to fetch from a loopback or RFC1918 URL,
-- **Then** the SSRF-guarded client rejects the request before any network round-trip is made.
-
 ### Scenario: enable a skill for a registered agent
 
 - **Given** an agent `claude_code` is registered (per spec 004) and a skill `my-skill` is imported,
@@ -274,18 +227,6 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user enables a skill for that agent,
 - **Then** the operation is rejected; with `--force`, the existing target is backed up to `<path>.coffer-backup-<ts>` and the link is created.
 
-### Scenario: update a Git-sourced skill
-
-- **Given** a skill was fetched from a Git URL,
-- **When** the user runs `coffer skill update <name>` and the upstream now serves different content,
-- **Then** the master folder is replaced atomically with the new content, an audit entry is recorded, and enabled agents see the new content through their existing symlinks.
-
-### Scenario: detect frontmatter name change on update
-
-- **Given** an update would change SKILL.md frontmatter `name`,
-- **When** the user runs update without `--allow-rename`,
-- **Then** the update is rejected with the new name in the error message; with `--allow-rename`, the master folder is renamed and every enabled symlink is recreated under the new name.
-
 ### Scenario: scan flags risky content on import
 
 - **Given** a skill folder whose bundled script pipes a download into a shell,
@@ -303,18 +244,6 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **Given** a flagged skill whose risk the user has explicitly acknowledged,
 - **When** the user enables it for an agent,
 - **Then** the link is created and the binding is recorded; a later content change resets the acknowledgment.
-
-### Scenario: detect an available update without applying it
-
-- **Given** a Git-sourced skill whose upstream content has changed,
-- **When** the user runs a check-for-updates,
-- **Then** the result reports an update is available and the signal is cached on the skill, but the master content is unchanged (nothing is applied) until the user runs update.
-
-### Scenario: pin a skill to suppress the update signal
-
-- **Given** a skill the user has pinned,
-- **When** the skill list/detail is rendered,
-- **Then** no "update available" signal is surfaced for it; unpinning restores the signal.
 
 ### Scenario: detect drift in agent skill directories
 
@@ -409,7 +338,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 ### Scenario: auto-deliver new skills to following agents
 
 - **Given** an agent with follow enabled,
-- **When** a new skill is registered in the master store (import, fetch, or adoption),
+- **When** a new skill is registered in the master store (import or adoption),
 - **Then** the daemon delivers it to that agent without further user action.
 
 ### Scenario: auto-remove deleted skills from following agents
@@ -467,24 +396,22 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 **Resource model**
 
 - **FR-001**: System MUST register each managed skill as a Resource of kind `skill`, identified by `skill:<name>` where `<name>` comes from SKILL.md frontmatter.
-- **FR-002**: System MUST validate skill configuration against a kind-specific schema with fields `source` (variant: `local_import` | `git`), `skill_md_name`, `skill_md_description`, `version_hash`, and `last_synced_from_source_at`.
+- **FR-002**: System MUST validate skill configuration against a kind-specific schema with fields `source` (variant: `local_import` only), `skill_md_name`, `skill_md_description`, `version_hash`, and `last_synced_from_source_at`.
 
 **Canonical storage**
 
 - **FR-003**: System MUST store each managed skill's content under `~/.coffer/skills/<name>/`, with that path as the single editable source of truth.
-- **FR-004**: System MUST validate every imported or fetched skill folder against the AgentSkills specification: `SKILL.md` present; frontmatter `name` present and non-empty (lowercase alphanumerics, hyphen, or underscore, ≤64 chars) and `description` present, non-empty, and ≤1024 chars; no path-escape symlinks; total size within a configurable limit (default 50 MB). A folder that violates any of these is rejected with `unprocessable_entity` (422) and nothing is persisted.
+- **FR-004**: System MUST validate every imported skill folder against the AgentSkills specification: `SKILL.md` present; frontmatter `name` present and non-empty (lowercase alphanumerics, hyphen, or underscore, ≤64 chars) and `description` present, non-empty, and ≤1024 chars; no path-escape symlinks; total size within a configurable limit (default 50 MB). A folder that violates any of these is rejected with `unprocessable_entity` (422) and nothing is persisted.
 - **FR-027**: System MUST recognize the optional agentskills.io frontmatter fields it understands — `license` and the experimental `allowed-tools` — parsing and retaining them rather than discarding them, while tolerating any other unrecognized frontmatter field so non-Coffer-authored skills validate cleanly. `allowed-tools` accepts either a list or a comma/whitespace-separated string and is normalized to a list of tool names; a malformed value is tolerated (treated as absent), never a validation failure. Likewise a non-string `license` scalar (e.g. an unquoted year or version) is coerced to a string rather than rejected.
 
 **Content trust (trust layer L2)**
 
-- **FR-028**: System MUST run a heuristic content scan over a skill's files on every ingest (import, fetch, adopt) and on every content-changing operation (update that changes `SKILL.md`, and in-place file edits), and MUST cache the result on the skill — a verdict (`low`/`medium`/`high`/`critical` or none), a findings count, the ruleset version, and the scan time. The scan is advisory: it never blocks ingest and a clean result is not a safety guarantee (Coffer delivers skills but does not execute them, so it cannot enforce runtime behavior — see ADR-027). A user MUST be able to re-scan a managed skill on demand. Every scan is audited.
+- **FR-028**: System MUST run a heuristic content scan over a skill's files on every ingest (import, adopt) and on every content-changing operation (in-place file edits), and MUST cache the result on the skill — a verdict (`low`/`medium`/`high`/`critical` or none), a findings count, the ruleset version, and the scan time. The scan is advisory: it never blocks ingest and a clean result is not a safety guarantee (Coffer delivers skills but does not execute them, so it cannot enforce runtime behavior — see ADR-027). A user MUST be able to re-scan a managed skill on demand. Every scan is audited.
 - **FR-029**: When a skill's scan verdict is `high` or `critical`, System MUST refuse to enable it for an agent until the user explicitly acknowledges the risk; the refusal is reported as `conflict` (409) and the follow/auto-bind reconcilers skip such a skill (audited) rather than delivering it. Acknowledgment is an explicit, audited action and MUST be reset whenever the skill's content subsequently changes (an acknowledgment is for the content it was made against). Adoption is exempt — it consolidates a skill already present in the agent's workspace, so it records the verdict but is not blocked.
 
 **Sources**
 
 - **FR-005**: System MUST support importing a skill from a local filesystem path; the original source path is recorded for provenance but is not retained as a live dependency.
-- **FR-006**: System MUST support fetching a skill from a public Git URL with a ref and optional subpath, using a shallow clone through an SSRF-guarded client (per the Coffer constitution).
-- **FR-007**: v1 MUST reject Git URLs that require authentication; private-repo support is a future-spec change.
 
 **Per-agent delivery**
 
@@ -493,13 +420,6 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **FR-010**: Disabling a binding MUST remove the target link without touching the master folder.
 - **FR-011**: Enabling MUST refuse to overwrite an existing non-Coffer target without `--force`; `--force` backs up the existing target before creating the link.
 - **FR-012**: When symlinks/directory junctions are unavailable (e.g., FAT32, network share), System MAY fall back to copy mode for that target; the binding records `link_mode=copy_fallback` (audited as `mode: copy_fallback` on the enable event) and the UI MUST surface the degradation (the agent Skills tab shows a "Copied" warning chip on such bindings).
-
-**Updates**
-
-- **FR-013**: System MUST support refreshing a Git-sourced skill on user demand; local-imported skills MUST be re-imported rather than updated.
-- **FR-014**: System MUST detect and reject updates that change SKILL.md frontmatter `name` unless the user passes `--allow-rename`, which triggers an atomic master-folder rename and rebuild of every enabled symlink.
-- **FR-030**: System MUST provide an on-demand "check for updates" operation for a Git-sourced skill that re-fetches the source and compares it against the stored version WITHOUT applying any change, caching the result (an update-available flag, the available content hash, and the check time) on the skill. Local-imported skills do not support the check (re-import to refresh). Applying an update clears the cached signal. Every check is audited.
-- **FR-031**: Users MUST be able to pin a skill. While pinned, the update-available signal is suppressed (a deliberately-frozen skill stops surfacing as out-of-date); pin and unpin are explicit, audited actions.
 
 **Drift**
 
@@ -531,12 +451,12 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 **Observability**
 
-- **FR-020**: System MUST record an audit entry for every import, fetch, enable, disable, update, rename, remove, and drift remediation event.
+- **FR-020**: System MUST record an audit entry for every import, enable, disable, remove, and drift remediation event.
 
 ### Key Entities
 
 - **Skill**: A Resource of kind `skill`, identified by `skill:<name>` (name from SKILL.md frontmatter). Holds source provenance, content hash, and metadata; the content folder lives on disk at `~/.coffer/skills/<name>/`.
-- **Skill Source**: A discriminated record (`local_import` or `git`) capturing where the skill came from. For Git, it includes URL, ref, and optional subpath. For local imports, it includes the original path for informational purposes only.
+- **Skill Source**: A record capturing where the skill came from. For local imports, it includes the original path for informational purposes only.
 - **Skill–Agent Binding**: A row joining one skill Resource and one agent Resource (kind `agent`, per spec 004), with an `enabled` flag and last-link-path metadata. Symlink existence on disk is the live representation; binding state is the persistent representation.
 - **Drift Report**: An ephemeral structure produced by `verify` listing each binding whose on-disk target disagrees with the binding state, categorized by drift type with a suggested remedy.
 - **Unmanaged Skill**: A derived (never stored) view of a skill-shaped entry found in an agent's skill locations that Coffer does not manage — name, path, location, `valid` flag. The filesystem is the source of truth; adoption or deletion are the only mutations.
@@ -547,13 +467,12 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 ### Measurable Outcomes
 
 - **SC-001**: From a fresh install, a user can import their existing `~/.claude/skills/<one-skill>/` folder, enable it for the auto-detected Claude Code agent, and reach the "ready" state within 60 seconds.
-- **SC-002**: Fetching a 1-MB public Git skill completes in under 10 seconds on a normal home connection, including validation and copy.
 - **SC-003**: Enabling a skill for two agents creates two valid directory symlinks (or junctions on Windows), and each agent's reading process sees identical SKILL.md content.
 - **SC-004**: After manually deleting an agent-side symlink, `coffer skill verify` identifies it as drift within 5 seconds and exits with a non-zero status.
 - **SC-005**: Removing a skill that is enabled for two agents leaves no residual symlinks, no residual master folder, and no orphan binding rows in the database.
 - **SC-006**: Every Acceptance Scenario in this spec is covered by at least one test marked `acceptance(spec="005-skill-manager", scenario="…")`, and `make verify-acceptance` reports zero uncovered scenarios.
 - **SC-007**: The full `make verify` suite passes locally and in CI; `make verify-all` (adding e2e) passes on macOS and Linux; Windows tests pass for both junction mode and copy-fallback mode.
-- **SC-008**: No SKILL.md content ever leaves the user's machine except where the user explicitly fetches a known public URL; verified by an automated network-egress scan during integration tests.
+- **SC-008**: No SKILL.md content ever leaves the user's machine; verified by an automated network-egress scan during integration tests.
 - **SC-009**: With follow enabled, a newly registered skill is delivered to the following agent within 5 seconds, with no user action beyond the registration itself.
 - **SC-010**: On a machine with a mix of managed links and hand-placed skills, the unmanaged scan lists exactly the hand-placed entries — zero managed links, zero `.system` entries — verified by integration tests over a constructed fixture tree.
 
@@ -563,10 +482,9 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec 001-mcp-gateway are in place.
 - The application shell from spec 002-ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place; the desktop Skills page is a feature surface that renders within that shell and fills the `/skills` nav slot 002-ui-shell reserved as a placeholder.
 - Skills follow the open AgentSkills standard (`SKILL.md` with `name`/`description` frontmatter at minimum) as published at agentskills.io, validated against the standard's exact constraints (`name` ≤64 chars, `description` ≤1024 chars) with the optional `license` and experimental `allowed-tools` fields recognized; non-conforming folders are out of scope.
-- v1 supports public Git URLs only; authenticated upstream skill sources are future work.
 - Local-imported skills are point-in-time copies; the source path is recorded for traceability, not for sync.
 - Windows users have directory-junction support on their filesystem; FAT32 and network shares fall back to copy mode.
 - Delivery stays at `<config_dir>/skills` for both agent types. Codex additionally reads `~/.agents/skills` (its newer standard location) and treats `<config_dir>/skills` as a backward-compatible legacy location — the unmanaged scan covers both; migrating Coffer's delivery target is a recorded decision deferred to a future change.
 - The follow-master-library flag and exclusion list live on the agent resource's config (spec 004's schema); this spec owns their delivery semantics.
 - A browse-and-install skill catalog (discovery) was prototyped then withdrawn (simplification, 2026-06-20) for lack of a content ecosystem; an install catalog remains possible future work.
-- v2 will explore: a remote catalog index, agent-to-agent skill recommendations, project-local skills (`.claude/skills/` in repo), and private Git sources via credential refs.
+- v2 will explore: a remote catalog index, agent-to-agent skill recommendations, and project-local skills (`.claude/skills/` in repo).

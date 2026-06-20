@@ -7,9 +7,7 @@ import {
   skillsApi,
   type SkillDisableRequest,
   type SkillEnableRequest,
-  type SkillFetchRequest,
   type SkillImportRequest,
-  type SkillUpdateRequest,
 } from "@/lib/api/skills";
 import { useToast } from "@/components/ui/toast";
 
@@ -42,18 +40,6 @@ export function useImportSkill() {
   const onError = useSkillToastError();
   return useMutation({
     mutationFn: (body: SkillImportRequest) => skillsApi.importLocal(body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: SKILLS_KEY });
-    },
-    onError,
-  });
-}
-
-export function useFetchSkill() {
-  const qc = useQueryClient();
-  const onError = useSkillToastError();
-  return useMutation({
-    mutationFn: (body: SkillFetchRequest) => skillsApi.fetchGit(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SKILLS_KEY });
     },
@@ -94,21 +80,6 @@ export function useRemoveSkill() {
     mutationFn: (name: string) => skillsApi.remove(name),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SKILLS_KEY });
-    },
-    onError,
-  });
-}
-
-export function useUpdateSkill() {
-  const qc = useQueryClient();
-  const onError = useSkillToastError();
-  return useMutation({
-    mutationFn: (vars: { name: string; body?: SkillUpdateRequest }) =>
-      skillsApi.update(vars.name, vars.body ?? {}),
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: SKILLS_KEY });
-      qc.invalidateQueries({ queryKey: ["skills", vars.name] });
-      qc.invalidateQueries({ queryKey: ["skills", vars.name, "files"] });
     },
     onError,
   });

@@ -1,7 +1,7 @@
 """Import / auto-bind / relink helpers for SkillService.
 
 Extracted to keep ``service.py`` under the file-size limit. Like
-``update_ops.py`` these are free functions that take the SkillService
+``scan_ops.py`` these are free functions that take the SkillService
 instance and reach into its (private) attributes — they are conceptually
 private to the skill subpackage.
 """
@@ -26,7 +26,7 @@ from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.skill.binding import LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.content_scan import scan_skill_folder
-from coffer.domain.skill.source import GitSource, LocalImportSource
+from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import ValidationOk
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ async def register_from_validated(
     service: SkillService,
     src: pathlib.Path,
     validation: ValidationOk,
-    source_meta: LocalImportSource | GitSource,
+    source_meta: LocalImportSource,
     event: AuditEventType,
     actor: str,
 ) -> Resource:

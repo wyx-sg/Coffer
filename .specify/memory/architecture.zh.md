@@ -87,7 +87,7 @@ backend/coffer/
 │   ├── daemon/                   # pid_lock、端口分配
 │   ├── mcp/                      # 子进程、HTTP 上游客户端
 │   ├── agent/                   # agent 配置文件存储
-│   ├── skill/                   # 主存储、源拉取器、同步引擎
+│   ├── skill/                   # 主存储、同步引擎
 │   └── channel/                 # telegram/seatalk 传输、peer 仓储、渲染
 └── surfaces/
     ├── http/                     # FastAPI app + 每个 kind 的子路由 (含 agent/skill/fs 路由)

@@ -14,7 +14,6 @@ infrastructure may expose extra methods.
 from __future__ import annotations
 
 import pathlib
-from contextlib import AbstractAsyncContextManager
 from typing import Any, Protocol
 
 from coffer.domain.skill.binding import BindingState, LinkMode
@@ -74,18 +73,6 @@ class SkillBindingRepoPort(Protocol):
     async def delete_for_skill(self, skill_id: int) -> Any: ...
 
     async def delete_for_agent(self, agent_id: int) -> Any: ...
-
-
-class SourceFetcherPort(Protocol):
-    """Fetch a remote skill source into a temporary working folder."""
-
-    def fetched(
-        self,
-        *,
-        git_url: str,
-        git_ref: str,
-        git_subpath: str = "",
-    ) -> AbstractAsyncContextManager[pathlib.Path]: ...
 
 
 class WorkspaceScanPort(Protocol):

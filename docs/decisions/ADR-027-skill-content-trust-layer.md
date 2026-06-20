@@ -7,6 +7,8 @@
 - **Deciders:** Yuxing Wu
 - **Spec:** [005-skill-manager](../../specs/005-skill-manager/spec.md) (FR-028, FR-029)
 
+> **Amended (2026-06-20, simplification 4.3).** Skill Git-fetch was removed; the scan-on-ingest layer now covers local import + adopt + in-place edits only.
+
 ## Context
 
 The competitive-landscape research ([`docs/research/agent-skills.md`](../research/agent-skills.md))
@@ -15,7 +17,7 @@ ecosystem ships with no built-in sandboxing or signing, and the real threat is
 the _bundled scripts_ a skill carries (OWASP "Agentic Skills Top 10", Snyk's
 ToxicSkills, a malicious file that passed every one of Anthropic's scanners).
 Coffer hardened _fetching_ (SSRF guard, shallow clone, size cap, neutralized
-repo hooks) but never looked at the _content_. For a tool that markets itself as
+repo hooks — fetch since removed by simplification 4.3) but never looked at the _content_. For a tool that markets itself as
 a vault, content trust is on-mission.
 
 A hard constraint shapes what is even possible: **Coffer delivers skills but
@@ -37,8 +39,7 @@ warn-don't-block acknowledgment gate.
    findings and an overall verdict. It is heuristic and non-authoritative: a
    finding is a prompt to review, and a clean report is not a guarantee. The
    ruleset carries a version so a stored verdict can be known stale.
-2. **Scan on every content entry.** Import, fetch, adopt, content-changing
-   update, and in-place file edits all re-scan; the verdict, findings count,
+2. **Scan on every content entry.** Import, adopt, and in-place file edits all re-scan; the verdict, findings count,
    ruleset version, and scan time are cached on the skill config (no migration —
    `config_json` is opaque). Every scan is audited.
 3. **Warn, don't block ingest.** A risky skill always enters the master store.
@@ -72,8 +73,5 @@ warn-don't-block acknowledgment gate.
   flagged skill is not silently delivered to every following agent.
 - The scan is best-effort and heuristic; it will both miss (false negatives) and
   over-flag (false positives). The verdict is advisory, never a safety claim.
-- Update detection still keys on the `SKILL.md` hash (FR-013), so a script-only
-  change that does not touch `SKILL.md` is a no-op that does not re-scan; the
-  on-demand re-scan and the in-place-edit re-scan cover the remaining paths.
 - Future work (roadmap items): content-scan findings surfaced in discovery,
   `allowed-tools`-vs-behavior mismatch findings, and an optional L3 policy.

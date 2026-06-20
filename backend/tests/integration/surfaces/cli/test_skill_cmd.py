@@ -1,7 +1,7 @@
 """Integration tests for `coffer skill` CLI subcommands.
 
-Covers TEST21-015: every verb (`list` / `import` / `fetch` / `show` /
-`enable` / `disable` / `rm` / `update` / `verify`) plus the `--json`
+Covers TEST21-015: every verb (`list` / `import` / `show` /
+`enable` / `disable` / `rm` / `verify`) plus the `--json`
 switch where it exists.
 
 We boot the full FastAPI app (via ``create_app``) so the agent + skill
@@ -208,22 +208,6 @@ def test_skill_import_invalid_folder_exits_2(skill_cli_daemon):
 
 
 # ---------------------------------------------------------------------------
-# skill fetch
-# ---------------------------------------------------------------------------
-
-
-def test_skill_fetch_ssrf_rejected(skill_cli_daemon):
-    """SSRF guard prevents fetch from loopback hosts — exits non-zero."""
-    result = _runner.invoke(
-        cli_app,
-        ["skill", "fetch", "http://127.0.0.1/repo.git", "--ref", "main"],
-    )
-    assert result.exit_code == 2, result.output
-    # The envelope message is surfaced on stderr.
-    assert "SSRF" in (result.output or "") or "127.0.0.1" in (result.output or "")
-
-
-# ---------------------------------------------------------------------------
 # skill show
 # ---------------------------------------------------------------------------
 
@@ -275,22 +259,6 @@ def test_skill_enable_then_disable(skill_cli_daemon):
     r = _runner.invoke(cli_app, ["skill", "disable", "ed-1", "--agent", "cur"])
     assert r.exit_code == 0, r.output
     assert not link.exists()
-
-
-# ---------------------------------------------------------------------------
-# skill update
-# ---------------------------------------------------------------------------
-
-
-def test_skill_update_local_import_not_supported(skill_cli_daemon):
-    """`update` on a local_import-sourced skill is rejected (re-import required)."""
-    src = skill_cli_daemon / "src"
-    _write_skill_folder(src, name="up-1")
-    _runner.invoke(cli_app, ["skill", "import", str(src)])
-    r = _runner.invoke(cli_app, ["skill", "update", "up-1"])
-    # ExitCode.GENERIC (2) — surface routes 4xx through `_cli_client.check`
-    # but the import side defers to the typer.Exit(2) raised in `update_cmd`.
-    assert r.exit_code != 0
 
 
 # ---------------------------------------------------------------------------

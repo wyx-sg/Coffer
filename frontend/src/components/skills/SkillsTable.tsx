@@ -77,10 +77,7 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
       label: t("skills.source"),
       allLabel: t("skills.allSources"),
       accessor: (s) => s.source.type,
-      options: [
-        { value: "local_import", label: "local_import" },
-        { value: "git", label: "git" },
-      ],
+      options: [{ value: "local_import", label: "local_import" }],
     },
   ];
 

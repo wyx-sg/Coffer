@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0028"
+HEAD_REVISION = "0029"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -47,6 +47,9 @@ HEAD_REVISION = "0028"
 # unchanged and the column is ABSENT at head (asserted separately below). 0028
 # DROPs ``channel_peers.preferred_workspace`` (channel workspace switching
 # removed, simplification 8.4) — again a column-only change, table set unchanged.
+# 0029 is DATA-only: it rewrites every ``kind='skill'`` ``config_json`` (Git
+# skill lifecycle removed, simplification 4.3) — no DDL, so the table/column set
+# is unchanged at head.
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
@@ -150,6 +153,78 @@ def test_migration_roundtrip_is_reversible_and_idempotent(tmp_path, monkeypatch)
     assert _alembic_version(db_path) == HEAD_REVISION
 
 
+def test_0029_rewrites_skill_config_to_local_import_only(tmp_path, monkeypatch):
+    """0029 is a data migration (simplification 4.3): every ``kind='skill'``
+    ``config_json`` loses the Git lifecycle — a git source becomes local_import
+    (the URL kept as ``original_path``) and the update/pin bookkeeping keys are
+    stripped, while shared fields (version_hash, last_synced, scan/risk) survive."""
+    db_path = tmp_path / "skill_data.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    # Stop one revision BEFORE 0029 and seed a pre-4.3 git-sourced skill row.
+    command.upgrade(cfg, "0028")
+    legacy_cfg = {
+        "source": {
+            "type": "git",
+            "git_url": "https://github.com/owner/skills-repo",
+            "git_ref": "main",
+            "git_subpath": "pdf",
+        },
+        "skill_md_name": "pdf",
+        "skill_md_description": "d",
+        "version_hash": "abc123",
+        "last_synced_from_source_at": "2026-01-01T00:00:00+00:00",
+        "risk_acknowledged": False,
+        "update_available": True,
+        "available_version_hash": "def456",
+        "last_update_check_at": "2026-01-02T00:00:00+00:00",
+        "pinned": True,
+    }
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
+            "VALUES ('skill', 'pdf', ?, 1, '2026-01-01', '2026-01-01')",
+            (json.dumps(legacy_cfg),),
+        )
+        conn.commit()
+
+    # Apply 0029.
+    command.upgrade(cfg, "head")
+    assert _alembic_version(db_path) == HEAD_REVISION
+
+    with sqlite3.connect(db_path) as conn:
+        (raw,) = conn.execute(
+            "SELECT config_json FROM resources WHERE kind = 'skill' AND name = 'pdf'"
+        ).fetchone()
+    migrated = json.loads(raw)
+
+    # Git source converted to local_import with the URL preserved as provenance.
+    assert migrated["source"] == {
+        "type": "local_import",
+        "original_path": "https://github.com/owner/skills-repo",
+    }
+    # Git-only bookkeeping keys stripped (would break the extra='forbid' model).
+    for key in ("update_available", "available_version_hash", "last_update_check_at", "pinned"):
+        assert key not in migrated
+    # Shared fields untouched.
+    assert migrated["version_hash"] == "abc123"
+    assert migrated["last_synced_from_source_at"] == "2026-01-01T00:00:00+00:00"
+    assert migrated["risk_acknowledged"] is False
+
+    # Downgrade re-adds the bookkeeping keys with their pre-4.3 defaults; the
+    # git -> local_import conversion is intentionally not restored (lossy).
+    command.downgrade(cfg, "0028")
+    with sqlite3.connect(db_path) as conn:
+        (raw2,) = conn.execute(
+            "SELECT config_json FROM resources WHERE kind = 'skill' AND name = 'pdf'"
+        ).fetchone()
+    downgraded = json.loads(raw2)
+    assert downgraded["update_available"] is False
+    assert downgraded["pinned"] is False
+    assert downgraded["source"]["type"] == "local_import"
+
+
 def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkeypatch):
     """Step the chain down one revision at a time and assert each downgrade()
     removes exactly the tables its matching upgrade() created."""
@@ -180,7 +255,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert "locked" not in _documents_columns()
     assert "memory_store_labels" in _user_tables(db_path)
 
-    # head (0028) -> 0027: 0028's downgrade re-adds channel_peers.preferred_workspace.
+    # head (0029) -> 0027: 0029 is data-only (skill config JSON), so its
+    # downgrade touches no columns; 0028's downgrade re-adds preferred_workspace.
     command.downgrade(cfg, "0027")
     assert "preferred_workspace" in _channel_peers_columns()
     assert "locked" not in _documents_columns()

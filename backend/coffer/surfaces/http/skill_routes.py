@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
-from coffer.application.skill.service import SkillService, UpdateOutcome
+from coffer.application.skill.service import SkillService
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
@@ -29,16 +29,6 @@ router = APIRouter(
 
 class SkillImportRequest(BaseModel):
     path: str = Field(min_length=1)
-
-
-class SkillFetchRequest(BaseModel):
-    git_url: str = Field(min_length=1)
-    git_ref: str = Field(min_length=1)
-    git_subpath: str = ""
-
-
-class SkillUpdateRequest(BaseModel):
-    allow_rename: bool = False
 
 
 class SkillEnableRequest(BaseModel):
@@ -79,22 +69,10 @@ class SkillOut(BaseModel):
     risk_acknowledged: bool = False
     # True when the verdict gates enabling and the risk is not yet acknowledged.
     requires_acknowledgment: bool = False
-    # Update detection (FR-030/FR-031).
-    update_available: bool = False
-    last_update_check_at: datetime | None = None
-    pinned: bool = False
-    # True when an update is available and the skill is not pinned (the badge).
-    update_pending: bool = False
 
 
 class SkillListOut(BaseModel):
     items: list[SkillOut]
-
-
-class SkillUpdateResult(BaseModel):
-    skill: SkillOut
-    changed: bool
-    renamed_from: str | None = None
 
 
 class DriftEntryOut(BaseModel):
@@ -183,10 +161,6 @@ async def _to_skill_out(
         requires_acknowledgment=(
             verdict_requires_ack(cfg.scan_verdict) and not cfg.risk_acknowledged
         ),
-        update_available=cfg.update_available,
-        last_update_check_at=cfg.last_update_check_at,
-        pinned=cfg.pinned,
-        update_pending=cfg.update_available and not cfg.pinned,
         bindings=[
             SkillBindingOut(
                 agent_name=agents_by_id.get(b.agent_resource_id, str(b.agent_resource_id)),
@@ -228,21 +202,6 @@ async def import_skill(
     return await _to_skill_out(svc, r, await _agents_by_id(svc))
 
 
-@router.post("/fetch", response_model=SkillOut, status_code=status.HTTP_201_CREATED)
-async def fetch_skill(
-    body: SkillFetchRequest,
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> SkillOut:
-    r = await svc.fetch_git(
-        git_url=body.git_url,
-        git_ref=body.git_ref,
-        git_subpath=body.git_subpath,
-        actor=actor,
-    )
-    return await _to_skill_out(svc, r, await _agents_by_id(svc))
-
-
 @router.get("/{name}", response_model=SkillOut)
 async def get_skill(
     name: str,
@@ -262,25 +221,6 @@ async def delete_skill(
     name = _validate_skill_name(name)
     await svc.remove(name=name, actor=actor)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.post("/{name}/update", response_model=SkillUpdateResult)
-async def update_skill(
-    name: str,
-    body: SkillUpdateRequest | None = None,
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> SkillUpdateResult:
-    name = _validate_skill_name(name)
-    body = body or SkillUpdateRequest()
-    outcome: UpdateOutcome = await svc.update(
-        name=name, allow_rename=body.allow_rename, actor=actor
-    )
-    return SkillUpdateResult(
-        skill=await _to_skill_out(svc, outcome.skill, await _agents_by_id(svc)),
-        changed=outcome.changed,
-        renamed_from=outcome.renamed_from,
-    )
 
 
 @router.post("/{name}/enable", response_model=SkillBindingOut)
@@ -343,5 +283,5 @@ async def verify_skills(
     )
 
 
-# Trust-layer (scan / acknowledge) + update-detection (check-update / pin /
-# unpin) endpoints live in ``skill_trust_routes.py`` (component size cap).
+# Trust-layer (scan / acknowledge) endpoints live in
+# ``skill_trust_routes.py`` (component size cap).

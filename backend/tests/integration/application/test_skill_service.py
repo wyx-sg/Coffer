@@ -1,8 +1,7 @@
 """SkillService end-to-end integration (DB + filesystem + sync engine).
 
-Covers import / fetch / enable / disable / update / verify / remove +
-the cross-kind cleanup hooks. Git fetch is exercised through a stubbed
-SourceFetcher that yields a prepared folder so we don't reach the network.
+Covers import / enable / disable / verify / remove +
+the cross-kind cleanup hooks.
 """
 
 from __future__ import annotations
@@ -10,8 +9,6 @@ from __future__ import annotations
 import os
 import pathlib
 import textwrap
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 
 import pytest
 
@@ -22,15 +19,11 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.scan_ops import acknowledge_risk, rescan_skill
 from coffer.application.skill.service import SkillService
-from coffer.application.skill.update_ops import check_for_updates, set_pinned
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
-    SkillNameMismatch,
     SkillValidationError,
-    SSRFBlocked,
     TargetConflict,
-    UpdateNotSupported,
 )
 from coffer.domain.resource import Resource
 from coffer.domain.skill.config import SkillConfig
@@ -47,34 +40,6 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
-
-
-class _FakeFetcher:
-    """Stub for GitSourceFetcher — serves prepared folders by URL."""
-
-    def __init__(self, content_by_url: dict[str, pathlib.Path]) -> None:
-        self._content = content_by_url
-
-    @asynccontextmanager
-    async def fetched(
-        self,
-        *,
-        git_url: str,
-        git_ref: str,
-        git_subpath: str = "",
-    ) -> AsyncIterator[pathlib.Path]:
-        # Honor SSRF guard via the real check_url to ensure tests can
-        # also exercise rejection paths.
-        from coffer.infrastructure.skill.ssrf_guard import check_url
-
-        try:
-            check_url(git_url)
-        except ValueError as e:
-            host = git_url.split("//", 1)[-1].split("/", 1)[0]
-            raise SSRFBlocked(host) from e
-        if git_url not in self._content:
-            raise FileNotFoundError(f"no fake content registered for {git_url}")
-        yield self._content[git_url]
 
 
 def _write_skill_folder(folder: pathlib.Path, *, name: str, body: str = "hello") -> pathlib.Path:
@@ -95,7 +60,7 @@ def _write_skill_folder(folder: pathlib.Path, *, name: str, body: str = "hello")
     return folder
 
 
-async def _setup(tmp_path: pathlib.Path, fake_fetch: dict[str, pathlib.Path] | None = None):
+async def _setup(tmp_path: pathlib.Path):
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -104,8 +69,6 @@ async def _setup(tmp_path: pathlib.Path, fake_fetch: dict[str, pathlib.Path] | N
 
     binding_repo = SkillBindingRepo(sm)
     master_store = MasterStore(root=tmp_path / "coffer-skills")
-
-    fetcher = _FakeFetcher(fake_fetch or {})
 
     # Cross-kind resolver — tests are outside the contract scope so we can
     # import both kinds here without violating Contract 5.
@@ -148,7 +111,6 @@ async def _setup(tmp_path: pathlib.Path, fake_fetch: dict[str, pathlib.Path] | N
         audit=audit,
         binding_repo=binding_repo,
         master_store=master_store,
-        source_fetcher=fetcher,  # type: ignore[arg-type]
         sync_engine=SyncEngine(),
         agent_skill_dir_resolver=_agent_skill_dir,
         agent_skill_delivery_resolver=_agent_skill_delivery,
@@ -242,35 +204,6 @@ async def test_import_rejects_path_escape_symlink(tmp_path):
     os.symlink(outside, src / "ev")
     with pytest.raises(SkillValidationError):
         await skill_svc.import_local(path=str(src), actor="cli")
-    await engine.dispose()
-
-
-# ----- fetch -----
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="fetch a public Git skill repo")
-async def test_fetch_git_with_stub_fetcher(tmp_path):
-    upstream = tmp_path / "upstream"
-    _write_skill_folder(upstream, name="from-git")
-    skill_svc, _, audit, store, engine = await _setup(
-        tmp_path,
-        fake_fetch={"https://github.com/x/y": upstream},
-    )
-    r = await skill_svc.fetch_git(git_url="https://github.com/x/y", git_ref="main", actor="cli")
-    assert r.name == "from-git"
-    assert store.paths_for("from-git").folder.is_dir()
-    audited = await audit.query(event_type=AuditEventType.SKILL_FETCHED.value)
-    assert len(audited) == 1
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="reject SSRF in fetch")
-async def test_fetch_rejects_loopback(tmp_path):
-    skill_svc, _, _, _, engine = await _setup(tmp_path)
-    with pytest.raises(SSRFBlocked):
-        await skill_svc.fetch_git(git_url="http://127.0.0.1/repo.git", git_ref="main", actor="cli")
     await engine.dispose()
 
 
@@ -612,61 +545,6 @@ async def test_external_dir_registration_preserves_existing_yaml(tmp_path):
     await engine.dispose()
 
 
-# ----- update -----
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="005-skill-manager", scenario="update a Git-sourced skill")
-async def test_update_replaces_master(tmp_path):
-    upstream_v1 = tmp_path / "upstream-v1"
-    _write_skill_folder(upstream_v1, name="upd", body="v1 body")
-    skill_svc, agent_svc, _, store, engine = await _setup(
-        tmp_path, fake_fetch={"https://example.org/repo": upstream_v1}
-    )
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
-    await skill_svc.fetch_git(git_url="https://example.org/repo", git_ref="main", actor="cli")
-    # Replace upstream content.
-    (upstream_v1 / "SKILL.md").write_text(
-        "---\nname: upd\ndescription: v2 description.\n---\n\nv2 body"
-    )
-    outcome = await skill_svc.update(name="upd", actor="cli")
-    assert outcome.changed
-    assert "v2 body" in store.paths_for("upd").skill_md.read_text()
-    # Symlink continues to point at master; verify the agent-side view updated.
-    link = skill_dir / "upd"
-    assert "v2 body" in (link / "SKILL.md").read_text()
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="detect frontmatter name change on update"
-)
-async def test_update_detects_name_change(tmp_path):
-    upstream = tmp_path / "upstream"
-    _write_skill_folder(upstream, name="orig")
-    skill_svc, agent_svc, _, _, engine = await _setup(
-        tmp_path, fake_fetch={"https://example.org/repo": upstream}
-    )
-    await _register_agent(agent_svc, tmp_path, name="cur")
-    await skill_svc.fetch_git(git_url="https://example.org/repo", git_ref="main", actor="cli")
-    (upstream / "SKILL.md").write_text("---\nname: renamed\ndescription: now renamed.\n---\nbody")
-    with pytest.raises(SkillNameMismatch):
-        await skill_svc.update(name="orig", actor="cli")
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_update_rejects_local_import(tmp_path):
-    skill_svc, _, _, _, engine = await _setup(tmp_path)
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="loc")
-    await skill_svc.import_local(path=str(src), actor="cli")
-    with pytest.raises(UpdateNotSupported):
-        await skill_svc.update(name="loc", actor="cli")
-    await engine.dispose()
-
-
 # ----- verify -----
 
 
@@ -753,59 +631,6 @@ async def test_remove_agent_cleans_its_bindings(tmp_path):
     assert not t1.exists()
     assert t2.exists()
     assert store.paths_for("my-skill").folder.exists()
-    await engine.dispose()
-
-
-# ----- TEST21-012: update with allow_rename — master + bindings rewire -----
-
-
-@pytest.mark.asyncio
-async def test_update_with_allow_rename_renames_master_and_rewires_bindings(tmp_path):
-    """Cover the `_rename_master_and_bindings` path of update_ops.
-
-    Two agents are enabled on the original skill name, the upstream then
-    changes the frontmatter ``name`` and the user runs update with
-    ``allow_rename=True``. The master folder must be renamed, every binding
-    rewired to the new resource_id, both agent-side links recreated under
-    the new name, and a SKILL_RENAMED audit emitted.
-    """
-    upstream = tmp_path / "upstream"
-    _write_skill_folder(upstream, name="orig")
-    skill_svc, agent_svc, audit, store, engine = await _setup(
-        tmp_path, fake_fetch={"https://example.org/repo": upstream}
-    )
-    _, sd1 = await _register_agent(agent_svc, tmp_path, name="cur1")
-    _, sd2 = await _register_agent(agent_svc, tmp_path, name="cur2", agent_type=AgentType.CODEX)
-    await skill_svc.fetch_git(git_url="https://example.org/repo", git_ref="main", actor="cli")
-    # Pre-rename: both agents have a link at <skill_dir>/orig.
-    t1_old = sd1 / "orig"
-    t2_old = sd2 / "orig"
-    assert t1_old.exists() and t2_old.exists()
-
-    # Upstream renames itself in the frontmatter.
-    (upstream / "SKILL.md").write_text("---\nname: shiny\ndescription: renamed.\n---\nbody")
-    outcome = await skill_svc.update(name="orig", allow_rename=True, actor="cli")
-    assert outcome.changed
-    assert outcome.renamed_from == "orig"
-    assert outcome.skill.name == "shiny"
-
-    # Master folder rename: old gone, new present.
-    assert not store.paths_for("orig").folder.exists()
-    assert store.paths_for("shiny").folder.is_dir()
-
-    # Bindings rewired: agent-side links now live under the new name and the
-    # old paths are gone.
-    t1_new = sd1 / "shiny"
-    t2_new = sd2 / "shiny"
-    assert t1_new.exists() and t2_new.exists()
-    assert not t1_old.exists() and not t2_old.exists()
-
-    # SKILL_RENAMED audit emitted with the from→to pair.
-    renamed = await audit.query(event_type=AuditEventType.SKILL_RENAMED.value)
-    assert len(renamed) == 1
-    details = renamed[0].details
-    assert details.get("from") == "orig"
-    assert details.get("to") == "shiny"
     await engine.dispose()
 
 
@@ -1125,31 +950,6 @@ async def test_clean_skill_has_no_verdict_and_autobinds(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_update_resets_prior_acknowledgment(tmp_path):
-    # Fetch a risky skill, acknowledge it, then update to new risky content —
-    # the acknowledgment must reset (it was for the old content).
-    src = tmp_path / "remote"
-    _write_risky_skill_folder(src, name="risky")
-    skill_svc, _, _, _, engine = await _setup(tmp_path, fake_fetch={"https://github.com/x/y": src})
-    await skill_svc.fetch_git(git_url="https://github.com/x/y", git_ref="main", actor="cli")
-    await acknowledge_risk(service=skill_svc, name="risky", actor="cli")
-    assert (await _skill_cfg(skill_svc, "risky")).risk_acknowledged is True
-    # Change SKILL.md (what update keys on) so the update is not a no-op; the
-    # content stays risky.
-    _write_risky_skill_folder(src, name="risky")
-    (src / "SKILL.md").write_text(
-        "---\nname: risky\ndescription: A risky skill, revised.\n---\n\nv2\n",
-        encoding="utf-8",
-    )
-    outcome = await skill_svc.update(name="risky", actor="cli")
-    assert outcome.changed is True
-    cfg = await _skill_cfg(skill_svc, "risky")
-    assert cfg.scan_verdict == "critical"
-    assert cfg.risk_acknowledged is False
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
 async def test_rescan_persists_new_verdict(tmp_path):
     skill_svc, _, _, store, engine = await _setup(tmp_path)
     src = tmp_path / "src"
@@ -1162,83 +962,4 @@ async def test_rescan_persists_new_verdict(tmp_path):
     report = await rescan_skill(service=skill_svc, name="clean", actor="cli")
     assert report.verdict is not None and report.verdict.value == "critical"
     assert (await _skill_cfg(skill_svc, "clean")).scan_verdict == "critical"
-    await engine.dispose()
-
-
-# ---------- update detection + pinning (FR-030/FR-031) ----------
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="detect an available update without applying it"
-)
-async def test_check_for_updates_detects_change_without_applying(tmp_path):
-    src = tmp_path / "remote"
-    _write_skill_folder(src, name="gitskill", body="v1")
-    skill_svc, _, _, _, engine = await _setup(tmp_path, fake_fetch={"https://github.com/x/y": src})
-    await skill_svc.fetch_git(git_url="https://github.com/x/y", git_ref="main", actor="cli")
-    before = await _skill_cfg(skill_svc, "gitskill")
-    # Upstream changes.
-    _write_skill_folder(src, name="gitskill", body="v2-new-content")
-    status = await check_for_updates(service=skill_svc, name="gitskill", actor="cli")
-    assert status.available is True
-    assert status.available_hash is not None and status.available_hash != before.version_hash
-    # Cached on the config, but NOT applied: version_hash unchanged.
-    after = await _skill_cfg(skill_svc, "gitskill")
-    assert after.update_available is True
-    assert after.last_update_check_at is not None
-    assert after.version_hash == before.version_hash
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_check_for_updates_clean_when_unchanged(tmp_path):
-    src = tmp_path / "remote"
-    _write_skill_folder(src, name="gitskill")
-    skill_svc, _, _, _, engine = await _setup(tmp_path, fake_fetch={"https://github.com/x/y": src})
-    await skill_svc.fetch_git(git_url="https://github.com/x/y", git_ref="main", actor="cli")
-    status = await check_for_updates(service=skill_svc, name="gitskill", actor="cli")
-    assert status.available is False
-    assert (await _skill_cfg(skill_svc, "gitskill")).update_available is False
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_check_for_updates_local_import_unsupported(tmp_path):
-    skill_svc, _, _, _, engine = await _setup(tmp_path)
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="local")
-    await skill_svc.import_local(path=str(src), actor="cli")
-    with pytest.raises(UpdateNotSupported):
-        await check_for_updates(service=skill_svc, name="local", actor="cli")
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_update_clears_update_available(tmp_path):
-    src = tmp_path / "remote"
-    _write_skill_folder(src, name="gitskill", body="v1")
-    skill_svc, _, _, _, engine = await _setup(tmp_path, fake_fetch={"https://github.com/x/y": src})
-    await skill_svc.fetch_git(git_url="https://github.com/x/y", git_ref="main", actor="cli")
-    _write_skill_folder(src, name="gitskill", body="v2")
-    await check_for_updates(service=skill_svc, name="gitskill", actor="cli")
-    assert (await _skill_cfg(skill_svc, "gitskill")).update_available is True
-    await skill_svc.update(name="gitskill", actor="cli")
-    assert (await _skill_cfg(skill_svc, "gitskill")).update_available is False
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="005-skill-manager", scenario="pin a skill to suppress the update signal"
-)
-async def test_pin_and_unpin(tmp_path):
-    skill_svc, _, _, _, engine = await _setup(tmp_path)
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="local")
-    await skill_svc.import_local(path=str(src), actor="cli")
-    await set_pinned(service=skill_svc, name="local", pinned=True, actor="cli")
-    assert (await _skill_cfg(skill_svc, "local")).pinned is True
-    await set_pinned(service=skill_svc, name="local", pinned=False, actor="cli")
-    assert (await _skill_cfg(skill_svc, "local")).pinned is False
     await engine.dispose()

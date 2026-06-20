@@ -50,12 +50,8 @@ _STATUS: dict[str, int] = {
     "FORBIDDEN": 403,
     # spec 005-skill-manager
     "SKILL_INVALID": 422,
-    "SOURCE_FETCH_FAILED": 502,
-    "SSRF_BLOCKED": 422,
     "TARGET_CONFLICT": 409,
-    "SKILL_NAME_MISMATCH": 409,
     "SKILL_RISK_NOT_ACKNOWLEDGED": 409,
-    "UPDATE_NOT_SUPPORTED": 400,
     # agent workspace (specs 004/005 amendment)
     "MCP_ENTRY_NOT_FOUND": 404,
     "PLUGIN_NOT_FOUND": 404,

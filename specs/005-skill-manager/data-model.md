@@ -8,27 +8,14 @@ framework from spec 001.
 
 ### `SkillSource` (`domain/skill/source.py`)
 
-A discriminated Pydantic union recording where a managed skill came from.
-
-```
-SkillSource = Annotated[LocalImportSource | GitSource, Discriminator("type")]
-```
+A Pydantic model recording where a managed skill came from. In v1, only local-folder import is supported.
 
 #### `LocalImportSource`
 
 | Field           | Type                      | Notes                                                 |
 | --------------- | ------------------------- | ----------------------------------------------------- |
-| `type`          | `Literal["local_import"]` | discriminator                                         |
+| `type`          | `Literal["local_import"]` | source type                                           |
 | `original_path` | `str`                     | informational only; not retained as a live dependency |
-
-#### `GitSource`
-
-| Field         | Type             | Notes                                                  |
-| ------------- | ---------------- | ------------------------------------------------------ |
-| `type`        | `Literal["git"]` | discriminator                                          |
-| `git_url`     | `HttpUrl`        | must pass SSRF guard (per spec 001 constitution)       |
-| `git_ref`     | `str`            | branch / tag / commit ref, e.g. `main`                 |
-| `git_subpath` | `str`            | path relative to repo root; `""` if skill sits at root |
 
 ### `SkillConfig` (`domain/skill/config.py`)
 
@@ -36,20 +23,16 @@ Pydantic v2 `BaseModel`.
 
 | Field                        | Type               | Notes                                               |
 | ---------------------------- | ------------------ | --------------------------------------------------- |
-| `source`                     | `SkillSource`      | discriminated union                                 |
+| `source`                     | `LocalImportSource` | single local_import source                         |
 | `skill_md_name`              | `str`              | SKILL.md frontmatter `name`; equals `Resource.name` |
 | `skill_md_description`       | `str`              | frontmatter `description`                           |
 | `version_hash`               | `str`              | sha256 of SKILL.md content at last sync             |
-| `last_synced_from_source_at` | `datetime \| None` | UTC; set on import/fetch/update                     |
+| `last_synced_from_source_at` | `datetime \| None` | UTC; set on import                                  |
 | `scan_verdict`               | `str \| None`      | trust layer L2 (FR-028): worst severity, or none    |
 | `scan_findings_count`        | `int`              | number of scan findings (default 0)                 |
 | `scan_ruleset_version`       | `str \| None`      | ruleset version the verdict was produced under      |
 | `last_scanned_at`            | `datetime \| None` | UTC; set on each scan                               |
 | `risk_acknowledged`          | `bool`             | FR-029; set by acknowledge, reset on content change |
-| `update_available`           | `bool`             | FR-030; set by check-for-updates, cleared on update |
-| `available_version_hash`     | `str \| None`      | the newer upstream SKILL.md hash when available     |
-| `last_update_check_at`       | `datetime \| None` | UTC; set on each update check                       |
-| `pinned`                     | `bool`             | FR-031; suppresses the update-available signal      |
 
 The trust-layer fields are all optional with defaults, so they serialize into
 the existing opaque `config_json` with no migration and pre-trust-layer rows
@@ -77,10 +60,10 @@ unrecognized field is tolerated under `extra='allow'`.
 
 The frontmatter `description` is stored on the skill kind's config as
 `SkillConfig.skill_md_description` (see above) — this is the authoritative
-copy and is what frontmatter renames will overwrite. The `resources` row has
+copy. The `resources` row has
 its own `description` column inherited from the kind-agnostic Resource
-framework; on import/fetch it is seeded from the frontmatter `description`
-for parity with other kinds, but it is not re-synced on subsequent updates
+framework; on import it is seeded from the frontmatter `description`
+for parity with other kinds, but it is not re-synced afterwards
 (treat it as a free-form human label after the initial write).
 
 ### `BindingState` (`domain/skill/binding.py`)
@@ -105,7 +88,7 @@ String-valued enum.
 | `missing_link`          | binding enabled but no target on disk         | re-enable to re-link                  |
 | `tampered_link`         | symlink target is not Coffer's master         | disable + re-enable, or use `--force` |
 | `replaced_with_regular` | path is a regular file/dir instead of a link  | same as above                         |
-| `missing_master`        | binding refers to a master folder that's gone | re-import or re-fetch                 |
+| `missing_master`        | binding refers to a master folder that's gone | re-import                             |
 | `orphan_master`         | master folder on disk has no DB record        | adopt or remove                       |
 
 ### Unmanaged Skill (`domain/skill/scan.py` + `domain/agent/scan.py`) — workspace amendment
@@ -182,16 +165,13 @@ Index: `idx_bindings_agent` on `(agent_resource_id, enabled)` — supports "whic
 
 Add to `AuditEventType`:
 
-| Value                  | When emitted                                                     |
-| ---------------------- | ---------------------------------------------------------------- |
-| `skill_imported`       | Local-path import succeeds                                       |
-| `skill_fetched`        | Git fetch succeeds                                               |
-| `skill_updated`        | Git update changes content (with before/after hashes in details) |
-| `skill_update_noop`    | Update found no change                                           |
-| `skill_renamed`        | Frontmatter rename applied with `--allow-rename`                 |
-| `skill_bound`          | Per-agent binding enabled (symlink created)                      |
-| `skill_unbound`        | Per-agent binding disabled (symlink removed)                     |
-| `skill_drift_detected` | `verify` op reported drift (count + categories in details)       |
+| Value                  | When emitted                                                               |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `skill_imported`       | Local-path import succeeds                                                 |
+| `skill_updated`        | In-place file edit changes skill content (with before/after hashes)        |
+| `skill_bound`          | Per-agent binding enabled (symlink created)                                |
+| `skill_unbound`        | Per-agent binding disabled (symlink removed)                               |
+| `skill_drift_detected` | `verify` op reported drift (count + categories in details)                 |
 
 The workspace amendment adds:
 
@@ -221,8 +201,8 @@ Skill **removal** has no dedicated event — deleting a skill goes through
 
 `.coffer.meta.json` mirrors a subset of `SkillConfig` for forensic recovery
 if the DB is lost. The file is written by `MasterStore` immediately after the
-master folder content is copied/replaced (i.e. at the end of import, fetch,
-and update) and is rewritten in place on every subsequent successful sync.
+master folder content is copied (i.e. at the end of import) and is rewritten
+in place on every subsequent successful sync.
 It is **not** read by Coffer at runtime; the DB is authoritative and wins on
 any disagreement.
 
@@ -230,7 +210,7 @@ Keys persisted:
 
 | Key                          | Source                                   | Notes                                        |
 | ---------------------------- | ---------------------------------------- | -------------------------------------------- |
-| `source`                     | `SkillConfig.source` (discriminated)     | full union including `type` + variant fields |
+| `source`                     | `SkillConfig.source`                     | local_import source with original_path       |
 | `skill_md_name`              | `SkillConfig.skill_md_name`              | matches the master folder name at write time |
 | `skill_md_description`       | `SkillConfig.skill_md_description`       |                                              |
 | `version_hash`               | `SkillConfig.version_hash`               | sha256 of SKILL.md at last sync              |
@@ -292,8 +272,6 @@ flows never fail.
 | Method                                                         | Purpose                                                                                                                        |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `import_local(path, actor) -> Resource`                        | Read SKILL.md, validate, copy to master, register Resource, audit, return. Auto-binds for every registered agent (trust mode). |
-| `fetch_git(url, ref, subpath, actor) -> Resource`              | SSRF-guarded shallow clone, validate, copy, register. Auto-bind.                                                               |
-| `update(ref, allow_rename=False, actor) -> UpdateOutcome`      | Re-fetch git source, compare hash, replace master atomically if changed; reject on rename unless flagged.                      |
 | `enable_for(skill_ref, agent_ref, force=False, actor) -> None` | Upsert binding, create symlink (or copy fallback on FAT32).                                                                    |
 | `disable_for(skill_ref, agent_ref, actor) -> None`             | Mark binding disabled, remove link.                                                                                            |
 | `verify() -> DriftReport`                                      | Walk every enabled binding; classify drift per `DriftKind`.                                                                    |
@@ -315,7 +293,7 @@ to the skill subpackage, same style as `lifecycle_ops.py`):
 ### File viewer (`application/skill/file_ops.py`)
 
 Stateless helpers beside `service.py` (same pattern as
-`verify_ops.py` / `update_ops.py`) that expose a skill's master folder to
+`verify_ops.py`) that expose a skill's master folder to
 surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
 read-only in-app viewer and surface each node's absolute on-disk path so the UI
 can offer open-in-external-editor / reveal-in-file-manager / copy-path
@@ -360,13 +338,6 @@ shape is returned by the programmatic write (FR-028).
 | `binary`          | `bool` | true when the file is non-UTF-8 or contains a NUL byte (content is empty)        |
 | `size`            | `int`  | true byte size of the file on disk (independent of any truncation)               |
 
-### `SourceFetcher` (`infrastructure/skill/source_fetcher.py`)
-
-Provides `fetch_git(url, ref, subpath) -> Path` returning a tmp directory with
-the cloned content at `subpath`. Uses `git` subprocess via SSRF-guarded
-`httpx.AsyncClient`-like predicate: validates URL host is not loopback /
-RFC1918 / link-local before invoking `git clone --depth=1 --branch=<ref> --filter=blob:none`.
-
 ### `SyncEngine` (`infrastructure/skill/sync_engine.py`)
 
 Cross-platform directory-link helper. Lives in `infrastructure/` because its
@@ -391,7 +362,7 @@ total size ≤ 50 MB.
 
 `surfaces/http/app.py` calls `wire_agent_and_skill_kinds(app, resource_svc, audit, sm)` from `surfaces/http/agent_skill_wiring.py`. The wiring function:
 
-1. Builds `SkillBindingRepo`, `MasterStore`, `SyncEngine`, `SourceFetcher`, and the `SkillService` (plus its `update_ops` / `verify_ops` collaborators).
+1. Builds `SkillBindingRepo`, `MasterStore`, `SyncEngine`, and the `SkillService` (plus its `verify_ops` collaborator).
 2. Constructs the skill `Kind` via `make_skill_kind(...)` and registers it into `app.state.kinds["skill"]`.
 3. Reads the existing agent `Kind` already registered by `_wire_agent_kind` and builds a new `Kind` whose `on_delete` is a closure: first `await skill_svc.cleanup_bindings_for_agent(ref)`, then delegate to the original agent `on_delete`. The wrapped agent kind replaces the previous entry in `app.state.kinds["agent"]`.
 4. Mounts the `skill_routes` router.
@@ -401,6 +372,4 @@ This closure-based composition keeps both kinds independent at the application l
 ## Constraints summary
 
 - All HTTP loopback-only.
-- Git fetch through SSRF-guarded URL predicate (loopback / RFC1918 / link-local rejected).
-- No credential-store entries in v1 (no auth on skill sources).
 - File-size limit: 50 MB total per skill folder, enforced by `validate_skill_folder`. The limit is a `SkillService` constructor default (`size_limit_bytes`); it is not yet plumbed to a config file, so v1 always uses the hardcoded 50 MB.

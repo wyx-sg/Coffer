@@ -1,12 +1,11 @@
 // frontend/src/pages/SkillDetailPage.tsx
 // Per-skill detail page (mirrors AgentDetailPage): a back link, a header with
-// the source badge + Update (git sources only) + Delete, and two tabs —
-// Overview and Files (a read-only tree + content viewer of the skill's master
-// folder).
+// the source badge + Delete, and two tabs — Overview and Files (a read-only
+// tree + content viewer of the skill's master folder).
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, RotateCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 
 import { SkillOverview } from "@/components/skills/SkillDetailTabs";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
@@ -23,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
-import { useRemoveSkill, useSkill, useUpdateSkill } from "@/lib/hooks/useSkills";
+import { useRemoveSkill, useSkill } from "@/lib/hooks/useSkills";
 
 export function SkillDetailPage() {
   const { t } = useTranslation();
@@ -33,7 +32,6 @@ export function SkillDetailPage() {
   // return target so we can offer a "back to <agent>" button.
   const backState = useLocation().state as { backTo?: string; backLabel?: string } | null;
   const { data: skill, isPending, error } = useSkill(name);
-  const update = useUpdateSkill();
   const remove = useRemoveSkill();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -64,8 +62,6 @@ export function SkillDetailPage() {
       </Card>
     );
   }
-
-  const isGit = skill.source.type === "git";
 
   return (
     <div className="space-y-6">
@@ -99,17 +95,6 @@ export function SkillDetailPage() {
             <Badge variant="secondary">{skill.source.type}</Badge>
           </div>
           <div className="flex items-center gap-2">
-            {isGit ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={update.isPending}
-                onClick={() => update.mutate({ name: skill.name })}
-              >
-                <RotateCw className="mr-1.5 size-3.5" />
-                {update.isPending ? t("common.saving") : t("skills.update")}
-              </Button>
-            ) : null}
             <Button
               variant="outline"
               size="sm"
@@ -124,12 +109,6 @@ export function SkillDetailPage() {
           <p className="max-w-prose text-sm text-muted-foreground">{skill.description}</p>
         ) : null}
       </div>
-
-      {update.error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {translateApiError(t, update.error)}
-        </p>
-      ) : null}
 
       <Tabs defaultValue="overview">
         <TabsList>

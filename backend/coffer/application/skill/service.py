@@ -1,8 +1,8 @@
-"""SkillService — import/fetch/update/enable/disable/verify/remove for skills.
+"""SkillService — import/enable/disable/verify/remove for skills.
 
 Stitches together MasterStore (canonical files), SkillBindingRepo (per-agent
-state), SourceFetcher (git), SyncEngine (per-OS link helper), and the
-kind-agnostic ResourceService (Resource rows + audit).
+state), SyncEngine (per-OS link helper), and the kind-agnostic ResourceService
+(Resource rows + audit).
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ import logging
 import pathlib
 import shutil
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from coffer.application.audit_service import AuditService
@@ -22,21 +21,16 @@ from coffer.application.skill.ports import (
     ExternalDirRegistrarPort,
     MasterStorePort,
     SkillBindingRepoPort,
-    SourceFetcherPort,
     SyncEnginePort,
     WorkspaceScanPort,
 )
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
-    SkillValidationError,
-    UpdateNotSupported,
-)
+from coffer.domain.errors import SkillValidationError
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.skill.binding import BindingState
-from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.drift import DriftReport
 from coffer.domain.skill.external_dir import ExternalDirRegistration
-from coffer.domain.skill.source import GitSource, LocalImportSource
+from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import (
     ValidationFailure,
     validate_skill_folder,
@@ -73,13 +67,6 @@ AgentSkillDeliveryResolver = Callable[[Resource], str]
 AgentExternalRegistrationResolver = Callable[[Resource], ExternalDirRegistration | None]
 
 
-@dataclass(frozen=True)
-class UpdateOutcome:
-    skill: Resource
-    changed: bool
-    renamed_from: str | None = None
-
-
 class SkillService:
     """Skill-kind lifecycle on top of the kind-agnostic Resource framework."""
 
@@ -90,7 +77,6 @@ class SkillService:
         audit: AuditService,
         binding_repo: SkillBindingRepoPort,
         master_store: MasterStorePort,
-        source_fetcher: SourceFetcherPort,
         sync_engine: SyncEnginePort,
         agent_skill_dir_resolver: AgentSkillDirResolver,
         size_limit_bytes: int = 50 * 1024 * 1024,
@@ -106,7 +92,6 @@ class SkillService:
         self._audit = audit
         self._bindings = binding_repo
         self._store = master_store
-        self._fetcher = source_fetcher
         self._sync = sync_engine
         self._resolve_agent_skill_dir = agent_skill_dir_resolver
         self._size_limit = size_limit_bytes
@@ -143,68 +128,6 @@ class SkillService:
             event=AuditEventType.SKILL_IMPORTED,
             actor=actor,
         )
-
-    async def fetch_git(
-        self,
-        *,
-        git_url: str,
-        git_ref: str,
-        git_subpath: str = "",
-        actor: str = "api",
-    ) -> Resource:
-        from coffer.application.skill.lifecycle_ops import register_from_validated
-
-        async with self._fetcher.fetched(
-            git_url=git_url, git_ref=git_ref, git_subpath=git_subpath
-        ) as folder:
-            result = validate_skill_folder(folder, size_limit_bytes=self._size_limit)
-            if isinstance(result, ValidationFailure):
-                raise SkillValidationError(result.reason, result.details)
-            return await register_from_validated(
-                service=self,
-                src=folder,
-                validation=result,
-                source_meta=GitSource(
-                    git_url=git_url,  # type: ignore[arg-type]
-                    git_ref=git_ref,
-                    git_subpath=git_subpath,
-                ),
-                event=AuditEventType.SKILL_FETCHED,
-                actor=actor,
-            )
-
-    # ---------- updates ----------
-
-    async def update(
-        self,
-        *,
-        name: str,
-        allow_rename: bool = False,
-        actor: str = "api",
-    ) -> UpdateOutcome:
-        from coffer.application.skill.update_ops import apply_update
-
-        existing = await self._rs.get(ResourceRef("skill", name))
-        cfg = SkillConfig.model_validate(existing.config)
-        if not isinstance(cfg.source, GitSource):
-            raise UpdateNotSupported("local_import sources cannot be auto-updated; re-import")
-        async with self._fetcher.fetched(
-            git_url=str(cfg.source.git_url),
-            git_ref=cfg.source.git_ref,
-            git_subpath=cfg.source.git_subpath,
-        ) as folder:
-            result = validate_skill_folder(folder, size_limit_bytes=self._size_limit)
-            if isinstance(result, ValidationFailure):
-                raise SkillValidationError(result.reason, result.details)
-            return await apply_update(
-                service=self,
-                existing=existing,
-                cfg=cfg,
-                validation=result,
-                src=folder,
-                allow_rename=allow_rename,
-                actor=actor,
-            )
 
     # ---------- per-agent bindings ----------
 

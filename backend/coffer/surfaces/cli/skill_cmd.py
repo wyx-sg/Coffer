@@ -1,4 +1,4 @@
-"""coffer skill ... commands."""
+"""coffer skill ... commands (local-folder import only)."""
 
 from __future__ import annotations
 
@@ -68,30 +68,6 @@ def import_cmd(
     typer.echo(f"imported: skill:{r.json()['name']}")
 
 
-@app.command("fetch")
-def fetch(
-    git_url: str = typer.Argument(..., help="Public Git URL of the skill repo."),
-    git_ref: str = typer.Option("main", "--ref", help="Branch / tag / commit."),
-    git_subpath: str = typer.Option("", "--subpath", help="Path inside the repo."),
-) -> None:
-    """Fetch a skill from a public Git URL."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(
-            "/skills/fetch",
-            json={
-                "git_url": git_url,
-                "git_ref": git_ref,
-                "git_subpath": git_subpath,
-            },
-            timeout=120,
-        )
-        if r.status_code >= 400:
-            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
-            raise typer.Exit(2)
-    typer.echo(f"fetched: skill:{r.json()['name']}")
-
-
 @app.command("show")
 def show(
     name: str = typer.Argument(...),
@@ -120,34 +96,10 @@ def show(
         if data.get("requires_acknowledgment"):
             ack = " (NEEDS ACKNOWLEDGMENT)"
         typer.echo(f"scan:        {verdict}, {data.get('scan_findings_count', 0)} finding(s){ack}")
-    if data.get("update_pending"):
-        typer.echo("update:      available")
-    elif data.get("pinned"):
-        typer.echo("update:      pinned")
     if data["bindings"]:
         typer.echo("bindings:")
         for b in data["bindings"]:
             typer.echo(f"  - {b['agent_name']}: {'enabled' if b['enabled'] else 'disabled'}")
-
-
-@app.command("update")
-def update(
-    name: str = typer.Argument(...),
-    allow_rename: bool = typer.Option(False, "--allow-rename"),
-) -> None:
-    """Refresh a Git-sourced skill from upstream."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(f"/skills/{name}/update", json={"allow_rename": allow_rename}, timeout=120)
-        if r.status_code >= 400:
-            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
-            raise typer.Exit(2)
-    data = r.json()
-    if data["changed"]:
-        rn = data.get("renamed_from")
-        typer.echo(f"updated: {data['skill']['name']}" + (f" (renamed from {rn})" if rn else ""))
-    else:
-        typer.echo(f"already up to date: {name}")
 
 
 @app.command("enable")
@@ -223,41 +175,6 @@ def scan(
 def acknowledge_risk(name: str = typer.Argument(...)) -> None:
     """Acknowledge a skill's scan risk so it can be enabled for agents."""
     _post_action(f"/skills/{name}/acknowledge-risk", f"risk acknowledged: skill:{name}")
-
-
-@app.command("check-update")
-def check_update(
-    name: str = typer.Argument(...),
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """Check upstream for a newer version without applying it."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(f"/skills/{name}/check-update", timeout=120)
-        if r.status_code >= 400:
-            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
-            raise typer.Exit(2)
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-    elif data["available"]:
-        extra = " (name change)" if data["rename_detected"] else ""
-        typer.echo(f"update available: {name}{extra}")
-    else:
-        typer.echo(f"up to date: {name}")
-    raise typer.Exit(3 if data["available"] else 0)
-
-
-@app.command("pin")
-def pin(name: str = typer.Argument(...)) -> None:
-    """Pin a skill so the update-available signal is suppressed."""
-    _post_action(f"/skills/{name}/pin", f"pinned: skill:{name}")
-
-
-@app.command("unpin")
-def unpin(name: str = typer.Argument(...)) -> None:
-    """Unpin a skill so update checks surface again."""
-    _post_action(f"/skills/{name}/unpin", f"unpinned: skill:{name}")
 
 
 @app.command("rm")

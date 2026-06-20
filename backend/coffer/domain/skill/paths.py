@@ -1,9 +1,9 @@
 """Shared path-containment helper for the skill subsystem.
 
-``file_ops.py``, ``validator.py``, and ``source_fetcher.py`` each enforce the
-same invariant: a candidate path must stay inside a trusted root. They used to
-reimplement the same ``Path.is_relative_to`` wrapper three times. This module
-holds the single canonical implementation.
+``file_ops.py`` and ``validator.py`` each enforce the same invariant: a
+candidate path must stay inside a trusted root. They used to reimplement the
+same ``Path.is_relative_to`` wrapper. This module holds the single canonical
+implementation.
 
 The helper does NOT resolve its arguments — callers decide whether to
 ``resolve()`` first (they all do, before calling), matching the original

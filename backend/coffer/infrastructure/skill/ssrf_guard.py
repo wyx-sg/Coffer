@@ -1,21 +1,20 @@
 """SSRF guard: refuse outbound requests to loopback, private, or link-local hosts.
 
-Used by `source_fetcher` to validate user-supplied Git URLs before any
-network round-trip. Resolves the host to one or more IPs; if any of them
-fall into the blocked ranges, the URL is rejected.
+Used to validate user-supplied outbound URLs (e.g. an LLM provider or
+embedding base URL via `provider_introspector`) before any network
+round-trip. Resolves the host to one or more IPs; if any of them fall into
+the blocked ranges, the URL is rejected.
 
 This is intentionally strict: we accept only public IPv4/IPv6 destinations.
 
-Residual gap (accepted): the guard resolves DNS at validation time, but
-`git` resolves the host again independently when it connects, so a
+Residual gap (accepted): the guard resolves DNS at validation time, but the
+HTTP client resolves the host again independently when it connects, so a
 DNS-rebinding host could still pass the check and then be re-pointed at an
-internal address. Pinning the resolved IP through to `git` is not feasible
-without breaking TLS SNI/cert verification. As defence-in-depth the Git
-fetch sets `http.followRedirects=false` (so a validated URL cannot be
-redirected to an internal host) and refuses interactive auth. For Coffer's
-threat model — a localhost-only, single-user desktop daemon where the URL
-is supplied by the user themselves — this residual rebinding risk is
-accepted rather than mitigated.
+internal address. Pinning the resolved IP through to the client is not
+feasible without breaking TLS SNI/cert verification. For Coffer's threat
+model — a localhost-only, single-user desktop daemon where the URL is
+supplied by the user themselves — this residual rebinding risk is accepted
+rather than mitigated.
 """
 
 from __future__ import annotations

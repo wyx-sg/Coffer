@@ -1,6 +1,6 @@
 """Write-side helper for a skill's master-folder files.
 
-A "helper module beside ``service.py``" like ``file_ops.py`` / ``update_ops.py``:
+A "helper module beside ``service.py``" like ``file_ops.py`` / ``scan_ops.py``:
 ``file_ops`` does the pure filesystem write; this adds the service-level
 concerns (existence check + audit) and is invoked by the HTTP surface. Kept out
 of ``service.py`` so that file stays inside the component size cap.
