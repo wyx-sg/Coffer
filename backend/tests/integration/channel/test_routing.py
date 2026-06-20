@@ -95,7 +95,7 @@ async def test_model_switch_for_bridged_agent_passes_through_to_agent_config(
     peer = await env.peers.get(resource.id)
     assert peer is not None
     cfg = await env.chat.get_agent_config(peer.active_conversation_id)
-    assert cfg["model"] == "gpt-5-codex"  # bridged → raw passthrough
+    assert cfg.model == "gpt-5-codex"  # bridged → raw passthrough
 
 
 async def test_status_reports_agent(env: ChannelEnv) -> None:

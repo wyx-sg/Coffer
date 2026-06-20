@@ -120,7 +120,7 @@ async def test_init_conversation_defaults_missing_cwd_to_workspace(
     await provider.init_conversation(conv.id, {})
     stored = await repo.get_agent_config(conv.id)
     expected = str(tmp_path / ".coffer" / "workspace")
-    assert stored["cwd"] == expected
+    assert stored.cwd == expected
     assert (tmp_path / ".coffer" / "workspace").is_dir()
 
     await engine.dispose()
@@ -147,7 +147,7 @@ async def test_init_conversation_stores_cwd(tmp_path: Any) -> None:
 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
     stored = await repo.get_agent_config(conv.id)
-    assert stored["cwd"] == str(tmp_path)
+    assert stored.cwd == str(tmp_path)
 
     await engine.dispose()
 
@@ -160,8 +160,8 @@ async def test_init_conversation_stores_model_when_present(tmp_path: Any) -> Non
 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path), "model": "o4-mini"})
     stored = await repo.get_agent_config(conv.id)
-    assert stored["cwd"] == str(tmp_path)
-    assert stored["model"] == "o4-mini"
+    assert stored.cwd == str(tmp_path)
+    assert stored.model == "o4-mini"
 
     await engine.dispose()
 
@@ -174,8 +174,8 @@ async def test_init_conversation_omits_model_when_absent(tmp_path: Any) -> None:
 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
     stored = await repo.get_agent_config(conv.id)
-    assert stored["cwd"] == str(tmp_path)
-    assert "model" not in stored
+    assert stored.cwd == str(tmp_path)
+    assert stored.model is None
 
     await engine.dispose()
 
@@ -223,7 +223,7 @@ async def test_build_adapter_resumes_stored_session(tmp_path: Any) -> None:
 
     # Thread id must have been written back.
     cfg = await repo.get_agent_config(conv.id)
-    assert cfg["session_id"] == "thread-99"
+    assert cfg.session_id == "thread-99"
 
     # Second provider+adapter should pass resume_session="thread-99".
     factory2, server2 = _make_factory()
@@ -276,7 +276,7 @@ async def test_build_adapter_session_sink_writes_back(tmp_path: Any) -> None:
     await asyncio.wait_for(_collect(adapter, _user_turn("go", conv.id)), timeout=5)
 
     cfg = await repo.get_agent_config(conv.id)
-    assert cfg["session_id"] == "thread-99"
+    assert cfg.session_id == "thread-99"
 
     await engine.dispose()
 

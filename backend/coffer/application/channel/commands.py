@@ -139,7 +139,7 @@ class ChannelCommands:
             # model namespace (ADR-024 retired the builtin model-registry agent),
             # so we just report what will be passed through to the agent's CLI.
             cfg = await self._conversations.get_agent_config(conversation_id)
-            current = cfg.get("model") or "(CLI default)"
+            current = cfg.model or "(CLI default)"
             await send(
                 binding, peer.chat_id, f"Model: {current}\n(passed through to the agent's CLI)"
             )
@@ -148,8 +148,7 @@ class ChannelCommands:
         # Bridged agents: raw passthrough; we do not own the CLI's model
         # namespace, so a bad name surfaces as the CLI's own error next turn.
         cfg = await self._conversations.get_agent_config(conversation_id)
-        cfg["model"] = name
-        await self._conversations.set_agent_config(conversation_id, cfg)
+        await self._conversations.set_agent_config(conversation_id, replace(cfg, model=name))
         await send(binding, peer.chat_id, f"🧠 Model set to '{name}' for the next turn.")
 
     async def _open_and_report(

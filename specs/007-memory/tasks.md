@@ -35,12 +35,12 @@ marked **[shared]** are delivered by the substrate and reused here.
 ## Phase 5 — Backend application
 
 - [x] T-0040 `application/memory/scope.py` — `ScopeResolver`: cwd → git-root → project ULID → store (lazy provision); global sentinel; store-name validation (`global` | `project-<26-char ULID>`)
-- [x] T-0041 `application/memory/service.py` (+ `writes.py` / `queries.py` / `recall.py` / `sync.py`) — remember / recall (lazy reindex-on-read + RRF cross-store merge) / update / forget / list / clear + MEMORY.md regen
+- [x] T-0041 `application/memory/service.py` (+ `writes.py` / `queries.py` / `recall.py` / `sync.py`) — remember / recall (lazy reindex-on-read + RRF cross-store merge) / update / forget / list / clear over the knowledge-lane inbox
 - [x] T-0043 `application/memory/kind.py` — make_memory_kind(...)
 
 ## Phase 7 — MCP built-in tools (shared file with KB)
 
-- [x] T-0060 `application/memory/builtin_tools.py` — register `coffer__recall` (response carries the `fallback` boolean), `coffer__remember`, `coffer__update_memory`, `coffer__forget`, `coffer__list_memory` with the MCP gateway's builtin registry
+- [x] T-0060 `application/memory/builtin_tools.py` — register `coffer__recall` (response carries the `fallback` boolean), `coffer__remember`, `coffer__list_memory`, `coffer__set_handoff`, `coffer__resume` with the MCP gateway's builtin registry
 - [x] T-0061 Scope resolution from the shim's reported cwd at session handshake
 - [x] T-0062 Integration test: `test_mcp_builtin_memory_tools.py`
 

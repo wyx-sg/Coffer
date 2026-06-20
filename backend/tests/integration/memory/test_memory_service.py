@@ -32,17 +32,15 @@ async def test_remember_project_fact_writes_file_and_index(mem) -> None:
         type="project",
     )
     store = _project_store(mem)
-    # The per-fact file exists with frontmatter.
+    # The per-item file exists under the knowledge/ lane's inbox with frontmatter.
     store_dir = paths.memory_store_dir(project_ulid_from(mem))
-    files = list(store_dir.glob("*.md"))
-    fact_files = [f for f in files if f.name != "MEMORY.md"]
-    assert len(fact_files) == 1
-    text = fact_files[0].read_text()
+    inbox_files = list(paths.inbox_dir(store_dir).glob("*.md"))
+    assert len(inbox_files) == 1
+    text = inbox_files[0].read_text()
     assert "name: deploy-via-make" in text
     assert "actor: agent" in text
-    # MEMORY.md regenerated.
-    memory_md = (store_dir / "MEMORY.md").read_text()
-    assert "deploy-via-make" in memory_md
+    # No derived MEMORY.md index is generated.
+    assert not (store_dir / "MEMORY.md").exists()
     # Indexed into documents (kind=memory).
     assert await mem.documents.count_documents("memory", store) == 1
     assert fact.id
@@ -129,7 +127,8 @@ async def test_project_scope_unresolved_outside_git(mem) -> None:
         )
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="agent updates a fact")
+# Service-level update (the REST/CLI write surface); the MCP update_memory tool
+# was removed in the knowledge-lane redesign.
 async def test_update_fact_reflects_in_recall(mem) -> None:
     fact = await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
@@ -149,7 +148,8 @@ async def test_update_fact_reflects_in_recall(mem) -> None:
     assert (await mem.service.recall(cwd=mem.project_cwd, query="aardvark", top_k=5))[0] == []
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="agent forgets a fact")
+# Service-level delete (the REST/CLI write surface); the MCP forget tool was
+# removed in the knowledge-lane redesign.
 async def test_forget_removes_fact(mem) -> None:
     fact = await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
@@ -164,7 +164,7 @@ async def test_forget_removes_fact(mem) -> None:
     assert await mem.documents.count_documents("memory", store) == 0
     assert (await mem.service.recall(cwd=mem.project_cwd, query="walrus", top_k=5))[0] == []
     store_dir = paths.memory_store_dir(project_ulid_from(mem))
-    assert [f for f in store_dir.glob("*.md") if f.name != "MEMORY.md"] == []
+    assert list(paths.inbox_dir(store_dir).glob("*.md")) == []
 
 
 @pytest.mark.acceptance(spec="007-memory", scenario="user adds a fact")
@@ -219,36 +219,6 @@ async def test_user_delete_fact(mem) -> None:
     assert facts == []
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="writing a fact regenerates MEMORY.md")
-async def test_memory_md_regenerated_on_write_and_delete(mem) -> None:
-    f1 = await mem.service.add_fact(
-        scope=MemoryScope.GLOBAL,
-        cwd=None,
-        name="alpha-fact",
-        description="first",
-        body="first body",
-        actor="user",
-    )
-    await mem.service.add_fact(
-        scope=MemoryScope.GLOBAL,
-        cwd=None,
-        name="beta-fact",
-        description="second",
-        body="second body",
-        actor="user",
-    )
-    store_dir = paths.memory_global_dir()
-    md = (store_dir / "MEMORY.md").read_text()
-    assert "- [alpha-fact](" in md
-    assert "- [beta-fact](" in md
-    assert "— first" in md
-    # Delete one → index regenerated without it.
-    await mem.service.delete_fact(store_name=GLOBAL_STORE_NAME, fact_id=f1.id, actor="user")
-    md2 = (store_dir / "MEMORY.md").read_text()
-    assert "alpha-fact" not in md2
-    assert "beta-fact" in md2
-
-
 @pytest.mark.acceptance(spec="007-memory", scenario="clear a memory scope")
 async def test_clear_scope_keeps_resource(mem) -> None:
     for i in range(3):
@@ -266,8 +236,9 @@ async def test_clear_scope_keeps_resource(mem) -> None:
     assert total == 0
     # Store Resource still exists.
     assert GLOBAL_STORE_NAME in [r.name for r in await mem.resources.list(kind="memory")]
-    md = (paths.memory_global_dir() / "MEMORY.md").read_text()
-    assert "fact number" not in md
+    # The knowledge lane is emptied; no derived MEMORY.md index exists.
+    assert list(paths.inbox_dir(paths.memory_global_dir()).glob("*.md")) == []
+    assert not (paths.memory_global_dir() / "MEMORY.md").exists()
 
 
 async def test_metrics(mem) -> None:
@@ -333,7 +304,7 @@ async def test_lazy_reindex_picks_up_out_of_band_edit(mem) -> None:
         actor="agent",
     )
     store_dir = paths.memory_store_dir(project_ulid_from(mem))
-    fact_file = next(f for f in store_dir.glob("*.md") if f.name != "MEMORY.md")
+    fact_file = next(iter(paths.inbox_dir(store_dir).glob("*.md")))
     # Edit the body directly on disk (frontmatter preserved).
     text = fact_file.read_text()
     fact_file.write_text(text.replace("original narwhal content", "edited platypus content"))
@@ -341,6 +312,33 @@ async def test_lazy_reindex_picks_up_out_of_band_edit(mem) -> None:
     assert any("platypus" in h.text for h in hits)
     assert (await mem.service.recall(cwd=mem.project_cwd, query="narwhal", top_k=5))[0] == []
     assert fact.id  # the same fact id, re-indexed in place
+
+
+async def test_grep_recall_ignores_legacy_root_facts(mem) -> None:
+    """A pre-lane fact abandoned at the store ROOT (not under knowledge/) must NOT
+    surface via recall in any mode — grep runs over the whole store dir, so the
+    knowledge/-lane filter must exclude it, staying consistent with keyword/vector
+    (whose reconciler indexes only the lane)."""
+    await mem.service.add_fact(
+        scope=MemoryScope.PROJECT,
+        cwd=mem.project_cwd,
+        name="real",
+        description="d",
+        body="a real lane fact about otters",
+        actor="agent",
+    )
+    store_dir = paths.memory_store_dir(project_ulid_from(mem))
+    # Plant a legacy fact at the store root (pre-lane layout), abandoned in place.
+    (store_dir / "legacy-zebra.md").write_text(
+        "---\nid: legacy-zebra\nname: legacy\ndescription: d\n"
+        "metadata:\n  actor: agent\n---\nthe secret zebra lives at the store root\n",
+        encoding="utf-8",
+    )
+    for mode in ("grep", "keyword", "vector"):
+        hits, _fb = await mem.service.recall(
+            cwd=mem.project_cwd, query="zebra", mode=mode, top_k=20
+        )
+        assert all("zebra" not in h.text for h in hits), f"legacy root fact leaked via {mode}"
 
 
 def project_ulid_from(mem) -> str:

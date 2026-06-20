@@ -1,8 +1,9 @@
 """Pydantic schemas matching specs/007-memory/contracts/api.openapi.yaml.
 
 Hand-written to mirror the OpenAPI wire contract. The memory face is the
-writable side of the shared substrate: per-fact markdown files + a regenerated
-MEMORY.md, two scopes (global + per-project), no LLM at write time.
+writable side of the shared substrate: per-item markdown files under each scope's
+``knowledge/`` lane (no derived index), two scopes (global + per-project), no LLM
+at write time.
 """
 
 from __future__ import annotations

@@ -199,9 +199,9 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         expected_memory_tools = {
             "coffer__recall",
             "coffer__remember",
-            "coffer__update_memory",
-            "coffer__forget",
             "coffer__list_memory",
+            "coffer__set_handoff",
+            "coffer__resume",
         }
         assert expected_memory_tools.issubset(tool_names), (
             f"memory built-in tools missing from tools/list; "

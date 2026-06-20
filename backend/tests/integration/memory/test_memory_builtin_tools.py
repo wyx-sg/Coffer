@@ -10,7 +10,7 @@ from coffer.application.builtin_tools import COFFER_TOOL_PREFIX, BuiltinToolRegi
 from coffer.application.memory.builtin_tools import register_memory_builtin_tools
 from coffer.application.memory.handoff import HandoffService
 from coffer.infrastructure.knowledge import paths
-from coffer.infrastructure.memory.scope_fs import git_branch
+from coffer.infrastructure.memory.scope_fs import git_branch, project_ulid
 
 pytestmark = pytest.mark.asyncio
 
@@ -37,8 +37,6 @@ async def test_memory_tools_registered(mem) -> None:
     assert names == {
         "recall",
         "remember",
-        "update_memory",
-        "forget",
         "list_memory",
         "set_handoff",
         "resume",
@@ -74,21 +72,35 @@ async def test_recall_tool_spans_scopes(mem) -> None:
     assert {"global", "project"} <= sources
 
 
-async def test_update_and_forget_by_id(mem) -> None:
+async def test_update_and_forget_tools_are_removed(mem) -> None:
+    """The agent write surface is ``remember`` only — the per-id ``update_memory``
+    and ``forget`` MCP tools were removed in the knowledge-lane redesign."""
+    reg = _registry(mem)
+    assert reg.get(f"{COFFER_TOOL_PREFIX}update_memory") is None
+    assert reg.get(f"{COFFER_TOOL_PREFIX}forget") is None
+
+
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="remembered items are stored in the knowledge lane"
+)
+async def test_remember_writes_into_knowledge_inbox(mem) -> None:
+    """A remembered item lands under the project store's ``knowledge/inbox/`` (never
+    the store root), no ``MEMORY.md`` is generated, and ``recall`` returns it."""
+    from pathlib import Path
+
     reg = _registry(mem)
     remember = reg.get(f"{COFFER_TOOL_PREFIX}remember")
-    update = reg.get(f"{COFFER_TOOL_PREFIX}update_memory")
-    forget = reg.get(f"{COFFER_TOOL_PREFIX}forget")
     recall = reg.get(f"{COFFER_TOOL_PREFIX}recall")
-    assert all(t is not None for t in (remember, update, forget, recall))
-    created = await remember.handler({"text": "original kangaroo note", "cwd": mem.project_cwd})
-    fact_id = created["id"]
-    await update.handler({"id": fact_id, "text": "updated dingo note", "cwd": mem.project_cwd})
-    out = await recall.handler({"query": "dingo", "cwd": mem.project_cwd})
-    assert any("dingo" in h["text"] for h in out["hits"])
-    await forget.handler({"id": fact_id, "cwd": mem.project_cwd})
-    gone = await recall.handler({"query": "dingo", "cwd": mem.project_cwd})
-    assert gone["hits"] == []
+    assert remember is not None and recall is not None
+    await remember.handler(
+        {"text": "the wombat fact about burrows", "cwd": mem.project_cwd, "name": "wombat"}
+    )
+    store_dir = paths.memory_store_dir(project_ulid(str(Path(mem.project_cwd).parent)))
+    assert len(list(paths.inbox_dir(store_dir).glob("*.md"))) == 1  # under knowledge/inbox/
+    assert list(store_dir.glob("*.md")) == []  # never at the store root
+    assert not (store_dir / "MEMORY.md").exists()  # no derived index
+    out = await recall.handler({"query": "wombat burrows", "cwd": mem.project_cwd})
+    assert any("wombat" in h["text"] for h in out["hits"])
 
 
 async def test_recall_grep_mode_never_raises(mem) -> None:

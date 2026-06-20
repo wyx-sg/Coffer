@@ -1,8 +1,11 @@
 """Memory built-in MCP tools (spec 007).
 
 Registered under the reserved ``coffer__`` prefix (added by the gateway). Tool
-set: ``recall``, ``remember``, ``update_memory``, ``forget``, ``list_memory``.
+set: ``recall``, ``remember``, ``list_memory``, ``set_handoff``, ``resume``.
 ``remember`` defaults to ``scope=project``; ``recall`` defaults to both scopes.
+The agent's write surface is ``remember`` + the internal organizer — there is no
+``update_memory``/``forget`` (humans correct memory via the REST/CLI surface or
+their own editor, files-as-truth).
 
 The agent's launch cwd (reported at session handshake) is threaded in as the
 ``cwd`` argument by the gateway in the surfaces phase; the handlers accept it so
@@ -41,8 +44,8 @@ def register_memory_builtin_tools(
     memory_service: MemoryService,
     handoff_service: HandoffService,
 ) -> None:
-    """Wire the memory tools (recall/remember/update/forget/list + handoff) into
-    the gateway's registry."""
+    """Wire the memory tools (recall/remember/list + handoff) into the gateway's
+    registry."""
 
     async def recall(args: dict[str, Any]) -> dict[str, Any]:
         query = str(args["query"])[:_MAX_QUERY_CHARS]
@@ -91,23 +94,6 @@ def register_memory_builtin_tools(
             else None,
         )
         return {"id": fact.id, "name": fact.name, "scope": scope.value, "status": "created"}
-
-    async def update_memory(args: dict[str, Any]) -> dict[str, Any]:
-        fact_id = str(args["id"])
-        text = args.get("text")
-        if not isinstance(text, str) or not text.strip():
-            raise ValueError("'text' must be a non-empty string")
-        store_name = await memory_service.find_fact_store(cwd=_cwd(args), fact_id=fact_id)
-        fact = await memory_service.update_fact(
-            store_name=store_name, fact_id=fact_id, new_body=text, actor="agent"
-        )
-        return {"id": fact.id, "status": "updated"}
-
-    async def forget(args: dict[str, Any]) -> dict[str, Any]:
-        fact_id = str(args["id"])
-        store_name = await memory_service.find_fact_store(cwd=_cwd(args), fact_id=fact_id)
-        await memory_service.delete_fact(store_name=store_name, fact_id=fact_id, actor="agent")
-        return {"id": fact_id, "status": "forgotten"}
 
     async def list_memory(args: dict[str, Any]) -> dict[str, Any]:
         scope = _scope_arg(args, default=MemoryScope.PROJECT) or MemoryScope.PROJECT
@@ -190,37 +176,6 @@ def register_memory_builtin_tools(
                 "required": ["text"],
             },
             handler=remember,
-        )
-    )
-    registry.register(
-        BuiltinTool(
-            name="update_memory",
-            description="Update a memory fact's text by id.",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string"},
-                    "text": {"type": "string"},
-                    "cwd": {"type": "string"},
-                },
-                "required": ["id", "text"],
-            },
-            handler=update_memory,
-        )
-    )
-    registry.register(
-        BuiltinTool(
-            name="forget",
-            description="Delete a memory fact by id.",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string"},
-                    "cwd": {"type": "string"},
-                },
-                "required": ["id"],
-            },
-            handler=forget,
         )
     )
     registry.register(

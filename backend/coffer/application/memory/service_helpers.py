@@ -18,7 +18,7 @@ from coffer.domain.errors import MemoryRejected
 from coffer.domain.knowledge.document import Document
 from coffer.domain.knowledge.retrieval import GrepHit, MemoryHit, Passage
 from coffer.domain.memory.scope import ResolvedScope
-from coffer.infrastructure.knowledge.paths import handoff_dir, memory_index_path
+from coffer.infrastructure.knowledge.paths import knowledge_dir
 from coffer.infrastructure.memory.files import read_fact_file
 
 
@@ -80,27 +80,28 @@ def grep_hits_to_memory_hits(hits: Sequence[GrepHit], resolved: ResolvedScope) -
     """Convert ripgrep line hits over a store dir to ``MemoryHit``s.
 
     The matched line is the hit text; the fact id/updated_at come from parsing
-    the matched file. ``MEMORY.md`` (the derived index) is skipped, and several
-    matches inside one fact dedupe to the first.
+    the matched file. Several matches inside one fact dedupe to the first.
 
-    Grep descends the store dir recursively, so it also reaches the ``handoff/``
-    subdir — working-state files that must NEVER surface in recall (keyword /
-    vector skip them because the reconciler globs only the top-level ``*.md``).
-    A handoff file parses *gracefully* into a fake fact (no ``id`` in its
-    frontmatter), so dropping by parse failure is not enough: any hit inside the
-    store's ``handoff/`` subdir is filtered out explicitly here."""
+    ripgrep runs over the whole store dir, so it also reaches content that must
+    NEVER surface in recall: the ``handoff/`` sibling lane (working-state files),
+    facts abandoned at the store root by a pre-lane build, and a leftover legacy
+    ``MEMORY.md``. Keyword/vector recall avoid all of these for free (the
+    reconciler indexes only the ``knowledge/`` lane); grep needs an explicit
+    guard. So recall keeps ONLY hits inside the ``knowledge/`` lane — one positive
+    check that covers handoff, abandoned root facts, and ``MEMORY.md`` together —
+    and additionally skips the lane's own ``INDEX.md`` review index."""
     out: list[MemoryHit] = []
     seen: set[str] = set()
-    index_name = memory_index_path()
-    handoff_root = handoff_dir(resolved.store_dir).resolve()
+    knowledge_root = knowledge_dir(resolved.store_dir).resolve()
     for h in hits:
         path = Path(h.path)
-        if path.name == index_name:
+        # Recall surfaces only the knowledge/ lane: this single check excludes the
+        # handoff/ sibling (recall isolation), facts abandoned at the store root,
+        # and any leftover MEMORY.md. Resolve so a relative or absolute grep path
+        # compares against the absolute lane root.
+        if not _is_under(path, knowledge_root):
             continue
-        # Drop any hit inside the store's handoff/ subdir (grep's recursion can
-        # reach it; recall isolation requires it stay invisible). Resolve so an
-        # absolute or relative grep path compares against the absolute root.
-        if _is_under(path, handoff_root):
+        if path.name == "INDEX.md":  # the lane's human review index is not a fact
             continue
         try:
             ff = read_fact_file(path)

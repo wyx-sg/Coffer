@@ -67,21 +67,6 @@ def test_user_adds_a_fact(tmp_path, monkeypatch):
         assert body["path"].endswith(".md")
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="writing a fact regenerates MEMORY.md")
-def test_writing_a_fact_regenerates_memory_index(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59620)
-    with TestClient(app) as c:
-        set_active_token(_TOKEN)
-        c.post(
-            "/api/v1/memory_stores/global/facts",
-            json={"text": "deploys via make release", "name": "deploy"},
-            headers=_USER,
-        )
-    index = tmp_path / "memory" / "global" / "MEMORY.md"
-    assert index.exists()
-    assert "deploy" in index.read_text(encoding="utf-8")
-
-
 @pytest.mark.acceptance(spec="007-memory", scenario="user corrects a fact out-of-band")
 def test_user_corrects_a_fact_via_write_api(tmp_path, monkeypatch):
     """The programmatic write path (REST PATCH) — the in-app viewer is
@@ -98,9 +83,11 @@ def test_user_corrects_a_fact_via_write_api(tmp_path, monkeypatch):
         ).json()
         fid = created["id"]
         # The read-only viewer needs absolute paths for open/reveal/copy-path:
-        # the fact carries its file path + containing folder (the store dir).
+        # the fact carries its file path + containing folder (the knowledge-lane
+        # inbox, where freshly-remembered items live).
+        inbox = store_dir / "knowledge" / "inbox"
         assert created["path"].endswith(".md")
-        assert created["folder_path"] == str(store_dir)
+        assert created["folder_path"] == str(inbox)
         r = c.patch(
             f"/api/v1/memory_stores/global/facts/{fid}",
             json={"text": "new corrected text"},
@@ -108,7 +95,7 @@ def test_user_corrects_a_fact_via_write_api(tmp_path, monkeypatch):
         )
         assert r.status_code == 200, r.text
         assert r.json()["text"] == "new corrected text"
-        assert r.json()["folder_path"] == str(store_dir)
+        assert r.json()["folder_path"] == str(inbox)
         got = c.get(f"/api/v1/memory_stores/global/facts/{fid}", headers=_HEADERS)
         assert got.json()["text"] == "new corrected text"
         # The store read carries the on-disk store dir (reveal/copy-path).

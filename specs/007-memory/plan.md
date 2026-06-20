@@ -10,7 +10,7 @@
 
 Memory is the **memory face** of one unified knowledge substrate shared with the knowledge base (spec 006). Each memory scope is a Resource of kind `memory`. Facts are per-fact markdown files (YAML frontmatter + body) plus a regenerated `MEMORY.md` index under `~/.coffer/memory/`. **Files are the source of truth; SQLite (`documents` + FTS5 + sqlite-vec) is a rebuildable index.** There are two scopes: global (sentinel ULID) and per-project (project ULID resolved from the agent's working directory).
 
-No LLM runs at write time — the agent writes a clean fact directly. Every agent reads and writes memory **only through Coffer's MCP gateway** (`coffer__recall/remember/update_memory/forget/list_memory`); Coffer keeps its own canonical format and **does not touch agents' native memory files** (native projection was removed — see ADR-026). The user does full CRUD through the CLI/REST write surface; the Coffer UI is a **read-only** viewer that offers open-in-editor / reveal / copy-path for each fact and its folder (curation happens in the user's own editor, picked up by lazy reindex-on-read).
+No LLM runs at write time — the agent writes a clean fact directly. Every agent reads and writes memory **only through Coffer's MCP gateway** (`coffer__recall/remember/list_memory/set_handoff/resume`); Coffer keeps its own canonical format and **does not touch agents' native memory files** (native projection was removed — see ADR-026). The user does full CRUD through the CLI/REST write surface; the Coffer UI is a **read-only** viewer that offers open-in-editor / reveal / copy-path for each fact and its folder (curation happens in the user's own editor, picked up by lazy reindex-on-read).
 
 This redesign **drops mem0, chroma, and LlamaIndex** and replaces `memory_records` with the unified `documents` table. There is no data migration (branch unreleased).
 
@@ -52,7 +52,7 @@ backend/coffer/
 │   │   └── locks.py                     # StoreLocks — per-store write serialization
 │   ├── memory/
 │   │   ├── kind.py                      # make_memory_kind(...)
-│   │   ├── service.py / service_helpers.py  # remember/recall/update/forget/list/clear + MEMORY.md regen
+│   │   ├── service.py / service_helpers.py  # remember/recall/update/forget/list/clear over the knowledge-lane inbox
 │   │   ├── writes.py / queries.py       # fact write/read paths
 │   │   ├── recall.py                    # recall orchestration + reciprocal-rank-fusion merge
 │   │   ├── scope.py                     # ScopeResolver: cwd → git-root → project ULID → store (lazy provision); store-name validation
