@@ -21,7 +21,8 @@
 
 - 导入一个有效的 skill 文件夹
 - 当 SKILL.md 缺失或 frontmatter 无效时拒绝导入
-- 重名时拒绝导入
+- 重名时拒绝导入（除非请求 overwrite）
+- 带 overwrite 的重新导入覆盖既有 skill
 - 含有越界 symlink 的文件夹拒绝导入
 
 ---
@@ -157,7 +158,7 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 
 ### Edge Cases
 
-- **导入时 skill 重名**：拒绝；用户必须先在 SKILL.md frontmatter 里改名再试。
+- **导入时 skill 重名**：默认拒绝；用户要么在 SKILL.md frontmatter 里改名再试，要么带 `overwrite`（`--force`）重新导入以就地替换既有 skill —— 其按 agent 的 binding 与已投递 symlink 保留。
 - **master 文件夹超过大小上限（默认 50 MB）**：导入被拒，错误信息包含上限值与调整方式提示。
 - **Windows 下 symlink/junction 创建失败（FAT32 或网络共享）**：该目标降级为复制模式，审计带 `degraded=true`；UI 显示警告标记。
 - **用户在外部编辑器中、从某 agent 的 `config_dir/skills` 文件夹内编辑 SKILL.md**：Coffer 的 UI 从不编辑文件内容；用户在自己的编辑器中改动（可经 Coffer 的「在外部编辑器中打开」/「在文件管理器中显示」操作进入，或直接打开）。由于 agent 路径是指向 master 的 symlink，该外部编辑实际落在 master 上，其他 agent 下次读取时即可见；不会被识别为 drift。
@@ -180,6 +181,12 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **Given** daemon 在运行，且不存在名为 `my-skill` 的 skill，
 - **When** 用户导入一个 SKILL.md frontmatter `name: my-skill` 的文件夹，
 - **Then** Coffer 把文件夹拷贝到 `~/.coffer/skills/my-skill/`，写入一条 kind 为 `skill` 的 Resource，并写一条审计记录。
+
+### Scenario: re-import a skill with overwrite replaces it（带 overwrite 的重新导入覆盖既有 skill）
+
+- **Given** 名为 `my-skill` 的 skill 已导入并对某 agent 启用，
+- **When** 用户带 `overwrite`（`--force`）再次导入一个 frontmatter `name: my-skill` 的文件夹，
+- **Then** 主库文件夹内容被原子替换、刷新该 skill 的 `version_hash`、保留其按 agent 的 binding 与已投递 symlink、并写一条 skill-update 审计记录 —— 而同样的重新导入若不带 `overwrite` 则以 `conflict`（409）拒绝。
 
 ### Scenario: 拒绝导入不合法的 skill 文件夹
 
@@ -360,7 +367,7 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 
 **源**
 
-- **FR-005**：系统必须支持从本地路径导入 skill；原始源路径仅作为 provenance 记录，不会被持续依赖。
+- **FR-005**：系统必须支持从本地路径导入 skill；原始源路径仅作为 provenance 记录，不会被持续依赖。重名（已存在同名 skill）默认拒绝（`conflict`，409）；带显式 `overwrite` 标志（CLI `--force`）时就地替换既有 skill —— 主库文件夹内容原子替换、刷新其 `version_hash` 与 `last_synced_from_source_at`、并保留其按 agent 的 binding 与已投递 symlink（主库文件夹名不变）。重新导入覆盖是 skill 唯一的更新机制（无可重新拉取的实时源）；该替换以 update 事件审计。
 
 **按 agent 投递**
 

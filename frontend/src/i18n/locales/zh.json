@@ -830,6 +830,8 @@
     "deleteAria": "删除 {{name}}",
     "removeConfirmTitle": "移除 Skill {{name}}？",
     "removeConfirmBody": "这会删除主存储文件夹以及所有 agent 端链接。",
+    "importConflictTitle": "已存在名为「{{name}}」的 Skill，要替换它吗？",
+    "importReplace": "替换",
     "verify.title": "校验 Skill 链接",
     "verify.subtitle": "检查每个已启用的绑定是否仍与磁盘上的链接一致。",
     "verify.checking": "正在检查漂移…",

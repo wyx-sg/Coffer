@@ -19,7 +19,8 @@ A developer already has skills in `~/.claude/skills/` (or elsewhere on disk). Th
 
 - import a valid skill folder
 - reject import when SKILL.md is missing or has invalid frontmatter
-- reject import on duplicate skill name
+- reject import on duplicate skill name (unless overwrite is requested)
+- re-import with overwrite replaces the existing skill
 - reject import containing path-escape symlinks
 
 ---
@@ -155,7 +156,7 @@ Per-skill bindings are precise but chatty: every new skill must be enabled agent
 
 ### Edge Cases
 
-- **Skill name collision on import**: Rejected; user must rename via SKILL.md frontmatter and retry.
+- **Skill name collision on import**: Rejected by default; the user either renames via SKILL.md frontmatter and retries, or re-imports with `overwrite` (`--force`) to replace the existing skill in place — its per-agent bindings and delivered symlinks are preserved.
 - **Master folder size exceeds limit (default 50 MB)**: Import rejected with the configured cap and a hint to adjust settings.
 - **Symlink/junction creation fails on Windows (FAT32 or network share)**: Falls back to copy mode for that target with an audit flag `degraded=true`; UI shows a warning chip.
 - **User edits `SKILL.md` in an external editor from inside an agent's `config_dir/skills` folder**: Coffer's UI never edits file content; the user makes the change in their own editor (reached via Coffer's "open in external editor" / "reveal in file manager" affordances or directly). Because the agent's path is a symlink to master, the external edit lands in master and is visible to all other agents on next read; no drift is detected.
@@ -178,6 +179,12 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **Given** the daemon is running and no skill named `my-skill` exists,
 - **When** the user imports a folder containing a valid SKILL.md with frontmatter `name: my-skill`,
 - **Then** Coffer copies the folder to `~/.coffer/skills/my-skill/`, persists a Resource of kind `skill`, and records an audit entry.
+
+### Scenario: re-import a skill with overwrite replaces it
+
+- **Given** a skill named `my-skill` is already imported and enabled for an agent,
+- **When** the user imports a folder with frontmatter `name: my-skill` again with `overwrite` (`--force`),
+- **Then** the master folder content is replaced atomically, the skill's `version_hash` is refreshed, the existing per-agent binding and its delivered symlink are preserved, and a skill-update audit entry is recorded — whereas the same re-import without `overwrite` is rejected with `conflict` (409).
 
 ### Scenario: reject import of an invalid skill folder
 
@@ -358,7 +365,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 **Sources**
 
-- **FR-005**: System MUST support importing a skill from a local filesystem path; the original source path is recorded for provenance but is not retained as a live dependency.
+- **FR-005**: System MUST support importing a skill from a local filesystem path; the original source path is recorded for provenance but is not retained as a live dependency. Re-importing a name that already exists is rejected by default (`conflict`, 409); with an explicit `overwrite` flag (CLI `--force`) the existing skill is replaced in place — the master folder content is swapped atomically, its `version_hash` and `last_synced_from_source_at` are refreshed, and its per-agent bindings and delivered symlinks are preserved (the master folder name is unchanged). Re-import overwrite is the only skill update mechanism (there is no live source to re-fetch); the replacement is audited as an update.
 
 **Per-agent delivery**
 

@@ -178,10 +178,44 @@ def test_conflict_envelope_shape_on_duplicate_import(tmp_path, monkeypatch):
     with _client(app) as c:
         r = c.post("/api/v1/skills/import", json={"path": str(src)})
         assert r.status_code == 201
-        # Same source → same name → AlreadyExists.
+        # Same source → same name → AlreadyExists (no overwrite flag).
         r = c.post("/api/v1/skills/import", json={"path": str(src)})
         assert r.status_code == 409
         body = r.json()
         assert "error" in body
         assert body["error"].get("code")
         assert isinstance(body["error"].get("message"), str)
+
+
+def test_reimport_with_overwrite_replaces(tmp_path, monkeypatch):
+    """Re-importing with overwrite=true replaces the skill instead of 409."""
+    app = _app(tmp_path, monkeypatch, 59614)
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="dup")
+    with _client(app) as c:
+        # First import — fresh
+        r = c.post("/api/v1/skills/import", json={"path": str(src)})
+        assert r.status_code == 201, r.text
+        first_hash = r.json()["version_hash"]
+
+        # Modify the skill content so version_hash changes.
+        (src / "SKILL.md").write_text(
+            textwrap.dedent(
+                """\
+                ---
+                name: dup
+                description: Updated description.
+                ---
+
+                updated body
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        # Re-import with overwrite=true — must succeed (201, not 409).
+        r = c.post("/api/v1/skills/import", json={"path": str(src), "overwrite": True})
+        assert r.status_code == 201, r.text
+        skill = r.json()
+        assert skill["name"] == "dup"
+        assert skill["version_hash"] != first_hash

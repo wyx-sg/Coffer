@@ -114,7 +114,9 @@ class SkillService:
 
     # ---------- imports ----------
 
-    async def import_local(self, *, path: str, actor: str = "api") -> Resource:
+    async def import_local(
+        self, *, path: str, actor: str = "api", overwrite: bool = False
+    ) -> Resource:
         from coffer.application.skill.lifecycle_ops import register_from_validated
 
         src = pathlib.Path(path).expanduser().resolve()
@@ -128,6 +130,7 @@ class SkillService:
             source_meta=LocalImportSource(original_path=str(src)),
             event=AuditEventType.SKILL_IMPORTED,
             actor=actor,
+            overwrite=overwrite,
         )
 
     # ---------- per-agent bindings ----------

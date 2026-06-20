@@ -41,6 +41,7 @@ export interface SkillListOut {
 
 export interface SkillImportRequest {
   path: string;
+  overwrite?: boolean;
 }
 
 export interface SkillEnableRequest {
