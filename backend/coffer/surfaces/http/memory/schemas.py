@@ -207,3 +207,23 @@ class RecallResponse(BaseModel):
     hits: list[RecallHit]
     mode: RetrievalMode
     fallback: bool = False
+
+
+# --- organize ---------------------------------------------------------------
+
+
+OrganizeStatus = Literal["organized", "no_model", "empty"]
+
+
+class OrganizeResponse(BaseModel):
+    """Result of an explicit ``organize`` run (inbox → topic docs).
+
+    ``status="no_model"`` (no internal model configured) and ``status="empty"``
+    (nothing to organize) are clean no-ops, not errors."""
+
+    status: OrganizeStatus
+    items_processed: int
+    topics_created: int
+    topics_updated: int
+    skipped: int
+    model: str | None = None

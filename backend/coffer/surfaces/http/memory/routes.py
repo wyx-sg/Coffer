@@ -31,6 +31,7 @@ from coffer.surfaces.http.memory.dependencies import (
     get_project_root_repo,
     get_store_label_repo,
 )
+from coffer.surfaces.http.memory.organize_state import get_organizer_service
 from coffer.surfaces.http.memory.schemas import (
     ClearResponse,
     FactCreate,
@@ -43,6 +44,7 @@ from coffer.surfaces.http.memory.schemas import (
     MemoryStoreListOut,
     MemoryStoreMetrics,
     MemoryStoreOut,
+    OrganizeResponse,
     RecallHit,
     RecallRequest,
     RecallResponse,
@@ -349,4 +351,29 @@ async def recall(
         ],
         mode=mode,
         fallback=fallback,
+    )
+
+
+# --- organize ---------------------------------------------------------------
+
+
+@router.post("/{name}/organize", response_model=OrganizeResponse)
+async def organize(
+    name: str,
+    mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
+    organizer: object = Depends(get_organizer_service),
+) -> OrganizeResponse:
+    """Drain the store's ``knowledge/inbox/`` into coherent topic documents via
+    Coffer's internal LLM (explicit trigger; no auto-fire). ``no_model`` /
+    ``empty`` are clean no-ops, not errors."""
+    if name == GLOBAL_STORE_NAME:
+        await mem_svc.ensure_store(name)
+    result = await organizer.organize(store_name=name)  # type: ignore[attr-defined]
+    return OrganizeResponse(
+        status=result.status,
+        items_processed=result.items_processed,
+        topics_created=result.topics_created,
+        topics_updated=result.topics_updated,
+        skipped=result.skipped,
+        model=result.model,
     )
