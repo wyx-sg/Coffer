@@ -142,15 +142,12 @@ def test_opencode_allowlist_dir_entries(monkeypatch, tmp_path) -> None:
     # existing entries preserved
     assert by_key["config"].path == cfg / "opencode.json"
     assert by_key["instructions"].path == cfg / "AGENTS.md"
-    # new RW directory entries
+    # the single RW directory entry (commands/ dropped — simplification 3.8)
     sub = by_key["subagents"]
     assert sub.path == cfg / "agents"
     assert sub.kind is ConfigFileKind.DIRECTORY
     assert sub.format is ConfigFileFormat.MARKDOWN
-    cmds = by_key["commands"]
-    assert cmds.path == cfg / "commands"
-    assert cmds.kind is ConfigFileKind.DIRECTORY
-    assert cmds.format is ConfigFileFormat.MARKDOWN
+    assert "commands" not in by_key
 
 
 def test_hermes_allowlist_identity_and_cron(monkeypatch, tmp_path) -> None:

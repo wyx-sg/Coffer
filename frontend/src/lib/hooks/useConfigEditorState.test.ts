@@ -32,12 +32,12 @@ describe("visibleConfigFiles", () => {
       file({ key: "subagents", kind: "directory", exists: true, files: [] }),
       file({ key: "agents", kind: "directory", exists: false, files: null }),
       file({
-        key: "commands",
+        key: "cron",
         kind: "directory",
         exists: true,
         files: [{ relpath: "a.md", size: 1, modified_at: "2026-06-19T00:00:00Z" }],
       }),
     ]);
-    expect(out.map((f) => f.key)).toEqual(["commands"]);
+    expect(out.map((f) => f.key)).toEqual(["cron"]);
   });
 });

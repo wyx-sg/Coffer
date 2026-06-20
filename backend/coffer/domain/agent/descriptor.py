@@ -177,13 +177,6 @@ def _opencode_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
             ConfigFileFormat.MARKDOWN,
             kind=ConfigFileKind.DIRECTORY,
         ),
-        ConfigFileSpec(
-            "commands",
-            "Commands (commands/)",
-            cfg / "commands",
-            ConfigFileFormat.MARKDOWN,
-            kind=ConfigFileKind.DIRECTORY,
-        ),
     )
 
 
