@@ -1,6 +1,7 @@
 # Skill Manager — Improvements Roadmap
 
-Status: #4/#3 **delivered**; #2 **withdrawn** (simplification 4.3, 2026-06-20) — skills are
+Status: #4 **delivered**; #3 **removed** (simplification 4.5, 2026-06-20) — heuristic content
+scan and acknowledge gate cut; #2 **withdrawn** (simplification 4.3, 2026-06-20) — skills are
 local-folder-import only, no live Git source to update against; #1 (discovery) was delivered
 then **withdrawn** (simplification 4.8, 2026-06-20) — no content ecosystem. FRs and acceptance
 scenarios for the shipped items live in `spec.md`; the trust-layer decision is ADR-027.
@@ -16,16 +17,16 @@ The Chinese mirror is [`improvements-roadmap.zh.md`](./improvements-roadmap.zh.m
 ## Sequencing
 
 ```
-#4 frontmatter alignment  →  #3 trust layer (L2)  →  ~~#2 update detection / pinning~~  →  #1 discovery
-   (small, prerequisite)      (large, top-leverage)    (withdrawn, simplification 4.3)       (large, reuses #3/#4)
+#4 frontmatter alignment  →  ~~#3 trust layer (L2)~~  →  ~~#2 update detection / pinning~~  →  #1 discovery
+   (small, prerequisite)      (removed, simplif. 4.5)     (withdrawn, simplification 4.3)       (large, reuses #4)
 ```
 
 Dependency rationale:
 
-- **#4 first** — recognizing the `allowed-tools` frontmatter field is the data the
-  trust layer (#3) consumes.
-- **#1 last** — browse-and-install must carry #3's content scan and #4's validation
-  before discovery rides on top of it.
+- **#4 first** — recognizing the `allowed-tools` frontmatter field provides the
+  validation foundation that downstream items build on.
+- **#1 last** — browse-and-install must carry #4's validation before discovery
+  rides on top of it.
 
 Each item is one branch / one PR, spec-first: update `spec.md`/`spec.zh.md`,
 `data-model.md`, `contracts/api.openapi.yaml`, then implement with tests, then
@@ -51,6 +52,8 @@ master folder to `<name>` on write, so this only bites a verify-time
 consistency check, which belongs with #2.
 
 ## #3 — Trust layer, level L2 (heuristic scan + warn)
+
+> **Removed (simplification 4.5, 2026-06-20).** The heuristic content scan (FR-028) and the acknowledge-to-enable gate (FR-029) are cut. Design retained for history.
 
 The research's #1 highest-leverage gap, and on-mission for a vault. **Boundary:**
 Coffer delivers skills but never runs them, so it cannot enforce `allowed-tools`
@@ -102,14 +105,13 @@ Currently requires a known git URL; rivals offer browse-and-install catalogs.
   registries (anthropics/skills, vercel-labs/skills, agentskills.io API if
   stable). Remote index fetch is allowed (local-first ≠ no remote calls), kept
   opt-in / refreshable.
-- Install reuses the git-fetch ingest path (SSRF guard + validate + #3 scan), so
-  discovery rides on #3/#4. Cross-references #2 for "newer version available".
+- Install reuses the git-fetch ingest path (SSRF guard + validate + #4 validation), so
+  discovery rides on #4. Cross-references #2 for "newer version available".
 - Surfaces: `GET /catalog/skills`, `POST /catalog/refresh`, UI catalog page, CLI
   `coffer skill search`.
 
-## Positioning (non-code, ships with #3)
+## Positioning (non-code)
 
 Lead with the differentiator the research highlights: "one library, every agent,
-no per-surface re-upload, auto-follow with exclusions — and every skill is
-scanned on ingest." Update `docs-site/guide/skills.md` and the README once the
-trust layer makes the claim true.
+no per-surface re-upload, auto-follow with exclusions." Update
+`docs-site/guide/skills.md` and the README as the roadmap delivers.

@@ -1,6 +1,7 @@
 # Skill Manager —— 改进 Roadmap
 
-状态：#4/#3 **已交付**；#2 **已撤回**（简化 4.3，2026-06-20）——skill 只支持本地文件夹导入，
+状态：#4 **已交付**；#3 **已移除**（简化 4.5，2026-06-20）——启发式内容扫描与确认才能启用的门控已删除；
+#2 **已撤回**（简化 4.3，2026-06-20）——skill 只支持本地文件夹导入，
 无实时 Git 源可比对更新；#1（发现机制）已交付后**撤回**（简化 4.8，2026-06-20）——缺乏内容生态。
 已交付项的 FR 与验收场景见 `spec.md`；信任层决策见 ADR-027。源自
 [`docs/research/agent-skills.md`](../../docs/research/agent-skills.md) 的竞品调研
@@ -13,14 +14,14 @@ Coffer 在跨 agent 交付与 SSRF 加固摄取上领先，在四个点上落后
 ## 落地顺序
 
 ```
-#4 frontmatter 对齐   →  #3 信任层（L2）    →  ~~#2 更新检测/钉选~~   →  #1 发现机制
-   (小·前置)              (大·最高杠杆)         (已撤回，简化 4.3)       (大·复用 #3/#4)
+#4 frontmatter 对齐   →  ~~#3 信任层（L2）~~  →  ~~#2 更新检测/钉选~~   →  #1 发现机制
+   (小·前置)              (已移除，简化 4.5)      (已撤回，简化 4.3)       (大·复用 #4)
 ```
 
 依赖理由：
 
-- **#4 最先**——识别 `allowed-tools` frontmatter 字段，正是信任层（#3）要消费的数据。
-- **#1 最后**——浏览即装必须先带上 #3 的内容扫描与 #4 的校验，发现机制才骑在其上。
+- **#4 最先**——识别 `allowed-tools` frontmatter 字段，为后续项提供校验基础。
+- **#1 最后**——浏览即装必须先带上 #4 的校验，发现机制才骑在其上。
 
 每项一个分支/一个 PR，spec 先行：先改 `spec.md`/`spec.zh.md`、`data-model.md`、
 `contracts/api.openapi.yaml`，再带测试实现，最后 `make verify`。
@@ -40,6 +41,8 @@ Coffer 在跨 agent 交付与 SSRF 加固摄取上领先，在四个点上落后
 把主库文件夹归一化为 `<name>`，所以它只影响 verify 期的一致性检查，归入 #2。
 
 ## #3 —— 信任层 L2（启发式扫描 + 警告）
+
+> **已移除（简化 4.5，2026-06-20）。** 启发式内容扫描（FR-028）与确认才能启用的门控（FR-029）已删除。设计保留仅供历史参考。
 
 调研的 #1 最高杠杆缺口，且对 vault 天经地义。**边界：** Coffer 只交付不运行，无法在
 运行时强制 `allowed-tools`（那是宿主 agent 的事）。所以 Coffer 的"信任"是入库/启用前
@@ -84,12 +87,12 @@ Coffer 在跨 agent 交付与 SSRF 加固摄取上领先，在四个点上落后
   `{name, description, git URL, ref, publisher}`；可选接已知 registry
   （anthropics/skills、vercel-labs/skills、稳定的话接 agentskills.io API）。拉远程
   索引是允许的（local-first ≠ 无远程调用），做成 opt-in / 可刷新。
-- install 复用 git-fetch 入库路径（SSRF guard + 校验 + #3 扫描），所以发现骑在 #3/#4
-  之上。与 #2 交叉显示"有新版本"。
+- install 复用 git-fetch 入库路径（SSRF guard + #4 校验），所以发现骑在 #4 之上。
+  与 #2 交叉显示"有新版本"。
 - Surfaces：`GET /catalog/skills`、`POST /catalog/refresh`、UI 目录页、CLI
   `coffer skill search`。
 
-## 定位（非代码，随 #3 一起出）
+## 定位（非代码）
 
-主打调研强调的差异化："一个库，所有 agent，无需逐平台重传，自动跟随 + 例外——且每个
-skill 入库即扫描。"等信任层让这句话成真后，更新 `docs-site/guide/skills.md` 与 README。
+主打调研强调的差异化："一个库，所有 agent，无需逐平台重传，自动跟随 + 例外。"
+随 roadmap 各项交付后更新 `docs-site/guide/skills.md` 与 README。

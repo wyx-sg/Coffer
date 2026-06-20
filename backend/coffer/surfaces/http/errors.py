@@ -51,7 +51,6 @@ _STATUS: dict[str, int] = {
     # spec 005-skill-manager
     "SKILL_INVALID": 422,
     "TARGET_CONFLICT": 409,
-    "SKILL_RISK_NOT_ACKNOWLEDGED": 409,
     # agent workspace (specs 004/005 amendment)
     "MCP_ENTRY_NOT_FOUND": 404,
     "PLUGIN_NOT_FOUND": 404,

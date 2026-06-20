@@ -23,14 +23,3 @@ class SkillConfig(BaseModel):
     skill_md_description: str = Field(min_length=1, max_length=1024)
     version_hash: str = Field(min_length=1, max_length=128)
     last_synced_from_source_at: datetime | None = None
-
-    # Trust layer L2 (FR-028/FR-029). The content scan runs on ingest/update and
-    # its result is cached here. All optional with defaults so pre-trust-layer
-    # rows (and the opaque config_json) still validate without a migration.
-    scan_verdict: str | None = None  # Severity value: low|medium|high|critical
-    scan_findings_count: int = 0
-    scan_ruleset_version: str | None = None
-    last_scanned_at: datetime | None = None
-    # Set True only by an explicit acknowledge action; reset on any content
-    # change so a prior acknowledgment never carries over to new content.
-    risk_acknowledged: bool = False

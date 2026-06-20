@@ -28,14 +28,6 @@ Pydantic v2 `BaseModel`。
 | `skill_md_description`       | `str`              | frontmatter 的 `description`                         |
 | `version_hash`               | `str`              | 上次同步时 SKILL.md 内容的 sha256                    |
 | `last_synced_from_source_at` | `datetime \| None` | UTC；在导入时写入                                    |
-| `scan_verdict`               | `str \| None`      | 信任层 L2（FR-028）：最严重等级，或无                |
-| `scan_findings_count`        | `int`              | 扫描 findings 数（默认 0）                           |
-| `scan_ruleset_version`       | `str \| None`      | 产出该 verdict 的 ruleset 版本                       |
-| `last_scanned_at`            | `datetime \| None` | UTC；每次扫描时写入                                  |
-| `risk_acknowledged`          | `bool`             | FR-029；确认时置位，内容变化时重置                   |
-
-信任层字段全部可选且有默认值，因此序列化进既有的不透明 `config_json`，无需迁移，
-旧的（信任层之前的）行也仍能通过校验。
 
 ### `SkillFrontmatter` (`domain/skill/frontmatter.py`)
 

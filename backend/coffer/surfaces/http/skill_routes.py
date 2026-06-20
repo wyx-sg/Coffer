@@ -13,7 +13,6 @@ from coffer.application.skill.service import SkillService
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
-from coffer.domain.skill.content_scan import verdict_requires_ack
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_skill_service
 
@@ -62,13 +61,6 @@ class SkillOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     bindings: list[SkillBindingOut]
-    # Trust layer L2 (FR-028/FR-029).
-    scan_verdict: str | None = None
-    scan_findings_count: int = 0
-    last_scanned_at: datetime | None = None
-    risk_acknowledged: bool = False
-    # True when the verdict gates enabling and the risk is not yet acknowledged.
-    requires_acknowledgment: bool = False
 
 
 class SkillListOut(BaseModel):
@@ -154,13 +146,6 @@ async def _to_skill_out(
         last_synced_from_source_at=cfg.last_synced_from_source_at,
         created_at=r.created_at,
         updated_at=r.updated_at,
-        scan_verdict=cfg.scan_verdict,
-        scan_findings_count=cfg.scan_findings_count,
-        last_scanned_at=cfg.last_scanned_at,
-        risk_acknowledged=cfg.risk_acknowledged,
-        requires_acknowledgment=(
-            verdict_requires_ack(cfg.scan_verdict) and not cfg.risk_acknowledged
-        ),
         bindings=[
             SkillBindingOut(
                 agent_name=agents_by_id.get(b.agent_resource_id, str(b.agent_resource_id)),
@@ -281,7 +266,3 @@ async def verify_skills(
             for e in report.entries
         ]
     )
-
-
-# Trust-layer (scan / acknowledge) endpoints live in
-# ``skill_trust_routes.py`` (component size cap).
