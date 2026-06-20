@@ -1,4 +1,4 @@
-"""Verify Tauri tray + close-to-tray + autolaunch are wired.
+"""Verify Tauri tray + close-to-tray are wired.
 
 These are "wiring" tests — they read the Rust source and config files
 and confirm the right symbols are referenced. They don't run the
@@ -27,21 +27,6 @@ def _all_rust_sources() -> str:
     """
     src = _DESKTOP / "src"
     return "\n".join(p.read_text() for p in sorted(src.glob("*.rs")))
-
-
-@pytest.mark.acceptance(spec="003-mcp-gateway-desktop", scenario="launch at login")
-def test_autostart_plugin_wired() -> None:
-    sources = _all_rust_sources()
-    cargo_toml = (_DESKTOP / "Cargo.toml").read_text()
-    capabilities = json.loads((_DESKTOP / "capabilities" / "default.json").read_text())
-
-    assert "tauri-plugin-autostart" in cargo_toml, "Cargo.toml must declare the autostart plugin"
-    assert "tauri_plugin_autostart" in sources, "crate must register the autostart plugin"
-    assert "set_autostart_enabled" in sources, "crate must expose the set_autostart_enabled command"
-    assert "get_autostart_enabled" in sources, "crate must expose the get_autostart_enabled command"
-    assert "autostart:default" in capabilities.get("permissions", []), (
-        "default capability must grant autostart:default"
-    )
 
 
 @pytest.mark.acceptance(spec="003-mcp-gateway-desktop", scenario="close to tray, not exit")

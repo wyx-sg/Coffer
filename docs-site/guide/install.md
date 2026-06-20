@@ -144,7 +144,7 @@ Connect your MCP client:
 claude mcp add coffer coffer-mcp-shim
 ```
 
-See [Desktop app →](/guide/desktop) for the full Desktop guide (tray menu, launch at login, etc.).
+See [Desktop app →](/guide/desktop) for the full Desktop guide (tray menu, etc.).
 
 ---
 

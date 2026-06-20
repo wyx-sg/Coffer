@@ -102,8 +102,6 @@ Tauri 边车机制（`desktop/tauri.conf.json` 中的 `bundle.externalBin`）是
 
 **系统托盘图标。** 主窗口关闭后，桌面应用以系统托盘图标运行。关闭窗口会将其隐藏；daemon 和托盘仍然存在。托盘菜单提供：打开（恢复窗口）、重启 daemon 和退出（调用 `app.exit()` 真正终止进程）。
 
-**开机自启。** `tauri-plugin-autostart` 插件让 `AppSettings` 桌面标签页能够切换开机自启选项。启用后，Coffer 会在登录后在后台启动，托盘图标随即出现。
-
 ## 发布流水线
 
 CI 发布矩阵（`.github/workflows/release.yml`）在每个 `v*` 标签上跨两个目标平台（macOS arm64、Linux x64）运行，生成：

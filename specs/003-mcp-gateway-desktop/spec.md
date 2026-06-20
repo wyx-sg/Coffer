@@ -2,23 +2,22 @@
 
 **Feature Branch**: `feature/003-mcp-gateway-desktop` (on top of `feature/002-mcp-gateway-web`)
 **Status**: Accepted
-**Input**: 002-ui-shell delivered the web UI and explicitly deferred two acceptance scenarios from spec 002's User Story 5 (desktop shell): launch-at-login and close-to-tray. This spec owns those scenarios and the Tauri desktop wrapper + distribution pipeline that makes them work.
+**Input**: 002-ui-shell delivered the web UI and explicitly deferred the close-to-tray acceptance scenario from spec 002's User Story 5 (desktop shell). This spec owns that scenario and the Tauri desktop wrapper + distribution pipeline that makes it work.
 
-**Scope note**: Coffer's user-facing UI lives in 002-ui-shell (web shell, visual language, information architecture). This spec adds the **desktop wrapper** — Tauri 2 shell, daemon supervision, tray icon, autostart plugin, PyInstaller sidecar packaging, and a notarisation-ready macOS release pipeline (actual code-signing / notarisation is deferred until an Apple Developer ID is available; the workflow ships unsigned bundles until then). It introduces no new resource kinds and no new UI screens; the web UI from 002 renders inside the Tauri window with the desktop-only `AppSettings` component activating behind the `isTauri()` guard that 002 already wired up.
+**Scope note**: Coffer's user-facing UI lives in 002-ui-shell (web shell, visual language, information architecture). This spec adds the **desktop wrapper** — Tauri 2 shell, daemon supervision, tray icon, PyInstaller sidecar packaging, and a notarisation-ready macOS release pipeline (actual code-signing / notarisation is deferred until an Apple Developer ID is available; the workflow ships unsigned bundles until then). It introduces no new resource kinds and no new UI screens; the web UI from 002 renders inside the Tauri window.
 
 ## User Scenarios & Testing
 
 ### User Story 1 — Desktop shell: always-on and out of the way (Priority: P3)
 
-After initial setup, the developer expects Coffer to be present whenever any MCP client starts — no manual launch — and to stay out of the way when they are not actively managing it. The Tauri desktop app supervises the local daemon (starting it and reconnecting transparently), runs in the system tray, restores its window from the tray on click, and offers optional launch-at-login.
+After initial setup, the developer expects Coffer to be present whenever any MCP client starts — no manual launch — and to stay out of the way when they are not actively managing it. The Tauri desktop app supervises the local daemon (starting it and reconnecting transparently), runs in the system tray, and restores its window from the tray on click.
 
-**Why this priority**: P3 — quality-of-life polish. The daemon and shim (spec 001) work without the desktop app; this story is the convenience layer that makes Coffer a daily-driver desktop product. Inherited from spec 002 §User Story 5, where launch-at-login and close-to-tray were explicitly deferred to this spec.
+**Why this priority**: P3 — quality-of-life polish. The daemon and shim (spec 001) work without the desktop app; this story is the convenience layer that makes Coffer a daily-driver desktop product. Inherited from spec 002 §User Story 5, where close-to-tray was explicitly deferred to this spec.
 
-**Independent Test**: enable "launch at login", log out and back in — the daemon is running and the tray icon is present. Close the main window — the daemon stays alive, the tray icon remains, and an MCP client still works; reopening from the tray shows the same state.
+**Independent Test**: Close the main window — the daemon stays alive, the tray icon remains, and an MCP client still works; reopening from the tray shows the same state.
 
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
-- launch at login
 - close to tray, not exit
 
 ---
@@ -98,13 +97,7 @@ The user clicks the tray icon and expects a small, obvious menu — open the mai
 
 ## Acceptance Scenarios
 
-The scenarios below cover this spec's user stories. Scenarios `launch at login` and `close to tray, not exit` are imported verbatim from `specs/002-ui-shell/spec.md` per the audit-traceability annotation there. They cover US1 (desktop shell — launch-at-login, close-to-tray). The desktop spec's acceptance audit owns them from here on. Build-pipeline scenarios cover US2 (single-bundle install).
-
-### Scenario: launch at login
-
-- **Given** the user has enabled launch-at-login in settings
-- **When** the user logs back into their machine
-- **Then** Coffer starts in the background and the system tray icon appears
+The scenarios below cover this spec's user stories. Scenario `close to tray, not exit` is imported verbatim from `specs/002-ui-shell/spec.md` per the audit-traceability annotation there. It covers US1 (desktop shell — close-to-tray). The desktop spec's acceptance audit owns it from here on. Build-pipeline scenarios cover US2 (single-bundle install).
 
 ### Scenario: close to tray, not exit
 
@@ -133,12 +126,11 @@ The scenarios below cover this spec's user stories. Scenarios `launch at login` 
 - **FR-D03**: The desktop shell MUST display a system-tray icon at all times while the app is running. The tray menu MUST include "Open", "Restart daemon", and "Quit" items. The "Restart daemon" item and the daemon-offline banner's Restart control both call the same rate-limited `restart_daemon` Tauri command.
 - **FR-D04**: A window-close event MUST be intercepted and translated into a hide-to-tray action; closing the main window MUST NOT terminate the desktop process.
 - **FR-D05**: Selecting "Quit" from the tray MUST call `app.exit()` (or platform-equivalent) so the desktop process actually exits and the tray icon disappears. Quit MUST NOT tear down the daemon — the daemon is a detached process (FR-D02) and keeps running after the desktop app exits, so MCP clients still work.
-- **FR-D06**: The desktop shell MUST integrate `tauri-plugin-autostart` with set/get capabilities so the `AppSettings` desktop tab can toggle launch-at-login and reflect the current state.
-- **FR-D07**: On every launch, the desktop shell MUST idempotently deploy the bundled `coffer-mcp-shim` to a stable user-writable PATH directory (macOS/Linux: `~/.coffer/bin/`; Windows: `%LOCALAPPDATA%\Coffer\bin\`, with `%USERPROFILE%\Coffer\bin\` as fallback when unset). Deploy MUST be idempotent — an up-to-date on-disk binary is left untouched; a stale one is replaced atomically (temp-sibling copy + rename, executable bit set before the swap). Staleness is decided by a 3-signal heuristic (byte size, bundled-vs-deployed mtime, and a `.coffer-mcp-shim.version` sentinel), so cross-version upgrades that happen to be the same size are still detected.
-- **FR-D08**: The Tauri bundle MUST declare `coffer-daemon` and `coffer-mcp-shim` as PyInstaller sidecars via `bundle.externalBin` in `desktop/tauri.conf.json`. No system Python dependency at runtime.
-- **FR-D09**: The release pipeline MUST produce, per `v*` tag, two download tiers from the same PyInstaller binaries for **macOS arm64 only**: (a) the **CLI+desktop** tier — an unsigned macOS arm64 `.dmg` (named `*-unsigned.dmg`) plus a zipped `Coffer-unsigned-<triple>.app.zip`; and (b) the **CLI-only** tier — a `coffer-cli-<triple>.tar.gz` archive containing `coffer`, `coffer-daemon`, and `coffer-mcp-shim`. macOS x64 (Intel) and the Linux / Windows bundles are deliberately not built — those legs were never validated and the Intel runner pool is being deprecated; the acceptance matrix asserts a macOS-arm64-only build.
-- **FR-D10**: The release pipeline MUST produce one aggregated `SHA256SUMS` file (generated in CI; concatenated across matrix legs in the release job) covering every artifact, so downloaders can verify integrity without trusting the GitHub Release UI alone.
-- **FR-D11**: The desktop shell MUST integrate `tauri-plugin-opener` with the capabilities to open a filesystem path in an external application (`opener:allow-open-path`) and to reveal a path in the OS file manager (`opener:allow-reveal-item-in-dir`). This lets the read-only file viewers offer "open in editor" (opening the file or its containing folder in the user's preferred external editor — see 002 General settings) and "reveal in Finder"; on the web, where these OS actions are unavailable, the viewers fall back to "copy path".
+- **FR-D06**: On every launch, the desktop shell MUST idempotently deploy the bundled `coffer-mcp-shim` to a stable user-writable PATH directory (macOS/Linux: `~/.coffer/bin/`; Windows: `%LOCALAPPDATA%\Coffer\bin\`, with `%USERPROFILE%\Coffer\bin\` as fallback when unset). Deploy MUST be idempotent — an up-to-date on-disk binary is left untouched; a stale one is replaced atomically (temp-sibling copy + rename, executable bit set before the swap). Staleness is decided by a 3-signal heuristic (byte size, bundled-vs-deployed mtime, and a `.coffer-mcp-shim.version` sentinel), so cross-version upgrades that happen to be the same size are still detected.
+- **FR-D07**: The Tauri bundle MUST declare `coffer-daemon` and `coffer-mcp-shim` as PyInstaller sidecars via `bundle.externalBin` in `desktop/tauri.conf.json`. No system Python dependency at runtime.
+- **FR-D08**: The release pipeline MUST produce, per `v*` tag, two download tiers from the same PyInstaller binaries for **macOS arm64 only**: (a) the **CLI+desktop** tier — an unsigned macOS arm64 `.dmg` (named `*-unsigned.dmg`) plus a zipped `Coffer-unsigned-<triple>.app.zip`; and (b) the **CLI-only** tier — a `coffer-cli-<triple>.tar.gz` archive containing `coffer`, `coffer-daemon`, and `coffer-mcp-shim`. macOS x64 (Intel) and the Linux / Windows bundles are deliberately not built — those legs were never validated and the Intel runner pool is being deprecated; the acceptance matrix asserts a macOS-arm64-only build.
+- **FR-D09**: The release pipeline MUST produce one aggregated `SHA256SUMS` file (generated in CI; concatenated across matrix legs in the release job) covering every artifact, so downloaders can verify integrity without trusting the GitHub Release UI alone.
+- **FR-D10**: The desktop shell MUST integrate `tauri-plugin-opener` with the capabilities to open a filesystem path in an external application (`opener:allow-open-path`) and to reveal a path in the OS file manager (`opener:allow-reveal-item-in-dir`). This lets the read-only file viewers offer "open in editor" (opening the file or its containing folder in the user's preferred external editor — see 002 General settings) and "reveal in Finder"; on the web, where these OS actions are unavailable, the viewers fall back to "copy path".
 
 ## Success Criteria
 

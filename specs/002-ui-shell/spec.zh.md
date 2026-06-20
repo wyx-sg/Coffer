@@ -93,7 +93,7 @@
 
 ### User Story 4 — Settings 按用户角度组织，不是按 daemon 内部 (Priority: P2)
 
-开发者打开 Settings，看到的 tab 是按"他在管什么"分组，不是按"Coffer 怎么搭的"：**General**（显示偏好——列表表格的默认每页条数，以及打开受管文件所用的首选外部编辑器）、**Data**（retention 策略、手动清理、备份）与 **About**（版本、许可证、源代码）。在桌面 (Tauri) 构建中，Data 与 About 之间会多出一个 **App** tab（开机自启），它在浏览器里隐藏，因为那些能力不存在。Settings 打开时落在 General tab。daemon 是实现细节——没有 "Daemon" tab，没有只读的 daemon 状态面板。用户永远不需要知道 Coffer 跑了一个后台 daemon。
+开发者打开 Settings，看到的 tab 是按"他在管什么"分组，不是按"Coffer 怎么搭的"：**General**（显示偏好——列表表格的默认每页条数，以及打开受管文件所用的首选外部编辑器）、**Data**（retention 策略、手动清理、备份）与 **About**（版本、许可证、源代码）。Settings 打开时落在 General tab。daemon 是实现细节——没有 "Daemon" tab，没有只读的 daemon 状态面板。用户永远不需要知道 Coffer 跑了一个后台 daemon。
 
 **General** tab 必须暴露默认每页条数偏好（每个列表表格据此初始化的 rows-per-page），持久化在 `localStorage`。它还必须暴露一个**首选外部编辑器**偏好——当用户从只读文件查看器中打开一个受管文件（或其所在文件夹）时，Coffer 用来打开它的应用。默认是操作系统的默认应用；用户可以通过选择一个应用或填入一条启动命令来覆盖。与其他显示偏好一样，它持久化在 `localStorage`，绝不发送给 daemon。
 
@@ -108,7 +108,7 @@
 
 剩余术语改成口语（例如 "prune" 改写成"清理过期数据"）。
 
-**Independent Test**: 开 `/settings`——落在 General。tab 列表是 General / Data / About（桌面构建还多一个 App）。没有 "Daemon" tab，没有 daemon 状态面板；任何 tab 都不暴露 "Shutdown" 或 "Rotate token"。
+**Independent Test**: 开 `/settings`——落在 General。tab 列表是 General / Data / About。没有 "Daemon" tab，没有 daemon 状态面板；任何 tab 都不暴露 "Shutdown" 或 "Rotate token"。
 
 **Representative scenarios** (完整 Given/When/Then 见 `## Acceptance Scenarios`):
 

@@ -375,7 +375,6 @@
       "general": "通用",
       "data": "数据",
       "security": "安全",
-      "app": "应用",
       "about": "关于",
       "models": "模型",
       "sync": "同步"
@@ -424,12 +423,6 @@
       "create": "创建备份",
       "creating": "备份中…",
       "saved": "已保存至 {{path}}"
-    },
-    "app": {
-      "autostart": {
-        "title": "开机自启",
-        "label": "登录时自动启动 Coffer"
-      }
     },
     "about": {
       "title": "关于 Coffer",

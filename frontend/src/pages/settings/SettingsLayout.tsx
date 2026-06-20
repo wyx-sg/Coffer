@@ -4,7 +4,6 @@ import {
   Bot,
   Database,
   Info,
-  Laptop,
   RefreshCw,
   Settings,
   ShieldCheck,
@@ -12,7 +11,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { isTauri } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 interface Item {
@@ -41,11 +39,6 @@ const SYNC_ITEM: Item = {
   labelKey: "settings.tabs.sync",
   icon: RefreshCw,
 };
-const APP_ITEM: Item = {
-  to: "/settings/app",
-  labelKey: "settings.tabs.app",
-  icon: Laptop,
-};
 const SECURITY_ITEM: Item = {
   to: "/settings/security",
   labelKey: "settings.tabs.security",
@@ -59,11 +52,14 @@ const ABOUT_ITEM: Item = {
 
 export function SettingsLayout() {
   const { t } = useTranslation();
-  // The App tab (launch-at-login) is desktop-only — it is hidden in the
-  // browser, where those Tauri capabilities don't exist.
-  const items: Item[] = isTauri()
-    ? [GENERAL_ITEM, MODELS_ITEM, DATA_ITEM, SYNC_ITEM, SECURITY_ITEM, APP_ITEM, ABOUT_ITEM]
-    : [GENERAL_ITEM, MODELS_ITEM, DATA_ITEM, SYNC_ITEM, SECURITY_ITEM, ABOUT_ITEM];
+  const items: Item[] = [
+    GENERAL_ITEM,
+    MODELS_ITEM,
+    DATA_ITEM,
+    SYNC_ITEM,
+    SECURITY_ITEM,
+    ABOUT_ITEM,
+  ];
 
   return (
     <div className="space-y-8">

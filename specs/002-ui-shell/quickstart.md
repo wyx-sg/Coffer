@@ -129,8 +129,7 @@ Code to read a file), then refresh the **Invocations** tab.
   surface reserved for the future, not this audit log.)
 - `/settings` — tabs sidebar opening on **General** (default rows-per-page
   preference), plus **Data** (retention policy, manual prune, backups) and
-  **About** (version / license / source). The desktop build adds an **App**
-  tab (launch-at-login).
+  **About** (version / license / source).
 
 You will notice three deliberately absent surfaces compared to the v0
 shell:

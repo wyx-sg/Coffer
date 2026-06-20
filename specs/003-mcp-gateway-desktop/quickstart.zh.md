@@ -64,9 +64,8 @@ shasum -a 256 -c SHA256SUMS --ignore-missing
   并写出 `~/.coffer/daemon.json`。
 - 托盘图标出现在菜单栏。
 
-如果 shim 的目标目录不在 `PATH` 上，Coffer 会在 **Settings → App** tab
-弹出一次性提示，给出添加到你 shell rc 文件（`~/.zshrc`、`~/.bashrc` 等）
-的准确一行。
+如果 shim 的目标目录不在 `PATH` 上，Coffer 会弹出一次性提示，
+给出添加到你 shell rc 文件（`~/.zshrc`、`~/.bashrc` 等）的准确一行。
 
 ## 4. 添加一个 MCP 服务器
 
@@ -114,13 +113,6 @@ shasum -a 256 -c SHA256SUMS --ignore-missing
 
 用 OS 关闭键关掉主窗口只会把窗口**隐藏**到托盘；daemon 仍存活，你的
 MCP 客户端继续工作。
-
-## 7. 可选：登录时启动 Coffer
-
-打开 **Settings → App**，打开 **Launch at login** 开关。Coffer 会把自己
-注册到 macOS 的 autostart 机制（`~/Library/LaunchAgents/` 下的 LaunchAgent）。
-
-登出再登入（或重启）验证 —— 托盘图标会在你不打开任何东西的情况下出现。
 
 ## CLI-only 安装
 
@@ -178,8 +170,7 @@ shim 通过 `~/.coffer/daemon.json` 自动发现运行中的 daemon，无需逐�
   没有接日志 sink），所以从终端启动 Coffer 查看其 stderr；daemon 问题查
   `~/.coffer/logs/daemon.log`。
 - **`coffer-mcp-shim: command not found`** —— 你的 shell `PATH` 没有
-  包含 shim 目录。重启一次 Coffer，按 Settings → App 的提示操作，然后
-  打开一个新终端。
+  包含 shim 目录。重启一次 Coffer，按 PATH 提示操作，然后打开一个新终端。
 - **daemon 拉不起来** —— 打开 `~/.coffer/logs/daemon.log` 搜
   `ERROR`。最常见的原因是 8000–8009 段每个端口都已被其他进程占用；
   退掉那些进程或等它们释放端口。

@@ -46,7 +46,7 @@ def daemon_spawn_command() -> list[str]:
            (``/Applications/Coffer.app/Contents/MacOS/coffer-daemon``) —
            covers a shim deployed by an older desktop build that did not yet
            co-locate the daemon in ``~/.coffer/bin`` (e.g. after a reboot
-           with the app not running and autostart off).
+           with the app not running).
 
       The first candidate that exists wins. If none exists, the sibling
       path is returned as a best effort so the caller surfaces a single,

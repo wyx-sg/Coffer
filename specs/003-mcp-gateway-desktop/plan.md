@@ -19,8 +19,7 @@ inside the Tauri bundle as `bundle.externalBin` sidecars per
 [ADR-008](../../docs/decisions/ADR-008-distribution-pyinstaller-tauri-sidecar.md).
 
 This spec adds **no new backend**, **no new resource kinds**, and **no new
-UI screens**. The desktop-only `AppSettings` React component shipped in 002
-behind an `isTauri()` guard is the only frontend touchpoint.
+UI screens**.
 
 See [./spec.md](./spec.md) for the user-visible contract,
 [./quickstart.md](./quickstart.md) for the end-user walkthrough, and
@@ -32,7 +31,7 @@ for the distribution-architecture decision.
 | Dimension                | Value                                                                                                                                                                                                                                                      |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Language / Version**   | Rust 1.78+ (Tauri 2 crate); reuses Python 3.12 from the daemon / shim (PyInstaller-bundled).                                                                                                                                                               |
-| **Primary Dependencies** | Tauri 2 (`tauri`, `tauri-build`); `tauri-plugin-autostart` (launch-at-login set/get); `tauri-plugin-shell` only as needed for sidecar spawn; the 002 frontend bundle (loaded from `dist/`).                                                                |
+| **Primary Dependencies** | Tauri 2 (`tauri`, `tauri-build`); `tauri-plugin-shell` only as needed for sidecar spawn; the 002 frontend bundle (loaded from `dist/`).                                                                |
 | **Sidecar Binaries**     | `coffer-daemon` and `coffer-mcp-shim`, built per platform via `scripts/build_binaries.sh` driving the PyInstaller specs in `backend/`.                                                                                                                     |
 | **Daemon Discovery**     | `~/.coffer/daemon.json` (port + token + pid), shared with the CLI and shim. See [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.md).                                                                                                         |
 | **Shim PATH target**     | macOS / Linux: `~/.coffer/bin/`. Windows: `%LOCALAPPDATA%\Coffer\bin\` (fallback `%USERPROFILE%\Coffer\bin\` when unset).                                                                                                                                  |
@@ -49,11 +48,11 @@ for the distribution-architecture decision.
 | ----------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **I. Local-First (NON-NEGOTIABLE)**       | OK         | Daemon stays loopback-only; the desktop shell never reaches the public internet; no telemetry or update-server call ships.                                                                         |
 | **II. Spec-as-Truth**                     | OK         | Spec committed before code; every acceptance scenario has a covering test (acceptance audit).                                                                                                      |
-| **III. Open-Source-Readiness**            | OK         | Tauri 2 (MIT/Apache-2.0) and `tauri-plugin-autostart` (MIT) are permissive-licensed; PyInstaller is GPL with a runtime-only exception that does not contaminate bundled binaries.                  |
+| **III. Open-Source-Readiness**            | OK         | Tauri 2 (MIT/Apache-2.0) is permissive-licensed; PyInstaller is GPL with a runtime-only exception that does not contaminate bundled binaries.                  |
 | **Languages**                             | OK         | Rust is allowed for the desktop shell per the constitution Languages clause; the daemon and shim remain Python 3.12.                                                                               |
 | **Architecture: layered**                 | OK         | Desktop crate is a thin shell — supervision, tray, and shim deploy live in dedicated modules; the web UI from 002 is the view layer.                                                               |
 | **Persistence: SQLite for control plane** | OK         | This spec owns no persistence; the daemon does. The shell reads `~/.coffer/daemon.json` (not SQLite) to discover the daemon — the discovery file is part of the runtime contract owned by ADR-006. |
-| **Credentials: encrypted store**          | OK         | Spec owns no credentials. The autostart preference is stored by `tauri-plugin-autostart` (OS-native, not the credential store).                                                                    |
+| **Credentials: encrypted store**          | OK         | Spec owns no credentials.                                                                    |
 | **Network defaults: loopback-only**       | OK         | The shell talks to the daemon on `127.0.0.1:<port>` from `daemon.json`; no other HTTP origin is reached.                                                                                           |
 
 ## Project Structure
@@ -69,7 +68,7 @@ specs/003-mcp-gateway-desktop/
 
 This folder deliberately has **no** `data-model.md` (no backend data here)
 and **no** `tasks.md` (the work is tracked at the user-story / PR level —
-the unit of change is "one desktop concern" — shim deploy, tray, autostart,
+the unit of change is "one desktop concern" — shim deploy, tray,
 release pipeline — and each lands as one PR).
 
 ### Source code (delivered in this PR)
@@ -121,8 +120,7 @@ desktop window's close-to-tray.
    Equal → no-op. Differing → atomic replace (`tempfile` + `rename`).
 
 The PATH-membership prompt is shown once on first launch when the target
-directory is not on `PATH` (handled by 002's `AppSettings` tab; the shell
-just deploys the binary).
+directory is not on `PATH`; the shell just deploys the binary.
 
 ### Build matrix
 
@@ -183,21 +181,14 @@ survives desktop-app close (US3 scenarios).
 **Done when:** US5's tray scenarios pass and US1's "close to tray, not exit"
 scenario passes.
 
-### Phase 4 — Autostart + AppSettings wiring
-
-`tauri-plugin-autostart` integration with set/get exposed to the JS bridge;
-002's `AppSettings` component picks up the toggle.
-
-**Done when:** US1's "launch at login" scenario passes.
-
-### Phase 5 — Shim auto-deploy
+### Phase 4 — Shim auto-deploy
 
 `shim.rs` — idempotent copy with size-mismatch heuristic, parent-dir
 probing, Windows PATH fallback.
 
 **Done when:** US4's three scenarios pass.
 
-### Phase 6 — Release pipeline + smoke test
+### Phase 5 — Release pipeline + smoke test
 
 `.github/workflows/release.yml` runs the macOS-arm64 build leg; it packages
 the three binaries (`coffer`, `coffer-daemon`, `coffer-mcp-shim`) into a
@@ -217,7 +208,6 @@ bundle green.
 | Detached daemon spawn (setsid / DETACHED_PROCESS)                   | Required for the daemon to outlive the desktop window's close-to-tray — otherwise OS process tree cleanup kills the daemon when the Tauri process exits.           | A foreground child process leaks the close-to-tray scenario; reparenting to PID 1 is what `setsid` and `DETACHED_PROCESS` are for.                                                                            |
 | Shim deploy on every launch (idempotent)                            | The desktop shell is the only entry point that knows where the bundled shim lives; deploying once-only (at install time) would miss in-place bundle upgrades.      | A separate "shim updater" service would be more moving parts; the size-mismatch heuristic is a few lines and runs in microseconds when the binary is already up to date.                                      |
 | macOS arm64 only (no x64 / Linux / Windows legs)                   | The Intel runner pool is being deprecated and starves the job, PyInstaller can't cross-compile x86_64 sidecars from arm64, and the Linux/Windows legs were never validated.                                  | Shipping unvalidated cross-platform bundles would mean publishing artifacts no one tested; the matrix is intentionally scoped to the one validated target until the others are wired and proven.               |
-| `tauri-plugin-autostart` over hand-rolling launchd / Task Scheduler | Cross-platform launch-at-login is non-trivial (launchd plist + systemd user unit + Windows Task Scheduler / Run key); the plugin is already maintained and tested. | Hand-rolling per-platform launch-at-login multiplies bug surface and tests across three OSes for zero functional gain.                                                                                        |
 
 ## Cross-Reference Index
 

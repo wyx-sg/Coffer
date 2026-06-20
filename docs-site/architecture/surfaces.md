@@ -126,9 +126,9 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 ## Desktop App
 
-**What it is.** The Tauri 2 desktop application, specified in [spec 003](/reference/specs/003-mcp-gateway-desktop/spec). The desktop app wraps the same Web UI from spec 002 inside a native application window, adds daemon supervision, a system tray icon, and optional launch-at-login. It is the zero-friction entry point for daily-driver desktop use: install it, and Coffer is always running in the background without any manual `coffer daemon start` step.
+**What it is.** The Tauri 2 desktop application, specified in [spec 003](/reference/specs/003-mcp-gateway-desktop/spec). The desktop app wraps the same Web UI from spec 002 inside a native application window, adds daemon supervision and a system tray icon. It is the zero-friction entry point for daily-driver desktop use: install it, and Coffer is always running in the background without any manual `coffer daemon start` step.
 
-**Which process.** A native desktop process (Tauri 2, Rust + WebView). It embeds the Web UI as a WebView; desktop-specific affordances (tray menu items, autostart settings) activate behind an `isTauri()` guard in the frontend code.
+**Which process.** A native desktop process (Tauri 2, Rust + WebView). It embeds the Web UI as a WebView; desktop-specific affordances (tray menu items) activate behind an `isTauri()` guard in the frontend code.
 
 **Transport.** Internally: the WebView talks to `127.0.0.1:<port>/api/v1/` for REST and `/mcp` for MCP (same as the browser-based Web UI). The Rust shell also communicates with the daemon's REST API for supervision tasks (health checks, restart).
 
@@ -152,7 +152,7 @@ The desktop app also idempotently deploys the bundled `coffer-mcp-shim` and `cof
 | Stdio shim     | Per-session       | HTTP/SSE                   | MCP client          | MCP client session  |
 | Callback listener | Daemon-spawned child | Loopback HTTP (forwards to daemon) | Daemon (on SeaTalk enable) | While a SeaTalk channel is enabled |
 | Web UI         | Browser tab       | Loopback HTTP (REST)       | User / browser      | Browser tab session |
-| Desktop app    | Native process    | Loopback HTTP (REST + MCP) | User / OS autostart | Until tray quit     |
+| Desktop app    | Native process    | Loopback HTTP (REST + MCP) | User                | Until tray quit     |
 
 ---
 
