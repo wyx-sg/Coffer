@@ -14,17 +14,6 @@ app = typer.Typer(help="Manage skills (AgentSkills standard)")
 _console = Console()
 
 
-def _post_action(path: str, ok_msg: str) -> None:
-    """POST a no-body skill action, surface a clean error, then echo ok_msg."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(path)
-        if r.status_code >= 400:
-            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
-            raise typer.Exit(2)
-    typer.echo(ok_msg)
-
-
 @app.command("list")
 def list_cmd(
     output_json: bool = typer.Option(False, "--json"),
