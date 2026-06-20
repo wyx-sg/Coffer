@@ -674,3 +674,102 @@ async def test_reimport_overwrite_registers_orphan_master(tmp_path):
     assert len(imported) == 1
 
     await engine.dispose()
+
+
+# ----- repair_drift (FR-029) -----
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="005-skill-manager",
+    scenario="opt-in repair re-delivers repairable drift from master",
+)
+async def test_repair_redelivers_repairable_drift_and_leaves_foreign(tmp_path):
+    """repair_drift re-delivers MISSING_LINK + TAMPERED_LINK, leaves
+    REPLACED_WITH_REGULAR + MISSING_MASTER in the residual report, and records
+    a SKILL_DRIFT_REMEDIATED audit row for each repaired entry."""
+    import shutil
+
+    skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
+    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
+
+    # Import four skills so we can induce one drift kind each.
+    for skill_name in ("s-missing-link", "s-tampered", "s-foreign-dir", "s-missing-master"):
+        src = tmp_path / f"src-{skill_name}"
+        _write_skill_folder(src, name=skill_name)
+        await skill_svc.import_local(path=str(src), actor="cli")
+
+    # --- induce MISSING_LINK: delete the delivered symlink ---
+    link_missing = skill_dir / "s-missing-link"
+    assert link_missing.is_symlink()
+    link_missing.unlink()
+
+    # --- induce TAMPERED_LINK: repoint the symlink elsewhere ---
+    link_tampered = skill_dir / "s-tampered"
+    assert link_tampered.is_symlink()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    link_tampered.unlink()
+    link_tampered.symlink_to(elsewhere, target_is_directory=True)
+
+    # --- induce REPLACED_WITH_REGULAR: swap symlink for a foreign plain dir ---
+    link_foreign = skill_dir / "s-foreign-dir"
+    assert link_foreign.is_symlink()
+    link_foreign.unlink()
+    link_foreign.mkdir()
+    foreign_sentinel = link_foreign / "precious.txt"
+    foreign_sentinel.write_text("user data — must not be touched")
+
+    # --- induce MISSING_MASTER: remove the master folder ---
+    link_missing_master = skill_dir / "s-missing-master"
+    assert link_missing_master.exists()
+    shutil.rmtree(store.paths_for("s-missing-master").folder)
+
+    # Confirm verify sees all four drift kinds before repair.
+    pre_report = await skill_svc.verify()
+    pre_kinds = {e.kind for e in pre_report.entries}
+    from coffer.domain.skill.drift import DriftKind
+
+    assert DriftKind.MISSING_LINK in pre_kinds
+    assert DriftKind.TAMPERED_LINK in pre_kinds
+    assert DriftKind.REPLACED_WITH_REGULAR in pre_kinds
+    assert DriftKind.MISSING_MASTER in pre_kinds
+
+    # --- run repair ---
+    result = await skill_svc.repair_drift(actor="test")
+
+    # Repaired: MISSING_LINK and TAMPERED_LINK only.
+    remediated_kinds = {e.kind for e in result.remediated}
+    assert DriftKind.MISSING_LINK in remediated_kinds
+    assert DriftKind.TAMPERED_LINK in remediated_kinds
+    assert DriftKind.REPLACED_WITH_REGULAR not in remediated_kinds
+    assert DriftKind.MISSING_MASTER not in remediated_kinds
+
+    # Repaired links resolve to master again.
+    master_missing = store.paths_for("s-missing-link").folder
+    master_tampered = store.paths_for("s-tampered").folder
+    assert link_missing.exists(), "MISSING_LINK should be re-delivered"
+    assert link_missing.resolve() == master_missing.resolve()
+    assert link_tampered.exists(), "TAMPERED_LINK should be re-delivered"
+    assert link_tampered.resolve() == master_tampered.resolve()
+
+    # Foreign directory is completely untouched.
+    assert link_foreign.is_dir() and not link_foreign.is_symlink(), "foreign dir must remain"
+    assert foreign_sentinel.read_text() == "user data — must not be touched"
+
+    # Residual report contains the two un-repairable kinds.
+    residual_kinds = {e.kind for e in result.remaining.entries}
+    assert DriftKind.REPLACED_WITH_REGULAR in residual_kinds
+    assert DriftKind.MISSING_MASTER in residual_kinds
+    # Repaired kinds must not appear in remaining.
+    assert DriftKind.MISSING_LINK not in residual_kinds
+    assert DriftKind.TAMPERED_LINK not in residual_kinds
+
+    # A SKILL_DRIFT_REMEDIATED audit row was recorded for each repaired entry.
+    remediated_events = await audit.query(event_type=AuditEventType.SKILL_DRIFT_REMEDIATED.value)
+    assert len(remediated_events) == 2  # one per repaired skill
+    remediated_skill_names = {ev.resource_name for ev in remediated_events}
+    assert "s-missing-link" in remediated_skill_names
+    assert "s-tampered" in remediated_skill_names
+
+    await engine.dispose()

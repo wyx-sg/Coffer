@@ -56,3 +56,16 @@ class DriftReport:
     @property
     def has_drift(self) -> bool:
         return bool(self.entries)
+
+
+@dataclass(frozen=True)
+class RepairResult:
+    """Output of `SkillService.repair_drift()`.
+
+    ``remediated`` holds entries that were successfully re-delivered;
+    ``remaining`` is the residual DriftReport after the repair pass (entries
+    that could not be repaired or were intentionally skipped).
+    """
+
+    remediated: list[DriftEntry]
+    remaining: DriftReport

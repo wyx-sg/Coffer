@@ -32,7 +32,11 @@ _CREDENTIALS = "credentials"
 #: conflicts, so they are excluded from the mirror (kept machine-local). The
 #: legacy ``MEMORY.md`` index is no longer regenerated, but stays excluded so a
 #: leftover copy from a pre-lane build never conflicts across machines.
-DERIVED_INDEX_NAMES = frozenset({"MEMORY.md"})
+#: The organizer's ``INDEX.md`` (each machine regenerates it from the synced
+#: topic docs) and its store-root ``consolidation-log.md`` (a per-machine
+#: changelog) are likewise derived/machine-local — the topic docs themselves DO
+#: sync as the source of truth.
+DERIVED_INDEX_NAMES = frozenset({"MEMORY.md", "INDEX.md", "consolidation-log.md"})
 
 
 def _replace_tree(

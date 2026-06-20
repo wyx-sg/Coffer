@@ -68,6 +68,7 @@ _MEM_MODELS: dict[str, type | None] = {
     "RecallRequest": mem_schemas.RecallRequest,
     "RecallHit": mem_schemas.RecallHit,
     "RecallResponse": mem_schemas.RecallResponse,
+    "OrganizeResponse": mem_schemas.OrganizeResponse,
     "RetrievalMode": None,
     "Scope": None,
     "ErrorEnvelope": None,

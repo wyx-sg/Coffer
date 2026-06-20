@@ -350,6 +350,12 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **When** 用户关闭跟随开关，
 - **Then** 每个当前已投递的 skill 都保留为显式逐 skill binding 且链接完好，后续主库新增不再自动投递。
 
+### Scenario: opt-in repair re-delivers repairable drift from master
+
+- **Given** 某 agent 的 skill 目录中：一条已启用 binding 的 Coffer 链接缺失；另一条的 Coffer 链接已被篡改（旧链接指向别处）；第三条 binding 的路径被用户自有的外部普通目录占据；第四条 binding 的 master 文件夹已不存在，
+- **When** 用户执行 opt-in 修复（`coffer skill verify --fix` / `POST /skills/repair`），
+- **Then** 缺失的链接重新创建并指向 master；被篡改的链接先备份到 `<path>.coffer-backup-<ts>`，再重新创建并指向 master；外部普通目录完全保持原样，仍在报告中列为需手动处理；missing-master 条目保持原样并报告为需手动处理；每次重新投递作为 repair 事件写入审计日志。
+
 ## Requirements
 
 ### Functional Requirements
@@ -381,6 +387,7 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 
 - **FR-015**：系统必须提供 `verify` 操作，对每条已启用 binding 比对其磁盘目标，并按 drift 类别（missing link、tampered link、missing master、orphan master）报告与建议处置方式。
 - **FR-016**：系统不得自动修复 drift；修复必须由用户显式触发。
+- **FR-029**：系统必须提供显式、opt-in 的 drift 修复操作（`coffer skill verify --fix`，`POST /skills/repair`），从主库重新投递可安全修复的 drift——即 missing link 与 tampered link——并且不得修改外部/用户内容（replaced-with-regular）、缺失的 master，或孤立 master；上述情况保持原样并报告为需要手动处理。每次修复写入审计。
 
 **非托管 skill（工作区增补）**
 

@@ -451,3 +451,39 @@ def test_fact_list_pagination_boundaries(tmp_path, monkeypatch):
             r = c.get("/api/v1/memory_stores/global/facts", params=params, headers=_HEADERS)
             assert r.status_code == 422, (params, r.text)
             _assert_envelope(r.json(), "CONFIG_INVALID")
+
+
+def test_organize_returns_no_model_noop_shape(tmp_path, monkeypatch):
+    """The wired ``POST …/organize`` returns the OrganizeResult shape. On a fresh
+    install no internal model is configured → a clean ``no_model`` no-op (the
+    full wiring + route + schema are exercised without calling a real LLM)."""
+    app = _app(tmp_path, monkeypatch, 59700)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        # An item to (not) organize — proves the no-op leaves the inbox untouched.
+        c.post(
+            "/api/v1/memory_stores/global/facts",
+            json={"text": "a fact awaiting organization"},
+            headers=_USER,
+        )
+        r = c.post("/api/v1/memory_stores/global/organize", headers=_HEADERS)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["status"] == "no_model"
+        assert body["items_processed"] == 0
+        assert body["topics_created"] == 0
+        assert body["topics_updated"] == 0
+        assert body["skipped"] == 0
+        assert body["model"] is None
+        # The inbox item is untouched (still listed).
+        facts = c.get("/api/v1/memory_stores/global/facts", headers=_HEADERS).json()
+        assert facts["total"] == 1
+
+
+def test_organize_unknown_store_404(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59710)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        r = c.post("/api/v1/memory_stores/not-a-real-store/organize", headers=_HEADERS)
+        assert r.status_code == 404, r.text
+        _assert_envelope(r.json(), "MEMORY_STORE_NOT_FOUND")

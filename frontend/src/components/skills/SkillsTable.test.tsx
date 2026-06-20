@@ -18,11 +18,15 @@ import type { SkillOut } from "@/lib/api/skills";
 vi.mock("@/lib/hooks/useSkills", () => ({
   useRemoveSkill: vi.fn(),
   useVerifySkills: vi.fn(),
+  useRepairSkillDrift: vi.fn(),
 }));
 
-const { useRemoveSkill, useVerifySkills } = await import("@/lib/hooks/useSkills");
+const { useRemoveSkill, useVerifySkills, useRepairSkillDrift } = await import(
+  "@/lib/hooks/useSkills"
+);
 const useRemoveSkillMock = vi.mocked(useRemoveSkill);
 const useVerifySkillsMock = vi.mocked(useVerifySkills);
+const useRepairSkillDriftMock = vi.mocked(useRepairSkillDrift);
 
 function stubVerify() {
   useVerifySkillsMock.mockReturnValue({
@@ -33,6 +37,15 @@ function stubVerify() {
     isError: false,
     error: null,
   } as unknown as ReturnType<typeof useVerifySkills>);
+  useRepairSkillDriftMock.mockReturnValue({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    data: undefined,
+    isPending: false,
+    isError: false,
+    isSuccess: false,
+    error: null,
+  } as unknown as ReturnType<typeof useRepairSkillDrift>);
 }
 
 function wrap(ui: React.ReactNode) {

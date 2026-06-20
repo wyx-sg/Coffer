@@ -247,8 +247,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # the supervisor loop never double-disposes it (dispose() is idempotent).
     app.state.mcp_session_supervisors = session_supervisors
 
-    # Wire transcript distillation (extends spec 007 Memory; see ADR-020). Needs
-    # memory, agent, and model services — all registered above by their wire_* calls.
+    # Wire transcript distillation + the memory consolidation organizer (spec 007
+    # FR-027..031) — internal-LLM consumers of the memory + model services (ADR-020).
     def _distill_credential_resolver(ref: str) -> str:
         value: str | None = credential_store.get(ref)
         if value is None:

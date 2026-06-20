@@ -277,6 +277,7 @@
       "skill_autobind_skipped": "跳过了技能 {{resource}} 的自动绑定",
       "skill_relinked": "重新链接了技能 {{resource}}",
       "skill_drift_detected": "检测到技能 {{resource}} 的偏移",
+      "skill_drift_remediated": "已从主存储重新下发技能 {{resource}}",
       "skill_adopted": "纳管了技能 {{resource}}",
       "skill_unmanaged_deleted": "删除了未纳管技能 {{resource}}",
       "kb_document_ingested": "向 {{resource}} 摄入了一个文档",
@@ -837,6 +838,11 @@
     "verify.checking": "正在检查漂移…",
     "verify.ok": "未检测到漂移。",
     "verify.found": "检测到 {{count}} 处漂移：",
+    "verify.fix": "修复",
+    "verify.fixing": "修复中…",
+    "verify.fixed": "已修复 {{count}} 处",
+    "verify.fixRemaining": "仍需手动处理",
+    "verify.fixGlobalNote": "修复操作会从 master 重新下发所有漂移的 skill，包括上方未列出的 skill。",
     "card": {
       "noBindings": "未绑定任何 Agent"
     },
