@@ -110,7 +110,8 @@ agent provider，所以把它们排除在那个已经很大的改动之外，以
   适配器仍 import 的共享 helper（`ParseState`、`SessionSink`、`last_user_text`）
   抽到一个小模块 `adapter_support.py`。—— **已交付**（后续 PR）。
 - **(b) 用一个有类型的 `AgentConfig { cwd, session_id, model }`** 替换无类型的
-  `agent_config` blob。—— 记入后续 PR。
+  `agent_config` blob（一个 frozen 的领域 dataclass：provider 把原始输入校验进它，
+  持久化层把它序列化到/从 JSON 列；不改动线协议）。—— **已交付**（后续 PR）。
 
 ### 不变量
 
@@ -163,8 +164,8 @@ agent provider，所以把它们排除在那个已经很大的改动之外，以
   保留。Spec 009 channel 层在它写这些字段处被更新。
 - 前端用一条持久的 `GET .../events` 订阅流替换每回合的 POST SSE + 2 秒轮询；
   composer 永不锁定并渲染 pending chips。
-- 遗留 CLI 适配器删除已在后续 PR **交付**（动作 3、第 4a 部分）；`agent_config`
-  类型化（第 4b 部分）记入后续 PR。
+- 遗留 CLI 适配器删除（第 4a 部分）与 `agent_config` 类型化（第 4b 部分）均已在
+  后续 PR **交付**（动作 3、第 4 部分）。
 - ADR-021 被**收窄**（非取代）：它的 channel 观测职责被拓宽为观测 + 中断 + 注入；
   它的多人"审批席"框架已经消失（ADR-025）。
 - 无内置人格改动（ADR-024 存续）；无凭据处理改动。
