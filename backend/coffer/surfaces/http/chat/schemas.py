@@ -159,6 +159,28 @@ class SendMessageRequest(BaseModel):
     text: str = Field(min_length=1, max_length=32768)
 
 
+class SendMessageAck(BaseModel):
+    """Response for POST /conversations/{id}/messages (fire-and-return, ADR-031).
+
+    ``queued`` is True when the message was enqueued behind an in-flight turn,
+    False when its turn started immediately.
+    """
+
+    queued: bool
+
+
+class PendingQueueIn(BaseModel):
+    """Body for PUT /conversations/{id}/pending — replaces the ordered queue."""
+
+    pending: list[str]
+
+
+class PendingQueueOut(BaseModel):
+    """The conversation's current ordered pending-message texts (ADR-031)."""
+
+    pending: list[str]
+
+
 # ---------------------------------------------------------------------------
 # Model
 # ---------------------------------------------------------------------------
