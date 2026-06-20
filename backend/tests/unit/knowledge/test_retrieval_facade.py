@@ -22,6 +22,9 @@ class FakeIndex:
     async def upsert_chunks(self, document_id, chunks, vectors):
         return len(chunks)
 
+    async def upsert_vectors(self, document_id, vectors):
+        return None
+
     async def delete_chunks(self, document_id):
         return None
 

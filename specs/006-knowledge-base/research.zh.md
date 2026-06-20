@@ -109,7 +109,18 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 
 不存在 KB 写工具 —— KB 由用户策展。调用记入 `mcp_invocations`（仅 tool 名 + who/when/duration/outcome；无参数或返回内容），与既有隐私立场一致。`coffer__` 前缀保留（名为 `coffer` 的 server 在注册时被拒）；上游工具前缀是 `<server>__`，绝不碰撞。
 
-## 9. 此处明确不决定 / 范围外
+## 9. 降级 embed：与 sha 闸门解耦 + 暴露计数（KB8）
+
+**问题**：当 embedding provider 不可用时，例程如何让 embed 保持可重试而不破坏 no-op 闸门？降级又如何在读取时变得可见？
+
+**决策**：用一个专用的持久化 **`embed_pending`** 标志，与 `content_sha256`（始终是真实正文哈希）解耦，再配上一个基于持久计数的暴露方式。
+
+- **为什么解耦。** 旧设计用空字符串哨兵覆盖 `content_sha256`，使下一次对账失配而重试 embed。但 `"" == previous_sha` 永不成立，于是**每次**扫描都重新切块降级文档 + 重写其 FTS 行 + 重试 embed —— 一个无关编辑就会重建整个降级语料。空 sha 还破坏了 files-as-truth 推导。把重试状态拆到独立列，让 sha 闸门保持诚实（正文不变 ⇒ 无 churn），同时 embed 仍可重试。
+- **为什么走只重试 embed 的路径。** 正文未变但 `embed_pending` 时，chunks + FTS 已经是最新 —— 只缺向量。例程在**内存**里重新切块（位置确定），embed，并调用新的索引方法 `upsert_vectors` 只写 vec 行。不重写 FTS / chunk ⇒ 降级语料的 churn 消失，且向量按位置与已存 chunks 对齐。
+- **为什么从持久标志暴露，而非临时扫描计数。** 降级计数原本在 `reindex_scan` 内计算，只由显式 `POST /reindex` 返回；读取时惰性重建（list / get / search / grep）期间的降级被悄悄丢弃（`_reconcile_on_read -> None`）。在 `metrics()` 里查询持久的 `embed_pending`（`count_pending_embeds`），让 `documents_degraded` 在任意读取上都正确，无需把扫描计数穿过每条读路径。
+- **边界。** `embed_pending` 只跟踪 embedding **provider** 调用失败（`EngineUnavailable`）。它与 sqlite-vec 扩展是否可用正交：provider 成功但 vec 表不可用属于 `embedded=True`（非 pending），在查询时由 `SearchResponse.fallback` 处理 —— 与既有 `embedded` 标志同构。
+
+## 10. 此处明确不决定 / 范围外
 
 - 单次调用里 keyword + vector 的 hybrid RRF 融合（可选未来，同引擎）。
 - 检索时的 reranking / HyDE / multi-query / LLM 综合 —— agent 综合。

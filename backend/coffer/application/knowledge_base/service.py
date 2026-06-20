@@ -259,6 +259,12 @@ class KnowledgeBaseService:
         """Lazy reindex-on-read (FR-008a / FR-016): reconcile the on-disk
         markdown against the SQLite index before serving a read/search.
 
+        Intentionally ``-> None``: the transient per-scan degraded count is NOT
+        threaded back here. ``documents_degraded`` is surfaced from the PERSISTED
+        ``embed_pending`` flag (``metrics()`` → ``count_pending_embeds``), so a
+        degraded embed during ANY read is observable without plumbing the scan
+        count through every read path (KB8).
+
         The in-app viewer is read-only, so users edit ``docs/<doc-id>.md``
         directly in their external editor with no filesystem watcher. The scan
         funnels through the SAME idempotent reindex routine (``content_sha256``
@@ -367,9 +373,11 @@ class KnowledgeBaseService:
         chunk_count = await self._documents.count_chunks(KIND_KNOWLEDGE_BASE, kb_name)
         kb_dir = self._paths.kb_dir(kb_name)
         disk = await asyncio.to_thread(du_bytes, kb_dir) if kb_dir.exists() else 0
+        degraded = await self._documents.count_pending_embeds(KIND_KNOWLEDGE_BASE, kb_name)
         return {
             "document_count": doc_count,
             "chunk_count": chunk_count,
+            "documents_degraded": degraded,
             "disk_bytes": disk,
             "enabled_modes": list(config.enabled_modes),
         }

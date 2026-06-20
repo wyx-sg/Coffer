@@ -105,6 +105,9 @@ export interface ReindexResult {
 export interface KnowledgeBaseMetrics {
   document_count: number;
   chunk_count: number;
+  // Documents indexed keyword-only because the embedding provider was
+  // unavailable (the embed is retried on the next reconcile). 0 when all embed.
+  documents_degraded: number;
   indexed_modes: RetrievalMode[];
   disk_bytes: number;
 }

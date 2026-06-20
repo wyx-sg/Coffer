@@ -48,12 +48,19 @@ def _one_chunk(markdown: str) -> list[str]:
 
 
 def fact_to_document(
-    fact: MemoryFact, *, store: StoreRef, content_sha256: str, path: str
+    fact: MemoryFact,
+    *,
+    store: StoreRef,
+    content_sha256: str,
+    path: str,
+    embed_pending: bool = False,
 ) -> Document:
     """Project a ``MemoryFact`` onto a unified ``documents`` row (kind=memory).
 
     ``path`` is the fact's canonical ``.md`` file (the source of truth), per the
-    data-model — recall hits surface it as their ``source``."""
+    data-model — recall hits surface it as their ``source``. ``embed_pending``
+    carries the degraded-embed retry state (KB8) so a degraded fact is retried on
+    the next reconcile."""
     metadata: dict[str, object] = {
         "type": fact.type,
         "actor": fact.actor,
@@ -68,6 +75,7 @@ def fact_to_document(
         title=fact.name,
         description=fact.description,
         content_sha256=content_sha256,
+        embed_pending=embed_pending,
         source_mode="native",
         created_at=fact.created_at,
         updated_at=fact.updated_at,
@@ -139,7 +147,14 @@ class MemoryReconciler:
         for fact_id, ff in on_disk.items():
             existing = known.get(fact_id)
             previous = None if force else (existing.content_sha256 if existing else None)
-            if not force and existing is not None and existing.content_sha256 == ff.content_sha256:
+            # A still-pending fact (embed degraded last time) must NOT be skipped
+            # by the no-op gate, else its embed never retries (KB8).
+            if (
+                not force
+                and existing is not None
+                and existing.content_sha256 == ff.content_sha256
+                and not existing.embed_pending
+            ):
                 unchanged += 1
                 continue
             outcome = await self._reindexer.reindex(
@@ -149,12 +164,14 @@ class MemoryReconciler:
                 embedding=embedding,
                 doc_id=fact_id,
                 chunker=_one_chunk,
+                previous_embed_pending=(existing.embed_pending if existing else False),
             )
             doc = fact_to_document(
                 ff.fact,
                 store=store,
                 content_sha256=outcome.content_sha256,
                 path=str(ff.path),
+                embed_pending=outcome.embed_pending,
             )
             await self._documents.upsert_document(doc)
             indexed += 1
@@ -184,12 +201,14 @@ class MemoryReconciler:
                 embedding=embedding,
                 doc_id=fact_file.fact.id,
                 chunker=_one_chunk,
+                previous_embed_pending=(existing.embed_pending if existing else False),
             )
             doc = fact_to_document(
                 fact_file.fact,
                 store=store,
                 content_sha256=outcome.content_sha256,
                 path=str(fact_file.path),
+                embed_pending=outcome.embed_pending,
             )
             await self._documents.upsert_document(doc)
 

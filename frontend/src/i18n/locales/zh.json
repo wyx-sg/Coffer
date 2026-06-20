@@ -952,6 +952,7 @@
       "back": "返回知识库",
       "docBadge": "{{count}} 个文档",
       "chunkBadge": "{{count}} 个分块",
+      "degradedBadge": "{{count}} 个文档的向量待嵌入（嵌入服务暂不可用，已按关键词索引）",
       "edit": "编辑",
       "save": "保存",
       "cancel": "取消",

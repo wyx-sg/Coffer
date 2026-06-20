@@ -37,6 +37,12 @@ class KnowledgeIndex(Protocol):
         """Replace a document's chunks (FTS5 + optional vec). Returns count."""
         ...
 
+    async def upsert_vectors(self, document_id: str, vectors: Sequence[Sequence[float]]) -> None:
+        """Attach embeddings to a document's EXISTING chunks (vec only — no FTS/
+        chunk rewrite). Used by the degraded-embed retry path; chunk positions are
+        deterministic so the vectors align with the stored chunks."""
+        ...
+
     async def delete_chunks(self, document_id: str) -> None:
         """Remove a document's chunk / FTS5 / vec rows."""
         ...

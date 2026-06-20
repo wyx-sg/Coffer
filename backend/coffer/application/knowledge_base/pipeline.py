@@ -73,12 +73,11 @@ class KBPipeline:
         self._reindexer = reindexer
         self._paths = paths
         self._resolve_embedding = embedding_resolver  # global embedding config
-        # Serializes write paths per KB so concurrent ingest/edit/reindex on one
-        # store don't interleave index batches or duplicate embeds.
+        # Serializes write paths per KB so concurrent ingest/edit/reindex don't
+        # interleave index batches or duplicate embeds.
         self._locks = StoreLocks()
-        # Per-KB last-seen stat-only docs/ fingerprint (in-memory, reset on
-        # restart): read by the service's reconcile-on-read short-circuit to skip
-        # the full scan when unchanged; refreshed by ``reindex_scan``.
+        # Per-KB stat-only docs/ fingerprint (in-memory): the reconcile-on-read
+        # short-circuit skips the full scan when unchanged; set by ``reindex_scan``.
         self.fingerprint_cache: dict[str, str] = {}
 
     def _lock(self, kb_name: str) -> asyncio.Lock:
@@ -155,8 +154,7 @@ class KBPipeline:
                 updated_at=now,
                 source_path=source_path,
             )
-            # previous_sha=None forces the row upsert even when the markdown body
-            # is unchanged, so the new source_sha256 provenance always lands.
+            # previous_sha=None forces the row upsert so new source_sha256 lands.
             await self._index_and_persist(
                 kb_name, doc, prepared.markdown, config, previous_sha=None
             )
@@ -224,13 +222,12 @@ class KBPipeline:
         degraded = 0
         async with self._lock(kb_name):
             # Snapshot the docs/ fingerprint BEFORE reading any file — caching the
-            # PRE-read state is what keeps the short-circuit race-safe (see below).
+            # PRE-read state keeps the short-circuit race-safe (see below).
             start_fp = await asyncio.to_thread(docs_fingerprint, docs_dir)
             paths: list[Path] = []
             if docs_dir.exists():
                 paths = await asyncio.to_thread(lambda: sorted(docs_dir.glob("*.md")))
-            # One batched row lookup keyed by id, reused for the per-file fetch
-            # AND the vanished-file prune below (replaces N ``get_document``s).
+            # One batched row lookup keyed by id (reused by the vanished-file prune).
             known = await self._documents.list_documents(
                 KIND_KNOWLEDGE_BASE, kb_name, limit=100_000, offset=0
             )
@@ -267,7 +264,9 @@ class KBPipeline:
                 removed += 1
             # Cache the PRE-read snapshot; set LAST so a mid-scan raise caches nothing.
             self.fingerprint_cache[kb_name] = start_fp
-        return {"reindexed": reindexed, "skipped": skipped} | {
+        return {
+            "reindexed": reindexed,
+            "skipped": skipped,
             "removed": removed,
             "degraded": degraded,
         }
@@ -292,8 +291,7 @@ class KBPipeline:
     async def _cleanup_locked(self, kb_name: str) -> None:
         await self._documents.delete_resource(KIND_KNOWLEDGE_BASE, kb_name)
         # Drop the per-store sqlite-vec table too: it lives outside the async
-        # session, so it would survive ``delete_resource`` and leak across a
-        # same-name re-create. Maintenance mode — no embedding width needed.
+        # session, so it would survive ``delete_resource`` and leak on re-create.
         with contextlib.suppress(Exception):
             await self._retrieval.drop_store(self._store_ref(kb_name), dimensions=None)
         kb_dir = self._paths.kb_dir(kb_name)
@@ -319,8 +317,8 @@ class KBPipeline:
         body = markdown.strip()
         title = title_of(body, filename)
         return Prepared(
-            # Stable ULID, decoupled from content (ADR-028) — minted for a new
-            # document; a re-upload reuses the matched document's existing id.
+            # Stable ULID, decoupled from content (ADR-028); a re-upload reuses
+            # the matched document's existing id.
             doc_id=new_ulid(),
             source_sha256=source_sha,
             extension=ext,
@@ -355,8 +353,8 @@ class KBPipeline:
             "converter": prepared.conversion_engine,
             "source_mode": "converted",
         }
-        # Record the external original's path only for path-based ingests; a
-        # byte/agent upload never carries one (it must not populate a server path).
+        # Record the external original's path only for path-based ingests (a
+        # byte/agent upload must not populate a server path).
         if source_path:
             fields["source_path"] = source_path
         full = render_frontmatter(fields, prepared.markdown)
@@ -371,18 +369,15 @@ class KBPipeline:
         *,
         previous_sha: str | None,
     ) -> tuple[bool, bool]:
-        """Run the shared reindex routine + persist the row.
-
-        Returns ``(changed, degraded)`` — ``changed`` is whether the content was
-        (re)indexed; ``degraded`` is whether an embed was requested but the
-        provider was unavailable (indexed keyword-only, retried next scan)."""
+        """Run the shared reindex routine + persist the row. Returns
+        ``(changed, degraded)`` — ``degraded`` is ``embed_pending`` (provider
+        unavailable → keyword-only, retried next scan)."""
         embedding = await self._resolve_embedding() if config.vector_enabled else None
         index = self._retrieval.index_for(
             self._store_ref(kb_name),
             dimensions=embedding.dimensions if embedding else None,
         )
-        # Canonicalize the body so the on-disk round-trip hashes identically to
-        # the freshly-ingested body — otherwise reindex never reaches a no-op.
+        # Canonicalize the body so the on-disk round-trip hashes identically.
         outcome = await self._reindexer.reindex(
             index=index,
             markdown=markdown.strip(),
@@ -390,11 +385,16 @@ class KBPipeline:
             embedding=embedding,
             doc_id=doc.id,
             chunker=chunker_for(config),
+            previous_embed_pending=doc.embed_pending,
         )
-        degraded = outcome.changed and outcome.content_sha256 == ""
-        if not outcome.changed and previous_sha is not None:
-            return False, degraded
+        # Persist when content changed OR the pending flag flipped (retry cleared
+        # it / fresh degrade); a true no-op skips the row write to avoid churn.
+        pending_changed = outcome.embed_pending != doc.embed_pending
+        if not outcome.changed and previous_sha is not None and not pending_changed:
+            return False, outcome.embed_pending
         await self._documents.upsert_document(
-            dc_replace(doc, content_sha256=outcome.content_sha256)
+            dc_replace(
+                doc, content_sha256=outcome.content_sha256, embed_pending=outcome.embed_pending
+            )
         )
-        return True, degraded
+        return outcome.changed, outcome.embed_pending

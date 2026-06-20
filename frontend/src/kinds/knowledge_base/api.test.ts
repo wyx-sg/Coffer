@@ -372,12 +372,19 @@ describe("reconvertDocument", () => {
 describe("getKnowledgeBaseMetrics", () => {
   test("returns the metrics payload as-is", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      okJson({ document_count: 3, chunk_count: 12, indexed_modes: ["keyword"], disk_bytes: 1234 }),
+      okJson({
+        document_count: 3,
+        chunk_count: 12,
+        documents_degraded: 0,
+        indexed_modes: ["keyword"],
+        disk_bytes: 1234,
+      }),
     );
     const out = await getKnowledgeBaseMetrics("kb1");
     expect(out).toEqual({
       document_count: 3,
       chunk_count: 12,
+      documents_degraded: 0,
       indexed_modes: ["keyword"],
       disk_bytes: 1234,
     });

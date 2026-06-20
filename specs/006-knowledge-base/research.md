@@ -109,7 +109,18 @@ Sizing stays **char-based** (deterministic, dependency-free); token-based sizing
 
 No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invocations` (tool name + who/when/duration/outcome only; no arguments or returned content), matching the existing privacy stance. The `coffer__` prefix is reserved (a server named `coffer` is rejected at registration); upstream tools are prefixed `<server>__` and can never collide.
 
-## 9. Things explicitly NOT decided / out of scope here
+## 9. Degraded-embed: decouple from the sha gate + surface the count (KB8)
+
+**Question**: When the embedding provider is unavailable, how does the routine keep the embed retryable without breaking the no-op gate, and how does a degrade become visible on a read?
+
+**Decision**: A dedicated persisted **`embed_pending`** flag, decoupled from `content_sha256` (which always carries the real body hash), plus a persisted-count surfacing.
+
+- **Why decouple.** The old design overwrote `content_sha256` with an empty-string sentinel so the next reconcile would mismatch and retry the embed. But `"" == previous_sha` is never true, so EVERY scan re-chunked the degraded doc + rewrote its FTS rows + re-attempted the embed — one unrelated edit re-indexed the whole degraded corpus. The empty sha also corrupted the files-as-truth derivation. Splitting the retry state onto its own column lets the sha gate stay honest (unchanged body ⇒ no churn) while the embed still retries.
+- **Why a retry-embed-only path.** When the body is unchanged but `embed_pending`, the chunks + FTS are already current — only the vectors are missing. The routine re-chunks **in memory** (deterministic positions), embeds, and calls a new index method `upsert_vectors` that writes ONLY the vec rows. No FTS / chunk rewrite ⇒ the degraded-corpus churn is gone, and the vectors align with the stored chunks by position.
+- **Why surface from the persisted flag, not the transient scan count.** The degraded count was computed inside `reindex_scan` and only returned by the explicit `POST /reindex`; a degrade during a lazy reindex-on-read (list / get / search / grep) was silently dropped (`_reconcile_on_read -> None`). Querying the persisted `embed_pending` (`count_pending_embeds`) in `metrics()` makes `documents_degraded` correct on ANY read, with no need to thread the scan count through every read path.
+- **Boundary.** `embed_pending` tracks ONLY a failed embedding **provider** call (`EngineUnavailable`). It is orthogonal to sqlite-vec extension availability: a provider success with an unavailable vec table is `embedded=True` (not pending) and is handled at query time by `SearchResponse.fallback` — same parity as the existing `embedded` flag.
+
+## 10. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.

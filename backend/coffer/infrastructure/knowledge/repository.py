@@ -31,6 +31,7 @@ def _to_domain(row: DocumentModel) -> Document:
         title=row.title,
         description=row.description,
         content_sha256=row.content_sha256,
+        embed_pending=bool(row.embed_pending),
         source_mode=row.source_mode,
         metadata=json.loads(row.metadata_json or "{}"),
         created_at=_tz(row.created_at),
@@ -64,6 +65,7 @@ class DocumentRepo:
                     description=d.description,
                     metadata_json=payload,
                     content_sha256=d.content_sha256,
+                    embed_pending=d.embed_pending,
                     source_mode=d.source_mode,
                     created_at=d.created_at,
                     updated_at=d.updated_at,
@@ -76,6 +78,7 @@ class DocumentRepo:
                 row.description = d.description
                 row.metadata_json = payload
                 row.content_sha256 = d.content_sha256
+                row.embed_pending = d.embed_pending
                 row.source_mode = d.source_mode
                 row.updated_at = d.updated_at
             await session.commit()
@@ -117,6 +120,21 @@ class DocumentRepo:
                 .where(
                     DocumentModel.kind == kind,
                     DocumentModel.resource_name == resource_name,
+                )
+            )
+            return int((await session.execute(stmt)).scalar_one())
+
+    async def count_pending_embeds(self, kind: str, resource_name: str) -> int:
+        """Documents whose embed is pending (provider was unavailable) — the
+        persisted ``documents_degraded`` surfaced on any read (KB8)."""
+        async with self._sm() as session:
+            stmt = (
+                select(func.count())
+                .select_from(DocumentModel)
+                .where(
+                    DocumentModel.kind == kind,
+                    DocumentModel.resource_name == resource_name,
+                    DocumentModel.embed_pending.is_(True),
                 )
             )
             return int((await session.execute(stmt)).scalar_one())
