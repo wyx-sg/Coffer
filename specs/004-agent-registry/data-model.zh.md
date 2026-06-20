@@ -108,7 +108,6 @@ skill 投递到 `<config_dir>/skills`；配置文件 allowlist 基于 `config_di
 | `opencode`    | `config`         | `~/.config/opencode/opencode.json` | `json`     | `file`      |
 | `opencode`    | `instructions`   | `~/.config/opencode/AGENTS.md`     | `markdown` | `file`      |
 | `opencode`    | `subagents`      | `~/.config/opencode/agents/`       | `markdown` | `directory` |
-| `opencode`    | `commands`       | `~/.config/opencode/commands/`     | `markdown` | `directory` |
 | `openclaw`    | `config`         | `~/.openclaw/openclaw.json`        | `json`     | `file`      |
 | `hermes`      | `config`         | `~/.hermes/config.yaml`            | `yaml`     | `file`      |
 | `hermes`      | `instructions`   | `~/.hermes/SOUL.md`                | `markdown` | `file`      |
@@ -118,7 +117,7 @@ skill 投递到 `<config_dir>/skills`；配置文件 allowlist 基于 `config_di
 （新增 agent 的 allowlist 覆盖各自的配置、指令/身份与受管目录面，随其它能力落地
 再扩充。Cursor 承载全局 `~/.cursor/.cursorrules` 与 `AGENTS.md`；其工程级
 `.cursor/rules/*.mdc` 属工程作用域、并非配置目录文件，故不进 allowlist。OpenCode
-新增可读写的 `agents/` 与 `commands/` 目录。Hermes 同时承载两个身份文件
+新增可读写的 `agents/` 目录。Hermes 同时承载两个身份文件
 （`SOUL.md` + `USER.md`）与可读写的 `cron/` 目录。OpenClaw 仅保留配置文件——其
 指令/身份文件未被可靠记录，确认前不添加指令条目。`global` 始终锚定在 `$HOME`——
 即使配置目录本身被覆盖，Claude Code 也把 `~/.claude.json` 放在主目录根部。）
@@ -137,8 +136,8 @@ skill 投递到 `<config_dir>/skills`；配置文件 allowlist 基于 `config_di
 `kind=directory` 的 allowlist 条目列出其子文件而非携带内容；磁盘上的目录即为
 事实来源（派生，从不存储）。目录条目：Claude Code 的 `subagents`
 （`~/.claude/agents/`，每个个人 subagent 一个 Markdown 文件，允许嵌套路径）、
-OpenCode 的 `subagents`（`~/.config/opencode/agents/`）与 `commands`
-（`~/.config/opencode/commands/`），以及 Hermes 的 `cron`（`~/.hermes/cron/`）。
+OpenCode 的 `subagents`（`~/.config/opencode/agents/`），以及 Hermes 的
+`cron`（`~/.hermes/cron/`）。
 
 `DirEntryInfo` —— 描述一个子文件的 frozen dataclass：
 
