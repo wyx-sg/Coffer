@@ -40,7 +40,7 @@ still validate.
 
 ### `SkillFrontmatter` (`domain/skill/frontmatter.py`)
 
-Pydantic v2 model used during validation of an imported/fetched folder. Aligns
+Pydantic v2 model used during validation of an imported folder. Aligns
 with the agentskills.io constraints:
 
 | Field           | Type                | Constraint                                                        |

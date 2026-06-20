@@ -39,7 +39,7 @@ Pydantic v2 `BaseModel`。
 
 ### `SkillFrontmatter` (`domain/skill/frontmatter.py`)
 
-Pydantic v2 模型，用于校验导入/拉取下来的文件夹，对齐 agentskills.io 约束：
+Pydantic v2 模型，用于校验导入的文件夹，对齐 agentskills.io 约束：
 
 | 字段            | 类型                | 约束                                              |
 | --------------- | ------------------- | ------------------------------------------------- |

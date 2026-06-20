@@ -137,7 +137,7 @@ async def _to_skill_out(
     bindings_by_skill: dict[int, list[BindingState]] | None = None,
 ) -> SkillOut:
     cfg = SkillConfig.model_validate(r.config)
-    # Single-skill handlers (get / import / fetch / update / enable / disable)
+    # Single-skill handlers (get / import / enable / disable)
     # take the per-skill round-trip — list handlers prebuild the map once
     # via ``svc.bindings_grouped_by_skill()`` to collapse N queries into 1.
     if bindings_by_skill is not None:
