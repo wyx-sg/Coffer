@@ -16,7 +16,7 @@
 
 **实删（8）**：`/cwd`（+工作区白名单）· commands 目录管理 · 4.8 skill catalog（回退 #116）· 3.9 instructions hub（回退 #112，待执行）· 1.7 MCP Registry 浏览（回退 #114）· 5.7 KB 逐文档锁 · 2.9 开机自启 · 10.5 死 ADR
 
-**简化/部分（4）**：3.5→只读 · 3.8→删 commands 留 subagents/cron · 1.11 backup 简化 · 8.4→删 /cwd 留其余
+**简化/部分（3）**：3.8→删 commands 留 subagents/cron · 1.11 backup 简化 · 8.4→删 /cwd 留其余（3.5 撤回——读写保留,不简化）
 
 **留**：其余全部（检索栈 / agent 框架 / 插件 / Sync / Channels 含 SeaTalk / Chat / skills 4.4–4.7,4.9 / 审计 / 1.6 / 2.10 / 批量 8 条）
 
@@ -64,7 +64,7 @@
 
 - [ ] 10.5 — 删 3 个死 ADR（ADR-010 LlamaIndex / 011 mem0 / 022），纯文档
 - [ ] 2.9 — 删开机自启（autostart）：跨平台差异、非重度日用不需要
-- [ ] 5.7 — 删 KB 逐文档锁，改用 **KB 级只读开关**替代
+- [ ] 5.7 — 删 KB 逐文档锁（per-doc `locked` 列/锁解锁 API/审计/UI，回退 #117 该部分）；**不加只读开关**,agent 总可写,靠审计 + backup 兜底
 - [ ] 3.8 — 删 commands 目录型配置管理（留 subagents/cron；descriptor 去掉该条目）
 - [ ] 8.4 — 删 `/cwd` 聊天命令 + 清 workspace 白名单（`binding.workspaces` / `preferred_workspace` / 裸路径拒绝；workspace 固定 default），留 `/agent` `/model`
 
@@ -83,7 +83,6 @@
 ### 阶段四 · 简化
 
 - [ ] 4.4 — 简化 skill 包管理：留 import + 重 fetch 覆盖；删 rename 检测 / pin / check-update
-- [ ] 3.5 — agent 真实 MCP 条目读写简化为**只读**
 - [ ] 1.11/P10 — backup 简化为 `~/.coffer` 快照 tar（restore=解压）+ 评估可选定期自动 backup worker（滚动保留 N 份，排除 master key）
 
 ### 阶段五 · 增强 + 新功能（按杠杆）
@@ -123,7 +122,7 @@
 | 4.9  | Skill drift 检测（verify）                           | 🟡   | 与 4.7 成对；4.7 留故 4.9 也留                                                                                                                                                           | 删（随 4.7）                 | ✅ 保留                                                                                                                                                                                                                         | 已决   |
 | 4.3  | 从 Git URL 拉 skill                                  | 🟡   | 本身不重，合理分发方式                                                                                                                                                                   | 留                           | ✅ 保留                                                                                                                                                                                                                         | 已决   |
 | 5.6  | MCP 让 agent 共管 KB 文档（add/edit/delete）         | 🟡   | "agent contributes"核心兑现；但写权限有风险                                                                                                                                              | 留（改默认只读）             | ✅ 保留                                                                                                                                                                                                                         | 已决   |
-| 5.7  | KB 逐文档锁                                          | 🔴   | 给 5.6 打的补丁；若默认只读则多余                                                                                                                                                        | 删（用 KB 级只读替代）       | ❌ **删除**（改用 KB 级只读开关）                                                                                                                                                                                               | 已决   |
+| 5.7  | KB 逐文档锁                                          | 🔴   | 给 5.6 打的补丁；若默认只读则多余                                                                                                                                                        | 删（用 KB 级只读替代）       | ❌ **删除**（不加只读开关；agent 总可写,靠审计 + backup,回退 #117 该部分）                                                                                                                                                                                               | 已决   |
 | 5.4  | KB keyword FTS5/BM25                                 | 🟡   | SQLite 自带，几乎零依赖                                                                                                                                                                  | 留                           | ✅ 保留                                                                                                                                                                                                                         | 已决   |
 | 6.2  | Memory 两层 scope（global+project）                  | 🟡   | 增加 scope 解析/检索复杂度；但对记忆质量有用                                                                                                                                             | 留                           | ✅ 保留                                                                                                                                                                                                                         | 已决   |
 | 7.1  | Chat 页 + 多会话历史                                 | 🟡   | 兼作 channel 对话**观察台**（同存储 + web/channel 来源徽章）；后端被 channels 锁死                                                                                                       | 视 channels 而定             | ✅ 保留                                                                                                                                                                                                                         | 已决   |
