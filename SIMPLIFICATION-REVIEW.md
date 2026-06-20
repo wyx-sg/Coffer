@@ -54,6 +54,51 @@
 
 - **CC Switch**（farion1231，~105k★，Tauri 2 + Rust）是最近的重叠竞品：已覆盖 provider 切换 + MCP + skills + prompts + sessions + 用量 + 本地代理，支持 7 个 agent。**不追它的广度**；Coffer 护城河 = 它没有的 **知识库 + 记忆 + RAG + 治理（审计/加密/版本化）+ 真 MCP 网关 + channels**。
 
+## 执行 backlog
+
+> 由执行 loop 生成（2026-06-20）。每轮取**第一个未勾选**项,读相关 spec + agents/\*.md 界定范围,SDD 先 spec 后码后测,`make verify` 全绿,一个 squash commit 开 PR,独立评审 + CI 绿后合并,再把该项勾成 `[x]`。
+> **排除已延后/不做**：G1/G2(不补) · G3 OAuth · G4 elicitation · G5(不单列) · G6 用量+本地代理 · G7 Windows/Linux 桌面 · G8 收编向导 · P7(跨 agent 聊天,研究) · P11(per-tool,取消未建) · Claude Desktop。
+> **安全阀**：删除若牵动在用功能(channels/SeaTalk)、有歧义或需产品决策 → 停下确认,不猜。
+
+### 阶段一 · 零风险删除
+
+- [ ] 10.5 — 删 3 个死 ADR（ADR-010 LlamaIndex / 011 mem0 / 022），纯文档
+- [ ] 2.9 — 删开机自启（autostart）：跨平台差异、非重度日用不需要
+- [ ] 5.7 — 删 KB 逐文档锁，改用 **KB 级只读开关**替代
+- [ ] 3.8 — 删 commands 目录型配置管理（留 subagents/cron；descriptor 去掉该条目）
+- [ ] 8.4 — 删 `/cwd` 聊天命令 + 清 workspace 白名单（`binding.workspaces` / `preferred_workspace` / 裸路径拒绝；workspace 固定 default），留 `/agent` `/model`
+
+### 阶段二 · 回退近期 PR 的删除
+
+- [ ] 1.7 — 删 MCP Registry 在线浏览（回退 PR #114），留粘贴 JSON 路径
+- [ ] 4.8 — 删内置 skill catalog / discovery（回退 PR #116）：无内容生态
+- [ ] 3.9 — 删 Master-instructions hub（回退 PR #112：instructions_service / instructions.py / routes / CLI / 前端 AgentConfigFilesEditor）
+
+### 阶段三 · MCP 权限删 + agent 砍到 Claude Code + Codex
+
+- [ ] 1.6 — 删 per-agent MCP server 作用域（auto/selected，回退 PR #108 / ADR-026）；P11 逐工具取消（未建）
+- [ ] AGENT — 砍到 Claude Code + Codex，删 Cursor/OpenCode/OpenClaw/Hermes（cascade：删 `plugin_state_extra` / `opencode_reader` / `external_dir_registrar` + 测试；改 `types` / `descriptor` / `plugin_capability` / `plugin_service` / `transcript_reader` / `agent_skill_wiring` + **spec 004**；4.10 收成 2 类型）
+- [ ] 4.5 — 删 Skill 内容信任扫描（风险分级 + acknowledge 闸）
+
+### 阶段四 · 简化
+
+- [ ] 4.4 — 简化 skill 包管理：留 import + 重 fetch 覆盖；删 rename 检测 / pin / check-update
+- [ ] 3.5 — agent 真实 MCP 条目读写简化为**只读**
+- [ ] 1.11/P10 — backup 简化为 `~/.coffer` 快照 tar（restore=解压）+ 评估可选定期自动 backup worker（滚动保留 N 份，排除 master key）
+
+### 阶段五 · 增强 + 新功能（按杠杆）
+
+- [ ] 4.9 — Skill drift verify 加 opt-in `--fix`（从 master 重新投递，复用现成投递逻辑）
+- [ ] G9 — 供应商切换（新）：共享 provider registry + 逐 agent 投影（档案 `{name, base_url, key→Fernet, 模型映射, wire 格式}`；切换=写原生配置复用 config-file store 原子 + .bak；审计 + 随 9.x 同步 + Claude 热切换；不做代理/故障转移/格式转换）
+- [ ] P5 — 蒸馏=记忆对账（读现有记忆 + 转录 → diff/merge，产 add/correct/refine 候选待审）
+- [ ] P6 — Chat 页=统一对话中枢（所有本机对话 + 收编外部转录，搜索/筛选/来源徽章/删除/接着聊；agent 详情"聊天记录"tab → 每-agent 过滤 + 深链 `/chat/:id`）
+- [ ] P3 — `/agent` `/model` 交互式选择卡片（Telegram inline keyboard + SeaTalk 交互卡片；inbound 把点选翻译成切换）
+- [ ] P4 — agent→模型 选择 UX（web chat agent 选择器旁给模型 picker，候选来自 7.4 注册表 / provider introspection）
+- [ ] P1 — 插件跨机同步（声明式清单 id+来源+启用态 → B 机从源重装 → 接 sync worker + `coffer agent plugin` CLI；3.7 为地基，绑 9.x）
+- [ ] P2 — channel 同步设计（channel 单活：同步 config/binding，enabled 态机器本地 / 单活 ownership 锁可一键转移；只服务迁移不服务并发）
+- [ ] P8 — 添加 Skill 原生文件夹选择器（桌面 Tauri tauri-plugin-dialog 返回绝对路径；纯 web 回退"浏览目录"tab）
+- [ ] P9 — 3.8 优化：subagents/cron 随 9.x 跨机同步 + 同类型 agent 多实例投递
+
 ## 决策表
 
 | 编号 | 名称                                                 | 类型 | 为什么嫌重（一句话）                                                                                                                                                                     | 我的建议                     | 决定                                                                                                                                                                                                                            | 状态   |
