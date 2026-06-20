@@ -81,6 +81,7 @@ The user manages KBs from the desktop UI under `Resources` and from `coffer kb �
 - **Re-conversion after edit**: Re-converting a document whose `source_mode == edited` is rejected; re-uploading a changed source (with `replace=true`) updates it in place and resets it to `converted`.
 - **Reindex of unchanged content**: Reindexing a document whose Markdown `content_sha256` is unchanged is a no-op.
 - **Concurrent searches**: Multiple searches against one KB run independently; no per-KB lock degrades read latency.
+- **Tracked source moved/deleted**: When a document's tracked external `source_path` is moved or deleted, `check_sources` reports it as `missing` and never crashes; `source_path` is machine-local, so a `missing` result on a different machine (after sync) is expected and benign.
 
 ## Acceptance Scenarios
 
@@ -109,6 +110,12 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 - **Given** documents are indexed,
 - **When** the user searches with `mode="keyword"` (or the KB default),
 - **Then** they receive passages ranked by `bm25()`, each carrying its source doc id, title, snippet, and score.
+
+### Scenario: keyword search matches CJK (Chinese) content
+
+- **Given** a knowledge base with a document whose Markdown body is Chinese (no word-boundary spaces),
+- **When** the user runs a keyword search with a CJK query,
+- **Then** a multi-character query (e.g. `向量检索`) matches via the FTS5 trigram index, and a short `< 3`-character query (e.g. `向量`) matches via the substring fallback — neither returns empty as the old `unicode61` tokenizer did.
 
 ### Scenario: grep returns file/line matches
 
@@ -230,6 +237,30 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 - **When** the user opens its detail view (UI or `coffer kb describe`),
 - **Then** they see document count, chunk count, the indexed retrieval modes, and the on-disk byte size of `knowledge/<name>/`.
 
+### Scenario: check sources detects changed, unchanged, and missing originals
+
+- **Given** documents ingested from external files (their absolute `source_path` recorded in metadata),
+- **When** the user runs `check_sources` after one original is edited on disk, one is left untouched, and one is deleted,
+- **Then** the report classifies them as `changed`, `unchanged`, and `missing` respectively (by re-hashing each external file against the stored `source_sha256`), and nothing is re-indexed or audited by the detection itself.
+
+### Scenario: update from source refreshes a changed document in place
+
+- **Given** a converted document whose external `source_path` original has changed on disk,
+- **When** the user runs `update_from_source` for that document,
+- **Then** Coffer re-ingests it from the tracked file in place (same ULID id, `source_mode` stays `converted`), the new content is searchable and the old content is gone, and `KB_DOCUMENT_UPDATED` is audited.
+
+### Scenario: update from source refuses an edited document
+
+- **Given** a document whose `source_mode == edited`,
+- **When** the user runs `update_from_source` for it,
+- **Then** Coffer refuses with the re-conversion-blocked error (hand edits are never clobbered), and `check_sources` reports that document as `edited` rather than overwriting it.
+
+### Scenario: auto_update_sources refreshes changed sources on check
+
+- **Given** a KB with `auto_update_sources` enabled and a document whose external original has changed,
+- **When** the user runs `check_sources`,
+- **Then** the changed document is auto-refreshed in place (reported `updated`) and `KB_DOCUMENT_UPDATED` is audited, while a hand-edited changed document would be skipped (reported `edited`).
+
 ### Scenario: test an embedding model
 
 - **Given** an embedding provider, model id, and (where required) credential ref,
@@ -265,7 +296,7 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 **Retrieval**
 
 - **FR-010**: Users MUST be able to search a KB and receive ranked passages (passage text + source doc id + title + score) via the requested or default mode. Default `top_k` is 5; callers MAY set `top_k` in 1–20.
-- **FR-011**: System MUST support three retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), and `vector` (sqlite-vec KNN over embeddings). Default enabled modes are `keyword`+`grep`; `vector` is opt-in. Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed).
+- **FR-011**: System MUST support three retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), and `vector` (sqlite-vec KNN over embeddings). Default enabled modes are `keyword`+`grep`; `vector` is opt-in. Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). The keyword index uses an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text (no word-boundary spaces), so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters (e.g. a 2-character CJK term) falls back to a bounded substring (LIKE) scan rather than returning empty.
 - **FR-011a**: An EXPLICIT `mode=grep` on the search endpoint — or any explicit mode not in the KB's `enabled_modes` — MUST be rejected with `400 SEARCH_MODE_INVALID` (grep is served by its own endpoint, never silently rewritten). `vector` is the one exception: it always reaches the retrieval facade so the keyword fallback is FLAGGED per FR-012. An implicit search (no `mode`) on a KB whose `default_mode` is `grep` serves `keyword` (grep is not a passage mode).
 - **FR-012**: When `vector` is requested but no embedding provider is configured, the system MUST fall back to `keyword` and flag the fallback in the response — it MUST NOT error or block.
 
@@ -288,6 +319,13 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 - **FR-019**: Users MUST be able to perform every KB operation through (a) a REST API under `/api/v1/knowledge_bases/`, (b) `coffer kb …` subcommands, and (c) a desktop UI under the existing `Resources` navigation.
 - **FR-020**: The UI document viewer MUST render the Markdown **read-only** — it MUST NOT offer an in-app text editor for document content (humans edit via the external editor or the edit API; agents via MCP). Instead, at both file and containing-folder granularity, the viewer MUST offer affordances to **open in external editor**, **reveal in file manager / Finder**, and **copy the absolute path**. On desktop (Tauri) open/reveal perform the real OS action (open/reveal honouring the global preferred-editor preference specced in `002-ui-shell`); on the web client, where the daemon cannot act on the user's machine, the open/reveal affordance falls back to copy-path. To support these affordances, read API responses (FR/§Wire) MUST surface the document's absolute on-disk path and its containing folder's absolute path.
+
+**Source-file tracking**
+
+- **FR-021**: A **path-based** ingest (the `coffer kb ingest` CLI, and a future desktop file picker) MUST record the external original's **absolute path** in the document's free-form `metadata` as `source_path` — there is no schema/DB migration; it rides in the existing JSON `metadata`. A web byte-upload and the agent `add_document` MCP tool MUST NOT set or infer `source_path` (an untrusted surface must never populate an arbitrary server path). `source_path` is machine-local: it is meaningful only on the machine that ingested the file.
+- **FR-022**: `check_sources` MUST classify each path-tracked document (those with a `source_path`) by re-hashing the external file with sha256 — streamed in chunks so a multi-GB original is never read fully into memory — and comparing to the stored `source_sha256`: `unchanged` (digests match), `changed` (they differ), or `missing` (the file is gone). Detection is **on-demand only** (no filesystem watcher), and detect-only changes nothing and audits nothing.
+- **FR-023**: `update_from_source` MUST re-ingest a document from its `source_path` in place — reading the tracked file's bytes and replaying the existing `replace=true` re-ingest path, so the document's stable ULID id is preserved and the corpus is re-chunked/re-indexed (audited via the existing `KB_DOCUMENT_UPDATED`). A document whose `source_mode == edited` MUST be refused (the existing `ReconversionBlocked` error) so hand edits are never clobbered; a vanished or untracked source is reported via the existing `IngestRejected`.
+- **FR-024**: A per-KB `auto_update_sources` flag (default **false**) governs `check_sources`: when false, detection only classifies; when true, each `changed` document whose `source_mode != edited` is auto-refreshed in place via `update_from_source` (reported `updated`), while a `changed` hand-edited document is skipped (reported `edited`). Toggling `auto_update_sources` MUST NOT re-chunk or re-embed the corpus (it is not a reindex-triggering field).
 
 ### Key Entities
 

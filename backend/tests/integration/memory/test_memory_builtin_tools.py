@@ -2,17 +2,29 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX, BuiltinToolRegistry
 from coffer.application.memory.builtin_tools import register_memory_builtin_tools
+from coffer.application.memory.handoff import HandoffService
+from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.memory.scope_fs import git_branch
 
 pytestmark = pytest.mark.asyncio
 
 
 def _registry(mem) -> BuiltinToolRegistry:
     reg = BuiltinToolRegistry()
-    register_memory_builtin_tools(reg, memory_service=mem.service)
+    handoff_service = HandoffService(
+        scope=mem.scope,
+        git_branch=git_branch,
+        store_dir=paths.memory_store_dir,
+        audit=mem.audit,
+        now=lambda: datetime.now(tz=UTC),
+    )
+    register_memory_builtin_tools(reg, memory_service=mem.service, handoff_service=handoff_service)
     return reg
 
 
@@ -22,7 +34,15 @@ def _registry(mem) -> BuiltinToolRegistry:
 async def test_memory_tools_registered(mem) -> None:
     reg = _registry(mem)
     names = {t.name for t in reg.list()}
-    assert names == {"recall", "remember", "update_memory", "forget", "list_memory"}
+    assert names == {
+        "recall",
+        "remember",
+        "update_memory",
+        "forget",
+        "list_memory",
+        "set_handoff",
+        "resume",
+    }
     assert reg.is_builtin(f"{COFFER_TOOL_PREFIX}recall")
 
 

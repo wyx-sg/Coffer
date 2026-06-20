@@ -96,6 +96,7 @@ class KBPipeline:
         raw_bytes: bytes,
         config: KnowledgeBaseConfig,
         replace: bool,
+        source_path: str | None = None,
     ) -> tuple[Document, str]:
         """Ingest one upload. Returns ``(document, status)`` where ``status`` is:
 
@@ -135,7 +136,9 @@ class KBPipeline:
                 status = "updated"
                 created_at = existing.created_at
             now = datetime.now(tz=UTC)
-            await self._write_files(kb_name, doc_id, prepared, raw_bytes, filename)
+            await self._write_files(
+                kb_name, doc_id, prepared, raw_bytes, filename, source_path=source_path
+            )
             doc = build_kb_document(
                 kb_name=kb_name,
                 doc_id=doc_id,
@@ -144,6 +147,7 @@ class KBPipeline:
                 source_mode="converted",
                 created_at=created_at or now,
                 updated_at=now,
+                source_path=source_path,
             )
             # previous_sha=None forces the row upsert even when the markdown body
             # is unchanged, so the new source_sha256 provenance always lands.
@@ -321,7 +325,14 @@ class KBPipeline:
         )
 
     async def _write_files(
-        self, kb_name: str, doc_id: str, prepared: Prepared, raw_bytes: bytes, filename: str
+        self,
+        kb_name: str,
+        doc_id: str,
+        prepared: Prepared,
+        raw_bytes: bytes,
+        filename: str,
+        *,
+        source_path: str | None = None,
     ) -> None:
         raw_path = self._paths.raw_path(kb_name, doc_id, prepared.extension)
         doc_path = self._paths.doc_path(kb_name, doc_id)
@@ -331,17 +342,19 @@ class KBPipeline:
             raw_path.write_bytes(raw_bytes)
 
         await asyncio.to_thread(_write)
-        full = render_frontmatter(
-            {
-                "title": prepared.title,
-                "source_filename": filename,
-                "source_format": prepared.extension.lstrip("."),
-                "source_sha256": prepared.source_sha256,
-                "converter": prepared.conversion_engine,
-                "source_mode": "converted",
-            },
-            prepared.markdown,
-        )
+        fields: dict[str, object] = {
+            "title": prepared.title,
+            "source_filename": filename,
+            "source_format": prepared.extension.lstrip("."),
+            "source_sha256": prepared.source_sha256,
+            "converter": prepared.conversion_engine,
+            "source_mode": "converted",
+        }
+        # Record the external original's path only for path-based ingests; a
+        # byte/agent upload never carries one (it must not populate a server path).
+        if source_path:
+            fields["source_path"] = source_path
+        full = render_frontmatter(fields, prepared.markdown)
         await asyncio.to_thread(mkparent_write, doc_path, full)
 
     async def _index_and_persist(

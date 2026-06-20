@@ -15,6 +15,7 @@ import asyncio
 import logging
 import os
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from coffer.application.builtin_tools import BuiltinToolRegistry
@@ -32,6 +33,7 @@ from coffer.application.knowledge_base.builtin_tools import register_kb_builtin_
 from coffer.application.knowledge_base.kind import make_kb_kind
 from coffer.application.knowledge_base.service import KnowledgeBaseService
 from coffer.application.memory.builtin_tools import register_memory_builtin_tools
+from coffer.application.memory.handoff import HandoffService
 from coffer.application.memory.kind import make_memory_kind
 from coffer.application.memory.scope import ScopeResolver
 from coffer.application.memory.service import MemoryService
@@ -54,7 +56,7 @@ from coffer.infrastructure.knowledge.repository import DocumentRepo
 from coffer.infrastructure.knowledge.sqlite_index import SqliteKnowledgeIndex
 from coffer.infrastructure.knowledge.vec_index import VecIndex
 from coffer.infrastructure.memory.project_root_repo import ProjectRootRepo
-from coffer.infrastructure.memory.scope_fs import git_root, project_ulid
+from coffer.infrastructure.memory.scope_fs import git_branch, git_root, project_ulid
 from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 from coffer.infrastructure.providers.provider_introspector import ProviderIntrospector
 from coffer.surfaces.http.chat.dependencies import set_introspection_service
@@ -217,9 +219,18 @@ def wire_memory_kind(
         fact_path=paths.fact_path,
         embedding_resolver=embedding_resolver,
     )
+    handoff_service = HandoffService(
+        scope=scope,
+        git_branch=git_branch,
+        store_dir=paths.memory_store_dir,
+        audit=audit,
+        now=lambda: datetime.now(tz=UTC),
+    )
     app.state.kinds["memory"] = make_memory_kind(memory_service)
     set_memory_service(memory_service)
-    register_memory_builtin_tools(builtin_tools, memory_service=memory_service)
+    register_memory_builtin_tools(
+        builtin_tools, memory_service=memory_service, handoff_service=handoff_service
+    )
     return memory_service
 
 

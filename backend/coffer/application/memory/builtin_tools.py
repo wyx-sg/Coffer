@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
+from coffer.application.memory.handoff import HandoffService
 from coffer.application.memory.scope import GLOBAL_STORE_NAME, project_store_name
 from coffer.application.memory.service import MemoryService
 from coffer.domain.memory.scope import MemoryScope
@@ -38,8 +39,10 @@ def register_memory_builtin_tools(
     registry: BuiltinToolRegistry,
     *,
     memory_service: MemoryService,
+    handoff_service: HandoffService,
 ) -> None:
-    """Wire the five memory tools into the gateway's registry."""
+    """Wire the memory tools (recall/remember/update/forget/list + handoff) into
+    the gateway's registry."""
 
     async def recall(args: dict[str, Any]) -> dict[str, Any]:
         query = str(args["query"])[:_MAX_QUERY_CHARS]
@@ -129,6 +132,29 @@ def register_memory_builtin_tools(
             ],
         }
 
+    async def set_handoff(args: dict[str, Any]) -> dict[str, Any]:
+        body = args.get("body") or args.get("text")
+        if not isinstance(body, str) or not body.strip():
+            raise ValueError("handoff 'body' must be a non-empty string")
+        res = await handoff_service.set_handoff(cwd=_cwd(args), body=body, actor="agent")
+        return {"status": "saved", "branch": res.branch, "scope": "project"}
+
+    async def resume(args: dict[str, Any]) -> dict[str, Any]:
+        res = await handoff_service.resume(cwd=_cwd(args))
+        if res is None:
+            return {"found": False}
+        ts = res.updated_at.isoformat()
+        return {
+            "found": True,
+            "branch": res.branch,
+            "body": res.body,
+            "updated_at": ts,
+            # Freshness annotation: a resumed scene may be stale; the agent
+            # should weigh it against the current request, not blindly continue.
+            # Chinese prose for the agent — fullwidth punctuation is intentional.
+            "note": f"现场，截至 {ts}，可能已过期；无关请忽略。",  # noqa: RUF001
+        }
+
     registry.register(
         BuiltinTool(
             name="recall",
@@ -210,6 +236,46 @@ def register_memory_builtin_tools(
                 "required": [],
             },
             handler=list_memory,
+        )
+    )
+    registry.register(
+        BuiltinTool(
+            name="set_handoff",
+            description=(
+                "Save the current working state ('现场': current task, next steps, "
+                "files in flight, open questions) for the current project + git branch. "
+                "Overwrites the previous handoff for this branch. Call when pausing work."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "body": {
+                        "type": "string",
+                        "description": (
+                            "Current task / next steps / files in flight / open questions."
+                        ),
+                    },
+                    "cwd": {"type": "string", "description": "Working directory (auto-injected)."},
+                },
+                "required": ["body"],
+            },
+            handler=set_handoff,
+        )
+    )
+    registry.register(
+        BuiltinTool(
+            name="resume",
+            description=(
+                "Return the saved working-state handoff for the current project + git "
+                "branch, to continue where work left off. Returns found=false if none."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "cwd": {"type": "string", "description": "Working directory (auto-injected)."}
+                },
+            },
+            handler=resume,
         )
     )
 

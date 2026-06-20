@@ -123,7 +123,7 @@ CREATE INDEX idx_chunks_document ON chunks(document_id);
 -- FTS5 keyword index; the chunk text lives once inside the FTS index (not
 -- duplicated into a base table), with chunk_id mapping a hit back to its row.
 CREATE VIRTUAL TABLE documents_fts USING fts5(
-    text, resource_name UNINDEXED, chunk_id UNINDEXED, tokenize='unicode61'
+    text, resource_name UNINDEXED, chunk_id UNINDEXED, tokenize='trigram'  -- CJK-capable (migration 0033)
 );
 
 -- sqlite-vec virtual table (only when a vector mode is enabled); created lazily

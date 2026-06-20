@@ -22,6 +22,7 @@ Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "knowledge_
 | `chunk_overlap`      | `int`                     | Default `64`; range `0–chunk_size/2`.                                                                               |
 | `max_document_bytes` | `int`                     | Default `25 * 1024 * 1024`; range `1024–104857600`.                                                                 |
 | `embedding`          | `EmbeddingConfig \| None` | Required only when `vector` is enabled. `None` ⇒ keyword/grep only.                                                 |
+| `auto_update_sources`| `bool`                    | Default `false`. When `true`, `check_sources` auto-refreshes path-tracked documents whose external original changed (skips hand-edited ones). NOT a reindex-triggering field — toggling it never re-chunks/re-embeds. |
 
 ### `EmbeddingConfig` (`domain/knowledge/embedder.py`)
 
@@ -52,7 +53,7 @@ Frozen dataclass; one per Markdown file, **discriminated by `kind`**. KB and mem
 | `metadata`                  | `dict`        | Per-face JSON; KB keys below.                                                                                                                                     |
 | `created_at` / `updated_at` | `datetime`    | UTC.                                                                                                                                                              |
 
-KB `metadata` keys: `original_filename` (the re-upload match key), `original_format`, `source_sha256` (provenance), `converted_at`, `conversion_engine`.
+KB `metadata` keys: `original_filename` (the re-upload match key), `original_format`, `source_sha256` (provenance), `converted_at`, `conversion_engine`, and the optional `source_path` (the external original's absolute path, set only by path-based ingests — CLI / desktop picker — so its on-disk drift can later be detected by `check_sources`; machine-local, never set by web byte-upload or agent `add_document`).
 
 ### `Passage`, `GrepHit`, `SearchResult` (`domain/knowledge/retrieval.py`)
 
@@ -144,7 +145,7 @@ CREATE VIRTUAL TABLE documents_fts USING fts5(
     text,
     resource_name UNINDEXED,
     chunk_id UNINDEXED,
-    tokenize='unicode61'
+    tokenize='trigram'  -- CJK-capable; unicode61 did not segment CJK (migration 0033)
 );
 
 -- sqlite-vec virtual table; one row per chunk with a vector. Created LAZILY by
@@ -288,8 +289,10 @@ Lives in `contracts/api.openapi.yaml`. Highlights (app-wide error envelope `{err
 - `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` — read-only markdown body + frontmatter + absolute `path` + `folder_path`
 - `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` — edit markdown via API (sets `source_mode=edited`, reindexes); the UI is read-only and edits otherwise arrive via the external editor (picked up by reindex-on-read) or agent MCP
 - `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` — re-run conversion from `raw/` (blocked with `RECONVERSION_BLOCKED` once hand-edited)
+- `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/update-source` — re-ingest in place from the tracked external `source_path` (blocked once hand-edited)
 - `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` — delete one document
 - `POST /api/v1/knowledge_bases/{name}/reindex` — rescan + rebuild index from files
+- `POST /api/v1/knowledge_bases/{name}/check-sources` — detect path-tracked documents whose external original changed (`unchanged`/`changed`/`missing`; auto-refreshes when `auto_update_sources`)
 - `POST /api/v1/knowledge_bases/{name}/search` — `{query, top_k?, mode?}` → ranked passages (+ `fallback`)
 - `POST /api/v1/knowledge_bases/{name}/grep` — `{pattern, max_matches?}` → file/line hits
 - `GET /api/v1/knowledge_bases/{name}/metrics` — counts + indexed modes + disk bytes

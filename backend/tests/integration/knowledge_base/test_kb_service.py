@@ -145,6 +145,23 @@ async def test_keyword_search_ranks(kb) -> None:
     assert result.passages[0].title == "Fox"
 
 
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="keyword search matches CJK (Chinese) content"
+)
+async def test_keyword_search_matches_cjk(kb) -> None:
+    await kb.create_kb("kb1")
+    await _ingest(kb, "kb1", "zh.md", "# 向量\n\n向量检索使用语义嵌入模型来匹配查询".encode())
+    # Multi-character CJK query: served by the FTS5 trigram index (unicode61
+    # would have returned nothing for a no-space Chinese run).
+    result = await kb.service.search(kb_name="kb1", query="向量检索", top_k=5)
+    assert result.mode == "keyword"
+    assert any("向量检索" in p.text for p in result.passages)
+    # Short (< 3 char) CJK query: trigram can't tokenize it, so the substring
+    # (LIKE) fallback serves it instead of returning empty.
+    short = await kb.service.search(kb_name="kb1", query="向量", top_k=5)
+    assert any("向量" in p.text for p in short.passages)
+
+
 @pytest.mark.acceptance(spec="006-knowledge-base", scenario="grep returns file/line matches")
 async def test_grep_returns_hits(kb) -> None:
     await kb.create_kb("kb1")
@@ -509,6 +526,175 @@ async def test_replace_reupload_audits_document_updated(kb) -> None:
     types = [e.event_type for e in events]
     assert types.count("kb_document_ingested") == 1  # the no-op did not re-audit
     assert types.count("kb_document_updated") == 1
+
+
+# ----- external source-file tracking (FR-021..024) -----
+
+
+async def _ingest_from_file(kb, name: str, src, *, replace: bool = False):
+    """Ingest an on-disk external file, recording its absolute ``source_path``
+    (as the trusted CLI / desktop picker surfaces do)."""
+    return await kb.service.ingest_bytes(
+        kb_name=name,
+        filename=src.name,
+        raw_bytes=src.read_bytes(),
+        actor="user",
+        replace=replace,
+        source_path=str(src.resolve()),
+    )
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base",
+    scenario="check sources detects changed, unchanged, and missing originals",
+)
+async def test_check_sources_classifies_changed_unchanged_missing(kb, tmp_path) -> None:
+    await kb.create_kb("kb1")
+    ext = tmp_path / "external"
+    ext.mkdir()
+    changed = ext / "changed.md"
+    changed.write_text("# Changed\n\noriginal body")
+    unchanged = ext / "unchanged.md"
+    unchanged.write_text("# Unchanged\n\nstable body")
+    missing = ext / "missing.md"
+    missing.write_text("# Missing\n\nwill vanish")
+
+    d_changed = await _ingest_from_file(kb, "kb1", changed)
+    d_unchanged = await _ingest_from_file(kb, "kb1", unchanged)
+    d_missing = await _ingest_from_file(kb, "kb1", missing)
+    # The path-based ingest recorded the external source path in metadata.
+    assert d_changed.metadata["source_path"] == str(changed.resolve())
+
+    # Mutate one original on disk, delete another, leave the third alone.
+    changed.write_text("# Changed\n\nbrand new body")
+    missing.unlink()
+
+    report = await kb.service.check_sources(kb_name="kb1", actor="user")
+    by_id = {s.doc_id: s.status for s in report}
+    assert by_id[d_changed.id] == "changed"
+    assert by_id[d_unchanged.id] == "unchanged"
+    assert by_id[d_missing.id] == "missing"
+    # Detect-only: no document was re-indexed, so no UPDATE was audited.
+    events = await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
+    assert "kb_document_updated" not in [e.event_type for e in events]
+
+
+async def test_check_sources_ignores_byte_uploads_without_source_path(kb, tmp_path) -> None:
+    """A byte-upload (no source_path) is invisible to the report — only
+    path-tracked documents are checked (FR-021)."""
+    await kb.create_kb("kb1")
+    # Plain byte upload — no source_path threaded.
+    await _ingest(kb, "kb1", "byte.md", b"# Byte\n\nuploaded as bytes")
+    # A path-tracked document, for contrast.
+    src = tmp_path / "tracked.md"
+    src.write_text("# Tracked\n\ntracked body")
+    tracked = await _ingest_from_file(kb, "kb1", src)
+
+    report = await kb.service.check_sources(kb_name="kb1", actor="user")
+    assert [s.doc_id for s in report] == [tracked.id]
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base",
+    scenario="update from source refreshes a changed document in place",
+)
+async def test_update_from_source_updates_in_place(kb, tmp_path) -> None:
+    await kb.create_kb("kb1")
+    src = tmp_path / "report.md"
+    src.write_text("# Report\n\noriginal apple body")
+    doc = await _ingest_from_file(kb, "kb1", src)
+    assert len((await kb.service.search(kb_name="kb1", query="apple", top_k=5)).passages) == 1
+
+    # The external original changes; refresh in place from it.
+    src.write_text("# Report\n\nchanged banana body")
+    updated = await kb.service.update_from_source(kb_name="kb1", document_id=doc.id, actor="user")
+    assert updated.id == doc.id
+    assert updated.source_mode == "converted"
+    assert await kb.documents.count_documents("knowledge_base", "kb1") == 1
+    # New content searchable, old content gone.
+    assert (await kb.service.search(kb_name="kb1", query="apple", top_k=5)).passages == ()
+    assert len((await kb.service.search(kb_name="kb1", query="banana", top_k=5)).passages) == 1
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="update from source refuses an edited document"
+)
+async def test_update_from_source_refuses_edited(kb, tmp_path) -> None:
+    await kb.create_kb("kb1")
+    src = tmp_path / "doc.md"
+    src.write_text("# Doc\n\nbody one")
+    doc = await _ingest_from_file(kb, "kb1", src)
+    await kb.service.edit_document(
+        kb_name="kb1", document_id=doc.id, new_markdown="# Doc\n\nhand edited", actor="user"
+    )
+    # update_from_source must refuse an edited document.
+    src.write_text("# Doc\n\nbody two changed")
+    with pytest.raises(ReconversionBlocked):
+        await kb.service.update_from_source(kb_name="kb1", document_id=doc.id, actor="user")
+    # check_sources marks the edited (changed) document "edited", not "changed",
+    # so an auto-update would skip it.
+    await kb.resources.update_config(
+        ref=ResourceRef("knowledge_base", "kb1"),
+        new_config={"auto_update_sources": True},
+        actor="user",
+    )
+    report = await kb.service.check_sources(kb_name="kb1", actor="user")
+    assert {s.doc_id: s.status for s in report}[doc.id] == "edited"
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="auto_update_sources refreshes changed sources on check"
+)
+async def test_auto_update_sources_refreshes_changed(kb, tmp_path) -> None:
+    await kb.create_kb("kb1", config={"auto_update_sources": True})
+    src = tmp_path / "auto.md"
+    src.write_text("# Auto\n\noriginal apple body")
+    doc = await _ingest_from_file(kb, "kb1", src)
+    # The external original changes; check_sources auto-refreshes it.
+    src.write_text("# Auto\n\nchanged banana body")
+    report = await kb.service.check_sources(kb_name="kb1", actor="user")
+    assert {s.doc_id: s.status for s in report}[doc.id] == "updated"
+    # Same document, refreshed content searchable.
+    assert await kb.documents.count_documents("knowledge_base", "kb1") == 1
+    assert len((await kb.service.search(kb_name="kb1", query="banana", top_k=5)).passages) == 1
+    # The in-place refresh audited KB_DOCUMENT_UPDATED.
+    events = await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
+    assert "kb_document_updated" in [e.event_type for e in events]
+
+
+async def test_update_from_source_missing_file_rejected(kb, tmp_path) -> None:
+    """A tracked source that vanished is reported via IngestRejected, never a
+    silent wipe (FR-023)."""
+    await kb.create_kb("kb1")
+    src = tmp_path / "gone.md"
+    src.write_text("# Gone\n\nsoon vanished body")
+    doc = await _ingest_from_file(kb, "kb1", src)
+    src.unlink()
+    with pytest.raises(IngestRejected) as exc:
+        await kb.service.update_from_source(kb_name="kb1", document_id=doc.id, actor="user")
+    assert exc.value.reason == "source_missing"
+
+
+async def test_check_sources_unreadable_source_is_missing_not_crash(kb, tmp_path) -> None:
+    """A tracked source that becomes UNREADABLE (a directory at the path, a
+    permission-denied file, a broken symlink) is reported "missing" and must NOT
+    abort the whole scan — the rest of the corpus is still classified."""
+    await kb.create_kb("kb1")
+    bad = tmp_path / "bad.md"
+    bad.write_text("# Bad\n\nbody")
+    good = tmp_path / "good.md"
+    good.write_text("# Good\n\nstable body")
+    d_bad = await _ingest_from_file(kb, "kb1", bad)
+    d_good = await _ingest_from_file(kb, "kb1", good)
+    # Replace the tracked original with a directory at the same path: opening it
+    # raises IsADirectoryError, which the scan must absorb (not propagate).
+    bad.unlink()
+    bad.mkdir()
+
+    report = await kb.service.check_sources(kb_name="kb1", actor="user")
+    by_id = {s.doc_id: s.status for s in report}
+    assert by_id[d_bad.id] == "missing"
+    assert by_id[d_good.id] == "unchanged"
 
 
 async def test_reindex_prunes_rows_whose_file_was_removed(kb) -> None:
