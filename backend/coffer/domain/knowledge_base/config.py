@@ -30,6 +30,10 @@ class KnowledgeBaseConfig(BaseModel):
     chunk_overlap: int = Field(default=DEFAULT_CHUNK_OVERLAP, ge=0)
     max_document_bytes: int = Field(default=DEFAULT_MAX_DOC_BYTES, ge=1024, le=104857600)
     embedding: EmbeddingConfig | None = None
+    # When true, ``check_sources`` auto-refreshes documents whose tracked
+    # external original has changed (skipping hand-edited ones). Off by default;
+    # NOT a reindex-triggering field (toggling it must not re-chunk/re-embed).
+    auto_update_sources: bool = False
 
     @model_validator(mode="after")
     def _check_cross_field(self) -> KnowledgeBaseConfig:

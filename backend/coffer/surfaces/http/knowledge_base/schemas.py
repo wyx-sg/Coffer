@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from coffer.application.knowledge_base.pipeline_helpers import SourceStatus
 from coffer.domain.knowledge.document import Document
 from coffer.domain.knowledge.retrieval import GrepResult, RetrievalMode, SearchResult
 from coffer.domain.knowledge_base.config import KnowledgeBaseConfig
@@ -132,6 +133,31 @@ class ReindexResult(BaseModel):
     # Docs indexed keyword-only because the embedding provider was unavailable
     # (retried on the next scan via the empty-sha sentinel).
     documents_degraded: int = 0
+
+
+class SourceStatusOut(BaseModel):
+    document_id: str
+    title: str
+    source_path: str
+    status: str
+
+
+class SourceCheckResponse(BaseModel):
+    sources: list[SourceStatusOut]
+
+    @classmethod
+    def from_report(cls, report: list[SourceStatus]) -> SourceCheckResponse:
+        return cls(
+            sources=[
+                SourceStatusOut(
+                    document_id=s.doc_id,
+                    title=s.title,
+                    source_path=s.source_path,
+                    status=s.status,
+                )
+                for s in report
+            ]
+        )
 
 
 class SearchRequest(BaseModel):
