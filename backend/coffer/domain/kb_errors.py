@@ -64,23 +64,6 @@ class ReconversionBlocked(CofferError):  # noqa: N818
         self.document_id = document_id
 
 
-class DocumentLocked(CofferError):  # noqa: N818
-    """A mutation (edit / reconvert / re-upload replace / delete) targeted a
-    ``locked`` document. KB documents are co-managed (ADR-028); the per-document
-    lock is the opt-out that freezes a document against all writes, human or
-    agent, until it is unlocked. Maps to 409."""
-
-    code = "DOCUMENT_LOCKED"
-
-    def __init__(self, kb_name: str, document_id: str) -> None:
-        super().__init__(
-            f"document {kb_name}:{document_id} is locked; unlock it before editing, "
-            "reconverting, replacing, or deleting it"
-        )
-        self.kb_name = kb_name
-        self.document_id = document_id
-
-
 class GrepPatternInvalid(CofferError):  # noqa: N818
     """ripgrep rejected the pattern (exit code 2, e.g. invalid regex). Maps to
     400 — without this an rg failure masquerades as 'no matches'."""

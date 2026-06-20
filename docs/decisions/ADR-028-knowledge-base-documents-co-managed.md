@@ -7,6 +7,8 @@
 **Deciders**: Yuxing Wu
 **Related**: spec `006-knowledge-base`; builds on [ADR-012](ADR-012-files-as-truth-sqlite-retrieval.md); sibling of [ADR-026 (memory via MCP)](ADR-026-memory-via-mcp-not-native-projection.md); part of the unified-knowledge redesign (知识 = 记忆 + 文档, both human + AI co-managed)
 
+> **Amended (2026-06-20, simplification 5.7).** Decision 3 (per-document lock) is withdrawn: KB documents are always writable; the F01 audit trail plus vault backup replace the opt-out lock. Pillars 1 (ULID identity) and 2 (agents may write) stand.
+
 ## Context
 
 The original `006-knowledge-base` design (ADR-012 era) framed the KB as a
@@ -21,7 +23,7 @@ agent-writable (`remember` / `update_memory` / `forget`). For the KB face to be 
 living, co-managed knowledge store rather than a static vault, the asymmetry
 "agents may write memory but never documents" is arbitrary — agents should be
 able to contribute documents too, with the same guardrails memory has (F01
-audit, an opt-out lock).
+audit).
 
 The content-addressed identity also has two concrete defects:
 
@@ -53,15 +55,6 @@ The content-addressed identity also has two concrete defects:
    idempotent re-index routine humans use and is recorded in the F01 audit trail
    with the agent as actor.
 
-3. **Per-document lock.** A document may be `locked`; a locked document **rejects
-   every mutation** — edit, reconvert, re-upload replace, delete — from any actor
-   (human or agent) until it is unlocked. The lock is the per-document opt-out
-   from co-management: it marks an authoritative/curated document that must not
-   drift. Locking/unlocking is itself always allowed and audited. The `locked`
-   flag is persisted in the document's frontmatter as well as the row, so a
-   files-only rebuild (FR-008 — files are truth) restores it locked rather than
-   silently unlocking.
-
 ## Scope & sequencing
 
 This ADR ships the co-management **core at global scope**. Two related pieces of
@@ -72,8 +65,7 @@ state with no UI:
 - **Per-project document scope** (the 全局/项目 axis for documents) — co-dependent
   with the unified 知识 project view; deferred to that slice.
 - **Recoverable soft-delete (trash/restore)** — needs its own UI to be useful;
-  for now delete is a hard delete that still leaves an F01 audit trail, and the
-  lock prevents unwanted deletion of curated documents.
+  for now delete is a hard delete that still leaves an F01 audit trail.
 
 The in-app document viewer stays **read-only with external-editor affordances**
 (the read-only-viewers decision): humans edit a document body via their external
@@ -88,26 +80,17 @@ re-introduce an in-app text editor.
   model — symmetrical with agent-writable memory.
 - Fixes the re-upload-updated-file duplicate bug: an updated source now updates
   its document in place under a stable id.
-- Locks give per-document authority/curation control that holds against both
-  human and agent writes.
 - Agent contributions are audited (F01) and reversible; a hard delete leaves an
-  audit trail, and the lock prevents clobbering of curated documents.
+  audit trail.
 
 **Negative**
 
-- Agents gain a **delete** capability over KB documents. Mitigated by the
-  per-document lock (a locked doc cannot be deleted) and the full F01 audit
-  trail; scoped deliberately because co-management without delete is
-  half-measures.
+- Agents gain a **delete** capability over KB documents. Mitigated by the full
+  F01 audit trail plus the vault backup; scoped deliberately because
+  co-management without delete is half-measures.
 - Stable ids mean the **same file uploaded into two KBs now has two ids** — KB
   documents are no longer deduplicated across stores. Accepted: each KB is its
   own corpus, and the per-store chunk-id namespacing already isolated them.
-- The lock-enforcement check for edit/reconvert/delete is read before the
-  per-store write lock is taken, so a concurrent lock-toggle has a narrow TOCTOU
-  window (the re-upload-replace path checks inside the lock and is not affected).
-  Accepted as bounded: Coffer is single-user (constitutional), and the lock is
-  curation guidance, not a security boundary against a malicious actor (agents
-  are trusted under the owner-pairing model, ADR-025).
 
 ## Alternatives considered
 
@@ -119,8 +102,8 @@ bug and conflates identity with content. A stable logical id with the content
 hash kept as provenance is strictly better.
 
 **Soft-delete now.** Deferred: a recoverable trash is only useful with a
-restore UI, which belongs with the unified 知识 slice. Hard delete + F01 audit +
-lock is sufficient protection for this slice.
+restore UI, which belongs with the unified 知识 slice. Hard delete + F01 audit is
+sufficient protection for this slice.
 
 **Auto-update on every re-upload (no `replace` flag).** Rejected: silently
 overwriting a document on a same-filename re-upload is surprising and can clobber

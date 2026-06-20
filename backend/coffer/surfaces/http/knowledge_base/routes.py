@@ -34,7 +34,6 @@ from coffer.surfaces.http.knowledge_base.schemas import (
     DocumentDetailOut,
     DocumentEditRequest,
     DocumentListOut,
-    DocumentLockRequest,
     DocumentOut,
     GrepRequest,
     GrepResponse,
@@ -222,24 +221,6 @@ async def edit_document(
 ) -> DocumentOut:
     doc = await kb_svc.edit_document(
         kb_name=name, document_id=document_id, new_markdown=body.markdown, actor=actor
-    )
-    counts = await kb_svc.chunk_counts(kb_name=name)
-    path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=doc.id)
-    return DocumentOut.from_domain(
-        doc, chunk_count=counts.get(doc.id, 0), path=path, folder_path=folder_path
-    )
-
-
-@router.patch("/{name}/documents/{document_id}", response_model=DocumentOut)
-async def set_document_lock(
-    name: str,
-    document_id: str,
-    body: DocumentLockRequest,
-    kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> DocumentOut:
-    doc = await kb_svc.set_document_lock(
-        kb_name=name, document_id=document_id, locked=body.locked, actor=actor
     )
     counts = await kb_svc.chunk_counts(kb_name=name)
     path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=doc.id)

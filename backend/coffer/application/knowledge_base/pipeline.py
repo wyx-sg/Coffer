@@ -34,10 +34,9 @@ from coffer.application.knowledge_base.pipeline_helpers import (
     extension_of,
     mkparent_write,
     render_doc_markdown,
-    set_frontmatter_locked,
     title_of,
 )
-from coffer.domain.errors import DocumentLocked, IngestRejected
+from coffer.domain.errors import IngestRejected
 from coffer.domain.knowledge.converter import MarkdownConverter
 from coffer.domain.knowledge.document import (
     KIND_KNOWLEDGE_BASE,
@@ -120,8 +119,6 @@ class KBPipeline:
             status = "ingested"
             created_at: datetime | None = None
             if existing is not None:
-                if existing.locked:
-                    raise DocumentLocked(kb_name, existing.id)
                 if str(existing.metadata.get("source_sha256", "")) == prepared.source_sha256:
                     # Byte-identical re-upload → idempotent no-op (FR-007).
                     return existing, "unchanged"
@@ -257,18 +254,6 @@ class KBPipeline:
             "degraded": degraded,
         }
 
-    # ----- lock -----
-
-    async def set_lock(self, *, kb_name: str, doc: Document, locked: bool) -> Document:
-        """Persist a lock toggle under the per-store lock: flip the on-disk
-        frontmatter ``locked`` key (survives a files-only rebuild — ADR-028)."""
-        async with self._lock(kb_name):
-            await asyncio.to_thread(
-                set_frontmatter_locked, self._paths.doc_path(kb_name, doc.id), locked
-            )
-            updated = await self._documents.set_locked(KIND_KNOWLEDGE_BASE, kb_name, doc.id, locked)
-            return updated or dc_replace(doc, locked=locked)
-
     # ----- delete / cleanup -----
 
     async def delete(self, *, kb_name: str, doc: Document) -> None:
@@ -354,9 +339,6 @@ class KBPipeline:
                 "source_sha256": prepared.source_sha256,
                 "converter": prepared.conversion_engine,
                 "source_mode": "converted",
-                # A new / replaced document is always unlocked (a locked one
-                # rejects replace); persisted so a files-only rebuild keeps it.
-                "locked": False,
             },
             prepared.markdown,
         )

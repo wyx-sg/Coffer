@@ -49,7 +49,6 @@ frozen dataclass；一个 Markdown 文件一条，**按 `kind` 区分**。KB 与
 | `description`               | `str \| None` | 可选摘要。                                                                                                               |
 | `content_sha256`            | `str`         | **Markdown** 正文的哈希 —— reindex 的 no-op 闸门。                                                                       |
 | `source_mode`               | `str`         | `"converted"` 或 `"edited"`。                                                                                            |
-| `locked`                    | `bool`        | 为 `true` 时拒绝一切变更（编辑 / 重转换 / 替换 / 删除）（FR-021）。默认 `false`。                                        |
 | `metadata`                  | `dict`        | 按面区分的 JSON；KB 的 key 见下。                                                                                        |
 | `created_at` / `updated_at` | `datetime`    | UTC。                                                                                                                    |
 
@@ -96,12 +95,11 @@ grep 是独立的 `infrastructure/knowledge/grep.py` ripgrep 包装器（无索�
 - `IngestRejected` —— code `"INGEST_REJECTED"`；reason ∈ `{"empty","too_large","unsupported_type","duplicate"}`。
 - `EngineUnavailable` —— code `"ENGINE_UNAVAILABLE"`；当请求操作所需的转换器库 / sqlite-vec / embedding provider 不可用时抛出。
 - `ReconversionBlocked` —— code `"RECONVERSION_BLOCKED"`；对 `source_mode == "edited"` 的文档执行重转换时抛出。
-- `DocumentLocked` —— code `"DOCUMENT_LOCKED"`（HTTP 409）；任何变更（编辑 / 重转换 / 重新上传覆盖 / 删除）作用于 `locked` 文档时抛出（FR-021）。
 - `SearchModeInvalid` —— code `"SEARCH_MODE_INVALID"`（HTTP 400）；当搜索请求**显式**指定 `mode=grep`（grep 有自己的端点）或任何不在该 KB `enabled_modes` 里的显式模式时抛出。`vector` 是例外 —— 它降级为 keyword 并标注 fallback，而不是报错。
 
-## SQLite schema（统一基底 + `locked` 列）
+## SQLite schema（统一基底）
 
-基底迁移（`0006`）删除旧的 `kb_documents` / `memory_records` 表并创建下面的统一 schema（**没有数据迁移** —— 分支未发布）。后续一个追加迁移（`0025`）为 `documents` 加上共管锁的 `locked` 列（FR-021），由幂等的 `_has_column` 检查守护。
+基底迁移（`0006`）删除旧的 `kb_documents` / `memory_records` 表并创建下面的统一 schema（**没有数据迁移** —— 分支未发布）。`0025` 为共管锁加上的 `locked` 列，在撤回逐文档锁时由后续一个追加迁移（`0027`）再次删除。
 
 ```sql
 -- One row per Markdown file, shared by KB and memory, discriminated by `kind`.
@@ -115,7 +113,6 @@ CREATE TABLE documents (
     description     TEXT,
     content_sha256  TEXT      NOT NULL,             -- hash of the markdown body (reindex no-op gate)
     source_mode     TEXT      NOT NULL,             -- 'converted' | 'edited' (KB) | 'native' (memory)
-    locked          BOOLEAN   NOT NULL DEFAULT 0,   -- co-management opt-out: blocks all mutations (FR-021)
     metadata        TEXT      NOT NULL DEFAULT '{}',-- JSON, per-face
     created_at      TIMESTAMP NOT NULL,
     updated_at      TIMESTAMP NOT NULL,
@@ -170,12 +167,11 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 
 `repository.py` —— `DocumentRepo`（document 行 CRUD）：
 
-- `async upsert_document(d: Document) -> Document`（按 `(kind, resource_name, id)` 插入或更新；携带 `locked`）
+- `async upsert_document(d: Document) -> Document`（按 `(kind, resource_name, id)` 插入或更新）
 - `async list_documents(kind, resource_name, *, limit, offset) -> list[Document]`
 - `async count_documents(kind, resource_name) -> int`
 - `async get_document(kind, resource_name, doc_id) -> Document | None`
 - `async find_by_filename(kind, resource_name, project_id, original_filename) -> Document | None`（重新上传的匹配键——读 `metadata->>'original_filename'`；取代旧的 `exists_source` sha 查找）
-- `async set_locked(kind, resource_name, doc_id, locked) -> Document | None`（翻转锁；返回更新后的行）
 - `async delete_document(kind, resource_name, doc_id) -> bool`
 - `async delete_resource(kind, resource_name) -> int`
 
@@ -245,16 +241,15 @@ compute content_sha256 of the new markdown body
 
 | 动作                                | 效果                                                                                                                                                                                                      |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 删除一个 Document                   | 移除 `docs/<id>.md` + `raw/<id>.<ext>`；删除其 `chunks`/`documents_fts`/`vec_chunks` 行；删除 `documents` 行；审计 `KB_DOCUMENT_DELETED`。被锁则拒绝。                                                    |
+| 删除一个 Document                   | 移除 `docs/<id>.md` + `raw/<id>.<ext>`；删除其 `chunks`/`documents_fts`/`vec_chunks` 行；删除 `documents` 行；审计 `KB_DOCUMENT_DELETED`。                                                                |
 | 删除一个 KB                         | `on_delete` 钩子：`delete_resource(kind, name)`（documents + chunks + fts + vec）；`rmtree(kb_dir(name))`；删除 `resources` 行；审计 `RESOURCE_DELETED` 带 KB 快照。                                      |
 | 重命名 KB                           | 禁止（Resource 名不可变；框架强制）。                                                                                                                                                                     |
 | 修改 `chunk_size` / `chunk_overlap` | 允许 → 对语料 re-chunk + re-index。                                                                                                                                                                       |
 | 修改 `embedding` 模型 / dimensions  | 允许 → 对语料重新 embedding（宽度变化时重建 `vec_chunks`）。                                                                                                                                              |
-| 编辑文档的 markdown                 | 经编辑 API 或 MCP `edit_document` → `source_mode = edited` → reindex 例程。在外部编辑器中对磁盘文件的编辑由读取时惰性重建索引拾取（`content_sha256` 漂移 ⇒ 同一例程）。被锁则拒绝。                       |
-| 重新上传变更后的 source             | 在 store 内按 `original_filename` 匹配 → 就地更新同一文档（复用 ULID，覆盖 `docs/`+`raw/`，只保留最新一份原件，`source_mode` → `converted`），需 `replace=true`；字节相同的重新上传是 no-op。被锁则拒绝。 |
-| 重转换文档                          | 仅当 `source_mode == converted` 时允许；`edited` ⇒ `ReconversionBlocked`。被锁则拒绝。                                                                                                                    |
-| 经 MCP 新增 / 编辑 / 删除           | agent 调用 `coffer__add_document` / `edit_document` / `delete_document`；与 REST 同一套服务路径，以 agent 为 actor 审计；被锁则拒绝。                                                                     |
-| 锁定 / 解锁文档                     | `locked` 翻转；审计 `KB_DOCUMENT_LOCKED` / `KB_DOCUMENT_UNLOCKED`。始终允许（这是解锁的方式）。                                                                                                           |
+| 编辑文档的 markdown                 | 经编辑 API 或 MCP `edit_document` → `source_mode = edited` → reindex 例程。在外部编辑器中对磁盘文件的编辑由读取时惰性重建索引拾取（`content_sha256` 漂移 ⇒ 同一例程）。                                   |
+| 重新上传变更后的 source             | 在 store 内按 `original_filename` 匹配 → 就地更新同一文档（复用 ULID，覆盖 `docs/`+`raw/`，只保留最新一份原件，`source_mode` → `converted`），需 `replace=true`；字节相同的重新上传是 no-op。            |
+| 重转换文档                          | 仅当 `source_mode == converted` 时允许；`edited` ⇒ `ReconversionBlocked`。                                                                                                                                |
+| 经 MCP 新增 / 编辑 / 删除           | agent 调用 `coffer__add_document` / `edit_document` / `delete_document`；与 REST 同一套服务路径，以 agent 为 actor 审计。                                                                                 |
 
 ## 新增审计事件
 
@@ -265,8 +260,6 @@ compute content_sha256 of the new markdown body
 | `"kb_document_ingested"` | 新文档首次索引后                                    |
 | `"kb_document_updated"`  | reindex 例程对变更文档重建索引后（编辑 / 重新上传） |
 | `"kb_document_deleted"`  | 文档删除后                                          |
-| `"kb_document_locked"`   | 文档被锁定后                                        |
-| `"kb_document_unlocked"` | 文档被解锁后                                        |
 | `"kb_reindexed"`         | 一次完整 `coffer kb reindex` 后（携带逐文档计数）   |
 
 KB 生命周期由 kind 无关核心的 `resource_created` / `resource_deleted` 覆盖。内建 MCP 工具调用记录到 `mcp_invocations`（仅工具名 + who/when/duration/outcome）。
@@ -293,10 +286,9 @@ KB 生命周期由 kind 无关核心的 `resource_created` / `resource_deleted` 
 - `POST /api/v1/knowledge_bases/{name}/documents` —— multipart 上传 + ingest（任意格式）
 - `GET /api/v1/knowledge_bases/{name}/documents` —— 分页列表（每行携带绝对 `path` + 所在文件夹 `folder_path`）
 - `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 只读 markdown 正文 + frontmatter + 绝对 `path` + `folder_path`
-- `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 经 API 编辑 markdown（置 `source_mode=edited`，重建索引；被锁时 `409 DOCUMENT_LOCKED`）；UI 为只读，其余编辑经外部编辑器或 agent MCP 进行（由读取时惰性重建索引拾取）
-- `PATCH /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— `{locked: bool}` → 锁定 / 解锁文档（审计）
-- `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` —— 从 `raw/` 重跑转换（一旦手工编辑过即被 `RECONVERSION_BLOCKED` 拦截，被锁时 `DOCUMENT_LOCKED`）
-- `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 删除单个文档（被锁时 `409 DOCUMENT_LOCKED`）
+- `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 经 API 编辑 markdown（置 `source_mode=edited`，重建索引）；UI 为只读，其余编辑经外部编辑器或 agent MCP 进行（由读取时惰性重建索引拾取）
+- `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` —— 从 `raw/` 重跑转换（一旦手工编辑过即被 `RECONVERSION_BLOCKED` 拦截）
+- `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 删除单个文档
 - `POST /api/v1/knowledge_bases/{name}/reindex` —— 重扫描 + 从文件重建索引
 - `POST /api/v1/knowledge_bases/{name}/search` —— `{query, top_k?, mode?}` → 排序 passage（+ `fallback`）
 - `POST /api/v1/knowledge_bases/{name}/grep` —— `{pattern, max_matches?}` → 文件/行命中

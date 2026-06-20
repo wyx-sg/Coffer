@@ -92,8 +92,7 @@ paths:
         `original_filename`: byte-identical content is an idempotent no-op; changed
         content under the same filename updates the SAME document in place (reuse
         the id, overwrite `docs/`+`raw/`) when `replace=true`, otherwise it is
-        rejected (`409` duplicate). Refused with `DOCUMENT_LOCKED` (409) when the
-        matched document is locked.
+        rejected (`409` duplicate).
       operationId: ingestDocument
       tags: [knowledge_bases]
       requestBody:
@@ -193,8 +192,7 @@ paths:
         Replaces the Markdown body. The document's `source_mode` becomes `edited`,
         which blocks future re-conversion from the raw original until a new source
         is uploaded. Runs the single idempotent re-index routine (no-op if the
-        content hash is unchanged). Refused with `DOCUMENT_LOCKED` (409) when the
-        document is locked (FR-021).
+        content hash is unchanged).
       operationId: editDocument
       tags: [knowledge_bases]
       requestBody:
@@ -214,33 +212,6 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/DocumentLocked"
-
-    patch:
-      summary: Lock or unlock a document
-      description: |
-        Sets the document's `locked` flag. While locked, every mutation (edit,
-        reconvert, re-upload replace, delete) is refused with `DOCUMENT_LOCKED`
-        (409) for human and agent callers alike (FR-021). Locking/unlocking is
-        always permitted and is audited (`KB_DOCUMENT_LOCKED` / `_UNLOCKED`).
-      operationId: setDocumentLock
-      tags: [knowledge_bases]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DocumentLockRequest"
-      responses:
-        "200":
-          description: Lock state updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DocumentOut"
-        "404":
-          $ref: "#/components/responses/NotFound"
 
     delete:
       summary: Delete a document
@@ -251,8 +222,6 @@ paths:
           description: No Content
         "404":
           $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/DocumentLocked"
 
   /api/v1/knowledge_bases/{name}/documents/{document_id}/reconvert:
     parameters:
@@ -265,8 +234,7 @@ paths:
         regenerating the Markdown and reindexing. Refused with
         `RECONVERSION_BLOCKED` (409) when the document's `source_mode` is
         `edited`, so hand edits are never clobbered — upload a new source file to
-        reset `source_mode` to `converted` first. Also refused with
-        `DOCUMENT_LOCKED` (409) when the document is locked (FR-021).
+        reset `source_mode` to `converted` first.
       operationId: reconvertDocument
       tags: [knowledge_bases]
       responses:
@@ -471,12 +439,6 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
-    DocumentLocked:
-      description: The document is locked (`DOCUMENT_LOCKED`); the mutation is refused until it is unlocked
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
 
   schemas:
     RetrievalMode:
@@ -582,7 +544,6 @@ components:
           title,
           source_mode,
           content_sha256,
-          locked,
           project_id,
           metadata,
           path,
@@ -605,11 +566,6 @@ components:
           type: string
           enum: [converted, edited]
         content_sha256: { type: string }
-        locked:
-          {
-            type: boolean,
-            description: "When true, every mutation (edit / reconvert / replace / delete) is refused (FR-021).",
-          }
         project_id:
           {
             type: string,
@@ -667,14 +623,6 @@ components:
           type: string
           minLength: 1
           description: The new Markdown body. Replaces the file; sets source_mode=edited.
-
-    DocumentLockRequest:
-      type: object
-      required: [locked]
-      properties:
-        locked:
-          type: boolean
-          description: Desired lock state. true locks the document (refuses all mutations); false unlocks it.
 
     ReindexResult:
       type: object

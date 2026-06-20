@@ -20,7 +20,6 @@ import {
   reconvertDocument,
   reindexKnowledgeBase,
   searchKnowledgeBase,
-  setDocumentLock,
   updateKnowledgeBaseConfig,
   type GrepResponse,
   type KnowledgeBaseConfigOut,
@@ -103,14 +102,6 @@ export function useKnowledgeBaseDetail(name: string) {
       invalidateSelected();
     },
   });
-  const setLock = useMutation({
-    mutationFn: (input: { id: string; locked: boolean }) =>
-      setDocumentLock(name, input.id, input.locked),
-    onSuccess: () => {
-      invalidate();
-      invalidateSelected();
-    },
-  });
   const del = useMutation({
     mutationFn: (id: string) => deleteDocument(name, id),
     onSuccess: () => {
@@ -186,7 +177,6 @@ export function useKnowledgeBaseDetail(name: string) {
     ingest,
     updateConfig,
     reconvert,
-    setLock,
     del,
     reindex,
     search,

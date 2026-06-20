@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.domain.errors import DocumentLocked, IngestRejected, ReconversionBlocked
+from coffer.domain.errors import IngestRejected, ReconversionBlocked
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge import paths
 
@@ -526,76 +526,3 @@ async def test_reindex_prunes_rows_whose_file_was_removed(kb) -> None:
     assert await kb.documents.get_document("knowledge_base", "kb1", gone.id) is None
     assert await kb.documents.get_document("knowledge_base", "kb1", keep.id) is not None
     assert (await kb.service.search(kb_name="kb1", query="vanishing", top_k=5)).passages == ()
-
-
-@pytest.mark.acceptance(spec="006-knowledge-base", scenario="a locked document rejects mutations")
-async def test_locked_document_rejects_mutations(kb) -> None:
-    """FR-021/ADR-028: a locked document refuses edit, reconvert, re-upload
-    replace, and delete — for every caller — until it is unlocked."""
-    await kb.create_kb("kb1")
-    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\nlocked body")
-    locked = await kb.service.set_document_lock(
-        kb_name="kb1", document_id=doc.id, locked=True, actor="user"
-    )
-    assert locked.locked is True
-
-    with pytest.raises(DocumentLocked):
-        await kb.service.edit_document(
-            kb_name="kb1", document_id=doc.id, new_markdown="# A\n\nhacked", actor="user"
-        )
-    with pytest.raises(DocumentLocked):
-        await kb.service.reconvert_document(kb_name="kb1", document_id=doc.id, actor="user")
-    with pytest.raises(DocumentLocked):
-        await _ingest(kb, "kb1", "a.md", b"# A\n\nchanged body", replace=True)
-    with pytest.raises(DocumentLocked):
-        await kb.service.delete_document(kb_name="kb1", document_id=doc.id, actor="user")
-
-    # The document is unchanged and still present.
-    assert await kb.documents.count_documents("knowledge_base", "kb1") == 1
-    assert len((await kb.service.search(kb_name="kb1", query="locked", top_k=5)).passages) == 1
-
-
-async def test_locked_survives_db_loss_rebuild(kb) -> None:
-    """FR-021 + files-are-truth (FR-008): the lock is persisted in the document's
-    frontmatter, so a full DB loss + reindex-from-files restores it LOCKED — it
-    does not silently unlock (review finding)."""
-    from sqlalchemy import text
-
-    await kb.create_kb("kb1")
-    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\ncurated body")
-    await kb.service.set_document_lock(kb_name="kb1", document_id=doc.id, locked=True, actor="user")
-
-    async with kb.sm() as session:
-        await session.execute(text("DELETE FROM documents_fts"))
-        await session.execute(text("DELETE FROM chunks"))
-        await session.execute(text("DELETE FROM documents"))
-        await session.commit()
-
-    await kb.service.reindex(kb_name="kb1", actor="user")
-    restored = await kb.documents.get_document("knowledge_base", "kb1", doc.id)
-    assert restored is not None and restored.locked is True
-
-
-@pytest.mark.acceptance(spec="006-knowledge-base", scenario="lock and unlock a document")
-async def test_lock_and_unlock_audits_and_restores_mutability(kb) -> None:
-    await kb.create_kb("kb1")
-    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\noriginal body")
-
-    await kb.service.set_document_lock(kb_name="kb1", document_id=doc.id, locked=True, actor="user")
-    # Idempotent re-lock is a no-op (no second audit).
-    await kb.service.set_document_lock(kb_name="kb1", document_id=doc.id, locked=True, actor="user")
-    unlocked = await kb.service.set_document_lock(
-        kb_name="kb1", document_id=doc.id, locked=False, actor="user"
-    )
-    assert unlocked.locked is False
-
-    events = await kb.audit.query(kind="knowledge_base", name="kb1", limit=50)
-    types = [e.event_type for e in events]
-    assert types.count("kb_document_locked") == 1
-    assert types.count("kb_document_unlocked") == 1
-
-    # After unlock, edits work again.
-    edited = await kb.service.edit_document(
-        kb_name="kb1", document_id=doc.id, new_markdown="# A\n\nedited body", actor="user"
-    )
-    assert edited.source_mode == "edited"

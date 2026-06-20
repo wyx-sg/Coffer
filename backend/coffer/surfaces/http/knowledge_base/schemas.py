@@ -66,8 +66,6 @@ class DocumentOut(BaseModel):
     description: str | None = None
     source_mode: str
     content_sha256: str
-    # Co-management lock (ADR-028): a locked document refuses every mutation.
-    locked: bool
     # WORKSPACE_GLOBAL sentinel for global KB documents (per-project scope is a
     # later slice); surfaced so the UI can group/scope documents.
     project_id: str
@@ -93,7 +91,6 @@ class DocumentOut(BaseModel):
             description=d.description,
             source_mode=d.source_mode,
             content_sha256=d.content_sha256,
-            locked=d.locked,
             project_id=d.project_id,
             chunk_count=chunk_count,
             metadata=dict(d.metadata),
@@ -124,12 +121,6 @@ class DocumentListOut(BaseModel):
 
 class DocumentEditRequest(BaseModel):
     markdown: str = Field(min_length=1)
-
-
-class DocumentLockRequest(BaseModel):
-    # Desired lock state: true freezes the document against all mutation
-    # (edit / reconvert / replace / delete); false unlocks it (ADR-028 / FR-021).
-    locked: bool
 
 
 class ReindexResult(BaseModel):
