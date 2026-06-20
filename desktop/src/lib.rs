@@ -11,7 +11,7 @@ mod daemon;
 mod shim;
 mod tray;
 
-use tauri::{AppHandle, RunEvent, WindowEvent};
+use tauri::{RunEvent, WindowEvent};
 // `Manager` (for `get_webview_window`) is only used by the macOS-only Reopen
 // handler below; gate the import so non-macOS builds don't warn on it.
 #[cfg(target_os = "macos")]
