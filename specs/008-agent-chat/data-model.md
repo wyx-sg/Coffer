@@ -20,7 +20,14 @@ Frozen dataclass — domain stays pure.
 | `model_id`                  | `str \| None`        | `chat_models.id` override; `None` → default model. Built-in agent's per-conversation model storage.                                                                                                                                                     |
 | `agent_config`              | `str \| None` (JSON) | Provider-owned per-conversation state (Alembic `0018`). CLI agents store `{cwd, session_id, permission_mode?}` here; the built-in agent stores nothing (it uses `model_id`). Read/written via `ConversationRepo.get_agent_config` / `set_agent_config`. |
 | `archived_at`               | `datetime \| None`   | `None` = active; a timestamp = archived (Alembic `0013`). Drives the active/archived filter and the two-stage retention lifecycle.                                                                                                                      |
+| `channel_name`              | `str \| None`        | Optional IM channel binding (ADR-031): the channel this conversation is also driven from. A conversation "has a channel binding" iff this is set (Alembic `0021`).                                                                                       |
+| `peer_chat_id`              | `str \| None`        | The IM chat id used as the return address for relaying the agent's output back to the channel. Paired with `channel_name` (Alembic `0021`).                                                                                                             |
 | `created_at` / `updated_at` | `datetime`           | UTC; `updated_at` bumped on each new message                                                                                                                                                                                                            |
+
+> **ADR-031** removed the former `origin` (web/channel) and `peer_display_name`
+> fields (Alembic `0033`): under the single-owner premise the IM peer is always
+> the owner, so there is no separate peer identity to display; "is this a channel
+> conversation" is derived from `channel_name` being set.
 
 ### `Message` (`domain/chat/message.py`)
 
@@ -46,8 +53,15 @@ Union of frozen dataclasses streamed by an `AgentAdapter` during a turn:
 - `ToolResult(tool_use_id, tool_name, output, error)`
 - `TurnDone(prompt_tokens, completion_tokens, stop_reason)`
 - `TurnError(code, message)`
+- `QueueChanged(pending: list[str])` — the ordered pending-queue texts (ADR-031);
+  broadcast so every subscriber renders the same pending chips. `type =
+  "queue_changed"`.
 
-Each carries a `type` discriminator reused verbatim as the SSE event name.
+Each carries a `type` discriminator reused verbatim as the SSE event name. Turn
+events are published to a **per-conversation broadcaster** (with a ring buffer of
+the current turn's events for late-subscriber replay) that any number of clients
+attach to via `GET /conversations/{id}/events` (ADR-031); the orchestrator no
+longer hands a single consumer queue to the POST request.
 
 ## Frozen platform contract
 
@@ -135,8 +149,9 @@ Tables: `conversations` (Alembic `0005`; `archived_at` `0013`; `agent_config`
 | Action                | Effect                                                                                                                                                                                      |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Create a conversation | Persist the row, then `provider.init_conversation`. If the provider rejects the config, the conversation row is rolled back (deleted) and the error surfaces.                               |
-| Interrupt a turn      | Cancel the turn task; the task's handler persists the **partial** assistant message (`status='complete'`, `stop_reason='interrupted'`) and emits a terminal `TurnDone`.                     |
-| Delete a conversation | Cancel any live turn (discard — no partial persisted); `provider.on_conversation_deleted`; `MessageRepo.delete_by_conversation`; delete the conversation row; audit `conversation_deleted`. |
+| Send while a turn runs | Enqueue on the in-memory pending queue (ADR-031); broadcast `QueueChanged`. When the in-flight turn ends, dequeue the head, commit it as the next user message, and run its turn (sequential FIFO). Not rejected. |
+| Interrupt a turn      | Cancel the turn task; the task's handler persists the **partial** assistant message (`status='complete'`, `stop_reason='interrupted'`) and emits a terminal `TurnDone`. Also **pauses** the pending queue — queued messages are held, not auto-run (ADR-031).                     |
+| Delete a conversation | Cancel any live turn (discard — no partial persisted); `provider.on_conversation_deleted`; `MessageRepo.delete_by_conversation`; delete the conversation row; audit `conversation_deleted`. The pending queue is dropped.                       |
 | Delete a model in use | Allowed; conversations referencing it resolve the default at turn time.                                                                                                                     |
 | Daemon startup        | Sweep: any `chat_messages.status='streaming'` → `failed`.                                                                                                                                   |
 
@@ -148,14 +163,19 @@ Unchanged: `conversation_created`, `conversation_deleted`,
 
 ## Wire contract (REST + SSE)
 
-Lives in `contracts/api.openapi.yaml`. Routes added/changed by this revision:
+Lives in `contracts/api.openapi.yaml`. Routes added/changed by **ADR-031**:
 
-- `GET /api/v1/chat/agents` — list registered agents — **new**
-- `POST /api/v1/chat/conversations` — body `{agent_key?, agent_config?}` — **changed**
-- `POST /api/v1/chat/conversations/{id}/interrupt` → 204 — **new**
+- `GET /api/v1/chat/conversations/{id}/events` — SSE subscribe to the
+  conversation's live turn events (replay-then-live) — **new**
+- `POST /api/v1/chat/conversations/{id}/messages` — now **fire-and-return**: starts
+  or enqueues a turn and returns `202 {queued: bool}`; it is no longer the event
+  stream — **changed**
+- `ConversationOut` drops `origin`/`peer`; gains optional `channel_binding`
+  (`{channel, chat_id}`) — **changed**
 
-Unchanged routes: conversation list/get/patch/delete, message history, the
-`POST .../messages` SSE turn endpoint, and the `/api/v1/models` CRUD.
+Unchanged routes: `GET /chat/agents`, conversation list/get/patch/delete/archive/
+unarchive, message history, `POST .../interrupt` → 204, and the `/api/v1/models`
+CRUD.
 
-SSE event names on the message POST: `turn_start`, `text_delta`, `tool_call`,
-`tool_result`, `turn_done`, `turn_error` — one per `AgentEvent` variant.
+SSE event names on the subscribe stream: `turn_start`, `text_delta`, `tool_call`,
+`tool_result`, `turn_done`, `turn_error`, `queue_changed`.

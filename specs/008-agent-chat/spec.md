@@ -84,6 +84,35 @@ historical shipped behaviour that ADR-024 removes from the chat surface; the
 LLM/agentic-loop machinery is kept but repurposed behind `coffer__ask` rather
 than presented to the user as a chat persona.
 
+## Repositioning — single-owner live mirror ([ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md))
+
+[ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md) commits
+the surface to one irreplaceable job and **narrows** ADR-021 job 2 from _observe_
+to _observe + interrupt + inject_. Because Coffer channels are **owner-paired**,
+the "IM peer" is the **same owner** on their phone — so Chat is the **desktop
+surface of the same conversations the owner also drives from IM**: one owner, one
+conversation timeline, two screens, one underlying agent session. From the desktop
+the owner can **observe** any conversation live (including a turn kicked off from
+the phone, token by token), **interrupt** a running turn, and **inject/continue**
+by typing freely — messages **queue**, never block. There is no multi-human model.
+
+Three structural moves follow, refining the requirements below:
+
+1. **A live conversation bus.** Turn events are published to a per-conversation
+   broadcaster (with a ring buffer for replay) that any surface subscribes to via
+   `GET /conversations/{id}/events`; `POST .../messages` becomes fire-and-return.
+   This is the single new capability — observe was the only one of the three
+   actually missing (FR-018 → FR-019b).
+2. **Send freely; a FIFO pending queue.** The composer never locks; an over-sent
+   message queues and is processed in order (amends FR-018).
+3. **Collapse origin.** The web/channel dichotomy collapses to one conversation
+   model; `channel_name`/`peer_chat_id` survive as an optional `channel_binding`
+   (the return address); `origin`/`peer_display_name` are dropped (revises FR-034).
+
+Where User Stories, Acceptance Scenarios, and FRs still describe the composer
+locking during a turn or an `origin`/`peer` field, read them as superseded by the
+ADR-031 wording here and the revised FRs below.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Configure a model provider before the first chat (Priority: P1)
@@ -295,8 +324,10 @@ turn with actor `agent`.
   sends the most recent history that fits within a context budget (approximated
   by a character budget, ~4 chars/token); older turns are omitted from the model
   input with a marker, while the full conversation remains stored.
-- **Second message sent while a turn is streaming**: rejected; the composer is
-  disabled for the duration of the in-flight turn.
+- **Second message sent while a turn is streaming**: accepted and enqueued on the
+  pending queue (the composer never locks); it runs as its own turn after the
+  current one ends (FR-018/FR-018a). Interrupting instead pauses the queue
+  (FR-018b).
 - **Streaming client disconnects mid-turn** (page closed, navigated away): the
   turn completes server-side and the assistant message is persisted; the next
   load shows the finished message.
@@ -360,9 +391,32 @@ referenced by at least one test marked
 ### Scenario: send a message and receive a streamed reply
 
 - **Given** a conversation and at least one configured model,
-- **When** the user sends a message,
-- **Then** the assistant reply streams incrementally, completes, and is persisted
-  as a message on that conversation.
+- **When** the user sends a message and subscribes to the conversation's event
+  stream,
+- **Then** the assistant reply streams incrementally over the subscription,
+  completes, and is persisted as a message on that conversation.
+
+### Scenario: observe a turn started from another surface
+
+- **Given** a conversation with a turn already in flight (e.g. started from the
+  IM channel),
+- **When** a client subscribes to `GET /conversations/{id}/events`,
+- **Then** the in-flight turn's events so far are replayed and then streamed live
+  to completion, without the client having started the turn.
+
+### Scenario: a queued message runs after the current turn
+
+- **Given** a turn is in flight,
+- **When** the user sends a second message,
+- **Then** it is accepted (not rejected), held as a pending item, and run as its
+  own turn once the in-flight turn ends.
+
+### Scenario: interrupting a turn pauses the pending queue
+
+- **Given** a turn is in flight with one or more pending messages queued,
+- **When** the user interrupts the turn,
+- **Then** the current turn stops with its partial output kept and the pending
+  messages are held (not auto-run) until the owner resumes or drops them.
 
 ### Scenario: reply survives a restart
 
@@ -400,11 +454,12 @@ referenced by at least one test marked
   and is not destroyed; restoring it returns it to the active list. Archiving a
   conversation that does not exist is rejected.
 
-### Scenario: composer locked during a streaming turn
+### Scenario: second message queues during a streaming turn
 
 - **Given** a turn is streaming,
-- **When** the user attempts to send another message in the same conversation,
-- **Then** the send is rejected until the turn ends.
+- **When** the user sends another message in the same conversation,
+- **Then** the message is accepted and enqueued (the composer does not lock), and
+  runs as its own turn after the current one ends.
 
 ### Scenario: model selection is recorded
 
@@ -445,10 +500,11 @@ referenced by at least one test marked
 
 ### Scenario: a channel-driven conversation is observable from the console
 
-- **Given** an IM peer driving a conversation,
-- **When** the user opens the Vault Console,
-- **Then** the conversation appears badged with its channel origin and peer
-  identity, and its turns stream the same turn events the web composer would.
+- **Given** a conversation that carries a channel binding (the owner is driving it
+  from an IM channel),
+- **When** the user opens Chat,
+- **Then** the conversation appears badged with its channel binding, and its turns
+  stream the same turn events over the subscription that a web-started turn would.
 
 ## Requirements
 
@@ -556,11 +612,42 @@ referenced by at least one test marked
 
 **Turn lifecycle: streaming, interruption**
 
-- **FR-018**: System MUST allow only one in-flight turn per conversation and
-  reject a second message until the current turn ends.
-- **FR-019**: System MUST stream a turn to the client as a sequence of typed
-  events covering, at minimum, text deltas, tool calls, tool results, turn
-  completion, and turn error.
+- **FR-018**: System MUST process at most one in-flight turn per conversation,
+  but MUST NOT reject a message sent while a turn is running (revises the original
+  reject-and-lock rule, [ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md)).
+  A message sent during a turn is **enqueued** on a per-conversation **pending
+  queue**; the composer never locks.
+- **FR-018a**: When the in-flight turn ends, System MUST dequeue the head of the
+  pending queue, commit it as the conversation's next user message, and run its
+  turn — sequential FIFO, one turn per queued message (not coalesced). A pending
+  message is **not** committed to the message sequence until its turn starts; it
+  is surfaced as a removable pending item the owner may drop before it runs. The
+  pending queue is in-memory and shared across surfaces (web + IM land in one
+  FIFO); a daemon restart drops not-yet-committed pending messages.
+- **FR-018b**: Interrupting a turn (FR-021) MUST also **pause** the pending queue:
+  the current turn stops with its partial output kept, and queued messages are
+  held (not auto-run) until the owner resumes or drops them.
+- **FR-019**: System MUST express a turn as a sequence of typed events covering,
+  at minimum, turn start, text deltas, tool calls, tool results, turn completion,
+  turn error, and **pending-queue change** (`queue_changed`, carrying the ordered
+  pending items so every subscriber renders the same pending state).
+- **FR-019a**: System MUST expose a per-conversation **live event subscription**
+  at `GET /conversations/{id}/events` (SSE) that any number of clients may attach
+  to. On attach, if a turn is in flight it MUST replay the current turn's events
+  (so a late subscriber — e.g. the desktop opened mid-turn, or watching a
+  phone-started turn — catches up), then stream live; when no turn is in flight it
+  MUST hold the connection open and deliver the next turn's events whenever one
+  starts, from any surface.
+- **FR-019b**: `POST /conversations/{id}/messages` MUST start (or enqueue) a turn
+  and return immediately (fire-and-return); it MUST NOT be the event stream. All
+  turn-event consumption flows through the FR-019a subscription (single event
+  path), so observing a turn the client started and observing a turn another
+  surface started travel the same code.
+- **FR-019c**: System MUST expose the pending queue for management at
+  `PUT /conversations/{id}/pending`, which replaces the ordered pending texts
+  (one primitive covering resume, drop, and reorder): the replacement unpauses
+  the queue and starts the next turn when none is in flight, and broadcasts
+  `queue_changed` to all subscribers.
 - **FR-021**: System MUST let the user interrupt a running turn: the turn stops
   at once and the partial assistant message (whatever text and tool blocks were
   produced) MUST be persisted. Interruption is distinct from conversation
@@ -588,9 +675,11 @@ referenced by at least one test marked
 
 - **FR-027**: System MUST provide a Chat page in the desktop app: a collapsible
   conversation-history list, a new-conversation dialog with an agent picker and a
-  per-agent configuration area, a message thread with streamed text, inline
-  expandable tool-call cards, a model selector, a composer, and a stop control
-  for an in-flight turn.
+  per-agent configuration area, a message thread with streamed text (driven by the
+  FR-019a live subscription, not by polling), inline expandable tool-call cards, a
+  model selector, a composer that **never locks** (a message sent during a turn
+  queues and renders as a removable pending item, FR-018/FR-018a), and a stop
+  control for an in-flight turn.
 - **FR-028**: System MUST add a "Chat" entry to the application sidebar as the
   primary (top-most) navigation item; the existing 002-ui-shell IA is otherwise
   unchanged.
@@ -609,20 +698,26 @@ referenced by at least one test marked
   `agent`; tool invocations the built-in agent makes are recorded in the
   gateway's invocation log under the agent's gateway session.
 
-**Chat surface: origin surfacing ([ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.md), amended by [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md))**
+**Chat surface: channel binding ([ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.md) → [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md) → [ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md))**
 
 - **FR-033**: The Chat surface (labelled **Chat**, reverted from _Vault Console_
   per [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md))
-  MUST talk **only** to Coffer-managed agents and MUST surface and let the user
-  observe channel-driven conversations. The `builtin` agent MUST NOT be
-  offered as a chat agent; its model is an internal-only capability reached
-  through `coffer__*` tools (ADR-024), not a chat persona. The Chat surface MUST
-  NOT position itself as a primary in-browser coding chat; the managed agents
-  remain available as provider-seam validation and as the targets of
-  channel-driven conversations.
-- **FR-034**: The conversation history MUST surface each conversation's origin
-  (web draft vs. channel peer) and, for channel-originated conversations, the
-  peer identity.
+  MUST talk **only** to Coffer-managed agents and MUST let the owner observe,
+  interrupt, and continue any conversation live, including those the owner drives
+  from an IM channel ([ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md)).
+  The `builtin` agent MUST NOT be offered as a chat agent; its model is an
+  internal-only capability reached through `coffer__*` tools (ADR-024), not a chat
+  persona. The Chat surface MUST NOT position itself as a primary in-browser coding
+  chat.
+- **FR-034**: A conversation MAY carry an optional **channel binding**
+  (`channel_name` + `peer_chat_id`) — the return address for relaying the agent's
+  output back to the IM app. The conversation history MUST surface whether a
+  conversation has a channel binding (a conversation "has a binding" iff
+  `channel_name` is set) and which channel it is. The former `origin` (web vs.
+  channel) and `peer_display_name` fields are removed
+  ([ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md)): under
+  the single-owner premise the peer is always the owner, so there is no separate
+  peer identity to display.
 
 ### Key Entities
 
