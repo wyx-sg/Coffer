@@ -119,7 +119,6 @@ class AgentMcpService:
             shim,
             container_key=inj.container_key,
             entry_style=inj.entry_style,
-            agent_name=name,
         )
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(

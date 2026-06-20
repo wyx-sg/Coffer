@@ -9,8 +9,6 @@
 | `0001`   | `20260520_0001_initial.py`           | `resources`、`audit_log`、`retention_policies`  |
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`、`mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
-| `0023`   | `20260619_0023_agent_mcp_scope.py`   | `agent_mcp_scope`、`agent_mcp_scope_server`     |
-
 ## Domain entities (`backend/coffer/domain/`)
 
 ### `ResourceRef` (`domain/resource.py`)
@@ -213,16 +211,6 @@ Pydantic `BaseModel`。上游查询返回的实时表示；从不持久化（按
 
 **绝不存参数或返回值**——schema 中没有可承载它们的字段。
 
-### `AgentMcpScope` (`domain/agent/scope.py`)
-
-普通 dataclass。网关强制执行的每 agent 可见性策略（FR-019..FR-022）。
-
-| Field        | Type                         | Notes                                                              |
-| ------------ | ---------------------------- | ------------------------------------------------------------------ |
-| `agent_name` | `str`                        | 该 agent 的资源名（对应 `--agent <name>` / `X-Coffer-Agent` 身份） |
-| `mode`       | `Literal["auto","selected"]` | `auto` = 每一台启用的服务器（默认）；`selected` = 仅 allowlist     |
-| `servers`    | `list[str]`                  | `mcp_server` 名的 allowlist；非 `selected` 时为空                  |
-
 ## SQLite schema（跨三次 Alembic revision）
 
 表分散在三次迁移中创建；下面的 schema 是三次 revision 全部应用后的合并结果。
@@ -302,24 +290,6 @@ CREATE TABLE mcp_server_health (
     checked_at     TIMESTAMP NOT NULL
 );
 
--- Per-agent MCP scoping: an agent's mode (auto = all enabled servers; selected = allowlist)
-CREATE TABLE agent_mcp_scope (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    mode              TEXT    NOT NULL DEFAULT 'auto',   -- 'auto' | 'selected'
-    created_at        TIMESTAMP NOT NULL,
-    updated_at        TIMESTAMP NOT NULL,
-    UNIQUE (agent_resource_id),
-    CHECK (mode IN ('auto', 'selected'))
-);
--- Per-agent MCP scoping: the allowlist used when mode = 'selected'
-CREATE TABLE agent_mcp_scope_server (
-    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_resource_id  INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    server_resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    UNIQUE (agent_resource_id, server_resource_id)
-);
-CREATE INDEX idx_agent_scope_server_agent ON agent_mcp_scope_server(agent_resource_id);
 ```
 
 ## SQLAlchemy mapping (summary)
@@ -334,9 +304,6 @@ ORM 模型存放于 `backend/coffer/infrastructure/persistence/models.py`（kind
 | `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`         |
 | `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/persistence.py`         |
 | `McpServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/persistence.py`         |
-| `AgentMcpScopeModel`           | `agent_mcp_scope`            | `infrastructure/agent/scope_persistence.py` |
-| `AgentMcpScopeServerModel`     | `agent_mcp_scope_server`     | `infrastructure/agent/scope_persistence.py` |
-
 每个 ORM 模型提供：
 
 - `to_domain() -> <DomainEntity>` 用于向外转换
@@ -347,8 +314,6 @@ ORM 模型存放于 `backend/coffer/infrastructure/persistence/models.py`（kind
 | Action                             | Effect                                                                                                                                   |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `DELETE FROM resources WHERE id=?` | 级联到 `mcp_capability_preferences`（通过 FK）。**不会**级联到 `audit_log` 或 `mcp_invocations`（保留历史）。                            |
-| 删除一个 **agent** 资源            | 级联到 `agent_mcp_scope` 及其 `agent_mcp_scope_server` 行（通过 `agent_resource_id` FK）。                                               |
-| 删除一个 **mcp_server** 资源       | 级联到把它列入 allowlist 的 `agent_mcp_scope_server` 行（通过 `server_resource_id` FK）；拥有它的 agent scope 仍在，只是少了那台服务器。 |
 | `UPDATE resources SET kind=?`      | 禁止——application 层永不更新 `kind`。                                                                                                    |
 | `UPDATE resources SET name=?`      | 禁止——rename = delete + register。                                                                                                       |
 | `DELETE FROM retention_policies`   | 禁止——policy 在启动时 upsert，永不删除。                                                                                                 |

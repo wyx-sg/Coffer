@@ -53,8 +53,7 @@ async def test_install_claude_writes_entry_with_backup_and_audit(
     assert st.installed is True
     assert st.command == SHIM
     data = json.loads(claude_json.read_text())
-    # ADR-026: the install entry carries the agent identity as `--agent <name>`.
-    assert data["mcpServers"]["coffer"] == {"command": SHIM, "args": ["--agent", "cc"]}
+    assert data["mcpServers"]["coffer"] == {"command": SHIM}
     # Untouched neighbouring state preserved; prior file backed up.
     assert data["oauthAccount"] == {"id": "x"}
     assert (tmp_path / ".claude.json.bak").exists()

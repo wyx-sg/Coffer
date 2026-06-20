@@ -23,7 +23,6 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from coffer.application.agent.scope_service import AgentMcpScopeService
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.credentials.resolver import CredentialResolver
@@ -32,7 +31,6 @@ from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
-from coffer.infrastructure.agent.scope_persistence import AgentMcpScopeRepo
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -43,7 +41,6 @@ from coffer.infrastructure.persistence.retention import (
     PrunableRegistry,
     PrunableTable,
 )
-from coffer.surfaces.http.agent_scope_dependencies import set_agent_mcp_scope_service
 from coffer.surfaces.http.dependencies import (
     set_capability_discovery,
     set_health_repo,
@@ -68,13 +65,6 @@ def wire_mcp_kind(
     Returns (process_supervisor, session_supervisors) so the caller can
     dispose them on shutdown.
     """
-    # Per-agent MCP server scoping (ADR-026). Bridges the agent kind (scope
-    # data) and the mcp kind (gateway enforcement) here at the composition root
-    # so neither kind imports the other (Contract 5). Shared by the gateway
-    # session factory and the agent scope REST routes.
-    scope_service = AgentMcpScopeService(AgentMcpScopeRepo(sm), resource_svc, audit)  # type: ignore[arg-type]
-    set_agent_mcp_scope_service(scope_service)
-
     # 1. Build the MCP-side repos
     prefs_repo = MCPCapabilityPreferenceRepo(sm)  # type: ignore[arg-type]
     inv_repo = MCPInvocationRepo(sm)  # type: ignore[arg-type]
@@ -133,7 +123,6 @@ def wire_mcp_kind(
             on_dispose=_drop_supervisor,
             builtin_tools=builtin_tools,
             embedder_provider=embedder_provider,
-            scope=scope_service,
         )
 
     # 6. Set ALL the MCP dependency providers

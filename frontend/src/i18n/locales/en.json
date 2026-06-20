@@ -680,15 +680,7 @@
         "parseError": "Failed to parse config — this file is read-only",
         "empty": "No direct MCP servers",
         "adoptSuccess": "Adopted {{name}} — now served to all agents via the gateway",
-        "searchPlaceholder": "Search servers",
-        "modeAuto": "All servers",
-        "modeSelected": "Selected servers",
-        "modeAutoHint": "Every enabled MCP server is exposed to this agent.",
-        "modeSelectedHint": "Only the checked servers are exposed to this agent.",
-        "save": "Save scope",
-        "saved": "Scope saved",
-        "saveError": "Couldn't save scope",
-        "unknownServer": "One of the selected servers no longer exists."
+        "searchPlaceholder": "Search servers"
       },
       "memory": "Memory",
       "conversations": "Conversations"

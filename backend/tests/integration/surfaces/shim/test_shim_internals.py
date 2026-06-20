@@ -52,7 +52,7 @@ def test_inject_cwd_preserves_existing_meta(monkeypatch):
     assert envelope["params"]["_meta"]["coffer/cwd"] == "/p"
 
 
-def _make_bridge(port: int = 18765, agent_name: str | None = None) -> _Bridge:
+def _make_bridge(port: int = 18765) -> _Bridge:
     info = DaemonInfo(
         version=1,
         pid=12345,
@@ -61,22 +61,7 @@ def _make_bridge(port: int = 18765, agent_name: str | None = None) -> _Bridge:
         started_at=_dt.datetime.now(tz=_dt.UTC),
         binary_path="/usr/bin/python3",
     )
-    return _Bridge(info, agent_name)
-
-
-def test_bridge_sets_agent_header_when_named() -> None:
-    """ADR-026: a shim launched with `--agent <name>` tells the gateway which
-    agent it serves via the X-Coffer-Agent header (driving per-agent scoping)."""
-    bridge = _make_bridge(agent_name="claude_code")
-    assert bridge._headers["X-Coffer-Agent"] == "claude_code"
-    # The auth token header is still present alongside it.
-    assert bridge._headers["X-Coffer-Token"] == "t-internals"
-
-
-def test_bridge_omits_agent_header_when_anonymous() -> None:
-    """No --agent -> no X-Coffer-Agent header -> the session is unscoped."""
-    bridge = _make_bridge()
-    assert "X-Coffer-Agent" not in bridge._headers
+    return _Bridge(info)
 
 
 def _patch_pump_stdin_with_reader(

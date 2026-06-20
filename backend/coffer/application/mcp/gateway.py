@@ -55,10 +55,6 @@ from coffer.application.mcp.gateway_parsing import (
     _extract_method,
     _extract_params,
 )
-from coffer.application.mcp.gateway_scope import (
-    authorize_server,
-    effective_mcp_servers,
-)
 from coffer.application.mcp.gateway_server_requests import (
     ServerRequestRegistry,
     build_list_roots_callback,
@@ -66,7 +62,6 @@ from coffer.application.mcp.gateway_server_requests import (
 )
 from coffer.application.mcp.gateway_tool_search import TOOL_SEARCH_NAME
 from coffer.application.mcp.ports import (
-    AgentMcpScopePort,
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
 )
@@ -108,7 +103,6 @@ class MCPGatewaySession:
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
         embedder_provider: Callable[[], Awaitable[Any | None]] | None = None,
-        scope: AgentMcpScopePort | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._resources = resource_service
@@ -125,9 +119,6 @@ class MCPGatewaySession:
         self._on_dispose = on_dispose
         self._builtin = builtin_tools or BuiltinToolRegistry()
         self._embedder_provider = embedder_provider  # semantic search_tools; None → BM25
-        # Per-agent scoping (ADR-026); both None → unscoped (every enabled server).
-        self._scope = scope
-        self._agent_name: str | None = None
         self._initialized = False
         # FR-004: the agent's launch cwd, reported by the shim at the
         # ``initialize`` handshake (params._meta["coffer/cwd"]). Threaded into
@@ -161,11 +152,6 @@ class MCPGatewaySession:
     def set_downstream_sink(self, sink: NotificationSink) -> None:
         """Called by the session runner once the downstream wire is open."""
         self._downstream_sink = sink
-
-    def bind_agent(self, agent_name: str | None) -> None:
-        """Attribute this session to an agent (idempotent; first wins; ADR-026)."""
-        if agent_name and self._agent_name is None:
-            self._agent_name = agent_name
 
     # --- Initialize ---
 
@@ -215,11 +201,11 @@ class MCPGatewaySession:
         """
         return self._server_request_registry.handle_response(envelope)
 
-    async def _effective_mcp_servers(self) -> list[str]:
-        return await effective_mcp_servers(self._resources, self._scope, self._agent_name)
-
-    async def _authorize_server(self, server_name: str) -> None:
-        await authorize_server(self._scope, self._agent_name, server_name)
+    async def _enabled_mcp_servers(self) -> list[str]:
+        # Push the enabled=true filter to SQL so we don't materialise rows
+        # we'll throw away (CODE-021).
+        resources = await self._resources.list(kind="mcp_server", enabled=True)
+        return [r.name for r in resources]
 
     async def _ensure_subscribed(self, server_name: str) -> None:
         """Attach notification + server-request handlers to the upstream connection lazily."""
@@ -249,19 +235,19 @@ class MCPGatewaySession:
 
     async def _handle_tools_list(self) -> dict[str, Any]:
         result = await list_tools_across(
-            self._discovery, self._ensure_subscribed, await self._effective_mcp_servers()
+            self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
         )
         append_builtin_tools(result["tools"], self._builtin)
         return result
 
     async def _handle_resources_list(self) -> dict[str, Any]:
         return await list_resources_across(
-            self._discovery, self._ensure_subscribed, await self._effective_mcp_servers()
+            self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
         )
 
     async def _handle_prompts_list(self) -> dict[str, Any]:
         return await list_prompts_across(
-            self._discovery, self._ensure_subscribed, await self._effective_mcp_servers()
+            self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
         )
 
     # --- tools/call, resources/read, prompts/get (delegated to gateway_handlers) ---
@@ -278,7 +264,7 @@ class MCPGatewaySession:
         name = str(params.get("name") or "")
         if name == TOOL_SEARCH_NAME:
             listed = await list_tools_across(
-                self._discovery, self._ensure_subscribed, await self._effective_mcp_servers()
+                self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
             )
             embedder = await self._embedder_provider() if self._embedder_provider else None
             return await dispatch_tool_search(
@@ -309,7 +295,6 @@ class MCPGatewaySession:
             clock=self._clock,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
-            authorize_server=self._authorize_server,
         )
 
     def _inject_session_cwd(self, prefixed_name: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -326,7 +311,6 @@ class MCPGatewaySession:
             clock=self._clock,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
-            authorize_server=self._authorize_server,
         )
 
     async def _handle_prompts_get(self, params: dict[str, Any]) -> Any:
@@ -340,7 +324,6 @@ class MCPGatewaySession:
             clock=self._clock,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
-            authorize_server=self._authorize_server,
         )
 
     # --- Upstream → downstream notification forwarding ---

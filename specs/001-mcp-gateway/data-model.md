@@ -9,8 +9,6 @@ names. Migrations are split across three Alembic revisions:
 | `0001`   | `20260520_0001_initial.py`           | `resources`, `audit_log`, `retention_policies`  |
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
-| `0023`   | `20260619_0023_agent_mcp_scope.py`   | `agent_mcp_scope`, `agent_mcp_scope_server`     |
-
 ## Domain entities (`backend/coffer/domain/`)
 
 ### `ResourceRef` (`domain/resource.py`)
@@ -217,16 +215,6 @@ persisted (per [ADR-004](../../docs/decisions/ADR-004-capability-state-model.md)
 
 **Never store args or results** — schema cannot hold them.
 
-### `AgentMcpScope` (`domain/agent/scope.py`)
-
-Plain dataclass. The per-agent visibility policy the gateway enforces (FR-019..FR-022).
-
-| Field        | Type                         | Notes                                                                          |
-| ------------ | ---------------------------- | ------------------------------------------------------------------------------ |
-| `agent_name` | `str`                        | the agent's resource name (matches the `--agent <name>` / `X-Coffer-Agent` id) |
-| `mode`       | `Literal["auto","selected"]` | `auto` = every enabled server (default); `selected` = the allowlist only       |
-| `servers`    | `list[str]`                  | allowlist of `mcp_server` names; empty unless `selected`                       |
-
 ## SQLite schema (across three Alembic revisions)
 
 Tables are created across three migrations; the schema below represents the
@@ -307,24 +295,6 @@ CREATE TABLE mcp_server_health (
     checked_at     TIMESTAMP NOT NULL
 );
 
--- Per-agent MCP scoping: an agent's mode (auto = all enabled servers; selected = allowlist)
-CREATE TABLE agent_mcp_scope (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    mode              TEXT    NOT NULL DEFAULT 'auto',   -- 'auto' | 'selected'
-    created_at        TIMESTAMP NOT NULL,
-    updated_at        TIMESTAMP NOT NULL,
-    UNIQUE (agent_resource_id),
-    CHECK (mode IN ('auto', 'selected'))
-);
--- Per-agent MCP scoping: the allowlist used when mode = 'selected'
-CREATE TABLE agent_mcp_scope_server (
-    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent_resource_id  INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    server_resource_id INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    UNIQUE (agent_resource_id, server_resource_id)
-);
-CREATE INDEX idx_agent_scope_server_agent ON agent_mcp_scope_server(agent_resource_id);
 ```
 
 ## SQLAlchemy mapping (summary)
@@ -341,9 +311,6 @@ ORM models live under `backend/coffer/infrastructure/persistence/models.py`
 | `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`         |
 | `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/persistence.py`         |
 | `McpServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/persistence.py`         |
-| `AgentMcpScopeModel`           | `agent_mcp_scope`            | `infrastructure/agent/scope_persistence.py` |
-| `AgentMcpScopeServerModel`     | `agent_mcp_scope_server`     | `infrastructure/agent/scope_persistence.py` |
-
 Each ORM model provides:
 
 - `to_domain() -> <DomainEntity>` for conversion outward
@@ -354,8 +321,6 @@ Each ORM model provides:
 | Action                              | Effect                                                                                                                                                           |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DELETE FROM resources WHERE id=?`  | cascades to `mcp_capability_preferences` (via FK). Does **not** cascade to `audit_log` or `mcp_invocations` (history preserved).                                 |
-| `DELETE` an **agent** resource      | cascades to `agent_mcp_scope` and its `agent_mcp_scope_server` rows (via the `agent_resource_id` FK).                                                            |
-| `DELETE` an **mcp_server** resource | cascades to the `agent_mcp_scope_server` rows that allowlisted it (via the `server_resource_id` FK); the owning agent's scope survives, now without that server. |
 | `UPDATE resources SET kind=?`       | forbidden — application layer never updates `kind`.                                                                                                              |
 | `UPDATE resources SET name=?`       | forbidden — rename = delete + register.                                                                                                                          |
 | `DELETE FROM retention_policies`    | forbidden — policies are upserted at startup, never deleted.                                                                                                     |

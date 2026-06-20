@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0029"
+HEAD_REVISION = "0030"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -40,7 +40,9 @@ HEAD_REVISION = "0029"
 # chunk-id collision fix); 0018 adds no table (conversation agent-config column);
 # 0019 adds ``sync_config`` + ``sync_state`` for multi-machine sync (spec 010);
 # 0023 adds ``agent_mcp_scope`` + ``agent_mcp_scope_server`` for per-agent MCP
-# server scoping (ADR-026). 0025 adds NO table — it ADDs the ``documents.locked``
+# server scoping (ADR-026) — but 0030 DROPs both again (per-agent scoping removed,
+# simplification 1.6), so they are ABSENT at head (asserted in the stepwise test).
+# 0025 adds NO table — it ADDs the ``documents.locked``
 # column for the co-management lock (ADR-028); 0026 adds ``memory_store_labels``
 # (a store's user-set display name, 007 FR-017c); 0027 DROPs ``documents.locked``
 # again (per-document lock removed, simplification 5.7), so EXPECTED_TABLES is
@@ -49,7 +51,9 @@ HEAD_REVISION = "0029"
 # removed, simplification 8.4) — again a column-only change, table set unchanged.
 # 0029 is DATA-only: it rewrites every ``kind='skill'`` ``config_json`` (Git
 # skill lifecycle removed, simplification 4.3) — no DDL, so the table/column set
-# is unchanged at head.
+# is unchanged at head. 0030 DROPs ``agent_mcp_scope`` + ``agent_mcp_scope_server``
+# (per-agent MCP scoping removed, simplification 1.6); its downgrade recreates
+# them so 0023's downgrade can drop them again on the way down.
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
@@ -74,8 +78,6 @@ EXPECTED_TABLES = {
     "channel_peers",
     "sync_config",
     "sync_state",
-    "agent_mcp_scope",
-    "agent_mcp_scope_server",
 }
 
 # FTS5 creates these shadow tables for ``documents_fts``; they are an
@@ -255,8 +257,16 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert "locked" not in _documents_columns()
     assert "memory_store_labels" in _user_tables(db_path)
 
-    # head (0029) -> 0027: 0029 is data-only (skill config JSON), so its
-    # downgrade touches no columns; 0028's downgrade re-adds preferred_workspace.
+    # 0030 dropped the per-agent MCP scope tables (simplification 1.6), so they
+    # are ABSENT at head; 0030's downgrade recreates them, so they reappear at
+    # 0029 and persist down to 0023's downgrade (at 0022).
+    scope_tables = {"agent_mcp_scope", "agent_mcp_scope_server"}
+    assert not (scope_tables & _user_tables(db_path))
+    command.downgrade(cfg, "0029")
+    assert scope_tables <= _user_tables(db_path)
+
+    # 0029 -> 0027: 0029 is data-only (skill config JSON), so its downgrade
+    # touches no columns; 0028's downgrade re-adds preferred_workspace.
     command.downgrade(cfg, "0027")
     assert "preferred_workspace" in _channel_peers_columns()
     assert "locked" not in _documents_columns()
@@ -271,12 +281,12 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.downgrade(cfg, "0025")
     assert "memory_store_labels" not in _user_tables(db_path)
     assert "locked" in _documents_columns()
-    assert _user_tables(db_path) == EXPECTED_TABLES - {"memory_store_labels"}
+    assert _user_tables(db_path) == (EXPECTED_TABLES | scope_tables) - {"memory_store_labels"}
 
     # 0025 -> 0024: 0025's downgrade drops documents.locked (column-only).
     command.downgrade(cfg, "0024")
     assert "locked" not in _documents_columns()
-    assert _user_tables(db_path) == EXPECTED_TABLES - {"memory_store_labels"}
+    assert _user_tables(db_path) == (EXPECTED_TABLES | scope_tables) - {"memory_store_labels"}
 
     # 0024 -> 0023: 0024's downgrade recreates memory_projection_bindings,
     # so it reappears here (and is dropped again at 0008's downgrade at 0007).
@@ -316,8 +326,6 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # memory_projection_bindings is back (recreated by 0024's downgrade); the
     # per-agent MCP scope tables were dropped at 0022 — so neither is present.
     assert _user_tables(db_path) == (EXPECTED_TABLES | {"memory_projection_bindings"}) - {
-        "agent_mcp_scope",
-        "agent_mcp_scope_server",
         "credentials",
         "channel_peers",
         "sync_config",
@@ -328,8 +336,6 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
     command.downgrade(cfg, "0011")
     assert _user_tables(db_path) == (EXPECTED_TABLES | {"memory_projection_bindings"}) - {
-        "agent_mcp_scope",
-        "agent_mcp_scope_server",
         "credentials",
         "channel_peers",
         "sync_config",
@@ -371,8 +377,6 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     # 0004 -> 0003: index-only revision, table set otherwise unchanged.
     command.downgrade(cfg, "0003")
     assert _user_tables(db_path) == EXPECTED_TABLES - {
-        "agent_mcp_scope",
-        "agent_mcp_scope_server",
         "credentials",
         "channel_peers",
         "sync_config",

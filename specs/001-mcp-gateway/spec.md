@@ -323,30 +323,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the daemon starts,
 - **Then** it picks the next free port in the supported range, writes the chosen port to `~/.coffer/daemon.json`, and every Coffer surface (shim, CLI) connects to that port without manual configuration.
 
-### Scenario: scope an agent to a subset of servers
-
-- **Given** two enabled MCP servers are registered and an agent is bound to a session whose MCP scope is `selected` with only the first server in its allowlist (ADR-026),
-- **When** that agent lists tools through the gateway,
-- **Then** only the first server's tools (plus Coffer's built-ins) appear and the second server's tools are hidden, and `coffer__search_tools` likewise ranks only in-scope tools.
-
-### Scenario: reject an out-of-scope tool call
-
-- **Given** an agent's MCP scope is `selected` and a server is not in its allowlist,
-- **When** the agent calls that out-of-scope server's tool directly by its `<server>__<tool>` name,
-- **Then** the gateway rejects the call with `MCP_SERVER_OUT_OF_SCOPE` and never forwards the request to the upstream.
-
-### Scenario: auto-mode agent sees all enabled servers
-
-- **Given** an agent whose MCP scope is `auto` (the default — no scope row),
-- **When** the agent lists tools through the gateway,
-- **Then** every enabled server's tools are exposed, exactly as before per-agent scoping existed.
-
-### Scenario: an anonymous session is unscoped
-
-- **Given** a gateway session with no bound agent identity (e.g. the in-process `ask` agent or a client that sent no `X-Coffer-Agent`),
-- **When** that session lists tools through the gateway,
-- **Then** every enabled server's tools are exposed, because scoping only applies to a known agent.
-
 ## Requirements
 
 ### Functional Requirements
@@ -369,13 +345,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **FR-008**: Users MUST be able to enable or disable individual tools, resources, and prompts on a per-server basis.
 - **FR-009**: System MUST preserve the user's enable/disable decisions across daemon restarts, upstream upgrades, and upstream temporary disappearances.
 - **FR-010**: System MUST apply a per-server "auto-enable new capabilities" policy (default true) when a previously unseen capability is discovered.
-
-**Per-agent scoping**
-
-- **FR-019**: System MUST identify which agent a downstream gateway session belongs to, via an agent identity carried by the `coffer` MCP entry (an `--agent <name>` argument) and forwarded by the shim as an `X-Coffer-Agent` request header. A session presenting no identity MUST be treated as unscoped (full access), preserving backward compatibility.
-- **FR-020**: System MUST support a per-agent scope mode of `auto` (the agent sees every enabled MCP server) or `selected` (the agent sees only an explicit allowlist of servers). Agents MUST default to `auto`; a newly added server MUST become visible to `auto` agents automatically but MUST NOT join any `selected` agent's allowlist.
-- **FR-021**: System MUST apply each agent's effective scope — enabled servers, intersected with the allowlist when `selected` — when listing tools, resources, and prompts and when ranking `coffer__search_tools`, so that an out-of-scope server's capabilities are never surfaced to that agent.
-- **FR-022**: System MUST reject a direct `tools/call`, `resources/read`, or `prompts/get` that targets an out-of-scope server — even when the capability name is supplied directly — returning an error instead of invoking the upstream.
 
 **Credentials and safety**
 
@@ -405,7 +374,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **Audit Event**: A record of a lifecycle change to any resource or capability. Includes the actor, target, event type, timestamp, and a structured payload.
 - **Invocation Record**: A record of a single capability call through the gateway. Includes target, timestamp, duration, and outcome — no arguments or return content.
 - **Retention Policy**: A per-log-table setting controlling how long entries are kept. Audit defaults to 365 days, invocations to 30 days; either can be set to "keep forever".
-- **Agent MCP scope**: Per-agent visibility policy applied at the gateway — a `mode` (`auto` = every enabled server; `selected` = an explicit allowlist) plus the allowlist of server names used when `selected`. New agents default to `auto`; a session with no agent identity is unscoped.
 
 ## Success Criteria
 
