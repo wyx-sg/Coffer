@@ -7,13 +7,7 @@
 // dynamically-imported `@tauri-apps/api/core` module.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import {
-  isTauri,
-  getDaemonInfo,
-  getAutostartEnabled,
-  setAutostartEnabled,
-  restartDaemon,
-} from "./tauri";
+import { isTauri, getDaemonInfo, restartDaemon } from "./tauri";
 
 // `@tauri-apps/api/core` is dynamically imported inside each helper. We stub it
 // with a shared `invoke` mock so we can assert command name + args.
@@ -62,43 +56,6 @@ describe("getDaemonInfo", () => {
     invokeMock.mockResolvedValue(info);
     await expect(getDaemonInfo()).resolves.toEqual(info);
     expect(invokeMock).toHaveBeenCalledWith("get_daemon_info");
-  });
-});
-
-describe("setAutostartEnabled", () => {
-  beforeEach(() => invokeMock.mockReset());
-  afterEach(() => leaveTauri());
-
-  test("dev fallback echoes the requested flag without invoking", async () => {
-    leaveTauri();
-    await expect(setAutostartEnabled(true)).resolves.toBe(true);
-    await expect(setAutostartEnabled(false)).resolves.toBe(false);
-    expect(invokeMock).not.toHaveBeenCalled();
-  });
-
-  test("invokes set_autostart_enabled with the flag inside Tauri", async () => {
-    enterTauri();
-    invokeMock.mockResolvedValue(true);
-    await expect(setAutostartEnabled(true)).resolves.toBe(true);
-    expect(invokeMock).toHaveBeenCalledWith("set_autostart_enabled", { enabled: true });
-  });
-});
-
-describe("getAutostartEnabled", () => {
-  beforeEach(() => invokeMock.mockReset());
-  afterEach(() => leaveTauri());
-
-  test("returns false outside Tauri without invoking", async () => {
-    leaveTauri();
-    await expect(getAutostartEnabled()).resolves.toBe(false);
-    expect(invokeMock).not.toHaveBeenCalled();
-  });
-
-  test("invokes get_autostart_enabled inside Tauri", async () => {
-    enterTauri();
-    invokeMock.mockResolvedValue(true);
-    await expect(getAutostartEnabled()).resolves.toBe(true);
-    expect(invokeMock).toHaveBeenCalledWith("get_autostart_enabled");
   });
 });
 

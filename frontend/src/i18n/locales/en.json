@@ -375,7 +375,6 @@
       "general": "General",
       "data": "Data",
       "security": "Security",
-      "app": "App",
       "about": "About",
       "models": "Models",
       "sync": "Sync"
@@ -424,12 +423,6 @@
       "create": "Create backup",
       "creating": "Backing up…",
       "saved": "Saved to {{path}}"
-    },
-    "app": {
-      "autostart": {
-        "title": "Launch at Login",
-        "label": "Start Coffer automatically when you log in"
-      }
     },
     "about": {
       "title": "About Coffer",

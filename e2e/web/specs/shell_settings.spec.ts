@@ -1,9 +1,8 @@
 // e2e/web/specs/shell_settings.spec.ts
 //
 // Spec 002 §User Story 5 — the redesigned Settings: tabs grouped by what
-// the user manages (Data / About; the desktop app adds App), the daemon
-// never surfaced as a concept, the sidebar language switcher, and the
-// removal of the confusing controls.
+// the user manages (Data / About), the daemon never surfaced as a concept,
+// the sidebar language switcher, and the removal of the confusing controls.
 
 import { expect } from "@playwright/test";
 import { acceptance } from "./_acceptance";
@@ -19,8 +18,7 @@ acceptance(
     // /settings index redirects to the first tab — General.
     await expect(page).toHaveURL(/\/settings\/general/);
 
-    // The browser shows General, Data, and About (the App tab is
-    // desktop-only). The daemon is never a tab.
+    // Settings shows General, Data, and About. The daemon is never a tab.
     await expect(page.getByRole("link", { name: /^General$/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Data$/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /^About$/ })).toBeVisible();

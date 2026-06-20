@@ -68,8 +68,8 @@ Open **Coffer** from your Applications folder. On first launch:
 - A tray icon appears in your menu bar.
 
 If the shim's target directory is not on `PATH`, Coffer shows a one-time
-prompt on the **Settings → App** tab with the exact line to add to your
-shell rc file (`~/.zshrc`, `~/.bashrc`, etc.).
+prompt with the exact line to add to your shell rc file (`~/.zshrc`,
+`~/.bashrc`, etc.).
 
 ## 4. Add an MCP server
 
@@ -121,15 +121,6 @@ backed by the same rate-limited command as the tray item.
 
 Closing the main window with the OS close button just **hides** the window
 to the tray; the daemon stays alive and your MCP clients keep working.
-
-## 7. Optional: launch Coffer at login
-
-Open **Settings → App**, flip the **Launch at login** toggle. Coffer
-re-registers itself with macOS's autostart mechanism (a LaunchAgent under
-`~/Library/LaunchAgents/`).
-
-Log out and back in (or reboot) to confirm — the tray icon appears without
-you opening anything.
 
 ## CLI-only install
 
@@ -189,8 +180,8 @@ so no per-machine parameterisation is needed.
   crate wires no log sink), so launch Coffer from a terminal to see its
   stderr; for daemon problems check `~/.coffer/logs/daemon.log`.
 - **`coffer-mcp-shim: command not found`** — your shell's `PATH` does not
-  include the shim directory. Re-launch Coffer once, follow the prompt on
-  Settings → App, then open a new terminal.
+  include the shim directory. Re-launch Coffer once, follow the PATH prompt,
+  then open a new terminal.
 - **Daemon does not start** — open `~/.coffer/logs/daemon.log` and search
   for `ERROR`. The most common cause is another process already bound to
   every port in 8000–8009; quit that process or wait for it to free up.

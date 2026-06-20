@@ -126,9 +126,9 @@ REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
 
 ## 桌面应用
 
-**它是什么。** Tauri 2 桌面应用，由[规约 003](/zh/reference/specs/003-mcp-gateway-desktop/spec) 规定。桌面应用将规约 002 的同一 Web UI 包装在原生应用窗口中，添加了守护进程监督、系统托盘图标和可选的登录时启动功能。对于日常桌面使用来说，它是零摩擦的入口点：安装它，Coffer 就始终在后台运行，无需任何手动 `coffer daemon start` 步骤。
+**它是什么。** Tauri 2 桌面应用，由[规约 003](/zh/reference/specs/003-mcp-gateway-desktop/spec) 规定。桌面应用将规约 002 的同一 Web UI 包装在原生应用窗口中，添加了守护进程监督和系统托盘图标。对于日常桌面使用来说，它是零摩擦的入口点：安装它，Coffer 就始终在后台运行，无需任何手动 `coffer daemon start` 步骤。
 
-**所在进程。** 原生桌面进程（Tauri 2，Rust + WebView）。它将 Web UI 嵌入为 WebView；桌面特定的功能（托盘菜单项、自动启动设置）在前端代码中的 `isTauri()` 守卫后面激活。
+**所在进程。** 原生桌面进程（Tauri 2，Rust + WebView）。它将 Web UI 嵌入为 WebView；桌面特定的功能（托盘菜单项）在前端代码中的 `isTauri()` 守卫后面激活。
 
 **传输方式。** 内部：WebView 通过 `127.0.0.1:<port>/api/v1/` 使用 REST，通过 `/mcp` 使用 MCP（与基于浏览器的 Web UI 相同）。Rust shell 也通过守护进程的 REST API 进行监督任务（健康检查、重启）。
 
@@ -152,7 +152,7 @@ REST API 是规范接口——CLI、Web UI 和桌面应用都调用它。
 | Stdio shim      | 每会话一个       | HTTP/SSE                    | MCP 客户端              | MCP 客户端会话   |
 | 回调监听器      | 守护进程启动的子进程 | Loopback HTTP（转发给守护进程） | 守护进程（SeaTalk 启用时） | 有 SeaTalk 通道启用期间 |
 | Web UI          | 浏览器标签页     | Loopback HTTP（REST）       | 用户 / 浏览器           | 浏览器标签页会话 |
-| 桌面应用        | 原生进程         | Loopback HTTP（REST + MCP） | 用户 / 操作系统自动启动 | 直到从托盘退出   |
+| 桌面应用        | 原生进程         | Loopback HTTP（REST + MCP） | 用户                    | 直到从托盘退出   |
 
 ---
 

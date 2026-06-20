@@ -102,8 +102,6 @@ A staleness check handles upgrades: the on-disk binary is compared against the b
 
 **Tray icon.** The desktop app runs as a system tray icon after the main window is closed. Closing the window hides it; the daemon and tray remain. The tray menu provides: Open (restore the window), Restart daemon, and Quit (which calls `app.exit()` and actually terminates the process).
 
-**Launch at login.** The `tauri-plugin-autostart` plugin enables the `AppSettings` desktop tab to toggle launch-at-login. When enabled, Coffer starts in the background after login and the tray icon appears.
-
 ## Release pipeline
 
 The CI release matrix (`.github/workflows/release.yml`) runs on every `v*` tag across two target platforms (macOS arm64, Linux x64) and produces:

@@ -11,8 +11,7 @@ mod daemon;
 mod shim;
 mod tray;
 
-use tauri::{AppHandle, RunEvent, WindowEvent};
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri::{RunEvent, WindowEvent};
 // `Manager` (for `get_webview_window`) is only used by the macOS-only Reopen
 // handler below; gate the import so non-macOS builds don't warn on it.
 #[cfg(target_os = "macos")]
@@ -21,26 +20,6 @@ use tauri::Manager;
 // Re-export the close-to-tray decision function so existing integration
 // tests can keep importing it via the crate root.
 pub use tray::should_close_app;
-
-// ---------------------------------------------------------------------------
-// Autostart Tauri commands (thin wrappers around the plugin manager).
-// ---------------------------------------------------------------------------
-
-#[tauri::command]
-fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<bool, String> {
-    let manager = app.autolaunch();
-    if enabled {
-        manager.enable().map_err(|e| e.to_string())?;
-    } else {
-        manager.disable().map_err(|e| e.to_string())?;
-    }
-    manager.is_enabled().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_autostart_enabled(app: AppHandle) -> Result<bool, String> {
-    app.autolaunch().is_enabled().map_err(|e| e.to_string())
-}
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -53,13 +32,7 @@ pub fn run() {
         // Lets the read-only file viewers reveal a managed file in Finder and
         // open it (or its folder) in the user's preferred external editor.
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            Some(vec![]),
-        ))
         .invoke_handler(tauri::generate_handler![
-            set_autostart_enabled,
-            get_autostart_enabled,
             daemon::restart_daemon,
             daemon::get_daemon_info,
             daemon::get_app_version,

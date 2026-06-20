@@ -92,7 +92,7 @@ frontend/src/
     ├── AgentsPage.tsx / AgentDetailPage.tsx     # /agents、/agents/:name
     ├── SkillsPage.tsx / SkillDetailPage.tsx     # /skills、/skills/:name
     ├── audit/AuditLogPage.tsx             # /audit — 审计日志视图（/observability 重定向到这里）
-    └── settings/                          # SettingsLayout + GeneralSettings、DataSettings、AppSettings、AboutPage
+    └── settings/                          # SettingsLayout + GeneralSettings、DataSettings、AboutPage
 
 frontend/
 ├── vite.config.ts                         # dev 专用的 token 注入插件 (读 daemon.json)

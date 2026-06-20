@@ -4,23 +4,22 @@
 
 **Feature Branch**: `feature/003-mcp-gateway-desktop`（在 `feature/002-mcp-gateway-web` 之上）
 **Status**: Accepted
-**Input**：002-ui-shell 交付了 Web UI，但明确把 spec 002 的 User Story 5（桌面外壳）的两个验收场景 —— 登录时启动（launch-at-login）与关闭到托盘（close-to-tray）—— 延期到本规范。本规范承接这两个场景，并交付让它们工作的 Tauri 桌面包装与分发流水线。
+**Input**：002-ui-shell 交付了 Web UI，但明确把 spec 002 的 User Story 5（桌面外壳）的关闭到托盘（close-to-tray）验收场景延期到本规范。本规范承接该场景，并交付让它工作的 Tauri 桌面包装与分发流水线。
 
-**范围说明**：Coffer 的用户可见 UI 由 002-ui-shell 拥有（Web 外壳、视觉语言、信息架构）。本规范新增的是**桌面包装层** —— Tauri 2 外壳、daemon 监管、托盘图标、autostart 插件、PyInstaller sidecar 打包、以及一条「公证就绪」的 macOS 发布流水线（实际签名 / 公证延期到有 Apple Developer ID 之后；在此之前流水线发布的是未签名 bundle）。它不引入任何新的 resource kind，也不引入任何新的 UI 屏幕；来自 002 的 Web UI 在 Tauri 窗口中渲染，桌面专用的 `AppSettings` 组件透过 002 已经接好的 `isTauri()` 守卫激活。
+**范围说明**：Coffer 的用户可见 UI 由 002-ui-shell 拥有（Web 外壳、视觉语言、信息架构）。本规范新增的是**桌面包装层** —— Tauri 2 外壳、daemon 监管、托盘图标、PyInstaller sidecar 打包、以及一条「公证就绪」的 macOS 发布流水线（实际签名 / 公证延期到有 Apple Developer ID 之后；在此之前流水线发布的是未签名 bundle）。它不引入任何新的 resource kind，也不引入任何新的 UI 屏幕；来自 002 的 Web UI 在 Tauri 窗口中渲染。
 
 ## 用户场景与测试
 
 ### User Story 1 —— 桌面外壳：常驻且不碍事（优先级 P3）
 
-完成初次设置之后，开发者期望 Coffer 在任意 MCP 客户端启动时已经在线 —— 无需手工拉起 —— 并且在他们不主动管理时尽量隐身。Tauri 桌面应用监管本地 daemon（启动 daemon 并透明重连）、常驻系统托盘、点击托盘可恢复主窗口、并提供可选的「登录时启动」。
+完成初次设置之后，开发者期望 Coffer 在任意 MCP 客户端启动时已经在线 —— 无需手工拉起 —— 并且在他们不主动管理时尽量隐身。Tauri 桌面应用监管本地 daemon（启动 daemon 并透明重连）、常驻系统托盘、点击托盘可恢复主窗口。
 
-**为什么是这个优先级**：P3 —— 体验润色。daemon 与 shim（spec 001）即便没有桌面应用也能工作；本故事是把 Coffer 变成日用桌面产品的便利层。继承自 spec 002 §User Story 5，其中 launch-at-login 与 close-to-tray 被显式延期到本规范。
+**为什么是这个优先级**：P3 —— 体验润色。daemon 与 shim（spec 001）即便没有桌面应用也能工作；本故事是把 Coffer 变成日用桌面产品的便利层。继承自 spec 002 §User Story 5，其中 close-to-tray 被显式延期到本规范。
 
-**独立可测**：打开「登录时启动」，登出后再登入 —— daemon 在运行，托盘图标在。关闭主窗口 —— daemon 仍活、托盘仍在、MCP 客户端仍可使用；从托盘恢复窗口看到的是同一状态。
+**独立可测**：关闭主窗口 —— daemon 仍活、托盘仍在、MCP 客户端仍可使用；从托盘恢复窗口看到的是同一状态。
 
 **代表性场景**（完整列表见 `## Acceptance Scenarios`）：
 
-- launch at login
 - close to tray, not exit
 
 ---
@@ -100,13 +99,7 @@
 
 ## Acceptance Scenarios
 
-下方场景覆盖本规范的用户故事。`launch at login` 与 `close to tray, not exit` 两个场景按 `specs/002-ui-shell/spec.md` 的 audit-traceability 注释逐字导入，对应 US1 的桌面外壳验收。本规范的 acceptance audit 从此承担它们。build-pipeline 场景覆盖 US2（单包安装）。
-
-### Scenario: launch at login
-
-- **Given** 用户已在 settings 中启用 launch-at-login
-- **When** 用户重新登入机器
-- **Then** Coffer 在后台启动，系统托盘图标出现
+下方场景覆盖本规范的用户故事。`close to tray, not exit` 场景按 `specs/002-ui-shell/spec.md` 的 audit-traceability 注释逐字导入，对应 US1 的桌面外壳验收。本规范的 acceptance audit 从此承担它。build-pipeline 场景覆盖 US2（单包安装）。
 
 ### Scenario: close to tray, not exit
 
@@ -135,12 +128,11 @@
 - **FR-D03**: 桌面外壳 MUST 在应用运行期间常驻一个系统托盘图标。托盘菜单 MUST 包含 "Open"、"Restart daemon" 与 "Quit" 三项。托盘的 "Restart daemon" 项与 daemon-offline banner 的 Restart 控件调用同一个限频 `restart_daemon` Tauri command。
 - **FR-D04**: 窗口关闭事件 MUST 被拦截并转译为 hide-to-tray；关闭主窗口 MUST NOT 终止桌面进程。
 - **FR-D05**: 从托盘选 "Quit" MUST 调用 `app.exit()`（或等价平台 API），使桌面进程真正退出，托盘图标随之消失。Quit MUST NOT 拆掉 daemon —— daemon 是脱离父进程的独立进程（FR-D02），在桌面应用退出后继续运行，因此 MCP 客户端仍可工作。
-- **FR-D06**: 桌面外壳 MUST 集成 `tauri-plugin-autostart` 并支持 set/get 能力，使 `AppSettings` 桌面 tab 能切换「登录时启动」并反映当前状态。
-- **FR-D07**: 每次启动，桌面外壳 MUST 幂等地把 bundle 自带的 `coffer-mcp-shim` 部署到稳定的用户可写 PATH 目录（macOS / Linux：`~/.coffer/bin/`；Windows：`%LOCALAPPDATA%\Coffer\bin\`；未设变量时退回 `%USERPROFILE%\Coffer\bin\`）。部署 MUST 保持幂等 —— 已是最新的磁盘二进制保持不动；陈旧的以原子方式替换（同目录临时 sibling 拷贝 + rename，swap 前先设好可执行位）。陈旧由 3 个信号的启发式判定（字节大小、bundle 与已部署的 mtime、以及 `.coffer-mcp-shim.version` sentinel），使大小恰好相同的跨版本升级也能被检出。
-- **FR-D08**: Tauri bundle MUST 把 `coffer-daemon` 与 `coffer-mcp-shim` 声明为 PyInstaller sidecar，写在 `desktop/tauri.conf.json` 的 `bundle.externalBin` 中。运行时无系统 Python 依赖。
-- **FR-D09**: release 流水线 MUST 在每个 `v*` tag 上、基于同一组 PyInstaller 二进制，**仅为 macOS arm64**产出两个下载层级：(a) **CLI+desktop** 层级 —— 一份未签名 macOS arm64 `.dmg`（命名为 `*-unsigned.dmg`）外加一份打包的 `Coffer-unsigned-<triple>.app.zip`；(b) **CLI-only** 层级 —— 一份 `coffer-cli-<triple>.tar.gz`，含 `coffer`、`coffer-daemon` 与 `coffer-mcp-shim`。macOS x64（Intel）以及 Linux / Windows bundle 刻意不构建 —— 那些 leg 从未验证过，且 Intel runner 池正在被弃用；acceptance 矩阵断言只构建 macOS-arm64。
-- **FR-D10**: release 流水线 MUST 产出一份聚合的 `SHA256SUMS` 文件（在 CI 中生成；release job 跨矩阵 leg 拼接），覆盖每一份制品，使下载者无需仅信任 GitHub Release UI 即可校验完整性。
-- **FR-D11**: 桌面外壳 MUST 集成 `tauri-plugin-opener`，具备在外部应用中打开文件系统路径（`opener:allow-open-path`）以及在操作系统文件管理器中显示某路径（`opener:allow-reveal-item-in-dir`）的能力。这让只读文件查看器能提供"在编辑器中打开"（用用户的首选外部编辑器打开该文件或其所在文件夹——见 002 General 设置）与"在 Finder 中显示"；在 Web 上这些操作系统能力不可用，查看器降级为"复制路径"。
+- **FR-D06**: 每次启动，桌面外壳 MUST 幂等地把 bundle 自带的 `coffer-mcp-shim` 部署到稳定的用户可写 PATH 目录（macOS / Linux：`~/.coffer/bin/`；Windows：`%LOCALAPPDATA%\Coffer\bin\`；未设变量时退回 `%USERPROFILE%\Coffer\bin\`）。部署 MUST 保持幂等 —— 已是最新的磁盘二进制保持不动；陈旧的以原子方式替换（同目录临时 sibling 拷贝 + rename，swap 前先设好可执行位）。陈旧由 3 个信号的启发式判定（字节大小、bundle 与已部署的 mtime、以及 `.coffer-mcp-shim.version` sentinel），使大小恰好相同的跨版本升级也能被检出。
+- **FR-D07**: Tauri bundle MUST 把 `coffer-daemon` 与 `coffer-mcp-shim` 声明为 PyInstaller sidecar，写在 `desktop/tauri.conf.json` 的 `bundle.externalBin` 中。运行时无系统 Python 依赖。
+- **FR-D08**: release 流水线 MUST 在每个 `v*` tag 上、基于同一组 PyInstaller 二进制，**仅为 macOS arm64**产出两个下载层级：(a) **CLI+desktop** 层级 —— 一份未签名 macOS arm64 `.dmg`（命名为 `*-unsigned.dmg`）外加一份打包的 `Coffer-unsigned-<triple>.app.zip`；(b) **CLI-only** 层级 —— 一份 `coffer-cli-<triple>.tar.gz`，含 `coffer`、`coffer-daemon` 与 `coffer-mcp-shim`。macOS x64（Intel）以及 Linux / Windows bundle 刻意不构建 —— 那些 leg 从未验证过，且 Intel runner 池正在被弃用；acceptance 矩阵断言只构建 macOS-arm64。
+- **FR-D09**: release 流水线 MUST 产出一份聚合的 `SHA256SUMS` 文件（在 CI 中生成；release job 跨矩阵 leg 拼接），覆盖每一份制品，使下载者无需仅信任 GitHub Release UI 即可校验完整性。
+- **FR-D10**: 桌面外壳 MUST 集成 `tauri-plugin-opener`，具备在外部应用中打开文件系统路径（`opener:allow-open-path`）以及在操作系统文件管理器中显示某路径（`opener:allow-reveal-item-in-dir`）的能力。这让只读文件查看器能提供"在编辑器中打开"（用用户的首选外部编辑器打开该文件或其所在文件夹——见 002 General 设置）与"在 Finder 中显示"；在 Web 上这些操作系统能力不可用，查看器降级为"复制路径"。
 
 ## Success Criteria
 

@@ -107,7 +107,7 @@ frontend/src/
     ├── AgentsPage.tsx / AgentDetailPage.tsx     # /agents, /agents/:name
     ├── SkillsPage.tsx / SkillDetailPage.tsx     # /skills, /skills/:name
     ├── audit/AuditLogPage.tsx             # /audit — audit-log view (/observability redirects here)
-    └── settings/                          # SettingsLayout + GeneralSettings, DataSettings, AppSettings, AboutPage
+    └── settings/                          # SettingsLayout + GeneralSettings, DataSettings, AboutPage
 
 frontend/
 ├── vite.config.ts                         # dev-only token-injection plugin (reads daemon.json)

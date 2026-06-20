@@ -40,14 +40,6 @@ clients keep working. To actually quit, use **Quit** from the tray menu.
 | **Restart daemon** | Stop the local daemon process and start a fresh one on the same port. |
 | **Quit**           | Stop the Desktop process and the daemon, removing the tray icon.      |
 
-### Launch at login (optional)
-
-Open **Settings → App** and flip the **Launch at login** toggle. Coffer registers itself
-with your OS autostart mechanism:
-
-- macOS: a LaunchAgent under `~/Library/LaunchAgents/`.
-- Linux: a `.desktop` file under `~/.config/autostart/`.
-
 ## Installation
 
 ### Download

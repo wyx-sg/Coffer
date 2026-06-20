@@ -75,7 +75,7 @@ make dev
 ## 5. 审计日志与 Settings
 
 - `/audit` — 审计日志视图（在 **System** 分组下）。按时间范围与 actor 过滤；点任意行展开它的原始日志——该条目完整的底层 JSON 记录，以等宽、可滚动的代码块美化呈现。legacy `/observability` URL 仍能解析并重定向到这里。（Observability——系统健康 / 指标——是另一个预留给未来的独立界面，不是这个审计日志。）
-- `/settings` — tabs 侧栏打开在 **General**（默认每页条数偏好），另有 **Data**（retention 策略、手动清理、备份）与 **About**（版本 / 许可证 / 源代码）。桌面构建还多一个 **App** tab（开机自启）。
+- `/settings` — tabs 侧栏打开在 **General**（默认每页条数偏好），另有 **Data**（retention 策略、手动清理、备份）与 **About**（版本 / 许可证 / 源代码）。
 
 相比 v0 壳，刻意删掉的三处地方：
 

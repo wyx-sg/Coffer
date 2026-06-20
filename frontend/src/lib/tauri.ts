@@ -32,23 +32,6 @@ export async function getDaemonInfo(): Promise<DaemonInfo> {
   return invoke<DaemonInfo>("get_daemon_info");
 }
 
-export async function setAutostartEnabled(enabled: boolean): Promise<boolean> {
-  if (!isTauri()) {
-    // Dev fallback — pretend success but mark the toggle as a no-op
-    return enabled;
-  }
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<boolean>("set_autostart_enabled", { enabled });
-}
-
-export async function getAutostartEnabled(): Promise<boolean> {
-  if (!isTauri()) {
-    return false;
-  }
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<boolean>("get_autostart_enabled");
-}
-
 export interface RestartResult {
   /** PID of the newly-spawned daemon process. */
   pid: number;

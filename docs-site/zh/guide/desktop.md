@@ -38,14 +38,6 @@ Tauri 窗口内渲染。
 | **Restart daemon** | 停止本地守护进程，并在同一端口起一个新的。     |
 | **Quit**           | 同时停止桌面进程和守护进程，托盘图标随之消失。 |
 
-### 登录时启动（可选）
-
-打开 **Settings → App**，打开 **Launch at login** 开关。Coffer 会把自己注册到 OS
-的 autostart 机制：
-
-- macOS：`~/Library/LaunchAgents/` 下的 LaunchAgent。
-- Linux：`~/.config/autostart/` 下的 `.desktop` 文件。
-
 ## 安装
 
 ### 下载

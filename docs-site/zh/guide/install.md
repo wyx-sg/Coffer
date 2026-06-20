@@ -140,7 +140,7 @@ codesign --force --deep --sign - /Applications/Coffer.app
 claude mcp add coffer coffer-mcp-shim
 ```
 
-完整的桌面应用指南（托盘菜单、登录时启动等）请参阅[桌面应用 →](/zh/guide/desktop)。
+完整的桌面应用指南（托盘菜单等）请参阅[桌面应用 →](/zh/guide/desktop)。
 
 ---
 

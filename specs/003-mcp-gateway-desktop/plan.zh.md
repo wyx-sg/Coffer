@@ -20,9 +20,7 @@ detect-or-spawn 模式监管无头 daemon，在每次启动把 bundle 自带的
 [ADR-008](../../docs/decisions/ADR-008-distribution-pyinstaller-tauri-sidecar.md)
 约定的 `bundle.externalBin` sidecar 方式装入 Tauri bundle。
 
-本规范不引入任何新的后端、新的 resource kind 或新的 UI 屏幕。002
-在 `isTauri()` 守卫后已经接好的桌面专用 `AppSettings` 组件是前端
-唯一需要触碰的位置。
+本规范不引入任何新的后端、新的 resource kind 或新的 UI 屏幕。
 
 用户可见契约见 [./spec.zh.md](./spec.zh.md)；最终用户上手见
 [./quickstart.zh.md](./quickstart.zh.md)；分发架构决策见
@@ -33,7 +31,7 @@ detect-or-spawn 模式监管无头 daemon，在每次启动把 bundle 自带的
 | 维度               | 取值                                                                                                                                                                                               |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **语言 / 版本**    | Rust 1.78+（Tauri 2 crate）；复用 daemon / shim 的 Python 3.12（PyInstaller 打包）。                                                                                                               |
-| **主要依赖**       | Tauri 2 (`tauri`, `tauri-build`)；`tauri-plugin-autostart`（登录时启动 set/get）；按需 `tauri-plugin-shell`（sidecar spawn）；002 的前端 bundle（从 `dist/` 加载）。                               |
+| **主要依赖**       | Tauri 2 (`tauri`, `tauri-build`)；按需 `tauri-plugin-shell`（sidecar spawn）；002 的前端 bundle（从 `dist/` 加载）。                               |
 | **Sidecar 二进制** | `coffer-daemon` 与 `coffer-mcp-shim`，由 `scripts/build_binaries.sh` 驱动 `backend/` 下的 PyInstaller spec 跨平台构建。                                                                            |
 | **Daemon 发现**    | `~/.coffer/daemon.json`（port + token + pid），与 CLI、shim 共享。见 [ADR-006](../../docs/decisions/ADR-006-daemon-detect-or-spawn.zh.md)。                                                        |
 | **Shim PATH 目录** | macOS / Linux：`~/.coffer/bin/`。Windows：`%LOCALAPPDATA%\Coffer\bin\`（未设时退回 `%USERPROFILE%\Coffer\bin\`）。                                                                                 |
@@ -50,11 +48,11 @@ detect-or-spawn 模式监管无头 daemon，在每次启动把 bundle 自带的
 | ----------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | **I. Local-First (NON-NEGOTIABLE)** | OK   | daemon 仍仅 loopback；桌面外壳不访问公共互联网；不会出现遥测 / 更新服务器调用。                                                             |
 | **II. Spec-as-Truth**               | OK   | spec 在代码之前提交；每个验收场景都有覆盖测试（acceptance audit）。                                                                          |
-| **III. Open-Source-Readiness**      | OK   | Tauri 2（MIT/Apache-2.0）与 `tauri-plugin-autostart`（MIT）均为宽松许可证；PyInstaller 是 GPL 但带运行时例外，不污染 bundle 出来的二进制。   |
+| **III. Open-Source-Readiness**      | OK   | Tauri 2（MIT/Apache-2.0）为宽松许可证；PyInstaller 是 GPL 但带运行时例外，不污染 bundle 出来的二进制。   |
 | **语言**                            | OK   | 章程 Languages 条款允许桌面外壳用 Rust；daemon 与 shim 仍是 Python 3.12。                                                                    |
 | **架构：分层**                      | OK   | 桌面 crate 是薄薄一层 —— supervisor、tray、shim-deploy 各自有模块；视图层来自 002 的 Web UI。                                                |
 | **持久化：SQLite 作为控制面**       | OK   | 本规范不拥有持久化；daemon 拥有。外壳读 `~/.coffer/daemon.json`（不是 SQLite）发现 daemon —— 该发现文件是 ADR-006 拥有的运行时契约的一部分。 |
-| **凭据：加密存储**                  | OK   | 本规范不拥有凭据。autostart 偏好由 `tauri-plugin-autostart`（OS 原生设施）存储，不进凭据存储。                                              |
+| **凭据：加密存储**                  | OK   | 本规范不拥有凭据。                                              |
 | **网络默认：仅 loopback**           | OK   | 外壳只与 daemon.json 中的 `127.0.0.1:<port>` 通话；不访问其他 HTTP origin。                                                                  |
 
 ## 工程结构
@@ -70,7 +68,7 @@ specs/003-mcp-gateway-desktop/
 
 本目录刻意不含 `data-model.md`（本规范无后端数据）也不含 `tasks.md`
 （工作按用户故事 / PR 切，单位是「一个桌面关切」——shim 部署、托盘、
-autostart、release 流水线 —— 每个独立 PR）。
+release 流水线 —— 每个独立 PR）。
 
 ### 源代码（本 PR 交付）
 
@@ -118,8 +116,7 @@ close-to-tray 之后仍然存活的关键。
 3. 比较 bundle 自带 shim 的字节大小与磁盘上的 shim（若存在）。
    一致 → no-op。不一致 → 原子替换（`tempfile` + `rename`）。
 
-PATH 是否包含目标目录的提示，由 002 的 `AppSettings` tab 在首次启动时
-显示一次；外壳只负责把二进制放到目标目录。
+PATH 是否包含目标目录的提示，在首次启动时显示一次；外壳只负责把二进制放到目标目录。
 
 ### 构建矩阵
 
@@ -174,21 +171,14 @@ detached spawn（`setsid` / `DETACHED_PROCESS`）。
 
 **完成标志**：US5 的托盘场景通过；US1 的 "close to tray, not exit" 通过。
 
-### Phase 4 —— Autostart + AppSettings 接线
-
-集成 `tauri-plugin-autostart`，把 set/get 暴露到 JS 桥；002 的
-`AppSettings` 组件拾取该开关。
-
-**完成标志**：US1 的 "launch at login" 通过。
-
-### Phase 5 —— Shim 自动部署
+### Phase 4 —— Shim 自动部署
 
 `shim.rs` —— 幂等拷贝 + size-mismatch 启发式、父目录探测、
 Windows PATH 兜底。
 
 **完成标志**：US4 的三个场景通过。
 
-### Phase 6 —— Release 流水线 + smoke test
+### Phase 5 —— Release 流水线 + smoke test
 
 `.github/workflows/release.yml` 跑 macOS-arm64 构建 leg；它把三份二进制
 （`coffer`、`coffer-daemon`、`coffer-mcp-shim`）打成 `coffer-cli-<triple>.tar.gz`
@@ -206,7 +196,6 @@ Windows PATH 兜底。
 | 脱离父进程的 daemon spawn（setsid / DETACHED_PROCESS）        | 让 daemon 在窗口 close-to-tray 后仍存活的必要条件 —— 否则 OS 进程树清理会在 Tauri 进程退出时连带杀掉 daemon。                         | 前台子进程会破坏 close-to-tray 场景；reparent 到 PID 1 正是 `setsid` 与 `DETACHED_PROCESS` 的用途。                                               |
 | 每次启动幂等 shim 部署                                        | 桌面外壳是唯一知道 bundle 自带 shim 在哪的入口；只在安装时部署一次会错过原地升级。                                                    | 独立的 "shim updater" 服务会增加运动部件；size-mismatch 启发式只有几行代码，shim 已最新时在微秒级完成。                                           |
 | 仅 macOS arm64（不做 x64 / Linux / Windows leg）             | Intel runner 池正在被弃用且会饿死 job，PyInstaller 无法从 arm64 交叉编译 x86_64 sidecar，且 Linux/Windows leg 从未验证过。           | 发布未验证的跨平台 bundle 等于发出没人测过的制品；矩阵刻意收敛到唯一已验证的目标，直到其他目标被接好并验证。                                       |
-| 用 `tauri-plugin-autostart` 而非自手 launchd / Task Scheduler | 跨平台 launch-at-login 并不简单（launchd plist + systemd user unit + Windows Task Scheduler / Run key）；该插件已经被维护并通过测试。 | 自己撸三套平台逻辑会让 bug 表面与测试量乘三，却没有功能收益。                                                                                     |
 
 ## 交叉引用索引
 
