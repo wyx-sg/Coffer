@@ -643,3 +643,34 @@ async def test_reimport_overwrite_replaces_and_preserves_bindings(tmp_path):
     assert len(updated_events) == 1
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reimport_overwrite_registers_orphan_master(tmp_path):
+    """An orphan master folder (content on disk, no Resource row —
+    DriftKind.ORPHAN_MASTER) plus overwrite must REGISTER the row rather than
+    crash on update_config's missing-row lookup."""
+    skill_svc, _agent_svc, audit, store, engine = await _setup(tmp_path)
+
+    # Create an orphan master folder directly: content on disk, no row.
+    orphan_src = tmp_path / "orphan_src"
+    _write_skill_folder(orphan_src, name="orphan-skill", body="stale")
+    store.copy_in(src=orphan_src, name="orphan-skill", meta={"name": "orphan-skill"})
+    assert store.exists("orphan-skill")
+    rows = await skill_svc._rs.list(kind="skill")
+    assert all(r.name != "orphan-skill" for r in rows), "no row yet — orphan state"
+
+    # Re-import the same name with overwrite -> registers the row + swaps content.
+    new_src = tmp_path / "new_src"
+    _write_skill_folder(new_src, name="orphan-skill", body="fresh")
+    r = await skill_svc.import_local(path=str(new_src), actor="cli", overwrite=True)
+
+    assert r.name == "orphan-skill"
+    rows2 = await skill_svc._rs.list(kind="skill")
+    assert any(r2.name == "orphan-skill" for r2 in rows2), "row registered"
+    assert "fresh" in store.paths_for("orphan-skill").skill_md.read_text(encoding="utf-8")
+    # The orphan adoption audits as a fresh import (the passed event).
+    imported = await audit.query(event_type=AuditEventType.SKILL_IMPORTED.value)
+    assert len(imported) == 1
+
+    await engine.dispose()

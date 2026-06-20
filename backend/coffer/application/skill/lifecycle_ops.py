@@ -86,18 +86,34 @@ async def register_from_validated(
         "version_hash": validation.skill_md_sha256,
     }
 
+    row_exists = any(r.name == name for r in existing)
     if name_taken:
-        # Overwrite path: swap master folder in place; preserve Resource row +
-        # per-agent bindings + delivered symlinks (master folder path unchanged).
+        # Overwrite path: swap the master folder in place (atomic_replace also
+        # covers an orphan master folder with no row — DriftKind.ORPHAN_MASTER).
         service._store.atomic_replace(src=src, name=name, meta=meta)
-        r = await service._rs.update_config(
-            ResourceRef("skill", name),
-            new_config=cfg.model_dump(mode="json"),
-            actor=actor,
-            description=validation.frontmatter.description,
-            allow_lifecycle_kind=True,  # CODE-REG: master folder replaced above
-        )
-        audit_event = AuditEventType.SKILL_UPDATED
+        if row_exists:
+            # Update the existing row, preserving its id + per-agent bindings +
+            # delivered symlinks (the master folder path is unchanged).
+            r = await service._rs.update_config(
+                ResourceRef("skill", name),
+                new_config=cfg.model_dump(mode="json"),
+                actor=actor,
+                description=validation.frontmatter.description,
+                allow_lifecycle_kind=True,  # CODE-REG: master folder replaced above
+            )
+            audit_event = AuditEventType.SKILL_UPDATED
+        else:
+            # Orphan master folder (content present, no row): register the row
+            # now so we don't crash on update_config's missing-row lookup.
+            r = await service._rs.register(
+                kind="skill",
+                name=name,
+                config=cfg.model_dump(mode="json"),
+                description=validation.frontmatter.description,
+                actor=actor,
+                allow_lifecycle_kind=True,  # CODE-REG: master folder replaced above
+            )
+            audit_event = event
     else:
         # Fresh import path: copy master folder in, register Resource row.
         service._store.copy_in(src=src, name=name, meta=meta)
