@@ -358,6 +358,12 @@ components:
             type: string,
             description: "Path to the existing skill folder; supports `~` expansion.",
           }
+        overwrite:
+          {
+            type: boolean,
+            default: false,
+            description: "Replace an existing skill of the same name instead of rejecting.",
+          }
 
     SkillEnableRequest:
       type: object

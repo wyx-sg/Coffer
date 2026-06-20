@@ -62,13 +62,13 @@ async def register_from_validated(
     source_meta: LocalImportSource,
     event: AuditEventType,
     actor: str,
+    overwrite: bool = False,
 ) -> Resource:
     name = validation.frontmatter.name
     # Duplicate check before copying any bytes.
     existing = await service._rs.list(kind="skill")
-    if any(r.name == name for r in existing):
-        raise ResourceAlreadyExists("skill", name)
-    if service._store.exists(name):
+    name_taken = any(r.name == name for r in existing) or service._store.exists(name)
+    if name_taken and not overwrite:
         raise ResourceAlreadyExists("skill", name)
 
     now = datetime.now(tz=UTC)
@@ -79,41 +79,69 @@ async def register_from_validated(
         version_hash=validation.skill_md_sha256,
         last_synced_from_source_at=now,
     )
+    meta = {
+        "name": name,
+        "source": source_meta.model_dump(mode="json"),
+        "imported_at": now,
+        "version_hash": validation.skill_md_sha256,
+    }
 
-    # Stage master folder
-    service._store.copy_in(
-        src=src,
-        name=name,
-        meta={
-            "name": name,
-            "source": source_meta.model_dump(mode="json"),
-            "imported_at": now,
-            "version_hash": validation.skill_md_sha256,
-        },
-    )
-    try:
-        r = await service._rs.register(
-            kind="skill",
-            name=name,
-            config=cfg.model_dump(mode="json"),
-            description=validation.frontmatter.description,
-            actor=actor,
-            allow_lifecycle_kind=True,  # CODE-REG: master folder created above
-        )
-    except Exception:
-        # Best-effort rollback of master
-        service._store.delete(name)
-        raise
+    row_exists = any(r.name == name for r in existing)
+    if name_taken:
+        # Overwrite path: swap the master folder in place (atomic_replace also
+        # covers an orphan master folder with no row — DriftKind.ORPHAN_MASTER).
+        service._store.atomic_replace(src=src, name=name, meta=meta)
+        if row_exists:
+            # Update the existing row, preserving its id + per-agent bindings +
+            # delivered symlinks (the master folder path is unchanged).
+            r = await service._rs.update_config(
+                ResourceRef("skill", name),
+                new_config=cfg.model_dump(mode="json"),
+                actor=actor,
+                description=validation.frontmatter.description,
+                allow_lifecycle_kind=True,  # CODE-REG: master folder replaced above
+            )
+            audit_event = AuditEventType.SKILL_UPDATED
+        else:
+            # Orphan master folder (content present, no row): register the row
+            # now so we don't crash on update_config's missing-row lookup.
+            r = await service._rs.register(
+                kind="skill",
+                name=name,
+                config=cfg.model_dump(mode="json"),
+                description=validation.frontmatter.description,
+                actor=actor,
+                allow_lifecycle_kind=True,  # CODE-REG: master folder replaced above
+            )
+            audit_event = event
+    else:
+        # Fresh import path: copy master folder in, register Resource row.
+        service._store.copy_in(src=src, name=name, meta=meta)
+        try:
+            r = await service._rs.register(
+                kind="skill",
+                name=name,
+                config=cfg.model_dump(mode="json"),
+                description=validation.frontmatter.description,
+                actor=actor,
+                allow_lifecycle_kind=True,  # CODE-REG: master folder created above
+            )
+        except Exception:
+            # Best-effort rollback of master
+            service._store.delete(name)
+            raise
+        audit_event = event
+        # Auto-bind for every enabled, following agent (FR-025).
+        # On overwrite the skill is already bound; skip auto-bind to avoid
+        # disturbing existing bindings.
+        await auto_bind_all(service=service, skill=r, actor=actor)
 
     await service._audit.record(
-        event.value,
+        audit_event.value,
         ref=ResourceRef("skill", name),
         actor=actor,
         details={"version_hash": validation.skill_md_sha256},
     )
-
-    # Auto-bind for every enabled, following agent (FR-025).
-    await auto_bind_all(service=service, skill=r, actor=actor)
     return r
 
 

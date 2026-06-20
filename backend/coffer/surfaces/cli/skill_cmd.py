@@ -46,11 +46,14 @@ def list_cmd(
 @app.command("import")
 def import_cmd(
     path: str = typer.Argument(..., help="Local path to an existing skill folder."),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Replace an existing skill of the same name"
+    ),
 ) -> None:
     """Import a skill from a local folder."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/skills/import", json={"path": path})
+        r = c.post("/skills/import", json={"path": path, "overwrite": force})
         if r.status_code >= 400:
             typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
             raise typer.Exit(2)
