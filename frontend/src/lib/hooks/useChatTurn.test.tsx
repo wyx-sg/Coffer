@@ -6,23 +6,41 @@ import type { PropsWithChildren } from "react";
 
 import { useChatTurn } from "./useChatTurn";
 import { ApiError } from "@/lib/api/errors";
+import type { AgentEvent } from "@/lib/chat/streamClient";
 
-// Mock the streamClient module.
+// Mock the streamClient module — useChatTurn opens a GET /events subscription.
 vi.mock("@/lib/chat/streamClient", () => ({
-  streamChatTurn: vi.fn(),
+  subscribeConversationEvents: vi.fn(),
 }));
 
-// Mock chatApi — useChatTurn calls interruptTurn on it.
+// Mock chatApi — useChatTurn calls sendMessage / setPending / interruptTurn.
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
+    sendMessage: vi.fn(),
+    setPending: vi.fn(),
     interruptTurn: vi.fn(),
   },
 }));
 
 const streamClientModule = await import("@/lib/chat/streamClient");
-const streamChatTurnMock = vi.mocked(streamClientModule.streamChatTurn);
+const subscribeMock = vi.mocked(streamClientModule.subscribeConversationEvents);
 const { chatApi } = await import("@/lib/api/chat");
 const chatApiMock = chatApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+
+/** A subscription generator that yields a fixed list of events then ends. */
+function fromEvents(...events: AgentEvent[]) {
+  return async function* () {
+    for (const e of events) yield e;
+  };
+}
+
+/** A subscription generator parked on a gate after the given events. */
+function gatedSubscription(gate: Promise<void>, ...events: AgentEvent[]) {
+  return async function* () {
+    for (const e of events) yield e;
+    await gate;
+  };
+}
 
 function makeWrapper() {
   const qc = new QueryClient({
@@ -36,9 +54,14 @@ function makeWrapper() {
 describe("useChatTurn", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: an empty subscription that ends immediately.
+    subscribeMock.mockImplementation(fromEvents());
+    chatApiMock.sendMessage.mockResolvedValue({ queued: false });
+    chatApiMock.setPending.mockResolvedValue({ pending: [] });
+    chatApiMock.interruptTurn.mockResolvedValue(undefined);
   });
 
-  test("initial state: not streaming, no liveMessage, no error", () => {
+  test("initial state: not streaming, no liveMessage, no error, empty pending", async () => {
     const { result } = renderHook(() => useChatTurn("conv-1"), {
       wrapper: makeWrapper(),
     });
@@ -46,183 +69,218 @@ describe("useChatTurn", () => {
     expect(result.current.isStreaming).toBe(false);
     expect(result.current.liveMessage).toBeNull();
     expect(result.current.error).toBeNull();
+    expect(result.current.pending).toEqual([]);
     expect(typeof result.current.send).toBe("function");
     expect(typeof result.current.clearError).toBe("function");
+    expect(typeof result.current.setPending).toBe("function");
+
+    // Let the subscription's async consumer settle so its state updates land
+    // inside act (the empty generator ends immediately).
+    await act(async () => {});
   });
 
-  test("completes a turn with text_delta events, clears liveMessage after done", async () => {
-    streamChatTurnMock.mockImplementation(
-      async function* () {
-        yield { event: "turn_start", data: {} };
-        yield { event: "text_delta", data: { text: "Hello" } };
-        yield { event: "text_delta", data: { text: " world" } };
-        yield { event: "turn_done", data: { stop_reason: "end_turn" } };
-      },
+  test("opens the subscription for the conversation on mount", async () => {
+    renderHook(() => useChatTurn("conv-7"), { wrapper: makeWrapper() });
+    expect(subscribeMock).toHaveBeenCalledWith("conv-7", expect.any(AbortSignal));
+    await act(async () => {});
+  });
+
+  test("send() POSTs the message fire-and-return and shows an optimistic echo", async () => {
+    let resolveSend!: () => void;
+    chatApiMock.sendMessage.mockImplementation(
+      () => new Promise<{ queued: boolean }>((r) => (resolveSend = () => r({ queued: false }))),
+    );
+
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    act(() => {
+      void result.current.send("what is OAuth?");
+    });
+
+    // The prompt is echoed immediately, before the POST resolves.
+    await waitFor(() => expect(result.current.liveMessage?.userText).toBe("what is OAuth?"));
+    expect(chatApiMock.sendMessage).toHaveBeenCalledWith("conv-1", "what is OAuth?");
+
+    await act(async () => {
+      resolveSend();
+    });
+  });
+
+  test("send() NEVER blocks while a turn streams — a second call still POSTs (queues)", async () => {
+    // A turn is in flight via the subscription; sending again must not be gated.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    subscribeMock.mockImplementation(gatedSubscription(gate, { event: "turn_start", data: {} }));
+
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.isStreaming).toBe(true));
+
+    await act(async () => {
+      await result.current.send("queued message");
+    });
+
+    expect(chatApiMock.sendMessage).toHaveBeenCalledWith("conv-1", "queued message");
+    release();
+  });
+
+  test("accumulates text_delta into the live bubble and clears it once the reply lands", async () => {
+    subscribeMock.mockImplementation(
+      fromEvents(
+        { event: "turn_start", data: {} },
+        { event: "text_delta", data: { text: "Hello" } },
+        { event: "text_delta", data: { text: " world" } },
+        { event: "turn_done", data: { stop_reason: "end_turn" } },
+      ),
     );
 
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
-    // The post-turn refetch carries the persisted assistant reply, so the live
-    // bubble is cleared (the keyed persisted bubble takes over).
-    qc.setQueryData(["messages", "conv-1"], [
-      {
-        id: "a1",
-        conversation_id: "conv-1",
-        seq: 1,
-        role: "assistant",
-        content: [{ type: "text", text: "Hello world" }],
-        status: "complete",
-        created_at: "",
-      },
-    ]);
+    // The post-turn refetch carries the persisted assistant reply.
+    qc.setQueryData(
+      ["messages", "conv-1"],
+      [
+        {
+          id: "a1",
+          conversation_id: "conv-1",
+          seq: 1,
+          role: "assistant",
+          content: [{ type: "text", text: "Hello world" }],
+          status: "complete",
+          created_at: "",
+        },
+      ],
+    );
     const wrapper = ({ children }: PropsWithChildren) => (
       <QueryClientProvider client={qc}>{children}</QueryClientProvider>
     );
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
-    await act(async () => {
-      await result.current.send("hi");
-    });
-
-    // After turn completes, liveMessage is cleared and isStreaming is false.
+    await waitFor(() => expect(result.current.liveMessage).toBeNull());
     expect(result.current.isStreaming).toBe(false);
-    expect(result.current.liveMessage).toBeNull();
     expect(result.current.error).toBeNull();
-    expect(streamChatTurnMock).toHaveBeenCalledWith("conv-1", "hi", expect.any(AbortSignal));
   });
 
   test("keeps the live bubble until the refetched messages carry the assistant reply (no flicker)", async () => {
-    // Flicker repro: clearing the live bubble before the persisted reply is in
-    // the messages cache leaves a gap (and remounts the bubble). When the
-    // refetch already carries the reply, the live bubble is safe to drop.
-    streamChatTurnMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      yield { event: "text_delta", data: { text: "The answer" } };
-      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
-    });
+    subscribeMock.mockImplementation(
+      fromEvents(
+        { event: "turn_start", data: {} },
+        { event: "text_delta", data: { text: "The answer" } },
+        { event: "turn_done", data: { stop_reason: "end_turn" } },
+      ),
+    );
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
-    // Stand in for the post-turn refetch: the persisted assistant reply is in
-    // the cache by the time the hook checks.
-    qc.setQueryData(["messages", "conv-1"], [
-      {
-        id: "a1",
-        conversation_id: "conv-1",
-        seq: 1,
-        role: "assistant",
-        content: [{ type: "text", text: "The answer" }],
-        status: "complete",
-        created_at: "",
-      },
-    ]);
+    qc.setQueryData(
+      ["messages", "conv-1"],
+      [
+        {
+          id: "a1",
+          conversation_id: "conv-1",
+          seq: 1,
+          role: "assistant",
+          content: [{ type: "text", text: "The answer" }],
+          status: "complete",
+          created_at: "",
+        },
+      ],
+    );
     const wrapper = ({ children }: PropsWithChildren) => (
       <QueryClientProvider client={qc}>{children}</QueryClientProvider>
     );
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
-    await act(async () => {
-      await result.current.send("q");
-    });
-
-    expect(result.current.liveMessage).toBeNull();
+    await waitFor(() => expect(result.current.liveMessage).toBeNull());
   });
 
   test("does NOT clear the live bubble when the refetch still lacks the assistant reply", async () => {
-    // If the persisted reply isn't in the refetched history yet, dropping the
-    // live bubble would blank the just-streamed answer — hold it instead.
-    streamChatTurnMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      yield { event: "text_delta", data: { text: "The answer" } };
-      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
-    });
+    subscribeMock.mockImplementation(
+      fromEvents(
+        { event: "turn_start", data: {} },
+        { event: "text_delta", data: { text: "The answer" } },
+        { event: "turn_done", data: { stop_reason: "end_turn" } },
+      ),
+    );
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
-    // Refetch brings only the user message back — the assistant reply hasn't
-    // landed yet.
-    qc.setQueryData(["messages", "conv-1"], [
-      {
-        id: "u1",
-        conversation_id: "conv-1",
-        seq: 0,
-        role: "user",
-        content: [{ type: "text", text: "q" }],
-        status: "complete",
-        created_at: "",
-      },
-    ]);
+    // Refetch brings only the user message back — the assistant reply hasn't landed.
+    qc.setQueryData(
+      ["messages", "conv-1"],
+      [
+        {
+          id: "u1",
+          conversation_id: "conv-1",
+          seq: 0,
+          role: "user",
+          content: [{ type: "text", text: "q" }],
+          status: "complete",
+          created_at: "",
+        },
+      ],
+    );
     const wrapper = ({ children }: PropsWithChildren) => (
       <QueryClientProvider client={qc}>{children}</QueryClientProvider>
     );
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
-    await act(async () => {
-      await result.current.send("q");
-    });
-
+    await waitFor(() => expect(result.current.liveMessage?.text).toBe("The answer"));
     expect(result.current.liveMessage).not.toBeNull();
-    expect(result.current.liveMessage?.text).toBe("The answer");
   });
 
-  test("sets error on ApiError and clears streaming state", async () => {
-    streamChatTurnMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      throw new ApiError("TURN_IN_PROGRESS", "a turn is already in progress");
-    });
-
-    const { result } = renderHook(() => useChatTurn("conv-1"), {
-      wrapper: makeWrapper(),
-    });
-
-    await act(async () => {
-      await result.current.send("hi");
-    });
-
-    expect(result.current.isStreaming).toBe(false);
-    expect(result.current.error).toBeInstanceOf(ApiError);
-    expect((result.current.error as ApiError).code).toBe("TURN_IN_PROGRESS");
-  });
-
-  test("sets error on generic Error", async () => {
-    // Reject immediately instead of using a generator to avoid require-yield lint.
-    streamChatTurnMock.mockReturnValue(
-      (async function* () {
-        yield { event: "turn_start", data: {} };
-        throw new Error("network failure");
-      })(),
+  test("turn_error surfaces an error and drops the live bubble", async () => {
+    subscribeMock.mockImplementation(
+      fromEvents(
+        { event: "turn_start", data: {} },
+        { event: "text_delta", data: { text: "thinking..." } },
+        { event: "turn_error", data: { code: "MODEL_ERROR", message: "provider failed" } },
+      ),
     );
 
-    const { result } = renderHook(() => useChatTurn("conv-1"), {
-      wrapper: makeWrapper(),
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.error).toBeInstanceOf(ApiError));
+    expect((result.current.error as ApiError).code).toBe("MODEL_ERROR");
+    expect((result.current.error as ApiError).message).toContain("provider failed");
+    expect(result.current.isStreaming).toBe(false);
+    expect(result.current.liveMessage).toBeNull();
+  });
+
+  test("a subscription failure surfaces as an error", async () => {
+    subscribeMock.mockImplementation(async function* () {
+      yield { event: "turn_start", data: {} };
+      throw new Error("network failure");
     });
 
-    await act(async () => {
-      await result.current.send("hi");
-    });
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
 
-    expect(result.current.error).toBeInstanceOf(Error);
+    await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
     expect((result.current.error as Error).message).toBe("network failure");
   });
 
-  test("clearError resets error state", async () => {
-    streamChatTurnMock.mockReturnValue(
-      (async function* () {
-        yield { event: "turn_start", data: {} };
-        throw new Error("network failure");
-      })(),
-    );
-
-    const { result } = renderHook(() => useChatTurn("conv-1"), {
-      wrapper: makeWrapper(),
-    });
+  test("send() error (POST rejected) surfaces in hook state", async () => {
+    chatApiMock.sendMessage.mockRejectedValue(new ApiError("CONVERSATION_NOT_FOUND", "gone"));
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
 
     await act(async () => {
       await result.current.send("hi");
     });
 
-    expect(result.current.error).not.toBeNull();
+    expect(result.current.error).toBeInstanceOf(ApiError);
+    expect((result.current.error as ApiError).code).toBe("CONVERSATION_NOT_FOUND");
+  });
+
+  test("clearError resets error state", async () => {
+    subscribeMock.mockImplementation(async function* () {
+      yield { event: "turn_start", data: {} };
+      throw new Error("network failure");
+    });
+
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
 
     act(() => {
       result.current.clearError();
@@ -231,136 +289,110 @@ describe("useChatTurn", () => {
     expect(result.current.error).toBeNull();
   });
 
-  test("send is idempotent — a second call while streaming is a no-op", async () => {
-    // The generator captures the 'send' reference snapshot — once isStreaming=true
-    // the second call should bail out immediately without calling streamChatTurn again.
-    // We can verify this by checking mock call count stays at 1.
-    streamChatTurnMock.mockImplementation(
-      async function* () {
-        yield { event: "turn_start", data: {} };
-        yield { event: "turn_done", data: { stop_reason: "end_turn" } };
-      },
-    );
-
-    const { result } = renderHook(() => useChatTurn("conv-1"), {
-      wrapper: makeWrapper(),
-    });
-
-    // First send completes.
-    await act(async () => {
-      await result.current.send("first");
-    });
-
-    expect(streamChatTurnMock).toHaveBeenCalledTimes(1);
-    expect(result.current.isStreaming).toBe(false);
-  });
-
   test("accumulates tool_call and tool_result events without error", async () => {
-    streamChatTurnMock.mockImplementation(
-      async function* () {
-        yield { event: "turn_start", data: {} };
-        yield {
+    subscribeMock.mockImplementation(
+      fromEvents(
+        { event: "turn_start", data: {} },
+        {
           event: "tool_call",
           data: {
             tool_use_id: "t1",
             tool_name: "coffer__search_memory",
             tool_input: { query: "OAuth" },
           },
-        };
-        yield {
+        },
+        {
           event: "tool_result",
-          data: { tool_use_id: "t1", tool_name: "coffer__search_memory", output: { result: "found" }, error: null },
-        };
-        yield { event: "text_delta", data: { text: "Based on" } };
-        yield { event: "turn_done", data: { stop_reason: "end_turn" } };
-      },
+          data: {
+            tool_use_id: "t1",
+            tool_name: "coffer__search_memory",
+            output: { result: "found" },
+            error: null,
+          },
+        },
+        { event: "text_delta", data: { text: "Based on" } },
+        { event: "turn_done", data: { stop_reason: "end_turn" } },
+      ),
     );
 
-    const { result } = renderHook(() => useChatTurn("conv-1"), {
-      wrapper: makeWrapper(),
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
+    qc.setQueryData(
+      ["messages", "conv-1"],
+      [
+        {
+          id: "a1",
+          conversation_id: "conv-1",
+          seq: 1,
+          role: "assistant",
+          content: [{ type: "text", text: "Based on" }],
+          status: "complete",
+          created_at: "",
+        },
+      ],
+    );
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
-    await act(async () => {
-      await result.current.send("what about OAuth?");
-    });
-
+    await waitFor(() => expect(result.current.isStreaming).toBe(false));
     expect(result.current.error).toBeNull();
-    expect(result.current.isStreaming).toBe(false);
-    expect(streamChatTurnMock).toHaveBeenCalledWith("conv-1", "what about OAuth?", expect.any(AbortSignal));
-  });
-
-  test("turn_error event surfaces an error in hook state", async () => {
-    streamChatTurnMock.mockImplementation(
-      async function* () {
-        yield { event: "turn_start", data: {} };
-        yield { event: "text_delta", data: { text: "thinking..." } };
-        yield { event: "turn_error", data: { code: "MODEL_ERROR", message: "provider failed" } };
-      },
-    );
-
-    const { result } = renderHook(() => useChatTurn("conv-1"), {
-      wrapper: makeWrapper(),
-    });
-
-    await act(async () => {
-      await result.current.send("hi");
-    });
-
-    // turn_error must surface as an error so the Chat page can display it.
-    expect(result.current.error).toBeInstanceOf(ApiError);
-    expect((result.current.error as ApiError).code).toBe("MODEL_ERROR");
-    expect((result.current.error as ApiError).message).toContain("provider failed");
-    expect(result.current.isStreaming).toBe(false);
   });
 
   test("isStreaming is true while a turn streams and false once it ends", async () => {
-    // A controllable gate keeps the turn open so mid-stream state is
-    // deterministic — no real timers, no act()-without-await warning.
     let release!: () => void;
-    const gate = new Promise<void>((r) => {
-      release = r;
-    });
-    streamChatTurnMock.mockImplementation(async function* () {
+    const gate = new Promise<void>((r) => (release = r));
+    subscribeMock.mockImplementation(async function* () {
       yield { event: "turn_start", data: {} };
       await gate;
       yield { event: "turn_done", data: { stop_reason: "end_turn" } };
     });
 
-    const { result } = renderHook(() => useChatTurn("conv-1"), {
-      wrapper: makeWrapper(),
-    });
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
 
-    // Kick off the turn; it parks at the gate.
-    let sendPromise!: Promise<void>;
-    act(() => {
-      sendPromise = result.current.send("hello");
-    });
-
-    // Mid-stream: the turn is streaming.
     await waitFor(() => expect(result.current.isStreaming).toBe(true));
 
-    // Let the turn finish.
-    release();
     await act(async () => {
-      await sendPromise;
+      release();
     });
 
-    expect(result.current.isStreaming).toBe(false);
+    await waitFor(() => expect(result.current.isStreaming).toBe(false));
     expect(result.current.error).toBeNull();
   });
 
-  test("switching conversation mid-stream resets state and aborts the old stream", async () => {
-    let release!: () => void;
-    const gate = new Promise<void>((r) => {
-      release = r;
+  test("queue_changed updates the pending queue", async () => {
+    subscribeMock.mockImplementation(
+      fromEvents({ event: "queue_changed", data: { pending: ["one", "two"] } }),
+    );
+
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.pending).toEqual(["one", "two"]));
+  });
+
+  test("setPending() PUTs the new queue and reflects the response", async () => {
+    chatApiMock.setPending.mockResolvedValue({ pending: ["kept"] });
+    const { result } = renderHook(() => useChatTurn("conv-9"), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      await result.current.setPending(["kept", "dropped"]);
     });
-    let capturedSignal: AbortSignal | undefined;
-    streamChatTurnMock.mockImplementation(async function* (_c, _t, signal) {
-      capturedSignal = signal;
+
+    expect(chatApiMock.setPending).toHaveBeenCalledWith("conv-9", ["kept", "dropped"]);
+    expect(result.current.pending).toEqual(["kept"]);
+  });
+
+  test("switching conversation aborts the old subscription and reopens for the new one", async () => {
+    const signals: AbortSignal[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    subscribeMock.mockImplementation(async function* (_id: string, signal?: AbortSignal) {
+      if (signal) signals.push(signal);
       yield { event: "turn_start", data: {} };
       yield { event: "text_delta", data: { text: "partial A" } };
       await gate;
-      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
     });
 
     const { result, rerender } = renderHook(({ id }) => useChatTurn(id), {
@@ -368,88 +400,23 @@ describe("useChatTurn", () => {
       initialProps: { id: "conv-A" },
     });
 
-    act(() => {
-      void result.current.send("hi");
-    });
     await waitFor(() => expect(result.current.liveMessage?.text).toBe("partial A"));
     expect(result.current.isStreaming).toBe(true);
 
-    // Switch to a different conversation while conv-A is still streaming.
     act(() => {
       rerender({ id: "conv-B" });
     });
 
-    // Conv-A's turn state must not bleed into conv-B.
+    // Conv-A's state must not bleed into conv-B; its subscription was aborted.
     expect(result.current.isStreaming).toBe(false);
     expect(result.current.liveMessage).toBeNull();
-    // The previous conversation's stream was aborted.
-    expect(capturedSignal?.aborted).toBe(true);
+    expect(signals[0]?.aborted).toBe(true);
+    expect(subscribeMock).toHaveBeenCalledWith("conv-B", expect.any(AbortSignal));
 
-    release(); // let the orphaned generator unwind
-  });
-
-  test("a stale send() continuation from the previous conversation cannot clear the new conversation's turn state", async () => {
-    // Conv-A's generator parks mid-stream; we switch to conv-B and start a
-    // turn there; then conv-A's generator finishes. A's continuation
-    // (invalidateQueries + setState + finally) must NOT wipe B's live state.
-    let releaseA!: () => void;
-    const gateA = new Promise<void>((r) => {
-      releaseA = r;
-    });
-    let releaseB!: () => void;
-    const gateB = new Promise<void>((r) => {
-      releaseB = r;
-    });
-
-    streamChatTurnMock.mockImplementation(async function* (convId: string) {
-      yield { event: "turn_start", data: {} };
-      if (convId === "conv-A") {
-        yield { event: "text_delta", data: { text: "from A" } };
-        await gateA;
-        yield { event: "turn_done", data: { stop_reason: "end_turn" } };
-      } else {
-        yield { event: "text_delta", data: { text: "from B" } };
-        await gateB;
-        yield { event: "turn_done", data: { stop_reason: "end_turn" } };
-      }
-    });
-
-    const { result, rerender } = renderHook(({ id }) => useChatTurn(id), {
-      wrapper: makeWrapper(),
-      initialProps: { id: "conv-A" },
-    });
-
-    let sendA!: Promise<void>;
-    act(() => {
-      sendA = result.current.send("hi A");
-    });
-    await waitFor(() => expect(result.current.liveMessage?.text).toBe("from A"));
-
-    // Switch to conv-B and start a turn there.
-    act(() => {
-      rerender({ id: "conv-B" });
-    });
-    act(() => {
-      void result.current.send("hi B");
-    });
-    await waitFor(() => expect(result.current.liveMessage?.text).toBe("from B"));
-    expect(result.current.isStreaming).toBe(true);
-
-    // Conv-A's stale continuation completes now.
-    releaseA();
-    await act(async () => {
-      await sendA;
-    });
-
-    // B's in-flight state survives the stale continuation.
-    expect(result.current.isStreaming).toBe(true);
-    expect(result.current.liveMessage?.text).toBe("from B");
-
-    releaseB();
+    release();
   });
 
   test("interrupt() calls chatApi.interruptTurn for the conversation", async () => {
-    chatApiMock.interruptTurn.mockResolvedValue(undefined);
     const { result } = renderHook(() => useChatTurn("conv-9"), { wrapper: makeWrapper() });
 
     await act(async () => {
@@ -459,62 +426,13 @@ describe("useChatTurn", () => {
     expect(chatApiMock.interruptTurn).toHaveBeenCalledWith("conv-9");
   });
 
-  test("send() exposes the just-sent user text as an optimistic echo while the turn streams", async () => {
-    // P0-4: without the echo, the prompt is invisible until the next messages
-    // fetch — the reply streams to a question the user cannot see.
-    let release!: () => void;
-    const gate = new Promise<void>((r) => {
-      release = r;
-    });
-    streamChatTurnMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      await gate;
-      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
-    });
-
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    });
-    // The post-turn refetch carries a persisted assistant reply, so the live
-    // bubble clears once the turn ends.
-    qc.setQueryData(["messages", "conv-1"], [
-      {
-        id: "a1",
-        conversation_id: "conv-1",
-        seq: 1,
-        role: "assistant",
-        content: [{ type: "text", text: "an answer" }],
-        status: "complete",
-        created_at: "",
-      },
-    ]);
-    const wrapper = ({ children }: PropsWithChildren) => (
-      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  test("turn_start invalidates the messages query so a committed user message appears", async () => {
+    subscribeMock.mockImplementation(
+      fromEvents(
+        { event: "turn_start", data: {} },
+        { event: "turn_done", data: { stop_reason: "end_turn" } },
+      ),
     );
-    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
-
-    let sendPromise!: Promise<void>;
-    act(() => {
-      sendPromise = result.current.send("what is OAuth?");
-    });
-
-    // The prompt is part of the live state before any reply token arrives.
-    await waitFor(() => expect(result.current.liveMessage?.userText).toBe("what is OAuth?"));
-
-    release();
-    await act(async () => {
-      await sendPromise;
-    });
-    expect(result.current.liveMessage).toBeNull();
-  });
-
-  test("turn_error refetches messages so the persisted user message and failed turn appear", async () => {
-    // P0-4: the messages query was only invalidated on stream success, so a
-    // failed turn left the persisted user message + failed row hidden.
-    streamChatTurnMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      yield { event: "turn_error", data: { code: "MODEL_ERROR", message: "provider failed" } };
-    });
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
@@ -522,22 +440,14 @@ describe("useChatTurn", () => {
     const wrapper = ({ children }: PropsWithChildren) => (
       <QueryClientProvider client={qc}>{children}</QueryClientProvider>
     );
-    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+    renderHook(() => useChatTurn("conv-1"), { wrapper });
 
-    await act(async () => {
-      await result.current.send("hi");
-    });
-
-    expect(result.current.error).toBeInstanceOf(ApiError);
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["messages", "conv-1"] });
-    // The live bubble is dropped — the persisted failed row is authoritative.
-    expect(result.current.liveMessage).toBeNull();
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["messages", "conv-1"] }),
+    );
   });
 
-  test("invalidates the conversations list when a turn ends, so the auto-generated title appears", async () => {
-    streamChatTurnMock.mockImplementation(async function* () {
-      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
-    });
+  test("invalidates the conversations list on send, so the auto-generated title appears", async () => {
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });

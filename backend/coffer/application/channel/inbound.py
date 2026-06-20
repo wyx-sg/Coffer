@@ -57,10 +57,8 @@ class ConversationPort(Protocol):
         agent_key: str,
         agent_config: dict[str, Any] | None,
         actor: str,
-        origin: str = "web",
         channel_name: str | None = None,
         peer_chat_id: str | None = None,
-        peer_display_name: str | None = None,
     ) -> Any: ...
 
     async def get_conversation(self, conversation_id: str) -> Any: ...

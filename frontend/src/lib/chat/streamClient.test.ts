@@ -1,9 +1,9 @@
 // frontend/src/lib/chat/streamClient.test.ts
-// Tests for SSE streaming client.
+// Tests for the GET /events SSE subscription client.
 // Uses a fake ReadableStream to simulate the server-sent event stream.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { streamChatTurn } from "./streamClient";
+import { subscribeConversationEvents } from "./streamClient";
 import { ApiError } from "../api/errors";
 
 // Mock auth helpers so they return deterministic values.
@@ -40,17 +40,17 @@ function sseFrame(event: string, data: unknown): string {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("streamChatTurn", () => {
+describe("subscribeConversationEvents", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
   test("yields turn_start, text_delta, turn_done from a simple stream", async () => {
     const body = makeStream(
-      sseFrame("turn_start", { conversation_id: "c1", message_id: "m1" }),
+      sseFrame("turn_start", {}),
       sseFrame("text_delta", { text: "Hello" }),
       sseFrame("text_delta", { text: " world" }),
-      sseFrame("turn_done", { message_id: "m1", prompt_tokens: 10, completion_tokens: 5 }),
+      sseFrame("turn_done", { stop_reason: "end_turn", prompt_tokens: 10, completion_tokens: 5 }),
     );
 
     vi.stubGlobal(
@@ -62,7 +62,7 @@ describe("streamChatTurn", () => {
     );
 
     const events = [];
-    for await (const event of streamChatTurn("c1", "hi")) {
+    for await (const event of subscribeConversationEvents("c1")) {
       events.push(event);
     }
 
@@ -74,9 +74,40 @@ describe("streamChatTurn", () => {
     expect(events[3].event).toBe("turn_done");
   });
 
+  test("does NOT stop after turn_done — keeps yielding events from the same subscription", async () => {
+    // The subscription is long-lived: a second turn (and a queue_changed) on the
+    // same stream must continue to be yielded.
+    const body = makeStream(
+      sseFrame("turn_start", {}),
+      sseFrame("text_delta", { text: "first" }),
+      sseFrame("turn_done", { stop_reason: "end_turn" }),
+      sseFrame("queue_changed", { pending: ["next up"] }),
+      sseFrame("turn_start", {}),
+      sseFrame("text_delta", { text: "second" }),
+      sseFrame("turn_done", { stop_reason: "end_turn" }),
+    );
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body }));
+
+    const events = [];
+    for await (const event of subscribeConversationEvents("c1")) {
+      events.push(event);
+    }
+
+    expect(events.map((e) => e.event)).toEqual([
+      "turn_start",
+      "text_delta",
+      "turn_done",
+      "queue_changed",
+      "turn_start",
+      "text_delta",
+      "turn_done",
+    ]);
+  });
+
   test("yields tool_call and tool_result events", async () => {
     const body = makeStream(
-      sseFrame("turn_start", { conversation_id: "c1", message_id: "m2" }),
+      sseFrame("turn_start", {}),
       sseFrame("tool_call", {
         tool_use_id: "t1",
         tool_name: "coffer__search_memory",
@@ -88,16 +119,13 @@ describe("streamChatTurn", () => {
         error: null,
       }),
       sseFrame("text_delta", { text: "Based on your notes..." }),
-      sseFrame("turn_done", { message_id: "m2", prompt_tokens: 20, completion_tokens: 10 }),
+      sseFrame("turn_done", { stop_reason: "end_turn", prompt_tokens: 20, completion_tokens: 10 }),
     );
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({ ok: true, body }),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body }));
 
     const events = [];
-    for await (const event of streamChatTurn("c1", "what about OAuth?")) {
+    for await (const event of subscribeConversationEvents("c1")) {
       events.push(event);
     }
 
@@ -108,56 +136,45 @@ describe("streamChatTurn", () => {
     expect(events[4].event).toBe("turn_done");
   });
 
-  test("yields turn_error and stops", async () => {
+  test("yields turn_error then continues (does not stop)", async () => {
     const body = makeStream(
-      sseFrame("turn_start", { conversation_id: "c1", message_id: "m3" }),
+      sseFrame("turn_start", {}),
       sseFrame("turn_error", { code: "MODEL_UNAVAILABLE", message: "provider error" }),
-      // This frame should NOT be yielded — generator must stop after turn_error.
-      sseFrame("text_delta", { text: "should not appear" }),
+      // A subsequent frame is still yielded — the subscription is long-lived.
+      sseFrame("text_delta", { text: "later turn" }),
     );
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({ ok: true, body }),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body }));
 
     const events = [];
-    for await (const event of streamChatTurn("c1", "ping")) {
+    for await (const event of subscribeConversationEvents("c1")) {
       events.push(event);
     }
 
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(3);
     expect(events[1].event).toBe("turn_error");
+    expect(events[2].event).toBe("text_delta");
   });
 
-  test("throws ApiError for a 409 HTTP error response", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 409,
-        json: vi.fn().mockResolvedValue({
-          error: { code: "TURN_IN_PROGRESS", message: "a turn is already in progress" },
-        }),
-      }),
+  test("yields queue_changed events", async () => {
+    const body = makeStream(
+      sseFrame("queue_changed", { pending: ["one", "two"] }),
+      sseFrame("turn_start", {}),
+      sseFrame("turn_done", { stop_reason: "end_turn" }),
     );
 
-    await expect(async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      for await (const _ of streamChatTurn("c1", "hi")) {
-        // should not reach here
-      }
-    }).rejects.toThrow(ApiError);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body }));
 
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      for await (const _ of streamChatTurn("c1", "hi")) {
-        // do nothing
-      }
-    } catch (err) {
-      expect(err).toBeInstanceOf(ApiError);
-      expect((err as ApiError).code).toBe("TURN_IN_PROGRESS");
+    const events = [];
+    for await (const event of subscribeConversationEvents("c1")) {
+      events.push(event);
     }
+
+    expect(events[0].event).toBe("queue_changed");
+    expect((events[0] as { event: string; data: { pending: string[] } }).data.pending).toEqual([
+      "one",
+      "two",
+    ]);
   });
 
   test("throws ApiError for a 404 HTTP error response", async () => {
@@ -175,7 +192,7 @@ describe("streamChatTurn", () => {
     let thrown: unknown;
     try {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      for await (const _ of streamChatTurn("bad-id", "hi")) {
+      for await (const _ of subscribeConversationEvents("bad-id")) {
         // do nothing
       }
     } catch (err) {
@@ -194,19 +211,16 @@ describe("streamChatTurn", () => {
     const chunk2 = fullFrame.slice(half);
 
     const body = makeStream(
-      sseFrame("turn_start", { conversation_id: "c2", message_id: "m4" }),
+      sseFrame("turn_start", {}),
       chunk1,
       chunk2,
-      sseFrame("turn_done", { message_id: "m4" }),
+      sseFrame("turn_done", { stop_reason: "end_turn" }),
     );
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({ ok: true, body }),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body }));
 
     const events = [];
-    for await (const event of streamChatTurn("c2", "test")) {
+    for await (const event of subscribeConversationEvents("c2")) {
       events.push(event);
     }
 
@@ -222,15 +236,15 @@ describe("streamChatTurn", () => {
     }
 
     const body = makeStream(
-      crlfFrame("turn_start", { conversation_id: "c4", message_id: "m6" }),
+      crlfFrame("turn_start", {}),
       crlfFrame("text_delta", { text: "crlf" }),
-      crlfFrame("turn_done", { message_id: "m6" }),
+      crlfFrame("turn_done", { stop_reason: "end_turn" }),
     );
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body }));
 
     const events = [];
-    for await (const event of streamChatTurn("c4", "test")) {
+    for await (const event of subscribeConversationEvents("c4")) {
       events.push(event);
     }
 
@@ -247,10 +261,10 @@ describe("streamChatTurn", () => {
     // Manually construct a stream that interleaves a comment line.
     const raw =
       ": keep-alive\n\n" +
-      sseFrame("turn_start", { conversation_id: "c5", message_id: "m7" }) +
+      sseFrame("turn_start", {}) +
       ": ping\n\n" +
       sseFrame("text_delta", { text: "after comment" }) +
-      sseFrame("turn_done", { message_id: "m7" });
+      sseFrame("turn_done", { stop_reason: "end_turn" });
 
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -262,7 +276,7 @@ describe("streamChatTurn", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body }));
 
     const events = [];
-    for await (const event of streamChatTurn("c5", "test")) {
+    for await (const event of subscribeConversationEvents("c5")) {
       events.push(event);
     }
 
@@ -270,7 +284,9 @@ describe("streamChatTurn", () => {
     expect(events).toHaveLength(3);
     expect(events[0].event).toBe("turn_start");
     expect(events[1].event).toBe("text_delta");
-    expect((events[1] as { event: string; data: { text: string } }).data.text).toBe("after comment");
+    expect((events[1] as { event: string; data: { text: string } }).data.text).toBe(
+      "after comment",
+    );
     expect(events[2].event).toBe("turn_done");
   });
 
@@ -290,35 +306,62 @@ describe("streamChatTurn", () => {
     );
 
     const events = [];
-    for await (const event of streamChatTurn("c9", "test")) {
+    for await (const event of subscribeConversationEvents("c9")) {
       events.push(event);
     }
 
     expect(events.map((e) => e.event)).toEqual(["turn_start", "text_delta", "turn_done"]);
   });
 
-  test("sends correct headers and body", async () => {
+  test("sends a GET with correct headers and no body", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       body: makeStream(
-        sseFrame("turn_start", { conversation_id: "c3", message_id: "m5" }),
-        sseFrame("turn_done", { message_id: "m5" }),
+        sseFrame("turn_start", {}),
+        sseFrame("turn_done", { stop_reason: "end_turn" }),
       ),
     });
     vi.stubGlobal("fetch", fetchMock);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    for await (const _ of streamChatTurn("c3", "hello")) {
+    for await (const _ of subscribeConversationEvents("c3")) {
       // consume
     }
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://127.0.0.1:8000/api/v1/chat/conversations/c3/messages");
-    expect(options.method).toBe("POST");
+    expect(url).toBe("http://127.0.0.1:8000/api/v1/chat/conversations/c3/events");
+    expect(options.method).toBe("GET");
+    expect(options.body).toBeUndefined();
     const headers = options.headers as Record<string, string>;
     expect(headers["X-Coffer-Token"]).toBe("test-token");
     expect(headers["X-Coffer-Actor"]).toBe("ui");
-    expect(JSON.parse(options.body as string)).toEqual({ text: "hello" });
+    expect(headers["Accept"]).toBe("text/event-stream");
+  });
+
+  test("stops when the abort signal fires", async () => {
+    // A never-closing stream + an aborted signal: the generator should unwind
+    // when the underlying read is cancelled.
+    const controller = new AbortController();
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        const encoder = new TextEncoder();
+        c.enqueue(encoder.encode(sseFrame("turn_start", {})));
+        // Leave the stream open; aborting cancels the reader.
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body }));
+
+    const events = [];
+    const gen = subscribeConversationEvents("c6", controller.signal);
+    for await (const event of gen) {
+      events.push(event);
+      // Abort after the first event and break out of consumption.
+      controller.abort();
+      break;
+    }
+
+    expect(events).toHaveLength(1);
+    expect(events[0].event).toBe("turn_start");
   });
 });

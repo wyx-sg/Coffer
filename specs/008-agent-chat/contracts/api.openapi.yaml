@@ -171,13 +171,14 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     post:
-      summary: Send a user message and stream the agent turn
+      summary: Send a user message (starts or enqueues a turn; fire-and-return)
       operationId: sendMessage
       description: >
-        Appends the user message, then streams the agent turn as
-        Server-Sent Events. Event names: `turn_start`, `text_delta`,
-        `tool_call`, `tool_result`, `turn_done`, `turn_error`. Each `data:`
-        payload is a JSON object. The stream closes when the turn ends.
+        Starts a turn for the message, or enqueues it on the conversation's
+        pending queue when a turn is already in flight (ADR-031). Returns
+        immediately; turn events are consumed via
+        `GET /conversations/{id}/events` (single event path). The composer never
+        locks — a message sent during a turn is queued, not rejected.
       tags: [chat]
       requestBody:
         required: true
@@ -185,6 +186,30 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '202':
+          description: Accepted — the turn started, or the message was queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendMessageAck'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/chat/conversations/{id}/events:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    get:
+      summary: Subscribe to a conversation's live turn events (SSE)
+      operationId: subscribeConversationEvents
+      description: >
+        Server-Sent Events stream of the conversation's turn events, for any
+        client (ADR-031). On attach, an in-flight turn's events so far are
+        replayed, then streamed live; when idle, the connection is held open and
+        the next turn (from any surface) is streamed. Event names: `turn_start`,
+        `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`,
+        `queue_changed`.
+      tags: [chat]
       responses:
         '200':
           description: SSE stream of agent events
@@ -194,12 +219,34 @@ paths:
                 type: string
         '404':
           $ref: '#/components/responses/NotFound'
-        '409':
-          description: A turn is already in progress, or no model is configured
+
+  /api/v1/chat/conversations/{id}/pending:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    put:
+      summary: Replace the conversation's pending message queue
+      operationId: setPendingQueue
+      description: >
+        Replace the ordered pending-message texts (ADR-031): one primitive that
+        clears (empty list), drops, reorders, or resumes the queue. Unpauses the
+        queue and starts the next turn when none is in flight. Broadcasts
+        `queue_changed`.
+      tags: [chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PendingQueueIn'
+      responses:
+        '200':
+          description: The updated pending queue.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorOut'
+                $ref: '#/components/schemas/PendingQueueOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/v1/chat/conversations/{id}/interrupt:
     parameters:
@@ -427,24 +474,48 @@ components:
           format: date-time
           nullable: true
           description: Null for an active conversation; the instant it was archived otherwise.
-        origin:
-          type: string
-          enum: [web, channel]
-          default: web
-          description: Where the thread was opened from (ADR-021) — a Vault Console draft or an IM channel.
-        peer:
+        channel_binding:
           nullable: true
-          description: The IM peer driving a channel-origin conversation; null for web threads.
+          description: >
+            The IM channel this conversation is also driven from (ADR-031); null
+            for a desktop-only conversation. Present iff channel_name is set.
           allOf:
-            - $ref: '#/components/schemas/ConversationPeerOut'
+            - $ref: '#/components/schemas/ChannelBindingOut'
 
-    ConversationPeerOut:
+    ChannelBindingOut:
       type: object
-      required: [chat_id, display_name, channel]
+      required: [channel, chat_id]
       properties:
-        chat_id: { type: string }
-        display_name: { type: string }
         channel: { type: string, description: The channel resource name. }
+        chat_id: { type: string, description: The IM chat id used as the return address. }
+
+    SendMessageAck:
+      type: object
+      required: [queued]
+      properties:
+        queued:
+          type: boolean
+          description: >
+            True when the message was enqueued behind an in-flight turn; false
+            when its turn started immediately.
+
+    PendingQueueIn:
+      type: object
+      required: [pending]
+      properties:
+        pending:
+          type: array
+          items: { type: string }
+          description: The new ordered pending-message texts (replaces the queue).
+
+    PendingQueueOut:
+      type: object
+      required: [pending]
+      properties:
+        pending:
+          type: array
+          items: { type: string }
+          description: The conversation's current ordered pending-message texts.
 
     ConversationListOut:
       type: object

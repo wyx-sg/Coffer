@@ -1,9 +1,10 @@
 // components/chat/MessageThread.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MessageThread } from "./MessageThread";
+import { acceptance } from "@/test/acceptance";
 import type { Conversation, Message } from "@/lib/api/chat";
 
 vi.mock("@/lib/api/chat", () => ({
@@ -121,24 +122,31 @@ describe("MessageThread", () => {
     await waitFor(() => expect(screen.getByRole("textbox")).toBeInTheDocument());
   });
 
-  test("Composer is disabled while streaming", async () => {
+  test("Composer stays ENABLED while a turn streams (the next message queues)", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({ isStreaming: true });
-    await waitFor(() => expect(screen.getByRole("textbox")).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole("textbox")).toBeInTheDocument());
+    expect(screen.getByRole("textbox")).not.toBeDisabled();
   });
 
-  test("locks the composer when the server reports an in-flight turn (persisted streaming row)", async () => {
-    // After a reload/switch-back mid-turn there is no client stream, but the
-    // fetched messages contain the streaming placeholder — the composer must
-    // be locked (sending would just 409) until the turn finishes.
-    chatApiMock.listMessages.mockResolvedValue({
-      messages: [
-        makeMsg({ role: "user" }),
-        makeMsg({ id: "msg-2", seq: 2, role: "assistant", status: "streaming", content: [] }),
-      ],
+  test("renders pending chips and clicking remove calls onSetPending without the removed item", async () => {
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    const onSetPending = vi.fn();
+    renderThread({
+      isStreaming: true,
+      pending: ["first queued", "second queued"],
+      onSetPending,
     });
-    renderThread({ isStreaming: false });
-    await waitFor(() => expect(screen.getByRole("textbox")).toBeDisabled());
+    await waitFor(() => expect(screen.getByText("first queued")).toBeInTheDocument());
+    expect(screen.getByText("second queued")).toBeInTheDocument();
+
+    // Each chip has a remove button; removing the first leaves only the second.
+    const removeButtons = screen.getAllByRole("button", { name: /remove from queue/i });
+    expect(removeButtons).toHaveLength(2);
+    act(() => {
+      fireEvent.click(removeButtons[0]);
+    });
+    expect(onSetPending).toHaveBeenCalledWith(["second queued"]);
   });
 
   test("does not render fetched streaming rows while a live message is shown", async () => {
@@ -227,5 +235,21 @@ describe("MessageThread", () => {
     renderThread({ agentLabel: "Other Agent" });
     await waitFor(() => expect(screen.getByText("Other Agent")).toBeInTheDocument());
     expect(screen.queryByRole("combobox", { name: /select.*model/i })).not.toBeInTheDocument();
+  });
+
+  acceptance("008-agent-chat", "second message queues during a streaming turn", async () => {
+    // Fire-and-return + persistent subscription: while a reply streams the
+    // composer stays usable, and a message sent mid-turn shows up as a queued
+    // chip (the queue_changed event surfaced it) instead of being blocked.
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderThread({ isStreaming: true, pending: ["my queued question"] });
+
+    // The composer is never locked by streaming.
+    await waitFor(() => expect(screen.getByRole("textbox")).toBeInTheDocument());
+    expect(screen.getByRole("textbox")).not.toBeDisabled();
+
+    // The second message appears as a removable queued chip.
+    expect(screen.getByText("my queued question")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /remove from queue/i })).toBeInTheDocument();
   });
 });

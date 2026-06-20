@@ -8,12 +8,21 @@ import { Textarea } from "@/components/ui/textarea";
 
 interface Props {
   onSend: (text: string) => void;
+  /**
+   * Hard-disable the composer (textarea + send). Used for the brief
+   * draft-creation window — NOT for streaming, which never locks the composer.
+   */
   disabled?: boolean;
+  /**
+   * True while a turn streams. The composer stays ENABLED — a message sent now
+   * queues server-side. Drives the Stop button and a subtle "will queue" hint.
+   */
+  streaming?: boolean;
   /** Called when the user stops an in-flight turn. Shown only while streaming. */
   onStop?: () => void;
 }
 
-export function Composer({ onSend, disabled = false, onStop }: Props) {
+export function Composer({ onSend, disabled = false, streaming = false, onStop }: Props) {
   const { t } = useTranslation();
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -59,7 +68,7 @@ export function Composer({ onSend, disabled = false, onStop }: Props) {
           <Send className="size-4" />
         </Button>
       </div>
-      {disabled && (
+      {streaming && (
         <div className="mt-1.5 flex items-center gap-2">
           {onStop && (
             <Button
@@ -74,9 +83,7 @@ export function Composer({ onSend, disabled = false, onStop }: Props) {
               {t("chat.composer.stop")}
             </Button>
           )}
-          <span className="text-xs text-muted-foreground">
-            {t("chat.composer.streaming")}
-          </span>
+          <span className="text-xs text-muted-foreground">{t("chat.composer.streaming")}</span>
         </div>
       )}
     </div>

@@ -1119,7 +1119,11 @@
       "ariaLabel": "消息输入框",
       "send": "发送",
       "stop": "停止",
-      "streaming": "等待响应中…"
+      "streaming": "回复正在生成中 —— 你的下一条消息将进入队列。"
+    },
+    "queue": {
+      "label": "队列中：",
+      "remove": "从队列移除"
     },
     "toolCard": {
       "unknown": "未知工具",

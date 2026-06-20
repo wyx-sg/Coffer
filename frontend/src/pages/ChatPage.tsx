@@ -83,9 +83,11 @@ export function ChatPage() {
             onStop={() => void c.turn.interrupt()}
             onSend={(text) => {
               c.turn.clearError();
-              c.turn.send(text);
+              void c.turn.send(text);
             }}
             onClearTurnError={c.turn.clearError}
+            pending={c.turn.pending}
+            onSetPending={(texts) => void c.turn.setPending(texts)}
             agentLabel={c.activeAgent?.display_name ?? c.activeConv.agent_key}
             readOnly={c.activeArchived}
             onRestore={() => c.restoreConversation(c.activeConv!.id)}
