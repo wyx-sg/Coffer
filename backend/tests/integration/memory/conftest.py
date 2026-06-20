@@ -100,6 +100,7 @@ class MemHarness:
     resources: ResourceService
     documents: DocumentRepo
     audit: AuditService
+    scope: ScopeResolver
     project_cwd: str  # a cwd the fake git-root resolves as a project
     vec_stores: dict[tuple[str, str], FakeVecIndex] | None = None
 
@@ -174,6 +175,7 @@ async def mem(tmp_path: pathlib.Path, monkeypatch):
             resources=resources,
             documents=documents,
             audit=audit,
+            scope=scope,
             project_cwd=str(project_root / "src"),
             vec_stores=vec_stores,
         )

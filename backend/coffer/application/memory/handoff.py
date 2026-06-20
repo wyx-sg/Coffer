@@ -27,8 +27,10 @@ from coffer.infrastructure.knowledge.paths import handoff_path
 from coffer.infrastructure.memory import handoff_files as hf
 
 #: Injected helpers (the service stays free of direct filesystem imports for the
-#: branch read + the store-dir resolution, mirroring ``ScopeResolver``).
-GitBranchFn = Callable[[str | None], "str | None"]
+#: branch read + the store-dir resolution, mirroring ``ScopeResolver``). The
+#: branch reader matches ``scope_fs.git_branch`` (cwd is never ``None`` at the
+#: call site — ``_locate`` short-circuits a ``None`` cwd first).
+GitBranchFn = Callable[[str | Path], "str | None"]
 StoreDirFn = Callable[[str], Path]
 ClockFn = Callable[[], datetime]
 
@@ -65,6 +67,8 @@ class HandoffService:
     async def _locate(self, cwd: str | None) -> tuple[str, Path, str] | None:
         """Resolve ``(branch, handoff_path, store_name)`` for ``cwd``, or
         ``None`` when there is no branch / no project scope (no global handoff)."""
+        if cwd is None:
+            return None
         branch = self._git_branch(cwd)
         if branch is None:
             return None
