@@ -29,7 +29,9 @@ from coffer.application.knowledge_base.pipeline_helpers import (
     KBPaths,
     Prepared,
     build_kb_document,
+    check_upload_size,
     chunker_for,
+    docs_fingerprint,
     document_from_frontmatter,
     extension_of,
     mkparent_write,
@@ -74,6 +76,10 @@ class KBPipeline:
         # Serializes write paths per KB so concurrent ingest/edit/reindex on one
         # store don't interleave index batches or duplicate embeds.
         self._locks = StoreLocks()
+        # Per-KB last-seen stat-only docs/ fingerprint (in-memory, reset on
+        # restart): read by the service's reconcile-on-read short-circuit to skip
+        # the full scan when unchanged; refreshed by ``reindex_scan``.
+        self.fingerprint_cache: dict[str, str] = {}
 
     def _lock(self, kb_name: str) -> asyncio.Lock:
         return self._locks.lock(KIND_KNOWLEDGE_BASE, kb_name)
@@ -110,7 +116,7 @@ class KBPipeline:
         is matched to an existing document by ``original_filename`` in scope, not
         by its bytes, so an updated source updates the same document in place.
         """
-        self._check_size(raw_bytes, config)
+        check_upload_size(raw_bytes, config)
         prepared = await self._prepare(filename, raw_bytes)
         async with self._lock(kb_name):
             existing = await self._documents.find_by_filename(
@@ -217,14 +223,23 @@ class KBPipeline:
         removed = 0
         degraded = 0
         async with self._lock(kb_name):
+            # Snapshot the docs/ fingerprint BEFORE reading any file — caching the
+            # PRE-read state is what keeps the short-circuit race-safe (see below).
+            start_fp = await asyncio.to_thread(docs_fingerprint, docs_dir)
             paths: list[Path] = []
             if docs_dir.exists():
                 paths = await asyncio.to_thread(lambda: sorted(docs_dir.glob("*.md")))
+            # One batched row lookup keyed by id, reused for the per-file fetch
+            # AND the vanished-file prune below (replaces N ``get_document``s).
+            known = await self._documents.list_documents(
+                KIND_KNOWLEDGE_BASE, kb_name, limit=100_000, offset=0
+            )
+            rows_by_id = {d.id: d for d in known}
             on_disk_ids: set[str] = set()
             for path in paths:
                 doc_id = path.stem
                 on_disk_ids.add(doc_id)
-                doc = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc_id)
+                doc = rows_by_id.get(doc_id)
                 frontmatter, body = split_frontmatter(
                     await asyncio.to_thread(path.read_text, "utf-8")
                 )
@@ -246,13 +261,12 @@ class KBPipeline:
                     degraded += 1
             # Files are truth in BOTH directions: rows whose markdown vanished are pruned.
             index = self._retrieval.index_for(self._store_ref(kb_name), dimensions=None)
-            known = await self._documents.list_documents(
-                KIND_KNOWLEDGE_BASE, kb_name, limit=100_000, offset=0
-            )
             for stale in (d for d in known if d.id not in on_disk_ids):
                 await index.delete_chunks(stale.id)
                 await self._documents.delete_document(KIND_KNOWLEDGE_BASE, kb_name, stale.id)
                 removed += 1
+            # Cache the PRE-read snapshot; set LAST so a mid-scan raise caches nothing.
+            self.fingerprint_cache[kb_name] = start_fp
         return {"reindexed": reindexed, "skipped": skipped} | {
             "removed": removed,
             "degraded": degraded,
@@ -296,15 +310,6 @@ class KBPipeline:
         await asyncio.to_thread(shutil.rmtree, resolved, ignore_errors=True)
 
     # ----- internals -----
-
-    def _check_size(self, raw_bytes: bytes, config: KnowledgeBaseConfig) -> None:
-        if not raw_bytes:
-            raise IngestRejected("empty", "uploaded file is empty")
-        if len(raw_bytes) > config.max_document_bytes:
-            raise IngestRejected(
-                "too_large",
-                f"file size {len(raw_bytes)} exceeds KB limit {config.max_document_bytes}",
-            )
 
     async def _prepare(self, filename: str, raw_bytes: bytes) -> Prepared:
         source_sha = hashlib.sha256(raw_bytes).hexdigest()
