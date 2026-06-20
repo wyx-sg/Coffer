@@ -186,13 +186,35 @@ class SqliteKnowledgeIndex:
     # --- reads --------------------------------------------------------------
 
     async def keyword_search(self, resource_name: str, query: str, top_k: int) -> Sequence[Passage]:
-        match = _fts_query(query)
-        if match:
-            return await self._match_search(resource_name, match, top_k)
-        # No trigram-able term (every term is < 3 chars), e.g. a short CJK query
-        # like 向量 — the trigram index can't tokenize it. Fall back to a bounded
-        # substring scan so short Chinese queries still match. See _fts_query.
-        return await self._like_search(resource_name, query, top_k)
+        quoted = _fts_terms(query)
+        if not quoted:
+            # No trigram-able term (every term is < 3 chars), e.g. a short CJK
+            # query like 向量 — the trigram index can't tokenize it. Fall back to
+            # a bounded substring scan so short Chinese queries still match. See
+            # _fts_terms.
+            return await self._like_search(resource_name, query, top_k)
+
+        # AND-first: run the implicit-AND query (every term must match) so chunks
+        # containing ALL terms rank ahead of chunks matching only one common
+        # term. A single term renders identically as AND/OR, so one search
+        # suffices.
+        and_hits = await self._match_search(resource_name, _fts_query(quoted, op="AND"), top_k)
+        if len(quoted) == 1 or len(and_hits) >= top_k:
+            return and_hits
+
+        # AND was too sparse: widen to OR (any term) and append the OR-only hits
+        # after the precise AND hits, deduped by chunk identity, up to top_k.
+        or_hits = await self._match_search(resource_name, _fts_query(quoted, op="OR"), top_k)
+        seen = {(p.document_id, p.position) for p in and_hits}
+        merged = list(and_hits)
+        for passage in or_hits:
+            if len(merged) >= top_k:
+                break
+            key = (passage.document_id, passage.position)
+            if key not in seen:
+                seen.add(key)
+                merged.append(passage)
+        return merged
 
     async def _match_search(self, resource_name: str, match: str, top_k: int) -> Sequence[Passage]:
         async with self._sm() as session:
@@ -314,19 +336,30 @@ class SqliteKnowledgeIndex:
         return passages
 
 
-def _fts_query(query: str) -> str:
-    """Turn a free-text query into a safe FTS5 (trigram) MATCH expression.
+def _fts_terms(query: str) -> list[str]:
+    """The double-quoted, trigram-able (>= 3 char) terms of ``query``.
 
     Each whitespace term of >= 3 characters is double-quoted (so punctuation /
-    operators in user input can't break the parser) and OR-joined. The trigram
-    tokenizer indexes 3-character sequences, so terms shorter than 3 characters
-    produce no tokens — they are dropped here and served by the LIKE fallback in
+    operators in user input can't break the FTS5 parser). The trigram tokenizer
+    indexes 3-character sequences, so terms shorter than 3 characters produce no
+    tokens — they are dropped here and served by the LIKE fallback in
     ``keyword_search`` (this is what lets short CJK queries like 向量 match). An
-    empty result means "no trigram-able term", which routes to that fallback.
+    empty list means "no trigram-able term", which routes to that fallback.
     """
     terms = [t for t in query.split() if len(t.strip()) >= 3]
-    quoted = ['"' + t.replace('"', '""') + '"' for t in terms]
-    return " OR ".join(quoted)
+    return ['"' + t.replace('"', '""') + '"' for t in terms]
+
+
+def _fts_query(quoted_terms: list[str], *, op: str) -> str:
+    """Join already-quoted terms into an FTS5 MATCH expression.
+
+    ``op="AND"`` joins by spaces (FTS5's implicit AND — every term must match,
+    the more precise recall); ``op="OR"`` joins by ``" OR "`` (any term, the
+    wider recall). A single term renders identically either way, so a one-term
+    query needs only one search (AND == OR).
+    """
+    sep = " " if op == "AND" else " OR "
+    return sep.join(quoted_terms)
 
 
 def _like_escape(term: str) -> str:
