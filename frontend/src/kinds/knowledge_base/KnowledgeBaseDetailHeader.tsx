@@ -6,7 +6,13 @@
 // and the action triggers.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, RefreshCw, Settings as SettingsIcon, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  RefreshCw,
+  Settings as SettingsIcon,
+  TriangleAlert,
+  Upload,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +71,14 @@ export function KnowledgeBaseDetailHeader({
                   {t(`knowledgeBases.modes.${m}`)}
                 </Badge>
               ))}
+              {metrics.documents_degraded > 0 ? (
+                <Badge variant="outline" className="gap-1 text-amber-600 dark:text-amber-500">
+                  <TriangleAlert className="size-3" />
+                  {t("knowledgeBases.detail.degradedBadge", {
+                    count: metrics.documents_degraded,
+                  })}
+                </Badge>
+              ) : null}
             </div>
           ) : null}
         </div>

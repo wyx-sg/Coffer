@@ -338,6 +338,7 @@ async def metrics(
     return KnowledgeBaseMetrics(
         document_count=cast(int, m["document_count"]),
         chunk_count=cast(int, m["chunk_count"]),
+        documents_degraded=cast(int, m["documents_degraded"]),
         indexed_modes=cast("list[RetrievalMode]", m["enabled_modes"]),
         disk_bytes=cast(int, m["disk_bytes"]),
     )

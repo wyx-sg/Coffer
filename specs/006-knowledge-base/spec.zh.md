@@ -59,13 +59,13 @@
 
 ### User Story 5 —— 在桌面与 CLI 管理，并观测（优先级 P2）
 
-用户在桌面 UI 的 `Resources` 下、以及通过 `coffer kb …` 子命令管理 KB，并查看每个 KB 的指标（文档数、chunk 数、磁盘占用、已建索引的模式）。
+用户在桌面 UI 的 `Resources` 下、以及通过 `coffer kb …` 子命令管理 KB，并查看每个 KB 的指标（文档数、chunk 数、磁盘占用、已建索引的模式，以及因 embedding 服务暂不可用而向量嵌入待重试的文档数）。
 
 **为什么是这个优先级**：非 CLI 用户和脚本化都需要它；但不阻塞核心流。
 
 **独立可测**：在 UI 里创建一个 KB，拖入文件，检索；在终端 ingest 一个目录、grep、以 JSON 读取指标。
 
-**代表性场景**：KB metrics report counts and disk usage；（UI / CLI 流程延后到 e2e —— 见末尾说明）。
+**代表性场景**：KB metrics report counts and disk usage；degraded embed surfaces documents_degraded and retries without re-chunking；（UI / CLI 流程延后到 e2e —— 见末尾说明）。
 
 ---
 
@@ -241,7 +241,13 @@
 
 - **Given** a KB has documents,
 - **When** the user opens its detail view (UI or `coffer kb describe`),
-- **Then** they see document count, chunk count, the indexed retrieval modes, and the on-disk byte size of `knowledge/<name>/`.
+- **Then** they see document count, chunk count, the indexed retrieval modes, the count of documents with a pending vector embed (`documents_degraded`), and the on-disk byte size of `knowledge/<name>/`.
+
+### Scenario: degraded embed surfaces documents_degraded and retries without re-chunking
+
+- **Given** a vector-enabled KB whose embedding provider is unavailable when a document is ingested,
+- **When** the document is indexed keyword-only and the user later reads the KB (list / search / metrics) with the provider still down, then again once it is restored,
+- **Then** the document carries its real `content_sha256` and a persisted `embed_pending` flag, `documents_degraded` reports `1` on the degraded read, and the next reconcile retries **only** the embed (no re-chunk / FTS rewrite — the chunk rows are unchanged), clearing `embed_pending` so `documents_degraded` returns to `0`.
 
 ### Scenario: check sources detects changed, unchanged, and missing originals
 
@@ -333,11 +339,12 @@
 - **FR-022**: `check_sources` MUST classify each path-tracked document (those with a `source_path`) by re-hashing the external file with sha256 — streamed in chunks so a multi-GB original is never read fully into memory — and comparing to the stored `source_sha256`: `unchanged` (digests match), `changed` (they differ), or `missing` (the file is gone). Detection is **on-demand only** (no filesystem watcher), and detect-only changes nothing and audits nothing.
 - **FR-023**: `update_from_source` MUST re-ingest a document from its `source_path` in place — reading the tracked file's bytes and replaying the existing `replace=true` re-ingest path, so the document's stable ULID id is preserved and the corpus is re-chunked/re-indexed (audited via the existing `KB_DOCUMENT_UPDATED`). A document whose `source_mode == edited` MUST be refused (the existing `ReconversionBlocked` error) so hand edits are never clobbered; a vanished or untracked source is reported via the existing `IngestRejected`.
 - **FR-024**: A per-KB `auto_update_sources` flag (default **false**) governs `check_sources`: when false, detection only classifies; when true, each `changed` document whose `source_mode != edited` is auto-refreshed in place via `update_from_source` (reported `updated`), while a `changed` hand-edited document is skipped (reported `edited`). Toggling `auto_update_sources` MUST NOT re-chunk or re-embed the corpus (it is not a reindex-triggering field).
+- **FR-025**: When an embed degrades because the embedding provider is unavailable (`EngineUnavailable`), the document MUST be indexed keyword-only and its retry state MUST be tracked on a dedicated persisted `embed_pending` flag — decoupled from `content_sha256`, which MUST always carry the real Markdown body hash (so a degraded document is no longer re-chunked + re-FTS'd on every scan, and the files-as-truth sha stays correct). The KB MUST surface the count of such documents as `documents_degraded` in its metrics, computed from the persisted `embed_pending` flag so the count reflects a degrade observed during **any** read (list / get / search / grep), not only an explicit `POST /reindex`. The next reconcile MUST retry **only** the embed for a still-pending document whose body is unchanged — re-chunking it in memory and upserting only the vectors (no FTS / chunk rewrite), clearing `embed_pending` on success.
 
 ### Key Entities
 
 - **Knowledge Base**（kind 为 `knowledge_base` 的 resource）：config = 启用的检索模式、chunk size/overlap、embedding provider/model/base_url/credential_ref、max document bytes、description。
-- **Document**（统一 `documents` 行，`kind="knowledge_base"`）：doc id（稳定 ULID）、KB resource 名、磁盘 path、title、description、`content_sha256`、`source_mode`、per-face `metadata`（`original_filename`、`original_format`、`source_sha256`、`converted_at`、`conversion_engine`）、时间戳。
+- **Document**（统一 `documents` 行，`kind="knowledge_base"`）：doc id（稳定 ULID）、KB resource 名、磁盘 path、title、description、`content_sha256`（始终是真实正文哈希）、`embed_pending`（索引派生的重试标志 —— embed 降级时为真；非文件真相）、`source_mode`、per-face `metadata`（`original_filename`、`original_format`、`source_sha256`、`converted_at`、`conversion_engine`）、时间戳。
 - **Chunk**（`chunks` 行）：在文档内的 position。chunk 文本在常规 FTS5 索引（`documents_fts`）内部存一份，不再重复存进基础 SQLite 表；它始终可由 Markdown 文件重建，文件仍是真相源。
 - **Passage**（检索结果，不持久化）：passage 文本、源 doc id、title、score、position。
 - **Grep hit**（检索结果，不持久化）：path、行号、行内容。

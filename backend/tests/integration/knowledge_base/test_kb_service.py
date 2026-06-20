@@ -440,6 +440,83 @@ async def test_metrics(kb) -> None:
     assert "keyword" in m["enabled_modes"]
 
 
+@pytest.mark.acceptance(
+    spec="006-knowledge-base",
+    scenario="degraded embed surfaces documents_degraded and retries without re-chunking",
+)
+async def test_degraded_embed_surfaces_and_retries_without_rechunk(kb, vector_config) -> None:
+    """KB8: a degraded ingest (provider down) sets ``embed_pending`` and surfaces
+    ``documents_degraded == 1`` on read. A reconcile with the provider restored
+    clears it WITHOUT re-chunking (the chunk/FTS rows are untouched — the
+    decouple kills the churn), and an unrelated doc never re-chunks the degraded
+    one's content sha."""
+    from coffer.domain.errors import EngineUnavailable
+
+    await kb.create_kb("kb1", config=vector_config)
+
+    # Force the embedder to fail (provider unavailable) for the first ingest.
+    reindexer = kb.service._pipeline._reindexer  # type: ignore[attr-defined]
+    real_factory = reindexer._embedder_factory  # type: ignore[attr-defined]
+
+    def _failing(config):
+        class _Down:
+            @property
+            def dimensions(self):
+                return config.dimensions
+
+            async def embed(self, texts):
+                raise EngineUnavailable("embedding", "provider down (test)")
+
+        return _Down()
+
+    reindexer._embedder_factory = _failing  # type: ignore[attr-defined]
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\ndegraded alpha content")
+    # The persisted row is pending an embed; its content sha is the REAL hash.
+    stored = await kb.documents.get_document("knowledge_base", "kb1", doc.id)
+    assert stored is not None
+    assert stored.embed_pending is True
+    assert stored.content_sha256 != ""  # decoupled: real sha, not the old sentinel
+    real_sha = stored.content_sha256
+
+    # documents_degraded surfaces from the persisted flag on ANY read (no /reindex).
+    m = await kb.service.metrics(kb_name="kb1")
+    assert m["documents_degraded"] == 1
+
+    # Snapshot chunk-row ids so we can prove a retry does NOT rewrite them.
+    async def _chunk_ids() -> set[str]:
+        from sqlalchemy import text
+
+        async with kb.sm() as session:
+            rows = (
+                await session.execute(
+                    text("SELECT id FROM chunks WHERE document_id = :d"), {"d": doc.id}
+                )
+            ).all()
+        return {str(r.id) for r in rows}
+
+    chunk_ids_before = await _chunk_ids()
+    assert chunk_ids_before  # keyword-only chunks exist
+
+    # Restore the provider and reconcile (a plain reindex scan — content unchanged
+    # on disk, only the embed was missing).
+    reindexer._embedder_factory = real_factory  # type: ignore[attr-defined]
+    stats = await kb.service.reindex(kb_name="kb1", actor="user")
+    # Content unchanged → not counted as reindexed; the pending flag cleared.
+    assert stats["degraded"] == 0
+
+    cleared = await kb.documents.get_document("knowledge_base", "kb1", doc.id)
+    assert cleared is not None
+    assert cleared.embed_pending is False
+    assert cleared.content_sha256 == real_sha  # sha unchanged across the retry
+    assert (await kb.service.metrics(kb_name="kb1"))["documents_degraded"] == 0
+    # The chunk rows were NOT rewritten (retry upserts vectors only — no churn).
+    assert await _chunk_ids() == chunk_ids_before
+
+    # Vector recall now works (the embed was retried in place).
+    res = await kb.service.search(kb_name="kb1", query="degraded", top_k=5, mode="vector")
+    assert any("degraded" in p.text for p in res.passages)
+
+
 async def test_reindex_scan_is_noop_when_unchanged(kb) -> None:
     await kb.create_kb("kb1")
     await _ingest(kb, "kb1", "a.md", b"# A\n\nunchanged content")

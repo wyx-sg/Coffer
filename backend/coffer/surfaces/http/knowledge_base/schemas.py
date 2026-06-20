@@ -131,7 +131,7 @@ class ReindexResult(BaseModel):
     # Rows pruned because their markdown file was removed out-of-band.
     documents_removed: int = 0
     # Docs indexed keyword-only because the embedding provider was unavailable
-    # (retried on the next scan via the empty-sha sentinel).
+    # (marked ``embed_pending`` so the next scan retries just the embed).
     documents_degraded: int = 0
 
 
@@ -221,5 +221,8 @@ class GrepResponse(BaseModel):
 class KnowledgeBaseMetrics(BaseModel):
     document_count: int
     chunk_count: int
+    # Documents indexed keyword-only because the embedding provider was
+    # unavailable (embed retried on the next reconcile). 0 when all are embedded.
+    documents_degraded: int = 0
     indexed_modes: list[RetrievalMode]
     disk_bytes: int

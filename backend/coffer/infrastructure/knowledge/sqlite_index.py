@@ -140,6 +140,20 @@ class SqliteKnowledgeIndex:
             await self._vec.upsert(rows)
         return len(chunks)
 
+    async def upsert_vectors(self, document_id: str, vectors: Sequence[Sequence[float]]) -> None:
+        # Degraded-embed retry path: attach vectors to a doc's EXISTING chunks
+        # without touching FTS/chunk rows (so no churn). Vec rows keep the bare
+        # '<doc-id>:<position>' id (per-store table); positions are deterministic
+        # so they align with the stored chunks. No-op when vec is unavailable.
+        # INVARIANT: only ever called from an embed_pending state, whose chunk
+        # set is unchanged since the keyword-only index — so the position count
+        # matches and there are no stale/extra vec rows to prune (a content
+        # change routes through the full ``upsert_chunks`` rebuild instead).
+        if self._vec is None or not self._vec.available() or not vectors:
+            return
+        rows = [(f"{document_id}:{position}", vector) for position, vector in enumerate(vectors)]
+        await self._vec.upsert(rows)
+
     async def delete_chunks(self, document_id: str) -> None:
         # Scoped to THIS store: the same document_id may live in other stores
         # (content-addressed ids); deleting here must not wipe theirs.

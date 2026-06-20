@@ -15,11 +15,15 @@ from coffer.domain.knowledge.embedder import EmbeddingConfig
 class RecordingIndex:
     def __init__(self):
         self.upserts = []
+        self.vector_upserts = []
         self.deletes = []
 
     async def upsert_chunks(self, document_id, chunks, vectors):
         self.upserts.append((document_id, list(chunks), vectors))
         return len(chunks)
+
+    async def upsert_vectors(self, document_id, vectors):
+        self.vector_upserts.append((document_id, [list(v) for v in vectors]))
 
     async def delete_chunks(self, document_id):
         self.deletes.append(document_id)
@@ -137,10 +141,10 @@ async def test_embedding_unavailable_degrades_to_keyword_only() -> None:
 
 
 @pytest.mark.asyncio
-async def test_embed_failure_does_not_advance_the_sha_gate() -> None:
-    """A transient embed failure must stay retryable: the outcome carries an
-    empty sha so the persisted row mismatches the file on the next reconcile
-    and the embed is retried (review M1)."""
+async def test_embed_failure_keeps_real_sha_and_marks_pending() -> None:
+    """A degraded embed keeps the REAL content sha (decoupled, KB8) and flags
+    ``embed_pending`` so the retry state lives on its own column — the sha gate
+    no longer churns the whole degraded corpus on every scan."""
     index = RecordingIndex()
     failing = await _reindexer(FakeEmbedder(fail=True)).reindex(
         index=index,
@@ -150,17 +154,63 @@ async def test_embed_failure_does_not_advance_the_sha_gate() -> None:
         doc_id="d1",
         chunker=_chunker,
     )
+    assert failing.changed is True
     assert failing.embedded is False
-    assert failing.content_sha256 == ""  # caller persists a never-matching sha
+    assert failing.embed_pending is True
+    assert failing.content_sha256 == content_sha256("alpha\n\nbeta")  # real sha, not ""
 
-    # Next reconcile: previous_sha="" mismatches → retried; embedder now works.
+
+@pytest.mark.asyncio
+async def test_pending_retry_embeds_vectors_only_without_rechunk() -> None:
+    """A second reindex with unchanged content but ``previous_embed_pending`` and
+    the provider now UP retries JUST the embed: it calls ``upsert_vectors`` (NOT
+    ``upsert_chunks``) so FTS/chunks are never rewritten (KB8 churn fix)."""
+    index = RecordingIndex()
+    sha = content_sha256("alpha\n\nbeta")
     retried = await _reindexer().reindex(
         index=index,
         markdown="alpha\n\nbeta",
-        previous_sha=failing.content_sha256 or None,
+        previous_sha=sha,
         embedding=EmbeddingConfig(provider="local", model="m", dimensions=4),
         doc_id="d1",
         chunker=_chunker,
+        previous_embed_pending=True,
     )
+    assert retried.changed is False
     assert retried.embedded is True
-    assert retried.content_sha256 == content_sha256("alpha\n\nbeta")
+    assert retried.embed_pending is False
+    assert retried.content_sha256 == sha
+    # Only vectors were upserted — chunks/FTS untouched (no churn).
+    assert index.upserts == []
+    assert len(index.vector_upserts) == 1
+    assert index.vector_upserts[0][0] == "d1"
+    assert len(index.vector_upserts[0][1]) == 2  # one vector per chunk
+
+
+@pytest.mark.asyncio
+async def test_unchanged_not_pending_is_true_noop_no_chunker_or_embed() -> None:
+    """Unchanged content + not pending is a TRUE no-op: the chunker and embedder
+    are never invoked, and nothing is upserted."""
+    chunker_calls: list[str] = []
+
+    def _tracking_chunker(md: str) -> list[str]:
+        chunker_calls.append(md)
+        return _chunker(md)
+
+    embedder = FakeEmbedder()
+    index = RecordingIndex()
+    sha = content_sha256("alpha\n\nbeta")
+    outcome = await _reindexer(embedder).reindex(
+        index=index,
+        markdown="alpha\n\nbeta",
+        previous_sha=sha,
+        embedding=EmbeddingConfig(provider="local", model="m", dimensions=4),
+        doc_id="d1",
+        chunker=_tracking_chunker,
+        previous_embed_pending=False,
+    )
+    assert outcome.changed is False
+    assert outcome.embed_pending is False
+    assert chunker_calls == []  # chunker never called
+    assert index.upserts == []
+    assert index.vector_upserts == []

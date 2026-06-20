@@ -46,4 +46,9 @@ class Document:
     updated_at: datetime
     description: str | None = None
     project_id: str = WORKSPACE_GLOBAL_PROJECT_ID
+    # Index-derived retry state — like ``content_sha256`` it is NOT file-truth
+    # (never written to frontmatter): True when the embedding provider was
+    # unavailable so the chunks are keyword-only and the next reindex must retry
+    # JUST the embed. Recomputed by the reindex routine on every write.
+    embed_pending: bool = False
     metadata: dict[str, object] = field(default_factory=dict)

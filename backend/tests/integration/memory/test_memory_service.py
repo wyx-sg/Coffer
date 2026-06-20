@@ -388,6 +388,78 @@ async def test_enabling_vector_backfills_existing_facts(mem) -> None:
     assert any("squash-merge" in h.text for h in hits)
 
 
+async def test_degraded_fact_is_retried_on_next_reconcile(mem) -> None:
+    """KB8: a fact whose embed degraded (provider down) MUST be retried on the
+    next reconcile — the no-op pre-gate no longer skips a still-pending fact just
+    because its content sha matches. The persisted ``embed_pending`` flag is what
+    makes the retry happen even though the body is unchanged."""
+    from coffer.domain.errors import EngineUnavailable
+    from coffer.domain.resource import ResourceRef
+
+    # Provision the global store (the first write auto-registers it), then enable
+    # vector so a later write attempts an embed.
+    await mem.service.add_fact_to_store(
+        store_name=GLOBAL_STORE_NAME, name="seed", description="", body="seed fact", actor="user"
+    )
+    await mem.resources.update_config(
+        ResourceRef("memory", GLOBAL_STORE_NAME),
+        new_config={
+            "retrieval_modes": ["grep", "keyword", "vector"],
+            "default_mode": "keyword",
+            "embedding_provider": "local",
+            "embedding_model": "fake-model",
+            "embedding_dimensions": 32,
+        },
+        actor="user",
+    )
+
+    # Force the embedder to fail for the write that indexes the new fact.
+    reindexer = mem.service._reconciler._reindexer  # type: ignore[attr-defined]
+    real_factory = reindexer._embedder_factory  # type: ignore[attr-defined]
+
+    def _failing(config):
+        class _Down:
+            @property
+            def dimensions(self):
+                return config.dimensions
+
+            async def embed(self, texts):
+                raise EngineUnavailable("embedding", "provider down (test)")
+
+        return _Down()
+
+    reindexer._embedder_factory = _failing  # type: ignore[attr-defined]
+    wombat = await mem.service.add_fact_to_store(
+        store_name=GLOBAL_STORE_NAME,
+        name="wombat",
+        description="d",
+        body="the wombat fact about embeddings",
+        actor="user",
+    )
+    # The wombat fact is indexed keyword-only and persisted as embed_pending.
+    pending = await mem.documents.get_document("memory", GLOBAL_STORE_NAME, wombat.id)
+    assert pending is not None
+    assert pending.embed_pending is True
+    assert pending.content_sha256 != ""  # real sha, decoupled from the retry state
+
+    # Restore the provider and reconcile (recall reconciles on read). The fact's
+    # body is unchanged, but because it is still pending the retry runs.
+    reindexer._embedder_factory = real_factory  # type: ignore[attr-defined]
+    hits, mode, fallback = await mem.service.recall_in_store(
+        store_name=GLOBAL_STORE_NAME,
+        query="wombat embeddings",
+        mode="vector",
+        top_k=5,
+    )
+    assert mode == "vector"
+    assert fallback is False  # the embed was retried → vector recall works
+    assert any("wombat" in h.text for h in hits)
+
+    cleared = await mem.documents.get_document("memory", GLOBAL_STORE_NAME, wombat.id)
+    assert cleared is not None
+    assert cleared.embed_pending is False
+
+
 async def test_recall_hit_time_and_source_carry_fact_metadata(mem) -> None:
     """MemoryHit.time must be the fact's updated_at (not now()) and source must
     carry the fact file's path, per the data-model (review misalignment #3)."""

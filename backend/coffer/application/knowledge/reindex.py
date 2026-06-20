@@ -4,12 +4,27 @@ Every write path (KB ingest / edit / reindex-scan, memory remember / update /
 lazy-recall scan) funnels a markdown body through :meth:`Reindexer.reindex`:
 
     compute content_sha256
-     ├ unchanged → no-op (skip)
+     ├ unchanged + not embed-pending → true no-op (skip)
+     ├ unchanged + embed-pending     → retry JUST the embed (re-chunk in memory,
+     │                                 embed, upsert ONLY the vectors — no FTS /
+     │                                 chunk rewrite, so no churn)
      └ changed   → delete old chunks (FTS5 + vec)
                  → markdown-aware chunk
                  → if vector configured: embed → upsert vec
                  → upsert chunks + documents_fts
                  → upsert the documents row (bump updated_at)
+
+``content_sha256`` ALWAYS carries the real body hash; the separate
+``embed_pending`` flag tracks the degraded-embed retry state (KB8). That decouple
+keeps the no-op gate honest: a degraded doc whose body is unchanged is no longer
+re-chunked + re-FTS'd on every scan (which it was when the sha was overwritten
+with an empty-string sentinel).
+
+``embed_pending`` tracks ONLY "the embedding PROVIDER call failed
+(``EngineUnavailable``)". It is orthogonal to sqlite-vec extension availability:
+if the provider succeeds but the vec table is unavailable, ``embedded=True`` and
+we are NOT pending (that degradation is handled at query time by
+``SearchResponse.fallback``) — same parity as the existing ``embedded`` flag.
 
 The routine is pure orchestration over injected ports — the chunker, the
 embedder factory, the index, and the document repo — so it stays engine-free and
@@ -43,6 +58,10 @@ class ReindexOutcome:
     chunk_count: int
     embedded: bool
     content_sha256: str
+    #: True when the embed degraded (provider unavailable) so the chunks are
+    #: keyword-only and the next reindex must retry JUST the embed. Distinct from
+    #: ``content_sha256`` (always the real body hash) — see the module docstring.
+    embed_pending: bool = False
 
 
 def content_sha256(markdown: str) -> str:
@@ -65,36 +84,72 @@ class Reindexer:
         embedding: EmbeddingConfig | None,
         doc_id: str,
         chunker: Chunker,
+        previous_embed_pending: bool = False,
     ) -> ReindexOutcome:
         """Re-index ``doc_id``'s chunks from ``markdown``.
 
         ``chunker`` is supplied per call so each face/store uses its own chunk
-        params (KB: markdown-aware windows; memory: one chunk per fact). If
-        ``content_sha256(markdown) == previous_sha`` the call is a no-op
-        (``changed=False``) — the caller skips writing the documents row too.
-        Otherwise old chunks are dropped and rebuilt; when ``embedding`` is set
-        the chunks are embedded (degrading silently to keyword-only on
-        ``EngineUnavailable`` so an unreachable provider never blocks a write).
+        params (KB: markdown-aware windows; memory: one chunk per fact). The
+        returned ``content_sha256`` is ALWAYS the real body hash; the separate
+        ``embed_pending`` flag carries the degraded-embed retry state.
+
+        Three paths (see the module docstring):
+
+        - content unchanged AND not ``previous_embed_pending`` → true no-op
+          (``changed=False``); the caller skips writing the documents row too.
+        - content unchanged BUT ``previous_embed_pending`` → the chunks + FTS are
+          already current, only the embed was missing. Re-chunk in memory
+          (deterministic), retry the embed, and upsert ONLY the vectors — no FTS /
+          chunk rewrite, so this carries NO churn.
+        - content changed (or first index) → drop + rebuild chunks/FTS/vec.
+
+        When ``embedding`` is set the chunks are embedded, degrading silently to
+        keyword-only on ``EngineUnavailable`` (``embed_pending=True``) so an
+        unreachable provider never blocks a write.
         """
         new_sha = content_sha256(markdown)
-        if previous_sha is not None and new_sha == previous_sha:
+        content_unchanged = previous_sha is not None and new_sha == previous_sha
+
+        if content_unchanged and not previous_embed_pending:
             return ReindexOutcome(
-                changed=False, chunk_count=0, embedded=False, content_sha256=new_sha
+                changed=False,
+                chunk_count=0,
+                embedded=False,
+                content_sha256=new_sha,
+                embed_pending=False,
             )
 
+        if content_unchanged and previous_embed_pending:
+            # Content (chunks + FTS) already current — only the embed was missing.
+            # Retry JUST the embed and upsert ONLY the vectors (no FTS / chunk
+            # rewrite ⇒ no churn). Chunk positions are deterministic so the fresh
+            # vectors align with the stored chunks.
+            chunks = chunker(markdown)
+            vectors, embedded = await self._maybe_embed(chunks, embedding, doc_id=doc_id)
+            if embedded and vectors is not None:
+                await index.upsert_vectors(doc_id, vectors)
+            # Still pending only if an embed was requested (vector enabled) yet
+            # degraded again. Vector disabled since the degrade ⇒ no longer pending.
+            still_pending = embedding is not None and bool(chunks) and not embedded
+            return ReindexOutcome(
+                changed=False,
+                chunk_count=len(chunks),
+                embedded=embedded,
+                content_sha256=new_sha,
+                embed_pending=still_pending,
+            )
+
+        # Content changed (or first index): full re-chunk + FTS + embed.
         chunks = chunker(markdown)
         vectors, embedded = await self._maybe_embed(chunks, embedding, doc_id=doc_id)
         chunk_count = await index.upsert_chunks(doc_id, chunks, vectors)
-        if embedding is not None and chunks and not embedded:
-            # Embedding was requested but degraded: report an empty sha so the
-            # caller persists a never-matching value and the next reconcile
-            # retries the embed instead of treating the doc as up to date.
-            new_sha = ""
+        embed_pending = embedding is not None and bool(chunks) and not embedded
         return ReindexOutcome(
             changed=True,
             chunk_count=chunk_count,
             embedded=embedded,
             content_sha256=new_sha,
+            embed_pending=embed_pending,
         )
 
     async def _maybe_embed(
@@ -107,9 +162,10 @@ class Reindexer:
             vectors = await embedder.embed(list(chunks))
         except EngineUnavailable as exc:
             # Provider library/endpoint missing — index keyword-only. Vector
-            # recall will fall back at read time; the write must not fail. The
-            # caller persists an empty sha so the embed is retried (see
-            # ``reindex``) — but an operator still deserves a signal.
+            # recall will fall back at read time; the write must not fail.
+            # ``reindex`` records ``embed_pending=True`` (NOT an empty sha) so the
+            # next reconcile retries JUST the embed — but an operator still
+            # deserves a signal.
             _logger.warning(
                 "knowledge.reindex.embed_degraded",
                 extra={"doc_id": doc_id, "provider": embedding.provider, "error": str(exc)},

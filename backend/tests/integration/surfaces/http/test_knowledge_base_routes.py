@@ -195,6 +195,7 @@ class _SearchMetricsFakeKbService:
         return {
             "document_count": 7,
             "chunk_count": 21,
+            "documents_degraded": 2,
             "disk_bytes": 12345,
             "enabled_modes": ["keyword", "grep"],
         }
@@ -244,6 +245,7 @@ def test_metrics_route_returns_kb_metrics(tmp_path, monkeypatch):
         assert body == {
             "document_count": 7,
             "chunk_count": 21,
+            "documents_degraded": 2,
             "indexed_modes": ["keyword", "grep"],
             "disk_bytes": 12345,
         }

@@ -958,6 +958,7 @@
       "back": "Back to knowledge bases",
       "docBadge": "{{count}} documents",
       "chunkBadge": "{{count}} chunks",
+      "degradedBadge": "{{count}} documents pending vector embed (embedding service unavailable; indexed by keyword)",
       "edit": "Edit",
       "save": "Save",
       "cancel": "Cancel",

@@ -65,6 +65,7 @@ function seedBaseQueries() {
   vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
     document_count: 1,
     chunk_count: 3,
+    documents_degraded: 0,
     indexed_modes: ["keyword", "grep"],
     disk_bytes: 264,
   });
@@ -93,6 +94,21 @@ describe("KnowledgeBaseDetailPage", () => {
     expect(await screen.findByRole("button", { name: /back to knowledge bases/i })).toBeVisible();
     const tree = screen.getByRole("complementary");
     expect(await within(tree).findByText("Deploys")).toBeVisible();
+    // No degraded badge when documents_degraded is 0.
+    expect(screen.queryByText(/pending vector embed/i)).toBeNull();
+  });
+
+  test("shows a degraded-embed notice when documents_degraded > 0", async () => {
+    seedBaseQueries();
+    vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
+      document_count: 1,
+      chunk_count: 3,
+      documents_degraded: 2,
+      indexed_modes: ["keyword", "grep"],
+      disk_bytes: 264,
+    });
+    renderPage();
+    expect(await screen.findByText(/pending vector embed/i)).toBeVisible();
   });
 
   test("the unified bar searches with the selected mode", async () => {
@@ -206,6 +222,7 @@ describe("KnowledgeBaseDetailPage", () => {
     vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
       document_count: 150,
       chunk_count: 3,
+      documents_degraded: 0,
       indexed_modes: ["keyword", "grep"],
       disk_bytes: 264,
     });
