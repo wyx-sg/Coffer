@@ -753,3 +753,132 @@ async def test_reindex_prunes_rows_whose_file_was_removed(kb) -> None:
     assert await kb.documents.get_document("knowledge_base", "kb1", gone.id) is None
     assert await kb.documents.get_document("knowledge_base", "kb1", keep.id) is not None
     assert (await kb.service.search(kb_name="kb1", query="vanishing", top_k=5)).passages == ()
+
+
+# ----- reconcile-on-read short-circuit (KB7: stat-only fingerprint) -----
+
+
+def _spy_reindex_scan(kb):
+    """Wrap the pipeline's full ``reindex_scan`` with a call counter so a test
+    can assert the heavy O(N) read+parse path is (or is not) entered, without
+    relying on timing. Returns a mutable ``[count]`` list."""
+    pipeline = kb.service._pipeline  # type: ignore[attr-defined]
+    original = pipeline.reindex_scan
+    calls = [0]
+
+    async def _counting(*args, **kwargs):
+        calls[0] += 1
+        return await original(*args, **kwargs)
+
+    pipeline.reindex_scan = _counting  # type: ignore[method-assign]
+    return calls
+
+
+async def test_unchanged_corpus_skips_full_scan(kb) -> None:
+    """KB7: once a read has run the full scan, subsequent reads/searches on an
+    UNCHANGED corpus skip the O(N) read+parse ``reindex_scan`` entirely — served
+    from the index via the cheap stat-only fingerprint short-circuit.
+
+    Asserted robustly (no timing): a spy counts entries into ``reindex_scan``.
+    The first read scans (cold cache → 1 call); every read after, with nothing
+    changed on disk, must NOT re-enter it."""
+    await kb.create_kb("kb1")
+    await _ingest(kb, "kb1", "a.md", b"# A\n\nunchanging content")
+
+    calls = _spy_reindex_scan(kb)
+    # First read after the spy is attached: cold fingerprint cache → one scan.
+    await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    assert calls[0] == 1
+    # Several further reads/searches/greps with nothing changed on disk: the
+    # fingerprint matches the cached one, so the heavy path is never re-entered.
+    await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    await kb.service.search(kb_name="kb1", query="unchanging", top_k=5)
+    await kb.service.grep(kb_name="kb1", pattern="content")
+    await kb.service.get_document(
+        kb_name="kb1",
+        document_id=(await kb.service.list_documents(kb_name="kb1", limit=1, offset=0))[0][0].id,
+    )
+    assert calls[0] == 1, "unchanged corpus must not re-enter the full scan"
+
+
+async def test_out_of_band_edit_breaks_fingerprint_and_rescans(kb) -> None:
+    """KB7 invariant (FR-008a): an out-of-band edit bumps the stat fingerprint,
+    so the next read re-enters the full scan and the edit is reflected — the
+    short-circuit must never mask external-editor drift."""
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# Orig\n\noriginal walrus content")
+    # Warm the fingerprint cache with a first read.
+    assert len((await kb.service.search(kb_name="kb1", query="walrus", top_k=5)).passages) == 1
+
+    calls = _spy_reindex_scan(kb)
+    # Out-of-band edit (as an external editor would), bypassing the write API.
+    md = paths.doc_path("kb1", doc.id)
+    text = md.read_text()
+    md.write_text(text.replace("original walrus content", "edited dolphin content here"))
+
+    # The fingerprint changed → the next read re-enters the full scan and
+    # reindexes; the edit is reflected in search.
+    assert (await kb.service.search(kb_name="kb1", query="walrus", top_k=5)).passages == ()
+    assert calls[0] >= 1
+    hits = (await kb.service.search(kb_name="kb1", query="dolphin", top_k=5)).passages
+    assert len(hits) == 1
+    assert "dolphin" in hits[0].text
+
+
+async def test_out_of_band_removal_breaks_fingerprint_and_prunes(kb) -> None:
+    """KB7 invariant (FR-008a): a file removed out-of-band changes the stat
+    fingerprint (the name set shrinks), so the next read re-enters the full scan
+    and prunes the orphaned row — not masked by the short-circuit."""
+    await kb.create_kb("kb1")
+    keep = await _ingest(kb, "kb1", "keep.md", b"# Keep\n\nkeeper body")
+    gone = await _ingest(kb, "kb1", "gone.md", b"# Gone\n\nvanishing soon body")
+    # Warm the cache so a stale fingerprint would (wrongly) skip the rescan.
+    docs, total = await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    assert total == 2
+
+    calls = _spy_reindex_scan(kb)
+    paths.doc_path("kb1", gone.id).unlink()
+
+    docs, total = await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    assert calls[0] >= 1
+    assert total == 1
+    assert [d.id for d in docs] == [keep.id]
+    assert await kb.documents.get_document("knowledge_base", "kb1", gone.id) is None
+    assert (await kb.service.search(kb_name="kb1", query="vanishing", top_k=5)).passages == ()
+
+
+async def test_write_during_scan_is_not_masked(kb) -> None:
+    """KB7 race: a doc edited out-of-band DURING a scan (after its file was read,
+    before the scan finishes) must NOT be masked. The cached fingerprint is the
+    PRE-read snapshot, so a mid-scan write differs from it → the next read
+    rescans and reflects the edit. (Caching a POST-scan fingerprint would bake
+    the mid-scan write into the cache while the index missed it → stale.)"""
+    await kb.create_kb("kb1")
+    a = await _ingest(kb, "kb1", "a.md", b"# A\n\nalpha walrus content")
+    b = await _ingest(kb, "kb1", "b.md", b"# B\n\nbeta seahorse content")
+    await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)  # warm cache
+
+    pipeline = kb.service._pipeline  # type: ignore[attr-defined]
+    a_path = paths.doc_path("kb1", a.id)
+    original = pipeline._index_and_persist
+    injected = {"done": False}
+
+    async def _inject(*args, **kwargs):
+        result = await original(*args, **kwargs)
+        # a.md (processed first, sorted) has now been read+indexed this scan;
+        # simulate an external write landing mid-scan, after a.md was read.
+        if not injected["done"]:
+            injected["done"] = True
+            a_path.write_text("# A\n\nalpha narwhal content")
+        return result
+
+    pipeline._index_and_persist = _inject  # type: ignore[method-assign]
+    # Trigger the scan by editing b.md out-of-band (the fingerprint differs).
+    paths.doc_path("kb1", b.id).write_text("# B\n\nbeta dolphin content")
+    await kb.service.search(kb_name="kb1", query="dolphin", top_k=5)
+    pipeline._index_and_persist = original  # restore
+
+    # The mid-scan write to a.md (narwhal) must surface on the NEXT read — the
+    # pre-read fingerprint snapshot forces a rescan rather than a stale match.
+    hits = (await kb.service.search(kb_name="kb1", query="narwhal", top_k=5)).passages
+    assert len(hits) == 1

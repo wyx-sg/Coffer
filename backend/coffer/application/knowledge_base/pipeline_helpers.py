@@ -7,14 +7,17 @@ service for reads (``read_markdown_body``, ``du_bytes``, ``chunker_for``).
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import hashlib
 import re
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+from coffer.domain.errors import IngestRejected
 from coffer.domain.knowledge.document import (
     KIND_KNOWLEDGE_BASE,
     WORKSPACE_GLOBAL_PROJECT_ID,
@@ -87,6 +90,17 @@ class SourceStatus:
     status: str
 
 
+def check_upload_size(raw_bytes: bytes, config: KnowledgeBaseConfig) -> None:
+    """Reject an empty or over-limit upload before any conversion work."""
+    if not raw_bytes:
+        raise IngestRejected("empty", "uploaded file is empty")
+    if len(raw_bytes) > config.max_document_bytes:
+        raise IngestRejected(
+            "too_large",
+            f"file size {len(raw_bytes)} exceeds KB limit {config.max_document_bytes}",
+        )
+
+
 def mkparent_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -136,6 +150,59 @@ def du_bytes(path: Path) -> int:
             with contextlib.suppress(OSError):
                 total += p.stat().st_size
     return total
+
+
+def docs_fingerprint(docs_dir: Path) -> str:
+    """A cheap, stat-only fingerprint of a KB's ``docs/`` directory.
+
+    Globs ``docs/*.md`` and hashes the sorted
+    ``(name, st_mtime_ns, st_ctime_ns, st_size)`` tuples — NO file reads, NO
+    frontmatter parse. The digest changes whenever ANY ``*.md`` file is added,
+    removed, renamed, or written to: a normal edit bumps ``st_mtime_ns``, a
+    same-length change still moves ``st_size``, and ``st_ctime_ns`` (inode change
+    time, which ordinary tooling cannot set) catches an mtime-restoring edit
+    (``touch -r`` / ``cp -p`` over a same-size body). The one residual blind spot
+    vs. the old read-every-file scan is a same-size content edit that restores
+    BOTH mtime and ctime — practically unreachable without clock/root tricks, and
+    always caught by an explicit ``coffer kb reindex``. This drops the O(N)
+    read+parse cost of a full scan to a stat walk. The empty / missing directory
+    has a stable fixed digest.
+
+    Race-safe by construction: a stat walk is idempotent and side-effect-free,
+    so two concurrent reads compute the same digest off the same on-disk state.
+    """
+    h = hashlib.sha256()
+    if docs_dir.exists():
+        entries: list[tuple[str, int, int, int]] = []
+        for p in sorted(docs_dir.glob("*.md")):
+            with contextlib.suppress(OSError):
+                st = p.stat()
+                entries.append((p.name, st.st_mtime_ns, st.st_ctime_ns, st.st_size))
+        for name, mtime_ns, ctime_ns, size in entries:
+            h.update(f"{name}\0{mtime_ns}\0{ctime_ns}\0{size}\0".encode())
+    return h.hexdigest()
+
+
+async def reconcile_on_read(
+    cache: dict[str, str],
+    kb_name: str,
+    docs_dir: Path,
+    scan: Callable[[], Awaitable[dict[str, int]]],
+) -> dict[str, int] | None:
+    """Lazy reindex-on-read (FR-008a) short-circuit.
+
+    If the cheap stat-only ``docs/`` fingerprint matches ``cache[kb_name]``, the
+    corpus is provably unchanged since the last full scan, so the O(N) read+parse
+    ``scan`` is skipped and the read is served directly (returns ``None``).
+    Otherwise — an out-of-band add/remove/edit bumped it (stat-detected; see
+    ``docs_fingerprint``), or it is the first read since daemon start — ``scan`` runs
+    (and refreshes the cache itself). The fingerprint only decides WHETHER to
+    scan, never WHAT it does.
+    """
+    current = await asyncio.to_thread(docs_fingerprint, docs_dir)
+    if cache.get(kb_name) == current:
+        return None
+    return await scan()
 
 
 def document_from_frontmatter(

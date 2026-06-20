@@ -37,6 +37,7 @@ from coffer.application.knowledge_base.pipeline_helpers import (
     chunker_for,
     du_bytes,
     read_markdown_body,
+    reconcile_on_read,
 )
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
@@ -259,11 +260,21 @@ class KnowledgeBaseService:
         markdown against the SQLite index before serving a read/search.
 
         The in-app viewer is read-only, so users edit ``docs/<doc-id>.md``
-        directly in their external editor with no filesystem watcher. This
-        mirrors the memory face's reconcile-before-recall: it funnels through
-        the SAME idempotent reindex scan (``content_sha256`` no-op gate +
-        file-vanished pruning), so an unchanged corpus is a cheap no-op."""
-        await self._pipeline.reindex_scan(kb_name=kb_name, config=config)
+        directly in their external editor with no filesystem watcher. The scan
+        funnels through the SAME idempotent reindex routine (``content_sha256``
+        no-op gate + file-vanished pruning).
+
+        An unchanged corpus is detected by a cheap stat-only fingerprint and
+        skips the full O(N) read+parse scan entirely, so concurrent reads on a
+        large, idle KB don't re-scan every file under the write lock — while an
+        out-of-band edit / add / remove still bumps the fingerprint and is
+        reconciled on the next read."""
+        await reconcile_on_read(
+            self._pipeline.fingerprint_cache,
+            kb_name,
+            self._paths.docs_dir(kb_name),
+            lambda: self._pipeline.reindex_scan(kb_name=kb_name, config=config),
+        )
 
     async def list_documents(
         self, *, kb_name: str, limit: int, offset: int
