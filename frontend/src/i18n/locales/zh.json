@@ -691,8 +691,7 @@
         "unknownServer": "所选 server 中有一项已不存在。"
       },
       "memory": "记忆",
-      "conversations": "对话记录",
-      "instructions": "指令"
+      "conversations": "对话记录"
     },
     "conversationsTab": {
       "title": "对话历史",
@@ -707,22 +706,6 @@
       "noInsights": "本次会话中未找到持久洞察。",
       "distillAria": "将会话 {{session}} 蒸馏到记忆",
       "showingRecent": "显示最近 {{count}} 条，共 {{total}} 条会话。"
-    },
-    "instructions": {
-      "title": "共享指令",
-      "description": "维护一份主指令文档，并作为 Coffer 托管块投递到该 agent 的指令文件中。",
-      "masterLabel": "主指令",
-      "masterPlaceholder": "每个 agent 都应遵循的通用规则…",
-      "saveMaster": "保存主指令",
-      "deliveryHeading": "投递到该 agent",
-      "unsupported": "该 agent 类型没有可管理的指令文件。",
-      "statusNotDelivered": "尚未投递到该 agent。",
-      "statusInSync": "已投递，且与主指令同步。",
-      "statusDrifted": "已投递，但主指令已变更——重新投递以更新。",
-      "deliver": "投递",
-      "remove": "移除",
-      "adopt": "收编为主指令",
-      "adoptHelp": "收编会把该 agent 的指令复制为主指令文档。"
     },
     "memoryTab": {
       "title": "记忆",
