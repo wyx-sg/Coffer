@@ -1,4 +1,6 @@
-"""/api/v1/daemon/* routes — status, backup, shutdown, rotate-token."""
+"""/api/v1/daemon/* routes — status, shutdown, rotate-token.
+/api/v1/vault/* routes — backup.
+"""
 
 from __future__ import annotations
 
@@ -7,13 +9,12 @@ import json
 import os
 import secrets
 import signal
-import sqlite3
 import stat
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 import coffer
 from coffer.application.audit_service import AuditService
@@ -33,6 +34,7 @@ from coffer.surfaces.http.schemas import (
 # used by _get_optional_resource_service below.
 
 router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
+vault_router = APIRouter(prefix="/api/v1/vault", tags=["vault"])
 
 # Daemon lifecycle phase — written by app.py's lifespan, read by /status.
 # Lives here (the reader) so app.py stays under the 400-line guideline and
@@ -169,10 +171,6 @@ def _default_backup_dir() -> Path:
     return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "backups"
 
 
-def _default_db_path() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "coffer.db"
-
-
 def _schedule_shutdown() -> None:
     """Send SIGTERM to ourselves; the daemon entry's signal handler does the cleanup."""
     os.kill(os.getpid(), signal.SIGTERM)
@@ -232,88 +230,28 @@ async def rotate_token(
     return TokenRotationOut(token=new_token)
 
 
-def _resolve_backup_dest(custom: str | None) -> Path:
-    """Resolve the backup destination, blocking obvious file-write abuse.
-
-    Rules (CODE-002):
-    - When ``custom`` is None → default to ``~/.coffer/backups/coffer.db.<ts>.bak``.
-    - ``..`` in the supplied path is rejected (path traversal).
-    - When ``COFFER_BACKUP_STRICT=1`` is set the destination MUST resolve
-      under the backup root (``COFFER_BACKUP_DIR`` if set, else
-      ``~/.coffer/backups/``). Strict mode is intended for hardened
-      deployments; the default mode keeps backwards compatibility with the
-      pre-fix behaviour of accepting any user-supplied absolute path the
-      authenticated CLI/UI can already write to anyway.
-
-    In every mode we resolve to a canonical absolute Path and ensure the
-    parent directory exists before opening the SQLite backup connection.
-    """
-    override = os.environ.get("COFFER_BACKUP_DIR")
-    allowed_root = (
-        Path(override).expanduser().resolve() if override else _default_backup_dir().resolve()
-    )
-    allowed_root.mkdir(parents=True, exist_ok=True)
-
-    if custom is None:
-        ts = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
-        return allowed_root / f"coffer.db.{ts}.bak"
-
-    # Always reject `..` segments — there's no legitimate reason for a backup
-    # client to ask for traversal; this is cheap and covers the most obvious
-    # abuse pattern even in non-strict mode.
-    if ".." in Path(custom).parts:
-        raise HTTPException(
-            status_code=400,
-            detail="backup path must not contain '..'",
-        )
-
-    candidate = Path(custom).expanduser()
-    if not candidate.is_absolute():
-        candidate = allowed_root / candidate
-
-    if os.environ.get("COFFER_BACKUP_STRICT") == "1":
-        resolved_parent = candidate.parent.resolve()
-        try:
-            resolved_parent.relative_to(allowed_root)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=400,
-                detail=(f"backup path must be inside {allowed_root}; got parent={resolved_parent}"),
-            ) from exc
-        return resolved_parent / candidate.name
-
-    return candidate
-
-
-@router.post(
+@vault_router.post(
     "/backup",
     response_model=BackupResultOut,
     dependencies=[Depends(require_token)],
 )
-async def backup_db(
-    body: dict[str, Any] | None = Body(default=None),  # noqa: B008
+async def vault_backup(
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> BackupResultOut:
-    src = _default_db_path()
-    if not src.exists():
-        raise HTTPException(status_code=503, detail="coffer.db does not exist")
-    custom_raw = (body or {}).get("path") if body else None
-    custom = str(custom_raw) if isinstance(custom_raw, str) and custom_raw else None
-    dest = _resolve_backup_dest(custom)
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    """Create a full vault snapshot (.tar.gz) in the default backups directory."""
+    from coffer.infrastructure.vault.backup import create_backup
 
-    def _do_backup() -> None:
-        src_conn = sqlite3.connect(str(src))
-        dst_conn = sqlite3.connect(str(dest))
-        try:
-            with dst_conn:
-                src_conn.backup(dst_conn)
-        finally:
-            src_conn.close()
-            dst_conn.close()
+    backup_dir = _default_backup_dir()
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
+    dest = backup_dir / f"coffer-{ts}.tar.gz"
 
-    await asyncio.to_thread(_do_backup)
+    try:
+        await asyncio.to_thread(create_backup, dest, include_master_key=False)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     await audit.record(
         AuditEventType.BACKUP_CREATED.value,
         actor=actor,

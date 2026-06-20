@@ -22,7 +22,7 @@ SQLite 选择的实际后果塑造了持久化层的每一个细节：
 
 - **单写入者** — SQLite 的写并发有限；由一个写入者（daemon）负责，从设计上消除了所有写冲突。daemon 序列化每一次变更；需要写入的接口面（CLI 命令、HTTP handler）都通过 loopback HTTP 经由 daemon 进行。
 - **WAL 模式** — Write-Ahead Logging 允许读取者（例如调用 REST API 的 `coffer mcp list` 命令）与写入者并发执行，而不会被锁阻塞。实际效果是 `coffer mcp list` 不会因等待正在进行的迁移而挂起。
-- **零基础设施备份** — 由于所有 Coffer 状态都在 `~/.coffer/` 下，一条简单的 `cp -r ~/.coffer/ <destination>` 命令就能生成一份自包含的备份。daemon 提供 `/api/v1/daemon/backup` 端点，通过 SQLite 的在线备份 API 将一致性快照写入 `~/.coffer/backups/`，同时 daemon 继续提供服务。
+- **零基础设施备份** — 由于所有 Coffer 状态都在 `~/.coffer/` 下，完整 vault 可打包成一个 `.tar.gz` 快照（db + `knowledge/`/`memory/`/`skills/` 文件树，默认不含 master key）。从 CLI 运行 `coffer backup <dest.tar.gz>`，或通过 HTTP 触发 `POST /api/v1/vault/backup`；两者均将归档写入 `~/.coffer/backups/`。使用 `coffer restore <src.tar.gz>` 恢复。
 
 ## SQLAlchemy 2.0 异步 ORM
 

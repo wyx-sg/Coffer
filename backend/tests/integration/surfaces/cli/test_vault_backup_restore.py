@@ -9,6 +9,7 @@ machine before any daemon exists.
 from __future__ import annotations
 
 import sqlite3
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -56,7 +57,7 @@ def _populate_vault(home: Path) -> None:
 def test_backup_then_restore_round_trips_db_and_file_trees(tmp_path, monkeypatch):
     """Backup a populated vault, restore into an empty one, assert full fidelity."""
     src_home = tmp_path / "src_home"
-    dest = tmp_path / "vault-backup"
+    dest = tmp_path / "coffer-backup.tar.gz"
     restore_home = tmp_path / "restore_home"
     restore_home.mkdir(parents=True)
 
@@ -67,13 +68,19 @@ def test_backup_then_restore_round_trips_db_and_file_trees(tmp_path, monkeypatch
     assert result.exit_code == 0, result.output
     assert "knowledge" in result.output and "memory" in result.output
 
-    # The archive must contain the file trees, not just the db.
-    assert (dest / "coffer.db").exists()
-    assert (dest / "knowledge" / "handbook" / "docs" / "welcome.md").exists()
-    assert (dest / "memory" / "global" / "prefers-dark-mode.md").exists()
-    assert (dest / "skills" / "greet" / "SKILL.md").exists()
+    # The backup must be a single .tar.gz FILE (not a directory).
+    assert dest.is_file(), "backup should be a .tar.gz file, not a directory"
+    assert not dest.is_dir()
+
+    # The archive must contain the file trees and db.
+    with tarfile.open(dest, "r:gz") as tar:
+        tar_names = set(tar.getnames())
+    assert "coffer.db" in tar_names
+    assert any(n.startswith("knowledge/") for n in tar_names)
+    assert any(n.startswith("memory/") for n in tar_names)
+    assert any(n.startswith("skills/") for n in tar_names)
     # master.key is excluded by default.
-    assert not (dest / "master.key").exists()
+    assert "master.key" not in tar_names, "master.key must NOT be in archive by default"
 
     # Now restore into a fresh, empty HOME.
     monkeypatch.setenv("HOME", str(restore_home))
@@ -102,13 +109,17 @@ def test_backup_then_restore_round_trips_db_and_file_trees(tmp_path, monkeypatch
 def test_backup_include_master_key_opt_in(tmp_path, monkeypatch):
     """``--include-master-key`` bundles the key and prints a loud warning."""
     src_home = tmp_path / "src_home"
-    dest = tmp_path / "full-backup"
+    dest = tmp_path / "full-backup.tar.gz"
     monkeypatch.setenv("HOME", str(src_home))
     _populate_vault(src_home)
 
     result = _runner.invoke(app, ["backup", str(dest), "--include-master-key"])
     assert result.exit_code == 0, result.output
-    assert (dest / "master.key").exists()
+
+    # master.key must be a tar member when opt-in is used.
+    with tarfile.open(dest, "r:gz") as tar:
+        tar_names = set(tar.getnames())
+    assert "master.key" in tar_names
     assert "WARNING" in result.output.upper()
 
 
@@ -119,7 +130,7 @@ def test_restore_is_atomic_on_failure(tmp_path, monkeypatch):
 
     src_home = tmp_path / "src"
     live_home = tmp_path / "live"
-    backup = tmp_path / "backup"
+    backup = tmp_path / "backup.tar.gz"
 
     monkeypatch.setenv("HOME", str(src_home))
     _populate_vault(src_home)
@@ -132,17 +143,22 @@ def test_restore_is_atomic_on_failure(tmp_path, monkeypatch):
     live_doc = live_home / ".coffer" / "knowledge" / "handbook" / "docs" / "welcome.md"
     live_doc.write_text("# LIVE — must survive a failed restore\n", encoding="utf-8")
 
-    # Force the staging copy to blow up partway (simulates ENOSPC/EIO).
-    real_copytree = vault_backup.shutil.copytree
-    calls = {"n": 0}
+    # Force the atomic swap to blow up partway (simulates an OS-level failure
+    # after extraction but during the rename phase).
+    import os as _os
 
-    def exploding_copytree(*a, **k):
-        calls["n"] += 1
-        if calls["n"] == 1:
+    original_replace = _os.replace
+    replace_calls = {"n": 0}
+
+    def exploding_replace(src, dst):
+        replace_calls["n"] += 1
+        # Blow up on the second rename (first is the db; second is knowledge/).
+        if replace_calls["n"] == 2:
             raise OSError(28, "No space left on device")
-        return real_copytree(*a, **k)
+        return original_replace(src, dst)
 
-    monkeypatch.setattr(vault_backup.shutil, "copytree", exploding_copytree)
+    # Patch the reference used inside backup.py itself.
+    monkeypatch.setattr(vault_backup.os, "replace", exploding_replace)
 
     with pytest.raises(OSError):
         vault_backup.restore_backup(backup)
@@ -157,7 +173,7 @@ def test_restore_is_atomic_on_failure(tmp_path, monkeypatch):
 def test_backup_refuses_when_no_vault(tmp_path, monkeypatch):
     """Backing up a non-existent vault is a clean error, not a traceback."""
     monkeypatch.setenv("HOME", str(tmp_path / "empty_home"))
-    result = _runner.invoke(app, ["backup", str(tmp_path / "out")])
+    result = _runner.invoke(app, ["backup", str(tmp_path / "out.tar.gz")])
     assert result.exit_code != 0
     assert "no" in result.output.lower() or "not" in result.output.lower()
 
@@ -165,8 +181,12 @@ def test_backup_refuses_when_no_vault(tmp_path, monkeypatch):
 def test_restore_refuses_invalid_archive(tmp_path, monkeypatch):
     """Restoring from a path with no coffer.db is rejected before clobbering."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    bogus = tmp_path / "not-a-backup"
-    bogus.mkdir()
+    bogus = tmp_path / "not-a-backup.tar.gz"
+    # Write a valid tar.gz but without coffer.db inside.
+    import tarfile as _tarfile
+
+    with _tarfile.open(bogus, "w:gz"):
+        pass  # empty archive
     result = _runner.invoke(app, ["restore", str(bogus), "--force"])
     assert result.exit_code != 0
     assert "coffer.db" in result.output or "invalid" in result.output.lower()
@@ -208,7 +228,7 @@ def test_restore_reindex_calls_daemon_per_kb(tmp_path, monkeypatch):
     from coffer.surfaces.cli import _client as _cli_client
 
     src_home = tmp_path / "src_home"
-    dest = tmp_path / "backup"
+    dest = tmp_path / "backup.tar.gz"
     monkeypatch.setenv("HOME", str(src_home))
     _populate_vault(src_home)
     assert _runner.invoke(app, ["backup", str(dest)]).exit_code == 0
@@ -229,7 +249,7 @@ def test_restore_reindex_calls_daemon_per_kb(tmp_path, monkeypatch):
 def test_restore_refuses_nonempty_vault_without_force(tmp_path, monkeypatch):
     """Restore must not silently overwrite a populated vault."""
     src_home = tmp_path / "src_home"
-    dest = tmp_path / "backup"
+    dest = tmp_path / "backup.tar.gz"
     monkeypatch.setenv("HOME", str(src_home))
     _populate_vault(src_home)
     assert _runner.invoke(app, ["backup", str(dest)]).exit_code == 0
@@ -237,3 +257,51 @@ def test_restore_refuses_nonempty_vault_without_force(tmp_path, monkeypatch):
     # Restore back over the SAME (non-empty) vault without --force.
     result = _runner.invoke(app, ["restore", str(dest)], input="n\n")
     assert result.exit_code != 0
+
+
+def test_restore_corrupt_archive_gives_clean_error_and_preserves_vault(tmp_path, monkeypatch):
+    """Restoring a corrupt/unsafe archive must raise a clean BackupError (no
+    traceback) and leave the live vault completely intact.
+
+    We craft a tar.gz that contains a valid ``coffer.db`` (so ``verify_backup``
+    passes) plus a member with an absolute path that triggers
+    ``tarfile.AbsolutePathError`` under ``filter="data"``.  The CLI must print
+    a human-readable error and exit non-zero; the live vault DB must survive.
+    """
+    import io
+
+    live_home = tmp_path / "live_home"
+    monkeypatch.setenv("HOME", str(live_home))
+    _populate_vault(live_home)
+    live_db = live_home / ".coffer" / "coffer.db"
+    assert live_db.exists()
+
+    # Build a crafted archive: valid coffer.db + an absolute-path member.
+    crafted = tmp_path / "crafted.tar.gz"
+    with tarfile.open(crafted, "w:gz") as tar:
+        # Valid coffer.db member — passes verify_backup.
+        db_data = b"SQLite format 3\x00" + b"\x00" * 80
+        db_info = tarfile.TarInfo(name="coffer.db")
+        db_info.size = len(db_data)
+        tar.addfile(db_info, io.BytesIO(db_data))
+
+        # Symlink to an absolute path — triggers AbsoluteLinkError under
+        # filter="data" (Python 3.12+), which is a tarfile.TarError subclass.
+        evil_info = tarfile.TarInfo(name="evil_link")
+        evil_info.type = tarfile.SYMTYPE
+        evil_info.linkname = "/etc/malicious"
+        tar.addfile(evil_info)
+
+    result = _runner.invoke(app, ["restore", str(crafted), "--force"])
+
+    # CLI must exit non-zero with a readable message — no Python traceback.
+    assert result.exit_code != 0, f"expected non-zero exit, got 0; output: {result.output}"
+    output_lower = result.output.lower()
+    assert "traceback" not in output_lower, "traceback must not be shown to user"
+    # The message should mention the archive problem.
+    assert any(word in output_lower for word in ("corrupt", "unsafe", "invalid")), (
+        f"expected error message mentioning corrupt/unsafe/invalid, got: {result.output}"
+    )
+
+    # The live vault DB is untouched.
+    assert live_db.exists(), "live vault DB was destroyed by a failed restore"

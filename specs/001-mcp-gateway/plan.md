@@ -229,7 +229,7 @@ prune doesn't block live API calls.
 
 **Done when:** Acceptance scenarios for User Story 4 pass (`audit lifecycle
 changes`, `invocation log records calls without arguments`, `configure
-retention per log`, `daemon backup produces a portable SQLite copy`).
+retention per log`, `vault backup produces a portable tar.gz snapshot`).
 
 ### Phase 6 — Hardening
 

@@ -42,6 +42,7 @@ def include_all_routers(app: FastAPI) -> None:
     """Mount every sub-router, grouped by spec (kind-agnostic core first)."""
     for sub_router in (
         daemon_routes.router,
+        daemon_routes.vault_router,  # POST /api/v1/vault/backup
         resource_router,
         audit_router,
         retention_router,

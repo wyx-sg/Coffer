@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
-import { useDaemonStatus, useDaemonBackup } from "./useDaemon";
+import { useDaemonStatus, useVaultBackup } from "./useDaemon";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 const { getApiClient } = await import("@/lib/api/client");
@@ -54,47 +54,25 @@ describe("useDaemonStatus", () => {
   });
 });
 
-describe("useDaemonBackup", () => {
+describe("useVaultBackup", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  test("mutation calls POST /daemon/backup and returns data", async () => {
+  test("mutation calls POST /vault/backup with no body and returns data", async () => {
     const postMock = vi.fn().mockResolvedValue({
-      data: { path: "/tmp/backup.db" },
+      data: { path: "/home/user/.coffer/backups/coffer-20260522T120000.tar.gz", size_bytes: 4096 },
       error: undefined,
     });
     getApiClientMock.mockReturnValue({
       POST: postMock,
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useDaemonBackup(), { wrapper: wrapper() });
+    const { result } = renderHook(() => useVaultBackup(), { wrapper: wrapper() });
 
     await act(async () => {
-      await result.current.mutateAsync("/tmp/backup.db");
+      await result.current.mutateAsync();
     });
 
-    expect(postMock).toHaveBeenCalledWith(
-      "/daemon/backup",
-      expect.objectContaining({ body: { path: "/tmp/backup.db" } }),
-    );
-  });
-
-  test("sends empty body when path is undefined", async () => {
-    const postMock = vi.fn().mockResolvedValue({
-      data: { path: "/home/user/.coffer/backups/coffer.db.20260522T120000.bak", size_bytes: 4096 },
-      error: undefined,
-    });
-    getApiClientMock.mockReturnValue({
-      POST: postMock,
-    } as unknown as ReturnType<typeof getApiClient>);
-
-    const { result } = renderHook(() => useDaemonBackup(), { wrapper: wrapper() });
-
-    await act(async () => {
-      await result.current.mutateAsync(undefined);
-    });
-
-    // When path is undefined, source does: body: path ? { path } : {}
-    expect(postMock).toHaveBeenCalledWith("/daemon/backup", expect.objectContaining({ body: {} }));
+    expect(postMock).toHaveBeenCalledWith("/vault/backup", {});
   });
 
   test("surfaces error when POST fails", async () => {
@@ -105,11 +83,11 @@ describe("useDaemonBackup", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useDaemonBackup(), { wrapper: wrapper() });
+    const { result } = renderHook(() => useVaultBackup(), { wrapper: wrapper() });
 
     await act(async () => {
       try {
-        await result.current.mutateAsync(undefined);
+        await result.current.mutateAsync();
       } catch {
         // expected
       }

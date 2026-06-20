@@ -98,7 +98,7 @@ The audit log is NOT **Observability** — system health / metrics is a distinct
 
 ### User Story 4 — Settings is organised around the user, not the daemon (Priority: P2)
 
-A developer opens Settings and finds tabs grouped by what they manage, not by how Coffer is built: **General** (display preferences — the default rows-per-page for list tables, and the preferred external editor for opening managed files), **Data** (retention policy, manual prune, and backups), and **About** (version, license, source). Settings opens on the General tab. The daemon is an implementation detail — there is no "Daemon" tab and no read-only daemon-status panel. A user never needs to know Coffer runs a background daemon.
+A developer opens Settings and finds tabs grouped by what they manage, not by how Coffer is built: **General** (display preferences — the default rows-per-page for list tables, and the preferred external editor for opening managed files), **Data** (retention policy, manual prune, and vault backup — a full `.tar.gz` snapshot of `~/.coffer/` triggered via `POST /vault/backup`), and **About** (version, license, source). Settings opens on the General tab. The daemon is an implementation detail — there is no "Daemon" tab and no read-only daemon-status panel. A user never needs to know Coffer runs a background daemon.
 
 The **General** tab MUST expose the default page-size preference (the rows-per-page every list table seeds from), persisted in `localStorage`. It MUST also expose a **preferred external editor** preference — the application Coffer uses when the user opens a managed file (or its containing folder) from a read-only file viewer. The default is the operating system's default application; the user MAY override it by choosing an application or entering a launch command. Like the other display preferences it is persisted in `localStorage` and never sent to the daemon.
 
@@ -299,5 +299,5 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - A first-time user can register an MCP server and reach a working gateway in-app; pointing an MCP client at the shim is documented in the project README.
 - The sidebar shows only operational surfaces (Agents, MCP servers, Audit log, Settings), grouped by role; no feature appears as a dead "soon" entry.
 - The audit log lives at `/audit` with the redesigned filter + table; the legacy `/observability` URL still resolves (redirects to `/audit`). Audit log and MCP invocation log rows each expand to the row's raw log JSON. Observability (system health / metrics) is a reserved future surface, not the audit log.
-- Settings groups data controls (retention, prune, backup) under a Data tab; the daemon is never surfaced as a user-facing concept, and no tab exposes a shutdown or token-rotation control.
+- Settings groups data controls (retention, prune, and vault backup — a full `.tar.gz` snapshot, not a DB-only copy) under a Data tab; the daemon is never surfaced as a user-facing concept, and no tab exposes a shutdown or token-rotation control.
 - `make verify` + `make verify-e2e` are green.

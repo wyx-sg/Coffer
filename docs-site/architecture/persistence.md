@@ -22,7 +22,7 @@ The practical consequences of the SQLite choice shape every detail of the persis
 
 - **Single writer** — SQLite's write concurrency is bounded; having one writer (the daemon) eliminates all write conflicts by design. The daemon serialises every mutation; surfaces that need to write (CLI commands, HTTP handlers) go through the daemon over loopback HTTP.
 - **WAL mode** — Write-Ahead Logging allows readers (e.g., a CLI `list` command calling the REST API) to proceed concurrently with the writer without blocking on a lock. In practice this means `coffer mcp list` never hangs waiting for an ongoing migration.
-- **Zero-infra backup** — because all Coffer state lives under `~/.coffer/`, a simple `cp -r ~/.coffer/ <destination>` produces a self-contained backup. The daemon exposes a `/api/v1/daemon/backup` endpoint that uses SQLite's online backup API to write a consistent snapshot to `~/.coffer/backups/` while the daemon keeps serving requests.
+- **Zero-infra backup** — because all Coffer state lives under `~/.coffer/`, the full vault can be captured as a single `.tar.gz` snapshot (db + `knowledge/`/`memory/`/`skills/` trees, master key excluded by default). Run `coffer backup <dest.tar.gz>` from the CLI, or trigger `POST /api/v1/vault/backup` from the HTTP surface; both write the archive to `~/.coffer/backups/`. Restore with `coffer restore <src.tar.gz>`.
 
 ## SQLAlchemy 2.0 async ORM
 

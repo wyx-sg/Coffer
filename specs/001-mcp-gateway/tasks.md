@@ -1842,9 +1842,9 @@ Same shape; query parameters: `kind`, `name`, `event_type`, `since`, `limit`. Te
 
 ---
 
-### T034 [TDD] `/api/v1/daemon/*` routes — backup / rotate-token / shutdown
+### T034 [TDD] `/api/v1/vault/backup` and `/api/v1/daemon/*` routes — backup / rotate-token / shutdown
 
-`POST /daemon/backup` invokes SQLite online backup API to `~/.coffer/backups/coffer.db.<ts>.bak`. `POST /daemon/rotate-token` generates a new token, writes daemon.json atomically, returns the new value (the only response that contains the secret). `POST /daemon/shutdown` schedules a graceful shutdown then returns 204.
+`POST /vault/backup` produces a full vault `.tar.gz` snapshot (db + `knowledge/`/`memory/`/`skills/` trees, master key excluded by default) under `~/.coffer/backups/` and returns `{ "path": "...", "size_bytes": ... }`. `POST /daemon/rotate-token` generates a new token, writes daemon.json atomically, returns the new value (the only response that contains the secret). `POST /daemon/shutdown` schedules a graceful shutdown then returns 204.
 
 ---
 

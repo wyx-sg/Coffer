@@ -87,7 +87,7 @@ frozen dataclass。一个资源 kind 的纯描述符。只属于 domain——不
 | `"daemon_stopped"`                                          | daemon 优雅关闭时                                   |
 | `"token_rotated"`                                           | `POST /api/v1/daemon/rotate-token` 之后             |
 | `"retention_updated"`                                       | retention policy 变更时                             |
-| `"backup_created"`                                          | `POST /api/v1/daemon/backup` 之后                   |
+| `"backup_created"`                                          | `POST /api/v1/vault/backup` 之后                    |
 | `"credential_set"`                                          | `POST /api/v1/credentials` 存储 secret 之后         |
 | `"credential_read"`                                         | `GET /api/v1/credentials/{ref}` 读取 secret 之后    |
 | `"credential_deleted"`                                      | `DELETE /api/v1/credentials/{ref}` 删除 secret 之后 |
@@ -344,7 +344,7 @@ for table_name, days in defaults:
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/v1/daemon/status` | 被 CLI 与 `coffer-mcp-shim` 用作廉价的就绪探针，在还没从 `~/.coffer/daemon.json` 读到任何 token 之前调用。只返回生命周期阶段、版本、端口、started-at 以及一个聚合的 upstream 概要 —— 不含 secret、不含逐 resource 细节、不含审计数据。 |
 
-所有改动型 endpoint（包括 `/daemon/backup`、`/daemon/rotate-token`、
+所有改动型 endpoint（包括 `/vault/backup`、`/daemon/rotate-token`、
 `/daemon/shutdown`）都要求 token。`/mcp` JSON-RPC 面也要求 token。客户端
 SHOULD 设置可选的 `X-Coffer-Actor` header（`cli` | `api` | `ui` | `system`），
 使审计条目带上来源 surface；缺省时默认为 `"api"`。

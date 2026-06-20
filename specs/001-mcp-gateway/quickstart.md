@@ -179,23 +179,24 @@ by ref.)
 ├── logs/
 │   ├── daemon.log         # structured JSON, one line per event
 │   └── upstream-<name>.log
-├── backups/               # produced by `coffer daemon backup`
+├── backups/               # produced by `coffer backup`
 └── upstream-pids/         # for orphan-subprocess cleanup
 ```
 
 ### Backup & restore
 
 The markdown trees (`knowledge/`, `memory/`, `skills/`) are the system of
-record; `coffer.db` is a rebuildable index over them. Two backup levels:
+record; `coffer.db` is a rebuildable index over them.
 
-- `coffer daemon backup` writes a self-consistent SQLite copy of `coffer.db`
-  alone under `backups/` while the daemon runs — handy for snapshotting the
-  index, but it does NOT capture the file trees.
-- `coffer backup <dest>` is the full **vault** backup: it copies `coffer.db`
-  AND every file tree into `<dest>`. `coffer restore <dest>` verifies the
-  backup and re-places the db + trees into `~/.coffer/`, so a fresh machine
-  comes back to life. The restored `coffer.db` is already a consistent index;
-  pass `coffer restore <dest> --reindex` to rebuild it from the trees anyway.
+`coffer backup <dest.tar.gz>` is the full **vault** backup: it bundles
+`coffer.db` and every file tree (`knowledge/`, `memory/`, `skills/`) into a
+single `.tar.gz` snapshot under `backups/`. `coffer restore <src.tar.gz>`
+verifies the archive and re-places the db + trees into `~/.coffer/`, so a
+fresh machine comes back to life. The restored `coffer.db` is already a
+consistent index; pass `coffer restore <src.tar.gz> --reindex` to rebuild it
+from the trees anyway. The same snapshot is also available via HTTP:
+`POST /api/v1/vault/backup` (no body) triggers a backup and returns
+`{ "path": "...", "size_bytes": ... }`.
 
 **Master-key policy.** `coffer backup` EXCLUDES `master.key` by default, so the
 backup is safe to copy off-machine — bundling the Fernet key next to the
