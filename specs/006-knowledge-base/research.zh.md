@@ -151,7 +151,18 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 - **`metrics()` / `store_metrics()` 不变**：每个资源的 DETAIL 端点（`GET /{name}/metrics`）仍遍历磁盘并报告 `disk_bytes`。只有 LIST 路径改了。
 - **无迁移 / 无 schema 改动。无新 FR**（既有端点下的性能改动）。
 
-## 13. 此处明确不决定 / 范围外
+## 13. 持久化"真相之源"文件的原子写入（KB19）
+
+**问题**：Coffer 的不变量是"文件即真相，SQLite 是可重建索引"，但持久化的 Markdown / raw 文件此前通过裸 `path.write_text` / `path.write_bytes` 非原子写入。写入中途崩溃或断电会留下被**截断**的文件 —— 一个损坏的真相之源，而下一次 reindex 会原样把它吃进索引。
+
+**决策**：把每个持久化真相写入都走同一个共享辅助函数 `coffer.infrastructure.knowledge.fs.atomic_write_text` / `atomic_write_bytes`：先写到**同一目录**下的临时文件，fsync，再 `os.replace` 就位。`os.replace` 在同一文件系统上是原子重命名，因此并发读者只会看到**完整的旧文件**或**完整的新文件**，绝不会是残缺的混合；任意失败都会删除临时文件并保持原文件不变。
+
+- **已转换的写入点**：KB 文档写入（ingest 经 `mkparent_write`、edit、reconvert）与 KB raw 上传字节；memory fact 文件、organizer 主题文档 + `INDEX.md`、以及按分支的 handoff 文件。辅助函数仅依赖标准库（无导入环），放在共享的 `infrastructure.knowledge` substrate —— 那里本就是 application 可组合的 kind-agnostic 辅助函数之家（chunking、frontmatter、ids、paths），import-linter 契约允许 `application/knowledge_base/*` 导入 —— 故 `application/knowledge_base/*` 与 `infrastructure/memory/*` 复用同一个，且不改动任何架构边界。原本就在事件循环外的写入保留其 `asyncio.to_thread` 包装（辅助函数是同步的）。
+- **追加型日志刻意不转换**：`consolidation-log.md` 以追加模式（`"a"`）打开；它是审计追踪，原子替换会摧毁既有历史，且一次被打断的追加也无法损坏先前的行。
+- **目录 fsync（断电下的重命名持久性）刻意推迟**：单次文件 fsync + `os.replace` 已提供**原子性**（无残缺/损坏文件），这正是 KB19 的目标。要保证重命名**本身**在断电后存活，还需对父目录再做一次 fsync；这是更强的持久性保证，可在出现真实需求时后续叠加到同一辅助函数上，且无需改动任何调用点。
+- **无迁移 / 无 schema 改动。无新 FR**（既有行为下的健壮性/质量改动）。memory 的真相之源文件（spec 007）共享该辅助函数；这是原子性保证的唯一归处。
+
+## 14. 此处明确不决定 / 范围外
 
 - 单次调用里 keyword + vector 的 hybrid RRF 融合（可选未来，同引擎）。
 - 检索时的 reranking / HyDE / multi-query / LLM 综合 —— agent 综合。

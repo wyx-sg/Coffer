@@ -18,6 +18,7 @@ from coffer.infrastructure.knowledge.frontmatter import (
     render_frontmatter,
     split_frontmatter,
 )
+from coffer.infrastructure.knowledge.fs import atomic_write_text
 from coffer.infrastructure.knowledge.paths import (
     inbox_dir,
     knowledge_dir,
@@ -104,9 +105,8 @@ def parse_fact_markdown(text: str, *, fallback_id: str, mtime: datetime) -> Memo
 
 
 def write_fact_file(path: Path, fact: MemoryFact) -> str:
-    """Write a fact's markdown to ``path``; return the body sha256."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render_fact_markdown(fact), encoding="utf-8")
+    """Write a fact's markdown to ``path`` atomically; return the body sha256."""
+    atomic_write_text(path, render_fact_markdown(fact))
     return fact_body_sha256(fact.body)
 
 
