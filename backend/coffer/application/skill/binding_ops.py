@@ -1,7 +1,7 @@
 """Per-agent enable/disable binding operations for SkillService.
 
 Extracted to keep ``service.py`` under the file-size limit. Like
-``lifecycle_ops.py`` / ``update_ops.py`` these are free functions that take
+``lifecycle_ops.py`` / ``scan_ops.py`` these are free functions that take
 the SkillService instance and reach into its (private) attributes — they are
 conceptually private to the skill subpackage.
 """

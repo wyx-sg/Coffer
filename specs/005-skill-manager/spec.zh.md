@@ -5,7 +5,7 @@
 **Feature Branch**: `feature/skill-manager`
 **Created**: 2026-05-22
 **Status**: Accepted
-**Input**: 用户描述：「Coffer 用开放的 AgentSkills 标准（agentskills.io）管理可移植的 AI skill。一份规范副本放在 `~/.coffer/skills/` 下；每个 agent 的可见性通过指向其配置目录下 `skills/` 子文件夹的目录 symlink/junction 实现。用户可以从本地路径导入 skill，或从公开 Git 仓库拉取，然后按 agent 启用或禁用每个 skill。v1 支持 Claude Code 与 Codex CLI 作为同步目标（每个 agent 是 spec 004-agent-registry 中 kind 为 `agent` 的 Resource）。」
+**Input**: 用户描述：「Coffer 用开放的 AgentSkills 标准（agentskills.io）管理可移植的 AI skill。一份规范副本放在 `~/.coffer/skills/` 下；每个 agent 的可见性通过指向其配置目录下 `skills/` 子文件夹的目录 symlink/junction 实现。用户可以从本地路径导入 skill，然后按 agent 启用或禁用每个 skill。v1 支持 Claude Code 与 Codex CLI 作为同步目标（每个 agent 是 spec 004-agent-registry 中 kind 为 `agent` 的 Resource）。」
 
 ## 用户场景与测试
 
@@ -26,22 +26,6 @@
 
 ---
 
-### User Story 2 —— 从 Git URL 拉取 skill（优先级 P1）
-
-开发者在某公开 GitHub 仓库里看到一个 skill，想把它拉进 Coffer。
-
-**为什么是这个优先级**：AgentSkills 生态本就强调分享，URL 拉取是主要分发渠道。少了这个能力，用户只能用自己写的 skill。
-
-**独立可测**：在命令行拉取一个已知的公开 skill 仓库（含 subpath）；验证创建出来的规范副本 `source.type=git`；验证 URL、ref、subpath 都被持久化。
-
-**代表性场景**：
-
-- 按 URL + ref + subpath 拉取公开 Git skill 仓库
-- 拒绝 SSRF 攻击（loopback / 私网地址）
-- v1 拒绝私有仓库
-- 拉取下来未能通过 SKILL.md 校验的内容被拒绝
-
----
 
 ### User Story 3 —— 把 skill 对特定 agent 启用（优先级 P1）
 
@@ -60,21 +44,6 @@
 
 ---
 
-### User Story 4 —— 从源头更新 skill（优先级 P2）
-
-开发者想拉到一个 Git 源 skill 的最新版。
-
-**为什么是这个优先级**：没有更新能力，拉下来的 skill 会变陈旧，用户会失去信任。
-
-**独立可测**：拉一个 Git skill；调高其上游内容；运行 `coffer skill update`；验证 master 内容已变化，所有已启用的 agent 在下次读取时都能看到新版本。
-
-**代表性场景**：
-
-- 把 Git 源 skill 更新到新的上游内容
-- 检测并告警两次版本之间 SKILL.md frontmatter 的 `name` 变化
-- 内容未变时为 no-op 更新
-
----
 
 ### User Story 5 —— 检测并报告 drift（优先级 P2）
 
@@ -96,7 +65,7 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 ### User Story 6 —— 在桌面 App 中管理 skill（优先级 P2）
 
-用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入或粘贴 Git URL 拉取，并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」「复制绝对路径」三种操作。按 agent 的启用/禁用在 agent 详情页上进行——该 agent 的「Skills」tab 列出绑定到该 agent 的 skill，并带每条 binding 的开关。
+用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」「复制绝对路径」三种操作。按 agent 的启用/禁用在 agent 详情页上进行——该 agent 的「Skills」tab 列出绑定到该 agent 的 skill，并带每条 binding 的开关。
 
 **为什么是这个优先级**：非 CLI 用户需要一个可视化日常管理面板。
 
@@ -105,7 +74,6 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 **代表性场景**：
 
 - 通过桌面文件选择器导入 skill
-- 通过桌面 URL 表单拉取 skill
 - 通过桌面切换控件按 agent 启停
 - 通过 UI 通知呈现 drift 数
 
@@ -115,7 +83,7 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 开发者用 `coffer skill ...` 子命令配合 `--json` 输出，在多台机器上脚本化 skill 配置。
 
-**独立可测**：一段 bash 脚本完成「导入一个 skill、再拉一个、为两个 agent 各启用、列出状态、跑一次 verify」全过程，无需 GUI。
+**独立可测**：一段 bash 脚本完成「导入 skill、为两个 agent 各启用、列出状态、跑一次 verify」全过程，无需 GUI。
 
 **代表性场景**：
 
@@ -141,13 +109,13 @@ agent 的 `config_dir/skills` 文件夹可能被外部篡改（删除、替换�
 
 ### User Story 9 —— 审计 skill 全生命周期（优先级 P3）
 
-每一次导入、拉取、启用、禁用、更新、移除都可审计。
+每一次导入、启用、禁用、移除都可审计。
 
 **独立可测**：跑一遍代表性操作序列；查看审计日志；每个变更一行，含 actor、target、event type。
 
 **代表性场景**：
 
-- 审计导入、拉取、启用、禁用、更新、移除
+- 审计导入、启用、禁用、移除
 
 ---
 
@@ -190,10 +158,7 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 ### Edge Cases
 
 - **导入时 skill 重名**：拒绝；用户必须先在 SKILL.md frontmatter 里改名再试。
-- **更新时 frontmatter 中的 `name` 变了**：默认拒绝；`--allow-rename` 触发对 master 文件夹的原子重命名，并重建所有已启用的 symlink。审计日志保留每条历史事件原始的名字；当前 Resource 行记录改名后的新名字。
-- **master 文件夹超过大小上限（默认 50 MB）**：导入或拉取被拒，错误信息包含上限值与调整方式提示。
-- **Git 拉取遇到私有仓库或需鉴权的 URL**：拒绝；v1 不处理上游 skill 源的凭据。
-- **Git 拉取目标不可达 / DNS 失败 / 超时**：操作干净地失败，返回网络错误；不会留下半写的 master 文件夹，也不会留下 DB 记录。
+- **master 文件夹超过大小上限（默认 50 MB）**：导入被拒，错误信息包含上限值与调整方式提示。
 - **Windows 下 symlink/junction 创建失败（FAT32 或网络共享）**：该目标降级为复制模式，审计带 `degraded=true`；UI 显示警告标记。
 - **用户在外部编辑器中、从某 agent 的 `config_dir/skills` 文件夹内编辑 SKILL.md**：Coffer 的 UI 从不编辑文件内容；用户在自己的编辑器中改动（可经 Coffer 的「在外部编辑器中打开」/「在文件管理器中显示」操作进入，或直接打开）。由于 agent 路径是指向 master 的 symlink，该外部编辑实际落在 master 上，其他 agent 下次读取时即可见；不会被识别为 drift。
 - **用户从某 agent 的 `config_dir/skills` 文件夹内删除一个由 Coffer 管理的文件**：同样会作用到 master；下次 `verify` 会标记其他 agent 上对应 link 是否仍能一致解析。
@@ -240,18 +205,6 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **When** 校验该文件夹，
 - **Then** 校验通过，且解析出的 frontmatter 保留 `license` 与归一化后的 `allowed-tools` 列表（而非丢弃）。
 
-### Scenario: 拉取公开 Git skill 仓库
-
-- **Given** daemon 在运行，且某公开 Git URL 在已知 subpath 处提供合法 skill，
-- **When** 用户运行 `coffer skill fetch <url> --ref <ref> --subpath <path>`，
-- **Then** Coffer 做 shallow clone、校验 SKILL.md、把该 subpath 拷贝到 `~/.coffer/skills/<name>/`，并持久化 `source.type=git` 与 `git_url`/`git_ref`/`git_subpath`。
-
-### Scenario: 拒绝 SSRF 拉取
-
-- **Given** daemon 在运行，
-- **When** 用户尝试从 loopback 或 RFC1918 URL 拉取，
-- **Then** SSRF guard 在任何网络往返之前直接拒绝该请求。
-
 ### Scenario: 把 skill 对已注册 agent 启用
 
 - **Given** agent `claude_code` 已按 spec 004 注册，且 skill `my-skill` 已被导入，
@@ -276,18 +229,6 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **When** 用户为该 agent 启用某 skill，
 - **Then** 操作被拒绝；若加 `--force`，已有目标被备份到 `<path>.coffer-backup-<ts>`，然后再创建 link。
 
-### Scenario: 更新一个 Git 源 skill
-
-- **Given** 某 skill 是从 Git URL 拉取来的，
-- **When** 用户运行 `coffer skill update <name>` 且上游已提供不同内容，
-- **Then** master 文件夹被原子替换为新内容，写一条审计记录，所有已启用的 agent 在原 symlink 上即可读到新版。
-
-### Scenario: 更新时检测 frontmatter 改名
-
-- **Given** 某次更新会改动 SKILL.md frontmatter 的 `name`，
-- **When** 用户运行 update 时未加 `--allow-rename`，
-- **Then** 更新被拒绝并在错误信息中告知新名字；若加 `--allow-rename`，master 文件夹被重命名，所有已启用的 symlink 在新名字下被重建。
-
 ### Scenario: 导入时扫描标记风险内容
 
 - **Given** 一个 bundled 脚本把下载内容管道进 shell 的 skill 文件夹，
@@ -305,18 +246,6 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **Given** 一个用户已显式确认风险的被标记 skill，
 - **When** 用户为某 agent 启用它，
 - **Then** 链接被创建、binding 被记录；之后内容变化会重置该确认。
-
-### Scenario: 检测有可用更新但不应用
-
-- **Given** 一个上游内容已变化的 Git 源 skill，
-- **When** 用户运行检查更新，
-- **Then** 结果报告有可用更新且该信号被缓存到 skill 上，但 master 内容未变（什么都没应用），直到用户运行 update。
-
-### Scenario: 固定 skill 以抑制更新信号
-
-- **Given** 一个被用户固定的 skill，
-- **When** 渲染 skill 列表/详情，
-- **Then** 不为它显示「有可用更新」信号；取消固定后信号恢复。
 
 ### Scenario: 检测 agent skill 目录中的 drift
 
@@ -411,7 +340,7 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 ### Scenario: auto-deliver new skills to following agents（向跟随中的 agent 自动投递新 skill）
 
 - **Given** 一个已开启跟随的 agent，
-- **When** 主库注册一个新 skill（导入、拉取或收编），
+- **When** 主库注册一个新 skill（导入或收编），
 - **Then** daemon 无需用户进一步操作即把它投递给该 agent。
 
 ### Scenario: auto-remove deleted skills from following agents（从跟随中的 agent 自动移除已删除 skill）
@@ -469,24 +398,22 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 **Resource 模型**
 
 - **FR-001**：系统必须把每个被管理的 skill 注册为 kind 为 `skill` 的 Resource，按 `skill:<name>` 标识，`<name>` 来自 SKILL.md frontmatter。
-- **FR-002**：系统必须按 kind 专属 schema 校验 skill 配置：字段含 `source`（变种：`local_import` | `git`）、`skill_md_name`、`skill_md_description`、`version_hash`、`last_synced_from_source_at`。
+- **FR-002**：系统必须按 kind 专属 schema 校验 skill 配置：字段含 `source`（变种：仅 `local_import`）、`skill_md_name`、`skill_md_description`、`version_hash`、`last_synced_from_source_at`。
 
 **规范存储**
 
 - **FR-003**：系统必须把每个被管理 skill 的内容存到 `~/.coffer/skills/<name>/`，并以此为唯一可编辑的事实来源。
-- **FR-004**：系统必须按 AgentSkills 规范校验每一个被导入或拉取的 skill 文件夹：存在 `SKILL.md`；frontmatter `name` 非空（小写字母数字、连字符或下划线，≤64 字符）、`description` 非空且 ≤1024 字符；不含越界 symlink；总大小不超过可配置上限（默认 50 MB）。违反任一项的文件夹以 `unprocessable_entity`（422）拒绝，且不写入任何内容。
+- **FR-004**：系统必须按 AgentSkills 规范校验每一个被导入的 skill 文件夹：存在 `SKILL.md`；frontmatter `name` 非空（小写字母数字、连字符或下划线，≤64 字符）、`description` 非空且 ≤1024 字符；不含越界 symlink；总大小不超过可配置上限（默认 50 MB）。违反任一项的文件夹以 `unprocessable_entity`（422）拒绝，且不写入任何内容。
 - **FR-027**：系统必须识别它理解的 agentskills.io 可选 frontmatter 字段——`license` 与实验性的 `allowed-tools`——解析并保留它们而非丢弃，同时容忍任何其他未识别字段，让非 Coffer 编写的 skill 也能干净通过校验。`allowed-tools` 接受列表或以逗号/空白分隔的字符串，归一化为工具名列表；格式异常的值被容忍（视作缺省），绝不构成校验失败。同理，非字符串的 `license` 标量（如未加引号的年份或版本号）会被转为字符串而非拒绝。
 
 **内容信任（信任层 L2）**
 
-- **FR-028**：系统必须在每次入库（import、fetch、adopt）以及每次内容变更操作（改动 `SKILL.md` 的 update、就地文件编辑）时，对 skill 文件运行启发式内容扫描，并把结果缓存到 skill 上——verdict（`low`/`medium`/`high`/`critical` 或无）、findings 数、ruleset 版本、扫描时间。扫描是建议性的：从不阻断入库，干净结果也不构成安全保证（Coffer 只交付不执行 skill，无法强制运行时行为——见 ADR-027）。用户必须能按需对已管理 skill 重新扫描。每次扫描都审计。
+- **FR-028**：系统必须在每次入库（import、adopt）以及每次内容变更操作（就地文件编辑）时，对 skill 文件运行启发式内容扫描，并把结果缓存到 skill 上——verdict（`low`/`medium`/`high`/`critical` 或无）、findings 数、ruleset 版本、扫描时间。扫描是建议性的：从不阻断入库，干净结果也不构成安全保证（Coffer 只交付不执行 skill，无法强制运行时行为——见 ADR-027）。用户必须能按需对已管理 skill 重新扫描。每次扫描都审计。
 - **FR-029**：当 skill 的扫描 verdict 为 `high` 或 `critical` 时，系统必须拒绝为某 agent 启用它，直到用户显式确认风险；拒绝以 `conflict`（409）报告，follow/auto-bind 调和器跳过此类 skill（审计）而非投递。确认是显式且审计的动作，并且每当 skill 内容随后变化时必须重置（确认只对当时的内容生效）。收编是例外——它只是把 agent workspace 中已存在的 skill 归并，所以记录 verdict 但不阻断。
 
 **源**
 
 - **FR-005**：系统必须支持从本地路径导入 skill；原始源路径仅作为 provenance 记录，不会被持续依赖。
-- **FR-006**：系统必须支持从公开 Git URL 拉取 skill（带 ref 与可选 subpath），通过 SSRF guard 客户端做 shallow clone（遵循 Coffer constitution）。
-- **FR-007**：v1 必须拒绝需要鉴权的 Git URL；私有仓库支持留给后续规范。
 
 **按 agent 投递**
 
@@ -495,13 +422,6 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **FR-010**：禁用一个 binding 必须移除目标 link，不动 master。
 - **FR-011**：启用时若目标位置已存在非 Coffer 目标，未加 `--force` 则拒绝；`--force` 在创建 link 前先备份既有目标。
 - **FR-012**：当符号链接/目录 junction 不可用（如 FAT32、网络共享）时，系统可降级为复制模式；绑定记录 `link_mode=copy_fallback`（enable 事件审计为 `mode: copy_fallback`），UI 必须呈现该降级状态（Agent 的 Skills 标签页对此类绑定显示 "已复制" 警示徽标）。
-
-**更新**
-
-- **FR-013**：系统必须支持按用户指令刷新 Git 源 skill；本地导入的 skill 应通过重新导入而非更新来刷新。
-- **FR-014**：系统必须检测并拒绝改动 SKILL.md frontmatter `name` 的更新，除非用户传 `--allow-rename`；该开关触发对 master 文件夹的原子重命名与所有已启用 symlink 的重建。
-- **FR-030**：系统必须为 Git 源 skill 提供按需的「检查更新」操作：重新拉取源并与已存版本比较，但**不应用**任何变更，并把结果（update-available 标志、可用内容哈希、检查时间）缓存到 skill 上。本地导入的 skill 不支持该检查（重新导入以刷新）。应用一次更新会清除该缓存信号。每次检查都审计。
-- **FR-031**：用户必须能固定（pin）一个 skill。固定期间，update-available 信号被抑制（被刻意冻结的 skill 不再显示为过期）；pin 与 unpin 都是显式且审计的动作。
 
 **Drift**
 
@@ -533,12 +453,12 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 
 **可观测**
 
-- **FR-020**：系统必须为每一次导入、拉取、启用、禁用、更新、改名、移除与 drift 修复事件写入一条审计记录。
+- **FR-020**：系统必须为每一次导入、启用、禁用、移除与 drift 修复事件写入一条审计记录。
 
 ### Key Entities
 
 - **Skill**：kind 为 `skill` 的 Resource，按 `skill:<name>`（name 来自 SKILL.md frontmatter）标识。承载源 provenance、内容哈希、元数据；内容文件夹位于 `~/.coffer/skills/<name>/`。
-- **Skill Source**：判别式记录（`local_import` 或 `git`），描述 skill 来源。Git 包含 URL、ref、可选 subpath；本地导入仅含原始路径作 provenance 用。
+- **Skill Source**：记录 skill 来源的结构。本地导入仅含原始路径作 provenance 用。
 - **Skill–Agent Binding**：连接一个 skill Resource 与一个 agent Resource（kind `agent`，按 spec 004）的一行；带 `enabled` 标志与最近 link path。磁盘上的 symlink 是 live 表达；binding 是持久化表达。
 - **Drift Report**：`verify` 返回的瞬时结构，列出每条与磁盘不一致的 binding，附 drift 类型与建议处置方式。
 - **Unmanaged Skill（非托管 skill）**：在 agent skill 位置发现的、Coffer 不管理的 skill 形条目的派生（绝不存储）视图——名称、路径、位置、`valid` 标志。文件系统是事实来源；收编或删除是仅有的两种变更。
@@ -549,13 +469,12 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 ### Measurable Outcomes
 
 - **SC-001**：从零安装开始，用户可在 60 秒内完成「导入既有 `~/.claude/skills/<one-skill>/`、对自动检测到的 Claude Code agent 启用、达到 ready 状态」。
-- **SC-002**：拉取一个 1-MB 的公开 Git skill（含校验与拷贝）在正常家庭网络下 10 秒内完成。
 - **SC-003**：把一个 skill 对两个 agent 启用产生两条合法的目录 symlink（Windows 上为 junction），两个 agent 的读取进程看到同样的 SKILL.md 内容。
 - **SC-004**：手动删掉某 agent 侧的一条 symlink 后，`coffer skill verify` 必须在 5 秒内识别为 drift，并以非零 exit code 退出。
 - **SC-005**：删除一个对两个 agent 启用的 skill 后，磁盘上无残留 symlink、无残留 master 文件夹，DB 中无孤儿 binding 行。
 - **SC-006**：本规范每一个 Acceptance Scenario 都至少被一个带 `acceptance(spec="005-skill-manager", scenario="…")` 的测试覆盖，`make verify-acceptance` 报告 0 个未覆盖 scenario。
 - **SC-007**：全套 `make verify` 在本地与 CI 通过；`make verify-all`（含 e2e）在 macOS 与 Linux 通过；Windows 在 junction 模式与 copy-fallback 模式下分别通过。
-- **SC-008**：除用户显式拉取已知公开 URL 的情形外，SKILL.md 内容永不离开用户机器；由集成测试中的网络出站扫描自动验证。
+- **SC-008**：SKILL.md 内容永不离开用户机器；由集成测试中的网络出站扫描自动验证。
 - **SC-009**：开启跟随后，新注册的 skill 在 5 秒内投递到跟随中的 agent，除注册本身外无需任何用户操作。
 - **SC-010**：在托管链接与手工放置 skill 混杂的机器上，非托管扫描恰好列出手工放置的条目——零托管链接、零 `.system` 条目——由基于构造 fixture 树的集成测试验证。
 
@@ -565,10 +484,9 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - spec 001-mcp-gateway 引入的 kind-agnostic Resource 框架、审计日志与 `<kind>:<name>` 标识方案已就位。
 - spec 002-ui-shell 的应用外壳——侧栏 IA、布局、路由骨架、设计系统——已就位；桌面 Skills 页是渲染在该外壳之上的功能 surface，填上 002-ui-shell 预留的 `/skills` 导航位。
 - skill 遵循开放 AgentSkills 标准（SKILL.md 至少含 `name`/`description` frontmatter，见 agentskills.io），并按标准的精确约束校验（`name` ≤64 字符、`description` ≤1024 字符），同时识别可选的 `license` 与实验性 `allowed-tools` 字段；不符合规范的文件夹不在本规范处理之列。
-- v1 仅支持公开 Git URL；需鉴权的上游 skill 源留给后续工作。
 - 本地导入的 skill 是时间点拷贝；原路径仅用于追溯，不用于同步。
 - Windows 用户的文件系统支持目录 junction；FAT32 与网络共享降级为 copy 模式。
 - 两种 agent 类型的投递位置维持 `<config_dir>/skills`。Codex 还会读取 `~/.agents/skills`（其较新的标准位置），并把 `<config_dir>/skills` 视为向后兼容的 legacy 位置——非托管扫描覆盖两处；迁移 Coffer 的投递目标是一项已记录、延后到未来变更的决策。
 - 跟随主库标志与排除列表存于 agent 资源的 config（spec 004 的 schema）；其投递语义由本 spec 拥有。
 - 浏览即装 skill 目录（发现机制）已原型化后撤回（简化，2026-06-20），原因是缺乏可供浏览的内容生态；安装目录作为未来工作仍有可能落地。
-- v2 将探索：远程目录索引、agent 间的 skill 推荐、项目级 skill（仓库内 `.claude/skills/`）、通过 credential ref 支持私有 Git 源。
+- v2 将探索：远程目录索引、agent 间的 skill 推荐、项目级 skill（仓库内 `.claude/skills/`）。

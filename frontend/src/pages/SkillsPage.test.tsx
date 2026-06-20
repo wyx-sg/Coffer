@@ -18,7 +18,6 @@ import type { SkillOut } from "@/lib/api/skills";
 vi.mock("@/lib/hooks/useSkills", () => ({
   useSkills: vi.fn(),
   useImportSkill: vi.fn(),
-  useFetchSkill: vi.fn(),
   useEnableSkill: vi.fn(),
   useDisableSkill: vi.fn(),
   useRemoveSkill: vi.fn(),
@@ -27,7 +26,6 @@ vi.mock("@/lib/hooks/useSkills", () => ({
 const hooks = await import("@/lib/hooks/useSkills");
 const useSkillsMock = vi.mocked(hooks.useSkills);
 const useImportSkillMock = vi.mocked(hooks.useImportSkill);
-const useFetchSkillMock = vi.mocked(hooks.useFetchSkill);
 const useRemoveSkillMock = vi.mocked(hooks.useRemoveSkill);
 const useVerifySkillsMock = vi.mocked(hooks.useVerifySkills);
 
@@ -72,11 +70,6 @@ function stubHooks(opts: {
     isPending: false,
     error: null,
   } as unknown as ReturnType<typeof hooks.useImportSkill>);
-  useFetchSkillMock.mockReturnValue({
-    mutateAsync: vi.fn().mockResolvedValue({}),
-    isPending: false,
-    error: null,
-  } as unknown as ReturnType<typeof hooks.useFetchSkill>);
   useRemoveSkillMock.mockReturnValue({
     mutate: vi.fn(),
     isPending: false,

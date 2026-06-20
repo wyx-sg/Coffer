@@ -53,9 +53,6 @@
     "SHIM_NOT_FOUND",
     "SKILL_DIR_NOT_WRITABLE",
     "SKILL_INVALID",
-    "SKILL_NAME_MISMATCH",
-    "SOURCE_FETCH_FAILED",
-    "SSRF_BLOCKED",
     "TARGET_CONFLICT",
     "TOOL_DISABLED",
     "TURN_IN_PROGRESS",
@@ -65,7 +62,6 @@
     "UNKNOWN_PRUNABLE_TABLE",
     "UNMANAGED_SKILL_INVALID",
     "UNMANAGED_SKILL_NOT_FOUND",
-    "UPDATE_NOT_SUPPORTED",
     "UPSTREAM_TIMEOUT",
     "UPSTREAM_UNAVAILABLE"
   ],
@@ -122,13 +118,10 @@
     "skill_autobind_skipped",
     "skill_bound",
     "skill_drift_detected",
-    "skill_fetched",
     "skill_imported",
     "skill_relinked",
-    "skill_renamed",
     "skill_unbound",
     "skill_unmanaged_deleted",
-    "skill_update_noop",
     "skill_updated",
     "token_rotated"
   ]

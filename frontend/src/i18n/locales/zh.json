@@ -271,10 +271,7 @@
       "agent_plugin_uninstalled": "从 {{resource}} 卸载了一个插件",
       "embedding_config_updated": "更新了向量嵌入配置",
       "skill_imported": "导入了技能 {{resource}}",
-      "skill_fetched": "从来源拉取了技能 {{resource}}",
       "skill_updated": "更新了技能 {{resource}}",
-      "skill_update_noop": "技能 {{resource}} 已是最新",
-      "skill_renamed": "重命名了技能 {{resource}}",
       "skill_bound": "将技能 {{resource}} 绑定到 {{key}}",
       "skill_unbound": "将技能 {{resource}} 从 {{key}} 解绑",
       "skill_autobind_skipped": "跳过了技能 {{resource}} 的自动绑定",
@@ -565,11 +562,7 @@
     "UNMANAGED_SKILL_NOT_FOUND": "未找到该未纳管技能",
     "UNMANAGED_SKILL_INVALID": "该技能目录不是有效的技能",
     "SKILL_INVALID": "该技能无效",
-    "SKILL_NAME_MISMATCH": "技能名称与其目录不一致",
-    "SOURCE_FETCH_FAILED": "无法从来源拉取",
-    "SSRF_BLOCKED": "出于安全考虑，该 URL 已被拦截",
     "TARGET_CONFLICT": "目标位置已存在一个技能",
-    "UPDATE_NOT_SUPPORTED": "该技能无法从其来源更新",
     "KB_NOT_FOUND": "未找到知识库",
     "DOCUMENT_NOT_FOUND": "未找到文档",
     "INGEST_REJECTED": "文档在摄入过程中被拒绝",
@@ -846,18 +839,13 @@
   "skills": {
     "title": "Skill",
     "subtitle": "Coffer 管理的 AgentSkills 标准目录，会下发到所有已注册的 Agent。",
-    "empty": "尚无 Skill。导入本地文件夹或从公开 Git URL 拉取。",
+    "empty": "尚无 Skill。导入本地文件夹以开始使用。",
     "loadFailed": "加载 Skill 失败",
     "add": "添加 Skill",
-    "addSubtitle": "导入本地文件夹，或从公开 Git URL 拉取。",
+    "addSubtitle": "从磁盘导入本地 AgentSkills 标准目录。",
     "import": "导入",
-    "fetch": "从 Git 拉取",
     "path": "本地路径",
-    "gitUrl": "Git URL",
-    "gitRef": "Ref（分支 / 标签 / commit）",
-    "gitSubpath": "仓库内子路径",
     "verify": "校验",
-    "update": "更新",
     "name": "名称",
     "source": "来源",
     "description": "描述",
@@ -867,10 +855,6 @@
     "deleteAria": "删除 {{name}}",
     "removeConfirmTitle": "移除 Skill {{name}}？",
     "removeConfirmBody": "这会删除主存储文件夹以及所有 agent 端链接。",
-    "add.tabs": {
-      "local": "本地文件夹",
-      "git": "从 Git"
-    },
     "verify.title": "校验 Skill 链接",
     "verify.subtitle": "检查每个已启用的绑定是否仍与磁盘上的链接一致。",
     "verify.checking": "正在检查漂移…",
@@ -896,11 +880,7 @@
       "scanClean": "干净——无 findings",
       "findingsCount": "{{count}} 条 findings",
       "needsAck": "需确认",
-      "acknowledged": "风险已确认",
-      "update": "更新",
-      "updateAvailable": "有可用更新",
-      "pinned": "已固定",
-      "upToDate": "已是最新"
+      "acknowledged": "风险已确认"
     },
     "bindings": {
       "noAgents": "尚未注册任何 Agent。请先添加 Agent，再绑定此 Skill。",
@@ -924,10 +904,10 @@
     },
     "welcome": {
       "title": "管理你的 Skill",
-      "body": "从磁盘导入 AgentSkills 标准目录，或从公开 Git URL 拉取。Coffer 会保留一份主副本，并下发到你已注册的 Agent。",
+      "body": "从磁盘导入 AgentSkills 标准目录。Coffer 会保留一份主副本，并下发到你已注册的 Agent。",
       "featureImport": {
-        "title": "导入或拉取",
-        "body": "导入本地 Skill 文件夹，或从公开 Git 仓库拉取。"
+        "title": "导入",
+        "body": "从磁盘导入本地 Skill 文件夹。"
       },
       "featureDeliver": {
         "title": "下发到你的 Agent",

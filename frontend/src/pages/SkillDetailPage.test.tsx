@@ -1,10 +1,10 @@
 // frontend/src/pages/SkillDetailPage.test.tsx
 //
-// The per-skill detail page: header (name + source badge + Update for git +
-// Delete) and two tabs — Overview, Files. We mock the skill hooks so the page
-// doesn't depend on a running daemon.
+// The per-skill detail page: header (name + source badge + Delete) and two
+// tabs — Overview, Files. We mock the skill hooks so the page doesn't depend
+// on a running daemon.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { SkillDetailPage } from "./SkillDetailPage";
@@ -12,7 +12,6 @@ import type { SkillOut } from "@/lib/api/skills";
 
 vi.mock("@/lib/hooks/useSkills", () => ({
   useSkill: vi.fn(),
-  useUpdateSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
   useRemoveSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useSkillFiles: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
   useSkillFileContent: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
@@ -20,12 +19,11 @@ vi.mock("@/lib/hooks/useSkills", () => ({
 
 const skillHooks = await import("@/lib/hooks/useSkills");
 const useSkillMock = vi.mocked(skillHooks.useSkill);
-const useUpdateSkillMock = vi.mocked(skillHooks.useUpdateSkill);
 
-const GIT_SKILL: SkillOut = {
+const LOCAL_SKILL: SkillOut = {
   name: "hello",
   description: "a greeting",
-  source: { type: "git", git_url: "https://example.com/repo", git_ref: "main", git_subpath: "" },
+  source: { type: "local_import", original_path: "/tmp/hello" },
   enabled: true,
   version_hash: "deadbeefcafe1234",
   master_path: "/master/hello",
@@ -61,36 +59,20 @@ afterEach(() => vi.clearAllMocks());
 
 describe("SkillDetailPage", () => {
   test("renders the header, source badge, and the two tabs", () => {
-    mockSkill(GIT_SKILL);
+    mockSkill(LOCAL_SKILL);
     renderAt();
     expect(screen.getByRole("heading", { name: "hello" })).toBeInTheDocument();
-    expect(screen.getByText("git")).toBeInTheDocument();
+    expect(screen.getByText("local_import")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /overview/i })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /bindings/i })).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /files/i })).toBeInTheDocument();
-    // Overview (default) shows the truncated version hash + git url.
+    // Overview (default) shows the truncated version hash + local path.
     expect(screen.getByText("deadbeefcafe")).toBeInTheDocument();
-    expect(screen.getByText("https://example.com/repo")).toBeInTheDocument();
+    expect(screen.getByText("/tmp/hello")).toBeInTheDocument();
   });
 
-  test("the Update button (git sources) calls the update mutation", () => {
-    const mutate = vi.fn();
-    useUpdateSkillMock.mockReturnValue({
-      mutate,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof skillHooks.useUpdateSkill>);
-    mockSkill(GIT_SKILL);
-    renderAt();
-    fireEvent.click(screen.getByRole("button", { name: /^update$/i }));
-    expect(mutate).toHaveBeenCalledWith({ name: "hello" });
-  });
-
-  test("hides the Update button for local_import sources", () => {
-    mockSkill({
-      ...GIT_SKILL,
-      source: { type: "local_import", original_path: "/tmp/h" },
-    });
+  test("the Update button is never shown (local-import only)", () => {
+    mockSkill(LOCAL_SKILL);
     renderAt();
     expect(screen.queryByRole("button", { name: /^update$/i })).not.toBeInTheDocument();
   });

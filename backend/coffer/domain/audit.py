@@ -52,10 +52,7 @@ class AuditEventType(StrEnum):
     AGENT_INSTRUCTIONS_ADOPTED = "agent_instructions_adopted"
     # spec 005-skill-manager
     SKILL_IMPORTED = "skill_imported"
-    SKILL_FETCHED = "skill_fetched"
     SKILL_UPDATED = "skill_updated"
-    SKILL_UPDATE_NOOP = "skill_update_noop"
-    SKILL_RENAMED = "skill_renamed"
     SKILL_BOUND = "skill_bound"
     SKILL_UNBOUND = "skill_unbound"
     SKILL_AUTOBIND_SKIPPED = "skill_autobind_skipped"
@@ -65,9 +62,6 @@ class AuditEventType(StrEnum):
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
     SKILL_SCANNED = "skill_scanned"
     SKILL_RISK_ACKNOWLEDGED = "skill_risk_acknowledged"
-    SKILL_UPDATE_CHECKED = "skill_update_checked"
-    SKILL_PINNED = "skill_pinned"
-    SKILL_UNPINNED = "skill_unpinned"
     # spec 006-knowledge-base
     KB_DOCUMENT_INGESTED = "kb_document_ingested"
     KB_DOCUMENT_UPDATED = "kb_document_updated"

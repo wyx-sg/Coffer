@@ -1,7 +1,7 @@
 """Content-scan + risk-acknowledgment helpers for SkillService (trust layer L2).
 
 Free functions that take the SkillService instance and reach into its (private)
-attributes — conceptually private to the skill subpackage, like ``update_ops``.
+attributes — conceptually private to the skill subpackage, like ``lifecycle_ops``.
 They translate between the pure ``domain.skill.content_scan`` report and the
 persisted ``SkillConfig`` fields, and own the re-scan / acknowledge operations.
 See spec 005 FR-028/FR-029 and ADR-027.

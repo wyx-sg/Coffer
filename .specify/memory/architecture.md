@@ -86,7 +86,7 @@ backend/coffer/
 │   ├── daemon/                   # pid_lock, port allocation
 │   ├── mcp/                      # subprocess, http upstream client
 │   ├── agent/                   # agent config-file store
-│   ├── skill/                   # master store, source fetcher, sync engine
+│   ├── skill/                   # master store, sync engine
 │   └── channel/                 # telegram/seatalk transports, peer repo, render
 └── surfaces/
     ├── http/                     # FastAPI app + per-kind sub-routers (incl. agent/skill/fs routes)

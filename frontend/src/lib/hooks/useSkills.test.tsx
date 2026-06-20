@@ -10,7 +10,6 @@ import type { PropsWithChildren } from "react";
 import {
   useSkills,
   useImportSkill,
-  useFetchSkill,
   useEnableSkill,
   useDisableSkill,
   useRemoveSkill,
@@ -95,24 +94,6 @@ describe("useImportSkill", () => {
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       path: "/tmp/hello",
     });
-  });
-});
-
-describe("useFetchSkill", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  test("POSTs the git URL body", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, SAMPLE_SKILL));
-    vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useFetchSkill(), { wrapper: wrapper() });
-    await result.current.mutateAsync({
-      git_url: "https://example.com/repo",
-      git_ref: "main",
-      git_subpath: "",
-    });
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/skills\/fetch$/);
-    expect((init as RequestInit).method).toBe("POST");
   });
 });
 

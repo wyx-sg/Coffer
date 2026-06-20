@@ -15,19 +15,7 @@ export function SkillOverview({ skill }: { skill: SkillOut }) {
       <CardContent className="py-6">
         <dl className="grid grid-cols-[12rem_1fr] gap-y-3 text-sm">
           <dt className="text-muted-foreground">{t("skills.source")}</dt>
-          <dd className="font-mono text-xs">
-            {skill.source.type === "git" ? (
-              <span className="space-y-0.5">
-                <span className="block">{skill.source.git_url}</span>
-                <span className="block text-muted-foreground">
-                  {skill.source.git_ref}
-                  {skill.source.git_subpath ? ` · ${skill.source.git_subpath}` : ""}
-                </span>
-              </span>
-            ) : (
-              skill.source.original_path
-            )}
-          </dd>
+          <dd className="font-mono text-xs">{skill.source.original_path}</dd>
 
           <dt className="text-muted-foreground">{t("skills.detail.versionHash")}</dt>
           <dd className="font-mono text-xs">{skill.version_hash.slice(0, 12)}</dd>
@@ -50,15 +38,6 @@ export function SkillOverview({ skill }: { skill: SkillOut }) {
             ) : (
               t("skills.detail.scanClean")
             )}
-          </dd>
-
-          <dt className="text-muted-foreground">{t("skills.detail.update")}</dt>
-          <dd>
-            {skill.update_pending
-              ? t("skills.detail.updateAvailable")
-              : skill.pinned
-                ? t("skills.detail.pinned")
-                : t("skills.detail.upToDate")}
           </dd>
 
           <dt className="text-muted-foreground">{t("skills.detail.masterPath")}</dt>

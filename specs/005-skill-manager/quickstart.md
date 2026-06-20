@@ -8,8 +8,6 @@ them to one or more registered AI agents (spec 004).
 - Coffer's daemon is running (start the desktop app or `coffer daemon`).
 - At least one agent is registered (auto-detected or via `coffer agent add` —
   see spec 004 quickstart).
-- For Git fetches: `git` is installed and on `PATH`.
-
 ## Import an existing skill folder
 
 If you already have a skill in `~/.claude/skills/my-skill/`, bring it under
@@ -31,20 +29,9 @@ Coffer:
 After this, **all your agents see the skill** through their normal
 `config_dir/skills` folder.
 
-## Fetch a skill from a Git repository
-
-```bash
-coffer skill fetch https://github.com/owner/skills-repo \
-  --ref main \
-  --subpath skills/my-skill
-```
-
-Coffer performs a shallow clone, validates the subpath, and copies it to
-`~/.coffer/skills/<name>/`. Private repos are not supported in v1.
-
 ## Enable / disable per agent
 
-After import or fetch, every registered agent is enabled by default. To
+After import, every registered agent is enabled by default. To
 restrict a skill to one agent:
 
 ```bash
@@ -66,7 +53,7 @@ before linking.
 ## Follow the master library
 
 By default every agent **follows** the master library: every skill you import
-or fetch is delivered automatically, and newly registered skills appear
+is delivered automatically, and newly registered skills appear
 without further action. Turn it off (or back on) per agent:
 
 ```bash
@@ -118,20 +105,6 @@ master content or bindings):
 coffer skill rm-unmanaged claude-code my-skill --location skills
 ```
 
-## Update a Git-sourced skill
-
-```bash
-coffer skill update my-skill
-```
-
-Coffer re-fetches the source, replaces the master folder atomically if the
-content has changed, and records the before/after content hashes in the audit
-log. If SKILL.md's frontmatter `name` has changed, the update is rejected
-unless you pass `--allow-rename`.
-
-Local-imported skills cannot be updated this way — re-run `import` against
-the new folder.
-
 ## Verify drift
 
 If you (or another tool) tampered with files in an agent's `config_dir/skills`
@@ -142,8 +115,7 @@ coffer skill verify
 ```
 
 The report categorizes drift and suggests a remedy per entry. Coffer does
-**not** automatically fix drift — you decide whether to re-enable, disable,
-or update.
+**not** automatically fix drift — you decide whether to re-enable or disable.
 
 ## Browse a skill's files (read-only)
 

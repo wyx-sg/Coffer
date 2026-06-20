@@ -68,7 +68,7 @@ const SAMPLE: SkillOut[] = [
   {
     name: "git-skill",
     description: "From a repo",
-    source: { type: "git", git_url: "https://x/y.git", git_ref: "main", git_subpath: "" },
+    source: { type: "local_import", original_path: "/tmp/git-skill" },
     enabled: true,
     version_hash: "999888777666",
     master_path: "/master/git-skill",

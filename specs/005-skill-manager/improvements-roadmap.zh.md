@@ -1,8 +1,8 @@
 # Skill Manager —— 改进 Roadmap
 
-状态：#4/#3/#2 **已交付**；#1（发现机制）已交付后**撤回**
-（简化 4.8，2026-06-20）——缺乏内容生态。已交付项的 FR 与验收场景见
-`spec.md`；信任层决策见 ADR-027。源自
+状态：#4/#3 **已交付**；#2 **已撤回**（简化 4.3，2026-06-20）——skill 只支持本地文件夹导入，
+无实时 Git 源可比对更新；#1（发现机制）已交付后**撤回**（简化 4.8，2026-06-20）——缺乏内容生态。
+已交付项的 FR 与验收场景见 `spec.md`；信任层决策见 ADR-027。源自
 [`docs/research/agent-skills.md`](../../docs/research/agent-skills.md) 的竞品调研
 （[`docs/research/README.md`](../../docs/research/README.md) 中的报告 #3）。调研判定
 Coffer 在跨 agent 交付与 SSRF 加固摄取上领先，在四个点上落后。本 roadmap 把这四点
@@ -13,16 +13,14 @@ Coffer 在跨 agent 交付与 SSRF 加固摄取上领先，在四个点上落后
 ## 落地顺序
 
 ```
-#4 frontmatter 对齐   →  #3 信任层（L2）    →  #2 更新检测/钉选   →  #1 发现机制
-   (小·前置)              (大·最高杠杆)         (中·独立)            (大·复用 #3/#4)
+#4 frontmatter 对齐   →  #3 信任层（L2）    →  ~~#2 更新检测/钉选~~   →  #1 发现机制
+   (小·前置)              (大·最高杠杆)         (已撤回，简化 4.3)       (大·复用 #3/#4)
 ```
 
 依赖理由：
 
 - **#4 最先**——识别 `allowed-tools` frontmatter 字段，正是信任层（#3）要消费的数据。
-- **#1 最后**——浏览即装复用现有的 git-fetch 入库路径，而该路径必须先带上 #3 的内容
-  扫描与 #4 的校验，发现机制才骑在其上。
-- **#2 与 #3** 互不依赖，可互换；若想更快出可发布成果，可走 4 → 2 → 3 → 1。
+- **#1 最后**——浏览即装必须先带上 #3 的内容扫描与 #4 的校验，发现机制才骑在其上。
 
 每项一个分支/一个 PR，spec 先行：先改 `spec.md`/`spec.zh.md`、`data-model.md`、
 `contracts/api.openapi.yaml`，再带测试实现，最后 `make verify`。
@@ -48,21 +46,21 @@ Coffer 在跨 agent 交付与 SSRF 加固摄取上领先，在四个点上落后
 把关，再把风险摆上台面。记录一份新 ADR。
 
 - **L1 清单 + 溯源。** 枚举脚本/可执行文件（扩展名 + shebang + exec 位），记录
-  path/size/sha256；读出声明的 `allowed-tools`；呈现 source URL、`git_ref`、入库
-  时间、`version_hash`（均已存储）。
+  path/size/sha256；读出声明的 `allowed-tools`；呈现入库时间、`version_hash`（均已存储）。
 - **L2 启发式扫描。** 纯函数 `scan_skill_folder(folder) -> list[Finding]`
   （`severity`、`rule_id`、`file`、`line?`、`message`）。规则：危险 shell
   （`curl … | sh`、`eval`、base64→exec、`rm -rf`、sudo、写出目录外）、网络出口、疑似
   外泄（`~/.ssh`、`~/.aws`、env dump 外送）、`allowed-tools` 与实际行为不符
   （best-effort）、混淆（长 base64/hex blob）。
 - **非硬拦。** 入库/启用照常；verdict ≥ high 标记 skill"需确认"，绑定/启用需显式 ack
-  （`POST /skills/{name}/acknowledge-risk`，写审计）。扫描在 import、git-fetch、
-  update-apply 时执行；结果持久化到 `SkillConfig`（`scan_verdict`、`findings_count`、
+  （`POST /skills/{name}/acknowledge-risk`，写审计）。扫描在 import、adopt 与就地文件编辑时执行；结果持久化到 `SkillConfig`（`scan_verdict`、`findings_count`、
   `last_scanned_at`、`ruleset_version`）。
 - **Surfaces。** detail 页 findings、list 徽章、`SKILL_SCANNED` /
   `SKILL_RISK_ACKNOWLEDGED` 审计事件、CLI `coffer skill scan <name>`。
 
 ## #2 —— 更新检测 + 钉选
+
+> **已撤回（2026-06-20，简化 4.3）。** 更新检测 + 钉选已移除：skill 只支持本地文件夹导入，没有实时 Git 源可比对。设计保留仅供历史参考。
 
 `update_ops.apply_update` 已经对比 SKILL.md 哈希，但只是"拉了就改"。新增：
 

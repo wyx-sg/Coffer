@@ -68,27 +68,6 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /skills/fetch:
-    post:
-      tags: [skills]
-      operationId: fetchSkill
-      summary: Fetch a skill from a public Git URL
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SkillFetchRequest" }
-      responses:
-        "201":
-          description: Fetched
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SkillOut" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "409": { $ref: "#/components/responses/Conflict" }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
-
   /skills/{name}:
     parameters:
       - in: path
@@ -115,31 +94,6 @@ paths:
           description: No Content
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
-
-  /skills/{name}/update:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-    post:
-      tags: [skills]
-      operationId: updateSkill
-      summary: Refresh a Git-sourced skill from upstream
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SkillUpdateRequest" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SkillUpdateResult" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
 
   /skills/{name}/enable:
     parameters:
@@ -314,64 +268,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /skills/{name}/check-update:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-    post:
-      tags: [skills]
-      operationId: checkSkillUpdate
-      summary: Check upstream for a newer version without applying it (FR-030)
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/UpdateStatusOut" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /skills/{name}/pin:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-    post:
-      tags: [skills]
-      operationId: pinSkill
-      summary: Pin a skill to suppress the update-available signal (FR-031)
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SkillOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /skills/{name}/unpin:
-    parameters:
-      - in: path
-        name: name
-        required: true
-        schema: { type: string }
-    post:
-      tags: [skills]
-      operationId: unpinSkill
-      summary: Unpin a skill so update checks surface again (FR-031)
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SkillOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
   /agents/{name}/unmanaged-skills:
     parameters:
       - in: path
@@ -489,7 +385,7 @@ components:
   schemas:
     SkillSourceType:
       type: string
-      enum: [local_import, git]
+      enum: [local_import]
 
     SkillImportRequest:
       type: object
@@ -501,29 +397,6 @@ components:
             type: string,
             description: "Path to the existing skill folder; supports `~` expansion.",
           }
-
-    SkillFetchRequest:
-      type: object
-      required: [git_url, git_ref]
-      additionalProperties: false
-      properties:
-        git_url: { type: string, format: uri }
-        git_ref: { type: string, description: "branch / tag / commit." }
-        git_subpath: { type: string, default: "" }
-
-    SkillUpdateRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        allow_rename: { type: boolean, default: false }
-
-    SkillUpdateResult:
-      type: object
-      required: [skill, changed]
-      properties:
-        skill: { $ref: "#/components/schemas/SkillOut" }
-        changed: { type: boolean }
-        renamed_from: { type: string, nullable: true }
 
     SkillEnableRequest:
       type: object
@@ -541,11 +414,7 @@ components:
         agent_name: { type: string }
 
     SkillSource:
-      oneOf:
-        - $ref: "#/components/schemas/LocalImportSource"
-        - $ref: "#/components/schemas/GitSource"
-      discriminator:
-        propertyName: type
+      $ref: "#/components/schemas/LocalImportSource"
 
     LocalImportSource:
       type: object
@@ -553,15 +422,6 @@ components:
       properties:
         type: { type: string, enum: [local_import] }
         original_path: { type: string }
-
-    GitSource:
-      type: object
-      required: [type, git_url, git_ref]
-      properties:
-        type: { type: string, enum: [git] }
-        git_url: { type: string, format: uri }
-        git_ref: { type: string }
-        git_subpath: { type: string }
 
     SkillOut:
       type: object
@@ -602,22 +462,6 @@ components:
         requires_acknowledgment:
           type: boolean
           description: Verdict gates enabling and risk not yet acknowledged (FR-029).
-        update_available: { type: boolean }
-        last_update_check_at:
-          { type: string, format: date-time, nullable: true }
-        pinned: { type: boolean }
-        update_pending:
-          type: boolean
-          description: Update available and the skill is not pinned (FR-030/FR-031).
-
-    UpdateStatusOut:
-      type: object
-      required: [available, current_hash, available_hash, rename_detected]
-      properties:
-        available: { type: boolean }
-        current_hash: { type: string }
-        available_hash: { type: string, nullable: true }
-        rename_detected: { type: boolean }
 
     ScanFindingOut:
       type: object
@@ -838,7 +682,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorOut" }
     UnprocessableEntity:
-      description: Validation failure (invalid SKILL.md, SSRF, size limit, path-escape, ...)
+      description: Validation failure (invalid SKILL.md, size limit, path-escape, ...)
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorOut" }

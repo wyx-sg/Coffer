@@ -37,7 +37,6 @@ from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
 from coffer.infrastructure.skill.external_dir_registrar import YamlExternalDirRegistrar
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
-from coffer.infrastructure.skill.source_fetcher import GitSourceFetcher
 from coffer.infrastructure.skill.sync_engine import SyncEngine
 from coffer.infrastructure.skill.workspace_scan import WorkspaceScan
 from coffer.surfaces.http.agent_instructions_routes import set_agent_instructions_service
@@ -74,7 +73,6 @@ def wire_agent_and_skill_kinds(
     binding_repo = SkillBindingRepo(sm)  # type: ignore[arg-type]
     master_store = MasterStore()
     master_store.ensure_root()
-    fetcher = GitSourceFetcher()
     sync_engine = SyncEngine()
 
     # Cross-kind resolvers: skill service needs the agent's effective
@@ -130,7 +128,6 @@ def wire_agent_and_skill_kinds(
         audit=audit,
         binding_repo=binding_repo,
         master_store=master_store,
-        source_fetcher=fetcher,
         sync_engine=sync_engine,
         agent_skill_dir_resolver=_agent_skill_dir,
         workspace_scan=WorkspaceScan(),

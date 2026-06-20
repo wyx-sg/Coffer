@@ -3,21 +3,14 @@
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
 
-export type SkillSourceType = "local_import" | "git";
+export type SkillSourceType = "local_import";
 
 export interface LocalImportSource {
   type: "local_import";
   original_path: string;
 }
 
-export interface GitSource {
-  type: "git";
-  git_url: string;
-  git_ref: string;
-  git_subpath: string;
-}
-
-export type SkillSource = LocalImportSource | GitSource;
+export type SkillSource = LocalImportSource;
 
 export type LinkMode = "symlink" | "junction" | "copy_fallback";
 
@@ -49,11 +42,6 @@ export interface SkillOut {
   last_scanned_at?: string | null;
   risk_acknowledged?: boolean;
   requires_acknowledgment?: boolean;
-  // Update detection (FR-030/FR-031). Optional for the same fixture-compat reason.
-  update_available?: boolean;
-  last_update_check_at?: string | null;
-  pinned?: boolean;
-  update_pending?: boolean;
 }
 
 export interface SkillListOut {
@@ -62,22 +50,6 @@ export interface SkillListOut {
 
 export interface SkillImportRequest {
   path: string;
-}
-
-export interface SkillFetchRequest {
-  git_url: string;
-  git_ref: string;
-  git_subpath?: string;
-}
-
-export interface SkillUpdateRequest {
-  allow_rename?: boolean;
-}
-
-export interface SkillUpdateResult {
-  skill: SkillOut;
-  changed: boolean;
-  renamed_from: string | null;
 }
 
 export interface SkillEnableRequest {
@@ -166,11 +138,8 @@ const enc = encodeURIComponent;
 export const skillsApi = {
   list: () => call<SkillListOut>("GET", "/skills"),
   importLocal: (body: SkillImportRequest) => call<SkillOut>("POST", "/skills/import", body),
-  fetchGit: (body: SkillFetchRequest) => call<SkillOut>("POST", "/skills/fetch", body),
   get: (name: string) => call<SkillOut>("GET", `/skills/${enc(name)}`),
   remove: (name: string) => call<void>("DELETE", `/skills/${enc(name)}`),
-  update: (name: string, body: SkillUpdateRequest) =>
-    call<SkillUpdateResult>("POST", `/skills/${enc(name)}/update`, body),
   enable: (name: string, body: SkillEnableRequest) =>
     call<SkillBindingOut>("POST", `/skills/${enc(name)}/enable`, body),
   disable: (name: string, body: SkillDisableRequest) =>

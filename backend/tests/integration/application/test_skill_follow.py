@@ -78,7 +78,6 @@ async def _setup(tmp_path: pathlib.Path):
         audit=audit,
         binding_repo=binding_repo,
         master_store=master_store,
-        source_fetcher=None,  # type: ignore[arg-type]  # no git in these tests
         sync_engine=SyncEngine(),
         agent_skill_dir_resolver=_agent_skill_dir,
         agent_skill_policy_resolver=_agent_skill_policy,

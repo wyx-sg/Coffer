@@ -5,7 +5,7 @@ Coffer-owned (see ``infrastructure/skill/master_store.py``). Surfaces show that
 folder as a file tree and let the user read individual files, read-only.
 
 This is a "helper module beside ``service.py``" (like ``verify_ops.py`` and
-``update_ops.py``): free functions, no class state. They are pure-ish reads of
+``scan_ops.py``): free functions, no class state. They are pure-ish reads of
 the filesystem — no mutation, no DB, no audit — so they take a resolved
 ``pathlib.Path`` rather than the ``SkillService`` instance.
 

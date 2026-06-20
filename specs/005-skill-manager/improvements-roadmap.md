@@ -1,7 +1,8 @@
 # Skill Manager — Improvements Roadmap
 
-Status: #4/#3/#2 **delivered**; #1 (discovery) was delivered then **withdrawn**
-(simplification 4.8, 2026-06-20) — no content ecosystem. FRs and acceptance
+Status: #4/#3 **delivered**; #2 **withdrawn** (simplification 4.3, 2026-06-20) — skills are
+local-folder-import only, no live Git source to update against; #1 (discovery) was delivered
+then **withdrawn** (simplification 4.8, 2026-06-20) — no content ecosystem. FRs and acceptance
 scenarios for the shipped items live in `spec.md`; the trust-layer decision is ADR-027.
 Derived from the competitive-landscape research in
 [`docs/research/agent-skills.md`](../../docs/research/agent-skills.md) (Report #3
@@ -15,19 +16,16 @@ The Chinese mirror is [`improvements-roadmap.zh.md`](./improvements-roadmap.zh.m
 ## Sequencing
 
 ```
-#4 frontmatter alignment  →  #3 trust layer (L2)  →  #2 update detection / pinning  →  #1 discovery
-   (small, prerequisite)      (large, top-leverage)    (medium, independent)            (large, reuses #3/#4)
+#4 frontmatter alignment  →  #3 trust layer (L2)  →  ~~#2 update detection / pinning~~  →  #1 discovery
+   (small, prerequisite)      (large, top-leverage)    (withdrawn, simplification 4.3)       (large, reuses #3/#4)
 ```
 
 Dependency rationale:
 
 - **#4 first** — recognizing the `allowed-tools` frontmatter field is the data the
   trust layer (#3) consumes.
-- **#1 last** — browse-and-install reuses the existing git-fetch ingest path, which
-  must already carry #3's content scan and #4's validation before discovery rides
-  on top of it.
-- **#2 and #3** are mutually independent and may be swapped; for a faster stream of
-  shippable wins, run 4 → 2 → 3 → 1.
+- **#1 last** — browse-and-install must carry #3's content scan and #4's validation
+  before discovery rides on top of it.
 
 Each item is one branch / one PR, spec-first: update `spec.md`/`spec.zh.md`,
 `data-model.md`, `contracts/api.openapi.yaml`, then implement with tests, then
@@ -61,7 +59,7 @@ making risk legible. Records a new ADR.
 
 - **L1 inventory + provenance.** Enumerate scripts/executables (extension +
   shebang + exec bit) with path/size/sha256; read declared `allowed-tools`;
-  surface source URL, `git_ref`, ingest time, `version_hash` (already stored).
+  surface ingest time, `version_hash` (already stored).
 - **L2 heuristic scan.** Pure `scan_skill_folder(folder) -> list[Finding]`
   (`severity`, `rule_id`, `file`, `line?`, `message`). Rules: dangerous shell
   (`curl … | sh`, `eval`, base64→exec, `rm -rf`, sudo, writes outside the
@@ -70,13 +68,14 @@ making risk legible. Records a new ADR.
   (long base64/hex blobs).
 - **Non-blocking.** Ingest/enable proceed; a verdict ≥ high marks the skill
   "needs acknowledgment" and binding/enable requires an explicit ack
-  (`POST /skills/{name}/acknowledge-risk`, audited). Scan runs at import,
-  git-fetch, and update-apply; results persist on `SkillConfig`
+  (`POST /skills/{name}/acknowledge-risk`, audited). Scan runs at import, adopt, and in-place file edits; results persist on `SkillConfig`
   (`scan_verdict`, `findings_count`, `last_scanned_at`, `ruleset_version`).
 - **Surfaces.** Detail-page findings, list badge, `SKILL_SCANNED` /
   `SKILL_RISK_ACKNOWLEDGED` audit events, CLI `coffer skill scan <name>`.
 
 ## #2 — Update detection + pinning
+
+> **Withdrawn (2026-06-20, simplification 4.3).** Update detection + pinning are removed: skills are local-folder-import only, with no live Git source to diff against. Design retained for history.
 
 `update_ops.apply_update` already compares the SKILL.md hash, but only as a
 pull-and-apply. Add:

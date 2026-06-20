@@ -19,7 +19,7 @@ Telegram 与 SeaTalk 是头两个 adapter。一个独立的回调监听器进程
   HTTP。
 - **不引入新 SDK。** Telegram 与 SeaTalk 都用 `httpx` 对固定 host
   （`api.telegram.org`、`openapi.seatalk.io`）通信。channel 配置中不存在
-  用户可控的 URL，因此 skill-fetcher 的 SSRF 防护不在此路径上。
+  用户可控的 URL，因此 SSRF 防护（用于 provider URL 检查）不在此路径上。
 - **adapter 运行时** —— daemon 里的一个 reconciler 任务（RetentionWorker
   模式）：约每 2 s 把启用状态的 channel 资源与运行中的 adapter 任务做
   diff；在 enable、disable、配置变更、delete 时启动/停止/重启。资源框架

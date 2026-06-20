@@ -8,8 +8,6 @@
 
 - Coffer 的 daemon 正在运行（启动桌面 App 或运行 `coffer daemon`）。
 - 至少有一个 agent 已注册（自动检测或 `coffer agent add` —— 参考 spec 004 的 quickstart）。
-- 如需 Git 拉取：`git` 已安装并在 `PATH` 中。
-
 ## 导入已有的 skill 文件夹
 
 如果你已经在 `~/.claude/skills/my-skill/` 里有一个 skill，把它纳入 Coffer 管理：
@@ -28,19 +26,9 @@ Coffer 会：
 
 之后，**所有 agent** 都能在它们自己的 `config_dir/skills` 文件夹下看到这个 skill。
 
-## 从 Git 仓库拉取一个 skill
-
-```bash
-coffer skill fetch https://github.com/owner/skills-repo \
-  --ref main \
-  --subpath skills/my-skill
-```
-
-Coffer 做 shallow clone、校验 subpath，并把内容拷到 `~/.coffer/skills/<name>/`。v1 不支持私有仓库。
-
 ## 按 agent 启用 / 禁用
 
-import 或 fetch 之后，所有已注册的 agent 默认都被启用。若想把某个 skill 限制到只对一个 agent 可见：
+import 之后，所有已注册的 agent 默认都被启用。若想把某个 skill 限制到只对一个 agent 可见：
 
 ```bash
 coffer skill disable my-skill --agent codex
@@ -57,7 +45,7 @@ coffer skill enable my-skill --agent codex
 
 ## Follow 主库
 
-默认情况下，每个 agent 都 **follow** 主库：你导入或拉取的每个 skill 会被自动
+默认情况下，每个 agent 都 **follow** 主库：你导入的每个 skill 会被自动
 投递，新注册的 skill 无需任何额外操作即会出现。可按 agent 关闭（或重新打开）：
 
 ```bash
@@ -105,16 +93,6 @@ binding）：
 coffer skill rm-unmanaged claude-code my-skill --location skills
 ```
 
-## 更新 Git 源 skill
-
-```bash
-coffer skill update my-skill
-```
-
-Coffer 会重新拉源、在内容变化时原子替换 master，并在审计日志中记录更新前后的内容哈希。若 SKILL.md 中 frontmatter 的 `name` 发生变化，update 会被拒绝，除非加 `--allow-rename`。
-
-本地导入的 skill 不能通过这种方式更新 —— 用新的文件夹路径再跑一次 `import`。
-
 ## 校验 drift
 
 如果你（或别的工具）在某个 agent 的 `config_dir/skills` 文件夹里动过文件，让 Coffer 报告它：
@@ -123,7 +101,7 @@ Coffer 会重新拉源、在内容变化时原子替换 master，并在审计日
 coffer skill verify
 ```
 
-报告会按 drift 类别列出条目并附建议处置方式。Coffer **不**会自动修复 drift —— 由你决定是重新启用、禁用还是更新。
+报告会按 drift 类别列出条目并附建议处置方式。Coffer **不**会自动修复 drift —— 由你决定是重新启用还是禁用。
 
 ## 浏览 skill 文件（只读）
 

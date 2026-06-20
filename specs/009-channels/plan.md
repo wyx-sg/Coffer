@@ -20,7 +20,7 @@ the Agents nav group.
   core and chat platform.
 - **No new SDKs.** Telegram and SeaTalk are spoken with `httpx` against fixed
   hosts (`api.telegram.org`, `openapi.seatalk.io`). No user-controlled URLs
-  exist in channel config, so the skill-fetcher SSRF guard is not in this
+  exist in channel config, so the SSRF guard (used for provider-URL checks) is not in this
   path.
 - **Adapter runtime** — a reconciler task in the daemon (RetentionWorker
   pattern): every ~2 s, diff enabled channel resources against running
