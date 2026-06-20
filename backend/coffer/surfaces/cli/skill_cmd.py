@@ -224,9 +224,59 @@ def rm_unmanaged(
 @app.command("verify")
 def verify(
     output_json: bool = typer.Option(False, "--json"),
+    fix: bool = typer.Option(
+        False,
+        "--fix",
+        help=(
+            "Re-deliver repairable drift (missing/tampered links) from master;"
+            " leaves foreign content untouched."
+        ),
+    ),
 ) -> None:
     """Report drift between bindings and on-disk symlinks."""
     c, _info = _cli_client.client_or_exit()
+    if fix:
+        with c:
+            r = c.post("/skills/repair")
+            r.raise_for_status()
+        data = r.json()
+        if output_json:
+            typer.echo(_json.dumps(data, indent=2))
+            if data["remaining"]["entries"]:
+                raise typer.Exit(2)
+            return
+        remediated = data["remediated"]
+        remaining = data["remaining"]["entries"]
+        if remediated:
+            table = Table(title="Repaired")
+            for col in ("Skill", "Agent", "Kind", "Target", "Remedy"):
+                table.add_column(col)
+            for e in remediated:
+                table.add_row(
+                    e["skill_name"],
+                    e["agent_name"] or "—",
+                    e["kind"],
+                    e["target_path"],
+                    e["suggested_remedy"],
+                )
+            _console.print(table)
+        else:
+            typer.echo("nothing to repair")
+        if remaining:
+            table2 = Table(title="Still drifted — manual action needed")
+            for col in ("Skill", "Agent", "Kind", "Target", "Remedy"):
+                table2.add_column(col)
+            for e in remaining:
+                table2.add_row(
+                    e["skill_name"],
+                    e["agent_name"] or "—",
+                    e["kind"],
+                    e["target_path"],
+                    e["suggested_remedy"],
+                )
+            _console.print(table2)
+            raise typer.Exit(2)
+        return
     with c:
         r = c.post("/skills/verify")
         r.raise_for_status()

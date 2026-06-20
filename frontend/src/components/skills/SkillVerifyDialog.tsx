@@ -5,9 +5,13 @@
 // verifies every skill; an optional `skillNames` prop narrows the *displayed*
 // entries to a chosen subset (per-row / bulk verify), so the OK state reflects
 // just those skills.
-import { useEffect } from "react";
+//
+// When drift is present a "Repair" button lets the user opt-in to auto-repair.
+// After repair the dialog shows two sections: remediated entries and any
+// remaining entries that still need manual action.
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Wrench } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +24,31 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { translateApiError } from "@/lib/api/errors";
-import { useVerifySkills } from "@/lib/hooks/useSkills";
+import type { DriftEntryOut, RepairReportOut } from "@/lib/api/skills";
+import { useRepairSkillDrift, useVerifySkills } from "@/lib/hooks/useSkills";
+
+/** Renders a compact list of drift entries with the same row layout used in the
+ *  verify report. */
+function DriftEntryList({ entries }: { entries: DriftEntryOut[] }) {
+  return (
+    <ul className="space-y-2">
+      {entries.map((d, i) => (
+        <li
+          key={`${d.skill_name}-${d.agent_name}-${i}`}
+          className="space-y-1 rounded-md border bg-card/60 px-3 py-2 text-sm"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{d.skill_name}</span>
+            <span className="text-muted-foreground">→</span>
+            <span>{d.agent_name}</span>
+            <Badge variant="outline">{d.kind}</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">{d.suggested_remedy}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function SkillVerifyDialog({
   open,
@@ -34,12 +62,24 @@ export function SkillVerifyDialog({
 }) {
   const { t } = useTranslation();
   const verify = useVerifySkills();
+  const repair = useRepairSkillDrift();
   const { mutate, reset } = verify;
+
+  // Holds the repair result once the user clicks Repair.
+  const [repairResult, setRepairResult] = useState<RepairReportOut | null>(null);
 
   // Re-run the drift check each time the dialog opens; clear stale state on close.
   useEffect(() => {
-    if (open) mutate();
-    else reset();
+    if (open) {
+      mutate();
+      setRepairResult(null);
+      repair.reset();
+    } else {
+      reset();
+      setRepairResult(null);
+      repair.reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mutate, reset]);
 
   // The endpoint verifies all skills; narrow to the chosen subset when asked.
@@ -47,6 +87,21 @@ export function SkillVerifyDialog({
   const entries = skillNames
     ? allEntries.filter((d) => skillNames.includes(d.skill_name))
     : allEntries;
+
+  const hasDrift = verify.isSuccess && entries.length > 0;
+
+  function handleRepair() {
+    repair.mutate(undefined, {
+      onSuccess: (data) => {
+        setRepairResult(data);
+      },
+    });
+  }
+
+  // After repair: show the FULL global result unfiltered — repair is system-wide
+  // and must be presented consistently (all remediated + all remaining).
+  const remediatedEntries = repairResult?.remediated ?? [];
+  const remainingEntries = repairResult ? (repairResult.remaining.entries ?? []) : [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -70,6 +125,45 @@ export function SkillVerifyDialog({
               <Loader2 className="size-5 animate-spin" />
               {t("skills.verify.checking")}
             </div>
+          ) : repairResult !== null ? (
+            /* Post-repair view: show remediated + remaining sections. */
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                {t("skills.verify.fixGlobalNote")}
+              </p>
+              {remediatedEntries.length > 0 && (
+                <div className="space-y-2">
+                  <p className="flex items-center gap-2 text-sm font-medium text-primary">
+                    <CheckCircle2 className="size-4 shrink-0" />
+                    {t("skills.verify.fixed", { count: remediatedEntries.length })}
+                  </p>
+                  <DriftEntryList entries={remediatedEntries} />
+                </div>
+              )}
+              {remainingEntries.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {t("skills.verify.fixRemaining")}
+                  </p>
+                  <DriftEntryList entries={remainingEntries} />
+                </div>
+              )}
+              {remediatedEntries.length === 0 && remainingEntries.length === 0 && (
+                <div className="flex items-center gap-2 py-2 text-sm font-medium">
+                  <CheckCircle2 className="size-5 text-primary" />
+                  {t("skills.verify.ok")}
+                </div>
+              )}
+              {repair.isError && (
+                <div
+                  className="flex items-start gap-3 py-2 text-sm text-destructive"
+                  role="alert"
+                >
+                  <AlertCircle className="mt-0.5 size-5 shrink-0" />
+                  <span>{translateApiError(t, repair.error)}</span>
+                </div>
+              )}
+            </div>
           ) : entries.length === 0 ? (
             <div className="flex items-center gap-2 py-2 text-sm font-medium">
               <CheckCircle2 className="size-5 text-primary" />
@@ -80,27 +174,40 @@ export function SkillVerifyDialog({
               <p className="text-sm text-muted-foreground">
                 {t("skills.verify.found", { count: entries.length })}
               </p>
-              <ul className="space-y-2">
-                {entries.map((d, i) => (
-                  <li
-                    key={`${d.skill_name}-${d.agent_name}-${i}`}
-                    className="space-y-1 rounded-md border bg-card/60 px-3 py-2 text-sm"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{d.skill_name}</span>
-                      <span className="text-muted-foreground">→</span>
-                      <span>{d.agent_name}</span>
-                      <Badge variant="outline">{d.kind}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{d.suggested_remedy}</p>
-                  </li>
-                ))}
-              </ul>
+              <DriftEntryList entries={entries} />
+              {repair.isError && (
+                <div
+                  className="flex items-start gap-3 py-2 text-sm text-destructive"
+                  role="alert"
+                >
+                  <AlertCircle className="mt-0.5 size-5 shrink-0" />
+                  <span>{translateApiError(t, repair.error)}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         <DialogFooter>
+          {hasDrift && repairResult === null && (
+            <Button
+              variant="outline"
+              onClick={handleRepair}
+              disabled={repair.isPending}
+            >
+              {repair.isPending ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  {t("skills.verify.fixing")}
+                </>
+              ) : (
+                <>
+                  <Wrench className="mr-2 size-4" />
+                  {t("skills.verify.fix")}
+                </>
+              )}
+            </Button>
+          )}
           <Button onClick={() => onOpenChange(false)}>{t("common.done")}</Button>
         </DialogFooter>
       </DialogContent>

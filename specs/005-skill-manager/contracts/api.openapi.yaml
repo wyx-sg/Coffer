@@ -229,6 +229,25 @@ paths:
               schema: { $ref: "#/components/schemas/DriftReport" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /skills/repair:
+    post:
+      tags: [skills]
+      operationId: repairSkillDrift
+      summary: Opt-in repair that re-delivers repairable drift from the master library
+      description: |
+        Re-delivers repairable drift kinds (missing_link, tampered_link) from the
+        master library. Foreign/user content (replaced_with_regular), a missing master,
+        and orphan_master entries are left intact and returned in `remaining`. Each
+        repair is audited. This endpoint is the HTTP surface for `coffer skill verify
+        --fix`; `POST /skills/verify` remains report-only (FR-016).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RepairReport" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /agents/{name}/unmanaged-skills:
     parameters:
       - in: path
@@ -458,6 +477,18 @@ components:
         entries:
           type: array
           items: { $ref: "#/components/schemas/DriftEntry" }
+
+    RepairReport:
+      type: object
+      required: [remediated, remaining]
+      properties:
+        remediated:
+          type: array
+          description: Drift entries that were successfully re-delivered from master during this repair run.
+          items: { $ref: "#/components/schemas/DriftEntry" }
+        remaining:
+          $ref: "#/components/schemas/DriftReport"
+          description: Drift still present after repair (foreign content, missing master, orphan master — requires manual action).
 
     SkillFileNodeOut:
       type: object

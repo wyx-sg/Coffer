@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import {
   skillsApi,
+  type RepairReportOut,
   type SkillDisableRequest,
   type SkillEnableRequest,
   type SkillImportRequest,
@@ -88,6 +89,18 @@ export function useRemoveSkill() {
 export function useVerifySkills() {
   return useMutation({
     mutationFn: () => skillsApi.verify(),
+  });
+}
+
+export function useRepairSkillDrift() {
+  const qc = useQueryClient();
+  const onError = useSkillToastError();
+  return useMutation<RepairReportOut, unknown, void>({
+    mutationFn: () => skillsApi.repair(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: SKILLS_KEY });
+    },
+    onError,
   });
 }
 

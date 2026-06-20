@@ -22,12 +22,14 @@ vi.mock("@/lib/hooks/useSkills", () => ({
   useDisableSkill: vi.fn(),
   useRemoveSkill: vi.fn(),
   useVerifySkills: vi.fn(),
+  useRepairSkillDrift: vi.fn(),
 }));
 const hooks = await import("@/lib/hooks/useSkills");
 const useSkillsMock = vi.mocked(hooks.useSkills);
 const useImportSkillMock = vi.mocked(hooks.useImportSkill);
 const useRemoveSkillMock = vi.mocked(hooks.useRemoveSkill);
 const useVerifySkillsMock = vi.mocked(hooks.useVerifySkills);
+const useRepairSkillDriftMock = vi.mocked(hooks.useRepairSkillDrift);
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -82,6 +84,15 @@ function stubHooks(opts: {
     isError: false,
     error: null,
   } as unknown as ReturnType<typeof hooks.useVerifySkills>);
+  useRepairSkillDriftMock.mockReturnValue({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    data: undefined,
+    isPending: false,
+    isError: false,
+    isSuccess: false,
+    error: null,
+  } as unknown as ReturnType<typeof hooks.useRepairSkillDrift>);
 }
 
 acceptance("005-skill-manager", "desktop and CLI cover every operation", async () => {

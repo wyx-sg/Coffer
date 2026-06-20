@@ -2,14 +2,25 @@
 
 from __future__ import annotations
 
+import logging
 import pathlib
 from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
-from coffer.domain.skill.drift import DriftEntry, DriftKind, DriftReport, suggested_remedy
+from coffer.domain.error_base import CofferError
+from coffer.domain.resource import ResourceRef
+from coffer.domain.skill.drift import (
+    DriftEntry,
+    DriftKind,
+    DriftReport,
+    RepairResult,
+    suggested_remedy,
+)
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
+
+logger = logging.getLogger(__name__)
 
 
 async def verify_drift(service: SkillService) -> DriftReport:
@@ -68,3 +79,72 @@ async def verify_drift(service: SkillService) -> DriftReport:
             },
         )
     return report
+
+
+# Drift kinds that are safe to auto-repair by re-delivering from master.
+# REPLACED_WITH_REGULAR, MISSING_MASTER, and ORPHAN_MASTER are intentionally
+# skipped: we never clobber foreign content and cannot re-deliver from a
+# missing master.
+_REPAIRABLE_KINDS = frozenset(
+    {
+        DriftKind.MISSING_LINK,
+        DriftKind.TAMPERED_LINK,
+    }
+)
+
+
+async def repair_drift(service: SkillService, *, actor: str) -> RepairResult:
+    """Opt-in repair: re-deliver safely-repairable drift kinds from master.
+
+    Repairable kinds
+    ----------------
+    MISSING_LINK      — link is gone; re-enable with force=False recreates it.
+    TAMPERED_LINK     — link points elsewhere; force=True backs it up + re-links.
+
+    Skipped kinds (left in ``remaining``)
+    ----------------------------------------
+    REPLACED_WITH_REGULAR — a foreign regular dir occupies the path; never clobber.
+    MISSING_MASTER        — master is gone; nothing to re-deliver.
+    ORPHAN_MASTER         — no binding row; out of scope for binding repair.
+
+    Returns
+    -------
+    RepairResult with ``remediated`` (successfully re-delivered entries) and
+    ``remaining`` (residual DriftReport from a second verify pass after repair).
+    """
+    initial = await verify_drift(service)
+    remediated: list[DriftEntry] = []
+
+    for entry in initial.entries:
+        if entry.kind not in _REPAIRABLE_KINDS:
+            continue
+        force = entry.kind is DriftKind.TAMPERED_LINK
+        try:
+            await service.enable_for(
+                skill_name=entry.skill_name,
+                agent_name=entry.agent_name,
+                force=force,
+                actor=actor,
+            )
+        except (CofferError, OSError):
+            logger.warning(
+                "repair_drift: could not repair %s/%s (%s)",
+                entry.skill_name,
+                entry.agent_name,
+                entry.kind.value,
+                exc_info=True,
+            )
+            continue
+        remediated.append(entry)
+        await service._audit.record(
+            AuditEventType.SKILL_DRIFT_REMEDIATED.value,
+            ref=ResourceRef("skill", entry.skill_name),
+            actor=actor,
+            details={
+                "agent": entry.agent_name,
+                "kind": entry.kind.value,
+            },
+        )
+
+    residual = await verify_drift(service)
+    return RepairResult(remediated=remediated, remaining=residual)

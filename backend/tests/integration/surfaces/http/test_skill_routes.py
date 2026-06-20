@@ -219,3 +219,56 @@ def test_reimport_with_overwrite_replaces(tmp_path, monkeypatch):
         skill = r.json()
         assert skill["name"] == "dup"
         assert skill["version_hash"] != first_hash
+
+
+def test_skill_repair_route(tmp_path, monkeypatch):
+    """POST /skills/repair re-delivers MISSING_LINK and leaves REPLACED_WITH_REGULAR intact."""
+    app = _app(tmp_path, monkeypatch, 59630)
+    agent_config_dir = tmp_path / "agent-cfg"
+    agent_config_dir.mkdir()
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="fix-me")
+
+    with _client(app) as c:
+        # Register agent and import skill (creates binding + link).
+        r = c.post(
+            "/api/v1/agents",
+            json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
+        )
+        assert r.status_code == 201, r.text
+
+        r = c.post("/api/v1/skills/import", json={"path": str(src)})
+        assert r.status_code == 201, r.text
+
+        link = agent_config_dir / "skills" / "fix-me"
+        assert link.exists()
+
+        # Introduce MISSING_LINK drift by removing the symlink.
+        link.unlink()
+        assert not link.exists()
+
+        # Introduce a REPLACED_WITH_REGULAR drift for another skill.
+        src2 = tmp_path / "src2"
+        _write_skill_folder(src2, name="foreign")
+        r2 = c.post("/api/v1/skills/import", json={"path": str(src2)})
+        assert r2.status_code == 201, r2.text
+        foreign_link = agent_config_dir / "skills" / "foreign"
+        # Replace the symlink with a regular directory (simulates REPLACED_WITH_REGULAR).
+        foreign_link.unlink()
+        foreign_link.mkdir()
+        (foreign_link / "file.txt").write_text("foreign content")
+
+        # Call repair.
+        r = c.post("/api/v1/skills/repair")
+        assert r.status_code == 200, r.text
+        body = r.json()
+
+        # The MISSING_LINK should be remediated.
+        assert any(e["skill_name"] == "fix-me" for e in body["remediated"]), body
+        # The link is restored.
+        assert link.exists()
+
+        # The REPLACED_WITH_REGULAR should remain (manual action needed).
+        assert any(e["skill_name"] == "foreign" for e in body["remaining"]["entries"]), body
+        # Foreign dir is untouched.
+        assert (foreign_link / "file.txt").exists()
