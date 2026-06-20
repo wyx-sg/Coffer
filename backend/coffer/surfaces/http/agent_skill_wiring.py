@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.config_file_service import AgentConfigFileService
-from coffer.application.agent.instructions_service import AgentInstructionsService
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
 from coffer.application.agent.mcp_service import AgentMcpService
@@ -39,7 +38,6 @@ from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.sync_engine import SyncEngine
 from coffer.infrastructure.skill.workspace_scan import WorkspaceScan
-from coffer.surfaces.http.agent_instructions_routes import set_agent_instructions_service
 from coffer.surfaces.http.dependencies import (
     set_agent_config_file_service,
     set_agent_mcp_service,
@@ -167,9 +165,6 @@ def wire_agent_and_skill_kinds(
         agent_service=agent_svc, audit=audit, store=config_file_store
     )
     agent_mcp_svc = AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
-    agent_instructions_svc = AgentInstructionsService(
-        agent_service=agent_svc, audit=audit, store=config_file_store
-    )
 
     # MCP entries + plugins in the agent's own config files (agent workspace).
     # The keyring is the same stateless adapter the rest of the app constructs
@@ -207,7 +202,6 @@ def wire_agent_and_skill_kinds(
     set_auto_detect_service(auto_detect_svc)
     set_agent_config_file_service(agent_config_file_svc)
     set_agent_mcp_service(agent_mcp_svc)
-    set_agent_instructions_service(agent_instructions_svc)
     set_agent_mcp_entry_service(agent_mcp_entry_svc)
     set_agent_plugin_service(agent_plugin_svc)
     set_skill_service(skill_svc)
