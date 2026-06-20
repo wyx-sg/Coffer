@@ -5,6 +5,12 @@
 **Status**: Accepted
 **Spec**: [009-channels](../../specs/009-channels/spec.md)
 
+> **Amended (2026-06-20, simplification 8.4).** The per-binding workspace
+> allowlist, the `/cwd` switch, and the peer `preferred_workspace` are
+> withdrawn: channels run in the single Coffer-managed default workspace
+> (`~/.coffer/workspace`). The `/agent` + `/model` switches and the
+> entrypoint-differentiation core stand.
+
 ## Context
 
 Spec 009 made Coffer the channel-entrypoint manager: an owner pairs an IM
@@ -35,7 +41,7 @@ Two facts from the code shaped the design:
    - _Structural_ dimensions (`agent_key`, `cwd`) are pinned when a conversation
      is created and cannot change mid-conversation. Switching one **opens a new
      conversation**, carrying over the other dimension's sticky value; the old
-     conversation stays in history. `/agent` and `/cwd` are structural.
+     conversation stays in history. `/agent` is structural.
    - _Parametric_ dimensions (`model`) are re-read each turn. Switching one
      **takes effect on the next turn in the same conversation**. `/model` is
      parametric.
@@ -53,17 +59,15 @@ Two facts from the code shaped the design:
    any future registered agent), with no channel-side code per agent (spec 009
    SC-004 preserved).
 
-3. **Workspaces are a channel-level allowlist and the cwd security boundary.** A
-   channel declares a list of **named workspaces** (`{name, path}`), validated to
-   exist at registration; an optional `default_workspace` names the one used
+3. ~~**Workspaces are a channel-level allowlist and the cwd security boundary.**
+   A channel declares a list of **named workspaces** (`{name, path}`), validated
+   to exist at registration; an optional `default_workspace` names the one used
    when none is chosen. `/cwd <name>` selects among them (structural → new
    conversation). **A channel never accepts a bare filesystem path from an IM
-   message** — an owner can only pick a name the operator pre-authorized. This
-   both makes IM-driven bridged agents usable (there is always a cwd) and closes
-   the "any host directory" gap: the entrypoint, being remote-reachable, must not
-   let a message point an agent at an arbitrary directory. The `builtin` agent
-   needs no workspace, so a default (builtin) channel keeps working with zero
-   workspace config.
+   message** — an owner can only pick a name the operator pre-authorized.~~ —
+   **Withdrawn (2026-06-20, simplification 8.4).** Channels now run in the
+   single Coffer-managed default workspace (`~/.coffer/workspace`); there is no
+   per-channel allowlist and no `/cwd` command.
 
 4. **Model selection is a parametric passthrough, registry-backed only where a
    registry exists.** For `builtin`, `/model <name>` resolves against Coffer's
@@ -116,15 +120,14 @@ Two facts from the code shaped the design:
 
 ## Consequences
 
-- The peer gains columns for the paired sender's identity (`sender_id`) and its
-  sticky agent/workspace preferences (`preferred_agent`, `preferred_workspace`);
-  one migration covers them. No new table.
-- Channel config gains `workspaces` + `default_workspace`, validated at
-  registration alongside the existing credential-ref probing.
-- The command set grows by `/agent`, `/cwd`, `/model`; all three ride the
-  existing slash-command seam in the channel core and select behavior from
-  capabilities, so no adapter learns about them — the differentiation layer is
+- The peer gains a column for the paired sender's identity (`sender_id`) and a
+  sticky agent preference (`preferred_agent`); one migration covers them.
+  No new table. (`preferred_workspace` and `workspaces`/`default_workspace`
+  on config are withdrawn — see amendment above.)
+- The command set grows by `/agent` and `/model`; both ride the existing
+  slash-command seam in the channel core and select behavior from capabilities,
+  so no adapter learns about them — the differentiation layer is
   channel-agnostic and any future channel inherits it (spec 009 SC-003
-  preserved).
+  preserved). (`/cwd` is withdrawn — see amendment above.)
 - The audit log answers "who drove which agent through which channel" without a
   schema change.

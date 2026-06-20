@@ -1,10 +1,10 @@
 """Conversation creation for channel-driven turns — shared by the inbound
 turn-driver and the command router.
 
-A channel conversation's structural choices (agent, workspace) are resolved
-from the peer's sticky preferences plus the channel defaults, then fixed at
-creation; switching either opens a fresh one. These helpers are pure given
-their injected ports — no per-processor state.
+A channel conversation's structural choice (agent) is resolved from the
+peer's sticky preference plus the channel default, then fixed at creation;
+switching opens a fresh conversation. These helpers are pure given their
+injected ports — no per-processor state.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 from coffer.application.channel.conversation_spec import resolve_conversation_spec
-from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
+from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.errors import CofferError
 
 if TYPE_CHECKING:
@@ -46,10 +46,7 @@ async def open_conversation(
     spec = resolve_conversation_spec(
         default_agent=binding.default_agent,
         default_agent_config=binding.default_agent_config,
-        workspaces=binding.workspaces,
-        default_workspace=binding.default_workspace,
         preferred_agent=peer.preferred_agent,
-        preferred_workspace=peer.preferred_workspace,
     )
     conv = await conversations.create_conversation(
         agent_key=spec.agent_key,
@@ -81,10 +78,6 @@ async def ensure_conversation(
     return await open_conversation(conversations, peers, binding, peer)
 
 
-def explain_conversation_error(binding: ChannelBinding, e: CofferError) -> str:
-    """Friendly chat text for a conversation-creation failure — a bridged agent
-    with no workspace points the owner at ``/cwd`` instead of a raw error code."""
-    if isinstance(e, AgentConfigRejected) and e.reason in {"invalid_cwd", "cwd_not_a_directory"}:
-        available = ", ".join(sorted(binding.workspaces)) or "(none configured)"
-        return f"⚠️ That agent needs a workspace. Pick one with /cwd <name>. Available: {available}"
+def explain_conversation_error(e: CofferError) -> str:
+    """Friendly chat text for a conversation-creation failure."""
     return f"⚠️ {e} [{e.code}]"

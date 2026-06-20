@@ -245,10 +245,9 @@ class InboundProcessor:
                 self._conversations, self._peers, binding, peer
             )
         except CofferError as e:
-            # e.g. the channel's default agent is unknown/misconfigured, or a
-            # bridged agent has no workspace — the owner must see it in the chat,
-            # not only in the daemon log.
-            await self._safe_send(binding, peer.chat_id, explain_conversation_error(binding, e))
+            # e.g. the channel's default agent is unknown/misconfigured — the
+            # owner must see it in the chat, not only in the daemon log.
+            await self._safe_send(binding, peer.chat_id, explain_conversation_error(e))
             return
         # A channel message driving a turn is first-class in the audit log:
         # who (the peer), through which channel, drives which agent.

@@ -9,7 +9,7 @@ transport in, transport out — every behavior above it is shared.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
@@ -55,7 +55,7 @@ class ChannelAdapter(Protocol):
 @dataclass(frozen=True)
 class ChannelBinding:
     """A live channel the runtime has started: resource identity + adapter +
-    the agent/workspace defaults the channel routes to."""
+    the agent defaults the channel routes to."""
 
     name: str
     resource_id: int
@@ -63,8 +63,6 @@ class ChannelBinding:
     default_agent: str
     default_agent_config: dict[str, Any] | None
     adapter: ChannelAdapter
-    workspaces: dict[str, str] = field(default_factory=dict)  # name -> absolute path
-    default_workspace: str | None = None
 
 
 @dataclass(frozen=True)
@@ -80,10 +78,9 @@ class ChannelPeer:
     # employee_code); the owner gate checks it when present. ``None`` on rows
     # paired before the gate gained sender awareness → chat-id-only fallback.
     sender_id: str | None = None
-    # Sticky structural choices: which agent and which channel workspace new
-    # conversations use. ``None`` means fall back to the channel defaults.
+    # Sticky structural choice: which agent new conversations use.
+    # ``None`` means fall back to the channel default.
     preferred_agent: str | None = None
-    preferred_workspace: str | None = None
 
 
 class ChannelPeerRepoPort(Protocol):
@@ -102,7 +99,6 @@ class ChannelPeerRepoPort(Protocol):
         resource_id: int,
         *,
         preferred_agent: str | None,
-        preferred_workspace: str | None,
     ) -> None: ...
 
 

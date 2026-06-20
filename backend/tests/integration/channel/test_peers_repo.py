@@ -81,14 +81,12 @@ async def test_sender_id_and_preferences_roundtrip(env: ChannelEnv) -> None:
             active_conversation_id=None,
             sender_id="u-42",
             preferred_agent="codex",
-            preferred_workspace="proj",
         )
     )
     peer = await env.peers.get(resource.id)
     assert peer is not None
     assert peer.sender_id == "u-42"
     assert peer.preferred_agent == "codex"
-    assert peer.preferred_workspace == "proj"
 
 
 async def test_legacy_peer_reads_new_fields_as_none(env: ChannelEnv) -> None:
@@ -98,7 +96,6 @@ async def test_legacy_peer_reads_new_fields_as_none(env: ChannelEnv) -> None:
     assert peer is not None
     assert peer.sender_id is None
     assert peer.preferred_agent is None
-    assert peer.preferred_workspace is None
 
 
 async def test_set_preferences_updates_and_preserves_active_conversation(env: ChannelEnv) -> None:
@@ -106,13 +103,10 @@ async def test_set_preferences_updates_and_preserves_active_conversation(env: Ch
     await env.peers.upsert(_peer(resource.id))
     await env.peers.set_active_conversation(resource.id, "conv-7")
 
-    await env.peers.set_preferences(
-        resource.id, preferred_agent="claude_code", preferred_workspace="docs"
-    )
+    await env.peers.set_preferences(resource.id, preferred_agent="claude_code")
     peer = await env.peers.get(resource.id)
     assert peer is not None
     assert peer.preferred_agent == "claude_code"
-    assert peer.preferred_workspace == "docs"
     assert peer.active_conversation_id == "conv-7"  # preferences don't disturb it
 
 
@@ -150,7 +144,6 @@ def test_migration_0015_creates_channel_peers(tmp_path, monkeypatch):  # type: i
             "active_conversation_id",
             "sender_id",
             "preferred_agent",
-            "preferred_workspace",
         }
         fks = conn.execute("PRAGMA foreign_key_list(channel_peers)").fetchall()
         assert len(fks) == 1

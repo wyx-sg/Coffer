@@ -187,30 +187,24 @@ disable）是这个 feature 可运维的根基。
 
 ---
 
-### User Story 9 — 从 chat 切换 agent、workspace 与 model（优先级：P2）
+### User Story 9 — 从 chat 切换 agent 与 model（优先级：P2）
 
-owner 不离开 IM app 就能操控入口。`/agent codex` 把会话切到 Codex；`/cwd
-my-project` 把编码 agent 指向一个预授权 workspace；`/model opus` 改 model。切换
-agent 或 workspace 会开一个 pin 到新选择的新会话（这两者对会话终身固定），且
-选择对后续消息与 `/new` 粘性保留；切换 model 在同会话下条 turn 生效。每个命令
-无参时报告当前值与可选项。owner 只能挑 operator 预先定义的 workspace——消息里
-的裸文件路径从不被采纳。
+owner 不离开 IM app 就能操控入口。`/agent codex` 把会话切到 Codex；`/model
+opus` 改 model。切换 agent 会开一个 pin 到新选择的新会话（agent 对会话终身固
+定），且选择对后续消息与 `/new` 粘性保留；切换 model 在同会话下条 turn 生效。
+每个命令无参时报告当前值与可选项。
 
-**为何此优先级**：channel 是入口*管理者*，不是一根固定线。路由到所选 agent、在
-所选安全目录里、用所选 model，才让一个已配对的 chat 成为通往 vault 暴露的每个
-agent 的交换机——而 workspace allowlist 是那道边界，防止可远程触达的入口把 agent
-指向任意目录。
+**为何此优先级**：channel 是入口*管理者*，不是一根固定线。路由到所选 agent、
+用所选 model，才让一个已配对的 chat 成为通往 vault 暴露的每个 agent 的交换机。
 
 **Independent Test**：用一个已配对 channel 和两个脚本化 provider，发
-`/agent <second>` 观察一个 pin 到它的新会话且下条消息由它回答；为已配置
-workspace 发 `/cwd <name>` 观察在该目录建的新会话；发 `/cwd /etc` 观察被拒；发
+`/agent <second>` 观察一个 pin 到它的新会话且下条消息由它回答；发
 `/model <name>` 观察下条 turn 用它。
 
 **Covering scenarios**:
 
 - /agent switches the agent and sticks
 - /agent rejects an unknown agent
-- /cwd selects a configured workspace and refuses a bare path
 - /model switches the model for the next turn
 
 ---
@@ -310,13 +304,6 @@ status / notify`。
   编辑能力无关：成功时报告 done 标记 + 工具数、耗时、token 用量；失败的 turn
   报告错误；被中断的 turn 报告停止。在不能编辑消息、且长桥接 turn 运行期间什么
   都不显示的平台上，这就是 turn 结束信号。
-- **FR-016**: 一个 channel 声明一组命名 workspace（`{name, path}`），注册时各
-  校验为已存在目录，外加一个可选默认 workspace。`/cwd` 无参时列出 workspaces
-  与当前那个；`/cwd <name>` 选一个 workspace 并在其中开一个新会话（会话的工作
-  目录不可改），把它记为 peer 的粘性首选。channel 永不接受来自 inbound 消息的
-  裸文件路径——workspace 列表是从 channel 选取 agent 工作目录的唯一权威。路由到
-  桥接 agent 时用 peer 的粘性 workspace，无则默认 workspace；两者皆无时告知
-  owner 未配置 workspace。builtin agent 不需要 workspace。
 - **FR-017**: owner 从 chat 切换 model。`/model` 无参时报告当前 model；
   `/model <name>` 对 builtin agent 把名字对 model registry 解析并设会话的 model
   覆盖，对桥接 agent 则存原始上游 model 串透传给 CLI。model 切换在同会话下条 turn
@@ -326,13 +313,11 @@ status / notify`。
 ### Key Entities
 
 - **Channel** — 资源 `channel:<name>`；config = 类型、凭据 ref、默认
-  agent + 配置、命名 workspaces + 可选默认 workspace。
+  agent + 配置。
 - **ChannelPeer** — channel 的已配对 owner：`(resource, chat_id)`、显示
   名、配对时间、指向活跃对话的指针、已配对发送者身份（`sender_id`），以及
-  粘性首选（所选 agent 与 workspace）。目前每个 channel 一个；以 chat 为键，
+  粘性首选（所选 agent）。目前每个 channel 一个；以 chat 为键，
   使群聊将来可以直接成为新的 peer 行而无需改 schema。
-- **Workspace** — channel 上一个命名、预授权的工作目录（`{name, path}`）；从
-  该 channel 选取 agent 运行目录时的 allowlist。裸路径从不被 chat 接受。
 - **InboundMessage / OutboundMessage** — 每个 adapter 生产与消费的规范化
   信封 (envelope)；内核永远看不到平台原始载荷。inbound 为 owner gate 携带
   发送者身份（`sender_id`）。
@@ -356,10 +341,8 @@ status / notify`。
   驱动 channel 来演示）。
 - **SC-005**: 下方每个 acceptance scenario 至少被一个测试覆盖；
   `make verify` 通过。
-- **SC-006**: 从一个已配对 chat，owner 能触达每个已注册 agent，每个都在一个
-  所选预授权 workspace 里、用一个所选 model，且一条 chat 消息绝不能把 agent
-  指向 operator 未预授权的目录（用驱动两个脚本化 provider 与一次被拒裸路径来
-  演示）。
+- **SC-006**: 从一个已配对 chat，owner 能触达每个已注册 agent、用一个所选
+  model（通过在测试里驱动两个脚本化 provider 来演示）。
 - **SC-007**: 每个 channel 驱动的 turn 都能按 channel、
   peer、agent 在审计日志里查到；且每个 turn——包括在不能编辑消息的 channel 上
   ——都以一条 chat 里的完成摘要收尾（用不能编辑的假 adapter 来演示）。
@@ -532,13 +515,6 @@ status / notify`。
 - **Given** 一个已配对 channel
 - **When** peer 发 `/agent nope`
 - **Then** channel 回复该 agent 未知并列出合法 keys，活跃会话不变
-
-### Scenario: /cwd selects a configured workspace and refuses a bare path
-
-- **Given** 一个配置了名为 `proj` 的 workspace 的已配对 channel
-- **When** peer 发 `/cwd proj`
-- **Then** 用该 workspace 的目录建一个新会话，且选择粘性保留
-- **And** 当 peer 发 `/cwd /etc` 时，channel 拒绝它，不在该目录建任何会话
 
 ### Scenario: /model switches the model for the next turn
 

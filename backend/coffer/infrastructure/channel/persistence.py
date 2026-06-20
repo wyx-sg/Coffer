@@ -41,7 +41,6 @@ class ChannelPeerModel(Base):
     active_conversation_id: Mapped[str | None] = mapped_column(String, nullable=True)
     sender_id: Mapped[str | None] = mapped_column(String, nullable=True)
     preferred_agent: Mapped[str | None] = mapped_column(String, nullable=True)
-    preferred_workspace: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("resource_id", "chat_id", name="uq_channel_peers_resource_chat"),
@@ -63,7 +62,6 @@ def _to_domain(row: ChannelPeerModel) -> ChannelPeer:
         active_conversation_id=row.active_conversation_id,
         sender_id=row.sender_id,
         preferred_agent=row.preferred_agent,
-        preferred_workspace=row.preferred_workspace,
     )
 
 
@@ -101,7 +99,6 @@ class ChannelPeerRepo:
                     active_conversation_id=peer.active_conversation_id,
                     sender_id=peer.sender_id,
                     preferred_agent=peer.preferred_agent,
-                    preferred_workspace=peer.preferred_workspace,
                 )
             )
             await session.commit()
@@ -120,7 +117,6 @@ class ChannelPeerRepo:
         resource_id: int,
         *,
         preferred_agent: str | None,
-        preferred_workspace: str | None,
     ) -> None:
         async with self._sm() as session:
             await session.execute(
@@ -128,7 +124,6 @@ class ChannelPeerRepo:
                 .where(ChannelPeerModel.resource_id == resource_id)
                 .values(
                     preferred_agent=preferred_agent,
-                    preferred_workspace=preferred_workspace,
                 )
             )
             await session.commit()

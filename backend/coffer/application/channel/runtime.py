@@ -199,8 +199,6 @@ class ChannelRuntime:
                 channel_type=parsed.channel_type,
                 default_agent=parsed.default_agent,
                 default_agent_config=parsed.default_agent_config,
-                workspaces={w.name: w.path for w in parsed.workspaces},
-                default_workspace=parsed.default_workspace,
                 adapter=adapter,
             )
         )

@@ -201,35 +201,28 @@ disable that actually stops traffic) is what makes the feature operable.
 
 ---
 
-### User Story 9 — Switch agent, workspace, and model from chat (Priority: P2)
+### User Story 9 — Switch agent and model from chat (Priority: P2)
 
 The owner steers the entrypoint without leaving the IM app. `/agent codex`
-switches the conversation to Codex; `/cwd my-project` points a coding agent at a
-pre-authorized workspace; `/model opus` changes the model. Switching the agent
-or the workspace starts a fresh conversation pinned to the new choice (these are
+switches the conversation to Codex; `/model opus` changes the model. Switching
+the agent starts a fresh conversation pinned to the new choice (the agent is
 fixed for a conversation's life) and the choice sticks for later messages and
 `/new`; switching the model takes effect on the next turn in the same
 conversation. Each command with no argument reports the current value and the
-available choices. The owner can only pick a workspace the operator pre-defined
-— a bare filesystem path in a message is never honored.
+available choices.
 
 **Why this priority**: A channel is an entrypoint _manager_, not a single fixed
-wire. Routing to a chosen agent, in a chosen safe directory, with a chosen
-model, is what makes one paired chat a switchboard for every agent the vault
-exposes — and the workspace allowlist is the boundary that keeps a remote-
-reachable entrypoint from pointing an agent at an arbitrary directory.
+wire. Routing to a chosen agent with a chosen model is what makes one paired
+chat a switchboard for every agent the vault exposes.
 
 **Independent Test**: With a paired channel and two scripted providers, send
 `/agent <second>` and observe a fresh conversation pinned to it and the next
-message answered by it; send `/cwd <name>` for a configured workspace and
-observe a fresh conversation created in that directory; send `/cwd /etc` and
-observe it is refused; send `/model <name>` and observe the next turn use it.
+message answered by it; send `/model <name>` and observe the next turn use it.
 
 **Covering scenarios**:
 
 - /agent switches the agent and sticks
 - /agent rejects an unknown agent
-- /cwd selects a configured workspace and refuses a bare path
 - /model switches the model for the next turn
 
 ---
@@ -350,16 +343,6 @@ status / notify`.
   the error; an interrupted turn reports the stop. This is the end-of-turn
   signal on platforms that cannot edit messages and show nothing while a long
   bridged turn runs.
-- **FR-016**: A channel declares a list of named workspaces (`{name, path}`),
-  each validated to be an existing directory at registration, and an optional
-  default workspace. `/cwd` with no argument lists the workspaces and the
-  current one; `/cwd <name>` selects a workspace and opens a fresh conversation
-  in it (a conversation's working directory cannot change), recording it as the
-  peer's sticky preference. A channel never accepts a bare filesystem path from
-  an inbound message — the workspace list is the only authority for an agent's
-  working directory chosen from a channel. Routing to a bridged agent uses the
-  peer's sticky workspace, else the default workspace; with neither, the owner
-  is told no workspace is configured. The builtin agent needs no workspace.
 - **FR-017**: The owner switches the model from chat. `/model` with no argument
   reports the current model; `/model <name>` for the builtin agent resolves the
   name against the model registry and sets the conversation's model override,
@@ -372,15 +355,12 @@ status / notify`.
 ### Key Entities
 
 - **Channel** — resource `channel:<name>`; config = type, credential refs,
-  default agent + config, named workspaces + optional default workspace.
+  default agent + config.
 - **ChannelPeer** — the paired owner of a channel: `(resource, chat_id)`,
   display name, paired-at, pointer to the active conversation, the paired
-  sender's identity (`sender_id`), and sticky preferences (chosen agent and
-  workspace). One per channel today; keyed by chat so group chats can become
+  sender's identity (`sender_id`), and sticky preferences (chosen agent).
+  One per channel today; keyed by chat so group chats can become
   peers later without a schema change.
-- **Workspace** — a named, pre-authorized working directory on a channel
-  (`{name, path}`); the allowlist of directories an agent may run in when
-  chosen from that channel. Bare paths are never accepted from chat.
 - **InboundMessage / OutboundMessage** — the normalized envelopes every
   adapter produces and consumes; the core never sees platform payloads.
   Inbound carries the sender's identity (`sender_id`) for the owner gate.
@@ -405,11 +385,8 @@ status / notify`.
   against a scripted second provider in tests).
 - **SC-005**: Every acceptance scenario below is covered by at least one
   test; `make verify` passes.
-- **SC-006**: From one paired chat the owner reaches every registered agent,
-  each in a chosen pre-authorized workspace, with a chosen model, and a chat
-  message can never point an agent at a directory the operator did not
-  pre-authorize (demonstrated by driving two scripted providers and a refused
-  bare path in tests).
+- **SC-006**: From one paired chat the owner reaches every registered agent
+  with a chosen model (demonstrated by driving two scripted providers in tests).
 - **SC-007**: Every channel-driven turn
   is queryable in the audit log by channel, peer, and agent; and every turn,
   including on a channel that cannot edit messages, ends with a completion
@@ -587,15 +564,6 @@ status / notify`.
 - **When** the peer sends `/agent nope`
 - **Then** the channel replies that the agent is unknown and lists the valid
   keys, and the active conversation is unchanged
-
-### Scenario: /cwd selects a configured workspace and refuses a bare path
-
-- **Given** a paired channel configured with a workspace named `proj`
-- **When** the peer sends `/cwd proj`
-- **Then** a fresh conversation is created with that workspace's directory and
-  the choice sticks
-- **And** when the peer sends `/cwd /etc` the channel refuses it and creates no
-  conversation in that directory
 
 ### Scenario: /model switches the model for the next turn
 

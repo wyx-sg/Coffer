@@ -172,8 +172,6 @@ def test_root_model_round_trips_flat_dict():
         "bot_token_ref": "channel/tg/bot-token",
         "default_agent": "claude_code",
         "default_agent_config": None,
-        "workspaces": [],
-        "default_workspace": None,
     }
 
 
@@ -184,75 +182,9 @@ def test_root_model_round_trips_seatalk_dict():
         **SEATALK_CONFIG,
         "default_agent": "claude_code",
         "default_agent_config": None,
-        "workspaces": [],
-        "default_workspace": None,
         "public_base_url": None,
         "tunnel_token_ref": None,
     }
-
-
-# -- workspaces (FR-016) -------------------------------------------------------
-
-
-def test_workspaces_default_empty():
-    cfg = parse_channel_config(TELEGRAM_CONFIG)
-    assert cfg.workspaces == []
-    assert cfg.default_workspace is None
-
-
-def test_workspaces_parsed_with_default():
-    cfg = parse_channel_config(
-        {
-            **TELEGRAM_CONFIG,
-            "workspaces": [
-                {"name": "proj", "path": "/srv/proj"},
-                {"name": "docs", "path": "/srv/docs"},
-            ],
-            "default_workspace": "proj",
-        }
-    )
-    assert [w.name for w in cfg.workspaces] == ["proj", "docs"]
-    assert cfg.workspaces[0].path == "/srv/proj"
-    assert cfg.default_workspace == "proj"
-
-
-def test_workspaces_reject_duplicate_names():
-    with pytest.raises(ValidationError, match="duplicate workspace name"):
-        parse_channel_config(
-            {
-                **TELEGRAM_CONFIG,
-                "workspaces": [
-                    {"name": "proj", "path": "/a"},
-                    {"name": "proj", "path": "/b"},
-                ],
-            }
-        )
-
-
-def test_default_workspace_must_name_a_workspace():
-    with pytest.raises(ValidationError, match="default_workspace"):
-        parse_channel_config(
-            {
-                **TELEGRAM_CONFIG,
-                "workspaces": [{"name": "proj", "path": "/a"}],
-                "default_workspace": "missing",
-            }
-        )
-
-
-def test_workspace_path_must_be_absolute():
-    with pytest.raises(ValidationError, match="absolute"):
-        parse_channel_config(
-            {**TELEGRAM_CONFIG, "workspaces": [{"name": "proj", "path": "relative/dir"}]}
-        )
-
-
-def test_seatalk_also_carries_workspaces():
-    cfg = parse_channel_config(
-        {**SEATALK_CONFIG, "workspaces": [{"name": "w", "path": "/w"}], "default_workspace": "w"}
-    )
-    assert isinstance(cfg, SeaTalkChannelConfig)
-    assert cfg.default_workspace == "w"
 
 
 def test_root_model_applies_raw_secret_rejection():
