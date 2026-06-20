@@ -7,9 +7,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-#: The three retrieval modes the substrate supports.
-RetrievalMode = Literal["grep", "keyword", "vector"]
-RETRIEVAL_MODES: tuple[RetrievalMode, ...] = ("grep", "keyword", "vector")
+#: The retrieval modes the substrate supports. ``hybrid`` fuses ``keyword`` and
+#: ``vector`` via reciprocal rank fusion (ADR-012); it degrades to keyword-only,
+#: flagged, when no embedding provider is available (exactly like ``vector``).
+RetrievalMode = Literal["grep", "keyword", "vector", "hybrid"]
+RETRIEVAL_MODES: tuple[RetrievalMode, ...] = ("grep", "keyword", "vector", "hybrid")
 
 
 @dataclass(frozen=True)
@@ -75,9 +77,9 @@ class MemoryHit:
 class SearchResult:
     """The outcome of a search.
 
-    ``fallback`` is set to ``"keyword"`` when a requested ``vector`` search
-    degraded because no embedding provider was configured / available — the
-    call never errors, it flags the fallback instead.
+    ``fallback`` is set to ``"keyword"`` when a requested ``vector`` (or
+    ``hybrid``) search degraded because no embedding provider was configured /
+    available — the call never errors, it flags the fallback instead.
     """
 
     mode: RetrievalMode

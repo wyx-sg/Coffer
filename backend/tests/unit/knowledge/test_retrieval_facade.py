@@ -52,8 +52,8 @@ def _store() -> StoreRef:
     return StoreRef(kind="knowledge_base", resource_name="kb1", project_id="0" * 26, docs_dir="/x")
 
 
-def _passage(doc_id: str) -> Passage:
-    return Passage(document_id=doc_id, title="T", text="text", score=1.0, position=0)
+def _passage(doc_id: str, *, position: int = 0) -> Passage:
+    return Passage(document_id=doc_id, title="T", text="text", score=1.0, position=position)
 
 
 def _facade(index: FakeIndex, *, embedder=None):
@@ -104,6 +104,66 @@ async def test_vector_with_unavailable_provider_falls_back_flagged() -> None:
     index = FakeIndex(keyword=[_passage("k1")])
     facade = _facade(index, embedder=FakeEmbedder(fail=True))
     result = await facade.search(_store(), "q", mode="vector", top_k=5, embedding=_embedding())
+    assert result.fallback == "keyword"
+    assert not index.vector_called
+    assert [p.document_id for p in result.passages] == ["k1"]
+
+
+@pytest.mark.asyncio
+async def test_hybrid_fuses_keyword_and_vector_by_rrf() -> None:
+    # keyword ranks [A, B], vector ranks [C, A]. RRF (K=60):
+    #   A = 1/(60+0) + 1/(60+1)  (top of keyword, 2nd of vector) — both lists
+    #   B = 1/(60+1)             (single list)
+    #   C = 1/(60+0)             (single list)
+    # so A (in BOTH lists) outranks the single-list hits.
+    index = FakeIndex(
+        keyword=[_passage("A"), _passage("B")],
+        vector=[_passage("C"), _passage("A")],
+    )
+    result = await _facade(index).search(
+        _store(), "q", mode="hybrid", top_k=5, embedding=_embedding()
+    )
+    assert result.mode == "hybrid"
+    assert result.fallback is None
+    assert index.vector_called
+    assert result.passages[0].document_id == "A"
+    # Dedup by (document_id, position): A appears once though it was in both.
+    assert [p.document_id for p in result.passages] == ["A", "C", "B"]
+
+
+@pytest.mark.asyncio
+async def test_hybrid_dedupes_by_doc_and_position_not_doc_alone() -> None:
+    # Same document, two distinct chunk positions: both survive (chunk identity
+    # is (document_id, position), not document_id alone).
+    index = FakeIndex(
+        keyword=[_passage("D", position=0)],
+        vector=[_passage("D", position=1)],
+    )
+    result = await _facade(index).search(
+        _store(), "q", mode="hybrid", top_k=5, embedding=_embedding()
+    )
+    keys = {(p.document_id, p.position) for p in result.passages}
+    assert keys == {("D", 0), ("D", 1)}
+
+
+@pytest.mark.asyncio
+async def test_hybrid_without_embedding_config_falls_back_flagged() -> None:
+    # hybrid requested without an embedder degrades to keyword-only, flagged —
+    # never raises (mirrors the vector→keyword degradation, FR-012).
+    index = FakeIndex(keyword=[_passage("k1")], vector=[_passage("v1")])
+    result = await _facade(index).search(_store(), "q", mode="hybrid", top_k=5, embedding=None)
+    assert result.mode == "hybrid"
+    assert result.fallback == "keyword"
+    assert not index.vector_called
+    assert [p.document_id for p in result.passages] == ["k1"]
+
+
+@pytest.mark.asyncio
+async def test_hybrid_with_unavailable_provider_falls_back_flagged() -> None:
+    index = FakeIndex(keyword=[_passage("k1")], vector=[_passage("v1")])
+    facade = _facade(index, embedder=FakeEmbedder(fail=True))
+    result = await facade.search(_store(), "q", mode="hybrid", top_k=5, embedding=_embedding())
+    assert result.mode == "hybrid"
     assert result.fallback == "keyword"
     assert not index.vector_called
     assert [p.document_id for p in result.passages] == ["k1"]

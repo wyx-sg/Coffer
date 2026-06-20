@@ -195,6 +195,47 @@ async def test_vector_falls_back_to_keyword(kb) -> None:
     assert len(result.passages) >= 1
 
 
+@pytest.mark.acceptance(
+    spec="006-knowledge-base", scenario="hybrid search fuses keyword and vector via RRF"
+)
+async def test_hybrid_search_fuses_keyword_and_vector(kb, vector_config) -> None:
+    await kb.create_kb("kb1", config=vector_config)
+    await _ingest(kb, "kb1", "a.md", b"# Alpha\n\nthe alpha passage about deploys")
+    await _ingest(kb, "kb1", "b.md", b"# Beta\n\nan unrelated passage about gardening")
+    result = await kb.service.search(kb_name="kb1", query="deploys", top_k=5, mode="hybrid")
+    assert result.mode == "hybrid"
+    assert result.fallback is None
+    assert len(result.passages) >= 1
+    # The doc that matches both the keyword query AND embeds near it surfaces.
+    assert any("deploys" in p.text for p in result.passages)
+
+
+async def test_hybrid_is_default_mode_when_vector_enabled(kb, vector_config) -> None:
+    # A vector-enabled KB defaults to hybrid (the config validator promotes it),
+    # so an IMPLICIT search (no mode) fuses keyword + vector.
+    cfg = dict(vector_config)
+    cfg.pop("default_mode")  # let the validator pick the default
+    await kb.create_kb("kb1", config=cfg)
+    config = await kb.service.get_kb_config("kb1")
+    assert config.default_mode == "hybrid"
+    await _ingest(kb, "kb1", "a.md", b"# Alpha\n\nthe alpha passage about deploys")
+    result = await kb.service.search(kb_name="kb1", query="deploys", top_k=5)
+    assert result.mode == "hybrid"
+    assert result.fallback is None
+    assert len(result.passages) >= 1
+
+
+async def test_hybrid_falls_back_to_keyword_when_embedding_unconfigured(kb) -> None:
+    # hybrid requested on a KB with no embedding degrades to keyword, flagged —
+    # exactly like vector (FR-012), never an error.
+    await kb.create_kb("kb1", config={"enabled_modes": ["keyword", "grep"]})
+    await _ingest(kb, "kb1", "a.md", b"# Alpha\n\nthe alpha passage about deploys")
+    result = await kb.service.search(kb_name="kb1", query="deploys", top_k=5, mode="hybrid")
+    assert result.mode == "hybrid"
+    assert result.fallback == "keyword"
+    assert len(result.passages) >= 1
+
+
 @pytest.mark.acceptance(spec="006-knowledge-base", scenario="edit a document and reindex")
 async def test_edit_sets_edited_mode_and_reflects_in_search(kb) -> None:
     await kb.create_kb("kb1")

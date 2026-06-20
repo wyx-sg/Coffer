@@ -14,7 +14,7 @@ its own imports and the importlinter engine-confinement contract holds.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Protocol, runtime_checkable
 
 from coffer.domain.errors import EngineUnavailable
@@ -22,10 +22,15 @@ from coffer.domain.knowledge.embedder import Embedder, EmbeddingConfig
 from coffer.domain.knowledge.index import GrepPort, KnowledgeIndex
 from coffer.domain.knowledge.retrieval import (
     GrepResult,
+    Passage,
     RetrievalMode,
     SearchResult,
     StoreRef,
 )
+
+#: Reciprocal Rank Fusion constant (the standard value): a passage's fused
+#: score is ``Σ 1/(RRF_K + rank)`` over the lists it appears in.
+RRF_K = 60
 
 
 @runtime_checkable
@@ -69,6 +74,47 @@ class _StoreDroppable(Protocol):
     contract every caller depends on."""
 
     async def drop_store(self) -> None: ...
+
+
+def _rrf_fuse(lists: list[Sequence[Passage]], *, top_k: int) -> list[Passage]:
+    """Reciprocal Rank Fusion over ranked passage lists (ADR-012).
+
+    For each passage, ``score = Σ_over_lists 1/(RRF_K + rank)`` where ``rank`` is
+    its 0-based position in that list. Passages are deduped by chunk identity
+    ``(document_id, position)`` — a passage in BOTH lists sums both
+    contributions, so it outranks any single-list hit. The fused passage keeps
+    the first-seen text/title (the chunk identity already pins the same chunk).
+    Returns the ``top_k`` highest-scoring passages, ties broken by first
+    appearance for a stable order.
+    """
+    scores: dict[tuple[str, int], float] = {}
+    passages: dict[tuple[str, int], Passage] = {}
+    order: dict[tuple[str, int], int] = {}
+    seq = 0
+    for ranked in lists:
+        for rank, passage in enumerate(ranked):
+            key = (passage.document_id, passage.position)
+            scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank)
+            if key not in passages:
+                passages[key] = passage
+                order[key] = seq
+                seq += 1
+    ranked_keys = sorted(scores, key=lambda k: (-scores[k], order[k]))
+    # Surface the fused RRF score on each returned passage so callers see why a
+    # hit ranked where it did (Passage is frozen — rebuild with the new score).
+    fused: list[Passage] = []
+    for key in ranked_keys[:top_k]:
+        base = passages[key]
+        fused.append(
+            Passage(
+                document_id=base.document_id,
+                title=base.title,
+                text=base.text,
+                score=scores[key],
+                position=base.position,
+            )
+        )
+    return fused
 
 
 class KnowledgeRetrieval:
@@ -118,14 +164,17 @@ class KnowledgeRetrieval:
         """Run ``query`` over ``store`` in ``mode``.
 
         ``grep`` is not a passage mode; callers route grep through :meth:`grep`.
-        A ``vector`` request with no usable embedding provider degrades to
-        ``keyword`` and the result carries ``fallback="keyword"`` — it never
-        raises ``EngineUnavailable`` to the caller.
+        A ``vector`` or ``hybrid`` request with no usable embedding provider
+        degrades to ``keyword`` and the result carries ``fallback="keyword"`` —
+        it never raises ``EngineUnavailable`` to the caller. ``hybrid`` fuses the
+        keyword + vector result lists by reciprocal rank fusion (ADR-012).
         """
         if mode == "grep":
             raise ValueError("grep is not a passage mode; call grep() instead")
         top_k = max(1, top_k)
 
+        if mode == "hybrid":
+            return await self._hybrid_search(store, query, top_k=top_k, embedding=embedding)
         if mode == "vector":
             return await self._vector_search(store, query, top_k=top_k, embedding=embedding)
 
@@ -141,28 +190,65 @@ class KnowledgeRetrieval:
         top_k: int,
         embedding: EmbeddingConfig | None,
     ) -> SearchResult:
+        vectors = await self._embed_query(query, embedding)
+        if vectors is None:
+            return await self._fallback_to_keyword(store, query, top_k=top_k, requested="vector")
+
+        index = self.index_for(store, dimensions=embedding.dimensions)  # type: ignore[union-attr]
+        passages = await index.vector_search(store.resource_name, vectors, top_k)
+        return SearchResult(mode="vector", passages=tuple(passages), fallback=None)
+
+    async def _hybrid_search(
+        self,
+        store: StoreRef,
+        query: str,
+        *,
+        top_k: int,
+        embedding: EmbeddingConfig | None,
+    ) -> SearchResult:
+        """RRF fusion of keyword + vector results (ADR-012).
+
+        When no usable embedding provider is available the vector half is empty,
+        so hybrid degrades to keyword-only and FLAGS it (``fallback="keyword"``)
+        — the same never-error degradation as ``vector`` (FR-012)."""
+        vectors = await self._embed_query(query, embedding)
+        if vectors is None:
+            return await self._fallback_to_keyword(store, query, top_k=top_k, requested="hybrid")
+
+        # Both halves run; fetch top_k from each so fusion has full lists to work
+        # with. The vec index is attached at the embedding width.
+        kw_index = self.index_for(store, dimensions=None)
+        vec_index = self.index_for(store, dimensions=embedding.dimensions)  # type: ignore[union-attr]
+        keyword_hits = await kw_index.keyword_search(store.resource_name, query, top_k)
+        vector_hits = await vec_index.vector_search(store.resource_name, vectors, top_k)
+        fused = _rrf_fuse([keyword_hits, vector_hits], top_k=top_k)
+        return SearchResult(mode="hybrid", passages=tuple(fused), fallback=None)
+
+    async def _embed_query(
+        self, query: str, embedding: EmbeddingConfig | None
+    ) -> list[float] | None:
+        """Embed ``query`` once, or ``None`` when no usable provider is available
+        (unconfigured, ``EngineUnavailable``, or an empty result) — the caller
+        then degrades to the flagged keyword fallback."""
         if embedding is None:
-            return await self._fallback_to_keyword(store, query, top_k=top_k)
+            return None
         try:
             embedder = self._embedder_factory(embedding)
             vectors = await embedder.embed([query])
         except EngineUnavailable:
-            return await self._fallback_to_keyword(store, query, top_k=top_k)
+            return None
         if not vectors:
-            return await self._fallback_to_keyword(store, query, top_k=top_k)
-
-        index = self.index_for(store, dimensions=embedding.dimensions)
-        passages = await index.vector_search(store.resource_name, vectors[0], top_k)
-        return SearchResult(mode="vector", passages=tuple(passages), fallback=None)
+            return None
+        return list(vectors[0])
 
     async def _fallback_to_keyword(
-        self, store: StoreRef, query: str, *, top_k: int
+        self, store: StoreRef, query: str, *, top_k: int, requested: RetrievalMode
     ) -> SearchResult:
         index = self.index_for(store, dimensions=None)
         passages = await index.keyword_search(store.resource_name, query, top_k)
-        # mode stays ``vector`` (what the caller requested) while ``fallback``
+        # mode stays the requested ``vector``/``hybrid`` while ``fallback``
         # records the degrade — surfaces report both.
-        return SearchResult(mode="vector", passages=tuple(passages), fallback="keyword")
+        return SearchResult(mode=requested, passages=tuple(passages), fallback="keyword")
 
     async def grep(self, store: StoreRef, pattern: str, *, max_matches: int = 200) -> GrepResult:
         """Ripgrep over the store's ``docs_dir`` (no index)."""

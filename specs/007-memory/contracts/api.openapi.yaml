@@ -323,7 +323,11 @@ components:
 
     RetrievalMode:
       type: string
-      enum: [grep, keyword, vector]
+      description: >
+        Retrieval mode. `hybrid` fuses `keyword` + `vector` by reciprocal rank
+        fusion (ADR-012); like `vector` it degrades to keyword-only (flagged)
+        when no embedding provider is available. Shared with the KB face.
+      enum: [grep, keyword, vector, hybrid]
 
     MemoryStoreConfig:
       type: object
