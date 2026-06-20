@@ -1,15 +1,14 @@
-"""Integration: git-root detection + MEMORY.md regen over a real directory."""
+"""Integration: git-root detection + knowledge-lane scan over a real directory."""
 
 from __future__ import annotations
 
 import pathlib
 import subprocess
 
-import pytest
-
 from coffer.domain.memory.fact import MemoryFact
+from coffer.infrastructure.knowledge.paths import inbox_item_path, knowledge_dir
 from coffer.infrastructure.memory.files import (
-    regenerate_memory_index,
+    legacy_root_facts,
     scan_store_dir,
     write_fact_file,
 )
@@ -95,29 +94,36 @@ def _fact(fact_id: str, name: str, desc: str) -> MemoryFact:
     )
 
 
-@pytest.mark.acceptance(spec="007-memory", scenario="writing a fact regenerates MEMORY.md")
-def test_regenerate_memory_index_is_idempotent(tmp_path: pathlib.Path) -> None:
-    store = tmp_path / "store"
-    store.mkdir()
-    write_fact_file(store / "beta.md", _fact("2", "beta", "the beta"))
-    write_fact_file(store / "alpha.md", _fact("1", "alpha", "the alpha"))
-    first = regenerate_memory_index(store).read_text()
-    second = regenerate_memory_index(store).read_text()
-    assert first == second  # idempotent
-    # Derived format, ordered by name.
-    lines = [ln for ln in first.splitlines() if ln.startswith("- [")]
-    assert lines[0].startswith("- [alpha](")
-    assert "— the alpha" in lines[0]
-    assert lines[1].startswith("- [beta](")
+def test_scan_reads_knowledge_inbox_recursively(tmp_path: pathlib.Path) -> None:
+    store = tmp_path / "s"
+    write_fact_file(inbox_item_path(store, "alpha-1"), _fact("1", "alpha", "the alpha"))
+    write_fact_file(inbox_item_path(store, "beta-2"), _fact("2", "beta", "the beta"))
+    # A hand-written topic doc at the knowledge root is also picked up.
+    write_fact_file(knowledge_dir(store) / "topic.md", _fact("3", "topic", "a topic"))
+    scan = scan_store_dir(store)
+    assert set(scan.files) == {"1", "2", "3"}
 
 
-def test_scan_excludes_memory_index(tmp_path: pathlib.Path) -> None:
+def test_scan_excludes_index_md_and_missing_dir(tmp_path: pathlib.Path) -> None:
+    store = tmp_path / "s"
+    # No knowledge/ dir yet → empty scan, never raises.
+    assert scan_store_dir(store).files == {}
+    write_fact_file(inbox_item_path(store, "f-1"), _fact("1", "f", "d"))
+    (knowledge_dir(store) / "INDEX.md").write_text("# Index\n", encoding="utf-8")
+    scan = scan_store_dir(store)
+    assert set(scan.files) == {"1"}  # INDEX.md is not treated as a fact
+
+
+def test_scan_ignores_legacy_root_facts(tmp_path: pathlib.Path) -> None:
+    """Pre-lane facts at the store root are abandoned in place: not scanned (the
+    scan reads only knowledge/), but discoverable via legacy_root_facts()."""
     store = tmp_path / "s"
     store.mkdir()
-    write_fact_file(store / "f.md", _fact("1", "f", "d"))
-    regenerate_memory_index(store)
-    scan = scan_store_dir(store)
-    assert set(scan.files) == {"1"}  # MEMORY.md not treated as a fact
+    write_fact_file(store / "old-fact.md", _fact("9", "old", "legacy"))
+    (store / "MEMORY.md").write_text("# Memory\n", encoding="utf-8")
+    assert scan_store_dir(store).files == {}  # root facts not read
+    legacy = legacy_root_facts(store)
+    assert [p.name for p in legacy] == ["old-fact.md"]  # MEMORY.md excluded
 
 
 def test_project_ulid_stable_across_calls_for_same_root(tmp_path: pathlib.Path) -> None:

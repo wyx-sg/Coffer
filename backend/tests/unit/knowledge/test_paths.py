@@ -48,6 +48,21 @@ def test_fact_path_guard(monkeypatch, tmp_path) -> None:
         paths.fact_path(store, "../evil")
 
 
+def test_knowledge_lane_paths(monkeypatch, tmp_path) -> None:
+    store = tmp_path / "store"
+    assert paths.knowledge_dir(store) == store / "knowledge"
+    assert paths.inbox_dir(store) == store / "knowledge" / "inbox"
+    item = paths.inbox_item_path(store, "deploy-01abcdef")
+    assert item == store / "knowledge" / "inbox" / "deploy-01abcdef.md"
+    assert item.name == "deploy-01abcdef.md"
+
+
+def test_inbox_item_path_rejects_traversal(monkeypatch, tmp_path) -> None:
+    store = tmp_path / "store"
+    with pytest.raises(ValueError):
+        paths.inbox_item_path(store, "../evil")
+
+
 def test_raw_path_rejects_slashed_ext(monkeypatch, tmp_path) -> None:
     """A slash-containing ext (from an upload filename) must not create nested
     subdirs inside raw/; it is rejected as an unsafe segment."""

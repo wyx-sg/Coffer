@@ -24,33 +24,15 @@ from coffer.application.sync.importer import SyncImporter
 from coffer.application.sync.service import SyncService
 from coffer.application.sync.worker import SyncWorker
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
-from coffer.infrastructure.memory.files import regenerate_memory_index
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 from coffer.infrastructure.sync.git_repo import GitRepo
-from coffer.infrastructure.sync.paths import memory_root, sync_root
+from coffer.infrastructure.sync.paths import sync_root
 from coffer.infrastructure.sync.persistence import (
     SqlAlchemySyncConfigRepo,
     SqlAlchemySyncStateRepo,
 )
 from coffer.infrastructure.sync.workspace import Workspace
 from coffer.surfaces.http.sync_routes import set_sync_service
-
-
-async def _regenerate_memory_indexes() -> None:
-    """Rebuild each memory store's ``MEMORY.md`` from the just-synced fact files.
-
-    Derived indexes are excluded from the sync mirror (they differ per machine
-    and would conflict), so they must be regenerated after import.
-    """
-    root = memory_root()
-    store_dirs: list[pathlib.Path] = []
-    if (root / "global").exists():
-        store_dirs.append(root / "global")
-    projects = root / "projects"
-    if projects.is_dir():
-        store_dirs.extend(d for d in projects.iterdir() if d.is_dir())
-    for store_dir in store_dirs:
-        await asyncio.to_thread(regenerate_memory_index, store_dir)
 
 
 def wire_sync(
@@ -69,9 +51,7 @@ def wire_sync(
         config=config_svc,
         git=git,
         exporter=SyncExporter(resource_svc, cred_sync, workspace),
-        importer=SyncImporter(
-            resource_svc, cred_sync, workspace, post_import=_regenerate_memory_indexes
-        ),
+        importer=SyncImporter(resource_svc, cred_sync, workspace),
         credentials=cred_sync,
         master_key=master_key,
         audit=audit,

@@ -32,8 +32,8 @@ Frozen dataclass; the in-memory view of one per-fact markdown file (frontmatter 
 | Field               | Type                      | Notes                                                                    |
 | ------------------- | ------------------------- | ------------------------------------------------------------------------ |
 | `id`                | `str`                     | Document id (ULID); also the basis of the `<fact-slug>.md` name.         |
-| `name`              | `str`                     | Frontmatter `name` (short title; appears in `MEMORY.md`).                |
-| `description`       | `str`                     | Frontmatter `description` (one-line; appears in `MEMORY.md`).            |
+| `name`              | `str`                     | Frontmatter `name` (short title).                                        |
+| `description`       | `str`                     | Frontmatter `description` (one-line).                                    |
 | `body`              | `str`                     | Markdown body = the fact text.                                           |
 | `type`              | `str \| None`             | Frontmatter `metadata.type` (`project`/`feedback`/`reference`/`user`/…). |
 | `actor`             | `Literal["agent","user"]` | Frontmatter `metadata.actor` — who wrote it.                             |
@@ -73,7 +73,7 @@ Cross-store recall merges per-store hit lists by **reciprocal rank fusion** (k=6
 
 Retrieval is **shared** with the KB face. The value objects (`StoreRef`, `Passage`, `GrepHit`, `GrepResult`, `MemoryHit`, `SearchResult`, `RetrievalMode`) live in `domain/knowledge/retrieval.py`; the protocols (`KnowledgeIndex`, `GrepPort`, `RetrievalPort`) live in `domain/knowledge/index.py`. The concrete facade is `KnowledgeRetrieval` (`application/knowledge/retrieval.py`): it composes the chunk index (`infrastructure/knowledge/sqlite_index.py` + `vec_index.py`), the ripgrep wrapper (`grep.py`), and the embedder clients (`embeddings.py`), and owns the keyword↔vector decision including the flagged vector→keyword fallback — so neither face duplicates it. The lazy reindex-on-read reconcile is the memory-side `MemoryReconciler` (`application/memory/sync.py`) driving the single re-index routine (`application/knowledge/reindex.py`).
 
-Agents read and write memory only through the MCP gateway tools (`coffer__recall`/`remember`/`update_memory`/`forget`/`list_memory`); Coffer never mutates an agent's native memory files (native projection was removed — see ADR-026).
+Agents read and write memory only through the MCP gateway tools (`coffer__recall`/`remember`/`list_memory`); fact edit/delete is a user surface (REST/CLI/external editor), not an MCP tool. Coffer never mutates an agent's native memory files (native projection was removed — see ADR-026).
 
 ### Domain errors (canonical classes in `domain/errors.py`, re-exported via `domain/knowledge/errors.py`)
 
@@ -161,12 +161,18 @@ The `label` takes precedence over the `project_root`-derived basename when rende
 ~/.coffer/
 └── memory/
     ├── global/                        # project_id = WORKSPACE_GLOBAL_PROJECT_ID (00000000000000000000000000)
-    │   ├── MEMORY.md                  # regenerated index: - [name](file.md) — description
-    │   └── <fact-slug>.md             # per-fact file = truth (frontmatter + body)
+    │   └── knowledge/                 # the semantic lane (recall searches here)
+    │       ├── inbox/<item>.md        # per-item file = truth (frontmatter + body), freshly remembered
+    │       ├── <topic>.md             # organized topic docs (PR2b — written by the consolidation organizer)
+    │       └── INDEX.md               # human review entry point (PR2b)
     └── projects/<project-ulid>/       # one dir per project
-        ├── MEMORY.md
-        └── <fact-slug>.md
+        └── knowledge/
+            ├── inbox/<item>.md
+            ├── <topic>.md             # PR2b
+            └── INDEX.md               # PR2b
 ```
+
+There is **no `MEMORY.md`** — the prior derived projection is removed. `recall` globs `knowledge/**/*.md` (excluding `INDEX.md`), so it transparently picks up topic docs once the organizer writes them and finds a hand-written topic doc immediately.
 
 Per-fact `.md` frontmatter:
 
@@ -188,18 +194,18 @@ release target tags and pushes atomically.
 
 `created_at` / `updated_at` are persisted in the frontmatter (the file is the source of truth); the file mtime is only a fallback when parsing hand-written fact files that omit them.
 
-`infrastructure/memory/paths.py` is the only module that constructs these paths. `infrastructure/memory/files.py` is the only module that reads/writes the per-fact `.md` files, renders `MEMORY.md`, and scans the dir for deltas.
+`infrastructure/memory/paths.py` is the only module that constructs these paths. `infrastructure/memory/files.py` is the only module that reads/writes the per-item `.md` files and scans the `knowledge/` lane for deltas.
 
 ## Cascade & integrity rules
 
 | Action                                                | Effect                                                                                                                                                                                      |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `remember` / user add                                 | Write `<fact-slug>.md` → regenerate `MEMORY.md` → index into `documents`/`chunks`/FTS5/(vec) → audit.                                                                                       |
-| `update_memory` / user edit (API/CLI/external editor) | Rewrite `.md` → single re-index routine (sha256 changed → re-chunk/-embed) → regenerate `MEMORY.md` → audit. (A direct external-editor edit takes effect on the next lazy reindex-on-read.) |
-| `forget` / user delete                                | Delete `.md` → remove `documents`/`chunks`/FTS5/vec rows → regenerate `MEMORY.md` → audit.                                                                                                  |
-| Clear a scope                                         | Delete all `.md` for the store → remove all index rows → empty `MEMORY.md` → audit. Store Resource preserved.                                                                               |
-| Delete the store Resource                             | Remove `documents` rows for the store, `rmtree(store_dir)`, audit.                                                                                                                          |
-| Recall                                                | **Lazy reindex-on-read**: scan `store_dir` for deltas (by `content_sha256`) → `reconcile` → search. No write to `MEMORY.md`.                                                                |
+| `remember` / user add                          | Write `knowledge/inbox/<item-slug>.md` → index into `documents`/`chunks`/FTS5/(vec) → audit.                                                                                  |
+| User edit (REST/CLI/external editor)           | Rewrite `.md` → single re-index routine (sha256 changed → re-chunk/-embed) → audit. (A direct external-editor edit takes effect on the next lazy reindex-on-read.) MCP has no edit tool — REST/CLI only. |
+| User delete (REST/CLI)                         | Delete `.md` → remove `documents`/`chunks`/FTS5/vec rows → audit. MCP has no delete tool — REST/CLI only.                                                                      |
+| Clear a scope                                  | Delete every memory item under `knowledge/` → remove all index rows → audit. Store Resource preserved.                                                                        |
+| Delete the store Resource                      | Remove `documents` rows for the store, `rmtree(store_dir)`, audit.                                                                                                            |
+| Recall                                         | **Lazy reindex-on-read**: scan the `knowledge/` lane for deltas (by `content_sha256`) → `reconcile` → search.                                                                 |
 | Change embedding model                                | Allowed → re-embed the store on next index (files are truth).                                                                                                                               |
 | Change `max_fact_chars`                               | Allowed.                                                                                                                                                                                    |
 
@@ -221,8 +227,8 @@ When a vector-enabled store's embed degrades (embedding provider unavailable), t
 | Value              | When emitted                            |
 | ------------------ | --------------------------------------- |
 | `"memory_added"`   | After a successful `remember`/user add  |
-| `"memory_updated"` | After a successful `update`/user edit   |
-| `"memory_deleted"` | After a successful `forget`/user delete |
+| `"memory_updated"` | After a successful user edit (REST/CLI) |
+| `"memory_deleted"` | After a successful user delete (REST/CLI) |
 | `"memory_cleared"` | After clearing a scope                  |
 
 ## Transcript distillation (Spec 007 extension)

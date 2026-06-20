@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from coffer.infrastructure.knowledge.paths import (
     fact_path,
+    inbox_dir,
+    inbox_item_path,
+    knowledge_dir,
     memory_global_dir,
-    memory_index_path,
     memory_project_dir,
     memory_projects_dir,
     memory_root,
@@ -19,8 +21,10 @@ from coffer.infrastructure.knowledge.paths import (
 
 __all__ = [
     "fact_path",
+    "inbox_dir",
+    "inbox_item_path",
+    "knowledge_dir",
     "memory_global_dir",
-    "memory_index_path",
     "memory_project_dir",
     "memory_projects_dir",
     "memory_root",

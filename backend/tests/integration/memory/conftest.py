@@ -164,7 +164,6 @@ async def mem(tmp_path: pathlib.Path, monkeypatch):
         retrieval=retrieval,
         audit=audit,
         store_dir=paths.memory_store_dir,
-        fact_path=paths.fact_path,
         embedding_resolver=_resolver,
     )
     # Register the memory kind so auto-provision (resources.register) works.
@@ -260,7 +259,6 @@ async def handoff(tmp_path: pathlib.Path, monkeypatch):
         retrieval=retrieval,
         audit=audit,
         store_dir=paths.memory_store_dir,
-        fact_path=paths.fact_path,
     )
     resources._kinds["memory"] = make_memory_kind(memory_service)  # type: ignore[attr-defined]
 

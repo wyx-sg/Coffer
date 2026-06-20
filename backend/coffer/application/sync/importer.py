@@ -13,7 +13,6 @@ everything else.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from coffer.application.resource_service import ResourceService
@@ -39,21 +38,14 @@ class SyncImporter:
         workspace: WorkspacePort,
         *,
         actor: str = "sync",
-        post_import: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
         self._workspace = workspace
         self._actor = actor
-        # Regenerate derived indexes (e.g. memory's MEMORY.md) from the merged
-        # source-of-truth files after they are mirrored in. Injected so sync
-        # stays decoupled from the memory kind.
-        self._post_import = post_import
 
     async def import_(self) -> ImportResult:
         docs, blobs = await asyncio.to_thread(self._load)
-        if self._post_import is not None:
-            await self._post_import()
         result = ImportResult()
         await self._import_credentials(blobs, result)
         await self._reconcile_resources(docs, result)
