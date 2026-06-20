@@ -120,7 +120,17 @@ No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invo
 - **Why surface from the persisted flag, not the transient scan count.** The degraded count was computed inside `reindex_scan` and only returned by the explicit `POST /reindex`; a degrade during a lazy reindex-on-read (list / get / search / grep) was silently dropped (`_reconcile_on_read -> None`). Querying the persisted `embed_pending` (`count_pending_embeds`) in `metrics()` makes `documents_degraded` correct on ANY read, with no need to thread the scan count through every read path.
 - **Boundary.** `embed_pending` tracks ONLY a failed embedding **provider** call (`EngineUnavailable`). It is orthogonal to sqlite-vec extension availability: a provider success with an unavailable vec table is `embedded=True` (not pending) and is handled at query time by `SearchResponse.fallback` — same parity as the existing `embedded` flag.
 
-## 10. Things explicitly NOT decided / out of scope here
+## 10. Title as embedding context (KB5)
+
+**Question**: A chunk taken from the middle of a document is embedded in isolation, so its vector loses the document's subject — how do we restore topic context for better vector recall?
+
+**Decision**: Prepend the document **title** (`"{title}\n\n{chunk}"`) to the text that gets **EMBEDDED** only — a standard RAG technique. The text written to FTS (`documents_fts`) and to the chunk rows stays the **raw** chunk, so the returned `Passage.text` is never polluted (the title is already surfaced separately via `Passage.title` from the `documents` JOIN). The prefix lives solely inside `Reindexer._maybe_embed`; the caller still passes the raw `chunks` to `upsert_chunks`. Memory reuses this: the fact name is the title.
+
+- **No mass re-embed.** `content_sha256` stays the hash of the **raw body** (the title is NOT folded in), so existing docs are not flagged "changed" — they keep their (title-less) vectors until a genuine content change or a `force` reconcile re-embeds them with the title. That gradual rollout is intended and acceptable: mixed title/no-title vectors share the same space with no correctness issue.
+- **No migration / no schema change.** No new FR (a retrieval-quality change under the existing modes, like the KB4 chunker and KB2). No FTS schema change, no `upsert_chunks`/`upsert_vectors` signature change.
+- **Deferred.** A keyword-side indexed `title` FTS column was deferred — it would need an FTS-rebuild migration and has a short-CJK-title trigram gap — until keyword title-matching proves needed.
+
+## 11. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.

@@ -164,6 +164,8 @@ class MemoryReconciler:
                 embedding=embedding,
                 doc_id=fact_id,
                 chunker=_one_chunk,
+                # The fact name is its title → embed-context only (KB5); FTS raw.
+                title=ff.fact.name,
                 previous_embed_pending=(existing.embed_pending if existing else False),
             )
             doc = fact_to_document(
@@ -201,6 +203,8 @@ class MemoryReconciler:
                 embedding=embedding,
                 doc_id=fact_file.fact.id,
                 chunker=_one_chunk,
+                # The fact name is its title → embed-context only (KB5); FTS raw.
+                title=fact_file.fact.name,
                 previous_embed_pending=(existing.embed_pending if existing else False),
             )
             doc = fact_to_document(

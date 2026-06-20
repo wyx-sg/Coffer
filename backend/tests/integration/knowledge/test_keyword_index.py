@@ -44,6 +44,11 @@ async def test_keyword_search_returns_ranked_passages(substrate) -> None:
     assert "fox" in hits[0].text
     assert hits[0].title == "Alpha"
     assert hits[0].score is not None
+    # KB5: the title is prepended only to the EMBEDDED text; the FTS passage stays
+    # raw, so the title (surfaced separately via ``Passage.title``) never leaks
+    # into ``Passage.text``.
+    assert hits[0].text == "the quick brown fox jumps"
+    assert "Alpha" not in hits[0].text
 
 
 @pytest.mark.asyncio

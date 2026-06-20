@@ -29,6 +29,13 @@ we are NOT pending (that degradation is handled at query time by
 The routine is pure orchestration over injected ports — the chunker, the
 embedder factory, the index, and the document repo — so it stays engine-free and
 testable with fakes.
+
+The document TITLE is prepended (``"{title}\n\n{chunk}"``) ONLY to the text that
+gets EMBEDDED, restoring standalone topic context to a mid-document chunk so its
+vector recall improves (KB5). The chunks written to FTS / the chunk rows — and
+thus the returned ``Passage.text`` — stay RAW (no prefix); the title is already
+surfaced separately via ``Passage.title``. ``content_sha256`` likewise stays the
+hash of the raw body, so prepending the title triggers NO mass re-embed.
 """
 
 from __future__ import annotations
@@ -84,6 +91,7 @@ class Reindexer:
         embedding: EmbeddingConfig | None,
         doc_id: str,
         chunker: Chunker,
+        title: str = "",
         previous_embed_pending: bool = False,
     ) -> ReindexOutcome:
         """Re-index ``doc_id``'s chunks from ``markdown``.
@@ -92,6 +100,9 @@ class Reindexer:
         params (KB: markdown-aware windows; memory: one chunk per fact). The
         returned ``content_sha256`` is ALWAYS the real body hash; the separate
         ``embed_pending`` flag carries the degraded-embed retry state.
+
+        ``title`` is prepended ONLY to the EMBEDDED text (topic context for
+        standalone chunks, KB5); the chunks sent to FTS / stored as rows stay raw.
 
         Three paths (see the module docstring):
 
@@ -125,7 +136,9 @@ class Reindexer:
             # rewrite ⇒ no churn). Chunk positions are deterministic so the fresh
             # vectors align with the stored chunks.
             chunks = chunker(markdown)
-            vectors, embedded = await self._maybe_embed(chunks, embedding, doc_id=doc_id)
+            vectors, embedded = await self._maybe_embed(
+                chunks, embedding, doc_id=doc_id, title=title
+            )
             if embedded and vectors is not None:
                 await index.upsert_vectors(doc_id, vectors)
             # Still pending only if an embed was requested (vector enabled) yet
@@ -141,7 +154,9 @@ class Reindexer:
 
         # Content changed (or first index): full re-chunk + FTS + embed.
         chunks = chunker(markdown)
-        vectors, embedded = await self._maybe_embed(chunks, embedding, doc_id=doc_id)
+        vectors, embedded = await self._maybe_embed(chunks, embedding, doc_id=doc_id, title=title)
+        # ``chunks`` (raw) is what lands in FTS / the chunk rows; only the
+        # title-prefixed copy inside ``_maybe_embed`` reaches the embedder.
         chunk_count = await index.upsert_chunks(doc_id, chunks, vectors)
         embed_pending = embedding is not None and bool(chunks) and not embedded
         return ReindexOutcome(
@@ -153,13 +168,24 @@ class Reindexer:
         )
 
     async def _maybe_embed(
-        self, chunks: Sequence[str], embedding: EmbeddingConfig | None, *, doc_id: str
+        self,
+        chunks: Sequence[str],
+        embedding: EmbeddingConfig | None,
+        *,
+        doc_id: str,
+        title: str = "",
     ) -> tuple[list[list[float]] | None, bool]:
         if embedding is None or not chunks:
             return None, False
+        # Prepend the doc title as topic context ONLY in the EMBEDDED text (KB5):
+        # a standalone mid-document chunk loses the subject, so the title restores
+        # it for better vector recall. ``chunks`` itself is untouched, so FTS / the
+        # chunk rows / the returned ``Passage.text`` stay raw (title comes back via
+        # ``Passage.title``). Empty title ⇒ embed the raw chunk unchanged.
+        to_embed = [f"{title}\n\n{c}" if title else c for c in chunks]
         try:
             embedder = self._embedder_factory(embedding)
-            vectors = await embedder.embed(list(chunks))
+            vectors = await embedder.embed(to_embed)
         except EngineUnavailable as exc:
             # Provider library/endpoint missing — index keyword-only. Vector
             # recall will fall back at read time; the write must not fail.

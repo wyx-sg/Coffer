@@ -120,7 +120,17 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 - **为什么从持久标志暴露，而非临时扫描计数。** 降级计数原本在 `reindex_scan` 内计算，只由显式 `POST /reindex` 返回；读取时惰性重建（list / get / search / grep）期间的降级被悄悄丢弃（`_reconcile_on_read -> None`）。在 `metrics()` 里查询持久的 `embed_pending`（`count_pending_embeds`），让 `documents_degraded` 在任意读取上都正确，无需把扫描计数穿过每条读路径。
 - **边界。** `embed_pending` 只跟踪 embedding **provider** 调用失败（`EngineUnavailable`）。它与 sqlite-vec 扩展是否可用正交：provider 成功但 vec 表不可用属于 `embedded=True`（非 pending），在查询时由 `SearchResponse.fallback` 处理 —— 与既有 `embedded` 标志同构。
 
-## 10. 此处明确不决定 / 范围外
+## 10. 标题作为 embedding 上下文（KB5）
+
+**问题**：取自文档中部的 chunk 被孤立地 embedding，向量丢失了文档主题 —— 如何恢复主题上下文以提升 vector 召回？
+
+**决策**：仅把文档**标题**（`"{title}\n\n{chunk}"`）前置到**被 EMBEDDING** 的文本 —— 一种标准 RAG 技术。写入 FTS（`documents_fts`）与 chunk 行的仍是**原始** chunk，因此返回的 `Passage.text` 永不被污染（标题已由 `documents` JOIN 经 `Passage.title` 单独呈现）。前缀只存在于 `Reindexer._maybe_embed` 内部；调用方仍把原始 `chunks` 传给 `upsert_chunks`。memory 复用此机制：fact name 即标题。
+
+- **不触发大规模重 embed。** `content_sha256` 仍是**原始正文**的哈希（标题不折入），因此既有文档不会被判为「changed」—— 它们保留（无标题的）旧向量，直到真正的内容变更或 `force` 对账以带标题重新 embedding。这种渐进 rollout 是有意且可接受的：带/不带标题的向量共享同一空间，无正确性问题。
+- **无迁移 / 无 schema 变更。** 无新 FR（既有检索模式下的检索质量改动，与 KB4 chunker、KB2 同类）。无 FTS schema 变更，无 `upsert_chunks`/`upsert_vectors` 签名变更。
+- **延后。** keyword 侧的索引化 `title` FTS 列被延后 —— 它需要 FTS 重建迁移且存在短 CJK 标题的 trigram 缺口 —— 直到 keyword 标题匹配确有需要。
+
+## 11. 此处明确不决定 / 范围外
 
 - 单次调用里 keyword + vector 的 hybrid RRF 融合（可选未来，同引擎）。
 - 检索时的 reranking / HyDE / multi-query / LLM 综合 —— agent 综合。

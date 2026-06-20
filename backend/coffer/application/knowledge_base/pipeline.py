@@ -3,9 +3,8 @@
 Extracted from ``service.py`` so the orchestration service stays thin. The
 pipeline owns the multi-step write paths (ingest / edit / reconvert /
 reindex_scan / delete / cleanup): any-format upload → Markdown on disk → index.
-Filesystem work is offloaded to worker threads; index/embedding work goes
-through the shared ``KnowledgeRetrieval`` + ``Reindexer``.
-"""
+Filesystem work is offloaded to worker threads; index/embedding work goes through
+the shared ``KnowledgeRetrieval`` + ``Reindexer``."""
 
 from __future__ import annotations
 
@@ -385,6 +384,7 @@ class KBPipeline:
             embedding=embedding,
             doc_id=doc.id,
             chunker=chunker_for(config),
+            title=doc.title,
             previous_embed_pending=doc.embed_pending,
         )
         # Persist when content changed OR the pending flag flipped (retry cleared
