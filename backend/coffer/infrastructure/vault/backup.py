@@ -27,6 +27,8 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
+import tarfile
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -54,33 +56,22 @@ class BackupManifest:
     master_key: bool = False
 
 
-def _copy_db(src_root: Path, dest_root: Path, manifest: BackupManifest) -> None:
-    src_db = src_root / _DB_NAME
-    if src_db.exists():
-        dest_root.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src_db, dest_root / _DB_NAME)
-        manifest.db = True
-
-
-def _copy_trees(src_root: Path, dest_root: Path, manifest: BackupManifest) -> None:
-    for name in _TREE_NAMES:
-        src_tree = src_root / name
-        if src_tree.is_dir():
-            # Replace, never merge: a file deleted from the live tree must not
-            # survive in a re-used backup dest and get resurrected on restore.
-            dest_tree = dest_root / name
-            if dest_tree.exists():
-                shutil.rmtree(dest_tree)
-            shutil.copytree(src_tree, dest_tree)
-            manifest.trees.append(name)
-
-
 def create_backup(dest: Path, *, include_master_key: bool = False) -> BackupManifest:
-    """Copy the live vault (db + file trees) into ``dest``.
+    """Write the live vault (db + file trees) into a ``.tar.gz`` archive at ``dest``.
 
-    ``dest`` is created if absent. Raises :class:`BackupError` when there is no
-    vault to back up (neither db nor any file tree exists). The master key is
-    only copied when ``include_master_key`` is True.
+    ``dest`` is the output file path (e.g. ``~/backups/coffer-20260620.tar.gz``).
+    The archive is written atomically: a temp file is created in the same
+    directory as ``dest``, fully populated, then renamed onto ``dest``.
+
+    Raises :class:`BackupError` when there is no vault to back up (neither db
+    nor any file tree exists). The master key is only included when
+    ``include_master_key`` is True.
+
+    Archive member paths are relative to the vault root, so extraction
+    reconstructs the original layout:
+      - ``coffer.db``
+      - ``knowledge/…``, ``memory/…``, ``skills/…`` (whichever exist)
+      - ``master.key`` (only if ``include_master_key=True``)
     """
     root = vault_root()
     has_db = (root / _DB_NAME).exists()
@@ -88,30 +79,60 @@ def create_backup(dest: Path, *, include_master_key: bool = False) -> BackupMani
     if not has_db and not has_tree:
         raise BackupError(f"no vault found at {root} — nothing to back up")
 
-    dest.mkdir(parents=True, exist_ok=True)
     manifest = BackupManifest()
-    _copy_db(root, dest, manifest)
-    _copy_trees(root, dest, manifest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
 
-    if include_master_key:
-        src_key = root / _MASTER_KEY_NAME
-        if src_key.exists():
-            shutil.copy2(src_key, dest / _MASTER_KEY_NAME)
-            os.chmod(dest / _MASTER_KEY_NAME, 0o600)
-            manifest.master_key = True
+    # Write atomically: tar to a temp file, then os.replace onto dest.
+    fd, tmp_path = tempfile.mkstemp(dir=dest.parent, prefix=".coffer-backup-", suffix=".tar.gz.tmp")
+    try:
+        os.close(fd)
+        with tarfile.open(tmp_path, "w:gz") as tar:
+            # Always add coffer.db (existence already confirmed above via has_db,
+            # but check once more to be explicit for the manifest).
+            db_path = root / _DB_NAME
+            if db_path.exists():
+                tar.add(db_path, arcname=_DB_NAME)
+                manifest.db = True
+
+            # Add each existing tree using its name as the arcname prefix so
+            # members are stored as e.g. ``knowledge/handbook/docs/welcome.md``.
+            for name in _TREE_NAMES:
+                tree = root / name
+                if tree.is_dir():
+                    tar.add(tree, arcname=name)
+                    manifest.trees.append(name)
+
+            # Master key is opt-in only.
+            if include_master_key:
+                key_path = root / _MASTER_KEY_NAME
+                if key_path.exists():
+                    tar.add(key_path, arcname=_MASTER_KEY_NAME)
+                    manifest.master_key = True
+
+        os.replace(tmp_path, dest)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
 
     return manifest
 
 
 def verify_backup(src: Path) -> None:
-    """Reject a source dir that is not a recognisable vault backup.
+    """Reject a source path that is not a recognisable vault backup.
 
-    Requires at least ``coffer.db`` (the one component every backup carries).
-    Raises :class:`BackupError` otherwise — checked before any clobbering.
+    Requires ``src`` to be a readable ``.tar.gz`` containing ``coffer.db``
+    (the one component every backup carries). Raises :class:`BackupError`
+    otherwise — checked before any clobbering.
     """
-    if not src.is_dir():
-        raise BackupError(f"backup source {src} is not a directory")
-    if not (src / _DB_NAME).exists():
+    if not src.is_file():
+        raise BackupError(f"backup source {src} is not a file")
+    try:
+        with tarfile.open(src, "r:gz") as tar:
+            names = tar.getnames()
+    except tarfile.TarError as exc:
+        raise BackupError(f"invalid backup: {src} is not a valid tar.gz archive ({exc})") from exc
+    if _DB_NAME not in names:
         raise BackupError(f"invalid backup: {src} has no {_DB_NAME}")
 
 
@@ -133,7 +154,7 @@ def _remove(path: Path) -> None:
 
 
 def restore_backup(src: Path) -> BackupManifest:
-    """Re-place a backup's db + file trees into the live vault root, atomically.
+    """Extract a ``.tar.gz`` backup's db + file trees into the live vault root, atomically.
 
     The restore is staged under the vault root and swapped into place with
     same-filesystem renames, so a mid-restore I/O failure (ENOSPC, EIO, an
@@ -144,6 +165,9 @@ def restore_backup(src: Path) -> BackupManifest:
     index never disagrees with what is on disk.
 
     Caller is responsible for confirming an overwrite of a populated vault.
+
+    Security: extraction uses ``filter="data"`` (Python 3.12+) to prevent
+    path-traversal attacks.
     """
     verify_backup(src)
     root = vault_root()
@@ -160,22 +184,34 @@ def restore_backup(src: Path) -> BackupManifest:
     moved_aside: list[tuple[Path, Path]] = []  # (live, .restore-old)
     placed: list[Path] = []
     try:
-        # 1. Stage everything from the backup (the expensive, failure-prone copy
-        #    happens entirely off to the side; the live vault is untouched here).
-        shutil.copy2(src / _DB_NAME, staging / _DB_NAME)
+        # 1. Determine what is in the archive (names are relative to vault root).
+        with tarfile.open(src, "r:gz") as tar:
+            tar_names = set(tar.getnames())
+            # Extract to staging — path-traversal safe via filter="data".
+            # A corrupt archive or a path-traversal member (AbsoluteLinkError,
+            # LinkOutsideDestinationError, etc.) raises tarfile.TarError here;
+            # translate to BackupError so the caller's except-BackupError block
+            # handles it cleanly and the rollback below still runs.
+            try:
+                tar.extractall(path=staging, filter="data")
+            except (tarfile.TarError, OSError) as exc:
+                raise BackupError(f"corrupt or unsafe backup archive {src}: {exc}") from exc
+
+        # 2. Build the swap list from what actually landed in staging.
+        #    db is always present (verify_backup guarantees it).
         swaps.append((root / _DB_NAME, staging / _DB_NAME))
+
         for name in _TREE_NAMES:
-            if (src / name).is_dir():
-                shutil.copytree(src / name, staging / name)
+            if (staging / name).is_dir():
                 swaps.append((root / name, staging / name))
             else:
                 swaps.append((root / name, None))  # absent in backup → remove live
-        if (src / _MASTER_KEY_NAME).exists():
-            shutil.copy2(src / _MASTER_KEY_NAME, staging / _MASTER_KEY_NAME)
+
+        if (staging / _MASTER_KEY_NAME).exists():
             os.chmod(staging / _MASTER_KEY_NAME, 0o600)
             swaps.append((root / _MASTER_KEY_NAME, staging / _MASTER_KEY_NAME))
 
-        # 2. Atomic swap: move each live component aside, then rename the staged
+        # 3. Atomic swap: move each live component aside, then rename the staged
         #    replacement in. Same-filesystem renames are atomic and fast.
         for dest, staged in swaps:
             if dest.exists() or dest.is_symlink():
@@ -202,6 +238,6 @@ def restore_backup(src: Path) -> BackupManifest:
     _remove(staging)
 
     manifest.db = True
-    manifest.trees = [n for n in _TREE_NAMES if (src / n).is_dir()]
-    manifest.master_key = (src / _MASTER_KEY_NAME).exists()
+    manifest.trees = [n for n in _TREE_NAMES if (root / n).is_dir()]
+    manifest.master_key = _MASTER_KEY_NAME in tar_names
     return manifest

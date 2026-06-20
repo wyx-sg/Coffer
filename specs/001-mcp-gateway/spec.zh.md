@@ -283,12 +283,6 @@ coffer__search_tools(query: string [required], top_k?: int = 5, max 20)
 - **When** 用户触发 token 轮换操作,
 - **Then** 用旧 token 的管理 API 调用返回 401，用新 token 调用成功，且这次轮换被记为 `token_rotated` 类型的 audit 条目。
 
-### Scenario: daemon backup produces a portable SQLite copy
-
-- **Given** daemon 的 `~/.coffer/coffer.db` 中有运行状态,
-- **When** 用户触发 daemon 备份操作,
-- **Then** 即便 daemon 仍在运行，也会向 `~/.coffer/backups/` 写入一份自洽的索引 SQLite 拷贝，并记录一条 `backup_created` 审计。（它只拷贝 `coffer.db`——可重建的索引——不含作为事实源的文件树；要得到完整、可恢复的 vault 快照，请用下面的 vault 备份。）
-
 ### Scenario: vault backup captures db + file trees, restore round-trips them
 
 - **Given** `~/.coffer/` 下有一个已填充的 vault——`coffer.db` 加上作为事实源的 markdown 文件树（`knowledge/`、`memory/`、`skills/`）,

@@ -4,1441 +4,1434 @@
  */
 
 export interface paths {
-  "/resources": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List resources */
+        get: operations["listResources"];
+        put?: never;
+        /** Register a new resource */
+        post: operations["registerResource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** List resources */
-    get: operations["listResources"];
-    put?: never;
-    /** Register a new resource */
-    post: operations["registerResource"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/resources/{kind}/{name}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        kind: string;
-        name: string;
-      };
-      cookie?: never;
+    "/resources/{kind}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getResource"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteResource"];
+        options?: never;
+        head?: never;
+        patch: operations["updateResource"];
+        trace?: never;
     };
-    get: operations["getResource"];
-    put?: never;
-    post?: never;
-    delete: operations["deleteResource"];
-    options?: never;
-    head?: never;
-    patch: operations["updateResource"];
-    trace?: never;
-  };
-  "/resources/{kind}/{name}/enable": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        kind: string;
-        name: string;
-      };
-      cookie?: never;
+    "/resources/{kind}/{name}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["enableResource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["enableResource"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/resources/{kind}/{name}/disable": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        kind: string;
-        name: string;
-      };
-      cookie?: never;
+    "/resources/{kind}/{name}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableResource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["disableResource"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/resources/mcp_server/{name}/capabilities": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
+    "/resources/mcp_server/{name}/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        /** List tools/resources/prompts (live + preference-filtered) */
+        get: operations["listMcpCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** List tools/resources/prompts (live + preference-filtered) */
-    get: operations["listMcpCapabilities"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/resources/mcp_server/{name}/capabilities/{capability_type}/enable": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-        capability_type: "tool" | "resource" | "prompt";
-      };
-      cookie?: never;
+    "/resources/mcp_server/{name}/capabilities/{capability_type}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                capability_type: "tool" | "resource" | "prompt";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable a capability for the named MCP server. The capability_key is
+         *     carried in the request body (not the URL) so that keys containing '/'
+         *     (resource URIs such as `file:///path`) route correctly.
+         */
+        post: operations["enableMcpCapability"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Enable a capability for the named MCP server. The capability_key is
-     *     carried in the request body (not the URL) so that keys containing '/'
-     *     (resource URIs such as `file:///path`) route correctly.
-     */
-    post: operations["enableMcpCapability"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/resources/mcp_server/{name}/capabilities/{capability_type}/disable": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-        capability_type: "tool" | "resource" | "prompt";
-      };
-      cookie?: never;
+    "/resources/mcp_server/{name}/capabilities/{capability_type}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                capability_type: "tool" | "resource" | "prompt";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableMcpCapability"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["disableMcpCapability"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/resources/mcp_server/{name}/refresh": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
+    "/resources/mcp_server/{name}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invalidate the in-memory capability cache and re-query upstream */
+        post: operations["refreshMcpCapabilities"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Invalidate the in-memory capability cache and re-query upstream */
-    post: operations["refreshMcpCapabilities"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/resources/mcp_server/{name}/test": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
+    "/resources/mcp_server/{name}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a transient upstream session and run initialize */
+        post: operations["testMcpServer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Open a transient upstream session and run initialize */
-    post: operations["testMcpServer"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/resources/mcp_server/{name}/invocations": {
-    parameters: {
-      query?: {
-        since?: string;
-        limit?: number;
-        status?: "ok" | "error" | "timeout" | "denied";
-      };
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
+    "/resources/mcp_server/{name}/invocations": {
+        parameters: {
+            query?: {
+                since?: string;
+                limit?: number;
+                status?: "ok" | "error" | "timeout" | "denied";
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listMcpInvocations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listMcpInvocations"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/resources/mcp_server/{name}/status": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/resources/mcp_server/{name}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cheap per-server status from persisted state — no spawn. */
+        get: operations["getMcpServerStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Cheap per-server status from persisted state — no spawn. */
-    get: operations["getMcpServerStatus"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/audit": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAuditEntries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listAuditEntries"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/retention/policies": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/retention/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRetentionPolicies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listRetentionPolicies"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/retention/policies/{table_name}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        table_name: string;
-      };
-      cookie?: never;
+    "/retention/policies/{table_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateRetentionPolicy"];
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch: operations["updateRetentionPolicy"];
-    trace?: never;
-  };
-  "/retention/prune": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/retention/prune": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pruneRetention"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["pruneRetention"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/daemon/status": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/daemon/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDaemonStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["getDaemonStatus"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/daemon/backup": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/vault/backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["vaultBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["backupDaemon"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/daemon/shutdown": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/daemon/shutdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["shutdownDaemon"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["shutdownDaemon"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/daemon/rotate-token": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/daemon/rotate-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rotateDaemonToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["rotateDaemonToken"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/credentials": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Store a secret in the Fernet-encrypted credential store under a reference key. */
+        post: operations["setCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Store a secret in the Fernet-encrypted credential store under a reference key. */
-    post: operations["setCredential"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/credentials/{ref}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/credentials/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a secret value from the encrypted credential store (audited). */
+        get: operations["getCredential"];
+        put?: never;
+        post?: never;
+        /** Remove a secret from the encrypted credential store. Idempotent. */
+        delete: operations["deleteCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Read a secret value from the encrypted credential store (audited). */
-    get: operations["getCredential"];
-    put?: never;
-    post?: never;
-    /** Remove a secret from the encrypted credential store. Idempotent. */
-    delete: operations["deleteCredential"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/credentials/{ref}/exists": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/credentials/{ref}/exists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report whether a secret is stored under a ref (no value returned). */
+        get: operations["credentialExists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Report whether a secret is stored under a ref (no value returned). */
-    get: operations["credentialExists"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/settings/credentials": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/settings/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report where the credential master key is stored. */
+        get: operations["getCredentialSettings"];
+        /** Relocate the credential master key (file <-> OS keychain). */
+        put: operations["putCredentialSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Report where the credential master key is stored. */
-    get: operations["getCredentialSettings"];
-    /** Relocate the credential master key (file <-> OS keychain). */
-    put: operations["putCredentialSettings"];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    CredentialSetIn: {
-      /** @description Reference key the secret is stored under. */
-      ref: string;
-      /** @description The secret value. Persisted Fernet-encrypted; audit rows carry the ref only. */
-      value: string;
-    };
-    CredentialGetOut: {
-      /** @description The stored secret value (decrypted in memory, never logged). */
-      value: string;
-    };
-    CredentialExistsOut: {
-      /** @description Whether a secret is stored under the ref. */
-      present: boolean;
-    };
-    CredentialSettingsOut: {
-      /**
-       * @description file = master.key beside the DB (default); keychain = OS keychain entry.
-       * @enum {string}
-       */
-      master_key_storage: "file" | "keychain";
-    };
-    CredentialSettingsIn: {
-      /** @enum {string} */
-      master_key_storage: "file" | "keychain";
-    };
-    CapabilityKeyBody: {
-      /**
-       * @description The tool name, resource URI, or prompt name. Sent in the body so
-       *     keys containing '/' (e.g. resource URIs) are routed correctly.
-       */
-      capability_key: string;
-    };
-    ErrorResponse: {
-      error: {
-        /** @example RESOURCE_NOT_FOUND */
-        code: string;
-        /** @example resource not found: mcp_server:filesystem */
-        message: string;
-        details?: {
-          [key: string]: unknown;
+    schemas: {
+        CredentialSetIn: {
+            /** @description Reference key the secret is stored under. */
+            ref: string;
+            /** @description The secret value. Persisted Fernet-encrypted; audit rows carry the ref only. */
+            value: string;
         };
-      };
+        CredentialGetOut: {
+            /** @description The stored secret value (decrypted in memory, never logged). */
+            value: string;
+        };
+        CredentialExistsOut: {
+            /** @description Whether a secret is stored under the ref. */
+            present: boolean;
+        };
+        CredentialSettingsOut: {
+            /**
+             * @description file = master.key beside the DB (default); keychain = OS keychain entry.
+             * @enum {string}
+             */
+            master_key_storage: "file" | "keychain";
+        };
+        CredentialSettingsIn: {
+            /** @enum {string} */
+            master_key_storage: "file" | "keychain";
+        };
+        CapabilityKeyBody: {
+            /**
+             * @description The tool name, resource URI, or prompt name. Sent in the body so
+             *     keys containing '/' (e.g. resource URIs) are routed correctly.
+             */
+            capability_key: string;
+        };
+        ErrorResponse: {
+            error: {
+                /** @example RESOURCE_NOT_FOUND */
+                code: string;
+                /** @example resource not found: mcp_server:filesystem */
+                message: string;
+                details?: {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        /**
+         * @description <kind>:<name>
+         * @example mcp_server:filesystem
+         */
+        ResourceRef: string;
+        ResourceOut: {
+            ref: components["schemas"]["ResourceRef"];
+            kind: string;
+            name: string;
+            description?: string | null;
+            config: {
+                [key: string]: unknown;
+            };
+            enabled: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ResourceListOut: {
+            resources: components["schemas"]["ResourceOut"][];
+        };
+        ResourceCreate: {
+            kind: string;
+            name: string;
+            description?: string | null;
+            config: {
+                [key: string]: unknown;
+            };
+        };
+        ResourceUpdate: {
+            description?: string | null;
+            config?: {
+                [key: string]: unknown;
+            };
+        };
+        StdioTransport: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "StdioTransport";
+            command: string;
+            /** @default [] */
+            args: string[];
+            /** @default {} */
+            env: {
+                [key: string]: string;
+            };
+            /** @default {} */
+            credential_refs: {
+                [key: string]: string;
+            };
+            cwd?: string | null;
+        };
+        HttpTransport: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "HttpTransport";
+            /** Format: uri */
+            url: string;
+            /** @default {} */
+            headers: {
+                [key: string]: string;
+            };
+            /** @default {} */
+            credential_refs: {
+                [key: string]: string;
+            };
+        };
+        MCPServerConfig: {
+            transport: components["schemas"]["StdioTransport"] | components["schemas"]["HttpTransport"];
+            /** @default true */
+            auto_enable_new_capabilities: boolean;
+            /** @default 30 */
+            spawn_timeout_seconds: number;
+            /** @default 120 */
+            request_timeout_seconds: number;
+            /** @default 600 */
+            idle_timeout_seconds: number;
+        };
+        MCPToolView: {
+            /** @example filesystem__read_file */
+            prefixed_name: string;
+            /** @example read_file */
+            original_name: string;
+            description?: string | null;
+            input_schema?: {
+                [key: string]: unknown;
+            };
+            enabled: boolean;
+        };
+        MCPResourceView: {
+            prefixed_uri: string;
+            original_uri: string;
+            name?: string | null;
+            description?: string | null;
+            mime_type?: string | null;
+            enabled: boolean;
+        };
+        MCPPromptView: {
+            prefixed_name: string;
+            original_name: string;
+            description?: string | null;
+            arguments?: {
+                name?: string;
+                description?: string | null;
+                required?: boolean;
+            }[];
+            enabled: boolean;
+        };
+        CapabilityListOut: {
+            server_name: string;
+            tools: components["schemas"]["MCPToolView"][];
+            resources: components["schemas"]["MCPResourceView"][];
+            prompts: components["schemas"]["MCPPromptView"][];
+            /** Format: date-time */
+            fetched_at: string;
+            from_cache?: boolean;
+        };
+        McpTestResultOut: {
+            ok: boolean;
+            latency_ms: number;
+            protocol_version?: string | null;
+            server_capabilities?: {
+                [key: string]: unknown;
+            } | null;
+            error_message?: string | null;
+        };
+        InvocationOut: {
+            /** Format: date-time */
+            timestamp: string;
+            /** @enum {string} */
+            capability_type: "tool" | "resource" | "prompt";
+            capability_key: string;
+            duration_ms: number;
+            /** @enum {string} */
+            status: "ok" | "error" | "timeout" | "denied";
+            error_message?: string | null;
+            session_id?: string | null;
+        };
+        InvocationListOut: {
+            invocations: components["schemas"]["InvocationOut"][];
+        };
+        McpServerStatusOut: {
+            /** @enum {string} */
+            status: "healthy" | "failing" | "unknown";
+        };
+        AuditEntryOut: {
+            id: number;
+            /** Format: date-time */
+            timestamp: string;
+            event_type: string;
+            resource_kind?: string | null;
+            resource_name?: string | null;
+            /** @enum {string} */
+            actor: "cli" | "api" | "ui" | "system";
+            details?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        AuditListOut: {
+            entries: components["schemas"]["AuditEntryOut"][];
+        };
+        RetentionPolicyOut: {
+            table_name: string;
+            display_name: string;
+            description: string;
+            default_retention_days: number | null;
+            /** @description Null means keep forever; positive integer is the day count. */
+            retention_days: number | null;
+            /** Format: date-time */
+            last_pruned_at?: string | null;
+            last_pruned_rows: number;
+        };
+        RetentionPolicyListOut: {
+            policies: components["schemas"]["RetentionPolicyOut"][];
+        };
+        RetentionPolicyUpdate: {
+            /** @description Set to null to keep forever; 1..3650 days otherwise. */
+            retention_days?: number | null;
+        };
+        PruneResultOut: {
+            /**
+             * @example {
+             *       "audit_log": 0,
+             *       "mcp_invocations": 1247
+             *     }
+             */
+            tables: {
+                [key: string]: number;
+            };
+        };
+        DaemonStatusOut: {
+            /** @enum {string} */
+            status: "starting" | "ready" | "draining";
+            version: string;
+            /** Format: date-time */
+            started_at: string;
+            port: number;
+            upstream_summary?: {
+                registered?: number;
+                enabled?: number;
+                healthy?: number;
+                unhealthy?: number;
+            };
+            /** @description Whether sqlite-vec's vec0 extension loaded in this daemon process. False in a frozen build that lost the native lib (vector retrieval degrades to keyword-only); asserted by the bundle smoke test. */
+            vec_available?: boolean;
+        };
+        BackupResultOut: {
+            path: string;
+            size_bytes: number;
+        };
+        TokenRotationOut: {
+            /** @description New token; clients must re-read daemon.json */
+            token: string;
+        };
     };
-    /**
-     * @description <kind>:<name>
-     * @example mcp_server:filesystem
-     */
-    ResourceRef: string;
-    ResourceOut: {
-      ref: components["schemas"]["ResourceRef"];
-      kind: string;
-      name: string;
-      description?: string | null;
-      config: {
-        [key: string]: unknown;
-      };
-      enabled: boolean;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: date-time */
-      updated_at: string;
+    responses: {
+        /** @description Malformed request */
+        BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Missing or invalid token */
+        Unauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Resource not found */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Duplicate resource */
+        Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Validation error */
+        UnprocessableEntity: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Upstream MCP server unreachable */
+        UpstreamUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
     };
-    ResourceListOut: {
-      resources: components["schemas"]["ResourceOut"][];
-    };
-    ResourceCreate: {
-      kind: string;
-      name: string;
-      description?: string | null;
-      config: {
-        [key: string]: unknown;
-      };
-    };
-    ResourceUpdate: {
-      description?: string | null;
-      config?: {
-        [key: string]: unknown;
-      };
-    };
-    StdioTransport: {
-      /**
-       * @description discriminator enum property added by openapi-typescript
-       * @enum {string}
-       */
-      type: "StdioTransport";
-      command: string;
-      /** @default [] */
-      args: string[];
-      /** @default {} */
-      env: {
-        [key: string]: string;
-      };
-      /** @default {} */
-      credential_refs: {
-        [key: string]: string;
-      };
-      cwd?: string | null;
-    };
-    HttpTransport: {
-      /**
-       * @description discriminator enum property added by openapi-typescript
-       * @enum {string}
-       */
-      type: "HttpTransport";
-      /** Format: uri */
-      url: string;
-      /** @default {} */
-      headers: {
-        [key: string]: string;
-      };
-      /** @default {} */
-      credential_refs: {
-        [key: string]: string;
-      };
-    };
-    MCPServerConfig: {
-      transport: components["schemas"]["StdioTransport"] | components["schemas"]["HttpTransport"];
-      /** @default true */
-      auto_enable_new_capabilities: boolean;
-      /** @default 30 */
-      spawn_timeout_seconds: number;
-      /** @default 120 */
-      request_timeout_seconds: number;
-      /** @default 600 */
-      idle_timeout_seconds: number;
-    };
-    MCPToolView: {
-      /** @example filesystem__read_file */
-      prefixed_name: string;
-      /** @example read_file */
-      original_name: string;
-      description?: string | null;
-      input_schema?: {
-        [key: string]: unknown;
-      };
-      enabled: boolean;
-    };
-    MCPResourceView: {
-      prefixed_uri: string;
-      original_uri: string;
-      name?: string | null;
-      description?: string | null;
-      mime_type?: string | null;
-      enabled: boolean;
-    };
-    MCPPromptView: {
-      prefixed_name: string;
-      original_name: string;
-      description?: string | null;
-      arguments?: {
-        name?: string;
-        description?: string | null;
-        required?: boolean;
-      }[];
-      enabled: boolean;
-    };
-    CapabilityListOut: {
-      server_name: string;
-      tools: components["schemas"]["MCPToolView"][];
-      resources: components["schemas"]["MCPResourceView"][];
-      prompts: components["schemas"]["MCPPromptView"][];
-      /** Format: date-time */
-      fetched_at: string;
-      from_cache?: boolean;
-    };
-    McpTestResultOut: {
-      ok: boolean;
-      latency_ms: number;
-      protocol_version?: string | null;
-      server_capabilities?: {
-        [key: string]: unknown;
-      } | null;
-      error_message?: string | null;
-    };
-    InvocationOut: {
-      /** Format: date-time */
-      timestamp: string;
-      /** @enum {string} */
-      capability_type: "tool" | "resource" | "prompt";
-      capability_key: string;
-      duration_ms: number;
-      /** @enum {string} */
-      status: "ok" | "error" | "timeout" | "denied";
-      error_message?: string | null;
-      session_id?: string | null;
-    };
-    InvocationListOut: {
-      invocations: components["schemas"]["InvocationOut"][];
-    };
-    McpServerStatusOut: {
-      /** @enum {string} */
-      status: "healthy" | "failing" | "unknown";
-    };
-    AuditEntryOut: {
-      id: number;
-      /** Format: date-time */
-      timestamp: string;
-      event_type: string;
-      resource_kind?: string | null;
-      resource_name?: string | null;
-      /** @enum {string} */
-      actor: "cli" | "api" | "ui" | "system";
-      details?: {
-        [key: string]: unknown;
-      } | null;
-    };
-    AuditListOut: {
-      entries: components["schemas"]["AuditEntryOut"][];
-    };
-    RetentionPolicyOut: {
-      table_name: string;
-      display_name: string;
-      description: string;
-      default_retention_days: number | null;
-      /** @description Null means keep forever; positive integer is the day count. */
-      retention_days: number | null;
-      /** Format: date-time */
-      last_pruned_at?: string | null;
-      last_pruned_rows: number;
-    };
-    RetentionPolicyListOut: {
-      policies: components["schemas"]["RetentionPolicyOut"][];
-    };
-    RetentionPolicyUpdate: {
-      /** @description Set to null to keep forever; 1..3650 days otherwise. */
-      retention_days?: number | null;
-    };
-    PruneResultOut: {
-      /**
-       * @example {
-       *       "audit_log": 0,
-       *       "mcp_invocations": 1247
-       *     }
-       */
-      tables: {
-        [key: string]: number;
-      };
-    };
-    DaemonStatusOut: {
-      /** @enum {string} */
-      status: "starting" | "ready" | "draining";
-      version: string;
-      /** Format: date-time */
-      started_at: string;
-      port: number;
-      upstream_summary?: {
-        registered?: number;
-        enabled?: number;
-        healthy?: number;
-        unhealthy?: number;
-      };
-      /** @description Whether sqlite-vec's vec0 extension loaded in this daemon process. False in a frozen build that lost the native lib (vector retrieval degrades to keyword-only); asserted by the bundle smoke test. */
-      vec_available?: boolean;
-    };
-    BackupResultOut: {
-      path: string;
-      size_bytes: number;
-    };
-    TokenRotationOut: {
-      /** @description New token; clients must re-read daemon.json */
-      token: string;
-    };
-  };
-  responses: {
-    /** @description Malformed request */
-    BadRequest: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-    /** @description Missing or invalid token */
-    Unauthorized: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-    /** @description Resource not found */
-    NotFound: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-    /** @description Duplicate resource */
-    Conflict: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-    /** @description Validation error */
-    UnprocessableEntity: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-    /** @description Upstream MCP server unreachable */
-    UpstreamUnavailable: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["ErrorResponse"];
-      };
-    };
-  };
-  parameters: never;
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  listResources: {
-    parameters: {
-      query?: {
-        kind?: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    listResources: {
+        parameters: {
+            query?: {
+                kind?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["ResourceListOut"];
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  registerResource: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ResourceCreate"];
-      };
-    };
-    responses: {
-      /** @description Created */
-      201: {
-        headers: {
-          [name: string]: unknown;
+    registerResource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["ResourceOut"];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResourceCreate"];
+            };
         };
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      409: components["responses"]["Conflict"];
-      422: components["responses"]["UnprocessableEntity"];
-    };
-  };
-  getResource: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        kind: string;
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceOut"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
         };
-        content: {
-          "application/json": components["schemas"]["ResourceOut"];
+    };
+    getResource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  deleteResource: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        kind: string;
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description No Content */
-      204: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
     };
-  };
-  updateResource: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        kind: string;
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ResourceUpdate"];
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    deleteResource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["ResourceOut"];
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-      422: components["responses"]["UnprocessableEntity"];
     };
-  };
-  enableResource: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        kind: string;
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    updateResource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["ResourceOut"];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResourceUpdate"];
+            };
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  disableResource: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        kind: string;
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceOut"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
-        content: {
-          "application/json": components["schemas"]["ResourceOut"];
+    };
+    enableResource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  listMcpCapabilities: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
-        content: {
-          "application/json": components["schemas"]["CapabilityListOut"];
+    };
+    disableResource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-      503: components["responses"]["UpstreamUnavailable"];
-    };
-  };
-  enableMcpCapability: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-        capability_type: "tool" | "resource" | "prompt";
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CapabilityKeyBody"];
-      };
-    };
-    responses: {
-      /** @description No Content */
-      204: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-      422: components["responses"]["UnprocessableEntity"];
     };
-  };
-  disableMcpCapability: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-        capability_type: "tool" | "resource" | "prompt";
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CapabilityKeyBody"];
-      };
-    };
-    responses: {
-      /** @description No Content */
-      204: {
-        headers: {
-          [name: string]: unknown;
+    listMcpCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
         };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-      422: components["responses"]["UnprocessableEntity"];
-    };
-  };
-  refreshMcpCapabilities: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["UpstreamUnavailable"];
         };
-        content: {
-          "application/json": components["schemas"]["CapabilityListOut"];
+    };
+    enableMcpCapability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                capability_type: "tool" | "resource" | "prompt";
+            };
+            cookie?: never;
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-      503: components["responses"]["UpstreamUnavailable"];
-    };
-  };
-  testMcpServer: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CapabilityKeyBody"];
+            };
         };
-        content: {
-          "application/json": components["schemas"]["McpTestResultOut"];
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
     };
-  };
-  listMcpInvocations: {
-    parameters: {
-      query?: {
-        since?: string;
-        limit?: number;
-        status?: "ok" | "error" | "timeout" | "denied";
-      };
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    disableMcpCapability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                capability_type: "tool" | "resource" | "prompt";
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["InvocationListOut"];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CapabilityKeyBody"];
+            };
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  getMcpServerStatus: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        name: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
-        content: {
-          "application/json": components["schemas"]["McpServerStatusOut"];
+    };
+    refreshMcpCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  listAuditEntries: {
-    parameters: {
-      query?: {
-        kind?: string;
-        name?: string;
-        event_type?: string;
-        since?: string;
-        limit?: number;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["UpstreamUnavailable"];
         };
-        content: {
-          "application/json": components["schemas"]["AuditListOut"];
+    };
+    testMcpServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
         };
-      };
-      401: components["responses"]["Unauthorized"];
-    };
-  };
-  listRetentionPolicies: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpTestResultOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
-        content: {
-          "application/json": components["schemas"]["RetentionPolicyListOut"];
+    };
+    listMcpInvocations: {
+        parameters: {
+            query?: {
+                since?: string;
+                limit?: number;
+                status?: "ok" | "error" | "timeout" | "denied";
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
         };
-      };
-      401: components["responses"]["Unauthorized"];
-    };
-  };
-  updateRetentionPolicy: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        table_name: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["RetentionPolicyUpdate"];
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvocationListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
-        content: {
-          "application/json": components["schemas"]["RetentionPolicyOut"];
+    };
+    getMcpServerStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
         };
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  pruneRetention: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: {
-      content: {
-        "application/json": {
-          /** @description When omitted, prunes every registered table. */
-          table_name?: string;
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerStatusOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
-      };
     };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    listAuditEntries: {
+        parameters: {
+            query?: {
+                kind?: string;
+                name?: string;
+                event_type?: string;
+                since?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["PruneResultOut"];
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  getDaemonStatus: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    listRetentionPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["DaemonStatusOut"];
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionPolicyListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
     };
-  };
-  backupDaemon: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: {
-      content: {
-        "application/json": {
-          /** @description Optional output path; default `~/.coffer/backups/coffer.db.YYYYMMDDTHHMMSS.bak` */
-          path?: string;
+    updateRetentionPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_name: string;
+            };
+            cookie?: never;
         };
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetentionPolicyUpdate"];
+            };
         };
-        content: {
-          "application/json": components["schemas"]["BackupResultOut"];
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionPolicyOut"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  shutdownDaemon: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description No Content */
-      204: {
-        headers: {
-          [name: string]: unknown;
+    pruneRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-    };
-  };
-  rotateDaemonToken: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description When omitted, prunes every registered table. */
+                    table_name?: string;
+                };
+            };
         };
-        content: {
-          "application/json": components["schemas"]["TokenRotationOut"];
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PruneResultOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  setCredential: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CredentialSetIn"];
-      };
-    };
-    responses: {
-      /** @description Secret stored. Ciphertext persisted in the local DB; audit row carries the ref only. */
-      204: {
-        headers: {
-          [name: string]: unknown;
+    getDaemonStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
-    };
-  };
-  getCredential: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        ref: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The stored secret value (decrypted in memory, never logged). */
-      200: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonStatusOut"];
+                };
+            };
         };
-        content: {
-          "application/json": components["schemas"]["CredentialGetOut"];
+    };
+    vaultBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-      };
-      401: components["responses"]["Unauthorized"];
-      404: components["responses"]["NotFound"];
-    };
-  };
-  deleteCredential: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        ref: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Secret removed (or already absent). */
-      204: {
-        headers: {
-          [name: string]: unknown;
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupResultOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  credentialExists: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        ref: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Presence flag. */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    shutdownDaemon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["CredentialExistsOut"];
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  getCredentialSettings: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    rotateDaemonToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["CredentialSettingsOut"];
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenRotationOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
-      };
-      401: components["responses"]["Unauthorized"];
     };
-  };
-  putCredentialSettings: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CredentialSettingsIn"];
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    setCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["CredentialSettingsOut"];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialSetIn"];
+            };
         };
-      };
-      400: components["responses"]["BadRequest"];
-      401: components["responses"]["Unauthorized"];
+        responses: {
+            /** @description Secret stored. Ciphertext persisted in the local DB; audit row carries the ref only. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
     };
-  };
+    getCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stored secret value (decrypted in memory, never logged). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialGetOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Secret removed (or already absent). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    credentialExists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Presence flag. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialExistsOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getCredentialSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialSettingsOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    putCredentialSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialSettingsIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialSettingsOut"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
 }

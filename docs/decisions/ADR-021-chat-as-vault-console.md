@@ -2,7 +2,7 @@
 
 > 中文版: [ADR-021-chat-as-vault-console.zh.md](./ADR-021-chat-as-vault-console.zh.md)
 
-- **Status:** Accepted — superseded by [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md) (2026-06-14, the `builtin`-persona job) and [ADR-025](./ADR-025-remove-tool-approval.md) (2026-06-18, the approval-seat job)
+- **Status:** Accepted — superseded by [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md) (2026-06-14, the `builtin`-persona job) and [ADR-025](./ADR-025-remove-tool-approval.md) (2026-06-18, the approval-seat job); **narrowed** by [ADR-031](./ADR-031-chat-single-owner-live-mirror.md) (2026-06-20 — observe → observe + interrupt + inject; the `origin`/`peer_display_name` fields are collapsed to an optional `channel_binding`)
 - **Spec:** [008-agent-chat](../../specs/008-agent-chat/spec.md) (repositioning — no new spec number; Spec 008 `spec.md` is updated before implementation)
 - **Related:** [009-channels](../../specs/009-channels/spec.md) ([ADR-014](./ADR-014-channel-adapter-framework.md), shared turn seams), [007-memory](../../specs/007-memory/spec.md) (the vault the console talks to)
 

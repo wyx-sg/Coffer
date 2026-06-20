@@ -65,6 +65,7 @@ from coffer.surfaces.http.app_mcp_composition import (
     wire_mcp_kind,
 )
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.backup_wiring import start_backup_worker, stop_backup_worker
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
@@ -293,6 +294,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retention_worker = worker
     app.state.retention_worker_task = worker_task
 
+    # Optional periodic auto-backup worker (opt-in via env; default OFF).
+    start_backup_worker(app)
+
     # Multi-machine sync (spec 010); worker is inert until the user enables it.
     start_sync(app, resource_svc, audit, sm, db_path, get_master_key_manager())
 
@@ -321,6 +325,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(Exception):
             await audit.record(AuditEventType.DAEMON_STOPPED.value, actor="system")
         worker.stop()
+        # Best-effort shutdown of the optional backup worker.
+        await stop_backup_worker(app)
         await stop_sync(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an

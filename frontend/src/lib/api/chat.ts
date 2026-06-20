@@ -39,11 +39,10 @@ export interface MessageListOut {
   messages: Message[];
 }
 
-/** The IM peer behind a channel-originated conversation (ADR-021). */
-export interface ConversationPeer {
-  chat_id: string;
-  display_name: string;
+/** The IM channel binding behind a channel-originated conversation (ADR-021). */
+export interface ChannelBinding {
   channel: string;
+  chat_id: string;
 }
 
 export interface Conversation {
@@ -55,10 +54,8 @@ export interface Conversation {
   updated_at: string;
   /** Null for an active conversation; an ISO timestamp once archived. */
   archived_at?: string | null;
-  /** Where the conversation started: the web console or an IM channel. */
-  origin?: "web" | "channel";
-  /** The paired IM peer; non-null only when origin === "channel". */
-  peer?: ConversationPeer | null;
+  /** The IM channel this conversation is bound to; null for a web conversation. */
+  channel_binding?: ChannelBinding | null;
 }
 
 export interface ConversationListOut {
@@ -97,7 +94,7 @@ export interface AgentListOut {
 // ---------------------------------------------------------------------------
 
 async function call<T>(
-  method: "GET" | "POST" | "PATCH" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -145,18 +142,27 @@ export const chatApi = {
   unarchiveConversation: (id: string) =>
     call<Conversation>("POST", `/chat/conversations/${id}/unarchive`),
 
-  getConversation: (id: string) =>
-    call<Conversation>("GET", `/chat/conversations/${id}`),
+  getConversation: (id: string) => call<Conversation>("GET", `/chat/conversations/${id}`),
 
   updateConversation: (id: string, body: ConversationPatch) =>
     call<Conversation>("PATCH", `/chat/conversations/${id}`, body),
 
-  deleteConversation: (id: string) =>
-    call<void>("DELETE", `/chat/conversations/${id}`),
+  deleteConversation: (id: string) => call<void>("DELETE", `/chat/conversations/${id}`),
 
   // Messages
   listMessages: (conversationId: string) =>
     call<MessageListOut>("GET", `/chat/conversations/${conversationId}/messages`),
+
+  // Enqueue a user message. Fire-and-return (202): the turn runs server-side and
+  // its events arrive over the GET /events subscription, not this response.
+  sendMessage: (conversationId: string, text: string) =>
+    call<{ queued: boolean }>("POST", `/chat/conversations/${conversationId}/messages`, { text }),
+
+  // Replace the pending-message queue (resume / drop / reorder).
+  setPending: (conversationId: string, pending: string[]) =>
+    call<{ pending: string[] }>("PUT", `/chat/conversations/${conversationId}/pending`, {
+      pending,
+    }),
 
   // Turn control
   interruptTurn: (conversationId: string) =>

@@ -2,7 +2,7 @@
 
 > English: [ADR-021-chat-as-vault-console.md](./ADR-021-chat-as-vault-console.md)
 
-- **状态：** 已接受 —— 被 [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md) 取代（2026-06-14，`builtin` 人格职责）与 [ADR-025](./ADR-025-remove-tool-approval.md) 取代（2026-06-18，审批席位职责）
+- **状态：** 已接受 —— 被 [ADR-024](./ADR-024-builtin-agent-is-internal-capability.md) 取代（2026-06-14，`builtin` 人格职责）与 [ADR-025](./ADR-025-remove-tool-approval.md) 取代（2026-06-18，审批席位职责）；被 [ADR-031](./ADR-031-chat-single-owner-live-mirror.md) **收窄**（2026-06-20 —— 观测 → 观测 + 中断 + 注入；`origin`/`peer_display_name` 字段折叠为一个可选的 `channel_binding`）
 - **Spec:** [008-agent-chat](../../specs/008-agent-chat/spec.md)（重定位 —— 不分配新 spec 编号；实现前先更新 Spec 008 `spec.md`）
 - **关联：** [009-channels](../../specs/009-channels/spec.md)（[ADR-014](./ADR-014-channel-adapter-framework.md)，共享 turn seam）、[007-memory](../../specs/007-memory/spec.md)（控制台对话的金库）
 

@@ -47,7 +47,7 @@ Coffer 的方案刻意保持精简：一对本地数据库表，而非时序数�
 | `daemon_started` / `daemon_stopped` | daemon 启动 / 优雅关闭时                |
 | `token_rotated`                     | `POST /api/v1/daemon/rotate-token` 之后 |
 | `retention_updated`                 | 保留策略发生变更时                      |
-| `backup_created`                    | `POST /api/v1/daemon/backup` 之后       |
+| `backup_created`                    | `POST /api/v1/vault/backup` 之后        |
 
 **凭据与主密钥：**
 

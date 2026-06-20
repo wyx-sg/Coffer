@@ -160,24 +160,6 @@ def status(
     typer.echo(f"pid:     {info.pid}")
 
 
-@app.command("backup")
-def backup(
-    ctx: typer.Context,
-    to: str | None = typer.Option(None, "--to", help="Destination path for the backup file"),
-) -> None:
-    """Back up the Coffer database."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    payload: dict[str, object] = {}
-    if to is not None:
-        payload["path"] = to
-    with c:
-        r = c.post("/daemon/backup", json=payload)
-        _cli_client.check(r, verbose=verbose)
-    data = r.json()
-    typer.echo(f"backup:  {data['path']} ({data['size_bytes']} bytes)")
-
-
 @app.command("rotate-token")
 def rotate_token(ctx: typer.Context) -> None:
     """Rotate the daemon API token and update daemon.json."""

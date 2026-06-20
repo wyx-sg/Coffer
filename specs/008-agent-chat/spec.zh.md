@@ -68,6 +68,31 @@ model 选择器、它在聊天里的金库工具调用、对它的 `coffer chat`
 面移除的历史已交付行为；LLM/agentic-loop 机器保留但被重塑到 `coffer__ask` 之后，而非
 作为聊天人格呈现给用户。
 
+## 再次定位 —— 单属主实时镜像（[ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.zh.md)）
+
+[ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.zh.md) 把本界面
+锁定到一个不可替代的职责，并把 ADR-021 职责 2 从*观测***收窄**为*观测 + 中断 +
+注入*。因为 Coffer 的 channel 是 **owner-paired（属主配对）** 的，"IM peer"就是手机
+上的**同一个属主** —— 所以聊天是**属主同样从 IM 驱动的那些会话的桌面界面**：一个
+属主、一条会话时间线、两块屏幕、一个底层 agent session。在桌面上属主可以实时**观测**
+任何会话（包括从手机发起的回合，逐 token）、**中断**一个正在运行的回合，并通过自由
+输入来**注入/继续** —— 消息**排队**，永不阻塞。没有多人模型。
+
+由此衍生三个结构性动作，refine 下文需求：
+
+1. **一条实时会话总线。** 回合事件被发布到一个每会话的 broadcaster（带一个用于回放
+   的环形缓冲区），任何界面通过 `GET /conversations/{id}/events` 订阅它；
+   `POST .../messages` 变为 fire-and-return（发后即返）。这是唯一的新能力 —— 三者
+   中真正缺失的只有观测（FR-018 → FR-019b）。
+2. **自由发送；一个 FIFO 待处理队列。** composer 永不锁定；一条超发的消息入队并按
+   序处理（修订 FR-018）。
+3. **折叠 origin。** 网页/channel 二分坍缩为一个会话模型；`channel_name`/
+   `peer_chat_id` 作为一个可选的 `channel_binding`（回邮地址）存续；`origin`/
+   `peer_display_name` 被去掉（修订 FR-034）。
+
+下文用户故事、验收场景与 FR 中仍描述回合期间 composer 锁定，或描述一个 `origin`/
+`peer` 字段的部分，应读作被此处的 ADR-031 措辞与下文修订后的 FR 取代。
+
 ## 用户场景与测试
 
 ### 用户故事 1 —— 在首次聊天前配置一个模型 provider（优先级：P1）
@@ -132,7 +157,8 @@ model id。一旦存在一个模型，内置 agent 就可被选择且聊天被�
 
 - 发送一条消息并收到一个流式助手回复
 - 该回复被持久化并在页面 reload 与守护进程重启后保留
-- composer 在一个回合流式输出时被禁用、在它结束时重新启用
+- composer 在一个回合流式输出时保持可用；一条在回合期间发送的消息入队而非被拒绝
+  （[ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.zh.md)，取代原先的 composer 锁定）
 - 一个 LLM/provider 错误在对话中浮现而不致页面崩溃
 
 ---
@@ -255,8 +281,9 @@ agent 使用哪一个。
 - **对话长于模型上下文窗口**：内置 agent 发送适配进一个上下文预算（由一个字符
   预算近似，约 4 字符/token）的最近历史；较旧的回合带一个标记从模型输入中省略，
   而完整对话仍被存储。
-- **在一个回合流式输出时发送第二条消息**：被拒绝；composer 在进行中回合期间被
-  禁用。
+- **在一个回合流式输出时发送第二条消息**：被接受并在待处理队列上入队（composer 永不
+  锁定）；它在当前回合结束后作为它自己的回合运行（FR-018/FR-018a）。中断则改为暂停
+  队列（FR-018b）。
 - **流式客户端在回合中断连**（页面关闭、导航离开）：回合在服务器端完成且助手
   消息被持久化；下次加载显示已完成的消息。
 - **回合被用户中断**：回合立即停止且部分助手消息被持久化（用户故事 7）。
@@ -311,8 +338,29 @@ agent 使用哪一个。
 ### 场景：发送一条消息并收到一个流式回复
 
 - **Given** 一个对话与至少一个配置好的模型，
-- **When** 用户发送一条消息，
-- **Then** 助手回复增量地流式输出、完成，并作为该对话上的一条消息被持久化。
+- **When** 用户发送一条消息并订阅该对话的事件流，
+- **Then** 助手回复在该订阅上增量地流式输出、完成，并作为该对话上的一条消息被持久化。
+
+### 场景：观测一个从另一界面发起的回合
+
+- **Given** 一个已有一个回合在飞的对话（例如从 IM channel 发起），
+- **When** 一个客户端订阅 `GET /conversations/{id}/events`，
+- **Then** 该在飞回合迄今的事件被回放、然后实时流式直到完成，而该客户端并未发起
+  该回合。
+
+### 场景：一条排队消息在当前回合之后运行
+
+- **Given** 一个回合在飞，
+- **When** 用户发送第二条消息，
+- **Then** 它被接受（而非拒绝）、作为一个待处理项保留，并在该在飞回合结束后作为它
+  自己的回合运行。
+
+### 场景：中断一个回合暂停待处理队列
+
+- **Given** 一个回合在飞，且有一条或多条待处理消息已排队，
+- **When** 用户中断该回合，
+- **Then** 当前回合停止并保留其部分输出，待处理消息被保留（不自动运行），直到属主
+  恢复或丢弃它们。
 
 ### 场景：回复在重启后保留
 
@@ -347,11 +395,12 @@ agent 使用哪一个。
 - **Then** 它离开默认（活跃）列表，出现在已归档列表中，且不被销毁；恢复它把它
   返回到活跃列表。归档一个不存在的对话被拒绝。
 
-### 场景：在一个流式回合期间 composer 被锁定
+### 场景：在一个流式回合期间第二条消息入队
 
 - **Given** 一个回合正在流式输出，
-- **When** 用户尝试在同一对话中发送另一条消息，
-- **Then** 该发送在回合结束前被拒绝。
+- **When** 用户在同一对话中发送另一条消息，
+- **Then** 该消息被接受并入队（composer 不锁定），并在当前回合结束后作为它自己的
+  回合运行。
 
 ### 场景：模型选择被记录
 
@@ -385,10 +434,10 @@ agent 使用哪一个。
 
 ### 场景：channel 驱动的会话可从控制台观测
 
-- **Given** 一个 IM peer 驱动的会话，
-- **When** 用户打开 Vault Console，
-- **Then** 该会话带着 channel 来源与 peer 身份标记出现，且它的回合流式输出与网页
-  composer 相同的回合事件。
+- **Given** 一个带有 channel binding 的会话（属主正从一个 IM channel 驱动它），
+- **When** 用户打开 Chat，
+- **Then** 该会话带着它的 channel binding 标记出现，且它的回合在订阅上流式输出与一个
+  网页发起的回合相同的回合事件。
 
 ## 需求
 
@@ -476,10 +525,35 @@ agent 使用哪一个。
 
 **回合生命周期：流式、中断**
 
-- **FR-018**：System MUST 每个对话只允许一个进行中回合并在当前回合结束前拒绝
-  第二条消息。
-- **FR-019**：System MUST 把一个回合作为一个类型化事件序列流式给客户端，至少覆盖
-  文本增量、工具调用、工具结果、回合完成与回合错误。
+- **FR-018**：System MUST 每个对话最多处理一个进行中回合，但 MUST NOT 拒绝一条在
+  某个回合运行时发送的消息（修订原先的拒绝并锁定规则，[ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.zh.md)）。
+  一条在某个回合期间发送的消息被**入队**到一个每对话的**待处理队列**；composer
+  永不锁定。
+- **FR-018a**：当进行中回合结束时，System MUST 把待处理队列的队首出队、把它提交为
+  对话的下一条用户消息，并运行它的回合 —— 顺序 FIFO，每条排队消息一个回合（不
+  合并）。一条待处理消息在它的回合开始前**不**被提交到消息序列；它以一个可移除的
+  待处理项呈现，属主可以在它运行前丢弃它。待处理队列在内存中；它在该会话上任何回合结束
+  后自动推进（包括一个 IM 驱动的回合），所以一条排在手机发起回合之后的桌面消息，会在那个
+  回合完成时仍然运行。（一条在回合在飞时从某个 IM channel 到达的消息，由 channel 自己的
+  入站缓冲——Spec 009——持有，而非这个队列；v1 不把两者合并为一个物理 FIFO。）一次守护
+  进程重启会丢弃尚未提交的待处理消息。
+- **FR-018b**：中断一个回合（FR-021）MUST 也**暂停**待处理队列：当前回合停止并保留
+  其部分输出，排队的消息被保留（不自动运行），直到属主恢复或丢弃它们。
+- **FR-019**：System MUST 把一个回合表达为一个类型化事件序列，至少覆盖回合开始、
+  文本增量、工具调用、工具结果、回合完成、回合错误，与**待处理队列变更**
+  （`queue_changed`，携带有序的待处理项，让每个订阅者渲染相同的待处理状态）。
+- **FR-019a**：System MUST 在 `GET /conversations/{id}/events`（SSE）暴露一个每对话
+  的**实时事件订阅**，任意数量的客户端都可挂接它。挂接时，若一个回合在飞，它 MUST
+  回放当前回合的事件（让一个迟到的订阅者 —— 例如回合中途打开的桌面，或观看一个手机
+  发起的回合 —— 赶上进度），然后实时流式；当没有回合在飞时，它 MUST 保持连接打开，
+  并在下一个回合无论从哪个界面启动时投递它的事件。
+- **FR-019b**：`POST /conversations/{id}/messages` MUST 发起（或入队）一个回合并
+  立即返回（fire-and-return）；它 MUST NOT 是事件流。所有回合事件消费都流经 FR-019a
+  订阅（单一事件路径），因此观测一个客户端自己发起的回合与观测另一个界面发起的回合
+  走同一段代码。
+- **FR-019c**：System MUST 在 `PUT /conversations/{id}/pending` 暴露待处理队列以供
+  管理，它替换有序的待处理文本（一个原语覆盖恢复、丢弃与重排序）：该替换会取消暂停
+  队列并在没有回合在飞时启动下一个回合，并向所有订阅者广播 `queue_changed`。
 - **FR-021**：System MUST 让用户中断一个正在运行的回合：回合立即停止且部分助手
   消息（已产生的任何文本与工具块）MUST 被持久化。中断区别于对话删除，后者丢弃
   进行中回合。
@@ -502,8 +576,10 @@ agent 使用哪一个。
 
 - **FR-027**：System MUST 在桌面应用中提供一个 Chat 页面：一个可折叠的对话历史
   列表、一个带 agent picker 与一个每 agent 配置区域的新对话对话框、一个带流式
-  文本的消息线索、内联可展开工具调用卡片、一个模型选择器、一个 composer,
-  以及一个用于进行中回合的停止控制。
+  文本的消息线索（由 FR-019a 实时订阅驱动，而非轮询）、内联可展开工具调用卡片、
+  一个模型选择器、一个**永不锁定**的 composer（一条在某个回合期间发送的消息入队
+  并渲染为一个可移除的待处理项，FR-018/FR-018a），以及一个用于进行中回合的停止
+  控制。
 - **FR-028**：System MUST 把一个 "Chat" 条目作为主（最顶部）导航项加入应用侧边栏;
   现有的 002-ui-shell IA 在其余方面不变。
 - **FR-029**：System MUST 提供一个覆盖每个模型注册操作的 Settings → Models 页面。
@@ -519,16 +595,21 @@ agent 使用哪一个。
   agent 进行的工具调用记录在 gateway 的调用日志中，归属于该 agent 的 gateway
   session。
 
-**Chat 界面：来源呈现（[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md)，被 [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md) 修订）**
+**Chat 界面：channel binding（[ADR-021](../../docs/decisions/ADR-021-chat-as-vault-console.zh.md) → [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md) → [ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.zh.md)）**
 
 - **FR-033**：Chat 界面（标签为 **Chat（聊天）**，按 [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)
-  从 _Vault Console_ 改回）MUST **只**与 Coffer 受管 agent 对话，并 MUST 呈现、让用户
-  观测 channel 驱动的会话。`builtin` agent MUST NOT 作为聊天 agent 提供；其模型是
-  仅内部能力，只能通过 `coffer__*` 工具触达（ADR-024），而非聊天人格。Chat 界面 MUST
-  NOT 把自己定位为主力的浏览器内编码聊天；受管 agent 仍作为 provider 接缝验证、以及
-  channel 驱动会话的目标而保留。
-- **FR-034**：会话历史 MUST 呈现每个会话的来源（网页草稿 vs channel peer），并对
-  channel 来源的会话呈现 peer 身份。
+  从 _Vault Console_ 改回）MUST **只**与 Coffer 受管 agent 对话，并 MUST 让属主实时
+  观测、中断与继续任何会话，包括属主从一个 IM channel 驱动的那些
+  （[ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.zh.md)）。
+  `builtin` agent MUST NOT 作为聊天 agent 提供；其模型是仅内部能力，只能通过
+  `coffer__*` 工具触达（ADR-024），而非聊天人格。Chat 界面 MUST NOT 把自己定位为
+  主力的浏览器内编码聊天。
+- **FR-034**：一个会话 MAY 携带一个可选的 **channel binding**（`channel_name` +
+  `peer_chat_id`）—— 把 agent 输出转发回 IM 应用的回邮地址。会话历史 MUST 呈现一个
+  会话是否有一个 channel binding（一个会话"有一个 binding"当且仅当 `channel_name`
+  被设置）以及它是哪个 channel。原先的 `origin`（网页 vs channel）与
+  `peer_display_name` 字段被移除（[ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.zh.md)）：
+  在单属主前提下 peer 永远是属主，所以没有单独的 peer 身份要显示。
 
 ### 关键实体
 
@@ -551,8 +632,9 @@ agent 使用哪一个。
 - **Model**：一个用户配置的、内置 agent 可运行其上的 LLM。字段：id、显示名、
   provider 类型（`anthropic` | `openai` | `ollama`）、model id、凭据引用（云端）、
   base URL（Ollama / 自定义）、默认标志。
-- **Agent Event**：一个流式回合中的一个类型化事件 —— 文本增量、工具调用、工具
-  结果、回合完成，或回合错误。
+- **Agent Event**：一个流式回合中的一个类型化事件 —— 回合开始、文本增量、工具调用、
+  工具结果、回合完成、回合错误，或待处理队列变更（`queue_changed`，会话级的待处理队列
+  快照，[ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.zh.md)）。
 
 ## 成功标准
 
@@ -591,8 +673,9 @@ agent 使用哪一个。
   provider 抽象触达；这些是开源依赖，且分层架构规则被遵守 —— 那些 SDK 保持限制在
   `infrastructure/chat/`，回合编排与 agent-provider 注册表是 `application/`，且
   `domain/chat/` 两者都不 import。
-- 交互模型是顺序的：每个对话同一时间一个回合，回合运行时 composer 被锁定。一个
-  对话内的并发回合不在范围内。
+- 交互模型是顺序的：每个对话同一时间一个回合。回合运行时 composer **不**锁定 ——
+  回合期间发送的消息会被入队，并在该回合之后运行（FR-018，[ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md)）。
+  一个对话内的并发（重叠）回合不在范围内。
 - agent-provider 注册表在启动时由代码填充；v1 注册一个 provider（内置 agent）。
   注册表是接缝 —— 从用户管理的配置填充它不在本规格内。
 - 以下被明确**列为不在范围**：用户创建或用户编辑的 agent；一个管理 agent 注册表的

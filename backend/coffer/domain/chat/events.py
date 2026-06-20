@@ -9,6 +9,11 @@ the SSE event name on the wire:
   ToolResult       → ``tool_result``
   TurnDone         → ``turn_done``
   TurnError        → ``turn_error``
+  QueueChanged     → ``queue_changed``
+
+``QueueChanged`` is a conversation-level event (the pending-message queue, ADR-031)
+rather than a turn-content event: it is broadcast by the orchestrator, never
+emitted by an adapter, and is not accumulated into the assistant message.
 """
 
 from __future__ import annotations
@@ -78,4 +83,17 @@ class TurnError:
     type: Literal["turn_error"] = "turn_error"
 
 
-AgentEvent = TurnStarted | TextDelta | ToolCall | ToolResult | TurnDone | TurnError
+@dataclass(frozen=True)
+class QueueChanged:
+    """The conversation's pending-message queue changed (ADR-031).
+
+    Carries the ordered texts still waiting to run as their own turns, so every
+    subscriber renders the same pending state. Conversation-level, not turn
+    content — never emitted by an adapter.
+    """
+
+    pending: list[str]
+    type: Literal["queue_changed"] = "queue_changed"
+
+
+AgentEvent = TurnStarted | TextDelta | ToolCall | ToolResult | TurnDone | TurnError | QueueChanged

@@ -281,12 +281,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user invokes the rotate-token operation,
 - **Then** subsequent management API calls with the previous token are rejected with 401, calls with the new token succeed, and the rotation is recorded as a `token_rotated` audit entry.
 
-### Scenario: daemon backup produces a portable SQLite copy
-
-- **Given** the daemon has running state in `~/.coffer/coffer.db`,
-- **When** the user invokes the daemon-backup operation,
-- **Then** a self-consistent SQLite copy of the index is written under `~/.coffer/backups/` while the daemon keeps running, and a `backup_created` audit entry is recorded. (This copies only `coffer.db` — the rebuildable index — not the system-of-record file trees; for a complete, restorable vault snapshot use the vault backup below.)
-
 ### Scenario: vault backup captures db + file trees, restore round-trips them
 
 - **Given** a populated vault under `~/.coffer/` — `coffer.db` plus the markdown file trees that are the system of record (`knowledge/`, `memory/`, `skills/`),

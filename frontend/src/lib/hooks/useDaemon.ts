@@ -46,13 +46,11 @@ export function useDaemonOutOfDate(version: string | undefined) {
   });
 }
 
-export function useDaemonBackup() {
+export function useVaultBackup() {
   return useMutation({
-    mutationFn: async (path?: string) => {
+    mutationFn: async () => {
       const client = getApiClient();
-      const { data, error } = await client.POST("/daemon/backup", {
-        body: path ? { path } : {},
-      });
+      const { data, error } = await client.POST("/vault/backup", {});
       if (error) throwApiError(error, "INTERNAL_ERROR", "backup failed");
       return data;
     },
