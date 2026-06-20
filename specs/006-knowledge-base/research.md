@@ -130,7 +130,17 @@ No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invo
 - **No migration / no schema change.** No new FR (a retrieval-quality change under the existing modes, like the KB4 chunker and KB2). No FTS schema change, no `upsert_chunks`/`upsert_vectors` signature change.
 - **Deferred.** A keyword-side indexed `title` FTS column was deferred — it would need an FTS-rebuild migration and has a short-CJK-title trigram gap — until keyword title-matching proves needed.
 
-## 11. Things explicitly NOT decided / out of scope here
+## 11. Embedding request batching (KB9)
+
+**Question**: Re-embedding runs serially under the per-store lock — one provider call per document — and a single `embed()` sends ALL of a document's chunks in one unbounded request. How much of this should be batched?
+
+**Decision**: Bound the **request size**, do NOT add cross-document parallelism.
+
+- **Bound request size (shipped).** `OpenAICompatibleEmbedder.embed` splits its input into sequential sub-requests of at most `_MAX_EMBED_BATCH` (128) texts and concatenates the results in input order. This prevents a many-chunk document — or a future batched caller — from sending one unbounded request that an OpenAI-compatible endpoint would reject on its inputs-per-call or token limit (a latent bug, made slightly more pressing by KB5 lengthening each embedded text with the title prefix). Per-sub-request `index` re-alignment + width validation are preserved; one sub-request failure raises `EngineUnavailable`, so the doc degrades whole and is retried via KB8's `embed_pending` (all-or-nothing per doc, unchanged). Local (fastembed) embeddings are in-process and need no bound.
+- **Cross-document parallel/batch re-embed: deliberately deferred (not built).** Collapsing the serial per-document loop into a concurrent or cross-document batched sweep was evaluated and judged over-engineering for a single-user tool: the within-call batch already exists; a full re-embed only happens on a `force` reconcile (config change) or a provider-recovery sweep — both infrequent — and `CooldownEmbedder` already de-fangs the provider-down case (no O(N×timeout) stall). The cross-doc restructure would break the per-document `embed → upsert_chunks` atomicity that KB8's per-doc `embed_pending` isolation relies on, and bounded concurrency's payoff is cloud-provider-only on a rare operation. Revisit only if a real bulk-re-embed latency complaint appears.
+- **No migration / no schema change. No new FR** (a reliability/robustness change under the existing retrieval modes).
+
+## 12. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.

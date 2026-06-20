@@ -88,6 +88,39 @@ async def test_embed_realigns_shuffled_response_by_index(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_embed_splits_large_input_into_bounded_requests(monkeypatch) -> None:
+    """Inputs over ``_MAX_EMBED_BATCH`` are split into sequential sub-requests;
+    each request stays within the cap and the results concatenate in INPUT
+    order (so a many-chunk doc never sends one unbounded provider call)."""
+    import openai
+
+    from coffer.infrastructure.knowledge.embeddings import _MAX_EMBED_BATCH
+
+    batch_sizes: list[int] = []
+
+    class _CountingOpenAI:
+        def __init__(self, **_kw: Any) -> None:
+            async def _create(*, model: str, input: list[str]) -> _FakeEmbeddingsResp:
+                batch_sizes.append(len(input))
+                # Each text is its global position as a string; encode it into
+                # the vector so output order can be checked against input order.
+                return _FakeEmbeddingsResp([(i, [float(int(t))] * 3) for i, t in enumerate(input)])
+
+            self.embeddings = type("E", (), {"create": staticmethod(_create)})()
+
+    monkeypatch.setattr(openai, "AsyncOpenAI", _CountingOpenAI)
+    emb = OpenAICompatibleEmbedder(_cfg(), resolve_credential=lambda _r: "k")
+
+    n = _MAX_EMBED_BATCH * 2 + 5
+    out = await emb.embed([str(i) for i in range(n)])
+
+    assert out == [[float(i)] * 3 for i in range(n)]  # global INPUT order preserved
+    assert len(batch_sizes) == 3  # 128 + 128 + 5
+    assert all(b <= _MAX_EMBED_BATCH for b in batch_sizes)
+    assert sum(batch_sizes) == n
+
+
+@pytest.mark.asyncio
 async def test_embed_width_mismatch_raises_engine_unavailable(monkeypatch) -> None:
     """A model returning the wrong width is caught as a clear config error rather
     than surfacing as a raw sqlite-vec constraint error at insert time."""
