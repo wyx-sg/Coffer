@@ -318,18 +318,6 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **When** 渲染 skill 列表/详情，
 - **Then** 不为它显示「有可用更新」信号；取消固定后信号恢复。
 
-### Scenario: 浏览并搜索 skill 目录
-
-- **Given** 内置的 skill 目录，
-- **When** 用户列出它再用子串搜索，
-- **Then** 空查询返回完整目录，匹配子串则返回按名称排序的子集。
-
-### Scenario: 从目录安装 skill
-
-- **Given** 一个目录条目，
-- **When** 用户按名称安装它，
-- **Then** Coffer 通过正常的校验+扫描 fetch 路径拉取该条目的 Git 源并注册该 skill。
-
 ### Scenario: 检测 agent skill 目录中的 drift
 
 - **Given** 某 binding 存在但其磁盘目标已被删除、被替换或被重指向，
@@ -515,11 +503,6 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - **FR-030**：系统必须为 Git 源 skill 提供按需的「检查更新」操作：重新拉取源并与已存版本比较，但**不应用**任何变更，并把结果（update-available 标志、可用内容哈希、检查时间）缓存到 skill 上。本地导入的 skill 不支持该检查（重新导入以刷新）。应用一次更新会清除该缓存信号。每次检查都审计。
 - **FR-031**：用户必须能固定（pin）一个 skill。固定期间，update-available 信号被抑制（被刻意冻结的 skill 不再显示为过期）；pin 与 unpin 都是显式且审计的动作。
 
-**发现**
-
-- **FR-032**：系统必须提供一个可浏览的可安装 skill 目录（名称、描述、Git 坐标、发布者），支持大小写不敏感的子串搜索。v1 内置一份 curated 启动目录；拉取远程索引是未来工作。
-- **FR-033**：用户必须能按名称安装目录条目。安装解析该条目的 Git 坐标并复用既有的 fetch 路径（FR-006）——相同的 SSRF guard、AgentSkills 校验（FR-004）、内容扫描（FR-028）——不新增任何入库或信任面。未知条目以 `not_found`（404）拒绝；坐标已失效的条目在 fetch/校验时干净失败。
-
 **Drift**
 
 - **FR-015**：系统必须提供 `verify` 操作，对每条已启用 binding 比对其磁盘目标，并按 drift 类别（missing link、tampered link、missing master、orphan master）报告与建议处置方式。
@@ -587,5 +570,5 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 - Windows 用户的文件系统支持目录 junction；FAT32 与网络共享降级为 copy 模式。
 - 两种 agent 类型的投递位置维持 `<config_dir>/skills`。Codex 还会读取 `~/.agents/skills`（其较新的标准位置），并把 `<config_dir>/skills` 视为向后兼容的 legacy 位置——非托管扫描覆盖两处；迁移 Coffer 的投递目标是一项已记录、延后到未来变更的决策。
 - 跟随主库标志与排除列表存于 agent 资源的 config（spec 004 的 schema）；其投递语义由本 spec 拥有。
-- 发现已内置一份 curated 启动目录（FR-032/FR-033）；远程/拉取式目录索引（如 agentskills.io API）是未来工作。
+- 浏览即装 skill 目录（发现机制）已原型化后撤回（简化，2026-06-20），原因是缺乏可供浏览的内容生态；安装目录作为未来工作仍有可能落地。
 - v2 将探索：远程目录索引、agent 间的 skill 推荐、项目级 skill（仓库内 `.claude/skills/`）、通过 credential ref 支持私有 Git 源。

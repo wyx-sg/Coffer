@@ -21,7 +21,6 @@ from coffer.surfaces.http.agent_unmanaged_skill_routes import (
 )
 from coffer.surfaces.http.agent_workspace_routes import router as agent_workspace_router
 from coffer.surfaces.http.audit_routes import router as audit_router
-from coffer.surfaces.http.catalog_routes import router as catalog_router
 from coffer.surfaces.http.channel_routes import router as channel_router
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.model_routes import router as chat_model_router
@@ -66,7 +65,6 @@ def include_all_routers(app: FastAPI) -> None:
         skill_router,
         skill_file_router,
         skill_trust_router,
-        catalog_router,
         kb_router,  # spec 006
         # MCP
         mcp_protocol_router,

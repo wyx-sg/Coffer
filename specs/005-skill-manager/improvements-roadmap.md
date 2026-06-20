@@ -1,7 +1,8 @@
 # Skill Manager — Improvements Roadmap
 
-Status: **delivered** — all four items shipped (#4 → #3 → #2 → #1). FRs and
-acceptance scenarios live in `spec.md`; the trust-layer decision is ADR-027.
+Status: #4/#3/#2 **delivered**; #1 (discovery) was delivered then **withdrawn**
+(simplification 4.8, 2026-06-20) — no content ecosystem. FRs and acceptance
+scenarios for the shipped items live in `spec.md`; the trust-layer decision is ADR-027.
 Derived from the competitive-landscape research in
 [`docs/research/agent-skills.md`](../../docs/research/agent-skills.md) (Report #3
 in [`docs/research/README.md`](../../docs/research/README.md)). The research
@@ -92,6 +93,8 @@ pull-and-apply. Add:
 - Surfaces: `POST /skills/{name}/check-update`, list field, CLI, UI badge.
 
 ## #1 — Discovery (browse-and-install)
+
+> **Withdrawn (2026-06-20, simplification 4.8).** This item shipped in PR #116 and was reverted: a built-in catalog has no content ecosystem to browse. The design below is retained for history only.
 
 Currently requires a known git URL; rivals offer browse-and-install catalogs.
 
