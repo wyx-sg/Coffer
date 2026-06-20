@@ -130,7 +130,17 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 - **无迁移 / 无 schema 变更。** 无新 FR（既有检索模式下的检索质量改动，与 KB4 chunker、KB2 同类）。无 FTS schema 变更，无 `upsert_chunks`/`upsert_vectors` 签名变更。
 - **延后。** keyword 侧的索引化 `title` FTS 列被延后 —— 它需要 FTS 重建迁移且存在短 CJK 标题的 trigram 缺口 —— 直到 keyword 标题匹配确有需要。
 
-## 11. 此处明确不决定 / 范围外
+## 11. Embedding 请求分批（KB9）
+
+**问题**：重嵌在 per-store 锁内串行——每文档一次 provider 调用——且单次 `embed()` 把一个文档的全部 chunk 放进一个无上限请求。应批量到什么程度？
+
+**决策**：**限制请求大小**，**不**引入跨文档并发。
+
+- **限制请求大小（已交付）。** `OpenAICompatibleEmbedder.embed` 把输入切成至多 `_MAX_EMBED_BATCH`（128）条文本的串行子请求，并按输入顺序拼接结果。这避免块数多的文档（或未来的批量调用方）发出一个无上限请求被 OpenAI 兼容端点按 inputs-per-call / token 上限拒绝（一个潜在 bug，KB5 给每条嵌入文本加 title 前缀后更突出）。每个子请求的 `index` 重对齐 + 宽度校验保留；任一子请求失败抛 `EngineUnavailable`，文档整体降级并经 KB8 的 `embed_pending` 整体重试（per-doc all-or-nothing，不变）。本地（fastembed）嵌入在进程内、无需上限。
+- **跨文档并发/批量重嵌：刻意推迟（未构建）。** 把串行 per-document 循环改成并发或跨文档批量已评估、判定为单用户工具上的过度工程：调用内批量本就存在；全量重嵌只发生在 `force` reconcile（配置变更）或 provider 恢复扫描——都罕见——且 `CooldownEmbedder` 已化解 provider-down（无 O(N×timeout) 卡顿）。跨文档重构会破坏 KB8 per-doc `embed_pending` 隔离所依赖的 per-document `embed → upsert_chunks` 原子性，而有界并发的收益仅限云 provider 的罕见操作。仅在出现真实批量重嵌延迟抱怨时再做。
+- **无迁移 / 无 schema 改动。无新 FR**（既有检索模式下的可靠性/健壮性改动）。
+
+## 12. 此处明确不决定 / 范围外
 
 - 单次调用里 keyword + vector 的 hybrid RRF 融合（可选未来，同引擎）。
 - 检索时的 reranking / HyDE / multi-query / LLM 综合 —— agent 综合。
