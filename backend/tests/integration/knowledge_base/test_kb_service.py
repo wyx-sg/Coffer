@@ -440,6 +440,32 @@ async def test_metrics(kb) -> None:
     assert "keyword" in m["enabled_modes"]
 
 
+async def test_document_count_uses_indexed_count_without_du_walk(kb) -> None:
+    """KB14: ``document_count`` hits only the indexed DB count — no ``du_bytes``
+    disk walk (the list path discards disk_bytes). Monkeypatching ``du_bytes`` to
+    raise proves it is NOT on the cheap-count path, while ``metrics()`` (the detail
+    endpoint) still walks the disk and reports disk_bytes."""
+    from coffer.application.knowledge_base import service as kb_service_mod
+
+    await kb.create_kb("kb1")
+    await _ingest(kb, "kb1", "a.md", b"# A\n\nalpha content here")
+    await _ingest(kb, "kb1", "b.md", b"# B\n\nbeta content here")
+
+    def _boom(_path):
+        raise AssertionError("du_bytes must not run on the document_count path")
+
+    # A local context so undo() does NOT revert the ``kb`` fixture's env-var
+    # patches (they share the per-test monkeypatch object otherwise).
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(kb_service_mod, "du_bytes", _boom)
+        assert await kb.service.document_count(kb_name="kb1") == 2
+
+    # The detail endpoint still walks the disk → confirm disk_bytes survives.
+    m = await kb.service.metrics(kb_name="kb1")
+    assert m["document_count"] == 2
+    assert m["disk_bytes"] > 0
+
+
 @pytest.mark.acceptance(
     spec="006-knowledge-base",
     scenario="degraded embed surfaces documents_degraded and retries without re-chunking",

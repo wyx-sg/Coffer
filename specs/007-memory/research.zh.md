@@ -60,6 +60,8 @@
 
 memory 用 **lazy reindex-on-read**：`recall` 先按 `content_sha256` 扫描这个小事实目录的增量，并在搜索前对账索引。这使 Claude 的 symlink 编辑与任何直接磁盘编辑对所有 agent 即时可见，**无需文件系统 watcher**。（相比之下 KB 在 Coffer 中介编辑 + 显式 `coffer kb reindex` + 一个默认关闭的可选 watcher 时重建索引。）
 
+**store 列表**的 `fact_count`（KB14，见 006 research §12）读取索引 `count_documents`，而非 `scan_store_dir` 扫描 fact 文件——任何索引-vs-磁盘的过期都会在上述下一次 recall/reconcile 时关闭。每个 store 的 `/metrics` 详情端点仍扫描并遍历磁盘以得到 `disk_bytes`。
+
 ## 7. Embedding 配置
 
 **问题**：vector recall 怎么配置？

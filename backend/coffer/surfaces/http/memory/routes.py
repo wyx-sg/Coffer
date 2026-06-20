@@ -103,7 +103,9 @@ async def _store_out(
     scope, _ = _scope_of(r.name)
     project_root = None if scope == "global" else await roots.get(r.name)  # type: ignore[attr-defined]
     try:
-        fact_count = cast(int, (await mem_svc.metrics(store_name=r.name)).get("fact_count", 0))
+        # Cheap indexed count only (KB14): the list output discards disk_bytes,
+        # so skip ``metrics()``' per-store ``scan_store_dir`` + ``du_bytes`` walk.
+        fact_count = await mem_svc.fact_count(store_name=r.name)
     except Exception:
         fact_count = 0
     store_dir = str((await mem_svc.resolved_store(r.name)).store_dir)

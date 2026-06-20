@@ -140,7 +140,18 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 - **跨文档并发/批量重嵌：刻意推迟（未构建）。** 把串行 per-document 循环改成并发或跨文档批量已评估、判定为单用户工具上的过度工程：调用内批量本就存在；全量重嵌只发生在 `force` reconcile（配置变更）或 provider 恢复扫描——都罕见——且 `CooldownEmbedder` 已化解 provider-down（无 O(N×timeout) 卡顿）。跨文档重构会破坏 KB8 per-doc `embed_pending` 隔离所依赖的 per-document `embed → upsert_chunks` 原子性，而有界并发的收益仅限云 provider 的罕见操作。仅在出现真实批量重嵌延迟抱怨时再做。
 - **无迁移 / 无 schema 改动。无新 FR**（既有检索模式下的可靠性/健壮性改动）。
 
-## 12. 此处明确不决定 / 范围外
+## 12. 资源列表计数走索引计数，而非 `metrics()`（KB14）
+
+**问题**：资源 LIST 端点（`GET /knowledge_bases`、`GET /memory_stores`）为了显示一个计数，对每个资源调用完整的 `metrics()`。`metrics()` 做了列表输出会丢弃的昂贵磁盘 I/O：KB 的 `metrics()` 每个 KB 跑一次递归 `du_bytes` 磁盘遍历；memory 的 `store_metrics()` 每个 store 同时跑 `scan_store_dir`（读/解析每个 fact 文件）和 `du_bytes` 遍历。列出 N 个资源就触发 N 次磁盘遍历（KB）/ N 次文件扫描 + N 次遍历（memory），只为一个列表会显示、却从不显示其计算出的 `disk_bytes` 的数字。
+
+**决策**：给每条列表路径一个只命中索引 DB `count_documents`、绝不走 `du_bytes` / `scan_store_dir` 的廉价计数。
+
+- **KB 列表**用一个薄方法 `KnowledgeBaseService.document_count(kb_name)` → `count_documents(KIND_KNOWLEDGE_BASE, kb_name)`（即 `metrics()` 本就作为 `document_count` 返回的同一索引计数）。列表路径上无 `du_bytes` 遍历。
+- **Memory 列表**用一个薄方法 `MemoryService.fact_count(store_name)` → `count_documents(KIND_MEMORY, store_name)`。计数来源从磁盘文件数（`len(scan_store_dir().files)`）改为 DB 索引——与 KB 现有计数方式一致。索引-vs-磁盘的小幅过期窗口会在下一次 recall/reconcile（惰性 reindex-on-read）时关闭，对一个列表显示数字而言是可接受的取舍。
+- **`metrics()` / `store_metrics()` 不变**：每个资源的 DETAIL 端点（`GET /{name}/metrics`）仍遍历磁盘并报告 `disk_bytes`。只有 LIST 路径改了。
+- **无迁移 / 无 schema 改动。无新 FR**（既有端点下的性能改动）。
+
+## 13. 此处明确不决定 / 范围外
 
 - 单次调用里 keyword + vector 的 hybrid RRF 融合（可选未来，同引擎）。
 - 检索时的 reranking / HyDE / multi-query / LLM 综合 —— agent 综合。

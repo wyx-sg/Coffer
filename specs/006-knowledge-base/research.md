@@ -140,7 +140,18 @@ No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invo
 - **Cross-document parallel/batch re-embed: deliberately deferred (not built).** Collapsing the serial per-document loop into a concurrent or cross-document batched sweep was evaluated and judged over-engineering for a single-user tool: the within-call batch already exists; a full re-embed only happens on a `force` reconcile (config change) or a provider-recovery sweep — both infrequent — and `CooldownEmbedder` already de-fangs the provider-down case (no O(N×timeout) stall). The cross-doc restructure would break the per-document `embed → upsert_chunks` atomicity that KB8's per-doc `embed_pending` isolation relies on, and bounded concurrency's payoff is cloud-provider-only on a rare operation. Revisit only if a real bulk-re-embed latency complaint appears.
 - **No migration / no schema change. No new FR** (a reliability/robustness change under the existing retrieval modes).
 
-## 12. Things explicitly NOT decided / out of scope here
+## 12. Resource-list count uses the indexed count, not `metrics()` (KB14)
+
+**Question**: The resource LIST endpoints (`GET /knowledge_bases`, `GET /memory_stores`) call the full `metrics()` per resource just to display a count. `metrics()` does expensive disk I/O the list output discards: KB's `metrics()` runs a recursive `du_bytes` disk walk per KB; memory's `store_metrics()` runs BOTH a `scan_store_dir` (read/parse every fact file) AND a `du_bytes` walk per store. Listing N resources triggers N disk walks (KB) / N file-scans + N walks (memory) for a number the list shows but never the `disk_bytes` it computes.
+
+**Decision**: Give each list path a cheap count that hits ONLY the indexed DB `count_documents`, never `du_bytes` / `scan_store_dir`.
+
+- **KB list** uses a thin `KnowledgeBaseService.document_count(kb_name)` → `count_documents(KIND_KNOWLEDGE_BASE, kb_name)` (the same indexed count `metrics()` already returns as `document_count`). No `du_bytes` walk on the list path.
+- **Memory list** uses a thin `MemoryService.fact_count(store_name)` → `count_documents(KIND_MEMORY, store_name)`. The count SOURCE moves from the on-disk file count (`len(scan_store_dir().files)`) to the DB index — matching how KB already counts. The small index-vs-disk staleness window closes on the next recall/reconcile (lazy reindex-on-read), an acceptable tradeoff for a list-display number.
+- **`metrics()` / `store_metrics()` are unchanged**: the per-resource DETAIL endpoint (`GET /{name}/metrics`) still walks the disk and reports `disk_bytes`. Only the LIST path changed.
+- **No migration / no schema change. No new FR** (a perf change under the existing endpoints).
+
+## 13. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.

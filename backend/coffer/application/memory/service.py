@@ -343,6 +343,11 @@ class MemoryService:
         scopes = await self._scope.resolve_recall_scopes(cwd=cwd)
         return await asyncio.to_thread(find_fact_store, scopes, fact_id, store_name_for)
 
+    async def fact_count(self, *, store_name: str) -> int:
+        """Cheap indexed fact count for the list path (no ``scan_store_dir`` parse
+        / ``du_bytes`` walk; staleness closes on the next recall/reconcile)."""
+        return await self._documents.count_documents(KIND_MEMORY, store_name)
+
     async def metrics(self, *, store_name: str) -> dict[str, object]:
         config = await self.get_store_config(store_name)
         return await store_metrics((await self._resolved_for_store(store_name)).store_dir, config)

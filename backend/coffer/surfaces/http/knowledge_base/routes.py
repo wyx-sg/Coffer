@@ -90,7 +90,9 @@ async def list_kbs(
     out = []
     for r in resources:
         try:
-            count = cast(int, (await kb_svc.metrics(kb_name=r.name)).get("document_count", 0))
+            # Cheap indexed count only (KB14): the list output discards disk_bytes,
+            # so skip ``metrics()``' per-KB ``du_bytes`` disk walk.
+            count = await kb_svc.document_count(kb_name=r.name)
         except Exception:
             count = 0
         out.append(_to_kb_out(r, document_count=count))
