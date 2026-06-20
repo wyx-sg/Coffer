@@ -1,6 +1,6 @@
 // frontend/src/components/chat/ConversationListItem.test.tsx
-// Plain unit test (no acceptance marker): a channel-originated conversation
-// shows a "via {channel}" chip tooltipped with the peer's display name (ADR-021).
+// Plain unit test (no acceptance marker): a channel-bound conversation shows a
+// "via {channel}" chip derived from channel_binding (ADR-021).
 import { describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -29,24 +29,22 @@ function renderItem(conversation: Conversation) {
   );
 }
 
-describe("ConversationListItem origin badge", () => {
-  test("renders a via-channel chip with the peer display name as title", () => {
+describe("ConversationListItem channel badge", () => {
+  test("renders a via-channel chip from channel_binding", () => {
     renderItem({
       ...base,
-      origin: "channel",
-      peer: { chat_id: "c-9", display_name: "Alice", channel: "telegram" },
+      channel_binding: { channel: "telegram", chat_id: "c-9" },
     });
     const chip = screen.getByText(/via telegram/i);
     expect(chip).toBeInTheDocument();
-    expect(chip).toHaveAttribute("title", "Alice");
   });
 
-  test("renders no chip for a web-origin conversation", () => {
-    renderItem({ ...base, origin: "web", peer: null });
+  test("renders no chip for a web conversation (channel_binding null)", () => {
+    renderItem({ ...base, channel_binding: null });
     expect(screen.queryByText(/via /i)).not.toBeInTheDocument();
   });
 
-  test("renders no chip when origin is absent (legacy rows)", () => {
+  test("renders no chip when channel_binding is absent (legacy rows)", () => {
     renderItem(base);
     expect(screen.queryByText(/via /i)).not.toBeInTheDocument();
   });

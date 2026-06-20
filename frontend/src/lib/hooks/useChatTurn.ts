@@ -1,52 +1,32 @@
 // frontend/src/lib/hooks/useChatTurn.ts
-// Drives streamClient.ts and accumulates SSE agent events into a live
-// assistant message for the Chat page to render.
+// Holds a persistent GET /events subscription for the active conversation and
+// accumulates SSE agent events into a live assistant message for the Chat page
+// to render. The event-folding reducer lives in ./chatTurnEvents.
 //
 // API:
-//   const { send, isStreaming, liveMessage, error,
-//           interrupt } = useChatTurn(convId);
+//   const { send, isStreaming, liveMessage, error, clearError,
+//           interrupt, pending, setPending } = useChatTurn(convId);
 //
-// `liveMessage` is non-null while a turn is in flight (it carries the user's
-// just-sent prompt as an optimistic echo plus the streaming reply) and is
-// cleared after the persisted messages are loaded — via messages query
-// invalidation on turn_done, or on stream failure (the persisted failed row
-// is authoritative).
+// The subscription is opened on the active conversation and stays open across
+// turns (it replays the in-flight turn then streams live). `send` is
+// fire-and-return: it POSTs the message and returns immediately — the turn's
+// events arrive over the subscription, not the POST.
 
-import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { streamChatTurn, type AgentEvent } from "@/lib/chat/streamClient";
-import { chatApi, type ContentBlock, type Message } from "@/lib/api/chat";
+import { subscribeConversationEvents } from "@/lib/chat/streamClient";
+import { chatApi } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
 import { CONVERSATIONS_KEY, messagesKey } from "./useConversations";
+import { type LiveMessage, handleEvent } from "./chatTurnEvents";
 
-// ---------------------------------------------------------------------------
-// State types
-// ---------------------------------------------------------------------------
-
-export interface LiveMessage {
-  /**
-   * The prompt that started this turn — echoed in the thread immediately so
-   * the user's message is visible while the reply streams (the persisted row
-   * takes over once the next messages fetch lands).
-   */
-  userText?: string;
-  /** Partial accumulated text from text_delta events. */
-  text: string;
-  /** Tool call/result blocks accumulated during the turn. */
-  toolBlocks: ContentBlock[];
-  /** Whether the turn is still streaming. */
-  streaming: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
+export type { LiveMessage } from "./chatTurnEvents";
 
 export interface UseChatTurnResult {
-  /** Send a message to the conversation and start streaming. */
+  /** Send a message to the conversation (fire-and-return; never blocks). */
   send: (text: string) => Promise<void>;
-  /** True while the SSE stream is open. */
+  /** True while a turn is in flight on the subscription. */
   isStreaming: boolean;
   /** Live partial message — non-null while streaming (and briefly after). */
   liveMessage: LiveMessage | null;
@@ -56,6 +36,10 @@ export interface UseChatTurnResult {
   clearError: () => void;
   /** Stop the in-flight turn; its partial output is kept server-side. */
   interrupt: () => Promise<void>;
+  /** Queued messages waiting to run after the in-flight turn. */
+  pending: string[];
+  /** Replace the pending queue (resume / drop / reorder). */
+  setPending: (texts: string[]) => Promise<void>;
 }
 
 export function useChatTurn(conversationId: string): UseChatTurnResult {
@@ -63,88 +47,85 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveMessage, setLiveMessage] = useState<LiveMessage | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [pending, setPendingState] = useState<string[]>([]);
 
-  // Abort controller allows cancellation on unmount / conversation switch.
-  const abortRef = useRef<AbortController | null>(null);
+  // Complete-reply count captured at turn_start (see chatTurnEvents) to detect a
+  // new reply landing before dropping the live bubble. A ref so the subscription
+  // effect doesn't re-run per token.
+  const priorReplyCountRef = useRef(0);
 
-  // Bind turn state to the conversation it belongs to: when the active
-  // conversation changes (or the hook unmounts), abort any in-flight stream
-  // for the previous conversation and reset the visible turn state, so a
-  // streaming message, lock, or error never bleeds into another
-  // thread (nor gets its interrupt POSTed to the wrong conversation).
+  // Persistent subscription bound to the active conversation. Opened on
+  // conversationId, aborted on switch/unmount. Because it replays the in-flight
+  // turn and stays open across turns, no per-send stream is needed.
   useEffect(() => {
+    if (!conversationId) return;
+
+    const controller = new AbortController();
+    let cancelled = false;
+
     setIsStreaming(false);
     setLiveMessage(null);
     setError(null);
+    setPendingState([]);
+    priorReplyCountRef.current = 0;
+
+    void (async () => {
+      try {
+        for await (const event of subscribeConversationEvents(conversationId, controller.signal)) {
+          if (cancelled) return;
+          await handleEvent(event, {
+            conversationId,
+            qc,
+            priorReplyCountRef,
+            setIsStreaming,
+            setLiveMessage,
+            setPendingState,
+            setError,
+            isCancelled: () => cancelled,
+          });
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof Error && err.name === "AbortError") return;
+        const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
+        setError(wrapped);
+      }
+    })();
+
     return () => {
-      abortRef.current?.abort();
-      abortRef.current = null;
+      cancelled = true;
+      controller.abort();
     };
-  }, [conversationId]);
+  }, [conversationId, qc]);
 
   const send = useCallback(
     async (text: string) => {
-      if (isStreaming) return; // guard: one in-flight turn per conversation
-
+      // Fire-and-return: NEVER blocks on an in-flight turn. A second message sent
+      // mid-turn is queued server-side and surfaced via queue_changed.
       setError(null);
-      setIsStreaming(true);
-      setLiveMessage({ userText: text, text: "", toolBlocks: [], streaming: true });
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-      // A continuation is stale once the hook moved on to another run or
-      // another conversation (abortRef was replaced/cleared). Every setState
-      // after an await is gated on this, so a slow tail of the previous
-      // conversation's turn (e.g. the invalidateQueries refetch) can never
-      // wipe the current conversation's live state.
-      const isCurrent = () => abortRef.current === controller;
-
+      // Optimistic echo so the prompt is visible immediately. If a turn is
+      // already streaming the reply belongs to the earlier prompt, so keep the
+      // existing live bubble and only fill in the echo when there is none.
+      setLiveMessage(
+        (prev) => prev ?? { userText: text, text: "", toolBlocks: [], streaming: false },
+      );
       try {
-        const gen = streamChatTurn(conversationId, text, controller.signal);
-
-        // Accumulate the streamed assistant text so we can confirm the persisted
-        // reply has landed before dropping the live bubble (see below).
-        let assistantText = "";
-        for await (const event of gen) {
-          if (!isCurrent()) return;
-          if (event.event === "text_delta") assistantText += event.data.text;
-          handleEvent(event, setLiveMessage);
-        }
-
-        // Turn completed — refetch the persisted messages, then drop the live
-        // bubble ONLY once that refetch actually carries this turn's assistant
-        // reply. Clearing before it lands removes the live bubble into a gap
-        // (the keyed persisted bubble hasn't rendered yet), so the just-streamed
-        // answer flickers out and back in. Aligning on the reply closes the gap.
-        await qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
-        if (!isCurrent()) return;
-        const refetched = qc.getQueryData<Message[]>(messagesKey(conversationId)) ?? [];
-        if (assistantReplyLanded(refetched, assistantText)) {
-          setLiveMessage(null);
-        }
+        await chatApi.sendMessage(conversationId, text);
       } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
-          return;
-        }
-        if (!isCurrent()) return;
-        const wrapped =
-          err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
+        const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
         setError(wrapped);
-        // The stream ended without turn_done, so nothing else refreshes the
-        // thread — refetch so the persisted user message and the failed turn
-        // replace the optimistic echo / partial live bubble.
-        await qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
-        if (isCurrent()) setLiveMessage(null);
       } finally {
-        if (isCurrent()) {
-          setIsStreaming(false);
-        }
-        // The first turn renames the conversation server-side (auto-title);
-        // refresh the list whether the turn succeeded or failed.
+        // Refresh the conversation list (first turn auto-titles it) AND the
+        // messages. The messages refetch is the safety net for the draft→first-
+        // send race: if the turn finished before the subscription attached (the
+        // bus ring buffer is already cleared), turn_start/turn_done never fire on
+        // this client, so nothing else would load the committed user message and
+        // reply — leaving the optimistic echo stranded.
         void qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
+        void qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
       }
     },
-    [conversationId, isStreaming, qc],
+    [conversationId, qc],
   );
 
   const interrupt = useCallback(async () => {
@@ -155,6 +136,22 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     }
   }, [conversationId]);
 
+  const setPending = useCallback(
+    async (texts: string[]) => {
+      // Optimistic: reflect the new queue immediately; the queue_changed event
+      // (or the response) reconciles it.
+      setPendingState(texts);
+      try {
+        const res = await chatApi.setPending(conversationId, texts);
+        setPendingState(res.pending);
+      } catch (err) {
+        const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
+        setError(wrapped);
+      }
+    },
+    [conversationId],
+  );
+
   const clearError = useCallback(() => setError(null), []);
 
   return {
@@ -164,86 +161,7 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     error,
     clearError,
     interrupt,
+    pending,
+    setPending,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Reply alignment
-// ---------------------------------------------------------------------------
-
-/**
- * Has the refetched history caught up with the turn that just streamed — i.e.
- * does it carry this turn's assistant reply? Align by the streamed text (a
- * complete assistant message whose text matches what streamed); for a reply
- * with no text (a tool-only turn) fall back to existence of any complete
- * assistant message. Used to gate clearing the live bubble so it never blanks
- * into a gap before the persisted bubble renders.
- */
-function assistantReplyLanded(messages: Message[], streamedText: string): boolean {
-  const replies = messages.filter((m) => m.role === "assistant" && m.status === "complete");
-  const wanted = streamedText.trim();
-  if (!wanted) return replies.length > 0;
-  return replies.some((m) => {
-    const text = m.content
-      .filter((b) => b.type === "text")
-      .map((b) => b.text ?? "")
-      .join("");
-    return text.trim() === wanted || text.includes(wanted);
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Event handler (pure function — easier to test independently)
-// ---------------------------------------------------------------------------
-
-function handleEvent(
-  event: AgentEvent,
-  setLiveMessage: Dispatch<SetStateAction<LiveMessage | null>>,
-): void {
-  switch (event.event) {
-    case "turn_start":
-      break;
-
-    case "text_delta":
-      setLiveMessage((prev) =>
-        prev ? { ...prev, text: prev.text + event.data.text } : null,
-      );
-      break;
-
-    case "tool_call": {
-      const block: ContentBlock = {
-        type: "tool_use",
-        tool_use_id: event.data.tool_use_id,
-        tool_name: event.data.tool_name,
-        tool_input: event.data.tool_input,
-      };
-      setLiveMessage((prev) =>
-        prev ? { ...prev, toolBlocks: [...prev.toolBlocks, block] } : null,
-      );
-      break;
-    }
-
-    case "tool_result": {
-      const resultBlock: ContentBlock = {
-        type: "tool_result",
-        tool_use_id: event.data.tool_use_id,
-        tool_name: event.data.tool_name,
-        output: event.data.output ?? null,
-        error: event.data.error ?? null,
-      };
-      setLiveMessage((prev) =>
-        prev ? { ...prev, toolBlocks: [...prev.toolBlocks, resultBlock] } : null,
-      );
-      break;
-    }
-
-    case "turn_done":
-      setLiveMessage((prev) => (prev ? { ...prev, streaming: false } : null));
-      break;
-
-    case "turn_error":
-      // The turn_error event ends the generator, so the catch in send() won't
-      // run — throw here to route the error through it.
-      throw new ApiError(event.data.code, event.data.message);
-  }
 }

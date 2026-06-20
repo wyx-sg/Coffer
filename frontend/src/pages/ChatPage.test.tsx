@@ -19,6 +19,10 @@ vi.mock("@/lib/api/chat", () => ({
     unarchiveConversation: vi.fn(),
     listMessages: vi.fn(),
     listAgents: vi.fn(),
+    // Fire-and-return turn control (ADR-031).
+    sendMessage: vi.fn().mockResolvedValue({ queued: false }),
+    setPending: vi.fn().mockResolvedValue({ pending: [] }),
+    interruptTurn: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -27,7 +31,9 @@ vi.mock("@/lib/api/models", () => ({
 }));
 
 vi.mock("@/lib/chat/streamClient", () => ({
-  streamChatTurn: vi.fn(async function* () {}),
+  // The persistent GET /events subscription — an async generator that ends
+  // immediately so no turn is in flight in these page-level tests.
+  subscribeConversationEvents: vi.fn(async function* () {}),
 }));
 
 const { chatApi } = await import("@/lib/api/chat");

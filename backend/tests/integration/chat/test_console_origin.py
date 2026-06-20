@@ -1,7 +1,8 @@
-"""Vault Console: channel-driven conversations are observable (ADR-021).
+"""Chat: a channel-driven conversation is observable from the console (ADR-031).
 
-Observable: a conversation a channel opened carries ``origin="channel"`` plus the
-IM peer's identity, and the console's conversation-list mapper surfaces it.
+A conversation the owner also drives from an IM channel carries a channel binding
+(``channel_name`` + ``peer_chat_id``); the conversation-list mapper surfaces it so
+the desktop can badge and observe it. A desktop-only conversation has no binding.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ async def test_channel_conversation_observable(tmp_path: pathlib.Path) -> None:
     repo = ConversationRepo(session_maker(engine))
     now = datetime.now(tz=UTC)
 
-    # A conversation an IM peer drives (what application/channel/inbound persists).
+    # A conversation the owner drives from a channel (what channel inbound persists).
     await repo.create(
         Conversation(
             id="c-channel",
@@ -42,17 +43,15 @@ async def test_channel_conversation_observable(tmp_path: pathlib.Path) -> None:
             model_id=None,
             created_at=now,
             updated_at=now,
-            origin="channel",
             channel_name="team-standup",
             peer_chat_id="peer-42",
-            peer_display_name="Alice",
         )
     )
-    # A plain Vault Console draft (defaults: web origin, no peer).
+    # A plain desktop draft (no channel binding).
     await repo.create(
         Conversation(
             id="c-web",
-            agent_key="builtin",
+            agent_key="claude_code",
             title="draft",
             model_id=None,
             created_at=now,
@@ -62,16 +61,14 @@ async def test_channel_conversation_observable(tmp_path: pathlib.Path) -> None:
 
     by_id = {c.id: _conv_out(c) for c in await repo.list()}
     try:
-        # --- Observable: origin + peer identity surface in the console list ---
+        # --- Observable: the channel binding surfaces in the conversation list ---
         channel_out = by_id["c-channel"]
-        assert channel_out.origin == "channel"
-        assert channel_out.peer is not None
-        assert channel_out.peer.chat_id == "peer-42"
-        assert channel_out.peer.display_name == "Alice"
-        assert channel_out.peer.channel == "team-standup"
+        assert channel_out.channel_binding is not None
+        assert channel_out.channel_binding.channel == "team-standup"
+        assert channel_out.channel_binding.chat_id == "peer-42"
 
+        # A desktop-only conversation has no channel binding.
         web_out = by_id["c-web"]
-        assert web_out.origin == "web"
-        assert web_out.peer is None
+        assert web_out.channel_binding is None
     finally:
         await engine.dispose()

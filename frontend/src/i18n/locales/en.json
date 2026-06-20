@@ -1119,7 +1119,11 @@
       "ariaLabel": "Message input",
       "send": "Send",
       "stop": "Stop",
-      "streaming": "Waiting for response…"
+      "streaming": "A reply is streaming — your next message will queue."
+    },
+    "queue": {
+      "label": "Queued:",
+      "remove": "Remove from queue"
     },
     "toolCard": {
       "unknown": "unknown tool",
