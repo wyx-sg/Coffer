@@ -139,3 +139,22 @@ def fact_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
     if not candidate.is_relative_to(store_dir.resolve()):
         raise ValueError(f"fact slug {slug!r} escapes the store dir")
     return store_dir / f"{slug}.md"
+
+
+def handoff_dir(store_dir: pathlib.Path) -> pathlib.Path:
+    """The ``handoff/`` subdir of a memory store (working-state files live here,
+    excluded from recall which globs only the store dir's top-level ``*.md``)."""
+    candidate = (store_dir / "handoff").resolve()
+    if not candidate.is_relative_to(store_dir.resolve()):
+        raise ValueError("handoff dir escapes the store dir")
+    return store_dir / "handoff"
+
+
+def handoff_path(store_dir: pathlib.Path, branch_slug: str) -> pathlib.Path:
+    """Path of a per-branch handoff file ``<store_dir>/handoff/<branch-slug>.md``."""
+    _safe_segment(branch_slug, "branch slug")
+    d = handoff_dir(store_dir)
+    candidate = (d / f"{branch_slug}.md").resolve()
+    if not candidate.is_relative_to(d.resolve()):
+        raise ValueError(f"branch slug {branch_slug!r} escapes the handoff dir")
+    return d / f"{branch_slug}.md"
