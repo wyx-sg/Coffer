@@ -18,7 +18,7 @@ from coffer.domain.errors import MemoryRejected
 from coffer.domain.knowledge.document import Document
 from coffer.domain.knowledge.retrieval import GrepHit, MemoryHit, Passage
 from coffer.domain.memory.scope import ResolvedScope
-from coffer.infrastructure.knowledge.paths import memory_index_path
+from coffer.infrastructure.knowledge.paths import handoff_dir, memory_index_path
 from coffer.infrastructure.memory.files import read_fact_file
 
 
@@ -81,13 +81,26 @@ def grep_hits_to_memory_hits(hits: Sequence[GrepHit], resolved: ResolvedScope) -
 
     The matched line is the hit text; the fact id/updated_at come from parsing
     the matched file. ``MEMORY.md`` (the derived index) is skipped, and several
-    matches inside one fact dedupe to the first."""
+    matches inside one fact dedupe to the first.
+
+    Grep descends the store dir recursively, so it also reaches the ``handoff/``
+    subdir — working-state files that must NEVER surface in recall (keyword /
+    vector skip them because the reconciler globs only the top-level ``*.md``).
+    A handoff file parses *gracefully* into a fake fact (no ``id`` in its
+    frontmatter), so dropping by parse failure is not enough: any hit inside the
+    store's ``handoff/`` subdir is filtered out explicitly here."""
     out: list[MemoryHit] = []
     seen: set[str] = set()
     index_name = memory_index_path()
+    handoff_root = handoff_dir(resolved.store_dir).resolve()
     for h in hits:
         path = Path(h.path)
         if path.name == index_name:
+            continue
+        # Drop any hit inside the store's handoff/ subdir (grep's recursion can
+        # reach it; recall isolation requires it stay invisible). Resolve so an
+        # absolute or relative grep path compares against the absolute root.
+        if _is_under(path, handoff_root):
             continue
         try:
             ff = read_fact_file(path)
@@ -108,3 +121,14 @@ def grep_hits_to_memory_hits(hits: Sequence[GrepHit], resolved: ResolvedScope) -
             )
         )
     return out
+
+
+def _is_under(path: Path, root: Path) -> bool:
+    """Whether ``path`` lies within ``root`` (both made absolute first).
+
+    Robust to ``path`` arriving absolute or relative as ripgrep returns it, and
+    to a non-existent ``path`` (``resolve`` is lexical for missing files)."""
+    try:
+        return path.resolve().is_relative_to(root)
+    except (OSError, ValueError):  # pragma: no cover - defensive
+        return False

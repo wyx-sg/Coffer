@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pathlib
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -190,6 +191,8 @@ class HandoffHarness:
     audit: AuditService
     cwd: str  # a path inside a REAL git repo (branch ``work``)
     non_repo: str  # a path outside any git repo
+    repo: str  # the REAL git repo root (for branch switches / worktree adds)
+    git: Callable[[list[str], pathlib.Path], None]  # run a git command in a dir
 
 
 def _git(args: list[str], cwd: pathlib.Path) -> None:
@@ -231,6 +234,12 @@ async def handoff(tmp_path: pathlib.Path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(["init", "-q", "-b", "work"], repo)
+    # Identity + an initial commit so branch creation / worktree adds work.
+    _git(["config", "user.email", "test@coffer.local"], repo)
+    _git(["config", "user.name", "Coffer Test"], repo)
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(["add", "README.md"], repo)
+    _git(["commit", "-q", "-m", "seed"], repo)
     src = repo / "src"
     src.mkdir()
     non_repo = tmp_path / "outside"
@@ -270,6 +279,8 @@ async def handoff(tmp_path: pathlib.Path, monkeypatch):
             audit=audit,
             cwd=str(src),
             non_repo=str(non_repo),
+            repo=str(repo),
+            git=_git,
         )
     finally:
         await engine.dispose()

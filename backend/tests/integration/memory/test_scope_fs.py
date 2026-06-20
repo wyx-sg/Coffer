@@ -35,6 +35,30 @@ def test_git_branch_none_outside_repo(tmp_path: pathlib.Path) -> None:
     assert git_branch(str(tmp_path)) is None
 
 
+def test_git_branch_reads_linked_worktree_branch(tmp_path: pathlib.Path) -> None:
+    """A linked worktree's ``.git`` is a FILE (``gitdir: <path>``) pointing at
+    the real gitdir; ``git_branch`` must follow it to read that worktree's HEAD.
+    This exercises the ``.git``-is-a-file branch (SHOULD 2)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-q", "-b", "work"], repo)
+    _git(["config", "user.email", "test@coffer.local"], repo)
+    _git(["config", "user.name", "Coffer Test"], repo)
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(["add", "README.md"], repo)
+    _git(["commit", "-q", "-m", "seed"], repo)
+    # Add a real linked worktree on a NEW branch "feature".
+    wt = tmp_path / "wt-feature"
+    _git(["worktree", "add", "-q", "-b", "feature", str(wt)], repo)
+    # The worktree's .git is a file, not a directory.
+    assert (wt / ".git").is_file()
+    assert git_branch(str(wt)) == "feature"
+    # And from a subdirectory of the worktree too.
+    sub = wt / "src"
+    sub.mkdir()
+    assert git_branch(str(sub)) == "feature"
+
+
 def test_git_root_walks_up_to_dot_git(tmp_path: pathlib.Path) -> None:
     repo = tmp_path / "repo"
     (repo / ".git").mkdir(parents=True)
