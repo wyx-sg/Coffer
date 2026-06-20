@@ -60,6 +60,8 @@ The projection engine dispatches on `projection_mode` (`SYMLINK` | `RENDER` | `N
 
 Memory uses **lazy reindex-on-read**: `recall` first scans the small fact dir for deltas (by `content_sha256`) and reconciles the index before searching. This makes Claude's symlink edits and any direct-disk edits instantly visible to all agents with **no filesystem watcher**. (KB, by contrast, reindexes on Coffer-mediated edits + explicit `coffer kb reindex` + an optional off-by-default watcher.)
 
+The **store-list** `fact_count` (KB14, see 006 research §12) reads the indexed `count_documents`, not a `scan_store_dir` of the fact files — any index-vs-disk staleness closes on the next recall/reconcile above. The per-store `/metrics` detail endpoint still scans + walks the disk for `disk_bytes`.
+
 ## 7. Embedding configuration
 
 **Question**: How is vector recall configured?

@@ -255,6 +255,43 @@ async def test_metrics(mem) -> None:
     assert m["disk_bytes"] > 0
 
 
+async def test_fact_count_uses_indexed_count_without_disk_scan(mem) -> None:
+    """KB14: ``fact_count`` hits only the indexed DB count — no ``scan_store_dir``
+    file parse and no ``du_bytes`` disk walk (the list path discards disk_bytes).
+    Patching both on the queries module to raise proves neither runs on the cheap
+    count path, while ``metrics()`` (the detail endpoint) still scans + reports
+    disk_bytes."""
+    from coffer.application.memory import queries as mem_queries_mod
+
+    for name in ("x", "y"):
+        await mem.service.add_fact(
+            scope=MemoryScope.GLOBAL,
+            cwd=None,
+            name=name,
+            description="d",
+            body=f"some {name} content",
+            actor="user",
+        )
+
+    def _boom_du(_path):
+        raise AssertionError("du_bytes must not run on the fact_count path")
+
+    def _boom_scan(_path):
+        raise AssertionError("scan_store_dir must not run on the fact_count path")
+
+    # A local context so undo() does NOT revert the ``mem`` fixture's env-var
+    # patches (they share the per-test monkeypatch object otherwise).
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(mem_queries_mod, "du_bytes", _boom_du)
+        mp.setattr(mem_queries_mod, "scan_store_dir", _boom_scan)
+        assert await mem.service.fact_count(store_name=GLOBAL_STORE_NAME) == 2
+
+    # The detail endpoint still scans + walks the disk → confirm both survive.
+    m = await mem.service.metrics(store_name=GLOBAL_STORE_NAME)
+    assert m["fact_count"] == 2
+    assert m["disk_bytes"] > 0
+
+
 @pytest.mark.acceptance(
     spec="007-memory", scenario="vector recall falls back when embedding is unconfigured"
 )

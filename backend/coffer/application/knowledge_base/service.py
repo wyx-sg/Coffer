@@ -259,22 +259,18 @@ class KnowledgeBaseService:
         """Lazy reindex-on-read (FR-008a / FR-016): reconcile the on-disk
         markdown against the SQLite index before serving a read/search.
 
-        Intentionally ``-> None``: the transient per-scan degraded count is NOT
-        threaded back here. ``documents_degraded`` is surfaced from the PERSISTED
-        ``embed_pending`` flag (``metrics()`` → ``count_pending_embeds``), so a
-        degraded embed during ANY read is observable without plumbing the scan
-        count through every read path (KB8).
+        Intentionally ``-> None``: ``documents_degraded`` is surfaced from the
+        PERSISTED ``embed_pending`` flag (``metrics()`` → ``count_pending_embeds``)
+        rather than the transient per-scan count, so it stays observable without
+        plumbing the scan count through every read path (KB8).
 
-        The in-app viewer is read-only, so users edit ``docs/<doc-id>.md``
-        directly in their external editor with no filesystem watcher. The scan
-        funnels through the SAME idempotent reindex routine (``content_sha256``
-        no-op gate + file-vanished pruning).
+        Out-of-band edits to ``docs/<doc-id>.md`` (no filesystem watcher) funnel
+        through the SAME idempotent reindex routine (``content_sha256`` no-op gate
+        + file-vanished pruning).
 
         An unchanged corpus is detected by a cheap stat-only fingerprint and
-        skips the full O(N) read+parse scan entirely, so concurrent reads on a
-        large, idle KB don't re-scan every file under the write lock — while an
-        out-of-band edit / add / remove still bumps the fingerprint and is
-        reconciled on the next read."""
+        skips the full O(N) read+parse scan entirely; an out-of-band edit / add /
+        remove bumps the fingerprint and is reconciled on the next read."""
         await reconcile_on_read(
             self._pipeline.fingerprint_cache,
             kb_name,
@@ -366,6 +362,10 @@ class KnowledgeBaseService:
         return await self._retrieval.grep(
             self._store_ref(kb_name), pattern, max_matches=max_matches
         )
+
+    async def document_count(self, *, kb_name: str) -> int:
+        """Cheap indexed document count for the list path (no ``du_bytes`` walk)."""
+        return await self._documents.count_documents(KIND_KNOWLEDGE_BASE, kb_name)
 
     async def metrics(self, *, kb_name: str) -> dict[str, object]:
         config = await self.get_kb_config(kb_name)

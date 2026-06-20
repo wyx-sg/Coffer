@@ -63,6 +63,34 @@ def test_create_and_list_kb(tmp_path, monkeypatch):
         assert any(k["name"] == "designs" for k in listed.json()["knowledge_bases"])
 
 
+def test_list_kbs_reports_indexed_count_without_du_walk(tmp_path, monkeypatch):
+    """KB14: GET /knowledge_bases reports the per-KB document_count from the cheap
+    indexed count, NOT ``metrics()``' per-KB ``du_bytes`` disk walk. Patching
+    ``du_bytes`` to raise proves the list path never touches it."""
+    from coffer.application.knowledge_base import service as kb_service_mod
+
+    app = _app(tmp_path, monkeypatch, 59490)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        c.post("/api/v1/knowledge_bases", json={"name": "kb", "config": {}}, headers=_HEADERS)
+        up = c.post(
+            "/api/v1/knowledge_bases/kb/documents",
+            files={"file": ("a.md", b"# A\n\nalpha content here", "text/plain")},
+            headers=_HEADERS,
+        )
+        assert up.status_code == 201, up.text
+
+        def _boom(_path):
+            raise AssertionError("du_bytes must not run on the list path")
+
+        monkeypatch.setattr(kb_service_mod, "du_bytes", _boom)
+
+        listed = c.get("/api/v1/knowledge_bases", headers=_HEADERS)
+        assert listed.status_code == 200, listed.text
+        kb = next(k for k in listed.json()["knowledge_bases"] if k["name"] == "kb")
+        assert kb["document_count"] == 1
+
+
 def test_create_duplicate_kb_returns_conflict_envelope(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59420)
     with TestClient(app) as c:
