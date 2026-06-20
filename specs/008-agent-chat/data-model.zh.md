@@ -24,7 +24,7 @@ Frozen dataclass —— domain 保持纯净。
 | `created_at` / `updated_at` | `datetime`           | UTC；每条新消息都会 bump `updated_at`                                                                                                                                                                                        |
 
 > **ADR-031** 移除了原先的 `origin`（web/channel）与 `peer_display_name`
-> 字段（Alembic `0033`）：在单属主前提下 IM peer 永远是属主，所以没有单独的 peer
+> 字段（Alembic `0034`）：在单属主前提下 IM peer 永远是属主，所以没有单独的 peer
 > 身份要显示；"这是不是一个 channel 对话"由 `channel_name` 是否被设置导出。
 
 ### `Message`（`domain/chat/message.py`）

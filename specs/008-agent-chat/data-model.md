@@ -25,7 +25,7 @@ Frozen dataclass — domain stays pure.
 | `created_at` / `updated_at` | `datetime`           | UTC; `updated_at` bumped on each new message                                                                                                                                                                                                            |
 
 > **ADR-031** removed the former `origin` (web/channel) and `peer_display_name`
-> fields (Alembic `0033`): under the single-owner premise the IM peer is always
+> fields (Alembic `0034`): under the single-owner premise the IM peer is always
 > the owner, so there is no separate peer identity to display; "is this a channel
 > conversation" is derived from `channel_name` being set.
 
