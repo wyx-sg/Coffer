@@ -97,6 +97,32 @@
 
 ---
 
+### User Story 7 —— 跨 agent、跨机器接续同一份工作（优先级 P2）
+
+开发者用 Claude Code 工作到一半暂停 —— 停在某个已知步骤、有明确的下一步、有打开中的文件
+—— 之后从另一个 agent（Codex）或第二台机器接续。暂停前 agent 调 `coffer__set_handoff`，
+传入当前的工作状态（「现场」）：正在做什么、下一步是什么、哪些文件在手、还有哪些未决问题。
+Coffer 按 **(项目 × git 分支)** 给这份现场记账，并写成项目记忆 store 下的一个文件，于是它随
+既有 git 同步镜像一起流转。恢复工作时，agent 调 `coffer__resume`，返回当前分支保存的现场
+（带上它可能有多旧的标注）—— 或在全新分支上告知没有任何现场。
+
+**为何此优先级**：连续性是本次重设计的北极星，但它建立在共享记忆内核（Story 1–2）之上：handoff
+是一条附加的工作记忆 lane，而非 recall 的前置条件。按分支记账意味着并行分支 / worktree 各自保有
+独立现场、互不覆盖；不存在全局 handoff（全局的「当前任务」没有意义），因此不在任何 git 项目里的
+cwd 没有可恢复的现场。
+
+**独立测试**：从 git 项目内、分支 `work` 上的某 MCP 客户端调 `coffer__set_handoff` 传入一段
+正文，再从第二个客户端（不同 agent 身份）在同一项目 + 分支调 `coffer__resume`，观察返回相同的
+正文、分支与一条新鲜度标注。在没有先前 handoff 的全新分支上，`coffer__resume` 报告
+`found=false`。
+
+**覆盖场景**：
+
+- agent saves and resumes a working-state handoff
+- resume reports no handoff for a fresh branch
+
+---
+
 ### Edge Cases
 
 - **请求 vector 但 embedding 未配置**：`recall` 带 `mode=vector` 时回退到 keyword，并在响应里标注此次回退；它从不阻塞。默认检索是 keyword+grep（零配置、离线）。
@@ -104,6 +130,8 @@
 - **空事实文本**：在 API 边界被拒；不写任何内容。
 - **事实文本过长**：在 API 边界按 `max_fact_chars`（默认 8192）约束；写入前即被拒。
 - **project 作用域无法解析**：若 agent 的工作目录不在某个 git 项目里，`scope=project` 被拒并给出清晰错误；`scope=global` 仍然可用。
+- **在全新分支上 resume**：当前（项目 × 分支）没有保存过 handoff 时，`coffer__resume` 返回 `found=false` 而非报错；不编造任何内容。
+- **不在 git 项目里的 handoff**：不在某个 git 项目里的 cwd 没有 project 作用域、也没有分支，故 `coffer__resume` 返回 `found=false`，`coffer__set_handoff` 被拒（不存在全局 handoff）。
 
 ## Acceptance Scenarios
 
@@ -203,13 +231,25 @@
 
 - **Given** 一个 MCP 客户端接入 coffer 网关，
 - **When** 客户端列出 tools，
-- **Then** `coffer__recall`、`coffer__remember`、`coffer__update_memory`、`coffer__forget`、`coffer__list_memory` 与其它内置工具及上游工具一起出现。
+- **Then** `coffer__recall`、`coffer__remember`、`coffer__update_memory`、`coffer__forget`、`coffer__list_memory`、`coffer__set_handoff`、`coffer__resume` 与其它内置工具及上游工具一起出现。
 
 ### Scenario: vector recall falls back when embedding is unconfigured
 
 - **Given** 一个未配置 embedding provider 的记忆 store，
 - **When** 用 `mode=vector` 调 `coffer__recall`，
 - **Then** 调用返回 keyword 结果并在响应里标注此次回退（绝不报错）。
+
+### Scenario: agent saves and resumes a working-state handoff
+
+- **Given** 一个在 git 项目内、某分支上运行的 MCP 客户端，
+- **When** 它调 `coffer__set_handoff` 传入正文，之后（可能换成另一个 agent）调 `coffer__resume`，
+- **Then** `set_handoff` 在项目 store 的 `handoff/` 子目录下写出一个按 `(项目 × 分支)` 命名的 markdown 文件（frontmatter `branch`/`updated_at` + 自由正文）—— 覆盖该分支此前的现场，并记一条 `handoff_set` 审计；`resume` 返回 `found=true`，带上保存的 branch、body、`updated_at` 与一条新鲜度 `note`；该 handoff 绝不会被 `coffer__recall` 返回。
+
+### Scenario: resume reports no handoff for a fresh branch
+
+- **Given** 一个在 git 项目内、某分支上没有保存过 handoff 的 MCP 客户端（或一个不在任何 git 项目里的 cwd），
+- **When** 它调 `coffer__resume`，
+- **Then** 调用返回 `found=false`（绝不报错、也不编造任何内容）。
 
 ### Scenario: distill-transcript-to-memory
 
@@ -244,8 +284,15 @@
 
 **通过 MCP 集成 agent**
 
-- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, mode?, top_k?)`（`mode` ∈ `grep` | `keyword` | `vector`）、`coffer__remember(text, scope?, type?)`、`coffer__update_memory(id, text)`、`coffer__forget(id)`、`coffer__list_memory(scope?)`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。
+- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, mode?, top_k?)`（`mode` ∈ `grep` | `keyword` | `vector`）、`coffer__remember(text, scope?, type?)`、`coffer__update_memory(id, text)`、`coffer__forget(id)`、`coffer__list_memory(scope?)`、`coffer__set_handoff(body)`、`coffer__resume()`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。
 - **FR-016**：这些内置 memory 工具调用 MUST 共用既有调用日志面（`mcp_invocations` 一行：工具名 + who/when/duration/outcome，不记参数也不记返回内容）。
+
+**工作状态 handoff（连续性）**
+
+- **FR-023**：系统 MUST 提供一条按 **(项目 store × git 分支)** 记账的**工作状态 handoff** lane：每分支一个文件，位于 `~/.coffer/memory/projects/<project-ulid>/handoff/<branch-slug>.md`，含 YAML frontmatter（`branch`、`updated_at`）加自由 markdown 正文。分支从 agent 上报的 cwd（其 repo 的当前分支）解析。handoff **仅限项目级** —— 不存在全局 handoff。
+- **FR-024**：`coffer__set_handoff(body)` MUST **覆盖**当前分支的 handoff 文件（不累积；每分支一份现场），更新 `updated_at`，并记一条 `handoff_set` 审计。handoff 正文以磁盘文件为准（随 git 同步镜像流转，与其它 memory 文件一致），且 MUST NOT 被 `coffer__recall` 返回（它在 `handoff/` 子目录里，在 recall 的 glob 之外）。
+- **FR-025**：`coffer__resume()` MUST 返回当前分支保存的 handoff —— `found=true`，带 `branch`、`body`、`updated_at` 与一条标注现场可能已过期的新鲜度 `note` —— 或当该分支没有 handoff（全新分支）或 cwd 不在 git 项目里时返回 `found=false`。它 MUST 在缺失 handoff 时绝不报错，且 MUST NOT 编造内容。
+- **FR-026**：当 agent 的 cwd 解析不到 git 项目（无 project 作用域、无分支）时，`coffer__set_handoff` MUST 被拒（没有可写的 store，也没有全局 handoff），`coffer__resume` MUST 返回 `found=false`。
 
 **Surfaces**
 
