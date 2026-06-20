@@ -87,12 +87,9 @@ export function ConversationListItem({
       tabIndex={0}
     >
       <span className="flex-1 truncate">{conversation.title}</span>
-      {conversation.origin === "channel" && conversation.peer && (
-        <span
-          className="shrink-0 rounded-full border border-transparent bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground"
-          title={conversation.peer.display_name}
-        >
-          {t("chat.history.viaChannel", { channel: conversation.peer.channel })}
+      {conversation.channel_binding != null && (
+        <span className="shrink-0 rounded-full border border-transparent bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
+          {t("chat.history.viaChannel", { channel: conversation.channel_binding.channel })}
         </span>
       )}
       {onRestore ? (

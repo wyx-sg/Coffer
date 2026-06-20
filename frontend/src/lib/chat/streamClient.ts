@@ -1,13 +1,15 @@
 // frontend/src/lib/chat/streamClient.ts
-// SSE consumer for POST /api/v1/chat/conversations/{id}/messages.
+// SSE consumer for GET /api/v1/chat/conversations/{id}/events.
 //
 // Implements an async generator that yields typed AgentEvent objects parsed
-// from the text/event-stream response. Handles:
+// from the text/event-stream response. The subscription replays the in-flight
+// turn then streams live, and stays open ACROSS turns (it does NOT close on
+// turn_done). Handles:
 //   - All SSE event names: turn_start, text_delta, tool_call, tool_result,
-//     turn_done, turn_error
-//   - Stream end (done: true from reader)
+//     turn_done, turn_error, queue_changed
+//   - Stream end (done: true from reader / abort signal)
 //   - Network errors (fetch throws)
-//   - HTTP error responses (non-200, e.g. 409 TurnInProgress — JSON body)
+//   - HTTP error responses (non-200, e.g. 404 — JSON body)
 
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "../api/errors";
@@ -62,13 +64,19 @@ export interface TurnErrorEvent {
   data: { code: string; message: string };
 }
 
+export interface QueueChangedEvent {
+  event: "queue_changed";
+  data: { pending: string[] };
+}
+
 export type AgentEvent =
   | TurnStartEvent
   | TextDeltaEvent
   | ToolCallEvent
   | ToolResultEvent
   | TurnDoneEvent
-  | TurnErrorEvent;
+  | TurnErrorEvent
+  | QueueChangedEvent;
 
 /** SSE event names this client understands; anything else is skipped so the
  *  AgentEvent union cast stays honest. */
@@ -79,6 +87,7 @@ const KNOWN_EVENTS: ReadonlySet<string> = new Set([
   "tool_result",
   "turn_done",
   "turn_error",
+  "queue_changed",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -115,45 +124,44 @@ function parseFrame(block: string): SseFrame | null {
 // ---------------------------------------------------------------------------
 
 /**
- * POST to /chat/conversations/{id}/messages and yield AgentEvents as they
- * arrive from the SSE stream.
+ * Subscribe to GET /chat/conversations/{id}/events and yield AgentEvents as
+ * they arrive from the SSE stream.
  *
- * Throws ApiError for HTTP errors (non-200 JSON responses).
+ * The subscription replays the in-flight turn then streams live, and stays
+ * open ACROSS turns — it does NOT return on `turn_done`/`turn_error`. The
+ * generator ends only when the response stream closes or the abort signal
+ * fires.
+ *
+ * Throws ApiError for HTTP errors (non-200 JSON responses, e.g. 404).
  * Throws Error for network/stream failures.
- *
- * The generator completes normally when a `turn_done` or `turn_error` event
- * is received, or when the stream closes.
  */
-export async function* streamChatTurn(
+export async function* subscribeConversationEvents(
   conversationId: string,
-  text: string,
   signal?: AbortSignal,
 ): AsyncGenerator<AgentEvent, void, unknown> {
-  const url = `${getCofferBaseUrl()}/chat/conversations/${conversationId}/messages`;
+  const url = `${getCofferBaseUrl()}/chat/conversations/${conversationId}/events`;
   const response = await fetch(url, {
-    method: "POST",
+    method: "GET",
     headers: {
-      "Content-Type": "application/json",
       Accept: "text/event-stream",
       "X-Coffer-Token": getCofferToken() ?? "",
       "X-Coffer-Actor": "ui",
     },
-    body: JSON.stringify({ text }),
     signal,
   });
 
   if (!response.ok) {
-    // Non-200 responses (e.g. 409 TurnInProgress, 404) return JSON.
+    // Non-200 responses (e.g. 404 conversation not found) return JSON.
     const payload = await response.json().catch(() => null);
     const err = payload?.error;
     throw new ApiError(
       err?.code ?? "INTERNAL_ERROR",
-      err?.message ?? `sendMessage failed: ${response.status}`,
+      err?.message ?? `subscribe failed: ${response.status}`,
     );
   }
 
   if (!response.body) {
-    throw new Error("streamChatTurn: response body is null");
+    throw new Error("subscribeConversationEvents: response body is null");
   }
 
   const reader = response.body.getReader();
@@ -192,11 +200,8 @@ export async function* streamChatTurn(
 
         const event = { event: frame.event, data: parsed } as AgentEvent;
         yield event;
-
-        // Stream terminates after turn_done or turn_error.
-        if (frame.event === "turn_done" || frame.event === "turn_error") {
-          return;
-        }
+        // The subscription is long-lived: it does NOT terminate on turn_done
+        // or turn_error. It ends only when the stream closes or it is aborted.
       }
     }
 
@@ -217,9 +222,9 @@ export async function* streamChatTurn(
       }
     }
   } finally {
-    // Cancel the body so the socket is torn down on early exit (terminal
-    // event, abort, or an abandoned generator), not left dangling. The
-    // server-side turn keeps running on disconnect by design.
+    // Cancel the body so the socket is torn down on exit (abort, stream close,
+    // or an abandoned generator), not left dangling. The server-side turn keeps
+    // running on disconnect by design.
     await reader.cancel().catch(() => {});
   }
 }

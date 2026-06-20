@@ -2,6 +2,7 @@
 // Scrollable list of messages + live streaming message.
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { chatApi } from "@/lib/api/chat";
 import { messagesKey } from "@/lib/hooks/useConversations";
@@ -25,6 +26,10 @@ interface Props {
   /** Called when the user stops the in-flight turn. */
   onStop?: () => void;
   onSend: (text: string) => void;
+  /** Messages queued behind the in-flight turn. */
+  pending?: string[];
+  /** Replace the pending queue (used to remove a queued message). */
+  onSetPending?: (texts: string[]) => void;
   /** Display name of the conversation's agent (from the agents API). */
   agentLabel?: string;
   /** Render read-only (archived conversation): restore CTA instead of composer. */
@@ -43,6 +48,8 @@ export function MessageThread({
   onClearTurnError,
   onStop,
   onSend,
+  pending = [],
+  onSetPending,
   agentLabel,
   readOnly,
   onRestore,
@@ -59,17 +66,10 @@ export function MessageThread({
   const { data, isPending, error } = useQuery({
     queryKey: messagesKey(conversation.id),
     queryFn: async () => (await chatApi.listMessages(conversation.id)).messages,
-    // While the fetched history holds a streaming placeholder (a turn running
-    // server-side with no client stream attached — reload / switch-back),
-    // poll until it resolves so the finished reply appears without a manual
-    // refresh.
-    refetchInterval: (query) =>
-      query.state.data?.some((m) => m.status === "streaming") ? 2000 : false,
+    // No polling: the persistent /events subscription drives the live turn and
+    // invalidates this query when the turn ends.
   });
 
-  // A persisted streaming row means a turn is in flight server-side even when
-  // this client holds no stream; lock the composer (a send would just 409).
-  const serverTurnActive = (data ?? []).some((m) => m.status === "streaming");
   // While the live bubble is shown, drop fetched streaming rows — a mid-turn
   // refetch (e.g. window refocus) must not duplicate the in-progress reply.
   const visibleMessages = liveMessage
@@ -167,7 +167,32 @@ export function MessageThread({
           </Button>
         </div>
       ) : (
-        <Composer onSend={onSend} disabled={isStreaming || serverTurnActive} onStop={onStop} />
+        <>
+          {pending.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-border bg-background px-4 pt-2">
+              <span className="text-xs text-muted-foreground">{t("chat.queue.label")}</span>
+              {pending.map((text, idx) => (
+                <span
+                  key={`${idx}-${text}`}
+                  className="inline-flex max-w-[16rem] items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
+                >
+                  <span className="truncate">{text}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-full p-0.5 hover:text-destructive"
+                    onClick={() => onSetPending?.(pending.filter((_, i) => i !== idx))}
+                    aria-label={t("chat.queue.remove")}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          {/* The composer is NEVER disabled by streaming: a message sent during a
+              turn queues server-side. */}
+          <Composer onSend={onSend} streaming={isStreaming} onStop={onStop} />
+        </>
       )}
     </div>
   );

@@ -60,20 +60,30 @@ describe("Composer", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  test("textarea is disabled while streaming", () => {
-    render(<Composer onSend={vi.fn()} disabled />);
-    expect(screen.getByRole("textbox")).toBeDisabled();
-    expect(screen.getByRole("button")).toBeDisabled();
+  test("textarea stays ENABLED while a turn streams (the next message queues)", () => {
+    render(<Composer onSend={vi.fn()} streaming />);
+    expect(screen.getByRole("textbox")).not.toBeDisabled();
   });
 
-  test("shows streaming hint when disabled", () => {
-    render(<Composer onSend={vi.fn()} disabled />);
-    expect(screen.getByText(/Waiting for response/i)).toBeInTheDocument();
+  test("can still send while streaming", () => {
+    const onSend = vi.fn();
+    render(<Composer onSend={onSend} streaming />);
+    const textarea = screen.getByRole("textbox");
+    act(() => {
+      fireEvent.change(textarea, { target: { value: "queue me" } });
+      fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+    });
+    expect(onSend).toHaveBeenCalledWith("queue me");
+  });
+
+  test("shows a 'will queue' hint while streaming", () => {
+    render(<Composer onSend={vi.fn()} streaming />);
+    expect(screen.getByText(/will queue/i)).toBeInTheDocument();
   });
 
   test("shows a Stop button while streaming and calls onStop", () => {
     const onStop = vi.fn();
-    render(<Composer onSend={vi.fn()} disabled onStop={onStop} />);
+    render(<Composer onSend={vi.fn()} streaming onStop={onStop} />);
     const stop = screen.getByRole("button", { name: /stop/i });
     act(() => {
       fireEvent.click(stop);
@@ -84,5 +94,11 @@ describe("Composer", () => {
   test("no Stop button when not streaming", () => {
     render(<Composer onSend={vi.fn()} onStop={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /stop/i })).not.toBeInTheDocument();
+  });
+
+  test("hard-disabled composer (draft creating) blocks input and send", () => {
+    render(<Composer onSend={vi.fn()} disabled />);
+    expect(screen.getByRole("textbox")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
   });
 });
