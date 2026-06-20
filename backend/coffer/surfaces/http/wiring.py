@@ -216,7 +216,6 @@ def wire_memory_kind(
         retrieval=retrieval,
         audit=audit,
         store_dir=paths.memory_store_dir,
-        fact_path=paths.fact_path,
         embedding_resolver=embedding_resolver,
     )
     handoff_service = HandoffService(

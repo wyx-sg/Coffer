@@ -13,6 +13,7 @@ read/scan is delegated to ``infrastructure.memory.files``.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,7 +25,13 @@ from coffer.domain.knowledge.document import KIND_MEMORY, Document
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.memory.fact import MemoryFact
-from coffer.infrastructure.memory.files import FactFile, scan_store_dir
+from coffer.infrastructure.memory.files import (
+    FactFile,
+    legacy_root_facts,
+    scan_store_dir,
+)
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -105,9 +112,19 @@ class MemoryReconciler:
     async def _reconcile_locked(
         self, *, store: StoreRef, embedding: EmbeddingConfig | None, force: bool
     ) -> ReconcileStats:
-        # The scan reads + parses every fact file — keep it off the event loop.
-        scan = await asyncio.to_thread(scan_store_dir, Path(store.docs_dir))
+        # The scan reads + parses every item in the knowledge/ lane — keep it
+        # off the event loop.
+        store_dir = Path(store.docs_dir)
+        scan = await asyncio.to_thread(scan_store_dir, store_dir)
         on_disk = scan.files
+        # FR-019: pre-lane facts at the store root are abandoned in place — note
+        # them once so an operator can re-remember or seed them if wanted.
+        legacy = await asyncio.to_thread(legacy_root_facts, store_dir)
+        if legacy:
+            _logger.info(
+                "memory.legacy_root_facts_abandoned",
+                extra={"store": store.resource_name, "count": len(legacy)},
+            )
         known = {
             d.id: d
             for d in await self._documents.list_documents(

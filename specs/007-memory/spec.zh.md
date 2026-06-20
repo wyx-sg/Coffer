@@ -5,7 +5,7 @@
 **Feature Branch**: `feature/kb-memory-redesign`
 **Created**: 2026-05-22
 **Status**: Accepted (redesign — in development)
-**Input**: Coffer memory feature 的重设计 —— 与 knowledge base（spec 006）共用同一套统一底座（unified substrate）的 **memory 面**。memory 不再是「写入时调 LLM 的 mem0 向量库」；它变成 **跨 agent 的单一真相源**（没有各 agent 间互相漂移的副本）。规范化存储 = 每条事实一个 markdown 文件，加上一个 `MEMORY.md` 索引，放在 `~/.coffer/memory/` 下，并带两层作用域（global + per-project）。agent **只通过 Coffer 的 MCP 网关读写记忆**（`coffer__recall`/`remember`/`update_memory`/`forget`/`list_memory`）；Coffer 保留自己的规范化格式，不触碰各 agent 的原生记忆文件（原生投影已移除 —— 见 ADR-026）。用户在 Coffer UI 里做完整 CRUD。检索复用与 knowledge base 相同的引擎（grep / keyword FTS5+BM25 / vector sqlite-vec）。完整设计依据见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)。
+**Input**: Coffer memory feature 的重设计 —— 与 knowledge base（spec 006）共用同一套统一底座（unified substrate）的 **memory 面**。memory 不再是「写入时调 LLM 的 mem0 向量库」；它变成 **跨 agent 的单一真相源**（没有各 agent 间互相漂移的副本）。规范化存储 = 每条记忆一个 markdown 文件，放在每个作用域的 `knowledge/` lane 下（新记住的条目落在 `knowledge/inbox/`），位于 `~/.coffer/memory/`，带两层作用域（global + per-project），并 **不再生成任何派生索引文件**（此前的 `MEMORY.md` 投影已移除 —— 检索里没人读它）。agent **只通过 Coffer 的 MCP 网关读写记忆**（`coffer__recall`/`remember`/`list_memory`）；编辑与删除是用户面（REST/CLI/外部编辑器），不是 MCP 工具。Coffer 保留自己的规范化格式，不触碰各 agent 的原生记忆文件（原生投影已移除 —— 见 ADR-026）。用户在 Coffer UI 里做完整 CRUD。检索复用与 knowledge base 相同的引擎（grep / keyword FTS5+BM25 / vector sqlite-vec）。完整设计依据见 [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md)。
 
 ## 用户场景与测试
 
@@ -15,15 +15,14 @@
 
 **为什么是这个优先级**：这是本次重设计的核心。各 agent 之间互相漂移的私有 silo 正是要解决的问题；没有单一真相源就没有这条 feature。
 
-**独立可测**：从全新安装开始，在一个 git 项目里跑 MCP 客户端，调 `coffer__remember` 写一条项目事实，再用第二个 MCP 客户端（不同 agent 身份）在同一项目里调 `coffer__recall`，看到该事实被召回。确认该事实也出现在项目的规范化 `MEMORY.md` 中。
+**独立可测**：从全新安装开始，在一个 git 项目里跑 MCP 客户端，调 `coffer__remember` 写一条项目事实，再用第二个 MCP 客户端（不同 agent 身份）在同一项目里调 `coffer__recall`，看到该事实被召回。确认该事实作为一个每条记忆的 markdown 文件出现在项目 store 的 `knowledge/inbox/` lane 下。
 
 **代表性场景**：
 
 - agent 记住一条项目事实
 - agent 召回一条项目事实
 - recall 跨 project 与 global 两个作用域
-- agent 更新一条事实
-- agent 遗忘一条事实
+- 记住的条目存入 knowledge lane
 - 内置记忆工具出现在客户端工具列表
 - embedding 未配置时 vector recall 回退
 
@@ -59,7 +58,6 @@
 - 用户添加一条事实
 - 用户带外纠正一条事实
 - 用户删除一条事实
-- 写入一条事实会重新生成 MEMORY.md
 - 只读视图提供打开/显示/复制路径的能力
 
 ---
@@ -141,7 +139,7 @@ cwd 没有可恢复的现场。
 
 - **Given** 一个跑在 git 项目内的 MCP 客户端，
 - **When** 它用一条事实加 `scope=project` 调 `coffer__remember`，
-- **Then** 在项目记忆目录下写出一个每条事实的 markdown 文件（YAML frontmatter `name`/`description`/`metadata.type`/`origin_session_id` + 正文），重新生成 `MEMORY.md`，将该文件索引进 `documents`，并写入一条审计。
+- **Then** 在项目记忆目录的 `knowledge/inbox/` 子目录下写出一个每条记忆的 markdown 文件（YAML frontmatter `name`/`description`/`metadata.type`/`origin_session_id` + 正文），将该文件索引进 `documents`，并写入一条审计。
 
 ### Scenario: agent recalls a project fact
 
@@ -155,6 +153,12 @@ cwd 没有可恢复的现场。
 - **When** 某 MCP 客户端不带 scope 调 `coffer__recall`，
 - **Then** 结果同时取自项目 store 与 global（sentinel）store。
 
+### Scenario: remembered items are stored in the knowledge lane
+
+- **Given** 一个跑在 git 项目内的 MCP 客户端，
+- **When** 它用一条事实调 `coffer__remember`，
+- **Then** 该条目作为一个 markdown 文件写入项目 store 的 `knowledge/inbox/` 子目录（从不落在 store 根目录、也不生成任何 `MEMORY.md`），被索引进 `documents`，且随后的 `coffer__recall` 能返回它。
+
 ### Scenario: remember at global scope
 
 - **Given** 一个 MCP 客户端，
@@ -167,18 +171,6 @@ cwd 没有可恢复的现场。
 - **When** daemon 解析项目记忆 store，
 - **Then** 它计算该 cwd 的 git-root，并解析（缺失则惰性置备）由该项目 ULID 标识的 per-project store。
 
-### Scenario: agent updates a fact
-
-- **Given** 一条事实已存在，
-- **When** 某 MCP 客户端用事实 id 与新文本调 `coffer__update_memory`，
-- **Then** 规范化 markdown 被重写、文档被重建索引、`MEMORY.md` 被重新生成，且 recall 反映新文本。
-
-### Scenario: agent forgets a fact
-
-- **Given** 一条事实已存在，
-- **When** 某 MCP 客户端用事实 id 调 `coffer__forget`，
-- **Then** markdown 文件被删除、其索引行被移除、`MEMORY.md` 被重新生成，且 recall 不再返回它。
-
 ### Scenario: out-of-band fact-file edits are visible on recall
 
 - **Given** 一个有事实的项目记忆 store，
@@ -189,7 +181,7 @@ cwd 没有可恢复的现场。
 
 - **Given** 一个记忆 store，
 - **When** 用户经 Coffer UI 或 CLI 添加一条事实，
-- **Then** 写出 `metadata.actor = "user"` 的规范化 markdown，重新生成 `MEMORY.md`，索引该文档，并写入一条审计。
+- **Then** 在 store 的 `knowledge/inbox/` 子目录下写出 `metadata.actor = "user"` 的规范化 markdown，索引该文档，并写入一条审计。
 
 ### Scenario: user corrects a fact out-of-band
 
@@ -201,7 +193,7 @@ cwd 没有可恢复的现场。
 
 - **Given** 一条事实已存在，
 - **When** 用户删除它，
-- **Then** markdown 文件与其索引行被移除、`MEMORY.md` 被重新生成，且 recall 不再返回它。
+- **Then** markdown 文件与其索引行被移除，且 recall 不再返回它。
 
 ### Scenario: read-only viewer offers open/reveal/copy-path affordances
 
@@ -209,17 +201,11 @@ cwd 没有可恢复的现场。
 - **When** 用户检视该事实（及其所在文件夹），
 - **Then** 内容只读渲染（应用内不编辑事实内容），读响应携带该事实的绝对 `.md` 磁盘路径及其所在文件夹的绝对路径，且 UI 在桌面（Tauri）端为文件与文件夹各提供「在外部编辑器中打开」+「在文件管理器中显示」，在 web 端回退为「复制绝对路径」；打开哪个编辑器由全局首选编辑器偏好决定（见 002-ui-shell）。
 
-### Scenario: writing a fact regenerates MEMORY.md
-
-- **Given** 任意写入者（agent、Claude 或用户）写入或移除一条事实，
-- **When** 写入完成，
-- **Then** `MEMORY.md` 从事实 frontmatter 重新生成为 `- [name](file.md) — description`，幂等地覆盖此前内容。
-
 ### Scenario: clear a memory scope
 
 - **Given** 一个有事实的记忆 store，
 - **When** 用户清空该作用域，
-- **Then** 每个事实文件与其索引行被移除、`MEMORY.md` 变空，但 store 这个 Resource 保留。
+- **Then** `knowledge/` 下的每条记忆条目被移除、其索引行被丢弃，但 store 这个 Resource 保留。
 
 ### Scenario: user renames a memory store
 
@@ -231,7 +217,7 @@ cwd 没有可恢复的现场。
 
 - **Given** 一个 MCP 客户端接入 coffer 网关，
 - **When** 客户端列出 tools，
-- **Then** `coffer__recall`、`coffer__remember`、`coffer__update_memory`、`coffer__forget`、`coffer__list_memory`、`coffer__set_handoff`、`coffer__resume` 与其它内置工具及上游工具一起出现。
+- **Then** `coffer__recall`、`coffer__remember`、`coffer__list_memory`、`coffer__set_handoff`、`coffer__resume` 与其它内置工具及上游工具一起出现。
 
 ### Scenario: vector recall falls back when embedding is unconfigured
 
@@ -265,15 +251,15 @@ cwd 没有可恢复的现场。
 
 **存储与作用域**
 
-- **FR-001**：系统 MUST 把每条记忆事实存为一个每条事实的 markdown 文件，带 YAML frontmatter（`name`、`description`、`metadata.type`、`metadata.actor`、`origin_session_id`）加 markdown 正文，并配一个重新生成的 `MEMORY.md` 索引。markdown 文件是 **唯一真相源**；SQLite 是可重建的索引。
-- **FR-002**：系统 MUST 支持两种记忆作用域：**global**（一个由 `project_id = WORKSPACE_GLOBAL_PROJECT_ID`（既有 sentinel `00000000000000000000000000`）标识的 store）与 **per-project**（每项目一个、由项目 ULID 标识的 store），分别存于 `~/.coffer/memory/global/` 与 `~/.coffer/memory/projects/<project-ulid>/`。
-- **FR-003**：系统 MUST 在每次 write/update/delete 时幂等地重新生成 `MEMORY.md`（`- [name](file.md) — description`，由事实 frontmatter 派生），覆盖此前内容。
+- **FR-001**：系统 MUST 把每条记忆条目存为一个每条记忆的 markdown 文件（YAML frontmatter `name`/`description`/`metadata.type`/`metadata.actor`/`origin_session_id` + 正文），位于每个作用域的 **`knowledge/` lane** 下 —— 新记住的条目落在 `knowledge/inbox/`，经整理的主题文档（`knowledge/<topic>.md`）加一个 `INDEX.md` 由整合 organizer 维护（后续 memory PR）。markdown 文件是 **唯一真相源**；SQLite 是可重建的索引。**不生成任何 `MEMORY.md` 索引**（此前的派生索引是无用的投影产物，检索里没人读它）。
+- **FR-002**：系统 MUST 支持两种记忆作用域：**global**（一个由 `project_id = WORKSPACE_GLOBAL_PROJECT_ID`（既有 sentinel `00000000000000000000000000`）标识的 store）与 **per-project**（每项目一个、由项目 ULID 标识的 store），分别存于 `~/.coffer/memory/global/knowledge/` 与 `~/.coffer/memory/projects/<project-ulid>/knowledge/`。
+- **FR-003**：`coffer__remember`（与用户添加）MUST 把一条记忆条目追加进每作用域的 inbox（`knowledge/inbox/`），写入时不调 LLM；整理进主题文档由整合 organizer 异步完成（后续 memory PR），绝不阻塞写入或 `recall`。
 - **FR-004**：系统 MUST 从 agent 在会话握手时上报的启动 cwd 解析 per-project store：daemon 计算 git-root，并解析（缺失则惰性置备）该项目 ULID 对应的 store。
 
 **事实生命周期**
 
 - **FR-005**：agent 与用户 MUST 能直接写入一条事实（写入时不调 LLM）。事实文本 MUST 至少 1 个字符、至多 `max_fact_chars`（默认 8192）；空或超长在 API 边界被拒，不持久化任何内容。
-- **FR-006**：用户与 agent MUST 能列出事实（按作用域）、按 id 取单条、改一条事实的文本（经 REST/CLI 写入面，或直接编辑规范化 markdown —— Coffer UI 只读渲染事实内容、不在应用内编辑它）、删除单条事实、清空某作用域全部事实。清空保留 store 这个 Resource。
+- **FR-006**：用户与 agent MUST 能列出事实（按作用域）、按 id 取单条、改一条事实的文本、删除单条事实、清空某作用域全部事实。事实**编辑/删除**经 REST/CLI 写入面（`PATCH/DELETE …/facts/{id}` / `coffer memory edit/delete`）与外部编辑器 files-as-truth —— Coffer UI 只读渲染事实内容、不在应用内编辑它；MCP 的 `update_memory`/`forget` 工具已**移除**（agent 的写入面是 `remember` + 内部 organizer）。清空保留 store 这个 Resource。
 - **FR-007**：每条事实带 `metadata.actor`（`agent` | `user`）与可选的 `metadata.type`（如 `project` / `feedback` / `reference` / `user`）；由写入者设定。
 
 **检索**
@@ -284,7 +270,7 @@ cwd 没有可恢复的现场。
 
 **通过 MCP 集成 agent**
 
-- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, mode?, top_k?)`（`mode` ∈ `grep` | `keyword` | `vector`）、`coffer__remember(text, scope?, type?)`、`coffer__update_memory(id, text)`、`coffer__forget(id)`、`coffer__list_memory(scope?)`、`coffer__set_handoff(body)`、`coffer__resume()`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。
+- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, mode?, top_k?)`（`mode` ∈ `grep` | `keyword` | `vector`）、`coffer__remember(text, scope?, type?)`、`coffer__list_memory(scope?)`、`coffer__set_handoff(body)`、`coffer__resume()`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。没有 MCP `update_memory`/`forget` 工具 —— 事实编辑/删除是用户面（REST/CLI/外部编辑器），见 FR-006。
 - **FR-016**：这些内置 memory 工具调用 MUST 共用既有调用日志面（`mcp_invocations` 一行：工具名 + who/when/duration/outcome，不记参数也不记返回内容）。
 
 **工作状态 handoff（连续性）**
@@ -296,7 +282,7 @@ cwd 没有可恢复的现场。
 
 **Surfaces**
 
-- **FR-017**：用户 MUST 能通过编程写入面完成完整记忆 CRUD —— (a) `/api/v1/memory_stores/` 下的 REST API 与 (b) `coffer memory …` 子命令。（这些 REST 写入端点也是 agent 经 MCP 网关写入事实的途径。）用户写入设 `metadata.actor = "user"`，写规范化 markdown、重新生成 `MEMORY.md`、重建索引并审计。桌面/web UI 以 **只读** 方式呈现事实（不在应用内编辑事实内容）；人类维护时在自己的外部编辑器里编辑规范化 markdown（经 lazy reindex-on-read（FR-010）拾取），或经 REST/CLI 写入面。这些 surface 上的 store 名会被校验：只有 `global` 或 `project-<26 字符 ULID>` 合法 —— 形状合法的名字会惰性 provision 其 store；其余返回 404（`MEMORY_STORE_NOT_FOUND`）。
+- **FR-017**：用户 MUST 能通过编程写入面完成完整记忆 CRUD —— (a) `/api/v1/memory_stores/` 下的 REST API 与 (b) `coffer memory …` 子命令。（这些 REST 写入端点也是 agent 经 MCP 网关写入事实的途径。）用户写入设 `metadata.actor = "user"`，把规范化 markdown 写入 store 的 `knowledge/inbox/` 子目录、重建索引并审计。桌面/web UI 以 **只读** 方式呈现事实（不在应用内编辑事实内容）；人类维护时在自己的外部编辑器里编辑规范化 markdown（经 lazy reindex-on-read（FR-010）拾取），或经 REST/CLI 写入面。这些 surface 上的 store 名会被校验：只有 `global` 或 `project-<26 字符 ULID>` 合法 —— 形状合法的名字会惰性 provision 其 store；其余返回 404（`MEMORY_STORE_NOT_FOUND`）。
 - **FR-017a**：各 surface MUST 用**从 `project_root` 推导的可读身份**来呈现 per-project store —— 以根目录的 basename 作为主标签、绝对根路径作为次要细节 —— 而**不**只显示不可读的 `project-<ULID>` store 名（项目 ULID 是根路径的单向摘要，人无法辨认）。当根路径未知（store 在记录根路径之前就被 provision）时退回显示 store 名；global store 无需推导（其名 `global` 本就可读）。底层 store 名仍是 `project-<ULID>`（FR-017）—— 这是**展示**层的事。由前端测试验证；桌面验收与其它桌面视图项一样延后到 e2e。
 - **FR-017c**：用户 MUST 能为任意 memory store 设置一个**显示标签**——一个用户自选、在所有 surface 中优先于 FR-017a 的 `project_root` 推导的名字。它为来源文件夹从未被记录的 store（FR-017a 否则会退回不可读的 `project-<ULID>` 名）提供可读身份。设置空 / 纯空白标签会清除它，退回 FR-017a 的推导或回退名。该标签是**展示元数据**：不改变 store 名（FR-017）或 `project_id`，通过 `PATCH /memory_stores/{name}/label` 设置。由 HTTP 验收测试验证；桌面重命名视图与其它桌面视图项一样延后到 e2e。
 - **FR-021**：只读事实视图 MUST 为「事实文件」与「其所在文件夹」两者各提供以下能力：(a) **在外部编辑器中打开**、(b) **在文件管理器 / Finder 中显示**、(c) **复制绝对路径**（web 回退）。在桌面（Tauri）端 (a) 与 (b) 执行真实的打开/显示；在 web 端 UI 回退为复制路径。打开哪个编辑器由全局首选编辑器偏好决定（在 002-ui-shell 规范，本处不再重复规范）。读响应 MUST 携带这些能力所作用的绝对路径（见 FR-022）。
@@ -308,7 +294,7 @@ cwd 没有可恢复的现场。
 
 **迁移**
 
-- **FR-019**：本分支未发布；**没有数据迁移**。单个迁移 MUST 删除 `memory_records` 并创建全新统一 schema。预发布构建遗留在磁盘上的旧引擎目录（chroma/LlamaIndex）原地废弃 —— 没有任何代码再读它们 —— 而非删除。旧的 mem0/chroma 文本不迁移。
+- **FR-019**：本分支未发布；lane 布局**没有新的 schema 迁移**（`documents`/`chunks` schema 不变 —— 只是磁盘上 lane 的位置变了）。单个迁移 MUST 删除 `memory_records` 并创建全新统一 schema。预发布构建遗留在磁盘上的旧引擎目录（chroma/LlamaIndex）原地废弃 —— 没有任何代码再读它们 —— 而非删除；旧的 mem0/chroma 文本不迁移。pre-lane 构建遗留在 store 根目录的旧每条记忆文件同样**原地废弃**（不读、不删）：lazy reindex-on-read 对账 `knowledge/` lane，于是旧根目录事实的陈旧索引行会在下一次 `recall` 时被对账清除，直到这些条目被重新记住或被 organizer 播种。磁盘上既有的 `MEMORY.md` 文件原地留存，不被读取。
 
 ### Key Entities
 
@@ -330,7 +316,7 @@ cwd 没有可恢复的现场。
 ## Assumptions
 
 - 用户在自己的机器上跑 Coffer；记忆数据留在本地。为可选的 vector recall 调用已配置的云端 embedding provider 是允许的（local-first ≠ 不调远程 API）。
-- 规范化格式是每条事实一个 markdown 文件（YAML frontmatter + 正文）加一个重新生成的 `MEMORY.md` 索引。
+- 规范化格式是每条记忆一个 markdown 文件（YAML frontmatter + 正文），位于每个作用域的 `knowledge/` lane 下；没有派生的 `MEMORY.md` 索引。
 - coffer-mcp-shim 在会话握手时把其启动 cwd 传给 daemon（在支持的 agent 上实现期验证）。
 - knowledge base（spec 006）与 memory 共用一套统一底座（`documents` 表按 `kind` + JSON `metadata` 区分）；二者是两个面，不是重复代码。
 - 单用户并发量很小。

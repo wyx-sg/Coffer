@@ -28,17 +28,15 @@ from coffer.domain.memory.fact import Actor, MemoryFact
 from coffer.domain.memory.scope import ResolvedScope
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge.ids import new_ulid, slugify
+from coffer.infrastructure.knowledge.paths import inbox_item_path
 from coffer.infrastructure.memory.files import (
     FactFile,
     delete_fact_file,
-    regenerate_memory_index,
     write_fact_file,
 )
 
 #: Post-write change hook installed by the composition root.
 NotifyFn = Callable[[str], Awaitable[None]]
-#: Resolves the canonical on-disk path for a fact (``store_dir, key -> path``).
-FactPathFn = Callable[[Path, str], Path]
 #: Builds a retrieval ``StoreRef`` (``store_name, project_id -> StoreRef``).
 StoreRefFn = Callable[[str, str], StoreRef]
 
@@ -52,7 +50,6 @@ class WriteDeps:
     audit: AuditService
     reconciler: MemoryReconciler
     notify: NotifyFn
-    fact_path: FactPathFn
     store_ref: StoreRefFn
     # Resolves the GLOBAL embedding config (embedding is no longer per-store).
     embedding_resolver: EmbeddingResolver = no_embedding
@@ -109,8 +106,8 @@ def apply_fact_changes(
     new_type: str | None,
 ) -> MemoryFact:
     """Return a copy of ``fact`` with the supplied edits applied. ``None`` for an
-    optional field leaves it unchanged (the agent-facing ``update_memory`` tool
-    passes body only)."""
+    optional field leaves it unchanged (the REST/CLI edit-by-id path passes
+    body only)."""
     changes: dict[str, object] = {
         "body": new_body,
         "updated_at": datetime.now(tz=UTC),
@@ -133,46 +130,43 @@ async def write_and_index(
     config: MemoryStoreConfig,
     embedding_resolver: EmbeddingResolver,
 ) -> None:
-    """Persist ``fact`` to ``fact_path``, index it, and regenerate ``MEMORY.md``."""
+    """Persist ``fact`` to ``fact_path`` and index it (no derived index)."""
     await asyncio.to_thread(write_fact_file, fact_path, fact)
     ff = FactFile(fact=fact, path=fact_path, content_sha256=body_sha(fact.body))
     embedding = await embedding_resolver() if config.vector_enabled else None
     await reconciler.index_one(store=store_ref, fact_file=ff, embedding=embedding)
-    await asyncio.to_thread(regenerate_memory_index, fact_path.parent)
 
 
-def default_fact_path(fact_path_fn: FactPathFn, store_dir: Path, fact: MemoryFact) -> Path:
-    """The canonical on-disk path for a fact: ``<slug>-<id-tail>``."""
-    return fact_path_fn(store_dir, f"{slugify(fact.name)}-{fact.id[-8:].lower()}")
+def default_fact_path(store_dir: Path, fact: MemoryFact) -> Path:
+    """The canonical on-disk path for a freshly-remembered item:
+    ``<store_dir>/knowledge/inbox/<slug>-<id-tail>.md``."""
+    return inbox_item_path(store_dir, f"{slugify(fact.name)}-{fact.id[-8:].lower()}")
 
 
 async def delete_one(
     *,
     reconciler: MemoryReconciler,
-    store_dir: Path,
     store_ref: StoreRef,
     fact_id: str,
     fact_path: Path,
 ) -> None:
-    """Remove a single fact file + its index rows, then regenerate ``MEMORY.md``."""
+    """Remove a single fact file + its index rows (no derived index)."""
     await asyncio.to_thread(delete_fact_file, fact_path)
     await reconciler.remove_one(store=store_ref, fact_id=fact_id)
-    await asyncio.to_thread(regenerate_memory_index, store_dir)
 
 
 async def clear_store(
     *,
     reconciler: MemoryReconciler,
-    store_dir: Path,
     store_ref: StoreRef,
     files: dict[str, FactFile],
 ) -> int:
-    """Remove every fact file + index rows in a store, then regenerate
-    ``MEMORY.md``. Returns the number of facts cleared."""
+    """Remove every memory item under the store's ``knowledge/`` lane + their
+    index rows; the store Resource (and ``handoff/``) is preserved. Returns the
+    number of items cleared."""
     for fact_id, ff in files.items():
         await asyncio.to_thread(delete_fact_file, ff.path)
         await reconciler.remove_one(store=store_ref, fact_id=fact_id)
-    await asyncio.to_thread(regenerate_memory_index, store_dir)
     return len(files)
 
 
@@ -204,7 +198,7 @@ async def add_new_fact(
     )
     await write_and_index(
         reconciler=deps.reconciler,
-        fact_path=default_fact_path(deps.fact_path, resolved.store_dir, fact),
+        fact_path=default_fact_path(resolved.store_dir, fact),
         fact=fact,
         store_ref=deps.store_ref(store_name, resolved.project_id),
         config=config,
@@ -267,10 +261,9 @@ async def remove_fact(
     existing: FactFile,
     actor: str,
 ) -> None:
-    """Delete a fact file + index rows, regenerate ``MEMORY.md``, audit, notify."""
+    """Delete a fact file + index rows, audit, notify."""
     await delete_one(
         reconciler=deps.reconciler,
-        store_dir=resolved.store_dir,
         store_ref=deps.store_ref(store_name, resolved.project_id),
         fact_id=existing.fact.id,
         fact_path=existing.path,
@@ -294,7 +287,6 @@ async def clear_all_facts(
     """Remove every fact in a store (keeping the Resource), audit, notify."""
     cleared = await clear_store(
         reconciler=deps.reconciler,
-        store_dir=resolved.store_dir,
         store_ref=deps.store_ref(store_name, resolved.project_id),
         files=files,
     )

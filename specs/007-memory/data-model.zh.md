@@ -32,8 +32,8 @@ frozen dataclass；一个每条事实 markdown 文件（frontmatter + 正文）�
 | 字段                | 类型                      | 说明                                                                       |
 | ------------------- | ------------------------- | -------------------------------------------------------------------------- |
 | `id`                | `str`                     | 文档 id（ULID）；也是 `<fact-slug>.md` 文件名的基础。                      |
-| `name`              | `str`                     | frontmatter `name`（短标题；出现在 `MEMORY.md`）。                         |
-| `description`       | `str`                     | frontmatter `description`（一行摘要；出现在 `MEMORY.md`）。                |
+| `name`              | `str`                     | frontmatter `name`（短标题）。                                            |
+| `description`       | `str`                     | frontmatter `description`（一行摘要）。                                   |
 | `body`              | `str`                     | markdown 正文 = 事实文本。                                                 |
 | `type`              | `str \| None`             | frontmatter `metadata.type`（`project`/`feedback`/`reference`/`user`/…）。 |
 | `actor`             | `Literal["agent","user"]` | frontmatter `metadata.actor` —— 谁写的。                                   |
@@ -73,7 +73,7 @@ frozen dataclass；recall 结果。
 
 检索与 KB 面**共享**。值对象（`StoreRef`、`Passage`、`GrepHit`、`GrepResult`、`MemoryHit`、`SearchResult`、`RetrievalMode`）在 `domain/knowledge/retrieval.py`；协议（`KnowledgeIndex`、`GrepPort`、`RetrievalPort`）在 `domain/knowledge/index.py`。具体门面是 `KnowledgeRetrieval`（`application/knowledge/retrieval.py`）：它组合 chunk 索引（`infrastructure/knowledge/sqlite_index.py` + `vec_index.py`）、ripgrep 包装器（`grep.py`）与 embedder 客户端（`embeddings.py`），并持有 keyword↔vector 的决策（包括带标注的 vector→keyword 回退）—— 两个面都不重复这段逻辑。读时惰性 reindex 的对账由 memory 侧的 `MemoryReconciler`（`application/memory/sync.py`）驱动单一 re-index 例程（`application/knowledge/reindex.py`）完成。
 
-agent 只通过 MCP 网关工具（`coffer__recall`/`remember`/`update_memory`/`forget`/`list_memory`）读写记忆；Coffer 从不改动 agent 的原生记忆文件（原生投影已移除 —— 见 ADR-026）。
+agent 只通过 MCP 网关工具（`coffer__recall`/`remember`/`list_memory`）读写记忆；事实编辑/删除是用户面（REST/CLI/外部编辑器），不是 MCP 工具。Coffer 从不改动 agent 的原生记忆文件（原生投影已移除 —— 见 ADR-026）。
 
 ### Domain 错误（规范类在 `domain/errors.py`，经 `domain/knowledge/errors.py` 再导出）
 
@@ -161,12 +161,18 @@ CREATE TABLE memory_store_labels (
 ~/.coffer/
 └── memory/
     ├── global/                        # project_id = WORKSPACE_GLOBAL_PROJECT_ID (00000000000000000000000000)
-    │   ├── MEMORY.md                  # regenerated index: - [name](file.md) — description
-    │   └── <fact-slug>.md             # per-fact file = truth (frontmatter + body)
-    └── projects/<project-ulid>/       # one dir per project
-        ├── MEMORY.md
-        └── <fact-slug>.md
+    │   └── knowledge/                 # 语义 lane（recall 在此搜索）
+    │       ├── inbox/<item>.md        # per-item file = truth（frontmatter + body），新记住的条目
+    │       ├── <topic>.md             # 经整理的主题文档（PR2b —— 由整合 organizer 写入）
+    │       └── INDEX.md               # 人类审阅入口（PR2b）
+    └── projects/<project-ulid>/       # 每项目一个目录
+        └── knowledge/
+            ├── inbox/<item>.md
+            ├── <topic>.md             # PR2b
+            └── INDEX.md               # PR2b
 ```
+
+**没有 `MEMORY.md`** —— 此前的派生投影已移除。`recall` glob `knowledge/**/*.md`（排除 `INDEX.md`），所以 organizer 写入主题文档后会被透明拾取，手写的主题文档也会被立即发现。
 
 每条事实 `.md` 的 frontmatter：
 
@@ -188,18 +194,18 @@ release target tags and pushes atomically.
 
 `created_at` / `updated_at` 持久化在 frontmatter 里（文件是真相源）；只有解析省略了它们的手写事实文件时，才回退用文件 mtime。
 
-`infrastructure/memory/paths.py` 是唯一构造这些路径的模块。`infrastructure/memory/files.py` 是唯一读写每条事实 `.md`、渲染 `MEMORY.md`、扫描目录找增量的模块。
+`infrastructure/memory/paths.py` 是唯一构造这些路径的模块。`infrastructure/memory/files.py` 是唯一读写每条记忆 `.md`、扫描 `knowledge/` lane 找增量的模块。
 
 ## 级联与完整性规则
 
 | 动作                                             | 效果                                                                                                                                                          |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `remember` / 用户新增                            | 写 `<fact-slug>.md` → 重新生成 `MEMORY.md` → 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计。                                                                 |
-| `update_memory` / 用户编辑（API/CLI/外部编辑器） | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 重新生成 `MEMORY.md` → 审计。（直接的外部编辑器编辑在下一次 lazy reindex-on-read 时生效。） |
-| `forget` / 用户删除                              | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 重新生成 `MEMORY.md` → 审计。                                                                            |
-| 清空一个 scope                                   | 删除该 store 全部 `.md` → 移除全部索引行 → `MEMORY.md` 置空 → 审计。store Resource 保留。                                                                     |
-| 删除 store Resource                              | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、审计。                                                                                                   |
-| Recall                                           | **读时惰性 reindex**：扫 `store_dir` 找增量（按 `content_sha256`）→ `reconcile` → 搜索。不写 `MEMORY.md`。                                                    |
+| `remember` / 用户新增                       | 写 `knowledge/inbox/<item-slug>.md` → 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计。                                                                          |
+| 用户编辑（REST/CLI/外部编辑器）             | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 审计。（直接的外部编辑器编辑在下一次 lazy reindex-on-read 时生效。）MCP 无编辑工具 —— 仅 REST/CLI。 |
+| 用户删除（REST/CLI）                        | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 审计。MCP 无删除工具 —— 仅 REST/CLI。                                                                       |
+| 清空一个 scope                              | 删除 `knowledge/` 下每条记忆条目 → 移除全部索引行 → 审计。store Resource 保留。                                                                                  |
+| 删除 store Resource                         | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、审计。                                                                                                     |
+| Recall                                      | **读时惰性 reindex**：扫 `knowledge/` lane 找增量（按 `content_sha256`）→ `reconcile` → 搜索。                                                                   |
 | 修改 embedding 模型                              | 允许 → 下次索引时对 store 重新 embedding（文件是真相）。                                                                                                      |
 | 修改 `max_fact_chars`                            | 允许。                                                                                                                                                        |
 
@@ -221,8 +227,8 @@ memory 的所有写路径（remember、update、用户编辑、惰性 reindex �
 | 值                 | 何时发出                  |
 | ------------------ | ------------------------- |
 | `"memory_added"`   | `remember`/用户新增成功后 |
-| `"memory_updated"` | `update`/用户编辑成功后   |
-| `"memory_deleted"` | `forget`/用户删除成功后   |
+| `"memory_updated"` | 用户编辑（REST/CLI）成功后 |
+| `"memory_deleted"` | 用户删除（REST/CLI）成功后 |
 | `"memory_cleared"` | 清空一个 scope 后         |
 
 ## 对话记录提炼（Spec 007 扩展）

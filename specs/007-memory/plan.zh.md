@@ -10,7 +10,7 @@
 
 memory 是与 knowledge base（spec 006）共用同一套统一知识底座的 **memory 面**。每个记忆作用域是一个 kind 为 `memory` 的 Resource。事实 = 每条事实一个 markdown 文件（YAML frontmatter + 正文）加一个重新生成的 `MEMORY.md` 索引，放在 `~/.coffer/memory/` 下。**文件是真相源；SQLite（`documents` + FTS5 + sqlite-vec）是可重建的索引。** 有两种作用域：global（sentinel ULID）与 per-project（由 agent 工作目录解析出的项目 ULID）。
 
-写入时不调 LLM —— agent 直接写一条干净的事实。每个 agent **只通过 Coffer MCP 网关读写记忆**（`coffer__recall/remember/update_memory/forget/list_memory`）；Coffer 保留自己的规范化格式，**不触碰各 agent 的原生记忆文件**（原生投影已移除 —— 见 ADR-026）。用户经 CLI/REST 写入面做完整 CRUD；Coffer UI 是 **只读** 视图，为每条事实及其文件夹提供「在外部编辑器打开 / 显示 / 复制路径」（维护在用户自己的编辑器里完成，经 lazy reindex-on-read 拾取）。
+写入时不调 LLM —— agent 直接写一条干净的事实。每个 agent **只通过 Coffer MCP 网关读写记忆**（`coffer__recall/remember/list_memory/set_handoff/resume`）；Coffer 保留自己的规范化格式，**不触碰各 agent 的原生记忆文件**（原生投影已移除 —— 见 ADR-026）。用户经 CLI/REST 写入面做完整 CRUD；Coffer UI 是 **只读** 视图，为每条事实及其文件夹提供「在外部编辑器打开 / 显示 / 复制路径」（维护在用户自己的编辑器里完成，经 lazy reindex-on-read 拾取）。
 
 本次重设计 **删除 mem0、chroma、LlamaIndex**，并用统一 `documents` 表取代 `memory_records`。没有数据迁移（分支未发布）。
 
@@ -52,7 +52,7 @@ backend/coffer/
 │   │   └── locks.py                     # StoreLocks —— 逐 store 写串行化
 │   ├── memory/
 │   │   ├── kind.py                      # make_memory_kind(...)
-│   │   ├── service.py / service_helpers.py  # remember/recall/update/forget/list/clear + MEMORY.md 重生
+│   │   ├── service.py / service_helpers.py  # remember/recall/update/forget/list/clear（知识库 inbox）
 │   │   ├── writes.py / queries.py       # 事实写/读路径
 │   │   ├── recall.py                    # recall 编排 + 倒数排名融合（RRF）合并
 │   │   ├── scope.py                     # ScopeResolver：cwd → git-root → 项目 ULID → store（惰性置备）；store 名校验

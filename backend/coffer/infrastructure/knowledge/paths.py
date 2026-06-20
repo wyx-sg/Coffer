@@ -141,6 +141,31 @@ def fact_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
     return store_dir / f"{slug}.md"
 
 
+def knowledge_dir(store_dir: pathlib.Path) -> pathlib.Path:
+    """The ``knowledge/`` lane of a memory store — the semantic memory the
+    ``recall`` glob searches (inbox items + organized topic docs)."""
+    candidate = (store_dir / "knowledge").resolve()
+    if not candidate.is_relative_to(store_dir.resolve()):
+        raise ValueError("knowledge dir escapes the store dir")
+    return store_dir / "knowledge"
+
+
+def inbox_dir(store_dir: pathlib.Path) -> pathlib.Path:
+    """The ``knowledge/inbox/`` subdir — freshly-remembered, not-yet-organized
+    items. The consolidation organizer drains it into topic docs."""
+    return knowledge_dir(store_dir) / "inbox"
+
+
+def inbox_item_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
+    """Path of a per-item file ``<store_dir>/knowledge/inbox/<slug>.md``."""
+    _safe_segment(slug, "inbox item slug")
+    d = inbox_dir(store_dir)
+    candidate = (d / f"{slug}.md").resolve()
+    if not candidate.is_relative_to(d.resolve()):
+        raise ValueError(f"inbox item slug {slug!r} escapes the inbox dir")
+    return d / f"{slug}.md"
+
+
 def handoff_dir(store_dir: pathlib.Path) -> pathlib.Path:
     """The ``handoff/`` subdir of a memory store (working-state files live here,
     excluded from recall which globs only the store dir's top-level ``*.md``)."""

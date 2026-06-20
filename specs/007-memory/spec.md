@@ -5,7 +5,7 @@
 **Feature Branch**: `feature/kb-memory-redesign`
 **Created**: 2026-05-22
 **Status**: Accepted (redesign — in development)
-**Input**: Redesign of Coffer's memory feature — the **memory face** of one unified substrate shared with the knowledge base (spec 006). Memory is no longer a mem0 vector store with an LLM at write time; it becomes a **single shared source of truth across agents** (no divergent per-agent copies). Canonical storage is per-fact markdown files plus a `MEMORY.md` index under `~/.coffer/memory/`, with a two-layer scope (global + per-project). Agents read and write memory **only through Coffer's MCP gateway** (`coffer__recall`/`remember`/`update_memory`/`forget`/`list_memory`); Coffer keeps its own canonical format and does not touch agents' native memory files (native projection was removed — see ADR-026). The user does full CRUD in the Coffer UI. Retrieval uses the same engine as the knowledge base (grep / keyword FTS5+BM25 / vector sqlite-vec). See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) for the full design rationale.
+**Input**: Redesign of Coffer's memory feature — the **memory face** of one unified substrate shared with the knowledge base (spec 006). Memory is no longer a mem0 vector store with an LLM at write time; it becomes a **single shared source of truth across agents** (no divergent per-agent copies). Canonical storage is per-item markdown files under a per-scope `knowledge/` lane (freshly-remembered items in `knowledge/inbox/`) under `~/.coffer/memory/`, with a two-layer scope (global + per-project) and **no derived index file** (the prior `MEMORY.md` projection is removed — read by nothing in retrieval). Agents read and write memory **only through Coffer's MCP gateway** (`coffer__recall`/`remember`/`list_memory`); editing and deleting are user surfaces (REST/CLI/external editor), not MCP tools. Coffer keeps its own canonical format and does not touch agents' native memory files (native projection was removed — see ADR-026). The user does full CRUD in the Coffer UI. Retrieval uses the same engine as the knowledge base (grep / keyword FTS5+BM25 / vector sqlite-vec). See [ADR-012](../../docs/decisions/ADR-012-files-as-truth-sqlite-retrieval.md) for the full design rationale.
 
 ## User Scenarios & Testing
 
@@ -15,15 +15,14 @@ The developer works on a project with Claude Code in the morning and Codex in th
 
 **Why this priority**: This is the core of the redesign. A per-agent silo that drifts across agents is the problem being solved; without a single shared source of truth there is no feature.
 
-**Independent Test**: From a fresh install, run an MCP client in a git project, call `coffer__remember` with a project fact, then from a second MCP client (different agent identity) in the same project call `coffer__recall` and observe the fact returned. Confirm the same fact appears in the project's canonical `MEMORY.md`.
+**Independent Test**: From a fresh install, run an MCP client in a git project, call `coffer__remember` with a project fact, then from a second MCP client (different agent identity) in the same project call `coffer__recall` and observe the fact returned. Confirm the same fact appears as a per-item markdown file under the project store's `knowledge/inbox/` lane.
 
 **Covering scenarios**:
 
 - agent remembers a project fact
 - agent recalls a project fact
 - recall spans project and global scope
-- agent updates a fact
-- agent forgets a fact
+- remembered items are stored in the knowledge lane
 - built-in memory tools appear in client tool list
 - vector recall falls back when embedding is unconfigured
 
@@ -59,7 +58,6 @@ The developer wants to see and correct what agents remember: browse facts per sc
 - user adds a fact
 - user corrects a fact out-of-band
 - user deletes a fact
-- writing a fact regenerates MEMORY.md
 - read-only viewer offers open/reveal/copy-path affordances
 
 ---
@@ -186,7 +184,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** an MCP client running inside a git project,
 - **When** it calls `coffer__remember` with a fact and `scope=project`,
-- **Then** a per-fact markdown file (YAML frontmatter `name`/`description`/`metadata.type`/`origin_session_id` + body) is written under the project memory dir, `MEMORY.md` is regenerated, the file is indexed into `documents`, and an audit entry is recorded.
+- **Then** a per-item markdown file (YAML frontmatter `name`/`description`/`metadata.type`/`origin_session_id` + body) is written under the project memory dir's `knowledge/inbox/` subdir, the file is indexed into `documents`, and an audit entry is recorded.
 
 ### Scenario: agent recalls a project fact
 
@@ -200,6 +198,12 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **When** an MCP client calls `coffer__recall` without a scope,
 - **Then** results are drawn from both the project store and the global (sentinel) store.
 
+### Scenario: remembered items are stored in the knowledge lane
+
+- **Given** an MCP client running inside a git project,
+- **When** it calls `coffer__remember` with a fact,
+- **Then** the item is written as a markdown file under the project store's `knowledge/inbox/` subdir (never at the store root and with no `MEMORY.md` generated), it is indexed into `documents`, and a subsequent `coffer__recall` returns it.
+
 ### Scenario: remember at global scope
 
 - **Given** an MCP client,
@@ -212,18 +216,6 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **When** the daemon resolves the project memory store,
 - **Then** it computes the git-root of that cwd and resolves (lazily provisioning if absent) the per-project store keyed by that project's ULID.
 
-### Scenario: agent updates a fact
-
-- **Given** a fact exists,
-- **When** an MCP client calls `coffer__update_memory` with the fact id and new text,
-- **Then** the canonical markdown is rewritten, the document is reindexed, `MEMORY.md` is regenerated, and recall reflects the new text.
-
-### Scenario: agent forgets a fact
-
-- **Given** a fact exists,
-- **When** an MCP client calls `coffer__forget` with the fact id,
-- **Then** the markdown file is deleted, its index rows are removed, `MEMORY.md` is regenerated, and recall no longer returns it.
-
 ### Scenario: out-of-band fact-file edits are visible on recall
 
 - **Given** a project memory store with facts,
@@ -234,7 +226,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** a memory store,
 - **When** the user adds a fact via the Coffer UI or CLI,
-- **Then** the canonical markdown is written with `metadata.actor = "user"`, `MEMORY.md` is regenerated, the document is indexed, and an audit entry is recorded.
+- **Then** the canonical markdown is written under the store's `knowledge/inbox/` subdir with `metadata.actor = "user"`, the document is indexed, and an audit entry is recorded.
 
 ### Scenario: user corrects a fact out-of-band
 
@@ -246,7 +238,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** a fact exists,
 - **When** the user deletes it,
-- **Then** the markdown file and its index rows are removed, `MEMORY.md` is regenerated, and recall no longer returns it.
+- **Then** the markdown file and its index rows are removed, and recall no longer returns it.
 
 ### Scenario: read-only viewer offers open/reveal/copy-path affordances
 
@@ -254,17 +246,11 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **When** the user inspects the fact (and its containing folder),
 - **Then** the content renders read-only (no in-app content editing), the read responses surface the fact's absolute on-disk `.md` path and its containing folder's absolute path, and the UI offers "open in external editor" + "reveal in file manager" for both the file and the folder on desktop (Tauri) and a "copy absolute path" fallback on web; which editor opens is decided by the global preferred-editor preference (see 002-ui-shell).
 
-### Scenario: writing a fact regenerates MEMORY.md
-
-- **Given** any writer (agent, Claude, or user) writes or removes a fact,
-- **When** the write completes,
-- **Then** `MEMORY.md` is regenerated from fact frontmatter as `- [name](file.md) — description`, overwriting any prior content idempotently.
-
 ### Scenario: clear a memory scope
 
 - **Given** a memory store with facts,
 - **When** the user clears that scope,
-- **Then** every fact file and its index rows are removed, `MEMORY.md` becomes empty, but the store Resource is preserved.
+- **Then** every memory item under `knowledge/` is removed and its index rows dropped, but the store Resource is preserved.
 
 ### Scenario: user renames a memory store
 
@@ -276,7 +262,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** an MCP client connects to coffer's gateway,
 - **When** the client lists tools,
-- **Then** `coffer__recall`, `coffer__remember`, `coffer__update_memory`, `coffer__forget`, `coffer__list_memory`, `coffer__set_handoff`, and `coffer__resume` appear alongside other built-in and upstream tools.
+- **Then** `coffer__recall`, `coffer__remember`, `coffer__list_memory`, `coffer__set_handoff`, and `coffer__resume` appear alongside other built-in and upstream tools.
 
 ### Scenario: vector recall falls back when embedding is unconfigured
 
@@ -318,15 +304,15 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Storage & scope**
 
-- **FR-001**: System MUST store every memory fact as a per-fact markdown file with YAML frontmatter (`name`, `description`, `metadata.type`, `metadata.actor`, `origin_session_id`) plus a markdown body, alongside a regenerated `MEMORY.md` index. The markdown files are the **sole source of truth**; SQLite is a rebuildable index.
-- **FR-002**: System MUST support two memory scopes: **global** (one store keyed by `project_id = WORKSPACE_GLOBAL_PROJECT_ID`, the existing sentinel `00000000000000000000000000`) and **per-project** (one store per project, keyed by the project's ULID), stored under `~/.coffer/memory/global/` and `~/.coffer/memory/projects/<project-ulid>/` respectively.
-- **FR-003**: System MUST regenerate `MEMORY.md` (`- [name](file.md) — description`, derived from fact frontmatter) on every write/update/delete, idempotently, overwriting any prior content.
+- **FR-001**: System MUST store every memory item as a per-item markdown file (YAML frontmatter `name`/`description`/`metadata.type`/`metadata.actor`/`origin_session_id` + body) under a per-scope **`knowledge/` lane** — freshly-remembered items in `knowledge/inbox/`, organized topic documents (`knowledge/<topic>.md`) plus an `INDEX.md` maintained by the consolidation organizer (a later memory PR). The markdown files are the **sole source of truth**; SQLite is a rebuildable index. **No `MEMORY.md` index is generated** (the prior derived index was a vestigial projection artifact, read by nothing in retrieval).
+- **FR-002**: System MUST support two memory scopes: **global** (one store keyed by `project_id = WORKSPACE_GLOBAL_PROJECT_ID`, the existing sentinel `00000000000000000000000000`) and **per-project** (one store per project, keyed by the project's ULID), stored under `~/.coffer/memory/global/knowledge/` and `~/.coffer/memory/projects/<project-ulid>/knowledge/` respectively.
+- **FR-003**: `coffer__remember` (and a user add) MUST append a memory item to the per-scope inbox (`knowledge/inbox/`) with no LLM at write time; organization into topic documents is performed asynchronously by the consolidation organizer (a later memory PR) and never blocks the write or `recall`.
 - **FR-004**: System MUST resolve the per-project store from the agent's reported launch cwd at session handshake: the daemon computes the git-root and resolves — lazily provisioning if absent — the store for that project's ULID.
 
 **Fact lifecycle**
 
 - **FR-005**: Agents and users MUST be able to write a fact directly (no LLM at write time). Fact text MUST be at least 1 char and at most `max_fact_chars` (default 8192); empty or over-long text is rejected at the API boundary with nothing persisted.
-- **FR-006**: Users and agents MUST be able to list facts (per scope), get a single fact by id, edit a fact's text (via the REST/CLI write surface or by editing the canonical markdown directly — the Coffer UI renders fact content read-only and does not edit it in-app), delete a single fact, and clear all facts in a scope. Clearing preserves the store Resource.
+- **FR-006**: Users and agents MUST be able to list facts (per scope), get a single fact by id, edit a fact's text, delete a single fact, and clear all facts in a scope. Fact **edit/delete** is via the REST/CLI write surface (`PATCH/DELETE …/facts/{id}` / `coffer memory edit/delete`) and external-editor files-as-truth — the Coffer UI renders fact content read-only and does not edit it in-app; the MCP `update_memory`/`forget` tools are **removed** (the agent's write surface is `remember` + the internal organizer). Clearing preserves the store Resource.
 - **FR-007**: Every fact carries `metadata.actor` (`agent` | `user`) and an optional `metadata.type` (e.g. `project` / `feedback` / `reference` / `user`); the writer sets these.
 
 **Retrieval**
@@ -337,7 +323,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Agent integration via MCP**
 
-- **FR-015**: Coffer's MCP gateway MUST expose built-in tools `coffer__recall(query, scope?, mode?, top_k?)` (`mode` ∈ `grep` | `keyword` | `vector`), `coffer__remember(text, scope?, type?)`, `coffer__update_memory(id, text)`, `coffer__forget(id)`, `coffer__list_memory(scope?)`, `coffer__set_handoff(body)`, and `coffer__resume()`, namespaced under the reserved `coffer__` prefix. `remember` defaults to `scope=project`; `recall` defaults to both scopes.
+- **FR-015**: Coffer's MCP gateway MUST expose built-in tools `coffer__recall(query, scope?, mode?, top_k?)` (`mode` ∈ `grep` | `keyword` | `vector`), `coffer__remember(text, scope?, type?)`, `coffer__list_memory(scope?)`, `coffer__set_handoff(body)`, and `coffer__resume()`, namespaced under the reserved `coffer__` prefix. `remember` defaults to `scope=project`; `recall` defaults to both scopes. There is no MCP `update_memory`/`forget` tool — fact edit/delete is a user surface (REST/CLI/external editor), per FR-006.
 - **FR-016**: Built-in memory tool invocations MUST share the existing invocation-logging surface (one `mcp_invocations` row: tool name + who/when/duration/outcome only — no arguments or returned content).
 
 **Working-state handoff (continuity)**
@@ -349,7 +335,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Surfaces**
 
-- **FR-017**: Users MUST be able to perform full memory CRUD through the programmatic write surfaces — (a) a REST API under `/api/v1/memory_stores/` and (b) `coffer memory …` subcommands. (The REST write endpoints are also what agents author facts through via the MCP gateway.) User writes set `metadata.actor = "user"`, write the canonical markdown, regenerate `MEMORY.md`, reindex, and audit. The desktop/web UI surfaces facts **read-only** (it does not edit fact content in-app); humans curate by editing the canonical markdown in their own external editor (picked up by lazy reindex-on-read, FR-010) or via the REST/CLI write surface. Store names on these surfaces are validated: only `global` or `project-<26-char ULID>` are legal — a well-formed name lazily provisions its store; anything else returns 404 (`MEMORY_STORE_NOT_FOUND`).
+- **FR-017**: Users MUST be able to perform full memory CRUD through the programmatic write surfaces — (a) a REST API under `/api/v1/memory_stores/` and (b) `coffer memory …` subcommands. (The REST write endpoints are also what agents author facts through via the MCP gateway.) User writes set `metadata.actor = "user"`, write the canonical markdown under the store's `knowledge/inbox/` subdir, reindex, and audit. The desktop/web UI surfaces facts **read-only** (it does not edit fact content in-app); humans curate by editing the canonical markdown in their own external editor (picked up by lazy reindex-on-read, FR-010) or via the REST/CLI write surface. Store names on these surfaces are validated: only `global` or `project-<26-char ULID>` are legal — a well-formed name lazily provisions its store; anything else returns 404 (`MEMORY_STORE_NOT_FOUND`).
 - **FR-017a**: Surfaces MUST present a per-project store by a **human-readable identity derived from its `project_root`** — the root directory's basename as the primary label and the absolute root path as a secondary detail — never only the opaque `project-<ULID>` store name (the project ULID is a one-way digest of the root and is not human-recognisable). When the root is unknown (a store provisioned before the root was tracked) the surface falls back to the store name; the global store needs no derivation (its name `global` is already readable). The underlying store name stays `project-<ULID>` (FR-017) — this is a **display** concern. Verified by frontend tests; desktop acceptance is deferred to e2e like the other desktop-view items.
 - **FR-017c**: A user MUST be able to set a **display label** for any memory store — a chosen name that takes precedence over the FR-017a `project_root` derivation in every surface. This gives a readable identity to a store whose originating folder was never recorded (where FR-017a would otherwise fall back to the opaque `project-<ULID>` name). Setting an empty / whitespace label clears it, reverting to the FR-017a derivation or fallback. The label is **display metadata**: it does not change the store name (FR-017) or `project_id`, and is set via `PATCH /memory_stores/{name}/label`. Verified by an HTTP acceptance test; the desktop rename view is deferred to e2e like the other desktop-view items.
 - **FR-021**: The read-only fact viewer MUST offer, for both a fact file and its containing folder, affordances to (a) **open in external editor**, (b) **reveal in file manager / Finder**, and (c) **copy the absolute path** (the web fallback). On the desktop (Tauri) build (a) and (b) perform a real open/reveal; on the web build the UI falls back to copy-path. Which editor opens is decided by the global preferred-editor preference (specced in 002-ui-shell; not re-specified here). The read responses MUST surface the absolute paths these affordances act on (see FR-022).
@@ -361,7 +347,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Migration**
 
-- **FR-019**: This branch is unreleased; there is **no data migration**. A single migration MUST drop `memory_records` and create the fresh unified schema. Legacy on-disk engine directories (chroma/LlamaIndex) from pre-release builds are abandoned in place — nothing reads them — rather than deleted. Old mem0/chroma text is not migrated.
+- **FR-019**: This branch is unreleased; there is **no new schema migration** for the lane layout (the `documents`/`chunks` schema is unchanged — only the on-disk lane location changes). A single migration MUST drop `memory_records` and create the fresh unified schema. Legacy on-disk engine directories (chroma/LlamaIndex) from pre-release builds are abandoned in place — nothing reads them — rather than deleted; old mem0/chroma text is not migrated. Legacy per-item files at a store root from pre-lane builds are likewise **abandoned in place** (not read, not deleted): the lazy reindex-on-read reconciles the `knowledge/` lane, so stale index rows for old root facts are reconciled away on the next `recall` until those items are re-remembered or seeded by the organizer. Existing `MEMORY.md` files on disk are left in place, unread.
 
 ### Key Entities
 
@@ -383,7 +369,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 ## Assumptions
 
 - The user runs Coffer on their own machine; memory data stays local. Calling a configured cloud embedding provider for opt-in vector recall is allowed (local-first ≠ no remote API calls).
-- The canonical format is per-fact markdown files (YAML frontmatter + body) plus a regenerated `MEMORY.md` index.
+- The canonical format is per-item markdown files (YAML frontmatter + body) under a per-scope `knowledge/` lane; there is no derived `MEMORY.md` index.
 - The coffer-mcp-shim propagates its launch cwd to the daemon at session handshake on the supported agents (to verify in implementation).
 - The knowledge base (spec 006) and memory share one unified substrate (`documents` table discriminated by `kind` + JSON `metadata`); they are two faces, not duplicated code.
 - Single-user concurrency is small.

@@ -27,11 +27,11 @@ _MANIFEST = "manifest.json"
 _RESOURCES = "resources"
 _CREDENTIALS = "credentials"
 
-#: Files that are *regenerated* from the source-of-truth files and must NOT be
-#: synced — they differ per machine (e.g. memory's ``MEMORY.md`` index lists
-#: that machine's facts), so syncing them causes spurious same-path conflicts.
-#: They are excluded from the mirror and rebuilt on import (see SyncImporter's
-#: post_import hook).
+#: Files that are *derived* from the source-of-truth files and must NOT be
+#: synced — they would differ per machine and cause spurious same-path
+#: conflicts, so they are excluded from the mirror (kept machine-local). The
+#: legacy ``MEMORY.md`` index is no longer regenerated, but stays excluded so a
+#: leftover copy from a pre-lane build never conflicts across machines.
 DERIVED_INDEX_NAMES = frozenset({"MEMORY.md"})
 
 
