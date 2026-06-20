@@ -110,6 +110,14 @@ paths:
                   type: boolean
                   default: false
                   description: If true, a changed re-upload of a filename already in the KB updates that document in place. Byte-identical re-uploads are a no-op regardless.
+                source_path:
+                  type: string
+                  nullable: true
+                  description: >
+                    Absolute path of the external original, supplied only by trusted clients
+                    (CLI / desktop picker) so source-update detection can later re-hash it.
+                    The web surface forwards what the client sends and never auto-derives a
+                    server path; an untrusted upload leaves this unset.
       responses:
         "201":
           description: Document ingested
@@ -255,6 +263,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/knowledge_bases/{name}/documents/{document_id}/update-source:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+      - $ref: "#/components/parameters/DocumentId"
+    post:
+      summary: Re-ingest a document from its tracked external source (in place)
+      description: |
+        Re-reads the document's external original at its stored `source_path` and
+        replays the `replace=true` re-ingest path, so the document's stable ULID
+        id is preserved and the corpus is re-chunked/re-indexed (audited
+        `KB_DOCUMENT_UPDATED`). Refused with `RECONVERSION_BLOCKED` (409) when the
+        document's `source_mode` is `edited`. A document with no `source_path`, or
+        whose source file has vanished, is rejected with `INGEST_REJECTED` (400).
+      operationId: updateDocumentSource
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: Re-ingested from source and reindexed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ReconversionBlocked"
+
   /api/v1/knowledge_bases/{name}/reindex:
     parameters:
       - $ref: "#/components/parameters/KBName"
@@ -273,6 +310,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReindexResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/knowledge_bases/{name}/check-sources:
+    parameters:
+      - $ref: "#/components/parameters/KBName"
+    post:
+      summary: Detect whether path-tracked documents' external originals changed
+      description: |
+        For each document with a `source_path` in metadata, re-hashes the external
+        original (streamed) against the stored `source_sha256` and classifies it
+        `unchanged` / `changed` / `missing`. Detection alone changes nothing and
+        audits nothing. When the KB's `auto_update_sources` is true, each changed
+        document whose `source_mode != edited` is refreshed in place (reported
+        `updated`, audited `KB_DOCUMENT_UPDATED`); a changed hand-edited document
+        is skipped (reported `edited`). On-demand only — no filesystem watcher.
+      operationId: checkKnowledgeBaseSources
+      tags: [knowledge_bases]
+      responses:
+        "200":
+          description: Source-status report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceCheckResponse"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -501,6 +563,13 @@ components:
             - $ref: "#/components/schemas/EmbeddingConfig"
           nullable: true
           description: Required only when `vector` is in enabled_modes.
+        auto_update_sources:
+          type: boolean
+          default: false
+          description: >
+            When true, `check_sources` auto-refreshes path-tracked documents whose
+            external original changed (skipping hand-edited ones). Not a
+            reindex-triggering field — toggling it never re-chunks/re-embeds.
 
     KnowledgeBaseCreate:
       type: object
@@ -642,6 +711,28 @@ components:
             type: integer,
             description: Documents indexed keyword-only because embedding degraded.,
           }
+
+    SourceStatus:
+      type: object
+      required: [document_id, title, source_path, status]
+      properties:
+        document_id: { type: string }
+        title: { type: string }
+        source_path:
+          type: string
+          description: The external original's absolute path (machine-local).
+        status:
+          type: string
+          enum: [unchanged, changed, missing, edited, updated]
+
+    SourceCheckResponse:
+      type: object
+      required: [sources]
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceStatus"
 
     SearchRequest:
       type: object

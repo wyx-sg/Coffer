@@ -44,6 +44,7 @@ from coffer.surfaces.http.knowledge_base.schemas import (
     ReindexResult,
     SearchRequest,
     SearchResponse,
+    SourceCheckResponse,
 )
 
 if TYPE_CHECKING:
@@ -133,6 +134,11 @@ async def ingest_document(
     name: str,
     file: UploadFile = File(...),  # noqa: B008
     replace: bool = Form(default=False),
+    # The external original's absolute path, supplied only by trusted clients
+    # (CLI / desktop picker) so source-update detection can later re-hash it.
+    # The web surface merely forwards whatever the client sends; it never
+    # auto-derives a server path (an untrusted upload leaves this unset).
+    source_path: str | None = Form(default=None),
     kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> DocumentOut:
@@ -169,6 +175,7 @@ async def ingest_document(
         raw_bytes=raw,
         actor=actor,
         replace=replace,
+        source_path=source_path,
     )
     counts = await kb_svc.chunk_counts(kb_name=name)
     path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=doc.id)
@@ -244,6 +251,21 @@ async def reconvert_document(
     )
 
 
+@router.post("/{name}/documents/{document_id}/update-source", response_model=DocumentOut)
+async def update_document_source(
+    name: str,
+    document_id: str,
+    kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> DocumentOut:
+    doc = await kb_svc.update_from_source(kb_name=name, document_id=document_id, actor=actor)
+    counts = await kb_svc.chunk_counts(kb_name=name)
+    path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=doc.id)
+    return DocumentOut.from_domain(
+        doc, chunk_count=counts.get(doc.id, 0), path=path, folder_path=folder_path
+    )
+
+
 @router.delete(
     "/{name}/documents/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -275,6 +297,16 @@ async def reindex(
         documents_removed=stats.get("removed", 0),
         documents_degraded=stats.get("degraded", 0),
     )
+
+
+@router.post("/{name}/check-sources", response_model=SourceCheckResponse)
+async def check_sources(
+    name: str,
+    kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> SourceCheckResponse:
+    report = await kb_svc.check_sources(kb_name=name, actor=actor)
+    return SourceCheckResponse.from_report(report)
 
 
 @router.post("/{name}/search", response_model=SearchResponse)
