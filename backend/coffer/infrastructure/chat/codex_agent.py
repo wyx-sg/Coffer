@@ -1,8 +1,8 @@
 """App-server-backed Codex adapter — drive Codex via ``codex app-server``.
 
-Where the legacy ``CodexDialect`` shelled out to ``codex exec --json``, this
-adapter drives Codex through the bidirectional ``codex app-server`` JSON-RPC
-protocol (NDJSON over stdio). Codex runs with full permissions (``never`` ask,
+This adapter drives Codex through the bidirectional ``codex app-server`` JSON-RPC
+protocol (NDJSON over stdio) rather than shelling out to ``codex exec --json``.
+Codex runs with full permissions (``never`` ask,
 ``danger-full-access``): Coffer does not gate individual tool calls — the owner
 driving the conversation is the trust boundary.
 
@@ -29,7 +29,7 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Message
-from coffer.infrastructure.chat.cli_agent import SessionSink, last_user_text
+from coffer.infrastructure.chat.adapter_support import SessionSink, last_user_text
 from coffer.infrastructure.chat.codex_app_server import (
     AppServerSessionFactory,
     CodexAppServerSession,

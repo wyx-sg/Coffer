@@ -3,7 +3,7 @@
 The Codex analog of ``claude_sdk_agent.map_sdk_message``: each streamed
 server→client notification ``(method, params)`` becomes zero or more
 ``AgentEvent``s, threaded through a mutable :class:`CodexParseState` (mirrors
-``cli_agent.ParseState``). Protocol shapes verified empirically against codex-cli 0.125.0
+``adapter_support.ParseState``). Protocol shapes verified empirically against codex-cli 0.125.0
 (``codex app-server generate-json-schema``).
 
 Mapping rules (§A):
@@ -11,8 +11,8 @@ Mapping rules (§A):
 * ``thread/started``            → capture ``thread.id`` (the resumable session id).
 * ``turn/started``              → capture ``turn.id``.
 * ``item/agentMessage/delta``   → ``TextDelta(delta)``.
-* ``item/started``              → ``[]`` (item content is partial; de-dup, like the
-                                  ``exec --json`` rule in the legacy ``CodexDialect``).
+* ``item/started``              → ``[]`` (item content is partial; de-dup — content is
+                                  emitted only on ``item/completed``).
 * ``item/completed`` (commandExecution) → ``ToolCall(tool_name="shell")`` + ``ToolResult``.
 * ``item/completed`` (fileChange)       → ``ToolCall(tool_name="file_change")`` + ``ToolResult``.
 * ``thread/tokenUsage/updated`` → stash ``last.input/outputTokens`` for ``TurnDone``.

@@ -4,7 +4,7 @@ Wraps the long-lived ``codex app-server`` process behind the
 :class:`CodexAppServerSession` protocol so the adapter drives a
 :class:`~coffer.infrastructure.chat.codex_jsonrpc.CodexRpcClient` without knowing
 whether it is talking to a real subprocess or a fake JSON-RPC peer. Mirrors
-``cli_agent.default_spawner`` / ``claude_sdk_agent.default_session_factory``.
+``claude_sdk_agent.default_session_factory``.
 
 The production factory :func:`default_app_server_session` resolves the ``codex``
 binary on ``PATH`` via ``shutil.which`` (production machines ship a working npm
