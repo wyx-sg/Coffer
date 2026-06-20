@@ -72,8 +72,8 @@ Five memory tools, namespaced under `coffer__`, agent-centric and frictionless:
 
 - `coffer__recall(query, scope?, mode?, top_k?)` → `[{id, text, score, source, time}, …]` (default both scopes; `mode` ∈ `grep` | `keyword` | `vector`).
 - `coffer__remember(text, scope?, type?)` → `{id, …}` (default `scope=project`).
-- `coffer__update_memory(id, text)` → `{id, …}`.
-- `coffer__forget(id)` → `{deleted: bool}`.
+- `coffer__set_handoff(body)` → `{status, branch, scope}` (working state, per project + branch).
+- `coffer__resume()` → `{found, branch?, body?, updated_at?, note?}`.
 - `coffer__list_memory(scope?)` → facts for browse.
 
 Invocations are recorded in `mcp_invocations` the same way KB and upstream tools are: tool name + who/when/duration/outcome only — no arguments or returned content (existing privacy stance).

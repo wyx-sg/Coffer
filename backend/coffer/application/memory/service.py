@@ -1,10 +1,11 @@
 """MemoryService — orchestration for the ``memory`` kind (spec 007).
 
-Memory is the writable face of the shared knowledge substrate: per-fact markdown
-files are the source of truth, with a regenerated ``MEMORY.md`` index. No LLM at
-write time; retrieval reuses the KB engine with lazy reindex-on-read. Mutation
-(``writes``), recall, scan reads (``queries``), admin, scope plumbing
-(``stores``) and helpers live in sibling modules to keep this file focused.
+Memory is the writable face of the shared knowledge substrate: per-item markdown
+files under each store's ``knowledge/`` lane are the source of truth (no derived
+index). No LLM at write time; retrieval reuses the KB engine with lazy
+reindex-on-read. Mutation (``writes``), recall, scan reads (``queries``), admin,
+scope plumbing (``stores``) and helpers live in sibling modules to keep this
+file focused.
 """
 
 from __future__ import annotations
@@ -68,7 +69,6 @@ _logger = logging.getLogger(__name__)
 #: Injected path helpers (the composition root passes the infrastructure
 #: functions, so the service does not import ``infrastructure.knowledge.paths``).
 StoreDirFn = Callable[[str], Path]
-FactPathFn = Callable[[Path, str], Path]
 #: Post-write hook: ``store_name -> awaitable`` (generic post-write extension).
 OnChangeFn = Callable[[str], Awaitable[None]]
 
@@ -86,7 +86,6 @@ class MemoryService:
         retrieval: KnowledgeRetrieval,
         audit: AuditService,
         store_dir: StoreDirFn,
-        fact_path: FactPathFn,
         on_change: OnChangeFn | None = None,
         embedding_resolver: EmbeddingResolver = no_embedding,
     ) -> None:
@@ -97,7 +96,6 @@ class MemoryService:
         self._retrieval = retrieval
         self._audit = audit
         self._store_dir = store_dir
-        self._fact_path = fact_path
         self._resolve_embedding = embedding_resolver  # global embedding config
         self._on_change = on_change  # generic post-write hook (no consumer today)
         # Bundle the collaborators the write + recall orchestrators need.
@@ -106,7 +104,6 @@ class MemoryService:
             audit=audit,
             reconciler=reconciler,
             notify=self._notify_change,
-            fact_path=fact_path,
             store_ref=store_ref_fn,
             embedding_resolver=embedding_resolver,
         )
@@ -173,7 +170,7 @@ class MemoryService:
         type: str | None = None,
         origin_session_id: str | None = None,
     ) -> MemoryFact:
-        """Write a fact file → regenerate ``MEMORY.md`` → index → audit (no LLM)."""
+        """Write a fact file to ``knowledge/inbox/`` → index → audit (no LLM)."""
         resolved = await self.resolve_scope(scope=scope, cwd=cwd)
         return await self._add(
             resolved,
@@ -240,7 +237,7 @@ class MemoryService:
         )
 
     async def delete_fact(self, *, store_name: str, fact_id: str, actor: str) -> None:
-        """Delete a fact file → drop index rows → regenerate ``MEMORY.md`` → audit."""
+        """Delete a fact file → drop index rows → audit."""
         resolved, ff = await self._store_fact(store_name, fact_id)
         await remove_fact(
             deps=self._writes,
@@ -342,7 +339,7 @@ class MemoryService:
     async def find_fact_store(self, *, cwd: str | None, fact_id: str) -> str:
         """Return the store name holding ``fact_id`` across the recall scopes
         (project then global). Raises ``MemoryNotFound`` if absent everywhere.
-        Used by the agent ``update_memory`` / ``forget`` tools (id-only)."""
+        Used by the REST/CLI edit/delete-by-id paths."""
         scopes = await self._scope.resolve_recall_scopes(cwd=cwd)
         return await asyncio.to_thread(find_fact_store, scopes, fact_id, store_name_for)
 

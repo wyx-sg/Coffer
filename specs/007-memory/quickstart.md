@@ -10,8 +10,8 @@ Five built-in tools appear (no store reference needed — scope is resolved from
 
 - `coffer__recall(query, scope?, mode?, top_k?)` — search project + global memory (default: both; `mode` is `grep` | `keyword` | `vector`).
 - `coffer__remember(text, scope?, type?)` — save a fact (default `scope=project`).
-- `coffer__update_memory(id, text)` — edit a fact.
-- `coffer__forget(id)` — delete a fact.
+- `coffer__set_handoff(body)` — save the current working state for this project + branch.
+- `coffer__resume()` — return the saved working-state handoff for this project + branch.
 - `coffer__list_memory(scope?)` — browse.
 
 ```text

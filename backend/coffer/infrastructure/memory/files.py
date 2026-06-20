@@ -1,8 +1,8 @@
-"""Per-fact markdown file I/O for the memory face (the source of truth).
+"""Per-item markdown file I/O for the memory face (the source of truth).
 
-The ONLY module that reads/writes the per-fact ``<slug>.md`` files, renders the
-derived ``MEMORY.md`` index, and scans a store dir for deltas (the lazy
-reindex-on-read input). Frontmatter parse/render is delegated to the shared
+The ONLY module that reads/writes the per-item ``<slug>.md`` files and scans a
+store's ``knowledge/`` lane for deltas (the lazy reindex-on-read input).
+Frontmatter parse/render is delegated to the shared
 ``infrastructure.knowledge.frontmatter`` (the PyYAML owner).
 """
 
@@ -18,10 +18,12 @@ from coffer.infrastructure.knowledge.frontmatter import (
     render_frontmatter,
     split_frontmatter,
 )
-from coffer.infrastructure.knowledge.paths import memory_index_path
+from coffer.infrastructure.knowledge.paths import knowledge_dir, memory_index_path
 
-#: ``MEMORY.md`` is the regenerated index file; never treated as a fact.
-_INDEX_NAME = memory_index_path()
+#: ``INDEX.md`` is the (PR2b) human review index; never treated as a fact.
+_LANE_INDEX_NAME = "INDEX.md"
+#: Legacy derived index from pre-lane builds; left on disk, never read.
+_LEGACY_INDEX_NAME = memory_index_path()
 
 
 @dataclass(frozen=True)
@@ -122,37 +124,38 @@ def delete_fact_file(path: Path) -> bool:
 
 
 def scan_store_dir(store_dir: Path) -> DirScan:
-    """Read every ``*.md`` fact file in ``store_dir`` (excluding ``MEMORY.md``),
-    keyed by fact id."""
+    """Read every per-item ``*.md`` file in the store's ``knowledge/`` lane,
+    recursively (the inbox + any organized topic docs), keyed by fact id.
+
+    Excludes the ``INDEX.md`` review index. The lane may not exist yet (a store
+    with no remembered items) → an empty scan, never an error. Legacy per-item
+    files at the store ROOT are deliberately NOT scanned — they are abandoned in
+    place by the lane redesign (see ``legacy_root_facts``)."""
     files: dict[str, FactFile] = {}
-    if not store_dir.exists():
+    lane = knowledge_dir(store_dir)
+    if not lane.exists():
         return DirScan(files=files)
-    for path in sorted(store_dir.glob("*.md")):
-        if path.name == _INDEX_NAME:
+    for path in sorted(lane.rglob("*.md")):
+        if path.name == _LANE_INDEX_NAME:
             continue
         ff = read_fact_file(path)
         files[ff.fact.id] = ff
     return DirScan(files=files)
 
 
-def regenerate_memory_index(store_dir: Path) -> Path:
-    """(Re)write ``MEMORY.md`` from the fact files currently on disk, idempotently.
+def legacy_root_facts(store_dir: Path) -> list[Path]:
+    """Per-item ``*.md`` files left at the store ROOT by pre-lane builds.
 
-    Format: ``- [name](file.md) — description``, one line per fact, ordered by
-    name. Overwrites any prior content (Claude may rewrite it; we own it).
-    Scanning the dir (rather than taking a fact list) keeps the index a true
-    derived view of the source-of-truth files — out-of-band fact files appear.
-    """
-    store_dir.mkdir(parents=True, exist_ok=True)
-    index_path = store_dir / _INDEX_NAME
-    scan = scan_store_dir(store_dir)
-    ordered = sorted(scan.files.values(), key=lambda ff: (ff.fact.name.lower(), ff.fact.id))
-    lines = ["# Memory", ""]
-    for ff in ordered:
-        lines.append(f"- [{ff.fact.name}]({ff.path.name}) — {ff.fact.description}")
-    body = "\n".join(lines).rstrip() + "\n"
-    index_path.write_text(body, encoding="utf-8")
-    return index_path
+    The lane redesign moved memory under ``knowledge/`` — these stale files are
+    abandoned in place (not read, not deleted). Used only to emit an FR-019 log
+    line. ``MEMORY.md`` (the removed derived index) is excluded."""
+    if not store_dir.exists():
+        return []
+    return [
+        p
+        for p in sorted(store_dir.glob("*.md"))
+        if p.name not in {_LEGACY_INDEX_NAME, _LANE_INDEX_NAME}
+    ]
 
 
 def _first_line(body: str) -> str:

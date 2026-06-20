@@ -36,9 +36,9 @@ log = logging.getLogger(__name__)
 DEFAULT_RECURSION_LIMIT = 16
 
 # Read-only knowledge + memory tools the agentic-RAG loop may call. Deliberately
-# excludes write tools (remember/update_memory/forget), tool-search, and
-# coffer__ask itself, so the loop stays a pure retrieval+synthesis over the
-# vault and can never recurse into itself.
+# excludes write tools (remember), tool-search, and coffer__ask itself, so the
+# loop stays a pure retrieval+synthesis over the vault and can never recurse into
+# itself.
 RETRIEVAL_TOOLS: frozenset[str] = frozenset(
     {
         "coffer__search_knowledge",

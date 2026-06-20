@@ -72,8 +72,8 @@ memory 用 **lazy reindex-on-read**：`recall` 先按 `content_sha256` 扫描这
 
 - `coffer__recall(query, scope?, mode?, top_k?)` → `[{id, text, score, source, time}, …]`（默认两个作用域；`mode` ∈ `grep` | `keyword` | `vector`）。
 - `coffer__remember(text, scope?, type?)` → `{id, …}`（默认 `scope=project`）。
-- `coffer__update_memory(id, text)` → `{id, …}`。
-- `coffer__forget(id)` → `{deleted: bool}`。
+- `coffer__set_handoff(body)` → `{status, branch, scope}`（工作现场，按 project + 分支）。
+- `coffer__resume()` → `{found, branch?, body?, updated_at?, note?}`。
 - `coffer__list_memory(scope?)` → 用于浏览的事实。
 
 调用记录进 `mcp_invocations`，方式与 KB 及上游工具相同：只记工具名 + who/when/duration/outcome —— 不记参数也不记返回内容（既有隐私立场）。

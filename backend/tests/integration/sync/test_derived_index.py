@@ -1,9 +1,11 @@
-"""Derived index files (e.g. memory's MEMORY.md) must not cause sync conflicts.
+"""Derived index files (e.g. memory's legacy ``MEMORY.md``) must not cause sync
+conflicts.
 
-MEMORY.md is regenerated from the per-fact ``*.md`` files, so two machines with
-different memories produce different MEMORY.md — a spurious same-path conflict.
-Sync excludes such derived indexes from the mirror and regenerates them on
-import from the (merged) fact files.
+A derived index would differ per machine, so syncing it produces a spurious
+same-path conflict. Sync excludes such files from the mirror (``DERIVED_INDEX_NAMES``),
+keeping them machine-local while the source-of-truth files converge. (The memory
+face no longer regenerates ``MEMORY.md`` at all — see spec 007 — but the
+exclusion stays so a leftover copy from a pre-lane build never conflicts.)
 """
 
 from __future__ import annotations
@@ -28,21 +30,16 @@ async def remote(tmp_path):  # type: ignore[no-untyped-def]
     return bare
 
 
-def _wire_memory(machine, store_dir, tmp_root):  # type: ignore[no-untyped-def]
-    """Point a machine's sync at a memory tree + regenerate-index post-import hook."""
-    from coffer.infrastructure.memory.files import regenerate_memory_index
+def _wire_memory(machine, store_dir):  # type: ignore[no-untyped-def]
+    """Point a machine's sync at a memory tree (no derived-index regeneration)."""
     from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 
     cred = CredentialSyncAdapter(machine.db_path, machine.master_key)
     # Reuse the machine's own git working tree (machine.root/"ws") so the
     # exporter writes where GitRepo operates.
     ws = Workspace(machine.root / "ws", trees=[("memory", store_dir)])
-
-    async def regen() -> None:
-        regenerate_memory_index(store_dir)
-
     machine.service._exporter = SyncExporter(machine.resources, cred, ws)
-    machine.service._importer = SyncImporter(machine.resources, cred, ws, post_import=regen)
+    machine.service._importer = SyncImporter(machine.resources, cred, ws)
 
 
 @pytest.mark.acceptance(spec="010-sync", scenario="only shared state syncs")
@@ -51,8 +48,9 @@ async def test_divergent_memory_index_does_not_conflict(tmp_path, remote) -> Non
     a_mem = tmp_path / "A" / "mem"
     a_mem.mkdir(parents=True)
     (a_mem / "fact-a.md").write_text("---\nname: a\ndescription: A's fact\n---\nbody A\n")
+    # A derived index (legacy MEMORY.md): machine-local, must not sync.
     (a_mem / "MEMORY.md").write_text("# Memory\n- [a](fact-a.md) — A's fact\n")
-    _wire_memory(a, a_mem, tmp_path)
+    _wire_memory(a, a_mem)
     assert (await a.service.run()).status is SyncStatus.CLEAN
 
     b = await _make_machine("B", tmp_path / "B", remote, create_key=True)
@@ -60,18 +58,17 @@ async def test_divergent_memory_index_does_not_conflict(tmp_path, remote) -> Non
     b_mem.mkdir(parents=True)
     (b_mem / "fact-b.md").write_text("---\nname: b\ndescription: B's fact\n---\nbody B\n")
     (b_mem / "MEMORY.md").write_text("# Memory\n- [b](fact-b.md) — B's fact\n")
-    _wire_memory(b, b_mem, tmp_path)
+    _wire_memory(b, b_mem)
 
-    # Divergent memories — must NOT conflict on the regenerated index.
+    # The divergent MEMORY.md indexes must NOT conflict — being excluded from the
+    # mirror, they were never committed, so the merge is clean.
     state = await b.service.run()
     assert state.status is SyncStatus.CLEAN, state.conflict_paths
 
-    # Both fact files converged on B...
+    # The shared source-of-truth fact files converged on B; the per-machine
+    # MEMORY.md index was excluded from the mirror (never synced, no conflict).
     assert (b_mem / "fact-a.md").exists()
     assert (b_mem / "fact-b.md").exists()
-    # ...and MEMORY.md was regenerated to list both, from the merged facts.
-    index = (b_mem / "MEMORY.md").read_text()
-    assert "fact-a.md" in index and "fact-b.md" in index
 
 
 def test_memory_index_excluded_from_mirror_constant() -> None:
