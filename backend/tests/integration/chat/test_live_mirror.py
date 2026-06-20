@@ -60,9 +60,10 @@ class _SeqProvider:
         return None
 
     async def build_adapter(self, conversation_id: str) -> object:
-        adapter = self._adapters[self.builds]
+        # Clamp so exhausting the list reuses the last adapter instead of raising.
+        idx = min(self.builds, len(self._adapters) - 1)
         self.builds += 1
-        return adapter
+        return self._adapters[idx]
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:
         return None
@@ -250,6 +251,35 @@ async def test_interrupt_pauses_queue() -> None:
 
     # The queue is paused: msg2 was NOT auto-run.
     assert orch.pending(conv.id) == ["msg2"]
+
+
+async def test_send_after_interrupt_resumes_queue() -> None:
+    release = asyncio.Event()
+    resumed = FakeAgentAdapter(
+        [TurnStarted(), TextDelta(text="resumed"), TurnDone(None, None, "end_turn")]
+    )
+    orch, chat, _ = _make_orch(_SeqProvider([_BlockingAdapter(release), resumed]))
+    conv = await chat.create_conversation(agent_key="builtin")
+
+    observer = orch.subscribe(conv.id)
+    await orch.enqueue_message(conv.id, "msg1")
+    await asyncio.sleep(0)
+    await orch.enqueue_message(conv.id, "msg2")
+
+    task = active_turns()[conv.id].task
+    orch.interrupt_turn(conv.id)
+    assert task is not None
+    await task
+    await asyncio.sleep(0.01)
+    assert orch.pending(conv.id) == ["msg2"]  # held by the interrupt
+
+    # A plain send unpauses and resumes the held queue (regression: previously the
+    # message was appended but never drained, leaving the queue stuck).
+    await orch.enqueue_message(conv.id, "msg3")
+    seen = await _collect_until(
+        observer, lambda e: isinstance(e, TextDelta) and e.text == "resumed"
+    )
+    assert any(isinstance(e, TextDelta) and e.text == "resumed" for e in seen)
 
 
 @pytest.mark.acceptance(spec="008-agent-chat", scenario="reply survives a restart")

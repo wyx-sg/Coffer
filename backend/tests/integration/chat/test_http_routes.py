@@ -494,18 +494,15 @@ def test_set_pending_replaces_queue() -> None:
         resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
         conv_id = resp.json()["id"]
 
-        # No model configured → the fake provider cannot build, so nothing
-        # auto-starts and the whole queue is retained (paused effect not needed).
+        # No model configured → the fake provider cannot build the head's turn.
+        # The orchestrator re-inserts the head and pauses rather than dropping it,
+        # so the WHOLE queue is preserved (regression test for the lost-head bug).
         resp = client.put(
             f"/api/v1/chat/conversations/{conv_id}/pending",
             json={"pending": ["a", "b", "c"]},
         )
         assert resp.status_code == 200
-        # The head may have been consumed by an auto-advance attempt; assert the
-        # tail is preserved and the response shape is correct.
-        body = resp.json()
-        assert "pending" in body
-        assert body["pending"][-2:] == ["b", "c"]
+        assert resp.json()["pending"] == ["a", "b", "c"]
 
     set_active_token(None)
 

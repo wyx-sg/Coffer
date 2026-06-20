@@ -65,7 +65,7 @@ async def send_message(
     return SendMessageAck(queued=queued)
 
 
-@router.get("/conversations/{id}/events")
+@router.get("/conversations/{id}/events", response_class=EventSourceResponse)
 async def subscribe_events(
     id: str,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008

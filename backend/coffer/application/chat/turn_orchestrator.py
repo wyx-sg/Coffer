@@ -1,38 +1,28 @@
 """TurnOrchestrator — runs one turn per conversation, agent-agnostically.
 
 The orchestrator is pure chat-platform plumbing: it knows the agent-provider
-registry and nothing about any specific agent. For each turn it asks the
-registry for the conversation's provider, has the provider build a configured
-adapter, drives ``adapter.run_turn(history)``, **publishes** the events to the
-conversation's :class:`ConversationBus`, and persists the assistant message.
+registry and nothing about any specific agent. For each turn it asks the registry
+for the conversation's provider, has the provider build a configured adapter, and
+spawns the detached turn task (``turn_runner.run_turn_task``) which drives the
+adapter and **publishes** events to the conversation's :class:`ConversationBus`.
 
 Live mirror + pending queue (ADR-031)
 -------------------------------------
 Starting a turn is decoupled from consuming its events. Every turn's events are
-published to a per-conversation :class:`ConversationBus`; any number of clients
-``subscribe`` to it (the web ``GET .../events`` stream). The web ``POST``
-entry-point is ``enqueue_message``: it starts the turn when idle or appends to a
-per-conversation **pending queue** when a turn is running (the composer never
-locks). When a turn ends the queue auto-advances FIFO, unless it was paused by an
-interrupt. The pending list is broadcast as a ``QueueChanged`` event so every
-subscriber renders the same chips.
+published to a per-conversation bus; any number of clients ``subscribe`` (the web
+``GET .../events`` stream). The web ``POST`` entry-point is ``enqueue_message``:
+it starts the turn when idle or appends to a per-conversation **pending queue**
+when a turn is running (the composer never locks). When a turn ends the queue
+auto-advances FIFO, unless an interrupt paused it. The pending list is broadcast
+as a ``QueueChanged`` event so every subscriber renders the same chips.
 
 ``start_turn`` is retained for the channel inbound seam: it starts a turn and
 returns a dedicated event queue ending in a ``None`` sentinel (what the channel
-renderer drains), while *also* publishing to the bus so the web observes a
+renderer drains), while also publishing to the bus so the web observes a
 channel-driven turn live.
 
-Architecture notes
-------------------
-- ``_ACTIVE_TURNS`` / ``_BUSES`` / ``_PENDING`` are module-level (process-global,
-  single-daemon by design — ADR-031). The active-turn entry is registered
-  synchronously, right after the ``TurnInProgress`` guard / idle check, so two
-  concurrent starts cannot both pass.
-- Interruption vs. deletion: both cancel the task; ``_ActiveTurn.interrupted``
-  tells the ``CancelledError`` handler whether to persist the partial message
-  (interrupt) or discard it (delete). Interrupt also pauses the pending queue.
-- A client disconnect cancels only its subscriber drain, not the turn task, so
-  the assistant message is still persisted (research.md §7).
+Per-conversation state (in-flight turn, bus, pending queue) is process-global and
+single-daemon by design; it lives in :mod:`turn_state`.
 """
 
 from __future__ import annotations
@@ -40,66 +30,26 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
-from typing import Any
 
 from coffer.application.audit_service import AuditService
 from coffer.application.chat.bus import ConversationBus
-from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService, MessageRepo
-from coffer.application.chat.turn_persistence import (
-    finalize_assistant_message,
-    recover_placeholder_id,
+from coffer.application.chat.turn_runner import run_turn_task
+from coffer.application.chat.turn_state import (
+    _ACTIVE_TURNS,
+    _BUSES,
+    _PENDING,
+    _ActiveTurn,
+    _PendingState,
 )
-from coffer.domain.chat.events import (
-    AgentEvent,
-    QueueChanged,
-    TextDelta,
-    ToolCall,
-    ToolResult,
-    TurnDone,
-    TurnError,
-)
-from coffer.domain.chat.message import (
-    Message,
-    Role,
-    TextBlock,
-    ToolResultBlock,
-    ToolUseBlock,
-)
+from coffer.application.chat.turn_state import active_turns as active_turns
+from coffer.application.chat.turn_state import clear_active_turns as clear_active_turns
+from coffer.domain.chat.events import AgentEvent, QueueChanged, TurnError
+from coffer.domain.chat.message import Role, TextBlock
 from coffer.domain.errors import TurnInProgress
 
 log = logging.getLogger(__name__)
-
-
-@dataclass
-class _ActiveTurn:
-    """In-process record of one conversation's in-flight turn."""
-
-    bus: ConversationBus
-    # A dedicated event queue for a ``start_turn`` caller (the channel renderer);
-    # ``None`` for a web turn, which observes via the bus instead. When present it
-    # receives every event plus a ``None`` end-of-stream sentinel.
-    primary_queue: asyncio.Queue[AgentEvent | None] | None = None
-    task: asyncio.Task[None] | None = None
-    interrupted: bool = field(default=False)
-
-
-@dataclass
-class _PendingState:
-    """A conversation's pending-message queue (ADR-031)."""
-
-    queue: list[str] = field(default_factory=list)
-    # Set by an interrupt; blocks auto-advance until the owner resumes (any
-    # ``enqueue_message`` / ``set_pending`` clears it).
-    paused: bool = False
-
-
-# Module-level, process-global (single daemon). conversation_id → state.
-_ACTIVE_TURNS: dict[str, _ActiveTurn] = {}
-_BUSES: dict[str, ConversationBus] = {}
-_PENDING: dict[str, _PendingState] = {}
 
 
 class TurnOrchestrator:
@@ -145,22 +95,25 @@ class TurnOrchestrator:
     async def enqueue_message(self, conversation_id: str, user_text: str) -> bool:
         """Start a turn for the message, or enqueue it behind the in-flight one.
 
-        Returns ``True`` when the message was queued (a turn was already running),
-        ``False`` when its turn started immediately. Raises ``ConversationNotFound``
-        when the conversation does not exist. The composer never locks — a message
-        sent during a turn is never rejected (revises FR-018, ADR-031).
+        Returns ``True`` when the message was queued, ``False`` when its turn
+        started immediately. Raises ``ConversationNotFound`` when the conversation
+        does not exist. The composer never locks — a message sent during a turn is
+        never rejected (revises FR-018, ADR-031).
         """
         await self._chat.get_conversation(conversation_id)  # raises ConversationNotFound -> 404
         state = self._pending_for(conversation_id)
         start_now = conversation_id not in _ACTIVE_TURNS and not state.paused and not state.queue
         state.paused = False
         if start_now:
-            # Start directly — the message is the head and runs at once.
             await self._begin_turn(conversation_id, user_text, primary_queue=None)
-        else:
-            state.queue.append(user_text)
+            self._broadcast_queue_changed(conversation_id)
+            return False
+        state.queue.append(user_text)
         self._broadcast_queue_changed(conversation_id)
-        return not start_now
+        # Unpaused above — drain the head if the conversation is now idle (e.g. a
+        # plain send after an interrupt resumes the held queue).
+        await self._maybe_advance(conversation_id)
+        return True
 
     async def set_pending(self, conversation_id: str, texts: Sequence[str]) -> list[str]:
         """Replace the pending queue (resume / drop / reorder). Unpauses and
@@ -272,6 +225,12 @@ class TurnOrchestrator:
             await self._begin_turn(conversation_id, text, primary_queue=None)
         except Exception:
             log.exception("auto-advance turn failed for conversation %s", conversation_id)
+            # Re-insert the head and pause so the message is neither lost nor
+            # retried in a spin; the owner resumes (send / set_pending) after
+            # fixing the cause (FR-018a — a queued message must not vanish).
+            state.queue.insert(0, text)
+            state.paused = True
+            self._broadcast_queue_changed(conversation_id)
             self._bus_for(conversation_id).publish(
                 TurnError(code="INTERNAL_ERROR", message="failed to start queued turn")
             )
@@ -309,7 +268,13 @@ class TurnOrchestrator:
             raise
 
         task = asyncio.create_task(
-            self._run_turn(conversation_id, active, adapter),
+            run_turn_task(
+                conversation_id=conversation_id,
+                active=active,
+                adapter=adapter,
+                chat=self._chat,
+                audit=self._audit,
+            ),
             name=f"turn:{conversation_id}",
         )
         active.task = task
@@ -322,171 +287,3 @@ class TurnOrchestrator:
             advance.add_done_callback(self._bg_tasks.discard)
 
         return _cb
-
-    async def _run_turn(
-        self,
-        conversation_id: str,
-        active: _ActiveTurn,
-        adapter: AgentAdapter,
-    ) -> None:
-        """Async task body: drive the adapter, publish events, persist the result."""
-        bus = active.bus
-
-        def emit(event: AgentEvent) -> None:
-            bus.publish(event)
-            if active.primary_queue is not None:
-                active.primary_queue.put_nowait(event)
-
-        text_parts: list[str] = []
-        tool_use_blocks: list[ToolUseBlock] = []
-        tool_result_blocks: list[ToolResultBlock] = []
-        final_done: TurnDone | None = None
-        error_event: TurnError | None = None
-        # An adapter may expose the resolved model id so the assistant message can
-        # record it. Other adapters need not; best-effort read.
-        model_id: str | None = getattr(adapter, "model_id", None)
-        placeholder_id: str | None = None
-        append_task: asyncio.Task[Message] | None = None
-
-        try:
-            history = await self._chat.list_messages(conversation_id)
-            # Write a ``streaming`` placeholder assistant row BEFORE the first
-            # event. A daemon crash mid-turn then leaves a row the startup sweep
-            # flips to ``failed`` (FR-022). It is finalised in place on completion
-            # (one row, no dup). The write runs as a shielded task: a cancellation
-            # landing between the row's commit and the id assignment leaves the
-            # task running, and the CancelledError handler recovers the id.
-            append_task = asyncio.create_task(
-                self._chat.append_message(
-                    conversation_id,
-                    role=Role.ASSISTANT,
-                    content=[],
-                    status="streaming",
-                    model_id=model_id,
-                )
-            )
-            placeholder_id = (await asyncio.shield(append_task)).id
-
-            async for event in await adapter.run_turn(history=history):
-                emit(event)
-                if isinstance(event, TextDelta):
-                    text_parts.append(event.text)
-                elif isinstance(event, ToolCall):
-                    tool_use_blocks.append(
-                        ToolUseBlock(
-                            tool_use_id=event.tool_use_id,
-                            tool_name=event.tool_name,
-                            tool_input=event.tool_input,
-                        )
-                    )
-                elif isinstance(event, ToolResult):
-                    tool_result_blocks.append(
-                        ToolResultBlock(
-                            tool_use_id=event.tool_use_id,
-                            tool_name=event.tool_name,
-                            output=event.output,
-                            error=event.error,
-                        )
-                    )
-                elif isinstance(event, TurnDone):
-                    final_done = event
-                elif isinstance(event, TurnError):
-                    error_event = event
-                    log.warning(
-                        "Turn for conversation %s ended with %s: %s",
-                        conversation_id,
-                        event.code,
-                        event.message,
-                    )
-                # TurnStarted / QueueChanged: forwarded only, not message content.
-
-            await self._finalize_assistant_message(
-                conversation_id=conversation_id,
-                message_id=placeholder_id,
-                model_id=model_id,
-                text_parts=text_parts,
-                tool_use_blocks=tool_use_blocks,
-                tool_result_blocks=tool_result_blocks,
-                final_done=final_done,
-                error_event=error_event,
-            )
-        except asyncio.CancelledError:
-            # The cancel may have landed while the placeholder write was still in
-            # flight; recover the committed row's id so it is not orphaned.
-            placeholder_id = await recover_placeholder_id(placeholder_id, append_task)
-            if active.interrupted:
-                # User interrupt: keep whatever the agent produced. Emit a terminal
-                # event and finalise the partial message. The finalise is shielded
-                # so a second cancellation (e.g. the conversation is deleted while
-                # this interrupt is mid-write) cannot abort the write half-done.
-                done = TurnDone(
-                    prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"
-                )
-                emit(done)
-                await asyncio.shield(
-                    self._finalize_assistant_message(
-                        conversation_id=conversation_id,
-                        message_id=placeholder_id,
-                        model_id=model_id,
-                        text_parts=text_parts,
-                        tool_use_blocks=tool_use_blocks,
-                        tool_result_blocks=tool_result_blocks,
-                        final_done=done,
-                        error_event=None,
-                    )
-                )
-                # Cancellation handled — do NOT re-raise.
-            else:
-                # Conversation deleted: discard the partial turn entirely — remove
-                # the placeholder so no orphan streaming row remains.
-                if placeholder_id is not None:
-                    await asyncio.shield(self._chat.delete_message(placeholder_id))
-                log.debug("Turn for conversation %s cancelled and discarded", conversation_id)
-                raise
-        except Exception as exc:
-            log.exception("Unexpected error in turn task for conversation %s", conversation_id)
-            error_event = TurnError(code="INTERNAL_ERROR", message=str(exc))
-            emit(error_event)
-            # placeholder_id may be None when the placeholder write itself failed;
-            # _finalize falls back to appending a failed row so the turn still
-            # leaves a persisted + audited trace.
-            await self._finalize_assistant_message(
-                conversation_id=conversation_id,
-                message_id=placeholder_id,
-                model_id=model_id,
-                text_parts=text_parts,
-                tool_use_blocks=tool_use_blocks,
-                tool_result_blocks=tool_result_blocks,
-                final_done=final_done,
-                error_event=error_event,
-            )
-        finally:
-            # Ownership-checked removal — only evict our own entry so a racing
-            # start that registered a fresh entry is not lost.
-            if _ACTIVE_TURNS.get(conversation_id) is active:
-                del _ACTIVE_TURNS[conversation_id]
-            bus.end_turn()
-            # Close the channel's dedicated queue so its renderer never hangs.
-            if active.primary_queue is not None:
-                active.primary_queue.put_nowait(None)
-
-    async def _finalize_assistant_message(self, **kwargs: Any) -> None:
-        """Finalize + audit the turn's assistant message (see turn_persistence)."""
-        await finalize_assistant_message(chat=self._chat, audit=self._audit, **kwargs)
-
-
-# ---------------------------------------------------------------------------
-# Test / monitoring helpers
-# ---------------------------------------------------------------------------
-
-
-def active_turns() -> dict[str, _ActiveTurn]:
-    """Expose the active-turns registry (for testing/monitoring only)."""
-    return _ACTIVE_TURNS
-
-
-def clear_active_turns() -> None:
-    """Clear all per-conversation orchestrator state (test teardown only)."""
-    _ACTIVE_TURNS.clear()
-    _BUSES.clear()
-    _PENDING.clear()

@@ -185,7 +185,8 @@ that completes without error and is still visible after reload.
 
 - send a message and receive a streamed assistant reply
 - the reply is persisted and survives a page reload and a daemon restart
-- the composer is disabled while a turn is streaming and re-enabled when it ends
+- the composer stays usable while a turn streams; a message sent during a turn
+  queues rather than being rejected ([ADR-031](../../docs/decisions/ADR-031-chat-single-owner-live-mirror.md), supersedes the former composer-lock)
 - an LLM/provider error surfaces in the conversation without crashing the page
 
 ---
@@ -622,8 +623,13 @@ referenced by at least one test marked
   turn — sequential FIFO, one turn per queued message (not coalesced). A pending
   message is **not** committed to the message sequence until its turn starts; it
   is surfaced as a removable pending item the owner may drop before it runs. The
-  pending queue is in-memory and shared across surfaces (web + IM land in one
-  FIFO); a daemon restart drops not-yet-committed pending messages.
+  pending queue is in-memory; it auto-advances after *any* turn on the
+  conversation ends (including an IM-driven one), so a desktop message queued
+  behind a phone-started turn still runs when that turn completes. (A message
+  arriving *from* an IM channel while a turn is in flight is held by the channel's
+  own inbound buffering, Spec 009, rather than this queue; v1 does not merge the
+  two into one physical FIFO.) A daemon restart drops not-yet-committed pending
+  messages.
 - **FR-018b**: Interrupting a turn (FR-021) MUST also **pause** the pending queue:
   the current turn stops with its partial output kept, and queued messages are
   held (not auto-run) until the owner resumes or drops them.
@@ -745,8 +751,9 @@ referenced by at least one test marked
 - **Model**: A user-configured LLM the built-in agent can run on. Fields: id,
   display name, provider type (`anthropic` | `openai` | `ollama`), model id,
   credential reference (cloud), base URL (Ollama / custom), default flag.
-- **Agent Event**: A typed event in a streamed turn — text delta, tool call,
-  tool result, turn done, or turn error.
+- **Agent Event**: A typed event on the conversation's live stream — turn start,
+  text delta, tool call, tool result, turn done, turn error, or queue changed
+  (`queue_changed`, the conversation-level pending-queue snapshot, ADR-031).
 
 ## Success Criteria
 

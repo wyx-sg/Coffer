@@ -91,7 +91,15 @@ only the response to over-sending changes (queue, not reject).
 - **Interrupt = stop the current turn + pause the queue.** Otherwise the next
   queued message would immediately fire into the turn you just stopped. The chips
   remain; the owner removes them, clears them, or resumes.
-- **Cross-surface, one queue.** Web and IM messages land in the same FIFO.
+- **Cross-surface advance.** The pending queue is the web composer's; it
+  auto-advances after *any* turn on the conversation ends — including an
+  IM-driven one — so a desktop message queued behind a phone-started turn still
+  runs when that turn completes. A message arriving *from* IM while a turn is in
+  flight is held by the channel's own inbound buffering (Spec 009), not this
+  queue; v1 does not merge the two into a single physical FIFO (the channel
+  adapter keeps its per-peer buffer), so the cross-surface guarantee is
+  "a desktop send is never rejected and runs in order", not "IM and web share one
+  queue object".
 - **Queue state rides the bus.** A `QueueChanged` event broadcasts the ordered
   pending items so every subscriber — a second tab, the phone — renders the same
   chips, making "two screens, one timeline" true for not-yet-processed messages.
