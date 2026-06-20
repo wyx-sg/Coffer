@@ -6,7 +6,6 @@ import asyncio
 from typing import Any
 
 from coffer.application.chat.bus import ConversationBus
-
 from coffer.domain.chat.events import AgentEvent, QueueChanged, TextDelta, TurnStarted
 
 

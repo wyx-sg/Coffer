@@ -75,12 +75,15 @@ class ConversationPatch(BaseModel):
     model_id: str | None = None
 
 
-class ConversationPeerOut(BaseModel):
-    """The IM peer driving a channel-origin conversation (ADR-021)."""
+class ChannelBindingOut(BaseModel):
+    """The IM channel a conversation is also driven from (ADR-031).
 
-    chat_id: str
-    display_name: str
+    The return address for relaying the agent's output back to the channel;
+    present iff the conversation has a channel binding.
+    """
+
     channel: str
+    chat_id: str
 
 
 class ConversationOut(BaseModel):
@@ -93,9 +96,8 @@ class ConversationOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None = None
-    # ADR-021 — where the thread was opened from, for the Vault Console.
-    origin: str = "web"
-    peer: ConversationPeerOut | None = None
+    # ADR-031 — optional channel binding (null for a desktop-only conversation).
+    channel_binding: ChannelBindingOut | None = None
 
 
 class ConversationListOut(BaseModel):

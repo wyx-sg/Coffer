@@ -22,6 +22,7 @@ from coffer.domain.chat.message import (
 )
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.chat.schemas import (
+    ChannelBindingOut,
     ChatAgentListOut,
     ChatAgentOut,
     ContentBlockOut,
@@ -29,7 +30,6 @@ from coffer.surfaces.http.chat.schemas import (
     ConversationListOut,
     ConversationOut,
     ConversationPatch,
-    ConversationPeerOut,
     MessageListOut,
     MessageOut,
 )
@@ -53,12 +53,12 @@ router = APIRouter(
 
 
 def _conv_out(conv: Conversation) -> ConversationOut:
-    peer: ConversationPeerOut | None = None
-    if conv.origin == "channel" and conv.peer_chat_id is not None:
-        peer = ConversationPeerOut(
-            chat_id=conv.peer_chat_id,
-            display_name=conv.peer_display_name or conv.peer_chat_id,
-            channel=conv.channel_name or "",
+    # A conversation "has a channel binding" iff channel_name is set (ADR-031).
+    binding: ChannelBindingOut | None = None
+    if conv.channel_name is not None:
+        binding = ChannelBindingOut(
+            channel=conv.channel_name,
+            chat_id=conv.peer_chat_id or "",
         )
     return ConversationOut(
         id=conv.id,
@@ -68,8 +68,7 @@ def _conv_out(conv: Conversation) -> ConversationOut:
         created_at=conv.created_at,
         updated_at=conv.updated_at,
         archived_at=conv.archived_at,
-        origin=conv.origin,
-        peer=peer,
+        channel_binding=binding,
     )
 
 

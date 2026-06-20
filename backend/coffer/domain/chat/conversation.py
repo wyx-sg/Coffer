@@ -16,10 +16,11 @@ class Conversation:
     ``archived_at`` is ``None`` for an active thread, or the instant it was
     archived; archived threads are hidden from the default list but restorable.
 
-    ``origin`` records where the thread was opened from (ADR-021): ``"web"`` for a
-    Vault Console draft, ``"channel"`` for one an IM peer drives. For a channel
-    thread the peer's identity (``channel_name`` + ``peer_chat_id`` +
-    ``peer_display_name``) is carried so the console can badge and observe it.
+    An optional **channel binding** (``channel_name`` + ``peer_chat_id``) is the
+    return address for relaying the agent's output back to an IM channel
+    (ADR-031). A conversation "has a channel binding" iff ``channel_name`` is set.
+    Under the single-owner premise the IM peer is always the owner, so there is no
+    separate peer identity to display.
     """
 
     id: str
@@ -29,7 +30,5 @@ class Conversation:
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None = None
-    origin: str = "web"
     channel_name: str | None = None
     peer_chat_id: str | None = None
-    peer_display_name: str | None = None
