@@ -22,6 +22,7 @@ Pydantic v2 `BaseModel`。当 `kind == "knowledge_base"` 时存在 `Resource.con
 | `chunk_overlap`      | `int`                     | 默认 `64`；范围 `0–chunk_size/2`。                                                                 |
 | `max_document_bytes` | `int`                     | 默认 `25 * 1024 * 1024`；范围 `1024–104857600`。                                                   |
 | `embedding`          | `EmbeddingConfig \| None` | 仅当启用 `vector` 时必需。`None` ⇒ 仅 keyword/grep。                                               |
+| `auto_update_sources`| `bool`                    | 默认 `false`。为 `true` 时，`check_sources` 自动刷新外部原件已变化的被跟踪文档（跳过手动编辑过的）。**不是**触发 reindex 的字段——切换它绝不会重新 chunk / 重新 embedding。 |
 
 ### `EmbeddingConfig` (`domain/knowledge/embedder.py`)
 
@@ -52,7 +53,7 @@ frozen dataclass；一个 Markdown 文件一条，**按 `kind` 区分**。KB 与
 | `metadata`                  | `dict`        | 按面区分的 JSON；KB 的 key 见下。                                                                                        |
 | `created_at` / `updated_at` | `datetime`    | UTC。                                                                                                                    |
 
-KB 的 `metadata` key：`original_filename`（重新上传的匹配键）、`original_format`、`source_sha256`（出处）、`converted_at`、`conversion_engine`。
+KB 的 `metadata` key：`original_filename`（重新上传的匹配键）、`original_format`、`source_sha256`（出处）、`converted_at`、`conversion_engine`，以及可选的 `source_path`（外部原件的绝对路径，仅由基于路径的 ingest——CLI / 桌面选择器——写入，供 `check_sources` 之后检测其磁盘漂移；机器本地，web 字节上传与 agent `add_document` 绝不写入）。
 
 ### `Passage`、`GrepHit`、`SearchResult` (`domain/knowledge/retrieval.py`)
 
@@ -288,8 +289,10 @@ KB 生命周期由 kind 无关核心的 `resource_created` / `resource_deleted` 
 - `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 只读 markdown 正文 + frontmatter + 绝对 `path` + `folder_path`
 - `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 经 API 编辑 markdown（置 `source_mode=edited`，重建索引）；UI 为只读，其余编辑经外部编辑器或 agent MCP 进行（由读取时惰性重建索引拾取）
 - `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` —— 从 `raw/` 重跑转换（一旦手工编辑过即被 `RECONVERSION_BLOCKED` 拦截）
+- `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/update-source` —— 从被跟踪的外部 `source_path` 就地重新 ingest（一旦手工编辑过即被拦截）
 - `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 删除单个文档
 - `POST /api/v1/knowledge_bases/{name}/reindex` —— 重扫描 + 从文件重建索引
+- `POST /api/v1/knowledge_bases/{name}/check-sources` —— 检测外部原件已变化的被跟踪文档（`unchanged`/`changed`/`missing`；启用 `auto_update_sources` 时自动刷新）
 - `POST /api/v1/knowledge_bases/{name}/search` —— `{query, top_k?, mode?}` → 排序 passage（+ `fallback`）
 - `POST /api/v1/knowledge_bases/{name}/grep` —— `{pattern, max_matches?}` → 文件/行命中
 - `GET /api/v1/knowledge_bases/{name}/metrics` —— 计数 + 已建索引模式 + 磁盘字节数

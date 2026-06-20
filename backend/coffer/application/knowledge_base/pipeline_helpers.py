@@ -71,6 +71,22 @@ class Prepared:
     conversion_engine: str
 
 
+@dataclass(frozen=True)
+class SourceStatus:
+    """One document's external-source tracking status (``check_sources`` result).
+
+    ``status`` is one of ``"unchanged"`` (the tracked external file's sha256
+    matches the stored ``source_sha256``), ``"changed"`` (it differs),
+    ``"missing"`` (the tracked file is gone), ``"edited"`` (changed but skipped
+    because the document was hand-edited), or ``"updated"`` (a changed source
+    that ``auto_update_sources`` re-ingested in place)."""
+
+    doc_id: str
+    title: str
+    source_path: str
+    status: str
+
+
 def mkparent_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -132,6 +148,21 @@ def document_from_frontmatter(
     the database."""
     now = datetime.now(tz=UTC)
     source_filename = str(frontmatter.get("source_filename", ""))
+    metadata: dict[str, object] = {
+        "original_filename": source_filename,
+        "original_format": str(frontmatter.get("source_format", "")),
+        "source_sha256": str(frontmatter.get("source_sha256", "")),
+        "converted_at": now.isoformat(),
+        "conversion_engine": str(frontmatter.get("converter", "unknown")),
+    }
+    # The external original's absolute path, when a path-based ingest recorded
+    # one (CLI / desktop picker). Added ONLY when truthy — mirrors
+    # build_kb_document so a byte-upload / agent ingest never gains a phantom
+    # source_path (a stored None would otherwise surface as a bogus "missing"
+    # source on the next check after a reindex-from-frontmatter rebuild).
+    source_path = str(frontmatter.get("source_path", ""))
+    if source_path:
+        metadata["source_path"] = source_path
     return Document(
         id=doc_id,
         kind=KIND_KNOWLEDGE_BASE,
@@ -144,13 +175,7 @@ def document_from_frontmatter(
         source_mode=str(frontmatter.get("source_mode", "converted")),
         created_at=now,
         updated_at=now,
-        metadata={
-            "original_filename": source_filename,
-            "original_format": str(frontmatter.get("source_format", "")),
-            "source_sha256": str(frontmatter.get("source_sha256", "")),
-            "converted_at": now.isoformat(),
-            "conversion_engine": str(frontmatter.get("converter", "unknown")),
-        },
+        metadata=metadata,
     )
 
 
@@ -163,10 +188,21 @@ def build_kb_document(
     source_mode: str,
     created_at: datetime,
     updated_at: datetime,
+    source_path: str | None = None,
 ) -> Document:
     """Build the in-memory ``Document`` for a freshly-converted upload. ``id`` is
     the stable ULID (new for an ingest, reused for an in-place update — ADR-028);
-    ``content_sha256`` is set by the reindex routine."""
+    ``content_sha256`` is set by the reindex routine. ``source_path`` is the
+    external original's absolute path, recorded only for path-based ingests."""
+    metadata: dict[str, object] = {
+        "original_filename": filename,
+        "original_format": prepared.extension.lstrip("."),
+        "source_sha256": prepared.source_sha256,
+        "converted_at": updated_at.isoformat(),
+        "conversion_engine": prepared.conversion_engine,
+    }
+    if source_path:
+        metadata["source_path"] = source_path
     return Document(
         id=doc_id,
         kind=KIND_KNOWLEDGE_BASE,
@@ -179,27 +215,24 @@ def build_kb_document(
         source_mode=source_mode,
         created_at=created_at,
         updated_at=updated_at,
-        metadata={
-            "original_filename": filename,
-            "original_format": prepared.extension.lstrip("."),
-            "source_sha256": prepared.source_sha256,
-            "converted_at": updated_at.isoformat(),
-            "conversion_engine": prepared.conversion_engine,
-        },
+        metadata=metadata,
     )
 
 
 def render_doc_markdown(doc: Document, body: str, *, source_mode: str) -> str:
     """Re-render a document's ``docs/<id>.md`` (frontmatter + body) for an edit
     or reconvert, preserving its provenance metadata."""
-    return render_frontmatter(
-        {
-            "title": title_of(body, doc.title),
-            "source_filename": str(doc.metadata.get("original_filename", "")),
-            "source_format": str(doc.metadata.get("original_format", "")),
-            "source_sha256": str(doc.metadata.get("source_sha256", "")),
-            "converter": str(doc.metadata.get("conversion_engine", "")),
-            "source_mode": source_mode,
-        },
-        body,
-    )
+    fields: dict[str, object] = {
+        "title": title_of(body, doc.title),
+        "source_filename": str(doc.metadata.get("original_filename", "")),
+        "source_format": str(doc.metadata.get("original_format", "")),
+        "source_sha256": str(doc.metadata.get("source_sha256", "")),
+        "converter": str(doc.metadata.get("conversion_engine", "")),
+        "source_mode": source_mode,
+    }
+    # Carry the external-source path through edit/reconvert so source tracking
+    # survives those write paths (only present for path-based ingests).
+    source_path = doc.metadata.get("source_path")
+    if source_path:
+        fields["source_path"] = source_path
+    return render_frontmatter(fields, body)

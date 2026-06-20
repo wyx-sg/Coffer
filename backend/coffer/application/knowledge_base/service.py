@@ -28,10 +28,12 @@ from coffer.application.knowledge.retrieval import (
     KnowledgeRetrieval,
     no_embedding,
 )
+from coffer.application.knowledge_base import source_tracking
 from coffer.application.knowledge_base.pipeline import KBPipeline
 from coffer.application.knowledge_base.pipeline_helpers import (
     DocumentRepoPort,
     KBPaths,
+    SourceStatus,
     chunker_for,
     du_bytes,
     read_markdown_body,
@@ -115,11 +117,18 @@ class KnowledgeBaseService:
         raw_bytes: bytes,
         actor: str,
         replace: bool = False,
+        source_path: str | None = None,
     ) -> Document:
         """Ingest one uploaded file: size check → convert → clean → frontmatter →
         write ``docs/``+``raw/`` → reindex → audit. A re-upload is matched to an
         existing document by filename (ADR-028): identical bytes are a no-op, a
-        changed file updates that document in place (``replace``)."""
+        changed file updates that document in place (``replace``).
+
+        ``source_path`` is the external original's absolute path; it is recorded
+        in ``metadata`` (enabling later source-update detection) only for
+        path-based ingests (CLI / desktop picker). A web byte-upload or agent
+        ``add_document`` MUST NOT pass it — an untrusted surface must never
+        populate an arbitrary server path."""
         config = await self.get_kb_config(kb_name)
         doc, status = await self._pipeline.ingest(
             kb_name=kb_name,
@@ -127,6 +136,7 @@ class KnowledgeBaseService:
             raw_bytes=raw_bytes,
             config=config,
             replace=replace,
+            source_path=source_path,
         )
         # A byte-identical re-upload is an idempotent no-op — nothing changed, so
         # nothing is audited (FR-007). A changed re-upload of an existing filename
@@ -211,6 +221,25 @@ class KnowledgeBaseService:
             details={"document_id": document_id, "source_mode": updated.source_mode},
         )
         return updated
+
+    # ----- external-source tracking (FR-021..024; impl in source_tracking.py) -----
+
+    async def check_sources(self, *, kb_name: str, actor: str) -> list[SourceStatus]:
+        """Classify each path-tracked document by re-hashing its external
+        original vs the stored ``source_sha256`` (``unchanged``/``changed``/
+        ``missing``). Detect-only audits nothing; with ``auto_update_sources`` a
+        changed non-edited document is refreshed in place. See
+        :mod:`coffer.application.knowledge_base.source_tracking`."""
+        return await source_tracking.check_sources(self, kb_name=kb_name, actor=actor)
+
+    async def update_from_source(self, *, kb_name: str, document_id: str, actor: str) -> Document:
+        """Re-ingest a document from its tracked external ``source_path`` in
+        place (preserving the ULID id), reusing the ``replace=True`` path.
+        Refused once hand-edited. See
+        :mod:`coffer.application.knowledge_base.source_tracking`."""
+        return await source_tracking.update_from_source(
+            self, kb_name=kb_name, document_id=document_id, actor=actor
+        )
 
     async def delete_document(self, *, kb_name: str, document_id: str, actor: str) -> None:
         await self.get_kb_config(kb_name)
@@ -344,4 +373,4 @@ class KnowledgeBaseService:
         return doc
 
 
-__all__ = ["DocumentRepoPort", "KnowledgeBaseService", "chunker_for"]
+__all__ = ["DocumentRepoPort", "KnowledgeBaseService", "SourceStatus", "chunker_for"]

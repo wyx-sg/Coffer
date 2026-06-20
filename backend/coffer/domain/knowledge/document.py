@@ -29,7 +29,9 @@ class Document:
     per-face JSON blob:
 
     - KB keys: ``original_filename``, ``original_format``, ``source_sha256``,
-      ``converted_at``, ``conversion_engine``.
+      ``converted_at``, ``conversion_engine``, and the optional ``source_path``
+      (the external original's absolute path, set only for path-based ingests
+      so its on-disk drift can later be detected).
     - memory keys: ``type``, ``actor``, ``origin_session_id``.
     """
 

@@ -129,7 +129,9 @@ def ingest(
     with c:
         with path.open("rb") as fp:
             files = {"file": (path.name, fp, "application/octet-stream")}
-            data = {"replace": str(replace).lower()}
+            # The CLI is a trusted client, so it records the external original's
+            # absolute path (enabling later `kb check-sources` update detection).
+            data = {"replace": str(replace).lower(), "source_path": str(path.resolve())}
             r = c.post(f"/knowledge_bases/{name}/documents", files=files, data=data)
         _cli_client.check(r, verbose=_verbose(ctx))
     out = r.json()
