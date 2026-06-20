@@ -35,7 +35,7 @@ LlamaIndex, mem0, chroma, the hand-rolled keyword term-frequency scan, and the d
 **Decision**: Three modes, one engine, face-tuned tools:
 
 - **`grep`** — `ripgrep` over `docs/*.md`, bounded by `max_matches` and a timeout. No index, no embedding, regex/exact. Returns `{path, line_number, line}`. Always available the instant files exist.
-- **`keyword`** — FTS5 `MATCH(query) ORDER BY bm25() LIMIT top_k`. Zero config, offline, CJK-capable (a **trigram** tokenizer matches Chinese and arbitrary substrings; `unicode61` did not segment CJK, so Chinese queries returned nothing). A query with no ≥3-char token (e.g. a 2-char CJK term) falls back to a bounded substring (LIKE) scan. The **default**.
+- **`keyword`** — FTS5 `MATCH(query) ORDER BY bm25() LIMIT top_k`. Zero config, offline, CJK-capable (a **trigram** tokenizer matches Chinese and arbitrary substrings; `unicode61` did not segment CJK, so Chinese queries returned nothing). A query with no ≥3-char token (e.g. a 2-char CJK term) falls back to a bounded substring (LIKE) scan. A multi-term query is **AND-first**: the implicit-AND match (every term) runs first so chunks containing all terms outrank a chunk matching just one common term; only when AND returns fewer than `top_k` does it widen to OR and append the OR-only hits (deduped, AND kept first). The **default**.
 - **`vector`** — embed the query → sqlite-vec KNN top_k. Opt-in; needs a configured embedding provider.
 
 A KB declares `enabled_modes` + `default_mode`; a search call may override `mode`. **Hybrid (RRF fusion of keyword + vector)** is an optional future addition behind the same engine — listed as a non-blocking enhancement, not built in MVP.
