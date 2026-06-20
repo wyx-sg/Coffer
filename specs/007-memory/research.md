@@ -92,6 +92,7 @@ Invocations are recorded in `mcp_invocations` the same way KB and upstream tools
 - Multi-machine sync (constitutional).
 - Filesystem watcher on by default.
 - Memory categories beyond a free-form `metadata.type`.
+- Defining file-write atomicity here: memory's source-of-truth files (facts, topic docs, `INDEX.md`, handoffs) are written via the shared `infrastructure.knowledge.fs.atomic_write_*` helper (same-dir temp → fsync → `os.replace`), decided once in KB19 (see `specs/006-knowledge-base/research.md` §13).
 
 ## 11. Open items to verify in implementation
 

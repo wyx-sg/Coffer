@@ -26,6 +26,7 @@ from coffer.domain.knowledge.document import (
 from coffer.domain.knowledge_base.config import KnowledgeBaseConfig
 from coffer.infrastructure.knowledge.chunking import chunk_markdown
 from coffer.infrastructure.knowledge.frontmatter import render_frontmatter, split_frontmatter
+from coffer.infrastructure.knowledge.fs import atomic_write_text
 
 # A filename's extension, lower-cased, restricted to a safe shape so it can never
 # escape ``raw/`` (e.g. ``foo./../../etc``).
@@ -103,8 +104,9 @@ def check_upload_size(raw_bytes: bytes, config: KnowledgeBaseConfig) -> None:
 
 
 def mkparent_write(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    """Write ``text`` to ``path`` atomically (temp file + fsync + ``os.replace``),
+    creating parent dirs — so a crash never leaves a partial source-of-truth file."""
+    atomic_write_text(path, text)
 
 
 def extension_of(filename: str) -> str:

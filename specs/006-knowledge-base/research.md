@@ -151,7 +151,18 @@ No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invo
 - **`metrics()` / `store_metrics()` are unchanged**: the per-resource DETAIL endpoint (`GET /{name}/metrics`) still walks the disk and reports `disk_bytes`. Only the LIST path changed.
 - **No migration / no schema change. No new FR** (a perf change under the existing endpoints).
 
-## 13. Things explicitly NOT decided / out of scope here
+## 13. Atomic writes for persisted source-of-truth files (KB19)
+
+**Question**: Coffer's invariant is "files are truth, SQLite is a rebuildable index", yet the persisted Markdown / raw files were written non-atomically via plain `path.write_text` / `path.write_bytes`. A crash or power loss mid-write leaves a TRUNCATED file — a corrupt source of truth that the next reindex faithfully ingests.
+
+**Decision**: Route every persisted-truth write through one shared helper, `coffer.infrastructure.knowledge.fs.atomic_write_text` / `atomic_write_bytes`, that writes to a temp file in the SAME directory, fsyncs it, then `os.replace`s it into place. `os.replace` is an atomic rename on the same filesystem, so a concurrent reader always sees either the complete OLD file or the complete NEW file, never a partial mix; on any failure the temp file is removed and the original is left untouched.
+
+- **Sites converted**: KB doc writes (ingest via `mkparent_write`, edit, reconvert) and the KB raw-upload bytes; memory fact files, organizer topic docs + `INDEX.md`, and the per-branch handoff files. The helper is stdlib-only (no import cycle) and lives in the shared `infrastructure.knowledge` substrate — already the application-composable home for kind-agnostic helpers (chunking, frontmatter, ids, paths) that the import-linter contract lets `application/knowledge_base/*` import — so both `application/knowledge_base/*` and `infrastructure/memory/*` reuse it with no architecture-boundary change. The already-off-loop writes keep their `asyncio.to_thread` wrapping (the helper is sync).
+- **Append-only logs are deliberately NOT converted**: `consolidation-log.md` is opened in append mode (`"a"`); it is an audit trail where atomic-replace would destroy prior history, and an interrupted append cannot corrupt earlier lines.
+- **Directory fsync (rename-durability under power loss) is deliberately DEFERRED**: a single file-fsync + `os.replace` already delivers ATOMICITY (no partial/corrupt file), which is the KB19 goal. Guaranteeing the rename *itself* survives a power loss needs an extra fsync of the parent directory; it is a stronger durability guarantee that can be layered onto the shared helper later if a real need appears, with zero call-site churn.
+- **No migration / no schema change. No new FR** (a robustness/quality change under existing behaviour). Memory's source-of-truth files (spec 007) share the helper; this is the single home for the atomicity guarantee.
+
+## 14. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.

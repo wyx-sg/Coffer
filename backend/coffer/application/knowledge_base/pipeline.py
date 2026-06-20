@@ -50,6 +50,7 @@ from coffer.infrastructure.knowledge.frontmatter import (
     render_frontmatter,
     split_frontmatter,
 )
+from coffer.infrastructure.knowledge.fs import atomic_write_bytes, atomic_write_text
 from coffer.infrastructure.knowledge.ids import new_ulid
 
 
@@ -170,7 +171,7 @@ class KBPipeline:
             raise IngestRejected("empty", "edited markdown is empty")
         async with self._lock(kb_name):
             full = render_doc_markdown(doc, body, source_mode="edited")
-            await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
+            await asyncio.to_thread(atomic_write_text, self._paths.doc_path(kb_name, doc.id), full)
             edited = dc_replace(
                 doc,
                 source_mode="edited",
@@ -196,7 +197,7 @@ class KBPipeline:
         body = markdown.strip()
         async with self._lock(kb_name):
             full = render_doc_markdown(doc, body, source_mode="converted")
-            await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
+            await asyncio.to_thread(atomic_write_text, self._paths.doc_path(kb_name, doc.id), full)
             reconv = dc_replace(
                 doc,
                 source_mode="converted",
@@ -338,12 +339,7 @@ class KBPipeline:
     ) -> None:
         raw_path = self._paths.raw_path(kb_name, doc_id, prepared.extension)
         doc_path = self._paths.doc_path(kb_name, doc_id)
-
-        def _write() -> None:
-            raw_path.parent.mkdir(parents=True, exist_ok=True)
-            raw_path.write_bytes(raw_bytes)
-
-        await asyncio.to_thread(_write)
+        await asyncio.to_thread(atomic_write_bytes, raw_path, raw_bytes)
         fields: dict[str, object] = {
             "title": prepared.title,
             "source_filename": filename,

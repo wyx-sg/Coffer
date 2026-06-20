@@ -92,6 +92,7 @@ memory 用 **lazy reindex-on-read**：`recall` 先按 `content_sha256` 扫描这
 - 多机同步（constitutional）。
 - 默认开启文件系统 watcher。
 - 超出自由 `metadata.type` 之外的 memory 分类。
+- 在此定义文件写入原子性：memory 的真相之源文件（facts、主题文档、`INDEX.md`、handoff）通过共享的 `infrastructure.knowledge.fs.atomic_write_*` 辅助函数写入（同目录临时文件 → fsync → `os.replace`），在 KB19 一次性决策（见 `specs/006-knowledge-base/research.md` §13）。
 
 ## 11. 实现期需验证的 open items
 

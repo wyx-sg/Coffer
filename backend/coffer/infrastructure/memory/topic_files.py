@@ -25,6 +25,7 @@ from coffer.infrastructure.knowledge.frontmatter import (
     render_frontmatter,
     split_frontmatter,
 )
+from coffer.infrastructure.knowledge.fs import atomic_write_text
 from coffer.infrastructure.knowledge.paths import (
     consolidation_log_path,
     knowledge_dir,
@@ -67,8 +68,8 @@ def write_topic_doc(path: Path, doc: TopicDoc) -> None:
     """Write (overwrite) a topic doc to ``path``: frontmatter + body.
 
     The organizer always passes the LLM the prior body to merge into, so an
-    overwrite here is a merge-with-history, never a from-scratch clobber."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    overwrite here is a merge-with-history, never a from-scratch clobber. The
+    write is atomic so a crash never leaves a partial topic doc."""
     text = render_frontmatter(
         {
             "title": doc.title,
@@ -77,7 +78,7 @@ def write_topic_doc(path: Path, doc: TopicDoc) -> None:
         },
         doc.body,
     )
-    path.write_text(text, encoding="utf-8")
+    atomic_write_text(path, text)
 
 
 def read_topic_doc(path: Path) -> TopicDoc | None:
@@ -138,8 +139,7 @@ def render_index(docs: list[TopicDoc]) -> str:
 def write_index(store_dir: Path, docs: list[TopicDoc]) -> None:
     """Regenerate the store's ``knowledge/INDEX.md`` from all topic docs."""
     path = knowledge_index_path(store_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render_index(docs), encoding="utf-8")
+    atomic_write_text(path, render_index(docs))
 
 
 def append_changelog(store_dir: Path, entry: str) -> None:
