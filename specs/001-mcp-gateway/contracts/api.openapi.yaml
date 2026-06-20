@@ -45,6 +45,8 @@ tags:
     description: Daemon lifecycle and metadata
   - name: credentials
     description: Fernet-encrypted credential store
+  - name: vault
+    description: Vault-level backup and restore operations
 
 paths:
   /resources:
@@ -439,20 +441,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DaemonStatusOut" }
 
-  /daemon/backup:
+  /vault/backup:
     post:
-      tags: [daemon]
-      operationId: backupDaemon
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                path:
-                  type: string
-                  description: Optional output path; default `~/.coffer/backups/coffer.db.YYYYMMDDTHHMMSS.bak`
+      tags: [vault]
+      operationId: vaultBackup
       responses:
         "200":
           description: OK

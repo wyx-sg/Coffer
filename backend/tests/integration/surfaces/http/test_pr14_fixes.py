@@ -21,22 +21,6 @@ from pathlib import Path
 
 import pytest
 
-# CODE-002 ------------------------------------------------------------------- #
-
-
-def test_backup_rejects_traversal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """`POST /daemon/backup` with a `..` in the path is rejected with 400."""
-    from coffer.surfaces.http.daemon_routes import _resolve_backup_dest
-
-    monkeypatch.setenv("HOME", str(tmp_path))
-    # We expect HTTPException with status_code=400 on traversal.
-    from fastapi import HTTPException
-
-    with pytest.raises(HTTPException) as exc_info:
-        _resolve_backup_dest("../etc/passwd")
-    assert exc_info.value.status_code == 400
-
-
 # CODE-006 ------------------------------------------------------------------- #
 
 

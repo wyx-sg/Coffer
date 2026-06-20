@@ -120,7 +120,7 @@ def in_proc_daemon(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(home))
     # Prevent daemon_routes from reading the real HOME coffer.db
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    # Also override os.environ so that daemon_routes._default_db_path() picks up tmp_path
+    # Also override os.environ directly so any code reading os.environ["HOME"] picks up tmp_path
     orig_environ_home = os.environ.get("HOME")
     os.environ["HOME"] = str(home)
 

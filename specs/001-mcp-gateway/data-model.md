@@ -88,7 +88,7 @@ String-valued enum (use `StrEnum`):
 | `"daemon_stopped"`                                          | At daemon graceful shutdown                                             |
 | `"token_rotated"`                                           | After `POST /api/v1/daemon/rotate-token`                                |
 | `"retention_updated"`                                       | When a retention policy is changed                                      |
-| `"backup_created"`                                          | After `POST /api/v1/daemon/backup`                                      |
+| `"backup_created"`                                          | After `POST /api/v1/vault/backup`                                       |
 | `"credential_set"`                                          | After `POST /api/v1/credentials` stores a secret                        |
 | `"credential_read"`                                         | After `GET /api/v1/credentials/{ref}` reads a secret                    |
 | `"credential_deleted"`                                      | After `DELETE /api/v1/credentials/{ref}` removes a secret               |
@@ -353,7 +353,7 @@ intentional exception is:
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/v1/daemon/status` | Used by the CLI and the `coffer-mcp-shim` as a cheap readiness probe before any token has been read from `~/.coffer/daemon.json`. Returns only lifecycle phase, version, port, started-at, and an aggregate upstream summary — no secrets, no per-resource details, no audit data. |
 
-All mutating endpoints (including `/daemon/backup`, `/daemon/rotate-token`,
+All mutating endpoints (including `/vault/backup`, `/daemon/rotate-token`,
 `/daemon/shutdown`) require the token. The `/mcp` JSON-RPC surface also
 requires the token. Clients SHOULD set the optional `X-Coffer-Actor` header
 (`cli` | `api` | `ui` | `system`) so audit entries carry the originating

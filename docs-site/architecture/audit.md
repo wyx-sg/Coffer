@@ -47,7 +47,7 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `daemon_started` / `daemon_stopped` | At daemon startup / graceful shutdown    |
 | `token_rotated`                     | After `POST /api/v1/daemon/rotate-token` |
 | `retention_updated`                 | When a retention policy is changed       |
-| `backup_created`                    | After `POST /api/v1/daemon/backup`       |
+| `backup_created`                    | After `POST /api/v1/vault/backup`        |
 
 **Credentials & master key:**
 

@@ -39,7 +39,7 @@ def _describe(manifest: _vault.BackupManifest) -> str:
 
 
 def backup(
-    dest: str = typer.Argument(..., help="Destination directory for the backup"),
+    dest: str = typer.Argument(..., help="Destination .tar.gz file path for the backup"),
     include_master_key: bool = typer.Option(
         False,
         "--include-master-key",
@@ -49,7 +49,7 @@ def backup(
         ),
     ),
 ) -> None:
-    """Copy the live vault (db + file trees) into ``dest``.
+    """Write the live vault (db + file trees) into a ``.tar.gz`` archive at ``dest``.
 
     Excludes ``master.key`` unless ``--include-master-key`` is given, so the
     backup is safe to copy off-machine.
@@ -73,7 +73,7 @@ def backup(
 
 
 def restore(
-    src: str = typer.Argument(..., help="Backup directory to restore from"),
+    src: str = typer.Argument(..., help="Backup .tar.gz file to restore from"),
     force: bool = typer.Option(
         False, "--force", "-f", help="Overwrite a populated vault without prompting"
     ),
@@ -105,7 +105,11 @@ def restore(
         typer.echo("restore aborted", err=True)
         raise typer.Exit(int(ExitCode.GENERIC))
 
-    manifest = _vault.restore_backup(src_path)
+    try:
+        manifest = _vault.restore_backup(src_path)
+    except _vault.BackupError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(int(ExitCode.GENERIC)) from None
     typer.echo(f"restore: {_vault.vault_root()} [{_describe(manifest)}]")
     if not manifest.master_key:
         typer.echo(

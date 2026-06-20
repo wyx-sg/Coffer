@@ -93,7 +93,7 @@
 
 ### User Story 4 — Settings 按用户角度组织，不是按 daemon 内部 (Priority: P2)
 
-开发者打开 Settings，看到的 tab 是按"他在管什么"分组，不是按"Coffer 怎么搭的"：**General**（显示偏好——列表表格的默认每页条数，以及打开受管文件所用的首选外部编辑器）、**Data**（retention 策略、手动清理、备份）与 **About**（版本、许可证、源代码）。Settings 打开时落在 General tab。daemon 是实现细节——没有 "Daemon" tab，没有只读的 daemon 状态面板。用户永远不需要知道 Coffer 跑了一个后台 daemon。
+开发者打开 Settings，看到的 tab 是按"他在管什么"分组，不是按"Coffer 怎么搭的"：**General**（显示偏好——列表表格的默认每页条数，以及打开受管文件所用的首选外部编辑器）、**Data**（retention 策略、手动清理、以及 vault 备份——通过 `POST /vault/backup` 触发的完整 `~/.coffer/` 的 `.tar.gz` 快照）与 **About**（版本、许可证、源代码）。Settings 打开时落在 General tab。daemon 是实现细节——没有 "Daemon" tab，没有只读的 daemon 状态面板。用户永远不需要知道 Coffer 跑了一个后台 daemon。
 
 **General** tab 必须暴露默认每页条数偏好（每个列表表格据此初始化的 rows-per-page），持久化在 `localStorage`。它还必须暴露一个**首选外部编辑器**偏好——当用户从只读文件查看器中打开一个受管文件（或其所在文件夹）时，Coffer 用来打开它的应用。默认是操作系统的默认应用；用户可以通过选择一个应用或填入一条启动命令来覆盖。与其他显示偏好一样，它持久化在 `localStorage`，绝不发送给 daemon。
 
@@ -294,5 +294,5 @@
 - 首次用户能在 app 内注册一台 MCP 服务器并到达一个能工作的 gateway；把 MCP 客户端指向 shim 这一步在项目 README 中记录。
 - 侧栏只展示运营界面（Agents、MCP servers、Audit log、Settings），按角色分组；没有任何功能以"敬请期待"的死占位项出现。
 - 审计日志住在 `/audit`，带重设计后的过滤 + 表格；legacy `/observability` URL 仍能解析（重定向到 `/audit`）。审计日志与 MCP invocation 日志的每一行都能展开为该行的原始日志 JSON。Observability（系统健康 / 指标）是预留的未来界面，不是审计日志。
-- Settings 把数据控件（retention、prune、backup）归到 Data tab；daemon 永不作为用户可见概念出现，任何 tab 都不暴露 shutdown 或 token-rotation。
+- Settings 把数据控件（retention、prune 与 vault 备份——完整的 `.tar.gz` 快照，而非仅含 DB 的拷贝）归到 Data tab；daemon 永不作为用户可见概念出现，任何 tab 都不暴露 shutdown 或 token-rotation。
 - `make verify` + `make verify-e2e` 绿。

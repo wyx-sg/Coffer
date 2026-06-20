@@ -7,7 +7,7 @@ import {
   useUpdateRetentionPolicy,
   usePruneNow,
 } from "@/lib/hooks/useRetention";
-import { useDaemonBackup } from "@/lib/hooks/useDaemon";
+import { useVaultBackup } from "@/lib/hooks/useDaemon";
 import { translateApiError } from "@/lib/api/errors";
 import { RetentionPolicySection } from "./RetentionPolicySection";
 
@@ -21,7 +21,7 @@ export function DataSettings() {
   const { data, isPending, error } = useRetentionPolicies();
   const update = useUpdateRetentionPolicy();
   const prune = usePruneNow();
-  const backup = useDaemonBackup();
+  const backup = useVaultBackup();
   const [pruneResult, setPruneResult] = useState<string | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
 

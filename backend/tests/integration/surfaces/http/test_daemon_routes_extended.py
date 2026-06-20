@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+import tarfile
 from datetime import UTC
 from datetime import datetime as dt
 from pathlib import Path
@@ -17,6 +18,7 @@ from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.daemon_routes import router as daemon_router
+from coffer.surfaces.http.daemon_routes import vault_router
 from coffer.surfaces.http.dependencies import get_audit_service
 
 
@@ -138,59 +140,6 @@ async def test_rotate_token_requires_auth(tmp_path):
     set_active_token(None)
 
 
-@pytest.mark.acceptance(
-    spec="001-mcp-gateway", scenario="daemon backup produces a portable SQLite copy"
-)
-@pytest.mark.asyncio
-async def test_backup_creates_file(tmp_path):
-    c, home = await _client(tmp_path)
-    # Create an actual coffer.db so backup can read it
-    db_path = home / ".coffer" / "coffer.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    import sqlite3
-
-    conn = sqlite3.connect(db_path)
-    conn.execute("CREATE TABLE t (x INTEGER);")
-    conn.execute("INSERT INTO t VALUES (1);")
-    conn.commit()
-    conn.close()
-
-    async with c:
-        r = await c.post("/api/v1/daemon/backup", json={})
-        assert r.status_code == 200, r.text
-        body = r.json()
-        backup_path = Path(body["path"])
-        assert backup_path.exists()
-        assert body["size_bytes"] > 0
-        # Backup is a valid sqlite file with same content
-        bconn = sqlite3.connect(backup_path)
-        rows = bconn.execute("SELECT x FROM t;").fetchall()
-        bconn.close()
-        assert rows == [(1,)]
-    set_active_token(None)
-
-
-@pytest.mark.asyncio
-async def test_backup_to_custom_path(tmp_path):
-    c, home = await _client(tmp_path)
-    # Create DB
-    db_path = home / ".coffer" / "coffer.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    import sqlite3
-
-    sqlite3.connect(db_path).close()
-
-    custom = tmp_path / "custom" / "out.bak"
-    custom.parent.mkdir(parents=True, exist_ok=True)
-
-    async with c:
-        r = await c.post("/api/v1/daemon/backup", json={"path": str(custom)})
-        assert r.status_code == 200
-        assert r.json()["path"] == str(custom)
-        assert custom.exists()
-    set_active_token(None)
-
-
 @pytest.mark.asyncio
 async def test_shutdown_returns_204(tmp_path):
     """Shutdown schedules graceful exit. We can't actually kill the test
@@ -297,19 +246,109 @@ async def test_rotate_token_records_token_rotated_audit(tmp_path):
         set_active_token(None)
 
 
+# ---------------------------------------------------------------------------
+# Vault backup route — POST /api/v1/vault/backup
+# ---------------------------------------------------------------------------
+
+
+async def _vault_client(tmp_path: Path, *, port: int = 8000):
+    """Build a minimal app that mounts both daemon_router and vault_router."""
+    monkeypatched_home = tmp_path / "home"
+    monkeypatched_home.mkdir()
+    os.environ["HOME"] = str(monkeypatched_home)
+
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+    audit = AuditService(SqlAlchemyAuditRepo(sm))
+
+    # Write daemon.json for auth
+    write(
+        monkeypatched_home / ".coffer" / "daemon.json",
+        DaemonInfo(
+            version=1,
+            pid=os.getpid(),
+            port=port,
+            token="initial-token",
+            started_at=dt.now(tz=UTC),
+            binary_path="/test/binary",
+        ),
+    )
+    # Create coffer.db so vault backup has something to archive
+    db_path = monkeypatched_home / ".coffer" / "coffer.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn2 = sqlite3.connect(db_path)
+    conn2.execute("CREATE TABLE t (x INTEGER);")
+    conn2.execute("INSERT INTO t VALUES (42);")
+    conn2.commit()
+    conn2.close()
+
+    set_active_token("initial-token")
+
+    app = FastAPI()
+    err_handlers.register(app)
+    app.include_router(daemon_router)
+    app.include_router(vault_router)
+    app.dependency_overrides[get_audit_service] = lambda: audit
+
+    transport = ASGITransport(app)
+    client = AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "initial-token"},
+    )
+    return client, audit, engine
+
+
 @pytest.mark.asyncio
-async def test_backup_records_backup_created_audit(tmp_path):
-    """POST /daemon/backup must record a backup_created audit entry with path."""
-    c, audit, engine = await _client_with_audit(tmp_path)
+async def test_vault_backup_returns_tar_gz(tmp_path):
+    """POST /vault/backup returns 200 with path ending .tar.gz and positive size."""
+    c, _audit, engine = await _vault_client(tmp_path)
     try:
         async with c:
-            r = await c.post("/api/v1/daemon/backup", json={})
+            r = await c.post("/api/v1/vault/backup")
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["path"].endswith(".tar.gz"), f"expected .tar.gz, got {body['path']}"
+            assert body["size_bytes"] > 0
+            backup_path = Path(body["path"])
+            assert backup_path.exists()
+            # The archive must contain coffer.db
+            with tarfile.open(backup_path, "r:gz") as tar:
+                names = tar.getnames()
+            assert "coffer.db" in names, f"coffer.db missing from archive members: {names}"
+    finally:
+        await engine.dispose()
+        set_active_token(None)
+
+
+@pytest.mark.asyncio
+async def test_vault_backup_records_audit(tmp_path):
+    """POST /vault/backup records a backup_created audit entry with the archive path."""
+    c, audit, engine = await _vault_client(tmp_path)
+    try:
+        async with c:
+            r = await c.post("/api/v1/vault/backup")
             assert r.status_code == 200, r.text
             backup_path = r.json()["path"]
         entries = await audit.query(event_type="backup_created")
         assert len(entries) == 1
         assert entries[0].actor == "api"
         assert entries[0].details.get("path") == backup_path
+    finally:
+        await engine.dispose()
+        set_active_token(None)
+
+
+@pytest.mark.asyncio
+async def test_vault_backup_requires_auth(tmp_path):
+    """POST /vault/backup must reject unauthenticated requests with 401."""
+    c, _audit, engine = await _vault_client(tmp_path)
+    try:
+        async with c:
+            r = await c.post("/api/v1/vault/backup", headers={"X-Coffer-Token": "wrong"})
+            assert r.status_code == 401
     finally:
         await engine.dispose()
         set_active_token(None)
