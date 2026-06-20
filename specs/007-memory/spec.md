@@ -136,9 +136,43 @@ The developer wants to know how much memory has accumulated per scope, to give a
 
 ---
 
+### User Story 7 — Continue the same work across agents and machines (Priority: P2)
+
+The developer pauses mid-task with Claude Code — at a known step, with specific
+next steps and files in flight — and later resumes from a different agent (Codex)
+or a second machine. Before pausing the agent calls `coffer__set_handoff` with
+the current working state ("现场"): what it was doing, what's next, which files
+are open, and any unresolved questions. Coffer keys that scene by **(project ×
+git branch)** and writes it as a file under the project's memory store, so it
+rides the existing git sync mirror. When work resumes, the agent calls
+`coffer__resume`, which returns the saved scene for the current branch (annotated
+with how stale it may be) — or reports that none exists for a fresh branch.
+
+**Why this priority**: Continuity is the redesign's north star, but it builds on
+the shared-memory core (Stories 1–2): a handoff is an additive working-memory
+lane, not a prerequisite for recall. Branch-keying means parallel branches /
+worktrees keep independent scenes and never clobber each other; there is no
+global handoff (a global "current task" is meaningless), so a cwd outside any
+git project has nothing to resume.
+
+**Independent Test**: From an MCP client inside a git project on branch `work`,
+call `coffer__set_handoff` with a body, then from a second client (different
+agent identity) in the same project + branch call `coffer__resume` and observe
+the same body returned with the branch and a freshness annotation. On a fresh
+branch with no prior handoff, `coffer__resume` reports `found=false`.
+
+**Covering scenarios**:
+
+- agent saves and resumes a working-state handoff
+- resume reports no handoff for a fresh branch
+
+---
+
 ### Edge Cases
 
 - **Vector requested but embedding unconfigured**: `recall` with `mode=vector` falls back to keyword and flags the fallback in the response; it never blocks. Default retrieval is keyword+grep (zero config, offline).
+- **Resume on a fresh branch**: when no handoff has been saved for the current (project × branch), `coffer__resume` returns `found=false` rather than erroring; nothing is fabricated.
+- **Handoff outside a git project**: a cwd not inside a git project has no project scope and no branch, so `coffer__resume` returns `found=false` and `coffer__set_handoff` is rejected (there is no global handoff).
 - **Direct disk edit of a fact file**: the next `recall` lazily scans the small fact dir for deltas and reindexes, so out-of-band edits are picked up with no watcher.
 - **Empty fact text**: rejected at the API boundary; nothing written.
 - **Fact text too long**: bounded at the API boundary (`max_fact_chars`, default 8192); rejected before any write.
@@ -242,13 +276,25 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** an MCP client connects to coffer's gateway,
 - **When** the client lists tools,
-- **Then** `coffer__recall`, `coffer__remember`, `coffer__update_memory`, `coffer__forget`, and `coffer__list_memory` appear alongside other built-in and upstream tools.
+- **Then** `coffer__recall`, `coffer__remember`, `coffer__update_memory`, `coffer__forget`, `coffer__list_memory`, `coffer__set_handoff`, and `coffer__resume` appear alongside other built-in and upstream tools.
 
 ### Scenario: vector recall falls back when embedding is unconfigured
 
 - **Given** a memory store with no embedding provider configured,
 - **When** `coffer__recall` is called with `mode=vector`,
 - **Then** the call returns keyword results and flags the fallback in the response (never an error).
+
+### Scenario: agent saves and resumes a working-state handoff
+
+- **Given** an MCP client running inside a git project on a branch,
+- **When** it calls `coffer__set_handoff` with a body and later (possibly as a different agent) calls `coffer__resume`,
+- **Then** `set_handoff` writes a per-`(project × branch)` markdown file (frontmatter `branch`/`updated_at` + freeform body) under the project store's `handoff/` subdir — overwriting any prior scene for that branch and recording a `handoff_set` audit entry — and `resume` returns `found=true` with the saved branch, body, `updated_at`, and a freshness `note`; the handoff is never returned by `coffer__recall`.
+
+### Scenario: resume reports no handoff for a fresh branch
+
+- **Given** an MCP client in a git project on a branch with no saved handoff (or a cwd outside any git project),
+- **When** it calls `coffer__resume`,
+- **Then** the call returns `found=false` (never an error and nothing fabricated).
 
 ### Scenario: distill-transcript-to-memory
 
@@ -291,8 +337,15 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Agent integration via MCP**
 
-- **FR-015**: Coffer's MCP gateway MUST expose built-in tools `coffer__recall(query, scope?, mode?, top_k?)` (`mode` ∈ `grep` | `keyword` | `vector`), `coffer__remember(text, scope?, type?)`, `coffer__update_memory(id, text)`, `coffer__forget(id)`, and `coffer__list_memory(scope?)`, namespaced under the reserved `coffer__` prefix. `remember` defaults to `scope=project`; `recall` defaults to both scopes.
+- **FR-015**: Coffer's MCP gateway MUST expose built-in tools `coffer__recall(query, scope?, mode?, top_k?)` (`mode` ∈ `grep` | `keyword` | `vector`), `coffer__remember(text, scope?, type?)`, `coffer__update_memory(id, text)`, `coffer__forget(id)`, `coffer__list_memory(scope?)`, `coffer__set_handoff(body)`, and `coffer__resume()`, namespaced under the reserved `coffer__` prefix. `remember` defaults to `scope=project`; `recall` defaults to both scopes.
 - **FR-016**: Built-in memory tool invocations MUST share the existing invocation-logging surface (one `mcp_invocations` row: tool name + who/when/duration/outcome only — no arguments or returned content).
+
+**Working-state handoff (continuity)**
+
+- **FR-023**: The system MUST provide a **working-state handoff** lane keyed by **(project store × git branch)**: one file per branch under `~/.coffer/memory/projects/<project-ulid>/handoff/<branch-slug>.md`, with YAML frontmatter (`branch`, `updated_at`) plus a freeform markdown body. The branch is resolved from the agent's reported cwd (its repo's current branch). Handoff is **per-project only** — there is no global handoff.
+- **FR-024**: `coffer__set_handoff(body)` MUST **overwrite** the current branch's handoff file (no accumulation; one scene per branch), set `updated_at`, and record a `handoff_set` audit entry. The handoff body is files-as-truth on disk (it rides the git sync mirror like other memory files) and MUST NOT be returned by `coffer__recall` (it lives in the `handoff/` subdir, outside the recall glob).
+- **FR-025**: `coffer__resume()` MUST return the current branch's saved handoff — `found=true` with `branch`, `body`, `updated_at`, and a freshness `note` annotating that the scene may be stale — or `found=false` when no handoff exists for the branch (a fresh branch) or the cwd is not inside a git project. It MUST never error on a missing handoff and MUST NOT fabricate content.
+- **FR-026**: When the agent's cwd does not resolve to a git project (no project scope, no branch), `coffer__set_handoff` MUST be rejected (there is no store to write to and no global handoff) and `coffer__resume` MUST return `found=false`.
 
 **Surfaces**
 
