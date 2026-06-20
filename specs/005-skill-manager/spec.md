@@ -348,6 +348,12 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 - **When** the user disables the follow switch,
 - **Then** every currently delivered skill remains as an explicit per-skill binding with its link intact, and subsequent master-store additions are no longer auto-delivered.
 
+### Scenario: opt-in repair re-delivers repairable drift from master
+
+- **Given** an agent skill directory where one enabled binding has a missing Coffer link, another has a tampered Coffer link (a stale link pointing elsewhere), a third binding's path is occupied by a foreign regular directory the user owns, and a fourth binding's master folder no longer exists,
+- **When** the user runs the opt-in repair (`coffer skill verify --fix` / `POST /skills/repair`),
+- **Then** the missing link is re-created pointing to master, the tampered link is backed up to `<path>.coffer-backup-<ts>` and then re-created pointing to master, the foreign regular directory is left completely untouched and still appears in the report as requiring manual action, the missing-master entry is left and reported as requiring manual action, and each re-delivery is recorded as a repair event in the audit log.
+
 ## Requirements
 
 ### Functional Requirements
@@ -379,6 +385,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 - **FR-015**: System MUST provide a `verify` operation that compares each enabled binding to its on-disk target and reports drift categories (missing link, tampered link, missing master, orphan master) with suggested remedies.
 - **FR-016**: System MUST NOT automatically remediate drift; remediation requires an explicit user action.
+- **FR-029**: System MUST provide an explicit, opt-in drift repair (`coffer skill verify --fix`, `POST /skills/repair`) that re-delivers repairable drift — missing link and tampered link — from the master library, and MUST NOT modify foreign/user content (replaced-with-regular), a missing master, or an orphan master; those are left intact and reported as requiring manual action. Each repair is audited.
 
 **Unmanaged skills (workspace amendment)**
 

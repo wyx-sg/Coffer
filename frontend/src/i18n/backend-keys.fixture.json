@@ -118,6 +118,7 @@
     "skill_autobind_skipped",
     "skill_bound",
     "skill_drift_detected",
+    "skill_drift_remediated",
     "skill_imported",
     "skill_relinked",
     "skill_unbound",

@@ -52,6 +52,7 @@ class AuditEventType(StrEnum):
     SKILL_AUTOBIND_SKIPPED = "skill_autobind_skipped"
     SKILL_RELINKED = "skill_relinked"
     SKILL_DRIFT_DETECTED = "skill_drift_detected"
+    SKILL_DRIFT_REMEDIATED = "skill_drift_remediated"
     SKILL_ADOPTED = "skill_adopted"
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
     # spec 006-knowledge-base

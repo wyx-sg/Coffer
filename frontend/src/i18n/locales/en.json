@@ -277,6 +277,7 @@
       "skill_autobind_skipped": "Skipped auto-binding skill {{resource}}",
       "skill_relinked": "Re-linked skill {{resource}}",
       "skill_drift_detected": "Detected drift in skill {{resource}}",
+      "skill_drift_remediated": "Re-delivered drifted skill {{resource}} from master",
       "skill_adopted": "Adopted skill {{resource}}",
       "skill_unmanaged_deleted": "Deleted unmanaged skill {{resource}}",
       "kb_document_ingested": "Ingested a document into {{resource}}",
@@ -837,6 +838,11 @@
     "verify.checking": "Checking for drift…",
     "verify.ok": "No drift detected.",
     "verify.found": "{{count}} drift entries:",
+    "verify.fix": "Repair",
+    "verify.fixing": "Repairing…",
+    "verify.fixed": "Repaired {{count}}",
+    "verify.fixRemaining": "Still needs manual action",
+    "verify.fixGlobalNote": "Repair re-delivers every drifted skill from master, including any not listed above.",
     "card": {
       "noBindings": "No agents bound"
     },

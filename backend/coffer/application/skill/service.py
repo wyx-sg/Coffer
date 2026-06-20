@@ -28,7 +28,10 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import SkillValidationError
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.skill.binding import BindingState
-from coffer.domain.skill.drift import DriftReport
+from coffer.domain.skill.drift import (
+    DriftReport,
+    RepairResult,
+)
 from coffer.domain.skill.external_dir import ExternalDirRegistration
 from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import (
@@ -187,6 +190,16 @@ class SkillService:
         from coffer.application.skill.verify_ops import verify_drift
 
         return await verify_drift(self)
+
+    async def repair_drift(self, *, actor: str = "api") -> RepairResult:
+        """Opt-in drift repair: re-deliver safely-repairable drift kinds.
+
+        Delegates to ``verify_ops.repair_drift`` to keep this module under the
+        file-size limit.  See that function for full semantics.
+        """
+        from coffer.application.skill.verify_ops import repair_drift
+
+        return await repair_drift(self, actor=actor)
 
     async def remove(self, *, name: str, actor: str = "api") -> None:
         # All on-disk teardown happens inside the awaited on_delete hook,
