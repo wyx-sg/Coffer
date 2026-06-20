@@ -5,7 +5,7 @@
 **Status**: Accepted
 **Date**: 2026-06-09
 **Deciders**: Yuxing Wu
-**Supersedes**: [ADR-010](ADR-010-llamaindex-rag-engine.md)（LlamaIndex RAG 引擎）、[ADR-011](ADR-011-mem0-memory-engine.md)（mem0 memory 引擎）
+**Supersedes**: ADR-010（LlamaIndex RAG 引擎）与 ADR-011（mem0 memory 引擎）—— 二者均已作为废弃文档移除
 **Related**: spec `006-knowledge-base`、spec `007-memory`、[ADR-002](ADR-002-code-layout-layer-first.md)、[ADR-007](ADR-007-everything-is-a-resource-kind.md)、[ADR-013](ADR-013-agent-native-shared-memory.md)
 
 ## Context

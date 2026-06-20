@@ -62,7 +62,7 @@
 
 ### 阶段一 · 零风险删除
 
-- [ ] 10.5 — 删 3 个死 ADR（ADR-010 LlamaIndex / 011 mem0 / 022），纯文档
+- [x] 10.5 — 删 3 个死 ADR（ADR-010 LlamaIndex / 011 mem0 / 022），纯文档
 - [ ] 2.9 — 删开机自启（autostart）：跨平台差异、非重度日用不需要
 - [ ] 5.7 — 删 KB 逐文档锁（per-doc `locked` 列/锁解锁 API/审计/UI，回退 #117 该部分）；**不加只读开关**,agent 总可写,靠审计 + backup 兜底
 - [ ] 3.8 — 删 commands 目录型配置管理（留 subagents/cron；descriptor 去掉该条目）
@@ -145,7 +145,7 @@
 | 2.6  | 偏好（外部编辑器/页大小）                            | 🟡   | 纯 localStorage 零成本                                                                                                                                                                   | 留（撤 flag）                | ✅ 保留                                                                                                                                                                                                                         | 已决   |
 | 10.3 | retention 服务（PrunableTable + worker）             | 🟡   | 单用户日志增长不紧迫；但实现已在且轻                                                                                                                                                     | 留（或固定保留期）           | ✅ 保留                                                                                                                                                                                                                         | 已决   |
 | 10.4 | Eval harness（ADR-017/019）                          | 🔴   | 用户：评测需要保留                                                                                                                                                                       | 删（或移出产品）             | ✅ 保留（宜补 spec 或明确定位为 dev-tooling）                                                                                                                                                                                   | 已决   |
-| 10.5 | 死 ADR 清理（ADR-010 LlamaIndex / 011 mem0 / 022）   | 🗑️   | 已被取代/de-scoped 的纯死重量                                                                                                                                                            | 删（零风险）                 | ❌ **删除**（零风险）                                                                                                                                                                                                           | 已决   |
+| 10.5 | 死 ADR 清理（ADR-010 LlamaIndex / 011 mem0 / 022）   | 🗑️   | 已被取代/de-scoped 的纯死重量                                                                                                                                                            | 删（零风险）                 | ❌ **删除**（零风险）                                                                                                                                                                                                           | 已执行 |
 
 ## 捆绑包（一拍带一串）
 
