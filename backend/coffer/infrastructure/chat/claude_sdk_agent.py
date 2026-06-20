@@ -1,7 +1,7 @@
 """SDK-backed Claude adapter — drive Claude Code via ``claude-agent-sdk``.
 
-Unlike ``cli_agent.py`` (which shells out to ``claude -p``), this adapter drives
-Claude Code through the Python ``ClaudeSDKClient``. The agent runs with full
+This adapter drives Claude Code through the Python ``ClaudeSDKClient`` rather
+than shelling out to ``claude -p``. The agent runs with full
 permissions (``bypassPermissions``): Coffer does not gate individual tool calls —
 the paired owner driving the conversation is the trust boundary.
 
@@ -48,7 +48,7 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Message
-from coffer.infrastructure.chat.cli_agent import ParseState, SessionSink, last_user_text
+from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink, last_user_text
 
 _logger = logging.getLogger(__name__)
 
@@ -62,8 +62,7 @@ class ClaudeSdkSession(Protocol):
     """The thin slice of ``ClaudeSDKClient`` the adapter drives, behind a seam.
 
     Injected via :data:`SdkSessionFactory` so turns can be tested with a fake
-    session that replays canned SDK messages (mirrors ``cli_agent``'s
-    ``CliProcess`` / ``Spawner`` split).
+    session that replays canned SDK messages — no real ``claude`` binary needed.
     """
 
     async def connect(self, prompt: str) -> None: ...
@@ -122,7 +121,7 @@ def default_session_factory(options: ClaudeAgentOptions) -> ClaudeSdkSession:
 def map_sdk_message(msg: Any, state: ParseState) -> list[AgentEvent]:
     """Map one streamed SDK message to zero or more ``AgentEvent``s.
 
-    The SDK analog of ``ClaudeCodeDialect.parse``: ``SystemMessage(init)``
+    Dispatches by SDK message type: ``SystemMessage(init)``
     captures the session id; ``AssistantMessage`` yields text/tool-call events;
     ``UserMessage`` carries tool results; ``ResultMessage`` is terminal.
     """
@@ -229,7 +228,7 @@ def _connect_error_message(exc: Exception) -> str:
 class ClaudeSdkAgentAdapter:
     """One turn of an SDK-backed Claude agent.
 
-    Mirrors ``CliAgentAdapter``: an injected ``session_factory`` seam, a
+    Has an injected ``session_factory`` seam, a
     ``run_turn`` that returns ``self._stream(...)``, best-effort logged session
     persistence, and ``CancelledError`` cleanup that interrupts + disconnects the
     session and still persists the session id.
@@ -259,13 +258,13 @@ class ClaudeSdkAgentAdapter:
     ) -> AsyncIterator[AgentEvent]:
         # Match the platform's ``async def -> AsyncIterator`` seam: delegate to
         # ``_stream`` so the coroutine machinery runs at yield points rather than
-        # at the ``await run_turn(...)`` call site (cli_agent does the same).
+        # at the ``await run_turn(...)`` call site (the codex adapter does the same).
         return self._stream(history)
 
     async def _persist_session(self, state: ParseState) -> None:
         """Write a newly-discovered SDK session id back for the next ``resume``.
 
-        Best-effort but logged (mirrors ``cli_agent``): a failed write only costs
+        Best-effort but logged: a failed write only costs
         session continuity, so it must not fail the turn.
         """
         if not state.session_id or state.session_id == self._resume:

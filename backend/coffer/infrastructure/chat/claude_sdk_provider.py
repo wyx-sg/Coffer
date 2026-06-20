@@ -1,7 +1,6 @@
 """SDK-backed Claude provider — ``AgentProvider`` wrapping ``ClaudeSdkAgentAdapter``.
 
-Mirrors ``cli_providers.py`` (which wraps ``CliAgentAdapter``): validates and
-stores the working directory on ``init_conversation``, constructs a
+Validates and stores the working directory on ``init_conversation``, constructs a
 ``ClaudeSdkAgentAdapter`` on ``build_adapter``, and reports binary availability
 via the injected ``which`` seam.  The ``session_factory`` seam lets tests inject
 a fake without a real ``claude`` binary (no network/subprocess needed).
@@ -27,11 +26,8 @@ from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 class ClaudeSdkProvider:
     """``AgentProvider`` for the SDK-backed Claude agent (``agent_key="claude_code"``).
 
-    Replaces ``ClaudeCodeProvider`` in the composition root: same ``agent_key``,
-    same ``init_conversation`` / ``build_adapter`` contract, but constructs a
-    ``ClaudeSdkAgentAdapter`` instead of a ``CliAgentAdapter``.  The
-    ``session_factory`` seam lets tests inject a fake without a real ``claude``
-    binary.
+    Constructs a ``ClaudeSdkAgentAdapter`` per turn; the ``session_factory`` seam
+    lets tests inject a fake without a real ``claude`` binary.
     """
 
     agent_key = "claude_code"

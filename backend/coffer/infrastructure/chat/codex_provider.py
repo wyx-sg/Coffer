@@ -5,11 +5,6 @@ validates and stores the working directory on ``init_conversation``, constructs 
 ``CodexAppServerAdapter`` on ``build_adapter``, and reports binary availability
 via the injected ``which`` seam.  The ``session_factory`` seam lets tests inject a
 fake without a real ``codex`` binary (no subprocess needed).
-
-This replaces ``CodexProvider`` (the legacy CLI-backed provider in
-``cli_providers.py``) in the composition root while keeping ``agent_key="codex"``
-so existing conversations are unaffected.  The old ``CodexProvider``/``CodexDialect``
-classes are retained in ``cli_providers.py`` for test references only.
 """
 
 from __future__ import annotations
@@ -32,11 +27,8 @@ from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 class CodexAppServerProvider:
     """``AgentProvider`` for the app-server-backed Codex agent (``agent_key="codex"``).
 
-    Replaces ``CodexProvider`` in the composition root: same ``agent_key``,
-    same ``init_conversation`` / ``build_adapter`` contract, but constructs a
-    ``CodexAppServerAdapter`` instead of a ``CliAgentAdapter``.  The
-    ``session_factory`` seam lets tests inject a fake without a real ``codex``
-    binary.
+    Constructs a ``CodexAppServerAdapter`` per turn; the ``session_factory`` seam
+    lets tests inject a fake without a real ``codex`` binary.
     """
 
     agent_key = "codex"

@@ -102,12 +102,15 @@ Telegram/SeaTalk"指示。
 把 Spec 008 的 `spec.md` / `data-model.md` / `contracts/api.openapi.yaml` 重写到与
 ADR-024 + 本定位一致，而非那条散文式免责声明（随本次改动交付）。
 
-另有两项清理**推迟到后续**（它们与实时镜像接缝无关、且触碰*活跃*的编码 agent
-provider，所以把它们排除在这个已经很大的改动之外，以免危及可工作的 `claude_code` /
-`codex` 适配器）：(a) 在抽出 SDK 适配器仍 import 的共享 helper（`ParseState`、
-`SessionSink`、`last_user_text`）之后，删除遗留 CLI 适配器（`cli_agent.py`、
-`cli_providers.py`），以及 (b) 用一个有类型的 `AgentConfig { cwd, session_id,
-model }` 替换无类型的 `agent_config` blob。已记入后续 PR。
+另有两项清理**从实时镜像改动中推迟**（它们与实时镜像接缝无关、且触碰*活跃*的编码
+agent provider，所以把它们排除在那个已经很大的改动之外，以免危及可工作的
+`claude_code` / `codex` 适配器）：
+
+- **(a) 删除遗留 CLI 适配器**（`cli_agent.py`、`cli_providers.py`），并先把活跃
+  适配器仍 import 的共享 helper（`ParseState`、`SessionSink`、`last_user_text`）
+  抽到一个小模块 `adapter_support.py`。—— **已交付**（后续 PR）。
+- **(b) 用一个有类型的 `AgentConfig { cwd, session_id, model }`** 替换无类型的
+  `agent_config` blob。—— 记入后续 PR。
 
 ### 不变量
 
@@ -160,7 +163,8 @@ model }` 替换无类型的 `agent_config` blob。已记入后续 PR。
   保留。Spec 009 channel 层在它写这些字段处被更新。
 - 前端用一条持久的 `GET .../events` 订阅流替换每回合的 POST SSE + 2 秒轮询；
   composer 永不锁定并渲染 pending chips。
-- 遗留 CLI 适配器删除 + `agent_config` 类型化推迟到后续 PR（动作 3、第 4 部分）。
+- 遗留 CLI 适配器删除已在后续 PR **交付**（动作 3、第 4a 部分）；`agent_config`
+  类型化（第 4b 部分）记入后续 PR。
 - ADR-021 被**收窄**（非取代）：它的 channel 观测职责被拓宽为观测 + 中断 + 注入；
   它的多人"审批席"框架已经消失（ADR-025）。
 - 无内置人格改动（ADR-024 存续）；无凭据处理改动。

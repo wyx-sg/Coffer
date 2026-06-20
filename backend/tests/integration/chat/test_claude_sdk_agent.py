@@ -43,11 +43,11 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Message, Role, TextBlock
+from coffer.infrastructure.chat.adapter_support import ParseState
 from coffer.infrastructure.chat.claude_sdk_agent import (
     ClaudeSdkAgentAdapter,
     map_sdk_message,
 )
-from coffer.infrastructure.chat.cli_agent import ParseState
 
 # ---------------------------------------------------------------------------
 # Fakes
