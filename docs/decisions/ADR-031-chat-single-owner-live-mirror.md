@@ -133,7 +133,9 @@ the working `claude_code` / `codex` adapters):
   `last_user_text`) the live adapters still import into a small
   `adapter_support.py`. — **DELIVERED** (follow-up PR).
 - **(b) Replace the untyped `agent_config` blob** with a typed
-  `AgentConfig { cwd, session_id, model }`. — Tracked for a subsequent PR.
+  `AgentConfig { cwd, session_id, model }` (a frozen domain dataclass the
+  providers validate into and persistence serializes to/from the JSON column;
+  no wire-contract change). — **DELIVERED** (follow-up PR).
 
 ### Invariants
 
@@ -195,8 +197,8 @@ dropping on restart matches the in-flight-turn-marked-failed story. Persisting a
 - The frontend replaces the per-turn POST SSE + 2-second polling with one
   persistent `GET .../events` subscribe stream; the composer never locks and
   renders pending chips.
-- Legacy CLI adapter deletion is **delivered** in a follow-up PR (move 3,
-  part 4a); `agent_config` typing (part 4b) is tracked for a subsequent PR.
+- Legacy CLI adapter deletion (part 4a) and `agent_config` typing (part 4b)
+  are both **delivered** in follow-up PRs (move 3, part 4).
 - ADR-021 is **narrowed** (not superseded): its channel-observe job is widened to
   observe + interrupt + inject; its multi-human "approval seat" framing is already
   gone (ADR-025).

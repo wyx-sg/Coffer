@@ -160,7 +160,7 @@ async def test_init_conversation_defaults_missing_cwd_to_workspace(  # type: ign
     await provider.init_conversation(conv.id, {})
     stored = await repo.get_agent_config(conv.id)
     expected = str(tmp_path / ".coffer" / "workspace")
-    assert stored["cwd"] == expected
+    assert stored.cwd == expected
     assert (tmp_path / ".coffer" / "workspace").is_dir()
 
     await engine.dispose()
@@ -187,8 +187,9 @@ async def test_init_conversation_stores_cwd(tmp_path) -> None:  # type: ignore[n
 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
     stored = await repo.get_agent_config(conv.id)
-    assert stored["cwd"] == str(tmp_path)
-    assert "permission_mode" not in stored  # agents always run with full permissions
+    assert stored.cwd == str(tmp_path)
+    # AgentConfig has no permission field — agents always run with full permissions.
+    assert stored.model is None  # nothing beyond cwd persisted
 
     await engine.dispose()
 
@@ -204,7 +205,7 @@ async def test_init_conversation_persists_model_and_adapter_passes_it(tmp_path) 
 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path), "model": "opus"})
     stored = await repo.get_agent_config(conv.id)
-    assert stored["model"] == "opus"
+    assert stored.model == "opus"
 
     adapter = await provider.build_adapter(conv.id)
     await _collect(adapter, _user_turn("hi", conv.id))
@@ -251,7 +252,7 @@ async def test_build_adapter_resumes_stored_session(tmp_path) -> None:  # type: 
 
     # Session id must have been written back.
     cfg = await repo.get_agent_config(conv.id)
-    assert cfg["session_id"] == "sess-sdk"
+    assert cfg.session_id == "sess-sdk"
 
     # Second build_adapter must pass resume_session.
     adapter2 = await provider.build_adapter(conv.id)
@@ -290,7 +291,7 @@ async def test_build_adapter_session_sink_writes_back(tmp_path) -> None:  # type
     await _collect(adapter, _user_turn("go", conv.id))
 
     cfg = await repo.get_agent_config(conv.id)
-    assert cfg["session_id"] == "sess-42"
+    assert cfg.session_id == "sess-42"
 
     await engine.dispose()
 

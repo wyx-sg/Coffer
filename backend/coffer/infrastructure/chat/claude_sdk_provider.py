@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import pathlib
 import shutil
+from dataclasses import replace
 from typing import Any
 
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ConversationRepo
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.claude_sdk_agent import (
     ClaudeSdkAgentAdapter,
@@ -51,25 +53,24 @@ class ClaudeSdkProvider:
             # chat draft now that the per-turn picker is gone). Fall back to the
             # Coffer-managed workspace rather than fail the turn silently.
             cwd = default_workspace_dir()
-        if not pathlib.Path(cwd).expanduser().is_dir():
+        resolved = pathlib.Path(cwd).expanduser()
+        if not resolved.is_dir():
             raise AgentConfigRejected(
                 reason="cwd_not_a_directory",
                 message=f"agent_config.cwd is not an existing directory: {cwd!r}",
             )
-        stored: dict[str, Any] = {"cwd": str(pathlib.Path(cwd).expanduser())}
         # Persist the model so a chat-chosen model reaches the SDK; without this
         # the option was always None and the CLI always picked the model itself.
-        if isinstance(agent_config.get("model"), str):
-            stored["model"] = agent_config["model"]
-        await self._conversations.set_agent_config(conversation_id, stored)
+        model = agent_config.get("model")
+        config = AgentConfig(cwd=str(resolved), model=model if isinstance(model, str) else None)
+        await self._conversations.set_agent_config(conversation_id, config)
 
     async def build_adapter(self, conversation_id: str) -> AgentAdapter:
         conv = await self._conversations.get(conversation_id)
         if conv is None:
             raise ConversationNotFound(conversation_id)
         config = await self._conversations.get_agent_config(conversation_id)
-        cwd = config.get("cwd")
-        if not isinstance(cwd, str) or not cwd:
+        if not config.cwd:
             raise AgentConfigRejected(
                 reason="invalid_cwd",
                 message="conversation has no working directory configured",
@@ -77,13 +78,14 @@ class ClaudeSdkProvider:
 
         async def _save_session(session_id: str) -> None:
             latest = await self._conversations.get_agent_config(conversation_id)
-            latest["session_id"] = session_id
-            await self._conversations.set_agent_config(conversation_id, latest)
+            await self._conversations.set_agent_config(
+                conversation_id, replace(latest, session_id=session_id)
+            )
 
         return ClaudeSdkAgentAdapter(
-            cwd=cwd,
-            resume_session=config.get("session_id"),
-            extra=config,
+            cwd=config.cwd,
+            resume_session=config.session_id,
+            extra={"model": config.model},
             session_factory=self._session_factory,
             on_session=_save_session,
         )

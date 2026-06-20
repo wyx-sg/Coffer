@@ -37,6 +37,7 @@ from coffer.application.channel.ports import (
 from coffer.application.channel.turn_render import TurnRenderer
 from coffer.domain.audit import AuditEventType
 from coffer.domain.channel.envelopes import InboundMessage
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import TurnInProgress
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
@@ -67,9 +68,9 @@ class ConversationPort(Protocol):
         self, conversation_id: str, *, model_id: str | None
     ) -> Any: ...
 
-    async def get_agent_config(self, conversation_id: str) -> dict[str, Any]: ...
+    async def get_agent_config(self, conversation_id: str) -> AgentConfig: ...
 
-    async def set_agent_config(self, conversation_id: str, config: dict[str, Any]) -> None: ...
+    async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None: ...
 
 
 class TurnPort(Protocol):

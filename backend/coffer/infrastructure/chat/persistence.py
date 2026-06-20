@@ -26,6 +26,7 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.message import (
     ContentBlock,
@@ -51,8 +52,9 @@ class ConversationModel(Base):
     agent_key: Mapped[str] = mapped_column(String, nullable=False, default="builtin")
     title: Mapped[str] = mapped_column(String, nullable=False)
     model_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    # Provider-owned per-conversation JSON state (CLI agents keep cwd + the
-    # upstream session id here); NULL = none. See ConversationRepo.*_agent_config.
+    # Provider-owned per-conversation state (cwd + upstream session id + model),
+    # stored as the JSON of an ``AgentConfig``; NULL = none. See
+    # ConversationRepo.*_agent_config.
     agent_config: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
@@ -210,24 +212,24 @@ class ConversationRepo:
             await session.commit()
             return self._to_domain(row)
 
-    async def get_agent_config(self, conversation_id: str) -> dict[str, Any]:
-        """Read the provider-owned config blob (``{}`` when unset/missing)."""
+    async def get_agent_config(self, conversation_id: str) -> AgentConfig:
+        """Read the typed provider config (an empty ``AgentConfig`` when unset)."""
         async with self._sm() as session:
             row = await session.get(ConversationModel, conversation_id)
             if row is None:
                 raise ConversationNotFound(conversation_id)
             if not row.agent_config:
-                return {}
+                return AgentConfig()
             parsed = json.loads(row.agent_config)
-            return parsed if isinstance(parsed, dict) else {}
+            return AgentConfig.from_json(parsed) if isinstance(parsed, dict) else AgentConfig()
 
-    async def set_agent_config(self, conversation_id: str, config: dict[str, Any]) -> None:
-        """Replace the provider-owned config blob for a conversation."""
+    async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None:
+        """Replace the typed provider config for a conversation."""
         async with self._sm() as session:
             stmt = (
                 update(ConversationModel)
                 .where(ConversationModel.id == conversation_id)
-                .values(agent_config=json.dumps(config))
+                .values(agent_config=json.dumps(config.to_json()))
             )
             result = await session.execute(stmt)
             if result.rowcount == 0:

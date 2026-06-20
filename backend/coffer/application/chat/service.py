@@ -22,6 +22,7 @@ from typing import Any, Protocol
 from coffer.application.audit_service import AuditService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.audit import AuditEventType
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.message import ContentBlock, Message, Role, TextBlock
 from coffer.domain.errors import ConversationNotFound, UnknownAgent
@@ -54,12 +55,12 @@ class ConversationRepo(Protocol):
 
     async def set_model(self, conversation_id: str, model_id: str | None) -> Conversation: ...
 
-    async def get_agent_config(self, conversation_id: str) -> dict[str, Any]:
-        """Provider-owned per-conversation JSON state (``{}`` when unset)."""
+    async def get_agent_config(self, conversation_id: str) -> AgentConfig:
+        """Typed provider-owned per-conversation state (empty when unset)."""
         ...
 
-    async def set_agent_config(self, conversation_id: str, config: dict[str, Any]) -> None:
-        """Replace the provider-owned per-conversation JSON state."""
+    async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None:
+        """Replace the typed provider-owned per-conversation state."""
         ...
 
     async def set_archived(
@@ -219,12 +220,12 @@ class ChatService:
         await self.get_conversation(conversation_id)  # existence check
         return await self._conversations.set_model(conversation_id, model_id)
 
-    async def get_agent_config(self, conversation_id: str) -> dict[str, Any]:
+    async def get_agent_config(self, conversation_id: str) -> AgentConfig:
         """The provider-private agent config (cwd, session id, model) for a
         conversation — used by the channel layer's ``/model`` passthrough."""
         return await self._conversations.get_agent_config(conversation_id)
 
-    async def set_agent_config(self, conversation_id: str, config: dict[str, Any]) -> None:
+    async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None:
         """Persist the provider-private agent config for a conversation."""
         await self._conversations.set_agent_config(conversation_id, config)
 
