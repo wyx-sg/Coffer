@@ -830,6 +830,8 @@
     "deleteAria": "Delete {{name}}",
     "removeConfirmTitle": "Remove skill {{name}}?",
     "removeConfirmBody": "This deletes the master folder and all per-agent links.",
+    "importConflictTitle": "A skill named «{{name}}» already exists. Replace it?",
+    "importReplace": "Replace",
     "verify.title": "Verify skill links",
     "verify.subtitle": "Check whether each enabled binding still matches its on-disk link.",
     "verify.checking": "Checking for drift…",

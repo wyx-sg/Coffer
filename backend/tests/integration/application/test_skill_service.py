@@ -584,3 +584,93 @@ async def test_config_dir_change_does_not_clobber_foreign_content_at_new_target(
     await skill_svc.disable_for(skill_name="my-skill", agent_name="cur", actor="cli")
     assert (foreign / "important.txt").read_text() == "precious user data"
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="005-skill-manager",
+    scenario="re-import a skill with overwrite replaces it",
+)
+async def test_reimport_overwrite_replaces_and_preserves_bindings(tmp_path):
+    """Re-importing with overwrite=True replaces master content + refreshes
+    version_hash while preserving the Resource row, per-agent binding, and
+    the delivered symlink; re-importing without overwrite still raises
+    ResourceAlreadyExists."""
+    from coffer.domain.errors import ResourceAlreadyExists
+
+    skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
+    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
+
+    # --- initial import ---
+    src_v1 = tmp_path / "src_v1"
+    _write_skill_folder(src_v1, name="my-skill", body="version one")
+    r1 = await skill_svc.import_local(path=str(src_v1), actor="cli")
+    original_id = r1.id
+
+    # import auto-binds — symlink must exist
+    link = skill_dir / "my-skill"
+    assert link.exists(), "symlink should be delivered on initial import"
+
+    # sanity: re-import WITHOUT overwrite raises ResourceAlreadyExists
+    with pytest.raises(ResourceAlreadyExists):
+        await skill_svc.import_local(path=str(src_v1), actor="cli")
+
+    # --- re-import with different content and overwrite=True ---
+    src_v2 = tmp_path / "src_v2"
+    _write_skill_folder(src_v2, name="my-skill", body="version two")
+    r2 = await skill_svc.import_local(path=str(src_v2), actor="cli", overwrite=True)
+
+    # (a) master folder content is the new content
+    master_skill_md = store.paths_for("my-skill").skill_md
+    assert "version two" in master_skill_md.read_text(encoding="utf-8")
+
+    # (b) version_hash changed
+    assert r2.config["version_hash"] != r1.config["version_hash"]
+
+    # (c) per-agent binding still exists (Resource row preserved — same id)
+    assert r2.id == original_id
+    bindings = await skill_svc.bindings_for("my-skill")
+    agent_resource = await agent_svc.get("cur")
+    assert any(b.agent_resource_id == agent_resource.id for b in bindings)
+
+    # (d) delivered symlink still resolves to the master (content updated in place)
+    assert link.exists(), "symlink must still exist after overwrite"
+    assert (link / "SKILL.md").is_file()
+    assert "version two" in (link / "SKILL.md").read_text(encoding="utf-8")
+
+    # (e) SKILL_UPDATED audit row was recorded
+    updated_events = await audit.query(event_type=AuditEventType.SKILL_UPDATED.value)
+    assert len(updated_events) == 1
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reimport_overwrite_registers_orphan_master(tmp_path):
+    """An orphan master folder (content on disk, no Resource row —
+    DriftKind.ORPHAN_MASTER) plus overwrite must REGISTER the row rather than
+    crash on update_config's missing-row lookup."""
+    skill_svc, _agent_svc, audit, store, engine = await _setup(tmp_path)
+
+    # Create an orphan master folder directly: content on disk, no row.
+    orphan_src = tmp_path / "orphan_src"
+    _write_skill_folder(orphan_src, name="orphan-skill", body="stale")
+    store.copy_in(src=orphan_src, name="orphan-skill", meta={"name": "orphan-skill"})
+    assert store.exists("orphan-skill")
+    rows = await skill_svc._rs.list(kind="skill")
+    assert all(r.name != "orphan-skill" for r in rows), "no row yet — orphan state"
+
+    # Re-import the same name with overwrite -> registers the row + swaps content.
+    new_src = tmp_path / "new_src"
+    _write_skill_folder(new_src, name="orphan-skill", body="fresh")
+    r = await skill_svc.import_local(path=str(new_src), actor="cli", overwrite=True)
+
+    assert r.name == "orphan-skill"
+    rows2 = await skill_svc._rs.list(kind="skill")
+    assert any(r2.name == "orphan-skill" for r2 in rows2), "row registered"
+    assert "fresh" in store.paths_for("orphan-skill").skill_md.read_text(encoding="utf-8")
+    # The orphan adoption audits as a fresh import (the passed event).
+    imported = await audit.query(event_type=AuditEventType.SKILL_IMPORTED.value)
+    assert len(imported) == 1
+
+    await engine.dispose()

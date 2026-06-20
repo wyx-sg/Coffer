@@ -28,6 +28,7 @@ router = APIRouter(
 
 class SkillImportRequest(BaseModel):
     path: str = Field(min_length=1)
+    overwrite: bool = False
 
 
 class SkillEnableRequest(BaseModel):
@@ -183,7 +184,7 @@ async def import_skill(
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> SkillOut:
-    r = await svc.import_local(path=body.path, actor=actor)
+    r = await svc.import_local(path=body.path, actor=actor, overwrite=body.overwrite)
     return await _to_skill_out(svc, r, await _agents_by_id(svc))
 
 

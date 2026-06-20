@@ -23,11 +23,16 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
-function stub(opts: { importAsync?: ReturnType<typeof vi.fn>; importError?: unknown }) {
+function stub(opts: {
+  importAsync?: ReturnType<typeof vi.fn>;
+  importError?: unknown;
+  reset?: ReturnType<typeof vi.fn>;
+}) {
   useImportSkillMock.mockReturnValue({
     mutateAsync: opts.importAsync ?? vi.fn().mockResolvedValue({}),
     isPending: false,
     error: opts.importError ?? null,
+    reset: opts.reset ?? vi.fn(),
   } as unknown as ReturnType<typeof useImportSkill>);
 }
 
@@ -65,5 +70,43 @@ describe("SkillAddDialog", () => {
       wrapper: wrap(null),
     });
     expect(screen.getByText(/missing SKILL\.md|invalid/i)).toBeInTheDocument();
+  });
+
+  test("409 conflict shows replace-confirm; confirming retries with overwrite: true", async () => {
+    const conflictError = new ApiError("RESOURCE_ALREADY_EXISTS", "already exists");
+    // First call rejects with 409; second call succeeds.
+    const importAsync = vi.fn().mockRejectedValueOnce(conflictError).mockResolvedValueOnce({});
+    const reset = vi.fn();
+    const onCreated = vi.fn();
+    const onOpenChange = vi.fn();
+    stub({ importAsync, reset });
+
+    render(<SkillAddDialog open onOpenChange={onOpenChange} onCreated={onCreated} />, {
+      wrapper: wrap(null),
+    });
+
+    // Enter a path and submit.
+    fireEvent.change(screen.getByPlaceholderText(/\.claude\/skills/i), {
+      target: { value: "/tmp/my-skill" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
+
+    // Conflict banner appears with skill name derived from the path.
+    await waitFor(() => expect(screen.getByText(/my-skill.*already exists/i)).toBeInTheDocument());
+
+    // First import call was without overwrite.
+    expect(importAsync).toHaveBeenNthCalledWith(1, { path: "/tmp/my-skill" });
+
+    // Click the Replace button.
+    fireEvent.click(screen.getByRole("button", { name: /replace/i }));
+
+    // Second call includes overwrite: true and dialog closes.
+    await waitFor(() => expect(importAsync).toHaveBeenCalledTimes(2));
+    expect(importAsync).toHaveBeenNthCalledWith(2, {
+      path: "/tmp/my-skill",
+      overwrite: true,
+    });
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
