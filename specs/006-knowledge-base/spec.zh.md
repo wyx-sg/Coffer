@@ -23,13 +23,13 @@
 
 ### User Story 2 —— 三种模式检索（优先级 P1）
 
-同一份语料用三种方式检索：`grep`（对 Markdown 文件做精确/正则匹配，零索引）、`keyword`（SQLite FTS5 + BM25）、`vector`（sqlite-vec 配合已配置的 embedding provider）。KB 声明一个默认模式；调用方可覆盖它。请求 `vector` 但未配置 embedding provider 时，回退到 keyword 并标注 —— 绝不阻断。
+同一份语料用多种方式检索：`grep`（对 Markdown 文件做精确/正则匹配，零索引）、`keyword`（SQLite FTS5 + BM25）、`vector`（sqlite-vec 配合已配置的 embedding provider），以及 `hybrid`（对 keyword + vector 做 reciprocal rank fusion，使精确/CJK/标识符命中与释义命中相互增强）。KB 声明一个默认模式；调用方可覆盖它。请求 `vector` 或 `hybrid` 但未配置 embedding provider 时，回退到 keyword 并标注 —— 绝不阻断。
 
 **为什么是这个优先级**：检索就是产品。三种模式覆盖了从离线零配置到语义检索的全谱。
 
 **独立可测**：在已填充的 KB 上跑一次 keyword 检索和一次 grep 查询（两者都无需 embedding 配置即可工作）；配置 embedding provider，跑一次 vector 检索；移除配置，再次请求 vector，观察响应里被标注为 keyword 回退。
 
-**代表性场景**：keyword search returns ranked passages；grep returns file/line matches；vector search returns ranked passages；vector falls back to keyword when embedding unconfigured。
+**代表性场景**：keyword search returns ranked passages；grep returns file/line matches；vector search returns ranked passages；vector falls back to keyword when embedding unconfigured；hybrid search fuses keyword and vector via RRF。
 
 ---
 
@@ -134,6 +134,12 @@
 - **Given** the KB has no embedding provider configured,
 - **When** the user searches with `mode="vector"`,
 - **Then** Coffer runs a keyword search instead and the response is flagged `fallback="keyword"`; no error is raised.
+
+### Scenario: hybrid search fuses keyword and vector via RRF
+
+- **Given** a KB with vector enabled and documents embedded,
+- **When** the user searches with `mode="hybrid"`,
+- **Then** Coffer runs BOTH keyword and vector searches and fuses them by reciprocal rank fusion (`K = 60`, deduped by `(document_id, position)`), so a passage ranked by both lists outranks single-list hits, and returns the fused top-k.
 
 ### Scenario: edit a document and reindex
 
@@ -296,9 +302,10 @@
 **Retrieval**
 
 - **FR-010**: Users MUST be able to search a KB and receive ranked passages (passage text + source doc id + title + score) via the requested or default mode. Default `top_k` is 5; callers MAY set `top_k` in 1–20.
-- **FR-011**: System MUST support three retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), and `vector` (sqlite-vec KNN over embeddings). Default enabled modes are `keyword`+`grep`; `vector` is opt-in. Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). The keyword index uses an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text (no word-boundary spaces), so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters (e.g. a 2-character CJK term) falls back to a bounded substring (LIKE) scan rather than returning empty.
-- **FR-011a**: An EXPLICIT `mode=grep` on the search endpoint — or any explicit mode not in the KB's `enabled_modes` — MUST be rejected with `400 SEARCH_MODE_INVALID` (grep is served by its own endpoint, never silently rewritten). `vector` is the one exception: it always reaches the retrieval facade so the keyword fallback is FLAGGED per FR-012. An implicit search (no `mode`) on a KB whose `default_mode` is `grep` serves `keyword` (grep is not a passage mode).
-- **FR-012**: When `vector` is requested but no embedding provider is configured, the system MUST fall back to `keyword` and flag the fallback in the response — it MUST NOT error or block.
+- **FR-011**: System MUST support four retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), `vector` (sqlite-vec KNN over embeddings), and `hybrid` (reciprocal rank fusion of `keyword` + `vector`, ADR-012). Default enabled modes are `keyword`+`grep`; `vector` is opt-in, and enabling `vector` also enables `hybrid` (which fuses both lists). Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). The keyword index uses an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text (no word-boundary spaces), so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters (e.g. a 2-character CJK term) falls back to a bounded substring (LIKE) scan rather than returning empty.
+- **FR-011a**: An EXPLICIT `mode=grep` on the search endpoint — or any explicit mode not in the KB's `enabled_modes` — MUST be rejected with `400 SEARCH_MODE_INVALID` (grep is served by its own endpoint, never silently rewritten). `vector` and `hybrid` are the exceptions: they always reach the retrieval facade so the keyword fallback is FLAGGED per FR-012. An implicit search (no `mode`) on a KB whose `default_mode` is `grep` serves `keyword` (grep is not a passage mode); a vector-enabled KB's `default_mode` is `hybrid` so an implicit search fuses both lists.
+- **FR-011b**: `hybrid` mode MUST run BOTH `keyword` and `vector` searches and fuse them by **reciprocal rank fusion** (RRF): each passage's fused score is `Σ_over_lists 1/(K + rank)` with `K = 60` and `rank` the 0-based position in that list; passages are deduped by chunk identity `(document_id, position)` so a passage in both lists sums both contributions and outranks single-list hits. The top-k by fused score are returned. This delivers the "optional hybrid via reciprocal rank fusion" promised by ADR-012.
+- **FR-012**: When `vector` (or `hybrid`) is requested but no embedding provider is configured, the system MUST fall back to `keyword` and flag the fallback in the response — it MUST NOT error or block.
 
 **Embedding configuration**
 

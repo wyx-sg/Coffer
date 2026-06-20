@@ -52,7 +52,17 @@ class KnowledgeBaseConfig(BaseModel):
                 seen.append(mode)
         if not seen:
             raise ValueError("enabled_modes must list at least one retrieval mode")
+        # ``hybrid`` is an independent mode (RRF over keyword+vector): enabling
+        # ``vector`` implies the KB CAN fuse, so ``hybrid`` is added to the set
+        # automatically and becomes the default (vector-enabled KBs get fusion
+        # by default) unless the caller explicitly chose another default_mode.
+        # Keyword stays the default when vector is off; ``hybrid`` without
+        # ``vector`` is allowed but degrades to keyword-only at search time.
+        if "vector" in seen and "hybrid" not in seen:
+            seen.append("hybrid")
         object.__setattr__(self, "enabled_modes", seen)
+        if "vector" in seen and "default_mode" not in self.model_fields_set:
+            object.__setattr__(self, "default_mode", "hybrid")
         # The default mode must be enabled.
         if self.default_mode not in seen:
             raise ValueError(f"default_mode {self.default_mode!r} is not in enabled_modes {seen}")
@@ -61,7 +71,7 @@ class KnowledgeBaseConfig(BaseModel):
     @property
     def vector_enabled(self) -> bool:
         # Embedding is GLOBAL now (not per-KB): a KB opts into vector by listing
-        # the mode; whether vector actually indexes depends on the global
-        # embedding config being active. The legacy ``embedding`` field is
-        # accepted but ignored.
-        return "vector" in self.enabled_modes
+        # the mode (or ``hybrid``, which fuses vector); whether vector actually
+        # indexes depends on the global embedding config being active. The
+        # legacy ``embedding`` field is accepted but ignored.
+        return "vector" in self.enabled_modes or "hybrid" in self.enabled_modes

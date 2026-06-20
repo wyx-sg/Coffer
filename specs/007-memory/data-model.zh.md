@@ -12,8 +12,8 @@ Pydantic v2 `BaseModel`。当 `kind == "memory"` 时存于 `Resource.config`。�
 
 | 字段                       | 类型                                       | 说明                                                                           |
 | -------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------ |
-| `retrieval_modes`          | `list[Literal["grep","keyword","vector"]]` | 启用的模式。默认 `["grep","keyword"]`（零配置、离线）。`vector` 为可选项。     |
-| `default_mode`             | `Literal["grep","keyword","vector"]`       | 默认 `"keyword"`。                                                             |
+| `retrieval_modes`          | `list[Literal["grep","keyword","vector","hybrid"]]` | 启用的模式。默认 `["grep","keyword"]`（零配置、离线）。`vector` 为可选项；`hybrid`（对 keyword+vector 做 RRF）与 KB 面共享。     |
+| `default_mode`             | `Literal["grep","keyword","vector","hybrid"]`       | 默认 `"keyword"`。                                                             |
 | `embedding_provider`       | `str \| None`                              | OpenAI 兼容 provider id（如 `openai`、`voyage`、`local`）。`vector` 必填。     |
 | `embedding_model`          | `str \| None`                              | 如 `bge-m3`（本地）或某云端模型。`vector` 必填。                               |
 | `embedding_base_url`       | `str \| None`                              | OpenAI 兼容 provider 的 base URL 覆盖。                                        |

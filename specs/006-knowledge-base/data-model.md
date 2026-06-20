@@ -16,8 +16,8 @@ Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "knowledge_
 
 | Field                | Type                      | Notes                                                                                                               |
 | -------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `enabled_modes`      | `list[RetrievalMode]`     | Subset of `{"grep","keyword","vector"}`. Default `["keyword","grep"]`. `vector` is opt-in and requires `embedding`. |
-| `default_mode`       | `RetrievalMode`           | The mode used when a search omits `mode`. Default `"keyword"`.                                                      |
+| `enabled_modes`      | `list[RetrievalMode]`     | Subset of `{"grep","keyword","vector","hybrid"}`. Default `["keyword","grep"]`. `vector` is opt-in and requires `embedding`; enabling `vector` auto-adds `hybrid` (RRF fusion of keyword+vector, ADR-012). |
+| `default_mode`       | `RetrievalMode`           | The mode used when a search omits `mode`. Default `"keyword"`; auto-becomes `"hybrid"` when `vector` is enabled (unless set explicitly).                                                      |
 | `chunk_size`         | `int`                     | Default `512`; range `64–2048`.                                                                                     |
 | `chunk_overlap`      | `int`                     | Default `64`; range `0–chunk_size/2`.                                                                               |
 | `max_document_bytes` | `int`                     | Default `25 * 1024 * 1024`; range `1024–104857600`.                                                                 |
@@ -62,7 +62,8 @@ Frozen value objects (not persisted):
 - `Passage`: `document_id`, `title`, `text`, `score: float`, `position: int`.
 - `GrepHit`: `path`, `line_number: int`, `line`.
 - `GrepResult`: `hits: Sequence[GrepHit]`, `truncated: bool` — `truncated` is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed).
-- `SearchResult`: `mode: RetrievalMode`, `passages: Sequence[Passage]`, `fallback: RetrievalMode | None` (set when a requested `vector` search degraded to `keyword`).
+- `SearchResult`: `mode: RetrievalMode`, `passages: Sequence[Passage]`, `fallback: RetrievalMode | None` (set when a requested `vector` or `hybrid` search degraded to `keyword`).
+- `RetrievalMode`: `Literal["grep","keyword","vector","hybrid"]` — `hybrid` fuses `keyword`+`vector` result lists by reciprocal rank fusion (`K = 60`, deduped by `(document_id, position)`); the fusion is pure Python in the `KnowledgeRetrieval` facade over the two lists the index already returns (no engine import). Shared with the memory face (spec 007).
 - `StoreRef`: `kind`, `resource_name`, `project_id`, `docs_dir` — identifies one logical store (one KB or one memory scope) for the shared retrieval facade.
 
 ### Ports (`domain/knowledge/`)
@@ -96,7 +97,7 @@ Grep is a separate `infrastructure/knowledge/grep.py` ripgrep wrapper (no index)
 - `IngestRejected` — code `"INGEST_REJECTED"`; reason ∈ `{"empty","too_large","unsupported_type","duplicate"}`.
 - `EngineUnavailable` — code `"ENGINE_UNAVAILABLE"`; raised when a converter library / sqlite-vec / embedding provider needed for the requested operation is unavailable.
 - `ReconversionBlocked` — code `"RECONVERSION_BLOCKED"`; raised when re-converting a document whose `source_mode == "edited"`.
-- `SearchModeInvalid` — code `"SEARCH_MODE_INVALID"` (HTTP 400); raised when a search request names an EXPLICIT `mode=grep` (grep has its own endpoint) or any explicit mode not in the KB's `enabled_modes`. `vector` is the exception — it degrades to keyword with a flagged fallback instead of erroring.
+- `SearchModeInvalid` — code `"SEARCH_MODE_INVALID"` (HTTP 400); raised when a search request names an EXPLICIT `mode=grep` (grep has its own endpoint) or any explicit mode not in the KB's `enabled_modes`. `vector` and `hybrid` are the exceptions — they degrade to keyword with a flagged fallback instead of erroring.
 
 ## SQLite schema (unified substrate)
 
