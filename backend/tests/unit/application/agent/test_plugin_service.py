@@ -37,7 +37,6 @@ from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import (
     PluginNotFound,
-    PluginToggleUnsupported,
     PluginUninstallFailed,
     PluginUninstallUnsupported,
 )
@@ -59,14 +58,6 @@ _CODEX_CONFIG = spec_for(AgentType.CODEX, "config", _CODEX_CONFIG_DIR).path
 _CLAUDE_INSTALLED = _CLAUDE_CONFIG_DIR / "plugins" / "installed_plugins.json"
 _CLAUDE_MARKETPLACES = _CLAUDE_CONFIG_DIR / "plugins" / "known_marketplaces.json"
 
-_CURSOR_CONFIG_DIR = pathlib.Path("/fake/home/.cursor")
-_OPENCODE_CONFIG_DIR = pathlib.Path("/fake/home/.config/opencode")
-_OPENCLAW_CONFIG_DIR = pathlib.Path("/fake/home/.openclaw")
-_HERMES_CONFIG_DIR = pathlib.Path("/fake/home/.hermes")
-
-_CURSOR_EXTENSIONS = _CURSOR_CONFIG_DIR / "extensions" / "extensions.json"
-_OPENCODE_CONFIG = spec_for(AgentType.OPENCODE, "config", _OPENCODE_CONFIG_DIR).path
-_OPENCLAW_CONFIG = spec_for(AgentType.OPENCLAW, "config", _OPENCLAW_CONFIG_DIR).path
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -92,10 +83,6 @@ class FakeAgentLookup:
     _AGENTS: ClassVar[dict[str, tuple[str, pathlib.Path]]] = {
         "cc": ("claude_code", _CLAUDE_CONFIG_DIR),
         "cx": ("codex", _CODEX_CONFIG_DIR),
-        "cu": ("cursor", _CURSOR_CONFIG_DIR),
-        "oc": ("opencode", _OPENCODE_CONFIG_DIR),
-        "ow": ("openclaw", _OPENCLAW_CONFIG_DIR),
-        "he": ("hermes", _HERMES_CONFIG_DIR),
     }
 
     async def get(self, name: str) -> Resource:
@@ -664,176 +651,3 @@ async def test_uninstall_codex_unknown_plugin_404(store, audit_svc):
     assert rmtree_calls == []
     entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
     assert entries == []
-
-
-# ---------------------------------------------------------------------------
-# Cursor (read-only)
-# ---------------------------------------------------------------------------
-
-_CURSOR_EXTENSIONS_JSON = json.dumps(
-    [
-        {"identifier": {"id": "ms-python.python"}, "version": "1.0.0"},
-        {"identifier": {"id": "esbenp.prettier-vscode"}, "version": "2.0.0"},
-    ]
-)
-
-
-async def test_list_cursor_extensions(store, audit_svc):
-    store._files[_CURSOR_EXTENSIONS] = _CURSOR_EXTENSIONS_JSON
-    svc = _make_svc(store, audit_svc)
-
-    out = await svc.list_plugins("cu")
-
-    assert out.parse_errors == []
-    assert {v.id for v in out.items} == {"ms-python.python", "esbenp.prettier-vscode"}
-    assert all(v.enabled for v in out.items)
-    assert out.marketplaces == []
-
-
-async def test_list_cursor_missing_empty(store, audit_svc):
-    svc = _make_svc(store, audit_svc)
-    out = await svc.list_plugins("cu")
-    assert out.items == [] and out.parse_errors == []
-
-
-async def test_toggle_cursor_unsupported(store, audit_svc):
-    store._files[_CURSOR_EXTENSIONS] = _CURSOR_EXTENSIONS_JSON
-    svc = _make_svc(store, audit_svc)
-    with pytest.raises(PluginToggleUnsupported):
-        await svc.set_enabled("cu", "ms-python.python", False)
-    assert store._writes == []
-
-
-async def test_uninstall_cursor_unsupported(store, audit_svc):
-    store._files[_CURSOR_EXTENSIONS] = _CURSOR_EXTENSIONS_JSON
-    svc = _make_svc(store, audit_svc)
-    with pytest.raises(PluginUninstallUnsupported):
-        await svc.uninstall("cu", "ms-python.python")
-    assert store._writes == []
-
-
-# ---------------------------------------------------------------------------
-# OpenCode (toggle/uninstall = membership in the "plugin" array)
-# ---------------------------------------------------------------------------
-
-_OPENCODE_JSON = json.dumps({"plugin": ["alpha", "beta"], "other": 1})
-
-
-async def test_list_opencode_plugins(store, audit_svc):
-    store._files[_OPENCODE_CONFIG] = _OPENCODE_JSON
-    svc = _make_svc(store, audit_svc)
-
-    out = await svc.list_plugins("oc")
-
-    assert out.parse_errors == []
-    assert {v.id for v in out.items} == {"alpha", "beta"}
-    assert all(v.enabled for v in out.items)
-
-
-async def test_toggle_opencode_writes_config(store, audit_svc):
-    store._files[_OPENCODE_CONFIG] = _OPENCODE_JSON
-    svc = _make_svc(store, audit_svc)
-
-    await svc.set_enabled("oc", "alpha", False, actor="cli")
-
-    written = [p for p, _ in store._writes]
-    assert written == [_OPENCODE_CONFIG]
-    data = json.loads(store._files[_OPENCODE_CONFIG])
-    assert "alpha" not in data["plugin"]
-    assert data["other"] == 1  # siblings survive
-
-    entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_TOGGLED.value)
-    assert len(entries) == 1
-    assert entries[0].details == {"plugin": "alpha", "enabled": False}
-
-
-async def test_uninstall_opencode_removes_entry(store, audit_svc):
-    store._files[_OPENCODE_CONFIG] = _OPENCODE_JSON
-    rmtree_calls: list[pathlib.Path] = []
-    svc = _make_svc(store, audit_svc, rmtree_calls=rmtree_calls)
-
-    await svc.uninstall("oc", "beta", actor="cli")
-
-    data = json.loads(store._files[_OPENCODE_CONFIG])
-    assert "beta" not in data["plugin"]
-    # OpenCode has no plugin cache directory to remove.
-    assert rmtree_calls == []
-    entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
-    assert len(entries) == 1
-    assert entries[0].details["plugin"] == "beta"
-
-
-async def test_uninstall_opencode_unknown_404(store, audit_svc):
-    store._files[_OPENCODE_CONFIG] = _OPENCODE_JSON
-    svc = _make_svc(store, audit_svc)
-    with pytest.raises(PluginNotFound):
-        await svc.uninstall("oc", "ghost")
-
-
-# ---------------------------------------------------------------------------
-# OpenClaw (the plugins{} block)
-# ---------------------------------------------------------------------------
-
-_OPENCLAW_JSON = json.dumps(
-    {"plugins": {"entries": ["alpha", "beta"], "enabled": ["alpha"], "deny": ["beta"]}}
-)
-
-
-async def test_list_openclaw_plugins(store, audit_svc):
-    store._files[_OPENCLAW_CONFIG] = _OPENCLAW_JSON
-    svc = _make_svc(store, audit_svc)
-
-    out = await svc.list_plugins("ow")
-
-    assert out.parse_errors == []
-    by_id = {v.id: v.enabled for v in out.items}
-    assert by_id == {"alpha": True, "beta": False}
-
-
-async def test_toggle_openclaw_writes_config(store, audit_svc):
-    store._files[_OPENCLAW_CONFIG] = _OPENCLAW_JSON
-    svc = _make_svc(store, audit_svc)
-
-    await svc.set_enabled("ow", "beta", True, actor="cli")
-
-    written = [p for p, _ in store._writes]
-    assert written == [_OPENCLAW_CONFIG]
-    out = await svc.list_plugins("ow")
-    assert {v.id: v.enabled for v in out.items}["beta"] is True
-
-
-async def test_uninstall_openclaw_removes_entry(store, audit_svc):
-    store._files[_OPENCLAW_CONFIG] = _OPENCLAW_JSON
-    svc = _make_svc(store, audit_svc)
-
-    await svc.uninstall("ow", "alpha", actor="cli")
-
-    out = await svc.list_plugins("ow")
-    assert "alpha" not in {v.id for v in out.items}
-    entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
-    assert len(entries) == 1
-
-
-# ---------------------------------------------------------------------------
-# Hermes (N/A — MCP is the plugin mechanism)
-# ---------------------------------------------------------------------------
-
-
-async def test_list_hermes_empty(store, audit_svc):
-    svc = _make_svc(store, audit_svc)
-    out = await svc.list_plugins("he")
-    assert out.items == [] and out.marketplaces == [] and out.parse_errors == []
-
-
-async def test_toggle_hermes_unsupported(store, audit_svc):
-    svc = _make_svc(store, audit_svc)
-    with pytest.raises(PluginToggleUnsupported):
-        await svc.set_enabled("he", "anything", True)
-    assert store._writes == []
-
-
-async def test_uninstall_hermes_unsupported(store, audit_svc):
-    svc = _make_svc(store, audit_svc)
-    with pytest.raises(PluginUninstallUnsupported):
-        await svc.uninstall("he", "anything")
-    assert store._writes == []

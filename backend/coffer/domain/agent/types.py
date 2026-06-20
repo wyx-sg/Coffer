@@ -21,10 +21,6 @@ class AgentType(StrEnum):
 
     CLAUDE_CODE = "claude_code"
     CODEX = "codex"
-    CURSOR = "cursor"
-    OPENCODE = "opencode"
-    OPENCLAW = "openclaw"
-    HERMES = "hermes"
 
     @property
     def display_name(self) -> str:
@@ -60,7 +56,7 @@ class AgentType(StrEnum):
 
     def config_dir(self) -> pathlib.Path:
         """Root the config-file allowlist resolves against (``~/.claude``,
-        ``~/.codex``, ``~/.cursor``, …)."""
+        ``~/.codex``)."""
         from coffer.domain.agent.descriptor import descriptor_for
 
         return descriptor_for(self).default_config_dir()

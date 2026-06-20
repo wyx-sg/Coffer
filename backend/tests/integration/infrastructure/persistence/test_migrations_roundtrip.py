@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0030"
+HEAD_REVISION = "0031"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -53,7 +53,10 @@ HEAD_REVISION = "0030"
 # skill lifecycle removed, simplification 4.3) — no DDL, so the table/column set
 # is unchanged at head. 0030 DROPs ``agent_mcp_scope`` + ``agent_mcp_scope_server``
 # (per-agent MCP scoping removed, simplification 1.6); its downgrade recreates
-# them so 0023's downgrade can drop them again on the way down.
+# them so 0023's downgrade can drop them again on the way down. 0031 is DATA-only:
+# it DELETEs ``kind='agent'`` rows whose ``config_json`` type is one of the four
+# removed agent types (cursor/opencode/openclaw/hermes — agent types cut to
+# claude_code + codex), so the table/column set is unchanged at head.
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
@@ -225,6 +228,53 @@ def test_0029_rewrites_skill_config_to_local_import_only(tmp_path, monkeypatch):
     assert downgraded["update_available"] is False
     assert downgraded["pinned"] is False
     assert downgraded["source"]["type"] == "local_import"
+
+
+def test_0031_deletes_removed_agent_type_rows(tmp_path, monkeypatch):
+    """0031 is a data migration (agent types cut to claude_code + codex): every
+    ``kind='agent'`` row whose stored ``config_json`` type is one of the four
+    removed types (cursor/opencode/openclaw/hermes) is DELETED, so it cannot
+    crash ``AgentConfig.model_validate`` once the enum loses those members; rows
+    for the kept types survive untouched."""
+    db_path = tmp_path / "agent_types.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    # Stop one revision BEFORE 0031 and seed rows for removed + kept types.
+    command.upgrade(cfg, "0030")
+    with sqlite3.connect(db_path) as conn:
+        for name, agent_type in (
+            ("a-cursor", "cursor"),
+            ("a-opencode", "opencode"),
+            ("a-openclaw", "openclaw"),
+            ("a-hermes", "hermes"),
+            ("a-claude", "claude_code"),
+            ("a-codex", "codex"),
+        ):
+            conn.execute(
+                "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
+                "VALUES ('agent', ?, ?, 1, '2026-01-01', '2026-01-01')",
+                (name, json.dumps({"type": agent_type})),
+            )
+        conn.commit()
+
+    # Apply 0031.
+    command.upgrade(cfg, "head")
+    assert _alembic_version(db_path) == HEAD_REVISION
+
+    with sqlite3.connect(db_path) as conn:
+        names = {r[0] for r in conn.execute("SELECT name FROM resources WHERE kind = 'agent'")}
+    # Removed-type rows are gone; kept-type rows survive.
+    assert names == {"a-claude", "a-codex"}
+
+    # Downgrade is intentionally lossy — it cannot resurrect the deleted rows;
+    # the kept-type rows remain and nothing is conjured back.
+    command.downgrade(cfg, "0030")
+    with sqlite3.connect(db_path) as conn:
+        names_after = {
+            r[0] for r in conn.execute("SELECT name FROM resources WHERE kind = 'agent'")
+        }
+    assert names_after == {"a-claude", "a-codex"}
 
 
 def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkeypatch):

@@ -84,8 +84,8 @@ class AgentConfig(BaseModel):
         """Where folder-mode skills are delivered: ``<config_dir>/<subpath>``.
 
         The subpath comes from the agent's capability descriptor — ``skills``
-        for most agents, ``workspace/skills`` for OpenClaw. Non-folder delivery
-        modes (Cursor, Hermes) do not use this path.
+        for Claude Code and Codex. Non-folder delivery modes do not use this
+        path.
         """
         from coffer.domain.agent.descriptor import descriptor_for
 

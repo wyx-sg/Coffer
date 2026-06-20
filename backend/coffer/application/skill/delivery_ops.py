@@ -11,7 +11,7 @@ Two concerns live here:
   injected resolver as a plain ``str`` (Contract 5: this layer never imports
   the descriptor's ``SkillDeliveryMode`` enum), and whether that mode is
   *folder-style* (realised as folders on disk).
-- **External-dir registration** (EXTERNAL_DIR — Hermes) — folder-deliver into a
+- **External-dir registration** (EXTERNAL_DIR) — folder-deliver into a
   Coffer-owned directory the agent scans and register that directory in the
   agent's own config file. The *where/how* is resolved at the composition root
   and handed in as an ``ExternalDirRegistration``; these helpers only apply it.
@@ -52,8 +52,8 @@ def resolve_agent_skill_delivery(service: SkillService, agent: Resource) -> str:
 def delivers_skill_folders(service: SkillService, agent: Resource) -> bool:
     """True for delivery modes realised as folders on disk: FOLDER (the agent's
     own ``skills`` dir) and EXTERNAL_DIR (a Coffer-owned dir the agent scans).
-    Non-folder modes (e.g. Cursor's ``rules_mdc``) return False and are gated
-    out of delivery."""
+    Non-folder modes (``rules_mdc``) are recognized extension points that return
+    False and are gated out of delivery."""
     return resolve_agent_skill_delivery(service, agent) in _FOLDER_STYLE_DELIVERY
 
 

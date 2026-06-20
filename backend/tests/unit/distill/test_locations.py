@@ -19,7 +19,7 @@ def test_codex_sessions_dir():
 
 def test_unknown_agent_rejected():
     with pytest.raises(UnsupportedAgentTypeError):
-        sessions_dir("cursor", Path("/x"))
+        sessions_dir("nonexistent_agent", Path("/x"))
 
 
 def test_only_jsonl_is_transcript():

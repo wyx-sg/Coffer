@@ -170,10 +170,10 @@ def test_list_transcripts_agent_not_found_returns_envelope() -> None:
 
 def test_list_transcripts_unsupported_agent_type_returns_envelope() -> None:
     set_active_token(_TOKEN)
-    svc = _FakeDistillService(raise_on_list=UnsupportedAgentTypeError("cursor"))
+    svc = _FakeDistillService(raise_on_list=UnsupportedAgentTypeError("nonexistent_agent"))
     app = _build_app(svc)
     with TestClient(app) as c:
-        r = c.get("/api/v1/agents/cursor-agent/transcripts", headers=_HEADERS)
+        r = c.get("/api/v1/agents/nonexistent-agent/transcripts", headers=_HEADERS)
     assert r.status_code == 400, r.text
     body = r.json()
     assert body["error"]["code"] == "UNSUPPORTED_AGENT_TYPE"
@@ -236,11 +236,11 @@ def test_distill_agent_not_found_returns_envelope() -> None:
 
 def test_distill_unsupported_agent_type_returns_envelope() -> None:
     set_active_token(_TOKEN)
-    svc = _FakeDistillService(raise_on_distill=UnsupportedAgentTypeError("cursor"))
+    svc = _FakeDistillService(raise_on_distill=UnsupportedAgentTypeError("nonexistent_agent"))
     app = _build_app(svc)
     with TestClient(app) as c:
         r = c.post(
-            "/api/v1/agents/cursor-agent/transcripts/distill",
+            "/api/v1/agents/nonexistent-agent/transcripts/distill",
             json={"session_id": "s1"},
             headers=_HEADERS,
         )

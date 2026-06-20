@@ -9,7 +9,7 @@
 
 ## 摘要
 
-向 Coffer 加入 `agent` 这一 Resource kind：本地安装 AI agent 的 registry。能力清单中接线了六个类型——**Claude Code**（`claude_code`）、**OpenAI Codex**（`codex`）、**Cursor**（`cursor`）、**OpenCode**（`opencode`）、**OpenClaw**（`openclaw`）与 **Hermes**（`hermes`）——每个都同时覆盖该产品的 CLI 与 app/IDE 形态，二者共享一个配置目录。目前 UI 只**暴露** Claude Code 与 Codex；另外四个已在后端端到端可用，但以 `enabled=False` 从发现中隐藏，待逐个验证后再逐一暴露。发现（discovery）是只读的：扫描把已安装但未注册的 agent 报告为候选项，由用户确认要添加哪些——不自动注册任何内容（包括启动时）。用户也可手工添加、编辑、移除 agent。
+向 Coffer 加入 `agent` 这一 Resource kind：本地安装 AI agent 的 registry。能力清单中接线了两个类型——**Claude Code**（`claude_code`）与 **OpenAI Codex**（`codex`）——每个都同时覆盖该产品的 CLI 与 app/IDE 形态，二者共享一个配置目录。发现（discovery）是只读的：扫描把已安装但未注册的 agent 报告为候选项，由用户确认要添加哪些——不自动注册任何内容（包括启动时）。用户也可手工添加、编辑、移除 agent。
 
 在 registry 之上，本功能新增两项能力：
 
@@ -175,6 +175,6 @@ workspace。各层新增模块：
 
 ## 延期至后续 spec 的开放项
 
-- agent **类型**扩展超出已支持的六种（Claude Desktop 聊天应用、Gemini CLI、GitHub Copilot）—— 每个增加一个 enum 值、扫描器与配置文件 allowlist。
+- agent **类型**扩展超出已支持的两种（Claude Desktop 聊天应用、Gemini CLI、GitHub Copilot）—— 每个增加一个 enum 值、扫描器与配置文件 allowlist。
 - agent **健康检查**（注册路径上的安装是否仍存在）—— 单独 spec。
 - agent **作为 MCP peer**（把另一个 agent 通过 Coffer MCP 网关暴露为可调用工具）—— 探索性。

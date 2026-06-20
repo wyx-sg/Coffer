@@ -54,6 +54,97 @@
 
 - **CC Switch**（farion1231，~105k★，Tauri 2 + Rust）是最近的重叠竞品：已覆盖 provider 切换 + MCP + skills + prompts + sessions + 用量 + 本地代理，支持 7 个 agent。**不追它的广度**；Coffer 护城河 = 它没有的 **知识库 + 记忆 + RAG + 治理（审计/加密/版本化）+ 真 MCP 网关 + channels**。
 
+## 第三轮（2026-06-20）：harness + 实现级深扫
+
+> 在前两轮"功能级"之上，转向 **harness（开发控制层）+ 后端实现级**过度设计。
+> 来源：四个并行扫描（domain/application · infrastructure · surfaces · 跨切面强制）去重排序。
+> **本节项与 SDD 功能 backlog 分开追踪**（是死代码/重构清理，非新 spec）。
+> ⚠️ **LOC 为估算；标 ❌删 的项删前需逐条 grep 复核 zero-caller（agent grep 来源，未亲验）。**
+> 状态：**第一/二档已获用户批准登记，执行时务必反复复核行为等价（用户明确要求）；第三/四档逐条待用户决定。**
+
+### Harness 结论（A）—— 清零，无改动
+
+- **H1 eval 飞轮 → 整块留**：(a) `evals.yml` 非必需 CI 卡门 / (b) 采集 sink + curate / (c) 静态 `make eval` / Slice 1 诚实调用日志 —— 全留。理由：eval 是 keep-and-invest 方向，(b) 以后做 eval 有用，(a) 已接好不挡合并，留着现成。
+- **B 文档/流程仪式 → 不改**（双语 .zh / 58 ADR / SDD 模板 / agents/\*.md）。
+- **A 其他 harness → 不改**（H2 ADR-017"工业级"措辞 / H3 harness 自测 / verify_stamp 指纹 hook 等）。
+
+### 第一档 · 纯死代码（❌删，行为不变，✅已批准登记，执行时反复确认）
+
+| 编号 | 名称（为什么是死的） | 位置 | ~LOC |
+| ---- | ---- | ---- | ---- |
+| IM1 | Gen-1 CLI provider 整栈（被 SDK/app-server provider 取代，仅测试引用；composition root 只 wire Gen-2） | `infra/chat/cli_providers.py` 全 + `cli_agent.py` 死半 + `tests/integration/chat/test_cli_agent.py`。**迁移仍用的 ParseState/SessionSink/last_user_text 到共享小模块** | 1080 |
+| IM2 | chat 上下文裁剪模块（编排器传全量 history、从不调用） | `application/chat/history.py` + 单测 | 80 |
+| IM3 | sync manifest/schema 版本子系统（写常量从不读，`SyncWorkspaceTooNew` 从不触发） | `domain/sync/manifest.py`、`domain/sync/errors.py`、`application/sync/ports.py` write/read_manifest + impl | 70 |
+| IM4 | codex JSON-RPC 双向 peer 机制（client 从不注册 request handler） | `infra/chat/codex_jsonrpc.py`（on_request/RequestHandler/\_handlers/\_handle_server_request/...） | 45 |
+| IM5 | 死 trace-id 关联（contextvar 从不 set → 每条日志/响应头恒为 `-`） | `infra/logging/setup.py` + `surfaces/http/errors.py` `X-Coffer-Trace` ×6 + `cors.py` expose-header。**留 structlog JSON 本身** | 40 |
+| IM6 | `ModelCatalogPort` + adapter（/model 已改 CLI 透传）+ `ConversationPort.set_conversation_model`（零调用方） | `application/channel/ports.py`、inbound.py、commands.py、`surfaces/http/channel_wiring.py` `_ModelCatalog` | 40 |
+| IM7 | 两个 test-only daemon helper（生产走别的原语，docstring 自承）。**勿动 ADR-006 核心 flock**（真有并发 auto-spawn 竞争） | `daemon/port_alloc.py` `allocate`、`daemon/bootstrap.py` `_spawn_lock` | 26 |
+| IM8 | 死 `ResourceSnapshot` dataclass | `application/sync/ports.py` | 10 |
+
+**小计 ~1400 行（含测试）。**
+
+### 正确性修复（✅修，已批准登记）
+
+| 编号 | 名称 | 位置 | ~LOC |
+| ---- | ---- | ---- | ---- |
+| IM9 | `_actor` 解析 copy-paste 跳过 `get_actor` 的 `_ACTOR_PATTERN` 校验 → 未校验 actor 串进审计日志 | `surfaces/http/skill_routes.py`、`knowledge_base/routes.py` → 改 import 规范 `get_actor` | 6 |
+
+### 第二档 · 重复/样板合并（✂️简化，✅已批准登记，执行时反复确认）
+
+| 编号 | 名称 | 位置 | ~LOC |
+| ---- | ---- | ---- | ---- |
+| IM10 | DI `set_/get_` 四件套 ×31（文件为压 400 行拆成 5 份，压力全是样板） | `surfaces/http/dependencies.py` + chat/memory/credential/distill dep 文件 → ~15 行工厂收成每组一行 | 330 可回收 |
+| IM11 | CLI client/错误样板：`client_or_exit` ×106、`verbose` 行 ×50、**三种互相矛盾的错误风格**绕过已有 `check()`/`render_http_error` | `surfaces/cli/*_cmd.py` + mcp.py → 统一 `cli_call` wrapper + `render_table` | 150–250 |
+| IM12 | per-kind 路由重复实现通用 Resource CRUD（`channel_routes.py` 已是零-CRUD 范本） | agent/KB/memory routes 的 list/get/create | 40–60 |
+| IM13 | per-kind `_to_*_out` 8 字段拷贝 | resource/KB/memory/agent routes | 50–60 |
+| IM14 | 小重复合集：skill 名正则重复 `ResourceCreate.name` · `_tz` ×8 · 重复 `ConversationPort`/`_ConversationPort` · 双 retention 白名单 · `AgentCatalogPort`→`Callable` · `ToolGateway` 单 impl · 恒 None 的 model_id getattr | 多处（逐条独立、低风险） | ~140 |
+
+### 第三档 · 实现级简化（已决 2026-06-20，Claude 复核后裁定）
+
+| 编号 | 名称 | 位置 | ~LOC | 决定 |
+| ---- | ---- | ---- | ---- | ---- |
+| IM15 | 30 个 Alembic 迁移 → 压成单一 baseline（工具**未发布、无存量库**；8 个 repair/reset，多对 add/drop 自相抵消） | `persistence/migrations/versions/` + roundtrip 测试 → 一次性 `alembic stamp` | 1400 | ✂️ **删（择时机）**——本轮简化浪潮 + agent 裁剪落地后，一次性 baseline 重置；dev 库 `alembic stamp` 一次 |
+| IM16 | MCP 调用写入器 5000 深队列 + 批量 drain（单人到不了该负载；同步 `_commit_one` 路径已存在） | `infra/mcp/invocation_writer.py` | 80 | 🔒 **留**——成本隔离在 80 行内、agent 突发密集调用的热路径理由站得住，删它低杠杆 |
+| IM17 | `DatabaseSchemaTooNew` 启动守卫（多分支/多发布才需要；Alembic 原生报错已覆盖；与 IM15 叠加） | `persistence/migrations_runner.py` + `domain/errors.py` | 35 | 🔒 **留**——多机 sync 让"A/B 跑不同版本"成真实场景，清晰报错胜过崩溃 |
+| IM18 | LangGraph + 4 LangChain 包仅服务一个 `coffer__ask` react loop | `chat/agentic_rag.py`、`langchain_models.py` | 40 + 依赖 | 🔒 **留**——3 个 provider 分支恰是"换内置模型 provider"可选项、与 G9 方向一致，**不砍**；"去 langgraph 依赖瘦身"记**远期一次性评估**（影响 PyInstaller 包体） |
+| IM19 | backup 路径 strict-mode 沙箱（env 旋钮 + `relative_to` 包含检查，docstring 自承默认不设防） | `surfaces/http/daemon_routes.py` `_resolve_backup_dest` → 重合 **P10** | 30 | ✂️ **删，并进 P10**——无威胁模型的企业级硬化 |
+
+### 第四档 · 流程/CI/测试/强制仪式（已决 2026-06-20，Claude 复核后裁定）
+
+> **裁定原则**：只砍"去冗余/去摩擦但**不损失任何真实保证**"的；真 harness 不瞎砍。
+> **二次复核（用户提醒"真需要的 harness 别瞎砍"后）**：撤回 IM22、IM25（经查是真 SDD harness，非冗余），软化 IM26a。只剩 **IM20/IM21/IM23** 三条是真冗余/去摩擦。
+
+| 编号 | 名称 | 位置 | ~LOC | 决定 |
+| ---- | ---- | ---- | ---- | ---- |
+| IM20 | import-linter 7 个 N×N 跨 kind 块（手维护 O(kinds²)；可塌成单个 `independence` 契约） | `backend/pyproject.toml` `[tool.importlinter]` Contracts 5–5f | 280 | ✂️ **改**——7 块 → 单个原生 `independence` 契约（~10 行）；**保证完全不变**、只去掉 N² 手维护。留 Contracts 1–3 + 引擎封闭 7/8 |
+| IM21 | 两个 CI workflow 每 PR 把 verify 5 个 tier **跑两遍**（push→ci.yml + pull_request→verify.yml） | `.github/workflows/{verify,ci}.yml` | CI 工时 | ✂️ **改（谨慎）**——去掉双跑，但**须保住冻结锁覆盖**（让存活的 PR run 用 frozen deps）。不是纯冗余（frozen vs unfrozen 是真矩阵维度），低优先 |
+| IM22 | benchmark tier = SC-003 网关开销预算（job 注释：**该预算的唯一执行点**） | `Makefile` verify-benchmark + verify.yml benchmark job + `tests/integration/perf/` | 25 + 1 job | 🔒 **留（撤回先前"删"）**——删了 SC-003 预算就无人执行、acceptance marker 会绿着撒谎。是真 harness，不是冗余 |
+| IM23 | `desktop-build` 用桩二进制、却是**每个 PR 的 required check**（真覆盖在 release.yml）；最慢最脆 | verify.yml desktop job（required） | 1 job | ✂️ **改**——`tauri build --bundles deb` 步骤改为**仅 desktop/frontend 变更时跑**（含 package.json/tauri 配置），`cargo test --lib` 常开；**job 仍常跑**保 required check 不卡 pending。纯去冗余：后端 PR 改不动桩二进制 bundle |
+| IM24 | acceptance tier：293 个 byte-exact `@pytest.mark.acceptance` marker + 305 行审计脚本（required，改标题就 orphan 报错） | `scripts/audit_acceptance.py` + markers（required） | 305 + 293 串 | 🔒 **留**——SDD spec↔test 可追溯是项目脊梁、是自动 build loop 逼 AI 把每条场景写测试的硬门；orphan 摩擦其实是"逼你同步 marker"的特性 |
+| IM25 | contract tier：验 Pydantic conform **手写 OpenAPI 契约**（`specs/001/contracts/api.openapi.yaml`=SDD 真相源） | `backend/tests/contract/` + verify-contract（required） | 1k | 🔒 **留（撤回先前"改"）**——OpenAPI 是手写 SDD 契约不是 codegen 产物；测 Pydantic conform = IM24 的 wire 级对应，真 SDD harness |
+| IM26 | `check_file_sizes.py` 反规避加固 + `verify_stamp.py` 指纹 | `scripts/check_file_sizes.py`、`scripts/verify_stamp.py` | ~180 | 🔒 **基本留（软化先前"删反规避"）**——反规避在**自动 loop**里防 AI 绕过尺寸门，有 gate-integrity 价值；(b) `verify_stamp` 属 harness A 已定留。若哪天确认无价值再收 glob，低优先 |
+
+> 复核结论：第四档真正该动的只有 **IM20**（同义改写、零保证损失）、**IM23**（去无谓重复构建）、**IM21**（谨慎去重、保住冻结覆盖）。其余（IM22/24/25/26）都是真 harness，**留**。教训：CI/测试"仪式"里混着真 SDD 保证，逐条查清来源再动，别按体量拍脑袋。
+
+### Scope 备注（并进 backlog `AGENT` 项，非新项）
+
+agent 类型裁到 2 类的级联比文档列的更广：`EXTERNAL_DIR`/Hermes、`RULES_MDC`/Cursor 分支贯穿 `application/skill/{service,binding_ops,follow_ops,lifecycle_ops}.py`；砍完后 `SkillDeliveryMode` 枚举塌成单值 `FOLDER`，"按投递模式分发"的间接失去意义。
+
+### 执行清单（第三轮，与 SDD backlog 分开）
+
+**要动的：**
+
+- [ ] IM1–IM8 第一档纯死代码清扫（先逐条 grep 复核 zero-caller 再删；IM1 先迁移仍用的 3 个 helper）
+- [ ] IM9 `_actor` 校验缺口修复（可与第一档同 PR）
+- [ ] IM10–IM14 第二档重复/样板合并（执行时反复确认行为等价后排期）
+- [ ] IM15 迁移压单一 baseline（**择时机**：本轮简化 + agent 裁剪落地后；dev 库 `alembic stamp` 一次）
+- [ ] IM19 backup strict-mode 删 → 并进 **P10**
+- [ ] IM20 import-linter 7 块 → 单个 `independence` 契约（同义改写、零保证损失）
+- [ ] IM23 desktop `tauri build` 步骤改"仅 desktop/frontend 变更触发"（job 常跑、`cargo test --lib` 常开）
+- [ ] IM21 ci.yml 去 PR 双跑（**谨慎**：存活的 PR run 须用 frozen deps 保冻结覆盖；低优先）
+
+**确定留、不执行：** IM16 · IM17 · IM18（provider 分支；去 langgraph 记远期）· **IM22**（SC-003 唯一执行点）· **IM24**（SDD 硬门）· **IM25**（手写 OpenAPI SDD 契约）· **IM26**（反规避在自动 loop 有价值 + verify_stamp）· H1 eval 飞轮全部 · 第四档其余（B 文档仪式）。
+
 ## 执行 backlog
 
 > 由执行 loop 生成（2026-06-20）。每轮取**第一个未勾选**项,读相关 spec + agents/\*.md 界定范围,SDD 先 spec 后码后测,`make verify` 全绿,一个 squash commit 开 PR,独立评审 + CI 绿后合并,再把该项勾成 `[x]`。
@@ -81,7 +172,8 @@
 
 - [x] 1.6 — 删 per-agent MCP server 作用域（auto/selected，回退 PR #108 / ADR-026）；P11 逐工具取消（未建）
   - 执行说明（用户 2026-06-20 复核:本文档内部对 1.6 自相矛盾——决策表 line 144「重审·已决=保留」 vs backlog/line 35「删」;用户裁定**删除**,推翻"重审保留"）。回退整条 per-agent scoping:网关恢复"每 agent 见全部 enabled server"(删 `scope` 形参/`bind_agent`/`X-Coffer-Agent` 身份)、删 scope service/domain/persistence/routes/CLI/前端 scope picker(AgentGatewayMcpSection 还原为只读列表)、spec 001 FR-019–022 + spec 004 FR-039/040 + 各 4/2 验收场景、ADR-026-per-agent 立碑。migration 0030 drop `agent_mcp_scope`+`agent_mcp_scope_server` 两表。**保留**:`ssrf_guard` 无关、`inject_session_cwd`(#108 重构搬家的 cwd 注入,非 scoping)、`mcp_install`/`mcp_service`(预存在,仅剥 agent_name 形参)、另一个 `ADR-026-memory-via-mcp`。
-- [ ] AGENT — 砍到 Claude Code + Codex，删 Cursor/OpenCode/OpenClaw/Hermes（cascade：删 `plugin_state_extra` / `opencode_reader` / `external_dir_registrar` + 测试；改 `types` / `descriptor` / `plugin_capability` / `plugin_service` / `transcript_reader` / `agent_skill_wiring` + **spec 004**；4.10 收成 2 类型）
+- [x] AGENT — 砍到 Claude Code + Codex，删 Cursor/OpenCode/OpenClaw/Hermes（cascade：删 `plugin_state_extra` / `opencode_reader` / `external_dir_registrar` + 测试；改 `types` / `descriptor` / `plugin_capability` / `plugin_service` / `transcript_reader` / `agent_skill_wiring` + **spec 004**；4.10 收成 2 类型）
+  - 执行说明（用户 2026-06-20 裁定:本文档对 agent 类型自相矛盾——决策表 3.2/4.10「已决=保留(框架便宜)」+ line 156「假警报,已留」 vs backlog/line 38「砍到 2」;用户裁定**删除**,推翻"保留"）。`AgentType` 删 CURSOR/OPENCODE/OPENCLAW/HERMES、`PluginModel` 删 CURSOR_RO/OPENCODE/OPENCLAW；删 4 条 `AGENT_DESCRIPTORS` 记录 + 4 个 `_*_files` builder；删 3 模块 `plugin_state_extra`/`opencode_reader`/`external_dir_registrar` + 整文件测试 3 个；剥 `plugin_service`(list/set_enabled/uninstall 派发链)、`transcript_reader`(`_TREE_SOURCES` opencode 树源)、`agent_skill_wiring`(Hermes EXTERNAL_DIR 注册 + registrar 接线)；spec 004 FR-003/013/019 + 能力表 + 删 6 个验收场景(spec↔marker 锁步) + data-model 去 3 模块引用；migration 0031 删存量 removed-type agent 行(否则 enum 移除后 load 崩)。**保留**:`SkillDeliveryMode` 枚举(RULES_MDC/EXTERNAL_DIR 现无消费者,留作通用投递抽象,非 per-type)、`is_agent_enabled`/`visible_agent_types`(通用 helper)。
 - [ ] 4.5 — 删 Skill 内容信任扫描（风险分级 + acknowledge 闸）
 
 ### 阶段四 · 简化
@@ -110,9 +202,9 @@
 | 6.4  | Memory 3-模式检索 + RRF 融合                         | 🔴   | ⚠️修正：RRF 与模式无关（跨 store/scope 合并，keyword/grep 也用），不随向量删。仅"3 模式"可议                                                                                             | （原:简化为 FTS5 单路）      | ✅ 保留（随 RAG 投资方向）                                                                                                                                                                                                      | 已决   |
 | 5.9  | KB 重切/重嵌/reindex                                 | 🟡   | 重嵌随向量删；reindex 是"文件为真相"必需                                                                                                                                                 | 留 reindex 删重嵌            | ✅ 保留（含重嵌，RAG 零件）                                                                                                                                                                                                     | 已决   |
 | 1.5  | `coffer__search_tools`                               | 🟡   | 语义排序又引一处 embedding；但工具过载是真问题                                                                                                                                           | 留（降级纯 BM25）            | ✅ 保留（含语义，随检索投资）                                                                                                                                                                                                   | 已决   |
-| 3.2  | 支持 6 种 agent 类型                                 | 🔴   | ⚠️假警报：是干净的数据表清单（AGENT_DESCRIPTORS），几乎无 per-type 分支，砍类型低杠杆（框架照留）                                                                                        | 砍到 2                       | ✅ 保留（框架便宜，4 个 disabled 类型现成，将来 flip enabled 即用）                                                                                                                                                             | 已决   |
+| 3.2  | 支持 6 种 agent 类型                                 | 🔴   | ⚠️假警报：是干净的数据表清单（AGENT_DESCRIPTORS），几乎无 per-type 分支，砍类型低杠杆（框架照留）                                                                                        | 砍到 2                       | ❌ **删除**（2026-06-20 用户复核裁定砍到 2，推翻"框架便宜"保留；删 Cursor/OpenCode/OpenClaw/Hermes + 3 模块 + spec 004，migration 0031）                                                                                         | 已执行 |
 | 3.7  | 逐 agent 插件管理                                    | 🔴   | 现状仅 list/toggle/uninstall，无"从源重装"、未接 sync——半成品地基                                                                                                                        | 删                           | ✅ **保留**（作地基，将扩展为可同步插件资产；见 build 项 P1）                                                                                                                                                                   | 已决   |
-| 4.10 | 6-agent 逐类投递目标差异                             | 🔴   | ⚠️假警报：SkillDeliveryMode 枚举驱动的通用逻辑，0 个 per-type 分支                                                                                                                       | 随 3.2                       | ✅ 保留（非 N×）                                                                                                                                                                                                                | 已决   |
+| 4.10 | 6-agent 逐类投递目标差异                             | 🔴   | ⚠️假警报：SkillDeliveryMode 枚举驱动的通用逻辑，0 个 per-type 分支                                                                                                                       | 随 3.2                       | ❌ **随 3.2 删除**（移除 Cursor/Hermes 后 RULES_MDC/EXTERNAL_DIR 无消费者；枚举留作通用抽象，投递收敛到 FOLDER）                                                                                                                 | 已执行 |
 | 6.5  | Transcript 蒸馏                                      | 🔴   | 用户保留，但要改成**智能对账**（非无脑追加摘要），见 P5                                                                                                                                  | 删                           | ✅ 保留（改对账，P5）                                                                                                                                                                                                           | 已决   |
 | 3.5  | 读写 agent 自己 config 的真实 MCP 条目               | 🟡   | Coffer 变成 agent config 编辑器                                                                                                                                                          | 简化为只读                   | ✅ 保留                                                                                                                                                                                                                         | 已决   |
 | 3.6  | Adopt into Coffer                                    | 🟡   | 解析各 agent config ×6；但迁移价值高                                                                                                                                                     | 留                           | ✅ 保留                                                                                                                                                                                                                         | 已决   |
@@ -153,7 +245,7 @@
 ## 捆绑包（一拍带一串）
 
 - **A. 去向量化** = 5.5 + 6.4 + 5.9(重嵌) + 1.5(语义路) — ❌ **作废**：用户保留 RAG 并计划做工业级；5.5 已定保留，6.4/5.9 随之保留。1.5(工具检索)属另一子系统，仍单独议。
-- **B. 6-agent → 2** = ~~3.2 + 4.10~~（假警报，已留）+ 3.7 + 6.5 → ⚠️ **大幅缩水**：真正的 per-type 成本只在 **3.7 插件** 和 **6.5 蒸馏** 两个分叉功能；砍类型本身低杠杆。【更新】3.7 已决保留（要扩展为可同步资产），故 Bundle B 现 ≈ {6.5} only
+- **B. 6-agent → 2** = **3.2 + 4.10**（2026-06-20 裁定删，6→2 类型，回收"假警报已留")+ 3.7（留）+ 6.5（留，改对账）→ ⚠️ **大幅缩水**：真正的 per-type 成本只在 **3.7 插件** 和 **6.5 蒸馏** 两个分叉功能；砍类型本身低杠杆。【更新】3.7 已决保留（要扩展为可同步资产）；3.2+4.10 已执行删除，故 Bundle B 现 ≈ {6.5} only
 - **C. Channels 整域** = 8.1 / 8.4 / 8.6 / 8.x → ✅ **留**（用户在用，含 SeaTalk）。8.4：删 `/cwd`（+清白名单），留 `/agent` `/model`（加交互卡片 P3）+ 基本盘 4 个。
 - **D. Sync 整域** = 9.x → ✅ **留**（用户要迁移+并发都支持，并发模型即可覆盖；9.3/9.4 都留）。唯一附加工作：channel 单活可转移 ownership（P2）。
 - **E. Chat 收缩** = 7.1–7.6 → ❌ **作废**：后端(7.2/7.3/对话存储)被 channels 锁死；7.1/7.4/7.5/7.6 用户全留。新增优化 P4（agent→模型选择 UX）。

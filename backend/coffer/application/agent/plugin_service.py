@@ -1,8 +1,7 @@
 """AgentPluginService — list / toggle / uninstall an agent's plugins.
 
 Operates on agent plugin state using the pure text transforms in
-``domain/agent/plugin_state.py`` (Claude Code, Codex) and
-``domain/agent/plugin_state_extra.py`` (Cursor, OpenCode, OpenClaw).
+``domain/agent/plugin_state.py`` (Claude Code, Codex).
 
 The per-agent behaviour is data, not control flow: each agent's
 :class:`~coffer.domain.agent.descriptor.PluginCapability` (read from the
@@ -11,18 +10,12 @@ the allowlist ``config_key`` of the write surface, and the ``can_toggle`` /
 ``can_uninstall`` flags. The service dispatches on those — it never switches on
 :class:`AgentType`.
 
-Agents with no plugin capability (Hermes — MCP *is* the plugin mechanism)
-return an empty listing; toggle and uninstall raise the matching "unsupported"
-error.
-
 Write-surface notes preserved from the original behaviour:
 - **Codex** writes ``config.toml`` (``config`` key) and removes the plugin
   cache at ``<config_dir>/plugins/cache/<marketplace>/<name>`` on uninstall.
 - **Claude Code** writes only ``settings.json`` (``settings`` key); the two
   internal inventory files are read by path and never written. Uninstall is not
   supported.
-- **Cursor** is read-only: extensions are listed from
-  ``<config_dir>/extensions/extensions.json``; toggle/uninstall are unsupported.
 """
 
 from __future__ import annotations
@@ -52,21 +45,11 @@ from coffer.domain.agent.plugin_capability import (
     UninstallStrategy,
 )
 from coffer.domain.agent.plugin_state import (
-    MarketplaceInfo,
     PluginInfo,
     parse_claude,
     parse_codex,
     set_claude_enabled,
     set_codex_enabled,
-)
-from coffer.domain.agent.plugin_state_extra import (
-    parse_cursor,
-    parse_openclaw,
-    parse_opencode,
-    remove_openclaw_entry,
-    remove_opencode_entry,
-    set_openclaw_enabled,
-    set_opencode_enabled,
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource, ResourceRef
@@ -135,14 +118,8 @@ class AgentPluginService:
 
         if cap.model is PluginModel.CODEX:
             out = self._list_codex(cfg, cfg_dir)
-        elif cap.model is PluginModel.CLAUDE:
+        else:  # PluginModel.CLAUDE
             out = self._list_claude(cfg, cfg_dir)
-        elif cap.model is PluginModel.CURSOR_RO:
-            out = self._list_text(cfg_dir / "extensions" / "extensions.json", parse_cursor)
-        elif cap.model is PluginModel.OPENCODE:
-            out = self._list_text(self._surface_path(cfg, cap), parse_opencode)
-        else:  # PluginModel.OPENCLAW
-            out = self._list_text(self._surface_path(cfg, cap), parse_openclaw)
 
         # Surface whether in-app uninstall can run now so the UI shows the
         # button on capability, not on agent type.
@@ -161,41 +138,6 @@ class AgentPluginService:
         """Resolve the write-surface file path from the capability's config_key."""
         assert cap.config_key is not None  # callers guard list-only models
         return spec_for(cfg.type, cap.config_key, cfg.resolved_config_dir()).path
-
-    def _list_text(
-        self,
-        path: pathlib.Path,
-        parse: Callable[[str | None], tuple[list[PluginInfo], list[MarketplaceInfo]]],
-    ) -> PluginsOut:
-        """List plugins from a single JSON file via a pure-text parser.
-
-        Used by Cursor / OpenCode / OpenClaw — none of which model a plugin
-        cache, so ``cache_present`` mirrors the install state (always True for a
-        listed entry). A parse failure degrades to an explicit ``parse_errors``
-        listing rather than raising.
-        """
-        text = self._store.read_text(path)
-        if text is None:
-            return _empty()
-        try:
-            plugins, marketplaces = parse(text)
-        except AgentConfigParseError as e:
-            return PluginsOut(
-                items=[],
-                marketplaces=[],
-                parse_errors=[ParseErrorInfo(source="config", path=str(path), error=str(e))],
-            )
-        items = [
-            PluginView(
-                id=p.id,
-                name=p.name,
-                marketplace=p.marketplace,
-                enabled=p.enabled,
-                cache_present=p.installed,
-            )
-            for p in plugins
-        ]
-        return PluginsOut(items=items, marketplaces=list(marketplaces), parse_errors=[])
 
     def _list_codex(self, cfg: AgentConfig, cfg_dir: pathlib.Path) -> PluginsOut:
         spec = spec_for(cfg.type, "config", cfg_dir)
@@ -302,20 +244,10 @@ class AgentPluginService:
             if text is None:
                 raise PluginNotFound(plugin_id)
             new_text = set_codex_enabled(text, plugin_id, enabled)
-        elif cap.model is PluginModel.CLAUDE:
+        else:  # PluginModel.CLAUDE
             # write settings.json only; create if missing
             text = self._store.read_text(spec_path) or ""
             new_text = set_claude_enabled(text, plugin_id, enabled)
-        elif cap.model is PluginModel.OPENCODE:
-            text = self._store.read_text(spec_path)
-            if text is None:
-                raise PluginNotFound(plugin_id)
-            new_text = set_opencode_enabled(text, plugin_id, enabled)
-        else:  # PluginModel.OPENCLAW
-            text = self._store.read_text(spec_path)
-            if text is None:
-                raise PluginNotFound(plugin_id)
-            new_text = set_openclaw_enabled(text, plugin_id, enabled)
 
         self._store.write_text_atomic(spec_path, new_text)
 
@@ -356,32 +288,14 @@ class AgentPluginService:
         cfg_dir = cfg.resolved_config_dir()
         spec_path = self._surface_path(cfg, cap)
 
-        if cap.model is PluginModel.CODEX:
-            await uninstall_codex(
-                store=self._store,
-                audit=self._audit,
-                dir_exists=self._dir_exists,
-                rmtree=self._rmtree,
-                name=name,
-                plugin_id=plugin_id,
-                spec_path=spec_path,
-                cfg_dir=cfg_dir,
-                actor=actor,
-            )
-            return
-
-        # OpenCode / OpenClaw — remove from the config array/block; no cache.
-        text = self._store.read_text(spec_path)
-        if text is None:
-            raise PluginNotFound(plugin_id)
-        if cap.model is PluginModel.OPENCODE:
-            new_text = remove_opencode_entry(text, plugin_id)
-        else:  # PluginModel.OPENCLAW
-            new_text = remove_openclaw_entry(text, plugin_id)
-        self._store.write_text_atomic(spec_path, new_text)
-        await self._audit.record(
-            AuditEventType.AGENT_PLUGIN_UNINSTALLED.value,
-            ref=ResourceRef("agent", name),
+        await uninstall_codex(
+            store=self._store,
+            audit=self._audit,
+            dir_exists=self._dir_exists,
+            rmtree=self._rmtree,
+            name=name,
+            plugin_id=plugin_id,
+            spec_path=spec_path,
+            cfg_dir=cfg_dir,
             actor=actor,
-            details={"plugin": plugin_id, "cache_removed": False},
         )

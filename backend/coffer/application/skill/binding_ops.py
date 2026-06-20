@@ -54,9 +54,9 @@ async def enable_skill_for_agent(
             raise SkillRiskNotAcknowledged(skill_name, cfg.scan_verdict or "high")
     # Gate delivery modes that have no on-disk folder delivery wired BEFORE any
     # filesystem work. FOLDER (own skills dir) and EXTERNAL_DIR (a Coffer-owned
-    # dir the agent scans — Hermes) are both folder-style; Cursor's rules_mdc is
-    # a recognized extension point the folder model must not mis-deliver into,
-    # so it fails explicitly (422).
+    # dir the agent scans) are both folder-style; rules_mdc is a recognized
+    # extension point the folder model must not mis-deliver into, so it fails
+    # explicitly (422).
     mode = resolve_agent_skill_delivery(service, agent)
     if not delivers_skill_folders(service, agent):
         agent_type = str(agent.config.get("type", "")) if isinstance(agent.config, dict) else ""

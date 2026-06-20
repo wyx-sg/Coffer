@@ -204,20 +204,21 @@ _交付到哪里_：`skill_delivery_mode`（`SkillDeliveryMode` —
 `skill_subpath`。skill 服务通过组合根注入的 resolver 读取该模式，resolver 返回
 普通字符串（契约 5：服务永不导入 descriptor）。
 
-| Agent       | 交付模式       | folder 目标                            | 状态                       |
-| ----------- | -------------- | -------------------------------------- | -------------------------- |
-| Claude Code | `folder`       | `<config_dir>/skills/<name>`           | 已交付                     |
-| Codex       | `folder`       | `<config_dir>/skills/<name>`           | 已交付                     |
-| OpenCode    | `folder`       | `<config_dir>/skills/<name>`           | 已交付                     |
-| OpenClaw    | `folder`       | `<config_dir>/workspace/skills/<name>` | 已交付                     |
-| Cursor      | `rules_mdc`    | —                                      | 已识别的扩展点（尚未交付） |
-| Hermes      | `external_dir` | —                                      | 已识别的扩展点（尚未交付） |
+| Agent          | 交付模式       | folder 目标                  | 状态                               |
+| -------------- | -------------- | ---------------------------- | ---------------------------------- |
+| Claude Code    | `folder`       | `<config_dir>/skills/<name>` | 已交付                             |
+| Codex          | `folder`       | `<config_dir>/skills/<name>` | 已交付                             |
+| `rules_mdc`    | —              | —                            | 保留扩展点（当前无 agent 类型使用）|
+| `external_dir` | —              | —                            | 保留扩展点（当前无 agent 类型使用）|
 
 folder 交付通过 symlink（FAT32 上回退为复制）把 master 目录链接到目标，agent 读取
-到的是规范的 `SKILL.md`（例如 OpenClaw 看到 `workspace/skills/<name>/SKILL.md`）。
-为 `rules_mdc` / `external_dir` 的 agent 启用 skill 会在任何文件系统写入之前抛出
-`SkillDeliveryUnsupported`（HTTP 422）；follow / relink 协调器会跳过这些 agent，
-因此注册、配置目录变更和策略变更流程对它们永远不会失败。
+到的是规范的 `SKILL.md`，路径为 `<config_dir>/skills/<name>/SKILL.md`。
+
+**`external_dir` 与 `rules_mdc`——保留扩展点。** 这两个 `SkillDeliveryMode` 枚举值
+作为有意保留的扩展点存在，当前没有任何 agent 类型使用。为使用这些模式的（假想）
+agent 启用 skill 会在任何文件系统写入之前抛出 `SkillDeliveryUnsupported`（HTTP 422）；
+follow / relink 协调器会跳过此类 agent，因此注册、配置目录变更和策略变更流程永远
+不会失败。
 
 ## Application 服务契约（`backend/coffer/application/skill/`）
 

@@ -25,10 +25,6 @@ from coffer.domain.distill.locations import (
 )
 from coffer.domain.distill.scrub import scrub_text
 from coffer.domain.distill.session import TranscriptMessage, TranscriptSession
-from coffer.infrastructure.distill.opencode_reader import (
-    opencode_storage_dir,
-    parse_opencode_storage,
-)
 
 log = logging.getLogger(__name__)
 
@@ -231,26 +227,12 @@ def parse_codex(lines: Iterable[str], *, source_path: str) -> TranscriptSession:
 # ---------------------------------------------------------------------------
 
 
-def _recent_first(sessions: list[TranscriptSession]) -> list[TranscriptSession]:
-    """Order sessions most-recent first; those without a timestamp sort last,
-    keeping their relative order. Used for tree-sourced agents, which can only
-    be paged in memory."""
-    with_ts = sorted(
-        (s for s in sessions if s.started_at is not None),
-        key=lambda s: s.started_at,  # type: ignore[arg-type,return-value]
-        reverse=True,
-    )
-    without_ts = [s for s in sessions if s.started_at is None]
-    return with_ts + without_ts
-
-
 class FileTranscriptReader:
     """Read-only adapter that discovers and parses agent transcript files.
 
     Implements ``TranscriptReaderPort``; wired at the composition root.
     Reads Claude Code ``~/.claude/projects/**/*.jsonl`` and
-    Codex ``~/.codex/sessions/**/*.jsonl`` (one ``.jsonl`` per session), plus
-    OpenCode's multi-file JSON storage tree via a per-agent *tree source*.
+    Codex ``~/.codex/sessions/**/*.jsonl`` (one ``.jsonl`` per session).
     """
 
     # Map agent_type_value → parser function (one .jsonl file per session).
@@ -258,25 +240,6 @@ class FileTranscriptReader:
         "claude_code": parse_claude_code,
         "codex": parse_codex,
     }
-
-    # Agents whose transcripts are NOT one-.jsonl-per-session but a storage tree
-    # joined across files. Each source ignores config_dir and reads its own
-    # (XDG-derived) location, returning fully-built sessions.
-    _TREE_SOURCES: ClassVar[dict[str, Callable[[], list[TranscriptSession]]]] = {
-        "opencode": lambda: parse_opencode_storage(opencode_storage_dir()),
-    }
-
-    def _tree_sessions(self, agent_type_value: str) -> list[TranscriptSession]:
-        source = self._TREE_SOURCES[agent_type_value]
-        try:
-            return source()
-        except Exception:
-            log.warning(
-                "transcript_reader: failed to read %s storage tree; skipping",
-                agent_type_value,
-                exc_info=True,
-            )
-            return []
 
     def _iter_files(self, agent_type_value: str, config_dir: str) -> Iterable[Path]:
         """Yield transcript file paths under the agent's sessions directory."""
@@ -300,8 +263,6 @@ class FileTranscriptReader:
         If the sessions directory does not exist, returns an empty list.
         Errors on individual files are logged and skipped.
         """
-        if agent_type_value in self._TREE_SOURCES:
-            return self._tree_sessions(agent_type_value)
         sessions: list[TranscriptSession] = []
         for path in self._iter_files(agent_type_value, config_dir):
             try:
@@ -316,17 +277,11 @@ class FileTranscriptReader:
         """Return ``(total, page)`` — the total session count and one page of
         sessions, most-recent first.
 
-        For file-per-session agents this sorts the transcript *files* by mtime
-        (a cheap ``stat``) and parses only the requested window, so listing
-        stays fast no matter how many thousand past sessions sit on disk —
-        unlike :meth:`list_sessions`, which parses every file. Tree-sourced
-        agents (whose storage can't be paged file-wise) build all sessions and
-        slice in memory.
+        Sorts transcript *files* by mtime (a cheap ``stat``) and parses only
+        the requested window, so listing stays fast no matter how many thousand
+        past sessions sit on disk — unlike :meth:`list_sessions`, which parses
+        every file.
         """
-        if agent_type_value in self._TREE_SOURCES:
-            ordered = _recent_first(self._tree_sessions(agent_type_value))
-            return len(ordered), ordered[offset : offset + limit]
-
         files: list[tuple[float, Path]] = []
         for path in self._iter_files(agent_type_value, config_dir):
             try:
@@ -350,11 +305,6 @@ class FileTranscriptReader:
         Raises KeyError if no matching session is found.
         Raises UnsupportedAgentTypeError for unknown agent types.
         """
-        if agent_type_value in self._TREE_SOURCES:
-            for session in self._tree_sessions(agent_type_value):
-                if session.session_id == session_id:
-                    return session
-            raise KeyError(f"No transcript session with id={session_id!r} for {agent_type_value!r}")
         for path in self._iter_files(agent_type_value, config_dir):
             try:
                 session = self._parse_file(agent_type_value, path)

@@ -133,9 +133,9 @@ async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -
     for a in await service._rs.list(kind="agent"):
         if not a.enabled:
             continue
-        # Non-folder delivery agents (Cursor's rules_mdc) can't receive folder
-        # deliveries; skip auto-bind audibly rather than raise per-agent.
-        # FOLDER and EXTERNAL_DIR (Hermes) agents both proceed.
+        # Non-folder delivery agents (rules_mdc — recognized extension point)
+        # can't receive folder deliveries; skip auto-bind audibly rather than
+        # raise per-agent. FOLDER and EXTERNAL_DIR agents both proceed.
         if not delivers_skill_folders(service, a):
             await audit_autobind_skipped(
                 service=service,
@@ -200,9 +200,10 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
         agent = await service._rs.get(ResourceRef("agent", agent_name))
     except CofferError:
         return
-    # Non-folder agents (Cursor's rules_mdc) have no folder bindings to move;
-    # skip rather than crash on config-dir-change reconciliation. FOLDER and
-    # EXTERNAL_DIR (Hermes) agents relink via their resolved target dir.
+    # Non-folder agents (rules_mdc — recognized extension point) have no folder
+    # bindings to move; skip rather than crash on config-dir-change
+    # reconciliation. FOLDER and EXTERNAL_DIR agents relink via their resolved
+    # target dir.
     if not delivers_skill_folders(service, agent):
         return
     new_skill_dir = service._resolve_agent_skill_dir(agent)

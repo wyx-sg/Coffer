@@ -156,9 +156,9 @@ class UnmanagedSkillInvalid(CofferError):  # noqa: N818
 
 
 class SkillDeliveryUnsupported(CofferError):  # noqa: N818
-    """The agent's skill-delivery mode is a recognized but not-yet-delivered
-    extension point (Cursor ``rules_mdc`` / Hermes ``external_dir``). Coffer
-    refuses to mis-deliver via the folder model. Maps to 422."""
+    """The agent's skill-delivery mode is a recognized extension point with no
+    current agent type (``rules_mdc`` / ``external_dir``). Coffer refuses to
+    mis-deliver via the folder model. Maps to 422."""
 
     code = "SKILL_DELIVERY_UNSUPPORTED"
 

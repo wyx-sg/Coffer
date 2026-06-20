@@ -19,12 +19,6 @@ class PluginModel(StrEnum):
     CLAUDE = "claude"
     #: Codex — ``[plugins."<id>"]`` tables in config.toml + a cache dir.
     CODEX = "codex"
-    #: Cursor — read-only VSIX list from ``extensions.json`` (array).
-    CURSOR_RO = "cursor_ro"
-    #: OpenCode — the ``plugin`` array in opencode.json.
-    OPENCODE = "opencode"
-    #: OpenClaw — the ``plugins`` block in openclaw.json.
-    OPENCLAW = "openclaw"
 
 
 class UninstallStrategy(StrEnum):
