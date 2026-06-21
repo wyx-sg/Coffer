@@ -28,16 +28,18 @@ paths:
     get:
       summary: List transcript sessions for an agent
       description: |
-        Returns one page of sessions, most-recent first, plus the total count.
-        Only the requested window is parsed off disk, so agents with thousands
-        of past sessions list quickly.
+        Returns one page of sessions plus the matched total. Supports
+        server-side search (title or project path), filtering (exact project
+        path; started_at time range), and sorting (started_at or
+        last_activity_at, asc/desc). Backed by an in-process mtime-aware cache,
+        so listing an agent with thousands of past sessions stays responsive.
       operationId: listTranscripts
       tags: [transcripts]
       parameters:
         - in: query
           name: limit
           required: false
-          description: Max sessions to return (most-recent first).
+          description: Max sessions to return in this page.
           schema:
             type: integer
             minimum: 1
@@ -46,11 +48,53 @@ paths:
         - in: query
           name: offset
           required: false
-          description: Number of (most-recent-first) sessions to skip.
+          description: Number of (sorted) sessions to skip before this page.
           schema:
             type: integer
             minimum: 0
             default: 0
+        - in: query
+          name: q
+          required: false
+          description: Case-insensitive substring matched against title or project path.
+          schema:
+            type: string
+        - in: query
+          name: project
+          required: false
+          description: Filter to sessions whose project_path equals this value exactly.
+          schema:
+            type: string
+        - in: query
+          name: started_after
+          required: false
+          description: Keep only sessions whose started_at is at or after this instant.
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: started_before
+          required: false
+          description: Keep only sessions whose started_at is at or before this instant.
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: sort
+          required: false
+          description: Sort key.
+          schema:
+            type: string
+            enum: [started_at, last_activity_at, message_count]
+            default: last_activity_at
+        - in: query
+          name: order
+          required: false
+          description: Sort direction.
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
       responses:
         "200":
           description: OK
@@ -130,23 +174,38 @@ components:
   schemas:
     TranscriptSessionSummary:
       type: object
-      required: [session_id, message_count]
+      required: [session_id, message_count, source_path]
       properties:
         session_id:
           type: string
           description: Unique session identifier derived from the transcript file.
+        title:
+          type: string
+          nullable: true
+          description: |
+            Human-readable session title — the agent's own title (Claude Code
+            ai-title) when present, else the first real user message, truncated.
+            Null when none can be derived.
         project_path:
           type: string
           nullable: true
           description: Absolute path to the project the session was recorded in.
         message_count:
           type: integer
-          description: Number of conversation turns (user + assistant messages).
+          description: Number of conversation turns parsed from the transcript.
         started_at:
           type: string
           format: date-time
           nullable: true
-          description: Timestamp of the first message in the session, if available.
+          description: Timestamp of the first event in the session, if available.
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last event in the session, if available.
+        source_path:
+          type: string
+          description: Absolute path to the session's .jsonl file (powers reveal-in-file-manager).
 
     TranscriptSessionListResponse:
       type: object

@@ -302,6 +302,26 @@ Coffer 读取 `~/.claude/projects/`、`~/.codex/sessions/` 以及 OpenCode 的�
 提炼复用现有的 memory 写入路径：每条写入的事实都会触发 `memory_added` 事件，并带上其
 `origin_session_id`。不会发出提炼专属的审计事件。
 
+### 对话会话摘要（历史列表视图）
+
+对话**历史**面列出某 agent 的过往会话，供浏览与提炼。摘要是从每个会话 `.jsonl`
+解析出的只读投影 —— 不持久化任何内容（Spec 004 只读不变量）：
+
+| 字段               | 来源                                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `session_id`       | Claude Code 的 `sessionId` / Codex 的 `payload.id`；回退到文件路径。                                          |
+| `title`            | Claude Code 的 `ai-title`（最新者胜），否则第一条*真实*用户消息（跳过前导/shell/斜杠命令）截断；可为 null。   |
+| `project_path`     | Claude Code 顶层 `cwd` / Codex 的 `session_meta.payload.cwd`。                                                |
+| `message_count`    | 对话轮次计数 —— Codex 仅计 `response_item` 消息（绝不计重复的 `event_msg` 事件）。                            |
+| `started_at`       | 第一个事件时间戳。                                                                                            |
+| `last_activity_at` | 最后一个事件时间戳。                                                                                          |
+| `source_path`      | 会话 `.jsonl` 的绝对路径（经共享 `FileActions` 驱动在文件管理器中显示）。                                     |
+
+列表端点应用服务端搜索（标题或项目路径）、筛选（精确项目；`started_at` 范围）与排序
+（`started_at` / `last_activity_at` / `message_count`，升/降序），以 `limit`/`offset`
+分页。读取器保留一份进程内、按 mtime 键控的已解析摘要缓存，使含数千会话的 agent
+仅重新解析 mtime 变化的文件。
+
 ## 线上契约（REST）
 
 位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall）。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写入事实的途径；桌面/web UI 是只读视图。读 DTO 携带磁盘真相：`FactOut` 带事实的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使只读视图能提供「在外部编辑器打开 / 显示 / 复制路径」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。

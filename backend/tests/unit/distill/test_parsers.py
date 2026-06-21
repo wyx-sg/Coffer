@@ -87,10 +87,183 @@ def test_parse_codex_list_of_blocks_content() -> None:
     assert "make release" in s.messages[1].text
 
 
+def test_parse_codex_real_rollout_payload_format() -> None:
+    """Real Codex rollout wraps every event in a ``payload`` envelope.
+
+    cwd/id live in ``session_meta.payload``; turns are ``response_item`` events
+    whose ``payload.type == "message"``. The duplicate ``event_msg``
+    user_message/agent_message UI events MUST NOT be double-counted.
+    """
+    lines = [
+        json.dumps(
+            {
+                "timestamp": "2026-05-10T16:55:56Z",
+                "type": "session_meta",
+                "payload": {"id": "sess-1", "cwd": "/Users/x/proj"},
+            }
+        ),
+        json.dumps(
+            {
+                "timestamp": "2026-05-10T16:56:00Z",
+                "type": "event_msg",
+                "payload": {"type": "task_started"},
+            }
+        ),
+        json.dumps(
+            {
+                "timestamp": "2026-05-10T16:56:01Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "add a retry helper"}],
+                },
+            }
+        ),
+        json.dumps(
+            {
+                "timestamp": "2026-05-10T16:56:05Z",
+                "type": "event_msg",
+                "payload": {"type": "user_message", "message": "add a retry helper"},
+            }
+        ),
+        json.dumps(
+            {
+                "timestamp": "2026-05-10T16:56:30Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Done, added retry()."}],
+                },
+            }
+        ),
+        json.dumps(
+            {
+                "timestamp": "2026-05-10T16:56:31Z",
+                "type": "event_msg",
+                "payload": {"type": "agent_message", "message": "Done, added retry()."},
+            }
+        ),
+    ]
+    s = parse_codex(lines, source_path="/x.jsonl")
+    assert s.project_path == "/Users/x/proj"
+    assert s.session_id == "sess-1"
+    assert [m.role for m in s.messages] == ["user", "assistant"]  # event_msg not double-counted
+    assert s.message_count == 2
+    assert "retry helper" in s.messages[0].text
+    assert s.title == "add a retry helper"
+    assert s.started_at is not None
+    assert s.last_activity_at is not None
+    assert s.last_activity_at > s.started_at
+
+
+def test_parse_codex_title_skips_noise_preamble() -> None:
+    """Codex title skips environment/instructions blocks and slash commands,
+    taking the first *real* user message — without dropping those turns from
+    the message list."""
+    lines = [
+        json.dumps({"type": "session_meta", "payload": {"id": "s2", "cwd": "/repo"}}),
+        json.dumps(
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "<environment_context>\n/repo\n</environment_context>",
+                        }
+                    ],
+                },
+            }
+        ),
+        json.dumps(
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "<command-name>/clear</command-name>"}
+                    ],
+                },
+            }
+        ),
+        json.dumps(
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "修复登录重定向 bug"}],
+                },
+            }
+        ),
+    ]
+    s = parse_codex(lines, source_path="/y.jsonl")
+    assert s.title == "修复登录重定向 bug"
+    assert s.message_count == 3  # only title-derivation skips noise; turns are kept
+
+
+def test_parse_claude_ai_title_latest_wins_and_last_activity() -> None:
+    """Claude Code stores its own ``ai-title`` (updated over time); latest wins,
+    and last_activity_at tracks the final timestamped event."""
+    lines = [
+        json.dumps(
+            {
+                "type": "user",
+                "cwd": "/repo",
+                "sessionId": "c1",
+                "timestamp": "2026-06-01T00:00:00Z",
+                "message": {"role": "user", "content": "start"},
+            }
+        ),
+        json.dumps({"type": "ai-title", "aiTitle": "Initial title", "sessionId": "c1"}),
+        json.dumps(
+            {
+                "type": "assistant",
+                "timestamp": "2026-06-01T00:05:00Z",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "ok"}]},
+            }
+        ),
+        json.dumps({"type": "ai-title", "aiTitle": "Refine auth flow", "sessionId": "c1"}),
+    ]
+    s = parse_claude_code(lines, source_path="/c.jsonl")
+    assert s.title == "Refine auth flow"
+    assert s.started_at is not None
+    assert s.last_activity_at is not None
+    assert s.last_activity_at > s.started_at
+
+
+def test_parse_claude_title_falls_back_to_first_user_message() -> None:
+    """With no ai-title line, the title falls back to the first real user msg."""
+    lines = [
+        json.dumps(
+            {
+                "type": "user",
+                "cwd": "/repo",
+                "sessionId": "c2",
+                "timestamp": "2026-06-01T00:00:00Z",
+                "message": {"role": "user", "content": "Refactor the payment module"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "sure"}]},
+            }
+        ),
+    ]
+    s = parse_claude_code(lines, source_path="/d.jsonl")
+    assert s.title == "Refactor the payment module"
+
+
 def test_parse_iso_bare_timestamp_is_tz_aware() -> None:
     """_parse_iso makes bare timestamps tz-aware (UTC) to prevent mixed-tz comparison."""
 
-    from coffer.infrastructure.distill.transcript_reader import _parse_iso
+    from coffer.infrastructure.distill.transcript_parsers import _parse_iso
 
     dt = _parse_iso("2026-01-01T10:00:00")  # no offset
     assert dt is not None
