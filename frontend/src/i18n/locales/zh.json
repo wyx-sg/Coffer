@@ -866,7 +866,7 @@
       "locationSkills": "skills 目录",
       "locationAgentsDir": "~/.agents/skills",
       "adoptSuccess": "已纳入主库：{{name}}",
-      "unmanagedNoMatch": "没有匹配的非托管 Skill。"
+      "unmanagedEmpty": "该 Agent 没有非托管 Skill。"
     },
     "mcpTab": {
       "notInstalled": "尚未在该 Agent 上安装 Coffer MCP —— 安装后可在此暴露 Coffer 的 MCP 服务器。",
