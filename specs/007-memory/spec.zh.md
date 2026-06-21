@@ -375,6 +375,14 @@ cwd 没有可恢复的现场。
 - **FR-035**：系统 MUST 提供一个**自动 session-end organize 触发器**，在某 memory store 静默时**自动、在后台**触发 `organize` pass（FR-027）—— 在没有 per-agent 断连信号的情况下近似“session end”。它由 memory 写入通知钩子驱动：每次 memory 写入都会（重新）武装一个**去抖（debounced）**定时器；当配置的静默延迟在无更多写入下走完，organizer 作为后台任务对发生变化的 store 运行。该触发器 MUST **保守且非阻塞**：(a) 它是**可选项（opt-in）**、由环境开关控制且**默认关闭**（绝不发起意外的内部 LLM 调用），与可选的自动备份 worker 一致；(b) 后台 pass MUST 绝不阻塞或破坏 daemon 关停 —— 关停时任何挂起的定时器被**取消**（未触发的 inbox 原样留给之后的静默 pass 或显式触发；不丢任何东西，因为 `recall` 本就覆盖 inbox 且 `organize` 幂等）；(c) 后台 pass 的失败 MUST 被吞掉并记录日志，绝不上抛给写入方或中断 daemon；(d) 未配置内部 connection 时该 pass 是干净 no-op（FR-027）。它**不引入新的 REST/CLI 面**（是对既有 organizer 的内部触发），并复用 `memory_organized` 审计。langchain/langgraph 限制（Contract 9）不变：触发器位于 `application`/`surfaces`，只通过已接线的 organizer 触达 LLM。
 - **FR-036**：系统 MUST 提供一个**过程性 `rules` lane** —— 每个 memory store（全局 + 每项目）一份 `rules/rules.md`，持有“要这样做 / 别那样做”的行为规则。rules lane 是**由 organizer 分类写入的，绝非 agent 显式参数**：在 `organize`（FR-027/028）期间，organizer 每条目的单次 LLM 调用 MAY 额外把某 inbox 条目分类为 **rule**；rule 条目被**追加**到 `rules/rules.md`（仅在追加成功后才排空该 inbox 条目），而不是合并进 `knowledge/<topic>.md` 主题文档，且 `organize` 的结果/审计报告一个 `rules_appended` 计数。`rules/` lane 位于 store 根目录（`knowledge/` 的同级，与 `handoff/`、`superseded/` 一样），因而**自动排除在 `recall` 之外**（recall glob 与对账器只下探 `knowledge/`；grep 守卫只保留 `knowledge/` 命中）—— rules 由**环境式 session-start 注入**交付，而非 `recall`。该 lane 是**真相源、DO 同步**（与 `handoff/`/主题文档一样；它不是派生/机器本地文件）。系统 MUST 把存储的 rules 只读暴露给注入面：`GET /api/v1/memory_stores/{name}/rules` 与 `coffer memory rules <name>` 返回 rules 文本（无 rule 时返回空/`null` 正文，绝不报错）。把这些 rules 作为上下文注入到每个受管 agent 的 **session-start 注入**（ADR-026：只注入、绝不原生写文件）是**之后的独立切片（PR3b）** —— 本切片落地 lane、分类与读取面。
 
+**Journal 记忆带（情景 / episodic）**
+
+### Journal 记忆带(情景 / episodic)
+
+- **FR-040:** Coffer SHALL 提供按项目的 `journal` 记忆带,把情景事件以追加式、按时间分片的 markdown 文件存储(`projects/<ulid>/journal/<YYYY-MM>.md`)。没有全局 journal。
+- **FR-041:** Journal 文件 SHALL 纳入同步镜像作为真相源历史(同 `rules/`、`superseded/`)。(Journal 进入 `recall` 的需求由 journal 索引切片规定;本切片只交付存储 + 服务,journal 暂不被检索。)
+- **FR-042:** Coffer SHALL 暴露内部 `JournalService.append(cwd, body, actor)` 与 `read_recent(cwd, limit)`。在 git 项目外 append 抛 `ScopeUnresolved`;项目外读取返回空列表。`journal_append` 审计条目只记录 `char_size`,绝不记录正文。
+
 **Transcript history（对话历史）**
 
 - **FR-037**：对话记录读取器 MUST 解析每种受支持 agent 的*真实*磁盘会话格式。**Codex** rollout 文件（`~/.codex/sessions/**/*.jsonl`）把每个事件包在 `payload` 信封里：工作目录与会话 id 来自 `session_meta.payload.cwd`/`payload.id`，对话轮次是 `response_item` 事件且其 `payload.type == "message"`（role + 带类型的 `*_text` 内容块）。读取器 MUST 仅按这些 `response_item` 消息计数轮次 —— 并行的 `event_msg` 的 `user_message`/`agent_message` UI 事件 MUST NOT 被重复计数 —— 并 MUST 保持防御性（跳过无法识别/非 JSON 的行，绝不因单行坏数据抛错）。**Claude Code** 的扁平顶层格式不变。（本切片之前，Codex 解析器读取真实格式从不携带的顶层字段，导致每个 Codex 会话都列为 0 条消息、无项目。）
