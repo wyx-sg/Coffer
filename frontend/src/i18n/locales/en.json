@@ -530,13 +530,15 @@
       "title": "Daemon offline",
       "body": "The coffer daemon stopped responding. Capability lists, tool calls, and registrations will fail until it restarts.",
       "notReadyTitle": "Daemon not running",
-      "notReadyBody": "Coffer's background service isn't reachable yet. It usually starts on its own — reload this page, and if the problem continues, restart Coffer.",
+      "notReadyBody": "Coffer's background service isn't reachable yet. It usually starts on its own — click Retry, and if the problem continues, restart Coffer.",
       "outOfDateTitle": "Daemon out of date",
       "outOfDateBody": "This app reused an older background service left running from a previous version. Restart the daemon so the app and daemon run the same version.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
       "reconnectFailed": "The daemon restarted, but the app could not reconnect to it: {{message}}. Quit and reopen Coffer.",
-      "reload": "Reload"
+      "retry": "Retry",
+      "retrying": "Retrying…",
+      "webRestartHint": "The browser can't restart it — run this in your terminal:"
     }
   },
   "notFound": {

@@ -62,6 +62,16 @@ export function DaemonOfflineBanner() {
     onSuccess: () => qc.invalidateQueries(),
   });
 
+  // Web recovery: a *soft* retry that refetches the daemon status (and every
+  // cached query) in place. NOT window.location.reload() — a hard reload
+  // navigates to the page host (the Vite dev server, or the daemon-served
+  // bundle); if that host is itself down the browser shows ERR_CONNECTION_REFUSED
+  // and the whole app goes blank. Refetching recovers when the daemon returns
+  // and otherwise just leaves the banner up.
+  const reload = useMutation({
+    mutationFn: () => qc.invalidateQueries(),
+  });
+
   // The daemon is out of date when it's reachable (no query error) but reports
   // a stale version. Skew only matters while the daemon is actually answering.
   const isStale = !isError && isOutOfDate === true;
@@ -124,14 +134,30 @@ export function DaemonOfflineBanner() {
               {restartError ? <p className="text-xs text-destructive">{restartError}</p> : null}
             </div>
           ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => window.location.reload()}
-              data-testid="daemon-banner-reload"
-            >
-              {t("daemon.offline.reload")}
-            </Button>
+            <div className="space-y-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => reload.mutate()}
+                disabled={reload.isPending}
+                data-testid="daemon-banner-reload"
+              >
+                {reload.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    {t("daemon.offline.retrying")}
+                  </>
+                ) : (
+                  t("daemon.offline.retry")
+                )}
+              </Button>
+              {/* The browser can't kill/respawn the daemon — Retry only re-checks
+                  the connection. Tell the user how to actually bring it back. */}
+              <p className="text-xs text-foreground/60">
+                {t("daemon.offline.webRestartHint")}{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono">coffer daemon start</code>
+              </p>
+            </div>
           )}
         </AlertDescription>
       </Alert>
