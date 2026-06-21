@@ -1,0 +1,177 @@
+"""`coffer provider …` — provider-profile CLI commands (spec 011)."""
+
+from __future__ import annotations
+
+import json as _json
+
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from coffer.surfaces.cli import _client as _cli_client
+
+app = typer.Typer(help="Manage provider profiles and switch the active provider")
+_console = Console()
+
+
+@app.command("add")
+def add(
+    name: str = typer.Argument(..., help="Profile name"),
+    wire_format: str = typer.Option(..., "--wire", help="Wire format: anthropic | openai"),
+    base_url: str = typer.Option(..., "--base-url", help="Upstream endpoint base URL"),
+    model: str = typer.Option(..., "--model", help="Primary model id"),
+    fast_model: str | None = typer.Option(None, "--fast-model", help="Fast model (anthropic)"),
+    wire_api: str | None = typer.Option(None, "--wire-api", help="Codex wire_api: chat|responses"),
+    secret: str | None = typer.Option(None, "--secret", help="API key (stored encrypted)"),
+    credential_ref: str | None = typer.Option(
+        None, "--credential-ref", help="Reuse an existing credential ref instead of --secret"
+    ),
+) -> None:
+    """Create a provider profile. Supply exactly one of --secret / --credential-ref."""
+    body: dict[str, object] = {
+        "name": name,
+        "wire_format": wire_format,
+        "base_url": base_url,
+        "model": model,
+    }
+    if fast_model is not None:
+        body["fast_model"] = fast_model
+    if wire_api is not None:
+        body["wire_api"] = wire_api
+    if secret is not None:
+        body["secret_value"] = secret
+    if credential_ref is not None:
+        body["credential_ref"] = credential_ref
+
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post("/providers", json=body)
+        if r.status_code in (400, 422):
+            typer.echo(f"invalid provider config: {r.text}", err=True)
+            raise typer.Exit(6)
+        if r.status_code == 409:
+            typer.echo(f"provider {name!r} already exists", err=True)
+            raise typer.Exit(5)
+        r.raise_for_status()
+    data = r.json()
+    typer.echo(f"added provider {data['name']} ({data['wire_format']})")
+
+
+@app.command("list")
+def list_providers(output_json: bool = typer.Option(False, "--json")) -> None:
+    """List all provider profiles."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/providers")
+        r.raise_for_status()
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    table = Table(title="Providers")
+    for col in ("name", "wire", "base_url", "model", "active"):
+        table.add_column(col)
+    for p in data["providers"]:
+        table.add_row(
+            p["name"],
+            p["wire_format"],
+            p["base_url"],
+            p["model"],
+            "yes" if p["is_active"] else "",
+        )
+    _console.print(table)
+
+
+@app.command("show")
+def show(name: str = typer.Argument(..., help="Profile name")) -> None:
+    """Show one provider profile."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get(f"/providers/{name}")
+        if r.status_code == 404:
+            typer.echo(f"provider {name!r} not found", err=True)
+            raise typer.Exit(4)
+        r.raise_for_status()
+    typer.echo(_json.dumps(r.json(), indent=2))
+
+
+@app.command("edit")
+def edit(
+    name: str = typer.Argument(..., help="Profile name"),
+    base_url: str | None = typer.Option(None, "--base-url"),
+    model: str | None = typer.Option(None, "--model"),
+    fast_model: str | None = typer.Option(None, "--fast-model"),
+    wire_api: str | None = typer.Option(None, "--wire-api"),
+    secret: str | None = typer.Option(None, "--secret", help="Rotate the stored API key"),
+) -> None:
+    """Edit a provider profile (wire_format / credential_ref are immutable)."""
+    patch: dict[str, object] = {}
+    if base_url is not None:
+        patch["base_url"] = base_url
+    if model is not None:
+        patch["model"] = model
+    if fast_model is not None:
+        patch["fast_model"] = fast_model
+    if wire_api is not None:
+        patch["wire_api"] = wire_api
+    if secret is not None:
+        patch["secret_value"] = secret
+    if not patch:
+        typer.echo("nothing to update — specify at least one option", err=True)
+        raise typer.Exit(6)
+
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.patch(f"/providers/{name}", json=patch)
+        if r.status_code == 404:
+            typer.echo(f"provider {name!r} not found", err=True)
+            raise typer.Exit(4)
+        if r.status_code in (400, 422):
+            typer.echo(f"invalid update: {r.text}", err=True)
+            raise typer.Exit(6)
+        r.raise_for_status()
+    typer.echo(f"updated provider {name}")
+
+
+@app.command("rm")
+def rm(name: str = typer.Argument(..., help="Profile name")) -> None:
+    """Remove a provider profile."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.delete(f"/providers/{name}")
+        if r.status_code == 404:
+            typer.echo(f"provider {name!r} not found", err=True)
+            raise typer.Exit(4)
+        r.raise_for_status()
+    typer.echo(f"removed provider {name}")
+
+
+@app.command("switch")
+def switch(name: str = typer.Argument(..., help="Profile to activate")) -> None:
+    """Switch: make this profile active for its wire and write native config."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/providers/{name}/activate")
+        if r.status_code == 404:
+            typer.echo(f"provider {name!r} not found", err=True)
+            raise typer.Exit(4)
+        r.raise_for_status()
+    data = r.json()
+    projected = ", ".join(data["projected"]) or "(no matching agent)"
+    typer.echo(f"switched to {data['activated']} [{data['wire_format']}] → {projected}")
+
+
+@app.command("key")
+def key(
+    wire: str = typer.Option(..., "--wire", help="Wire format: anthropic | openai"),
+) -> None:
+    """Print the active provider's API key for a wire (Claude apiKeyHelper)."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get(f"/providers/active-key/{wire}")
+        if r.status_code == 404:
+            typer.echo(f"no active provider for wire {wire!r}", err=True)
+            raise typer.Exit(4)
+        r.raise_for_status()
+    # Raw value only — apiKeyHelper consumes stdout as the token.
+    typer.echo(r.json()["value"])

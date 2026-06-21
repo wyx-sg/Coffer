@@ -104,6 +104,9 @@ _STATUS: dict[str, int] = {
     "SYNC_GIT_FAILED": 502,
     "SYNC_SERIALIZATION_INVALID": 422,
     "MASTER_KEY_FILE_INVALID": 422,
+    # provider switching (spec 011)
+    "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
+    "NO_ACTIVE_PROVIDER": 404,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a

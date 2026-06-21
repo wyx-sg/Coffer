@@ -1,0 +1,433 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Provider Switching API
+  version: "0.1.0"
+  description: |
+    Provider registry endpoints. Merged into the main Coffer Management API at
+    runtime; this document scopes only the provider-specific routes added by
+    the 011-provider-switching spec.
+
+    All routes use the same `X-Coffer-Token` authentication from
+    `specs/001-mcp-gateway/contracts/api.openapi.yaml`.
+
+    Hand-written; NOT contract-test-gated. Sync with the implementation manually.
+
+    Security note: `ProviderOut` never includes the raw secret. `credential_ref`
+    and `is_active` are always present.
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "8000"
+
+security:
+  - cofferToken: []
+
+tags:
+  - name: providers
+    description: Provider profile registry and activation
+
+paths:
+  /providers:
+    get:
+      tags: [providers]
+      operationId: listProviders
+      summary: List all provider profiles
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+    post:
+      tags: [providers]
+      operationId: createProvider
+      summary: Create a new provider profile
+      description: |
+        Exactly one credential source must be supplied:
+        - `secret_value`: the raw API key — stored to the Fernet vault under
+          `provider/<name>/key` and kept only as a `credential_ref`.
+        - `credential_ref`: reuse an existing vault ref.
+        Supplying both or neither is rejected with 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderCreateRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /providers/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Provider profile name (unique within kind).
+
+    get:
+      tags: [providers]
+      operationId: getProvider
+      summary: Get a single provider profile
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+    patch:
+      tags: [providers]
+      operationId: updateProvider
+      summary: Update a provider profile
+      description: |
+        All fields are optional. Supplying `secret_value` rotates the stored
+        secret (overwrites the vault entry at the existing `credential_ref`).
+        `wire_format` and `credential_ref` are immutable (identity) — change
+        them by recreating the profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderPatchRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+    delete:
+      tags: [providers]
+      operationId: deleteProvider
+      summary: Delete a provider profile
+      description: |
+        If the profile owns its `credential_ref` (no other profile cites it),
+        the Fernet vault entry is also deleted. Guarded by
+        `find_credential_citations`.
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /providers/{name}/activate:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Provider profile name to activate.
+
+    post:
+      tags: [providers]
+      operationId: activateProvider
+      summary: Activate (switch to) a provider profile
+      description: |
+        Sets this profile as the active one for its `wire_format` (at most one
+        active per wire at any time). Atomically clears `is_active` on all
+        other profiles of the same `wire_format`.
+
+        For each ENABLED registered agent whose native wire matches the
+        profile's `wire_format`, projects (writes native config):
+        - `anthropic` → `~/.claude/settings.json` (apiKeyHelper + env keys)
+        - `openai` → `~/.codex/config.toml` (model + model_providers.coffer)
+
+        If no matching agent is registered, the profile is still activated and
+        the response carries the agent in `skipped` — NOT an error.
+
+        Emits a `PROVIDER_SWITCHED` audit event with details
+        `{from, to, wire_format, agents: [...projected...]}`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivateOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /providers/active-key/{wire}:
+    parameters:
+      - in: path
+        name: wire
+        required: true
+        schema: { type: string, enum: [anthropic, openai] }
+        description: Wire format whose active profile's key to resolve.
+
+    get:
+      tags: [providers]
+      operationId: activeProviderKey
+      summary: Resolve the active provider's API key for a wire format
+      description: |
+        Returns the decrypted API key of the active profile for `wire`, over the
+        local token-protected daemon API. This is what Claude Code's
+        `apiKeyHelper = "coffer provider key --wire anthropic"` invokes, so the
+        raw key never has to be written into `settings.json`. Not audited —
+        `apiKeyHelper` polls it frequently. 404 when no profile is active for
+        that wire.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActiveKeyOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  schemas:
+
+    WireFormat:
+      type: string
+      enum: [anthropic, openai]
+      description: |
+        Determines which native agent this profile projects to:
+        - `anthropic` → Claude Code (`~/.claude/settings.json`)
+        - `openai` → Codex (`~/.codex/config.toml`)
+
+    WireApi:
+      type: string
+      enum: [chat, responses]
+      description: >-
+        Codex wire API variant. `chat` = Chat Completions;
+        `responses` = Responses API. Ignored for anthropic wire.
+
+    ProviderOut:
+      type: object
+      required:
+        - name
+        - wire_format
+        - base_url
+        - credential_ref
+        - model
+        - is_active
+        - created_at
+        - updated_at
+      description: >-
+        A provider profile. Never includes the raw secret. `credential_ref`
+        and `is_active` are always present.
+      properties:
+        name:
+          type: string
+          description: Profile name (unique within kind `provider`).
+        wire_format:
+          $ref: "#/components/schemas/WireFormat"
+        base_url:
+          type: string
+          description: The upstream LLM endpoint URL.
+        credential_ref:
+          type: string
+          description: >-
+            Fernet vault reference for the API key.
+            Pattern: `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`.
+            Typically `provider/<name>/key` for an owned secret.
+        model:
+          type: string
+          description: Primary model ID.
+        fast_model:
+          type: string
+          nullable: true
+          description: >-
+            Fast/small model ID. anthropic only (`ANTHROPIC_SMALL_FAST_MODEL`).
+            Null or absent for openai.
+        wire_api:
+          $ref: "#/components/schemas/WireApi"
+        is_active:
+          type: boolean
+          description: >-
+            Whether this is the active profile for its wire_format. At most
+            one profile per wire_format has is_active=true.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProviderCreateRequest:
+      type: object
+      required:
+        - name
+        - wire_format
+        - base_url
+        - model
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Profile name; must pass `validate_name`.
+        wire_format:
+          $ref: "#/components/schemas/WireFormat"
+        base_url:
+          type: string
+          description: The upstream LLM endpoint URL.
+        model:
+          type: string
+          description: Primary model ID.
+        fast_model:
+          type: string
+          nullable: true
+          description: Fast/small model ID (anthropic only).
+        wire_api:
+          $ref: "#/components/schemas/WireApi"
+        credential_ref:
+          type: string
+          nullable: true
+          description: >-
+            Reuse an existing vault ref. Mutually exclusive with
+            `secret_value`. Exactly one must be supplied.
+        secret_value:
+          type: string
+          nullable: true
+          description: >-
+            Raw API key. Stored to the vault under `provider/<name>/key`.
+            Mutually exclusive with `credential_ref`. Exactly one must be
+            supplied. Never echoed in any response.
+
+    ProviderPatchRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        All fields optional. `wire_format` and `credential_ref` are immutable
+        and cannot be patched.
+      properties:
+        base_url:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        fast_model:
+          type: string
+          nullable: true
+          description: Pass null to remove `ANTHROPIC_SMALL_FAST_MODEL` from settings.
+        wire_api:
+          $ref: "#/components/schemas/WireApi"
+        secret_value:
+          type: string
+          nullable: true
+          description: >-
+            Rotate the stored secret. Overwrites the vault entry at the
+            current `credential_ref`. Never echoed in any response.
+
+    ActivateOut:
+      type: object
+      required: [activated, wire_format, projected, skipped]
+      description: Result of a successful activate operation.
+      properties:
+        activated:
+          type: string
+          description: Name of the profile that is now active.
+        wire_format:
+          $ref: "#/components/schemas/WireFormat"
+        projected:
+          type: array
+          items: { type: string }
+          description: Agent names whose native config was updated.
+        skipped:
+          type: array
+          items: { type: string }
+          description: >-
+            Agent type(s) matching this wire format that have no registered
+            enabled agent to project into. Not an error — the profile is still
+            activated. (A genuine native-config write failure aborts the switch
+            with a 5xx and leaves the registry unchanged, rather than skipping.)
+
+    ProviderListOut:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items: { $ref: "#/components/schemas/ProviderOut" }
+
+    ActiveKeyOut:
+      type: object
+      required: [value]
+      description: >-
+        The decrypted API key of the active profile for a wire format, served
+        for Claude Code's apiKeyHelper. Never logged or audited.
+      properties:
+        value:
+          type: string
+          description: The decrypted provider API key.
+
+    ErrorOut:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code.
+        message:
+          type: string
+          description: Human-readable description.
+        details:
+          type: object
+          additionalProperties: true
+          description: Optional structured error details.
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid X-Coffer-Token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    BadRequest:
+      description: Malformed request body or query parameters
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    NotFound:
+      description: Provider profile not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    Conflict:
+      description: A provider with this name already exists
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    UnprocessableEntity:
+      description: |
+        Validation failure. Common cases:
+        - Unknown `wire_format`
+        - Both `secret_value` and `credential_ref` supplied (or neither)
+        - `credential_ref` pattern violation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    InternalError:
+      description: >-
+        Server error during projection (e.g. config file write failed).
+        The profile's `is_active` state reflects the transaction outcome;
+        check the audit log for details.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }

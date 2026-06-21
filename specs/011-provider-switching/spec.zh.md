@@ -1,0 +1,356 @@
+# 功能规范：Provider Switching
+
+> English: [spec.md](./spec.md)
+
+**Feature Branch**: `feature/G9-provider-switching`
+**Created**: 2026-06-21
+**Status**: Draft
+
+## 一句话总结
+
+**provider 注册表**让用户只需配置一次 LLM provider（名称、wire 格式、base URL、加密凭证、模型），并将该配置投影到对应 agent 的本地配置文件中。相比 `claude switch` 或各工具的独立脚本，Coffer 的优势在于统一注册表加治理层——Fernet 加密凭证、完整审计日志、git 同步——而非各工具各管各的。
+
+## 为什么要做
+
+Claude Code 和 Codex 各有自己的原生配置文件（`~/.claude/settings.json`、`~/.codex/config.toml`），需要填写不同的 provider 密钥和 base URL。今天手动切换 provider 意味着编辑多个文件、以明文存储密钥、并丢失审计记录。Coffer 集中管理 provider profile：配置一次，切换（含投影），全程可审计。
+
+## 已确认决策
+
+以下三条决策在撰写规范前已锁定，不得重新讨论。
+
+### 决策 A——单 wire profile、按 agent 激活
+
+一条 profile 持有 `{name, wire_format, base_url, credential_ref, model, fast_model, wire_api, is_active}`。一条 profile 只投影到其 `wire_format` 匹配的 agent：
+
+- `anthropic` → Claude Code（`~/.claude/settings.json`）
+- `openai` → Codex（`~/.codex/config.toml`）
+
+每种 wire format 最多同时存在一条活跃 profile（与 chat 引擎中 `ModelConfig.is_default` 的模式类似）。Claude Code 和 Codex"共用"同一注册表，一个 `credential_ref` 可被多条 profile 复用，但绝非用一条记录同时驱动两个 agent。
+
+### 决策 B——凭证隔离；明文密钥不得写入原生配置
+
+与现有 MCP `credential_refs` 模式及"凭证隔离"原则保持一致。原始密钥始终留在 Fernet vault 中，按需解密，从不持久化到原生配置文件：
+
+- **Claude Code**：在 `settings.json` 中写入 `apiKeyHelper = "coffer provider key --wire anthropic"`。Claude Code 调用此命令获取密钥。由于 Claude Code 会定期重新调用 `apiKeyHelper`，该设计使未来的 hot-switch 几乎可以无代价实现——此处仅作前瞻性说明。
+- **Codex**：在 TOML 的 `[model_providers.coffer]` 表中写入 `env_key = "COFFER_PROVIDER_KEY"`。Codex 在运行时从该环境变量读取密钥。**本 PR 不修改 Codex 的启动逻辑**；用户需要手动 export 该变量（见 Quickstart）。明确说明：**Codex 独立运行时需要在 shell 中设置 `COFFER_PROVIDER_KEY`；将 key 自动注入 Coffer 启动的 Codex 进程与 hot-switch 一同延期。** 这是选择决策 B（凭证隔离）可接受的代价。
+
+原始密钥绝不写入 `settings.json`、`config.toml` 或任何其他原生配置文件。
+
+### 决策 C——分阶段交付；本 PR 不包含 hot-switch
+
+本 PR 交付：注册表 + 投影 + 切换操作 + 审计 + sync 接入。
+
+Hot-switch（对正在运行的 Claude Code 或 Codex 进程的会话内热重载）是**单独的后续 PR**，明确**不在本 PR 范围内**。
+
+## 范围
+
+### 在范围内
+
+- 后端 `provider` resource Kind（通过 ResourceService 实现 CRUD，自动审计 + 自动 sync）；凭证处理（将 secret 存入 Fernet vault，只保留 ref）；投影服务（将原生配置写入匹配 agent）；切换/激活操作；`PROVIDER_SWITCHED` 审计事件；sync 接入（注册 kind）；Claude `apiKeyHelper` 使用的密钥解析。
+- CLI：`coffer provider list|add|show|edit|remove|switch|key`
+- HTTP API：`/api/v1/providers`（list / create / get / patch / delete）以及 `/api/v1/providers/{name}/activate`
+- 前端：最简 Providers 资源页——`DataTable`（name、wire format、base URL、model、active），行操作包括 create / switch / delete，与 Skills 和 MCP 资源页保持一致。
+- 跨层测试；acceptance 标记对应下方场景；本 spec bundle 每个文档都有中文版。
+
+### 不在范围内（明确非目标）
+
+- **Hot-switch / 进程内热重载**——延期到后续 PR。
+- **显式停用 / 原生配置还原**——无"恢复默认"操作。
+- **Provider drift-verify**——spec 条目 4.9，单独规范。
+- **超出 wire 匹配的逐 agent provider 覆盖**——`wire_format` 不匹配的 profile 不投影到该 agent，无手动绑定。
+- **代理 / 故障转移 / 格式转换**——不代理；无 fallback 链；不做 anthropic↔openai 协议转换。
+- **将 `COFFER_PROVIDER_KEY` 自动注入 Coffer 启动的 Codex 进程**——与 hot-switch 一同延期。
+
+## 实体——ProviderProfile（Kind = `"provider"`）
+
+Resource `name` = profile 名称（在 kind 内唯一，经 `validate_name` 校验）。
+
+### Config 字段（同步的 `config` 字典；确定性，不含机器本地 id）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `wire_format` | `"anthropic" \| "openai"` | 必填。决定该 profile 投影到哪个 agent。 |
+| `base_url` | `str` | 必填。上游 LLM endpoint。 |
+| `credential_ref` | `str` | 必填。Fernet vault ref；格式 `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`，通常为 `provider/<name>/key`（自有 secret）；多条 profile 可共用一个 ref。 |
+| `model` | `str` | 必填。主模型 ID → `ANTHROPIC_MODEL`（Claude）/ `model`（Codex）。 |
+| `fast_model` | `str \| None` | 可选。`ANTHROPIC_SMALL_FAST_MODEL`（仅 anthropic wire）；openai wire 忽略。 |
+| `wire_api` | `"chat" \| "responses"` | 可选，默认 `"chat"`。仅 openai/Codex（`[model_providers.*].wire_api`）。 |
+| `is_active` | `bool` | 每种 `wire_format` 最多一条活跃。导入时若某 wire 有多条活跃，则确定性归一化（保留最近更新的）。 |
+
+- `audit_redactor`：config 中不含 secret（只有 `credential_ref`），审计可原样展示 config。需双重确认 `config` 或 `details` 中无 secret 泄露。
+
+## 投影——写入原生配置
+
+类比 `mcp_injection.py` 中的 `McpInjectionSpec`；以小型显式表格编码。
+
+### anthropic → Claude Code
+
+**文件**：`~/.claude/settings.json`（JSON）；通过 `spec_for(AgentType.CLAUDE_CODE, "settings", cfg_dir)` 解析路径。
+
+Coffer 仅管理以下键，**合并**到现有 JSON（绝不全量替换），通过 `ConfigFileStore.write_text_atomic`（原子写 + `.bak` 备份）写入：
+
+| 键路径 | 值 |
+|---|---|
+| `apiKeyHelper` | `"coffer provider key --wire anthropic"` |
+| `env.ANTHROPIC_BASE_URL` | `profile.base_url` |
+| `env.ANTHROPIC_MODEL` | `profile.model` |
+| `env.ANTHROPIC_SMALL_FAST_MODEL` | `profile.fast_model`（为 `None` 时省略 / 删除该键） |
+
+**绝不**写入 `ANTHROPIC_API_KEY`（否则会覆盖 helper）。其余所有内容保持原样；通过 `json.dumps(indent=2)` 序列化（与 `mcp_entries.py` 中的 MCP JSON 路径一致）。
+
+### openai → Codex
+
+**文件**：`~/.codex/config.toml`（TOML）；通过 `spec_for(AgentType.CODEX, "config", cfg_dir)` 解析路径。
+
+Coffer 通过 `tomlkit`（保留注释 / 顺序，与 MCP TOML 路径一致）管理以下键：
+
+| 键路径 | 值 |
+|---|---|
+| `model` | `profile.model` |
+| `model_provider` | `"coffer"` |
+| `[model_providers.coffer].name` | `"Coffer (<profile name>)"` |
+| `[model_providers.coffer].base_url` | `profile.base_url` |
+| `[model_providers.coffer].wire_api` | `profile.wire_api`（默认 `"chat"`） |
+| `[model_providers.coffer].env_key` | `"COFFER_PROVIDER_KEY"` |
+
+其余所有内容保持原样。
+
+## 切换 / 激活操作
+
+`POST /api/v1/providers/{name}/activate` / `coffer provider switch <name>`：
+
+1. Profile 必须存在，否则返回 404。
+2. 通过 `ResourceService.update_config` 逐一清除同 `wire_format` 下所有其他 profile 的 `is_active`，再通过第二次调用将目标 profile 的 `is_active` 设为 `true`。单进程 daemon 对请求串行化，切换操作不会交错。
+3. 对所有已启用的已注册 agent——其 `AgentType` 原生 wire 与 `profile.wire_format` 匹配的——执行投影（写入原生配置）。若无匹配 agent，记录 active 但不投影，**不视为错误**（在 skipped 中报告）。
+4. 发出值为 `"provider_switched"` 的审计事件，details：`{from: <prev_name|null>, to: <name>, wire_format, agents: [...projected...]}`。
+5. 返回 `{activated: <name>, projected: [agent...], skipped: [agent...]}`。
+
+注意：投影（`_project`）在激活标志翻转之前运行；原生配置写入失败会中止切换，注册表保持不变。
+
+## 密钥解析（apiKeyHelper + Codex 环境变量）
+
+`coffer provider key --wire <wire_format>`：
+
+1. 找到给定 wire format 的活跃 profile。
+2. 读取 `credential_ref` → 通过 `EncryptedCredentialStore.get(ref)` 解密。
+3. 将原始密钥打印到**仅 stdout**。**不得**记录该值到日志。
+
+Claude Code 的 `apiKeyHelper` 调用此命令（`--wire anthropic`）。Codex 用户则需执行：
+```bash
+export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
+```
+
+## Sync（复用，几乎零引擎改动）
+
+将 `provider` 建模为 ResourceService Kind 可自动同步：
+
+- `SyncExporter` 列出所有 kind → 通过 `resource_to_doc` 将每行序列化为 `resources/provider/<name>.yaml`。
+- `SyncImporter` 按 `(kind, name)` 进行 reconcile。
+- 凭证已以 Fernet 密文形式同步至 `credentials/<ref>.enc`。
+
+接入点：定义 Kind，添加 `wire_provider_kind(...)` 辅助函数（镜像 `surfaces/http/wiring.py` 中的 `wire_kb_kind`），在 `surfaces/http/app.py` 的 composition root 中注册到 `app.state.kinds`。无需新迁移，无需 SCHEMA_VERSION bump。
+
+## 审计（复用）
+
+`ResourceService` create / update 自动发出 `RESOURCE_*` 事件（kind-redacted config）。需在 `backend/coffer/domain/audit.py` 的 `AuditEventType` 中添加 `PROVIDER_SWITCHED = "provider_switched"`，并在切换操作中通过 `AuditService.record(AuditEventType.PROVIDER_SWITCHED.value, ref=ResourceRef(kind="provider", name=<name>), actor=..., details={...})` 发出。
+
+## HTTP API
+
+手写 OpenAPI；005 风格——不做 contract-test 门控，手动同步。完整规范见 [contracts/api.openapi.yaml](./contracts/api.openapi.yaml)。
+
+- `GET  /api/v1/providers` → 列出所有 profile（`{ "providers": [ ProviderOut, ... ] }`）
+- `POST /api/v1/providers` → 创建（见下方凭证来源规则）
+- `GET  /api/v1/providers/{name}` → 获取单条 profile
+- `PATCH /api/v1/providers/{name}` → 更新可变字段（`base_url`、`model`、`fast_model`、`wire_api`、`secret_value`）；`wire_format` 和 `credential_ref` 不可变；`secret_value` 可轮换存储的 secret
+- `DELETE /api/v1/providers/{name}` → 删除；删除自有 secret 前通过 `find_credential_citations` 守卫
+- `POST /api/v1/providers/{name}/activate` → 切换；返回 `{activated, projected:[agent...], skipped:[agent...]}`
+
+**凭证来源规则**：创建时必须且只能提供 `secret_value`（存入 vault，仅保留 ref）或 `credential_ref`（复用现有）之一；两者都提供或都不提供均以 `422` 拒绝。
+
+`ProviderOut` 绝不含原始 secret；包含 `credential_ref` 和 `is_active`。
+
+## CLI
+
+`coffer provider list|add|show|edit|remove|switch|key`，支持 `--json`。
+
+- `add`：提示输入 / 接受 secret。
+- `key`：打印解析出的 secret（供 `apiKeyHelper` 使用）；需要 `--wire <wire_format>`；按该 wire 的活跃 profile 解析，不支持按名称解析。
+
+## 前端（最简）
+
+- `frontend/src/lib/api/providers.ts`——手写客户端 + TS 类型（`types.ts` codegen 只覆盖 001 gateway spec；此处不期望生成类型）。
+- Providers 页 = `DataTable`（复用共享组件；参见 SkillsPage / MCP 页），列：name / wire_format / base_url / model / active。行操作：switch / delete；顶部操作：create。编辑 profile 通过 CLI（`coffer provider edit`）和 PATCH API 实现，桌面页不需要内联编辑功能。本 PR 不含 detail 页，也不含逐 agent 绑定 tab。新 hook 的测试需添加 `vi.mock`。
+
+## Acceptance Scenarios
+
+根据 `agents/sdd.md`，本节每个场景都必须有至少一个测试携带
+`@pytest.mark.acceptance(spec="011-provider-switching", scenario="…")`（Python）
+或 `acceptance("011-provider-switching", "…", …)`（TypeScript）标记。
+
+### Scenario: create an anthropic provider profile with an inline secret
+
+- **Given** 不存在名为 `my-provider` 的 provider，
+- **When** 用户以 `wire_format="anthropic"`、`base_url`、`model` 和 `secret_value`（原始 API key）创建 profile，
+- **Then** profile 以 `credential_ref` 为 `provider/my-provider/key` 持久化，原始 key 在 Fernet vault 中以该 ref 存储，`ProviderOut` 不含 secret 字段，并审计 `RESOURCE_CREATED`。
+
+### Scenario: create a profile that reuses an existing credential ref
+
+- **Given** ref 为 `shared/key` 的凭证已存在，
+- **When** 用户提供 `credential_ref="shared/key"`（不含 `secret_value`）创建 profile，
+- **Then** profile 以指向现有 ref 的方式持久化，不创建新 vault 条目，`ProviderOut` 中的 `credential_ref` 与所提供的一致。
+
+### Scenario: reject a profile with an unknown wire format
+
+- **Given** daemon 正在运行，
+- **When** 用户尝试以 `wire_format="grpc"` 创建 profile，
+- **Then** 请求以 `422 Unprocessable Entity` 被拒绝，不创建任何 profile 行。
+
+### Scenario: reject a profile that supplies neither a secret nor a credential ref
+
+- **Given** daemon 正在运行，
+- **When** 用户尝试创建 profile，但既不提供 `secret_value` 也不提供 `credential_ref`，
+- **Then** 请求以 `422 Unprocessable Entity` 被拒绝，不创建 profile 行或 vault 条目。
+
+### Scenario: update a provider profile
+
+- **Given** 某 provider profile 已存在，
+- **When** 用户 patch `base_url` 和 `model`（不含 `secret_value`），
+- **Then** 只更新这两个字段，`credential_ref` 不变，并审计 `RESOURCE_UPDATED`。
+
+### Scenario: list provider profiles
+
+- **Given** 已存在两条 provider profile（一条 anthropic，一条 openai），
+- **When** 用户列出所有 provider，
+- **Then** 两条均出现在 `ProviderOut[]` 中，均不含原始 secret，每条携带正确的 `is_active` 标志。
+
+### Scenario: delete a provider profile cleans up its owned credential
+
+- **Given** 某 profile 的 `credential_ref` 为 `provider/my-provider/key`（自有，无其他 profile 共用），
+- **When** 用户删除该 profile，
+- **Then** vault 中该 ref 的条目被删除，并审计 `RESOURCE_DELETED`。
+
+### Scenario: activate an anthropic profile writes Claude Code settings
+
+- **Given** 已注册 Claude Code agent，且存在一条 anthropic profile，
+- **When** 用户激活该 profile，
+- **Then** `~/.claude/settings.json` 包含 `apiKeyHelper`、`env.ANTHROPIC_BASE_URL`、`env.ANTHROPIC_MODEL`；若 `fast_model` 有值则 `env.ANTHROPIC_SMALL_FAST_MODEL` 存在；`ANTHROPIC_API_KEY` 缺失；profile 的 `is_active` 变为 `true`。
+
+### Scenario: activate an openai profile writes Codex config
+
+- **Given** 已注册 Codex agent，且存在一条 openai profile，
+- **When** 用户激活该 profile，
+- **Then** `~/.codex/config.toml` 包含 `model`、`model_provider = "coffer"` 以及含 `base_url`、`wire_api`、`env_key = "COFFER_PROVIDER_KEY"` 的 `[model_providers.coffer]` 表；profile 的 `is_active` 变为 `true`。
+
+### Scenario: activating a profile deactivates the previous active profile of the same wire format
+
+- **Given** anthropic profile A 为活跃，anthropic profile B 存在，
+- **When** 用户激活 profile B，
+- **Then** profile B 变为活跃，profile A 变为非活跃（单进程 daemon 对 clear-then-set 串行化，切换操作不会交错）。
+
+### Scenario: activate a profile whose wire matches no registered agent records active but projects nothing
+
+- **Given** 无已注册的 Codex agent，且存在一条 openai profile，
+- **When** 用户激活该 openai profile，
+- **Then** profile 的 `is_active` 变为 `true`，不写入任何配置文件，响应中 `skipped: ["codex"]`（或 `projected` 为空）。
+
+### Scenario: switching preserves unrelated native-config keys and writes a .bak backup
+
+- **Given** `~/.claude/settings.json` 中含有 Coffer 不管理的键（如 `theme`、`mcpServers`），
+- **When** 用户激活一条 anthropic profile，
+- **Then** 这些键在更新后的文件中逐字节保留，写入前创建 `.bak` 备份，只有 Coffer 管理的键被修改。
+
+### Scenario: a provider switch is recorded in the audit log
+
+- **Given** 某 anthropic profile 被激活，
+- **When** 用户查询审计日志，
+- **Then** 出现一条 `provider_switched` 条目，含 details `{from, to, wire_format, agents}`、时间戳和操作者。
+
+### Scenario: resolve the active provider key for the apiKeyHelper
+
+- **Given** 某 anthropic profile 为活跃，其 secret 已存于 vault，
+- **When** 执行 `coffer provider key --wire anthropic`，
+- **Then** 原始 key 被打印到 stdout，vault key **不被**记录到日志。
+
+### Scenario: a provider profile round-trips through sync export and import
+
+- **Given** 存在一条含 credential ref 的 provider profile，
+- **When** sync exporter 运行，随后在全新 DB 上运行 sync importer，
+- **Then** profile 行以相同的 `config` 字段被还原，凭证密文出现在 `credentials/<ref>.enc`，sync workspace 明文中无 secret 暴露。
+
+### Scenario: the command line covers create, list, and switch
+
+- **Given** daemon 正在运行，
+- **When** 用户从 CLI 运行 `coffer provider add`、`coffer provider list --json`、`coffer provider switch`，
+- **Then** 每个操作与 HTTP API 效果相同，`list --json` 返回机器可读输出。
+
+### Scenario: the Providers page lists profiles and can switch the active one
+
+- **Given** Providers 页以两条 mock profile 渲染，
+- **When** 用户点击非活跃 profile 的"Switch"行操作，
+- **Then** activate mutation 以正确的 profile name 被调用，表格反映更新后的活跃状态（TypeScript acceptance 测试）。
+
+## 需求
+
+### 功能需求
+
+**资源模型**
+
+- **FR-001**：系统必须将每个托管 provider 注册为 kind 为 `provider` 的 Resource，标识符为 `provider:<name>`。
+- **FR-002**：系统必须按 kind 专属 schema 校验 provider config（字段：`wire_format`、`base_url`、`credential_ref`、`model`、`fast_model?`、`wire_api?`、`is_active`）。
+- **FR-003**：`ProviderOut` 绝不得含原始 secret。`credential_ref` 和 `is_active` 必须包含。
+
+**凭证处理**
+
+- **FR-004**：携带 `secret_value` 创建时，系统必须将原始 key 存入 Fernet vault 的 `provider/<name>/key`，只持久化 ref。`secret_value` 或 `credential_ref` 必须且只能提供一个；两者都有或都没有均以 `422` 拒绝。
+- **FR-005**：`PATCH` 携带 `secret_value` 时，系统必须轮换存储的 secret（覆盖 vault 条目），不改变 ref。
+- **FR-006**：删除时，若 profile 自有其 credential ref（无其他 profile 引用），系统必须通过 `find_credential_citations` 守卫删除 vault 条目。
+
+**投影**
+
+- **FR-007**：系统必须通过 `ConfigFileStore.write_text_atomic`（原子写 + `.bak`）将激活的 anthropic profile 投影到 `~/.claude/settings.json`，只合并指定键，其余内容保持原样。绝不写入 `ANTHROPIC_API_KEY`。
+- **FR-008**：系统必须通过 `tomlkit`（保留注释/顺序）将激活的 openai profile 投影到 `~/.codex/config.toml`，只合并指定键，其余内容保持原样。
+- **FR-009**：若 `fast_model` 为 `None`，`settings.json` 中的 `env.ANTHROPIC_SMALL_FAST_MODEL` 键必须省略或删除。
+- **FR-010**：域层投影逻辑必须为纯函数（无 I/O）。`domain/provider/projection.py` 中的纯函数 `apply_anthropic_settings(...)` 和 `apply_codex_provider(...)` 直接返回新的原生配置文本；`ProviderService._project(...)` 调用这些函数并执行文件写入。
+
+**单活跃不变量**
+
+- **FR-011**：每种 `wire_format` 最多一条 `is_active=true` 的 profile。激活 profile 必须通过顺序的 `ResourceService.update_config` 调用清除同 wire 下所有其他 profile 的 `is_active`，然后将目标 profile 的 `is_active` 设为 `true`。单进程 daemon 对请求串行化，切换操作不会交错。导入时若某 wire 有多条活跃，则归一化处理：保留最近更新的，其余设为非活跃。
+
+**切换操作**
+
+- **FR-012**：`POST /api/v1/providers/{name}/activate` 必须应用 FR-011，然后投影到所有已启用的已注册 agent（其原生 wire 与 `wire_format` 匹配）。若无匹配 agent，记录活跃并返回非空 `skipped` 列表——不视为错误。
+- **FR-013**：系统必须发出值为 `"provider_switched"` 的审计事件，details：`{from, to, wire_format, agents: [...projected...]}`。
+
+**密钥解析**
+
+- **FR-014**：`coffer provider key --wire <wire_format>` 必须找到该 wire 的活跃 profile，通过 `EncryptedCredentialStore.get(ref)` 解密，只打印到 stdout。原始 key 绝不记录到日志。不支持按 profile `<name>` 解析；仅接受 `--wire` 形式。
+
+**Sync**
+
+- **FR-015**：`provider` kind 必须注册到 `app.state.kinds`，使 `SyncExporter`/`SyncImporter` 自动处理。无需新迁移或 SCHEMA_VERSION bump。
+
+**审计**
+
+- **FR-016**：`PROVIDER_SWITCHED`（值 `"provider_switched"`）必须加入 `AuditEventType` 并在每次成功切换时携带 `{from, to, wire_format, agents}` 发出。`RESOURCE_CREATED`、`RESOURCE_UPDATED`、`RESOURCE_DELETED` 由 `ResourceService` 自动发出。
+
+**界面**
+
+- **FR-017**：创建、切换和删除操作必须可通过（a）REST API、（b）`coffer provider ...` CLI（含 `--json`）、（c）桌面 Providers 页面访问。编辑 profile（PATCH）仅通过 REST API 和 CLI（`coffer provider edit`）提供；桌面页不需要内联编辑功能。
+- **FR-018**：CLI `key` 子命令必须支持 `--wire <wire_format>`（按该 wire 的活跃 profile 解析）。不支持位置参数 `<name>` 解析；仅接受 `--wire` 形式。
+
+## 成功标准
+
+- **SC-001**：从全新安装开始，用户可以添加一条 anthropic provider profile，激活它，并通过一条 `coffer provider switch` 命令让 Claude Code 使用新 endpoint。
+- **SC-002**：原始 key 不会出现在 `settings.json`、`config.toml` 或 sync workspace（`resources/provider/*.yaml`）中——在集成测试中通过自动扫描验证。
+- **SC-003**：每个 Acceptance Scenario 都有至少一个 `acceptance(spec="011-provider-switching", scenario="…")` 标记的测试，`make verify-acceptance` 报告零遗漏场景。
+- **SC-004**：`make verify` 本地和 CI 通过。
+- **SC-005**：激活 profile 只写入定义的托管键集，不触碰任何托管集以外的键。
+
+## 假设
+
+- Spec 004-agent-registry（PR #25）已合并；`AgentType`、`AgentConfig`、agent CRUD 和 `on_delete` hook 均可用。
+- `EncryptedCredentialStore`（Fernet vault）和 `ConfigFileStore.write_text_atomic` 均可用（spec 001）。
+- `tomlkit` 已在后端 Python 依赖中（MCP TOML 路径支持时已添加）。
+- Coffer 作为单用户个人工具运行；除现有 `X-Coffer-Token` 门控外，无需多用户访问控制。
+- 用户的 `~/.claude/settings.json` 和 `~/.codex/config.toml` 对 Coffer 可写。若文件不存在，Coffer 创建只含托管键的文件。
+- Provider drift-verify（检查原生配置是否与活跃 profile 一致）延期到 spec 4.9。

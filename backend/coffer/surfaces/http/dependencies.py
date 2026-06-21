@@ -267,6 +267,22 @@ def get_agent_service() -> Any:
     return _agent_service
 
 
+_provider_service: Any | None = None
+
+
+def set_provider_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _provider_service
+    _provider_service = svc
+
+
+def get_provider_service() -> Any:
+    """FastAPI Depends() target — actual type is ProviderService (spec 011)."""
+    if _provider_service is None:
+        raise RuntimeError("provider service not initialised")
+    return _provider_service
+
+
 def set_auto_detect_service(svc: Any) -> None:
     """Called by the composition root once on startup."""
     global _auto_detect_service

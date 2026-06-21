@@ -88,6 +88,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
 from coffer.surfaces.http.migrations_runner import run_migrations
+from coffer.surfaces.http.provider_wiring import wire_provider_kind
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_wiring import start_sync, stop_sync
 from coffer.surfaces.http.wiring import (
@@ -163,19 +164,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Created before kind wiring so skill/KB/memory can all register into it.
     builtin_tools = BuiltinToolRegistry()
 
-    # Wire up agent + skill kinds (specs 004-agent-registry, 005-skill-manager).
-    # The helper builds both in lockstep so the cross-kind on_delete hook (agent
-    # deletion cascades into skill binding cleanup) can reference both services,
-    # and so app.py stays under the 400-line guideline. Agent detection stays
-    # discovery + confirm (no auto-registration on startup). Passing
-    # builtin_tools registers the skill tools (list_skills / load_skill) so the
-    # built-in chat agent can reach them through the gateway (spec 008).
+    # Wire agent + skill kinds (specs 004/005) in lockstep so the cross-kind
+    # on_delete hook (agent deletion cascades into skill-binding cleanup) sees
+    # both services; builtin_tools registers the skill tools for the gateway.
     wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools, credential_store)
 
+    # Provider switching (spec 011) — AFTER the agent kind: it projects the
+    # active profile into each agent's native config (see provider_wiring).
+    wire_provider_kind(app, resource_svc, audit, credential_store)
+
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
-    # into `builtin_tools` so the gateway can expose them.
-    # One substrate per process: KB + memory share the DocumentRepo,
-    # retrieval facade and reindexer (per KnowledgeRetrieval's contract).
+    # into `builtin_tools`. One substrate per process: KB + memory share the
+    # DocumentRepo, retrieval facade and reindexer (per KnowledgeRetrieval).
     substrate = build_substrate(sm, credential_store)
 
     # Embedding is global: KB + memory resolve the current config at index/recall

@@ -90,6 +90,8 @@ class AuditEventType(StrEnum):
     SYNC_RESOLVED = "sync_resolved"
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"
+    # spec 011-provider-switching
+    PROVIDER_SWITCHED = "provider_switched"
 
 
 @dataclass
