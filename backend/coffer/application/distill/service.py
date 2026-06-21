@@ -26,7 +26,9 @@ class DistillResult:
     """Result of a single distillation run."""
 
     insights: list[DistilledInsight] = field(default_factory=list)
-    facts: list[str] = field(default_factory=list)  # created fact ids (empty on dry_run)
+    journal_entries: list[str] = field(
+        default_factory=list
+    )  # journal-entry markers (empty on dry_run)
 
 
 class TranscriptDistillationService:
@@ -88,7 +90,7 @@ class TranscriptDistillationService:
         project_path: str | None = None,
         dry_run: bool = False,
     ) -> DistillResult:
-        """Distil a single transcript session into memory insights.
+        """Distil a single transcript session into the journal lane.
 
         Session selection:
         - If *session_id* given: read that session directly.
@@ -123,17 +125,18 @@ class TranscriptDistillationService:
 
         insights = parse_insights(raw)
 
-        fact_ids: list[str] = []
+        written: list[str] = []
         if not dry_run:
             for insight in insights:
-                fact_id = await self._sink.record(
+                marker = await self._sink.record(
                     project_path=session.project_path,
                     insight=insight,
                     origin_session_id=session.session_id,
                 )
-                fact_ids.append(fact_id)
+                if marker is not None:
+                    written.append(marker)
 
-        return DistillResult(insights=insights, facts=fact_ids)
+        return DistillResult(insights=insights, journal_entries=written)
 
     # ------------------------------------------------------------------
     # Private helpers

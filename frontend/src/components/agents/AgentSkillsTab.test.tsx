@@ -12,10 +12,9 @@
 //     page (the reconciler delivers everything automatically)
 //   - while NOT following, the managed table's per-skill switch keeps the old
 //     binding behaviour
-//   - the unmanaged-skills section: always rendered (empty-message table when
-//     the list is empty), rows with location / foreign-link badges and invalid
-//     reasons, adopt (disabled w/ hint when invalid or foreign) and
-//     delete-with-confirm actions
+//   - the unmanaged-skills section: hidden when empty, rows with location /
+//     foreign-link badges and invalid reasons, adopt (disabled w/ hint when
+//     invalid or foreign) and delete-with-confirm actions
 //   - en/zh key parity for agents.skillsTab
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -244,18 +243,13 @@ describe("AgentSkillsTab", () => {
   });
 
   describe("unmanaged skills", () => {
-    test("section always renders with an empty-message table when the list is empty", async () => {
+    test("section is hidden when the list is empty", async () => {
       stub([]);
       renderTab();
 
-      // The section is a permanent surface (like the MCP / memory / plugins
-      // tables): it stays visible and shows its empty message rather than
-      // disappearing when there is nothing on disk to manage.
-      const section = await screen.findByTestId("unmanaged-skills");
-      expect(
-        await within(section).findByText(en.agents.skillsTab.unmanagedEmpty),
-      ).toBeInTheDocument();
-      expect(api.unmanagedSkills).toHaveBeenCalledWith("cc");
+      // Let the unmanaged query settle, then assert absence.
+      await waitFor(() => expect(api.unmanagedSkills).toHaveBeenCalledWith("cc"));
+      expect(screen.queryByTestId("unmanaged-skills")).not.toBeInTheDocument();
     });
 
     test("rows render with location badges, invalid reason, and foreign-link badge", async () => {
@@ -263,7 +257,7 @@ describe("AgentSkillsTab", () => {
       renderTab();
 
       const section = await screen.findByTestId("unmanaged-skills");
-      expect(await within(section).findByText("good")).toBeInTheDocument();
+      expect(within(section).getByText("good")).toBeInTheDocument();
       expect(within(section).getByText("broken")).toBeInTheDocument();
       expect(within(section).getByText("linked")).toBeInTheDocument();
 
@@ -283,7 +277,6 @@ describe("AgentSkillsTab", () => {
       renderTab();
 
       const section = await screen.findByTestId("unmanaged-skills");
-      await within(section).findByText("good"); // wait for the rows to load
       const adoptButtons = within(section).getAllByRole("button", {
         name: en.agents.skillsTab.adopt,
       });
@@ -307,9 +300,7 @@ describe("AgentSkillsTab", () => {
       renderTab();
 
       const section = await screen.findByTestId("unmanaged-skills");
-      fireEvent.click(
-        await within(section).findByRole("button", { name: en.agents.skillsTab.adopt }),
-      );
+      fireEvent.click(within(section).getByRole("button", { name: en.agents.skillsTab.adopt }));
       await waitFor(() =>
         expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("cc", "good", "skills"),
       );
@@ -320,7 +311,7 @@ describe("AgentSkillsTab", () => {
       renderTab();
 
       const section = await screen.findByTestId("unmanaged-skills");
-      fireEvent.click(await within(section).findByRole("button", { name: en.common.delete }));
+      fireEvent.click(within(section).getByRole("button", { name: en.common.delete }));
 
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByText(en.agents.skillsTab.deleteConfirm)).toBeInTheDocument();
@@ -338,9 +329,7 @@ describe("AgentSkillsTab", () => {
 
       const section = await screen.findByTestId("unmanaged-skills");
       // Select all rows, then trigger the bulk Adopt from the bulk bar.
-      fireEvent.click(
-        await within(section).findByRole("checkbox", { name: en.common.bulk.selectAll }),
-      );
+      fireEvent.click(within(section).getByRole("checkbox", { name: en.common.bulk.selectAll }));
       const bar = screen.getByText(/2 selected/i).closest("div")!;
       fireEvent.click(within(bar).getByRole("button", { name: en.agents.skillsTab.adopt }));
 
@@ -356,9 +345,7 @@ describe("AgentSkillsTab", () => {
       renderTab();
 
       const section = await screen.findByTestId("unmanaged-skills");
-      fireEvent.click(
-        await within(section).findByRole("checkbox", { name: en.common.bulk.selectAll }),
-      );
+      fireEvent.click(within(section).getByRole("checkbox", { name: en.common.bulk.selectAll }));
       const bar = screen.getByText(/2 selected/i).closest("div")!;
       fireEvent.click(within(bar).getByRole("button", { name: en.common.bulk.delete }));
 

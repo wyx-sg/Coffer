@@ -866,7 +866,7 @@
       "locationSkills": "skills directory",
       "locationAgentsDir": "~/.agents/skills",
       "adoptSuccess": "Adopted into the master library: {{name}}",
-      "unmanagedEmpty": "This agent has no unmanaged skills."
+      "unmanagedNoMatch": "No unmanaged skills match your search."
     },
     "mcpTab": {
       "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to expose Coffer's MCP servers here.",

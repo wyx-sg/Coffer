@@ -33,6 +33,7 @@ from coffer.application.knowledge_base.kind import make_kb_kind
 from coffer.application.knowledge_base.service import KnowledgeBaseService
 from coffer.application.memory.builtin_tools import register_memory_builtin_tools
 from coffer.application.memory.handoff import HandoffService
+from coffer.application.memory.journal import JournalService
 from coffer.application.memory.kind import make_memory_kind
 from coffer.application.memory.scope import ScopeResolver
 from coffer.application.memory.service import MemoryService
@@ -69,6 +70,7 @@ from coffer.surfaces.http.dependencies import (
     set_turn_orchestrator,
 )
 from coffer.surfaces.http.memory.dependencies import (
+    set_journal_service,
     set_project_root_repo,
     set_store_label_repo,
 )
@@ -225,6 +227,13 @@ def wire_memory_kind(
         audit=audit,
         now=lambda: datetime.now(tz=UTC),
     )
+    journal_service = JournalService(
+        scope=scope,
+        store_dir=paths.memory_store_dir,
+        audit=audit,
+        now=lambda: datetime.now(tz=UTC),
+    )
+    set_journal_service(journal_service)
     app.state.kinds["memory"] = make_memory_kind(memory_service)
     set_memory_service(memory_service)
     register_memory_builtin_tools(

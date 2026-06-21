@@ -107,16 +107,3 @@ def test_error_envelope_shape_is_declared() -> None:
     envelope = components["ErrorEnvelope"]
     error_props = envelope["properties"]["error"]["properties"]
     assert {"code", "message", "details"} <= set(error_props)
-
-
-def test_insight_type_enum_values_match_domain() -> None:
-    """InsightOut.type enum in the contract must match the domain InsightType values."""
-    from coffer.domain.distill.session import InsightType
-
-    doc = _load(_TRANSCRIPTS_CONTRACT)
-    insight_out = doc["components"]["schemas"]["InsightOut"]
-    contract_enum = set(insight_out["properties"]["type"]["enum"])
-    domain_values = {t.value for t in InsightType}
-    assert contract_enum == domain_values, (
-        f"contract InsightOut.type enum {contract_enum} != domain InsightType {domain_values}"
-    )

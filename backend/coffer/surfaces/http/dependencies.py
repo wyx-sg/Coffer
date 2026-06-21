@@ -390,5 +390,7 @@ def get_memory_service() -> Any:
     return _memory_service
 
 
-# More providers split out for the file-size budget: memory.dependencies,
-# distill.state, chat.dependencies (re-exported at top).
+# More providers split out for the file-size budget: memory.dependencies (incl.
+# the spec-007 journal-lane provider — imported there directly by the composition
+# roots, NOT re-exported here so kind-agnostic core stays clean), distill.state,
+# chat.dependencies (re-exported at top).

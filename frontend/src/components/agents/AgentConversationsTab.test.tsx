@@ -151,7 +151,7 @@ describe("AgentConversationsTab", () => {
   test("clicking 'Distill to memory' calls mutate with the session id", async () => {
     distillMutate.mockImplementation(
       (_args: unknown, callbacks: { onSuccess?: (r: unknown) => void }) => {
-        callbacks?.onSuccess?.({ insights: [], fact_ids: [] });
+        callbacks?.onSuccess?.({ insights: [], journal_entries: [] });
       },
     );
     stubTranscripts();
@@ -171,12 +171,11 @@ describe("AgentConversationsTab", () => {
         name: "Use Redis",
         description: "cache layer",
         body: "We chose Redis for caching.",
-        type: "decision",
       },
     ];
     distillMutate.mockImplementation(
       (_args: unknown, callbacks: { onSuccess?: (r: unknown) => void }) => {
-        callbacks?.onSuccess?.({ insights, fact_ids: ["fact-1"] });
+        callbacks?.onSuccess?.({ insights, journal_entries: ["2026-06-21T09:00:00+00:00"] });
       },
     );
 
@@ -185,7 +184,6 @@ describe("AgentConversationsTab", () => {
     fireEvent.click(screen.getByRole("button", { name: /distill/i }));
     await waitFor(() => expect(screen.getByText("Use Redis")).toBeInTheDocument());
     expect(screen.getByText(/We chose Redis/i)).toBeInTheDocument();
-    expect(screen.getByText("decision")).toBeInTheDocument();
   });
 
   test("selecting a row reveals the bulk distill action", () => {

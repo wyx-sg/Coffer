@@ -7,7 +7,6 @@ import pytest
 from coffer.application.distill.service import TranscriptDistillationService
 from coffer.domain.distill.session import (
     DistilledInsight,
-    InsightType,
     TranscriptMessage,
     TranscriptSession,
 )
@@ -33,9 +32,7 @@ class _Reader:
 
 class _Llm:
     async def complete(self, **k: object) -> str:
-        return (
-            '[{"name":"Use Redis","description":"cache","body":"Chose Redis.","type":"decision"}]'
-        )
+        return '[{"name":"Use Redis","description":"cache","body":"Chose Redis."}]'
 
 
 class _Sink:
@@ -44,9 +41,9 @@ class _Sink:
 
     async def record(
         self, *, project_path: str | None, insight: DistilledInsight, origin_session_id: str
-    ) -> str:
+    ) -> str | None:
         self.calls.append((project_path, insight, origin_session_id))
-        return "fact-1"
+        return "2026-06-21T09:00:00+00:00"
 
 
 class _Agents:
@@ -63,7 +60,7 @@ class _Models:
 
 
 @pytest.mark.asyncio
-async def test_distill_writes_one_fact() -> None:
+async def test_distill_writes_one_journal_entry() -> None:
     sink = _Sink()
     svc = TranscriptDistillationService(
         reader=_Reader(),
@@ -74,10 +71,10 @@ async def test_distill_writes_one_fact() -> None:
         credential_resolver=lambda r: "",
     )
     result = await svc.distill(agent_name="codex", session_id="s1")
-    assert len(result.facts) == 1
+    assert len(result.journal_entries) == 1
     assert sink.calls[0][0] == "/repo"
     assert sink.calls[0][2] == "s1"
-    assert sink.calls[0][1].type is InsightType.DECISION
+    assert sink.calls[0][1].name == "Use Redis"
 
 
 @pytest.mark.asyncio

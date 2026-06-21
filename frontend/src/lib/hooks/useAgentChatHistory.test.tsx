@@ -55,10 +55,9 @@ const SAMPLE_DISTILL = {
       name: "Use Redis",
       description: "cache layer",
       body: "We chose Redis for caching.",
-      type: "decision",
     },
   ],
-  fact_ids: ["fact-1"],
+  journal_entries: ["2026-06-21T09:00:00+00:00"],
 };
 
 describe("transcriptsKey", () => {
@@ -136,7 +135,7 @@ describe("useDistillTranscript", () => {
       data = await result.current.mutateAsync({ session_id: "s1" });
     });
     expect(data?.insights).toHaveLength(1);
-    expect(data?.fact_ids).toEqual(["fact-1"]);
+    expect(data?.journal_entries).toEqual(["2026-06-21T09:00:00+00:00"]);
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).not.toContain("/api/v1/api/v1");
     expect(String(url)).toMatch(/\/api\/v1\/agents\/claude\/transcripts\/distill$/);
