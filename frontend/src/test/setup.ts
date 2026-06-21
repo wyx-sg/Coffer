@@ -30,3 +30,17 @@ if (typeof window !== "undefined" && !window.HTMLElement.prototype.setPointerCap
 if (typeof window !== "undefined" && !window.HTMLElement.prototype.releasePointerCapture) {
   window.HTMLElement.prototype.releasePointerCapture = function () {};
 }
+
+// CodeMirror (the <CodeView> preview) measures ranges via Range.getClientRects,
+// which jsdom does not implement — stub it so read-only previews mount quietly
+// in tests. Real layout/scroll-to-match is verified by Playwright e2e.
+if (typeof Range !== "undefined" && typeof Range.prototype.getClientRects !== "function") {
+  const emptyRectList = {
+    length: 0,
+    item: () => null,
+    [Symbol.iterator]: function* () {},
+  } as unknown as DOMRectList;
+  Range.prototype.getClientRects = () => emptyRectList;
+  Range.prototype.getBoundingClientRect = () =>
+    ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 }) as DOMRect;
+}

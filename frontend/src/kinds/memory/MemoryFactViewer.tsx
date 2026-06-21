@@ -11,7 +11,7 @@ import { Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileActions } from "@/components/FileActions";
-import { Markdown } from "@/components/Markdown";
+import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import type { FactOut } from "./api";
 
 interface Props {
@@ -59,9 +59,7 @@ export function MemoryFactViewer({ fact, isDeletePending, onDelete }: Props) {
         </p>
       ) : null}
 
-      <div className="max-h-[50vh] overflow-auto p-4">
-        <Markdown>{fact.text}</Markdown>
-      </div>
+      <FindableMarkdown className="max-h-[50vh] overflow-auto p-4">{fact.text}</FindableMarkdown>
     </div>
   );
 }

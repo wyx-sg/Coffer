@@ -25,9 +25,13 @@ function baseProps(overrides: Partial<ConfigEditorPaneProps> = {}): ConfigEditor
 describe("ConfigEditorPane", () => {
   test("renders the content read-only (no textarea, Save, or find/replace)", () => {
     render(<ConfigEditorPane {...baseProps({ content: '{"theme":"dark"}' })} />);
-    // The content shows, but never in an editable control.
-    expect(screen.getByText('{"theme":"dark"}')).toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    // The content shows in a read-only CodeMirror editor (contenteditable=false),
+    // never an editable field. Syntax highlighting splits tokens across spans, so
+    // assert on the editor's concatenated text.
+    const content = document.querySelector(".cm-content");
+    expect(content?.textContent).toContain('{"theme":"dark"}');
+    expect(content?.getAttribute("contenteditable")).toBe("false");
+    expect(document.querySelector("textarea")).toBeNull();
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /find ?\/ ?replace/i })).not.toBeInTheDocument();
   });

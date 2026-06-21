@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
+import { CodeView } from "@/components/preview/CodeView";
 import type { components } from "@/lib/api/types";
 import { useDisableCapability, useEnableCapability } from "@/lib/hooks/useMcpCapabilityMutations";
 import { CapabilityBulkActions } from "./CapabilityBulkActions";
@@ -178,9 +179,16 @@ export function CapabilityList(props: Props) {
         hasSchema
           ? (row) =>
               row.schema ? (
-                <pre className="overflow-auto px-4 py-3 text-xs">
-                  {JSON.stringify(row.schema, null, 2)}
-                </pre>
+                <div className="px-4 py-3">
+                  <CodeView
+                    value={JSON.stringify(row.schema, null, 2)}
+                    language="json"
+                    maxHeight="20rem"
+                    lineNumbers={false}
+                    ariaLabel={t("mcp.capabilities.schemaLabel")}
+                    className="bg-muted/30"
+                  />
+                </div>
               ) : (
                 <div className="px-4 py-3 text-xs text-muted-foreground">
                   {t("mcp.capabilities.noSchema")}

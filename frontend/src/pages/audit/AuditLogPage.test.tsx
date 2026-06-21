@@ -126,11 +126,16 @@ describe("AuditLogPage", () => {
     // Click the row to expand it
     fireEvent.click(activityCell.closest("tr")!);
 
-    // The raw log panel shows the entry's full underlying JSON record.
-    const raw = await screen.findByText((_, el) => el?.tagName === "PRE");
-    expect(raw.textContent).toContain('"some_key": "some_value"');
-    expect(raw.textContent).toContain('"event_type": "resource_created"');
-    expect(raw.textContent).toContain('"id": 42');
+    // The raw log panel shows the entry's full underlying JSON record in a
+    // read-only CodeMirror block (tokens split across spans → assert on its text).
+    await waitFor(() => {
+      expect(document.querySelector(".cm-content")?.textContent).toContain(
+        '"some_key": "some_value"',
+      );
+    });
+    const raw = document.querySelector(".cm-content");
+    expect(raw?.textContent).toContain('"event_type": "resource_created"');
+    expect(raw?.textContent).toContain('"id": 42');
   });
 
   test("clicking the expanded row again collapses it", async () => {
@@ -160,7 +165,7 @@ describe("AuditLogPage", () => {
 
     // Expand
     fireEvent.click(row);
-    const findRaw = () => screen.queryByText((_, el) => el?.tagName === "PRE");
+    const findRaw = () => document.querySelector<HTMLElement>(".cm-content");
     await waitFor(() => expect(findRaw()?.textContent).toContain('"note": "hello"'));
 
     // Collapse — click the same row again

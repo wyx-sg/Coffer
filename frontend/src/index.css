@@ -103,3 +103,13 @@
     @apply bg-transparent p-0;
   }
 }
+
+/* In-preview find highlights for rendered Markdown (CSS Custom Highlight API).
+   Painted by domFind.ts; CodeMirror previews carry their own match theme. */
+::highlight(coffer-find) {
+  background-color: rgba(253, 224, 71, 0.45);
+}
+::highlight(coffer-find-active) {
+  background-color: rgba(251, 191, 36, 0.9);
+  color: rgb(31, 27, 23);
+}

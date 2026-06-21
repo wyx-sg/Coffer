@@ -1,4 +1,16 @@
 {
+  "preview": {
+    "find": {
+      "label": "Find",
+      "placeholder": "Find…",
+      "matches": "{{active}}/{{total}}",
+      "noMatches": "No matches",
+      "next": "Next",
+      "prev": "Previous",
+      "caseSensitive": "Case sensitive",
+      "close": "Close"
+    }
+  },
   "fileActions": {
     "openInEditor": "Open in editor",
     "openFolder": "Open folder",
@@ -149,6 +161,7 @@
       "statusFilter": "Status",
       "toggleAria": "Toggle {{kind}} {{key}}",
       "noSchema": "No input schema.",
+      "schemaLabel": "Input schema",
       "header": {
         "name": "Name",
         "enabled": "Enabled"
@@ -764,15 +777,6 @@
         "subagents": "Custom subagent definitions, one Markdown file per subagent.",
         "config": "Codex CLI configuration: model, providers, and tool settings.",
         "hooks": "Lifecycle hooks that run commands around Codex events."
-      },
-      "find": {
-        "toggle": "Find / Replace",
-        "find": "Find",
-        "replace": "Replace",
-        "replaceAll": "Replace all",
-        "findNext": "Find next",
-        "matches": "{{n}} matches",
-        "caseSensitive": "Case sensitive"
       }
     },
     "mcp": {

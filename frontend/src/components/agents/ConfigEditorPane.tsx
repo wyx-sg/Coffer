@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { Info } from "lucide-react";
 
 import { FileActions } from "@/components/FileActions";
+import { CodeView } from "@/components/preview/CodeView";
 
 export interface ConfigEditorPaneProps {
   /** Full path shown in the header (file path, or path/relpath for a child). */
@@ -40,9 +41,7 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
             {props.pathLabel}
           </span>
           {props.description ? (
-            <span className="mt-0.5 block text-xs text-muted-foreground">
-              {props.description}
-            </span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">{props.description}</span>
           ) : null}
         </span>
         <span className="shrink-0 text-xs text-muted-foreground">{props.formatLabel}</span>
@@ -59,12 +58,13 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
         </div>
       ) : null}
 
-      <pre
-        aria-label={t("agents.config.editorLabel", { key: props.editorKey })}
-        className="h-80 w-full overflow-auto whitespace-pre-wrap break-words rounded border bg-muted/30 p-2 font-mono text-xs text-foreground"
-      >
-        {props.loading ? "" : props.content}
-      </pre>
+      <CodeView
+        value={props.loading ? "" : props.content}
+        filename={props.filePath}
+        height="20rem"
+        ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
+        className="bg-muted/30"
+      />
     </div>
   );
 }
