@@ -14,6 +14,7 @@ that holds the write lock (mirrors ``mcp_entry_service``).
 from __future__ import annotations
 
 import asyncio
+import pathlib
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -42,8 +43,8 @@ class _CredentialStore(Protocol):
 
 
 class _ConfigFileStore(Protocol):
-    def read_text(self, path: object) -> str | None: ...
-    def write_text_atomic(self, path: object, text: str) -> None: ...
+    def read_text(self, path: pathlib.Path) -> str | None: ...
+    def write_text_atomic(self, path: pathlib.Path, text: str) -> None: ...
 
 
 class _AgentLister(Protocol):
