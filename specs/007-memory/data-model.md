@@ -116,7 +116,7 @@ CREATE TABLE chunks (
     document_id  TEXT NOT NULL,                 -- app-level cascade (not a FK; KB+memory share the table)
     kind         TEXT NOT NULL,
     resource_name TEXT NOT NULL,
-    position     INTEGER NOT NULL               -- memory: one chunk per fact
+    position     INTEGER NOT NULL               -- memory: per-passage chunks (1 for a short inbox fact; N for a multi-section topic doc)
 );
 CREATE INDEX idx_chunks_document ON chunks(document_id);
 
@@ -224,6 +224,8 @@ compute content_sha256 of the new markdown
 ```
 
 All memory write paths (remember, update, user edit, lazy reindex scan) funnel through this one routine.
+
+The memory reconciler supplies its own **chunker** to the routine (per FR-032): the shared `infrastructure/knowledge/chunking.chunk_markdown`, bound to fixed memory chunk-size/overlap constants (not a per-store config), so an organized topic document is split into **per-passage chunks** (heading- and block-structure aware) and `recall` returns its most relevant passage. A short single-passage fact still yields one chunk, so the inbox-vs-topic and `INDEX.md`/`handoff/` recall isolation is unaffected.
 
 When a vector-enabled store's embed degrades (embedding provider unavailable), the routine indexes keyword-only and persists an **empty-string `content_sha256`** — a deliberate never-matching sentinel so the next lazy reconcile retries the embed instead of treating the fact as up to date.
 

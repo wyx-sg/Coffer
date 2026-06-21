@@ -116,7 +116,7 @@ CREATE TABLE chunks (
     document_id  TEXT NOT NULL,                 -- app-level cascade (not a FK; KB+memory share the table)
     kind         TEXT NOT NULL,
     resource_name TEXT NOT NULL,
-    position     INTEGER NOT NULL               -- memory: one chunk per fact
+    position     INTEGER NOT NULL               -- memory: per-passage chunks (1 for a short inbox fact; N for a multi-section topic doc)
 );
 CREATE INDEX idx_chunks_document ON chunks(document_id);
 
@@ -224,6 +224,8 @@ compute content_sha256 of the new markdown
 ```
 
 memory 的所有写路径（remember、update、用户编辑、惰性 reindex 扫描）都汇入这一个例程。
+
+memory 对账器向该例程提供自己的**分块器**（见 FR-032）：共享的 `infrastructure/knowledge/chunking.chunk_markdown`，绑定固定的 memory 分块 size/overlap 常量（不是 per-store 配置），从而把一份已整理的主题文档切成**段落粒度的分块**（标题与块结构感知），使 `recall` 返回其最相关的段落。短的单段落事实仍只切成一块，因此 inbox 与主题文档之分、以及 `INDEX.md`/`handoff/` 的 recall 隔离都不受影响。
 
 当启用 vector 的 store 在 embed 时降级（embedding provider 不可用），该例程只做 keyword 索引并持久化一个**空字符串 `content_sha256`** —— 一个刻意永不匹配的哨兵值，使下一次惰性对账重试 embed，而不是把这条事实当作已是最新。
 
