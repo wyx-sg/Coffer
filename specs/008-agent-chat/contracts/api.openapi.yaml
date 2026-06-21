@@ -52,12 +52,12 @@ paths:
       summary: Create a conversation
       operationId: createConversation
       description: >
-        Creates a conversation for the named agent. `agent_key` selects the
-        agent (defaults to the built-in agent); `agent_config` is an opaque,
-        agent-specific configuration object the named agent validates and
-        stores. For the built-in agent, `agent_config` accepts an optional
-        `model_id`. An unknown `agent_key` or an invalid `agent_config` is
-        rejected with 400.
+        Creates a conversation for the named Coffer-managed agent. `agent_key`
+        is required (chat has no built-in agent since ADR-024); `agent_config`
+        is an opaque, agent-specific configuration object the named agent
+        validates and stores. For a managed agent it accepts an optional `cwd`
+        and an optional `model` (the agent's own model, free-text). An unknown
+        `agent_key` or an invalid `agent_config` is rejected with 400.
       tags: [chat]
       requestBody:
         required: false
@@ -117,6 +117,50 @@ paths:
       responses:
         '204':
           description: No Content
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/chat/conversations/{id}/agent-config:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    get:
+      summary: Read a conversation's agent config (cwd, model)
+      operationId: getAgentConfig
+      tags: [chat]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentConfigOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      summary: Set a conversation's agent model (managed agents)
+      description: >
+        Sets `agent_config.model` — the managed agent's own model, passed through
+        to its CLI (Claude Code `--model`, Codex `model`) — preserving `cwd` and
+        `session_id`. An empty or omitted `model` clears the override so the
+        conversation inherits the active provider profile's projected default.
+        Mirrors the channel `/model` command. The registry `model_id` (PATCH
+        /conversations/{id}) is unrelated and is not read by the managed-agent
+        turn path.
+      operationId: setAgentConfig
+      tags: [chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentConfigPatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentConfigOut'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -451,13 +495,33 @@ components:
           nullable: true
           description: >
             Opaque, agent-specific configuration validated by the named agent.
-            For the built-in agent: an optional `model_id`.
+            For a managed agent (Claude Code / Codex): an optional `cwd` and an
+            optional `model` (the agent's own model, free-text, passed through to
+            its CLI).
 
     ConversationPatch:
       type: object
       properties:
         title: { type: string, nullable: true }
         model_id: { type: string, nullable: true }
+
+    AgentConfigPatch:
+      type: object
+      properties:
+        model:
+          type: string
+          nullable: true
+          description: >
+            The managed agent's model (free-text, passed through to its CLI).
+            Empty or null clears the override; `cwd` and `session_id` are
+            preserved.
+
+    AgentConfigOut:
+      type: object
+      required: [cwd, model]
+      properties:
+        cwd: { type: string, nullable: true }
+        model: { type: string, nullable: true }
 
     ConversationOut:
       type: object

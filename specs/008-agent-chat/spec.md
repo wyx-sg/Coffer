@@ -113,6 +113,48 @@ Where User Stories, Acceptance Scenarios, and FRs still describe the composer
 locking during a turn or an `origin`/`peer` field, read them as superseded by the
 ADR-031 wording here and the revised FRs below.
 
+## Repositioning — a managed agent's per-conversation model is its own model ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md) → [ADR-032](../../docs/decisions/ADR-032-provider-switching.md))
+
+[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)
+retired the built-in chat persona, which **re-founds** the per-conversation model
+override (FR-025/FR-026, User Story 8). For a managed agent the conversation's
+model is **not** a Coffer-registered `Model` (the `Conversation.model_id` registry
+column): it is the agent's **own** model, carried as free-text `agent_config.model`
+and passed through to the agent's CLI (Claude Code `--model`, Codex `model`),
+exactly as the channel `/model` command already does. Coffer does not validate the
+name — a bad model is reported by the agent's CLI on the next turn.
+
+Two layers, one override:
+
+1. **Global default.** Provider Switching ([ADR-032](../../docs/decisions/ADR-032-provider-switching.md), spec 011)
+   projects the active provider profile's `model` (and, for Claude, `fast_model`)
+   into the agent's native config. This is what a turn runs when the conversation
+   does not override the model.
+2. **Per-conversation override.** `agent_config.model` is passed as an explicit
+   per-turn option that the CLI honours over its config default. An **empty**
+   per-conversation model inherits the global default; setting it overrides only
+   the subsequent turns of that one conversation and preserves the conversation's
+   other agent config (`cwd`, `session_id`).
+
+`Conversation.model_id` (the `Model` registry override of FR-026) is **not read by
+the managed-agent turn path** — both managed providers build their adapter from
+`agent_config.model`, never from `model_id`. It remains the registry of Coffer's
+internal-engine models (Settings → Models) and is **out of scope** for the chat
+model picker; re-wiring or retiring it is a separate concern (see Non-Goals).
+
+The web Chat surface MUST let the owner set `agent_config.model` both when
+**starting** a conversation (the draft, beside the agent picker) and
+**mid-conversation** (the agent bar), mirroring `/model`. The control is a
+free-text combobox with **best-effort** suggestions — the agent's active provider
+profile `model`/`fast_model` ([ADR-032](../../docs/decisions/ADR-032-provider-switching.md)),
+augmented best-effort by provider model introspection — and an empty value that
+inherits the global default.
+
+Where FR-025/FR-026, User Story 8, and the "model selection is recorded" scenario
+describe a Coffer-registered `Model` (`model_id`) override for the built-in agent,
+read them as repositioned here: for managed agents the per-conversation model is
+`agent_config.model`, governed by FR-026a/FR-026b below.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — Configure a model provider before the first chat (Priority: P1)
@@ -469,6 +511,16 @@ referenced by at least one test marked
 - **Then** the turn runs on the chosen model and the assistant message records
   which model produced it.
 
+### Scenario: set a managed agent's model per conversation
+
+- **Given** a conversation with a managed agent and an active provider profile,
+- **When** the owner sets the conversation's agent model to a free-text id (from
+  the draft or the agent bar),
+- **Then** the value is persisted as `agent_config.model`, the conversation's
+  `cwd` and `session_id` are preserved, and subsequent turns pass that model to
+  the agent's CLI; clearing it reverts to the provider profile's projected
+  default.
+
 ### Scenario: no-model empty state
 
 - **Given** a running daemon with no model configured,
@@ -676,6 +728,21 @@ referenced by at least one test marked
   use it for any conversation that does not override the model.
 - **FR-026**: A conversation MUST be able to override the model; the override
   affects only subsequent turns of that conversation.
+- **FR-026a**: For a **managed agent**, the conversation's model override MUST be
+  the agent's own model carried as free-text `agent_config.model` and passed
+  through to the agent's CLI (not a Coffer-registered `Model`/`model_id`).
+  Setting it MUST preserve the conversation's other agent config (`cwd`,
+  `session_id`) and affect only subsequent turns; an empty value MUST inherit the
+  global default that Provider Switching ([ADR-032](../../docs/decisions/ADR-032-provider-switching.md))
+  projects into the agent's native config. The managed-agent turn path MUST NOT
+  read `Conversation.model_id`.
+- **FR-026b**: The REST API MUST expose reading and setting a conversation's
+  `agent_config.model`, and creating a conversation MUST accept an initial
+  `agent_config.model`. The GUI MUST surface this both at conversation creation
+  (beside the agent picker) and mid-conversation, as a free-text combobox whose
+  best-effort suggestions come from the agent's active provider profile
+  `model`/`fast_model` augmented by best-effort provider model introspection
+  (FR-030 REST parity).
 
 **Surfaces**
 
@@ -813,3 +880,8 @@ referenced by at least one test marked
   and any cross-agent raw-transcript browse/search surface (sharing across agents
   is served by distilled memory, [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.md)).
   Remote channels are delivered separately by Spec 009.
+- Re-wiring the managed-agent turn path to read `Conversation.model_id`, and
+  retiring that registry override for chat, are **out of scope**: the per-conversation
+  model picker targets `agent_config.model` only (see the per-conversation-model
+  repositioning above). `model_id` stays the Settings → Models internal-engine
+  registry.

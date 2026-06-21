@@ -15,11 +15,12 @@ from typing import Any
 from coffer.application.chat.ports import ToolSpec
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.audit import AuditEntry
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message, Role, TextBlock
 from coffer.domain.chat.model import ModelConfig, ProviderType
-from coffer.domain.errors import NoModelConfigured
+from coffer.domain.errors import ConversationNotFound, NoModelConfigured
 
 # ---------------------------------------------------------------------------
 # Audit
@@ -45,6 +46,7 @@ class FakeAuditRepo:
 class FakeConversationRepo:
     def __init__(self) -> None:
         self._store: dict[str, Conversation] = {}
+        self._agent_configs: dict[str, AgentConfig] = {}
 
     async def create(self, conversation: Conversation) -> Conversation:
         self._store[conversation.id] = conversation
@@ -83,6 +85,16 @@ class FakeConversationRepo:
 
     async def delete(self, conversation_id: str) -> None:
         self._store.pop(conversation_id, None)
+
+    async def get_agent_config(self, conversation_id: str) -> AgentConfig:
+        if conversation_id not in self._store:
+            raise ConversationNotFound(conversation_id)
+        return self._agent_configs.get(conversation_id, AgentConfig())
+
+    async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None:
+        if conversation_id not in self._store:
+            raise ConversationNotFound(conversation_id)
+        self._agent_configs[conversation_id] = config
 
 
 # ---------------------------------------------------------------------------

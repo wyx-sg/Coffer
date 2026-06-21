@@ -1177,6 +1177,11 @@
       "workdirPlaceholder": "/path/to/your/project",
       "recent": "Recent directories"
     },
+    "modelPicker": {
+      "label": "Agent model",
+      "placeholder": "Model (optional)",
+      "defaultHint": "Default: {{model}}"
+    },
     "draft": {
       "guide": "Message {{agent}} to start a new conversation.",
       "workdirNeeded": "Enter a working directory above to start chatting with {{agent}}.",

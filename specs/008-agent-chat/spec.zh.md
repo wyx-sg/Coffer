@@ -93,6 +93,39 @@ model 选择器、它在聊天里的金库工具调用、对它的 `coffer chat`
 下文用户故事、验收场景与 FR 中仍描述回合期间 composer 锁定，或描述一个 `origin`/
 `peer` 字段的部分，应读作被此处的 ADR-031 措辞与下文修订后的 FR 取代。
 
+## 再次定位 —— 受管 agent 的按对话模型就是它自己的模型（[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md) → [ADR-032](../../docs/decisions/ADR-032-provider-switching.zh.md)）
+
+[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)
+退役了内置聊天人格，这**重新奠定**了按对话的模型覆盖（FR-025/FR-026、用户故事 8）。
+对一个受管 agent，对话的模型**不是**一个 Coffer 注册的 `Model`（`Conversation.model_id`
+注册表列）：它是该 agent **自己**的模型，以自由文本 `agent_config.model` 承载，并透传给
+agent 的 CLI（Claude Code `--model`、Codex `model`），与 channel `/model` 命令今天所做的
+完全一致。Coffer 不校验该名字 —— 坏模型名由 agent 的 CLI 在下一回合自行报错。
+
+两层，一个覆盖：
+
+1. **全局默认。** Provider Switching（[ADR-032](../../docs/decisions/ADR-032-provider-switching.zh.md)、spec 011）
+   把 active provider profile 的 `model`（对 Claude，还有 `fast_model`）投影进 agent 的原生
+   配置。这是对话未覆盖模型时回合所跑的模型。
+2. **按对话覆盖。** `agent_config.model` 作为一个显式的 per-turn 选项传入，CLI 会用它压过
+   配置默认。**空**的按对话模型继承全局默认；设置它只覆盖该对话的后续回合，并保留该对话
+   的其余 agent 配置（`cwd`、`session_id`）。
+
+`Conversation.model_id`（FR-026 的 `Model` 注册表覆盖）**不被受管 agent 的回合路径读取**
+—— 两个受管 provider 都从 `agent_config.model` 构建其 adapter，从不读 `model_id`。它仍是
+Coffer 内部引擎模型的注册表（设置 → 模型），且**不在**聊天模型选择器范围内；重接线或退役
+它是另一件事（见 Non-Goals）。
+
+Web Chat 界面 MUST 让属主在**开始**一个对话时（draft，紧邻 agent 选择器）与
+**对话进行中**（agent bar）都能设置 `agent_config.model`，镜像 `/model`。该控件是一个
+自由文本 combobox，带**尽力而为**的建议 —— 来自该 agent 的 active provider profile 的
+`model`/`fast_model`（[ADR-032](../../docs/decisions/ADR-032-provider-switching.zh.md)），
+并由 provider 模型 introspection 尽力增补 —— 空值则继承全局默认。
+
+下文 FR-025/FR-026、用户故事 8 与"模型选择被记录"场景中描述内置 agent 的 Coffer 注册
+`Model`（`model_id`）覆盖之处，应读作在此被重新定位：对受管 agent，按对话模型即
+`agent_config.model`，由下文 FR-026a/FR-026b 规范。
+
 ## 用户场景与测试
 
 ### 用户故事 1 —— 在首次聊天前配置一个模型 provider（优先级：P1）
@@ -408,6 +441,13 @@ agent 使用哪一个。
 - **When** 用户设置一个对话的模型并发送一条消息，
 - **Then** 回合运行在所选模型上且助手消息记录产生它的模型。
 
+### 场景：按对话设置一个受管 agent 的模型
+
+- **Given** 一个带受管 agent 与一个 active provider profile 的对话，
+- **When** 属主把对话的 agent 模型设为一个自由文本 id（从 draft 或 agent bar），
+- **Then** 该值被持久化为 `agent_config.model`，对话的 `cwd` 与 `session_id` 被保留，
+  且后续回合把该模型传给 agent 的 CLI；清空它则回退到 provider profile 投影的默认。
+
 ### 场景：no-model 空状态
 
 - **Given** 一个没有配置模型的运行中守护进程，
@@ -571,6 +611,17 @@ agent 使用哪一个。
 - **FR-025**：System MUST 恰好标记一个已配置模型为默认，并把它用于任何不覆盖模型
   的对话。
 - **FR-026**：一个对话 MUST 能够覆盖模型；该覆盖只影响该对话的后续回合。
+- **FR-026a**：对一个**受管 agent**，对话的模型覆盖 MUST 是该 agent 自己的模型，以
+  自由文本 `agent_config.model` 承载并透传给 agent 的 CLI（而非一个 Coffer 注册的
+  `Model`/`model_id`）。设置它 MUST 保留对话的其余 agent 配置（`cwd`、`session_id`）
+  且只影响后续回合；空值 MUST 继承 Provider Switching（[ADR-032](../../docs/decisions/ADR-032-provider-switching.zh.md)）
+  投影进 agent 原生配置的全局默认。受管 agent 的回合路径 MUST NOT 读取
+  `Conversation.model_id`。
+- **FR-026b**：REST API MUST 暴露读取与设置一个对话的 `agent_config.model`，且创建
+  对话 MUST 接受一个初始 `agent_config.model`。GUI MUST 在开始对话时（紧邻 agent
+  picker）与对话进行中都呈现它，作为一个自由文本 combobox，其尽力而为的建议来自该
+  agent 的 active provider profile 的 `model`/`fast_model`，并由 provider 模型
+  introspection 尽力增补（FR-030 REST 对等）。
 
 **界面**
 
@@ -683,3 +734,6 @@ agent 使用哪一个。
   外部 agent 会话的恢复/继续；以及任何跨 agent 的原始 transcript 浏览/搜索界面（跨
   agent 的共享由蒸馏后的 memory 承担，[ADR-020](../../docs/decisions/ADR-020-transcript-distillation.zh.md)）。
   远程通道由 Spec 009 单独交付。
+- 把受管 agent 的回合路径重接线去读 `Conversation.model_id`、以及为聊天退役该注册表
+  覆盖，均**不在范围内**：按对话模型选择器只面向 `agent_config.model`（见上文按对话模型
+  的重新定位）。`model_id` 仍是设置 → 模型的内部引擎注册表。

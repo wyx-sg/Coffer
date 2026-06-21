@@ -17,8 +17,8 @@ Frozen dataclass — domain stays pure.
 | `id`                        | `str`                | uuid4 hex                                                                                                                                                                                                                                               |
 | `agent_key`                 | `str`                | which agent the thread talks to; default `"builtin"`                                                                                                                                                                                                    |
 | `title`                     | `str`                | auto-generated from the first user message; user-editable                                                                                                                                                                                               |
-| `model_id`                  | `str \| None`        | `chat_models.id` override; `None` → default model. Built-in agent's per-conversation model storage.                                                                                                                                                     |
-| `agent_config`              | `str \| None` (JSON) | Provider-owned per-conversation state (Alembic `0018`). CLI agents store `{cwd, session_id, permission_mode?}` here; the built-in agent stores nothing (it uses `model_id`). Read/written via `ConversationRepo.get_agent_config` / `set_agent_config`. |
+| `model_id`                  | `str \| None`        | `chat_models.id` override → the internal-engine `ModelConfig` registry (Settings → Models). **Not read by the managed-agent turn path** (ADR-024); out of scope for the chat model picker. `None` → default model.                                       |
+| `agent_config`              | `str \| None` (JSON) | Provider-owned per-conversation state (Alembic `0018`). Managed agents (Claude Code / Codex) store `{cwd, session_id, model}` here; `model` is the agent's own per-conversation model (free-text, passed through to its CLI), set via the agent-config PATCH route mirroring `/model`. Read/written via `ConversationRepo.get_agent_config` / `set_agent_config`. |
 | `archived_at`               | `datetime \| None`   | `None` = active; a timestamp = archived (Alembic `0013`). Drives the active/archived filter and the two-stage retention lifecycle.                                                                                                                      |
 | `channel_name`              | `str \| None`        | Optional IM channel binding (ADR-031): the channel this conversation is also driven from. A conversation "has a channel binding" iff this is set (Alembic `0021`).                                                                                       |
 | `peer_chat_id`              | `str \| None`        | The IM chat id used as the return address for relaying the agent's output back to the channel. Paired with `channel_name` (Alembic `0021`).                                                                                                             |
@@ -172,6 +172,11 @@ Lives in `contracts/api.openapi.yaml`. Routes added/changed by **ADR-031**:
   stream — **changed**
 - `ConversationOut` drops `origin`/`peer`; gains optional `channel_binding`
   (`{channel, chat_id}`) — **changed**
+
+Routes added by the per-conversation-model repositioning ([ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md) → [ADR-032](../../docs/decisions/ADR-032-provider-switching.md)):
+
+- `GET /api/v1/chat/conversations/{id}/agent-config` — read `{cwd, model}` — **new**
+- `PATCH /api/v1/chat/conversations/{id}/agent-config` — set `agent_config.model` (managed agents), preserving `cwd`/`session_id`; empty clears the override — **new**
 
 Unchanged routes: `GET /chat/agents`, conversation list/get/patch/delete/archive/
 unarchive, message history, `POST .../interrupt` → 204, and the `/api/v1/models`

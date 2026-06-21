@@ -19,6 +19,9 @@ vi.mock("@/lib/api/chat", () => ({
     unarchiveConversation: vi.fn(),
     listMessages: vi.fn(),
     listAgents: vi.fn(),
+    // Per-conversation managed-agent model (ADR-024 → ADR-032).
+    getAgentConfig: vi.fn().mockResolvedValue({ cwd: null, model: null }),
+    setAgentModel: vi.fn().mockResolvedValue({ cwd: null, model: null }),
     // Fire-and-return turn control (ADR-031).
     sendMessage: vi.fn().mockResolvedValue({ queued: false }),
     setPending: vi.fn().mockResolvedValue({ pending: [] }),
@@ -28,6 +31,12 @@ vi.mock("@/lib/api/chat", () => ({
 
 vi.mock("@/lib/api/models", () => ({
   modelsApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+}));
+
+// The model picker's provider suggestions are out of scope for these page tests.
+vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: () => ({ data: [] }) }));
+vi.mock("@/lib/hooks/useModelIntrospection", () => ({
+  useListProviderModels: () => ({ mutate: vi.fn() }),
 }));
 
 vi.mock("@/lib/chat/streamClient", () => ({
@@ -146,6 +155,29 @@ describe("ChatPage", () => {
       expect(chatApiMock.createConversation).toHaveBeenCalledWith({
         agent_key: "claude_code",
         agent_config: {},
+      }),
+    );
+  });
+
+  test("a draft model is carried into the created conversation's agent_config", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
+    modelsApiMock.list.mockResolvedValue({ models: [] });
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
+    renderPage("/chat");
+
+    const picker = await screen.findByLabelText(/agent model/i);
+    fireEvent.change(picker, { target: { value: "claude-opus-4-8" } });
+    fireEvent.blur(picker);
+
+    const composer = await screen.findByRole("textbox", { name: /message input/i });
+    fireEvent.change(composer, { target: { value: "hi" } });
+    fireEvent.keyDown(composer, { key: "Enter", shiftKey: false });
+
+    await waitFor(() =>
+      expect(chatApiMock.createConversation).toHaveBeenCalledWith({
+        agent_key: "claude_code",
+        agent_config: { model: "claude-opus-4-8" },
       }),
     );
   });
