@@ -6,6 +6,15 @@ Files-as-truth. Each entry is delimited by an HTML-comment marker line
 ``##``/list collisions in bodies), followed by the entry body. Append rewrites
 the whole file atomically via ``infrastructure.knowledge.fs.atomic_write_text``
 so a crash never leaves a partial file. No LLM, no frontmatter — pure I/O.
+
+**Known limitation — reserved delimiter in body text.**
+The marker line ``<!-- coffer:journal <iso> -->`` is reserved as an entry
+delimiter. A body whose own text contains that exact pattern on a line by itself
+will be mis-parsed by ``read_entries`` as the start of a new entry. This is an
+accepted limitation for the lane's scope: bodies are Coffer-internal episodic
+text produced by the application, not arbitrary user markdown, so the pattern
+will not appear naturally. No escaping or validation is applied; callers must
+not embed the marker pattern in body text.
 """
 
 from __future__ import annotations
@@ -28,7 +37,7 @@ def journal_period(when: datetime) -> str:
 
 def append_entry(path: Path, *, timestamp: datetime, body: str) -> None:
     """Append one timestamped entry to ``path`` atomically (creates parents)."""
-    block = f"{_MARK}{timestamp.isoformat()} -->\n{body.strip()}\n"
+    block = f"{_MARK}{timestamp.isoformat()} -->\n{body.strip('\n')}\n"
     try:
         existing = path.read_text(encoding="utf-8")
     except OSError:

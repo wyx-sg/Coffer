@@ -48,3 +48,11 @@ def test_body_with_markdown_heading_is_not_split(tmp_path: pathlib.Path) -> None
     got = read_entries(path)
     assert len(got) == 1
     assert got[0].body == "line1\n## Foo\nline3"
+
+
+def test_append_preserves_surrounding_spaces(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "2026-06.md"
+    t = datetime(2026, 6, 21, 9, 0, tzinfo=UTC)
+    append_entry(path, timestamp=t, body="  indented body  ")
+    got = read_entries(path)
+    assert got[0].body == "  indented body  "
