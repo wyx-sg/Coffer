@@ -1,7 +1,8 @@
 // frontend/src/pages/settings/SettingsLayout.test.tsx
 //
 // Direct-render tests for the settings tab-strip + pane-swap behaviour.
-// Settings renders Models + Data + Security + About; the daemon is never a tab.
+// Settings renders LLM Connections + Data + Security + About; the daemon is
+// never a tab.
 
 import { describe, expect, test } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -33,13 +34,16 @@ describe("SettingsLayout", () => {
     expect(screen.queryByRole("link", { name: /^Daemon$/ })).not.toBeInTheDocument();
   });
 
-  test("folds embedding into the Models tab — no standalone Embedding tab", () => {
+  test("folds Models + Providers + Embedding into one LLM Connections tab", () => {
     render(wrap());
-    // The embedding/chunking config lives on the Models page (its own card),
-    // so there is no separate Embedding nav item.
+    // The Models and Providers tabs are retired (unified) and the embedding
+    // config lives on the LLM Connections page (its own card), so there is no
+    // separate Models / Providers / Embedding nav item.
+    expect(screen.queryByRole("link", { name: /^Models$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^Providers$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Embedding/ })).not.toBeInTheDocument();
-    // The tab is just "Models".
-    expect(screen.getByRole("link", { name: /^Models$/ })).toBeInTheDocument();
+    // The single unified tab is "LLM Connections".
+    expect(screen.getByRole("link", { name: /LLM Connections/ })).toBeInTheDocument();
   });
 
   test("renders the active pane and swaps content when another tab is clicked", () => {

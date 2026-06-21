@@ -12,7 +12,7 @@ import { useProviders } from "@/lib/hooks/useProviders";
 const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
 const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>;
 
-function makeProfile(over: Record<string, unknown> = {}) {
+function makeConnection(over: Record<string, unknown> = {}) {
   return {
     name: "p1",
     wire_format: "anthropic",
@@ -22,6 +22,7 @@ function makeProfile(over: Record<string, unknown> = {}) {
     fast_model: "claude-haiku-4-5",
     wire_api: "chat",
     is_active: true,
+    internal_default: false,
     enabled: true,
     created_at: "",
     updated_at: "",
@@ -29,96 +30,97 @@ function makeProfile(over: Record<string, unknown> = {}) {
   };
 }
 
-function options(container: HTMLElement): (string | null)[] {
-  return Array.from(container.querySelectorAll("option")).map((o) => o.getAttribute("value"));
+/** Open the Radix Select trigger and return its rendered option labels.
+ *
+ * jsdom has no PointerEvent, so drive the trigger via the keyboard (Radix opens
+ * the listbox on ArrowDown / Enter / Space) rather than a pointer gesture. */
+function openAndReadOptions(): string[] {
+  const trigger = screen.getByRole("combobox", { name: /agent model/i });
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  return screen.getAllByRole("option").map((o) => o.textContent ?? "");
 }
 
 beforeEach(() => {
-  useProvidersMock.mockReturnValue({ data: [makeProfile()] });
+  vi.clearAllMocks();
+  useProvidersMock.mockReturnValue({ data: [makeConnection()] });
   useListMock.mockReturnValue({ mutate: vi.fn() });
 });
 
 describe("ModelPicker", () => {
-  test("suggests the active profile model + fast_model and shows the default hint", () => {
-    const { container } = render(
-      <ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />,
-    );
-    expect(options(container)).toEqual(["claude-opus-4-8", "claude-haiku-4-5"]);
-    expect(screen.getByLabelText(/agent model/i)).toHaveAttribute(
-      "placeholder",
-      "Default: claude-opus-4-8",
-    );
+  test("renders a dropdown listing the active connection's model + fast_model", () => {
+    render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
+    const options = openAndReadOptions();
+    expect(options).toContain("claude-opus-4-8");
+    expect(options).toContain("claude-haiku-4-5");
+    // A custom-entry escape hatch is always offered (model ids are free-form).
+    expect(options.some((o) => /custom/i.test(o))).toBe(true);
   });
 
-  test("commits a trimmed value on blur", () => {
+  test("selecting a listed model commits it", () => {
     const onCommit = vi.fn();
     render(<ModelPicker agentKey="claude_code" value={null} onCommit={onCommit} />);
-    const input = screen.getByLabelText(/agent model/i);
-    fireEvent.change(input, { target: { value: "  custom-model  " } });
-    fireEvent.blur(input);
-    expect(onCommit).toHaveBeenCalledWith("custom-model");
+    openAndReadOptions();
+    fireEvent.click(screen.getByRole("option", { name: "claude-haiku-4-5" }));
+    expect(onCommit).toHaveBeenCalledWith("claude-haiku-4-5");
   });
 
-  test("clearing the text commits null (inherit the default)", () => {
+  test("choosing Custom… reveals a free-text input that commits any id on blur", () => {
     const onCommit = vi.fn();
-    render(<ModelPicker agentKey="claude_code" value="claude-opus-4-8" onCommit={onCommit} />);
+    render(<ModelPicker agentKey="claude_code" value={null} onCommit={onCommit} />);
+    openAndReadOptions();
+    fireEvent.click(screen.getByRole("option", { name: /custom/i }));
+    const input = screen.getByLabelText(/agent model/i);
+    fireEvent.change(input, { target: { value: "  some-custom-id  " } });
+    fireEvent.blur(input);
+    expect(onCommit).toHaveBeenCalledWith("some-custom-id");
+  });
+
+  test("introspects on first open and merges fetched models (deduped)", () => {
+    const mutate = vi.fn((_probe, opts) =>
+      opts.onSuccess({ models: ["claude-sonnet-4-6", "claude-opus-4-8"], message: "" }),
+    );
+    useListMock.mockReturnValue({ mutate });
+    render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
+    const trigger = screen.getByRole("combobox", { name: /agent model/i });
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    fireEvent.keyDown(trigger, { key: "ArrowDown" }); // second open must not re-fetch
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const options = screen.getAllByRole("option").map((o) => o.textContent ?? "");
+    expect(options).toContain("claude-sonnet-4-6");
+    // opus appears once (deduped against the connection's own model)
+    expect(options.filter((o) => o === "claude-opus-4-8")).toHaveLength(1);
+  });
+
+  test("with no active connection for the agent's wire, falls back to a free-text input", () => {
+    // Only an anthropic connection is active; a codex (openai) agent has none →
+    // no models to list, so the picker is a plain editable field.
+    const onCommit = vi.fn();
+    render(<ModelPicker agentKey="codex" value={null} onCommit={onCommit} />);
+    const input = screen.getByLabelText(/agent model/i);
+    fireEvent.change(input, { target: { value: "gpt-5-codex" } });
+    fireEvent.blur(input);
+    expect(onCommit).toHaveBeenCalledWith("gpt-5-codex");
+  });
+
+  test("a custom (non-listed) current value renders in the free-text input", () => {
+    render(<ModelPicker agentKey="claude_code" value="my-finetune" onCommit={vi.fn()} />);
+    // Not one of the connection's models → shown in the editable input directly.
+    expect(screen.getByLabelText(/agent model/i)).toHaveValue("my-finetune");
+  });
+
+  test("clearing the free-text value commits null (inherit the default)", () => {
+    const onCommit = vi.fn();
+    render(<ModelPicker agentKey="claude_code" value="my-finetune" onCommit={onCommit} />);
     const input = screen.getByLabelText(/agent model/i);
     fireEvent.change(input, { target: { value: "" } });
     fireEvent.blur(input);
     expect(onCommit).toHaveBeenCalledWith(null);
   });
 
-  test("does not commit when the value is unchanged", () => {
+  test("does not commit when the free-text value is unchanged", () => {
     const onCommit = vi.fn();
-    render(<ModelPicker agentKey="claude_code" value="claude-opus-4-8" onCommit={onCommit} />);
+    render(<ModelPicker agentKey="claude_code" value="my-finetune" onCommit={onCommit} />);
     fireEvent.blur(screen.getByLabelText(/agent model/i));
     expect(onCommit).not.toHaveBeenCalled();
-  });
-
-  test("introspects once on first focus and merges fetched models (deduped)", () => {
-    const mutate = vi.fn((_probe, opts) =>
-      opts.onSuccess({ models: ["claude-sonnet-4-6", "claude-opus-4-8"], message: "" }),
-    );
-    useListMock.mockReturnValue({ mutate });
-    const { container } = render(
-      <ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />,
-    );
-    const input = screen.getByLabelText(/agent model/i);
-    fireEvent.focus(input);
-    fireEvent.focus(input); // second focus must not re-fetch
-    expect(mutate).toHaveBeenCalledTimes(1);
-    expect(options(container)).toEqual([
-      "claude-opus-4-8",
-      "claude-haiku-4-5",
-      "claude-sonnet-4-6",
-    ]);
-  });
-
-  test("resets the introspected catalogue when the agent changes (no leak)", () => {
-    const mutate = vi.fn((_probe, opts) =>
-      opts.onSuccess({ models: ["claude-sonnet-4-6"], message: "" }),
-    );
-    useListMock.mockReturnValue({ mutate });
-    const { container, rerender } = render(
-      <ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />,
-    );
-    fireEvent.focus(screen.getByLabelText(/agent model/i));
-    expect(options(container)).toContain("claude-sonnet-4-6");
-
-    // Switch to codex (no active openai profile here): the anthropic catalogue
-    // must not leak into the new agent's suggestions.
-    rerender(<ModelPicker agentKey="codex" value={null} onCommit={vi.fn()} />);
-    expect(options(container)).toEqual([]);
-  });
-
-  test("with no active profile for the agent's wire, offers no suggestions but allows free text", () => {
-    // Only an anthropic profile is active; a codex (openai) agent has none.
-    const onCommit = vi.fn();
-    const { container } = render(<ModelPicker agentKey="codex" value={null} onCommit={onCommit} />);
-    expect(options(container)).toEqual([]);
-    const input = screen.getByLabelText(/agent model/i);
-    fireEvent.change(input, { target: { value: "gpt-5-codex" } });
-    fireEvent.blur(input);
-    expect(onCommit).toHaveBeenCalledWith("gpt-5-codex");
   });
 });

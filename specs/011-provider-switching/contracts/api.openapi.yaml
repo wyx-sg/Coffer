@@ -45,13 +45,18 @@ paths:
     post:
       tags: [providers]
       operationId: createProvider
-      summary: Create a new provider profile
+      summary: Create a new provider connection
       description: |
-        Exactly one credential source must be supplied:
-        - `secret_value`: the raw API key — stored to the Fernet vault under
-          `provider/<name>/key` and kept only as a `credential_ref`.
-        - `credential_ref`: reuse an existing vault ref.
-        Supplying both or neither is rejected with 422.
+        Credential source depends on `wire_format`:
+        - For `anthropic`/`openai`, exactly one credential source must be
+          supplied:
+          - `secret_value`: the raw API key — stored to the Fernet vault under
+            `provider/<name>/key` and kept only as a `credential_ref`.
+          - `credential_ref`: reuse an existing vault ref.
+          Supplying both or neither is rejected with 422.
+        - For `ollama`, the credential is OPTIONAL — supply NEITHER
+          `secret_value` nor `credential_ref` (an ollama connection has no
+          key). Supplying either is rejected with 422.
       requestBody:
         required: true
         content:
@@ -165,6 +170,37 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /providers/{name}/internal-default:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Connection name to set as the internal-engine default.
+
+    post:
+      tags: [providers]
+      operationId: setInternalDefaultProvider
+      summary: Set a connection as Coffer's internal-engine default
+      description: |
+        Marks this connection as the one Coffer's internal LLM engine uses
+        (memory organizer, reorg, distill, `coffer__ask`). At most one
+        connection globally is the internal default; setting one clears the
+        previous one (sequential clear-then-set, serialised by the
+        single-process daemon).
+
+        Emits a `PROVIDER_INTERNAL_DEFAULT_SET` audit event with details
+        `{from, to}` and returns the updated `ProviderOut`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /providers/active-key/{wire}:
     parameters:
       - in: path
@@ -205,11 +241,15 @@ components:
 
     WireFormat:
       type: string
-      enum: [anthropic, openai]
+      enum: [anthropic, openai, ollama]
       description: |
-        Determines which native agent this profile projects to:
+        Determines which native agent this connection projects to:
         - `anthropic` → Claude Code (`~/.claude/settings.json`)
         - `openai` → Codex (`~/.codex/config.toml`)
+        - `ollama` → internal-only; projected to NO agent (`target_for`
+          returns null). Used solely by Coffer's internal engine when this
+          connection is the internal default. Has no API key, so its
+          `credential_ref` is absent.
 
     WireApi:
       type: string
@@ -227,15 +267,17 @@ components:
         - credential_ref
         - model
         - is_active
+        - internal_default
         - created_at
         - updated_at
       description: >-
-        A provider profile. Never includes the raw secret. `credential_ref`
-        and `is_active` are always present.
+        A provider connection. Never includes the raw secret. `credential_ref`
+        (null for ollama), `is_active`, and `internal_default` are always
+        present.
       properties:
         name:
           type: string
-          description: Profile name (unique within kind `provider`).
+          description: Connection name (unique within kind `provider`).
         wire_format:
           $ref: "#/components/schemas/WireFormat"
         base_url:
@@ -243,10 +285,12 @@ components:
           description: The upstream LLM endpoint URL.
         credential_ref:
           type: string
+          nullable: true
           description: >-
             Fernet vault reference for the API key.
             Pattern: `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`.
             Typically `provider/<name>/key` for an owned secret.
+            Null for an ollama connection (no API key).
         model:
           type: string
           description: Primary model ID.
@@ -262,7 +306,13 @@ components:
           type: boolean
           description: >-
             Whether this is the active profile for its wire_format. At most
-            one profile per wire_format has is_active=true.
+            one profile per wire_format has is_active=true. Always false for
+            ollama (internal-only, never projected).
+        internal_default:
+          type: boolean
+          description: >-
+            Whether this connection is Coffer's internal-engine default. At
+            most one connection globally has internal_default=true.
         created_at:
           type: string
           format: date-time
@@ -301,14 +351,16 @@ components:
           nullable: true
           description: >-
             Reuse an existing vault ref. Mutually exclusive with
-            `secret_value`. Exactly one must be supplied.
+            `secret_value`. For anthropic/openai exactly one of the two must
+            be supplied; for ollama supply neither.
         secret_value:
           type: string
           nullable: true
           description: >-
             Raw API key. Stored to the vault under `provider/<name>/key`.
-            Mutually exclusive with `credential_ref`. Exactly one must be
-            supplied. Never echoed in any response.
+            Mutually exclusive with `credential_ref`. For anthropic/openai
+            exactly one of the two must be supplied; for ollama supply
+            neither. Never echoed in any response.
 
     ProviderPatchRequest:
       type: object
@@ -418,7 +470,10 @@ components:
       description: |
         Validation failure. Common cases:
         - Unknown `wire_format`
-        - Both `secret_value` and `credential_ref` supplied (or neither)
+        - For anthropic/openai: both `secret_value` and `credential_ref`
+          supplied, or neither
+        - For ollama: a `secret_value` or `credential_ref` supplied (ollama
+          has no key)
         - `credential_ref` pattern violation
       content:
         application/json:

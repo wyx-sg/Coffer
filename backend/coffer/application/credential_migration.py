@@ -1,8 +1,8 @@
 """One-time migration: legacy OS-keychain secrets -> encrypted store.
 
 Runs at every daemon startup but only touches refs that are cited by a
-registered resource (or passed in ``extra_refs`` for non-resource owners
-like chat models and the global embedding config) AND absent from the
+registered resource (or passed in ``extra_refs`` for the non-resource
+global embedding config) AND absent from the
 encrypted store, so a completed migration is a no-op (the OS keychain is
 never enumerated — refs come from each kind's credential_ref_extractor
 plus ``extra_refs``). A locked/denied keychain skips that ref; it will be
@@ -40,8 +40,8 @@ async def migrate_legacy_keychain(
     """Move every still-keychain-resident cited secret into the store.
 
     ``extra_refs`` carries credential refs cited by non-resource owners
-    (chat models, the global embedding config) so they migrate alongside
-    resource-cited refs instead of being stranded in the OS keychain.
+    (the global embedding config) so they migrate alongside resource-cited
+    refs instead of being stranded in the OS keychain.
     """
     moved = 0
     seen: set[str] = set()
@@ -89,20 +89,16 @@ async def migrate_legacy_keychain(
 
 
 async def gather_extra_credential_refs(
-    chat_model_repo: Any,
     embedding_config_svc: Any,
 ) -> list[str]:
     """Collect credential refs cited by non-resource owners.
 
-    Chat models and the global embedding config cite secrets but are not
-    registered resources, so their refs would otherwise be stranded in the
-    OS keychain on upgrade. The embedding config row may not exist yet, in
-    which case its ref is simply absent.
+    LLM connections are ``provider`` resources now (their refs migrate via the
+    resource-cited loop above), so the only remaining non-resource owner is the
+    global embedding config. Its row may not exist yet, in which case its ref is
+    simply absent.
     """
     refs: list[str] = []
-    for model_cfg in await chat_model_repo.list():
-        if model_cfg.credential_ref:
-            refs.append(model_cfg.credential_ref)
     embedding_ref = (await embedding_config_svc.get()).credential_ref
     if embedding_ref:
         refs.append(embedding_ref)

@@ -34,6 +34,16 @@ Claude Code 和 Codex 各自需要在独立的原生配置文件中配置 provid
 
 **Hot-switch**（对正在运行的 Claude Code 或 Codex 进程的会话内热重载）明确**不在本 ADR 范围内**，将在单独的后续 ADR 和 PR 中处理。
 
+### D——一条 LLM connection，agent 与 Coffer 内部引擎共用
+
+provider profile 与 Coffer 旧的 `ModelConfig`/`chat_models` 注册表本是同一形状（key + endpoint + model）戴着两顶帽子。二者统一为单一的 **LLM connection** = provider resource。独立的 `ModelConfig` 注册表——model CRUD REST 与 `coffer model` CLI——**退役**（其行迁移为 provider resource；保留 provider 的模型内省路由 `list-models` / `test-connection`）。为此：
+
+- `wire_format` 新增第三个取值 `ollama`：**仅内部**，不投影到任何 agent（`target_for` 返回 `None`），且无密钥——故 `credential_ref` 变为可选（anthropic/openai 必填，ollama 不存在）。
+- 新增全局 `internal_default` 标志（所有 connection 中 ≤1），标记 Coffer 内部 LLM 引擎（memory organizer、reorg、distill、`coffer__ask`）使用的 connection，经 `POST /providers/{name}/internal-default`（审计事件 `provider_internal_default_set`）/ `coffer provider internal-default` 设置。一条 connection 可以**同时**是 `is_active`（投影到其 wire 的 agent）和 `internal_default`——一份密钥，两种用途。
+- `build_chat_model` 改吃 connection（`ProviderConfig`），按 `wire_format` 分派，取代对 `ModelConfig` 的依赖。这修复了一个真 bug：旧的 anthropic/openai builder 丢弃了 connection 的 `base_url`，导致自定义/代理 endpoint 被忽略。内部消费者从 `ModelService.get_default()` 改指 `ProviderService.resolve_internal_connection()`；未配置 `internal_default` 时内部引擎是干净的 no-op（与此前一致）。
+
+per-conversation 的 `Conversation.model_id` 列现为遗留 vestigial 列（保留，不再对注册表校验）。
+
 ## 后果
 
 ### 投影写入（及绝不写入）的内容

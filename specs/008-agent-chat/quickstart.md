@@ -15,9 +15,10 @@ The Chat page lets you talk to **Coffer Assistant** — Coffer's built-in agent.
 The agent can use everything in your vault: your MCP server tools, your memory
 stores, your knowledge bases, and your skills.
 
-## 1. Configure a model
+## 1. Configure an LLM connection
 
-The built-in agent needs an LLM. Open **Settings → Models** and add one:
+Coffer's internal engine needs an LLM. Open **Settings → LLM Connections** and
+add one:
 
 | Provider       | What you supply                                                       |
 | -------------- | --------------------------------------------------------------------- |
@@ -25,21 +26,25 @@ The built-in agent needs an LLM. Open **Settings → Models** and add one:
 | OpenAI         | model id (e.g. `gpt-4o`) + API-key credential                         |
 | Ollama (local) | model id (e.g. `llama3.1`) + base URL (e.g. `http://localhost:11434`) |
 
-The first model you add becomes the default. A cloud model references its API
-key by a credential reference; store the key itself first, then register the
-model that points at it. From the command line:
+Mark one connection as the **internal-engine default** so Coffer's own engine
+runs on it. A cloud connection references its API key by a credential reference;
+store the key itself first, then register the connection that points at it. From
+the command line:
 
 ```bash
 # 1. Store the API key in the encrypted credential store under a reference name.
 coffer credentials set anthropic-api-key     # reads the secret from stdin
-# 2. Register a model that resolves its credential from that reference.
-coffer model add --name "Sonnet" --provider anthropic \
+# 2. Register a connection that resolves its credential from that reference.
+coffer provider add sonnet --wire anthropic \
+  --base-url https://api.anthropic.com \
   --model claude-sonnet-4-6 --credential-ref anthropic-api-key
-coffer model list --json
+# 3. Make it Coffer's internal-engine default.
+coffer provider internal-default sonnet
+coffer provider list --json
 ```
 
 API keys are stored as ciphertext in Coffer's encrypted credential store, with
-only the credential reference in the model config — the plaintext key never
+only the credential reference in the connection config — the plaintext key never
 touches the database.
 
 ## 2. Start chatting
@@ -116,8 +121,9 @@ Either window can be set to _off_ to disable that stage. Active conversations
 
 ## Troubleshooting
 
-**"No model configured"** — the Chat page shows this until you add a model in
-Settings → Models. Add one and the chat input unlocks.
+**"No model configured"** — the Chat page shows this until you add a connection
+and mark it the internal-engine default in Settings → LLM Connections. Do so and
+the chat input unlocks.
 
 **A turn fails with a provider error** — check the model's credential and, for
 Ollama, that the base URL is reachable. The conversation stays usable; just send

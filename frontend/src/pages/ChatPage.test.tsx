@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ChatPage } from "./ChatPage";
 import type { Conversation } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
-import type { Model } from "@/lib/api/models";
 
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
@@ -29,12 +28,30 @@ vi.mock("@/lib/api/chat", () => ({
   },
 }));
 
-vi.mock("@/lib/api/models", () => ({
-  modelsApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+// The model picker's provider suggestions are out of scope for these page tests,
+// but the draft surface needs an active connection (otherwise it shows the
+// no-connection empty state instead of the composer).
+vi.mock("@/lib/hooks/useProviders", () => ({
+  useProviders: () => ({
+    data: [
+      {
+        name: "official",
+        wire_format: "anthropic",
+        base_url: "https://api.anthropic.com",
+        credential_ref: "ref",
+        model: "claude-opus-4-8",
+        fast_model: null,
+        wire_api: "chat",
+        is_active: true,
+        internal_default: false,
+        enabled: true,
+        description: null,
+        created_at: "",
+        updated_at: "",
+      },
+    ],
+  }),
 }));
-
-// The model picker's provider suggestions are out of scope for these page tests.
-vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: () => ({ data: [] }) }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useListProviderModels: () => ({ mutate: vi.fn() }),
 }));
@@ -46,26 +63,13 @@ vi.mock("@/lib/chat/streamClient", () => ({
 }));
 
 const { chatApi } = await import("@/lib/api/chat");
-const { modelsApi } = await import("@/lib/api/models");
 const chatApiMock = chatApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
-const modelsApiMock = modelsApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 const makeConv = (overrides?: Partial<Conversation>): Conversation => ({
   id: "conv-1",
   agent_key: "claude_code",
   title: "Test Conv",
   model_id: null,
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-01T00:00:00Z",
-  ...overrides,
-});
-
-const makeModel = (overrides?: Partial<Model>): Model => ({
-  id: "model-1",
-  display_name: "Test Model",
-  provider: "anthropic",
-  model: "claude-3-5-sonnet",
-  is_default: true,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
   ...overrides,
@@ -100,7 +104,6 @@ describe("ChatPage", () => {
 
   test("shows conversation list with active/archived filter", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [] });
     renderPage();
     expect(await screen.findByRole("tab", { name: /active/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /archived/i })).toBeInTheDocument();
@@ -108,7 +111,6 @@ describe("ChatPage", () => {
 
   test("bare /chat shows the draft surface with a composer right away, not a modal", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [] });
     renderPage("/chat");
     // No per-turn working-directory step anymore: the draft guide + composer
     // appear immediately — no "Start conversation" dialog button.
@@ -120,7 +122,6 @@ describe("ChatPage", () => {
 
   test("draft with no managed agent available shows the install/configure empty state", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [] });
     renderPage("/chat", [
       { agent_key: "claude_code", display_name: "Claude Code", available: false },
     ]);
@@ -129,7 +130,6 @@ describe("ChatPage", () => {
 
   test("/chat/:id opens that conversation's thread (URL-addressable)", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
-    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderPage("/chat/conv-1");
     // The thread's empty prompt (not the draft guide) appears for a real conv.
@@ -140,7 +140,6 @@ describe("ChatPage", () => {
 
   test("sending the first message in the draft creates a conversation", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
     renderPage("/chat");
@@ -161,14 +160,14 @@ describe("ChatPage", () => {
 
   test("a draft model is carried into the created conversation's agent_config", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
     renderPage("/chat");
 
-    const picker = await screen.findByLabelText(/agent model/i);
-    fireEvent.change(picker, { target: { value: "claude-opus-4-8" } });
-    fireEvent.blur(picker);
+    // The model picker is a dropdown listing the active connection's model.
+    const trigger = await screen.findByRole("combobox", { name: /agent model/i });
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "claude-opus-4-8" }));
 
     const composer = await screen.findByRole("textbox", { name: /message input/i });
     fireEvent.change(composer, { target: { value: "hi" } });
@@ -184,7 +183,6 @@ describe("ChatPage", () => {
 
   test("deleting a conversation asks for confirmation first", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
-    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderPage("/chat/conv-1");
 
@@ -201,7 +199,6 @@ describe("ChatPage", () => {
     // P0-3: archived rows are not in the active list — the thread must still
     // open (by-id fetch), read-only, instead of falling through to the draft.
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
     chatApiMock.getConversation.mockResolvedValue(
       makeConv({ archived_at: "2026-02-01T00:00:00Z" }),
     );
@@ -228,7 +225,6 @@ describe("ChatPage", () => {
 
   test("restoring an archived thread unarchives it and re-enables the composer", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
     chatApiMock.getConversation
       .mockResolvedValueOnce(makeConv({ archived_at: "2026-02-01T00:00:00Z" }))
       .mockResolvedValue(makeConv({ archived_at: null }));
@@ -247,7 +243,6 @@ describe("ChatPage", () => {
     // P0-3: a stale deep-link must say so explicitly — typing into the draft
     // here would silently create a NEW conversation.
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [makeModel()] });
     chatApiMock.getConversation.mockRejectedValue(
       new ApiError("CONVERSATION_NOT_FOUND", "conversation not found"),
     );
@@ -264,7 +259,6 @@ describe("ChatPage", () => {
 
   test("surfaces an error when creating a conversation fails", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    modelsApiMock.list.mockResolvedValue({ models: [] });
     chatApiMock.createConversation.mockRejectedValue(new Error("boom"));
     renderPage("/chat");
 

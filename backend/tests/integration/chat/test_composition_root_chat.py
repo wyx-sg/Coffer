@@ -51,47 +51,9 @@ def test_chat_conversation_router_mounted(app) -> None:  # type: ignore[no-untyp
         assert body["conversations"] == []
 
 
-def test_chat_model_router_mounted(app) -> None:  # type: ignore[no-untyped-def]
-    """GET /api/v1/models returns 200, proving the model router is mounted."""
-    with TestClient(app) as client:
-        set_active_token(_TOKEN)
-        resp = client.get("/api/v1/models", headers=_HEADERS)
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert "models" in body
-        assert body["models"] == []
-
-
 # ---------------------------------------------------------------------------
-# Conversation + model CRUD end-to-end through the real wiring
+# Conversation CRUD end-to-end through the real wiring
 # ---------------------------------------------------------------------------
-
-
-def test_model_crud_via_wired_daemon(app) -> None:  # type: ignore[no-untyped-def]
-    """Create, list, and delete a model through the fully-wired daemon."""
-    with TestClient(app) as client:
-        set_active_token(_TOKEN)
-
-        resp = client.post(
-            "/api/v1/models",
-            headers=_HEADERS,
-            json={
-                "display_name": "Claude Test",
-                "provider": "anthropic",
-                "model": "claude-sonnet-4-6",
-                "credential_ref": "my-test-key",
-            },
-        )
-        assert resp.status_code == 201, resp.text
-        model_id = resp.json()["id"]
-        assert resp.json()["is_default"] is True
-
-        resp = client.get("/api/v1/models", headers=_HEADERS)
-        assert resp.status_code == 200
-        assert len(resp.json()["models"]) == 1
-
-        resp = client.delete(f"/api/v1/models/{model_id}", headers=_HEADERS)
-        assert resp.status_code == 204
 
 
 def test_conversation_crud_via_wired_daemon(app, tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -148,7 +110,9 @@ def test_chat_db_tables_created_on_startup(app, tmp_path) -> None:  # type: igno
     table_names = {r[0] for r in rows}
     assert "conversations" in table_names, f"tables: {table_names}"
     assert "chat_messages" in table_names, f"tables: {table_names}"
-    assert "chat_models" in table_names, f"tables: {table_names}"
+    # The former chat_models registry table is retired (migration 0036): models
+    # are now provider connections in the generic ``resources`` table.
+    assert "chat_models" not in table_names, f"tables: {table_names}"
 
 
 # ---------------------------------------------------------------------------

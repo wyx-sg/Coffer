@@ -18,35 +18,6 @@ class ConversationNotFound(CofferError):  # noqa: N818
         self.conversation_id = conversation_id
 
 
-class ModelNotFound(CofferError):  # noqa: N818
-    code = "MODEL_NOT_FOUND"
-
-    def __init__(self, model_id: str) -> None:
-        super().__init__(f"model config not found: {model_id!r}")
-        self.model_id = model_id
-
-
-class ModelRejected(CofferError):  # noqa: N818
-    """``ModelConfig`` failed validation. ``reason``: missing_credential |
-    missing_base_url | duplicate_name | empty_display_name."""
-
-    code = "MODEL_REJECTED"
-
-    def __init__(self, reason: str, message: str) -> None:
-        super().__init__(message)
-        self.reason = reason
-
-
-class NoModelConfigured(CofferError):  # noqa: N818
-    """Raised when a chat turn is started but no model has been configured."""
-
-    code = "NO_MODEL_CONFIGURED"
-
-    def __init__(self) -> None:
-        msg = "no model is configured; register at least one model under Settings → Models"
-        super().__init__(msg)
-
-
 class TurnInProgress(CofferError):  # noqa: N818
     """Raised when a second message is sent to a conversation with an active turn."""
 

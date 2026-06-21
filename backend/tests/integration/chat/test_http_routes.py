@@ -1,15 +1,14 @@
-"""Integration tests for the chat HTTP surface — conversations, messages, models, SSE turn.
+"""Integration tests for the chat HTTP surface — conversations, messages, SSE turn.
 
 Tests the routes through a real FastAPI app wired with:
-- Real ChatService / ModelService over in-memory SQLite repos.
+- Real ChatService over in-memory SQLite repos.
 - Real TurnOrchestrator with FakeAgentAdapter + FakeToolGateway from the unit conftest.
 
 Coverage:
 - Conversation CRUD round-trip (create, get, list, rename/model, delete).
-- Model CRUD round-trip (create, list, patch, delete).
 - SSE turn endpoint streaming turn_start … turn_done events.
 - TurnInProgress → 409 JSON (not SSE).
-- NoModelConfigured → 409 JSON.
+- A build-adapter domain error → mapped JSON status (not SSE).
 - ConversationNotFound on send_message → 404 JSON.
 - ConversationNotFound on GET / PATCH / DELETE → 404.
 """
@@ -22,19 +21,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from coffer.application.chat.model_service import ModelService
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator, clear_active_turns
-from coffer.domain.errors import NoModelConfigured
+from coffer.domain.errors import AgentConfigRejected
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.conversation_routes import router as conversation_router
-from coffer.surfaces.http.chat.model_routes import router as model_router
 from coffer.surfaces.http.chat.turn_routes import router as turn_router
 from coffer.surfaces.http.dependencies import (
     get_agent_registry,
     get_chat_service,
-    get_model_service,
     get_turn_orchestrator,
 )
 
@@ -51,16 +47,13 @@ _TOKEN = "test-token"
 
 def _build_app(
     chat_svc: ChatService,
-    model_svc: ModelService,
     orchestrator: TurnOrchestrator,
 ) -> FastAPI:
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(conversation_router)
     app.include_router(turn_router)
-    app.include_router(model_router)
     app.dependency_overrides[get_chat_service] = lambda: chat_svc
-    app.dependency_overrides[get_model_service] = lambda: model_svc
     app.dependency_overrides[get_turn_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_agent_registry] = lambda: orchestrator._registry
     return app
@@ -70,10 +63,10 @@ def _make_services(
     events: list | None = None,
     *,
     provider: object = None,
-) -> tuple[ChatService, ModelService, TurnOrchestrator]:
+) -> tuple[ChatService, TurnOrchestrator]:
     """Create fully-wired in-memory chat services (registry-backed)."""
-    chat_svc, model_svc, orchestrator, _registry = make_chat_services(events, provider=provider)
-    return chat_svc, model_svc, orchestrator
+    chat_svc, orchestrator, _registry = make_chat_services(events, provider=provider)
+    return chat_svc, orchestrator
 
 
 @pytest.fixture(autouse=True)
@@ -91,8 +84,8 @@ def _reset_turns() -> Generator[None, None, None]:
 
 @pytest.mark.acceptance(spec="008-agent-chat", scenario="manage conversations")
 def test_conversation_crud_roundtrip() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -138,8 +131,8 @@ def test_conversation_crud_roundtrip() -> None:
 
 @pytest.mark.acceptance(spec="008-agent-chat", scenario="archive and restore a conversation")
 def test_archive_and_unarchive_filter_the_list() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -174,8 +167,8 @@ def test_archive_and_unarchive_filter_the_list() -> None:
 
 
 def test_get_conversation_not_found_returns_404() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -186,8 +179,8 @@ def test_get_conversation_not_found_returns_404() -> None:
 
 
 def test_patch_conversation_not_found_returns_404() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -200,61 +193,9 @@ def test_patch_conversation_not_found_returns_404() -> None:
     set_active_token(None)
 
 
-def test_patch_conversation_unknown_model_returns_404() -> None:
-    """PATCH model_id with a non-existent model must be rejected up front
-    (404 MODEL_NOT_FOUND), not accepted and deferred to the next turn."""
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
-    set_active_token(_TOKEN)
-
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
-            "id"
-        ]
-
-        resp = client.patch(
-            f"/api/v1/chat/conversations/{conv_id}",
-            json={"model_id": "ghost-model"},
-        )
-        assert resp.status_code == 404, resp.text
-        assert resp.json()["error"]["code"] == "MODEL_NOT_FOUND"
-
-        # Nothing persisted: the conversation still has no model override.
-        conv = client.get(f"/api/v1/chat/conversations/{conv_id}").json()
-        assert conv["model_id"] is None
-
-    set_active_token(None)
-
-
-def test_patch_conversation_is_atomic_on_invalid_model() -> None:
-    """A PATCH carrying both a title and an invalid model_id must apply
-    NEITHER — a rejected request may not leave a partially-applied rename."""
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
-    set_active_token(_TOKEN)
-
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
-            "id"
-        ]
-        original_title = client.get(f"/api/v1/chat/conversations/{conv_id}").json()["title"]
-
-        resp = client.patch(
-            f"/api/v1/chat/conversations/{conv_id}",
-            json={"title": "Sneaky rename", "model_id": "ghost-model"},
-        )
-        assert resp.status_code == 404, resp.text
-
-        conv = client.get(f"/api/v1/chat/conversations/{conv_id}").json()
-        assert conv["title"] == original_title  # rename was NOT applied
-        assert conv["model_id"] is None
-
-    set_active_token(None)
-
-
 def test_delete_conversation_not_found_returns_404() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -265,8 +206,8 @@ def test_delete_conversation_not_found_returns_404() -> None:
 
 
 def test_list_messages_not_found_returns_404() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -277,8 +218,8 @@ def test_list_messages_not_found_returns_404() -> None:
 
 
 def test_create_conversation_with_body() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -294,8 +235,8 @@ def test_create_conversation_with_body() -> None:
 
 
 def test_unauthenticated_request_returns_401() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, raise_server_exceptions=False) as client:
@@ -314,8 +255,8 @@ def test_unauthenticated_request_returns_401() -> None:
     spec="008-agent-chat", scenario="set a managed agent's model per conversation"
 )
 def test_agent_config_set_and_get_model_roundtrip() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -344,8 +285,8 @@ def test_agent_config_set_and_get_model_roundtrip() -> None:
 
 
 def test_agent_config_clear_model_with_empty_string() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -368,8 +309,8 @@ def test_agent_config_clear_model_with_empty_string() -> None:
 
 
 def test_agent_config_get_not_found_returns_404() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -395,7 +336,7 @@ async def test_agent_config_set_model_preserves_cwd_and_session() -> None:
     )
     from coffer.surfaces.http.chat.schemas import AgentConfigPatch
 
-    chat_svc, _model_svc, _orchestrator = _make_services()
+    chat_svc, _orchestrator = _make_services()
     conv = await chat_svc.create_conversation(agent_key="builtin", agent_config={})
     await chat_svc.set_agent_config(conv.id, AgentConfig(cwd="/work", session_id="sess-1"))
 
@@ -415,147 +356,6 @@ async def test_agent_config_set_model_preserves_cwd_and_session() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Model CRUD
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="register a model provider")
-def test_model_crud_roundtrip() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
-    set_active_token(_TOKEN)
-
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        # Create
-        resp = client.post(
-            "/api/v1/models",
-            json={
-                "display_name": "My Claude",
-                "provider": "anthropic",
-                "model": "claude-sonnet-4-6",
-                "credential_ref": "my-key",
-            },
-        )
-        assert resp.status_code == 201, resp.text
-        data = resp.json()
-        model_id = data["id"]
-        assert data["display_name"] == "My Claude"
-        assert data["provider"] == "anthropic"
-        assert data["is_default"] is True  # first model becomes default
-
-        # List
-        resp = client.get("/api/v1/models")
-        assert resp.status_code == 200
-        assert len(resp.json()["models"]) == 1
-
-        # Patch
-        resp = client.patch(
-            f"/api/v1/models/{model_id}",
-            json={"display_name": "Renamed Claude"},
-        )
-        assert resp.status_code == 200
-        assert resp.json()["display_name"] == "Renamed Claude"
-
-        # Delete
-        resp = client.delete(f"/api/v1/models/{model_id}")
-        assert resp.status_code == 204
-
-        # List after delete — should be empty
-        resp = client.get("/api/v1/models")
-        assert resp.status_code == 200
-        assert resp.json()["models"] == []
-
-    set_active_token(None)
-
-
-def test_create_second_model_with_is_default_promotes_it() -> None:
-    """POST /models with is_default=true on a non-first model must take effect."""
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
-    set_active_token(_TOKEN)
-
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        first = client.post(
-            "/api/v1/models",
-            json={
-                "display_name": "Claude",
-                "provider": "anthropic",
-                "model": "claude-sonnet-4-6",
-                "credential_ref": "k1",
-            },
-        )
-        assert first.status_code == 201, first.text
-        first_id = first.json()["id"]
-
-        second = client.post(
-            "/api/v1/models",
-            json={
-                "display_name": "GPT-4o",
-                "provider": "openai",
-                "model": "gpt-4o",
-                "credential_ref": "k2",
-                "is_default": True,
-            },
-        )
-        assert second.status_code == 201, second.text
-        assert second.json()["is_default"] is True
-
-        models = {m["id"]: m for m in client.get("/api/v1/models").json()["models"]}
-        assert models[first_id]["is_default"] is False
-
-    set_active_token(None)
-
-
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="reject an incomplete model")
-def test_create_model_invalid_returns_400() -> None:
-    """Missing credential_ref for anthropic → 400 MODEL_REJECTED."""
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
-    set_active_token(_TOKEN)
-
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        resp = client.post(
-            "/api/v1/models",
-            json={
-                "display_name": "Bad Model",
-                "provider": "anthropic",
-                "model": "claude-sonnet-4-6",
-                # No credential_ref — should fail
-            },
-        )
-        assert resp.status_code == 400
-
-    set_active_token(None)
-
-
-def test_patch_model_not_found_returns_404() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
-    set_active_token(_TOKEN)
-
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        resp = client.patch(
-            "/api/v1/models/does-not-exist",
-            json={"display_name": "x"},
-        )
-        assert resp.status_code == 404
-
-    set_active_token(None)
-
-
-def test_delete_model_not_found_returns_404() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
-    set_active_token(_TOKEN)
-
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        resp = client.delete("/api/v1/models/does-not-exist")
-        assert resp.status_code == 404
-
-    set_active_token(None)
-
-
-# ---------------------------------------------------------------------------
 # SSE turn endpoint
 # ---------------------------------------------------------------------------
 
@@ -564,8 +364,8 @@ def test_send_message_returns_202_fire_and_return() -> None:
     """POST /conversations/{id}/messages is fire-and-return (ADR-031): 202 with
     queued=false when the turn starts immediately. Turn events stream via the
     GET .../events subscription (covered in test_live_mirror.py)."""
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -594,18 +394,21 @@ def test_send_message_returns_202_fire_and_return() -> None:
 
 def test_set_pending_replaces_queue() -> None:
     """PUT /conversations/{id}/pending replaces the pending queue and echoes it
-    back (ADR-031). With no turn running the head starts and the rest remain."""
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    back (ADR-031). When the head's turn cannot start, the whole queue is kept."""
+    # A provider whose build_adapter fails → the head's turn cannot start. The
+    # orchestrator re-inserts the head and pauses rather than dropping it, so the
+    # WHOLE queue is preserved (regression test for the lost-head bug).
+    provider = FakeAgentProvider(
+        adapter=None, build_error=AgentConfigRejected("missing_credential", "no credential")
+    )
+    chat_svc, orchestrator = _make_services(provider=provider)
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
         resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
         conv_id = resp.json()["id"]
 
-        # No model configured → the fake provider cannot build the head's turn.
-        # The orchestrator re-inserts the head and pauses rather than dropping it,
-        # so the WHOLE queue is preserved (regression test for the lost-head bug).
         resp = client.put(
             f"/api/v1/chat/conversations/{conv_id}/pending",
             json={"pending": ["a", "b", "c"]},
@@ -618,8 +421,8 @@ def test_set_pending_replaces_queue() -> None:
 
 def test_send_message_unknown_conversation_returns_404() -> None:
     """POST .../messages for a missing conversation propagates 404 JSON."""
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -633,42 +436,11 @@ def test_send_message_unknown_conversation_returns_404() -> None:
     set_active_token(None)
 
 
-@pytest.mark.acceptance(spec="008-agent-chat", scenario="no-model empty state")
-def test_send_message_no_model_configured_returns_409_json(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """NoModelConfigured must return 409 JSON — not SSE."""
-    events: list = []
-    chat_svc, model_svc, orchestrator = _make_services(events=events)
-    app = _build_app(chat_svc, model_svc, orchestrator)
-    set_active_token(_TOKEN)
-
-    from coffer.domain.errors import NoModelConfigured
-
-    async def _raise_no_model(*args: object, **kwargs: object) -> None:  # type: ignore[misc]
-        raise NoModelConfigured()
-
-    monkeypatch.setattr(orchestrator, "start_turn", _raise_no_model)
-
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
-        conv_id = resp.json()["id"]
-
-        resp = client.post(
-            f"/api/v1/chat/conversations/{conv_id}/messages",
-            json={"text": "hello"},
-        )
-        assert resp.status_code == 409
-        body = resp.json()
-        assert body["error"]["code"] == "NO_MODEL_CONFIGURED"
-        assert "text/event-stream" not in resp.headers.get("content-type", "")
-
-    set_active_token(None)
-
-
 def test_send_message_conversation_not_found_returns_404_json(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """ConversationNotFound on send_message must return 404 JSON — not SSE."""
     events: list = []
-    chat_svc, model_svc, orchestrator = _make_services(events=events)
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services(events=events)
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     from coffer.domain.errors import ConversationNotFound
@@ -692,16 +464,19 @@ def test_send_message_conversation_not_found_returns_404_json(monkeypatch) -> No
 
 
 # ---------------------------------------------------------------------------
-# SSE turn: no-model path via real orchestrator (end-to-end)
+# SSE turn: build-adapter error via real orchestrator (end-to-end)
 # ---------------------------------------------------------------------------
 
 
-def test_send_message_no_model_real_orchestrator() -> None:
-    """When the agent provider's build_adapter raises NoModelConfigured, the turn
-    endpoint returns 409 JSON — the orchestrator propagates it before streaming."""
-    provider = FakeAgentProvider(adapter=None, build_error=NoModelConfigured())
-    chat_svc, model_svc, orchestrator = _make_services(provider=provider)
-    app = _build_app(chat_svc, model_svc, orchestrator)
+def test_send_message_build_adapter_error_real_orchestrator() -> None:
+    """When the agent provider's build_adapter raises a domain error, the turn
+    endpoint returns the mapped status as JSON — the orchestrator propagates it
+    before streaming, so the client never gets a half-open SSE stream."""
+    provider = FakeAgentProvider(
+        adapter=None, build_error=AgentConfigRejected("missing_credential", "no credential")
+    )
+    chat_svc, orchestrator = _make_services(provider=provider)
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -712,9 +487,9 @@ def test_send_message_no_model_real_orchestrator() -> None:
             f"/api/v1/chat/conversations/{conv_id}/messages",
             json={"text": "hello"},
         )
-        assert resp.status_code == 409
+        assert resp.status_code == 400
         body = resp.json()
-        assert body["error"]["code"] == "NO_MODEL_CONFIGURED"
+        assert body["error"]["code"] == "AGENT_CONFIG_REJECTED"
         assert "text/event-stream" not in resp.headers.get("content-type", "")
 
     set_active_token(None)
@@ -726,8 +501,8 @@ def test_send_message_no_model_real_orchestrator() -> None:
 
 
 def test_interrupt_unknown_conversation_returns_404() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
@@ -738,8 +513,8 @@ def test_interrupt_unknown_conversation_returns_404() -> None:
 
 
 def test_interrupt_no_active_turn_is_a_noop_204() -> None:
-    chat_svc, model_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, model_svc, orchestrator)
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:

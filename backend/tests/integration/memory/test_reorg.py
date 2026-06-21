@@ -19,33 +19,27 @@ import pytest
 
 from coffer.application.memory.reorg import ReorgService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.chat.model import ModelConfig, ProviderType
+from coffer.domain.provider.config import ProviderConfig, WireFormat
 from coffer.infrastructure.knowledge.paths import superseded_dir, topic_path
 from coffer.infrastructure.memory.topic_files import TopicDoc, write_topic_doc
 
 
-def _model() -> ModelConfig:
-    now = datetime(2026, 6, 21, tzinfo=UTC)
-    return ModelConfig(
-        id="m1",
-        display_name="Local Ollama",
-        provider=ProviderType.OLLAMA,
-        model="llama3",
-        credential_ref=None,
+def _model() -> ProviderConfig:
+    return ProviderConfig(
+        wire_format=WireFormat.OLLAMA,
         base_url="http://localhost:11434",
-        is_default=True,
-        created_at=now,
-        updated_at=now,
+        credential_ref=None,
+        model="llama3",
     )
 
 
 class _Models:
     """Fake ModelSelectorPort. ``model=None`` simulates no internal model."""
 
-    def __init__(self, model: ModelConfig | None) -> None:
+    def __init__(self, model: ProviderConfig | None) -> None:
         self._model = model
 
-    async def get_default(self) -> ModelConfig | None:
+    async def get_default(self) -> ProviderConfig | None:
         return self._model
 
 
@@ -69,7 +63,7 @@ class _FakeAgent:
     async def run(
         self,
         *,
-        model: ModelConfig,
+        model: ProviderConfig,
         tools: Any,
         system_prompt: str,
         credential_resolver: Any,
@@ -209,7 +203,7 @@ async def test_reorg_consolidates_duplicate_topics(mem: Any) -> None:
     assert result.topics_before == 2
     assert result.topics_written == 1
     assert result.topics_superseded == 1
-    assert result.model == "Local Ollama"
+    assert result.model == "llama3"
 
     # deploy-a is now the merged doc
     merged = topic_path(store_dir, "deploy-a").read_text(encoding="utf-8")

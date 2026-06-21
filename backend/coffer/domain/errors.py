@@ -300,9 +300,6 @@ class EmbeddingUnavailable(CofferError):  # noqa: N818
 from coffer.domain.chat.errors import (  # noqa: E402, I001
     AgentConfigRejected as AgentConfigRejected,
     ConversationNotFound as ConversationNotFound,
-    ModelNotFound as ModelNotFound,
-    ModelRejected as ModelRejected,
-    NoModelConfigured as NoModelConfigured,
     TurnInProgress as TurnInProgress,
     UnknownAgent as UnknownAgent,
 )

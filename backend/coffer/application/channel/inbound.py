@@ -33,7 +33,6 @@ from coffer.application.channel.ports import (
     ChannelBinding,
     ChannelPeer,
     ChannelPeerRepoPort,
-    ModelCatalogPort,
     ModelSuggestionPort,
 )
 from coffer.application.channel.turn_render import TurnRenderer
@@ -106,7 +105,6 @@ class InboundProcessor:
         turns: TurnPort,
         audit: AuditService,
         agents: AgentCatalogPort,
-        models: ModelCatalogPort,
         model_suggestions: ModelSuggestionPort,
     ) -> None:
         self._peers = peers
@@ -121,7 +119,6 @@ class InboundProcessor:
             conversations=conversations,
             turns=turns,
             agents=agents,
-            models=models,
             model_suggestions=model_suggestions,
         )
 

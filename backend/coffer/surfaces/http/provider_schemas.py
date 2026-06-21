@@ -13,8 +13,9 @@ from coffer.domain.provider.config import WireApi, WireFormat
 
 
 class ProviderCreate(BaseModel):
-    """Create a provider profile. Supply EXACTLY one of ``secret_value`` /
-    ``credential_ref``."""
+    """Create an LLM connection. For ``anthropic`` / ``openai`` supply EXACTLY
+    one of ``secret_value`` / ``credential_ref``; an ``ollama`` connection has
+    no key, so supply neither."""
 
     name: str = Field(min_length=1, max_length=64)
     wire_format: WireFormat
@@ -39,16 +40,23 @@ class ProviderPatch(BaseModel):
 
 
 class ProviderOut(BaseModel):
-    """A provider profile as returned by the API (no secret)."""
+    """An LLM connection as returned by the API (no secret).
+
+    ``credential_ref`` is ``None`` for ``ollama`` connections (no key).
+    ``internal_default`` marks the connection Coffer's internal engine uses
+    (at most one globally); ``is_active`` marks the one projected to its wire's
+    agent — a connection may be both.
+    """
 
     name: str
     wire_format: WireFormat
     base_url: str
-    credential_ref: str
+    credential_ref: str | None
     model: str
     fast_model: str | None
     wire_api: WireApi
     is_active: bool
+    internal_default: bool
     enabled: bool
     description: str | None
     created_at: datetime

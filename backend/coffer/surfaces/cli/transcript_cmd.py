@@ -55,7 +55,6 @@ def distill(
     project_path: str | None = typer.Option(
         None, "--project", "-p", help="Filter by project path."
     ),
-    model_id: str | None = typer.Option(None, "--model", "-m", help="Model ID to use."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview insights without writing."),
 ) -> None:
     """Distil insights from an agent's transcript into Coffer memory."""
@@ -64,8 +63,6 @@ def distill(
         body["session_id"] = session_id
     if project_path is not None:
         body["project_path"] = project_path
-    if model_id is not None:
-        body["model_id"] = model_id
 
     c, _info = _cli_client.client_or_exit()
     with c:

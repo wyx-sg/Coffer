@@ -118,7 +118,7 @@ ADR-031 wording here and the revised FRs below.
 [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.md)
 retired the built-in chat persona, which **re-founds** the per-conversation model
 override (FR-025/FR-026, User Story 8). For a managed agent the conversation's
-model is **not** a Coffer-registered `Model` (the `Conversation.model_id` registry
+model is **not** the now-retired Coffer model registry (the `Conversation.model_id`
 column): it is the agent's **own** model, carried as free-text `agent_config.model`
 and passed through to the agent's CLI (Claude Code `--model`, Codex `model`),
 exactly as the channel `/model` command already does. Coffer does not validate the
@@ -138,9 +138,11 @@ Two layers, one override:
 
 `Conversation.model_id` (the `Model` registry override of FR-026) is **not read by
 the managed-agent turn path** — both managed providers build their adapter from
-`agent_config.model`, never from `model_id`. It remains the registry of Coffer's
-internal-engine models (Settings → Models) and is **out of scope** for the chat
-model picker; re-wiring or retiring it is a separate concern (see Non-Goals).
+`agent_config.model`, never from `model_id`. The standalone `ModelConfig`/`chat_models`
+registry it referenced is now **retired** (folded into provider connections, spec
+011 / ADR-032), so `model_id` is a **vestigial legacy column**: Coffer's internal
+engine now selects its model from the internal-default connection, not from this
+registry. The column is out of scope for the chat model picker.
 
 The web Chat surface MUST let the owner set `agent_config.model` both when
 **starting** a conversation (the draft, beside the agent picker) and
@@ -160,25 +162,25 @@ read them as repositioned here: for managed agents the per-conversation model is
 ### User Story 1 — Configure a model provider before the first chat (Priority: P1)
 
 The built-in agent has no LLM of its own. On first visit to Chat, the user is
-pointed at **Settings → Models**, where they register at least one model: choose
-a provider (Anthropic, OpenAI, or a local Ollama endpoint), supply the
-credential (cloud providers) or base URL (Ollama), and name a model id. Once one
-model exists, the built-in agent can be chosen and chat is unlocked.
+pointed at **Settings → LLM Connections** (spec 011), where they configure at
+least one connection: choose a wire (anthropic, openai, or a local ollama
+endpoint), supply the credential (cloud wires) or base URL (ollama), and name a
+model id. Once one connection exists and is marked the internal default, the
+built-in agent can be chosen and chat is unlocked.
 
 **Why this priority**: Without a configured model the built-in agent cannot
 answer at all. This is the gate to every other scenario that uses it.
 
-**Independent Test**: With a fresh install, open Settings → Models, add an
-Anthropic model with a credential, save; observe it listed and marked as the
-default; the Chat page stops showing the "no model configured" state.
+**Independent Test**: With a fresh install, open Settings → LLM Connections, add
+an anthropic connection with a credential, mark it the internal default; observe
+it listed; the Chat page stops showing the "no model configured" state.
 
-**Covering scenarios**:
+**Covering scenarios** (connection configuration now lives in spec 011 / Settings
+→ LLM Connections; this story's chat-side coverage is):
 
-- register a cloud model with a credential
-- register a local Ollama model with a base URL and no credential
-- reject a model whose required credential or base URL is missing
-- the first registered model becomes the default
-- register and list models from the command line
+- no-model empty state
+- list a provider's models
+- test a model connection
 
 ---
 
@@ -348,9 +350,9 @@ turn with actor `agent`.
 ### Edge Cases
 
 - **No model configured**: The Chat page renders an actionable empty state that
-  links to Settings → Models; it does not show a generic error or a dead input.
-  Choosing the built-in agent with no model configured fails the turn with the
-  no-model state, not a crash.
+  links to Settings → LLM Connections; it does not show a generic error or a dead
+  input. Choosing the built-in agent with no internal connection configured fails
+  the turn with the no-model state, not a crash.
 - **Unknown agent / invalid agent configuration**: Creating a conversation with
   an agent the platform does not offer, or with a configuration that agent
   rejects, fails with a message naming the problem; nothing is persisted.
@@ -389,22 +391,6 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is
 referenced by at least one test marked
 `@pytest.mark.acceptance(spec="008-agent-chat", scenario="…")` (Python) or
 `acceptance("008-agent-chat", "…", …)` (TypeScript).
-
-### Scenario: register a model provider
-
-- **Given** a running daemon with no model configured,
-- **When** the user registers a model with a provider, model id, and the
-  credential or base URL its provider requires,
-- **Then** the model is persisted, the first such model is marked default, and
-  the Chat page no longer reports "no model configured".
-
-### Scenario: reject an incomplete model
-
-- **Given** a running daemon,
-- **When** the user registers a cloud model without a credential, or an Ollama
-  model without a base URL,
-- **Then** registration is rejected with a message naming the missing field and
-  nothing is persisted.
 
 ### Scenario: list available agents
 
@@ -533,8 +519,8 @@ referenced by at least one test marked
 
 - **Given** a running daemon with no model configured,
 - **When** the user opens the Chat page,
-- **Then** an actionable empty state linking to Settings → Models is shown and no
-  message can be sent.
+- **Then** an actionable empty state linking to Settings → LLM Connections is
+  shown and no message can be sent.
 
 ### Scenario: token usage and audit
 
@@ -766,12 +752,17 @@ referenced by at least one test marked
 - **FR-028**: System MUST add a "Chat" entry to the application sidebar as the
   primary (top-most) navigation item; the existing 002-ui-shell IA is otherwise
   unchanged.
-- **FR-029**: System MUST provide a Settings → Models page covering every model
-  registration operation.
-- **FR-030**: Every chat and model operation available in the GUI MUST be
-  available through the REST API, and the model operations MUST be available as
-  CLI commands; CLI read operations MUST support `--json`. (The `coffer chat`
-  CLI was removed with the retired built-in chat agent, ADR-024.)
+- **FR-029**: The dedicated Settings → Models registry page is **retired**: the
+  standalone `ModelConfig`/`chat_models` registry it managed is gone (folded into
+  provider connections, spec 011 / ADR-032). Coffer's internal-engine connection
+  is now configured on the unified **Settings → LLM Connections** page (spec 011),
+  and managed agents pick their connection on the agent detail page.
+- **FR-030**: Every chat operation available in the GUI MUST be available through
+  the REST API; CLI read operations MUST support `--json`. The model-registry
+  CRUD REST and the `coffer model` CLI are **retired** with the `ModelConfig`
+  registry (spec 011); only the provider **introspection** routes
+  (`list-models`, `test-connection`) remain. (The `coffer chat` CLI was removed
+  with the retired built-in chat agent, ADR-024.)
 
 **Observability**
 
@@ -866,7 +857,7 @@ referenced by at least one test marked
   from specs 001–006 — are in place on this branch's base.
 - The application shell from spec 002-ui-shell — sidebar IA, layout, routing,
   design system, and the Settings layout — is in place; the Chat page and the
-  Settings → Models page render within that shell.
+  Settings → LLM Connections page (spec 011) render within that shell.
 - Memory and knowledge-base tools (`coffer__recall`, `coffer__search_knowledge`,
   and siblings) already exist as gateway built-in tools from specs 005–006; this
   spec consumes them and does not redefine them.
@@ -890,8 +881,10 @@ referenced by at least one test marked
   and any cross-agent raw-transcript browse/search surface (sharing across agents
   is served by distilled memory, [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.md)).
   Remote channels are delivered separately by Spec 009.
-- Re-wiring the managed-agent turn path to read `Conversation.model_id`, and
-  retiring that registry override for chat, are **out of scope**: the per-conversation
-  model picker targets `agent_config.model` only (see the per-conversation-model
-  repositioning above). `model_id` stays the Settings → Models internal-engine
-  registry.
+- The standalone `ModelConfig`/`chat_models` registry that `Conversation.model_id`
+  referenced is **retired** (folded into provider connections, spec 011 /
+  ADR-032). `model_id` is now a **vestigial legacy column**, never read by the
+  managed-agent turn path: that path uses the agent's own model — the active
+  connection's `model` plus the per-conversation `agent_config.model` override
+  (PR #170). Coffer's internal engine selects its model from the internal-default
+  connection.

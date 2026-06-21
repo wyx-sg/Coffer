@@ -6,6 +6,8 @@
 // (~/.coffer/workspace) by default — there is no per-turn working-directory
 // picker. When no managed agent is available, an install/configure empty state
 // is shown instead.
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Bot, MessageSquareOff } from "lucide-react";
 
@@ -17,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { AgentInfo } from "@/lib/api/chat";
+import { WIRE_BY_AGENT } from "@/lib/api/providers";
+import { useProviders } from "@/lib/hooks/useProviders";
 import { Composer } from "./Composer";
 import { ModelPicker } from "./ModelPicker";
 
@@ -46,6 +50,22 @@ export function DraftThread({
 }: Props) {
   const { t } = useTranslation();
   const agentName = agents.find((a) => a.agent_key === agentKey)?.display_name ?? agentKey;
+
+  // Whether the selected agent has an active LLM connection for its wire. With
+  // none configured the agent has no model to talk to, so we surface an
+  // actionable empty state linking to Settings → LLM Connections rather than a
+  // composer that would only 409 on send.
+  const providers = useProviders();
+  const wire = WIRE_BY_AGENT[agentKey];
+  const hasConnection = useMemo(
+    () => (providers.data ?? []).some((p) => p.wire_format === wire && p.is_active),
+    [providers.data, wire],
+  );
+  // Until the providers query settles we don't yet know whether a connection
+  // exists. Render the composer optimistically rather than flashing the
+  // "no connection" empty state on first paint (it would only flip back once
+  // the query resolves). The empty state shows only once we KNOW there's none.
+  const showNoConnection = !providers.isPending && !hasConnection;
 
   // No Coffer-managed agent on PATH / registered — there is nothing to chat
   // with, so guide the user to install or configure one.
@@ -89,20 +109,48 @@ export function DraftThread({
           </Select>
         </div>
         {/* Optional model for the new conversation, beside the agent picker. */}
-        <ModelPicker
-          agentKey={agentKey}
-          value={modelValue}
-          onCommit={(model) => onModelChange?.(model)}
-        />
+        {hasConnection && (
+          <ModelPicker
+            agentKey={agentKey}
+            value={modelValue}
+            onCommit={(model) => onModelChange?.(model)}
+          />
+        )}
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <Bot className="mb-3 size-8 text-primary/70" strokeWidth={1.5} />
-        <p className="text-sm text-muted-foreground">
-          {t("chat.draft.guide", { agent: agentName })}
-        </p>
-      </div>
-      <Composer onSend={onSend} disabled={creating} />
+      {!showNoConnection ? (
+        <>
+          <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+            <Bot className="mb-3 size-8 text-primary/70" strokeWidth={1.5} />
+            <p className="text-sm text-muted-foreground">
+              {t("chat.draft.guide", { agent: agentName })}
+            </p>
+          </div>
+          <Composer onSend={onSend} disabled={creating} />
+        </>
+      ) : (
+        // No active LLM connection for this agent's wire → actionable empty
+        // state instead of a composer that would only fail on send.
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12 text-center">
+          <MessageSquareOff
+            className="size-12 text-muted-foreground/40"
+            strokeWidth={1.25}
+            aria-hidden
+          />
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold">{t("chat.draft.noConnectionTitle")}</h2>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              {t("chat.draft.noConnectionBody")}
+            </p>
+          </div>
+          <Link
+            to="/settings/llm-connections"
+            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {t("chat.draft.noConnectionCta")}
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
