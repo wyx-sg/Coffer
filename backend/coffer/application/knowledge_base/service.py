@@ -301,8 +301,8 @@ class KnowledgeBaseService:
     def doc_paths(self, *, kb_name: str, document_id: str) -> tuple[str, str]:
         """Absolute markdown path + its containing folder for a document.
 
-        The in-app viewer is read-only; surfaces hand these to the desktop for
-        open-in-external-editor / reveal / copy-path."""
+        The in-app viewer is read-only; surfaces hand these to open-in-external-editor
+        / reveal (desktop via the OS opener, web via the loopback daemon)."""
         path = self._paths.doc_path(kb_name, document_id)
         return str(path), str(path.parent)
 

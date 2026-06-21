@@ -64,7 +64,7 @@ coffer memory clear project-01J… --yes
 1. 侧栏 → **Memory**。页面以表格列出所有记忆 store（global store 加每项目一个 —— 自动置备，所以没有「New store」操作）。
 2. 点一行 store 进入它的逐 store 详情页。
 3. 事实列表是主视图，顶部有 recall 框（模式选择器默认 keyword）。
-4. 点一条事实展开 **只读** 渲染（UI 不在应用内编辑事实内容）。每条事实及其所在文件夹提供 **在外部编辑器中打开**、**在文件管理器中显示**（桌面）以及 **复制绝对路径**（web 回退）；打开哪个编辑器由全局首选编辑器偏好决定（见 spec 002-ui-shell）。要纠正一条事实，就在自己的编辑器里打开它 —— 下一次 recall 经 lazy reindex-on-read 拾取改动。
+4. 点一条事实展开 **只读** 渲染（UI 不在应用内编辑事实内容）。每条事实及其所在文件夹提供 **在外部编辑器中打开** 与 **在文件管理器中显示**（桌面与 web 上都是真实 OS 动作——web 上经 daemon）；打开哪个编辑器由全局首选编辑器偏好决定（见 spec 002-ui-shell）。要纠正一条事实，就在自己的编辑器里打开它 —— 下一次 recall 经 lazy reindex-on-read 拾取改动。
 5. 头部显示事实条数与落盘大小；kebab 菜单提供「Clear scope」。要添加或删除事实，用 `coffer memory add` / `coffer memory delete`（或 REST API）。
 
 每次写入 —— agent（MCP）、CLI 或 REST —— 都会重新生成 `MEMORY.md`、重建索引并审计；桌面 UI 本身是只读视图。

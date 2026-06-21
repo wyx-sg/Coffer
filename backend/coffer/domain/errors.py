@@ -167,6 +167,23 @@ class FsPathNotBrowsable(CofferError):  # noqa: N818
         self.reason = reason
 
 
+class FsPathNotOpenable(CofferError):  # noqa: N818
+    """An open/reveal target can't be acted on (not absolute, missing, launch failed).
+
+    Surfaces map this to 400 — the caller-supplied path is invalid or the OS
+    launcher could not be spawned. The daemon acts only on an existing absolute
+    path; it never creates anything (spec 004-agent-registry FR-039, ADR-033).
+    """
+
+    code = "FS_PATH_NOT_OPENABLE"
+
+    def __init__(self, path: str, reason: str = "") -> None:
+        msg = f"path not openable: {path} ({reason})" if reason else f"path not openable: {path}"
+        super().__init__(msg)
+        self.path = path
+        self.reason = reason
+
+
 # === skill manager ===
 
 

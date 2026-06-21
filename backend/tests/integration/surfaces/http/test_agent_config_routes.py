@@ -60,7 +60,7 @@ def test_list_and_read_config_file(tmp_path, monkeypatch):
         assert items["settings"]["kind"] == "file"
         assert items["settings"]["files"] is None
         assert items["subagents"]["kind"] == "directory"
-        # The read-only viewer needs absolute paths for open/reveal/copy-path
+        # The read-only viewer needs absolute paths for open/reveal
         # (FR-038): a file entry exposes its own path + its containing folder.
         assert items["settings"]["path"] == str(settings_path)
         assert items["settings"]["folder_path"] == str(claude_dir)

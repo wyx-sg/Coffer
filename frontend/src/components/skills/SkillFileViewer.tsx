@@ -2,7 +2,7 @@
 // Right pane of the skill Files tab: shows the selected file's contents
 // READ-ONLY. Markdown (.md) renders via the shared <Markdown> component; other
 // text files show as raw <pre>. Editing happens in the user's own editor — the
-// <FileActions> bar opens / reveals / copies the file's absolute path. Binary
+// <FileActions> bar opens / reveals the file. Binary
 // and truncated files render the same read-only way.
 import { useTranslation } from "react-i18next";
 

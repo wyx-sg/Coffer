@@ -122,12 +122,11 @@ describe("MemoryStoreDetailPage", () => {
   });
 
   // Spec 007 scenario: the human-facing memory viewer is read-only and routes
-  // edits to the user's own editor — it surfaces open/reveal/copy-path
-  // affordances instead of an in-app editor. jsdom is not Tauri, so the
-  // copy-path fallback is what renders here.
+  // edits to the user's own editor — it surfaces open/reveal affordances
+  // (daemon-backed on web, Tauri on desktop) instead of an in-app editor.
   acceptance(
     "007-memory",
-    "read-only viewer offers open/reveal/copy-path affordances",
+    "read-only viewer offers open/reveal affordances",
     async () => {
       stubLists();
       renderPage();
@@ -135,7 +134,8 @@ describe("MemoryStoreDetailPage", () => {
       fireEvent.click(await within(tree).findByText("tabs"));
       await screen.findByText("uses tabs over spaces");
       expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /copy path/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
     },
   );
 

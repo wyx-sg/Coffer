@@ -15,7 +15,7 @@ export interface ConfigFileInfo {
   key: string;
   display_name: string;
   path: string;
-  /** Absolute path of the containing folder (for "open folder" / "copy folder path"). */
+  /** Absolute path of the containing folder (for the "open folder" affordance). */
   folder_path?: string;
   format: ConfigFileFormat;
   exists: boolean;

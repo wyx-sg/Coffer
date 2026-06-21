@@ -3,10 +3,6 @@
     "openInEditor": "Open in editor",
     "openFolder": "Open folder",
     "reveal": "Reveal in Finder",
-    "copyPath": "Copy path",
-    "copyFolderPath": "Copy folder path",
-    "copied": "Copied",
-    "copyFailed": "Couldn't copy the path to the clipboard.",
     "openFailed": "Couldn't open the file in your editor.",
     "openFolderFailed": "Couldn't open the folder in your editor.",
     "revealFailed": "Couldn't reveal the file."

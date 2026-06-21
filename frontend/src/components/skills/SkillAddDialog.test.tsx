@@ -47,6 +47,16 @@ describe("SkillAddDialog", () => {
     expect(screen.getByPlaceholderText(/\.claude\/skills/i)).toBeInTheDocument();
   });
 
+  test("offers a folder picker next to the path input (spec 005 FR-030)", () => {
+    stub({});
+    render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
+      wrapper: wrap(null),
+    });
+    // The shared FolderPicker's Browse button — native dialog on desktop, daemon
+    // folder browser on web — so the skill folder is picked, not typed.
+    expect(screen.getByRole("button", { name: /browse/i })).toBeInTheDocument();
+  });
+
   test("the local tab imports the path and fires onCreated + close", async () => {
     const importAsync = vi.fn().mockResolvedValue({});
     const onCreated = vi.fn();

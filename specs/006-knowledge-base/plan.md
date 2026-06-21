@@ -138,7 +138,7 @@ frontend/src/kinds/knowledge_base/
 ├── KnowledgeBaseForm.tsx     # name, description, enabled modes, chunk params, embedding provider
 ├── KnowledgeBaseDetailPage.tsx
 ├── DocumentTable.tsx         # shared DataTable; source_mode badge
-├── DocumentViewer.tsx        # read-only Markdown render + open-in-editor / reveal / copy-path
+├── DocumentViewer.tsx        # read-only Markdown render + open-in-editor / reveal
 ├── UploadDropzone.tsx
 ├── SearchPanel.tsx           # mode selector (grep/keyword/vector) + results
 └── schema.ts
@@ -182,7 +182,7 @@ For each acceptance scenario: failing test in the right tier with the acceptance
 
 ## Phase 4 — Frontend
 
-`KnowledgeBaseForm` (zod mirrors `KnowledgeBaseConfig`) → `KnowledgeBaseDetailPage` (DocumentTable + UploadDropzone + read-only DocumentViewer with open-in-editor / reveal / copy-path + SearchPanel with mode selector) → register `KNOWLEDGE_BASE_KIND_UI` → one test per UI acceptance scenario.
+`KnowledgeBaseForm` (zod mirrors `KnowledgeBaseConfig`) → `KnowledgeBaseDetailPage` (DocumentTable + UploadDropzone + read-only DocumentViewer with open-in-editor / reveal + SearchPanel with mode selector) → register `KNOWLEDGE_BASE_KIND_UI` → one test per UI acceptance scenario.
 
 ## Phase 5 — Verification
 
