@@ -22,6 +22,7 @@ from coffer.infrastructure.chat.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.distill.transcript_reader import FileTranscriptReader
 from coffer.surfaces.http.distill.state import set_distill_service
 from coffer.surfaces.http.organize_wiring import wire_organize
+from coffer.surfaces.http.reorg_wiring import wire_reorg
 
 # ---------------------------------------------------------------------------
 # Adapters
@@ -140,4 +141,6 @@ def wire_distill(
     # internal-LLM consumer of the same memory + model services; wire it here so
     # the app composition root keeps a single internal-LLM call site.
     wire_organize(memory_service, model_svc, credential_resolver)
+    # The agentic reorg service (spec 007 FR-033/034) — same collaborators.
+    wire_reorg(memory_service, model_svc, credential_resolver)
     return svc

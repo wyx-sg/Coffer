@@ -193,6 +193,23 @@ def consolidation_log_path(store_dir: pathlib.Path) -> pathlib.Path:
     return store_dir / "consolidation-log.md"
 
 
+def superseded_dir(store_dir: pathlib.Path) -> pathlib.Path:
+    """The store-root ``superseded/`` tombstone — topic docs retired by the reorg
+    pass. At the store ROOT (outside ``knowledge/``) so it is excluded from recall
+    like ``handoff/``; recoverable, and it DOES sync (source-of-truth history)."""
+    return store_dir / "superseded"
+
+
+def superseded_path(store_dir: pathlib.Path, name: str) -> pathlib.Path:
+    """``<store>/superseded/<name>.md``, guarded as a single safe segment."""
+    _safe_segment(name, "superseded name")
+    d = superseded_dir(store_dir)
+    candidate = (d / f"{name}.md").resolve()
+    if not candidate.is_relative_to(d.resolve()):
+        raise ValueError(f"superseded name {name!r} escapes the superseded dir")
+    return d / f"{name}.md"
+
+
 def handoff_dir(store_dir: pathlib.Path) -> pathlib.Path:
     """The ``handoff/`` subdir of a memory store (working-state files live here,
     excluded from recall which globs only the store dir's top-level ``*.md``)."""
