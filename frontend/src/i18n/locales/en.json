@@ -708,15 +708,22 @@
       "title": "Transcript sessions",
       "subtitle": "Local chat transcripts from this agent. Distil a session to extract durable insights into shared memory.",
       "empty": "No conversations found for this agent.",
+      "colTitle": "Title",
       "colProject": "Project",
       "colMessages": "Messages",
       "colStarted": "Started",
+      "colLastActivity": "Last activity",
       "distill": "Distill to memory",
       "distilling": "Distilling…",
       "distilledCount": "Distilled {{count}} insight(s) to memory.",
       "noInsights": "No durable insights found in this session.",
       "distillAria": "Distill session {{session}} to memory",
-      "showingRecent": "Showing the {{count}} most recent of {{total}} sessions."
+      "searchPlaceholder": "Search title or project…",
+      "filterProject": "Filter by project",
+      "allProjects": "All projects",
+      "sortBy": "Sort by {{field}}",
+      "loadMore": "Load more",
+      "showingCount": "Showing {{count}} of {{total}} sessions."
     },
     "memoryTab": {
       "title": "Memory",
