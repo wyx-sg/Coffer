@@ -339,6 +339,35 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   hit, confirming topic documents are chunked **per passage** (heading- and
   block-structure aware) rather than one chunk per file.
 
+### Scenario: the reorg pass consolidates duplicate topic documents
+
+- **Given** a memory store with two overlapping topic documents (both about the
+  same subject, one carrying extra detail) and an internal model configured,
+- **When** `POST /api/v1/memory_stores/{name}/reorg` (or `coffer memory reorg
+  <name>`) runs and the internal agentic loop reads both documents, writes the
+  merged content into one, and supersedes the now-redundant other,
+- **Then** a single topic document holds the combined content, the redundant
+  document no longer appears in `recall` or `INDEX.md`, a subsequent `recall`
+  returns the merged content, and a `memory_reorganized` audit entry is recorded.
+
+### Scenario: reorg never destroys content — a superseded topic stays recoverable
+
+- **Given** a memory store with a topic document holding content X (possibly a
+  human edit),
+- **When** the reorg loop overwrites or supersedes that document,
+- **Then** the prior content X is first archived to the store's `superseded/`
+  tombstone (so it is **recoverable**, never hard-deleted), the tombstone is
+  **excluded from recall** (it lives outside the `knowledge/` lane), and the
+  consolidation changelog records the supersession — the loop is an incremental
+  edit, never a from-scratch regeneration.
+
+### Scenario: reorg is a no-op when no internal model is configured
+
+- **Given** a memory store with topic documents but no internal model configured,
+- **When** `reorg` is called,
+- **Then** the call returns `status="no_model"`, no topic document is written,
+  superseded, or archived, and no error is raised.
+
 > **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, the desktop read-only fact viewer's open-in-editor / reveal / copy-path affordances, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
 
 ## Requirements
@@ -384,6 +413,8 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-030**: After draining, the organizer MUST regenerate the store's `knowledge/INDEX.md` review catalog from all topic docs' frontmatter (`- [<title>](<slug>.md) — <description>`), reconcile the index (dropping the removed inbox rows and (re)indexing the new/updated topic docs so `recall` returns content from the topic docs, not the drained inbox), and record one `memory_organized` audit entry (store + counts only — no item content). `recall` MUST surface organized topic-doc content and MUST NOT surface `INDEX.md`.
 - **FR-031**: The organizer MUST keep a **non-blocking consolidation changelog** at the store ROOT (`<store>/consolidation-log.md`, append-only, human-readable: one line per merged/created topic with the timestamp and the source inbox item). The changelog is auditable, never a gate, and is **excluded from recall** (it lives outside the `knowledge/` lane) and **from the sync mirror** (machine-local, like `INDEX.md`; topic docs themselves DO sync as source-of-truth).
 - **FR-032**: The memory reconciler MUST chunk a fact file's body into **passage-granular, structure-aware chunks** using the retrieval substrate's shared markdown chunker (`infrastructure/knowledge/chunking.chunk_markdown` — splits on heading sections, keeps fenced code / tables atomic, and packs structural blocks up to a fixed window), with **fixed memory chunk-size/overlap parameters** (not a per-store `MemoryStoreConfig` field), so a multi-section organized topic document surfaces the **most relevant passage** on `recall` rather than its entire body as a single chunk. A short single-passage fact (e.g. an inbox item) still chunks to one passage — so this changes only the **granularity** of large/organized topic docs, never *what* `recall` includes or excludes: the `INDEX.md`, inbox-vs-topic, and `handoff/` recall isolation (FR-024/030/031) and the legacy-root-fact abandonment (FR-019) are all unchanged.
+- **FR-033**: The system MUST provide an **internal agentic reorganization pass** that, on an **explicit trigger only** (`POST /api/v1/memory_stores/{name}/reorg` and `coffer memory reorg <name>`; no automatic/background firing in this PR), runs a bounded **langgraph `create_react_agent` loop** driven by Coffer's **internal LLM** (Settings → Models) over the store's existing topic documents to keep them coherent — consolidating duplicate/overlapping documents and splitting over-long ones. The loop is given a small, fixed tool surface over the topic docs only — **list** topics, **read** a topic, **write** (create/overwrite) a topic, and **supersede** (retire) a topic — and is **never an agent-facing tool** (it is internal, like the organizer). The langchain/langgraph code MUST stay confined to `infrastructure.chat` (importlinter Contract 9); `application/memory` reaches it only through an injected memory-local port. When no internal model is configured the pass is a clean no-op (`status="no_model"`, nothing written/superseded/archived) rather than an error; a store with no topic documents is likewise a no-op (`status="empty"`). After the loop the pass MUST regenerate `INDEX.md`, reconcile the index (so `recall` reflects the consolidated docs), and record one `memory_reorganized` audit entry (store + counts only — no document content).
+- **FR-034**: The reorg pass MUST be **non-destructive and incremental — it MUST NOT hard-delete or from-scratch-regenerate a topic document**. Every mutation that removes or replaces existing topic-doc content MUST first **archive the current version** to the store-root `superseded/` tombstone (`<store>/superseded/<slug>-<timestamp>.md`): a `write` that overwrites an existing topic archives the prior version before writing the new one, and a `supersede` **moves** the document there (it is never unlinked into the void). The `superseded/` tombstone is **excluded from recall** (it lives outside the `knowledge/` lane, like `handoff/` and `consolidation-log.md`) and **DOES sync** as recoverable source-of-truth history (unlike the machine-local `INDEX.md`/changelog). Topic-doc writes remain **atomic**, and every write/supersede is appended to the `consolidation-log.md` changelog. This is the data-loss guarantee: no byte ever leaves the `knowledge/` lane without first being recoverably archived, so a human edit can never be irrecoverably clobbered.
 
 **Surfaces**
 

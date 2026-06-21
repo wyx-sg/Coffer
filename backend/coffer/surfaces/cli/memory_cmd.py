@@ -324,3 +324,36 @@ def organize(
         f"{data['topics_created']} created, {data['topics_updated']} updated, "
         f"{data['skipped']} skipped (model: {data.get('model')})"
     )
+
+
+@app.command("reorg")
+def reorg(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Reorganize a store's topic documents: consolidate duplicates and split
+    over-long docs using Coffer's internal agentic model (explicit trigger).
+    Non-destructive — superseded content is archived to the recoverable
+    superseded/ tombstone."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/memory_stores/{name}/reorg")
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    status = data["status"]
+    if status == "no_model":
+        typer.echo("no internal model configured — nothing reorganized", err=True)
+        return
+    if status == "empty":
+        typer.echo("no topic documents — nothing to reorganize")
+        return
+    typer.echo(
+        f"reorganized: {data['topics_written']} written, "
+        f"{data['topics_superseded']} superseded "
+        f"(before: {data['topics_before']}, after: {data['topics_after']}, "
+        f"model: {data.get('model')})"
+    )

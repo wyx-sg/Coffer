@@ -311,6 +311,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/memory_stores/{name}/reorg:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    post:
+      summary: >
+        Reorganize the store: run Coffer's internal agentic loop over the
+        existing topic documents to consolidate duplicates and split over-long
+        ones (explicit trigger; no auto-fire). Non-destructive — superseded or
+        overwritten content is archived to the recoverable `superseded/`
+        tombstone, never hard-deleted.
+      operationId: reorgMemoryStore
+      tags: [organize]
+      responses:
+        "200":
+          description: >
+            OK. Reports counts and the outcome status. `status="no_model"` (no
+            internal model configured) and `status="empty"` (no topic documents
+            to reorganize) are clean no-ops, not errors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReorgResponse"
+        "404":
+          description: >
+            Memory store not found (`MEMORY_STORE_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
 components:
   securitySchemes:
     cofferToken:
@@ -630,6 +660,34 @@ components:
         skipped:
           type: integer
           description: Items left in the inbox due to an LLM/parse failure (never lost).
+        model:
+          type: string
+          nullable: true
+          description: Display name of the internal model used (null when status="no_model").
+
+    ReorgResponse:
+      type: object
+      required: [status, topics_before, topics_after, topics_written, topics_superseded]
+      properties:
+        status:
+          type: string
+          enum: [reorganized, no_model, empty]
+          description: >
+            `reorganized` = the agentic loop ran; `no_model` = no internal model
+            configured (clean no-op, nothing changed); `empty` = no topic
+            documents to reorganize.
+        topics_before:
+          type: integer
+          description: Number of topic documents in the lane before the pass.
+        topics_after:
+          type: integer
+          description: Number of topic documents in the lane after the pass.
+        topics_written:
+          type: integer
+          description: Topic documents created or overwritten by the loop (prior versions archived).
+        topics_superseded:
+          type: integer
+          description: Topic documents retired to the recoverable `superseded/` tombstone.
         model:
           type: string
           nullable: true
