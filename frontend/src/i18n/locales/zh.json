@@ -708,15 +708,22 @@
       "title": "对话历史",
       "subtitle": "该 agent 的本地对话记录。蒸馏一条会话，将持久洞察提取并写入共享记忆。",
       "empty": "该 agent 暂无对话记录。",
+      "colTitle": "标题",
       "colProject": "项目",
       "colMessages": "消息数",
       "colStarted": "开始时间",
+      "colLastActivity": "最后聊天时间",
       "distill": "蒸馏到记忆",
       "distilling": "蒸馏中…",
       "distilledCount": "已蒸馏 {{count}} 条洞察到记忆。",
       "noInsights": "本次会话中未找到持久洞察。",
       "distillAria": "将会话 {{session}} 蒸馏到记忆",
-      "showingRecent": "显示最近 {{count}} 条，共 {{total}} 条会话。"
+      "searchPlaceholder": "搜索标题或项目…",
+      "filterProject": "按项目筛选",
+      "allProjects": "全部项目",
+      "sortBy": "按{{field}}排序",
+      "loadMore": "加载更多",
+      "showingCount": "显示 {{count}} / 共 {{total}} 条会话。"
     },
     "memoryTab": {
       "title": "记忆",

@@ -10,6 +10,8 @@ envelope. The ``X-Coffer-Token`` / ``require_token`` guard and the
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query
 
 from coffer.application.distill.service import (
@@ -44,15 +46,37 @@ async def list_transcripts(
     name: str,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(None, description="Search title or project path."),
+    project: str | None = Query(None, description="Filter to this exact project_path."),
+    started_after: datetime | None = Query(  # noqa: B008
+        None, description="Keep started_at ≥ this instant."
+    ),
+    started_before: datetime | None = Query(  # noqa: B008
+        None, description="Keep started_at ≤ this instant."
+    ),
+    sort: str = Query("last_activity_at", pattern="^(started_at|last_activity_at|message_count)$"),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
     svc: TranscriptDistillationService = Depends(get_distill_service),  # noqa: B008
 ) -> TranscriptSessionListResponse:
-    """List an agent's transcript sessions, most-recent first.
+    """List an agent's transcript sessions with search, filter, and sort.
 
-    Paged by ``limit`` / ``offset``: only the requested window is parsed, so an
-    agent with thousands of past sessions lists fast (no full-tree scan).
+    Searches title + project path (``q``), filters by exact ``project`` and a
+    ``started_at`` range, and sorts by ``sort``/``order``. Backed by the
+    reader's mtime-aware cache, so an agent with thousands of past sessions
+    stays responsive. Paged by ``limit``/``offset`` against the matched total.
     """
     try:
-        total, sessions = await svc.list_sessions(agent_name=name, limit=limit, offset=offset)
+        total, sessions = await svc.list_sessions(
+            agent_name=name,
+            limit=limit,
+            offset=offset,
+            query=q,
+            project=project,
+            started_after=started_after,
+            started_before=started_before,
+            sort=sort,
+            order=order,
+        )
     except ResourceNotFound:
         return error_response("RESOURCE_NOT_FOUND", f"agent {name!r} not found")  # type: ignore[return-value]
     except UnsupportedAgentTypeError as exc:
@@ -64,9 +88,12 @@ async def list_transcripts(
         sessions=[
             TranscriptSessionSummary(
                 session_id=s.session_id,
+                title=s.title,
                 project_path=s.project_path,
                 message_count=s.message_count,
                 started_at=s.started_at,
+                last_activity_at=s.last_activity_at,
+                source_path=s.source_path,
             )
             for s in sessions
         ],

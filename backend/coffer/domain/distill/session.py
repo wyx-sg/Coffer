@@ -30,6 +30,9 @@ class TranscriptSession:
     started_at: datetime | None
     messages: tuple[TranscriptMessage, ...] = field(default_factory=tuple)
     source_path: str = ""
+    # History-list projection fields (parsed read-only; never persisted).
+    title: str | None = None
+    last_activity_at: datetime | None = None
 
     @property
     def message_count(self) -> int:

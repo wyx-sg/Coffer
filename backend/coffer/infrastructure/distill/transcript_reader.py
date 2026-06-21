@@ -1,17 +1,13 @@
-"""Defensive transcript parsers + FileTranscriptReader (TranscriptReaderPort).
+"""FileTranscriptReader (TranscriptReaderPort) — discover, parse, cache, search.
 
-Parser design principles:
-- Never raise on a single bad line; skip and continue.
-- Keep only natural-language *text* blocks; drop tool_use / tool_result /
-  function-call blocks entirely.
-- Apply scrub_text to every message text before storing.
-- Extract project_path from ``cwd``, session_id from ``sessionId`` (Claude) /
-  ``id`` (Codex), started_at from first ``timestamp`` (ISO-8601 → datetime).
+The pure per-agent parsers live in :mod:`transcript_parsers`; this module is the
+read-only filesystem adapter that finds each agent's ``.jsonl`` session files,
+parses them (via an mtime-aware cache), and serves list / search / read queries.
+``parse_claude_code`` / ``parse_codex`` are re-exported for callers and tests.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
@@ -23,208 +19,14 @@ from coffer.domain.distill.locations import (
     is_transcript_file,
     sessions_dir,
 )
-from coffer.domain.distill.scrub import scrub_text
-from coffer.domain.distill.session import TranscriptMessage, TranscriptSession
+from coffer.domain.distill.session import TranscriptSession
+from coffer.infrastructure.distill.transcript_parsers import parse_claude_code, parse_codex
 
 log = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
-def _parse_iso(ts: str | None) -> datetime | None:
-    """Parse an ISO-8601 timestamp string; return None on any failure.
-
-    Always returns a tz-aware datetime (UTC when no offset is present) so that
-    comparisons across sessions never raise TypeError on mixed aware/naive values.
-    """
-    if not ts:
-        return None
-    try:
-        # Python 3.11+ handles Z suffix; for 3.10 compatibility replace it.
-        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt
-
-
-def _text_from_content(content: object) -> str | None:
-    """Extract plain text from a Claude ``content`` value (str or block list).
-
-    Returns None when the content carries no text at all (e.g. it is purely a
-    tool_use payload that we intentionally discard).
-    """
-    if isinstance(content, str):
-        return content or None
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if not isinstance(block, dict):
-                continue
-            if block.get("type") == "text":
-                text = block.get("text")
-                if text:
-                    parts.append(str(text))
-            # tool_use / tool_result blocks are silently dropped
-        return "".join(parts) or None
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Public parsers
-# ---------------------------------------------------------------------------
-
-
-def parse_claude_code(lines: Iterable[str], *, source_path: str) -> TranscriptSession:
-    """Parse a Claude Code persisted transcript (one JSON object per line).
-
-    Tolerates non-JSON lines (skipped). Keeps only text content blocks;
-    drops tool_use / tool_result entirely.
-    """
-    messages: list[TranscriptMessage] = []
-    project_path: str | None = None
-    session_id: str = source_path  # fallback: use path if record carries none
-    started_at: datetime | None = None
-
-    for raw in lines:
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            record: dict[object, object] = json.loads(raw)
-        except json.JSONDecodeError:
-            log.debug("claude_code parser: skipping non-JSON line in %s", source_path)
-            continue
-
-        if not isinstance(record, dict):
-            continue
-
-        # Extract metadata from any record that carries it (first wins).
-        if project_path is None and isinstance(record.get("cwd"), str):
-            project_path = record["cwd"]  # type: ignore[assignment]
-        if session_id == source_path and isinstance(record.get("sessionId"), str):
-            session_id = record["sessionId"]  # type: ignore[assignment]
-        if started_at is None:
-            started_at = _parse_iso(record.get("timestamp"))  # type: ignore[arg-type]
-
-        # Extract message text.
-        msg_obj = record.get("message")
-        if not isinstance(msg_obj, dict):
-            continue
-        role = msg_obj.get("role")
-        if not isinstance(role, str):
-            continue
-        content = msg_obj.get("content")
-        text = _text_from_content(content)
-        if text is not None:
-            messages.append(TranscriptMessage(role=role, text=scrub_text(text)))
-
-    return TranscriptSession(
-        session_id=session_id,
-        agent_type_value="claude_code",
-        project_path=project_path,
-        started_at=started_at,
-        messages=tuple(messages),
-        source_path=source_path,
-    )
-
-
-def parse_codex(lines: Iterable[str], *, source_path: str) -> TranscriptSession:
-    """Parse a Codex rollout-*.jsonl transcript (flat JSONL events).
-
-    Tolerates non-JSON lines (skipped). Keeps ``message`` events with text
-    content; drops command_execution / file_change / function-call events.
-
-    The persisted rollout format is similar to but not identical with the live
-    ``codex exec --json`` stream.  We therefore parse defensively: any line
-    whose ``type`` we don't recognise is silently skipped.
-    """
-    messages: list[TranscriptMessage] = []
-    project_path: str | None = None
-    session_id: str = source_path  # fallback
-    started_at: datetime | None = None
-
-    for raw in lines:
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            record: dict[object, object] = json.loads(raw)
-        except json.JSONDecodeError:
-            log.debug("codex parser: skipping non-JSON line in %s", source_path)
-            continue
-
-        if not isinstance(record, dict):
-            continue
-
-        kind = record.get("type")
-
-        # session_meta carries cwd + id
-        if kind in ("session_meta", "thread.started"):
-            if project_path is None and isinstance(record.get("cwd"), str):
-                project_path = record["cwd"]  # type: ignore[assignment]
-            if session_id == source_path:
-                # Codex live stream uses thread_id; rollout may use id
-                sid = record.get("id") or record.get("thread_id")
-                if isinstance(sid, str):
-                    session_id = sid
-            continue
-
-        # timestamp on any record (first wins)
-        if started_at is None:
-            started_at = _parse_iso(record.get("timestamp"))  # type: ignore[arg-type]
-
-        # message events carry role + content text
-        if kind == "message":
-            role = record.get("role")
-            content = record.get("content")
-            if isinstance(role, str):
-                if isinstance(content, str) and content:
-                    messages.append(TranscriptMessage(role=role, text=scrub_text(content)))
-                elif isinstance(content, list):
-                    # Real Codex rollout stores content as typed blocks, e.g.
-                    # {"type":"input_text","text":...} / {"type":"output_text","text":...}
-                    parts: list[str] = []
-                    for block in content:
-                        if not isinstance(block, dict):
-                            continue
-                        btype = block.get("type", "")
-                        if isinstance(btype, str) and (btype == "text" or btype.endswith("_text")):
-                            text = block.get("text")
-                            if text:
-                                parts.append(str(text))
-                    joined = "".join(parts)
-                    if joined:
-                        messages.append(TranscriptMessage(role=role, text=scrub_text(joined)))
-            continue
-
-        # item.completed events (live stream shape) — keep agent_message only
-        if kind == "item.completed":
-            item = record.get("item")
-            if isinstance(item, dict) and item.get("type") == "agent_message":
-                text = item.get("text")
-                if isinstance(text, str) and text:
-                    messages.append(TranscriptMessage(role="assistant", text=scrub_text(text)))
-            continue
-
-        # All other event types (command_execution, file_change, tool_use, …) are dropped.
-
-    return TranscriptSession(
-        session_id=session_id,
-        agent_type_value="codex",
-        project_path=project_path,
-        started_at=started_at,
-        messages=tuple(messages),
-        source_path=source_path,
-    )
-
-
-# ---------------------------------------------------------------------------
-# FileTranscriptReader (implements TranscriptReaderPort)
-# ---------------------------------------------------------------------------
+# Sort sentinel for sessions with no timestamp — keeps them last on a desc sort
+# (and first on asc), and is tz-aware so it never mixes with naive datetimes.
+_DT_MIN = datetime(1, 1, 1, tzinfo=UTC)
 
 
 class FileTranscriptReader:
@@ -240,6 +42,12 @@ class FileTranscriptReader:
         "claude_code": parse_claude_code,
         "codex": parse_codex,
     }
+
+    def __init__(self) -> None:
+        # path -> (mtime, parsed session). The reader is a composition-root
+        # singleton, so this cache lives for the daemon's lifetime: an agent
+        # with thousands of sessions re-parses only files whose mtime changed.
+        self._cache: dict[str, tuple[float, TranscriptSession]] = {}
 
     def _iter_files(self, agent_type_value: str, config_dir: str) -> Iterable[Path]:
         """Yield transcript file paths under the agent's sessions directory."""
@@ -296,6 +104,88 @@ class FileTranscriptReader:
             except Exception:
                 log.warning("transcript_reader: failed to parse %s; skipping", path, exc_info=True)
         return len(files), page
+
+    def _all_summaries(self, agent_type_value: str, config_dir: str) -> list[TranscriptSession]:
+        """Parse every session under the agent's sessions dir, reusing the cache.
+
+        mtime-aware: a file is re-parsed only when its mtime changes. Cache
+        entries for files that have since been deleted (under this root) are
+        pruned so the cache can't grow without bound.
+        """
+        root_prefix = str(sessions_dir(agent_type_value, Path(config_dir)))
+        out: list[TranscriptSession] = []
+        seen: set[str] = set()
+        for path in self._iter_files(agent_type_value, config_dir):
+            key = str(path)
+            seen.add(key)
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                log.warning("transcript_reader: failed to stat %s; skipping", path, exc_info=True)
+                continue
+            cached = self._cache.get(key)
+            if cached is not None and cached[0] == mtime:
+                out.append(cached[1])
+                continue
+            try:
+                session = self._parse_file(agent_type_value, path)
+            except Exception:
+                log.warning("transcript_reader: failed to parse %s; skipping", path, exc_info=True)
+                continue
+            self._cache[key] = (mtime, session)
+            out.append(session)
+        for stale in [k for k in self._cache if k.startswith(root_prefix) and k not in seen]:
+            del self._cache[stale]
+        return out
+
+    def search_session_summaries(
+        self,
+        *,
+        agent_type_value: str,
+        config_dir: str,
+        limit: int,
+        offset: int,
+        query: str | None = None,
+        project: str | None = None,
+        started_after: datetime | None = None,
+        started_before: datetime | None = None,
+        sort: str = "last_activity_at",
+        order: str = "desc",
+    ) -> tuple[int, list[TranscriptSession]]:
+        """Return ``(matched_total, page)`` after search + filter + sort.
+
+        Parses (cached) every session, then applies a case-insensitive search
+        over title + project_path, a project + ``started_at``-range filter, and
+        a sort by ``started_at`` / ``last_activity_at`` / ``message_count``
+        (asc/desc), paged by ``limit``/``offset``.
+        """
+        sessions = self._all_summaries(agent_type_value, config_dir)
+        q = query.strip().lower() if query else None
+
+        def keep(s: TranscriptSession) -> bool:
+            if project is not None and s.project_path != project:
+                return False
+            if started_after is not None and (s.started_at is None or s.started_at < started_after):
+                return False
+            if started_before is not None and (
+                s.started_at is None or s.started_at > started_before
+            ):
+                return False
+            if q:
+                haystack = " ".join(p for p in (s.title, s.project_path) if p).lower()
+                if q not in haystack:
+                    return False
+            return True
+
+        filtered = [s for s in sessions if keep(s)]
+        reverse = order != "asc"
+        if sort == "message_count":
+            filtered.sort(key=lambda s: s.message_count, reverse=reverse)
+        elif sort == "started_at":
+            filtered.sort(key=lambda s: s.started_at or _DT_MIN, reverse=reverse)
+        else:  # last_activity_at (default)
+            filtered.sort(key=lambda s: s.last_activity_at or _DT_MIN, reverse=reverse)
+        return len(filtered), filtered[offset : offset + limit]
 
     def read_session(
         self, *, agent_type_value: str, config_dir: str, session_id: str

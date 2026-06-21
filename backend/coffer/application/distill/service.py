@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from coffer.application.distill.ports import (
     AgentResolverPort,
@@ -49,17 +50,34 @@ class TranscriptDistillationService:
         self._credential_resolver = credential_resolver
 
     async def list_sessions(
-        self, agent_name: str, *, limit: int = 100, offset: int = 0
+        self,
+        agent_name: str,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        query: str | None = None,
+        project: str | None = None,
+        started_after: datetime | None = None,
+        started_before: datetime | None = None,
+        sort: str = "last_activity_at",
+        order: str = "desc",
     ) -> tuple[int, list[TranscriptSession]]:
-        """Return ``(total, page)`` of transcript sessions for *agent_name*,
-        most-recent first. Only the requested page is parsed, so listing an
-        agent with thousands of past sessions stays fast."""
+        """Return ``(matched_total, page)`` of transcript sessions for
+        *agent_name* after search + filter + sort. Backed by the reader's
+        mtime-aware cache, so listing an agent with thousands of past sessions
+        stays responsive."""
         agent_type_value, config_dir = await self._agents.resolve(agent_name)
-        return self._reader.list_session_summaries(
+        return self._reader.search_session_summaries(
             agent_type_value=agent_type_value,
             config_dir=config_dir,
             limit=limit,
             offset=offset,
+            query=query,
+            project=project,
+            started_after=started_after,
+            started_before=started_before,
+            sort=sort,
+            order=order,
         )
 
     async def distill(

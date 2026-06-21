@@ -1,98 +1,38 @@
 // frontend/src/components/agents/AgentConversationsTab.tsx
-// "Conversations" tab on the agent detail page: lists local transcript sessions
-// and lets the user distill them into Coffer memory facts via a per-row action.
-import { useState } from "react";
+// "Conversations" tab on the agent detail page: lists the agent's local
+// transcript sessions (title, project, counts, start + last-activity times)
+// with server-side search / project + time filters / sortable columns and a
+// "load more" pager, plus per-row "reveal the session file" and "distill to
+// memory" actions.
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ArrowDown, ArrowUp } from "lucide-react";
 
-import { DataTable, type Column } from "@/components/DataTable";
-import { Badge } from "@/components/ui/badge";
+import { DistillCell } from "@/components/agents/AgentConversationsDistillCell";
+import { AgentConversationsToolbar } from "@/components/agents/AgentConversationsToolbar";
 import { Button } from "@/components/ui/button";
+import { FileActions } from "@/components/FileActions";
+import { type TimeRangeValue } from "@/components/TimeRangePicker";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { translateApiError } from "@/lib/api/errors";
-import type { InsightOut, TranscriptSessionSummary } from "@/lib/api/agentChat";
-import { useAgentTranscripts, useDistillTranscript } from "@/lib/hooks/useAgentChatHistory";
+import { resolveTimeWindow } from "@/lib/timeRange";
+import type { SortOrder, TranscriptSort } from "@/lib/api/agentChat";
+import { useAgentTranscripts, type TranscriptFilters } from "@/lib/hooks/useAgentChatHistory";
 
-// ---------------------------------------------------------------------------
-// Sub-component: the distill button + inline insight viewer for a single row
-// ---------------------------------------------------------------------------
-
-interface DistillCellProps {
-  session: TranscriptSessionSummary;
-  name: string;
-}
-
-function DistillCell({ session, name }: DistillCellProps) {
-  const { t } = useTranslation();
-  const [insights, setInsights] = useState<InsightOut[]>([]);
-  const [factCount, setFactCount] = useState<number | null>(null);
-  const distill = useDistillTranscript(name);
-
-  const handleDistill = () => {
-    distill.mutate(
-      { session_id: session.session_id },
-      {
-        onSuccess: (result) => {
-          setInsights(result.insights);
-          setFactCount(result.fact_ids.length);
-        },
-      },
-    );
-  };
-
+function TimeCell({ value }: { value: string | null }) {
   return (
-    <div className="space-y-2">
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={distill.isPending}
-        onClick={(e) => {
-          e.stopPropagation();
-          handleDistill();
-        }}
-        aria-label={t("agents.conversationsTab.distillAria", {
-          session: session.session_id,
-        })}
-      >
-        {distill.isPending
-          ? t("agents.conversationsTab.distilling")
-          : t("agents.conversationsTab.distill")}
-      </Button>
-
-      {factCount !== null && insights.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{t("agents.conversationsTab.noInsights")}</p>
-      ) : null}
-
-      {factCount !== null && insights.length > 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t("agents.conversationsTab.distilledCount", { count: insights.length })}
-        </p>
-      ) : null}
-
-      {insights.length > 0 ? (
-        <div className="space-y-2 pt-1">
-          {insights.map((insight, index) => (
-            <div
-              key={`${index}-${insight.name}`}
-              className="space-y-1 rounded-md border bg-card px-3 py-2 text-sm"
-            >
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{insight.type}</Badge>
-                <span className="font-medium">{insight.name}</span>
-              </div>
-              {insight.description ? (
-                <p className="text-xs text-muted-foreground">{insight.description}</p>
-              ) : null}
-              <p className="text-xs">{insight.body}</p>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    <span className="text-xs text-muted-foreground">
+      {value ? new Date(value).toLocaleString() : "—"}
+    </span>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 
 interface Props {
   /** Agent name — used as the route param for transcript queries. */
@@ -101,49 +41,75 @@ interface Props {
 
 export function AgentConversationsTab({ name }: Props) {
   const { t } = useTranslation();
-  const { data, isPending, error } = useAgentTranscripts(name);
+  const [search, setSearch] = useState("");
+  const [project, setProject] = useState("all");
+  const [time, setTime] = useState<TimeRangeValue>({ timeRange: "all", from: "", to: "" });
+  const [sort, setSort] = useState<TranscriptSort>("last_activity_at");
+  const [order, setOrder] = useState<SortOrder>("desc");
 
-  const rows = data?.sessions ?? [];
-  // The list is paged (most-recent first) so a many-thousand-session agent
-  // loads fast; tell the user when older sessions aren't shown.
-  const truncated = (data?.total ?? 0) > rows.length;
+  const window = resolveTimeWindow(time);
+  const filters: TranscriptFilters = {
+    q: search.trim() || undefined,
+    project: project !== "all" ? project : undefined,
+    startedAfter: window.since,
+    startedBefore: window.until,
+    sort,
+    order,
+  };
 
-  const columns: Column<TranscriptSessionSummary>[] = [
-    {
-      key: "project_path",
-      header: t("agents.conversationsTab.colProject"),
-      cell: (s) => (
-        <span className="break-all font-mono text-xs">
-          {s.project_path ?? <span className="text-muted-foreground">—</span>}
-        </span>
-      ),
-    },
-    {
-      key: "message_count",
-      header: t("agents.conversationsTab.colMessages"),
-      className: "whitespace-nowrap text-right",
-      cell: (s) => <span className="text-sm tabular-nums">{s.message_count}</span>,
-    },
-    {
-      key: "started_at",
-      header: t("agents.conversationsTab.colStarted"),
-      className: "whitespace-nowrap",
-      cell: (s) =>
-        s.started_at ? (
-          <span className="text-xs text-muted-foreground">
-            {new Date(s.started_at).toLocaleString()}
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        ),
-    },
-    {
-      key: "action",
-      header: "",
-      className: "text-right",
-      cell: (s) => <DistillCell session={s} name={name} />,
-    },
-  ];
+  const { data, isPending, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useAgentTranscripts(name, filters);
+
+  const rows = useMemo(() => data?.pages.flatMap((p) => p.sessions) ?? [], [data]);
+  const total = data?.pages[0]?.total ?? 0;
+
+  // Project filter options derive from the loaded rows' distinct paths (plus the
+  // current selection so it never disappears mid-filter).
+  const projectOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) if (r.project_path) set.add(r.project_path);
+    if (project !== "all") set.add(project);
+    return [...set].sort();
+  }, [rows, project]);
+
+  const toggleSort = (key: TranscriptSort) => {
+    if (sort === key) {
+      setOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSort(key);
+      setOrder("desc");
+    }
+  };
+
+  function SortHeader({
+    col,
+    label,
+    className,
+  }: {
+    col: TranscriptSort;
+    label: string;
+    className?: string;
+  }) {
+    return (
+      <TableHead className={className}>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 hover:text-foreground"
+          onClick={() => toggleSort(col)}
+          aria-label={t("agents.conversationsTab.sortBy", { field: label })}
+        >
+          {label}
+          {sort === col ? (
+            order === "asc" ? (
+              <ArrowUp className="size-3" aria-hidden />
+            ) : (
+              <ArrowDown className="size-3" aria-hidden />
+            )
+          ) : null}
+        </button>
+      </TableHead>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -160,20 +126,97 @@ export function AgentConversationsTab({ name }: Props) {
         <p className="text-sm text-destructive">{translateApiError(t, error)}</p>
       ) : (
         <>
-          {truncated ? (
-            <p className="text-xs text-muted-foreground">
-              {t("agents.conversationsTab.showingRecent", {
-                count: rows.length,
-                total: data?.total ?? 0,
-              })}
-            </p>
-          ) : null}
-          <DataTable
-            rows={rows}
-            columns={columns}
-            rowKey={(s) => s.session_id}
-            emptyMessage={t("agents.conversationsTab.empty")}
+          <AgentConversationsToolbar
+            search={search}
+            onSearchChange={setSearch}
+            project={project}
+            onProjectChange={setProject}
+            projectOptions={projectOptions}
+            time={time}
+            onTimeChange={setTime}
           />
+
+          <div className="rounded-md border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("agents.conversationsTab.colTitle")}</TableHead>
+                  <TableHead>{t("agents.conversationsTab.colProject")}</TableHead>
+                  <SortHeader
+                    col="message_count"
+                    label={t("agents.conversationsTab.colMessages")}
+                    className="whitespace-nowrap text-right"
+                  />
+                  <SortHeader
+                    col="started_at"
+                    label={t("agents.conversationsTab.colStarted")}
+                    className="whitespace-nowrap"
+                  />
+                  <SortHeader
+                    col="last_activity_at"
+                    label={t("agents.conversationsTab.colLastActivity")}
+                    className="whitespace-nowrap"
+                  />
+                  <TableHead className="text-right" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.length === 0 ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                      {t("agents.conversationsTab.empty")}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  rows.map((s) => (
+                    <TableRow key={s.session_id}>
+                      <TableCell className="max-w-md py-3">
+                        <span className="line-clamp-2 text-sm">
+                          {s.title ?? <span className="text-muted-foreground">—</span>}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <span className="break-all font-mono text-xs">
+                          {s.project_path ?? <span className="text-muted-foreground">—</span>}
+                        </span>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap py-3 text-right">
+                        <span className="text-sm tabular-nums">{s.message_count}</span>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap py-3">
+                        <TimeCell value={s.started_at} />
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap py-3">
+                        <TimeCell value={s.last_activity_at} />
+                      </TableCell>
+                      <TableCell className="py-3 text-right">
+                        <div className="flex flex-col items-end gap-2">
+                          <FileActions filePath={s.source_path} />
+                          <DistillCell session={s} name={name} />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {t("agents.conversationsTab.showingCount", { count: rows.length, total })}
+            </p>
+            {hasNextPage ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isFetchingNextPage}
+                onClick={() => void fetchNextPage()}
+              >
+                {isFetchingNextPage ? t("common.loading") : t("agents.conversationsTab.loadMore")}
+              </Button>
+            ) : null}
+          </div>
         </>
       )}
     </div>
