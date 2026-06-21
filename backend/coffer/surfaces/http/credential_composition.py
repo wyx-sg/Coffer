@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import pathlib
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import text as _sa_text
@@ -23,6 +24,7 @@ from coffer.application.credential_migration import (
     migrate_legacy_keychain,
 )
 from coffer.domain.credential_errors import MasterKeyMissing
+from coffer.domain.errors import CredentialMissing
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
@@ -58,6 +60,19 @@ def get_master_key_manager() -> Any:
     if _master_key_manager is None:
         raise RuntimeError("master key manager not initialised")
     return _master_key_manager
+
+
+def make_credential_resolver(store: Any) -> Callable[[str], str]:
+    """Build the ``ref -> plaintext`` resolver used by internal-LLM consumers
+    (distillation, organize, reorg). Raises CredentialMissing for an unknown ref."""
+
+    def _resolve(ref: str) -> str:
+        value: str | None = store.get(ref)
+        if value is None:
+            raise CredentialMissing(ref)
+        return value
+
+    return _resolve
 
 
 async def init_credential_store(
