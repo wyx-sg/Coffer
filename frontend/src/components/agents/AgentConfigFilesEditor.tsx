@@ -3,7 +3,7 @@
 // config files (the allowlist — credential and machine-state files are
 // deliberately excluded), and a right pane that previews the selected file's
 // on-disk content. Editing happens in the user's own editor, not in-app: the
-// right pane carries a FileActions bar (open-in-editor / reveal / copy-path)
+// right pane carries a FileActions bar (open-in-editor / reveal)
 // instead of a textarea + Save, and the managed-block notice (FR-037) is a
 // read-only annotation rather than an editor warning.
 //
@@ -45,11 +45,10 @@ export function AgentConfigFilesEditor({ name }: { name: string }) {
       ? t(`agents.config.desc.${s.selectedKey}`)
       : null;
 
-  // Absolute paths for the external-editor actions. The content response is the
+  // Absolute path for the external-editor action. The content response is the
   // most precise source (it resolves the actual file/child on disk); fall back
   // to the list metadata for the selected top-level key.
   const filePath = s.activeContent?.path ?? (s.selectedChild ? undefined : s.selectedInfo?.path);
-  const folderPath = s.activeContent?.folder_path ?? s.selectedInfo?.folder_path;
 
   return (
     <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
@@ -91,7 +90,6 @@ export function AgentConfigFilesEditor({ name }: { name: string }) {
                 : (s.selectedInfo?.path ?? s.selectedKey)
             }
             filePath={filePath}
-            folderPath={folderPath}
             description={description}
             formatLabel={s.activeContent?.format ?? s.selectedInfo?.format}
             editorKey={s.selectedChild ?? s.selectedKey}

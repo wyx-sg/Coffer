@@ -47,7 +47,7 @@
 
 ### User Story 4 —— 用户在 Coffer 里维护记忆（优先级 P2）
 
-开发者要看见并纠正 agent 记下的东西：在一个 **只读** 视图里按作用域浏览事实，然后 **在自己的外部编辑器里**（或经 API/CLI）改一条漂移的、手动加一条、删掉一条错的。Coffer UI 从不在应用内编辑事实内容；相反，每条事实及其所在文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」以及（web 回退）「复制绝对路径」，任何带外的纠正都会被既有的 lazy reindex-on-read 拾取（FR-010）。
+开发者要看见并纠正 agent 记下的东西：在一个 **只读** 视图里按作用域浏览事实，然后 **在自己的外部编辑器里**（或经 API/CLI）改一条漂移的、手动加一条、删掉一条错的。Coffer UI 从不在应用内编辑事实内容；相反，每条事实及其所在文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」（Web 上经 daemon,桌面上为原生），任何带外的纠正都会被既有的 lazy reindex-on-read 拾取（FR-010）。
 
 **为什么是这个优先级**：没有人工维护的记忆让人不放心；agent 偶尔会记错。能维护，这条 feature 才足够安全到可以一直开着 —— 而把编辑路由到用户自己的编辑器，使 markdown 文件保持唯一真相源，无需再维护第二个编辑界面。
 
@@ -58,7 +58,7 @@
 - 用户添加一条事实
 - 用户带外纠正一条事实
 - 用户删除一条事实
-- 只读视图提供打开/显示/复制路径的能力
+- 只读视图提供打开/显示的能力
 
 ---
 
@@ -123,7 +123,7 @@ cwd 没有可恢复的现场。
 
 ### Edge Cases
 
-- **请求 vector 但 embedding 未配置**：`recall` 带 `mode=vector` 时回退到 keyword，并在响应里标注此次回退；它从不阻塞。默认检索是 keyword+grep（零配置、离线）。
+- **vector 不可用但 embedding 未配置**：当 store 解析出的策略需要向量但未配置 embedding provider 时，`recall` 在内部回退到 keyword 并返回结果；它从不阻塞。回退**不**作为查询期响应标志暴露。默认检索是 keyword+grep（零配置、离线）。
 - **直接在磁盘上编辑事实文件**：下一次 `recall` 会惰性扫描这个小事实目录、找出增量并重建索引，因此带外编辑会被拾取，无需 watcher。
 - **空事实文本**：在 API 边界被拒；不写任何内容。
 - **事实文本过长**：在 API 边界按 `max_fact_chars`（默认 8192）约束；写入前即被拒。
@@ -195,11 +195,11 @@ cwd 没有可恢复的现场。
 - **When** 用户删除它，
 - **Then** markdown 文件与其索引行被移除，且 recall 不再返回它。
 
-### Scenario: read-only viewer offers open/reveal/copy-path affordances
+### Scenario: read-only viewer offers open/reveal affordances
 
 - **Given** 在 Coffer UI 中查看一条事实，
 - **When** 用户检视该事实（及其所在文件夹），
-- **Then** 内容只读渲染（应用内不编辑事实内容），读响应携带该事实的绝对 `.md` 磁盘路径及其所在文件夹的绝对路径，且 UI 在桌面（Tauri）端为文件与文件夹各提供「在外部编辑器中打开」+「在文件管理器中显示」，在 web 端回退为「复制绝对路径」；打开哪个编辑器由全局首选编辑器偏好决定（见 002-ui-shell）。
+- **Then** 内容只读渲染（应用内不编辑事实内容），读响应携带该事实的绝对 `.md` 磁盘路径及其所在文件夹的绝对路径，且 UI 在**两个**界面上都为文件与文件夹提供「在外部编辑器中打开」+「在文件管理器中显示」——桌面（Tauri）经 OS opener,web 经环回 daemon（spec 004 FR-039）——没有 copy-path 回退;打开哪个编辑器由全局首选编辑器偏好决定（见 002-ui-shell）。
 
 ### Scenario: clear a memory scope
 
@@ -222,8 +222,8 @@ cwd 没有可恢复的现场。
 ### Scenario: vector recall falls back when embedding is unconfigured
 
 - **Given** 一个未配置 embedding provider 的记忆 store，
-- **When** 用 `mode=vector` 调 `coffer__recall`，
-- **Then** 调用返回 keyword 结果并在响应里标注此次回退（绝不报错）。
+- **When** 引擎解析为向量策略但无可用 embedder，
+- **Then** 调用改跑 keyword 检索并返回结果、不报错；降级**不**作为查询期响应标志暴露（内部 keyword 回退，与 KB 面一致）。
 
 ### Scenario: agent saves and resumes a working-state handoff
 
@@ -325,7 +325,7 @@ cwd 没有可恢复的现场。
 - **Then** 响应原样返回 rules 文本（供之后 session-start 注入读取的那个面），且无 rule 的
   store 返回空/`null` 正文而非报错。
 
-> **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：桌面记忆列表按作用域展示、桌面只读事实视图的打开/显示/复制路径能力、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
+> **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：桌面记忆列表按作用域展示、桌面只读事实视图的打开/显示能力、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
 
 ## Requirements
 
@@ -346,13 +346,13 @@ cwd 没有可恢复的现场。
 
 **检索**
 
-- **FR-008**：recall MUST 使用与 knowledge base 共享的统一检索引擎：`grep`（真实服务 —— ripgrep 扫该 store 的事实文件；对 FTS5 无法分词的内容必不可少，如 CJK）、`keyword`（FTS5 BM25，默认）、`vector`（sqlite-vec 配可配置的 embedding provider）。当请求 `vector` 但未配置 embedding provider 时，recall MUST 回退到 `keyword` 并以布尔值在响应里标注此次回退 —— 绝不阻塞。MCP `coffer__recall` 的响应包含该 `fallback` 布尔值。
+- **FR-008**：recall MUST 使用与 knowledge base 共享的统一检索引擎：`grep`（ripgrep 扫该 store 的事实文件；对 FTS5 无法分词的内容必不可少，如 CJK）、`keyword`（FTS5 BM25，默认）、`vector`（sqlite-vec 配可配置的 embedding provider）。这些引擎模式是**内部细节** —— recall **不**接受外部 `mode`；引擎自动解析该 store 的默认策略。当解析出的策略需要向量但未配置 embedding provider 时，recall MUST 在内部回退到 `keyword` —— 绝不阻塞，且回退**不**作为查询期响应标志暴露（`fallback` 字段已从 recall 响应移除）。
 - **FR-009**：`coffer__recall` MUST 默认跨 project 与 global 两个 store（显式给出 `scope` 时收窄到单个 store：`project` = 仅项目 store，`global` = 仅 global store）；跨 store 的结果用倒数排名融合（reciprocal rank fusion）合并（逐 store 的分数跨模式/跨 store 不可比；每条命中保留其逐 store 分数，只有合并后的顺序来自融合）。结果带 id、text、score、source、time —— `time` 是事实的 `updated_at`，`source` 是 `<scope>:<fact file path>`。默认 `top_k` 为 5；调用方 MAY 指定 1–20。
 - **FR-010**：memory MUST 用 **lazy reindex-on-read**：`recall` 先按内容哈希扫描事实目录的增量（新增/变更/删除文件）并对账索引，再搜索，使带外编辑 —— 人类在自己外部编辑器里做的纠正，或任何直接在磁盘上的编辑 —— 即时可见，无需文件系统 watcher。这正是让外部纠正得以显现的机制，于是 UI 可以保持为只读视图（FR-017），而维护在用户的编辑器里完成。
 
 **通过 MCP 集成 agent**
 
-- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, mode?, top_k?)`（`mode` ∈ `grep` | `keyword` | `vector`）、`coffer__remember(text, scope?, type?)`、`coffer__list_memory(scope?)`、`coffer__set_handoff(body)`、`coffer__resume()`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。没有 MCP `update_memory`/`forget` 工具 —— 事实编辑/删除是用户面（REST/CLI/外部编辑器），见 FR-006。
+- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, top_k?)`（无 `mode` 参数 —— 检索模式是内部的）、`coffer__remember(text, scope?, type?)`、`coffer__list_memory(scope?)`、`coffer__set_handoff(body)`、`coffer__resume()`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。没有 MCP `update_memory`/`forget` 工具 —— 事实编辑/删除是用户面（REST/CLI/外部编辑器），见 FR-006。
 - **FR-016**：这些内置 memory 工具调用 MUST 共用既有调用日志面（`mcp_invocations` 一行：工具名 + who/when/duration/outcome，不记参数也不记返回内容）。
 
 **工作状态 handoff（连续性）**
@@ -386,8 +386,8 @@ cwd 没有可恢复的现场。
 - **FR-017**：用户 MUST 能通过编程写入面完成完整记忆 CRUD —— (a) `/api/v1/memory_stores/` 下的 REST API 与 (b) `coffer memory …` 子命令。（这些 REST 写入端点也是 agent 经 MCP 网关写入事实的途径。）用户写入设 `metadata.actor = "user"`，把规范化 markdown 写入 store 的 `knowledge/inbox/` 子目录、重建索引并审计。桌面/web UI 以 **只读** 方式呈现事实（不在应用内编辑事实内容）；人类维护时在自己的外部编辑器里编辑规范化 markdown（经 lazy reindex-on-read（FR-010）拾取），或经 REST/CLI 写入面。这些 surface 上的 store 名会被校验：只有 `global` 或 `project-<26 字符 ULID>` 合法 —— 形状合法的名字会惰性 provision 其 store；其余返回 404（`MEMORY_STORE_NOT_FOUND`）。
 - **FR-017a**：各 surface MUST 用**从 `project_root` 推导的可读身份**来呈现 per-project store —— 以根目录的 basename 作为主标签、绝对根路径作为次要细节 —— 而**不**只显示不可读的 `project-<ULID>` store 名（项目 ULID 是根路径的单向摘要，人无法辨认）。当根路径未知（store 在记录根路径之前就被 provision）时退回显示 store 名；global store 无需推导（其名 `global` 本就可读）。底层 store 名仍是 `project-<ULID>`（FR-017）—— 这是**展示**层的事。由前端测试验证；桌面验收与其它桌面视图项一样延后到 e2e。
 - **FR-017c**：用户 MUST 能为任意 memory store 设置一个**显示标签**——一个用户自选、在所有 surface 中优先于 FR-017a 的 `project_root` 推导的名字。它为来源文件夹从未被记录的 store（FR-017a 否则会退回不可读的 `project-<ULID>` 名）提供可读身份。设置空 / 纯空白标签会清除它，退回 FR-017a 的推导或回退名。该标签是**展示元数据**：不改变 store 名（FR-017）或 `project_id`，通过 `PATCH /memory_stores/{name}/label` 设置。由 HTTP 验收测试验证；桌面重命名视图与其它桌面视图项一样延后到 e2e。
-- **FR-021**：只读事实视图 MUST 为「事实文件」与「其所在文件夹」两者各提供以下能力：(a) **在外部编辑器中打开**、(b) **在文件管理器 / Finder 中显示**、(c) **复制绝对路径**（web 回退）。在桌面（Tauri）端 (a) 与 (b) 执行真实的打开/显示；在 web 端 UI 回退为复制路径。打开哪个编辑器由全局首选编辑器偏好决定（在 002-ui-shell 规范，本处不再重复规范）。读响应 MUST 携带这些能力所作用的绝对路径（见 FR-022）。
-- **FR-022**：读响应 MUST 携带磁盘真相：事实读端点（`GET …/facts`、`GET …/facts/{id}`）MUST 包含每个事实文件的绝对 `.md` 路径及其所在文件夹的绝对路径，store 读端点（`GET …/{name}`）MUST 包含 store 的绝对磁盘目录。它们驱动 FR-021 的打开/显示/复制路径能力，并让人类能定位规范化文件以带外纠正。
+- **FR-021**：只读事实视图 MUST 为「事实文件」与「其所在文件夹」两者各提供以下能力：(a) **在外部编辑器中打开**、(b) **在文件管理器 / Finder 中显示**。两者在**两个**界面上都执行真实的 OS 动作:桌面（Tauri）端经 OS opener,web 端经环回 daemon 的文件系统动作端点（spec 004 FR-039）——因为 daemon 就在用户自己的机器上（ADR-033）。没有 copy-path 回退。打开哪个编辑器由全局首选编辑器偏好决定（在 002-ui-shell 规范，本处不再重复规范）。读响应 MUST 携带这些能力所作用的绝对路径（见 FR-022）。
+- **FR-022**：读响应 MUST 携带磁盘真相：事实读端点（`GET …/facts`、`GET …/facts/{id}`）MUST 包含每个事实文件的绝对 `.md` 路径及其所在文件夹的绝对路径，store 读端点（`GET …/{name}`）MUST 包含 store 的绝对磁盘目录。它们驱动 FR-021 的打开/显示能力，并让人类能定位规范化文件以带外纠正。
 
 **底座隔离**
 

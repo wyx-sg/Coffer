@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CodeView } from "@/components/preview/CodeView";
 import type { ContentBlock } from "@/lib/api/chat";
 
 interface Props {
@@ -65,9 +66,14 @@ export function ToolCallCard({ toolUse, toolResult }: Props) {
               <div className="mb-1 font-semibold text-muted-foreground">
                 {t("chat.toolCard.input")}
               </div>
-              <pre className="overflow-x-auto rounded bg-background p-2 text-xs leading-relaxed">
-                {JSON.stringify(toolUse.tool_input, null, 2)}
-              </pre>
+              <CodeView
+                value={JSON.stringify(toolUse.tool_input, null, 2)}
+                language="json"
+                maxHeight="20rem"
+                lineNumbers={false}
+                ariaLabel={t("chat.toolCard.input")}
+                className="bg-background"
+              />
             </div>
           )}
           {hasResult && (
@@ -75,18 +81,16 @@ export function ToolCallCard({ toolUse, toolResult }: Props) {
               <div className="mb-1 font-semibold text-muted-foreground">
                 {isError ? t("chat.toolCard.errorLabel") : t("chat.toolCard.result")}
               </div>
-              <pre
-                className={cn(
-                  "overflow-x-auto rounded p-2 text-xs leading-relaxed",
-                  isError
-                    ? "bg-destructive/5 text-destructive"
-                    : "bg-background",
-                )}
-              >
-                {isError
-                  ? toolResult.error
-                  : JSON.stringify(toolResult.output, null, 2)}
-              </pre>
+              <CodeView
+                value={
+                  isError ? (toolResult.error ?? "") : JSON.stringify(toolResult.output, null, 2)
+                }
+                language={isError ? "text" : "json"}
+                maxHeight="20rem"
+                lineNumbers={false}
+                ariaLabel={isError ? t("chat.toolCard.errorLabel") : t("chat.toolCard.result")}
+                className={cn(isError ? "bg-destructive/5 text-destructive" : "bg-background")}
+              />
             </div>
           )}
         </div>

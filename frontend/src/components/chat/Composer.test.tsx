@@ -1,7 +1,8 @@
 // components/chat/Composer.test.tsx
+import { createRef } from "react";
 import { describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { Composer } from "./Composer";
+import { Composer, type ComposerHandle } from "./Composer";
 
 describe("Composer", () => {
   test("renders textarea and send button", () => {
@@ -112,5 +113,14 @@ describe("Composer", () => {
     render(<Composer onSend={vi.fn()} disabled />);
     expect(screen.getByRole("textbox")).toBeDisabled();
     expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
+  });
+
+  test("setText() loads text into the input (used when editing a queued message)", () => {
+    const ref = createRef<ComposerHandle>();
+    render(<Composer ref={ref} onSend={vi.fn()} />);
+    act(() => {
+      ref.current?.setText("edited draft");
+    });
+    expect(screen.getByRole("textbox")).toHaveValue("edited draft");
   });
 });

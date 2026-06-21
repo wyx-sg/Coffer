@@ -490,6 +490,14 @@ referenced by at least one test marked
 - **Then** the message is accepted and enqueued (the composer does not lock), and
   runs as its own turn after the current one ends.
 
+### Scenario: editing a queued message re-queues it at the tail
+
+- **Given** one or more messages are queued behind a streaming turn, shown one
+  per row,
+- **When** the user edits a queued message,
+- **Then** that message is pulled out of the queue and back into the composer to
+  amend, and re-sending it enqueues it at the tail of the pending queue.
+
 ### Scenario: model selection is recorded
 
 - **Given** two configured models,
@@ -736,9 +744,11 @@ referenced by at least one test marked
   conversation-history list, a new-conversation dialog with an agent picker and a
   per-agent configuration area, a message thread with streamed text (driven by the
   FR-019a live subscription, not by polling), inline expandable tool-call cards, a
-  model selector, a composer that **never locks** (a message sent during a turn
-  queues and renders as a removable pending item, FR-018/FR-018a), and a stop
-  control for an in-flight turn.
+  model selector, a composer that **auto-grows** with multi-line input (capped,
+  then scrolls internally) and **never locks** (a message sent during a turn
+  queues and renders one-per-row as a removable and editable pending item;
+  editing pulls it back into the composer and re-queues it at the tail,
+  FR-018/FR-018a), and a stop control for an in-flight turn.
 - **FR-028**: System MUST add a "Chat" entry to the application sidebar as the
   primary (top-most) navigation item; the existing 002-ui-shell IA is otherwise
   unchanged.

@@ -13,8 +13,7 @@ from coffer.application.embedding_config_service import EmbeddingConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 
-# Agent-chat (spec 008) providers live in their own module; re-export them so
-# the long-standing surfaces.http.dependencies.get_chat_service paths keep working.
+# Agent-chat (spec 008) providers re-exported so the get_chat_service paths work.
 from coffer.surfaces.http.chat.dependencies import (
     get_agent_registry as get_agent_registry,
 )
@@ -34,20 +33,16 @@ from coffer.surfaces.http.chat.dependencies import (
     set_turn_orchestrator as set_turn_orchestrator,
 )
 
-# X-Coffer-Actor accepts any short identifier. Canonical values: "cli", "api",
-# "ui", "system". Tests use prefixed identifiers like "e2e-mcp"; downstream
-# integrations may add their own. Length-and-charset bounded to keep audit
-# safe; absence defaults to "api".
+# X-Coffer-Actor: any short bounded identifier (canonical "cli"/"api"/"ui"/
+# "system"; prefixed ones like "e2e-mcp" allowed). Absence defaults to "api".
 _ACTOR_PATTERN: re.Pattern[str] = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 
 
 def get_actor(x_coffer_actor: str | None = Header(default=None)) -> str:
-    """Resolve the actor name for audit log entries from X-Coffer-Actor header.
+    """Actor name for audit entries from X-Coffer-Actor (``"api"`` when absent).
 
-    Falls back to ``"api"`` when the header is absent. Rejects values that are
-    not short lowercase identifiers (1-32 chars, ``[a-z][a-z0-9_-]*``) with 400
-    so audit entries always carry a safe, bounded string.
-    """
+    Rejects values that are not short lowercase identifiers (1-32 chars,
+    ``[a-z][a-z0-9_-]*``) with 400 so audit entries stay safe and bounded."""
     if x_coffer_actor is None or x_coffer_actor == "":
         return "api"
     if not _ACTOR_PATTERN.match(x_coffer_actor):
@@ -122,11 +117,8 @@ def get_embedding_config_service() -> EmbeddingConfigService:
     return _embedding_config_service
 
 
-# Factory type: (session_id: str) -> <MCPGatewaySession>.
-# Typed as Callable[[str], Any] to avoid importing MCPGatewaySession here and
-# creating a transitive kind-specific import chain from kind-agnostic surfaces
-# (Contract 6).  The concrete MCPGatewaySession type is enforced at the call
-# site in coffer.surfaces.http.mcp.protocol_routes, which IS in the mcp kind.
+# Factory (session_id: str) -> <MCPGatewaySession>; typed Callable[[str], Any] to
+# keep it out of kind-agnostic surfaces (Contract 6; enforced at mcp.protocol_routes).
 _mcp_session_factory: Callable[[str], Any] | None = None
 
 
@@ -143,11 +135,8 @@ def get_mcp_session_factory() -> Callable[[str], Any]:
     return _mcp_session_factory
 
 
-# --- MCP kind-specific dependency providers ---
-# These are typed as Any to avoid importing kind-specific modules from the
-# kind-agnostic core (Contract 6). The concrete types are enforced at the
-# call site in coffer.surfaces.http.mcp.* route modules.
-
+# --- MCP kind-specific dependency providers (typed Any per Contract 6;
+# concrete types enforced at the mcp.* route call sites) ---
 _capability_discovery: Any | None = None
 _supervisor: Any | None = None
 _preferences_repo: Any | None = None
@@ -201,13 +190,8 @@ def set_invocation_repo(repo: Any) -> None:
 
 
 def get_invocation_repo_optional() -> Any | None:
-    """Lifecycle accessor: return the buffered invocation repo or None.
-
-    The app lifespan calls ``start()``/``stop()`` on the buffered writer but
-    runs before/after the routes that would have set it. This public accessor
-    lets the lifespan reach it without importing the private ``_invocation_repo``
-    module global (CODE-DI). Returns None when no MCP kind was wired.
-    """
+    """Buffered invocation repo (None if no MCP kind wired); lets the app
+    lifespan start()/stop() the writer (CODE-DI)."""
     return _invocation_repo
 
 
@@ -232,9 +216,8 @@ def get_health_repo() -> Any:
     return _health_repo
 
 
-# Credential-store DI singletons: re-exported from credential_composition (split
-# for the file-size limit) so the long-standing dependencies.get_credential_store
-# / get_master_key_manager import paths keep working.
+# Credential-store DI singletons re-exported from credential_composition (split
+# for the file-size limit) so their import paths keep working.
 from coffer.surfaces.http.credential_composition import (  # noqa: E402, I001
     get_credential_store as get_credential_store,
     get_master_key_manager as get_master_key_manager,
@@ -243,7 +226,6 @@ from coffer.surfaces.http.credential_composition import (  # noqa: E402, I001
 )
 
 # --- Agent kind-specific dependency providers (spec 004-agent-registry) ---
-
 _agent_service: Any | None = None
 _auto_detect_service: Any | None = None
 
@@ -292,6 +274,7 @@ def get_auto_detect_service() -> Any:
 
 _agent_config_file_service: Any | None = None
 _agent_mcp_service: Any | None = None
+_agent_native_memory_service: Any | None = None
 
 
 def set_agent_config_file_service(svc: Any) -> None:
@@ -320,12 +303,37 @@ def get_agent_mcp_service() -> Any:
     return _agent_mcp_service
 
 
-def get_fs_browse_service() -> Any:
-    """FastAPI Depends() target — actual type is FsBrowseService.
+def set_agent_native_memory_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_native_memory_service
+    _agent_native_memory_service = svc
 
-    Stateless (no I/O at construction), so it's built per-request rather than
-    held as a composition-root singleton.
-    """
+
+def get_agent_native_memory_service() -> Any:
+    """FastAPI Depends() target — actual type is AgentNativeMemoryService."""
+    if _agent_native_memory_service is None:
+        raise RuntimeError("agent native-memory service not initialised")
+    return _agent_native_memory_service
+
+
+_agent_memory_import_service: Any | None = None
+
+
+def set_agent_memory_import_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_memory_import_service
+    _agent_memory_import_service = svc
+
+
+def get_agent_memory_import_service() -> Any:
+    """FastAPI Depends() target — actual type is AgentMemoryImportService."""
+    if _agent_memory_import_service is None:
+        raise RuntimeError("agent memory-import service not initialised")
+    return _agent_memory_import_service
+
+
+def get_fs_browse_service() -> Any:
+    """FastAPI Depends() target (FsBrowseService). Stateless → built per-request."""
     from coffer.application.fs.browse_service import FsBrowseService
 
     return FsBrowseService()
@@ -368,7 +376,6 @@ def get_kb_service() -> Any:
 
 
 # --- memory kind dependency providers (spec 007) ---
-
 _memory_service: Any | None = None
 
 
@@ -383,12 +390,5 @@ def get_memory_service() -> Any:
     return _memory_service
 
 
-# Memory-store side-repo providers (project_root + display label) live in
-# coffer.surfaces.http.memory.dependencies (extracted to keep this file ≤400).
-
-# Agent-chat (spec 008) dependency providers are re-exported from
-# surfaces/http/chat/dependencies.py (see the import at the top of this module),
-# which keeps this kind-agnostic core under its file-size budget.
-
-# Transcript-distillation (Spec 007 extension — ADR-020) dependency providers
-# are in coffer.surfaces.http.distill.state (extracted to keep this file ≤400 lines).
+# More providers split out for the file-size budget: memory.dependencies,
+# distill.state, chat.dependencies (re-exported at top).

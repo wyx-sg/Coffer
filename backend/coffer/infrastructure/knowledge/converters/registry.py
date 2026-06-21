@@ -35,7 +35,10 @@ class ConverterRegistry:
                 return converter
         raise IngestRejected(
             "unsupported_type",
-            f"no converter for format {fmt!r}",
+            f"Unsupported file type {fmt!r}. Convert it to a supported format — "
+            "PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx/.xls), HTML, "
+            "EPUB, CSV, or a text/Markdown file — and re-upload. Legacy Office "
+            "files (.doc/.ppt) must be saved as .docx/.pptx first.",
         )
 
     async def convert(self, data: bytes, fmt: str) -> tuple[str, dict[str, object]]:

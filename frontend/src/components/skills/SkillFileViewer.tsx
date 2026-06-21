@@ -2,12 +2,13 @@
 // Right pane of the skill Files tab: shows the selected file's contents
 // READ-ONLY. Markdown (.md) renders via the shared <Markdown> component; other
 // text files show as raw <pre>. Editing happens in the user's own editor — the
-// <FileActions> bar opens / reveals / copies the file's absolute path. Binary
+// <FileActions> bar opens / reveals the file. Binary
 // and truncated files render the same read-only way.
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
-import { Markdown } from "@/components/Markdown";
+import { CodeView } from "@/components/preview/CodeView";
+import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import { translateApiError } from "@/lib/api/errors";
 import { useSkillFileContent } from "@/lib/hooks/useSkills";
 
@@ -31,12 +32,13 @@ export function SkillFileViewer({ name, path }: { name: string; path: string }) 
   }
 
   const absPath = content.data?.abs_path;
-  const folderAbsPath = content.data?.folder_abs_path;
 
   const header = (
     <div className="flex flex-wrap items-start justify-between gap-2">
-      <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{path}</span>
-      {absPath ? <FileActions filePath={absPath} folderPath={folderAbsPath} /> : null}
+      <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+        {path}
+      </span>
+      {absPath ? <FileActions filePath={absPath} /> : null}
     </div>
   );
 
@@ -59,13 +61,11 @@ export function SkillFileViewer({ name, path }: { name: string; path: string }) 
       {header}
 
       {isMarkdown(path) ? (
-        <div className="h-80 overflow-auto rounded border bg-background p-3">
-          <Markdown>{text}</Markdown>
-        </div>
-      ) : (
-        <pre className="h-80 w-full overflow-auto rounded border bg-background p-2 font-mono text-xs text-foreground">
+        <FindableMarkdown className="h-80 overflow-auto rounded border bg-background p-3">
           {text}
-        </pre>
+        </FindableMarkdown>
+      ) : (
+        <CodeView value={text} filename={path} height="20rem" className="bg-background" />
       )}
       {truncated ? (
         <p className="text-xs text-muted-foreground">

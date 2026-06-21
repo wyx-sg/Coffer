@@ -15,7 +15,7 @@ export interface ConfigFileInfo {
   key: string;
   display_name: string;
   path: string;
-  /** Absolute path of the containing folder (for "open folder" / "copy folder path"). */
+  /** Absolute path of the containing folder. */
   folder_path?: string;
   format: ConfigFileFormat;
   exists: boolean;
@@ -45,6 +45,33 @@ export interface ConfigFileContent {
 export interface McpInstallStatus {
   installed: boolean;
   command: string | null;
+}
+
+/** One of the agent's OWN native per-project memory stores (read-only scan). */
+export interface NativeMemoryStore {
+  /** Best-effort readable project label (the project dir's basename). */
+  project: string;
+  /** Best-effort decoded absolute project path, or null when undecodable. */
+  path: string | null;
+  /** Absolute path to the agent's native memory directory (the real identity). */
+  memory_dir: string;
+  /** Number of memory items (.md files, excluding the MEMORY.md index). */
+  item_count: number;
+}
+
+export interface NativeMemoryListResponse {
+  items: NativeMemoryStore[];
+}
+
+/** Result of importing one native memory store into Coffer (bulk remember →
+ * inbox → organize). `store` is null when the project couldn't be resolved
+ * (e.g. a lossy slug with no transcript, or a non-git project). */
+export interface NativeMemoryImportResult {
+  imported: number;
+  skipped: number;
+  store: string | null;
+  project_path: string | null;
+  organized: boolean;
 }
 
 export interface AgentOut {
@@ -260,4 +287,12 @@ export const agentsApi = {
       "DELETE",
       `/agents/${enc(name)}/unmanaged-skills/${enc(skill)}?location=${encodeURIComponent(location)}`,
     ),
+
+  // Native memory: the agent's OWN per-project memory stores (read-only scan).
+  nativeMemory: (name: string) =>
+    call<NativeMemoryListResponse>("GET", `/agents/${enc(name)}/native-memory`),
+  importNativeMemory: (name: string, memoryDir: string) =>
+    call<NativeMemoryImportResult>("POST", `/agents/${enc(name)}/native-memory/import`, {
+      memory_dir: memoryDir,
+    }),
 };

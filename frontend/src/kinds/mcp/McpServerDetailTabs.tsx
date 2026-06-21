@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CodeView } from "@/components/preview/CodeView";
 import { CapabilityList } from "./CapabilityList";
 import { InvocationsTable } from "./InvocationsTable";
 import { useMcpInvocations } from "@/lib/hooks/useMcpInvocations";
@@ -122,9 +123,13 @@ export function McpServerDetailTabs({
               <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                 {t("mcp.server.overview.rawConfig")}
               </summary>
-              <pre className="mt-2 overflow-x-auto rounded-md bg-secondary/50 p-4 font-mono text-xs leading-relaxed text-foreground/80">
-                {JSON.stringify(config, null, 2)}
-              </pre>
+              <CodeView
+                value={JSON.stringify(config, null, 2)}
+                language="json"
+                maxHeight="24rem"
+                ariaLabel={t("mcp.server.overview.rawConfig")}
+                className="mt-2 bg-secondary/50"
+              />
             </details>
           </CardContent>
         </Card>

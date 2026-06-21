@@ -99,10 +99,13 @@ def _build_openai(
         raise ValueError("openai connection is missing credential_ref")
 
     api_key = credential_resolver(config.credential_ref)
+    # ``base_url`` lets an OpenAI-COMPATIBLE endpoint (Azure/OpenRouter/aggregators)
+    # be used; ``None`` falls back to the official OpenAI API. Without this an
+    # openai-compatible provider's calls silently hit api.openai.com and 401.
     return ChatOpenAI(
         model=config.model,
         api_key=api_key,  # type: ignore[arg-type]
-        base_url=config.base_url,
+        base_url=config.base_url or None,
     )
 
 

@@ -74,7 +74,7 @@ class DocumentOut(BaseModel):
     metadata: dict[str, Any]
     # Absolute path of the normalized markdown on disk (the source of truth) and
     # its containing folder. The in-app viewer is read-only; the pair backs
-    # open-in-external-editor / reveal-in-file-manager / copy-path.
+    # open-in-external-editor / reveal-in-file-manager.
     path: str
     folder_path: str
     created_at: datetime
@@ -163,7 +163,6 @@ class SourceCheckResponse(BaseModel):
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=4096)
     top_k: int = Field(default=5, ge=1, le=20)
-    mode: RetrievalMode | None = None
 
 
 class Passage(BaseModel):
@@ -175,15 +174,11 @@ class Passage(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    mode: RetrievalMode
-    fallback: RetrievalMode | None = None
     passages: list[Passage]
 
     @classmethod
     def from_result(cls, result: SearchResult) -> SearchResponse:
         return cls(
-            mode=result.mode,
-            fallback=result.fallback,
             passages=[
                 Passage(
                     text=p.text,

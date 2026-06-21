@@ -47,6 +47,16 @@ def test_openai_resolves_credential_and_builds_client() -> None:
     assert model.__class__.__name__ == "ChatOpenAI"
 
 
+def test_openai_passes_base_url_for_compatible_endpoint() -> None:
+    # An OpenAI-COMPATIBLE endpoint (aggregator/Azure/OpenRouter) must reach
+    # config.base_url, not silently fall back to api.openai.com.
+    model = build_chat_model(
+        _conn(WireFormat.OPENAI, base_url="https://apihub.example.com/v1"),
+        lambda ref: "secret-key",
+    )
+    assert "apihub.example.com/v1" in str(model.openai_api_base)
+
+
 def test_ollama_uses_base_url_and_skips_credential() -> None:
     def resolver(ref: str) -> str:  # pragma: no cover - must not be called
         raise AssertionError("ollama must not resolve a credential")

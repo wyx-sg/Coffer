@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { FolderPicker } from "@/components/agents/FolderPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -82,16 +83,22 @@ function LocalImportTab({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
       }}
       className="space-y-3"
     >
-      <label className="block text-sm">
-        {t("skills.path")}
-        <input
-          className="mt-1 block w-full rounded border bg-background px-2 py-1 font-mono text-xs"
-          required
-          value={path}
-          onChange={(e) => handlePathChange(e.target.value)}
-          placeholder="/Users/me/.claude/skills/my-skill"
-        />
-      </label>
+      <div className="space-y-1">
+        <label htmlFor="skill-import-path" className="block text-sm">
+          {t("skills.path")}
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            id="skill-import-path"
+            className="block w-full rounded border bg-background px-2 py-1 font-mono text-xs"
+            required
+            value={path}
+            onChange={(e) => handlePathChange(e.target.value)}
+            placeholder="/Users/me/.claude/skills/my-skill"
+          />
+          <FolderPicker value={path || null} onChange={handlePathChange} />
+        </div>
+      </div>
       {conflictName ? (
         <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-700 dark:bg-amber-950">
           <p className="font-medium text-amber-900 dark:text-amber-200">

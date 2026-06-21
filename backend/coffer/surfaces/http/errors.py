@@ -41,6 +41,7 @@ _STATUS: dict[str, int] = {
     "CONFIG_FILE_FORMAT_INVALID": 422,
     "SHIM_NOT_FOUND": 422,
     "FS_PATH_NOT_BROWSABLE": 400,
+    "FS_PATH_NOT_OPENABLE": 400,
     "INTERNAL_ERROR": 500,
     "UNKNOWN_PRUNABLE_TABLE": 404,
     "UNAUTHENTICATED": 401,
@@ -73,7 +74,6 @@ _STATUS: dict[str, int] = {
     "INGEST_REJECTED": 400,  # `_status_for` refines this by reason
     "ENGINE_UNAVAILABLE": 503,
     "RECONVERSION_BLOCKED": 409,
-    "SEARCH_MODE_INVALID": 400,
     "GREP_PATTERN_INVALID": 400,
     # memory kind (spec 007)
     "MEMORY_STORE_NOT_FOUND": 404,

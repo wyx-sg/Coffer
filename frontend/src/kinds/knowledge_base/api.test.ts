@@ -12,7 +12,6 @@ import {
   getDocument,
   getKnowledgeBase,
   getKnowledgeBaseMetrics,
-  grepKnowledgeBase,
   ingestDocument,
   listDocuments,
   reconvertDocument,
@@ -144,6 +143,26 @@ describe("listDocuments", () => {
     await listDocuments("kb with space");
     expect(fetchMock.mock.calls[0][0]).toContain("kb%20with%20space");
   });
+
+  test("appends an encoded &q=<filter> when a title filter is given", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(okJson({ documents: [], total: 0 }));
+    await listDocuments("kb1", 50, 0, "run book");
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${BASE}/knowledge_bases/kb1/documents?limit=50&offset=0&q=run%20book`,
+    );
+  });
+
+  test("omits q when the filter is empty/blank", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(okJson({ documents: [], total: 0 }));
+    await listDocuments("kb1", 50, 0, "   ");
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${BASE}/knowledge_bases/kb1/documents?limit=50&offset=0`,
+    );
+  });
 });
 
 describe("getDocument", () => {
@@ -216,31 +235,28 @@ describe("reindexKnowledgeBase", () => {
 });
 
 describe("searchKnowledgeBase", () => {
-  test("POSTs query + top_k + mode and returns the SearchResponse", async () => {
+  test("POSTs query + top_k (no mode) and returns the SearchResponse", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       okJson({
-        mode: "keyword",
-        fallback: null,
         passages: [
           { text: "alpha bravo", document_id: "d1", title: "a.md", score: 0.7, position: 0 },
         ],
       }),
     );
 
-    const out = await searchKnowledgeBase("kb1", "alpha", { topK: 3, mode: "keyword" });
+    const out = await searchKnowledgeBase("kb1", "alpha", { topK: 3 });
     expect(out.passages).toHaveLength(1);
     expect(out.passages[0].text).toContain("alpha");
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/knowledge_bases/kb1/search`);
     expect(init?.method).toBe("POST");
-    expect(JSON.parse(init!.body as string)).toEqual({ query: "alpha", top_k: 3, mode: "keyword" });
+    // "One query → one answer": the request carries no mode.
+    expect(JSON.parse(init!.body as string)).toEqual({ query: "alpha", top_k: 3 });
   });
 
-  test("defaults top_k to 5 and omits mode when not given", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ mode: "keyword", passages: [] }));
+  test("defaults top_k to 5 and never sends mode", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ passages: [] }));
 
     await searchKnowledgeBase("kb1", "anything");
     expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({
@@ -250,22 +266,8 @@ describe("searchKnowledgeBase", () => {
   });
 });
 
-describe("grepKnowledgeBase", () => {
-  test("POSTs pattern + max_matches to /grep", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ hits: [], truncated: false }));
-
-    await grepKnowledgeBase("kb1", "TODO", 50);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/knowledge_bases/kb1/grep`);
-    expect(init?.method).toBe("POST");
-    expect(JSON.parse(init!.body as string)).toEqual({ pattern: "TODO", max_matches: 50 });
-  });
-});
-
 describe("getKnowledgeBase", () => {
-  test("GETs the kind-agnostic resource URL for the KB", async () => {
+  test("GETs the KB-specific endpoint (normalized config), not the raw resource URL", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       okJson({
         ref: "knowledge_base:designs",
@@ -281,7 +283,11 @@ describe("getKnowledgeBase", () => {
     const out = await getKnowledgeBase("designs");
     expect(out.config.enabled_modes).toEqual(["keyword", "grep"]);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/resources/knowledge_base/designs`);
+    // The KB-specific endpoint re-parses the stored config through
+    // KnowledgeBaseConfig and always returns a complete config; the raw
+    // /resources endpoint can omit fields like enabled_modes and crash the
+    // settings dialog. Reads must use this endpoint.
+    expect(url).toBe(`${BASE}/knowledge_bases/designs`);
     expect(init?.method).toBeUndefined();
     const headers = init?.headers as Record<string, string>;
     expect(headers["X-Coffer-Token"]).toBe("test-token");

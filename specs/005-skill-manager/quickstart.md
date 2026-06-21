@@ -122,7 +122,7 @@ The report categorizes drift and suggests a remedy per entry. Coffer does
 The desktop app shows a skill's master folder as a file tree and lets you read
 individual files in a read-only viewer. To change a file, open it (or its
 containing folder) in your own external editor or file manager via the viewer's
-open / reveal / copy-path affordances. The same read data is available over the
+open / reveal affordances. The same read data is available over the
 REST API, and each entry carries its absolute on-disk path.
 
 List the master folder as a recursive tree:

@@ -45,7 +45,6 @@ from coffer.domain.errors import (
     DocumentNotFound,
     KBNotFound,
     ReconversionBlocked,
-    SearchModeInvalid,
 )
 from coffer.domain.knowledge.converter import MarkdownConverter
 from coffer.domain.knowledge.document import KIND_KNOWLEDGE_BASE, Document
@@ -279,14 +278,16 @@ class KnowledgeBaseService:
         )
 
     async def list_documents(
-        self, *, kb_name: str, limit: int, offset: int
+        self, *, kb_name: str, limit: int, offset: int, q: str | None = None
     ) -> tuple[list[Document], int]:
         config = await self.get_kb_config(kb_name)
         await self._reconcile_on_read(kb_name, config)
+        # ``q`` is a case-insensitive title substring filter applied server-side
+        # BEFORE limit/offset, so ``total`` reflects the filtered count (FR-010a).
         docs = await self._documents.list_documents(
-            KIND_KNOWLEDGE_BASE, kb_name, limit=limit, offset=offset
+            KIND_KNOWLEDGE_BASE, kb_name, limit=limit, offset=offset, q=q
         )
-        total = await self._documents.count_documents(KIND_KNOWLEDGE_BASE, kb_name)
+        total = await self._documents.count_documents(KIND_KNOWLEDGE_BASE, kb_name, q=q)
         return docs, total
 
     async def get_document(self, *, kb_name: str, document_id: str) -> Document:
@@ -301,8 +302,8 @@ class KnowledgeBaseService:
     def doc_paths(self, *, kb_name: str, document_id: str) -> tuple[str, str]:
         """Absolute markdown path + its containing folder for a document.
 
-        The in-app viewer is read-only; surfaces hand these to the desktop for
-        open-in-external-editor / reveal / copy-path."""
+        The in-app viewer is read-only; surfaces hand these to open-in-external-editor
+        / reveal (desktop via the OS opener, web via the loopback daemon)."""
         path = self._paths.doc_path(kb_name, document_id)
         return str(path), str(path.parent)
 
@@ -327,18 +328,11 @@ class KnowledgeBaseService:
         # Lazy reindex-on-read: surface out-of-band edits before searching the
         # index (FR-008a). No-op when the corpus is unchanged.
         await self._reconcile_on_read(kb_name, config)
-        # An explicit mode the store cannot serve is a caller error (400), never
-        # a silent rewrite. ``vector`` and ``hybrid`` are the exceptions: they
-        # always reach the facade so the keyword fallback is FLAGGED (not
-        # rejected) when no embedder is available, per FR-011a / FR-012.
-        if mode == "grep":
-            raise SearchModeInvalid("grep", "grep is served by the grep endpoint")
-        if (
-            mode is not None
-            and mode not in ("vector", "hybrid")
-            and mode not in config.enabled_modes
-        ):
-            raise SearchModeInvalid(mode, "mode is not enabled for this knowledge base")
+        # ``mode`` is INTERNAL: external surfaces always pass ``None``, which
+        # resolves to the store's ``default_mode`` (hybrid when vector is
+        # enabled, else keyword). Internal callers/tests may still pin a mode;
+        # vector/hybrid degrade to keyword (flagged internally) when no embedder
+        # is available rather than erroring.
         chosen = mode or config.default_mode
         # An implicit search on a store whose default_mode is grep serves the
         # passage engine's keyword mode (grep is not a passage mode).

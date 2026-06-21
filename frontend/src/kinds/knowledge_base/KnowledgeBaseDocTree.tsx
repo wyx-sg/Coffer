@@ -2,11 +2,13 @@
 //
 // Left-hand document list for the KB detail page (a flat file tree — KB docs
 // have no folder hierarchy). Clicking a row's title selects it; the page renders
-// the preview/editor on the right. A small filter input narrows a long list by
-// title, and per-row checkboxes drive a multi-select bulk-delete bar. The row's
-// checkbox and its clickable title are SIBLINGS (no nested interactive elements)
-// so the title stays selectable by its text for the e2e + page tests.
-import { useMemo, useState } from "react";
+// the preview/editor on the right. The title filter is SERVER-SIDE (a `q` query
+// param, lifted to props from the page hook); per-row checkboxes drive a
+// multi-select bulk-delete bar scoped to the CURRENT page. Page-based pagination
+// (Pagination.tsx) is rendered below the list, driven by server offset. The
+// row's checkbox and its clickable title are SIBLINGS (no nested interactive
+// elements) so the title stays selectable by its text for the e2e + page tests.
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 
@@ -15,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/Pagination";
 import { BulkBar, useTableSelection } from "@/components/DataTableSelection";
 import { cn } from "@/lib/utils";
 import type { DocumentListOut, DocumentOut } from "./api";
@@ -23,10 +26,16 @@ interface Props {
   docs: DocumentListOut | undefined;
   selectedId: string | null;
   isLoading: boolean;
-  /** Fetching an additional page (the "Load more" footer is in flight). */
-  isLoadingMore?: boolean;
-  /** Fetch the next page; only rendered when more docs remain than are loaded. */
-  onLoadMore?: () => void;
+  /** Server-side title filter value (`q`), owned by the page hook. */
+  filter: string;
+  onFilterChange: (value: string) => void;
+  /** 1-based current page. */
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
   onSelect: (documentId: string) => void;
   /** Bulk-delete the given document ids (fan-out lives in the page hook). */
   onBulkDelete: (documentIds: string[]) => void | Promise<void>;
@@ -38,31 +47,33 @@ export function KnowledgeBaseDocTree({
   docs,
   selectedId,
   isLoading,
-  isLoadingMore = false,
-  onLoadMore,
+  filter,
+  onFilterChange,
+  page,
+  pageCount,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
   onSelect,
   onBulkDelete,
   isBulkDeletePending = false,
 }: Props) {
   const { t } = useTranslation();
-  const items = useMemo(() => docs?.documents ?? [], [docs]);
-  const total = docs?.total ?? items.length;
-  const hasMore = items.length < total;
+  // The server already applied the `q` filter; these are exactly the rows for
+  // the current page.
+  const items = docs?.documents ?? [];
 
-  const [filter, setFilter] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // Client-side title filter (case-insensitive substring); empty → all docs.
-  const visible = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((d) => d.title.toLowerCase().includes(q));
-  }, [items, filter]);
-
-  // Selection is scoped to the FILTERED (visible) set so select-all + bulk
-  // actions only ever touch what's on screen — mirrors DataTable's selection.
-  const sel = useTableSelection<DocumentOut>(visible, (d) => d.id);
-  const visibleKeys = visible.map((d) => d.id);
+  // Selection is scoped to the CURRENT PAGE so select-all + bulk actions only
+  // ever touch what's on screen — mirrors DataTable's selection.
+  const sel = useTableSelection<DocumentOut>(items, (d) => d.id);
+  // The selection is page-scoped: drop it whenever the page changes so picks made
+  // on one page never linger invisibly into another (clear is stable useCallback).
+  const clearSelection = sel.clear;
+  useEffect(() => clearSelection(), [page, clearSelection]);
+  const visibleKeys = items.map((d) => d.id);
   const allSelected = visibleKeys.length > 0 && visibleKeys.every((k) => sel.keys.has(k));
   const someSelected = !allSelected && visibleKeys.some((k) => sel.keys.has(k));
   const selectedIds = sel.selectedRows.map((d) => d.id);
@@ -73,21 +84,25 @@ export function KnowledgeBaseDocTree({
     setConfirmOpen(false);
   };
 
+  // The filter input stays visible whenever there is a filter or any docs, so
+  // the user can always clear a filter that matched nothing.
+  const showFilter = Boolean(filter) || total > 0;
+
   return (
     <aside className="space-y-1">
       <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {t("knowledgeBases.detail.documents")}
-        {docs ? <span className="ml-1 normal-case">({docs.total})</span> : null}
+        {docs ? <span className="ml-1 normal-case">({total})</span> : null}
       </p>
       {isLoading ? (
         <p className="px-1 text-sm text-muted-foreground">{t("common.loading")}</p>
-      ) : items.length === 0 ? (
+      ) : !showFilter ? (
         <p className="px-1 text-sm text-muted-foreground">{t("knowledgeBases.detail.empty")}</p>
       ) : (
         <>
           <Input
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => onFilterChange(e.target.value)}
             placeholder={t("knowledgeBases.detail.filterDocs")}
             aria-label={t("knowledgeBases.detail.filterDocs")}
             className="h-8 text-sm"
@@ -111,10 +126,15 @@ export function KnowledgeBaseDocTree({
             </BulkBar>
           ) : null}
 
-          {visible.length === 0 ? (
-            <p className="px-1 text-sm text-muted-foreground">
-              {t("knowledgeBases.detail.noFilterMatches")}
-            </p>
+          {items.length === 0 ? (
+            // Only a non-empty filter means "no matches"; an empty current page
+            // (total > 0, page out of range) self-corrects via the clamp, so show
+            // nothing there and keep the pager below reachable.
+            filter ? (
+              <p className="px-1 text-sm text-muted-foreground">
+                {t("knowledgeBases.detail.noFilterMatches")}
+              </p>
+            ) : null
           ) : (
             <ul className="max-h-[60vh] space-y-0.5 overflow-y-auto">
               <li className="flex items-center gap-2 px-2 py-1">
@@ -126,7 +146,7 @@ export function KnowledgeBaseDocTree({
                 />
                 <span className="text-xs text-muted-foreground">{t("common.bulk.selectAll")}</span>
               </li>
-              {visible.map((d) => (
+              {items.map((d) => (
                 <li key={d.id} className="flex items-center gap-1.5">
                   <Checkbox
                     checked={sel.keys.has(d.id)}
@@ -153,22 +173,17 @@ export function KnowledgeBaseDocTree({
                   </button>
                 </li>
               ))}
-              {hasMore && onLoadMore ? (
-                <li>
-                  <button
-                    type="button"
-                    onClick={onLoadMore}
-                    disabled={isLoadingMore}
-                    className="mt-1 w-full rounded-md py-1.5 text-center text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
-                  >
-                    {isLoadingMore
-                      ? t("common.loading")
-                      : t("common.loadMore", { loaded: items.length, total })}
-                  </button>
-                </li>
-              ) : null}
             </ul>
           )}
+
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            pageSize={pageSize}
+            onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
+          />
         </>
       )}
 

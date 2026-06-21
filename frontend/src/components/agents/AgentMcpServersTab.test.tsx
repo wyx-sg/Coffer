@@ -1,8 +1,8 @@
 // frontend/src/components/agents/AgentMcpServersTab.test.tsx
 //
 // The MCP-servers tab has two sections:
-//   A. "Via Coffer gateway" — install status + the enabled mcp_server
-//      resources Coffer exposes through the gateway (read-only list).
+//   A. "Via Coffer gateway" — install status + a link to the standalone MCP
+//      servers page (the exposed servers are managed there, not re-listed here).
 //   B. "Direct servers" — the agent's own MCP entries with source/transport,
 //      a per-entry Switch only where the agent supports it (codex-style
 //      entries carry enabled: true/false; claude entries carry null), adopt
@@ -30,25 +30,6 @@ vi.mock("@/lib/api/agents", () => ({
     adoptMcpEntry: vi.fn(),
   },
 }));
-vi.mock("@/lib/hooks/useResources", () => ({
-  useResources: vi.fn(() => ({
-    data: [
-      {
-        ref: { kind: "mcp_server", name: "fs" },
-        kind: "mcp_server",
-        name: "fs",
-        description: null,
-        config: {},
-        enabled: true,
-        created_at: "",
-        updated_at: "",
-      },
-    ],
-    isPending: false,
-    error: null,
-  })),
-}));
-
 const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
 
@@ -118,11 +99,14 @@ function renderTab() {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentMcpServersTab", () => {
-  test("gateway section lists the exposed servers; not-installed shows the note", async () => {
+  test("gateway section links to the MCP servers page; not-installed shows the note", async () => {
     stub();
     renderTab();
-    expect(await screen.findByText("fs")).toBeInTheDocument();
     expect(screen.getByText("Via Coffer gateway")).toBeInTheDocument();
+    // Installed → a link to the standalone page, not a re-listing of servers.
+    expect(
+      await screen.findByRole("button", { name: /open the mcp servers page/i }),
+    ).toBeInTheDocument();
 
     api.mcpStatus.mockResolvedValue({ installed: false, command: null });
     renderTab();
@@ -159,7 +143,8 @@ describe("AgentMcpServersTab", () => {
     expect(await screen.findByText("github")).toBeInTheDocument();
     expect(screen.getByText("fetcher")).toBeInTheDocument();
 
-    // The direct table's search box is the last one (gateway section has its own).
+    // The direct table carries the only "Search servers" box now (the gateway
+    // section is a link, not a table).
     const searchBoxes = screen.getAllByPlaceholderText("Search servers");
     fireEvent.change(searchBoxes[searchBoxes.length - 1], { target: { value: "github" } });
 

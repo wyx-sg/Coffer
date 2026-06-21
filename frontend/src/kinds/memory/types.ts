@@ -118,7 +118,7 @@ export interface MemoryStoreOut {
   config: MemoryStoreConfigOut;
   enabled: boolean;
   // Absolute on-disk directory holding this store's fact files, exposed so the
-  // UI can offer open/reveal/copy-path affordances on the store folder.
+  // UI can offer open/reveal affordances on the store folder.
   store_dir?: string;
   /** Number of facts in the store (shown in the stores table). */
   fact_count?: number;
@@ -167,9 +167,10 @@ export interface RecallHit {
 }
 
 export interface RecallResponse {
+  // External retrieval is "one query → one answer": the backend auto-selects
+  // the strategy, so the response carries only ranked hits — no `mode`,
+  // no `fallback`.
   hits: RecallHit[];
-  mode: RetrievalMode;
-  fallback?: boolean;
 }
 
 export interface FactInput {

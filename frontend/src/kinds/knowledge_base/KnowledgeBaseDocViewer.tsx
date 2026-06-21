@@ -11,7 +11,7 @@ import { RefreshCw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileActions } from "@/components/FileActions";
-import { Markdown } from "@/components/Markdown";
+import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import { translateApiError } from "@/lib/api/errors";
 import type { DocumentDetailOut } from "./api";
 
@@ -64,7 +64,7 @@ export function KnowledgeBaseDocViewer({
           </Badge>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {doc.path ? <FileActions filePath={doc.path} folderPath={doc.folder_path} /> : null}
+          {doc.path ? <FileActions filePath={doc.path} /> : null}
           <Button
             size="sm"
             variant="outline"
@@ -91,9 +91,7 @@ export function KnowledgeBaseDocViewer({
         </p>
       ) : null}
 
-      <div className="max-h-[60vh] overflow-auto p-4">
-        <Markdown>{doc.markdown}</Markdown>
-      </div>
+      <FindableMarkdown className="max-h-[60vh] overflow-auto p-4">{doc.markdown}</FindableMarkdown>
     </div>
   );
 }

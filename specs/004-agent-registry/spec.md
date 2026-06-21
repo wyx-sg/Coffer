@@ -110,11 +110,11 @@ Every add / edit / remove / auto-detection is recorded with timestamp and actor,
 
 ### User Story 7 — View an agent's config files and open them in an external editor (Priority: P2)
 
-After an agent is registered, the user wants to see that agent's own configuration files (e.g. Claude Code's `settings.json`, Codex's `config.toml`) directly inside Coffer, without leaving the app to hunt for dotfiles. Coffer shows the agent type's curated set of known config files and lets the user open one to read its current content in a **read-only** viewer. For each file (and its containing folder) Coffer offers open-in-external-editor, reveal-in-file-manager, and copy-path affordances, so the user makes any edits in their own editor. Coffer does not edit config-file content in place; the programmatic write path (REST/CLI) keeps the validate + atomic-write + `.bak` safety net.
+After an agent is registered, the user wants to see that agent's own configuration files (e.g. Claude Code's `settings.json`, Codex's `config.toml`) directly inside Coffer, without leaving the app to hunt for dotfiles. Coffer shows the agent type's curated set of known config files and lets the user open one to read its current content in a **read-only** viewer. For each file Coffer offers open-in-external-editor and reveal-in-file-manager affordances, so the user makes any edits in their own editor. Coffer does not edit config-file content in place; the programmatic write path (REST/CLI) keeps the validate + atomic-write + `.bak` safety net.
 
 **Why this priority**: Locating agent config by hand means remembering where each file lives and what format it uses. Surfacing the curated set in one place — viewable at a glance, one click from the user's own editor — is the first feature that makes the registry useful beyond bookkeeping.
 
-**Independent Test**: Register a `claude_code` agent; list its config files; open `settings.json` in the read-only viewer and observe the response surfaces the file's `path` and containing-folder `folder_path` (backing open/reveal/copy-path); open a not-yet-created file (e.g. `CLAUDE.md`) and observe it reads as empty without being created.
+**Independent Test**: Register a `claude_code` agent; list its config files; open `settings.json` in the read-only viewer and observe the response surfaces the file's `path` and containing-folder `folder_path` (backing open/reveal); open a not-yet-created file (e.g. `CLAUDE.md`) and observe it reads as empty without being created.
 
 **Covering scenarios**:
 
@@ -208,7 +208,7 @@ Per-agent plugin support:
 
 ### User Story 12 — Manage directory-type config entries (Priority: P2)
 
-Some agent configuration is a directory of prose files, not a single file — Claude Code's `agents/` directory holds one Markdown file per personal subagent. The user expands such an entry in the config-files tab and sees its files, opening one in the read-only viewer (with open-in-external-editor / reveal / copy-path for the child file and its folder). Creating, writing, and deleting individual files is available programmatically through the REST API / `coffer agent` CLI — with the same validation, atomic-write, and `.bak` safety net as single-file entries. The allowlist also gains Codex's `hooks.json`; the `memory` key is renamed `instructions` (CLAUDE.md / AGENTS.md are human-authored instructions, not agent-written memory).
+Some agent configuration is a directory of prose files, not a single file — Claude Code's `agents/` directory holds one Markdown file per personal subagent. The user expands such an entry in the config-files tab and sees its files, opening one in the read-only viewer (with open-in-external-editor / reveal for the child file and its folder). Creating, writing, and deleting individual files is available programmatically through the REST API / `coffer agent` CLI — with the same validation, atomic-write, and `.bak` safety net as single-file entries. The allowlist also gains Codex's `hooks.json`; the `memory` key is renamed `instructions` (CLAUDE.md / AGENTS.md are human-authored instructions, not agent-written memory).
 
 **Why this priority**: Subagent definitions are exactly the kind of shareable prose the hub model wants visible first, adoptable later; today they are invisible.
 
@@ -302,6 +302,12 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **Given** the daemon is running,
 - **When** the web folder browser requests the subdirectories of a readable directory,
 - **Then** Coffer returns that directory's path, its parent, and its immediate subdirectories (no file contents); an unreadable or missing path returns an error.
+
+### Scenario: open a managed file via the daemon (web open/reveal)
+
+- **Given** the daemon is running and the read-only viewer is showing a managed file,
+- **When** the web surface asks the daemon to open an existing absolute path (optionally with a preferred editor) or to reveal it in the file manager,
+- **Then** the daemon launches the OS application / file manager for that path and returns success; a relative or non-existent path is rejected without spawning anything.
 
 ### Scenario: update an existing agent
 
@@ -533,6 +539,24 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the user writes back content carrying the fingerprint from the earlier read,
 - **Then** the write is rejected with `conflict` (409) and the on-disk file is unchanged; re-reading yields a fresh fingerprint that allows the write.
 
+### Scenario: the native memory scan lists an agent's own per-project stores
+
+- **Given** a registered `claude_code` agent whose `<config_dir>/projects/<slug>/memory` directory holds `.md` fact files (plus a `MEMORY.md` index),
+- **When** the user scans the agent's native memory,
+- **Then** Coffer returns one store per project with a readable `project` label decoded from the slug, a best-effort decoded `path` (lossy, may be null), the real `memory_dir`, and an `item_count` of `.md` files excluding `MEMORY.md` — read-only, deriving everything from disk and emitting no audit event. An agent type with no native memory layout (`codex`), or one with no `projects/` directory, returns an empty list.
+
+### Scenario: importing a native memory store adopts it into Coffer
+
+- **Given** a registered `claude_code` agent and a native memory store whose project resolves to a real git project (by the decoded slug, or by the `cwd` recorded in a sibling transcript `.jsonl` when the lossy slug does not decode),
+- **When** the user imports that store by its `memory_dir`,
+- **Then** Coffer reads each fact file (skipping `MEMORY.md`), writes each as a project-scoped Coffer memory fact into the project store's `knowledge/inbox/` lane (a trusted import may write up to the 32768-character domain ceiling), reports `imported`/`skipped` counts with the resolved `store` and `project_path`, and schedules the spec-007 organizer as a BACKGROUND task (`organized=true`) so the dozens of internal-LLM calls never block the request. The memory writes audit through spec 007's existing memory events; the import itself adds no new 004 audit event.
+
+### Scenario: importing a store outside a git project maps to no Coffer store
+
+- **Given** a registered `claude_code` agent and a native memory store whose path cannot be mapped to a Coffer project (not a git project, or an unresolvable lossy slug with no transcript `cwd`),
+- **When** the user imports that store,
+- **Then** Coffer corrupts no inbox and reports a zero-import result — `imported=0`, `store=null`, `project_path=null`, `organized=false` — rather than an error.
+
 ## Requirements
 
 ### Functional Requirements
@@ -557,7 +581,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 **Config files**
 
 - **FR-013**: Each supported agent type MUST define a curated allowlist of config files (in its capability-manifest record), each entry carrying a stable `key`, a display name, a resolved absolute path, and a `format` (`json`, `toml`, `yaml`, `markdown`, or `text`). Claude Code → `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md` (key `instructions`), and the `agents/` directory entry (FR-034); Codex → `config.toml`, `AGENTS.md` (key `instructions`), and `hooks.json`. The former `memory` key is renamed `instructions` — these files are human-authored instructions, distinct from agent-written memory (spec 007's domain).
-- **FR-014**: Users MUST be able to list an agent's config files with, for each, its key, display name, path, the containing-folder absolute path (`folder_path`), format, and existence (plus size and modified time when the file exists). The `path`/`folder_path` pair feeds the read-only UI's open-in-external-editor / reveal-in-file-manager / copy-path affordances (FR-038).
+- **FR-014**: Users MUST be able to list an agent's config files with, for each, its key, display name, path, the containing-folder absolute path (`folder_path`), format, and existence (plus size and modified time when the file exists). The `path`/`folder_path` pair feeds the read-only UI's open-in-external-editor / reveal-in-file-manager affordances (FR-038).
 - **FR-015**: Users MUST be able to read the content of any allowlisted config file. A file that does not exist reads as empty content with `exists=false` and is not created by the read.
 - **FR-016**: The system MUST expose a programmatic write (save) for the content of any allowlisted config file through the REST API and the `coffer agent` CLI; the in-app UI is read-only and does not write config-file content. The content MUST be validated against the file's `format` before any write; malformed `json`/`toml` MUST be rejected (`unprocessable_entity`, 422) and the on-disk file left unchanged. `markdown`/`text` files accept any content.
 - **FR-017**: Writes MUST be atomic (temp file + rename) and MUST keep a `.bak` copy of the prior content so a bad edit is recoverable; each successful write MUST record an `agent_config_file_written` audit entry. The Coffer-MCP install/uninstall operations (FR-022) reuse the same atomic-write + `.bak` machinery.
@@ -592,21 +616,32 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **FR-036**: Config-file reads (single files and directory children) MUST return a content fingerprint; writes MUST carry it back and are rejected with `conflict` (409) when the on-disk content changed since the read, leaving the file untouched.
 - **FR-037**: When an instructions file contains a managed block defined by another feature — the spec-007 memory-projection block — the read-only viewer MUST annotate that the block is owned by that feature. Each block uses its own distinct markers and is rewritten independently; the marker format is owned by the defining feature.
 
+**Native memory (workspace amendment)**
+
+These two requirements extend the registry to the coding agent's OWN native per-project memory — distinct from the `instructions` config files of FR-013 (CLAUDE.md / AGENTS.md are human-authored instructions; this is the agent's self-written memory store). The transform (organizing imported facts into Coffer topic documents) is owned by spec 007's organizer; this spec only reads the agent's store and hands its facts to that organizer.
+
+- **FR-040**: System MUST expose a read-only **native-memory scan** that lists an agent type's own native per-project memory stores. For `claude_code` these live at `<config_dir>/projects/<slug>/memory/*.md`; an agent type with no native memory layout (`codex`) returns an empty list, as does an agent whose `projects/` directory is absent. Each store carries a readable `project` label decoded from the slug, a best-effort decoded `path` (the slug decode is lossy and MAY be null), the real `memory_dir`, and an `item_count` of `.md` files excluding `MEMORY.md`. The scan is read-only, derives everything from disk at read time (nothing stored), and — consistent with FR-011's "workspace listings are read-only; none emits an audit event" — emits NO audit event. It never writes the agent's store.
+- **FR-041**: Users MUST be able to **import (adopt)** one native memory store into Coffer. Given a store's `memory_dir`, System reads its fact files (skipping `MEMORY.md`), resolves the REAL project path — the decoded slug when it exists on disk, else the `cwd` recorded in a sibling transcript `.jsonl` (the slug decode is lossy) — and writes each fact as a project-scoped Coffer memory fact into the project store's `knowledge/inbox/` lane (like a batch of `remember`s; a trusted import MAY write a note up to the 32768-character domain ceiling). It then triggers spec 007's organizer as a BACKGROUND task, because a bulk import is dozens of sequential internal-LLM calls and MUST NOT block the request. The result reports `imported`, `skipped`, `store` (null when the project cannot be mapped to a Coffer store), `project_path`, and `organized`. A store outside any git project (no mappable Coffer project) yields `imported=0`, `store=null`, `project_path=null`, `organized=false` — it corrupts no inbox and is not an error. The import's memory writes audit through spec 007's existing memory events; the import adds no NEW 004 audit event.
+
 **Surfaces**
 
-- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, plugin list/toggle/uninstall — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The desktop Agents page MUST expose all of these EXCEPT config-file content writes (single files and directory children): in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager / copy-path affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path.
+- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, plugin list/toggle/uninstall, native-memory scan/import (FR-040/FR-041) — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The native-memory commands are `coffer agent native-memory <name>` (read, `--json`) and `coffer agent import-native-memory <name> <memory_dir>` (adopt). The desktop Agents page MUST expose all of these EXCEPT config-file content writes (single files and directory children): in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path. The agent Memory tab shows the Coffer-managed memory link plus this native table **read-only** (open / reveal per FR-038), with an import button that adopts a store (FR-041).
 - **FR-010**: The CLI MUST support `--json` for machine-readable output on every read operation.
-- **FR-038**: For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor**, **reveal-in-file-manager**, and **copy-path** actions for both the file itself and its containing folder, using the `path`/`folder_path` pair from FR-014/FR-015. In the packaged desktop app (Tauri) open and reveal perform the real OS action; on the web they fall back to copy-path. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by spec 002-ui-shell (not re-specified here).
+- **FR-038**: For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor** and **reveal-in-file-manager** actions on the file, using the `path` from FR-014/FR-015. Open and reveal perform the real OS action on **both** surfaces: the packaged desktop app (Tauri) uses the OS opener directly; the web uses the daemon filesystem-action endpoints (FR-039), since the loopback daemon is always on the user's own machine (ADR-033). There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by spec 002-ui-shell (not re-specified here).
 
 **Observability**
 
-- **FR-011**: System MUST record an audit entry for every lifecycle event: agent created, updated, removed; config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). (Agents have no enable/disable concept; discovery and all workspace listings are read-only — none emits an audit event.)
+- **FR-011**: System MUST record an audit entry for every lifecycle event: agent created, updated, removed; config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). (Agents have no enable/disable concept; discovery and all workspace listings — including the native-memory scan, FR-040 — are read-only and emit no audit event. The native-memory import, FR-041, adds no NEW 004 audit event: each imported fact audits through spec 007's existing memory write events.)
 - **FR-012**: System MUST expose a read-only discovery operation listing installed-but-unregistered agents as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer agent detect` CLI, and the desktop Agents page.
 
 **Config-directory picker**
 
 - **FR-023**: When choosing a custom `config_dir`, the desktop app MUST offer a folder picker rather than requiring the user to type a path. In the packaged desktop app it MUST use the OS-native directory dialog; on the web it MUST use the daemon-backed folder browser (FR-024). Both yield an absolute path that is then validated per FR-007 before registration.
 - **FR-024**: System MUST expose a read-only filesystem-browse operation (`GET /api/v1/fs/browse`) that, given a directory path (defaulting to the user's home), returns that path, its parent, and its immediate subdirectories. It MUST NOT return file contents and MUST be guarded by the same loopback + token auth as all other daemon routes.
+
+**Filesystem open/reveal**
+
+- **FR-039**: System MUST expose filesystem-action operations that let the web surface perform real open/reveal (FR-038) through the loopback daemon, which is always co-located with the web client on the user's machine (ADR-033): `POST /api/v1/fs/open` (open an existing absolute path in an application — a `with` editor preference, or the OS default) and `POST /api/v1/fs/reveal` (select / reveal an existing absolute path in the OS file manager). Both MUST validate the path is absolute and exists before acting, MUST invoke the OS launcher with a fixed argument vector (no shell interpolation), MUST create nothing, and MUST be guarded by the same loopback + token auth as all other daemon routes. A non-absolute or non-existent path is rejected (`FS_PATH_NOT_OPENABLE`, 400). Where a platform has no portable "select the file" primitive (Linux), reveal degrades to opening the containing folder. System MUST also expose `GET /api/v1/fs/editors`, which enumerates common GUI editors detected as installed on the host (macOS app-bundle names for `open -a`; Linux/Windows commands on PATH) so the spec 002-ui-shell preferred-editor setting can offer a picker rather than a blind text field. It returns each editor's display label and the launcher `value` accepted by `/fs/open`'s `with`, reads nothing but app presence, and is guarded by the same loopback + token auth.
 
 ### Key Entities
 
@@ -618,6 +653,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **Agent MCP Entry**: A derived (never stored) view of one MCP server configured in the agent's own files — name, source file, transport, `enabled` (Codex), `is_coffer`, `matches_resource`. The file is the source of truth; Coffer reads, edits, removes, or adopts entries but keeps no copy.
 - **Agent Plugin**: A derived (never stored) view of one installed plugin — id (`<name>@<marketplace>`), marketplace, enabled state, `cache_present`. Enabled state lives in each agent's documented config surface; the inventory files of Claude Code are read-only inputs.
 - **Directory Config Entry**: An allowlisted config entry that resolves to a directory of files rather than a single file. Children are addressed by validated entry-relative paths; the directory on disk is the source of truth.
+- **Native Memory Store**: A derived (never stored) view of one of the coding agent's OWN per-project native memory directories (`<config_dir>/projects/<slug>/memory` for `claude_code`) — a readable `project` label, a best-effort decoded `path` (lossy, may be null), the real `memory_dir`, and an `item_count` of `.md` files excluding `MEMORY.md`. Read-only; the agent's store is never written. Adopting one (FR-041) imports its facts into the matching Coffer project memory's `knowledge/inbox/` lane and hands them to spec 007's organizer.
 
 ## Success Criteria
 

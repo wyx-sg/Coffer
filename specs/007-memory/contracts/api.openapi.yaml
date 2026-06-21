@@ -510,7 +510,7 @@ components:
           description: >-
             Absolute on-disk directory holding the store's per-fact markdown
             files. The in-app viewer is read-only; this backs
-            reveal-in-file-manager / copy-path for the whole store.
+            reveal-in-file-manager for the whole store.
         description: { type: string, nullable: true }
         config:
           $ref: "#/components/schemas/MemoryStoreConfig"
@@ -601,7 +601,7 @@ components:
           description: >-
             Absolute canonical .md path of the fact file (source of truth). The
             in-app viewer is read-only; this backs open-in-external-editor /
-            reveal-in-file-manager / copy-path.
+            reveal-in-file-manager.
         folder_path:
           type: string
           description: Absolute path of the fact file's containing folder (the store dir).
@@ -631,8 +631,6 @@ components:
             `project` = the named store only, `global` = the global store
             only, `both` (default) = the named store + the global store
             merged by reciprocal rank fusion.
-        mode:
-          $ref: "#/components/schemas/RetrievalMode"
         top_k:
           type: integer
           minimum: 1
@@ -653,18 +651,12 @@ components:
 
     RecallResponse:
       type: object
-      required: [hits, mode]
+      required: [hits]
       properties:
         hits:
           type: array
           items:
             $ref: "#/components/schemas/RecallHit"
-        mode:
-          $ref: "#/components/schemas/RetrievalMode"
-        fallback:
-          type: boolean
-          default: false
-          description: True when vector was requested but degraded to keyword (embedding unconfigured).
 
     OrganizeResponse:
       type: object

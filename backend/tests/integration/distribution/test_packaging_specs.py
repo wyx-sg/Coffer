@@ -314,10 +314,11 @@ def test_daemon_spec_includes_kb_memory_chat_hidden_imports() -> None:
       * langgraph / langchain — infrastructure/chat/*
 
     MarkItDown goes one level deeper: it imports its format backends lazily
-    *inside* each converter, so collect_submodules("markitdown") alone does not
-    pull them in. The readers behind the markitdown[docx,pdf,pptx,xls,xlsx]
-    extras must be collected too, or a frozen daemon raises
-    MissingDependencyException on PDF/office uploads even though markitdown ships.
+    *inside* each converter. PyInstaller's graph may trace them transitively, but
+    we collect the readers behind the markitdown[docx,pdf,pptx,xls,xlsx] extras
+    explicitly (belt-and-suspenders) so a build that fails to trace them still
+    ships working converters instead of raising MissingDependencyException on
+    PDF/office uploads.
     """
     tree = _parse_spec(_REPO / "backend" / "coffer-daemon.spec")
     submodules = _collect_submodules_args(tree)

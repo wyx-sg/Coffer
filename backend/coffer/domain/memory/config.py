@@ -13,6 +13,10 @@ from pydantic import BaseModel, Field, model_validator
 from coffer.domain.knowledge.retrieval import RETRIEVAL_MODES, RetrievalMode
 
 DEFAULT_MAX_FACT_CHARS = 8192
+# Hard ceiling on a single fact's length. The per-store default bounds ordinary
+# agent ``remember`` writes; trusted bulk imports of a user's own existing memory
+# may write up to this ceiling so a long note is never truncated or dropped.
+MAX_FACT_CHARS = 32768
 DEFAULT_RETRIEVAL_MODES: list[RetrievalMode] = ["grep", "keyword"]
 DEFAULT_MODE: RetrievalMode = "keyword"
 DEFAULT_EMBEDDING_DIMENSIONS = 768
@@ -31,7 +35,7 @@ class MemoryStoreConfig(BaseModel):
     embedding_base_url: str | None = None
     embedding_credential_ref: str | None = None
     embedding_dimensions: int = Field(default=DEFAULT_EMBEDDING_DIMENSIONS, ge=1, le=8192)
-    max_fact_chars: int = Field(default=DEFAULT_MAX_FACT_CHARS, ge=64, le=32768)
+    max_fact_chars: int = Field(default=DEFAULT_MAX_FACT_CHARS, ge=64, le=MAX_FACT_CHARS)
 
     @model_validator(mode="after")
     def _check(self) -> MemoryStoreConfig:

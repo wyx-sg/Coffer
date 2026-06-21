@@ -23,11 +23,11 @@
 
 ### User Story 2 —— 三种模式检索（优先级 P1）
 
-同一份语料用多种方式检索：`grep`（对 Markdown 文件做精确/正则匹配，零索引）、`keyword`（SQLite FTS5 + BM25）、`vector`（sqlite-vec 配合已配置的 embedding provider），以及 `hybrid`（对 keyword + vector 做 reciprocal rank fusion，使精确/CJK/标识符命中与释义命中相互增强）。KB 声明一个默认模式；调用方可覆盖它。请求 `vector` 或 `hybrid` 但未配置 embedding provider 时，回退到 keyword 并标注 —— 绝不阻断。
+同一份语料在底层用多种方式检索：`grep`（对 Markdown 文件做精确/正则匹配，零索引）、`keyword`（SQLite FTS5 + BM25）、`vector`（sqlite-vec 配合已配置的 embedding provider），以及 `hybrid`（对 keyword + vector 做 reciprocal rank fusion，使精确/CJK/标识符命中与释义命中相互增强）。这些是**引擎内部细节**：外部调用方**不**选择模式——一次检索自动解析 KB 的默认策略（启用 vector 时为 `hybrid`，否则为 `keyword`）。`grep` 是一个独立的工具/端点（仅供 agent；已从人用 web 面板移除）。请求时若未配置 embedding provider，在内部回退到 keyword —— 绝不阻断，也无查询期标志（降级通过 `documents_degraded` 指标体现）。
 
-**为什么是这个优先级**：检索就是产品。三种模式覆盖了从离线零配置到语义检索的全谱。
+**为什么是这个优先级**：检索就是产品。内部模式覆盖了从离线零配置到语义检索的全谱，而外部界面保持「一次查询 → 一个答案」。
 
-**独立可测**：在已填充的 KB 上跑一次 keyword 检索和一次 grep 查询（两者都无需 embedding 配置即可工作）；配置 embedding provider，跑一次 vector 检索；移除配置，再次请求 vector，观察响应里被标注为 keyword 回退。
+**独立可测**：在已填充的 KB 上跑一次检索（无模式）和一次 grep 查询（两者都无需 embedding 配置即可工作）；配置 embedding provider，在启用 vector 的 KB 上再检索一次；移除配置，再检索一次，观察结果仍返回且无报错（降级通过 `documents_degraded` 体现，而非逐查询标志）。
 
 **代表性场景**：keyword search returns ranked passages；grep returns file/line matches；vector search returns ranked passages；vector falls back to keyword when embedding unconfigured；hybrid search fuses keyword and vector via RRF。
 
@@ -47,7 +47,7 @@
 
 ### User Story 4 —— 策展语料：编辑、重建索引、重新 embedding（优先级 P2）
 
-用户在自己的外部编辑器中打开文档的 Markdown（或通过编辑 API）修掉一处转换瑕疵，改动随后被拾取。他以同名重新上传某文件的更新版本，Coffer 就地更新**同一文档**（稳定 ULID id——不产生重复）。他改动 chunk 参数或 embedding 模型，Coffer 重新索引 / 重新 embedding 整个语料。Coffer UI 以**只读**方式渲染 Markdown——它从不提供应用内文本编辑器——而是提供在外部编辑器中打开文档（或其所在文件夹）、在文件管理器 / 访达中显示、复制其绝对路径等操作。一旦某文档被编辑（`source_mode = edited`），就**禁止**从原始 raw 重新转换，以免覆盖编辑。
+用户在自己的外部编辑器中打开文档的 Markdown（或通过编辑 API）修掉一处转换瑕疵，改动随后被拾取。他以同名重新上传某文件的更新版本，Coffer 就地更新**同一文档**（稳定 ULID id——不产生重复）。他改动 chunk 参数或 embedding 模型，Coffer 重新索引 / 重新 embedding 整个语料。Coffer UI 以**只读**方式渲染 Markdown——它从不提供应用内文本编辑器——而是提供在外部编辑器中打开文档（或其所在文件夹）、在文件管理器 / 访达中显示等操作（Web 上经 daemon,桌面上为原生）。一旦某文档被编辑（`source_mode = edited`），就**禁止**从原始 raw 重新转换，以免覆盖编辑。
 
 **为什么是这个优先级**：KB 是随时间策展的；一次性 ingest 不够。但它不是展示核心价值所必需。
 
@@ -77,7 +77,7 @@
 - **文件过大**：超过 `max_document_bytes`（默认 25 MB）的文件在 API 边界、任何转换运行之前被拒绝。
 - **重新上传，字节完全相同**：字节未变（其 `source_sha256` 与该文件名下已存文档相同）的重新上传是幂等 no-op——返回既有文档，不重写也不重新审计。
 - **重新上传，内容变化，同名**：以 KB 中已有的文件名重新上传更新后的文件，就地更新**同一文档**（复用 ULID id，覆盖 `docs/`+`raw/`，只保留最新一份原件，`source_mode` 重置为 `converted`）——但仅当调用方传 `replace=true`；否则以 `duplicate` 拒绝，使覆盖始终显式。
-- **请求 vector 但未配置 embedding**：检索回退到 keyword，并在响应里标注 `fallback="keyword"`；绝不报错。
+- **vector 不可用、未配置 embedding**：检索在内部回退到 keyword 并正常返回结果、不报错；降级**不**作为查询期标志暴露（通过 `documents_degraded` 指标体现）。
 - **编辑后重新转换**：对 `source_mode == edited` 的文档请求重新转换会被拒绝；以 `replace=true` 重新上传变更后的源会就地更新它并重置为 `converted`。
 - **对未变内容重建索引**：对 Markdown 的 `content_sha256` 未变的文档重建索引是 no-op。
 - **并发检索**：对同一个 KB 的多次检索各自独立运行；没有 per-KB 锁拖慢读延迟。
@@ -105,10 +105,16 @@
 - **When** the user lists documents,
 - **Then** they see one row per document with stable doc ids, titles, original filenames, and timestamps, paginated.
 
+### Scenario: filter documents by title
+
+- **Given** a KB with multiple documents,
+- **When** the user lists documents with a title query `q`,
+- **Then** only documents whose title contains `q` (case-insensitive) are returned, `total` reflects the filtered count, and results stay paginated by `limit`/`offset`.
+
 ### Scenario: keyword search returns ranked passages
 
 - **Given** documents are indexed,
-- **When** the user searches with `mode="keyword"` (or the KB default),
+- **When** the user searches (no mode; Coffer uses the KB's resolved default strategy),
 - **Then** they receive passages ranked by `bm25()`, each carrying its source doc id, title, snippet, and score.
 
 ### Scenario: keyword search matches CJK (Chinese) content
@@ -126,19 +132,19 @@
 ### Scenario: vector search returns ranked passages
 
 - **Given** the KB has an embedding provider configured and documents embedded,
-- **When** the user searches with `mode="vector"`,
+- **When** the engine runs a vector search (a vector-enabled KB's resolved default),
 - **Then** Coffer embeds the query, runs a sqlite-vec KNN, and returns top-k passages with similarity scores.
 
 ### Scenario: vector falls back to keyword when embedding unconfigured
 
 - **Given** the KB has no embedding provider configured,
-- **When** the user searches with `mode="vector"`,
-- **Then** Coffer runs a keyword search instead and the response is flagged `fallback="keyword"`; no error is raised.
+- **When** the engine resolves to a vector strategy but no embedder is available,
+- **Then** Coffer runs a keyword search instead and returns results with no error; the degradation is NOT surfaced as a query-time flag (it is reported via `documents_degraded`).
 
 ### Scenario: hybrid search fuses keyword and vector via RRF
 
 - **Given** a KB with vector enabled and documents embedded,
-- **When** the user searches with `mode="hybrid"`,
+- **When** the engine fuses keyword+vector for a vector-enabled KB (its resolved default),
 - **Then** Coffer runs BOTH keyword and vector searches and fuses them by reciprocal rank fusion (`K = 60`, deduped by `(document_id, position)`), so a passage ranked by both lists outranks single-list hits, and returns the fused top-k.
 
 ### Scenario: edit a document and reindex
@@ -192,7 +198,7 @@
 ### Scenario: agent searches a knowledge base
 
 - **Given** a KB with indexed documents,
-- **When** the client calls `coffer__search_knowledge(kb, query, top_k?, mode?)`,
+- **When** the client calls `coffer__search_knowledge(kb, query, top_k?)`,
 - **Then** Coffer returns ranked passages structured for LLM consumption (passage + source doc id + score).
 
 ### Scenario: agent greps a knowledge base
@@ -295,7 +301,7 @@
 **Ingestion & conversion**
 
 - **FR-004**: Users MUST be able to upload a file of any supported format; the system MUST detect format, convert to Markdown via a pluggable `MarkdownConverter` port, clean the output, prepend YAML frontmatter, write `docs/`+`raw/`, and index it.
-- **FR-005**: Conversion MUST dispatch through a per-format converter registry confined to `infrastructure/`: Markdown/text/source files pass through unchanged, `csv` has a dedicated converter, and everything else (pdf / docx / pptx / xlsx / html / epub / odt / rtf / …) goes through the default MarkItDown engine. A higher-fidelity engine for a format is a new converter in the registry, not a substrate change.
+- **FR-005**: Conversion MUST dispatch through a per-format converter registry confined to `infrastructure/`: Markdown/text/source files pass through unchanged, `csv` has a dedicated converter, and everything else (pdf / docx / pptx / xlsx / xls / html / epub / …) goes through the default MarkItDown engine. Formats MarkItDown has no converter for (legacy binary `.doc`/`.ppt`, `.rtf`, `.odt`) are rejected as `unsupported_type`, not advertised. A higher-fidelity engine for a format is a new converter in the registry, not a substrate change.
 - **FR-006**: System MUST reject files over `max_document_bytes` (default 25 MB, configurable), files of unsupported type, and files whose conversion yields empty Markdown.
 - **FR-007**: Each document MUST be identified by a **stable ULID** minted at first ingest (not a content hash). The system MUST compute `source_sha256` of the original (kept in `metadata` as provenance) and match a re-upload to an existing document by `original_filename` within the store: a **byte-identical** re-upload is an idempotent no-op; a **changed** re-upload of a filename already present updates the **same document in place** (reuse the id) only when `replace=true`, otherwise it is rejected (`duplicate`); a **new** filename is a new document. Re-uploading the SAME file (same name) into two different KBs yields two independent documents (KB documents are not deduplicated across stores).
 
@@ -307,11 +313,11 @@
 
 **Retrieval**
 
-- **FR-010**: Users MUST be able to search a KB and receive ranked passages (passage text + source doc id + title + score) via the requested or default mode. Default `top_k` is 5; callers MAY set `top_k` in 1–20.
-- **FR-011**: System MUST support four retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), `vector` (sqlite-vec KNN over embeddings), and `hybrid` (reciprocal rank fusion of `keyword` + `vector`, ADR-012). Default enabled modes are `keyword`+`grep`; `vector` is opt-in, and enabling `vector` also enables `hybrid` (which fuses both lists). Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). The keyword index uses an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text (no word-boundary spaces), so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters (e.g. a 2-character CJK term) falls back to a bounded substring (LIKE) scan rather than returning empty.
-- **FR-011a**: An EXPLICIT `mode=grep` on the search endpoint — or any explicit mode not in the KB's `enabled_modes` — MUST be rejected with `400 SEARCH_MODE_INVALID` (grep is served by its own endpoint, never silently rewritten). `vector` and `hybrid` are the exceptions: they always reach the retrieval facade so the keyword fallback is FLAGGED per FR-012. An implicit search (no `mode`) on a KB whose `default_mode` is `grep` serves `keyword` (grep is not a passage mode); a vector-enabled KB's `default_mode` is `hybrid` so an implicit search fuses both lists.
-- **FR-011b**: `hybrid` mode MUST run BOTH `keyword` and `vector` searches and fuse them by **reciprocal rank fusion** (RRF): each passage's fused score is `Σ_over_lists 1/(K + rank)` with `K = 60` and `rank` the 0-based position in that list; passages are deduped by chunk identity `(document_id, position)` so a passage in both lists sums both contributions and outranks single-list hits. The top-k by fused score are returned. This delivers the "optional hybrid via reciprocal rank fusion" promised by ADR-012.
-- **FR-012**: When `vector` (or `hybrid`) is requested but no embedding provider is configured, the system MUST fall back to `keyword` and flag the fallback in the response — it MUST NOT error or block.
+- **FR-010**: Users MUST be able to search a KB and receive ranked passages (passage text + source doc id + title + score). Retrieval is **automatic**: the caller does NOT choose a mode; Coffer resolves the strategy internally (`hybrid` when `vector` is enabled, else `keyword`). Default `top_k` is 5; callers MAY set `top_k` in 1–20.
+- **FR-010a**: Listing documents MUST support an optional **case-insensitive title filter `q`**, applied server-side BEFORE pagination; `total` reflects the filtered count.
+- **FR-011**: System MUST support four retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), `vector` (sqlite-vec KNN over embeddings), and `hybrid` (reciprocal rank fusion of `keyword` + `vector`, ADR-012). Default enabled modes are `keyword`+`grep`; `vector` is opt-in, and enabling `vector` also enables `hybrid` (which fuses both lists). Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). The keyword index uses an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text (no word-boundary spaces), so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters (e.g. a 2-character CJK term) falls back to a bounded substring (LIKE) scan rather than returning empty. These four modes are an **INTERNAL engine detail** — external surfaces (REST / MCP / CLI / UI) do NOT expose mode selection; a search always uses the KB's resolved default strategy, and `grep` is a separate tool/endpoint (removed from the human web panel, still available to agents).
+- **FR-011b**: `hybrid` mode MUST run BOTH `keyword` and `vector` searches and fuse them by **reciprocal rank fusion** (RRF): each passage's fused score is `Σ_over_lists 1/(K + rank)` with `K = 60` and `rank` the 0-based position in that list; passages are deduped by chunk identity `(document_id, position)` so a passage in both lists sums both contributions and outranks single-list hits. The top-k by fused score are returned. This delivers the "optional hybrid via reciprocal rank fusion" promised by ADR-012. (Internal — `hybrid` is the resolved default when `vector` is enabled, never an external mode parameter.)
+- **FR-012**: When `vector` (or `hybrid`) is the resolved strategy but no embedding provider is configured, the system MUST fall back to `keyword` internally — it MUST NOT error or block. This degradation is NOT surfaced as a query-time response flag anymore (the `fallback` field is removed from the search response); vector-unavailable documents are reported via the `documents_degraded` metric (FR-025).
 
 **Embedding configuration**
 
@@ -325,13 +331,13 @@
 
 **Agent integration via MCP**
 
-- **FR-017**: Coffer's MCP gateway MUST expose built-in KB tools to every connected client, namespaced under the reserved `coffer__` prefix: the read tools `coffer__list_knowledge_bases`, `coffer__search_knowledge`, `coffer__grep_knowledge`, `coffer__read_document`, AND the write tools `coffer__add_document` (ingest Markdown content under a filename), `coffer__edit_document` (replace a document's body), and `coffer__delete_document`. The write tools share the same service paths as the REST surface, so they honour the F01 audit (FR-018).
+- **FR-017**: Coffer's MCP gateway MUST expose built-in KB tools to every connected client, namespaced under the reserved `coffer__` prefix: the read tools `coffer__list_knowledge_bases`, `coffer__search_knowledge(kb, query, top_k?)` (no `mode?` parameter — retrieval mode is internal), `coffer__grep_knowledge`, `coffer__read_document`, AND the write tools `coffer__add_document` (ingest Markdown content under a filename), `coffer__edit_document` (replace a document's body), and `coffer__delete_document`. The write tools share the same service paths as the REST surface, so they honour the F01 audit (FR-018).
 - **FR-018**: Built-in KB tool invocations MUST be recorded in `mcp_invocations` exactly as upstream calls (tool name, who/when/duration/outcome — no arguments or returned content); the document-level effect of a write tool is additionally recorded in the F01 audit trail (`KB_DOCUMENT_INGESTED` / `_UPDATED` / `_DELETED`) with the agent as actor.
 
 **Surfaces**
 
 - **FR-019**: Users MUST be able to perform every KB operation through (a) a REST API under `/api/v1/knowledge_bases/`, (b) `coffer kb …` subcommands, and (c) a desktop UI under the existing `Resources` navigation.
-- **FR-020**: The UI document viewer MUST render the Markdown **read-only** — it MUST NOT offer an in-app text editor for document content (humans edit via the external editor or the edit API; agents via MCP). Instead, at both file and containing-folder granularity, the viewer MUST offer affordances to **open in external editor**, **reveal in file manager / Finder**, and **copy the absolute path**. On desktop (Tauri) open/reveal perform the real OS action (open/reveal honouring the global preferred-editor preference specced in `002-ui-shell`); on the web client, where the daemon cannot act on the user's machine, the open/reveal affordance falls back to copy-path. To support these affordances, read API responses (FR/§Wire) MUST surface the document's absolute on-disk path and its containing folder's absolute path.
+- **FR-020**: The UI document viewer MUST render the Markdown **read-only** — it MUST NOT offer an in-app text editor for document content (humans edit via the external editor or the edit API; agents via MCP). Instead, at both file and containing-folder granularity, the viewer MUST offer affordances to **open in external editor** and **reveal in file manager / Finder**. Open/reveal perform the real OS action on **both** surfaces (honouring the global preferred-editor preference specced in `002-ui-shell`): desktop (Tauri) via the OS opener, the web client via the loopback daemon's filesystem-action endpoints (spec 004 FR-039) — the daemon is always on the user's own machine, so it acts on the user's behalf (ADR-033). There is no copy-path fallback. To support these affordances, read API responses (FR/§Wire) MUST surface the document's absolute on-disk path and its containing folder's absolute path.
 
 **Source-file tracking（源文件跟踪）**
 

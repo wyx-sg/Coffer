@@ -47,7 +47,9 @@ async def test_search_tool_returns_passages(kb) -> None:
     tool = reg.get(f"{COFFER_TOOL_PREFIX}search_knowledge")
     assert tool is not None
     out = await tool.handler({"kb": "kb1", "query": "fox"})
-    assert out["mode"] == "keyword"
+    # One query → one answer: the MCP tool no longer surfaces mode / fallback.
+    assert "mode" not in out
+    assert "fallback" not in out
     assert len(out["passages"]) == 1
     assert out["passages"][0]["document_id"]
 

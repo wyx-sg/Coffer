@@ -1,10 +1,12 @@
 // frontend/src/kinds/knowledge_base/KnowledgeBaseDetailPage.test.tsx
 //
-// Exercises the redesigned KB detail surface: the unified retrieval bar
-// (one input + a keyword/vector/grep mode dropdown), and the document tree →
-// READ-ONLY preview flow (select a doc on the left; the right pane renders the
-// Markdown with FileActions + reconvert / delete, no in-app editing). The
-// `./api` module is mocked so the component renders without a backend.
+// Exercises the redesigned KB detail surface: the retrieval bar (one input +
+// Search; "one query → one answer", no mode picker / grep / fallback), the
+// page-paginated document tree with a SERVER-SIDE title filter (`q`), and the
+// document tree → READ-ONLY preview flow (select a doc on the left; the right
+// pane renders the Markdown with FileActions + reconvert / delete, no in-app
+// editing). The `./api` module is mocked so the component renders without a
+// backend.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -25,7 +27,6 @@ vi.mock("./api", () => ({
   checkSources: vi.fn(),
   updateFromSource: vi.fn(),
   searchKnowledgeBase: vi.fn(),
-  grepKnowledgeBase: vi.fn(),
   updateKnowledgeBaseConfig: vi.fn(),
 }));
 const api = await import("./api");
@@ -114,11 +115,9 @@ describe("KnowledgeBaseDetailPage", () => {
     expect(await screen.findByText(/pending vector embed/i)).toBeVisible();
   });
 
-  test("the unified bar searches with the selected mode", async () => {
+  test("the bar searches (one query → one answer; no mode in the call)", async () => {
     seedBaseQueries();
     vi.mocked(api.searchKnowledgeBase).mockResolvedValue({
-      mode: "keyword",
-      fallback: null,
       passages: [
         { text: "make release", document_id: "d1", title: "Deploys", score: 0.9, position: 0 },
       ],
@@ -131,7 +130,6 @@ describe("KnowledgeBaseDetailPage", () => {
     await waitFor(() =>
       expect(api.searchKnowledgeBase).toHaveBeenCalledWith("designs", "release", {
         topK: 5,
-        mode: "keyword",
       }),
     );
     expect(await screen.findByText(/make release/)).toBeVisible();
@@ -155,8 +153,9 @@ describe("KnowledgeBaseDetailPage", () => {
     // There is no in-app editing — no Edit/Save controls.
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
-    // The read-only viewer offers the copy-path affordance (jsdom is not Tauri).
-    expect(screen.getByRole("button", { name: /copy path/i })).toBeInTheDocument();
+    // The read-only viewer offers real open/reveal affordances (daemon-backed on web).
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
   });
 
   test("deleting a selected document calls delete after confirmation", async () => {
@@ -188,42 +187,24 @@ describe("KnowledgeBaseDetailPage", () => {
     expect(api.deleteDocument).not.toHaveBeenCalled();
   });
 
-  test("grep mode calls the grep helper", async () => {
-    seedBaseQueries();
-    vi.mocked(api.grepKnowledgeBase).mockResolvedValue({
-      hits: [{ path: "d1.md", line_number: 2, line: "needle" }],
-      truncated: false,
-    });
-    renderPage();
-    fireEvent.click(await screen.findByRole("combobox"));
-    fireEvent.click(await screen.findByRole("option", { name: "Grep" }));
-    fireEvent.change(screen.getByPlaceholderText(/pattern/i), { target: { value: "needle" } });
-    fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
-    await waitFor(() =>
-      expect(api.grepKnowledgeBase).toHaveBeenCalledWith("designs", "needle", 100),
-    );
-    expect(await screen.findByText("needle")).toBeVisible();
-  });
-
-  test("shows a load-more affordance and fetches the next page when over the page size", async () => {
-    // 100 docs loaded, but the KB has 150 — the cap must not silently hide the
-    // rest. A "Load more" button shows the loaded/total split and, on click,
-    // re-queries with a larger limit so the remaining docs become reachable.
-    const page1 = Array.from({ length: 100 }, (_, i) => ({
+  test("paginates the document tree by server offset (page 2 sends offset)", async () => {
+    // The tree is page-paginated (default size 50, server-driven offset). Paging
+    // forward re-queries listDocuments with offset = (page-1)*pageSize.
+    const page1 = Array.from({ length: 50 }, (_, i) => ({
       ...DOC,
       id: `d${i}`,
       title: `doc-${i}`,
     }));
-    const page2 = Array.from({ length: 150 }, (_, i) => ({
+    const page2 = Array.from({ length: 50 }, (_, i) => ({
       ...DOC,
-      id: `d${i}`,
-      title: `doc-${i}`,
+      id: `d${50 + i}`,
+      title: `doc-${50 + i}`,
     }));
-    vi.mocked(api.listDocuments).mockImplementation(async (_kb, limit) =>
-      (limit ?? 0) > 100 ? { documents: page2, total: 150 } : { documents: page1, total: 150 },
+    vi.mocked(api.listDocuments).mockImplementation(async (_kb, _limit, offset) =>
+      (offset ?? 0) >= 50 ? { documents: page2, total: 120 } : { documents: page1, total: 120 },
     );
     vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
-      document_count: 150,
+      document_count: 120,
       chunk_count: 3,
       documents_degraded: 0,
       indexed_modes: ["keyword", "grep"],
@@ -232,13 +213,15 @@ describe("KnowledgeBaseDetailPage", () => {
     vi.mocked(api.getKnowledgeBase).mockResolvedValue(KB);
 
     renderPage();
-    const loadMore = await screen.findByRole("button", { name: /showing 100 of 150/i });
-    expect(loadMore).toBeVisible();
-    expect(await screen.findByText("doc-99")).toBeVisible();
+    const tree = screen.getByRole("complementary");
+    // First page fetched with offset 0.
+    expect(await within(tree).findByText("doc-0")).toBeVisible();
+    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 50, 0, ""));
 
-    fireEvent.click(loadMore);
-    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 200, 0));
-    expect(await screen.findByText("doc-149")).toBeVisible();
+    // Next page → offset 50.
+    fireEvent.click(within(tree).getByRole("button", { name: /next/i }));
+    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 50, 50, ""));
+    expect(await within(tree).findByText("doc-99")).toBeVisible();
   });
 
   test("a duplicate upload surfaces an inline error", async () => {
@@ -277,12 +260,22 @@ describe("KnowledgeBaseDetailPage", () => {
     vi.mocked(api.checkSources)
       .mockResolvedValueOnce({
         sources: [
-          { document_id: "d1", title: "Deploys", source_path: "/abs/deploys.md", status: "changed" },
+          {
+            document_id: "d1",
+            title: "Deploys",
+            source_path: "/abs/deploys.md",
+            status: "changed",
+          },
         ],
       })
       .mockResolvedValueOnce({
         sources: [
-          { document_id: "d1", title: "Deploys", source_path: "/abs/deploys.md", status: "unchanged" },
+          {
+            document_id: "d1",
+            title: "Deploys",
+            source_path: "/abs/deploys.md",
+            status: "unchanged",
+          },
         ],
       });
     vi.mocked(api.updateFromSource).mockResolvedValue(DOC);
@@ -299,15 +292,21 @@ describe("KnowledgeBaseDetailPage", () => {
     await waitFor(() => expect(api.checkSources).toHaveBeenCalledTimes(2));
   });
 
-  test("the doc filter narrows the visible rows by title and restores on clear", async () => {
+  test("the doc filter is SERVER-SIDE: typing re-queries with q and resets to page 1", async () => {
     seedBaseQueries();
-    vi.mocked(api.listDocuments).mockResolvedValue({
-      documents: [
-        { ...DOC, id: "d1", title: "Deploys" },
-        { ...DOC, id: "d2", title: "Runbook" },
-      ],
-      total: 2,
-    });
+    // The server applies the title filter; the helper returns only matches and a
+    // filtered total. Empty q → both rows; q="run" → just Runbook.
+    vi.mocked(api.listDocuments).mockImplementation(async (_kb, _limit, _offset, q) =>
+      q && q.trim()
+        ? { documents: [{ ...DOC, id: "d2", title: "Runbook" }], total: 1 }
+        : {
+            documents: [
+              { ...DOC, id: "d1", title: "Deploys" },
+              { ...DOC, id: "d2", title: "Runbook" },
+            ],
+            total: 2,
+          },
+    );
     renderPage();
 
     const tree = screen.getByRole("complementary");
@@ -316,18 +315,63 @@ describe("KnowledgeBaseDetailPage", () => {
 
     const filter = within(tree).getByPlaceholderText(/filter documents/i);
     fireEvent.change(filter, { target: { value: "run" } });
-    // Case-insensitive title substring: only Runbook survives.
-    expect(within(tree).queryByText("Deploys")).toBeNull();
+    // After the ~300ms debounce, the server is queried with q="run" at offset 0.
+    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 50, 0, "run"));
+    // Only the server-returned match remains.
+    await waitFor(() => expect(within(tree).queryByText("Deploys")).toBeNull());
     expect(within(tree).getByText("Runbook")).toBeVisible();
 
-    // A filter that matches nothing shows the muted no-matches line.
-    fireEvent.change(filter, { target: { value: "zzz" } });
-    expect(within(tree).getByText(/no documents match the filter/i)).toBeVisible();
-
-    // Clearing the filter restores every row.
+    // Clearing the filter re-queries with empty q and restores the full list.
     fireEvent.change(filter, { target: { value: "" } });
-    expect(within(tree).getByText("Deploys")).toBeVisible();
+    await waitFor(() => expect(api.listDocuments).toHaveBeenLastCalledWith("designs", 50, 0, ""));
+    expect(await within(tree).findByText("Deploys")).toBeVisible();
     expect(within(tree).getByText("Runbook")).toBeVisible();
+  });
+
+  test("clamps to a populated page when the total shrinks (last page emptied)", async () => {
+    // Page 2 holds only the 51st doc; deleting it shrinks the total so page 2 no
+    // longer exists — the tree must pull back to page 1, never strand the user on
+    // an empty page past the end.
+    const deleted = new Set<string>();
+    const remaining = () =>
+      Array.from({ length: 51 }, (_, i) => ({ ...DOC, id: `d${i}`, title: `doc-${i}` })).filter(
+        (d) => !deleted.has(d.id),
+      );
+    vi.mocked(api.listDocuments).mockImplementation(async (_kb, _limit, offset) => {
+      const all = remaining();
+      const start = offset ?? 0;
+      return { documents: all.slice(start, start + 50), total: all.length };
+    });
+    vi.mocked(api.deleteDocument).mockImplementation(async (_kb, _id) => {
+      deleted.add(_id);
+    });
+    vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
+      document_count: 51,
+      chunk_count: 3,
+      documents_degraded: 0,
+      indexed_modes: ["keyword", "grep"],
+      disk_bytes: 264,
+    });
+    vi.mocked(api.getKnowledgeBase).mockResolvedValue(KB);
+
+    renderPage();
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("doc-0");
+
+    // Page 2 → the lone 51st doc.
+    fireEvent.click(within(tree).getByRole("button", { name: /next/i }));
+    expect(await within(tree).findByText("doc-50")).toBeVisible();
+
+    // Bulk-delete it; total drops to 50 → page 2 disappears.
+    fireEvent.click(within(tree).getByLabelText(/select row/i));
+    fireEvent.click(within(tree).getByRole("button", { name: /^delete$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d50"));
+
+    // The clamp pulls back to page 1 (offset 0): a populated page, not an empty one.
+    expect(await within(tree).findByText("doc-0")).toBeVisible();
+    expect(within(tree).queryByText("doc-50")).toBeNull();
   });
 
   test("selecting two rows shows the bulk bar and bulk-deletes after confirm", async () => {

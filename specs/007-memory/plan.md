@@ -10,7 +10,7 @@
 
 Memory is the **memory face** of one unified knowledge substrate shared with the knowledge base (spec 006). Each memory scope is a Resource of kind `memory`. Facts are per-fact markdown files (YAML frontmatter + body) plus a regenerated `MEMORY.md` index under `~/.coffer/memory/`. **Files are the source of truth; SQLite (`documents` + FTS5 + sqlite-vec) is a rebuildable index.** There are two scopes: global (sentinel ULID) and per-project (project ULID resolved from the agent's working directory).
 
-No LLM runs at write time — the agent writes a clean fact directly. Every agent reads and writes memory **only through Coffer's MCP gateway** (`coffer__recall/remember/list_memory/set_handoff/resume`); Coffer keeps its own canonical format and **does not touch agents' native memory files** (native projection was removed — see ADR-026). The user does full CRUD through the CLI/REST write surface; the Coffer UI is a **read-only** viewer that offers open-in-editor / reveal / copy-path for each fact and its folder (curation happens in the user's own editor, picked up by lazy reindex-on-read).
+No LLM runs at write time — the agent writes a clean fact directly. Every agent reads and writes memory **only through Coffer's MCP gateway** (`coffer__recall/remember/list_memory/set_handoff/resume`); Coffer keeps its own canonical format and **does not touch agents' native memory files** (native projection was removed — see ADR-026). The user does full CRUD through the CLI/REST write surface; the Coffer UI is a **read-only** viewer that offers open-in-editor / reveal for each fact and its folder (curation happens in the user's own editor, picked up by lazy reindex-on-read).
 
 This redesign **drops mem0, chroma, and LlamaIndex** and replaces `memory_records` with the unified `documents` table. There is no data migration (branch unreleased).
 
@@ -90,7 +90,7 @@ frontend/src/kinds/memory/
 ├── index.tsx                            # MEMORY_KIND_UI
 ├── MemoryStoreDetailPage.tsx            # per-store detail page (route /memory/:name)
 ├── MemoryFactList.tsx                   # DataTable (name, description, type, actor, updated)
-├── MemoryFactViewer.tsx                 # read-only fact render + open-in-editor / reveal / copy-path (file + folder)
+├── MemoryFactViewer.tsx                 # read-only fact render + open-in-editor / reveal (file + folder)
 ├── MemoryRecallPanel.tsx                # recall box with mode selector (keyword default)
 ├── MemoryMetricsHeader.tsx              # fact count + disk bytes
 ├── api.ts / types.ts
@@ -118,7 +118,7 @@ backend/tests/
 
 frontend/src/kinds/memory/
 ├── FactList.test.tsx
-├── FactViewer.test.tsx                       # read-only render + open/reveal/copy-path affordances
+├── FactViewer.test.tsx                       # read-only render + open/reveal affordances
 └── RecallBox.test.tsx
 ```
 

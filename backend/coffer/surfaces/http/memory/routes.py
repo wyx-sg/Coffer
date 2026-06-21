@@ -321,11 +321,13 @@ async def recall(
 ) -> RecallResponse:
     if name == GLOBAL_STORE_NAME:
         await mem_svc.ensure_store(name)
-    hits, mode, fallback = await mem_svc.recall_in_store(
+    # One query → one answer: the surface never selects a mode; the service
+    # resolves it from the store's default_mode (mode stays internal).
+    hits, _mode, _fallback = await mem_svc.recall_in_store(
         store_name=name,
         query=body.query,
         top_k=body.top_k,
-        mode=body.mode,
+        mode=None,
         scope=body.scope,
     )
     return RecallResponse(
@@ -333,8 +335,6 @@ async def recall(
             RecallHit(id=h.id, text=h.text, score=h.score, source=h.source, time=h.time)
             for h in hits
         ],
-        mode=mode,
-        fallback=fallback,
     )
 
 
