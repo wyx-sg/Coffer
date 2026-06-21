@@ -21,6 +21,7 @@ import type {
   GrepResponse,
   ReindexResult,
   KnowledgeBaseMetrics,
+  SourceCheckResponse,
 } from "./types";
 
 // Re-export the wire types so existing `import { … } from "./api"` call sites
@@ -164,6 +165,31 @@ export async function reindexKnowledgeBase(kbName: string): Promise<ReindexResul
   });
   await checkOk(r);
   return (await r.json()) as ReindexResult;
+}
+
+export async function checkSources(kbName: string): Promise<SourceCheckResponse> {
+  // Scans every document with a tracked external source file and reports its
+  // status (unchanged / changed / missing / edited / updated). With the KB's
+  // auto_update_sources flag on, changed docs are re-ingested and reported as
+  // "updated"; web-uploaded docs have no source_path and never appear.
+  const r = await fetch(`${kbBase(kbName)}/check-sources`, {
+    method: "POST",
+    headers: headers(),
+  });
+  await checkOk(r);
+  return (await r.json()) as SourceCheckResponse;
+}
+
+export async function updateFromSource(kbName: string, documentId: string): Promise<DocumentOut> {
+  // Re-ingests one document from its external source file. Refused with a typed
+  // ApiError (via checkOk) when source_mode=edited — the local edits would be
+  // clobbered — mirroring reconvert's blocked case.
+  const r = await fetch(`${kbBase(kbName)}/documents/${enc(documentId)}/update-source`, {
+    method: "POST",
+    headers: headers(),
+  });
+  await checkOk(r);
+  return (await r.json()) as DocumentOut;
 }
 
 export async function searchKnowledgeBase(

@@ -942,20 +942,39 @@
       "replaceExisting": "重新上传并替换",
       "reconvert": "重新转换",
       "settings": "设置",
+      "checkSources": "检查源文件",
       "deleteConfirm": "删除文档 {{title}}？此操作不可撤销。",
       "empty": "还没有文档。上传任意格式的文件以填充该知识库。",
       "back": "返回知识库",
       "docBadge": "{{count}} 个文档",
       "chunkBadge": "{{count}} 个分块",
       "degradedBadge": "{{count}} 个文档的向量待嵌入（嵌入服务暂不可用，已按关键词索引）",
-      "selectDocument": "在左侧选择一个文档以预览或编辑。"
+      "selectDocument": "在左侧选择一个文档以预览或编辑。",
+      "sourceCheck": {
+        "title": "源文件",
+        "description": "从磁盘文件摄入的文档，将与其原始源文件进行比对。",
+        "empty": "没有文档跟踪外部源文件。网页上传不会被跟踪——只有从路径摄入的文档（通过 CLI 或桌面应用）才有可供重新检查的源文件。",
+        "update": "从源文件更新",
+        "updated": "文档已从源文件更新。",
+        "missingNote": "在该路径未找到源文件。",
+        "editedNote": "该文档已在本地编辑，为避免覆盖你的改动，已禁止从源文件更新。",
+        "status": {
+          "unchanged": "已是最新",
+          "changed": "源文件已变更",
+          "missing": "源文件缺失",
+          "edited": "已本地编辑",
+          "updated": "已自动更新"
+        }
+      }
     },
     "settings": {
       "title": "知识库设置",
       "description": "更新该知识库的分块与 embedding 配置。修改分块后请重建索引，以应用到已有文档。",
       "chunkSize": "分块大小",
       "chunkOverlap": "分块重叠",
-      "vectorHint": "为该知识库启用基于含义的向量检索（关键词与 grep 始终开启）。向量模型在「设置 → 向量模型」中统一配置。"
+      "vectorHint": "为该知识库启用基于含义的向量检索（关键词与 grep 始终开启）。向量模型在「设置 → 向量模型」中统一配置。",
+      "autoUpdateSources": "源文件变更时自动更新",
+      "autoUpdateSourcesHint": "当文档的外部源文件发生变更时，在下次检查源文件时自动重新摄入（本地编辑过的文档始终会被跳过）。"
     },
     "welcome": {
       "title": "管理你的知识库",

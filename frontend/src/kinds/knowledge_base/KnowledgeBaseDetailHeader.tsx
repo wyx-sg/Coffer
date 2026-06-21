@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
+  FileSearch,
   RefreshCw,
   Settings as SettingsIcon,
   TriangleAlert,
@@ -24,8 +25,10 @@ interface Props {
   metrics: KnowledgeBaseMetrics | undefined;
   isReindexPending: boolean;
   isUploadPending: boolean;
+  checkingSources: boolean;
   canOpenSettings: boolean;
   onReindex: () => void;
+  onCheckSources: () => void;
   onOpenSettings: () => void;
   onUpload: () => void;
 }
@@ -35,8 +38,10 @@ export function KnowledgeBaseDetailHeader({
   metrics,
   isReindexPending,
   isUploadPending,
+  checkingSources,
   canOpenSettings,
   onReindex,
+  onCheckSources,
   onOpenSettings,
   onUpload,
 }: Props) {
@@ -85,6 +90,14 @@ export function KnowledgeBaseDetailHeader({
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={onOpenSettings} disabled={!canOpenSettings}>
             <SettingsIcon className="mr-1.5 size-3.5" /> {t("knowledgeBases.detail.settings")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCheckSources}
+            disabled={checkingSources || !canOpenSettings}
+          >
+            <FileSearch className="mr-1.5 size-3.5" /> {t("knowledgeBases.detail.checkSources")}
           </Button>
           <Button variant="outline" size="sm" onClick={onReindex} disabled={isReindexPending}>
             <RefreshCw className="mr-1.5 size-3.5" /> {t("knowledgeBases.detail.reindex")}

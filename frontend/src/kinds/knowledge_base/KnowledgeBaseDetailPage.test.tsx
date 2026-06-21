@@ -22,6 +22,8 @@ vi.mock("./api", () => ({
   deleteDocument: vi.fn(),
   reconvertDocument: vi.fn(),
   reindexKnowledgeBase: vi.fn(),
+  checkSources: vi.fn(),
+  updateFromSource: vi.fn(),
   searchKnowledgeBase: vi.fn(),
   grepKnowledgeBase: vi.fn(),
   updateKnowledgeBaseConfig: vi.fn(),
@@ -54,6 +56,7 @@ const KB = {
     chunk_overlap: 100,
     max_document_bytes: 1048576,
     embedding: null,
+    auto_update_sources: false,
   },
   enabled: true,
   created_at: "2026-05-29T00:00:00Z",
@@ -247,5 +250,74 @@ describe("KnowledgeBaseDetailPage", () => {
     const inputs = document.querySelectorAll('input[type="file"]');
     fireEvent.change(inputs[inputs.length - 1], { target: { files: [file] } });
     expect(await screen.findByText(/duplicate/i)).toBeVisible();
+  });
+
+  test("Check sources calls the API and opens the report dialog", async () => {
+    seedBaseQueries();
+    vi.mocked(api.checkSources).mockResolvedValue({
+      sources: [
+        { document_id: "d1", title: "Deploys", source_path: "/abs/deploys.md", status: "changed" },
+      ],
+    });
+    renderPage();
+    const checkBtn = await screen.findByRole("button", { name: /check sources/i });
+    // The button is disabled until the KB resource query resolves.
+    await waitFor(() => expect(checkBtn).not.toBeDisabled());
+    fireEvent.click(checkBtn);
+    await waitFor(() => expect(api.checkSources).toHaveBeenCalledWith("designs"));
+    // The report dialog opens with the changed row + its Update action.
+    expect(await screen.findByText(/source files/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: /update from source/i })).toBeVisible();
+  });
+
+  test("updating a changed source re-runs the check so the report isn't stale", async () => {
+    seedBaseQueries();
+    // First scan reports a changed source; after the update, a re-scan reports
+    // it unchanged — the load-bearing refresh that keeps the dialog accurate.
+    vi.mocked(api.checkSources)
+      .mockResolvedValueOnce({
+        sources: [
+          { document_id: "d1", title: "Deploys", source_path: "/abs/deploys.md", status: "changed" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        sources: [
+          { document_id: "d1", title: "Deploys", source_path: "/abs/deploys.md", status: "unchanged" },
+        ],
+      });
+    vi.mocked(api.updateFromSource).mockResolvedValue(DOC);
+    renderPage();
+
+    const checkBtn = await screen.findByRole("button", { name: /check sources/i });
+    await waitFor(() => expect(checkBtn).not.toBeDisabled());
+    fireEvent.click(checkBtn);
+    const updateBtn = await screen.findByRole("button", { name: /update from source/i });
+    fireEvent.click(updateBtn);
+
+    await waitFor(() => expect(api.updateFromSource).toHaveBeenCalledWith("designs", "d1"));
+    // The hook re-runs check-sources on update success → the report refreshes.
+    await waitFor(() => expect(api.checkSources).toHaveBeenCalledTimes(2));
+  });
+
+  test("the settings PATCH carries auto_update_sources (guards the reset gotcha)", async () => {
+    seedBaseQueries();
+    vi.mocked(api.getKnowledgeBase).mockResolvedValue({
+      ...KB,
+      config: { ...KB.config, auto_update_sources: false },
+    });
+    vi.mocked(api.updateKnowledgeBaseConfig).mockResolvedValue(KB);
+    renderPage();
+
+    const settingsBtn = await screen.findByRole("button", { name: /^settings$/i });
+    await waitFor(() => expect(settingsBtn).not.toBeDisabled());
+    fireEvent.click(settingsBtn);
+    const dialog = await screen.findByRole("dialog");
+    // Flip the auto-update switch on, then save.
+    fireEvent.click(within(dialog).getByLabelText(/auto-update from source/i));
+    fireEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(api.updateKnowledgeBaseConfig).toHaveBeenCalled());
+    const sentConfig = vi.mocked(api.updateKnowledgeBaseConfig).mock.calls[0][1];
+    expect(sentConfig).toHaveProperty("auto_update_sources", true);
   });
 });

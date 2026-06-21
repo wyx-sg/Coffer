@@ -9,20 +9,34 @@
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-import { ApiError } from "@/lib/api/errors";
+import { ApiError, translateApiError } from "@/lib/api/errors";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { KnowledgeBaseDetailHeader } from "./KnowledgeBaseDetailHeader";
 import { KnowledgeBaseDocTree } from "./KnowledgeBaseDocTree";
 import { KnowledgeBaseDocViewer } from "./KnowledgeBaseDocViewer";
 import { KnowledgeBaseLoadStatus } from "./KnowledgeBaseLoadStatus";
 import { KnowledgeBaseSearchBar } from "./KnowledgeBaseSearchBar";
 import { KnowledgeBaseSettingsDialog } from "./KnowledgeBaseSettingsDialog";
+import { SourceCheckDialog } from "./SourceCheckDialog";
 import { useKnowledgeBaseDetail } from "./useKnowledgeBaseDetail";
 
 export function KnowledgeBaseDetailPage() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const name = useParams<{ name: string }>().name ?? "";
   const kb = useKnowledgeBaseDetail(name);
+
+  const onCheckSources = () =>
+    kb.checkSources.mutate(undefined, {
+      onError: (e) => toast.error(translateApiError(t, e)),
+    });
+  const onUpdateFromSource = (id: string) =>
+    kb.updateFromSource.mutate(id, {
+      onSuccess: () => toast.success(t("knowledgeBases.detail.sourceCheck.updated")),
+      // The edited-refusal (and any other failure) surfaces as a toast.
+      onError: (e) => toast.error(translateApiError(t, e)),
+    });
 
   return (
     <div className="space-y-6 p-6">
@@ -31,8 +45,10 @@ export function KnowledgeBaseDetailPage() {
         metrics={kb.metricsQuery.data}
         isReindexPending={kb.reindex.isPending}
         isUploadPending={kb.ingest.isPending}
+        checkingSources={kb.checkSources.isPending}
         canOpenSettings={Boolean(kb.kbQuery.data)}
         onReindex={() => kb.reindex.mutate()}
+        onCheckSources={onCheckSources}
         onOpenSettings={() => kb.setShowSettings(true)}
         onUpload={kb.handlePickFile}
       />
@@ -48,6 +64,18 @@ export function KnowledgeBaseDetailPage() {
           error={kb.updateConfig.error}
           isPending={kb.updateConfig.isPending}
           onSubmit={(config) => kb.updateConfig.mutate(config)}
+        />
+      ) : null}
+
+      {kb.sourceReport ? (
+        <SourceCheckDialog
+          open
+          onOpenChange={(o) => {
+            if (!o) kb.setSourceReport(null);
+          }}
+          report={kb.sourceReport}
+          updatingId={kb.updateFromSource.isPending ? kb.updateFromSource.variables : null}
+          onUpdate={onUpdateFromSource}
         />
       ) : null}
 

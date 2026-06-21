@@ -187,7 +187,19 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 - **`converted_at` 不变** —— 它跟踪一次转换引擎运行，而非文档年龄，故重建时仍为 `now`。
 - **无新 FR** —— 这是在既有 FR-008 / SC-005 重建保证下补上一个"文件即真相"的缺口。无 schema/DB 改动（`documents` 表已有这两列）；仅改变磁盘文件内容与重建读取路径。
 
-## 16. 此处明确不决定 / 范围外
+## 16. 源文件更新检测——前端（FR-021..024）
+
+**问题**：PR #140 交付了外部源文件跟踪的后端——`check-sources` 扫描会按文档（仅限带有跟踪 `source_path` 的文档）报告其原始磁盘文件是 `unchanged`（未变更）/ `changed`（已变更）/ `missing`（文件已删除）/ `edited`（源文件已变但文档曾本地编辑，故跳过重新摄入）/ `updated`（曾变更并因该知识库的 `auto_update_sources` 开启而自动重新摄入）；外加按文档的 `update-source` 重新摄入与按知识库的 `auto_update_sources` 配置开关。这些此前都无法从 UI 触达。
+
+**决策**：在知识库详情页以纯增量 UI 暴露（不改后端）：
+
+- 在标题栏（紧邻 设置 / 重建索引 / 上传）新增 **「检查源文件」** 动作，POST `check-sources` 并打开 **报告对话框**。每行显示文档标题、其源文件路径，以及对应五种状态之一的状态徽标。只有 **`changed`** 行提供按行的 **「从源文件更新」** 按钮（POST `update-source`，原地重新摄入）；`missing` 行注明文件已不存在，`edited` 行注明文档已本地编辑、为避免覆盖而禁止更新（后端会以一个带类型的错误拒绝 `edited` 文档，以 toast 形式呈现）。当扫描返回零行时，对话框会说明 **网页上传不会被跟踪**——只有基于路径的摄入（CLI / 桌面）才带有源文件。
+
+- 按知识库的 **`auto_update_sources`** 开关在设置对话框中新增一个 `<Switch>` 行。由于配置 PATCH 会 **替换** 整个配置对象（FR-014/FR-019），该开关的值会被串进提交时构建的合并配置中，并且该字段已加入 `KnowledgeBaseConfigOut`，从而保证保存设置不会悄悄把它重置为 false。
+
+- **无新增 FR**——这交付的是既有 FR-021..024 的前端；覆盖由新的 `SourceCheckDialog` vitest 套件与扩展后的详情页测试（断言「检查源文件」会打开对话框、且设置 PATCH 携带 `auto_update_sources`）保证。
+
+## 17. 此处明确不决定 / 范围外
 
 - 单次调用里 keyword + vector 的 hybrid RRF 融合（可选未来，同引擎）。
 - 检索时的 reranking / HyDE / multi-query / LLM 综合 —— agent 综合。

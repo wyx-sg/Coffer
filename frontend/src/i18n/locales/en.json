@@ -942,20 +942,39 @@
       "replaceExisting": "Upload again and replace",
       "reconvert": "Reconvert",
       "settings": "Settings",
+      "checkSources": "Check sources",
       "deleteConfirm": "Delete document {{title}}? This cannot be undone.",
       "empty": "No documents yet. Upload a file of any format to populate this knowledge base.",
       "back": "Back to knowledge bases",
       "docBadge": "{{count}} documents",
       "chunkBadge": "{{count}} chunks",
       "degradedBadge": "{{count}} documents pending vector embed (embedding service unavailable; indexed by keyword)",
-      "selectDocument": "Select a document on the left to preview or edit it."
+      "selectDocument": "Select a document on the left to preview or edit it.",
+      "sourceCheck": {
+        "title": "Source files",
+        "description": "Documents ingested from a file on disk, checked against their original source.",
+        "empty": "No documents track an external source file. Web uploads aren't tracked — only documents ingested from a path (via the CLI or desktop app) have a source file to re-check.",
+        "update": "Update from source",
+        "updated": "Document updated from its source file.",
+        "missingNote": "Source file not found at that path.",
+        "editedNote": "This document was edited locally, so updating from source is blocked to avoid clobbering your changes.",
+        "status": {
+          "unchanged": "Up to date",
+          "changed": "Source changed",
+          "missing": "Source missing",
+          "edited": "Locally edited",
+          "updated": "Auto-updated"
+        }
+      }
     },
     "settings": {
       "title": "Knowledge base settings",
       "description": "Update chunking and embedding for this knowledge base. Reindex afterwards to apply chunking changes to existing documents.",
       "chunkSize": "Chunk size",
       "chunkOverlap": "Chunk overlap",
-      "vectorHint": "Add meaning-based vector retrieval for this knowledge base (keyword + grep are always on). The embedding model is configured globally in Settings → Embedding."
+      "vectorHint": "Add meaning-based vector retrieval for this knowledge base (keyword + grep are always on). The embedding model is configured globally in Settings → Embedding.",
+      "autoUpdateSources": "Auto-update from source",
+      "autoUpdateSourcesHint": "When a document's external source file changes, re-ingest it automatically on the next source check (locally edited documents are always skipped)."
     },
     "welcome": {
       "title": "Manage your knowledge bases",
