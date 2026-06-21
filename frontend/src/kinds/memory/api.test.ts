@@ -10,6 +10,7 @@ import {
   addFact,
   clearFacts,
   deleteFact,
+  getFact,
   getMemoryStore,
   getMemoryStoreMetrics,
   listFacts,
@@ -151,6 +152,27 @@ describe("deleteFact", () => {
     const err = await deleteFact("prefs", "ghost").catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).code).toBe("MEMORY_NOT_FOUND");
+  });
+});
+
+describe("getFact", () => {
+  test("GETs /memory_stores/<store>/facts/<id> and returns the full fact", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(okJson({ id: "m-1", name: "tabs", text: "uses tabs", actor: "user" }));
+    const out = await getFact("prefs", "m-1");
+    expect(out.id).toBe("m-1");
+    expect(out.text).toBe("uses tabs");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/memory_stores/prefs/facts/m-1`);
+    expect(init?.method).toBeUndefined();
+  });
+
+  test("URL-encodes the store name and fact id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ id: "x" }));
+    await getFact("store with space", "a/b?c");
+    expect(fetchMock.mock.calls[0][0]).toContain("store%20with%20space");
+    expect(fetchMock.mock.calls[0][0]).toContain("a%2Fb%3Fc");
   });
 });
 

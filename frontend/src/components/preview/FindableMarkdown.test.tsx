@@ -26,4 +26,29 @@ describe("FindableMarkdown", () => {
     fireEvent.change(screen.getByPlaceholderText(/find/i), { target: { value: "zzz" } });
     expect(screen.getByText(/no matches/i)).toBeInTheDocument();
   });
+
+  test("does not open find when no initialQuery is given", () => {
+    render(<FindableMarkdown>{SOURCE}</FindableMarkdown>);
+    expect(screen.queryByPlaceholderText(/find/i)).not.toBeInTheDocument();
+  });
+
+  test("seeds find from initialQuery and highlights matches on mount", () => {
+    render(<FindableMarkdown initialQuery="alpha">{SOURCE}</FindableMarkdown>);
+    expect(screen.getByPlaceholderText(/find/i)).toHaveValue("alpha");
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+  });
+
+  test("re-seeds when initialQuery changes to a new term", () => {
+    const { rerender } = render(<FindableMarkdown initialQuery="alpha">{SOURCE}</FindableMarkdown>);
+    rerender(<FindableMarkdown initialQuery="Title">{SOURCE}</FindableMarkdown>);
+    expect(screen.getByPlaceholderText(/find/i)).toHaveValue("Title");
+    expect(screen.getByText("1/1")).toBeInTheDocument();
+  });
+
+  test("closes find when initialQuery becomes empty", () => {
+    const { rerender } = render(<FindableMarkdown initialQuery="alpha">{SOURCE}</FindableMarkdown>);
+    expect(screen.getByPlaceholderText(/find/i)).toBeInTheDocument();
+    rerender(<FindableMarkdown initialQuery="">{SOURCE}</FindableMarkdown>);
+    expect(screen.queryByPlaceholderText(/find/i)).not.toBeInTheDocument();
+  });
 });

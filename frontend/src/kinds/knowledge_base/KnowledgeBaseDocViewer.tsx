@@ -23,6 +23,8 @@ interface Props {
   reconvertError: unknown;
   onReconvert: () => void;
   onDelete: () => void;
+  /** Search query to pre-highlight in the body ("" = no highlight). */
+  initialQuery?: string;
 }
 
 export function KnowledgeBaseDocViewer({
@@ -33,6 +35,7 @@ export function KnowledgeBaseDocViewer({
   reconvertError,
   onReconvert,
   onDelete,
+  initialQuery,
 }: Props) {
   const { t } = useTranslation();
 
@@ -91,7 +94,9 @@ export function KnowledgeBaseDocViewer({
         </p>
       ) : null}
 
-      <FindableMarkdown className="max-h-[60vh] overflow-auto p-4">{doc.markdown}</FindableMarkdown>
+      <FindableMarkdown className="max-h-[60vh] overflow-auto p-4" initialQuery={initialQuery}>
+        {doc.markdown}
+      </FindableMarkdown>
     </div>
   );
 }

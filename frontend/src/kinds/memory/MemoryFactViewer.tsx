@@ -18,9 +18,11 @@ interface Props {
   fact: FactOut | undefined;
   isDeletePending: boolean;
   onDelete: () => void;
+  /** Recall query to pre-highlight in the body ("" = no highlight). */
+  initialQuery?: string;
 }
 
-export function MemoryFactViewer({ fact, isDeletePending, onDelete }: Props) {
+export function MemoryFactViewer({ fact, isDeletePending, onDelete, initialQuery }: Props) {
   const { t } = useTranslation();
 
   if (!fact) {
@@ -59,7 +61,9 @@ export function MemoryFactViewer({ fact, isDeletePending, onDelete }: Props) {
         </p>
       ) : null}
 
-      <FindableMarkdown className="max-h-[50vh] overflow-auto p-4">{fact.text}</FindableMarkdown>
+      <FindableMarkdown className="max-h-[60vh] overflow-auto p-4" initialQuery={initialQuery}>
+        {fact.text}
+      </FindableMarkdown>
     </div>
   );
 }

@@ -16,13 +16,17 @@ interface FindableMarkdownProps {
   children: string;
   /** Classes for the scroll viewport (height + overflow + padding). */
   className?: string;
+  /** When set, pre-seed the find query to highlight this term (e.g. a recall /
+   *  search hit). Empty string closes/clears; `undefined` leaves find as the
+   *  Cmd/Ctrl+F-only default. */
+  initialQuery?: string;
 }
 
-export function FindableMarkdown({ children, className }: FindableMarkdownProps) {
+export function FindableMarkdown({ children, className, initialQuery }: FindableMarkdownProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Pass the markdown source as the revision so an open search re-applies when
   // the previewed document changes (e.g. selecting a different KB doc / fact).
-  const { find, inputRef, onKeyDown } = useDomFind(scrollRef, children);
+  const { find, inputRef, onKeyDown } = useDomFind(scrollRef, children, initialQuery);
 
   return (
     <div className="relative">
