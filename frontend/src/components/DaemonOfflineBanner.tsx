@@ -5,7 +5,6 @@ import { ApiError } from "@/lib/api/errors";
 import { resetApiClient } from "@/lib/api/client";
 import { setDaemonConnection } from "@/lib/auth";
 import { useDaemonOutOfDate, useDaemonStatus } from "@/lib/hooks/useDaemon";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { getDaemonInfo, isTauri, restartDaemon } from "@/lib/tauri";
 
@@ -85,82 +84,91 @@ export function DaemonOfflineBanner() {
       : String(restart.error)
     : null;
 
-  // Floats over the whole app (above the sidebar too): a fixed, top-centered
-  // card that doesn't take layout space, so page content stays put underneath.
-  // pointer-events-none on the wrapper lets clicks pass through the empty gutter;
-  // the card itself re-enables them.
+  const title = isStale
+    ? t("daemon.offline.outOfDateTitle")
+    : isAuthGap
+      ? t("daemon.offline.notReadyTitle")
+      : t("daemon.offline.title");
+  const body = isStale
+    ? t("daemon.offline.outOfDateBody")
+    : isAuthGap
+      ? t("daemon.offline.notReadyBody")
+      : t("daemon.offline.body");
+  const errorSuffix =
+    !isStale && !isAuthGap && error instanceof Error ? ` (${error.message})` : null;
+
+  // A full-width status strip across the very top of the app, NOT a floating
+  // card. Layout renders it above the sidebar + content row, so it pushes the
+  // app down instead of overlaying it; returning null when healthy means it
+  // reserves no space then. The icon + message run on the left and the recovery
+  // action(s) on the right, wrapping to a second line only when space is tight.
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-      <Alert
-        variant="destructive"
-        className="pointer-events-auto w-full max-w-xl border-status-warn/40 bg-card text-foreground shadow-lg"
-        data-testid="daemon-banner"
-        data-banner-code={isStale ? "DAEMON_OUT_OF_DATE" : code}
-      >
-        <AlertCircle className="size-4 text-status-warn" />
-        <AlertTitle className="font-serif text-base">
-          {isStale
-            ? t("daemon.offline.outOfDateTitle")
-            : isAuthGap
-              ? t("daemon.offline.notReadyTitle")
-              : t("daemon.offline.title")}
-        </AlertTitle>
-        <AlertDescription>
-          <p className="mb-3 text-foreground/80">
-            {isStale
-              ? t("daemon.offline.outOfDateBody")
-              : isAuthGap
-                ? t("daemon.offline.notReadyBody")
-                : t("daemon.offline.body")}
-            {!isStale && !isAuthGap && error instanceof Error ? ` (${error.message})` : null}
-          </p>
+    <div
+      role="alert"
+      className="border-b border-status-warn/40 bg-card text-foreground shadow-sm"
+      data-testid="daemon-banner"
+      data-banner-code={isStale ? "DAEMON_OUT_OF_DATE" : code}
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
+        <AlertCircle className="size-4 shrink-0 text-status-warn" />
+        <div className="min-w-0 flex-1 text-sm">
+          <span className="font-serif font-medium">{title}</span>
+          <span className="ml-2 text-foreground/80">
+            {body}
+            {errorSuffix}
+          </span>
+          {!isTauri() ? (
+            // The browser can't kill/respawn the daemon — Retry only re-checks
+            // the connection. Tell the user how to actually bring it back.
+            <span className="ml-2 text-foreground/60">
+              {t("daemon.offline.webRestartHint")}{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono">coffer daemon start</code>
+            </span>
+          ) : null}
+          {/* The restart-failure message can be a full sentence; keep it in the
+              wrapping message column (not the shrink-0 action group) so it never
+              overflows the strip horizontally. */}
+          {restartError ? (
+            <span className="mt-1 block text-xs text-destructive">{restartError}</span>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           {isTauri() ? (
-            <div className="space-y-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => restart.mutate()}
-                disabled={restart.isPending}
-              >
-                {restart.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                    {t("daemon.offline.restarting")}
-                  </>
-                ) : (
-                  t("daemon.offline.restart")
-                )}
-              </Button>
-              {restartError ? <p className="text-xs text-destructive">{restartError}</p> : null}
-            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => restart.mutate()}
+              disabled={restart.isPending}
+            >
+              {restart.isPending ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  {t("daemon.offline.restarting")}
+                </>
+              ) : (
+                t("daemon.offline.restart")
+              )}
+            </Button>
           ) : (
-            <div className="space-y-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => reload.mutate()}
-                disabled={reload.isPending}
-                data-testid="daemon-banner-reload"
-              >
-                {reload.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                    {t("daemon.offline.retrying")}
-                  </>
-                ) : (
-                  t("daemon.offline.retry")
-                )}
-              </Button>
-              {/* The browser can't kill/respawn the daemon — Retry only re-checks
-                  the connection. Tell the user how to actually bring it back. */}
-              <p className="text-xs text-foreground/60">
-                {t("daemon.offline.webRestartHint")}{" "}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono">coffer daemon start</code>
-              </p>
-            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => reload.mutate()}
+              disabled={reload.isPending}
+              data-testid="daemon-banner-reload"
+            >
+              {reload.isPending ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  {t("daemon.offline.retrying")}
+                </>
+              ) : (
+                t("daemon.offline.retry")
+              )}
+            </Button>
           )}
-        </AlertDescription>
-      </Alert>
+        </div>
+      </div>
     </div>
   );
 }

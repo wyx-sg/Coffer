@@ -2,9 +2,11 @@
 // "Unmanaged skills" section of the agent Skills tab: skills found on disk in
 // the agent's skill locations that Coffer does not manage, with adopt-into-
 // master and delete actions. Foreign symlinks (targets outside the master
-// store) are badged and never adoptable. Hidden entirely while the list is
-// empty. Extracted from AgentSkillsTab to keep that file inside the
-// component size cap.
+// store) are badged and never adoptable. The section ALWAYS renders — when
+// there are no unmanaged skills the table shows its empty message — so it stays
+// consistent with the MCP / plugins / memory / conversations tabs, whose tables
+// are permanent surfaces rather than hidden-when-empty. Extracted from
+// AgentSkillsTab to keep that file inside the component size cap.
 //
 // Rendered through the shared DataTable so it mirrors the "Managed by Coffer"
 // table directly above it — same header row, search box, and pagination —
@@ -45,9 +47,6 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
   const [deleteTarget, setDeleteTarget] = useState<UnmanagedSkillOut | null>(null);
 
   const items = unmanaged.data?.items ?? [];
-  // Keep the section hidden until there is at least one unmanaged skill to act
-  // on, so it never adds an empty table to the page.
-  if (items.length === 0) return null;
 
   const columns: Column<UnmanagedSkillOut>[] = [
     {
@@ -137,29 +136,35 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
         {t("agents.skillsTab.unmanagedTitle")}
       </h3>
 
-      <DataTable
-        rows={items}
-        columns={columns}
-        rowKey={(s) => `${s.location}:${s.name}`}
-        search={{
-          accessor: (s) => `${s.name} ${s.reason ?? ""}`,
-          placeholder: t("skills.searchPlaceholder"),
-        }}
-        selection={{
-          ariaSelectAll: t("common.bulk.selectAll"),
-          ariaSelectRow: (s) => `${t("common.bulk.selectRow")}: ${s.name}`,
-          bulkLabel: (count) => t("common.bulk.selected", { count }),
-          clearLabel: t("common.clear"),
-          renderBulkActions: ({ selectedRows, clear }) => (
-            <AgentUnmanagedSkillsBulkActions
-              agentName={agentName}
-              rows={selectedRows}
-              clear={clear}
-            />
-          ),
-        }}
-        emptyMessage={t("agents.skillsTab.unmanagedNoMatch")}
-      />
+      {unmanaged.isPending ? (
+        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+      ) : unmanaged.error ? (
+        <p className="text-sm text-destructive">{translateApiError(t, unmanaged.error)}</p>
+      ) : (
+        <DataTable
+          rows={items}
+          columns={columns}
+          rowKey={(s) => `${s.location}:${s.name}`}
+          search={{
+            accessor: (s) => `${s.name} ${s.reason ?? ""}`,
+            placeholder: t("skills.searchPlaceholder"),
+          }}
+          selection={{
+            ariaSelectAll: t("common.bulk.selectAll"),
+            ariaSelectRow: (s) => `${t("common.bulk.selectRow")}: ${s.name}`,
+            bulkLabel: (count) => t("common.bulk.selected", { count }),
+            clearLabel: t("common.clear"),
+            renderBulkActions: ({ selectedRows, clear }) => (
+              <AgentUnmanagedSkillsBulkActions
+                agentName={agentName}
+                rows={selectedRows}
+                clear={clear}
+              />
+            ),
+          }}
+          emptyMessage={t("agents.skillsTab.unmanagedEmpty")}
+        />
+      )}
 
       <Dialog
         open={deleteTarget !== null}

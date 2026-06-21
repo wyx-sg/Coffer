@@ -118,80 +118,85 @@ export function Layout() {
 
   return (
     // h-screen + overflow-hidden pins the app to the viewport; the sidebar
-    // and the main content each own an independent scroll region.
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
-      {/* Floats over the whole app (fixed, top-centered) — rendered at the root
-          so it overlays the sidebar too and never shifts page content. */}
+    // and the main content each own an independent scroll region. The column
+    // wrapper lets the daemon strip span the full width across the very top and
+    // push the sidebar + content row down (min-h-0 lets that row still scroll).
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      {/* Full-width status strip at the very top; rendered above the row so it
+          pushes the app down, and renders nothing (no reserved space) when the
+          daemon is healthy. */}
       <DaemonOfflineBanner />
-      <aside
-        className={cn(
-          "hidden shrink-0 flex-col border-r border-border bg-card/50 transition-[width] duration-200 md:flex",
-          collapsed ? "w-16" : "w-64",
-        )}
-        aria-label={t("nav.aria.primary")}
-      >
-        <div
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <aside
           className={cn(
-            "flex h-16 items-center border-b border-border",
-            collapsed ? "justify-center px-2" : "justify-between px-5",
+            "hidden shrink-0 flex-col border-r border-border bg-card/50 transition-[width] duration-200 md:flex",
+            collapsed ? "w-16" : "w-64",
           )}
+          aria-label={t("nav.aria.primary")}
         >
-          {!collapsed ? (
-            <Link to="/" className="flex items-center gap-2 text-base font-serif tracking-tight">
-              <span
-                className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm"
-                aria-hidden
-              >
-                <Boxes className="size-4" strokeWidth={2.25} />
-              </span>
-              <span className="text-foreground">Coffer</span>
-            </Link>
-          ) : null}
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            aria-label={t(collapsed ? "nav.expand" : "nav.collapse")}
-            title={t(collapsed ? "nav.expand" : "nav.collapse")}
-            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="size-4" />
-            ) : (
-              <PanelLeftClose className="size-4" />
+          <div
+            className={cn(
+              "flex h-16 items-center border-b border-border",
+              collapsed ? "justify-center px-2" : "justify-between px-5",
             )}
-          </button>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto px-3 py-3 text-sm">
-          {NAV_GROUPS.map((group, i) => (
-            <div key={group.labelKey || group.items[0]?.to} className="mb-1">
+          >
+            {!collapsed ? (
+              <Link to="/" className="flex items-center gap-2 text-base font-serif tracking-tight">
+                <span
+                  className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm"
+                  aria-hidden
+                >
+                  <Boxes className="size-4" strokeWidth={2.25} />
+                </span>
+                <span className="text-foreground">Coffer</span>
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label={t(collapsed ? "nav.expand" : "nav.collapse")}
+              title={t(collapsed ? "nav.expand" : "nav.collapse")}
+              className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
               {collapsed ? (
-                i > 0 ? (
-                  <div className="mx-1 my-2 border-t border-border" />
-                ) : null
-              ) : group.labelKey ? (
-                <div className="nav-group-label">{t(group.labelKey)}</div>
-              ) : null}
-              {group.items.map((item) => (
-                <NavRow key={item.to} item={item} collapsed={collapsed} />
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        {!collapsed ? (
-          <div className="border-t border-border p-3">
-            <LanguageSwitcher />
+                <PanelLeftOpen className="size-4" />
+              ) : (
+                <PanelLeftClose className="size-4" />
+              )}
+            </button>
           </div>
-        ) : null}
-      </aside>
-      <main className="flex-1 overflow-y-auto">
-        {/* Full-width — the content tracks the sidebar, so collapsing it
+
+          <nav className="flex-1 overflow-y-auto px-3 py-3 text-sm">
+            {NAV_GROUPS.map((group, i) => (
+              <div key={group.labelKey || group.items[0]?.to} className="mb-1">
+                {collapsed ? (
+                  i > 0 ? (
+                    <div className="mx-1 my-2 border-t border-border" />
+                  ) : null
+                ) : group.labelKey ? (
+                  <div className="nav-group-label">{t(group.labelKey)}</div>
+                ) : null}
+                {group.items.map((item) => (
+                  <NavRow key={item.to} item={item} collapsed={collapsed} />
+                ))}
+              </div>
+            ))}
+          </nav>
+
+          {!collapsed ? (
+            <div className="border-t border-border p-3">
+              <LanguageSwitcher />
+            </div>
+          ) : null}
+        </aside>
+        <main className="flex-1 overflow-y-auto">
+          {/* Full-width — the content tracks the sidebar, so collapsing it
             genuinely widens the working area. */}
-        <div className="w-full px-6 py-10 md:px-10">
-          <Outlet />
-        </div>
-      </main>
+          <div className="w-full px-6 py-10 md:px-10">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
