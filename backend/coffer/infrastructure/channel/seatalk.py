@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import logging
 import time
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -19,6 +20,8 @@ import httpx
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
+    ChoiceButton,
+    InboundCallback,
     InboundMessage,
     SentMessage,
 )
@@ -49,6 +52,29 @@ _TOKEN_SLACK_SECONDS = 60
 _RATE_BACKOFF = (1.0, 3.0, 9.0)
 
 
+def _interactive_card(text: str, buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
+    """A SeaTalk ``interactive_message`` card: a markdown body + callback buttons
+    each carrying our custom ``value`` (research.md). A tap returns the value in
+    an ``interactive_message_click`` event.
+
+    research.md pins only ``tag="interactive_message"``, ``button_type="callback"``
+    and the custom ``value``; the ``elements``/``description`` body nesting and
+    the button ``text`` field are inferred (the live API docs are login-gated and
+    unreachable from this machine). If SeaTalk rejects the payload, adjust this
+    one helper — the rest of the card pipeline is shape-agnostic."""
+    return {
+        "tag": "interactive_message",
+        "interactive_message": {
+            "elements": [
+                {"element_type": "description", "description": {"format": 1, "text": text}},
+            ],
+            "buttons": [
+                {"button_type": "callback", "text": b.label, "value": b.value} for b in buttons
+            ],
+        },
+    }
+
+
 class SeaTalkAdapter:
     """One SeaTalk app/bot ↔ one channel resource."""
 
@@ -76,6 +102,7 @@ class SeaTalkAdapter:
             supports_edit=False,
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
+            supports_buttons=True,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -117,12 +144,35 @@ class SeaTalkAdapter:
                     sender_id=str(event.get("employee_code", "")),
                 )
             )
+        elif event_type == "interactive_message_click" and self._callbacks.on_callback is not None:
+            # A selection-card button tap; the custom ``value`` we set on the
+            # button comes back here (research.md). DMs are 1:1 so the sender is
+            # the employee_code — the core owner-gates on it.
+            await self._callbacks.on_callback(
+                InboundCallback(
+                    channel=self._name,
+                    chat_id=str(event.get("employee_code", "")),
+                    sender_id=str(event.get("employee_code", "")),
+                    data=str(event.get("value", "")),
+                    platform_message_id=str(event.get("message_id", "")),
+                )
+            )
 
     # -- outbound ------------------------------------------------------------
 
-    async def send_text(self, chat_id: str, markdown: str) -> SentMessage:
+    async def send_text(
+        self,
+        chat_id: str,
+        markdown: str,
+        *,
+        buttons: Sequence[ChoiceButton] | None = None,
+    ) -> SentMessage:
         from coffer.infrastructure.channel.render import chunk_text
 
+        if buttons:
+            # Selection prompts are short — one interactive card, no chunking.
+            result = await self._send_single_chat(chat_id, _interactive_card(markdown, buttons))
+            return SentMessage(message_id=str(result.get("message_id", "")))
         last = ""
         for chunk in chunk_text(markdown, self.capabilities.max_message_chars):
             for piece in _split_to_byte_limit(chunk, _BYTE_LIMIT):

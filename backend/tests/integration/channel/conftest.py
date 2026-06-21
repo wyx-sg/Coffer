@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -41,6 +42,8 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEntry
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
+    ChoiceButton,
+    InboundCallback,
     InboundMessage,
     SentMessage,
 )
@@ -103,6 +106,11 @@ def inbound(
     )
 
 
+def tap_event(channel: str, chat_id: str, data: str, *, sender_id: str = "") -> InboundCallback:
+    """A selection-card button tap, for driving ``processor.on_callback``."""
+    return InboundCallback(channel=channel, chat_id=chat_id, sender_id=sender_id, data=data)
+
+
 # ---------------------------------------------------------------------------
 # Fakes at the non-local boundaries (IM platform, credential store, child process)
 # ---------------------------------------------------------------------------
@@ -130,16 +138,20 @@ class FakeChannelAdapter:
         supports_edit: bool = True,
         supports_typing: bool = True,
         max_message_chars: int = 4096,
+        supports_buttons: bool = False,
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
+            supports_buttons=supports_buttons,
         )
         self.started = False
         self.stopped = False
         self.callbacks: AdapterCallbacks | None = None
         self.sent: list[tuple[str, str]] = []  # (chat_id, text)
+        # (chat_id, text, buttons) for sends that carried a selection card.
+        self.cards: list[tuple[str, str, list[ChoiceButton]]] = []
         self.edits: list[tuple[str, str, str]] = []  # (chat_id, message_id, text)
         self.deleted: list[tuple[str, str]] = []  # (chat_id, message_id)
         self.typing: list[str] = []  # chat_ids
@@ -165,8 +177,16 @@ class FakeChannelAdapter:
         self.started = False
         self.stopped = True
 
-    async def send_text(self, chat_id: str, markdown: str) -> SentMessage:
+    async def send_text(
+        self,
+        chat_id: str,
+        markdown: str,
+        *,
+        buttons: Sequence[ChoiceButton] | None = None,
+    ) -> SentMessage:
         self.sent.append((chat_id, markdown))
+        if buttons:
+            self.cards.append((chat_id, markdown, list(buttons)))
         return SentMessage(message_id=self._new_id())
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
@@ -177,6 +197,15 @@ class FakeChannelAdapter:
 
     async def send_typing(self, chat_id: str) -> None:
         self.typing.append(chat_id)
+
+    async def tap(
+        self, value: str, *, channel: str, chat_id: str = "owner", sender_id: str = ""
+    ) -> None:
+        """Simulate a selection-card button tap arriving from the platform."""
+        assert self.callbacks is not None and self.callbacks.on_callback is not None
+        await self.callbacks.on_callback(
+            InboundCallback(channel=channel, chat_id=chat_id, sender_id=sender_id, data=value)
+        )
 
 
 class FakeModelCatalog:
@@ -193,6 +222,19 @@ class FakeModelCatalog:
 
     async def list_models(self) -> list[tuple[str, str]]:
         return [(model_id, name) for name, model_id in self._by_name.items()]
+
+
+class FakeModelSuggestions:
+    """In-memory ModelSuggestionPort: per-agent model quick-picks for cards."""
+
+    def __init__(self) -> None:
+        self._by_agent: dict[str, list[str]] = {}
+
+    def add(self, agent_key: str, models: list[str]) -> None:
+        self._by_agent[agent_key] = models
+
+    async def suggest(self, agent_key: str) -> list[str]:
+        return list(self._by_agent.get(agent_key, []))
 
 
 class StubListenerController:
@@ -270,6 +312,7 @@ class ChannelEnv:
     provider: ScriptedAgentProvider
     registry: AgentProviderRegistry
     models: FakeModelCatalog
+    model_suggestions: FakeModelSuggestions
     chat: ChatService
     orchestrator: TurnOrchestrator
     processor: InboundProcessor
@@ -368,6 +411,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     )
     orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, audit=audit)
     models = FakeModelCatalog()
+    model_suggestions = FakeModelSuggestions()
     processor = InboundProcessor(
         peers=peers,
         pairing=pairing,
@@ -376,6 +420,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         audit=audit,
         agents=registry,
         models=models,
+        model_suggestions=model_suggestions,
     )
 
     created_adapters: list[FakeChannelAdapter] = []
@@ -421,6 +466,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         provider=provider,
         registry=registry,
         models=models,
+        model_suggestions=model_suggestions,
         chat=chat,
         orchestrator=orchestrator,
         processor=processor,
