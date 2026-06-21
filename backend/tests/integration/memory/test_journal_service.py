@@ -28,6 +28,13 @@ async def test_append_then_read_recent(mem) -> None:
     assert [e.body for e in got] == ["did X"]
 
 
+async def test_read_recent_limit_zero_returns_empty(mem) -> None:
+    # ``limit=0`` is a hard cap → no entries, never an implicit "all".
+    svc = _svc(mem, now=lambda: datetime(2026, 6, 21, 9, 0, tzinfo=UTC))
+    await svc.append(cwd=mem.project_cwd, body="did X", actor="agent")
+    assert await svc.read_recent(cwd=mem.project_cwd, limit=0) == []
+
+
 async def test_read_recent_is_newest_first(mem) -> None:
     times = iter(
         [datetime(2026, 6, 21, 9, 0, tzinfo=UTC), datetime(2026, 6, 21, 10, 0, tzinfo=UTC)]

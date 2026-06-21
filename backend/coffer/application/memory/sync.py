@@ -29,11 +29,16 @@ from coffer.domain.knowledge.document import (
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.memory.fact import MemoryFact
+from coffer.domain.memory.lane import Lane
 from coffer.infrastructure.knowledge.chunking import chunk_markdown
 from coffer.infrastructure.memory.files import (
     FactFile,
     legacy_root_facts,
     scan_store_dir,
+)
+from coffer.infrastructure.memory.journal_files import (
+    JournalFileScan,
+    scan_journal_dir,
 )
 
 _logger = logging.getLogger(__name__)
@@ -97,6 +102,34 @@ def fact_to_document(
     )
 
 
+def journal_to_document(
+    scan: JournalFileScan,
+    *,
+    store: StoreRef,
+    content_sha256: str,
+    embed_pending: bool = False,
+) -> Document:
+    """Project one journal period file onto a unified ``documents`` row
+    (kind=memory, lane=journal) so the episodic lane participates in ``recall``
+    (FR-043). ``path`` is the canonical ``journal/<period>.md`` file — a recall
+    hit surfaces it as ``source`` so the lane is distinguishable (FR-044)."""
+    return Document(
+        id=scan.doc_id,
+        kind=KIND_MEMORY,
+        resource_name=store.resource_name,
+        project_id=store.project_id,
+        path=str(scan.path),
+        title=scan.title,
+        description=None,
+        content_sha256=content_sha256,
+        embed_pending=embed_pending,
+        source_mode="native",
+        created_at=scan.created_at,
+        updated_at=scan.updated_at,
+        metadata={"lane": Lane.JOURNAL.value},
+    )
+
+
 class MemoryReconciler:
     """Reconciles the memory index with the on-disk fact files for one store."""
 
@@ -139,6 +172,10 @@ class MemoryReconciler:
         store_dir = Path(store.docs_dir)
         scan = await asyncio.to_thread(scan_store_dir, store_dir)
         on_disk = scan.files
+        # The episodic journal lane is indexed too (FR-043): one document per
+        # time-partitioned period file, keyed by ``journal-<period>`` so it never
+        # collides with a fact's ULID id.
+        journal = await asyncio.to_thread(scan_journal_dir, store_dir)
         # FR-019: pre-lane facts at the store root are abandoned in place — note
         # them once so an operator can re-remember or seed them if wanted.
         legacy = await asyncio.to_thread(legacy_root_facts, store_dir)
@@ -192,9 +229,42 @@ class MemoryReconciler:
             await self._documents.upsert_document(doc)
             indexed += 1
 
-        for fact_id in set(known) - set(on_disk):
-            await index.delete_chunks(fact_id)
-            await self._documents.delete_document(KIND_MEMORY, store.resource_name, fact_id)
+        for doc_id, js in journal.items():
+            existing = known.get(doc_id)
+            previous = None if force else (existing.content_sha256 if existing else None)
+            if (
+                not force
+                and existing is not None
+                and existing.content_sha256 == js.content_sha256
+                and not existing.embed_pending
+            ):
+                unchanged += 1
+                continue
+            outcome = await self._reindexer.reindex(
+                index=index,
+                markdown=js.body,
+                previous_sha=previous,
+                embedding=embedding,
+                doc_id=doc_id,
+                # Same passage-granular chunker as topic docs (FR-043).
+                chunker=_chunk_fact,
+                title=js.title,
+                previous_embed_pending=(existing.embed_pending if existing else False),
+            )
+            doc = journal_to_document(
+                js,
+                store=store,
+                content_sha256=outcome.content_sha256,
+                embed_pending=outcome.embed_pending,
+            )
+            await self._documents.upsert_document(doc)
+            indexed += 1
+
+        # Anything indexed but no longer on disk in EITHER lane is dropped.
+        live_ids = set(on_disk) | set(journal)
+        for doc_id in set(known) - live_ids:
+            await index.delete_chunks(doc_id)
+            await self._documents.delete_document(KIND_MEMORY, store.resource_name, doc_id)
             removed += 1
 
         return ReconcileStats(indexed=indexed, removed=removed, unchanged=unchanged)
@@ -242,4 +312,5 @@ __all__ = [
     "MemoryReconciler",
     "ReconcileStats",
     "fact_to_document",
+    "journal_to_document",
 ]

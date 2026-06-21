@@ -338,9 +338,14 @@ class MemoryService:
         return await asyncio.to_thread(find_fact_store, scopes, fact_id, store_name_for)
 
     async def fact_count(self, *, store_name: str) -> int:
-        """Cheap indexed fact count for the list path (staleness closes on the
-        next recall/reconcile)."""
-        return await self._documents.count_documents(KIND_MEMORY, store_name)
+        """Fact count for the store-list path — the number of files in the
+        ``knowledge/`` lane (a directory scan). It counts ONLY that lane, so the
+        episodic ``journal/`` lane (indexed for recall but not "facts", FR-043)
+        never inflates the number, and it stays consistent with the per-store
+        metrics count (``store_metrics``)."""
+        resolved = await self._resolved_for_store(store_name)
+        scan = await asyncio.to_thread(scan_store_dir, resolved.store_dir)
+        return len(scan.files)
 
     async def metrics(self, *, store_name: str) -> dict[str, object]:
         config = await self.get_store_config(store_name)
