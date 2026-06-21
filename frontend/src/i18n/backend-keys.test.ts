@@ -37,8 +37,15 @@ test("every audit event type has an audit.activity.<event> key in en + zh", () =
 
 test("errors.* maps carry no key the backend no longer emits", () => {
   const known = new Set(ERROR_CODES);
+  // A reason-qualified key `errors.<CODE>_<reason>` (KB15) lets a machine
+  // `IngestRejected` reason drive a specific message via translateApiError;
+  // it is legitimate as long as its `<CODE>` prefix is a known backend code.
+  const isKnownOrReasonQualified = (k: string) =>
+    known.has(k) || ERROR_CODES.some((c) => k.startsWith(`${c}_`));
   const stale = (have: Record<string, unknown>) =>
-    Object.keys(have).filter((k) => !known.has(k)).sort();
+    Object.keys(have)
+      .filter((k) => !isKnownOrReasonQualified(k))
+      .sort();
   expect(stale(en.errors)).toEqual([]);
   expect(stale(zh.errors)).toEqual([]);
 });

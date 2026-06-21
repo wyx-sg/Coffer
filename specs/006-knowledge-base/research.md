@@ -209,7 +209,17 @@ No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invo
 - We **kept the 2-pane layout** (sidebar tree + right-hand viewer) rather than swapping to a full-width `DataTable`: a DataTable doesn't fit the narrow sidebar and would break the viewer flow + the e2e/page selectors. The single-delete path (viewer Trash2 → confirm → `del`) is unchanged.
 - **No new FR** — this is a UX affordance over the existing FR-013/FR-020 document-management surface; coverage is the extended detail-page test (filter narrows/restores/no-match; select two rows → bulk bar → confirm → `deleteDocument` per id → selection clears; title-click still loads the viewer).
 
-## 18. Things explicitly NOT decided / out of scope here
+## 18. Ingest-rejection error legibility — scanned PDF + reason-driven messages (KB11/KB15)
+
+**Question**: An ingest rejection (`IngestRejected`) collapses every cause — empty conversion, too-large upload, duplicate, unsupported type — into one generic frontend string (`translateApiError` keyed only on the envelope `code`, so all `INGEST_REJECTED` reasons mapped to "The document was rejected during ingestion"). The worst offender: a **scanned / image-only PDF** converts to empty markdown, raising the generic `"empty"` reason, so the user had no clue why and no next step.
+
+**Decision** — make the machine `reason` legible end-to-end, additive and backward-compatible:
+
+- **Backend (KB11)**: when the cleaned markdown is empty **and the format is a PDF** (`fmt.lower().lstrip(".") == "pdf"`, handling both `"pdf"` and `".pdf"`), the converter registry raises a distinct `IngestRejected("scanned_pdf", <actionable message>)` ("This PDF has no extractable text — it looks scanned or image-only. Run OCR…"). Detection stays **strict-empty** (no length threshold — a low threshold would false-positive on legitimately short PDFs). Every other format keeps the generic `"empty"` reason. The reason→HTTP map gains `"scanned_pdf": 415` (same status as `"empty"`). The error envelope already carries `details.reason` via `_details_for`.
+- **Frontend (KB15)**: `translateApiError` now tries a **reason-qualified flat key** `errors.${code}_${reason}` first (e.g. `errors.INGEST_REJECTED_scanned_pdf`) — flat because `errors.INGEST_REJECTED` is itself a string, so a nested `errors.INGEST_REJECTED.scanned_pdf` is impossible. If that key resolves it wins; otherwise it falls through UNCHANGED to the existing `errors.${code}` → envelope-message chain. `throwApiError` now plumbs the envelope's `details` onto the thrown `ApiError` (it previously dropped them) so the reason reaches the translator everywhere. `details` is read defensively (narrowed from `unknown`); a missing/non-string reason behaves exactly as before.
+- **No new FR**: this is error-quality (like prior KB items) — covered by a backend registry test (PDF-empty → `scanned_pdf`; `.pdf` normalised; non-PDF-empty still `empty`) and a frontend `translateApiError`/`throwApiError` test. Only the required `INGEST_REJECTED_scanned_pdf` i18n key (en+zh) is added; the generic key remains the fallback.
+
+## 19. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.

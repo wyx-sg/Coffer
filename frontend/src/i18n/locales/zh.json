@@ -567,6 +567,7 @@
     "KB_NOT_FOUND": "未找到知识库",
     "DOCUMENT_NOT_FOUND": "未找到文档",
     "INGEST_REJECTED": "文档在摄入过程中被拒绝",
+    "INGEST_REJECTED_scanned_pdf": "该 PDF 似乎是扫描件或纯图片——无法提取文本。请先运行 OCR（或将其转换为基于文本的 PDF）后重新上传。",
     "ENGINE_UNAVAILABLE": "检索引擎不可用",
     "RECONVERSION_BLOCKED": "重建索引正在进行中",
     "SEARCH_MODE_INVALID": "不支持的检索模式",
