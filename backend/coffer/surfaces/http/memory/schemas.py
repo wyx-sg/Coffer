@@ -98,8 +98,8 @@ class MemoryStoreOut(BaseModel):
     # basename; ``None`` when the user has not named the store.
     label: str | None = None
     # Absolute on-disk directory holding the store's per-fact markdown files.
-    # The in-app viewer is read-only; this backs reveal-in-file-manager /
-    # copy-path for the whole store.
+    # The in-app viewer is read-only; this backs reveal-in-file-manager for the
+    # whole store.
     store_dir: str
     description: str | None = None
     config: MemoryStoreConfigOut
@@ -149,7 +149,7 @@ class FactOut(BaseModel):
     path: str
     # Absolute path of the fact file's containing folder (the store dir). The
     # in-app viewer is read-only; the pair backs open-in-external-editor /
-    # reveal-in-file-manager / copy-path.
+    # reveal-in-file-manager.
     folder_path: str
     created_at: datetime
     updated_at: datetime

@@ -293,7 +293,9 @@ status / notify`。
   与注册表里可选的 agent key；`/agent <key>` 对 agent 注册表校验该 key，成功后
   把它记为 peer 的粘性首选并开一个 pin 到它的新会话（已存在会话的 agent 不可
   改），此后的消息与 `/new` 都用所选 agent，直到再次切换。未知 key 被拒绝并
-  列出合法 keys；不为任何 agent 增加 channel 侧代码。
+  列出合法 keys；不为任何 agent 增加 channel 侧代码。在 `supports_buttons` 的
+  传输上（FR-018），`/agent` 无参时把候选渲染成一张交互式选择卡片而非文本列表；
+  点选某个按钮执行同一次切换。
 - **FR-014**: owner gate 校验发送者身份，而非只看会话身份。每条 inbound 信封
   携带 `sender_id`（Telegram `from.id`、SeaTalk `employee_code`）；pairing 把它
   记到 peer，一条 inbound 消息只有在 `chat_id` 匹配且（当 peer 有已存
@@ -308,7 +310,17 @@ status / notify`。
   `/model <name>` 对 builtin agent 把名字对 model registry 解析并设会话的 model
   覆盖，对桥接 agent 则存原始上游 model 串透传给 CLI。model 切换在同会话下条 turn
   生效（model 每 turn 重读，不同于 agent 与工作目录）。非法 builtin model 对
-  registry 校验被拒；坏的桥接 model 串会以 CLI 自己的错误回传到 chat。
+  registry 校验被拒；坏的桥接 model 串会以 CLI 自己的错误回传到 chat。在
+  `supports_buttons` 的传输上（FR-018），`/model` 无参时把尽力而为的快捷选项
+  —— 受管 agent 的 active provider profile 的 model/fast_model（ADR-032）——
+  渲染成选择卡片（自由文本 `/model <name>` 仍可用）；没有建议时回退到文本报告。
+- **FR-018**: 在声明了 `supports_buttons` 能力的传输上，内核 MAY 把一个命令的
+  候选列表渲染成一张**交互式选择卡片**（Telegram inline keyboard、SeaTalk
+  interactive message）。按钮点选作为一个规范化回调到达，携带一个不透明的值；
+  内核**像对消息一样 owner-gate 它**（chat + 发送者身份，FR-014），再路由到与
+  文本命令相同的切换。点选从不配对；不支持的传输静默保持文本路径。这兑现了
+  [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.zh.md) 的
+  `ChannelCapabilities` 已预想的交互按钮能力（「show buttons?」）。
 
 ### Key Entities
 
@@ -318,11 +330,13 @@ status / notify`。
   名、配对时间、指向活跃对话的指针、已配对发送者身份（`sender_id`），以及
   粘性首选（所选 agent）。目前每个 channel 一个；以 chat 为键，
   使群聊将来可以直接成为新的 peer 行而无需改 schema。
-- **InboundMessage / OutboundMessage** — 每个 adapter 生产与消费的规范化
-  信封 (envelope)；内核永远看不到平台原始载荷。inbound 为 owner gate 携带
-  发送者身份（`sender_id`）。
-- **ChannelCapabilities** — adapter 声明自己能做什么（编辑消息、交互
-  按钮、typing indicator）；内核据此选择渲染策略。
+- **InboundMessage / InboundCallback / OutboundMessage** — 每个 adapter 生产与
+  消费的规范化信封 (envelope)；内核永远看不到平台原始载荷。inbound 为 owner gate
+  携带发送者身份（`sender_id`）。`InboundCallback` 是一次选择卡片按钮点选（携带一个
+  不透明的 `data` 值而非文本，FR-018）；出站文本 MAY 携带 `ChoiceButton`，支持按钮的
+  传输把它渲染成选择卡片。
+- **ChannelCapabilities** — adapter 声明自己能做什么（编辑消息、经
+  `supports_buttons` 的交互按钮、typing indicator）；内核据此选择渲染策略。
 - **PairingCode** — 内存态、一次性、按 channel；从不持久化。
 
 ## Success Criteria
@@ -522,6 +536,19 @@ status / notify`。
 - **When** peer 发 `/model <name>` 然后发一条消息
 - **Then** 下条 turn 在同会话里以所选 model 运行
 
+### Scenario: a selection-card tap switches the agent
+
+- **Given** 一个在支持按钮的传输上、且注册了第二个 agent 的已配对 channel
+- **When** owner 发 `/agent`（渲染为选择卡片）并点选第二个 agent 的按钮
+- **Then** 一个 pin 到第二个 agent 的新会话变为活跃，如同 owner 键入了
+  `/agent <second>`
+
+### Scenario: a non-owner selection-card tap is ignored
+
+- **Given** 一个 peer 已存 `sender_id` 的已配对 channel
+- **When** 该 chat 里的另一个成员点选一个选择卡片按钮
+- **Then** 该点选被忽略，owner 的 agent/model 不变
+
 ### Scenario: a channel-driven turn is audited with channel, peer, and agent
 
 - **Given** 一个已配对 channel
@@ -547,4 +574,6 @@ status / notify`。
   等）。
 - 对 SeaTalk，用户自行运行一条隧道（cloudflared、ngrok 或等价物）把公网
   URL 通到本地回调端口；Coffer 在 quickstart 中给出做法，但不管理隧道。
-- channel 承载文本对话；富媒体会收到一条礼貌的「只支持文本」回复。
+- channel 承载文本对话；富媒体会收到一条礼貌的「只支持文本」回复。唯一的例外是
+  **命令选择卡片**：在 `supports_buttons` 的传输上，`/agent` 与 `/model` 可以把候选
+  渲染成交互按钮（FR-018）。

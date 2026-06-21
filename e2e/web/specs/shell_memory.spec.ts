@@ -73,8 +73,8 @@ acceptance("007-memory", "clear a memory scope", async ({ page }) => {
 // Spec 007 §User Story 5 — a fact is added (memory is AI-authored: the agent
 // writes via the MCP `remember` tool / API, the wire behind the UI & CLI). This
 // pins that an added fact surfaces in the read-only UI and that the viewer
-// hands the file off to an external editor (Copy path on the web) instead of
-// editing in-app — humans correct facts in their own editor.
+// hands the file off to an external editor (open/reveal, daemon-backed on the
+// web) instead of editing in-app — humans correct facts in their own editor.
 acceptance("007-memory", "user adds a fact", async ({ page }) => {
   const { token, port } = readDaemonToken();
   const factText = `e2e ui fact ${Date.now().toString(36)}`;
@@ -101,10 +101,13 @@ acceptance("007-memory", "user adds a fact", async ({ page }) => {
     await expect(page.getByText(factText).first()).toBeVisible();
 
     // The viewer is read-only — no in-app edit affordance — and offers the
-    // path hand-off to an external editor (Copy path on the web).
-    await expect(page.getByRole("button", { name: "Edit" })).toHaveCount(0);
+    // open/reveal hand-off to an external editor (daemon-backed on the web).
+    // Asserting visibility only (a click would shell out a real OS launcher).
+    // `exact: true` — the default substring match would match "Open in editor".
+    await expect(page.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
     await expect(page.locator("textarea")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /copy path/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /open in editor/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /reveal/i })).toBeVisible();
   } finally {
     // Clear the scope even on failure so reruns against a reused daemon stay
     // isolated (safe under workers:1 — nothing else shares the store mid-run).

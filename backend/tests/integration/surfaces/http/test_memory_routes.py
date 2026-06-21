@@ -114,7 +114,7 @@ def test_user_corrects_a_fact_via_write_api(tmp_path, monkeypatch):
             headers=_USER,
         ).json()
         fid = created["id"]
-        # The read-only viewer needs absolute paths for open/reveal/copy-path:
+        # The read-only viewer needs absolute paths for open/reveal:
         # the fact carries its file path + containing folder (the knowledge-lane
         # inbox, where freshly-remembered items live).
         inbox = store_dir / "knowledge" / "inbox"
@@ -130,7 +130,7 @@ def test_user_corrects_a_fact_via_write_api(tmp_path, monkeypatch):
         assert r.json()["folder_path"] == str(inbox)
         got = c.get(f"/api/v1/memory_stores/global/facts/{fid}", headers=_HEADERS)
         assert got.json()["text"] == "new corrected text"
-        # The store read carries the on-disk store dir (reveal/copy-path).
+        # The store read carries the on-disk store dir (reveal).
         store = c.get("/api/v1/memory_stores/global", headers=_HEADERS).json()
         assert store["store_dir"] == str(store_dir)
 

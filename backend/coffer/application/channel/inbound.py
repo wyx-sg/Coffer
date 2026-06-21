@@ -16,6 +16,7 @@ import asyncio
 import contextlib
 import logging
 from collections import deque
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -33,10 +34,11 @@ from coffer.application.channel.ports import (
     ChannelPeer,
     ChannelPeerRepoPort,
     ModelCatalogPort,
+    ModelSuggestionPort,
 )
 from coffer.application.channel.turn_render import TurnRenderer
 from coffer.domain.audit import AuditEventType
-from coffer.domain.channel.envelopes import InboundMessage
+from coffer.domain.channel.envelopes import ChoiceButton, InboundCallback, InboundMessage
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import TurnInProgress
 from coffer.domain.errors import CofferError
@@ -105,6 +107,7 @@ class InboundProcessor:
         audit: AuditService,
         agents: AgentCatalogPort,
         models: ModelCatalogPort,
+        model_suggestions: ModelSuggestionPort,
     ) -> None:
         self._peers = peers
         self._pairing = pairing
@@ -119,6 +122,7 @@ class InboundProcessor:
             turns=turns,
             agents=agents,
             models=models,
+            model_suggestions=model_suggestions,
         )
 
     # -- runtime registry ------------------------------------------------
@@ -189,6 +193,21 @@ class InboundProcessor:
             session.drain_task = asyncio.create_task(
                 self._drain(binding), name=f"channel-drain:{binding.name}"
             )
+
+    async def on_callback(self, cb: InboundCallback) -> None:
+        """A selection-card button tap. Owner-gated exactly like ``on_message``
+        (an intruder in a paired group must not flip the owner's agent/model by
+        tapping), then routed to the same switch the text command performs. A
+        tap never pairs — an unpaired/foreign chat is ignored silently."""
+        binding = self._bindings.get(cb.channel)
+        if binding is None:
+            return
+        peer = await self._peers.get(binding.resource_id)
+        if peer is None or peer.chat_id != cb.chat_id:
+            return
+        if peer.sender_id is not None and cb.sender_id and peer.sender_id != cb.sender_id:
+            return
+        await self._commands.dispatch_callback(binding, peer, cb.data, self._safe_send)
 
     # -- pairing -----------------------------------------------------------
 
@@ -305,8 +324,15 @@ class InboundProcessor:
             self._sessions[name] = _Session()
         return self._sessions[name]
 
-    async def _safe_send(self, binding: ChannelBinding, chat_id: str, text: str) -> None:
+    async def _safe_send(
+        self,
+        binding: ChannelBinding,
+        chat_id: str,
+        text: str,
+        *,
+        buttons: Sequence[ChoiceButton] | None = None,
+    ) -> None:
         try:
-            await binding.adapter.send_text(chat_id, text)
+            await binding.adapter.send_text(chat_id, text, buttons=buttons)
         except Exception:
             _logger.exception("channel.send.failed", extra={"channel": binding.name})

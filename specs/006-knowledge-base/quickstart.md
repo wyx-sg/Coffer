@@ -89,7 +89,7 @@ If you request `--mode vector` on a KB with no embedding configured, the search 
 3. Fill the form: name, description, enabled retrieval modes (keyword + grep by default), chunk params, and — only if you enable vector — an embedding provider/model and credential. Submit.
 4. Click into the KB. Drag files of any format into the upload area; each becomes Markdown.
 5. Use the **Search** panel; pick a mode (grep / keyword / vector) from the selector.
-6. Open a document to view its rendered Markdown (read-only). To change it, use **Open in editor** to edit the file in your external editor (or **Reveal in Finder** / **Copy path**); your edit is picked up automatically on the next read via reindex-on-read. Editing via `coffer kb edit` / the REST API / an agent works too and marks it `edited`.
+6. Open a document to view its rendered Markdown (read-only). To change it, use **Open in editor** to edit the file in your external editor (or **Reveal in Finder**); your edit is picked up automatically on the next read via reindex-on-read. Editing via `coffer kb edit` / the REST API / an agent works too and marks it `edited`.
 7. Document actions live on each row (read, delete, copy id, re-upload source).
 8. Delete the KB via the kebab menu on the detail header.
 
@@ -139,5 +139,5 @@ Markdown files are the **source of truth**; SQLite is a rebuildable index. `coff
 
 - Per-document size: 25 MB (configurable per KB).
 - Per-KB documents: ~500 (soft; search latency grows past that).
-- Supported formats: anything the converter registry handles — md / txt / source code / json / yaml and other text formats (passthrough), csv (dedicated csv converter), and pdf / doc / docx / ppt / pptx / xls / xlsx / html / epub / odt / rtf (MarkItDown). **xml is not supported** and is rejected with `unsupported_type` (HTTP 415), like any other unhandled type; a missing engine for a known type returns `ENGINE_UNAVAILABLE` naming the dependency.
+- Supported formats: anything the converter registry handles — md / txt / source code / json / yaml and other text formats (passthrough), csv (dedicated csv converter), and pdf / docx / pptx / xls / xlsx / html / epub (MarkItDown). **Legacy binary Office (`.doc`/`.ppt`), `.rtf`, `.odt`, and `xml` are not supported** — they are rejected with `unsupported_type` (HTTP 415), the same as any other unhandled type; save legacy Office files as `.docx`/`.pptx` and re-upload. A missing engine for a *known* type returns `ENGINE_UNAVAILABLE` naming the dependency.
 - Retrieval: keyword + grep work offline with zero config; vector is opt-in and needs an embedding provider.

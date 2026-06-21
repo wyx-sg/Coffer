@@ -388,8 +388,8 @@ def test_document_flow_ingest_get_edit_reconvert_reindex_grep(tmp_path, monkeypa
         assert doc["source_mode"] == "converted"
         doc_id = doc["id"]
         # The in-app viewer is read-only: each document carries the absolute
-        # path of its normalized markdown + the containing folder so the desktop
-        # can open-in-external-editor / reveal / copy-path.
+        # path of its normalized markdown + the containing folder so the UI
+        # can open-in-external-editor / reveal.
         docs_dir = tmp_path / ".coffer" / "knowledge" / "kb" / "docs"
         assert doc["path"] == str(docs_dir / f"{doc_id}.md")
         assert doc["folder_path"] == str(docs_dir)

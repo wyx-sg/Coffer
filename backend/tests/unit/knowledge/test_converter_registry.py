@@ -5,6 +5,9 @@ import pytest
 from coffer.domain.errors import IngestRejected
 from coffer.infrastructure.knowledge.converters import default_registry
 from coffer.infrastructure.knowledge.converters.csv_converter import CsvConverter
+from coffer.infrastructure.knowledge.converters.markitdown_converter import (
+    MarkItDownConverter,
+)
 from coffer.infrastructure.knowledge.converters.passthrough_converter import (
     PassthroughConverter,
 )
@@ -108,3 +111,29 @@ def test_registry_supports() -> None:
     assert reg.supports("csv") is True
     assert reg.supports("pdf") is True  # markitdown claims it (lazy)
     assert reg.supports("zzz") is False
+    assert reg.supports("doc") is False  # legacy Office: no converter exists
+
+
+def test_markitdown_drops_legacy_office_formats() -> None:
+    # Legacy binary Office (.doc/.ppt) + .rtf/.odt have NO MarkItDown converter.
+    # Claiming them produced a misleading "engine unavailable / conversion
+    # failed" error; instead they must fall through to the registry's clean
+    # unsupported_type path. The formats MarkItDown actually reads stay claimed.
+    conv = MarkItDownConverter()
+    for fmt in ("doc", "ppt", "rtf", "odt"):
+        assert conv.can_handle(fmt) is False, fmt
+    for fmt in ("pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "epub"):
+        assert conv.can_handle(fmt) is True, fmt
+
+
+@pytest.mark.asyncio
+async def test_legacy_office_rejected_with_actionable_message() -> None:
+    # A legacy .doc/.ppt (or .rtf/.odt) upload is rejected as unsupported_type
+    # with a message that tells the user how to proceed (save as .docx/.pptx).
+    reg = default_registry()
+    for fmt in ("doc", "ppt", "rtf", "odt"):
+        with pytest.raises(IngestRejected) as exc:
+            await reg.convert(b"\xd0\xcf\x11\xe0", fmt)
+        assert exc.value.reason == "unsupported_type", fmt
+        msg = str(exc.value).lower()
+        assert ".docx" in msg or "supported" in msg, fmt

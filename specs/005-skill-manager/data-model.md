@@ -270,7 +270,7 @@ Stateless helpers beside `service.py` (same pattern as
 `verify_ops.py`) that expose a skill's master folder to
 surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
 read-only in-app viewer and surface each node's absolute on-disk path so the UI
-can offer open-in-external-editor / reveal-in-file-manager / copy-path
+can offer open-in-external-editor / reveal-in-file-manager
 affordances (FR-027); the UI viewer never edits content. A separate **write**
 helper (`write_skill_file`) backs the programmatic REST/CLI overwrite (FR-028)
 and is the only mutation here — the in-app UI does not call it to edit content.
@@ -292,7 +292,7 @@ One node in the recursive tree. The root node has `path == ""`.
 | ---------- | ----------------- | -------------------------------------------------------------------------- |
 | `name`     | `str`             | entry's base name                                                          |
 | `path`     | `str`             | POSIX path relative to the master folder root (`""` for the root)          |
-| `abs_path` | `str`             | absolute on-disk path (for open-in-editor / reveal / copy-path, FR-027)    |
+| `abs_path` | `str`             | absolute on-disk path (for open-in-editor / reveal, FR-027)    |
 | `type`     | `"file" \| "dir"` | node kind                                                                  |
 | `size`     | `int \| None`     | byte size for files; `null` for directories                                |
 | `children` | `list[FileNode]`  | populated for directories (sorted dirs-first then by name); `[]` for files |

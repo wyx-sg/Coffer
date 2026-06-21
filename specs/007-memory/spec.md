@@ -47,7 +47,7 @@ Some facts are about the developer everywhere ("prefers tabs over spaces"); othe
 
 ### User Story 4 — User curates memory in Coffer (Priority: P2)
 
-The developer wants to see and correct what agents remember: browse facts per scope in a **read-only** viewer, then fix one that drifted **in their own external editor** (or via the API/CLI), add a fact by hand, delete a wrong one. The Coffer UI never edits fact content in-app; instead each fact and its containing folder offer "open in external editor", "reveal in file manager", and (web fallback) "copy absolute path", and any out-of-band correction is picked up by the existing lazy reindex-on-read (FR-010).
+The developer wants to see and correct what agents remember: browse facts per scope in a **read-only** viewer, then fix one that drifted **in their own external editor** (or via the API/CLI), add a fact by hand, delete a wrong one. The Coffer UI never edits fact content in-app; instead each fact and its containing folder offer "open in external editor" and "reveal in file manager" (daemon-backed on the web, native on the desktop), and any out-of-band correction is picked up by the existing lazy reindex-on-read (FR-010).
 
 **Why this priority**: Memory without human curation is uncomfortable; agents sometimes record wrong things. Curation makes the feature safe to leave on — and routing edits through the user's own editor keeps the markdown files the sole source of truth without a second editing surface to keep in sync.
 
@@ -58,7 +58,7 @@ The developer wants to see and correct what agents remember: browse facts per sc
 - user adds a fact
 - user corrects a fact out-of-band
 - user deletes a fact
-- read-only viewer offers open/reveal/copy-path affordances
+- read-only viewer offers open/reveal affordances
 
 ---
 
@@ -240,11 +240,11 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **When** the user deletes it,
 - **Then** the markdown file and its index rows are removed, and recall no longer returns it.
 
-### Scenario: read-only viewer offers open/reveal/copy-path affordances
+### Scenario: read-only viewer offers open/reveal affordances
 
 - **Given** a fact viewed in the Coffer UI,
 - **When** the user inspects the fact (and its containing folder),
-- **Then** the content renders read-only (no in-app content editing), the read responses surface the fact's absolute on-disk `.md` path and its containing folder's absolute path, and the UI offers "open in external editor" + "reveal in file manager" for both the file and the folder on desktop (Tauri) and a "copy absolute path" fallback on web; which editor opens is decided by the global preferred-editor preference (see 002-ui-shell).
+- **Then** the content renders read-only (no in-app content editing), the read responses surface the fact's absolute on-disk `.md` path and its containing folder's absolute path, and the UI offers "open in external editor" + "reveal in file manager" for both the file and the folder on **both** surfaces — desktop (Tauri) via the OS opener, web via the loopback daemon (spec 004 FR-039) — with no copy-path fallback; which editor opens is decided by the global preferred-editor preference (see 002-ui-shell).
 
 ### Scenario: clear a memory scope
 
@@ -413,7 +413,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   later session-start injection reads), and a store with no rules returns an
   empty/`null` body rather than an error.
 
-> **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, the desktop read-only fact viewer's open-in-editor / reveal / copy-path affordances, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
+> **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, the desktop read-only fact viewer's open-in-editor / reveal affordances, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
 
 ## Requirements
 
@@ -474,8 +474,8 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-017**: Users MUST be able to perform full memory CRUD through the programmatic write surfaces — (a) a REST API under `/api/v1/memory_stores/` and (b) `coffer memory …` subcommands. (The REST write endpoints are also what agents author facts through via the MCP gateway.) User writes set `metadata.actor = "user"`, write the canonical markdown under the store's `knowledge/inbox/` subdir, reindex, and audit. The desktop/web UI surfaces facts **read-only** (it does not edit fact content in-app); humans curate by editing the canonical markdown in their own external editor (picked up by lazy reindex-on-read, FR-010) or via the REST/CLI write surface. Store names on these surfaces are validated: only `global` or `project-<26-char ULID>` are legal — a well-formed name lazily provisions its store; anything else returns 404 (`MEMORY_STORE_NOT_FOUND`).
 - **FR-017a**: Surfaces MUST present a per-project store by a **human-readable identity derived from its `project_root`** — the root directory's basename as the primary label and the absolute root path as a secondary detail — never only the opaque `project-<ULID>` store name (the project ULID is a one-way digest of the root and is not human-recognisable). When the root is unknown (a store provisioned before the root was tracked) the surface falls back to the store name; the global store needs no derivation (its name `global` is already readable). The underlying store name stays `project-<ULID>` (FR-017) — this is a **display** concern. Verified by frontend tests; desktop acceptance is deferred to e2e like the other desktop-view items.
 - **FR-017c**: A user MUST be able to set a **display label** for any memory store — a chosen name that takes precedence over the FR-017a `project_root` derivation in every surface. This gives a readable identity to a store whose originating folder was never recorded (where FR-017a would otherwise fall back to the opaque `project-<ULID>` name). Setting an empty / whitespace label clears it, reverting to the FR-017a derivation or fallback. The label is **display metadata**: it does not change the store name (FR-017) or `project_id`, and is set via `PATCH /memory_stores/{name}/label`. Verified by an HTTP acceptance test; the desktop rename view is deferred to e2e like the other desktop-view items.
-- **FR-021**: The read-only fact viewer MUST offer, for both a fact file and its containing folder, affordances to (a) **open in external editor**, (b) **reveal in file manager / Finder**, and (c) **copy the absolute path** (the web fallback). On the desktop (Tauri) build (a) and (b) perform a real open/reveal; on the web build the UI falls back to copy-path. Which editor opens is decided by the global preferred-editor preference (specced in 002-ui-shell; not re-specified here). The read responses MUST surface the absolute paths these affordances act on (see FR-022).
-- **FR-022**: Read responses MUST surface the on-disk truth: the fact read endpoints (`GET …/facts`, `GET …/facts/{id}`) MUST include each fact file's absolute `.md` path and its containing folder's absolute path, and the store read endpoint (`GET …/{name}`) MUST include the store's absolute on-disk directory. These power the FR-021 open/reveal/copy-path affordances and let a human locate the canonical file to correct out-of-band.
+- **FR-021**: The read-only fact viewer MUST offer, for both a fact file and its containing folder, affordances to (a) **open in external editor** and (b) **reveal in file manager / Finder**. Both perform the real OS action on **both** surfaces: the desktop (Tauri) build via the OS opener, the web build via the loopback daemon's filesystem-action endpoints (spec 004 FR-039), since the daemon is on the user's own machine (ADR-033). There is no copy-path fallback. Which editor opens is decided by the global preferred-editor preference (specced in 002-ui-shell; not re-specified here). The read responses MUST surface the absolute paths these affordances act on (see FR-022).
+- **FR-022**: Read responses MUST surface the on-disk truth: the fact read endpoints (`GET …/facts`, `GET …/facts/{id}`) MUST include each fact file's absolute `.md` path and its containing folder's absolute path, and the store read endpoint (`GET …/{name}`) MUST include the store's absolute on-disk directory. These power the FR-021 open/reveal affordances and let a human locate the canonical file to correct out-of-band.
 
 **Substrate isolation**
 

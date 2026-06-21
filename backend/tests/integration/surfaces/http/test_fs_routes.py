@@ -1,4 +1,4 @@
-"""HTTP coverage for /api/v1/fs/browse (spec 004-agent-registry FR-024)."""
+"""HTTP coverage for /api/v1/fs/* (spec 004-agent-registry FR-024/FR-039)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import pathlib
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.application.fs import open_service
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -66,3 +67,72 @@ def test_fs_browse_rejects_missing_path(tmp_path, monkeypatch):
         r = c.get("/api/v1/fs/browse", params={"path": str(tmp_path / "nope")})
         assert r.status_code == 400, r.text
         assert r.json()["error"]["code"] == "FS_PATH_NOT_BROWSABLE"
+
+
+def _capture_spawn(monkeypatch, platform: str = "darwin") -> list[list[str]]:
+    """Pin the platform and capture launcher argv instead of spawning a process."""
+    calls: list[list[str]] = []
+    monkeypatch.setattr("sys.platform", platform)
+    monkeypatch.setattr(open_service.subprocess, "Popen", lambda cmd, **_: calls.append(cmd))
+    return calls
+
+
+@pytest.mark.acceptance(
+    spec="004-agent-registry", scenario="open a managed file via the daemon (web open/reveal)"
+)
+def test_fs_open_launches_default_app(tmp_path, monkeypatch):
+    """POST /fs/open with no editor → OS default launcher, 204."""
+    f = tmp_path / "settings.json"
+    f.write_text("{}", encoding="utf-8")
+    calls = _capture_spawn(monkeypatch)
+    app = _app(tmp_path, monkeypatch, 59643)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/open", json={"path": str(f)})
+        assert r.status_code == 204, r.text
+    assert calls == [["open", str(f)]]
+
+
+def test_fs_open_honours_preferred_editor(tmp_path, monkeypatch):
+    """The `with` field (preferred editor) is passed to the launcher."""
+    f = tmp_path / "CLAUDE.md"
+    f.write_text("hi", encoding="utf-8")
+    calls = _capture_spawn(monkeypatch)
+    app = _app(tmp_path, monkeypatch, 59644)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/open", json={"path": str(f), "with": "Visual Studio Code"})
+        assert r.status_code == 204, r.text
+    assert calls == [["open", "-a", "Visual Studio Code", str(f)]]
+
+
+def test_fs_reveal_selects_in_file_manager(tmp_path, monkeypatch):
+    """POST /fs/reveal → file-manager select, 204."""
+    f = tmp_path / "config.toml"
+    f.write_text("", encoding="utf-8")
+    calls = _capture_spawn(monkeypatch)
+    app = _app(tmp_path, monkeypatch, 59645)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/reveal", json={"path": str(f)})
+        assert r.status_code == 204, r.text
+    assert calls == [["open", "-R", str(f)]]
+
+
+def test_fs_open_rejects_relative_path(tmp_path, monkeypatch):
+    """A non-absolute path is rejected with 400 before any spawn."""
+    calls = _capture_spawn(monkeypatch)
+    app = _app(tmp_path, monkeypatch, 59646)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/open", json={"path": "relative/notes.md"})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "FS_PATH_NOT_OPENABLE"
+    assert calls == []
+
+
+def test_fs_open_rejects_missing_path(tmp_path, monkeypatch):
+    """An absolute path that doesn't exist is rejected with 400."""
+    calls = _capture_spawn(monkeypatch)
+    app = _app(tmp_path, monkeypatch, 59647)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/open", json={"path": str(tmp_path / "nope.md")})
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "FS_PATH_NOT_OPENABLE"
+    assert calls == []

@@ -10,7 +10,7 @@
 
 memory 是与 knowledge base（spec 006）共用同一套统一知识底座的 **memory 面**。每个记忆作用域是一个 kind 为 `memory` 的 Resource。事实 = 每条事实一个 markdown 文件（YAML frontmatter + 正文）加一个重新生成的 `MEMORY.md` 索引，放在 `~/.coffer/memory/` 下。**文件是真相源；SQLite（`documents` + FTS5 + sqlite-vec）是可重建的索引。** 有两种作用域：global（sentinel ULID）与 per-project（由 agent 工作目录解析出的项目 ULID）。
 
-写入时不调 LLM —— agent 直接写一条干净的事实。每个 agent **只通过 Coffer MCP 网关读写记忆**（`coffer__recall/remember/list_memory/set_handoff/resume`）；Coffer 保留自己的规范化格式，**不触碰各 agent 的原生记忆文件**（原生投影已移除 —— 见 ADR-026）。用户经 CLI/REST 写入面做完整 CRUD；Coffer UI 是 **只读** 视图，为每条事实及其文件夹提供「在外部编辑器打开 / 显示 / 复制路径」（维护在用户自己的编辑器里完成，经 lazy reindex-on-read 拾取）。
+写入时不调 LLM —— agent 直接写一条干净的事实。每个 agent **只通过 Coffer MCP 网关读写记忆**（`coffer__recall/remember/list_memory/set_handoff/resume`）；Coffer 保留自己的规范化格式，**不触碰各 agent 的原生记忆文件**（原生投影已移除 —— 见 ADR-026）。用户经 CLI/REST 写入面做完整 CRUD；Coffer UI 是 **只读** 视图，为每条事实及其文件夹提供「在外部编辑器打开 / 显示」（维护在用户自己的编辑器里完成，经 lazy reindex-on-read 拾取）。
 
 本次重设计 **删除 mem0、chroma、LlamaIndex**，并用统一 `documents` 表取代 `memory_records`。没有数据迁移（分支未发布）。
 
@@ -90,7 +90,7 @@ frontend/src/kinds/memory/
 ├── index.tsx                            # MEMORY_KIND_UI
 ├── MemoryStoreDetailPage.tsx            # 逐 store 详情页（路由 /memory/:name）
 ├── MemoryFactList.tsx                   # DataTable（name、description、type、actor、updated）
-├── MemoryFactViewer.tsx                 # 只读事实渲染 + 在外部编辑器打开 / 显示 / 复制路径（文件 + 文件夹）
+├── MemoryFactViewer.tsx                 # 只读事实渲染 + 在外部编辑器打开 / 显示（文件 + 文件夹）
 ├── MemoryRecallPanel.tsx                # 带模式选择的 recall 框（默认 keyword）
 ├── MemoryMetricsHeader.tsx              # 事实条数 + 磁盘字节
 ├── api.ts / types.ts
@@ -118,7 +118,7 @@ backend/tests/
 
 frontend/src/kinds/memory/
 ├── FactList.test.tsx
-├── FactViewer.test.tsx                       # 只读渲染 + 打开/显示/复制路径能力
+├── FactViewer.test.tsx                       # 只读渲染 + 打开/显示能力
 └── RecallBox.test.tsx
 ```
 

@@ -55,9 +55,14 @@ async function checkOk(r: Response): Promise<Response> {
 
 const enc = encodeURIComponent;
 const kbBase = (name: string) => `${getCofferBaseUrl()}/knowledge_bases/${enc(name)}`;
-// Config reads/updates go through the kind-agnostic resource endpoints
+// Config UPDATES go through the kind-agnostic resource endpoint
 // (PATCH /resources/{kind}/{name} replaces the whole config server-side, so
 // callers must send the merged object — see updateKnowledgeBaseConfig).
+// Config READS use the KB-specific endpoint instead (getKnowledgeBase): the
+// resource endpoint returns the raw stored config dict (no default-filling),
+// so a legacy/seeded row missing a field like `enabled_modes` would come back
+// undefined and crash the settings dialog. The KB endpoint re-parses through
+// KnowledgeBaseConfig and always returns a complete, typed config.
 const resourceBase = (name: string) =>
   `${getCofferBaseUrl()}/resources/knowledge_base/${enc(name)}`;
 
@@ -82,7 +87,9 @@ export async function listKnowledgeBases(): Promise<KnowledgeBaseOut[]> {
 }
 
 export async function getKnowledgeBase(name: string): Promise<KnowledgeBaseOut> {
-  const r = await fetch(resourceBase(name), { headers: headers() });
+  // Reads use the KB-specific endpoint so the config is normalized server-side
+  // (default-filled through KnowledgeBaseConfig); see the resourceBase note.
+  const r = await fetch(kbBase(name), { headers: headers() });
   await checkOk(r);
   return (await r.json()) as KnowledgeBaseOut;
 }

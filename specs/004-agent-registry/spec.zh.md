@@ -112,11 +112,11 @@
 
 ### User Story 7 —— 查看一个 agent 的配置文件并在外部编辑器中打开它们（优先级 P2）
 
-agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的配置文件（例如 Claude Code 的 `settings.json`、Codex 的 `config.toml`），无需离开应用去翻找 dotfile。Coffer 展示该 agent 类型的一组精选已知配置文件，让用户打开其中一个，在**只读**查看器中读取当前内容。对每个文件（及其所在文件夹），Coffer 提供「在外部编辑器中打开」「在文件管理器中显示」「复制路径」等操作，让用户在自己的编辑器里做任何编辑。Coffer 不就地编辑配置文件内容；程序化写入路径（REST/CLI）保留校验 + 原子写入 + `.bak` 兜底。
+agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的配置文件（例如 Claude Code 的 `settings.json`、Codex 的 `config.toml`），无需离开应用去翻找 dotfile。Coffer 展示该 agent 类型的一组精选已知配置文件，让用户打开其中一个，在**只读**查看器中读取当前内容。对每个文件（及其所在文件夹），Coffer 提供「在外部编辑器中打开」「在文件管理器中显示」等操作，让用户在自己的编辑器里做任何编辑。Coffer 不就地编辑配置文件内容；程序化写入路径（REST/CLI）保留校验 + 原子写入 + `.bak` 兜底。
 
 **为什么是这个优先级**：手工定位 agent 配置意味着要记住每个文件在哪、用什么格式。把这组精选文件集中到一处呈现、一眼可见、一键进入用户自己的编辑器——是让 registry 超越「记账」、真正变得有用的第一个功能。
 
-**独立可测**：注册一个 `claude_code` agent；列出其配置文件；在只读查看器中打开 `settings.json`，观察响应给出该文件的 `path` 与其所在文件夹的 `folder_path`（支撑 打开/显示/复制路径）；打开一个尚未创建的文件（如 `CLAUDE.md`），观察它读为空内容且未被创建。
+**独立可测**：注册一个 `claude_code` agent；列出其配置文件；在只读查看器中打开 `settings.json`，观察响应给出该文件的 `path` 与其所在文件夹的 `folder_path`（支撑 打开/显示）；打开一个尚未创建的文件（如 `CLAUDE.md`），观察它读为空内容且未被创建。
 
 **代表性场景**：
 
@@ -210,7 +210,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 ### User Story 12 —— 管理目录型配置条目（优先级 P2）
 
-有些 agent 配置不是单个文件而是一个 prose 文件目录——Claude Code 的 `agents/` 目录下每个个人 subagent 一个 Markdown 文件。用户在配置文件 tab 展开这样的条目，看到其中的文件，在只读查看器中打开某个（带对该子文件及其文件夹的「在外部编辑器中打开」「显示」「复制路径」）。新建、写入与删除单个文件通过 REST API / `coffer agent` CLI 以程序化方式提供——校验、原子写入与 `.bak` 兜底与单文件条目完全一致。allowlist 还新增 Codex 的 `hooks.json`；把 `memory` key 改名为 `instructions`（CLAUDE.md / AGENTS.md 是人写的指令，不是 agent 自写的记忆）。
+有些 agent 配置不是单个文件而是一个 prose 文件目录——Claude Code 的 `agents/` 目录下每个个人 subagent 一个 Markdown 文件。用户在配置文件 tab 展开这样的条目，看到其中的文件，在只读查看器中打开某个（带对该子文件及其文件夹的「在外部编辑器中打开」「显示」）。新建、写入与删除单个文件通过 REST API / `coffer agent` CLI 以程序化方式提供——校验、原子写入与 `.bak` 兜底与单文件条目完全一致。allowlist 还新增 Codex 的 `hooks.json`；把 `memory` key 改名为 `instructions`（CLAUDE.md / AGENTS.md 是人写的指令，不是 agent 自写的记忆）。
 
 **为什么是这个优先级**：subagent 定义正是 hub 模型希望「先可见、后可收编」的那类可共享 prose；今天它们完全不可见。
 
@@ -304,6 +304,12 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **Given** daemon 正在运行，
 - **When** Web 文件夹浏览器请求某个可读目录的子目录，
 - **Then** Coffer 返回该目录的路径、其父目录与其直接子目录（不含文件内容）；不可读或不存在的路径返回错误。
+
+### Scenario: open a managed file via the daemon (web open/reveal)
+
+- **Given** daemon 正在运行，只读查看器正在显示一个受管文件，
+- **When** Web 界面请求 daemon 打开一个已存在的绝对路径（可选带首选编辑器）或在文件管理器中显示它，
+- **Then** daemon 为该路径启动 OS 应用 / 文件管理器并返回成功；相对路径或不存在的路径被拒绝，且不启动任何进程。
 
 ### Scenario: update an existing agent
 
@@ -559,7 +565,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 **配置文件**
 
 - **FR-013**: 每个受支持 agent 类型 MUST 定义一份精选的配置文件 allowlist（在其能力清单记录中），每个条目携带稳定的 `key`、一个显示名、一个解析后的绝对路径与一个 `format`（`json`、`toml`、`yaml`、`markdown` 或 `text`）。Claude Code → `settings.json`、`settings.local.json`、`~/.claude.json`、`CLAUDE.md`（key 为 `instructions`）与 `agents/` 目录条目（FR-034）；Codex → `config.toml`、`AGENTS.md`（key 为 `instructions`）与 `hooks.json`。原 `memory` key 改名为 `instructions`——这些文件是人写的指令，区别于 agent 自写的记忆（spec 007 的领域）。
-- **FR-014**: 用户 MUST 能列出一个 agent 的配置文件，并对每个文件给出其 key、显示名、路径、所在文件夹的绝对路径（`folder_path`）、格式与存在性（文件存在时附带大小与修改时间）。`path`/`folder_path` 这一对支撑只读 UI 的「在外部编辑器中打开 / 在文件管理器中显示 / 复制路径」（FR-038）。
+- **FR-014**: 用户 MUST 能列出一个 agent 的配置文件，并对每个文件给出其 key、显示名、路径、所在文件夹的绝对路径（`folder_path`）、格式与存在性（文件存在时附带大小与修改时间）。`path`/`folder_path` 这一对支撑只读 UI 的「在外部编辑器中打开 / 在文件管理器中显示」（FR-038）。
 - **FR-015**: 用户 MUST 能读取任一 allowlist 内配置文件的内容。不存在的文件读为空内容、`exists=false`，且读取不会创建它。
 - **FR-016**: 系统 MUST 通过 REST API 与 `coffer agent` CLI 为任一 allowlist 内配置文件的内容暴露一个程序化写入（保存）；应用内 UI 是只读的，不写入配置文件内容。写入前 MUST 按文件的 `format` 校验内容；畸形的 `json`/`toml` MUST 被拒绝（`unprocessable_entity`，422）且磁盘文件保持不变。`markdown`/`text` 文件接受任意内容。
 - **FR-017**: 写入 MUST 是原子的（临时文件 + rename），并 MUST 保留上一版本内容的 `.bak` 副本，使错误编辑可恢复；每次成功写入 MUST 写一条 `agent_config_file_written` audit 条目。Coffer-MCP 安装/卸载操作（FR-022）复用同一套原子写入 + `.bak` 机制。
@@ -596,9 +602,9 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **界面**
 
-- **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/移除/切换/收编、插件列出/切换/卸载——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。桌面 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示 / 复制路径」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。
+- **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/移除/切换/收编、插件列出/切换/卸载——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。桌面 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。
 - **FR-010**: CLI MUST 在每个读取类操作上支持 `--json` 以提供机器可读输出。
-- **FR-038**: 对每个配置文件（及每个目录条目子文件），UI MUST 为文件本身及其所在文件夹提供**在外部编辑器中打开**、**在文件管理器中显示**与**复制路径**操作，使用 FR-014/FR-015 的 `path`/`folder_path` 这一对。在打包桌面应用（Tauri）中，打开与显示执行真实的 OS 动作；在 Web 上回退为复制路径。用于「在外部编辑器中打开」的编辑器引用 spec 002-ui-shell 定义的用户「首选外部编辑器」偏好（此处不再重新规定）。
+- **FR-038**: 对每个配置文件（及每个目录条目子文件），UI MUST 提供**在外部编辑器中打开**与**在文件管理器中显示**操作（打开也适用于所在文件夹），使用 FR-014/FR-015 的 `path`/`folder_path` 这一对。打开与显示在**两个**界面上都执行真实的 OS 动作：打包桌面应用（Tauri）直接用 OS opener;Web 用 daemon 的文件系统动作端点（FR-039）——因为环回 daemon 始终在用户自己的机器上（ADR-033）。没有 copy-path 回退。用于「在外部编辑器中打开」的编辑器引用 spec 002-ui-shell 定义的用户「首选外部编辑器」偏好（此处不再重新规定）。
 
 **可观测性**
 
@@ -609,6 +615,10 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 - **FR-023**: 选择自定义 `config_dir` 时，桌面应用 MUST 提供一个文件夹选择器，而非要求用户手动输入路径。在打包桌面应用中，它 MUST 使用 OS 原生目录对话框；在 Web 上，它 MUST 使用 daemon 支撑的文件夹浏览器（FR-024）。两者都产出一个绝对路径，随后在注册前按 FR-007 校验。
 - **FR-024**: 系统 MUST 暴露一个只读的文件系统浏览操作（`GET /api/v1/fs/browse`），给定一个目录路径（默认用户主目录），返回该路径、其父目录与其直接子目录。它 MUST NOT 返回文件内容，且 MUST 与所有其它 daemon 路由一样受同样的 loopback + token 鉴权保护。
+
+**文件系统打开/显示**
+
+- **FR-039**: 系统 MUST 暴露文件系统动作操作,让 Web 界面经环回 daemon 执行真正的 open/reveal（FR-038）——daemon 始终与 Web 客户端同处用户机器上（ADR-033）:`POST /api/v1/fs/open`(在某个应用里打开一个已存在的绝对路径——一个 `with` 编辑器偏好,或 OS 默认)与 `POST /api/v1/fs/reveal`(在 OS 文件管理器中选中/显示一个已存在的绝对路径)。两者在动作前都 MUST 校验路径为绝对且存在,MUST 以固定参数向量调用 OS 启动器(无 shell 插值),MUST 不创建任何东西,且 MUST 与所有其它 daemon 路由一样受同样的 loopback + token 鉴权保护。非绝对或不存在的路径被拒绝(`FS_PATH_NOT_OPENABLE`,400)。在没有可移植「选中文件」原语的平台(Linux),reveal 降级为打开所在文件夹。
 
 ### Key Entities
 

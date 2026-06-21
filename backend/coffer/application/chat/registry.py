@@ -48,3 +48,8 @@ class AgentProviderRegistry:
     def agent_keys(self) -> list[str]:
         """Every registered ``agent_key``, in registration order (AgentCatalogPort)."""
         return list(self._entries.keys())
+
+    def agent_choices(self) -> list[tuple[str, str]]:
+        """``(agent_key, display_name)`` pairs, in registration order — for
+        rendering an agent selection card (AgentCatalogPort)."""
+        return [(key, entry.display_name) for key, entry in self._entries.items()]

@@ -144,7 +144,7 @@ paths:
         absolute path (`folder_path`), format, and existence metadata. The set
         is fixed per agent type; files that do not exist yet are listed with
         `exists=false`. The `path`/`folder_path` pair backs the read-only UI's
-        open-in-external-editor / reveal-in-file-manager / copy-path
+        open-in-external-editor / reveal-in-file-manager
         affordances (FR-038).
       responses:
         "200":
@@ -181,7 +181,7 @@ paths:
         containing-folder path (`folder_path`), format, existence, and a content
         fingerprint for optimistic-concurrency writes (FR-036). The in-app UI
         renders this content read-only; the `path`/`folder_path` pair backs the
-        open-in-external-editor / reveal / copy-path affordances (FR-038). A
+        open-in-external-editor / reveal affordances (FR-038). A
         file that does not exist returns empty content with `exists=false` and
         `fingerprint=""` and is not created. A key outside the agent type's
         allowlist returns 404.
@@ -252,8 +252,8 @@ paths:
         Returns the child file's text content, its resolved absolute path and
         containing-folder path (`folder_path`), format, existence, and content
         fingerprint, like the single-file read. The in-app UI renders this
-        content read-only (`path`/`folder_path` back open-in-editor / reveal /
-        copy-path, FR-038). A child that does not exist returns empty content
+        content read-only (`path`/`folder_path` back open-in-editor / reveal,
+        FR-038). A child that does not exist returns empty content
         with `exists=false` and is not created.
       responses:
         "200":
@@ -586,6 +586,49 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /fs/open:
+    post:
+      tags: [fs]
+      operationId: openFilesystemPath
+      summary: Open a local path in an application
+      description: |
+        Open an existing absolute path (a managed file or its folder) in an
+        application — the preferred editor (`with`) or the OS default. Backs the
+        read-only file viewers' "open in editor" action on the web, where a
+        browser can't reach the OS but the loopback daemon — always on the user's
+        own machine — can (ADR-033). Validated absolute-and-existing before any
+        launch; creates nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FsOpenRequest" }
+      responses:
+        "204": { description: The launcher was spawned. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /fs/reveal:
+    post:
+      tags: [fs]
+      operationId: revealFilesystemPath
+      summary: Reveal a local path in the OS file manager
+      description: |
+        Select / reveal an existing absolute path in the OS file manager (Finder /
+        Explorer; on Linux, where there is no portable "select", the containing
+        folder is opened). Backs the read-only file viewers' "reveal" action on
+        the web via the loopback daemon (ADR-033). Validated absolute-and-existing;
+        creates nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FsRevealRequest" }
+      responses:
+        "204": { description: The file manager was opened. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
 components:
   securitySchemes:
     cofferToken:
@@ -753,8 +796,8 @@ components:
           description: >-
             Absolute path of the file's containing folder (its parent
             directory). The in-app viewer is read-only; the `path`/`folder_path`
-            pair backs open-in-external-editor / reveal-in-file-manager /
-            copy-path (FR-038).
+            pair backs open-in-external-editor / reveal-in-file-manager
+            (FR-038).
         format: { $ref: "#/components/schemas/ConfigFileFormat" }
         kind: { $ref: "#/components/schemas/ConfigFileKind" }
         exists: { type: boolean }
@@ -797,7 +840,7 @@ components:
             Resolved absolute path of the file on disk (for a directory child,
             the resolved absolute path of that child). The in-app viewer is
             read-only; this path backs open-in-external-editor /
-            reveal-in-file-manager / copy-path (FR-038).
+            reveal-in-file-manager (FR-038).
         folder_path:
           type: string
           description: "Absolute path of the file's containing folder (FR-038)."
@@ -1067,6 +1110,28 @@ components:
           type: array
           items: { $ref: "#/components/schemas/FsEntry" }
           description: "Immediate subdirectories (no files)."
+
+    FsOpenRequest:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: "Absolute path of an existing file or folder to open."
+        with:
+          type: string
+          nullable: true
+          description: >-
+            Application to open with (the preferred-editor preference). Omitted /
+            null opens with the OS default application.
+
+    FsRevealRequest:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: "Absolute path of an existing file or folder to reveal."
 
     ErrorOut:
       type: object
