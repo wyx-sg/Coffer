@@ -319,8 +319,8 @@ status / notify`。
   interactive message）。按钮点选作为一个规范化回调到达，携带一个不透明的值；
   内核**像对消息一样 owner-gate 它**（chat + 发送者身份，FR-014），再路由到与
   文本命令相同的切换。点选从不配对；不支持的传输静默保持文本路径。这兑现了
-  [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.zh.md) 预留的
-  `OutboundMessage` 交互按钮能力。
+  [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.zh.md) 的
+  `ChannelCapabilities` 已预想的交互按钮能力（「show buttons?」）。
 
 ### Key Entities
 

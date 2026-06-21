@@ -229,3 +229,21 @@ async def test_callback_query_routes_to_on_callback_and_acks(
     assert fake_telegram.calls_for("answerCallbackQuery")[0] == {"callback_query_id": "cbq-1"}
     # The poll must subscribe to callback_query, else Telegram never delivers taps.
     assert "callback_query" in fake_telegram.calls_for("getUpdates")[0]["allowed_updates"]
+
+
+async def test_buttons_ride_only_the_final_chunk(fake_telegram: FakeTelegram) -> None:
+    from coffer.domain.channel.envelopes import ChoiceButton
+
+    adapter = make_telegram_adapter(fake_telegram)
+    long_md = ("a" * 3000) + "\n\n" + ("b" * 3000)  # two paragraphs → two chunks
+    try:
+        await adapter.send_text(
+            "555", long_md, buttons=[ChoiceButton(label="Codex", value="agent:codex")]
+        )
+    finally:
+        await adapter.stop()
+
+    sends = fake_telegram.calls_for("sendMessage")
+    assert len(sends) >= 2
+    assert "reply_markup" not in sends[0]  # the keyboard must not ride the first chunk
+    assert "reply_markup" in sends[-1]  # only the last chunk carries it

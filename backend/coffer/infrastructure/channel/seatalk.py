@@ -55,7 +55,13 @@ _RATE_BACKOFF = (1.0, 3.0, 9.0)
 def _interactive_card(text: str, buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
     """A SeaTalk ``interactive_message`` card: a markdown body + callback buttons
     each carrying our custom ``value`` (research.md). A tap returns the value in
-    an ``interactive_message_click`` event."""
+    an ``interactive_message_click`` event.
+
+    research.md pins only ``tag="interactive_message"``, ``button_type="callback"``
+    and the custom ``value``; the ``elements``/``description`` body nesting and
+    the button ``text`` field are inferred (the live API docs are login-gated and
+    unreachable from this machine). If SeaTalk rejects the payload, adjust this
+    one helper — the rest of the card pipeline is shape-agnostic."""
     return {
         "tag": "interactive_message",
         "interactive_message": {

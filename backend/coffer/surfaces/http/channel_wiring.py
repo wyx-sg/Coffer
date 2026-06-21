@@ -96,7 +96,12 @@ class _ModelSuggestions:
             return []
         picks: list[str] = []
         for r in resources:
-            cfg = ProviderConfig.model_validate(r.config)
+            try:
+                cfg = ProviderConfig.model_validate(r.config)
+            except Exception:
+                # A legacy/invalid profile config must not deny the whole card —
+                # skip it and keep the best-effort contract (empty → free-text).
+                continue
             if cfg.wire_format.value != wire or not cfg.is_active:
                 continue
             for m in (cfg.model, cfg.fast_model):

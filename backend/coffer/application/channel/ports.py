@@ -124,9 +124,8 @@ class AgentCatalogPort(Protocol):
 
     def agent_keys(self) -> list[str]: ...
 
+    # ``(agent_key, display_name)`` pairs for rendering a selection card.
     def agent_choices(self) -> list[tuple[str, str]]: ...
-
-    """``(agent_key, display_name)`` pairs for rendering a selection card."""
 
 
 class ModelSuggestionPort(Protocol):

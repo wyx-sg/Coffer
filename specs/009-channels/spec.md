@@ -364,8 +364,9 @@ status / notify`.
   **owner-gates it exactly like a message** (chat + sender identity, FR-014)
   before routing it to the same switch the text command performs. A tap never
   pairs, and an unsupported transport silently keeps the text path. This
-  realizes the `OutboundMessage` interactive-button capability reserved by
-  [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md).
+  realizes the interactive-button capability that
+  [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)'s
+  `ChannelCapabilities` anticipated ("show buttons?").
 
 ### Key Entities
 
