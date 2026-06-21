@@ -8,13 +8,15 @@ transport in, transport out — every behavior above it is shared.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
+    ChoiceButton,
+    InboundCallback,
     InboundMessage,
     SentMessage,
 )
@@ -25,6 +27,9 @@ class AdapterCallbacks:
     """What an adapter calls when the platform delivers something."""
 
     on_message: Callable[[InboundMessage], Awaitable[None]]
+    # A selection-card button tap (ADR-014). ``None`` for transports/tests that
+    # never emit one; adapters skip the callback when unset.
+    on_callback: Callable[[InboundCallback], Awaitable[None]] | None = None
 
 
 class ChannelAdapter(Protocol):
@@ -43,7 +48,17 @@ class ChannelAdapter(Protocol):
 
     async def stop(self) -> None: ...
 
-    async def send_text(self, chat_id: str, markdown: str) -> SentMessage: ...
+    async def send_text(
+        self,
+        chat_id: str,
+        markdown: str,
+        *,
+        buttons: Sequence[ChoiceButton] | None = None,
+    ) -> SentMessage:
+        """Send markdown text. When ``buttons`` is given AND the transport
+        ``supports_buttons``, render them as an interactive selection card;
+        otherwise the text is sent plain (buttons ignored)."""
+        ...
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None: ...
 
@@ -108,6 +123,18 @@ class AgentCatalogPort(Protocol):
     by ``AgentProviderRegistry``."""
 
     def agent_keys(self) -> list[str]: ...
+
+    # ``(agent_key, display_name)`` pairs for rendering a selection card.
+    def agent_choices(self) -> list[tuple[str, str]]: ...
+
+
+class ModelSuggestionPort(Protocol):
+    """Best-effort model quick-picks for a managed agent's ``/model`` selection
+    card: the active provider profile's ``model`` (and ``fast_model``) for the
+    agent's wire (ADR-032), mirroring the web model picker. Empty when there is
+    no active profile — the card then offers only the free-text path."""
+
+    async def suggest(self, agent_key: str) -> list[str]: ...
 
 
 class ModelCatalogPort(Protocol):

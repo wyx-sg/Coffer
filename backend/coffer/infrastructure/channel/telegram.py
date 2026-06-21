@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -19,6 +20,8 @@ import httpx
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
+    ChoiceButton,
+    InboundCallback,
     InboundMessage,
     SentMessage,
 )
@@ -37,6 +40,11 @@ _COMMANDS = [
     {"command": "status", "description": "Conversation and turn state"},
     {"command": "help", "description": "List commands"},
 ]
+
+
+def _inline_keyboard(buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
+    """One button per row (selection menus stay readable on a phone)."""
+    return {"inline_keyboard": [[{"text": b.label, "callback_data": b.value}] for b in buttons]}
 
 
 class TelegramAdapter:
@@ -66,6 +74,7 @@ class TelegramAdapter:
             supports_edit=True,
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
+            supports_buttons=True,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -93,7 +102,7 @@ class TelegramAdapter:
             try:
                 params: dict[str, Any] = {
                     "timeout": self._poll_timeout,
-                    "allowed_updates": ["message"],
+                    "allowed_updates": ["message", "callback_query"],
                 }
                 if offset is not None:
                     params["offset"] = offset
@@ -145,22 +154,64 @@ class TelegramAdapter:
                     sender_id=str(sender.get("id") or ""),
                 )
             )
+            return
+        query = update.get("callback_query")
+        if isinstance(query, dict):
+            await self._dispatch_callback(query)
+
+    async def _dispatch_callback(self, query: dict[str, Any]) -> None:
+        if self._callbacks is None:
+            return
+        sender = query.get("from") or {}
+        card = query.get("message") or {}
+        query_id = str(query.get("id") or "")
+        if self._callbacks.on_callback is not None:
+            await self._callbacks.on_callback(
+                InboundCallback(
+                    channel=self._name,
+                    chat_id=str(card.get("chat", {}).get("id", "")),
+                    sender_id=str(sender.get("id") or ""),
+                    data=str(query.get("data") or ""),
+                    callback_id=query_id,
+                    platform_message_id=str(card.get("message_id", "")),
+                )
+            )
+        # Dismiss the button's loading spinner (best-effort; the tap is already
+        # handled, so a failed ack must not surface as a turn error).
+        if query_id:
+            with contextlib.suppress(Exception):
+                await self._call("answerCallbackQuery", callback_query_id=query_id)
 
     # -- outbound ------------------------------------------------------------
 
-    async def send_text(self, chat_id: str, markdown: str) -> SentMessage:
+    async def send_text(
+        self,
+        chat_id: str,
+        markdown: str,
+        *,
+        buttons: Sequence[ChoiceButton] | None = None,
+    ) -> SentMessage:
+        chunks = list(chunk_text(markdown, self.capabilities.max_message_chars))
         last: SentMessage | None = None
-        for chunk in chunk_text(markdown, self.capabilities.max_message_chars):
-            last = await self._send_chunk(chat_id, chunk)
+        for i, chunk in enumerate(chunks):
+            # The inline keyboard rides on the final chunk so it sits under the
+            # whole (possibly chunked) message.
+            kb = buttons if (buttons and i == len(chunks) - 1) else None
+            last = await self._send_chunk(chat_id, chunk, kb)
         return last if last is not None else SentMessage(message_id="")
 
-    async def _send_chunk(self, chat_id: str, chunk: str) -> SentMessage:
+    async def _send_chunk(
+        self, chat_id: str, chunk: str, buttons: Sequence[ChoiceButton] | None = None
+    ) -> SentMessage:
+        markup = _inline_keyboard(buttons) if buttons else None
+        extra = {"reply_markup": markup} if markup is not None else {}
         try:
             sent = await self._call(
                 "sendMessage",
                 chat_id=chat_id,
                 text=markdown_to_telegram_html(chunk),
                 parse_mode="HTML",
+                **extra,
             )
         except ChannelSendFailed as e:
             # Retry as plain text ONLY when the platform explicitly rejected
@@ -169,7 +220,7 @@ class TelegramAdapter:
             # would duplicate; a 429 needs backoff, not an instant resend.
             if not (e.api_rejected and e.status == 400):
                 raise
-            sent = await self._call("sendMessage", chat_id=chat_id, text=chunk)
+            sent = await self._call("sendMessage", chat_id=chat_id, text=chunk, **extra)
         return SentMessage(message_id=str(sent.get("message_id", "")))
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
