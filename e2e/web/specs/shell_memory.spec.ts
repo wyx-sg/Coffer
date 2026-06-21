@@ -103,7 +103,8 @@ acceptance("007-memory", "user adds a fact", async ({ page }) => {
     // The viewer is read-only — no in-app edit affordance — and offers the
     // open/reveal hand-off to an external editor (daemon-backed on the web).
     // Asserting visibility only (a click would shell out a real OS launcher).
-    await expect(page.getByRole("button", { name: "Edit" })).toHaveCount(0);
+    // `exact: true` — the default substring match would match "Open in editor".
+    await expect(page.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
     await expect(page.locator("textarea")).toHaveCount(0);
     await expect(page.getByRole("button", { name: /open in editor/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /reveal/i })).toBeVisible();
