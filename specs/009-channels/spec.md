@@ -328,7 +328,9 @@ status / notify`.
   conversation pinned to it (an existing conversation's agent cannot change), so
   subsequent messages and `/new` use the chosen agent until it is switched
   again. An unknown key is rejected with the valid keys listed; no channel-side
-  code is added per agent.
+  code is added per agent. On a transport that `supports_buttons` (FR-018),
+  `/agent` with no argument renders the choices as an interactive selection card
+  instead of a text list; tapping a button performs the same switch.
 - **FR-014**: The owner gate verifies sender identity, not only chat identity.
   Every inbound envelope carries a `sender_id` (Telegram `from.id`, SeaTalk
   `employee_code`); pairing records it on the peer, and an inbound message is
@@ -350,7 +352,20 @@ status / notify`.
   the CLI. A model switch takes effect on the next turn in the same conversation
   (the model is re-read each turn, unlike the agent and working directory). An
   invalid builtin model is rejected against the registry; a bad bridged model
-  string surfaces as the CLI's own error relayed to the chat.
+  string surfaces as the CLI's own error relayed to the chat. On a transport
+  that `supports_buttons` (FR-018), `/model` with no argument renders best-effort
+  quick-picks — the managed agent's active provider profile model/fast_model
+  (ADR-032) — as a selection card (free-text `/model <name>` still works); with
+  no suggestions it falls back to the text report.
+- **FR-018**: On a transport that declares the `supports_buttons` capability,
+  the core MAY render a command's choice list as an **interactive selection
+  card** (Telegram inline keyboard, SeaTalk interactive message). A button tap
+  arrives as a normalized callback carrying an opaque value; the core
+  **owner-gates it exactly like a message** (chat + sender identity, FR-014)
+  before routing it to the same switch the text command performs. A tap never
+  pairs, and an unsupported transport silently keeps the text path. This
+  realizes the `OutboundMessage` interactive-button capability reserved by
+  [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md).
 
 ### Key Entities
 
@@ -361,12 +376,15 @@ status / notify`.
   sender's identity (`sender_id`), and sticky preferences (chosen agent).
   One per channel today; keyed by chat so group chats can become
   peers later without a schema change.
-- **InboundMessage / OutboundMessage** — the normalized envelopes every
-  adapter produces and consumes; the core never sees platform payloads.
-  Inbound carries the sender's identity (`sender_id`) for the owner gate.
+- **InboundMessage / InboundCallback / OutboundMessage** — the normalized
+  envelopes every adapter produces and consumes; the core never sees platform
+  payloads. Inbound carries the sender's identity (`sender_id`) for the owner
+  gate. An `InboundCallback` is a selection-card button tap (an opaque `data`
+  value instead of text, FR-018); outbound text MAY carry `ChoiceButton`s, which
+  a button-capable transport renders as a selection card.
 - **ChannelCapabilities** — what an adapter declares it can do
-  (edit messages, interactive buttons, typing indicator); the core picks
-  rendering strategies from it.
+  (edit messages, interactive buttons via `supports_buttons`, typing indicator);
+  the core picks rendering strategies from it.
 - **PairingCode** — in-memory, single-use, per-channel; never persisted.
 
 ## Success Criteria
@@ -571,6 +589,21 @@ status / notify`.
 - **When** the peer sends `/model <name>` and then a message
 - **Then** the next turn runs with the chosen model in the same conversation
 
+### Scenario: a selection-card tap switches the agent
+
+- **Given** a paired channel on a button-capable transport, with a second agent
+  registered
+- **When** the owner sends `/agent` (rendered as a selection card) and taps the
+  second agent's button
+- **Then** a fresh conversation pinned to the second agent becomes active, as if
+  the owner had typed `/agent <second>`
+
+### Scenario: a non-owner selection-card tap is ignored
+
+- **Given** a paired channel whose peer has a stored `sender_id`
+- **When** a different member of the chat taps a selection-card button
+- **Then** the tap is ignored and the owner's agent/model is unchanged
+
 ### Scenario: a channel-driven turn is audited with channel, peer, and agent
 
 - **Given** a paired channel
@@ -600,4 +633,6 @@ status / notify`.
   from a public URL to the local callback port; Coffer documents this in the
   quickstart but does not manage the tunnel.
 - Channels carry text conversations; rich media arrives as a polite
-  "text only" reply.
+  "text only" reply. The one exception is **command selection cards**: on a
+  transport that `supports_buttons`, `/agent` and `/model` may render their
+  choices as interactive buttons (FR-018).

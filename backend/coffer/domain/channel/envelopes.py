@@ -31,6 +31,37 @@ class ChannelCapabilities:
     supports_edit: bool  # progress streaming via message edits
     supports_typing: bool  # typing indicator ack
     max_message_chars: int  # outbound chunk budget
+    supports_buttons: bool = False  # interactive selection cards (ADR-014)
+
+
+@dataclass(frozen=True)
+class ChoiceButton:
+    """One tappable option on an interactive selection card.
+
+    ``value`` is the opaque callback payload echoed back when the owner taps
+    (e.g. ``"agent:claude_code"`` / ``"model:claude-opus-4-8"``); it must stay
+    small (Telegram caps callback_data at 64 bytes).
+    """
+
+    label: str  # human text shown on the button
+    value: str  # callback payload routed back through InboundCallback.data
+
+
+@dataclass(frozen=True)
+class InboundCallback:
+    """A selection-card button tap arriving from an IM chat.
+
+    The button counterpart of ``InboundMessage``: it carries the opaque
+    ``data`` (the tapped ``ChoiceButton.value``) rather than free text. The core
+    owner-gates it exactly like a message before honoring the switch.
+    """
+
+    channel: str  # channel resource name
+    chat_id: str  # return address (Telegram chat id / SeaTalk employee_code)
+    sender_id: str  # stable per-sender id for the owner gate ("" when none)
+    data: str  # the tapped ChoiceButton.value
+    callback_id: str = ""  # platform ack handle (Telegram callback_query.id); "" if none
+    platform_message_id: str = ""  # the card message (for an optional in-place ack)
 
 
 @dataclass(frozen=True)

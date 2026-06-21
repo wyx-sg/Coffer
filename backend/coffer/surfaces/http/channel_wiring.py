@@ -22,6 +22,7 @@ from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.domain.channel.config import parse_channel_config
+from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.channel.listener_spawn import CallbackListenerController
 from coffer.infrastructure.channel.persistence import ChannelPeerRepo
@@ -38,6 +39,7 @@ from coffer.surfaces.http.chat.dependencies import (
     get_model_service,
     get_turn_orchestrator,
 )
+from coffer.surfaces.http.dependencies import get_provider_service
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -70,6 +72,40 @@ class _ModelCatalog:
         return [(str(m.id), str(m.display_name)) for m in await self._models.list()]
 
 
+# A managed chat agent's agent_key -> its provider wire format (ADR-032 targets).
+_WIRE_BY_AGENT = {"claude_code": "anthropic", "codex": "openai"}
+
+
+class _ModelSuggestions:
+    """ModelSuggestionPort: best-effort model quick-picks for a managed agent's
+    ``/model`` card — the active provider profile's ``model`` (+ ``fast_model``)
+    for the agent's wire (ADR-032), mirroring the web model picker. Empty on any
+    miss (no provider service, no active profile, unknown agent), so the card
+    falls back to the free-text path."""
+
+    def __init__(self, provider_service_getter: Any) -> None:
+        self._get = provider_service_getter
+
+    async def suggest(self, agent_key: str) -> list[str]:
+        wire = _WIRE_BY_AGENT.get(agent_key)
+        if wire is None:
+            return []
+        try:
+            resources = await self._get().list()
+        except Exception:
+            return []
+        picks: list[str] = []
+        for r in resources:
+            cfg = ProviderConfig.model_validate(r.config)
+            if cfg.wire_format.value != wire or not cfg.is_active:
+                continue
+            for m in (cfg.model, cfg.fast_model):
+                if m and m not in picks:
+                    picks.append(m)
+            break
+        return picks
+
+
 def wire_channel_kind(
     app: FastAPI,
     resource_svc: ResourceService,
@@ -87,6 +123,7 @@ def wire_channel_kind(
         audit=audit,
         agents=get_agent_registry(),
         models=_ModelCatalog(get_model_service()),
+        model_suggestions=_ModelSuggestions(get_provider_service),
     )
 
     # Production injects the EncryptedCredentialStore; None (tests) falls back

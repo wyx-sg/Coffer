@@ -93,7 +93,10 @@ Nothing the user relies on lives only in memory.
 ```
 InboundMessage:  channel name, chat_id, sender display name, sender_id, text,
                  platform message id, timestamp
-OutboundText:    markdown text (rendered per adapter capability)
+InboundCallback: channel name, chat_id, sender_id, data (tapped ChoiceButton
+                 value), callback_id, platform message id (FR-018)
+OutboundText:    markdown text (rendered per adapter capability), optional
+                 ChoiceButtons (label + opaque value) → selection card
 ChannelCapabilities: supports_edit, supports_buttons, supports_typing,
                  max_message_chars
 ```

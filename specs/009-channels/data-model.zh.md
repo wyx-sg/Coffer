@@ -86,7 +86,10 @@ failed，配对码重新签发，队列归零。用户依赖的任何东西都�
 ```
 InboundMessage:  channel name, chat_id, sender display name, text,
                  platform message id, timestamp
-OutboundText:    markdown text (rendered per adapter capability)
+InboundCallback: channel name, chat_id, sender_id, data（点选的 ChoiceButton
+                 value）, callback_id, platform message id (FR-018)
+OutboundText:    markdown text (rendered per adapter capability), 可选
+                 ChoiceButtons（label + 不透明 value）→ 选择卡片
 ChannelCapabilities: supports_edit, supports_buttons, supports_typing,
                  max_message_chars
 ```
