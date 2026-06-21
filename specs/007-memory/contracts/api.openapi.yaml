@@ -341,6 +341,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/memory_stores/{name}/rules:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    get:
+      summary: >
+        Return the store's procedural `rules/rules.md` text — the behavioural
+        rules the organizer classified into the rules lane, read-only. This is
+        the surface a later session-start injection reads; rules are NOT returned
+        by `recall` (the lane sits outside the knowledge recall glob).
+      operationId: getMemoryStoreRules
+      tags: [rules]
+      responses:
+        "200":
+          description: >
+            OK. Returns the rules text, or a null body when the store has no
+            rules yet (never an error).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesResponse"
+        "404":
+          description: >
+            Memory store not found (`MEMORY_STORE_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
 components:
   securitySchemes:
     cofferToken:
@@ -640,7 +668,7 @@ components:
 
     OrganizeResponse:
       type: object
-      required: [status, items_processed, topics_created, topics_updated, skipped]
+      required: [status, items_processed, topics_created, topics_updated, rules_appended, skipped]
       properties:
         status:
           type: string
@@ -650,13 +678,16 @@ components:
             configured (clean no-op, inbox untouched); `empty` = nothing to organize.
         items_processed:
           type: integer
-          description: Inbox items successfully merged into a topic doc and removed.
+          description: Inbox items successfully drained (merged into a topic doc or appended as a rule).
         topics_created:
           type: integer
           description: New topic documents created.
         topics_updated:
           type: integer
           description: Existing topic documents merged into / overwritten with merged content.
+        rules_appended:
+          type: integer
+          description: Inbox items classified as behavioural rules and appended to rules/rules.md.
         skipped:
           type: integer
           description: Items left in the inbox due to an LLM/parse failure (never lost).
@@ -692,6 +723,17 @@ components:
           type: string
           nullable: true
           description: Display name of the internal model used (null when status="no_model").
+
+    RulesResponse:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          nullable: true
+          description: >
+            The store's `rules/rules.md` text (the procedural rules the organizer
+            classified into the rules lane), or null when there are no rules yet.
 
     ErrorEnvelope:
       type: object

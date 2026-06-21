@@ -55,3 +55,57 @@ def test_parse_rejects_malformed_unsafe_and_empty() -> None:
         )
         is None
     )
+
+
+def test_parse_is_rule_true_with_empty_slug_and_title() -> None:
+    """When is_rule=true, slug/title/description may be empty; only markdown required."""
+    raw = json.dumps(
+        {
+            "is_rule": True,
+            "topic_slug": "",
+            "topic_title": "",
+            "topic_description": "",
+            "markdown": "Always run make verify before pushing.",
+        }
+    )
+    out = parse_organized_topic(raw)
+    assert out is not None
+    assert out.is_rule is True
+    assert out.markdown == "Always run make verify before pushing."
+
+
+def test_parse_is_rule_false_still_requires_slug() -> None:
+    """When is_rule=false, strict slug validation is enforced."""
+    raw = json.dumps(
+        {
+            "is_rule": False,
+            "topic_slug": "",
+            "topic_title": "T",
+            "topic_description": "d",
+            "markdown": "body",
+        }
+    )
+    assert parse_organized_topic(raw) is None
+
+
+def test_parse_is_rule_missing_defaults_false() -> None:
+    """is_rule defaults to False when absent; slug validation still enforced."""
+    out = parse_organized_topic(
+        _raw(topic_slug="slug-ok", topic_title="T", topic_description="d", markdown="body")
+    )
+    assert out is not None
+    assert out.is_rule is False
+
+
+def test_parse_is_rule_true_requires_markdown() -> None:
+    """Even for a rule, markdown (the rule text) must be non-empty."""
+    raw = json.dumps(
+        {
+            "is_rule": True,
+            "topic_slug": "",
+            "topic_title": "",
+            "topic_description": "",
+            "markdown": "",
+        }
+    )
+    assert parse_organized_topic(raw) is None

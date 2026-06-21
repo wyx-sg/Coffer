@@ -225,8 +225,21 @@ class OrganizeResponse(BaseModel):
     items_processed: int
     topics_created: int
     topics_updated: int
+    rules_appended: int
     skipped: int
     model: str | None = None
+
+
+# --- rules ------------------------------------------------------------------
+
+
+class RulesOut(BaseModel):
+    """The rules text for a memory store (read-only surface, spec 007 FR-036).
+
+    ``text`` is ``None`` when no rules have been classified for this store yet.
+    The field is always present in the response (required, nullable per contract)."""
+
+    text: str | None
 
 
 # --- reorg ------------------------------------------------------------------
