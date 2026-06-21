@@ -99,7 +99,12 @@ export function MessageThread({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <AgentModelBar agentLabel={agentLabel} />
+      <AgentModelBar
+        conversationId={conversation.id}
+        agentKey={conversation.agent_key}
+        agentLabel={agentLabel}
+        disabled={readOnly}
+      />
 
       <div
         ref={scrollRef}

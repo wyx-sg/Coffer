@@ -306,6 +306,115 @@ def test_unauthenticated_request_returns_401() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Agent-config (per-conversation managed-agent model, ADR-024 -> ADR-032)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="008-agent-chat", scenario="set a managed agent's model per conversation"
+)
+def test_agent_config_set_and_get_model_roundtrip() -> None:
+    chat_svc, model_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, model_svc, orchestrator)
+    set_active_token(_TOKEN)
+
+    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
+        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
+            "id"
+        ]
+
+        # Empty by default — inherits the global default.
+        before = client.get(f"/api/v1/chat/conversations/{conv_id}/agent-config")
+        assert before.status_code == 200, before.text
+        assert before.json() == {"cwd": None, "model": None}
+
+        # Set the agent's own model (free-text passthrough).
+        resp = client.patch(
+            f"/api/v1/chat/conversations/{conv_id}/agent-config",
+            json={"model": "claude-opus-4-8"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"cwd": None, "model": "claude-opus-4-8"}
+
+        # Reads back.
+        after = client.get(f"/api/v1/chat/conversations/{conv_id}/agent-config").json()
+        assert after["model"] == "claude-opus-4-8"
+
+    set_active_token(None)
+
+
+def test_agent_config_clear_model_with_empty_string() -> None:
+    chat_svc, model_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, model_svc, orchestrator)
+    set_active_token(_TOKEN)
+
+    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
+        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
+            "id"
+        ]
+        client.patch(
+            f"/api/v1/chat/conversations/{conv_id}/agent-config",
+            json={"model": "gpt-5-codex"},
+        )
+        # An empty/whitespace model clears the override back to the default.
+        resp = client.patch(
+            f"/api/v1/chat/conversations/{conv_id}/agent-config",
+            json={"model": "  "},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["model"] is None
+
+    set_active_token(None)
+
+
+def test_agent_config_get_not_found_returns_404() -> None:
+    chat_svc, model_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, model_svc, orchestrator)
+    set_active_token(_TOKEN)
+
+    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
+        assert client.get("/api/v1/chat/conversations/nope/agent-config").status_code == 404
+        resp = client.patch(
+            "/api/v1/chat/conversations/nope/agent-config",
+            json={"model": "x"},
+        )
+        assert resp.status_code == 404
+
+    set_active_token(None)
+
+
+async def test_agent_config_set_model_preserves_cwd_and_session() -> None:
+    """Setting (and clearing) the model must never clobber cwd/session_id —
+    otherwise an existing CLI session would be lost on the next turn."""
+    from coffer.domain.chat.agent_config import AgentConfig
+    from coffer.surfaces.http.chat.conversation_routes import (
+        get_agent_config as get_agent_config_route,
+    )
+    from coffer.surfaces.http.chat.conversation_routes import (
+        set_agent_config as set_agent_config_route,
+    )
+    from coffer.surfaces.http.chat.schemas import AgentConfigPatch
+
+    chat_svc, _model_svc, _orchestrator = _make_services()
+    conv = await chat_svc.create_conversation(agent_key="builtin", agent_config={})
+    await chat_svc.set_agent_config(conv.id, AgentConfig(cwd="/work", session_id="sess-1"))
+
+    out = await set_agent_config_route(
+        conv.id, AgentConfigPatch(model="claude-opus-4-8"), svc=chat_svc
+    )
+    assert out.model == "claude-opus-4-8"
+    assert out.cwd == "/work"
+    stored = await chat_svc.get_agent_config(conv.id)
+    assert stored.session_id == "sess-1"  # preserved
+
+    cleared = await set_agent_config_route(conv.id, AgentConfigPatch(model=""), svc=chat_svc)
+    assert cleared.model is None
+    again = await get_agent_config_route(conv.id, svc=chat_svc)
+    assert again.cwd == "/work"
+    assert (await chat_svc.get_agent_config(conv.id)).session_id == "sess-1"
+
+
+# ---------------------------------------------------------------------------
 # Model CRUD
 # ---------------------------------------------------------------------------
 

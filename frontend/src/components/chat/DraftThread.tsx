@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import type { AgentInfo } from "@/lib/api/chat";
 import { Composer } from "./Composer";
+import { ModelPicker } from "./ModelPicker";
 
 interface Props {
   agents: AgentInfo[];
@@ -25,6 +26,9 @@ interface Props {
   /** True when no Coffer-managed agent is available (shows an empty state). */
   noManagedAgent?: boolean;
   onAgentChange: (agentKey: string) => void;
+  /** The chosen per-conversation model for the new conversation (null = default). */
+  modelValue?: string | null;
+  onModelChange?: (model: string | null) => void;
   onSend: (text: string) => void;
   /** True while the create-then-send round-trip is in flight. */
   creating?: boolean;
@@ -35,6 +39,8 @@ export function DraftThread({
   agentKey,
   noManagedAgent = false,
   onAgentChange,
+  modelValue = null,
+  onModelChange,
   onSend,
   creating = false,
 }: Props) {
@@ -82,6 +88,12 @@ export function DraftThread({
             </SelectContent>
           </Select>
         </div>
+        {/* Optional model for the new conversation, beside the agent picker. */}
+        <ModelPicker
+          agentKey={agentKey}
+          value={modelValue}
+          onCommit={(model) => onModelChange?.(model)}
+        />
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">

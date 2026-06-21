@@ -6,6 +6,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DraftThread } from "./DraftThread";
 import type { AgentInfo } from "@/lib/api/chat";
 
+// The model picker pulls provider suggestions; stub them so the draft makes no
+// network calls.
+vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: () => ({ data: [] }) }));
+vi.mock("@/lib/hooks/useModelIntrospection", () => ({
+  useListProviderModels: () => ({ mutate: vi.fn() }),
+}));
+
 const agents: AgentInfo[] = [
   { agent_key: "claude_code", display_name: "Claude Code", available: true },
 ];
@@ -50,13 +57,20 @@ describe("DraftThread", () => {
     expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
   });
 
+  test("offers a model picker beside the agent selector and commits the choice", () => {
+    const onModelChange = vi.fn();
+    renderDraft({ onModelChange });
+    const picker = screen.getByLabelText(/agent model/i);
+    fireEvent.change(picker, { target: { value: "claude-opus-4-8" } });
+    fireEvent.blur(picker);
+    expect(onModelChange).toHaveBeenCalledWith("claude-opus-4-8");
+  });
+
   test("no longer renders a working-directory input or folder picker", () => {
     // The per-turn working-directory UI was removed; turns default to the
     // Coffer-managed workspace on the backend.
     renderDraft();
-    expect(
-      screen.queryByRole("textbox", { name: /working directory/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /working directory/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /browse/i })).not.toBeInTheDocument();
   });
 });

@@ -122,6 +122,8 @@ export function ChatPage() {
             agentKey={c.effectiveDraft.agentKey}
             noManagedAgent={c.noManagedAgent}
             onAgentChange={c.setDraftAgent}
+            modelValue={c.effectiveDraft.model}
+            onModelChange={c.setDraftModel}
             onSend={c.sendDraft}
             creating={c.creating}
           />

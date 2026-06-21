@@ -1177,6 +1177,11 @@
       "workdirPlaceholder": "/你的/项目/路径",
       "recent": "最近的目录"
     },
+    "modelPicker": {
+      "label": "Agent 模型",
+      "placeholder": "模型（可选）",
+      "defaultHint": "默认：{{model}}"
+    },
     "draft": {
       "guide": "给 {{agent}} 发消息，开始新对话。",
       "workdirNeeded": "在上方填写工作目录后，即可与 {{agent}} 对话。",

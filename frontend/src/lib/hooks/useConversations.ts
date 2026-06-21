@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import {
   chatApi,
+  type AgentConfigOut,
   type Conversation,
   type ConversationCreate,
   type ConversationPatch,
@@ -19,6 +20,10 @@ export function conversationKey(id: string) {
 
 export function messagesKey(conversationId: string) {
   return ["messages", conversationId] as const;
+}
+
+export function agentConfigKey(conversationId: string) {
+  return ["agent-config", conversationId] as const;
 }
 
 /** Shared onError → toast handler — a failed mutation must never be silent. */
@@ -54,6 +59,15 @@ export function useConversation(id: string) {
     queryKey: conversationKey(id),
     queryFn: () => chatApi.getConversation(id),
     enabled: !!id,
+  });
+}
+
+/** A conversation's managed-agent model (agent_config.model); see ADR-024 → ADR-032. */
+export function useAgentConfig(id: string, enabled = true) {
+  return useQuery({
+    queryKey: agentConfigKey(id),
+    queryFn: () => chatApi.getAgentConfig(id),
+    enabled: !!id && enabled,
   });
 }
 
@@ -96,6 +110,20 @@ export function useSetConversationModel() {
     onSuccess: (updated: Conversation) => {
       qc.setQueryData(conversationKey(updated.id), updated);
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
+    },
+    onError,
+  });
+}
+
+/** Set (or clear) a managed agent's own per-conversation model (agent_config.model). */
+export function useSetAgentModel() {
+  const qc = useQueryClient();
+  const onError = useConversationToastError();
+  return useMutation({
+    mutationFn: (vars: { id: string; model: string | null }) =>
+      chatApi.setAgentModel(vars.id, vars.model),
+    onSuccess: (updated: AgentConfigOut, vars) => {
+      qc.setQueryData(agentConfigKey(vars.id), updated);
     },
     onError,
   });

@@ -74,6 +74,21 @@ export interface ConversationPatch {
   model_id?: string | null;
 }
 
+/**
+ * A conversation's agent config (managed agents). `model` is the agent's own
+ * per-conversation model, free-text and passed through to its CLI (ADR-024 →
+ * ADR-032). `session_id` is provider-internal and not surfaced.
+ */
+export interface AgentConfigOut {
+  cwd: string | null;
+  model: string | null;
+}
+
+export interface AgentConfigPatch {
+  /** Empty/whitespace or null clears the override (inherit the provider default). */
+  model?: string | null;
+}
+
 export interface SendMessageRequest {
   text: string;
 }
@@ -146,6 +161,13 @@ export const chatApi = {
 
   updateConversation: (id: string, body: ConversationPatch) =>
     call<Conversation>("PATCH", `/chat/conversations/${id}`, body),
+
+  // Per-conversation managed-agent model (agent_config.model), mirrors `/model`.
+  getAgentConfig: (id: string) =>
+    call<AgentConfigOut>("GET", `/chat/conversations/${id}/agent-config`),
+
+  setAgentModel: (id: string, model: string | null) =>
+    call<AgentConfigOut>("PATCH", `/chat/conversations/${id}/agent-config`, { model }),
 
   deleteConversation: (id: string) => call<void>("DELETE", `/chat/conversations/${id}`),
 

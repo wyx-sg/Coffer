@@ -16,8 +16,8 @@ Frozen dataclass —— domain 保持纯净。
 | `id`                        | `str`                | uuid4 hex                                                                                                                                                                                                                    |
 | `agent_key`                 | `str`                | 该线程对话所用的 agent；默认 `"builtin"`                                                                                                                                                                                     |
 | `title`                     | `str`                | 从首条用户消息自动生成；用户可编辑                                                                                                                                                                                           |
-| `model_id`                  | `str \| None`        | `chat_models.id` 覆盖项；`None` → 默认模型。内置 agent 的每对话模型存储。                                                                                                                                                    |
-| `agent_config`              | `str \| None` (JSON) | provider 自有的每对话状态（Alembic `0018`）。CLI agent 在此存储 `{cwd, session_id, permission_mode?}`；内置 agent 不存储任何东西（它使用 `model_id`）。通过 `ConversationRepo.get_agent_config` / `set_agent_config` 读/写。 |
+| `model_id`                  | `str \| None`        | `chat_models.id` 覆盖项 → 内部引擎 `ModelConfig` 注册表（设置 → 模型）。**不被受管 agent 的回合路径读取**（ADR-024）；不在聊天模型选择器范围内。`None` → 默认模型。                                                            |
+| `agent_config`              | `str \| None` (JSON) | provider 自有的每对话状态（Alembic `0018`）。受管 agent（Claude Code / Codex）在此存储 `{cwd, session_id, model}`；`model` 是该 agent 自己的每对话模型（自由文本，透传给其 CLI），经镜像 `/model` 的 agent-config PATCH 路由设置。通过 `ConversationRepo.get_agent_config` / `set_agent_config` 读/写。 |
 | `archived_at`               | `datetime \| None`   | `None` = 活跃；时间戳 = 已归档（Alembic `0013`）。驱动活跃/已归档过滤器与两阶段保留生命周期。                                                                                                                                |
 | `channel_name`              | `str \| None`        | 可选的 IM channel binding（ADR-031）：本对话同样从其被驱动的 channel。一个对话"有一个 channel binding"当且仅当本字段被设置（Alembic `0021`）。                                                                                |
 | `peer_chat_id`              | `str \| None`        | 用作回邮地址、把 agent 输出转发回 channel 的 IM chat id。与 `channel_name` 配对（Alembic `0021`）。                                                                                                                          |
@@ -164,6 +164,11 @@ CLI agent 需要每对话的工作目录 + session 状态，通过同一个 `ini
   发起或入队一个回合并返回 `202 {queued: bool}`；它不再是事件流 —— **改动**
 - `ConversationOut` 去掉 `origin`/`peer`；新增可选的 `channel_binding`
   （`{channel, chat_id}`）—— **改动**
+
+按对话模型重新定位新增的路由（[ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md) → [ADR-032](../../docs/decisions/ADR-032-provider-switching.zh.md)）：
+
+- `GET /api/v1/chat/conversations/{id}/agent-config` —— 读取 `{cwd, model}` —— **新增**
+- `PATCH /api/v1/chat/conversations/{id}/agent-config` —— 设置 `agent_config.model`（受管 agent），保留 `cwd`/`session_id`；空值清除覆盖 —— **新增**
 
 未变路由：`GET /chat/agents`、对话 list/get/patch/delete/archive/unarchive、消息
 历史、`POST .../interrupt` → 204，以及 `/api/v1/models` CRUD。

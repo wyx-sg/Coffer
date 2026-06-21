@@ -10,7 +10,15 @@ import type { Conversation, Message } from "@/lib/api/chat";
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
     listMessages: vi.fn(),
+    getAgentConfig: vi.fn().mockResolvedValue({ cwd: null, model: null }),
   },
+}));
+
+// The AgentModelBar's model picker pulls provider suggestions; stub those out so
+// this thread-focused test makes no network calls.
+vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: () => ({ data: [] }) }));
+vi.mock("@/lib/hooks/useModelIntrospection", () => ({
+  useListProviderModels: () => ({ mutate: vi.fn() }),
 }));
 
 const { chatApi } = await import("@/lib/api/chat");
@@ -58,12 +66,15 @@ describe("MessageThread", () => {
     vi.clearAllMocks();
   });
 
-  test("renders the thread for a managed agent without any model machinery", async () => {
-    // Chat talks only to managed agents (Claude Code, Codex) — configured by a
-    // working directory, never a Coffer model. The thread must render normally.
+  test("renders the thread with a per-conversation agent model picker", async () => {
+    // Chat talks only to managed agents (Claude Code, Codex). The per-conversation
+    // model is the agent's own model (agent_config.model, ADR-024 → ADR-032), so
+    // the thread bar carries a model picker — but never the built-in agent's
+    // "No model configured" empty state.
     chatApiMock.listMessages = vi.fn().mockResolvedValue({ messages: [] });
     renderThread();
     await waitFor(() => expect(chatApiMock.listMessages).toHaveBeenCalled());
+    expect(screen.getByLabelText(/agent model/i)).toBeInTheDocument();
     expect(screen.queryByText("No model configured")).not.toBeInTheDocument();
   });
 

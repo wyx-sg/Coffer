@@ -6,6 +6,8 @@ which renders the standard ``{error, message}`` envelope.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from fastapi import APIRouter, Depends, Response, status
 
 from coffer.application.chat.model_service import ModelService
@@ -22,6 +24,8 @@ from coffer.domain.chat.message import (
 )
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.chat.schemas import (
+    AgentConfigOut,
+    AgentConfigPatch,
     ChannelBindingOut,
     ChatAgentListOut,
     ChatAgentOut,
@@ -202,6 +206,42 @@ async def update_conversation(
         conv = await svc.set_conversation_model(id, model_id=body.model_id)
 
     return _conv_out(conv)
+
+
+@router.get("/conversations/{id}/agent-config", response_model=AgentConfigOut)
+async def get_agent_config(
+    id: str,
+    svc: ChatService = Depends(get_chat_service),  # noqa: B008
+) -> AgentConfigOut:
+    """Read a conversation's agent config (cwd, model). 404 if not found.
+
+    ``session_id`` is provider-internal and deliberately not surfaced.
+    """
+    cfg = await svc.get_agent_config(id)  # raises ConversationNotFound -> 404
+    return AgentConfigOut(cwd=cfg.cwd, model=cfg.model)
+
+
+@router.patch("/conversations/{id}/agent-config", response_model=AgentConfigOut)
+async def set_agent_config(
+    id: str,
+    body: AgentConfigPatch,
+    svc: ChatService = Depends(get_chat_service),  # noqa: B008
+) -> AgentConfigOut:
+    """Set a managed agent's own model for a conversation (ADR-024 → ADR-032).
+
+    Mirrors the channel ``/model`` command: read-then-``replace(cfg, model=...)``
+    so ``cwd`` and ``session_id`` are preserved. An empty/whitespace ``model``
+    clears the override (the conversation then inherits the active provider
+    profile's projected default). The registry ``model_id`` (PATCH
+    /conversations/{id}) is unrelated and is not read by the managed-agent turn
+    path.
+    """
+    cfg = await svc.get_agent_config(id)  # raises ConversationNotFound -> 404
+    if "model" in body.model_fields_set:
+        new_model = (body.model or "").strip() or None
+        cfg = replace(cfg, model=new_model)
+        await svc.set_agent_config(id, cfg)
+    return AgentConfigOut(cwd=cfg.cwd, model=cfg.model)
 
 
 @router.post("/conversations/{id}/archive", response_model=ConversationOut)
