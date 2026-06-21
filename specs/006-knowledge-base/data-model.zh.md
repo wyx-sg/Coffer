@@ -14,6 +14,8 @@
 
 Pydantic v2 `BaseModel`。当 `kind == "knowledge_base"` 时存在 `Resource.config` 里。所有字段创建后**可变**（改 chunk 参数或 embedding 模型会触发 reindex/重新 embedding —— 没有不可变锁）。
 
+> **检索 `mode` 是引擎内部概念**（ADR-034）：`enabled_modes` / `default_mode` 仍是内部配置 —— 它们配置引擎解析出的策略，但**不**在任何外部界面（REST / MCP / CLI / UI）暴露用于逐查询选择。检索是「一次查询 → 一个答案」。
+
 | Field                | Type                      | Notes                                                                                              |
 | -------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
 | `enabled_modes`      | `list[RetrievalMode]`     | `{"grep","keyword","vector","hybrid"}` 的子集。默认 `["keyword","grep"]`。`vector` 可选，需要 `embedding`；启用 `vector` 会自动加入 `hybrid`（对 keyword+vector 做 RRF 融合，ADR-012）。 |
@@ -98,7 +100,7 @@ grep 是独立的 `infrastructure/knowledge/grep.py` ripgrep 包装器（无索�
 - `IngestRejected` —— code `"INGEST_REJECTED"`；reason ∈ `{"empty","too_large","unsupported_type","duplicate"}`。
 - `EngineUnavailable` —— code `"ENGINE_UNAVAILABLE"`；当请求操作所需的转换器库 / sqlite-vec / embedding provider 不可用时抛出。
 - `ReconversionBlocked` —— code `"RECONVERSION_BLOCKED"`；对 `source_mode == "edited"` 的文档执行重转换时抛出。
-- `SearchModeInvalid` —— code `"SEARCH_MODE_INVALID"`（HTTP 400）；当搜索请求**显式**指定 `mode=grep`（grep 有自己的端点）或任何不在该 KB `enabled_modes` 里的显式模式时抛出。`vector` 与 `hybrid` 是例外 —— 它们降级为 keyword 并标注 fallback，而不是报错。
+- `SearchModeInvalid` —— **已移除**（ADR-034）。外部搜索界面不再接受 `mode`，因此 `SEARCH_MODE_INVALID`（HTTP 400）不再适用；引擎在内部解析策略，grep 保留自己的端点。
 
 ## SQLite schema（统一基底）
 
@@ -242,7 +244,7 @@ compute content_sha256 of the new markdown body
 
 `coffer kb reindex <name>` 重新扫描 `docs/` 目录找增量，逐文件运行该例程，从文件重建全部 SQLite 状态。该扫描还会清理 markdown 文件被带外删除的 `documents` 行，计入可选的 `ReindexResult.documents_removed`；因 embed 降级而只做了 keyword 索引的文档计入可选的 `documents_degraded`。
 
-**降级 embed —— 解耦的重试状态（KB8）。** 当 embed 降级（embedding provider 不可用 / `EngineUnavailable`）时，该例程对文档只做 keyword 索引，保留**真实的 `content_sha256`**，并置上专用的持久化标志 **`embed_pending`**。这把 no-op 闸门与重试状态解耦：降级文档不再在每次扫描时被重新切块 + 重写 FTS（旧设计用空字符串哨兵覆盖 `content_sha256`，导致永不匹配、把整个降级语料反复 churn）。下一次对账看到 `embed_pending` 后**只**重试 embed —— 在内存里重新切块、只 upsert `vec_chunks`（chunk/FTS 行不动）—— 然后清除该标志。`embed_pending` 只跟踪 embedding **provider** 调用失败；它与 sqlite-vec 扩展是否可用正交（vec 表不可用属于 `embedded=True`，在查询时由 `SearchResponse.fallback` 处理）。KB 将持久化的计数暴露为 `KnowledgeBaseMetrics.documents_degraded`，因此任意一次读取（list / get / search / grep）观察到的降级都可见，而不仅是显式的 `POST /reindex`。
+**降级 embed —— 解耦的重试状态（KB8）。** 当 embed 降级（embedding provider 不可用 / `EngineUnavailable`）时，该例程对文档只做 keyword 索引，保留**真实的 `content_sha256`**，并置上专用的持久化标志 **`embed_pending`**。这把 no-op 闸门与重试状态解耦：降级文档不再在每次扫描时被重新切块 + 重写 FTS（旧设计用空字符串哨兵覆盖 `content_sha256`，导致永不匹配、把整个降级语料反复 churn）。下一次对账看到 `embed_pending` 后**只**重试 embed —— 在内存里重新切块、只 upsert `vec_chunks`（chunk/FTS 行不动）—— 然后清除该标志。`embed_pending` 只跟踪 embedding **provider** 调用失败；它与 sqlite-vec 扩展是否可用正交（vec 表不可用属于 `embedded=True`，在查询时由引擎内部的 keyword 回退处理 —— 不作为响应标志暴露，见 ADR-034）。KB 将持久化的计数暴露为 `KnowledgeBaseMetrics.documents_degraded`，因此任意一次读取（list / get / search / grep）观察到的降级都可见，而不仅是显式的 `POST /reindex`。
 
 ## 级联与完整性规则
 
@@ -291,7 +293,7 @@ KB 生命周期由 kind 无关核心的 `resource_created` / `resource_deleted` 
 - `GET /api/v1/knowledge_bases` —— 列出 KB
 - `GET /api/v1/knowledge_bases/{name}` —— 获取单个 KB
 - `POST /api/v1/knowledge_bases/{name}/documents` —— multipart 上传 + ingest（任意格式）
-- `GET /api/v1/knowledge_bases/{name}/documents` —— 分页列表（每行携带绝对 `path` + 所在文件夹 `folder_path`）
+- `GET /api/v1/knowledge_bases/{name}/documents` —— 分页列表，支持可选的大小写不敏感标题过滤 `q`（服务端在分页前应用；`total` 反映过滤后的计数）；每行携带绝对 `path` + 所在文件夹 `folder_path`
 - `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 只读 markdown 正文 + frontmatter + 绝对 `path` + `folder_path`
 - `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 经 API 编辑 markdown（置 `source_mode=edited`，重建索引）；UI 为只读，其余编辑经外部编辑器或 agent MCP 进行（由读取时惰性重建索引拾取）
 - `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` —— 从 `raw/` 重跑转换（一旦手工编辑过即被 `RECONVERSION_BLOCKED` 拦截）
@@ -299,7 +301,7 @@ KB 生命周期由 kind 无关核心的 `resource_created` / `resource_deleted` 
 - `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` —— 删除单个文档
 - `POST /api/v1/knowledge_bases/{name}/reindex` —— 重扫描 + 从文件重建索引
 - `POST /api/v1/knowledge_bases/{name}/check-sources` —— 检测外部原件已变化的被跟踪文档（`unchanged`/`changed`/`missing`；启用 `auto_update_sources` 时自动刷新）
-- `POST /api/v1/knowledge_bases/{name}/search` —— `{query, top_k?, mode?}` → 排序 passage（+ `fallback`）
+- `POST /api/v1/knowledge_bases/{name}/search` —— `{query, top_k?}` → 排序 passage（无 `mode` 输入，无 `fallback` 回显 —— 检索模式是内部的，见 ADR-034）
 - `POST /api/v1/knowledge_bases/{name}/grep` —— `{pattern, max_matches?}` → 文件/行命中
 - `GET /api/v1/knowledge_bases/{name}/metrics` —— 计数 + 已建索引模式 + 磁盘字节数
 

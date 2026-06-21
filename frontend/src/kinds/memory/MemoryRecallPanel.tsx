@@ -1,33 +1,31 @@
 // frontend/src/kinds/memory/MemoryRecallPanel.tsx
 //
-// Recall section: a keyword/vector mode toggle, the query box, and the ranked
-// hits. State and the recall trigger live in the page.
+// Recall section: ONE query box + Recall button, and the ranked hits. External
+// retrieval is "one query → one answer" — the backend auto-selects the strategy
+// and returns ranked hits (no mode picker, no fallback hint). State and the
+// recall trigger live in the page.
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { translateApiError } from "@/lib/api/errors";
-import { type RecallResponse, type RetrievalMode } from "./api";
+import { type RecallResponse } from "./api";
 
 interface Props {
   query: string;
-  mode: RetrievalMode;
   result: RecallResponse | null;
   error: unknown;
   isPending: boolean;
   onQueryChange: (value: string) => void;
-  onModeChange: (mode: RetrievalMode) => void;
   onRecall: () => void;
 }
 
 export function MemoryRecallPanel({
   query,
-  mode,
   result,
   error,
   isPending,
   onQueryChange,
-  onModeChange,
   onRecall,
 }: Props) {
   const { t } = useTranslation();
@@ -35,15 +33,6 @@ export function MemoryRecallPanel({
     <section className="space-y-2">
       <h2 className="text-lg font-medium">{t("memory.detail.recall")}</h2>
       <div className="flex max-w-2xl flex-wrap gap-2">
-        <select
-          aria-label={t("memory.detail.mode")}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-          value={mode}
-          onChange={(e) => onModeChange(e.target.value as RetrievalMode)}
-        >
-          <option value="keyword">{t("memory.modes.keyword")}</option>
-          <option value="vector">{t("memory.modes.vector")}</option>
-        </select>
         <Input
           className="flex-1"
           placeholder={t("memory.detail.recallPlaceholder")}
@@ -60,11 +49,6 @@ export function MemoryRecallPanel({
       {error ? <p className="text-sm text-destructive">{translateApiError(t, error)}</p> : null}
       {result ? (
         <div className="space-y-2">
-          {result.fallback ? (
-            <p className="text-xs text-amber-600 dark:text-amber-400">
-              {t("memory.detail.fallback")}
-            </p>
-          ) : null}
           {result.hits.length > 0 ? (
             <ul className="space-y-2 text-sm">
               {result.hits.map((h, i) => (

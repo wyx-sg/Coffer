@@ -631,8 +631,6 @@ components:
             `project` = the named store only, `global` = the global store
             only, `both` (default) = the named store + the global store
             merged by reciprocal rank fusion.
-        mode:
-          $ref: "#/components/schemas/RetrievalMode"
         top_k:
           type: integer
           minimum: 1
@@ -653,18 +651,12 @@ components:
 
     RecallResponse:
       type: object
-      required: [hits, mode]
+      required: [hits]
       properties:
         hits:
           type: array
           items:
             $ref: "#/components/schemas/RecallHit"
-        mode:
-          $ref: "#/components/schemas/RetrievalMode"
-        fallback:
-          type: boolean
-          default: false
-          description: True when vector was requested but degraded to keyword (embedding unconfigured).
 
     OrganizeResponse:
       type: object

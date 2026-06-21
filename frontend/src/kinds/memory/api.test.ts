@@ -166,28 +166,25 @@ describe("clearFacts", () => {
 });
 
 describe("recall", () => {
-  test("POSTs query + top_k + mode to /recall and returns hits", async () => {
+  test("POSTs query + top_k (no mode) to /recall and returns hits", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       okJson({
-        mode: "keyword",
-        fallback: false,
         hits: [{ id: "m-1", text: "uses tabs", score: 0.92, source: "global", time: "t" }],
       }),
     );
 
-    const out = await recall("prefs", "tabs", { topK: 3, mode: "keyword" });
+    const out = await recall("prefs", "tabs", { topK: 3 });
     expect(out.hits).toHaveLength(1);
     expect(out.hits[0].text).toBe("uses tabs");
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/memory_stores/prefs/recall`);
-    expect(JSON.parse(init!.body as string)).toEqual({ query: "tabs", top_k: 3, mode: "keyword" });
+    // "One query → one answer": the request carries no mode.
+    expect(JSON.parse(init!.body as string)).toEqual({ query: "tabs", top_k: 3 });
   });
 
   test("defaults top_k to 5 when omitted", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ mode: "keyword", hits: [] }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ hits: [] }));
     await recall("prefs", "anything");
     expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({
       query: "anything",

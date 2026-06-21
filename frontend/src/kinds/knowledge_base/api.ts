@@ -3,22 +3,20 @@
 // Hand-written fetch-based API helpers for the knowledge_base kind. These
 // mirror the redesigned OpenAPI contract in
 // specs/006-knowledge-base/contracts/api.openapi.yaml. Uploads of ANY format
-// are converted to Markdown on disk (the source of truth); retrieval has three
-// modes (grep / keyword / vector). The KB is user-curated; agents read it
-// read-only over the MCP gateway. We keep fetch + interfaces (not codegen —
-// codegen only covers spec 001).
+// are converted to Markdown on disk (the source of truth); external retrieval
+// is "one query → one answer" (the backend auto-selects the strategy). The KB
+// is user-curated; agents read it read-only over the MCP gateway. We keep
+// fetch + interfaces (not codegen — codegen only covers spec 001).
 
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import { ApiError } from "@/lib/api/errors";
 import type {
-  RetrievalMode,
   KnowledgeBaseConfigOut,
   KnowledgeBaseOut,
   DocumentOut,
   DocumentListOut,
   DocumentDetailOut,
   SearchResponse,
-  GrepResponse,
   ReindexResult,
   KnowledgeBaseMetrics,
   SourceCheckResponse,
@@ -113,8 +111,12 @@ export async function listDocuments(
   kbName: string,
   limit = 50,
   offset = 0,
+  q?: string,
 ): Promise<DocumentListOut> {
-  const r = await fetch(`${kbBase(kbName)}/documents?limit=${limit}&offset=${offset}`, {
+  // `q` is an optional case-insensitive title filter applied server-side; the
+  // returned `total` reflects the filtered count so pagination stays correct.
+  const qParam = q && q.trim() ? `&q=${enc(q)}` : "";
+  const r = await fetch(`${kbBase(kbName)}/documents?limit=${limit}&offset=${offset}${qParam}`, {
     headers: headers(),
   });
   await checkOk(r);
@@ -202,10 +204,12 @@ export async function updateFromSource(kbName: string, documentId: string): Prom
 export async function searchKnowledgeBase(
   kbName: string,
   query: string,
-  opts: { topK?: number; mode?: RetrievalMode } = {},
+  opts: { topK?: number } = {},
 ): Promise<SearchResponse> {
+  // External retrieval is "one query → one answer": the backend auto-selects
+  // the strategy, so the request carries no `mode` and the response no longer
+  // returns `mode`/`fallback`.
   const body: Record<string, unknown> = { query, top_k: opts.topK ?? 5 };
-  if (opts.mode) body.mode = opts.mode;
   const r = await fetch(`${kbBase(kbName)}/search`, {
     method: "POST",
     headers: { ...headers(), "Content-Type": "application/json" },
@@ -213,20 +217,6 @@ export async function searchKnowledgeBase(
   });
   await checkOk(r);
   return (await r.json()) as SearchResponse;
-}
-
-export async function grepKnowledgeBase(
-  kbName: string,
-  pattern: string,
-  maxMatches = 100,
-): Promise<GrepResponse> {
-  const r = await fetch(`${kbBase(kbName)}/grep`, {
-    method: "POST",
-    headers: { ...headers(), "Content-Type": "application/json" },
-    body: JSON.stringify({ pattern, max_matches: maxMatches }),
-  });
-  await checkOk(r);
-  return (await r.json()) as GrepResponse;
 }
 
 export async function getKnowledgeBaseMetrics(kbName: string): Promise<KnowledgeBaseMetrics> {
