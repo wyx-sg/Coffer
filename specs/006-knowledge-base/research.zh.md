@@ -176,7 +176,18 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 
 **无迁移 / 无 schema 改动 / 无新 FR**（既有行为下的纯清理）。
 
-## 15. 此处明确不决定 / 范围外
+## 15. 文档时间戳写入 frontmatter（KB18）
+
+**问题**：Coffer 的不变量是"文件是真相，SQLite 是可重建的索引"，但 KB 文档的磁盘 `.md` frontmatter 此前**未**记录 `created_at` / `updated_at`。于是数据库丢失、从文件重建行（`document_from_frontmatter`）时，两个时间戳都会被重置为 `now()` —— 原始的 ingest/编辑时间被悄无声息地丢失。记忆面（spec 007）已在每个 fact 文件里记录并回读这两个字段，故该缺口仅在 KB 侧。
+
+**决策**：在每条写入路径把 `created_at` / `updated_at`（ISO 字符串）写入 KB 文档 frontmatter —— ingest（`render_ingest_markdown`）与 编辑/重转换（`render_doc_markdown`），并保持两处字段集合**完全一致**，使 ingest→编辑→重建的往返稳定。首次 ingest 两者都等于 `now`；重新上传时 `created_at` 从既有文档保留、`updated_at` 顶进；编辑/重转换保留 `created_at`、顶进 `updated_at`。数据库丢失重建（`document_from_frontmatter`）现会回读它们，使重建行恢复**真实**时间戳，而非 `now()`。
+
+- **文件 mtime 兜底以向后兼容**：缺失这些 key（或值为空/无法解析）的既有 / 手写文件，降级到文件的 `mtime` —— 而非 `now()` —— 与记忆面 `parse_fact_markdown` 一致。故既有语料以合理时间重建，**无需迁移 / 无需回填**。
+- **本地 `_parse_dt` 辅助，不跨 kind import**：ISO→aware-UTC 解析辅助是 `application/knowledge_base/pipeline_helpers.py` 内的本地副本；import-linter 禁止从 `infrastructure/memory/*` import（memory↔knowledge_base 是不同 kind），而每个 kind 各持一份副本是既定模式（记忆面的 topic_files / handoff 各自一份）。
+- **`converted_at` 不变** —— 它跟踪一次转换引擎运行，而非文档年龄，故重建时仍为 `now`。
+- **无新 FR** —— 这是在既有 FR-008 / SC-005 重建保证下补上一个"文件即真相"的缺口。无 schema/DB 改动（`documents` 表已有这两列）；仅改变磁盘文件内容与重建读取路径。
+
+## 16. 此处明确不决定 / 范围外
 
 - 单次调用里 keyword + vector 的 hybrid RRF 融合（可选未来，同引擎）。
 - 检索时的 reranking / HyDE / multi-query / LLM 综合 —— agent 综合。

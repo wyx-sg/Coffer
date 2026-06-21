@@ -176,7 +176,18 @@ No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invo
 
 **No migration / no schema change / no new FR** (pure cleanup under existing behaviour).
 
-## 15. Things explicitly NOT decided / out of scope here
+## 15. Document timestamps in frontmatter (KB18)
+
+**Question**: Coffer's invariant is "files are truth, SQLite is a rebuildable index", yet a KB document's on-disk `.md` frontmatter did NOT record `created_at` / `updated_at`. So when the database is lost and rows are rebuilt from the files (`document_from_frontmatter`), BOTH timestamps reset to `now()` — the original ingest/edit time was silently lost. The memory face (spec 007) already records these in each fact file and reads them back, so the gap was KB-only.
+
+**Decision**: Write `created_at` / `updated_at` (ISO strings) into the KB doc frontmatter on every write path — ingest (`render_ingest_markdown`) and edit/reconvert (`render_doc_markdown`), keeping the two field sets identical so an ingest→edit→rebuild round-trip is stable. On first ingest both equal `now`; on a re-upload `created_at` is preserved from the existing document and `updated_at` is bumped; an edit/reconvert preserves `created_at` and bumps `updated_at`. The DB-loss rebuild (`document_from_frontmatter`) now reads them back so a rebuilt row restores the REAL timestamps instead of `now()`.
+
+- **File-mtime fallback for back-compat**: a pre-existing / hand-written file lacking the keys (or with a blank/unparseable value) degrades to the file's `mtime` — NOT `now()` — mirroring memory's `parse_fact_markdown`. So existing corpora rebuild with a sensible time and need NO migration / NO backfill.
+- **Local `_parse_dt` helper, no cross-kind import**: the ISO→aware-UTC parse helper is a local copy in `application/knowledge_base/pipeline_helpers.py`; the import-linter forbids importing from `infrastructure/memory/*` (memory↔knowledge_base are separate kinds), and a per-kind copy is the established pattern (memory's topic_files / handoff each keep their own).
+- **`converted_at` is unchanged** — it tracks a conversion-engine run, not the document's age, so it stays `now` on a rebuild.
+- **No new FR** — this closes a files-as-truth gap under the existing FR-008 / SC-005 rebuild guarantee. No schema/DB change (the `documents` table already has the two columns); only the on-disk file contents and the rebuild read path change.
+
+## 16. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.
