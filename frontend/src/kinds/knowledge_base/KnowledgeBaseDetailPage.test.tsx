@@ -115,24 +115,61 @@ describe("KnowledgeBaseDetailPage", () => {
     expect(await screen.findByText(/pending vector embed/i)).toBeVisible();
   });
 
-  test("the bar searches (one query → one answer; no mode in the call)", async () => {
+  test("searching filters the tree to the hit doc and highlights the query in the viewer", async () => {
     seedBaseQueries();
+    vi.mocked(api.listDocuments).mockResolvedValue({
+      documents: [
+        { ...DOC, id: "d1", title: "Deploys" },
+        { ...DOC, id: "d2", title: "Runbook" },
+      ],
+      total: 2,
+    });
     vi.mocked(api.searchKnowledgeBase).mockResolvedValue({
       passages: [
         { text: "make release", document_id: "d1", title: "Deploys", score: 0.9, position: 0 },
       ],
     });
+    vi.mocked(api.getDocument).mockResolvedValue({
+      ...DOC,
+      id: "d1",
+      title: "Deploys",
+      markdown: "make a release build",
+    });
     renderPage();
+
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("Deploys");
+    expect(within(tree).getByText("Runbook")).toBeInTheDocument();
+
     fireEvent.change(await screen.findByPlaceholderText(/search this knowledge base/i), {
       target: { value: "release" },
     });
     fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
+
     await waitFor(() =>
-      expect(api.searchKnowledgeBase).toHaveBeenCalledWith("designs", "release", {
-        topK: 5,
-      }),
+      expect(api.searchKnowledgeBase).toHaveBeenCalledWith("designs", "release", { topK: 5 }),
     );
-    expect(await screen.findByText(/make release/)).toBeVisible();
+    // The tree filters to the hit doc; the non-hit drops out.
+    await waitFor(() => expect(within(tree).queryByText("Runbook")).not.toBeInTheDocument());
+    expect(within(tree).getByText("Deploys")).toBeInTheDocument();
+    // The top hit auto-opens with the query pre-seeded into the find widget.
+    expect(await screen.findByPlaceholderText(/find/i)).toHaveValue("release");
+  });
+
+  test("a search with no hits shows the no-matches label and an empty tree", async () => {
+    seedBaseQueries();
+    vi.mocked(api.searchKnowledgeBase).mockResolvedValue({ passages: [] });
+    renderPage();
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("Deploys");
+
+    fireEvent.change(await screen.findByPlaceholderText(/search this knowledge base/i), {
+      target: { value: "zzz" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
+
+    expect(await within(tree).findByText(/no matches/i)).toBeInTheDocument();
+    expect(within(tree).queryByText("Deploys")).not.toBeInTheDocument();
   });
 
   test("selecting a document renders its markdown READ-ONLY with file affordances", async () => {
@@ -216,11 +253,11 @@ describe("KnowledgeBaseDetailPage", () => {
     const tree = screen.getByRole("complementary");
     // First page fetched with offset 0.
     expect(await within(tree).findByText("doc-0")).toBeVisible();
-    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 50, 0, ""));
+    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 50, 0));
 
     // Next page → offset 50.
     fireEvent.click(within(tree).getByRole("button", { name: /next/i }));
-    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 50, 50, ""));
+    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 50, 50));
     expect(await within(tree).findByText("doc-99")).toBeVisible();
   });
 
@@ -292,42 +329,6 @@ describe("KnowledgeBaseDetailPage", () => {
     await waitFor(() => expect(api.checkSources).toHaveBeenCalledTimes(2));
   });
 
-  test("the doc filter is SERVER-SIDE: typing re-queries with q and resets to page 1", async () => {
-    seedBaseQueries();
-    // The server applies the title filter; the helper returns only matches and a
-    // filtered total. Empty q → both rows; q="run" → just Runbook.
-    vi.mocked(api.listDocuments).mockImplementation(async (_kb, _limit, _offset, q) =>
-      q && q.trim()
-        ? { documents: [{ ...DOC, id: "d2", title: "Runbook" }], total: 1 }
-        : {
-            documents: [
-              { ...DOC, id: "d1", title: "Deploys" },
-              { ...DOC, id: "d2", title: "Runbook" },
-            ],
-            total: 2,
-          },
-    );
-    renderPage();
-
-    const tree = screen.getByRole("complementary");
-    expect(await within(tree).findByText("Deploys")).toBeVisible();
-    expect(within(tree).getByText("Runbook")).toBeVisible();
-
-    const filter = within(tree).getByPlaceholderText(/filter documents/i);
-    fireEvent.change(filter, { target: { value: "run" } });
-    // After the ~300ms debounce, the server is queried with q="run" at offset 0.
-    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 50, 0, "run"));
-    // Only the server-returned match remains.
-    await waitFor(() => expect(within(tree).queryByText("Deploys")).toBeNull());
-    expect(within(tree).getByText("Runbook")).toBeVisible();
-
-    // Clearing the filter re-queries with empty q and restores the full list.
-    fireEvent.change(filter, { target: { value: "" } });
-    await waitFor(() => expect(api.listDocuments).toHaveBeenLastCalledWith("designs", 50, 0, ""));
-    expect(await within(tree).findByText("Deploys")).toBeVisible();
-    expect(within(tree).getByText("Runbook")).toBeVisible();
-  });
-
   test("clamps to a populated page when the total shrinks (last page emptied)", async () => {
     // Page 2 holds only the 51st doc; deleting it shrinks the total so page 2 no
     // longer exists — the tree must pull back to page 1, never strand the user on
@@ -342,6 +343,11 @@ describe("KnowledgeBaseDetailPage", () => {
       const start = offset ?? 0;
       return { documents: all.slice(start, start + 50), total: all.length };
     });
+    vi.mocked(api.getDocument).mockImplementation(async (_kb, id) => ({
+      ...DOC,
+      id,
+      markdown: "body",
+    }));
     vi.mocked(api.deleteDocument).mockImplementation(async (_kb, _id) => {
       deleted.add(_id);
     });
@@ -358,13 +364,12 @@ describe("KnowledgeBaseDetailPage", () => {
     const tree = screen.getByRole("complementary");
     await within(tree).findByText("doc-0");
 
-    // Page 2 → the lone 51st doc.
+    // Page 2 → the lone 51st doc; select it for the viewer.
     fireEvent.click(within(tree).getByRole("button", { name: /next/i }));
-    expect(await within(tree).findByText("doc-50")).toBeVisible();
+    fireEvent.click(await within(tree).findByText("doc-50"));
 
-    // Bulk-delete it; total drops to 50 → page 2 disappears.
-    fireEvent.click(within(tree).getByLabelText(/select row/i));
-    fireEvent.click(within(tree).getByRole("button", { name: /^delete$/i }));
+    // Delete it via the viewer's confirm dialog; total drops to 50 → page 2 gone.
+    fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
     await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d50"));
@@ -372,69 +377,6 @@ describe("KnowledgeBaseDetailPage", () => {
     // The clamp pulls back to page 1 (offset 0): a populated page, not an empty one.
     expect(await within(tree).findByText("doc-0")).toBeVisible();
     expect(within(tree).queryByText("doc-50")).toBeNull();
-  });
-
-  test("selecting two rows shows the bulk bar and bulk-deletes after confirm", async () => {
-    seedBaseQueries();
-    vi.mocked(api.listDocuments).mockResolvedValue({
-      documents: [
-        { ...DOC, id: "d1", title: "Deploys" },
-        { ...DOC, id: "d2", title: "Runbook" },
-      ],
-      total: 2,
-    });
-    vi.mocked(api.deleteDocument).mockResolvedValue(undefined);
-    renderPage();
-
-    const tree = screen.getByRole("complementary");
-    await within(tree).findByText("Deploys");
-    // Each row carries a "Select row" checkbox sibling of the title button.
-    const rowChecks = within(tree).getAllByLabelText(/select row/i);
-    expect(rowChecks).toHaveLength(2);
-    fireEvent.click(rowChecks[0]);
-    fireEvent.click(rowChecks[1]);
-
-    // The bulk bar reports the selected count and offers Delete.
-    expect(within(tree).getByText(/2 selected/i)).toBeVisible();
-    fireEvent.click(within(tree).getByRole("button", { name: /^delete$/i }));
-
-    // Confirm dialog → on confirm, deleteDocument fires once per selected id.
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
-    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d1"));
-    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d2"));
-    expect(api.deleteDocument).toHaveBeenCalledTimes(2);
-    // Selection clears: the bulk bar disappears.
-    await waitFor(() => expect(within(tree).queryByText(/2 selected/i)).toBeNull());
-  });
-
-  test("bulk-deleting the currently-viewed document resets the viewer", async () => {
-    seedBaseQueries();
-    vi.mocked(api.listDocuments).mockResolvedValue({
-      documents: [
-        { ...DOC, id: "d1", title: "Deploys" },
-        { ...DOC, id: "d2", title: "Runbook" },
-      ],
-      total: 2,
-    });
-    vi.mocked(api.getDocument).mockResolvedValue({ ...DOC, id: "d1", markdown: "viewed-body" });
-    vi.mocked(api.deleteDocument).mockResolvedValue(undefined);
-    renderPage();
-
-    const tree = screen.getByRole("complementary");
-    // View d1 in the right pane.
-    fireEvent.click(await within(tree).findByText("Deploys"));
-    expect(await screen.findByText("viewed-body")).toBeVisible();
-
-    // Select d1's checkbox and bulk-delete it.
-    fireEvent.click(within(tree).getAllByLabelText(/select row/i)[0]);
-    fireEvent.click(within(tree).getByRole("button", { name: /^delete$/i }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
-
-    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d1"));
-    // The viewer drops the deleted doc — selectedId resets, the preview clears.
-    await waitFor(() => expect(screen.queryByText("viewed-body")).toBeNull());
   });
 
   test("clicking a row title still loads it in the viewer (the e2e-critical path)", async () => {

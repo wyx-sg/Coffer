@@ -638,8 +638,9 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **配置目录选择器**
 
-- **FR-023**: 选择自定义 `config_dir` 时，桌面应用 MUST 提供一个文件夹选择器，而非要求用户手动输入路径。在打包桌面应用中，它 MUST 使用 OS 原生目录对话框；在 Web 上，它 MUST 使用 daemon 支撑的文件夹浏览器（FR-024）。两者都产出一个绝对路径，随后在注册前按 FR-007 校验。
+- **FR-023**: 选择自定义 `config_dir` 时，桌面应用 MUST 提供一个文件夹选择器，而非要求用户手动输入路径。在打包桌面应用中，它 MUST 使用 OS 原生目录对话框；在 Web 上，它 MUST 使用 daemon 原生目录对话框（FR-042），仅当宿主没有原生对话框工具时才退回 daemon 支撑的文件夹浏览器（FR-024）。两者都产出一个绝对路径，随后在注册前按 FR-007 校验。
 - **FR-024**: 系统 MUST 暴露一个只读的文件系统浏览操作（`GET /api/v1/fs/browse`），给定一个目录路径（默认用户主目录），返回该路径、其父目录与其直接子目录。它 MUST NOT 返回文件内容，且 MUST 与所有其它 daemon 路由一样受同样的 loopback + token 鉴权保护。
+- **FR-042**: 系统 MUST 通过环回 daemon 暴露原生 OS 选择器对话框（ADR-036），让 Web 界面打开宿主的真实对话框，而非要求手输路径：`POST /api/v1/fs/pick-folder`（选目录）、`POST /api/v1/fs/pick-file`（选一个已存在的文件来打开）、`POST /api/v1/fs/save-file`（选目标位置，可带 `suggested_name`）。每个都打开宿主原生对话框（macOS 用 `osascript`；Linux 用 `zenity`/`kdialog`），以固定参数向量调用（无 shell 插值），返回 `{ available, path }`：宿主无原生对话框工具时 `available=false`；用户取消时 `available=true` 且 `path=null`；否则为所选绝对路径。当 `available=false` 时调用方降级——文件夹选择退回应用内浏览器（FR-024），选文件与存文件退回手输路径。三者都不创建任何东西，且与每条 daemon 路由一样受同样的 loopback + token 鉴权保护。
 
 **文件系统打开/显示**
 

@@ -492,6 +492,7 @@
       "masterKey": "Master key (out-of-band)",
       "masterKeyHint": "Export this machine's key to a file and move it to another machine over a channel you trust, then import it there. Never put it in the sync repo.",
       "keyPath": "Local key file path",
+      "keyPathManualHint": "This machine has no native file dialog — type the path, then click again.",
       "exportKey": "Export key",
       "importKey": "Import key",
       "statuses": {
@@ -990,7 +991,6 @@
       "mode": "Mode",
       "searchPlaceholder": "Search this knowledge base…",
       "fallback": "No embedding configured — fell back to {{mode}}.",
-      "score": "score={{score}}",
       "noMatches": "No matches.",
       "grep": "Grep",
       "grepPlaceholder": "Pattern (exact / regex) over the Markdown files…",
@@ -1008,9 +1008,6 @@
       "chunkBadge": "{{count}} chunks",
       "degradedBadge": "{{count}} documents pending vector embed (embedding service unavailable; indexed by keyword)",
       "selectDocument": "Select a document on the left to preview or edit it.",
-      "filterDocs": "Filter documents…",
-      "noFilterMatches": "No documents match the filter.",
-      "bulkDeleteConfirm": "Delete {{count}} documents? This cannot be undone.",
       "sourceCheck": {
         "title": "Source files",
         "description": "Documents ingested from a file on disk, checked against their original source.",
@@ -1092,7 +1089,6 @@
       "mode": "Mode",
       "recallPlaceholder": "Recall facts from this store…",
       "fallback": "No embedding configured — fell back to keyword.",
-      "score": "score={{score}}",
       "noMatches": "No matches.",
       "addFact": "Add fact",
       "factName": "Name (optional)",

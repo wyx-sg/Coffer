@@ -93,6 +93,12 @@ export async function listFacts(store: string, limit = 50, offset = 0): Promise<
   return (await r.json()) as FactListOut;
 }
 
+export async function getFact(store: string, factId: string): Promise<FactOut> {
+  const r = await fetch(`${storeBase(store)}/facts/${enc(factId)}`, { headers: headers() });
+  await checkOk(r);
+  return (await r.json()) as FactOut;
+}
+
 export async function addFact(store: string, input: FactInput): Promise<FactOut> {
   const r = await fetch(`${storeBase(store)}/facts`, {
     method: "POST",

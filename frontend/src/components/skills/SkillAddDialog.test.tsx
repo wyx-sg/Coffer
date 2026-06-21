@@ -1,7 +1,8 @@
 // frontend/src/components/skills/SkillAddDialog.test.tsx
 //
 // The "Add skill" dialog: a single local-folder import form with its own
-// mutation. Submitting calls the mutation and, on resolve, fires onCreated +
+// mutation. The folder is PICKED via the FolderPicker (read-only display), not
+// typed; submitting calls the mutation and, on resolve, fires onCreated +
 // closes the dialog.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -15,6 +16,12 @@ vi.mock("@/lib/hooks/useSkills", () => ({
 }));
 const { useImportSkill } = await import("@/lib/hooks/useSkills");
 const useImportSkillMock = vi.mocked(useImportSkill);
+
+// The read-only path field is filled by the FolderPicker, which on the web asks
+// the daemon to open the native dialog (fsApi.pickFolder).
+vi.mock("@/lib/api/fs", () => ({ fsApi: { browse: vi.fn(), pickFolder: vi.fn() } }));
+const { fsApi } = await import("@/lib/api/fs");
+const pickFolderMock = vi.mocked(fsApi.pickFolder);
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -36,6 +43,13 @@ function stub(opts: {
   } as unknown as ReturnType<typeof useImportSkill>);
 }
 
+/** Pick a folder through the (mocked) native dialog and wait for it to land. */
+async function pickFolder(path: string) {
+  pickFolderMock.mockResolvedValue({ available: true, path });
+  fireEvent.click(screen.getByRole("button", { name: /browse/i }));
+  await waitFor(() => expect(screen.getByPlaceholderText(/\.claude\/skills/i)).toHaveValue(path));
+}
+
 describe("SkillAddDialog", () => {
   afterEach(() => vi.clearAllMocks());
 
@@ -47,17 +61,17 @@ describe("SkillAddDialog", () => {
     expect(screen.getByPlaceholderText(/\.claude\/skills/i)).toBeInTheDocument();
   });
 
-  test("offers a folder picker next to the path input (spec 005 FR-030)", () => {
+  test("offers a folder picker beside the path display (spec 005 FR-030)", () => {
     stub({});
     render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
       wrapper: wrap(null),
     });
     // The shared FolderPicker's Browse button — native dialog on desktop, daemon
-    // folder browser on web — so the skill folder is picked, not typed.
+    // native dialog → in-app browser on web — so the skill folder is picked, not typed.
     expect(screen.getByRole("button", { name: /browse/i })).toBeInTheDocument();
   });
 
-  test("the local tab imports the path and fires onCreated + close", async () => {
+  test("imports the picked path and fires onCreated + close", async () => {
     const importAsync = vi.fn().mockResolvedValue({});
     const onCreated = vi.fn();
     const onOpenChange = vi.fn();
@@ -65,13 +79,21 @@ describe("SkillAddDialog", () => {
     render(<SkillAddDialog open onOpenChange={onOpenChange} onCreated={onCreated} />, {
       wrapper: wrap(null),
     });
-    fireEvent.change(screen.getByPlaceholderText(/\.claude\/skills/i), {
-      target: { value: "/tmp/my-skill" },
-    });
+
+    await pickFolder("/tmp/my-skill");
     fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
+
     await waitFor(() => expect(importAsync).toHaveBeenCalledWith({ path: "/tmp/my-skill" }));
     expect(onCreated).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  test("Import is disabled until a folder is picked", () => {
+    stub({});
+    render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
+      wrapper: wrap(null),
+    });
+    expect(screen.getByRole("button", { name: /^import$/i })).toBeDisabled();
   });
 
   test("surfaces the import error inline", () => {
@@ -95,10 +117,8 @@ describe("SkillAddDialog", () => {
       wrapper: wrap(null),
     });
 
-    // Enter a path and submit.
-    fireEvent.change(screen.getByPlaceholderText(/\.claude\/skills/i), {
-      target: { value: "/tmp/my-skill" },
-    });
+    // Pick a folder and submit.
+    await pickFolder("/tmp/my-skill");
     fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
 
     // Conflict banner appears with skill name derived from the path.

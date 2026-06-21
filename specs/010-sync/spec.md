@@ -95,6 +95,12 @@ brings it over out-of-band exactly once:
 - `coffer sync key import <path>` installs it on the new machine (into the file
   store or keychain per the machine's setting).
 
+In the desktop UI the master-key card MUST let the user pick the file through a
+native dialog rather than typing a path — a native save dialog for export and a
+native open dialog for import (the OS dialog in the packaged app; on the web via
+the daemon picker, spec 004 FR-042 / ADR-036). A typed path field appears only as
+a fallback when the host has no native dialog tool.
+
 Until the key is present on a machine, imported ciphertext stays **locked**:
 resources that reference it cannot spawn, and status reports
 `credentials_locked` with the affected refs.

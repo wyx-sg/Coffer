@@ -27,9 +27,9 @@ describe("fsApi.browse", () => {
   });
 
   test("GETs /fs/browse with no query when path is omitted, sending auth headers", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { path: "/", parent: null, entries: [] }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { path: "/", parent: null, entries: [] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const out = await fsApi.browse();
@@ -65,9 +65,9 @@ describe("fsApi.browse", () => {
 
   test("sends an empty token header when no token is set", async () => {
     setCofferToken(null);
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { path: "/", parent: null, entries: [] }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { path: "/", parent: null, entries: [] }));
     vi.stubGlobal("fetch", fetchMock);
 
     await fsApi.browse();
@@ -78,9 +78,11 @@ describe("fsApi.browse", () => {
   test("throws an ApiError carrying the server envelope on a non-2xx response", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse(403, { error: { code: "FORBIDDEN", message: "no access" } }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(403, { error: { code: "FORBIDDEN", message: "no access" } }),
+        ),
     );
 
     await expect(fsApi.browse("/etc")).rejects.toMatchObject({
@@ -93,14 +95,95 @@ describe("fsApi.browse", () => {
   test("falls back to a synthetic error when the error body is unparseable", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response("not json", { status: 500, headers: { "Content-Type": "text/plain" } }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response("not json", { status: 500, headers: { "Content-Type": "text/plain" } }),
+        ),
     );
 
     await expect(fsApi.browse()).rejects.toMatchObject({
       code: "INTERNAL_ERROR",
       message: expect.stringContaining("500"),
     });
+  });
+});
+
+describe("fsApi.pickFile / saveFile (native file dialogs, FR-042)", () => {
+  beforeEach(() => setCofferToken("secret-token"));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setCofferToken(null);
+  });
+
+  test("pickFile POSTs /fs/pick-file with the start dir and auth headers", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { available: true, path: "/Users/me/coffer.key" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const out = await fsApi.pickFile("/Users/me");
+    expect(out).toEqual({ available: true, path: "/Users/me/coffer.key" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/fs\/pick-file$/);
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ start: "/Users/me" });
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers["X-Coffer-Token"]).toBe("secret-token");
+    expect(headers["X-Coffer-Actor"]).toBe("ui");
+  });
+
+  test("pickFile sends start:null when omitted", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { available: false, path: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fsApi.pickFile();
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      start: null,
+    });
+  });
+
+  test("saveFile POSTs /fs/save-file with the suggested name + start", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { available: true, path: "/Users/me/out.key" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const out = await fsApi.saveFile("coffer-master.key", "/Users/me");
+    expect(out).toEqual({ available: true, path: "/Users/me/out.key" });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/fs\/save-file$/);
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      suggested_name: "coffer-master.key",
+      start: "/Users/me",
+    });
+  });
+
+  test("saveFile defaults suggested_name + start to null", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { available: true, path: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fsApi.saveFile();
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      suggested_name: null,
+      start: null,
+    });
+  });
+
+  test("pickFile throws an ApiError carrying the server envelope on a non-2xx", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(401, { error: { code: "UNAUTHENTICATED", message: "nope" } }),
+        ),
+    );
+    await expect(fsApi.pickFile()).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    await expect(fsApi.pickFile()).rejects.toBeInstanceOf(ApiError);
   });
 });

@@ -13,6 +13,9 @@ interface Props {
   ariaLabel?: string;
   /** Extra classes for the wrapper (e.g. width). */
   className?: string;
+  /** Fired on Enter when the (trimmed) value is non-empty — for inputs that
+   *  trigger an explicit action (e.g. a server search) rather than live-filter. */
+  onSearch?: () => void;
 }
 
 /**
@@ -20,7 +23,15 @@ interface Props {
  * that appears once there is text. Shared by the MCP server list and the
  * audit log search.
  */
-export function SearchInput({ value, onChange, placeholder, id, ariaLabel, className }: Props) {
+export function SearchInput({
+  value,
+  onChange,
+  placeholder,
+  id,
+  ariaLabel,
+  className,
+  onSearch,
+}: Props) {
   const { t } = useTranslation();
   return (
     <div className={cn("relative", className)}>
@@ -34,6 +45,13 @@ export function SearchInput({ value, onChange, placeholder, id, ariaLabel, class
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={
+          onSearch
+            ? (e) => {
+                if (e.key === "Enter" && value.trim()) onSearch();
+              }
+            : undefined
+        }
         className={cn("pl-9", value && "pr-9")}
       />
       {value ? (

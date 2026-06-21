@@ -18,6 +18,7 @@ import { MemoryStoreDetailPage } from "./MemoryStoreDetailPage";
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
   listFacts: vi.fn(),
+  getFact: vi.fn(),
   getMemoryStore: vi.fn(),
   getMemoryStoreMetrics: vi.fn(),
   addFact: vi.fn(),
@@ -57,6 +58,7 @@ function renderPage() {
 
 function stubLists() {
   vi.mocked(api.listFacts).mockResolvedValue({ facts: [FACT], total: 1 });
+  vi.mocked(api.getFact).mockResolvedValue(FACT);
   vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 1, disk_bytes: 50 });
   vi.mocked(api.getMemoryStore).mockResolvedValue({
     ref: "memory:global",
@@ -106,6 +108,76 @@ describe("MemoryStoreDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
 
     await waitFor(() => expect(api.recall).toHaveBeenCalledWith("global", "tabs", { topK: 5 }));
+  });
+
+  test("recall filters the tree to the hit fact and highlights the query in the viewer", async () => {
+    const spaces = { ...FACT, id: "f2", name: "spaces", text: "spaces are fine" };
+    stubLists();
+    vi.mocked(api.listFacts).mockResolvedValue({ facts: [FACT, spaces], total: 2 });
+    vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 2, disk_bytes: 50 });
+    vi.mocked(api.recall).mockResolvedValue({
+      hits: [{ id: "f1", text: "uses tabs", score: 0.9, source: "global:/x.md", time: "t" }],
+    });
+    vi.mocked(api.getFact).mockResolvedValue(FACT);
+
+    renderPage();
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("tabs");
+    expect(within(tree).getByText("spaces")).toBeInTheDocument();
+
+    fireEvent.change(await screen.findByPlaceholderText(/recall facts/i), {
+      target: { value: "tabs" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
+
+    await waitFor(() => expect(api.getFact).toHaveBeenCalledWith("global", "f1"));
+    // Only the hit fact remains in the left tree; the non-hit drops out.
+    await waitFor(() => expect(within(tree).queryByText("spaces")).not.toBeInTheDocument());
+    expect(within(tree).getByText("tabs")).toBeInTheDocument();
+    // The viewer pre-seeds the find widget with the query to highlight the match.
+    expect(await screen.findByPlaceholderText(/find/i)).toHaveValue("tabs");
+  });
+
+  test("clearing the recall box restores the full fact list", async () => {
+    const spaces = { ...FACT, id: "f2", name: "spaces", text: "spaces are fine" };
+    stubLists();
+    vi.mocked(api.listFacts).mockResolvedValue({ facts: [FACT, spaces], total: 2 });
+    vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 2, disk_bytes: 50 });
+    vi.mocked(api.recall).mockResolvedValue({
+      hits: [{ id: "f1", text: "uses tabs", score: 0.9, source: "global:/x.md", time: "t" }],
+    });
+    vi.mocked(api.getFact).mockResolvedValue(FACT);
+
+    renderPage();
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("spaces");
+    fireEvent.change(await screen.findByPlaceholderText(/recall facts/i), {
+      target: { value: "tabs" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
+    await waitFor(() => expect(within(tree).queryByText("spaces")).not.toBeInTheDocument());
+
+    // The × clear button in the search box exits recall mode → full list returns.
+    fireEvent.click(screen.getByRole("button", { name: /^clear$/i }));
+    expect(await within(tree).findByText("spaces")).toBeInTheDocument();
+  });
+
+  test("a recall with no hits shows the no-matches label and an empty tree", async () => {
+    stubLists();
+    vi.mocked(api.recall).mockResolvedValue({ hits: [] });
+
+    renderPage();
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("tabs"); // full list first
+
+    fireEvent.change(await screen.findByPlaceholderText(/recall facts/i), {
+      target: { value: "zzz" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
+
+    // The tree drops the full list and shows the no-matches label (not a blank box).
+    expect(await within(tree).findByText(/no matches/i)).toBeInTheDocument();
+    expect(within(tree).queryByText("tabs")).not.toBeInTheDocument();
   });
 
   test("a selected fact renders READ-ONLY: no Edit/Save controls", async () => {

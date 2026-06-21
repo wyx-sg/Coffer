@@ -39,6 +39,16 @@ export function KnowledgeBaseDetailPage() {
       onError: (e) => toast.error(translateApiError(t, e)),
     });
 
+  // In recall mode the tree IS the deduped hit set; otherwise it's the current
+  // paged documents. Both reduce to plain {id, title, sourceMode} rows.
+  const treeItems = kb.recalling
+    ? kb.recallDocs
+    : (kb.docsQuery.data?.documents ?? []).map((d) => ({
+        id: d.id,
+        title: d.title,
+        sourceMode: d.source_mode,
+      }));
+
   return (
     <div className="space-y-6 p-6">
       <KnowledgeBaseDetailHeader
@@ -98,33 +108,30 @@ export function KnowledgeBaseDetailPage() {
 
       <KnowledgeBaseSearchBar
         query={kb.query}
-        searchResult={kb.searchResult}
         error={kb.search.error}
         isPending={kb.search.isPending}
-        onQueryChange={kb.setQuery}
+        onQueryChange={kb.onQueryChange}
         onSearch={kb.runSearch}
-        onSelectDocument={kb.selectDoc}
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(220px,300px)_1fr]">
         <KnowledgeBaseDocTree
-          docs={kb.docsQuery.data}
+          items={treeItems}
           selectedId={kb.selectedId}
-          isLoading={kb.docsQuery.isPending}
-          filter={kb.docFilter}
-          onFilterChange={kb.setDocFilter}
+          isLoading={kb.recalling ? false : kb.docsQuery.isPending}
+          total={kb.recalling ? treeItems.length : kb.docTotal}
           page={kb.docPage}
           pageCount={kb.docPageCount}
           pageSize={kb.docPageSize}
-          total={kb.docTotal}
           onPageChange={kb.setDocPage}
           onPageSizeChange={kb.setDocPageSize}
           onSelect={kb.selectDoc}
-          onBulkDelete={kb.bulkDelete}
-          isBulkDeletePending={kb.bulkDeletePending}
+          hidePagination={kb.recalling}
+          emptyLabel={kb.recalling ? t("knowledgeBases.detail.noMatches") : undefined}
         />
         <KnowledgeBaseDocViewer
           doc={kb.docDetailQuery.data}
+          initialQuery={kb.recalling ? kb.query : ""}
           isLoading={Boolean(kb.selectedId) && kb.docDetailQuery.isPending}
           isReconvertPending={kb.reconvert.isPending}
           isDeletePending={kb.del.isPending}

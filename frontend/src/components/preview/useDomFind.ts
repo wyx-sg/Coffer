@@ -18,6 +18,7 @@ export interface DomFind {
 export function useDomFind(
   containerRef: RefObject<HTMLElement | null>,
   revision?: unknown,
+  initialQuery?: string,
 ): DomFind {
   const rangesRef = useRef<Range[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +44,7 @@ export function useDomFind(
     [containerRef],
   );
 
-  const find = useFind(engine, revision);
+  const find = useFind(engine, revision, initialQuery);
 
   useEffect(() => {
     if (find.open) inputRef.current?.focus();

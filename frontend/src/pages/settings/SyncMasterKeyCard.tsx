@@ -1,9 +1,10 @@
 // frontend/src/pages/settings/SyncMasterKeyCard.tsx
 //
-// Out-of-band master-key transfer (spec 010). On the desktop app a native
-// save/open file dialog picks the path (click → choose, like mature software);
-// in the browser (no native picker for arbitrary paths) it falls back to a
-// path text field. The key never travels through the sync repo.
+// Out-of-band master-key transfer (spec 010). Click → native dialog picks the
+// path (save dialog for export, open dialog for import), the same on desktop
+// (Tauri) and web (daemon picker, spec 004 FR-042 / ADR-036). A typed path
+// field appears only as a fallback on hosts with no native dialog tool. The key
+// never travels through the sync repo.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -11,35 +12,43 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isTauri } from "@/lib/tauri";
+import { pickOpenFile, pickSaveFile } from "@/lib/filePicker";
 import { useExportMasterKey, useImportMasterKey } from "@/lib/hooks/useSync";
 
 const DEFAULT_KEY_NAME = "coffer-master.key";
 
 export function SyncMasterKeyCard() {
   const { t } = useTranslation();
+  // manual mode is revealed only after a pick reports no native dialog tool.
+  const [manual, setManual] = useState(false);
   const [keyPath, setKeyPath] = useState("");
   const importKey = useImportMasterKey();
   const exportKey = useExportMasterKey();
 
   const onExport = async () => {
-    if (isTauri()) {
-      const { save } = await import("@tauri-apps/plugin-dialog");
-      const path = await save({ defaultPath: DEFAULT_KEY_NAME });
-      if (path) exportKey.mutate(path);
+    if (manual) {
+      if (keyPath) exportKey.mutate(keyPath);
       return;
     }
-    if (keyPath) exportKey.mutate(keyPath);
+    const res = await pickSaveFile(DEFAULT_KEY_NAME);
+    if (res.unavailable) {
+      setManual(true);
+      return;
+    }
+    if (res.path) exportKey.mutate(res.path);
   };
 
   const onImport = async () => {
-    if (isTauri()) {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const path = await open({ multiple: false, directory: false });
-      if (typeof path === "string") importKey.mutate(path);
+    if (manual) {
+      if (keyPath) importKey.mutate(keyPath);
       return;
     }
-    if (keyPath) importKey.mutate(keyPath);
+    const res = await pickOpenFile();
+    if (res.unavailable) {
+      setManual(true);
+      return;
+    }
+    if (res.path) importKey.mutate(res.path);
   };
 
   return (
@@ -49,7 +58,7 @@ export function SyncMasterKeyCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-foreground/70">{t("settings.sync.masterKeyHint")}</p>
-        {!isTauri() && (
+        {manual && (
           <div className="space-y-2">
             <Label htmlFor="sync-key-path">{t("settings.sync.keyPath")}</Label>
             <Input
@@ -58,20 +67,21 @@ export function SyncMasterKeyCard() {
               placeholder="/path/to/coffer-master.key"
               onChange={(e) => setKeyPath(e.target.value)}
             />
+            <p className="text-xs text-foreground/60">{t("settings.sync.keyPathManualHint")}</p>
           </div>
         )}
         <div className="flex gap-2">
           <Button
             variant="secondary"
             onClick={onExport}
-            disabled={exportKey.isPending || (!isTauri() && !keyPath)}
+            disabled={exportKey.isPending || (manual && !keyPath)}
           >
             {t("settings.sync.exportKey")}
           </Button>
           <Button
             variant="secondary"
             onClick={onImport}
-            disabled={importKey.isPending || (!isTauri() && !keyPath)}
+            disabled={importKey.isPending || (manual && !keyPath)}
           >
             {t("settings.sync.importKey")}
           </Button>
