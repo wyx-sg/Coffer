@@ -1,13 +1,14 @@
-"""HTTP coverage for /api/v1/fs/* (spec 004-agent-registry FR-024/FR-039)."""
+"""HTTP coverage for /api/v1/fs/* (spec 004-agent-registry FR-024/FR-039/FR-042)."""
 
 from __future__ import annotations
 
 import pathlib
+from types import SimpleNamespace
 
 import pytest
 from starlette.testclient import TestClient
 
-from coffer.application.fs import editor_service, open_service
+from coffer.application.fs import editor_service, open_service, pick_service
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -161,3 +162,53 @@ def test_fs_editors_empty_when_none_installed(tmp_path, monkeypatch):
         r = c.get("/api/v1/fs/editors")
         assert r.status_code == 200, r.text
         assert r.json()["editors"] == []
+
+
+def _stub_dialog(monkeypatch, *, returncode: int, stdout: str = "") -> None:
+    """Pin macOS and stub the native dialog spawn instead of opening a real one."""
+    monkeypatch.setattr("sys.platform", "darwin")
+    monkeypatch.setattr(
+        pick_service.subprocess,
+        "run",
+        lambda cmd, **_: SimpleNamespace(returncode=returncode, stdout=stdout, stderr=""),
+    )
+
+
+def test_fs_pick_file_returns_chosen_path(tmp_path, monkeypatch):
+    """POST /fs/pick-file → the absolute file path the user chose."""
+    _stub_dialog(monkeypatch, returncode=0, stdout="/Users/me/coffer-master.key\n")
+    app = _app(tmp_path, monkeypatch, 59650)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/pick-file", json={"start": "/Users/me"})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"available": True, "path": "/Users/me/coffer-master.key"}
+
+
+def test_fs_save_file_returns_destination_path(tmp_path, monkeypatch):
+    """POST /fs/save-file → the destination path the user chose."""
+    _stub_dialog(monkeypatch, returncode=0, stdout="/Users/me/out.key\n")
+    app = _app(tmp_path, monkeypatch, 59651)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/save-file", json={"suggested_name": "out.key"})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"available": True, "path": "/Users/me/out.key"}
+
+
+def test_fs_save_file_cancel_is_available_no_path(tmp_path, monkeypatch):
+    """A non-zero exit from a present dialog tool means the user cancelled."""
+    _stub_dialog(monkeypatch, returncode=1, stdout="")
+    app = _app(tmp_path, monkeypatch, 59652)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/save-file", json={})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"available": True, "path": None}
+
+
+def test_fs_pick_file_unavailable_on_host_without_dialog(tmp_path, monkeypatch):
+    """No native dialog tool (Windows) → available:false so the UI falls back."""
+    monkeypatch.setattr("sys.platform", "win32")
+    app = _app(tmp_path, monkeypatch, 59653)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/pick-file", json={})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"available": False, "path": None}

@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-import { FolderPicker } from "@/components/agents/FolderPicker";
+import { FolderPickerField } from "@/components/agents/FolderPickerField";
 import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
 import type { AgentCreate, AgentType } from "@/lib/api/agents";
@@ -82,17 +82,13 @@ export function AgentManualAddForm({ onAdded }: { onAdded: (name: string) => voi
           </label>
           <div className="block text-sm">
             <span>{t("agents.configDirOverride")}</span>
-            <div className="mt-1 flex gap-2">
-              <input
-                aria-label={t("agents.configDirOverride")}
-                className="block w-full rounded border bg-background px-2 py-1 font-mono text-xs"
+            <div className="mt-1">
+              <FolderPickerField
+                ariaLabel={t("agents.configDirOverride")}
                 placeholder={t("agents.configDirPlaceholder")}
-                value={form.config_dir ?? ""}
-                onChange={(e) => setForm({ ...form, config_dir: e.target.value || null })}
-              />
-              <FolderPicker
                 value={form.config_dir ?? null}
                 onChange={(p) => setForm({ ...form, config_dir: p })}
+                clearable
               />
             </div>
           </div>

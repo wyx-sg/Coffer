@@ -492,6 +492,7 @@
       "masterKey": "Master key（带外）",
       "masterKeyHint": "把本机的 key 导出到文件，通过你信任的通道带到另一台机器再导入。切勿放进同步仓库。",
       "keyPath": "本地 key 文件路径",
+      "keyPathManualHint": "本机没有原生文件对话框——请手动输入路径，然后再次点击。",
       "exportKey": "导出 key",
       "importKey": "导入 key",
       "statuses": {

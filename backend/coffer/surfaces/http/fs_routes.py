@@ -120,6 +120,44 @@ async def pick_folder(
     return FsPickFolderOut(available=result.available, path=result.path)
 
 
+class FsPickFileRequest(BaseModel):
+    start: str | None = None
+
+
+class FsSaveFileRequest(BaseModel):
+    suggested_name: str | None = None
+    start: str | None = None
+
+
+class FsFilePickOut(BaseModel):
+    # available=False → no native dialog tool on this host (caller falls back to
+    # a typed path); available=True + path=None → the user cancelled.
+    available: bool
+    path: str | None
+
+
+@router.post("/pick-file", response_model=FsFilePickOut)
+async def pick_file(
+    body: FsPickFileRequest,
+    svc: FsPickService = Depends(get_fs_pick_service),  # noqa: B008
+) -> FsFilePickOut:
+    """Open the host's native open-file dialog and return the chosen file."""
+    # to_thread: the native dialog is modal and blocks until the user responds.
+    result = await asyncio.to_thread(svc.pick_file, body.start)
+    return FsFilePickOut(available=result.available, path=result.path)
+
+
+@router.post("/save-file", response_model=FsFilePickOut)
+async def save_file(
+    body: FsSaveFileRequest,
+    svc: FsPickService = Depends(get_fs_pick_service),  # noqa: B008
+) -> FsFilePickOut:
+    """Open the host's native save-file dialog and return the chosen destination."""
+    # to_thread: the native dialog is modal and blocks until the user responds.
+    result = await asyncio.to_thread(svc.save_file, body.suggested_name, body.start)
+    return FsFilePickOut(available=result.available, path=result.path)
+
+
 # --- Installed-editor detection (backs the preferred-editor picker, spec 002) ---
 
 
