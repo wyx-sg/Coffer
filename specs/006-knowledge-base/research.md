@@ -187,7 +187,17 @@ No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invo
 - **`converted_at` is unchanged** — it tracks a conversion-engine run, not the document's age, so it stays `now` on a rebuild.
 - **No new FR** — this closes a files-as-truth gap under the existing FR-008 / SC-005 rebuild guarantee. No schema/DB change (the `documents` table already has the two columns); only the on-disk file contents and the rebuild read path change.
 
-## 16. Things explicitly NOT decided / out of scope here
+## 16. Source-file update detection — frontend (FR-021..024)
+
+**Question**: PR #140 shipped the backend for external source-file tracking — a `check-sources` scan that reports, per document with a tracked `source_path`, whether its original on-disk file is `unchanged` / `changed` / `missing` / `edited` (source moved on but the doc was locally edited, so a re-ingest is skipped) / `updated` (was changed and auto-re-ingested because the KB's `auto_update_sources` is on), plus a per-document `update-source` re-ingest and the per-KB `auto_update_sources` config flag. None of it was reachable from the UI.
+
+**Decision**: Surface it on the KB detail page as purely additive UI (no backend change):
+
+- A **"Check sources"** header action (next to Settings / Reindex / Upload) POSTs `check-sources` and opens a **report dialog**. Each row shows the document title, its source path, and a status badge for one of the five statuses. Only a **`changed`** row offers a per-row **"Update from source"** button (POST `update-source`, re-ingest in place); `missing` rows note the file is gone, `edited` rows note the doc was edited locally so updating is blocked (the backend refuses an `edited` doc with a typed error, surfaced as a toast). When the scan returns no rows the dialog explains that **web uploads aren't tracked** — only path-based ingests (CLI / desktop) carry a source file.
+- The per-KB **`auto_update_sources`** flag gets a `<Switch>` row in the settings dialog. Because the config PATCH **replaces** the whole config (FR-014/FR-019), the toggle's value is threaded through the merged config built on submit, and the field was added to `KnowledgeBaseConfigOut` so a settings save can't silently reset it to false.
+- **No new FR** — this delivers the existing FR-021..024 frontend; coverage is the new `SourceCheckDialog` vitest suite plus the extended detail-page test (asserts Check-sources opens the dialog and that the settings PATCH carries `auto_update_sources`).
+
+## 17. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.

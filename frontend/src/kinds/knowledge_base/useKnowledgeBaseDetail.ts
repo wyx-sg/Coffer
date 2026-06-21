@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/errors";
 import {
+  checkSources,
   deleteDocument,
   getDocument,
   getKnowledgeBase,
@@ -20,11 +21,13 @@ import {
   reconvertDocument,
   reindexKnowledgeBase,
   searchKnowledgeBase,
+  updateFromSource,
   updateKnowledgeBaseConfig,
   type GrepResponse,
   type KnowledgeBaseConfigOut,
   type RetrievalMode,
   type SearchResponse,
+  type SourceCheckResponse,
 } from "./api";
 
 // Page size for the document tree; "Load more" grows the fetch limit by this.
@@ -44,6 +47,9 @@ export function useKnowledgeBaseDetail(name: string) {
   const [showSettings, setShowSettings] = useState(false);
   const [lastFile, setLastFile] = useState<File | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  // The latest source-check report; non-null opens the report dialog.
+  const [sourceReport, setSourceReport] = useState<SourceCheckResponse | null>(null);
 
   // Documents are paged so a large KB doesn't load all at once; the tree shows a
   // "Load more" affordance once more documents exist than are loaded.
@@ -113,6 +119,27 @@ export function useKnowledgeBaseDetail(name: string) {
     mutationFn: () => reindexKnowledgeBase(name),
     onSuccess: invalidate,
   });
+  const checkSourcesM = useMutation({
+    mutationFn: () => checkSources(name),
+    onSuccess: (report) => {
+      // An "updated" entry means a doc was auto-re-ingested in place — refresh
+      // the lists/metrics so the new chunk counts show.
+      if (report.sources.some((s) => s.status === "updated")) {
+        invalidate();
+        invalidateSelected();
+      }
+      setSourceReport(report);
+    },
+  });
+  const updateFromSourceM = useMutation({
+    mutationFn: (id: string) => updateFromSource(name, id),
+    onSuccess: () => {
+      invalidate();
+      invalidateSelected();
+      // Re-run the scan so the just-updated row flips out of "changed".
+      checkSourcesM.mutate();
+    },
+  });
   const search = useMutation({
     mutationFn: () => searchKnowledgeBase(name, query, { topK: 5, mode }),
     onSuccess: (data) => {
@@ -179,6 +206,10 @@ export function useKnowledgeBaseDetail(name: string) {
     reconvert,
     del,
     reindex,
+    checkSources: checkSourcesM,
+    updateFromSource: updateFromSourceM,
+    sourceReport,
+    setSourceReport,
     search,
     grep,
     runSearch,
