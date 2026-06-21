@@ -65,7 +65,11 @@ A single persisted sync config row:
 - `enabled` — master on/off for sync.
 - `auto` — whether the daemon auto-sync worker runs.
 - `interval_seconds` — auto pull/push interval (default 300).
-- `branch` — git branch to sync on (default `main`).
+- `branch` — git branch to sync on (default `main`). This is an internal ref
+  name in Coffer's own sync vault repo, not the user's project branch; both
+  machines use the same default, so it is **not exposed in the settings UI**.
+  It remains in the config/API and is adjustable via the CLI (`coffer sync
+  --branch`) for the rare case of sharing one remote across branches.
 
 Credentials for the git remote (SSH key / token) are the user's own git
 configuration; Coffer invokes git and relies on the ambient git credential

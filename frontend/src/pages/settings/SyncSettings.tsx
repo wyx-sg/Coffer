@@ -105,10 +105,10 @@ export function SyncSettings() {
               onChange={(e) => setRemote(e.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="sync-branch">{t("settings.sync.branch")}</Label>
-            <Input id="sync-branch" value={branch} onChange={(e) => setBranch(e.target.value)} />
-          </div>
+          {/* Branch is an internal ref name in Coffer's own sync vault repo, not
+              the user's project branch; both machines default to "main", so it is
+              not user-facing. We still round-trip the loaded value on save to
+              preserve a non-default branch set via the CLI (`coffer sync --branch`). */}
           <div className="flex items-center justify-between">
             <Label htmlFor="sync-enabled">{t("settings.sync.enable")}</Label>
             <Switch id="sync-enabled" checked={enabled} onCheckedChange={setEnabled} />
