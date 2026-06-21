@@ -40,7 +40,7 @@ export function MemoryFactViewer({ fact, isDeletePending, onDelete }: Props) {
           {fact.type ? <Badge variant="secondary">{fact.type}</Badge> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {fact.path ? <FileActions filePath={fact.path} folderPath={fact.folder_path} /> : null}
+          {fact.path ? <FileActions filePath={fact.path} /> : null}
           <Button
             size="sm"
             variant="outline"

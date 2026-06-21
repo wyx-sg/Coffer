@@ -123,10 +123,9 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     openSettings();
 
     // FileActions offers real open/reveal on both surfaces (daemon-backed on web):
-    // open-in-editor + reveal for the file, plus open-folder (folder_path present).
+    // open-in-editor + reveal for the file.
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open folder/i })).toBeInTheDocument();
   });
 
   test("hides not-yet-created allowlisted files from the read-only viewer", () => {
