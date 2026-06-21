@@ -6,7 +6,7 @@ import json
 import logging
 import re
 
-from coffer.domain.distill.session import DistilledInsight, InsightType, TranscriptSession
+from coffer.domain.distill.session import DistilledInsight, TranscriptSession
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +16,12 @@ _SYSTEM = """\
 You are a knowledge-distillation assistant. Your task is to read a software engineering \
 conversation between a developer and a coding agent and extract DURABLE, project-relevant insights.
 
-Extract ONLY insights that fall into one of these four categories:
-- decision: An architectural or design decision made, including the rationale.
-- gotcha: A failed approach, surprising bug, or hard-won lesson that future engineers should know.
-- convention: A naming convention, style rule, or project standard that was established.
-- todo: An open action item or deferred decision explicitly noted in the conversation.
+An insight is DURABLE when it is the kind of thing a future engineer would want to know — \
+typically one of:
+- A decision: an architectural or design decision made, including the rationale.
+- A gotcha: a failed approach, surprising bug, or hard-won lesson worth remembering.
+- A convention: a naming convention, style rule, or project standard that was established.
+- A todo: an open action item or deferred decision explicitly noted in the conversation.
 
 Rules:
 - IGNORE transient chatter, exploratory thinking, trivial steps, and status updates.
@@ -31,15 +32,13 @@ Return ONLY a JSON array of objects with these exact fields:
   name        — short title (≤ 80 chars)
   description — one-sentence summary (≤ 200 chars)
   body        — full detail (Markdown, ≤ 1000 chars)
-  type        — one of: decision, gotcha, convention, todo
 
 Example (valid response):
 [
   {
     "name": "Use ULIDs for all entity IDs",
     "description": "Project convention established in session.",
-    "body": "All database entities use ULIDs (not UUIDs) for primary keys.",
-    "type": "convention"
+    "body": "All database entities use ULIDs (not UUIDs) for primary keys."
   }
 ]
 
@@ -70,7 +69,7 @@ def parse_insights(raw: str) -> list[DistilledInsight]:
 
     Strips ``` fences, loads JSON, maps to domain objects.
     Returns [] on any parse failure or if input is not valid JSON array.
-    Skips items with unknown type or missing required fields.
+    Skips items missing required fields.
     """
     text = raw.strip()
 
@@ -94,16 +93,10 @@ def parse_insights(raw: str) -> list[DistilledInsight]:
         if not isinstance(item, dict):
             continue
         try:
-            insight_type = InsightType(item["type"])
-        except (KeyError, ValueError):
-            logger.debug("parse_insights: skipping item with unknown type %r", item.get("type"))
-            continue
-        try:
             insight = DistilledInsight(
                 name=item["name"],
                 description=item["description"],
                 body=item["body"],
-                type=insight_type,
             )
         except (KeyError, TypeError):
             logger.debug("parse_insights: skipping item with missing fields: %r", item)

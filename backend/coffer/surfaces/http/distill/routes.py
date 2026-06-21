@@ -112,7 +112,7 @@ async def distill_transcript(
     body: DistillRequest,
     svc: TranscriptDistillationService = Depends(get_distill_service),  # noqa: B008
 ) -> DistillResponse:
-    """Distil a transcript session into Coffer memory facts."""
+    """Distil a transcript session into the Coffer journal."""
     try:
         result = await svc.distill(
             agent_name=name,
@@ -143,9 +143,8 @@ async def distill_transcript(
                 name=i.name,
                 description=i.description,
                 body=i.body,
-                type=i.type,
             )
             for i in result.insights
         ],
-        fact_ids=result.facts,
+        journal_entries=result.journal_entries,
     )

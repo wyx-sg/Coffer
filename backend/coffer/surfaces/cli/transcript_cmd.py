@@ -2,7 +2,7 @@
 
 Thin HTTP shells over the daemon. Two commands:
   - ``list <agent>``    List transcript sessions for a registered agent.
-  - ``distill <agent>`` Distil insights from a session into Coffer memory facts.
+  - ``distill <agent>`` Distil insights from a session into the Coffer journal.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def distill(
     ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview insights without writing."),
 ) -> None:
-    """Distil insights from an agent's transcript into Coffer memory."""
+    """Distil insights from an agent's transcript into the Coffer journal."""
     body: dict[str, object] = {"dry_run": dry_run}
     if session_id is not None:
         body["session_id"] = session_id
@@ -77,14 +77,14 @@ def distill(
 
     typer.echo(f"Insights ({len(insights)}):")
     for ins in insights:
-        typer.echo(f"  [{ins['type']}] {ins['name']}")
+        typer.echo(f"  {ins['name']}")
         typer.echo(f"    {ins['body']}")
 
     if dry_run:
-        typer.echo("(dry-run: nothing was written to memory)")
+        typer.echo("(dry-run: nothing was written to the journal)")
     else:
-        fact_ids: list[str] = data.get("fact_ids", [])
-        if fact_ids:
-            typer.echo(f"Created {len(fact_ids)} fact(s):")
-            for fid in fact_ids:
-                typer.echo(f"  {fid}")
+        entries: list[str] = data.get("journal_entries", [])
+        if entries:
+            typer.echo(f"Wrote {len(entries)} journal entry(ies):")
+            for marker in entries:
+                typer.echo(f"  {marker}")

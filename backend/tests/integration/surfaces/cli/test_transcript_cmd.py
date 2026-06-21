@@ -16,7 +16,7 @@ from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
 from coffer.application.distill.service import DistillResult
-from coffer.domain.distill.session import DistilledInsight, InsightType, TranscriptSession
+from coffer.domain.distill.session import DistilledInsight, TranscriptSession
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
@@ -69,7 +69,7 @@ class _FakeDistillService:
         dry_run: bool = False,
     ) -> DistillResult:
         if dry_run:
-            return DistillResult(insights=self._distill_result.insights, facts=[])
+            return DistillResult(insights=self._distill_result.insights, journal_entries=[])
         return self._distill_result
 
 
@@ -90,10 +90,9 @@ _INSIGHT = DistilledInsight(
     name="Use ULIDs for IDs",
     description="Project standard for identifiers",
     body="All IDs in this project are ULIDs, not UUIDs.",
-    type=InsightType.CONVENTION,
 )
 
-_RESULT = DistillResult(insights=[_INSIGHT], facts=["fact-id-001"])
+_RESULT = DistillResult(insights=[_INSIGHT], journal_entries=["2026-06-21T09:00:00+00:00"])
 
 
 def _build_app(svc: _FakeDistillService) -> FastAPI:
@@ -165,23 +164,22 @@ def test_distill_dry_run_prints_insights(transcript_cli_daemon: None) -> None:
     )
     assert result.exit_code == 0, result.output
     assert "Use ULIDs for IDs" in result.output
-    assert "convention" in result.output
     assert "dry-run" in result.output
 
 
-def test_distill_dry_run_does_not_print_fact_ids(transcript_cli_daemon: None) -> None:
+def test_distill_dry_run_does_not_print_journal_entries(transcript_cli_daemon: None) -> None:
     result = _runner.invoke(
         cli_app, ["transcript", "distill", "my-agent", "--session", "sess-abc", "--dry-run"]
     )
     assert result.exit_code == 0, result.output
-    # "fact-id-001" must NOT appear — dry-run writes nothing
-    assert "fact-id-001" not in result.output
+    # The journal-entry marker must NOT appear — dry-run writes nothing
+    assert "2026-06-21T09:00:00+00:00" not in result.output
 
 
-def test_distill_real_run_prints_fact_ids(transcript_cli_daemon: None) -> None:
+def test_distill_real_run_prints_journal_entries(transcript_cli_daemon: None) -> None:
     result = _runner.invoke(cli_app, ["transcript", "distill", "my-agent", "--session", "sess-abc"])
     assert result.exit_code == 0, result.output
-    assert "fact-id-001" in result.output
+    assert "2026-06-21T09:00:00+00:00" in result.output
     assert "Use ULIDs for IDs" in result.output
 
 

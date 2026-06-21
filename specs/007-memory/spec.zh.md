@@ -241,7 +241,7 @@ cwd 没有可恢复的现场。
 
 - **Given** 一个已注册的 agent（Claude Code、Codex 或 OpenCode），且其原生存储中至少有一条含自然语言对话轮次的对话记录，
 - **When** 调用 `POST /api/v1/agents/{name}/transcripts/distill`（或 CLI 中的 `coffer transcript distill <agent>`），且 `dry_run=false`，
-- **Then** 对话记录被读取，工具调用载荷和密钥在 LLM 调用前被清洗，LLM 返回结构化洞察，每条洞察被写为项目作用域的 memory 事实，携带 `actor="agent"`、`origin_session_id=<对话记录会话 id>`，且 `type` ∈ `{decision, gotcha, convention, todo}`；任何已持久化事实中均不出现原始对话内容；`coffer__recall` 此后返回这些新事实；当 `dry_run=true` 时，洞察被返回但不向磁盘写入任何内容。
+- **Then** 对话记录被读取，工具调用载荷和密钥在 LLM 调用前被清洗，LLM 返回结构化洞察(每条仅含 `name` / `description` / `body` —— 蒸馏不再为每条洞察分类 type),每条洞察被**追加为项目作用域的 journal 条目**(情景记忆,`actor="agent"` 记录在 `journal_append` 审计里)—— 绝不写为扁平 knowledge 事实;路径不在 git 项目内的会话被跳过(没有全局 journal);任何已持久化条目中均不出现原始对话内容;`coffer__recall` 此后返回这些新 journal 条目(FR-043);当 `dry_run=true` 时,洞察被返回但不向磁盘写入任何内容。
 
 ### Scenario: browse an agent's transcript history with title, search, and sort
 
@@ -384,6 +384,7 @@ cwd 没有可恢复的现场。
 - **FR-042:** Coffer SHALL 暴露内部 `JournalService.append(cwd, body, actor)` 与 `read_recent(cwd, limit)`。在 git 项目外 append 抛 `ScopeUnresolved`;项目外读取返回空列表。`read_recent` 按最新优先返回,数量上限为 `limit`;`limit=0` 返回空列表(不隐式表示“全部”)。`journal_append` 审计条目只记录 `char_size`,绝不记录正文。
 - **FR-043:** Journal 记忆带 SHALL 参与 `recall`。记忆 reconciler MUST 扫描每个 `journal/<YYYY-MM>.md` 文件并把它索引为一个记忆文档(`kind=memory`),用与主题文档(FR-032)相同的共享 markdown 分块器与固定参数分块,并纳入懒惰的读时重建索引(FR-010),使外部编辑或新的 `JournalService.append` 在下一次 `recall` 时即可被检索到。grep recall 守卫(原本只保留 `knowledge/` 命中)MUST 额外保留 `journal/` 命中,并按 journal 文件而非 fact 文件解析它们。Journal 文档 MUST NOT 计入 store 的 `fact_count`(该计数只统计 `knowledge/` 记忆带)。`rules/`、`handoff/`、`superseded/` 记忆带仍排除在 `recall` 之外。
 - **FR-044:** 来自 journal 记忆带的 `recall` 命中 MUST 能与 `knowledge/` 命中区分:与所有 recall 命中一样,其 `source` 携带被命中文件的磁盘路径(同 FR-022),而 journal 命中的路径是 `journal/<YYYY-MM>.md` 文件(含 `journal/` 记忆带片段),因此 agent 能区分情景事件与语义事实。
+- **FR-045:** 对话记录蒸馏(用户故事 6)SHALL 把每条提取出的洞察写入 **journal** 记忆带(情景),而**不是**扁平的 `knowledge/` 事实。蒸馏保持“笨”:只提取 `name` / `description` / `body`,MUST NOT 为每条洞察分类 type —— 旧的 `InsightType`(`decision` / `gotcha` / `convention` / `todo`)被废弃(蒸馏洞察、蒸馏 prompt、蒸馏响应里都不再有 `type` 字段)。每条洞察经 `JournalService.append` 追加到会话所属项目的 journal;路径不解析为 git 项目的会话被跳过(没有全局 journal)。蒸馏响应报告写入的 journal 条目(`fact_ids` 字段重命名为 `journal_entries`)。把复现的 journal 模式固化进 `knowledge`/`rules` 是 organizer 的职责(后续固化切片),绝非蒸馏的。
 
 **Transcript history（对话历史）**
 

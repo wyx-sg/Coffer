@@ -46,7 +46,7 @@ class DistillRequest(BaseModel):
     )
     dry_run: bool = Field(
         default=False,
-        description="If true, return insights without writing memory facts.",
+        description="If true, return insights without writing journal entries.",
     )
 
 
@@ -56,11 +56,10 @@ class InsightOut(BaseModel):
     name: str
     description: str
     body: str
-    type: str  # InsightType value (decision | gotcha | convention | todo)
 
 
 class DistillResponse(BaseModel):
     """Response for POST /api/v1/agents/{name}/transcripts/distill."""
 
     insights: list[InsightOut]
-    fact_ids: list[str]
+    journal_entries: list[str]

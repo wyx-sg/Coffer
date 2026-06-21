@@ -60,7 +60,7 @@ class InsightSinkPort(Protocol):
         project_path: str | None,
         insight: DistilledInsight,
         origin_session_id: str,
-    ) -> str: ...  # returns created fact id
+    ) -> str | None: ...  # returns the journal-entry marker, or None when skipped
 
 
 class AgentResolverPort(Protocol):

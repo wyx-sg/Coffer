@@ -54,12 +54,11 @@ export interface InsightOut {
   name: string;
   description: string;
   body: string;
-  type: string; // "decision" | "gotcha" | "convention" | "todo"
 }
 
 export interface DistillResponse {
   insights: InsightOut[];
-  fact_ids: string[];
+  journal_entries: string[];
 }
 
 // ---------------------------------------------------------------------------
