@@ -191,7 +191,6 @@ RecallScope = Literal["global", "project", "both"]
 class RecallRequest(BaseModel):
     query: str = Field(min_length=1, max_length=4096)
     scope: RecallScope = "both"
-    mode: RetrievalMode | None = None
     top_k: int = Field(default=5, ge=1, le=20)
 
 
@@ -205,8 +204,6 @@ class RecallHit(BaseModel):
 
 class RecallResponse(BaseModel):
     hits: list[RecallHit]
-    mode: RetrievalMode
-    fallback: bool = False
 
 
 # --- organize ---------------------------------------------------------------

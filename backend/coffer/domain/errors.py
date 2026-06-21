@@ -235,7 +235,6 @@ from coffer.domain.kb_errors import (  # noqa: E402, I001
     IngestRejected as IngestRejected,
     KBNotFound as KBNotFound,
     ReconversionBlocked as ReconversionBlocked,
-    SearchModeInvalid as SearchModeInvalid,
 )
 
 

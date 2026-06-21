@@ -232,7 +232,6 @@ def configure(
     enable_vector: bool = typer.Option(
         False, "--enable-vector", help="Add 'vector' to retrieval_modes."
     ),
-    default_mode: str | None = typer.Option(None, "--default-mode"),
     max_fact_chars: int | None = typer.Option(None, "--max-fact-chars"),
 ) -> None:
     """Update a store's config (embedding / modes / limits). PATCHes the store;
@@ -248,8 +247,6 @@ def configure(
         patch["embedding_base_url"] = base_url
     if credential_ref is not None:
         patch["embedding_credential_ref"] = credential_ref
-    if default_mode is not None:
-        patch["default_mode"] = default_mode
     if max_fact_chars is not None:
         patch["max_fact_chars"] = max_fact_chars
     c, _info = _cli_client.client_or_exit()
@@ -275,13 +272,10 @@ def recall(
     name: str = typer.Argument(...),
     query: str = typer.Argument(...),
     top_k: int = typer.Option(5, "--top-k"),
-    mode: str | None = typer.Option(None, "--mode", help="grep / keyword / vector."),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Recall facts from a store."""
+    """Recall facts from a store (one query → one answer)."""
     payload: dict[str, object] = {"query": query, "top_k": top_k}
-    if mode is not None:
-        payload["mode"] = mode
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post(f"/memory_stores/{name}/recall", json=payload)
@@ -290,8 +284,6 @@ def recall(
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
         return
-    if data.get("fallback"):
-        typer.echo("(vector unavailable — fell back to keyword)", err=True)
     for i, h in enumerate(data["hits"], start=1):
         typer.echo(f"{i}. (score={h['score']:.3f}) {h['text']}")
 

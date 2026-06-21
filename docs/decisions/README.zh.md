@@ -99,3 +99,4 @@ section that future readers most often want — don't skip it.>
 | [027](ADR-027-skill-content-trust-layer.md)              | Skill 内容信任层（启发式扫描，警告而非拦截）                              | Accepted                                                                                                  |
 | [028](ADR-028-knowledge-base-documents-co-managed.md)    | 知识库文档由人与 AI 共管（agent 可写）+ 稳定标识                          | Accepted                                                                                                  |
 | [029](ADR-029-consume-official-mcp-registry.md)          | 消费官方 MCP Registry 做服务器发现                                        | Reverted                                                                                                  |
+| [034](ADR-034-retrieval-mode-is-internal.md)             | 检索 mode 是引擎内部细节；外部界面只暴露「查询→答案」                     | Accepted                                                                                                  |

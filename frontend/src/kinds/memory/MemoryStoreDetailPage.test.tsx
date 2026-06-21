@@ -1,10 +1,11 @@
 // frontend/src/kinds/memory/MemoryStoreDetailPage.test.tsx
 //
 // Exercises the redesigned memory store detail surface: metrics header, recall
-// with a mode toggle, and the fact list → READ-ONLY preview flow (select a fact
-// on the left; the right pane renders the Markdown with FileActions + delete, no
-// in-app editing) plus clear-all. The `./api` module is mocked so the component
-// renders without a backend.
+// ("one query → one answer"; no mode toggle / fallback), the page-paginated
+// fact list → READ-ONLY preview flow (select a fact on the left; the right pane
+// renders the Markdown with FileActions + delete, no in-app editing) plus
+// clear-all. The `./api` module is mocked so the component renders without a
+// backend.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -93,11 +94,9 @@ describe("MemoryStoreDetailPage", () => {
     expect(await screen.findByText("uses tabs over spaces")).toBeInTheDocument();
   });
 
-  test("recall passes the selected mode and renders hits", async () => {
+  test("recall (one query → one answer; no mode in the call) renders hits", async () => {
     stubLists();
     vi.mocked(api.recall).mockResolvedValue({
-      mode: "keyword",
-      fallback: false,
       hits: [{ id: "f1", text: "uses tabs over spaces", score: 0.9, source: "global", time: "t" }],
     });
 
@@ -106,9 +105,7 @@ describe("MemoryStoreDetailPage", () => {
     fireEvent.change(input, { target: { value: "tabs" } });
     fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
 
-    await waitFor(() =>
-      expect(api.recall).toHaveBeenCalledWith("global", "tabs", { topK: 5, mode: "keyword" }),
-    );
+    await waitFor(() => expect(api.recall).toHaveBeenCalledWith("global", "tabs", { topK: 5 }));
   });
 
   test("a selected fact renders READ-ONLY: no Edit/Save controls", async () => {
@@ -124,20 +121,16 @@ describe("MemoryStoreDetailPage", () => {
   // Spec 007 scenario: the human-facing memory viewer is read-only and routes
   // edits to the user's own editor — it surfaces open/reveal affordances
   // (daemon-backed on web, Tauri on desktop) instead of an in-app editor.
-  acceptance(
-    "007-memory",
-    "read-only viewer offers open/reveal affordances",
-    async () => {
-      stubLists();
-      renderPage();
-      const tree = screen.getByRole("complementary");
-      fireEvent.click(await within(tree).findByText("tabs"));
-      await screen.findByText("uses tabs over spaces");
-      expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
-    },
-  );
+  acceptance("007-memory", "read-only viewer offers open/reveal affordances", async () => {
+    stubLists();
+    renderPage();
+    const tree = screen.getByRole("complementary");
+    fireEvent.click(await within(tree).findByText("tabs"));
+    await screen.findByText("uses tabs over spaces");
+    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+  });
 
   test("deleting a selected fact calls delete after confirming in the dialog", async () => {
     stubLists();
@@ -178,24 +171,23 @@ describe("MemoryStoreDetailPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/resource not found/i);
   });
 
-  test("shows a load-more affordance and fetches the next page when over the page size", async () => {
-    // 100 facts loaded, but the store has 150 — the cap must not silently hide
-    // the rest. A "Load more" button shows the loaded/total split and, on click,
-    // re-queries with a larger limit so the remaining facts become reachable.
-    const page1 = Array.from({ length: 100 }, (_, i) => ({
+  test("paginates the fact tree by server offset (page 2 sends offset)", async () => {
+    // The fact tree is page-paginated (default size 50, server-driven offset).
+    // Paging forward re-queries listFacts with offset = (page-1)*pageSize.
+    const page1 = Array.from({ length: 50 }, (_, i) => ({
       ...FACT,
       id: `f${i}`,
       name: `fact-${i}`,
     }));
-    const page2 = Array.from({ length: 150 }, (_, i) => ({
+    const page2 = Array.from({ length: 50 }, (_, i) => ({
       ...FACT,
-      id: `f${i}`,
-      name: `fact-${i}`,
+      id: `f${50 + i}`,
+      name: `fact-${50 + i}`,
     }));
-    vi.mocked(api.listFacts).mockImplementation(async (_store, limit) =>
-      (limit ?? 0) > 100 ? { facts: page2, total: 150 } : { facts: page1, total: 150 },
+    vi.mocked(api.listFacts).mockImplementation(async (_store, _limit, offset) =>
+      (offset ?? 0) >= 50 ? { facts: page2, total: 120 } : { facts: page1, total: 120 },
     );
-    vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 150, disk_bytes: 50 });
+    vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 120, disk_bytes: 50 });
     vi.mocked(api.getMemoryStore).mockResolvedValue({
       ref: "memory:global",
       kind: "memory",
@@ -220,13 +212,54 @@ describe("MemoryStoreDetailPage", () => {
     });
 
     renderPage();
-    const loadMore = await screen.findByRole("button", { name: /showing 100 of 150/i });
-    expect(loadMore).toBeVisible();
-    expect(await screen.findByText("fact-99")).toBeVisible();
+    const tree = screen.getByRole("complementary");
+    // First page fetched with offset 0.
+    expect(await within(tree).findByText("fact-0")).toBeVisible();
+    await waitFor(() => expect(api.listFacts).toHaveBeenCalledWith("global", 50, 0));
 
-    fireEvent.click(loadMore);
-    await waitFor(() => expect(api.listFacts).toHaveBeenCalledWith("global", 200, 0));
-    expect(await screen.findByText("fact-149")).toBeVisible();
+    // Next page → offset 50.
+    fireEvent.click(within(tree).getByRole("button", { name: /next/i }));
+    await waitFor(() => expect(api.listFacts).toHaveBeenCalledWith("global", 50, 50));
+    expect(await within(tree).findByText("fact-99")).toBeVisible();
+  });
+
+  test("clamps to a populated page when the total shrinks (last page emptied)", async () => {
+    // Page 2 holds only the 51st fact; deleting it shrinks the total so page 2 no
+    // longer exists — the tree must pull back to page 1 (and the pager stays
+    // rendered on the briefly-empty page) instead of stranding the user.
+    stubLists(); // a valid getMemoryStore + metrics; listFacts is overridden below
+    const deleted = new Set<string>();
+    const remaining = () =>
+      Array.from({ length: 51 }, (_, i) => ({ ...FACT, id: `f${i}`, name: `fact-${i}` })).filter(
+        (f) => !deleted.has(f.id),
+      );
+    vi.mocked(api.listFacts).mockImplementation(async (_store, _limit, offset) => {
+      const all = remaining();
+      const start = offset ?? 0;
+      return { facts: all.slice(start, start + 50), total: all.length };
+    });
+    vi.mocked(api.deleteFact).mockImplementation(async (_store, _id) => {
+      deleted.add(_id);
+    });
+    vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 51, disk_bytes: 50 });
+
+    renderPage();
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("fact-0");
+
+    // Page 2 → the lone 51st fact; select it for the viewer.
+    fireEvent.click(within(tree).getByRole("button", { name: /next/i }));
+    fireEvent.click(await within(tree).findByText("fact-50"));
+
+    // Delete it via the viewer's confirm dialog; total drops to 50 → page 2 gone.
+    fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+    await waitFor(() => expect(api.deleteFact).toHaveBeenCalledWith("global", "f50"));
+
+    // The clamp pulls back to page 1: a populated page, not an empty one.
+    expect(await within(tree).findByText("fact-0")).toBeVisible();
+    expect(within(tree).queryByText("fact-50")).toBeNull();
   });
 
   test("clear-all calls clearFacts after confirming in the dialog", async () => {

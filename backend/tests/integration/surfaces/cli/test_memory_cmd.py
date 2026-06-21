@@ -151,7 +151,9 @@ def test_recall(memory_cli_daemon):
     assert result.exit_code == 0, result.output
     data = json.loads(_extract_json(result.output))
     assert "hits" in data
-    assert "mode" in data
+    # One query → one answer: mode / fallback are no longer surfaced.
+    assert "mode" not in data
+    assert "fallback" not in data
 
 
 def test_describe_missing_store_exit_code_4(memory_cli_daemon):

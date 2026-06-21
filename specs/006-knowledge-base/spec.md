@@ -23,11 +23,11 @@ A developer has design notes, ADRs, internal wikis, PDFs of papers, a spreadshee
 
 ### User Story 2 — Retrieve in three modes (Priority: P1)
 
-The same corpus is queried several ways: `grep` (exact/regex over the Markdown files, zero index), `keyword` (SQLite FTS5 + BM25), `vector` (sqlite-vec with a configured embedding provider), and `hybrid` (reciprocal rank fusion of keyword + vector, so exact/CJK/identifier hits and paraphrase hits reinforce each other). The KB declares a default mode; a caller may override it. Vector or hybrid requested without a configured embedding provider falls back to keyword, flagged — never blocked.
+The same corpus is queried several ways under the hood: `grep` (exact/regex over the Markdown files, zero index), `keyword` (SQLite FTS5 + BM25), `vector` (sqlite-vec with a configured embedding provider), and `hybrid` (reciprocal rank fusion of keyword + vector, so exact/CJK/identifier hits and paraphrase hits reinforce each other). These are an **internal engine detail**: external callers do NOT choose a mode — a search resolves the KB's default strategy automatically (`hybrid` when vector is enabled, else `keyword`). `grep` is a separate tool/endpoint (agent-only; removed from the human web panel). Vector or hybrid without a configured embedding provider falls back to keyword internally — never blocked, and no query-time flag (degradation is reported via the `documents_degraded` metric).
 
-**Why this priority**: Retrieval is the product. The three modes cover offline/zero-config use through to semantic search.
+**Why this priority**: Retrieval is the product. The internal modes cover offline/zero-config use through to semantic search, while the external surface stays "one query → one answer".
 
-**Independent Test**: With a populated KB, run a keyword search and a grep query (both work with no embedding config); configure an embedding provider, run a vector search; remove the config, request vector again, observe a keyword fallback flagged in the response.
+**Independent Test**: With a populated KB, run a search (no mode) and a grep query (both work with no embedding config); configure an embedding provider, run a search again on a vector-enabled KB; remove the config, search again, observe results still return with no error (the degradation is visible via `documents_degraded`, not a per-query flag).
 
 **Covering scenarios**: keyword search returns ranked passages; grep returns file/line matches; vector search returns ranked passages; vector falls back to keyword when embedding unconfigured; hybrid search fuses keyword and vector via RRF.
 
@@ -77,7 +77,7 @@ The user manages KBs from the desktop UI under `Resources` and from `coffer kb �
 - **Oversized file**: A file over `max_document_bytes` (default 25 MB) is rejected at the API boundary before any conversion runs.
 - **Re-upload, identical bytes**: A re-upload of a file whose bytes are unchanged (its `source_sha256` matches the document already stored under that filename) is an idempotent no-op — the existing document is returned, nothing is re-written or re-audited.
 - **Re-upload, changed bytes, same filename**: A re-upload of an updated file under a name already in the KB updates the **same document in place** (the ULID id is reused, `docs/`+`raw/` are overwritten keeping only the latest original, `source_mode` resets to `converted`) — but only when the caller passes `replace=true`; without it the upload is rejected (`duplicate`) so the overwrite is always explicit.
-- **Vector requested, embedding unconfigured**: Search falls back to keyword and flags `fallback="keyword"` in the response; it never errors.
+- **Vector unavailable, embedding unconfigured**: Search falls back to keyword internally and returns results with no error; the degradation is NOT surfaced as a query-time flag (it is reported via the `documents_degraded` metric).
 - **Re-conversion after edit**: Re-converting a document whose `source_mode == edited` is rejected; re-uploading a changed source (with `replace=true`) updates it in place and resets it to `converted`.
 - **Reindex of unchanged content**: Reindexing a document whose Markdown `content_sha256` is unchanged is a no-op.
 - **Concurrent searches**: Multiple searches against one KB run independently; no per-KB lock degrades read latency.
@@ -105,10 +105,16 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 - **When** the user lists documents,
 - **Then** they see one row per document with stable doc ids, titles, original filenames, and timestamps, paginated.
 
+### Scenario: filter documents by title
+
+- **Given** a KB with multiple documents,
+- **When** the user lists documents with a title query `q`,
+- **Then** only documents whose title contains `q` (case-insensitive) are returned, `total` reflects the filtered count, and results stay paginated by `limit`/`offset`.
+
 ### Scenario: keyword search returns ranked passages
 
 - **Given** documents are indexed,
-- **When** the user searches with `mode="keyword"` (or the KB default),
+- **When** the user searches (no mode; Coffer uses the KB's resolved default strategy),
 - **Then** they receive passages ranked by `bm25()`, each carrying its source doc id, title, snippet, and score.
 
 ### Scenario: keyword search matches CJK (Chinese) content
@@ -126,19 +132,19 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 ### Scenario: vector search returns ranked passages
 
 - **Given** the KB has an embedding provider configured and documents embedded,
-- **When** the user searches with `mode="vector"`,
+- **When** the engine runs a vector search (a vector-enabled KB's resolved default),
 - **Then** Coffer embeds the query, runs a sqlite-vec KNN, and returns top-k passages with similarity scores.
 
 ### Scenario: vector falls back to keyword when embedding unconfigured
 
 - **Given** the KB has no embedding provider configured,
-- **When** the user searches with `mode="vector"`,
-- **Then** Coffer runs a keyword search instead and the response is flagged `fallback="keyword"`; no error is raised.
+- **When** the engine resolves to a vector strategy but no embedder is available,
+- **Then** Coffer runs a keyword search instead and returns results with no error; the degradation is NOT surfaced as a query-time flag (it is reported via `documents_degraded`).
 
 ### Scenario: hybrid search fuses keyword and vector via RRF
 
 - **Given** a KB with vector enabled and documents embedded,
-- **When** the user searches with `mode="hybrid"`,
+- **When** the engine fuses keyword+vector for a vector-enabled KB (its resolved default),
 - **Then** Coffer runs BOTH keyword and vector searches and fuses them by reciprocal rank fusion (`K = 60`, deduped by `(document_id, position)`), so a passage ranked by both lists outranks single-list hits, and returns the fused top-k.
 
 ### Scenario: edit a document and reindex
@@ -192,7 +198,7 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 ### Scenario: agent searches a knowledge base
 
 - **Given** a KB with indexed documents,
-- **When** the client calls `coffer__search_knowledge(kb, query, top_k?, mode?)`,
+- **When** the client calls `coffer__search_knowledge(kb, query, top_k?)`,
 - **Then** Coffer returns ranked passages structured for LLM consumption (passage + source doc id + score).
 
 ### Scenario: agent greps a knowledge base
@@ -307,11 +313,11 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 **Retrieval**
 
-- **FR-010**: Users MUST be able to search a KB and receive ranked passages (passage text + source doc id + title + score) via the requested or default mode. Default `top_k` is 5; callers MAY set `top_k` in 1–20.
-- **FR-011**: System MUST support four retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), `vector` (sqlite-vec KNN over embeddings), and `hybrid` (reciprocal rank fusion of `keyword` + `vector`, ADR-012). Default enabled modes are `keyword`+`grep`; `vector` is opt-in, and enabling `vector` also enables `hybrid` (which fuses both lists). Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). The keyword index uses an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text (no word-boundary spaces), so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters (e.g. a 2-character CJK term) falls back to a bounded substring (LIKE) scan rather than returning empty.
-- **FR-011a**: An EXPLICIT `mode=grep` on the search endpoint — or any explicit mode not in the KB's `enabled_modes` — MUST be rejected with `400 SEARCH_MODE_INVALID` (grep is served by its own endpoint, never silently rewritten). `vector` and `hybrid` are the exceptions: they always reach the retrieval facade so the keyword fallback is FLAGGED per FR-012. An implicit search (no `mode`) on a KB whose `default_mode` is `grep` serves `keyword` (grep is not a passage mode); a vector-enabled KB's `default_mode` is `hybrid` so an implicit search fuses both lists.
-- **FR-011b**: `hybrid` mode MUST run BOTH `keyword` and `vector` searches and fuse them by **reciprocal rank fusion** (RRF): each passage's fused score is `Σ_over_lists 1/(K + rank)` with `K = 60` and `rank` the 0-based position in that list; passages are deduped by chunk identity `(document_id, position)` so a passage in both lists sums both contributions and outranks single-list hits. The top-k by fused score are returned. This delivers the "optional hybrid via reciprocal rank fusion" promised by ADR-012.
-- **FR-012**: When `vector` (or `hybrid`) is requested but no embedding provider is configured, the system MUST fall back to `keyword` and flag the fallback in the response — it MUST NOT error or block.
+- **FR-010**: Users MUST be able to search a KB and receive ranked passages (passage text + source doc id + title + score). Retrieval is **automatic**: the caller does NOT choose a mode; Coffer resolves the strategy internally (`hybrid` when `vector` is enabled, else `keyword`). Default `top_k` is 5; callers MAY set `top_k` in 1–20.
+- **FR-010a**: Listing documents MUST support an optional **case-insensitive title filter `q`**, applied server-side BEFORE pagination; `total` reflects the filtered count.
+- **FR-011**: System MUST support four retrieval modes: `grep` (ripgrep over `docs/`, bounded by max-matches + timeout, no index), `keyword` (FTS5 `MATCH` ordered by `bm25()`), `vector` (sqlite-vec KNN over embeddings), and `hybrid` (reciprocal rank fusion of `keyword` + `vector`, ADR-012). Default enabled modes are `keyword`+`grep`; `vector` is opt-in, and enabling `vector` also enables `hybrid` (which fuses both lists). Grep responses carry a `truncated` flag that is true when matches beyond `max_matches` exist OR the server-side timeout cut the scan short (a timed-out grep returns no hits with `truncated=true`, and the `rg` process is killed). The keyword index uses an FTS5 **trigram** tokenizer so CJK and substring queries match — `unicode61` does not segment CJK text (no word-boundary spaces), so a query like `向量检索` returned nothing; a query with no token of ≥ 3 characters (e.g. a 2-character CJK term) falls back to a bounded substring (LIKE) scan rather than returning empty. These four modes are an **INTERNAL engine detail** — external surfaces (REST / MCP / CLI / UI) do NOT expose mode selection; a search always uses the KB's resolved default strategy, and `grep` is a separate tool/endpoint (removed from the human web panel, still available to agents).
+- **FR-011b**: `hybrid` mode MUST run BOTH `keyword` and `vector` searches and fuse them by **reciprocal rank fusion** (RRF): each passage's fused score is `Σ_over_lists 1/(K + rank)` with `K = 60` and `rank` the 0-based position in that list; passages are deduped by chunk identity `(document_id, position)` so a passage in both lists sums both contributions and outranks single-list hits. The top-k by fused score are returned. This delivers the "optional hybrid via reciprocal rank fusion" promised by ADR-012. (Internal — `hybrid` is the resolved default when `vector` is enabled, never an external mode parameter.)
+- **FR-012**: When `vector` (or `hybrid`) is the resolved strategy but no embedding provider is configured, the system MUST fall back to `keyword` internally — it MUST NOT error or block. This degradation is NOT surfaced as a query-time response flag anymore (the `fallback` field is removed from the search response); vector-unavailable documents are reported via the `documents_degraded` metric (FR-025).
 
 **Embedding configuration**
 
@@ -325,7 +331,7 @@ Per [`agents/sdd.md`](../../agents/sdd.md) and [`agents/testing.md`](../../agent
 
 **Agent integration via MCP**
 
-- **FR-017**: Coffer's MCP gateway MUST expose built-in KB tools to every connected client, namespaced under the reserved `coffer__` prefix: the read tools `coffer__list_knowledge_bases`, `coffer__search_knowledge`, `coffer__grep_knowledge`, `coffer__read_document`, AND the write tools `coffer__add_document` (ingest Markdown content under a filename), `coffer__edit_document` (replace a document's body), and `coffer__delete_document`. The write tools share the same service paths as the REST surface, so they honour the F01 audit (FR-018).
+- **FR-017**: Coffer's MCP gateway MUST expose built-in KB tools to every connected client, namespaced under the reserved `coffer__` prefix: the read tools `coffer__list_knowledge_bases`, `coffer__search_knowledge(kb, query, top_k?)` (no `mode?` parameter — retrieval mode is internal), `coffer__grep_knowledge`, `coffer__read_document`, AND the write tools `coffer__add_document` (ingest Markdown content under a filename), `coffer__edit_document` (replace a document's body), and `coffer__delete_document`. The write tools share the same service paths as the REST surface, so they honour the F01 audit (FR-018).
 - **FR-018**: Built-in KB tool invocations MUST be recorded in `mcp_invocations` exactly as upstream calls (tool name, who/when/duration/outcome — no arguments or returned content); the document-level effect of a write tool is additionally recorded in the F01 audit trail (`KB_DOCUMENT_INGESTED` / `_UPDATED` / `_DELETED`) with the agent as actor.
 
 **Surfaces**

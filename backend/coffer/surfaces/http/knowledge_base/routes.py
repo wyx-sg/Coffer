@@ -191,9 +191,10 @@ async def list_documents(
     name: str,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None),
     kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
 ) -> DocumentListOut:
-    docs, total = await kb_svc.list_documents(kb_name=name, limit=limit, offset=offset)
+    docs, total = await kb_svc.list_documents(kb_name=name, limit=limit, offset=offset, q=q)
     counts = await kb_svc.chunk_counts(kb_name=name)
     out = []
     for d in docs:
@@ -317,7 +318,7 @@ async def search_kb(
     body: SearchRequest,
     kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
 ) -> SearchResponse:
-    result = await kb_svc.search(kb_name=name, query=body.query, top_k=body.top_k, mode=body.mode)
+    result = await kb_svc.search(kb_name=name, query=body.query, top_k=body.top_k, mode=None)
     return SearchResponse.from_result(result)
 
 

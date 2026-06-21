@@ -632,28 +632,6 @@ async def test_reindex_reconstructs_documents_rows_after_db_loss(kb) -> None:
     assert len(res.passages) == 1
 
 
-async def test_search_with_explicit_grep_mode_is_rejected(kb) -> None:
-    """An explicit ``mode="grep"`` on search must 400 (the grep endpoint serves
-    it), not be silently rewritten to keyword (review: unspecced silent rewrite)."""
-    from coffer.domain.errors import SearchModeInvalid
-
-    await kb.create_kb("kb1")
-    await _ingest(kb, "kb1", "a.md", b"# A\n\nsome text")
-    with pytest.raises(SearchModeInvalid):
-        await kb.service.search(kb_name="kb1", query="text", mode="grep")
-
-
-async def test_search_with_disabled_mode_is_rejected(kb) -> None:
-    """An explicit mode the KB has not enabled must 400, not silently fall back
-    to the default (vector is the one flagged-fallback exception)."""
-    from coffer.domain.errors import SearchModeInvalid
-
-    await kb.create_kb("kb1", config={"enabled_modes": ["grep"], "default_mode": "grep"})
-    await _ingest(kb, "kb1", "a.md", b"# A\n\nsome text")
-    with pytest.raises(SearchModeInvalid):
-        await kb.service.search(kb_name="kb1", query="text", mode="keyword")
-
-
 async def test_search_default_grep_mode_serves_keyword(kb) -> None:
     """A store whose ``default_mode`` is grep still serves implicit searches
     (mapped to keyword) — only EXPLICIT grep requests are rejected."""

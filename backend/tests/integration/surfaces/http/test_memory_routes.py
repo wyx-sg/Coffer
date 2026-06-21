@@ -222,7 +222,7 @@ def test_per_store_metrics(tmp_path, monkeypatch):
         assert body["disk_bytes"] >= 0
 
 
-def test_recall_returns_hits_with_mode(tmp_path, monkeypatch):
+def test_recall_returns_hits_only(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59670)
     with TestClient(app) as c:
         set_active_token(_TOKEN)
@@ -238,15 +238,16 @@ def test_recall_returns_hits_with_mode(tmp_path, monkeypatch):
         )
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body["mode"] in {"keyword", "grep", "vector"}
         assert isinstance(body["hits"], list)
-        assert "fallback" in body
+        # One query → one answer: mode / fallback are no longer surfaced.
+        assert "mode" not in body
+        assert "fallback" not in body
 
 
-@pytest.mark.acceptance(
-    spec="007-memory", scenario="vector recall falls back when embedding is unconfigured"
-)
-def test_vector_recall_falls_back_when_embedding_unconfigured(tmp_path, monkeypatch):
+def test_recall_rejects_mode_in_request_body(tmp_path, monkeypatch):
+    """The external recall surface no longer accepts a ``mode`` — but extra keys
+    are ignored by Pydantic (not 422); the call still succeeds and resolves the
+    store's default_mode internally."""
     app = _app(tmp_path, monkeypatch, 59680)
     with TestClient(app) as c:
         set_active_token(_TOKEN)
@@ -262,9 +263,8 @@ def test_vector_recall_falls_back_when_embedding_unconfigured(tmp_path, monkeypa
         )
         assert r.status_code == 200, r.text
         body = r.json()
-        # No embedding configured → degrade to keyword, flagged, never an error.
-        assert body["fallback"] is True
-        assert body["mode"] == "keyword"
+        assert "mode" not in body
+        assert "fallback" not in body
 
 
 def test_store_scoped_recall_honours_scope(tmp_path, monkeypatch):
