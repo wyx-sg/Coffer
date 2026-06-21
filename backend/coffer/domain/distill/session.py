@@ -4,14 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import StrEnum
-
-
-class InsightType(StrEnum):
-    DECISION = "decision"
-    GOTCHA = "gotcha"
-    CONVENTION = "convention"
-    TODO = "todo"
 
 
 @dataclass(frozen=True)
@@ -44,4 +36,3 @@ class DistilledInsight:
     name: str
     description: str
     body: str
-    type: InsightType

@@ -20,7 +20,7 @@ from coffer.application.distill.service import (
     TranscriptDistillationService,
 )
 from coffer.domain.distill.locations import UnsupportedAgentTypeError
-from coffer.domain.distill.session import DistilledInsight, InsightType, TranscriptSession
+from coffer.domain.distill.session import DistilledInsight, TranscriptSession
 from coffer.domain.errors import ResourceNotFound
 from coffer.infrastructure.distill.transcript_reader import FileTranscriptReader
 from coffer.surfaces.http import errors as err_handlers
@@ -83,8 +83,8 @@ class _FakeDistillService:
         if self._raise_on_distill is not None:
             raise self._raise_on_distill
         if dry_run:
-            # Return insights but no fact ids (dry-run contract)
-            return DistillResult(insights=self._distill_result.insights, facts=[])
+            # Return insights but no journal entries (dry-run contract)
+            return DistillResult(insights=self._distill_result.insights, journal_entries=[])
         return self._distill_result
 
 
@@ -116,10 +116,9 @@ _INSIGHT = DistilledInsight(
     name="Use ULIDs for IDs",
     description="Project standard for identifiers",
     body="All IDs in this project are ULIDs, not UUIDs.",
-    type=InsightType.CONVENTION,
 )
 
-_RESULT = DistillResult(insights=[_INSIGHT], facts=["fact-id-001"])
+_RESULT = DistillResult(insights=[_INSIGHT], journal_entries=["2026-06-21T09:00:00+00:00"])
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +205,7 @@ def test_list_transcripts_unsupported_agent_type_returns_envelope() -> None:
 
 
 @pytest.mark.acceptance(spec="007-memory", scenario="distill-transcript-to-memory")
-def test_distill_returns_insights_and_fact_ids() -> None:
+def test_distill_returns_insights_and_journal_entries() -> None:
     set_active_token(_TOKEN)
     svc = _FakeDistillService(distill_result=_RESULT)
     app = _build_app(svc)
@@ -221,11 +220,11 @@ def test_distill_returns_insights_and_fact_ids() -> None:
     assert len(body["insights"]) == 1
     insight = body["insights"][0]
     assert insight["name"] == "Use ULIDs for IDs"
-    assert insight["type"] == "convention"
-    assert body["fact_ids"] == ["fact-id-001"]
+    assert "type" not in insight
+    assert body["journal_entries"] == ["2026-06-21T09:00:00+00:00"]
 
 
-def test_distill_dry_run_returns_insights_no_fact_ids() -> None:
+def test_distill_dry_run_returns_insights_no_journal_entries() -> None:
     set_active_token(_TOKEN)
     svc = _FakeDistillService(distill_result=_RESULT)
     app = _build_app(svc)
@@ -238,7 +237,7 @@ def test_distill_dry_run_returns_insights_no_fact_ids() -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert len(body["insights"]) == 1
-    assert body["fact_ids"] == []
+    assert body["journal_entries"] == []
 
 
 def test_distill_agent_not_found_returns_envelope() -> None:

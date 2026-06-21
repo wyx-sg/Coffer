@@ -1,95 +1,109 @@
-"""Integration test: _MemoryInsightSink scope fallback.
+"""Integration test: _JournalInsightSink writes distilled insights to the journal.
 
-Verifies that when project_path is not inside a git work-tree,
-_MemoryInsightSink.record falls back to GLOBAL scope and returns a fact id.
+Verifies that the sink appends to the project journal (returning the entry's iso
+timestamp marker), skips when there is no project path, and skips when the path
+does not resolve to a git project (``ScopeUnresolved`` → there is no global journal).
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
-from coffer.domain.distill.session import DistilledInsight, InsightType
+from coffer.domain.distill.session import DistilledInsight
 from coffer.domain.errors import ScopeUnresolved
-from coffer.domain.memory.scope import MemoryScope
 
 pytestmark = pytest.mark.asyncio
 
+_TS = datetime(2026, 6, 21, 9, 0, tzinfo=UTC)
 
-class _FakeMemoryService:
-    """Minimal fake: raises ScopeUnresolved for PROJECT, succeeds for GLOBAL."""
+
+class _Entry:
+    def __init__(self, ts: datetime) -> None:
+        self.timestamp = ts
+
+
+class _FakeJournalService:
+    """Records append calls and returns an entry with a fixed timestamp."""
 
     def __init__(self) -> None:
         self.calls: list[dict] = []
 
-    async def add_fact(self, *, scope: MemoryScope, cwd, **kwargs) -> object:
-        self.calls.append({"scope": scope, "cwd": cwd, **kwargs})
-        if scope == MemoryScope.PROJECT:
-            raise ScopeUnresolved(cwd or "unknown")
-
-        class _Fact:
-            id = "global-fact-id"
-
-        return _Fact()
+    async def append(self, *, cwd, body, actor) -> _Entry:
+        self.calls.append({"cwd": cwd, "body": body, "actor": actor})
+        return _Entry(_TS)
 
 
-async def test_memory_sink_falls_back_to_global_when_scope_unresolved() -> None:
-    """project_path that triggers ScopeUnresolved retries with GLOBAL scope."""
-    from coffer.surfaces.http.distill_wiring import _MemoryInsightSink
+class _RaisingJournalService:
+    """Always raises ScopeUnresolved (path not inside a git project)."""
 
-    svc = _FakeMemoryService()
-    sink = _MemoryInsightSink(svc)  # type: ignore[arg-type]
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
 
-    insight = DistilledInsight(
+    async def append(self, *, cwd, body, actor) -> _Entry:
+        self.calls.append({"cwd": cwd, "body": body, "actor": actor})
+        raise ScopeUnresolved(cwd or "unknown")
+
+
+def _insight() -> DistilledInsight:
+    return DistilledInsight(
         name="test-insight",
         description="A test",
         body="Body text",
-        type=InsightType.DECISION,
     )
-    fact_id = await sink.record(
-        project_path="/not/a/git/root",
-        insight=insight,
+
+
+async def test_journal_sink_appends_and_returns_marker() -> None:
+    """A project_path appends to the journal and record() returns the iso timestamp."""
+    from coffer.surfaces.http.distill_wiring import _JournalInsightSink
+
+    svc = _FakeJournalService()
+    sink = _JournalInsightSink(svc)  # type: ignore[arg-type]
+
+    marker = await sink.record(
+        project_path="/repo",
+        insight=_insight(),
         origin_session_id="sess-abc",
     )
 
-    assert fact_id == "global-fact-id"
-    # First call was PROJECT (which raised); second was GLOBAL
-    assert len(svc.calls) == 2
-    assert svc.calls[0]["scope"] == MemoryScope.PROJECT
-    assert svc.calls[1]["scope"] == MemoryScope.GLOBAL
-    assert svc.calls[1]["cwd"] is None
+    assert marker == _TS.isoformat()
+    assert len(svc.calls) == 1
+    assert svc.calls[0]["cwd"] == "/repo"
+    assert svc.calls[0]["actor"] == "agent"
+    # Body joins the non-empty pieces of name/description/body.
+    assert svc.calls[0]["body"] == "test-insight\n\nA test\n\nBody text"
 
 
-async def test_memory_sink_uses_global_directly_when_no_project_path() -> None:
-    """When project_path is None, GLOBAL scope is used directly (no fallback needed)."""
-    from coffer.surfaces.http.distill_wiring import _MemoryInsightSink
+async def test_journal_sink_skips_when_no_project_path() -> None:
+    """project_path=None returns None and does NOT call append (no global journal)."""
+    from coffer.surfaces.http.distill_wiring import _JournalInsightSink
 
-    class _DirectFake:
-        def __init__(self) -> None:
-            self.calls: list[dict] = []
+    svc = _FakeJournalService()
+    sink = _JournalInsightSink(svc)  # type: ignore[arg-type]
 
-        async def add_fact(self, *, scope: MemoryScope, cwd, **kwargs) -> object:
-            self.calls.append({"scope": scope, "cwd": cwd})
-
-            class _Fact:
-                id = "global-only-id"
-
-            return _Fact()
-
-    svc = _DirectFake()
-    sink = _MemoryInsightSink(svc)  # type: ignore[arg-type]
-    insight = DistilledInsight(
-        name="global-insight",
-        description="Global",
-        body="Body",
-        type=InsightType.DECISION,
-    )
-    fact_id = await sink.record(
+    marker = await sink.record(
         project_path=None,
-        insight=insight,
+        insight=_insight(),
         origin_session_id="sess-xyz",
     )
 
-    assert fact_id == "global-only-id"
+    assert marker is None
+    assert svc.calls == []
+
+
+async def test_journal_sink_skips_when_scope_unresolved() -> None:
+    """A project_path that raises ScopeUnresolved returns None (path not in a git project)."""
+    from coffer.surfaces.http.distill_wiring import _JournalInsightSink
+
+    svc = _RaisingJournalService()
+    sink = _JournalInsightSink(svc)  # type: ignore[arg-type]
+
+    marker = await sink.record(
+        project_path="/not/a/git/root",
+        insight=_insight(),
+        origin_session_id="sess-abc",
+    )
+
+    assert marker is None
     assert len(svc.calls) == 1
-    assert svc.calls[0]["scope"] == MemoryScope.GLOBAL
-    assert svc.calls[0]["cwd"] is None

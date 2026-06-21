@@ -244,48 +244,41 @@ components:
           type: boolean
           default: false
           description: |
-            If true, return insights without writing memory facts.
-            fact_ids will be an empty array.
+            If true, return insights without writing journal entries.
+            journal_entries will be an empty array.
 
     InsightOut:
       type: object
-      required: [name, description, body, type]
+      required: [name, description, body]
       properties:
         name:
           type: string
-          description: Short title for the insight (used as the memory fact name).
+          description: Short title for the insight.
         description:
           type: string
           description: One-line summary.
         body:
           type: string
           description: Full markdown body of the distilled insight.
-        type:
-          type: string
-          enum: [decision, gotcha, convention, todo]
-          description: |
-            Insight category:
-            - decision — architectural or design choice with rationale
-            - gotcha — a failed approach or trap to avoid
-            - convention — naming/style/tool standards
-            - todo — an open item surfaced from the conversation
 
     DistillResponse:
       type: object
-      required: [insights, fact_ids]
+      required: [insights, journal_entries]
       properties:
         insights:
           type: array
           items:
             $ref: "#/components/schemas/InsightOut"
           description: Distilled insights extracted from the transcript.
-        fact_ids:
+        journal_entries:
           type: array
           items:
             type: string
           description: |
-            IDs of created memory facts (one per insight). Empty when
-            dry_run=true or when no insights were extracted.
+            Markers (entry timestamps) of the journal entries written, one per
+            insight. Empty when dry_run=true, when no insights were extracted, or
+            when the session's path does not resolve to a git project (there is
+            no global journal).
 
     ErrorEnvelope:
       type: object

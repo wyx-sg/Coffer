@@ -70,19 +70,19 @@ discussed and settled in those sessions, but never explicitly recorded as
 memory facts. The developer runs `coffer transcript distill claude_code
 --project /repo` (or clicks "Distil to memory" in the Coffer UI). Coffer
 reads the local `.jsonl` transcript files, scrubs tool payloads and secrets,
-asks an LLM to extract durable insights, and writes them as project-scoped
-memory facts. From that point on, any agent — including Codex on a second
-machine — can recall those facts through `coffer__recall`, because memory is
-shared (Spec 007) and synced (Spec 010). No raw transcript content is ever
-stored or transmitted. When the transcript's working directory resolves to a
-git project, the extracted facts are written project-scoped to that project's
-memory store; when the path is not inside a git work-tree, facts fall back to
-the global memory store.
+asks an LLM to extract durable insights, and appends them as project-scoped
+**journal** entries (episodic memory). From that point on, any agent — including
+Codex on a second machine — can recall those entries through `coffer__recall`
+(the journal lane participates in recall, FR-043), because memory is shared
+(Spec 007) and synced (Spec 010). No raw transcript content is ever stored or
+transmitted. When the transcript's working directory resolves to a git project,
+the insights are appended to that project's journal; a session whose path is not
+inside a git work-tree is skipped — there is no global journal.
 
 **Why this priority**: Agents accumulate institutional knowledge in local
 transcripts that is otherwise siloed per-session and inaccessible to other
 agents. Distillation is the least-invasive mechanism to surface that
-knowledge: it produces standard memory facts, inheriting cross-agent sharing
+knowledge: it produces journal entries, inheriting cross-agent sharing
 and multi-machine sync for free. It is P2 (not P1) because the core shared
 memory flow (Stories 1–2) must work first — distillation is additive on top
 of it. See [ADR-020](../../docs/decisions/ADR-020-transcript-distillation.md)
@@ -107,9 +107,9 @@ OpenCode transcript in the agent's native store, run
 `coffer transcript distill <agent> --project <path> --dry-run` and observe
 at least one insight printed without any fact being written to disk. Then run
 without `--dry-run` and confirm via `coffer memory recall <store> "<topic>"`
-that at least one distilled fact is now retrievable, carries
-`actor="agent"` and a non-empty `origin_session_id`, and contains no tool
-payloads, file contents, or secret-like strings.
+that at least one distilled **journal entry** is now retrievable and contains no
+tool payloads, file contents, or secret-like strings (the `journal_append` audit
+records the writing actor; the episodic entry text carries no frontmatter).
 
 **Covering scenarios**:
 
@@ -289,12 +289,15 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **When** `POST /api/v1/agents/{name}/transcripts/distill` is called (or
   `coffer transcript distill <agent>` in the CLI) with `dry_run=false`,
 - **Then** the transcript is read, tool payloads and secrets are scrubbed before
-  the LLM call, the LLM returns structured insights, and each insight is written
-  as a project-scoped memory fact with `actor="agent"`,
-  `origin_session_id=<transcript session id>`, and `type` ∈
-  `{decision, gotcha, convention, todo}`; no raw transcript content appears in
-  any persisted fact; `coffer__recall` subsequently returns the new facts; and
-  when `dry_run=true`, insights are returned but nothing is written to disk.
+  the LLM call, the LLM returns structured insights (each just `name` /
+  `description` / `body` — distillation does NOT classify a per-insight type),
+  and each insight is **appended as a project-scoped journal entry** (episodic
+  memory, `actor="agent"` recorded in the `journal_append` audit) — never a flat
+  knowledge fact; a session whose path is not inside a git project is skipped
+  (there is no global journal); no raw transcript content appears in any
+  persisted entry; `coffer__recall` subsequently returns the new journal entries
+  (FR-043); and when `dry_run=true`, insights are returned but nothing is written
+  to disk.
 
 ### Scenario: browse an agent's transcript history with title, search, and sort
 
@@ -472,6 +475,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-042:** Coffer SHALL expose internal `JournalService.append(cwd, body, actor)` and `read_recent(cwd, limit)`. Appending outside a git project raises `ScopeUnresolved`; reading outside a git project returns an empty list. `read_recent` returns the newest entries first, capped at `limit`; `limit=0` returns an empty list (no implicit "all"). The `journal_append` audit entry records `char_size` only — never the body.
 - **FR-043:** The journal lane SHALL participate in `recall`. The memory reconciler MUST scan each `journal/<YYYY-MM>.md` file and index it as one memory document (`kind=memory`), chunked with the same shared markdown chunker and fixed parameters as topic docs (FR-032), covered by lazy reindex-on-read (FR-010) so an out-of-band edit or a fresh `JournalService.append` becomes searchable on the next `recall`. The grep recall guard (which keeps only `knowledge/` hits) MUST additionally keep `journal/` hits, parsing them per journal file rather than as fact files. Journal documents MUST NOT count toward a store's `fact_count` (which counts only the `knowledge/` lane). The `rules/`, `handoff/`, and `superseded/` lanes remain excluded from `recall`.
 - **FR-044:** A `recall` hit from the journal lane MUST be distinguishable from a `knowledge/` hit: like every recall hit its `source` carries the on-disk path of the matched file (per FR-022), and a journal hit's path is the `journal/<YYYY-MM>.md` file (containing the `journal/` lane segment), so the agent can tell episodic events from semantic facts.
+- **FR-045:** Transcript distillation (User Story 6) SHALL write each extracted insight to the **journal** lane (episodic), NOT as a flat `knowledge/` fact. Distillation stays "dumb": it extracts `name` / `description` / `body` only and MUST NOT classify a per-insight type — the legacy `InsightType` (`decision` / `gotcha` / `convention` / `todo`) is retired (no `type` field on the distilled insight, the distill prompt, or the distill response). Each insight is appended via `JournalService.append` to the session's project journal; a session whose path does not resolve to a git project is skipped (there is no global journal). The distill response reports the written journal entries (the `fact_ids` field is renamed `journal_entries`). Promotion of recurring journal patterns into `knowledge`/`rules` is the organizer's job (a later consolidation slice), never distillation's.
 
 **Transcript history**
 

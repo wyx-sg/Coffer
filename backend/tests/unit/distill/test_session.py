@@ -1,20 +1,19 @@
 from coffer.domain.distill.session import (
     DistilledInsight,
-    InsightType,
     TranscriptMessage,
     TranscriptSession,
 )
 
 
-def test_insight_requires_known_type():
+def test_insight_holds_name_description_body():
     insight = DistilledInsight(
         name="Use ULIDs for ids",
         description="Project standard",
         body="IDs are ULIDs, not UUIDs.",
-        type=InsightType.CONVENTION,
     )
-    assert insight.type is InsightType.CONVENTION
     assert insight.name == "Use ULIDs for ids"
+    assert insight.description == "Project standard"
+    assert insight.body == "IDs are ULIDs, not UUIDs."
 
 
 def test_session_counts_messages_and_keeps_project_path():

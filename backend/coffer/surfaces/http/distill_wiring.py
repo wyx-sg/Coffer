@@ -12,15 +12,16 @@ from collections.abc import Callable
 from typing import Any
 
 from coffer.application.distill.service import TranscriptDistillationService
+from coffer.application.memory.journal import JournalService
 from coffer.application.memory.service import MemoryService
 from coffer.application.provider.service import ProviderService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.distill.session import DistilledInsight
-from coffer.domain.memory.scope import MemoryScope
 from coffer.domain.provider.config import ProviderConfig
 from coffer.infrastructure.chat.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.distill.transcript_reader import FileTranscriptReader
 from coffer.surfaces.http.distill.state import set_distill_service
+from coffer.surfaces.http.memory.dependencies import get_journal_service
 from coffer.surfaces.http.native_memory_import_wiring import wire_native_memory_import
 from coffer.surfaces.http.organize_wiring import wire_organize
 from coffer.surfaces.http.reorg_wiring import wire_reorg
@@ -30,30 +31,11 @@ from coffer.surfaces.http.reorg_wiring import wire_reorg
 # ---------------------------------------------------------------------------
 
 
-class _MemoryInsightSink:
-    """InsightSinkPort adapter: writes each distilled insight as a memory fact."""
+class _JournalInsightSink:
+    """InsightSinkPort adapter: writes each distilled insight to the journal lane."""
 
-    def __init__(self, memory_service: MemoryService) -> None:
-        self._memory = memory_service
-
-    async def _add_fact(
-        self,
-        *,
-        scope: MemoryScope,
-        cwd: str | None,
-        insight: DistilledInsight,
-        origin_session_id: str,
-    ) -> Any:
-        return await self._memory.add_fact(
-            scope=scope,
-            cwd=cwd,
-            name=insight.name,
-            description=insight.description,
-            body=insight.body,
-            actor="agent",
-            type=insight.type.value,
-            origin_session_id=origin_session_id,
-        )
+    def __init__(self, journal_service: JournalService) -> None:
+        self._journal = journal_service
 
     async def record(
         self,
@@ -61,27 +43,22 @@ class _MemoryInsightSink:
         project_path: str | None,
         insight: DistilledInsight,
         origin_session_id: str,
-    ) -> str:
+    ) -> str | None:
         from coffer.domain.errors import ScopeUnresolved
 
-        if project_path is not None:
-            try:
-                fact = await self._add_fact(
-                    scope=MemoryScope.PROJECT,
-                    cwd=project_path,
-                    insight=insight,
-                    origin_session_id=origin_session_id,
-                )
-                return str(fact.id)
-            except ScopeUnresolved:
-                pass  # project_path not inside a git work-tree; fall back to global
-        fact = await self._add_fact(
-            scope=MemoryScope.GLOBAL,
-            cwd=None,
-            insight=insight,
-            origin_session_id=origin_session_id,
+        # No global journal: only sessions resolving to a git project are recorded.
+        if project_path is None:
+            return None
+        body = "\n\n".join(
+            piece
+            for piece in (insight.name.strip(), insight.description.strip(), insight.body.strip())
+            if piece
         )
-        return str(fact.id)
+        try:
+            entry = await self._journal.append(cwd=project_path, body=body, actor="agent")
+        except ScopeUnresolved:
+            return None  # path not inside a git project → skip
+        return entry.timestamp.isoformat()
 
 
 class _AgentResolver:
@@ -130,7 +107,7 @@ def wire_distill(
     svc = TranscriptDistillationService(
         reader=FileTranscriptReader(),
         llm=LangchainLlmCompletion(),
-        sink=_MemoryInsightSink(memory_service),
+        sink=_JournalInsightSink(get_journal_service()),
         agents=_AgentResolver(agent_service),
         models=_ModelSelector(provider_svc),
         credential_resolver=credential_resolver,

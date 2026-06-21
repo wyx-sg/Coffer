@@ -5,7 +5,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { InsightOut, TranscriptSessionSummary } from "@/lib/api/agentChat";
 import { useDistillTranscript } from "@/lib/hooks/useAgentChatHistory";
@@ -18,7 +17,7 @@ interface Props {
 export function DistillCell({ session, name }: Props) {
   const { t } = useTranslation();
   const [insights, setInsights] = useState<InsightOut[]>([]);
-  const [factCount, setFactCount] = useState<number | null>(null);
+  const [entryCount, setEntryCount] = useState<number | null>(null);
   const distill = useDistillTranscript(name);
 
   const handleDistill = () => {
@@ -27,7 +26,7 @@ export function DistillCell({ session, name }: Props) {
       {
         onSuccess: (result) => {
           setInsights(result.insights);
-          setFactCount(result.fact_ids.length);
+          setEntryCount(result.journal_entries.length);
         },
       },
     );
@@ -50,11 +49,11 @@ export function DistillCell({ session, name }: Props) {
           : t("agents.conversationsTab.distill")}
       </Button>
 
-      {factCount !== null && insights.length === 0 ? (
+      {entryCount !== null && insights.length === 0 ? (
         <p className="text-xs text-muted-foreground">{t("agents.conversationsTab.noInsights")}</p>
       ) : null}
 
-      {factCount !== null && insights.length > 0 ? (
+      {entryCount !== null && insights.length > 0 ? (
         <p className="text-xs text-muted-foreground">
           {t("agents.conversationsTab.distilledCount", { count: insights.length })}
         </p>
@@ -68,7 +67,6 @@ export function DistillCell({ session, name }: Props) {
               className="space-y-1 rounded-md border bg-card px-3 py-2 text-sm"
             >
               <div className="flex items-center gap-2">
-                <Badge variant="secondary">{insight.type}</Badge>
                 <span className="font-medium">{insight.name}</span>
               </div>
               {insight.description ? (
