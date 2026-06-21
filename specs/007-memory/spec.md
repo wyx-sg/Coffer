@@ -327,6 +327,18 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **Then** the call returns `status="no_model"`, the inbox is left untouched, no
   topic document is written, and no error is raised.
 
+### Scenario: a topic document recalls at passage granularity
+
+- **Given** an organized memory store whose `knowledge/` lane holds a topic
+  document with two distinct heading sections, each describing a different
+  subject, indexed for recall,
+- **When** `coffer__recall` is queried with terms that occur only in the second
+  section,
+- **Then** the returned hit's text is that section's **passage** — not the whole
+  document — so the first section's distinctive wording does not appear in the
+  hit, confirming topic documents are chunked **per passage** (heading- and
+  block-structure aware) rather than one chunk per file.
+
 > **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, the desktop read-only fact viewer's open-in-editor / reveal / copy-path affordances, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
 
 ## Requirements
@@ -371,6 +383,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-029**: An inbox item MUST be **deleted only after** its content is successfully written into a topic doc. A malformed or unparseable LLM response (missing/empty required keys, an unsafe `topic_slug`, or non-JSON) MUST cause that item to be **skipped** — left in the inbox, no topic doc written or corrupted — and the run continues; the result reports the count of skipped items. `organize` on an empty inbox is a no-op (`status="empty"`); when no internal model is configured `organize` is a clean no-op (`status="no_model"`, inbox untouched, nothing written) rather than an error.
 - **FR-030**: After draining, the organizer MUST regenerate the store's `knowledge/INDEX.md` review catalog from all topic docs' frontmatter (`- [<title>](<slug>.md) — <description>`), reconcile the index (dropping the removed inbox rows and (re)indexing the new/updated topic docs so `recall` returns content from the topic docs, not the drained inbox), and record one `memory_organized` audit entry (store + counts only — no item content). `recall` MUST surface organized topic-doc content and MUST NOT surface `INDEX.md`.
 - **FR-031**: The organizer MUST keep a **non-blocking consolidation changelog** at the store ROOT (`<store>/consolidation-log.md`, append-only, human-readable: one line per merged/created topic with the timestamp and the source inbox item). The changelog is auditable, never a gate, and is **excluded from recall** (it lives outside the `knowledge/` lane) and **from the sync mirror** (machine-local, like `INDEX.md`; topic docs themselves DO sync as source-of-truth).
+- **FR-032**: The memory reconciler MUST chunk a fact file's body into **passage-granular, structure-aware chunks** using the retrieval substrate's shared markdown chunker (`infrastructure/knowledge/chunking.chunk_markdown` — splits on heading sections, keeps fenced code / tables atomic, and packs structural blocks up to a fixed window), with **fixed memory chunk-size/overlap parameters** (not a per-store `MemoryStoreConfig` field), so a multi-section organized topic document surfaces the **most relevant passage** on `recall` rather than its entire body as a single chunk. A short single-passage fact (e.g. an inbox item) still chunks to one passage — so this changes only the **granularity** of large/organized topic docs, never *what* `recall` includes or excludes: the `INDEX.md`, inbox-vs-topic, and `handoff/` recall isolation (FR-024/030/031) and the legacy-root-fact abandonment (FR-019) are all unchanged.
 
 **Surfaces**
 

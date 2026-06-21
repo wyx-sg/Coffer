@@ -261,6 +261,15 @@ cwd 没有可恢复的现场。
 - **When** 调用 `organize`，
 - **Then** 调用返回 `status="no_model"`，inbox 原封不动，不写出任何主题文档，也不报错。
 
+### Scenario: a topic document recalls at passage granularity
+
+- **Given** 一个已整理的 memory store，其 `knowledge/` lane 中有一份含两个不同标题
+  小节（各描述不同主题）的主题文档，并已建立 recall 索引，
+- **When** 用只出现在第二个小节中的词去查询 `coffer__recall`，
+- **Then** 返回命中的文本是该小节的**段落（passage）**——而非整篇文档——因此第一个
+  小节的特征措辞不会出现在命中中，证明主题文档是**按段落分块**的（标题与块结构感知），
+  而不是每文件一块。
+
 > **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：桌面记忆列表按作用域展示、桌面只读事实视图的打开/显示/复制路径能力、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
 
 ## Requirements
@@ -305,6 +314,7 @@ cwd 没有可恢复的现场。
 - **FR-029**：inbox 条目 MUST **仅在**其内容成功写入主题文档**之后**才被删除。畸形或不可解析的 LLM 响应（缺失/空的必填键、不安全的 `topic_slug`、或非 JSON）MUST 导致该条目被**跳过** —— 留在 inbox，不写出也不损坏任何主题文档 —— 并继续整轮；结果中报告被跳过的条目数。对空 inbox 调 `organize` 是 no-op（`status="empty"`）；当未配置内部模型时，`organize` 是干净的 no-op（`status="no_model"`，inbox 原封不动、不写任何内容）而非报错。
 - **FR-030**：排空后，organizer MUST 从所有主题文档的 frontmatter 重新生成 store 的 `knowledge/INDEX.md` 审阅目录（`- [<title>](<slug>.md) — <description>`），对账索引（丢弃被删的 inbox 行、(重)索引新/更新的主题文档，使 `recall` 返回主题文档的内容而非被排空的 inbox），并记一条 `memory_organized` 审计（仅 store + 计数 —— 无条目内容）。`recall` MUST 呈现已整理的主题文档内容，且 MUST NOT 呈现 `INDEX.md`。
 - **FR-031**：organizer MUST 在 store 根目录维护一份**非阻塞的整合 changelog**（`<store>/consolidation-log.md`，只追加、人类可读：每条合并/创建的主题一行，带时间戳与来源 inbox 条目）。该 changelog 可审计、绝不是闸门，且**排除在 recall 之外**（它在 `knowledge/` lane 之外）与**排除在同步镜像之外**（机器本地，与 `INDEX.md` 一样；主题文档本身作为真相源 DO 同步）。
+- **FR-032**：memory 对账器 MUST 用检索基座共享的 markdown 分块器（`infrastructure/knowledge/chunking.chunk_markdown` —— 按标题小节切分、保持 fenced code/表格原子、把结构块打包进固定窗口）把事实文件正文切成**段落粒度、结构感知的分块**，并使用**固定的 memory 分块 size/overlap 参数**（不是 `MemoryStoreConfig` 的 per-store 字段），从而让一份多小节的已整理主题文档在 `recall` 时呈现**最相关的段落**，而非把整篇正文作为单一分块。短的单段落事实（如 inbox 条目）仍只切成一块 —— 因此这只改变大/已整理主题文档的**粒度**，绝不改变 `recall` *包含/排除什么*：`INDEX.md`、inbox 与主题文档之分、以及 `handoff/` 的 recall 隔离（FR-024/030/031）和遗留根目录事实的废弃（FR-019）全部不变。
 
 **Surfaces**
 
