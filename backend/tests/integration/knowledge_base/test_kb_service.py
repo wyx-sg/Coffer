@@ -102,6 +102,15 @@ async def test_reupload_updated_file_updates_in_place(kb) -> None:
     assert updated.id == first.id
     assert updated.source_mode == "converted"
     assert await kb.documents.count_documents("knowledge_base", "kb1") == 1
+    # KB18: a re-upload preserves created_at and bumps updated_at — both in the
+    # row and in the on-disk frontmatter (the source of truth).
+    assert updated.created_at == first.created_at
+    assert updated.updated_at >= first.updated_at
+    from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
+
+    fm, _ = split_frontmatter(paths.doc_path("kb1", updated.id).read_text())
+    assert fm["created_at"] == first.created_at.isoformat()
+    assert fm["updated_at"] == updated.updated_at.isoformat()
     # New content searchable; old content gone.
     assert (await kb.service.search(kb_name="kb1", query="apple", top_k=5)).passages == ()
     assert len((await kb.service.search(kb_name="kb1", query="banana", top_k=5)).passages) == 1
@@ -598,6 +607,8 @@ async def test_reindex_reconstructs_documents_rows_after_db_loss(kb) -> None:
     await kb.create_kb("kb1")
     doc = await _ingest(kb, "kb1", "a.md", b"# A\n\nrebuildable banana")
     original_sha = doc.metadata["source_sha256"]
+    original_created = doc.created_at
+    original_updated = doc.updated_at
 
     async with kb.sm() as session:
         await session.execute(text("DELETE FROM documents_fts"))
@@ -613,6 +624,10 @@ async def test_reindex_reconstructs_documents_rows_after_db_loss(kb) -> None:
     assert restored.source_mode == "converted"
     assert restored.title == "A"
     assert restored.metadata["source_sha256"] == original_sha
+    # KB18: timestamps survive the rebuild — restored from the file's frontmatter,
+    # NOT reset to now() (files are truth, including the documents-table columns).
+    assert restored.created_at == original_created
+    assert restored.updated_at == original_updated
     res = await kb.service.search(kb_name="kb1", query="banana", top_k=5)
     assert len(res.passages) == 1
 

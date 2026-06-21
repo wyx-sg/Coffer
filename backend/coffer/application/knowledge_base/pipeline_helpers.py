@@ -208,15 +208,39 @@ async def reconcile_on_read(
     return await scan()
 
 
+def _parse_dt(value: object, *, default: datetime) -> datetime:
+    """Parse an ISO timestamp string into an aware UTC datetime.
+
+    Missing / blank / unparseable → ``default`` (the file mtime), so a
+    pre-existing / hand-written file degrades gracefully. A local copy of the
+    memory face's helper (``infrastructure.memory.files._parse_dt``) — the
+    import-linter forbids cross-kind imports (memory↔knowledge_base), so each
+    kind keeps its own copy (the established pattern)."""
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+        except ValueError:
+            return default
+    return default
+
+
 def document_from_frontmatter(
-    kb_name: str, doc_id: str, frontmatter: dict[str, object]
+    kb_name: str, doc_id: str, frontmatter: dict[str, object], *, mtime: datetime
 ) -> Document:
     """Rebuild a ``documents`` row from a file's self-describing frontmatter.
 
-    Timestamps are not in the frontmatter; a rebuilt row gets ``now`` (the
-    rebuild time), which is honest — the original ingest time was lost with
-    the database."""
+    The doc timestamps are read back from the frontmatter (``created_at`` /
+    ``updated_at``) so a DB-loss rebuild restores the real ingest/edit time
+    instead of resetting to ``now`` — files are the source of truth. A
+    pre-existing / hand-written file lacking those keys falls back to the file
+    ``mtime`` (not ``now``). ``converted_at`` stays ``now`` — it tracks this
+    conversion-engine run, not the document's age."""
     now = datetime.now(tz=UTC)
+    created_at = _parse_dt(frontmatter.get("created_at"), default=mtime)
+    updated_at = _parse_dt(frontmatter.get("updated_at"), default=mtime)
     source_filename = str(frontmatter.get("source_filename", ""))
     metadata: dict[str, object] = {
         "original_filename": source_filename,
@@ -243,8 +267,8 @@ def document_from_frontmatter(
         description=None,
         content_sha256="",  # set by the reindex routine
         source_mode=str(frontmatter.get("source_mode", "converted")),
-        created_at=now,
-        updated_at=now,
+        created_at=created_at,
+        updated_at=updated_at,
         metadata=metadata,
     )
 
@@ -289,9 +313,42 @@ def build_kb_document(
     )
 
 
-def render_doc_markdown(doc: Document, body: str, *, source_mode: str) -> str:
+def render_ingest_markdown(
+    prepared: Prepared,
+    filename: str,
+    *,
+    created_at: datetime,
+    updated_at: datetime,
+    source_path: str | None = None,
+) -> str:
+    """Render a freshly-converted upload's ``docs/<id>.md`` (frontmatter + body).
+
+    Timestamps live in the file (the source of truth) so a DB-loss rebuild
+    restores them; ``source_path`` is recorded only for path-based ingests (a
+    byte/agent upload must not gain a server path). Keep this field set
+    identical to ``render_doc_markdown`` so an ingest→edit→rebuild round-trip is
+    stable."""
+    fields: dict[str, object] = {
+        "title": prepared.title,
+        "source_filename": filename,
+        "source_format": prepared.extension.lstrip("."),
+        "source_sha256": prepared.source_sha256,
+        "converter": prepared.conversion_engine,
+        "source_mode": "converted",
+        "created_at": created_at.isoformat(),
+        "updated_at": updated_at.isoformat(),
+    }
+    if source_path:
+        fields["source_path"] = source_path
+    return render_frontmatter(fields, prepared.markdown)
+
+
+def render_doc_markdown(doc: Document, body: str, *, source_mode: str, updated_at: datetime) -> str:
     """Re-render a document's ``docs/<id>.md`` (frontmatter + body) for an edit
-    or reconvert, preserving its provenance metadata."""
+    or reconvert, preserving its provenance metadata. ``created_at`` is carried
+    from the document; ``updated_at`` is the new edit/reconvert time. Keep this
+    field set identical to ``render_ingest_markdown`` so a round-trip is
+    stable."""
     fields: dict[str, object] = {
         "title": title_of(body, doc.title),
         "source_filename": str(doc.metadata.get("original_filename", "")),
@@ -299,6 +356,8 @@ def render_doc_markdown(doc: Document, body: str, *, source_mode: str) -> str:
         "source_sha256": str(doc.metadata.get("source_sha256", "")),
         "converter": str(doc.metadata.get("conversion_engine", "")),
         "source_mode": source_mode,
+        "created_at": doc.created_at.isoformat(),
+        "updated_at": updated_at.isoformat(),
     }
     # Carry the external-source path through edit/reconvert so source tracking
     # survives those write paths (only present for path-based ingests).
