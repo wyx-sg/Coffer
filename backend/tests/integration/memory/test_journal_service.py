@@ -6,8 +6,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from coffer.application.memory.journal import JournalService
 
+from coffer.application.memory.journal import JournalService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ScopeUnresolved
 from coffer.infrastructure.knowledge import paths

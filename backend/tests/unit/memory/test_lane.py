@@ -7,7 +7,7 @@ from coffer.domain.memory.lane import Lane
 
 
 def test_lane_values_are_the_four_folder_names() -> None:
-    assert {l.value for l in Lane} == {"knowledge", "rules", "journal", "handoff"}
+    assert {lane.value for lane in Lane} == {"knowledge", "rules", "journal", "handoff"}
 
 
 def test_lane_is_a_str() -> None:
