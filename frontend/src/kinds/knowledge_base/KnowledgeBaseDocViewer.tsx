@@ -64,7 +64,7 @@ export function KnowledgeBaseDocViewer({
           </Badge>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {doc.path ? <FileActions filePath={doc.path} folderPath={doc.folder_path} /> : null}
+          {doc.path ? <FileActions filePath={doc.path} /> : null}
           <Button
             size="sm"
             variant="outline"
