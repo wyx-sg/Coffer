@@ -11,6 +11,16 @@ describe("MarkdownContent", () => {
     expect(container.textContent).not.toContain("**");
   });
 
+  test("keeps single newlines as line breaks (remark-breaks)", () => {
+    // Agent output (e.g. the `/usage` report) lays facts out one per line with a
+    // single newline. CommonMark collapses those into spaces; remark-breaks must
+    // turn them into <br> so the lines stay visually separate.
+    const { container } = render(<MarkdownContent content={"line one\nline two\nline three"} />);
+    expect(container.querySelectorAll("br").length).toBeGreaterThanOrEqual(2);
+    // Still one paragraph — the lines are joined by <br>, not split into many <p>.
+    expect(container.querySelectorAll("p")).toHaveLength(1);
+  });
+
   test("renders a bullet list as <li> items", () => {
     const { container } = render(<MarkdownContent content={"- one\n- two"} />);
     const items = container.querySelectorAll("li");

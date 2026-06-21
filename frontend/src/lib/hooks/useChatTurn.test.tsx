@@ -230,6 +230,78 @@ describe("useChatTurn", () => {
     expect(result.current.liveMessage).not.toBeNull();
   });
 
+  test("reconciles a stuck live bubble when the stream ends without turn_done", async () => {
+    // The stream drops mid-turn (no turn_done reaches us) but the reply finished
+    // server-side. On stream end the hook must refetch and drop the spinning
+    // live bubble instead of leaving it on "thinking…" forever.
+    subscribeMock.mockImplementation(
+      fromEvents(
+        { event: "turn_start", data: {} },
+        { event: "text_delta", data: { text: "partial" } },
+        // stream ends here — NO turn_done
+      ),
+    );
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    qc.setQueryData(
+      ["messages", "conv-1"],
+      [
+        {
+          id: "a1",
+          conversation_id: "conv-1",
+          seq: 1,
+          role: "assistant",
+          content: [{ type: "text", text: "the full reply" }],
+          status: "complete",
+          created_at: "",
+        },
+      ],
+    );
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+
+    await waitFor(() => expect(result.current.liveMessage).toBeNull());
+    expect(result.current.isStreaming).toBe(false);
+  });
+
+  test("stream ending without a landed reply resets streaming but keeps the live text", async () => {
+    // Stream ends with only the user message persisted (reply not yet landed):
+    // the live bubble is kept (no premature clear) but streaming is reset.
+    subscribeMock.mockImplementation(
+      fromEvents(
+        { event: "turn_start", data: {} },
+        { event: "text_delta", data: { text: "still thinking text" } },
+      ),
+    );
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    qc.setQueryData(
+      ["messages", "conv-1"],
+      [
+        {
+          id: "u1",
+          conversation_id: "conv-1",
+          seq: 0,
+          role: "user",
+          content: [{ type: "text", text: "q" }],
+          status: "complete",
+          created_at: "",
+        },
+      ],
+    );
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+
+    await waitFor(() => expect(result.current.isStreaming).toBe(false));
+    expect(result.current.liveMessage?.text).toBe("still thinking text");
+  });
+
   test("turn_error surfaces an error and drops the live bubble", async () => {
     subscribeMock.mockImplementation(
       fromEvents(

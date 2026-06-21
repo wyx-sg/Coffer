@@ -16,7 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { subscribeConversationEvents } from "@/lib/chat/streamClient";
-import { chatApi } from "@/lib/api/chat";
+import { chatApi, type Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
 import { CONVERSATIONS_KEY, messagesKey } from "./useConversations";
 import { type LiveMessage, handleEvent } from "./chatTurnEvents";
@@ -69,6 +69,24 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     setPendingState([]);
     priorReplyCountRef.current = 0;
 
+    // The SSE subscription is meant to be long-lived (it stays open across turns
+    // and the server holds it open when idle). If it ENDS — a dropped connection,
+    // a proxy timeout, or the server closing it — the live turn may have finished
+    // server-side after we stopped receiving events, so its terminal `turn_done`
+    // never reached us and the live bubble would spin on "thinking…" forever.
+    // Reconcile against the persisted messages: if the reply already landed, drop
+    // the stale live bubble (and leave streaming off, since the stream is gone).
+    const reconcileEndedStream = async () => {
+      setIsStreaming(false);
+      await qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
+      if (cancelled) return;
+      const msgs = qc.getQueryData<Message[]>(messagesKey(conversationId)) ?? [];
+      const last = msgs[msgs.length - 1];
+      if (last?.role === "assistant" && last.status === "complete") {
+        setLiveMessage(null);
+      }
+    };
+
     void (async () => {
       try {
         for await (const event of subscribeConversationEvents(conversationId, controller.signal)) {
@@ -84,11 +102,16 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
             isCancelled: () => cancelled,
           });
         }
+        // Stream closed cleanly (not aborted by us) — reconcile so a turn that
+        // ended after the drop doesn't leave the bubble stuck on "thinking…".
+        if (cancelled) return;
+        await reconcileEndedStream();
       } catch (err) {
         if (cancelled) return;
         if (err instanceof Error && err.name === "AbortError") return;
         const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
         setError(wrapped);
+        await reconcileEndedStream();
       }
     })();
 

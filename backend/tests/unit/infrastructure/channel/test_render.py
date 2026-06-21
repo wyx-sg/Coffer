@@ -48,6 +48,28 @@ class TestMarkdownToTelegramHtml:
     def test_raw_html_cannot_inject_tags(self):
         assert markdown_to_telegram_html("<script>x</script>") == "&lt;script&gt;x&lt;/script&gt;"
 
+    def test_newlines_preserved_so_multiline_output_stays_multiline(self):
+        # Telegram renders \n literally (HTML parse_mode), so the web-only
+        # single-newline collapse must NOT happen here — each line stays its own
+        # line, keeping multi-fact agent output (e.g. /usage) readable.
+        rendered = markdown_to_telegram_html("line one\nline two\nline three")
+        assert rendered == "line one\nline two\nline three"
+
+    def test_dash_bullets_become_glyphs(self):
+        assert markdown_to_telegram_html("- one\n- two") == "• one\n• two"
+
+    def test_star_bullets_become_glyphs(self):
+        assert markdown_to_telegram_html("* one\n* two") == "• one\n• two"
+
+    def test_indented_bullet_keeps_indent(self):
+        # The whole message is stripped at the edges, so put the nested item mid-text.
+        assert markdown_to_telegram_html("top\n  - nested") == "top\n  • nested"
+
+    def test_bullet_glyph_does_not_eat_bold_or_italic(self):
+        # Leading **bold** / *italic* are not list markers (no space after *).
+        assert markdown_to_telegram_html("**strong** lead") == "<b>strong</b> lead"
+        assert markdown_to_telegram_html("*em* lead") == "<i>em</i> lead"
+
     def test_empty_input_renders_empty(self):
         assert markdown_to_telegram_html("") == ""
 
