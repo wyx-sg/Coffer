@@ -298,8 +298,16 @@ describe("useChatTurn", () => {
     );
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
-    await waitFor(() => expect(result.current.isStreaming).toBe(false));
-    expect(result.current.liveMessage?.text).toBe("still thinking text");
+    // Wait for the UNIQUE terminal state — the live text landed AND streaming
+    // reset — in one condition. Waiting only on `isStreaming === false` is racy:
+    // that is also the hook's initial state, so under CI scheduling the wait can
+    // resolve in the initial window (before the stream's events are processed),
+    // when liveMessage is still null. Both assertions hold only once the stream
+    // has ended, so this converges deterministically.
+    await waitFor(() => {
+      expect(result.current.liveMessage?.text).toBe("still thinking text");
+      expect(result.current.isStreaming).toBe(false);
+    });
   });
 
   test("turn_error surfaces an error and drops the live bubble", async () => {
