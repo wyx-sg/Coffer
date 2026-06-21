@@ -75,60 +75,66 @@ export function DaemonOfflineBanner() {
       : String(restart.error)
     : null;
 
+  // Floats over the whole app (above the sidebar too): a fixed, top-centered
+  // card that doesn't take layout space, so page content stays put underneath.
+  // pointer-events-none on the wrapper lets clicks pass through the empty gutter;
+  // the card itself re-enables them.
   return (
-    <Alert
-      variant="destructive"
-      className="mb-6 border-status-warn/40 bg-status-warn/5 text-foreground"
-      data-testid="daemon-banner"
-      data-banner-code={isStale ? "DAEMON_OUT_OF_DATE" : code}
-    >
-      <AlertCircle className="size-4 text-status-warn" />
-      <AlertTitle className="font-serif text-base">
-        {isStale
-          ? t("daemon.offline.outOfDateTitle")
-          : isAuthGap
-            ? t("daemon.offline.notReadyTitle")
-            : t("daemon.offline.title")}
-      </AlertTitle>
-      <AlertDescription>
-        <p className="mb-3 text-foreground/80">
+    <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+      <Alert
+        variant="destructive"
+        className="pointer-events-auto w-full max-w-xl border-status-warn/40 bg-card text-foreground shadow-lg"
+        data-testid="daemon-banner"
+        data-banner-code={isStale ? "DAEMON_OUT_OF_DATE" : code}
+      >
+        <AlertCircle className="size-4 text-status-warn" />
+        <AlertTitle className="font-serif text-base">
           {isStale
-            ? t("daemon.offline.outOfDateBody")
+            ? t("daemon.offline.outOfDateTitle")
             : isAuthGap
-              ? t("daemon.offline.notReadyBody")
-              : t("daemon.offline.body")}
-          {!isStale && !isAuthGap && error instanceof Error ? ` (${error.message})` : null}
-        </p>
-        {isTauri() ? (
-          <div className="space-y-2">
+              ? t("daemon.offline.notReadyTitle")
+              : t("daemon.offline.title")}
+        </AlertTitle>
+        <AlertDescription>
+          <p className="mb-3 text-foreground/80">
+            {isStale
+              ? t("daemon.offline.outOfDateBody")
+              : isAuthGap
+                ? t("daemon.offline.notReadyBody")
+                : t("daemon.offline.body")}
+            {!isStale && !isAuthGap && error instanceof Error ? ` (${error.message})` : null}
+          </p>
+          {isTauri() ? (
+            <div className="space-y-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => restart.mutate()}
+                disabled={restart.isPending}
+              >
+                {restart.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    {t("daemon.offline.restarting")}
+                  </>
+                ) : (
+                  t("daemon.offline.restart")
+                )}
+              </Button>
+              {restartError ? <p className="text-xs text-destructive">{restartError}</p> : null}
+            </div>
+          ) : (
             <Button
               size="sm"
               variant="outline"
-              onClick={() => restart.mutate()}
-              disabled={restart.isPending}
+              onClick={() => window.location.reload()}
+              data-testid="daemon-banner-reload"
             >
-              {restart.isPending ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  {t("daemon.offline.restarting")}
-                </>
-              ) : (
-                t("daemon.offline.restart")
-              )}
+              {t("daemon.offline.reload")}
             </Button>
-            {restartError ? <p className="text-xs text-destructive">{restartError}</p> : null}
-          </div>
-        ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => window.location.reload()}
-            data-testid="daemon-banner-reload"
-          >
-            {t("daemon.offline.reload")}
-          </Button>
-        )}
-      </AlertDescription>
-    </Alert>
+          )}
+        </AlertDescription>
+      </Alert>
+    </div>
   );
 }

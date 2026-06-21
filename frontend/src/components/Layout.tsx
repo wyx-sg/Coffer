@@ -120,6 +120,9 @@ export function Layout() {
     // h-screen + overflow-hidden pins the app to the viewport; the sidebar
     // and the main content each own an independent scroll region.
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      {/* Floats over the whole app (fixed, top-centered) — rendered at the root
+          so it overlays the sidebar too and never shifts page content. */}
+      <DaemonOfflineBanner />
       <aside
         className={cn(
           "hidden shrink-0 flex-col border-r border-border bg-card/50 transition-[width] duration-200 md:flex",
@@ -186,7 +189,6 @@ export function Layout() {
         {/* Full-width — the content tracks the sidebar, so collapsing it
             genuinely widens the working area. */}
         <div className="w-full px-6 py-10 md:px-10">
-          <DaemonOfflineBanner />
           <Outlet />
         </div>
       </main>
