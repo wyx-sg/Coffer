@@ -87,6 +87,12 @@ export interface ActivateOut {
   skipped: string[];
 }
 
+export interface DeactivateOut {
+  wire_format: WireFormat;
+  deprojected: string[];
+  previous: string | null;
+}
+
 /** True only for anthropic/openai connections — ollama has no key. */
 export function wireNeedsCredential(wire: WireFormat): boolean {
   return wire !== "ollama";
@@ -135,6 +141,10 @@ export const providersApi = {
   remove: (name: string) => call<void>("DELETE", `/providers/${name}`),
 
   activate: (name: string) => call<ActivateOut>("POST", `/providers/${name}/activate`),
+
+  /** Switch a wire's agent(s) back to their own built-in login: remove Coffer's
+   * projection and clear the active connection. Idempotent. */
+  useBuiltin: (wire: WireFormat) => call<DeactivateOut>("POST", `/providers/use-builtin/${wire}`),
 
   /** Make this connection Coffer's internal-engine default (clears the flag on
    * all others). Returns the updated connection. */

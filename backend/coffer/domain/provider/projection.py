@@ -132,3 +132,42 @@ def apply_codex_provider(
     block["env_key"] = env_key
     doc["model_providers"][provider_id] = block
     return tomlkit.dumps(doc)
+
+
+def remove_anthropic_settings(text: str, *, api_key_helper: str = ANTHROPIC_API_KEY_HELPER) -> str:
+    """Inverse of :func:`apply_anthropic_settings` — strip Coffer's managed keys so
+    Claude Code falls back to its OWN login ("use built-in"). Removes the managed
+    ``apiKeyHelper`` (only when it is Coffer's, never a user-owned one) and the
+    ``env.ANTHROPIC_BASE_URL`` / ``ANTHROPIC_MODEL`` / ``ANTHROPIC_SMALL_FAST_MODEL``
+    vars; unrelated keys and env entries are preserved."""
+    data = json.loads(text) if text.strip() else {}
+    if not isinstance(data, dict):
+        return "{}\n"
+    if data.get("apiKeyHelper") == api_key_helper:
+        data.pop("apiKeyHelper", None)
+    env = data.get("env")
+    if isinstance(env, dict):
+        for key in ("ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL"):
+            env.pop(key, None)
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def remove_codex_provider(text: str, *, provider_id: str = CODEX_PROVIDER_ID) -> str:
+    """Inverse of :func:`apply_codex_provider` — drop Coffer's provider block so
+    Codex falls back to its OWN default provider/model ("use built-in"). The
+    ``[model_providers.<provider_id>]`` table is always removed; ``model_provider``
+    and the top-level ``model`` are cleared ONLY when ``model_provider`` currently
+    points at Coffer (a user-selected provider is left untouched). Unrelated keys
+    are preserved."""
+    if not text.strip():
+        return ""
+    doc = tomlkit.parse(text)
+    providers = doc.get("model_providers")
+    if isinstance(providers, MutableMapping):
+        providers.pop(provider_id, None)
+        if not providers:
+            doc.pop("model_providers", None)
+    if doc.get("model_provider") == provider_id:
+        doc.pop("model_provider", None)
+        doc.pop("model", None)
+    return tomlkit.dumps(doc)

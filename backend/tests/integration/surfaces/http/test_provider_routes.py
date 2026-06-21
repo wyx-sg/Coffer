@@ -213,6 +213,44 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="011-provider-switching",
+    scenario="switch a wire back to the agent built-in login",
+)
+def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59785)
+    cfg = _agent_dir(tmp_path)
+    with _client(app) as c:
+        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        c.post("/api/v1/providers", json=_anthropic_body(fast_model="claude-haiku-4-5"))
+        c.post("/api/v1/providers/acme/activate")
+        # sanity — the connection is projected into the agent config first
+        assert json.loads((cfg / "settings.json").read_text())["env"]["ANTHROPIC_BASE_URL"]
+
+        r = c.post("/api/v1/providers/use-builtin/anthropic")
+        assert r.status_code == 200, r.text
+        assert r.json()["deprojected"] == ["cc"]
+        assert r.json()["previous"] == "acme"
+
+        # projection removed → the agent falls back to its own built-in login
+        data = json.loads((cfg / "settings.json").read_text())
+        assert "apiKeyHelper" not in data
+        assert "ANTHROPIC_BASE_URL" not in data.get("env", {})
+        # and the connection is no longer the active override
+        providers = c.get("/api/v1/providers").json()["providers"]
+        assert all(not p["is_active"] for p in providers)
+
+
+def test_use_builtin_is_idempotent_noop(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59786)
+    with _client(app) as c:
+        # Nothing active for the wire → use-builtin is a clean no-op.
+        r = c.post("/api/v1/providers/use-builtin/openai")
+        assert r.status_code == 200, r.text
+        assert r.json()["deprojected"] == []
+        assert r.json()["previous"] is None
+
+
+@pytest.mark.acceptance(
+    spec="011-provider-switching",
     scenario="activating a profile deactivates the previous active profile of the same wire format",
 )
 def test_activate_deactivates_previous(tmp_path, monkeypatch):
