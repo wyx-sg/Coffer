@@ -1,6 +1,13 @@
 // components/chat/Composer.tsx
 // Text input + send button pinned at the bottom of the message thread.
-import { useState, useRef, type KeyboardEvent } from "react";
+import {
+  forwardRef,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,10 +29,48 @@ interface Props {
   onStop?: () => void;
 }
 
-export function Composer({ onSend, disabled = false, streaming = false, onStop }: Props) {
+/**
+ * Imperative handle: lets the parent load text into the composer. Used when the
+ * user edits a queued message — it is pulled out of the queue and back into the
+ * input to amend, then re-sent (re-queuing it at the tail).
+ */
+export interface ComposerHandle {
+  setText: (text: string) => void;
+}
+
+/**
+ * Max height (px) the textarea grows to before it scrolls internally — roughly
+ * ten lines, matching Claude Code / Codex's grow-then-scroll input. Kept in sync
+ * with the `max-h-[200px]` class below.
+ */
+const MAX_HEIGHT = 200;
+
+export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
+  { onSend, disabled = false, streaming = false, onStop },
+  ref,
+) {
   const { t } = useTranslation();
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow: remeasure on every value change so the box tracks its content,
+  // capped at MAX_HEIGHT where it switches to internal scrolling. Sending clears
+  // `value`, which runs this again and collapses the box back to a single row.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const next = Math.min(el.scrollHeight, MAX_HEIGHT);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? "auto" : "hidden";
+  }, [value]);
+
+  useImperativeHandle(ref, () => ({
+    setText: (text: string) => {
+      setValue(text);
+      textareaRef.current?.focus();
+    },
+  }));
 
   const canSend = value.trim().length > 0 && !disabled;
 
@@ -61,7 +106,7 @@ export function Composer({ onSend, disabled = false, streaming = false, onStop }
           placeholder={t("chat.composer.placeholder")}
           disabled={disabled}
           rows={1}
-          className="min-h-[40px] resize-none overflow-hidden py-2 leading-5"
+          className="max-h-[200px] min-h-[40px] resize-none py-2 leading-5"
           aria-label={t("chat.composer.ariaLabel")}
         />
         <Button
@@ -94,4 +139,6 @@ export function Composer({ onSend, disabled = false, streaming = false, onStop }
       )}
     </div>
   );
-}
+});
+
+Composer.displayName = "Composer";

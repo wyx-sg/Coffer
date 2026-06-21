@@ -140,7 +140,7 @@ describe("MessageThread", () => {
     expect(screen.getByRole("textbox")).not.toBeDisabled();
   });
 
-  test("renders pending chips and clicking remove calls onSetPending without the removed item", async () => {
+  test("renders queued messages one per row; clicking remove drops that item", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     const onSetPending = vi.fn();
     renderThread({
@@ -151,13 +151,36 @@ describe("MessageThread", () => {
     await waitFor(() => expect(screen.getByText("first queued")).toBeInTheDocument());
     expect(screen.getByText("second queued")).toBeInTheDocument();
 
-    // Each chip has a remove button; removing the first leaves only the second.
+    // Each row has a remove button; removing the first leaves only the second.
     const removeButtons = screen.getAllByRole("button", { name: /remove from queue/i });
     expect(removeButtons).toHaveLength(2);
     act(() => {
       fireEvent.click(removeButtons[0]);
     });
     expect(onSetPending).toHaveBeenCalledWith(["second queued"]);
+  });
+
+  acceptance("008-agent-chat", "editing a queued message re-queues it at the tail", async () => {
+    // The edit affordance pulls a queued message back into the composer to amend;
+    // re-sending it (still streaming) re-queues it at the tail via the send path.
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    const onSetPending = vi.fn();
+    renderThread({
+      isStreaming: true,
+      pending: ["first queued", "second queued"],
+      onSetPending,
+    });
+    await waitFor(() => expect(screen.getByText("first queued")).toBeInTheDocument());
+
+    const editButtons = screen.getAllByRole("button", { name: /edit queued message/i });
+    expect(editButtons).toHaveLength(2);
+    act(() => {
+      fireEvent.click(editButtons[0]);
+    });
+    // Removed from the queue…
+    expect(onSetPending).toHaveBeenCalledWith(["second queued"]);
+    // …and pulled back into the composer for the user to amend.
+    expect(screen.getByRole("textbox")).toHaveValue("first queued");
   });
 
   test("does not render fetched streaming rows while a live message is shown", async () => {
