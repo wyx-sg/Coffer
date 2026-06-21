@@ -197,7 +197,19 @@ No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invo
 - The per-KB **`auto_update_sources`** flag gets a `<Switch>` row in the settings dialog. Because the config PATCH **replaces** the whole config (FR-014/FR-019), the toggle's value is threaded through the merged config built on submit, and the field was added to `KnowledgeBaseConfigOut` so a settings save can't silently reset it to false.
 - **No new FR** — this delivers the existing FR-021..024 frontend; coverage is the new `SourceCheckDialog` vitest suite plus the extended detail-page test (asserts Check-sources opens the dialog and that the settings PATCH carries `auto_update_sources`).
 
-## 17. Things explicitly NOT decided / out of scope here
+## 17. Document-list filter + multi-select bulk-delete — frontend (KB12)
+
+**Question**: The KB detail page's document list (`KnowledgeBaseDocTree`, the left-sidebar `<ul>` of clickable rows) had no way to narrow a long list or to remove several documents at once — single delete was viewer-driven (select a doc → Trash2 in the right pane → confirm → one delete). Curating a large KB meant scrolling and deleting one at a time.
+
+**Decision**: Enhance the existing sidebar **in place** — purely additive frontend, no backend change:
+
+- A small client-side **filter `<Input>`** sits at the top of the tree (inside the `<aside role="complementary">`, above the `<ul>`). It filters the rendered docs by **case-insensitive title substring**; an empty filter shows all docs, and a filter that hides everything shows a muted "no matches" line.
+- Each row gains a **`<Checkbox>` that is a SIBLING of the clickable title** (never a nested interactive element). The title stays a `<button>` selectable by its text — preserving the e2e (`shell_knowledge_base.spec.ts` clicks "Deploys" by text) and page-test (`getByRole("complementary")` + click-by-text) selectors. A header "select all" checkbox spans the **filtered** set (mirrors `useTableSelection`'s selected ∩ visible).
+- When ≥1 row is selected, the shared **`BulkBar`** (from `DataTableSelection`) shows the count + Delete + Clear. Delete opens a `ConfirmDialog`; on confirm, the page hook's `bulkDelete` fans `deleteDocument(name, id)` out over the selected ids via `useBulkMutate` (one summary toast + one `["kb-documents"]`/`["kb-metrics"]` invalidate burst), then clears the selection. If the currently-VIEWED doc was among those deleted, the viewer's `selectedId` is reset so the right pane doesn't show a deleted doc.
+- We **kept the 2-pane layout** (sidebar tree + right-hand viewer) rather than swapping to a full-width `DataTable`: a DataTable doesn't fit the narrow sidebar and would break the viewer flow + the e2e/page selectors. The single-delete path (viewer Trash2 → confirm → `del`) is unchanged.
+- **No new FR** — this is a UX affordance over the existing FR-013/FR-020 document-management surface; coverage is the extended detail-page test (filter narrows/restores/no-match; select two rows → bulk bar → confirm → `deleteDocument` per id → selection clears; title-click still loads the viewer).
+
+## 18. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.

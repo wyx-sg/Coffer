@@ -116,6 +116,8 @@ export function KnowledgeBaseDetailPage() {
           isLoadingMore={kb.docsQuery.isFetching}
           onLoadMore={kb.loadMoreDocuments}
           onSelect={kb.selectDoc}
+          onBulkDelete={kb.bulkDelete}
+          isBulkDeletePending={kb.bulkDeletePending}
         />
         <KnowledgeBaseDocViewer
           doc={kb.docDetailQuery.data}
