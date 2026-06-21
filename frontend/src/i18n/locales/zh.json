@@ -1,4 +1,16 @@
 {
+  "preview": {
+    "find": {
+      "label": "查找",
+      "placeholder": "查找…",
+      "matches": "{{active}}/{{total}}",
+      "noMatches": "无匹配",
+      "next": "下一个",
+      "prev": "上一个",
+      "caseSensitive": "区分大小写",
+      "close": "关闭"
+    }
+  },
   "fileActions": {
     "openInEditor": "在编辑器中打开",
     "openFolder": "打开文件夹",
@@ -767,15 +779,6 @@
         "subagents": "自定义子智能体定义，每个子智能体一个 Markdown 文件。",
         "config": "Codex CLI 配置：模型、供应商与工具设置。",
         "hooks": "围绕 Codex 事件运行命令的生命周期钩子。"
-      },
-      "find": {
-        "toggle": "查找/替换",
-        "find": "查找",
-        "replace": "替换",
-        "replaceAll": "全部替换",
-        "findNext": "查找下一个",
-        "matches": "{{n}} 处匹配",
-        "caseSensitive": "区分大小写"
       }
     },
     "mcp": {
