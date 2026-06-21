@@ -224,22 +224,15 @@ describe("KnowledgeBaseDetailPage", () => {
     expect(api.deleteDocument).not.toHaveBeenCalled();
   });
 
-  test("paginates the document tree by server offset (page 2 sends offset)", async () => {
-    // The tree is page-paginated (default size 50, server-driven offset). Paging
-    // forward re-queries listDocuments with offset = (page-1)*pageSize.
-    const page1 = Array.from({ length: 50 }, (_, i) => ({
+  test("renders all documents in one scrollable list (no in-UI pager)", async () => {
+    // The list is fetched in ONE request at the API max page size and rendered
+    // as a single scrollable list — no page-based pager.
+    const docs = Array.from({ length: 120 }, (_, i) => ({
       ...DOC,
       id: `d${i}`,
       title: `doc-${i}`,
     }));
-    const page2 = Array.from({ length: 50 }, (_, i) => ({
-      ...DOC,
-      id: `d${50 + i}`,
-      title: `doc-${50 + i}`,
-    }));
-    vi.mocked(api.listDocuments).mockImplementation(async (_kb, _limit, offset) =>
-      (offset ?? 0) >= 50 ? { documents: page2, total: 120 } : { documents: page1, total: 120 },
-    );
+    vi.mocked(api.listDocuments).mockResolvedValue({ documents: docs, total: 120 });
     vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
       document_count: 120,
       chunk_count: 3,
@@ -251,14 +244,12 @@ describe("KnowledgeBaseDetailPage", () => {
 
     renderPage();
     const tree = screen.getByRole("complementary");
-    // First page fetched with offset 0.
+    // The whole list renders (first AND last row) from a single fetch.
     expect(await within(tree).findByText("doc-0")).toBeVisible();
-    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 50, 0));
-
-    // Next page → offset 50.
-    fireEvent.click(within(tree).getByRole("button", { name: /next/i }));
-    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 50, 50));
-    expect(await within(tree).findByText("doc-99")).toBeVisible();
+    expect(within(tree).getByText("doc-119")).toBeInTheDocument();
+    // Fetched once at the API max (limit 200, offset 0); no pager rendered.
+    await waitFor(() => expect(api.listDocuments).toHaveBeenCalledWith("designs", 200, 0));
+    expect(within(tree).queryByRole("button", { name: /next/i })).toBeNull();
   });
 
   test("a duplicate upload surfaces an inline error", async () => {
@@ -327,56 +318,6 @@ describe("KnowledgeBaseDetailPage", () => {
     await waitFor(() => expect(api.updateFromSource).toHaveBeenCalledWith("designs", "d1"));
     // The hook re-runs check-sources on update success → the report refreshes.
     await waitFor(() => expect(api.checkSources).toHaveBeenCalledTimes(2));
-  });
-
-  test("clamps to a populated page when the total shrinks (last page emptied)", async () => {
-    // Page 2 holds only the 51st doc; deleting it shrinks the total so page 2 no
-    // longer exists — the tree must pull back to page 1, never strand the user on
-    // an empty page past the end.
-    const deleted = new Set<string>();
-    const remaining = () =>
-      Array.from({ length: 51 }, (_, i) => ({ ...DOC, id: `d${i}`, title: `doc-${i}` })).filter(
-        (d) => !deleted.has(d.id),
-      );
-    vi.mocked(api.listDocuments).mockImplementation(async (_kb, _limit, offset) => {
-      const all = remaining();
-      const start = offset ?? 0;
-      return { documents: all.slice(start, start + 50), total: all.length };
-    });
-    vi.mocked(api.getDocument).mockImplementation(async (_kb, id) => ({
-      ...DOC,
-      id,
-      markdown: "body",
-    }));
-    vi.mocked(api.deleteDocument).mockImplementation(async (_kb, _id) => {
-      deleted.add(_id);
-    });
-    vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
-      document_count: 51,
-      chunk_count: 3,
-      documents_degraded: 0,
-      indexed_modes: ["keyword", "grep"],
-      disk_bytes: 264,
-    });
-    vi.mocked(api.getKnowledgeBase).mockResolvedValue(KB);
-
-    renderPage();
-    const tree = screen.getByRole("complementary");
-    await within(tree).findByText("doc-0");
-
-    // Page 2 → the lone 51st doc; select it for the viewer.
-    fireEvent.click(within(tree).getByRole("button", { name: /next/i }));
-    fireEvent.click(await within(tree).findByText("doc-50"));
-
-    // Delete it via the viewer's confirm dialog; total drops to 50 → page 2 gone.
-    fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
-    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d50"));
-
-    // The clamp pulls back to page 1 (offset 0): a populated page, not an empty one.
-    expect(await within(tree).findByText("doc-0")).toBeVisible();
-    expect(within(tree).queryByText("doc-50")).toBeNull();
   });
 
   test("clicking a row title still loads it in the viewer (the e2e-critical path)", async () => {

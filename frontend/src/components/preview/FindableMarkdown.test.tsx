@@ -11,6 +11,16 @@ describe("FindableMarkdown", () => {
     expect(screen.getByRole("heading", { name: "Title" })).toBeInTheDocument();
   });
 
+  test("constrains the rendered body to a centered reading max-width", () => {
+    const { container } = render(<FindableMarkdown>{SOURCE}</FindableMarkdown>);
+    // Content sits inside a centered max-width wrapper so long lines don't
+    // stretch edge-to-edge on wide screens.
+    const wrapper = container.querySelector(".max-w-3xl");
+    expect(wrapper).not.toBeNull();
+    expect(wrapper).toHaveClass("mx-auto");
+    expect(wrapper).toContainElement(screen.getByRole("heading", { name: "Title" }));
+  });
+
   test("Cmd/Ctrl+F opens find and counts matches in the rendered text", () => {
     const { container } = render(<FindableMarkdown>{SOURCE}</FindableMarkdown>);
     const region = container.querySelector("[tabindex]") as HTMLElement;
