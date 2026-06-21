@@ -284,6 +284,91 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/memory_stores/{name}/organize:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    post:
+      summary: >
+        Organize the store: drain `knowledge/inbox/` into coherent topic
+        documents using Coffer's internal LLM (explicit trigger; no auto-fire).
+      operationId: organizeMemoryStore
+      tags: [organize]
+      responses:
+        "200":
+          description: >
+            OK. Reports counts and the outcome status. `status="no_model"` (no
+            internal model configured) and `status="empty"` (nothing to organize)
+            are clean no-ops, not errors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizeResponse"
+        "404":
+          description: >
+            Memory store not found (`MEMORY_STORE_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/memory_stores/{name}/reorg:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    post:
+      summary: >
+        Reorganize the store: run Coffer's internal agentic loop over the
+        existing topic documents to consolidate duplicates and split over-long
+        ones (explicit trigger; no auto-fire). Non-destructive — superseded or
+        overwritten content is archived to the recoverable `superseded/`
+        tombstone, never hard-deleted.
+      operationId: reorgMemoryStore
+      tags: [organize]
+      responses:
+        "200":
+          description: >
+            OK. Reports counts and the outcome status. `status="no_model"` (no
+            internal model configured) and `status="empty"` (no topic documents
+            to reorganize) are clean no-ops, not errors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReorgResponse"
+        "404":
+          description: >
+            Memory store not found (`MEMORY_STORE_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/memory_stores/{name}/rules:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    get:
+      summary: >
+        Return the store's procedural `rules/rules.md` text — the behavioural
+        rules the organizer classified into the rules lane, read-only. This is
+        the surface a later session-start injection reads; rules are NOT returned
+        by `recall` (the lane sits outside the knowledge recall glob).
+      operationId: getMemoryStoreRules
+      tags: [rules]
+      responses:
+        "200":
+          description: >
+            OK. Returns the rules text, or a null body when the store has no
+            rules yet (never an error).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesResponse"
+        "404":
+          description: >
+            Memory store not found (`MEMORY_STORE_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
 components:
   securitySchemes:
     cofferToken:
@@ -580,6 +665,75 @@ components:
           type: boolean
           default: false
           description: True when vector was requested but degraded to keyword (embedding unconfigured).
+
+    OrganizeResponse:
+      type: object
+      required: [status, items_processed, topics_created, topics_updated, rules_appended, skipped]
+      properties:
+        status:
+          type: string
+          enum: [organized, no_model, empty]
+          description: >
+            `organized` = the inbox was drained; `no_model` = no internal model
+            configured (clean no-op, inbox untouched); `empty` = nothing to organize.
+        items_processed:
+          type: integer
+          description: Inbox items successfully drained (merged into a topic doc or appended as a rule).
+        topics_created:
+          type: integer
+          description: New topic documents created.
+        topics_updated:
+          type: integer
+          description: Existing topic documents merged into / overwritten with merged content.
+        rules_appended:
+          type: integer
+          description: Inbox items classified as behavioural rules and appended to rules/rules.md.
+        skipped:
+          type: integer
+          description: Items left in the inbox due to an LLM/parse failure (never lost).
+        model:
+          type: string
+          nullable: true
+          description: Display name of the internal model used (null when status="no_model").
+
+    ReorgResponse:
+      type: object
+      required: [status, topics_before, topics_after, topics_written, topics_superseded]
+      properties:
+        status:
+          type: string
+          enum: [reorganized, no_model, empty]
+          description: >
+            `reorganized` = the agentic loop ran; `no_model` = no internal model
+            configured (clean no-op, nothing changed); `empty` = no topic
+            documents to reorganize.
+        topics_before:
+          type: integer
+          description: Number of topic documents in the lane before the pass.
+        topics_after:
+          type: integer
+          description: Number of topic documents in the lane after the pass.
+        topics_written:
+          type: integer
+          description: Topic documents created or overwritten by the loop (prior versions archived).
+        topics_superseded:
+          type: integer
+          description: Topic documents retired to the recoverable `superseded/` tombstone.
+        model:
+          type: string
+          nullable: true
+          description: Display name of the internal model used (null when status="no_model").
+
+    RulesResponse:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          nullable: true
+          description: >
+            The store's `rules/rules.md` text (the procedural rules the organizer
+            classified into the rules lane), or null when there are no rules yet.
 
     ErrorEnvelope:
       type: object

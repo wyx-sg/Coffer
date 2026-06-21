@@ -21,10 +21,15 @@ from coffer.application.knowledge.locks import StoreLocks
 from coffer.application.knowledge.reindex import Reindexer
 from coffer.application.knowledge.retrieval import KnowledgeRetrieval
 from coffer.application.memory.ports import MemoryDocumentRepo
-from coffer.domain.knowledge.document import KIND_MEMORY, Document
+from coffer.domain.knowledge.document import (
+    DOCUMENT_SCAN_LIMIT,
+    KIND_MEMORY,
+    Document,
+)
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.memory.fact import MemoryFact
+from coffer.infrastructure.knowledge.chunking import chunk_markdown
 from coffer.infrastructure.memory.files import (
     FactFile,
     legacy_root_facts,
@@ -41,19 +46,35 @@ class ReconcileStats:
     unchanged: int
 
 
-def _one_chunk(markdown: str) -> list[str]:
-    """Memory indexes one chunk per fact (a fact is a single short passage)."""
-    body = markdown.strip()
-    return [body] if body else []
+# Memory topic docs are chunked per passage (heading/structure-aware) so recall
+# surfaces the relevant section, not the whole document. Size/overlap are fixed
+# here (not a MemoryStoreConfig field) to avoid per-store schema churn; the
+# window mirrors the KB default. A short single-passage fact still yields one
+# chunk, so inbox items and recall-isolation are unaffected.
+_MEMORY_CHUNK_SIZE = 512
+_MEMORY_CHUNK_OVERLAP = 64
+
+
+def _chunk_fact(markdown: str) -> list[str]:
+    return chunk_markdown(
+        markdown, chunk_size=_MEMORY_CHUNK_SIZE, chunk_overlap=_MEMORY_CHUNK_OVERLAP
+    )
 
 
 def fact_to_document(
-    fact: MemoryFact, *, store: StoreRef, content_sha256: str, path: str
+    fact: MemoryFact,
+    *,
+    store: StoreRef,
+    content_sha256: str,
+    path: str,
+    embed_pending: bool = False,
 ) -> Document:
     """Project a ``MemoryFact`` onto a unified ``documents`` row (kind=memory).
 
     ``path`` is the fact's canonical ``.md`` file (the source of truth), per the
-    data-model — recall hits surface it as their ``source``."""
+    data-model — recall hits surface it as their ``source``. ``embed_pending``
+    carries the degraded-embed retry state (KB8) so a degraded fact is retried on
+    the next reconcile."""
     metadata: dict[str, object] = {
         "type": fact.type,
         "actor": fact.actor,
@@ -68,6 +89,7 @@ def fact_to_document(
         title=fact.name,
         description=fact.description,
         content_sha256=content_sha256,
+        embed_pending=embed_pending,
         source_mode="native",
         created_at=fact.created_at,
         updated_at=fact.updated_at,
@@ -128,7 +150,7 @@ class MemoryReconciler:
         known = {
             d.id: d
             for d in await self._documents.list_documents(
-                KIND_MEMORY, store.resource_name, limit=100_000, offset=0
+                KIND_MEMORY, store.resource_name, limit=DOCUMENT_SCAN_LIMIT, offset=0
             )
         }
         index = self._retrieval.index_for(
@@ -139,7 +161,14 @@ class MemoryReconciler:
         for fact_id, ff in on_disk.items():
             existing = known.get(fact_id)
             previous = None if force else (existing.content_sha256 if existing else None)
-            if not force and existing is not None and existing.content_sha256 == ff.content_sha256:
+            # A still-pending fact (embed degraded last time) must NOT be skipped
+            # by the no-op gate, else its embed never retries (KB8).
+            if (
+                not force
+                and existing is not None
+                and existing.content_sha256 == ff.content_sha256
+                and not existing.embed_pending
+            ):
                 unchanged += 1
                 continue
             outcome = await self._reindexer.reindex(
@@ -148,13 +177,17 @@ class MemoryReconciler:
                 previous_sha=previous,
                 embedding=embedding,
                 doc_id=fact_id,
-                chunker=_one_chunk,
+                chunker=_chunk_fact,
+                # The fact name is its title → embed-context only (KB5); FTS raw.
+                title=ff.fact.name,
+                previous_embed_pending=(existing.embed_pending if existing else False),
             )
             doc = fact_to_document(
                 ff.fact,
                 store=store,
                 content_sha256=outcome.content_sha256,
                 path=str(ff.path),
+                embed_pending=outcome.embed_pending,
             )
             await self._documents.upsert_document(doc)
             indexed += 1
@@ -183,13 +216,17 @@ class MemoryReconciler:
                 previous_sha=existing.content_sha256 if existing else None,
                 embedding=embedding,
                 doc_id=fact_file.fact.id,
-                chunker=_one_chunk,
+                chunker=_chunk_fact,
+                # The fact name is its title → embed-context only (KB5); FTS raw.
+                title=fact_file.fact.name,
+                previous_embed_pending=(existing.embed_pending if existing else False),
             )
             doc = fact_to_document(
                 fact_file.fact,
                 store=store,
                 content_sha256=outcome.content_sha256,
                 path=str(fact_file.path),
+                embed_pending=outcome.embed_pending,
             )
             await self._documents.upsert_document(doc)
 

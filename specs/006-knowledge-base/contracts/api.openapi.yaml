@@ -832,6 +832,14 @@ components:
       properties:
         document_count: { type: integer }
         chunk_count: { type: integer }
+        documents_degraded:
+          type: integer
+          default: 0
+          description: >
+            Documents indexed keyword-only because the embedding provider was
+            unavailable (the embed is retried on the next reconcile). Surfaced
+            from the persisted embed_pending flag, so it reflects a degraded
+            embed observed during any read — not only an explicit /reindex.
         indexed_modes:
           type: array
           items:

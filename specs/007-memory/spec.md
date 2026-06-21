@@ -296,6 +296,111 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   any persisted fact; `coffer__recall` subsequently returns the new facts; and
   when `dry_run=true`, insights are returned but nothing is written to disk.
 
+### Scenario: the organizer drains the inbox into a topic document
+
+- **Given** a memory store with two freshly-remembered items in its
+  `knowledge/inbox/` and an internal model configured,
+- **When** `POST /api/v1/memory_stores/{name}/organize` (or `coffer memory
+  organize <name>`) is called,
+- **Then** the internal LLM organizer drains the inbox (no items remain), at
+  least one `knowledge/<topic>.md` topic document exists holding the merged
+  content, `knowledge/INDEX.md` lists that topic, a `memory_organized` audit
+  entry is recorded, and a subsequent `recall` returns content from the topic
+  document (not the now-empty inbox).
+
+### Scenario: organizing merges a note into an existing topic without clobbering it
+
+- **Given** a memory store that already has a hand-edited topic document
+  containing content X plus a new related item in its `knowledge/inbox/`,
+- **When** `organize` is called and the organizer merges the new item into that
+  topic,
+- **Then** the topic document still contains the original content X alongside
+  the newly integrated information, the inbox item has been removed, and the
+  consolidation changelog (`consolidation-log.md`) records the merge — the
+  organizer never regenerates from scratch and never clobbers a human edit.
+
+### Scenario: organize is a no-op when no internal model is configured
+
+- **Given** a memory store with items in its `knowledge/inbox/` but no internal
+  model configured,
+- **When** `organize` is called,
+- **Then** the call returns `status="no_model"`, the inbox is left untouched, no
+  topic document is written, and no error is raised.
+
+### Scenario: a topic document recalls at passage granularity
+
+- **Given** an organized memory store whose `knowledge/` lane holds a topic
+  document with two distinct heading sections, each describing a different
+  subject, indexed for recall,
+- **When** `coffer__recall` is queried with terms that occur only in the second
+  section,
+- **Then** the returned hit's text is that section's **passage** — not the whole
+  document — so the first section's distinctive wording does not appear in the
+  hit, confirming topic documents are chunked **per passage** (heading- and
+  block-structure aware) rather than one chunk per file.
+
+### Scenario: the reorg pass consolidates duplicate topic documents
+
+- **Given** a memory store with two overlapping topic documents (both about the
+  same subject, one carrying extra detail) and an internal model configured,
+- **When** `POST /api/v1/memory_stores/{name}/reorg` (or `coffer memory reorg <name>`)
+  runs and the internal agentic loop reads both documents, writes the merged
+  content into one, and supersedes the now-redundant other,
+- **Then** a single topic document holds the combined content, the redundant
+  document no longer appears in `recall` or `INDEX.md`, a subsequent `recall`
+  returns the merged content, and a `memory_reorganized` audit entry is recorded.
+
+### Scenario: reorg never destroys content — a superseded topic stays recoverable
+
+- **Given** a memory store with a topic document holding content X (possibly a
+  human edit),
+- **When** the reorg loop overwrites or supersedes that document,
+- **Then** the prior content X is first archived to the store's `superseded/`
+  tombstone (so it is **recoverable**, never hard-deleted), the tombstone is
+  **excluded from recall** (it lives outside the `knowledge/` lane), and the
+  consolidation changelog records the supersession — the loop is an incremental
+  edit, never a from-scratch regeneration.
+
+### Scenario: reorg is a no-op when no internal model is configured
+
+- **Given** a memory store with topic documents but no internal model configured,
+- **When** `reorg` is called,
+- **Then** the call returns `status="no_model"`, no topic document is written,
+  superseded, or archived, and no error is raised.
+
+### Scenario: memory is auto-organized after the store goes idle
+
+- **Given** the opt-in auto-organize trigger is enabled, an internal model is
+  configured, and an item is freshly remembered into a store's `knowledge/inbox/`,
+- **When** the store goes idle (no further memory writes) for the conservative
+  debounce delay,
+- **Then** the organizer runs **automatically in the background** — with no
+  explicit `organize` call — draining the inbox into a topic document, and the
+  background pass never blocks: cancelling the pending trigger (e.g. at daemon
+  shutdown) before it fires simply leaves the inbox intact for a later pass.
+
+### Scenario: the organizer routes a rule-shaped note into the rules lane
+
+- **Given** a memory store with an internal model configured and two freshly
+  remembered inbox items — one a behavioural rule ("always run the verify step
+  before pushing") and one an ordinary fact,
+- **When** `organize` runs and the organizer classifies the first item as a rule
+  and the second as ordinary knowledge,
+- **Then** the rule is appended to the store's procedural `rules/rules.md` lane
+  (not written into a `knowledge/<topic>.md` doc), the ordinary fact becomes a
+  topic document, both inbox items are drained, and `recall` does NOT surface the
+  rule (the `rules/` lane sits outside the `knowledge/` recall glob, like
+  `handoff/` and `superseded/`).
+
+### Scenario: the rules read surface returns the stored rules
+
+- **Given** a memory store whose `rules/rules.md` holds one or more rules,
+- **When** `GET /api/v1/memory_stores/{name}/rules` (or `coffer memory rules <name>`)
+  is called,
+- **Then** the response returns the rules text verbatim (the surface that a
+  later session-start injection reads), and a store with no rules returns an
+  empty/`null` body rather than an error.
+
 > **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, the desktop read-only fact viewer's open-in-editor / reveal / copy-path affordances, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
 
 ## Requirements
@@ -332,6 +437,19 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-024**: `coffer__set_handoff(body)` MUST **overwrite** the current branch's handoff file (no accumulation; one scene per branch), set `updated_at`, and record a `handoff_set` audit entry. The handoff body is files-as-truth on disk (it rides the git sync mirror like other memory files) and MUST NOT be returned by `coffer__recall` (it lives in the `handoff/` subdir, outside the recall glob).
 - **FR-025**: `coffer__resume()` MUST return the current branch's saved handoff — `found=true` with `branch`, `body`, `updated_at`, and a freshness `note` annotating that the scene may be stale — or `found=false` when no handoff exists for the branch (a fresh branch) or the cwd is not inside a git project. It MUST never error on a missing handoff and MUST NOT fabricate content.
 - **FR-026**: When the agent's cwd does not resolve to a git project (no project scope, no branch), `coffer__set_handoff` MUST be rejected (there is no store to write to and no global handoff) and `coffer__resume` MUST return `found=false`.
+
+**Consolidation — the internal organizer**
+
+- **FR-027**: The system MUST provide an **internal memory organizer** that, on an **explicit trigger only** (`POST /api/v1/memory_stores/{name}/organize` and `coffer memory organize <name>`; no automatic/background firing in this PR), drains a store's `knowledge/inbox/` of freshly-remembered items into a small set of coherent **topic documents** (`knowledge/<topic-slug>.md`, YAML frontmatter `title`/`description`/`updated_at` + a markdown body) using Coffer's **internal LLM** (Settings → Models) via a **one-shot completion per item** — never an agent-facing tool. The organizer MUST process items sequentially, and one item's LLM/parse failure MUST NOT abort the run (the other items still organize).
+- **FR-028**: For each inbox item the organizer MUST (a) retrieve up to the top-K (K=3) most-relevant **existing topic docs** via the shared retrieval engine (no LLM on this step) as merge candidates, (b) make **one LLM call** that either MERGES the item into the best-fitting candidate — **preserving all existing content and human edits**, integrating the new information, removing exact duplicates — or CREATES a new topic when none fits, and (c) write the returned full document body to `knowledge/<topic-slug>.md`. The organizer MUST be an **incremental merge into the existing document, never a from-scratch regeneration**: the LLM is given the full existing topic content to merge into, so human corrections survive. The organizer MUST NOT hard-delete an existing topic doc (it only creates or overwrites with merged content; git history is the audit trail).
+- **FR-029**: An inbox item MUST be **deleted only after** its content is successfully written into a topic doc. A malformed or unparseable LLM response (missing/empty required keys, an unsafe `topic_slug`, or non-JSON) MUST cause that item to be **skipped** — left in the inbox, no topic doc written or corrupted — and the run continues; the result reports the count of skipped items. `organize` on an empty inbox is a no-op (`status="empty"`); when no internal model is configured `organize` is a clean no-op (`status="no_model"`, inbox untouched, nothing written) rather than an error.
+- **FR-030**: After draining, the organizer MUST regenerate the store's `knowledge/INDEX.md` review catalog from all topic docs' frontmatter (`- [<title>](<slug>.md) — <description>`), reconcile the index (dropping the removed inbox rows and (re)indexing the new/updated topic docs so `recall` returns content from the topic docs, not the drained inbox), and record one `memory_organized` audit entry (store + counts only — no item content). `recall` MUST surface organized topic-doc content and MUST NOT surface `INDEX.md`.
+- **FR-031**: The organizer MUST keep a **non-blocking consolidation changelog** at the store ROOT (`<store>/consolidation-log.md`, append-only, human-readable: one line per merged/created topic with the timestamp and the source inbox item). The changelog is auditable, never a gate, and is **excluded from recall** (it lives outside the `knowledge/` lane) and **from the sync mirror** (machine-local, like `INDEX.md`; topic docs themselves DO sync as source-of-truth).
+- **FR-032**: The memory reconciler MUST chunk a fact file's body into **passage-granular, structure-aware chunks** using the retrieval substrate's shared markdown chunker (`infrastructure/knowledge/chunking.chunk_markdown` — splits on heading sections, keeps fenced code / tables atomic, and packs structural blocks up to a fixed window), with **fixed memory chunk-size/overlap parameters** (not a per-store `MemoryStoreConfig` field), so a multi-section organized topic document surfaces the **most relevant passage** on `recall` rather than its entire body as a single chunk. A short single-passage fact (e.g. an inbox item) still chunks to one passage — so this changes only the **granularity** of large/organized topic docs, never *what* `recall` includes or excludes: the `INDEX.md`, inbox-vs-topic, and `handoff/` recall isolation (FR-024/030/031) and the legacy-root-fact abandonment (FR-019) are all unchanged.
+- **FR-033**: The system MUST provide an **internal agentic reorganization pass** that, on an **explicit trigger only** (`POST /api/v1/memory_stores/{name}/reorg` and `coffer memory reorg <name>`; no automatic/background firing in this PR), runs a bounded **langgraph `create_react_agent` loop** driven by Coffer's **internal LLM** (Settings → Models) over the store's existing topic documents to keep them coherent — consolidating duplicate/overlapping documents and splitting over-long ones. The loop is given a small, fixed tool surface over the topic docs only — **list** topics, **read** a topic, **write** (create/overwrite) a topic, and **supersede** (retire) a topic — and is **never an agent-facing tool** (it is internal, like the organizer). The langchain/langgraph code MUST stay confined to `infrastructure.chat` (importlinter Contract 9); `application/memory` reaches it only through an injected memory-local port. When no internal model is configured the pass is a clean no-op (`status="no_model"`, nothing written/superseded/archived) rather than an error; a store with no topic documents is likewise a no-op (`status="empty"`). After the loop the pass MUST regenerate `INDEX.md`, reconcile the index (so `recall` reflects the consolidated docs), and record one `memory_reorganized` audit entry (store + counts only — no document content).
+- **FR-034**: The reorg pass MUST be **non-destructive and incremental — it MUST NOT hard-delete or from-scratch-regenerate a topic document**. Every mutation that removes or replaces existing topic-doc content MUST first **archive the current version** to the store-root `superseded/` tombstone (`<store>/superseded/<slug>-<timestamp>.md`): a `write` that overwrites an existing topic archives the prior version before writing the new one, and a `supersede` **moves** the document there (it is never unlinked into the void). The `superseded/` tombstone is **excluded from recall** (it lives outside the `knowledge/` lane, like `handoff/` and `consolidation-log.md`) and **DOES sync** as recoverable source-of-truth history (unlike the machine-local `INDEX.md`/changelog). Topic-doc writes remain **atomic**, and every write/supersede is appended to the `consolidation-log.md` changelog. This is the data-loss guarantee: no byte ever leaves the `knowledge/` lane without first being recoverably archived, so a human edit can never be irrecoverably clobbered.
+- **FR-035**: The system MUST provide an **auto session-end organize trigger** that fires the `organize` pass (FR-027) **automatically, in the background, when a memory store goes idle** — approximating "session end" without a per-agent disconnect signal. It is driven by the memory write-notify hook: each memory write (re)arms a single **debounced** timer; after the configured idle delay elapses with no further writes, the organizer runs for the changed store(s) as a background task. The trigger MUST be **conservative and non-blocking**: (a) it is **opt-in**, controlled by an environment switch and **default-OFF** (so it never makes a surprise internal-LLM call), mirroring the optional auto-backup worker; (b) the background pass MUST NEVER block or break daemon shutdown — on shutdown any pending timer is **cancelled** (the un-fired inbox is simply left intact for a later idle pass or an explicit trigger; nothing is lost, since `recall` already covers the inbox and `organize` is idempotent); (c) a background-pass failure MUST be suppressed + logged, never surfacing to a writer or aborting the daemon; (d) when no internal model is configured the pass is a clean no-op (FR-027). It introduces **no new REST/CLI surface** (it is an internal trigger over the existing organizer) and reuses the `memory_organized` audit. The langchain/langgraph confinement (Contract 9) is unchanged: the trigger lives in `application`/`surfaces` and reaches the LLM only through the already-wired organizer.
+- **FR-036**: The system MUST provide a **procedural `rules` lane** — a single `rules/rules.md` per memory store (global + per-project), holding "do this / don't do that" behavioural rules. The rules lane is **agent-written via the organizer's classification, never an explicit agent param**: during `organize` (FR-027/028), the organizer's single per-item LLM call MAY additionally classify an inbox item as a **rule**; a rule item is **appended** to `rules/rules.md` (the inbox item is drained only after the append succeeds) instead of being merged into a `knowledge/<topic>.md` topic document, and the `organize` result/audit reports a `rules_appended` count. The `rules/` lane sits at the store ROOT (a sibling of `knowledge/`, like `handoff/` and `superseded/`) so it is **excluded from `recall`** for free (the recall glob and the reconciler only descend into `knowledge/`; the grep guard keeps only `knowledge/` hits) — rules are **delivered by ambient session-start injection, not by `recall`**. The lane is **source-of-truth and DOES sync** (like `handoff/`/topic docs; it is not a derived/machine-local file). The system MUST expose the stored rules read-only for the injection surface: `GET /api/v1/memory_stores/{name}/rules` and `coffer memory rules <name>` return the rules text (an empty/`null` body when there are no rules, never an error). The **session-start injection** that delivers these rules into each managed agent as context (ADR-026: injection only, never a native file write) is a **separate later slice (PR3b)** — this slice lands the lane, the classification, and the read surface.
 
 **Surfaces**
 

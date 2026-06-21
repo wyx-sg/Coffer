@@ -243,6 +243,82 @@ cwd 没有可恢复的现场。
 - **When** 调用 `POST /api/v1/agents/{name}/transcripts/distill`（或 CLI 中的 `coffer transcript distill <agent>`），且 `dry_run=false`，
 - **Then** 对话记录被读取，工具调用载荷和密钥在 LLM 调用前被清洗，LLM 返回结构化洞察，每条洞察被写为项目作用域的 memory 事实，携带 `actor="agent"`、`origin_session_id=<对话记录会话 id>`，且 `type` ∈ `{decision, gotcha, convention, todo}`；任何已持久化事实中均不出现原始对话内容；`coffer__recall` 此后返回这些新事实；当 `dry_run=true` 时，洞察被返回但不向磁盘写入任何内容。
 
+### Scenario: the organizer drains the inbox into a topic document
+
+- **Given** 一个 memory store，其 `knowledge/inbox/` 中有两条新记住的条目，且已配置内部模型，
+- **When** 调用 `POST /api/v1/memory_stores/{name}/organize`（或 `coffer memory organize <name>`），
+- **Then** 内部 LLM organizer 排空 inbox（不再有条目），至少存在一个持有合并后内容的 `knowledge/<topic>.md` 主题文档，`knowledge/INDEX.md` 列出了该主题，记下一条 `memory_organized` 审计，且随后的 `recall` 返回主题文档（而非现在已空的 inbox）的内容。
+
+### Scenario: organizing merges a note into an existing topic without clobbering it
+
+- **Given** 一个 memory store，已存在一个含内容 X 的人工编辑过的主题文档，且其 `knowledge/inbox/` 中有一条相关的新条目，
+- **When** 调用 `organize`，organizer 把新条目合并进该主题，
+- **Then** 该主题文档仍含原始内容 X，并并入了新整合的信息，inbox 条目已被移除，整合 changelog（`consolidation-log.md`）记下了这次合并 —— organizer 绝不从零重生、绝不覆盖人工编辑。
+
+### Scenario: organize is a no-op when no internal model is configured
+
+- **Given** 一个 memory store，其 `knowledge/inbox/` 中有条目但未配置内部模型，
+- **When** 调用 `organize`，
+- **Then** 调用返回 `status="no_model"`，inbox 原封不动，不写出任何主题文档，也不报错。
+
+### Scenario: a topic document recalls at passage granularity
+
+- **Given** 一个已整理的 memory store，其 `knowledge/` lane 中有一份含两个不同标题
+  小节（各描述不同主题）的主题文档，并已建立 recall 索引，
+- **When** 用只出现在第二个小节中的词去查询 `coffer__recall`，
+- **Then** 返回命中的文本是该小节的**段落（passage）**——而非整篇文档——因此第一个
+  小节的特征措辞不会出现在命中中，证明主题文档是**按段落分块**的（标题与块结构感知），
+  而不是每文件一块。
+
+### Scenario: the reorg pass consolidates duplicate topic documents
+
+- **Given** 一个 memory store，含两份重叠的主题文档（同一主题、其中一份带额外细节），
+  且已配置内部模型，
+- **When** `POST /api/v1/memory_stores/{name}/reorg`（或 `coffer memory reorg <name>`）
+  运行，内部 agentic 循环读取两份文档、把合并后的内容写入其中一份、并 supersede
+  那份现已冗余的另一份，
+- **Then** 单一主题文档持有合并后的内容，冗余文档不再出现在 `recall` 或 `INDEX.md` 中，
+  随后的 `recall` 返回合并后的内容，并记下一条 `memory_reorganized` 审计。
+
+### Scenario: reorg never destroys content — a superseded topic stays recoverable
+
+- **Given** 一个 memory store，含一份持有内容 X 的主题文档（可能是人类编辑），
+- **When** reorg 循环覆盖或 supersede 该文档，
+- **Then** 先前内容 X 先被归档到 store 根的 `superseded/` tombstone（因而**可恢复**、
+  绝不硬删除），该 tombstone **排除在 recall 之外**（在 `knowledge/` lane 之外），且整合
+  changelog 记录该 supersession —— 循环是增量编辑，绝非从零重生。
+
+### Scenario: reorg is a no-op when no internal model is configured
+
+- **Given** 一个 memory store，有主题文档但未配置内部模型，
+- **When** 调用 `reorg`，
+- **Then** 调用返回 `status="no_model"`，不写出/不 supersede/不归档任何主题文档，也不报错。
+
+### Scenario: memory is auto-organized after the store goes idle
+
+- **Given** 已启用可选的 auto-organize 触发器、已配置内部模型，且有一条新记住的条目
+  进入某 store 的 `knowledge/inbox/`，
+- **When** 该 store 静默（无更多 memory 写入）达到保守的去抖延迟，
+- **Then** organizer **在后台自动**运行 —— 无显式 `organize` 调用 —— 把 inbox 排空进
+  主题文档；且该后台 pass 绝不阻塞：若在其触发前取消挂起的触发器（例如 daemon 关停时），
+  只是把未处理的 inbox 原样留给之后的 pass。
+
+### Scenario: the organizer routes a rule-shaped note into the rules lane
+
+- **Given** 一个 memory store，已配置内部模型，且有两条新记住的 inbox 条目 —— 一条是
+  行为规则（“推送前总是先跑 verify 步骤”），一条是普通事实，
+- **When** `organize` 运行，organizer 把第一条分类为 rule、第二条分类为普通 knowledge，
+- **Then** 该 rule 被追加到 store 的过程性 `rules/rules.md` lane（而非写入 `knowledge/<topic>.md`），
+  普通事实成为一个主题文档，两条 inbox 条目都被排空，且 `recall` **不**呈现该 rule（`rules/`
+  lane 在 `knowledge/` recall glob 之外，与 `handoff/`、`superseded/` 一样）。
+
+### Scenario: the rules read surface returns the stored rules
+
+- **Given** 一个 memory store，其 `rules/rules.md` 持有一条或多条 rule，
+- **When** 调用 `GET /api/v1/memory_stores/{name}/rules`（或 `coffer memory rules <name>`），
+- **Then** 响应原样返回 rules 文本（供之后 session-start 注入读取的那个面），且无 rule 的
+  store 返回空/`null` 正文而非报错。
+
 > **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：桌面记忆列表按作用域展示、桌面只读事实视图的打开/显示/复制路径能力、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
 
 ## Requirements
@@ -279,6 +355,19 @@ cwd 没有可恢复的现场。
 - **FR-024**：`coffer__set_handoff(body)` MUST **覆盖**当前分支的 handoff 文件（不累积；每分支一份现场），更新 `updated_at`，并记一条 `handoff_set` 审计。handoff 正文以磁盘文件为准（随 git 同步镜像流转，与其它 memory 文件一致），且 MUST NOT 被 `coffer__recall` 返回（它在 `handoff/` 子目录里，在 recall 的 glob 之外）。
 - **FR-025**：`coffer__resume()` MUST 返回当前分支保存的 handoff —— `found=true`，带 `branch`、`body`、`updated_at` 与一条标注现场可能已过期的新鲜度 `note` —— 或当该分支没有 handoff（全新分支）或 cwd 不在 git 项目里时返回 `found=false`。它 MUST 在缺失 handoff 时绝不报错，且 MUST NOT 编造内容。
 - **FR-026**：当 agent 的 cwd 解析不到 git 项目（无 project 作用域、无分支）时，`coffer__set_handoff` MUST 被拒（没有可写的 store，也没有全局 handoff），`coffer__resume` MUST 返回 `found=false`。
+
+**整合 —— 内部 organizer**
+
+- **FR-027**：系统 MUST 提供一个**内部 memory organizer**，它**仅在显式触发时**（`POST /api/v1/memory_stores/{name}/organize` 与 `coffer memory organize <name>`；本 PR 不做任何自动/后台触发）运行，使用 Coffer 的**内部 LLM**（Settings → Models）通过**每条目一次 one-shot completion**，把 store 的 `knowledge/inbox/` 中新记住的条目排空、整合进一小组连贯的**主题文档**（`knowledge/<topic-slug>.md`，YAML frontmatter `title`/`description`/`updated_at` + markdown 正文）—— 绝不是面向 agent 的工具。organizer MUST 顺序处理各条目，且单个条目的 LLM/解析失败 MUST NOT 中止整轮（其余条目仍照常整理）。
+- **FR-028**：对每个 inbox 条目，organizer MUST (a) 经共享检索引擎取回至多 top-K（K=3）最相关的**既有主题文档**（此步不用 LLM）作为合并候选，(b) 发起**一次 LLM 调用**，要么把该条目 MERGE 进最契合的候选 —— **保留全部既有内容与人工编辑**、整合新信息、去除完全重复 —— 要么在没有契合者时 CREATE 一个新主题，(c) 把返回的完整文档正文写入 `knowledge/<topic-slug>.md`。organizer MUST 是**对既有文档的增量 MERGE，绝不从零重生**：把完整既有主题内容交给 LLM 去合并，使人工纠正得以存续。organizer MUST NOT 硬删除既有主题文档（只创建或用合并后内容覆盖；git 历史即审计轨迹）。
+- **FR-029**：inbox 条目 MUST **仅在**其内容成功写入主题文档**之后**才被删除。畸形或不可解析的 LLM 响应（缺失/空的必填键、不安全的 `topic_slug`、或非 JSON）MUST 导致该条目被**跳过** —— 留在 inbox，不写出也不损坏任何主题文档 —— 并继续整轮；结果中报告被跳过的条目数。对空 inbox 调 `organize` 是 no-op（`status="empty"`）；当未配置内部模型时，`organize` 是干净的 no-op（`status="no_model"`，inbox 原封不动、不写任何内容）而非报错。
+- **FR-030**：排空后，organizer MUST 从所有主题文档的 frontmatter 重新生成 store 的 `knowledge/INDEX.md` 审阅目录（`- [<title>](<slug>.md) — <description>`），对账索引（丢弃被删的 inbox 行、(重)索引新/更新的主题文档，使 `recall` 返回主题文档的内容而非被排空的 inbox），并记一条 `memory_organized` 审计（仅 store + 计数 —— 无条目内容）。`recall` MUST 呈现已整理的主题文档内容，且 MUST NOT 呈现 `INDEX.md`。
+- **FR-031**：organizer MUST 在 store 根目录维护一份**非阻塞的整合 changelog**（`<store>/consolidation-log.md`，只追加、人类可读：每条合并/创建的主题一行，带时间戳与来源 inbox 条目）。该 changelog 可审计、绝不是闸门，且**排除在 recall 之外**（它在 `knowledge/` lane 之外）与**排除在同步镜像之外**（机器本地，与 `INDEX.md` 一样；主题文档本身作为真相源 DO 同步）。
+- **FR-032**：memory 对账器 MUST 用检索基座共享的 markdown 分块器（`infrastructure/knowledge/chunking.chunk_markdown` —— 按标题小节切分、保持 fenced code/表格原子、把结构块打包进固定窗口）把事实文件正文切成**段落粒度、结构感知的分块**，并使用**固定的 memory 分块 size/overlap 参数**（不是 `MemoryStoreConfig` 的 per-store 字段），从而让一份多小节的已整理主题文档在 `recall` 时呈现**最相关的段落**，而非把整篇正文作为单一分块。短的单段落事实（如 inbox 条目）仍只切成一块 —— 因此这只改变大/已整理主题文档的**粒度**，绝不改变 `recall` *包含/排除什么*：`INDEX.md`、inbox 与主题文档之分、以及 `handoff/` 的 recall 隔离（FR-024/030/031）和遗留根目录事实的废弃（FR-019）全部不变。
+- **FR-033**：系统 MUST 提供一个**内部 agentic 重组 pass**，仅在**显式触发**时运行（`POST /api/v1/memory_stores/{name}/reorg` 与 `coffer memory reorg <name>`；本 PR 无自动/后台触发），由 Coffer **内部 LLM**（Settings → Models）驱动一个有界的 **langgraph `create_react_agent` 循环**，在 store 既有的主题文档上保持其连贯 —— 合并重复/重叠的文档、拆分过长的文档。循环只获得一个小而固定、仅作用于主题文档的工具面：**list** 主题、**read** 主题、**write**（创建/覆盖）主题、**supersede**（退役）主题，且**绝非 agent 可见工具**（它是内部的，与 organizer 一样）。langchain/langgraph 代码 MUST 限制在 `infrastructure.chat`（importlinter Contract 9）；`application/memory` 只通过注入的 memory-local 端口触达它。未配置内部模型时该 pass 是干净的 no-op（`status="no_model"`，不写/不 supersede/不归档）而非报错；无主题文档的 store 同样 no-op（`status="empty"`）。循环结束后该 pass MUST 重新生成 `INDEX.md`、对账索引（使 `recall` 反映整合后的文档）、并记一条 `memory_reorganized` 审计（仅 store + 计数 —— 无文档内容）。
+- **FR-034**：reorg pass MUST **非破坏且增量 —— MUST NOT 硬删除或从零重生主题文档**。任何移除或替换既有主题文档内容的变更，MUST 先把当前版本**归档**到 store 根的 `superseded/` tombstone（`<store>/superseded/<slug>-<timestamp>.md`）：覆盖既有主题的 `write` 在写新内容前先归档旧版本，`supersede` 把文档**移动**到那里（绝不 unlink 入虚空）。`superseded/` tombstone **排除在 recall 之外**（在 `knowledge/` lane 之外，与 `handoff/`、`consolidation-log.md` 一样），且作为可恢复的真相源历史 **DO 同步**（不同于机器本地的 `INDEX.md`/changelog）。主题文档写入保持**原子**，每次 write/supersede 追加到 `consolidation-log.md` changelog。这就是数据不丢保证：没有任何字节在未被可恢复归档前离开 `knowledge/` lane，因此人类编辑永不会被不可恢复地覆盖。
+- **FR-035**：系统 MUST 提供一个**自动 session-end organize 触发器**，在某 memory store 静默时**自动、在后台**触发 `organize` pass（FR-027）—— 在没有 per-agent 断连信号的情况下近似“session end”。它由 memory 写入通知钩子驱动：每次 memory 写入都会（重新）武装一个**去抖（debounced）**定时器；当配置的静默延迟在无更多写入下走完，organizer 作为后台任务对发生变化的 store 运行。该触发器 MUST **保守且非阻塞**：(a) 它是**可选项（opt-in）**、由环境开关控制且**默认关闭**（绝不发起意外的内部 LLM 调用），与可选的自动备份 worker 一致；(b) 后台 pass MUST 绝不阻塞或破坏 daemon 关停 —— 关停时任何挂起的定时器被**取消**（未触发的 inbox 原样留给之后的静默 pass 或显式触发；不丢任何东西，因为 `recall` 本就覆盖 inbox 且 `organize` 幂等）；(c) 后台 pass 的失败 MUST 被吞掉并记录日志，绝不上抛给写入方或中断 daemon；(d) 未配置内部模型时该 pass 是干净 no-op（FR-027）。它**不引入新的 REST/CLI 面**（是对既有 organizer 的内部触发），并复用 `memory_organized` 审计。langchain/langgraph 限制（Contract 9）不变：触发器位于 `application`/`surfaces`，只通过已接线的 organizer 触达 LLM。
+- **FR-036**：系统 MUST 提供一个**过程性 `rules` lane** —— 每个 memory store（全局 + 每项目）一份 `rules/rules.md`，持有“要这样做 / 别那样做”的行为规则。rules lane 是**由 organizer 分类写入的，绝非 agent 显式参数**：在 `organize`（FR-027/028）期间，organizer 每条目的单次 LLM 调用 MAY 额外把某 inbox 条目分类为 **rule**；rule 条目被**追加**到 `rules/rules.md`（仅在追加成功后才排空该 inbox 条目），而不是合并进 `knowledge/<topic>.md` 主题文档，且 `organize` 的结果/审计报告一个 `rules_appended` 计数。`rules/` lane 位于 store 根目录（`knowledge/` 的同级，与 `handoff/`、`superseded/` 一样），因而**自动排除在 `recall` 之外**（recall glob 与对账器只下探 `knowledge/`；grep 守卫只保留 `knowledge/` 命中）—— rules 由**环境式 session-start 注入**交付，而非 `recall`。该 lane 是**真相源、DO 同步**（与 `handoff/`/主题文档一样；它不是派生/机器本地文件）。系统 MUST 把存储的 rules 只读暴露给注入面：`GET /api/v1/memory_stores/{name}/rules` 与 `coffer memory rules <name>` 返回 rules 文本（无 rule 时返回空/`null` 正文，绝不报错）。把这些 rules 作为上下文注入到每个受管 agent 的 **session-start 注入**（ADR-026：只注入、绝不原生写文件）是**之后的独立切片（PR3b）** —— 本切片落地 lane、分类与读取面。
 
 **Surfaces**
 

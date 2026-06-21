@@ -207,3 +207,56 @@ class RecallResponse(BaseModel):
     hits: list[RecallHit]
     mode: RetrievalMode
     fallback: bool = False
+
+
+# --- organize ---------------------------------------------------------------
+
+
+OrganizeStatus = Literal["organized", "no_model", "empty"]
+
+
+class OrganizeResponse(BaseModel):
+    """Result of an explicit ``organize`` run (inbox → topic docs).
+
+    ``status="no_model"`` (no internal model configured) and ``status="empty"``
+    (nothing to organize) are clean no-ops, not errors."""
+
+    status: OrganizeStatus
+    items_processed: int
+    topics_created: int
+    topics_updated: int
+    rules_appended: int
+    skipped: int
+    model: str | None = None
+
+
+# --- rules ------------------------------------------------------------------
+
+
+class RulesOut(BaseModel):
+    """The rules text for a memory store (read-only surface, spec 007 FR-036).
+
+    ``text`` is ``None`` when no rules have been classified for this store yet.
+    The field is always present in the response (required, nullable per contract)."""
+
+    text: str | None
+
+
+# --- reorg ------------------------------------------------------------------
+
+
+ReorgStatus = Literal["reorganized", "no_model", "empty"]
+
+
+class ReorgResponse(BaseModel):
+    """Result of an explicit ``reorg`` run (topic-doc consolidation).
+
+    ``status="no_model"`` (no internal model configured) and ``status="empty"``
+    (no topic docs to reorganize) are clean no-ops, not errors."""
+
+    status: ReorgStatus
+    topics_before: int
+    topics_after: int
+    topics_written: int
+    topics_superseded: int
+    model: str | None = None

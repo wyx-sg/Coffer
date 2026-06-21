@@ -2,10 +2,10 @@
 
 Pure layer: imports stdlib + Pydantic only. The retrieval/index/converter
 ports and the unified ``Document`` live in the shared ``coffer.domain.knowledge``
-substrate; this package holds only the KB-specific config + doc-id helper.
+substrate; this package holds only the KB-specific config.
 """
 
 from coffer.domain.knowledge_base.config import KnowledgeBaseConfig
-from coffer.domain.knowledge_base.document import Document, kb_doc_id
+from coffer.domain.knowledge_base.document import Document
 
-__all__ = ["Document", "KnowledgeBaseConfig", "kb_doc_id"]
+__all__ = ["Document", "KnowledgeBaseConfig"]

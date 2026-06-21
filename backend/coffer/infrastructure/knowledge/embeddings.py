@@ -36,6 +36,13 @@ PROVIDER_BASE_URLS: dict[str, str | None] = {
 #: A ``credential_ref -> secret | None`` resolver (the keychain adapter's get).
 CredentialResolver = Callable[[str], str | None]
 
+#: Max texts per provider request. OpenAI-compatible embedding endpoints cap the
+#: inputs per call (and one giant request risks a token-limit rejection), so a
+#: many-chunk document or a force-reconcile sweep is split into sequential
+#: sub-requests rather than sent as a single unbounded call. Local (fastembed)
+#: embeddings are in-process and need no such bound.
+_MAX_EMBED_BATCH = 128
+
 
 def _validate_widths(vectors: list[list[float]], expected: int) -> list[list[float]]:
     """Ensure every embedding matches the configured width.
@@ -97,7 +104,8 @@ class OpenAICompatibleEmbedder:
         return self._client
 
     async def embed(self, texts: Sequence[str]) -> list[list[float]]:
-        if not texts:
+        items = list(texts)
+        if not items:
             return []
         import asyncio
 
@@ -105,15 +113,23 @@ class OpenAICompatibleEmbedder:
         # on macOS that can pop a blocking Keychain prompt, so keep it off the
         # event loop. Cached after the first call.
         client = await asyncio.to_thread(self._ensure_client)
-        try:
-            resp = await client.embeddings.create(model=self._config.model, input=list(texts))
-        except Exception as exc:
-            raise EngineUnavailable("embedding", f"provider call failed: {exc}") from exc
-        # The OpenAI contract does NOT guarantee response order matches input
-        # order; each item carries its ``index``. Sort by it to keep embeddings
-        # aligned with their source texts.
-        ordered = sorted(resp.data, key=lambda d: d.index)
-        return _validate_widths([list(item.embedding) for item in ordered], self.dimensions)
+        # Split into bounded sub-requests (see _MAX_EMBED_BATCH); process them in
+        # input order and concatenate so the result stays aligned with ``texts``.
+        # Any sub-request failure degrades the whole call — one EngineUnavailable
+        # marks the doc embed_pending and it is retried whole on the next scan.
+        vectors: list[list[float]] = []
+        for start in range(0, len(items), _MAX_EMBED_BATCH):
+            batch = items[start : start + _MAX_EMBED_BATCH]
+            try:
+                resp = await client.embeddings.create(model=self._config.model, input=batch)
+            except Exception as exc:
+                raise EngineUnavailable("embedding", f"provider call failed: {exc}") from exc
+            # The OpenAI contract does NOT guarantee response order matches input
+            # order; each item carries its ``index`` (relative to THIS request).
+            # Sort by it, then concatenate sub-batches to preserve global order.
+            ordered = sorted(resp.data, key=lambda d: d.index)
+            vectors.extend(list(item.embedding) for item in ordered)
+        return _validate_widths(vectors, self.dimensions)
 
 
 class LocalEmbedder:

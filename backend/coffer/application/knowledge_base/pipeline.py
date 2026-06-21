@@ -4,8 +4,7 @@ Extracted from ``service.py`` so the orchestration service stays thin. The
 pipeline owns the multi-step write paths (ingest / edit / reconvert /
 reindex_scan / delete / cleanup): any-format upload → Markdown on disk → index.
 Filesystem work is offloaded to worker threads; index/embedding work goes
-through the shared ``KnowledgeRetrieval`` + ``Reindexer``.
-"""
+through the shared ``KnowledgeRetrieval`` + ``Reindexer``."""
 
 from __future__ import annotations
 
@@ -29,26 +28,28 @@ from coffer.application.knowledge_base.pipeline_helpers import (
     KBPaths,
     Prepared,
     build_kb_document,
+    check_upload_size,
     chunker_for,
+    docs_fingerprint,
     document_from_frontmatter,
     extension_of,
     mkparent_write,
     render_doc_markdown,
+    render_ingest_markdown,
     title_of,
 )
 from coffer.domain.errors import IngestRejected
 from coffer.domain.knowledge.converter import MarkdownConverter
 from coffer.domain.knowledge.document import (
+    DOCUMENT_SCAN_LIMIT,
     KIND_KNOWLEDGE_BASE,
     WORKSPACE_GLOBAL_PROJECT_ID,
     Document,
 )
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.knowledge_base.config import KnowledgeBaseConfig
-from coffer.infrastructure.knowledge.frontmatter import (
-    render_frontmatter,
-    split_frontmatter,
-)
+from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
+from coffer.infrastructure.knowledge.fs import atomic_write_bytes, atomic_write_text
 from coffer.infrastructure.knowledge.ids import new_ulid
 
 
@@ -71,9 +72,12 @@ class KBPipeline:
         self._reindexer = reindexer
         self._paths = paths
         self._resolve_embedding = embedding_resolver  # global embedding config
-        # Serializes write paths per KB so concurrent ingest/edit/reindex on one
-        # store don't interleave index batches or duplicate embeds.
+        # Serializes write paths per KB so concurrent ingest/edit/reindex don't
+        # interleave index batches or duplicate embeds.
         self._locks = StoreLocks()
+        # Per-KB stat-only docs/ fingerprint: the reconcile-on-read short-circuit
+        # skips the full scan when unchanged; set by ``reindex_scan``.
+        self.fingerprint_cache: dict[str, str] = {}
 
     def _lock(self, kb_name: str) -> asyncio.Lock:
         return self._locks.lock(KIND_KNOWLEDGE_BASE, kb_name)
@@ -103,14 +107,13 @@ class KBPipeline:
         - ``"ingested"`` — a brand-new document (new ULID id), audited INGEST;
         - ``"updated"``  — a changed re-upload of an existing filename, updated
           in place under the same id (``replace=true``), audited UPDATE;
-        - ``"unchanged"`` — a byte-identical re-upload, an idempotent no-op (no
-          write, no audit).
+        - ``"unchanged"`` — a byte-identical re-upload, an idempotent no-op.
 
         Identity is a stable ULID decoupled from content (ADR-028): a re-upload
         is matched to an existing document by ``original_filename`` in scope, not
         by its bytes, so an updated source updates the same document in place.
         """
-        self._check_size(raw_bytes, config)
+        check_upload_size(raw_bytes, config)
         prepared = await self._prepare(filename, raw_bytes)
         async with self._lock(kb_name):
             existing = await self._documents.find_by_filename(
@@ -129,15 +132,21 @@ class KBPipeline:
                         f"a document named {filename!r} already exists; "
                         "pass replace=true to update it in place",
                     )
-                # Changed source, same filename → update the SAME doc in place:
-                # reuse the id, overwrite docs/+raw/ (keep only the latest
-                # original), reset source_mode to converted.
+                # Changed source, same filename → update the SAME doc in place.
                 doc_id = existing.id
                 status = "updated"
                 created_at = existing.created_at
             now = datetime.now(tz=UTC)
+            doc_created_at = created_at or now  # first ingest: now; re-upload: preserved
             await self._write_files(
-                kb_name, doc_id, prepared, raw_bytes, filename, source_path=source_path
+                kb_name,
+                doc_id,
+                prepared,
+                raw_bytes,
+                filename,
+                created_at=doc_created_at,
+                updated_at=now,
+                source_path=source_path,
             )
             doc = build_kb_document(
                 kb_name=kb_name,
@@ -145,12 +154,11 @@ class KBPipeline:
                 prepared=prepared,
                 filename=filename,
                 source_mode="converted",
-                created_at=created_at or now,
+                created_at=doc_created_at,
                 updated_at=now,
                 source_path=source_path,
             )
-            # previous_sha=None forces the row upsert even when the markdown body
-            # is unchanged, so the new source_sha256 provenance always lands.
+            # previous_sha=None forces the row upsert so new source_sha256 lands.
             await self._index_and_persist(
                 kb_name, doc, prepared.markdown, config, previous_sha=None
             )
@@ -166,12 +174,13 @@ class KBPipeline:
         if not body:
             raise IngestRejected("empty", "edited markdown is empty")
         async with self._lock(kb_name):
-            full = render_doc_markdown(doc, body, source_mode="edited")
-            await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
+            now = datetime.now(tz=UTC)
+            full = render_doc_markdown(doc, body, source_mode="edited", updated_at=now)
+            await asyncio.to_thread(atomic_write_text, self._paths.doc_path(kb_name, doc.id), full)
             edited = dc_replace(
                 doc,
                 source_mode="edited",
-                updated_at=datetime.now(tz=UTC),
+                updated_at=now,
                 title=title_of(body, doc.title),
             )
             await self._index_and_persist(
@@ -192,12 +201,13 @@ class KBPipeline:
         markdown, _meta = await self._converters.convert(raw_bytes, fmt)
         body = markdown.strip()
         async with self._lock(kb_name):
-            full = render_doc_markdown(doc, body, source_mode="converted")
-            await asyncio.to_thread(self._paths.doc_path(kb_name, doc.id).write_text, full, "utf-8")
+            now = datetime.now(tz=UTC)
+            full = render_doc_markdown(doc, body, source_mode="converted", updated_at=now)
+            await asyncio.to_thread(atomic_write_text, self._paths.doc_path(kb_name, doc.id), full)
             reconv = dc_replace(
                 doc,
                 source_mode="converted",
-                updated_at=datetime.now(tz=UTC),
+                updated_at=now,
                 title=title_of(body, doc.title),
             )
             await self._index_and_persist(
@@ -217,22 +227,32 @@ class KBPipeline:
         removed = 0
         degraded = 0
         async with self._lock(kb_name):
+            # Snapshot the docs/ fingerprint BEFORE reading any file — caching the
+            # PRE-read state keeps the short-circuit race-safe.
+            start_fp = await asyncio.to_thread(docs_fingerprint, docs_dir)
             paths: list[Path] = []
             if docs_dir.exists():
                 paths = await asyncio.to_thread(lambda: sorted(docs_dir.glob("*.md")))
+            # One batched row lookup keyed by id (reused by the vanished-file prune).
+            known = await self._documents.list_documents(
+                KIND_KNOWLEDGE_BASE, kb_name, limit=DOCUMENT_SCAN_LIMIT, offset=0
+            )
+            rows_by_id = {d.id: d for d in known}
             on_disk_ids: set[str] = set()
             for path in paths:
                 doc_id = path.stem
                 on_disk_ids.add(doc_id)
-                doc = await self._documents.get_document(KIND_KNOWLEDGE_BASE, kb_name, doc_id)
+                doc = rows_by_id.get(doc_id)
                 frontmatter, body = split_frontmatter(
                     await asyncio.to_thread(path.read_text, "utf-8")
                 )
                 if doc is None:
-                    # No row (DB loss / restore-from-backup): reconstruct it
-                    # from the file's frontmatter — files are the source of
-                    # truth for the documents table too (FR-008/SC-005).
-                    doc = document_from_frontmatter(kb_name, doc_id, frontmatter)
+                    # No row (DB loss): reconstruct from the file's frontmatter —
+                    # files are truth for the documents table too (FR-008/SC-005).
+                    # The mtime is the timestamp fallback for files predating the
+                    # created_at/updated_at keys.
+                    mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+                    doc = document_from_frontmatter(kb_name, doc_id, frontmatter, mtime=mtime)
                 # ``force`` bypasses the sha no-op gate (chunk params changed).
                 previous = None if force else doc.content_sha256
                 changed, was_degraded = await self._index_and_persist(
@@ -246,14 +266,15 @@ class KBPipeline:
                     degraded += 1
             # Files are truth in BOTH directions: rows whose markdown vanished are pruned.
             index = self._retrieval.index_for(self._store_ref(kb_name), dimensions=None)
-            known = await self._documents.list_documents(
-                KIND_KNOWLEDGE_BASE, kb_name, limit=100_000, offset=0
-            )
             for stale in (d for d in known if d.id not in on_disk_ids):
                 await index.delete_chunks(stale.id)
                 await self._documents.delete_document(KIND_KNOWLEDGE_BASE, kb_name, stale.id)
                 removed += 1
-        return {"reindexed": reindexed, "skipped": skipped} | {
+            # Cache the PRE-read snapshot; set LAST so a mid-scan raise caches nothing.
+            self.fingerprint_cache[kb_name] = start_fp
+        return {
+            "reindexed": reindexed,
+            "skipped": skipped,
             "removed": removed,
             "degraded": degraded,
         }
@@ -278,8 +299,7 @@ class KBPipeline:
     async def _cleanup_locked(self, kb_name: str) -> None:
         await self._documents.delete_resource(KIND_KNOWLEDGE_BASE, kb_name)
         # Drop the per-store sqlite-vec table too: it lives outside the async
-        # session, so it would survive ``delete_resource`` and leak across a
-        # same-name re-create. Maintenance mode — no embedding width needed.
+        # session, so it would survive ``delete_resource`` and leak on re-create.
         with contextlib.suppress(Exception):
             await self._retrieval.drop_store(self._store_ref(kb_name), dimensions=None)
         kb_dir = self._paths.kb_dir(kb_name)
@@ -297,15 +317,6 @@ class KBPipeline:
 
     # ----- internals -----
 
-    def _check_size(self, raw_bytes: bytes, config: KnowledgeBaseConfig) -> None:
-        if not raw_bytes:
-            raise IngestRejected("empty", "uploaded file is empty")
-        if len(raw_bytes) > config.max_document_bytes:
-            raise IngestRejected(
-                "too_large",
-                f"file size {len(raw_bytes)} exceeds KB limit {config.max_document_bytes}",
-            )
-
     async def _prepare(self, filename: str, raw_bytes: bytes) -> Prepared:
         source_sha = hashlib.sha256(raw_bytes).hexdigest()
         ext = extension_of(filename)
@@ -314,8 +325,8 @@ class KBPipeline:
         body = markdown.strip()
         title = title_of(body, filename)
         return Prepared(
-            # Stable ULID, decoupled from content (ADR-028) — minted for a new
-            # document; a re-upload reuses the matched document's existing id.
+            # Stable ULID, decoupled from content (ADR-028); a re-upload reuses
+            # the matched document's existing id.
             doc_id=new_ulid(),
             source_sha256=source_sha,
             extension=ext,
@@ -332,29 +343,20 @@ class KBPipeline:
         raw_bytes: bytes,
         filename: str,
         *,
+        created_at: datetime,
+        updated_at: datetime,
         source_path: str | None = None,
     ) -> None:
         raw_path = self._paths.raw_path(kb_name, doc_id, prepared.extension)
         doc_path = self._paths.doc_path(kb_name, doc_id)
-
-        def _write() -> None:
-            raw_path.parent.mkdir(parents=True, exist_ok=True)
-            raw_path.write_bytes(raw_bytes)
-
-        await asyncio.to_thread(_write)
-        fields: dict[str, object] = {
-            "title": prepared.title,
-            "source_filename": filename,
-            "source_format": prepared.extension.lstrip("."),
-            "source_sha256": prepared.source_sha256,
-            "converter": prepared.conversion_engine,
-            "source_mode": "converted",
-        }
-        # Record the external original's path only for path-based ingests; a
-        # byte/agent upload never carries one (it must not populate a server path).
-        if source_path:
-            fields["source_path"] = source_path
-        full = render_frontmatter(fields, prepared.markdown)
+        await asyncio.to_thread(atomic_write_bytes, raw_path, raw_bytes)
+        full = render_ingest_markdown(
+            prepared,
+            filename,
+            created_at=created_at,
+            updated_at=updated_at,
+            source_path=source_path,
+        )
         await asyncio.to_thread(mkparent_write, doc_path, full)
 
     async def _index_and_persist(
@@ -366,18 +368,15 @@ class KBPipeline:
         *,
         previous_sha: str | None,
     ) -> tuple[bool, bool]:
-        """Run the shared reindex routine + persist the row.
-
-        Returns ``(changed, degraded)`` — ``changed`` is whether the content was
-        (re)indexed; ``degraded`` is whether an embed was requested but the
-        provider was unavailable (indexed keyword-only, retried next scan)."""
+        """Run the shared reindex routine + persist the row. Returns
+        ``(changed, degraded)`` — ``degraded`` is ``embed_pending`` (provider
+        unavailable → keyword-only, retried next scan)."""
         embedding = await self._resolve_embedding() if config.vector_enabled else None
         index = self._retrieval.index_for(
             self._store_ref(kb_name),
             dimensions=embedding.dimensions if embedding else None,
         )
-        # Canonicalize the body so the on-disk round-trip hashes identically to
-        # the freshly-ingested body — otherwise reindex never reaches a no-op.
+        # Canonicalize the body so the on-disk round-trip hashes identically.
         outcome = await self._reindexer.reindex(
             index=index,
             markdown=markdown.strip(),
@@ -385,11 +384,17 @@ class KBPipeline:
             embedding=embedding,
             doc_id=doc.id,
             chunker=chunker_for(config),
+            title=doc.title,
+            previous_embed_pending=doc.embed_pending,
         )
-        degraded = outcome.changed and outcome.content_sha256 == ""
-        if not outcome.changed and previous_sha is not None:
-            return False, degraded
+        # Persist when content changed OR the pending flag flipped (retry cleared
+        # it / fresh degrade); a true no-op skips the row write to avoid churn.
+        pending_changed = outcome.embed_pending != doc.embed_pending
+        if not outcome.changed and previous_sha is not None and not pending_changed:
+            return False, outcome.embed_pending
         await self._documents.upsert_document(
-            dc_replace(doc, content_sha256=outcome.content_sha256)
+            dc_replace(
+                doc, content_sha256=outcome.content_sha256, embed_pending=outcome.embed_pending
+            )
         )
-        return True, degraded
+        return outcome.changed, outcome.embed_pending

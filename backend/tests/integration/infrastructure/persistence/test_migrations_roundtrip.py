@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0034"
+HEAD_REVISION = "0035"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -61,7 +61,9 @@ HEAD_REVISION = "0034"
 # scan_findings_count / scan_ruleset_version / last_scanned_at /
 # risk_acknowledged) from every ``kind='skill'`` ``config_json`` (skill
 # content-trust scanning removed, simplification 4.5) — no DDL, table/column set
-# unchanged at head.
+# unchanged at head. 0035 ADDs the ``documents.embed_pending`` column (decouple
+# content_sha256 from the degraded-embed retry state, KB8) — a column-only change,
+# so EXPECTED_TABLES is unchanged.
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.

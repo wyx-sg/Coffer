@@ -22,6 +22,8 @@ vi.mock("./api", () => ({
   deleteDocument: vi.fn(),
   reconvertDocument: vi.fn(),
   reindexKnowledgeBase: vi.fn(),
+  checkSources: vi.fn(),
+  updateFromSource: vi.fn(),
   searchKnowledgeBase: vi.fn(),
   grepKnowledgeBase: vi.fn(),
   updateKnowledgeBaseConfig: vi.fn(),
@@ -54,6 +56,7 @@ const KB = {
     chunk_overlap: 100,
     max_document_bytes: 1048576,
     embedding: null,
+    auto_update_sources: false,
   },
   enabled: true,
   created_at: "2026-05-29T00:00:00Z",
@@ -65,6 +68,7 @@ function seedBaseQueries() {
   vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
     document_count: 1,
     chunk_count: 3,
+    documents_degraded: 0,
     indexed_modes: ["keyword", "grep"],
     disk_bytes: 264,
   });
@@ -93,6 +97,21 @@ describe("KnowledgeBaseDetailPage", () => {
     expect(await screen.findByRole("button", { name: /back to knowledge bases/i })).toBeVisible();
     const tree = screen.getByRole("complementary");
     expect(await within(tree).findByText("Deploys")).toBeVisible();
+    // No degraded badge when documents_degraded is 0.
+    expect(screen.queryByText(/pending vector embed/i)).toBeNull();
+  });
+
+  test("shows a degraded-embed notice when documents_degraded > 0", async () => {
+    seedBaseQueries();
+    vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
+      document_count: 1,
+      chunk_count: 3,
+      documents_degraded: 2,
+      indexed_modes: ["keyword", "grep"],
+      disk_bytes: 264,
+    });
+    renderPage();
+    expect(await screen.findByText(/pending vector embed/i)).toBeVisible();
   });
 
   test("the unified bar searches with the selected mode", async () => {
@@ -206,6 +225,7 @@ describe("KnowledgeBaseDetailPage", () => {
     vi.mocked(api.getKnowledgeBaseMetrics).mockResolvedValue({
       document_count: 150,
       chunk_count: 3,
+      documents_degraded: 0,
       indexed_modes: ["keyword", "grep"],
       disk_bytes: 264,
     });
@@ -230,5 +250,185 @@ describe("KnowledgeBaseDetailPage", () => {
     const inputs = document.querySelectorAll('input[type="file"]');
     fireEvent.change(inputs[inputs.length - 1], { target: { files: [file] } });
     expect(await screen.findByText(/duplicate/i)).toBeVisible();
+  });
+
+  test("Check sources calls the API and opens the report dialog", async () => {
+    seedBaseQueries();
+    vi.mocked(api.checkSources).mockResolvedValue({
+      sources: [
+        { document_id: "d1", title: "Deploys", source_path: "/abs/deploys.md", status: "changed" },
+      ],
+    });
+    renderPage();
+    const checkBtn = await screen.findByRole("button", { name: /check sources/i });
+    // The button is disabled until the KB resource query resolves.
+    await waitFor(() => expect(checkBtn).not.toBeDisabled());
+    fireEvent.click(checkBtn);
+    await waitFor(() => expect(api.checkSources).toHaveBeenCalledWith("designs"));
+    // The report dialog opens with the changed row + its Update action.
+    expect(await screen.findByText(/source files/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: /update from source/i })).toBeVisible();
+  });
+
+  test("updating a changed source re-runs the check so the report isn't stale", async () => {
+    seedBaseQueries();
+    // First scan reports a changed source; after the update, a re-scan reports
+    // it unchanged — the load-bearing refresh that keeps the dialog accurate.
+    vi.mocked(api.checkSources)
+      .mockResolvedValueOnce({
+        sources: [
+          { document_id: "d1", title: "Deploys", source_path: "/abs/deploys.md", status: "changed" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        sources: [
+          { document_id: "d1", title: "Deploys", source_path: "/abs/deploys.md", status: "unchanged" },
+        ],
+      });
+    vi.mocked(api.updateFromSource).mockResolvedValue(DOC);
+    renderPage();
+
+    const checkBtn = await screen.findByRole("button", { name: /check sources/i });
+    await waitFor(() => expect(checkBtn).not.toBeDisabled());
+    fireEvent.click(checkBtn);
+    const updateBtn = await screen.findByRole("button", { name: /update from source/i });
+    fireEvent.click(updateBtn);
+
+    await waitFor(() => expect(api.updateFromSource).toHaveBeenCalledWith("designs", "d1"));
+    // The hook re-runs check-sources on update success → the report refreshes.
+    await waitFor(() => expect(api.checkSources).toHaveBeenCalledTimes(2));
+  });
+
+  test("the doc filter narrows the visible rows by title and restores on clear", async () => {
+    seedBaseQueries();
+    vi.mocked(api.listDocuments).mockResolvedValue({
+      documents: [
+        { ...DOC, id: "d1", title: "Deploys" },
+        { ...DOC, id: "d2", title: "Runbook" },
+      ],
+      total: 2,
+    });
+    renderPage();
+
+    const tree = screen.getByRole("complementary");
+    expect(await within(tree).findByText("Deploys")).toBeVisible();
+    expect(within(tree).getByText("Runbook")).toBeVisible();
+
+    const filter = within(tree).getByPlaceholderText(/filter documents/i);
+    fireEvent.change(filter, { target: { value: "run" } });
+    // Case-insensitive title substring: only Runbook survives.
+    expect(within(tree).queryByText("Deploys")).toBeNull();
+    expect(within(tree).getByText("Runbook")).toBeVisible();
+
+    // A filter that matches nothing shows the muted no-matches line.
+    fireEvent.change(filter, { target: { value: "zzz" } });
+    expect(within(tree).getByText(/no documents match the filter/i)).toBeVisible();
+
+    // Clearing the filter restores every row.
+    fireEvent.change(filter, { target: { value: "" } });
+    expect(within(tree).getByText("Deploys")).toBeVisible();
+    expect(within(tree).getByText("Runbook")).toBeVisible();
+  });
+
+  test("selecting two rows shows the bulk bar and bulk-deletes after confirm", async () => {
+    seedBaseQueries();
+    vi.mocked(api.listDocuments).mockResolvedValue({
+      documents: [
+        { ...DOC, id: "d1", title: "Deploys" },
+        { ...DOC, id: "d2", title: "Runbook" },
+      ],
+      total: 2,
+    });
+    vi.mocked(api.deleteDocument).mockResolvedValue(undefined);
+    renderPage();
+
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("Deploys");
+    // Each row carries a "Select row" checkbox sibling of the title button.
+    const rowChecks = within(tree).getAllByLabelText(/select row/i);
+    expect(rowChecks).toHaveLength(2);
+    fireEvent.click(rowChecks[0]);
+    fireEvent.click(rowChecks[1]);
+
+    // The bulk bar reports the selected count and offers Delete.
+    expect(within(tree).getByText(/2 selected/i)).toBeVisible();
+    fireEvent.click(within(tree).getByRole("button", { name: /^delete$/i }));
+
+    // Confirm dialog → on confirm, deleteDocument fires once per selected id.
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d1"));
+    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d2"));
+    expect(api.deleteDocument).toHaveBeenCalledTimes(2);
+    // Selection clears: the bulk bar disappears.
+    await waitFor(() => expect(within(tree).queryByText(/2 selected/i)).toBeNull());
+  });
+
+  test("bulk-deleting the currently-viewed document resets the viewer", async () => {
+    seedBaseQueries();
+    vi.mocked(api.listDocuments).mockResolvedValue({
+      documents: [
+        { ...DOC, id: "d1", title: "Deploys" },
+        { ...DOC, id: "d2", title: "Runbook" },
+      ],
+      total: 2,
+    });
+    vi.mocked(api.getDocument).mockResolvedValue({ ...DOC, id: "d1", markdown: "viewed-body" });
+    vi.mocked(api.deleteDocument).mockResolvedValue(undefined);
+    renderPage();
+
+    const tree = screen.getByRole("complementary");
+    // View d1 in the right pane.
+    fireEvent.click(await within(tree).findByText("Deploys"));
+    expect(await screen.findByText("viewed-body")).toBeVisible();
+
+    // Select d1's checkbox and bulk-delete it.
+    fireEvent.click(within(tree).getAllByLabelText(/select row/i)[0]);
+    fireEvent.click(within(tree).getByRole("button", { name: /^delete$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d1"));
+    // The viewer drops the deleted doc — selectedId resets, the preview clears.
+    await waitFor(() => expect(screen.queryByText("viewed-body")).toBeNull());
+  });
+
+  test("clicking a row title still loads it in the viewer (the e2e-critical path)", async () => {
+    seedBaseQueries();
+    vi.mocked(api.getDocument).mockResolvedValue({
+      ...DOC,
+      markdown: "# Deploys\n\nbody",
+      path: "/abs/kb/designs/deploys.md",
+      folder_path: "/abs/kb/designs",
+    });
+    renderPage();
+
+    const tree = screen.getByRole("complementary");
+    // The title is a clickable element selectable by its TEXT (not the checkbox).
+    fireEvent.click(await within(tree).findByText("Deploys"));
+    expect(await screen.findByText("body")).toBeVisible();
+    await waitFor(() => expect(api.getDocument).toHaveBeenCalledWith("designs", "d1"));
+  });
+
+  test("the settings PATCH carries auto_update_sources (guards the reset gotcha)", async () => {
+    seedBaseQueries();
+    vi.mocked(api.getKnowledgeBase).mockResolvedValue({
+      ...KB,
+      config: { ...KB.config, auto_update_sources: false },
+    });
+    vi.mocked(api.updateKnowledgeBaseConfig).mockResolvedValue(KB);
+    renderPage();
+
+    const settingsBtn = await screen.findByRole("button", { name: /^settings$/i });
+    await waitFor(() => expect(settingsBtn).not.toBeDisabled());
+    fireEvent.click(settingsBtn);
+    const dialog = await screen.findByRole("dialog");
+    // Flip the auto-update switch on, then save.
+    fireEvent.click(within(dialog).getByLabelText(/auto-update from source/i));
+    fireEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(api.updateKnowledgeBaseConfig).toHaveBeenCalled());
+    const sentConfig = vi.mocked(api.updateKnowledgeBaseConfig).mock.calls[0][1];
+    expect(sentConfig).toHaveProperty("auto_update_sources", true);
   });
 });

@@ -87,8 +87,11 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
+from coffer.surfaces.http.memory.organize_state import get_organizer_service
 from coffer.surfaces.http.migrations_runner import run_migrations
+from coffer.surfaces.http.provider_wiring import wire_provider_kind
 from coffer.surfaces.http.routing import include_all_routers
+from coffer.surfaces.http.session_end_wiring import start_auto_organize, stop_auto_organize
 from coffer.surfaces.http.sync_wiring import start_sync, stop_sync
 from coffer.surfaces.http.wiring import (
     build_substrate,
@@ -163,19 +166,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Created before kind wiring so skill/KB/memory can all register into it.
     builtin_tools = BuiltinToolRegistry()
 
-    # Wire up agent + skill kinds (specs 004-agent-registry, 005-skill-manager).
-    # The helper builds both in lockstep so the cross-kind on_delete hook (agent
-    # deletion cascades into skill binding cleanup) can reference both services,
-    # and so app.py stays under the 400-line guideline. Agent detection stays
-    # discovery + confirm (no auto-registration on startup). Passing
-    # builtin_tools registers the skill tools (list_skills / load_skill) so the
-    # built-in chat agent can reach them through the gateway (spec 008).
+    # Agent + skill kinds (004/005), lockstep: on_delete cascade + skill tools → gateway.
     wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools, credential_store)
 
+    # Provider switching (spec 011) — AFTER the agent kind: it projects the
+    # active profile into each agent's native config (see provider_wiring).
+    wire_provider_kind(app, resource_svc, audit, credential_store)
+
     # Wire up knowledge_base kind (spec 006). Registers the KB built-in tools
-    # into `builtin_tools` so the gateway can expose them.
-    # One substrate per process: KB + memory share the DocumentRepo,
-    # retrieval facade and reindexer (per KnowledgeRetrieval's contract).
+    # into `builtin_tools`. One substrate per process: KB + memory share the
+    # DocumentRepo, retrieval facade and reindexer (per KnowledgeRetrieval).
     substrate = build_substrate(sm, credential_store)
 
     # Embedding is global: KB + memory resolve the current config at index/recall
@@ -241,14 +241,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     chat_gateway_session = wire_chat(
         audit, sm, get_mcp_session_factory(), credential_store, builtin_tools
     )
-    # The chat session's supervisor stays registered in session_supervisors so
-    # the mcp_server on_delete hook evicts its upstream connections too; shutdown
-    # disposes the chat session first (its on_dispose deregisters the entry), so
-    # the supervisor loop never double-disposes it (dispose() is idempotent).
+    # The chat session's supervisor stays in session_supervisors so on_delete evicts
+    # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
     app.state.mcp_session_supervisors = session_supervisors
 
-    # Wire transcript distillation (extends spec 007 Memory; see ADR-020). Needs
-    # memory, agent, and model services — all registered above by their wire_* calls.
+    # Wire transcript distillation + organizer (spec 007 FR-027..031, ADR-020).
     def _distill_credential_resolver(ref: str) -> str:
         value: str | None = credential_store.get(ref)
         if value is None:
@@ -294,8 +291,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retention_worker = worker
     app.state.retention_worker_task = worker_task
 
-    # Optional periodic auto-backup worker (opt-in via env; default OFF).
+    # Optional opt-in background workers (default OFF).
     start_backup_worker(app)
+    start_auto_organize(app, memory_service, get_organizer_service())  # FR-035
 
     # Multi-machine sync (spec 010); worker is inert until the user enables it.
     start_sync(app, resource_svc, audit, sm, db_path, get_master_key_manager())
@@ -327,6 +325,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         worker.stop()
         # Best-effort shutdown of the optional backup worker.
         await stop_backup_worker(app)
+        await stop_auto_organize(app)
         await stop_sync(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an

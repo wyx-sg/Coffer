@@ -294,3 +294,84 @@ def recall(
         typer.echo("(vector unavailable — fell back to keyword)", err=True)
     for i, h in enumerate(data["hits"], start=1):
         typer.echo(f"{i}. (score={h['score']:.3f}) {h['text']}")
+
+
+@app.command("organize")
+def organize(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Organize a store: drain its inbox into coherent topic documents using
+    Coffer's internal model (explicit trigger)."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/memory_stores/{name}/organize")
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    status = data["status"]
+    if status == "no_model":
+        typer.echo("no internal model configured — nothing organized", err=True)
+        return
+    if status == "empty":
+        typer.echo("inbox empty — nothing to organize")
+        return
+    typer.echo(
+        f"organized {data['items_processed']} item(s): "
+        f"{data['topics_created']} created, {data['topics_updated']} updated, "
+        f"{data['skipped']} skipped (model: {data.get('model')})"
+    )
+
+
+@app.command("rules")
+def rules(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Store name (e.g. 'global')."),
+) -> None:
+    """Show the rules lane for a memory store (read-only)."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get(f"/memory_stores/{name}/rules")
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    text = data.get("text")
+    if text:
+        typer.echo(text)
+    else:
+        typer.echo("(no rules)")
+
+
+@app.command("reorg")
+def reorg(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Reorganize a store's topic documents: consolidate duplicates and split
+    over-long docs using Coffer's internal agentic model (explicit trigger).
+    Non-destructive — superseded content is archived to the recoverable
+    superseded/ tombstone."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/memory_stores/{name}/reorg")
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    status = data["status"]
+    if status == "no_model":
+        typer.echo("no internal model configured — nothing reorganized", err=True)
+        return
+    if status == "empty":
+        typer.echo("no topic documents — nothing to reorganize")
+        return
+    typer.echo(
+        f"reorganized: {data['topics_written']} written, "
+        f"{data['topics_superseded']} superseded "
+        f"(before: {data['topics_before']}, after: {data['topics_after']}, "
+        f"model: {data.get('model')})"
+    )

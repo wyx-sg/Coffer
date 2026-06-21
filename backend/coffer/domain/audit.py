@@ -52,6 +52,7 @@ class AuditEventType(StrEnum):
     SKILL_AUTOBIND_SKIPPED = "skill_autobind_skipped"
     SKILL_RELINKED = "skill_relinked"
     SKILL_DRIFT_DETECTED = "skill_drift_detected"
+    SKILL_DRIFT_REMEDIATED = "skill_drift_remediated"
     SKILL_ADOPTED = "skill_adopted"
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
     # spec 006-knowledge-base
@@ -64,6 +65,8 @@ class AuditEventType(StrEnum):
     MEMORY_UPDATED = "memory_updated"
     MEMORY_DELETED = "memory_deleted"
     MEMORY_CLEARED = "memory_cleared"
+    MEMORY_ORGANIZED = "memory_organized"
+    MEMORY_REORGANIZED = "memory_reorganized"
     HANDOFF_SET = "handoff_set"
     # spec 008-agent-chat
     CONVERSATION_CREATED = "conversation_created"
@@ -87,6 +90,8 @@ class AuditEventType(StrEnum):
     SYNC_RESOLVED = "sync_resolved"
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"
+    # spec 011-provider-switching
+    PROVIDER_SWITCHED = "provider_switched"
 
 
 @dataclass

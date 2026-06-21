@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Bot,
+  Boxes,
   Database,
   Info,
   RefreshCw,
@@ -29,6 +30,11 @@ const MODELS_ITEM: Item = {
   labelKey: "settings.tabs.models",
   icon: Bot,
 };
+const PROVIDERS_ITEM: Item = {
+  to: "/settings/providers",
+  labelKey: "settings.tabs.providers",
+  icon: Boxes,
+};
 const DATA_ITEM: Item = {
   to: "/settings/data",
   labelKey: "settings.tabs.data",
@@ -55,6 +61,7 @@ export function SettingsLayout() {
   const items: Item[] = [
     GENERAL_ITEM,
     MODELS_ITEM,
+    PROVIDERS_ITEM,
     DATA_ITEM,
     SYNC_ITEM,
     SECURITY_ITEM,

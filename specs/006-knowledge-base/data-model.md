@@ -48,7 +48,8 @@ Frozen dataclass; one per Markdown file, **discriminated by `kind`**. KB and mem
 | `path`                      | `str`         | Relative path of the Markdown file, `docs/<doc-id>.md`.                                                                                                           |
 | `title`                     | `str`         | From frontmatter / first heading / filename.                                                                                                                      |
 | `description`               | `str \| None` | Optional summary.                                                                                                                                                 |
-| `content_sha256`            | `str`         | Hash of the **Markdown** body — the reindex no-op gate.                                                                                                           |
+| `content_sha256`            | `str`         | Hash of the **Markdown** body — the reindex no-op gate. **Always** the real body hash (decoupled from embed-retry state, KB8).                                    |
+| `embed_pending`             | `bool`        | Index-derived retry flag (default `False`): `True` when the embed degraded (provider unavailable) so the chunks are keyword-only and the next reindex retries JUST the embed. NOT file-truth — never written to frontmatter (migration `0035`). |
 | `source_mode`               | `str`         | `"converted"` or `"edited"`.                                                                                                                                      |
 | `metadata`                  | `dict`        | Per-face JSON; KB keys below.                                                                                                                                     |
 | `created_at` / `updated_at` | `datetime`    | UTC.                                                                                                                                                              |
@@ -101,7 +102,7 @@ Grep is a separate `infrastructure/knowledge/grep.py` ripgrep wrapper (no index)
 
 ## SQLite schema (unified substrate)
 
-The substrate migration (`0006`) drops the old `kb_documents` / `memory_records` tables and creates the unified schema below (**no data migration** — the branch is unreleased). The `locked` column added by `0025` for the co-management lock is dropped again by a later additive migration (`0027`) when the per-document lock is withdrawn.
+The substrate migration (`0006`) drops the old `kb_documents` / `memory_records` tables and creates the unified schema below (**no data migration** — the branch is unreleased). The `locked` column added by `0025` for the co-management lock is dropped again by a later additive migration (`0027`) when the per-document lock is withdrawn. Migration `0035` adds the `embed_pending` column (decouple embed-retry state from `content_sha256`, KB8) and backfills it from the now-retired empty-string sentinel (`embed_pending = 1 WHERE content_sha256 = ''`).
 
 ```sql
 -- One row per Markdown file, shared by KB and memory, discriminated by `kind`.
@@ -113,7 +114,8 @@ CREATE TABLE documents (
     path            TEXT      NOT NULL,             -- relative path of the markdown file
     title           TEXT      NOT NULL,
     description     TEXT,
-    content_sha256  TEXT      NOT NULL,             -- hash of the markdown body (reindex no-op gate)
+    content_sha256  TEXT      NOT NULL,             -- hash of the markdown body (reindex no-op gate); always the real hash
+    embed_pending   BOOLEAN   NOT NULL DEFAULT 0,   -- embed degraded (provider down) → retry just the embed next reindex (migration 0035)
     source_mode     TEXT      NOT NULL,             -- 'converted' | 'edited' (KB) | 'native' (memory)
     metadata        TEXT      NOT NULL DEFAULT '{}',-- JSON, per-face
     created_at      TIMESTAMP NOT NULL,
@@ -226,18 +228,21 @@ All write paths (ingest, re-upload, edit, reindex scan) funnel through one idemp
 
 ```
 compute content_sha256 of the new markdown body
- ├ unchanged → no-op (skip)
- └ changed   → delete old chunks / documents_fts / vec_chunks rows
-             → markdown-aware chunk
-             → if vector enabled: embed → write vec_chunks
-             → write chunks + documents_fts
-             → upsert documents row (bump updated_at)
-             → audit KB_DOCUMENT_UPDATED  (or _INGESTED on first index)
+ ├ unchanged + not embed_pending → true no-op (skip)
+ ├ unchanged + embed_pending     → retry JUST the embed: re-chunk in memory,
+ │                                 embed, upsert ONLY vec_chunks (no FTS / chunk
+ │                                 rewrite ⇒ no churn) → clear embed_pending
+ └ changed                       → delete old chunks / documents_fts / vec_chunks rows
+                                 → markdown-aware chunk
+                                 → if vector enabled: embed → write vec_chunks
+                                 → write chunks + documents_fts
+                                 → upsert documents row (bump updated_at)
+                                 → audit KB_DOCUMENT_UPDATED (or _INGESTED on first index)
 ```
 
 `coffer kb reindex <name>` rescans the `docs/` directory for deltas and runs this routine per file, reconstructing all SQLite state from the files. The scan also prunes `documents` rows whose markdown file was removed out-of-band, reported in the optional `ReindexResult.documents_removed`; documents indexed keyword-only because the embed degraded are counted in the optional `documents_degraded`.
 
-When an embed degrades (embedding provider unavailable), the routine indexes the document keyword-only and persists an **empty-string `content_sha256`** — a deliberate never-matching sentinel so the next reconcile retries the embed instead of treating the document as up to date. The empty value can appear on the wire in `DocumentOut`.
+**Degraded embed — decoupled retry state (KB8).** When an embed degrades (embedding provider unavailable / `EngineUnavailable`), the routine indexes the document keyword-only, keeps the **real `content_sha256`**, and sets the dedicated persisted **`embed_pending`** flag. This decouples the no-op gate from the retry state: a degraded document is no longer re-chunked + re-FTS'd on every scan (the old design overwrote `content_sha256` with an empty-string sentinel that never matched, churning the whole degraded corpus). The next reconcile sees `embed_pending` and retries **only** the embed — re-chunking in memory and upserting only `vec_chunks` (the chunk/FTS rows are untouched) — then clears the flag. `embed_pending` tracks ONLY a failed embedding **provider** call; it is orthogonal to sqlite-vec extension availability (a vec-table-unavailable degradation is `embedded=True`, handled at query time by `SearchResponse.fallback`). The KB surfaces the persisted count as `KnowledgeBaseMetrics.documents_degraded`, so a degrade observed during ANY read (list / get / search / grep) is visible, not only an explicit `POST /reindex`.
 
 ## Cascade & integrity rules
 

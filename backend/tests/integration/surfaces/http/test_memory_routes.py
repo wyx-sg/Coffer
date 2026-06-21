@@ -49,6 +49,38 @@ def test_global_store_auto_provisions_and_lists(tmp_path, monkeypatch):
         assert glob["project_id"] == "00000000000000000000000000"
 
 
+def test_list_stores_reports_indexed_fact_count_without_disk_scan(tmp_path, monkeypatch):
+    """KB14: GET /memory_stores reports per-store fact_count from the cheap indexed
+    count, NOT ``metrics()``' per-store ``scan_store_dir`` + ``du_bytes`` walk.
+    Patching both on the queries module to raise proves the list path never runs
+    them."""
+    from coffer.application.memory import queries as mem_queries_mod
+
+    app = _app(tmp_path, monkeypatch, 59770)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        added = c.post(
+            "/api/v1/memory_stores/global/facts",
+            json={"text": "prefers tabs over spaces", "name": "tabs"},
+            headers=_USER,
+        )
+        assert added.status_code == 201, added.text
+
+        def _boom_du(_path):
+            raise AssertionError("du_bytes must not run on the list path")
+
+        def _boom_scan(_path):
+            raise AssertionError("scan_store_dir must not run on the list path")
+
+        monkeypatch.setattr(mem_queries_mod, "du_bytes", _boom_du)
+        monkeypatch.setattr(mem_queries_mod, "scan_store_dir", _boom_scan)
+
+        listed = c.get("/api/v1/memory_stores", headers=_HEADERS)
+        assert listed.status_code == 200, listed.text
+        glob = next(s for s in listed.json()["memory_stores"] if s["name"] == "global")
+        assert glob["fact_count"] == 1
+
+
 @pytest.mark.acceptance(spec="007-memory", scenario="user adds a fact")
 def test_user_adds_a_fact(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59610)
@@ -451,3 +483,39 @@ def test_fact_list_pagination_boundaries(tmp_path, monkeypatch):
             r = c.get("/api/v1/memory_stores/global/facts", params=params, headers=_HEADERS)
             assert r.status_code == 422, (params, r.text)
             _assert_envelope(r.json(), "CONFIG_INVALID")
+
+
+def test_organize_returns_no_model_noop_shape(tmp_path, monkeypatch):
+    """The wired ``POST …/organize`` returns the OrganizeResult shape. On a fresh
+    install no internal model is configured → a clean ``no_model`` no-op (the
+    full wiring + route + schema are exercised without calling a real LLM)."""
+    app = _app(tmp_path, monkeypatch, 59700)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        # An item to (not) organize — proves the no-op leaves the inbox untouched.
+        c.post(
+            "/api/v1/memory_stores/global/facts",
+            json={"text": "a fact awaiting organization"},
+            headers=_USER,
+        )
+        r = c.post("/api/v1/memory_stores/global/organize", headers=_HEADERS)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["status"] == "no_model"
+        assert body["items_processed"] == 0
+        assert body["topics_created"] == 0
+        assert body["topics_updated"] == 0
+        assert body["skipped"] == 0
+        assert body["model"] is None
+        # The inbox item is untouched (still listed).
+        facts = c.get("/api/v1/memory_stores/global/facts", headers=_HEADERS).json()
+        assert facts["total"] == 1
+
+
+def test_organize_unknown_store_404(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59710)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        r = c.post("/api/v1/memory_stores/not-a-real-store/organize", headers=_HEADERS)
+        assert r.status_code == 404, r.text
+        _assert_envelope(r.json(), "MEMORY_STORE_NOT_FOUND")

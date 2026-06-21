@@ -277,6 +277,7 @@
       "skill_autobind_skipped": "Skipped auto-binding skill {{resource}}",
       "skill_relinked": "Re-linked skill {{resource}}",
       "skill_drift_detected": "Detected drift in skill {{resource}}",
+      "skill_drift_remediated": "Re-delivered drifted skill {{resource}} from master",
       "skill_adopted": "Adopted skill {{resource}}",
       "skill_unmanaged_deleted": "Deleted unmanaged skill {{resource}}",
       "kb_document_ingested": "Ingested a document into {{resource}}",
@@ -358,7 +359,8 @@
       "security": "Security",
       "about": "About",
       "models": "Models",
-      "sync": "Sync"
+      "sync": "Sync",
+      "providers": "Providers"
     },
     "general": {
       "title": "Display",
@@ -493,6 +495,22 @@
         "credentials_locked": "Credentials locked"
       },
       "keyExported": "Key written to {{path}}"
+    },
+    "providers": {
+      "title": "Providers",
+      "subtitle": "Switch the active LLM provider that Claude Code and Codex use.",
+      "add": "Add provider",
+      "addTitle": "Add provider",
+      "empty": "No provider profiles yet.",
+      "switch": "Switch",
+      "active": "Active",
+      "deleteTitle": "Delete provider",
+      "deleteConfirm": "Delete provider \"{{name}}\"? Its stored credential is removed too.",
+      "name": "Name",
+      "wireFormat": "Wire format",
+      "baseUrl": "Base URL",
+      "model": "Model",
+      "secret": "API key"
     }
   },
   "daemon": {
@@ -566,6 +584,7 @@
     "KB_NOT_FOUND": "Knowledge base not found",
     "DOCUMENT_NOT_FOUND": "Document not found",
     "INGEST_REJECTED": "The document was rejected during ingestion",
+    "INGEST_REJECTED_scanned_pdf": "This PDF appears to be scanned or image-only — no text could be extracted. Run OCR (or convert it to a text-based PDF) and re-upload.",
     "ENGINE_UNAVAILABLE": "The retrieval engine is unavailable",
     "RECONVERSION_BLOCKED": "Reindexing is already in progress",
     "SEARCH_MODE_INVALID": "Unsupported search mode",
@@ -837,6 +856,11 @@
     "verify.checking": "Checking for drift…",
     "verify.ok": "No drift detected.",
     "verify.found": "{{count}} drift entries:",
+    "verify.fix": "Repair",
+    "verify.fixing": "Repairing…",
+    "verify.fixed": "Repaired {{count}}",
+    "verify.fixRemaining": "Still needs manual action",
+    "verify.fixGlobalNote": "Repair re-delivers every drifted skill from master, including any not listed above.",
     "card": {
       "noBindings": "No agents bound"
     },
@@ -918,18 +942,10 @@
       "title": "New knowledge base",
       "name": "Name",
       "description": "Description (optional)",
-      "vector": "Vector search",
-      "vectorHint": "Add meaning-based vector retrieval (keyword + grep are always on). Requires an embedding provider.",
-      "provider": "Embedding provider",
-      "embeddingModel": "Embedding model",
-      "dimensions": "Dimensions",
-      "baseUrl": "Base URL",
-      "credential": "Credential reference"
+      "vector": "Vector search"
     },
     "detail": {
-      "metrics": "{{docs}} documents · {{chunks}} chunks · {{bytes}}",
       "reindex": "Reindex",
-      "reindexResult": "Reindexed: {{scanned}} scanned, {{reindexed}} reindexed, {{skipped}} unchanged.",
       "search": "Search",
       "mode": "Mode",
       "searchPlaceholder": "Search this knowledge base…",
@@ -944,25 +960,42 @@
       "replaceExisting": "Upload again and replace",
       "reconvert": "Reconvert",
       "settings": "Settings",
-      "chunks": "{{count}} chunks",
-      "editAria": "Edit Markdown for {{title}}",
+      "checkSources": "Check sources",
       "deleteConfirm": "Delete document {{title}}? This cannot be undone.",
-      "loadFailed": "Failed to load this knowledge base.",
       "empty": "No documents yet. Upload a file of any format to populate this knowledge base.",
       "back": "Back to knowledge bases",
       "docBadge": "{{count}} documents",
       "chunkBadge": "{{count}} chunks",
-      "edit": "Edit",
-      "save": "Save",
-      "cancel": "Cancel",
-      "selectDocument": "Select a document on the left to preview or edit it."
+      "degradedBadge": "{{count}} documents pending vector embed (embedding service unavailable; indexed by keyword)",
+      "selectDocument": "Select a document on the left to preview or edit it.",
+      "filterDocs": "Filter documents…",
+      "noFilterMatches": "No documents match the filter.",
+      "bulkDeleteConfirm": "Delete {{count}} documents? This cannot be undone.",
+      "sourceCheck": {
+        "title": "Source files",
+        "description": "Documents ingested from a file on disk, checked against their original source.",
+        "empty": "No documents track an external source file. Web uploads aren't tracked — only documents ingested from a path (via the CLI or desktop app) have a source file to re-check.",
+        "update": "Update from source",
+        "updated": "Document updated from its source file.",
+        "missingNote": "Source file not found at that path.",
+        "editedNote": "This document was edited locally, so updating from source is blocked to avoid clobbering your changes.",
+        "status": {
+          "unchanged": "Up to date",
+          "changed": "Source changed",
+          "missing": "Source missing",
+          "edited": "Locally edited",
+          "updated": "Auto-updated"
+        }
+      }
     },
     "settings": {
       "title": "Knowledge base settings",
       "description": "Update chunking and embedding for this knowledge base. Reindex afterwards to apply chunking changes to existing documents.",
       "chunkSize": "Chunk size",
       "chunkOverlap": "Chunk overlap",
-      "vectorHint": "Add meaning-based vector retrieval for this knowledge base (keyword + grep are always on). The embedding model is configured globally in Settings → Embedding."
+      "vectorHint": "Add meaning-based vector retrieval for this knowledge base (keyword + grep are always on). The embedding model is configured globally in Settings → Embedding.",
+      "autoUpdateSources": "Auto-update from source",
+      "autoUpdateSourcesHint": "When a document's external source file changes, re-ingest it automatically on the next source check (locally edited documents are always skipped)."
     },
     "welcome": {
       "title": "Manage your knowledge bases",

@@ -60,6 +60,8 @@ The projection engine dispatches on `projection_mode` (`SYMLINK` | `RENDER` | `N
 
 Memory uses **lazy reindex-on-read**: `recall` first scans the small fact dir for deltas (by `content_sha256`) and reconciles the index before searching. This makes Claude's symlink edits and any direct-disk edits instantly visible to all agents with **no filesystem watcher**. (KB, by contrast, reindexes on Coffer-mediated edits + explicit `coffer kb reindex` + an optional off-by-default watcher.)
 
+The **store-list** `fact_count` (KB14, see 006 research §12) reads the indexed `count_documents`, not a `scan_store_dir` of the fact files — any index-vs-disk staleness closes on the next recall/reconcile above. The per-store `/metrics` detail endpoint still scans + walks the disk for `disk_bytes`.
+
 ## 7. Embedding configuration
 
 **Question**: How is vector recall configured?
@@ -90,6 +92,7 @@ Invocations are recorded in `mcp_invocations` the same way KB and upstream tools
 - Multi-machine sync (constitutional).
 - Filesystem watcher on by default.
 - Memory categories beyond a free-form `metadata.type`.
+- Defining file-write atomicity here: memory's source-of-truth files (facts, topic docs, `INDEX.md`, handoffs) are written via the shared `infrastructure.knowledge.fs.atomic_write_*` helper (same-dir temp → fsync → `os.replace`), decided once in KB19 (see `specs/006-knowledge-base/research.md` §13).
 
 ## 11. Open items to verify in implementation
 

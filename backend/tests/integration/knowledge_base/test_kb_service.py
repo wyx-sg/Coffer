@@ -102,6 +102,15 @@ async def test_reupload_updated_file_updates_in_place(kb) -> None:
     assert updated.id == first.id
     assert updated.source_mode == "converted"
     assert await kb.documents.count_documents("knowledge_base", "kb1") == 1
+    # KB18: a re-upload preserves created_at and bumps updated_at — both in the
+    # row and in the on-disk frontmatter (the source of truth).
+    assert updated.created_at == first.created_at
+    assert updated.updated_at >= first.updated_at
+    from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
+
+    fm, _ = split_frontmatter(paths.doc_path("kb1", updated.id).read_text())
+    assert fm["created_at"] == first.created_at.isoformat()
+    assert fm["updated_at"] == updated.updated_at.isoformat()
     # New content searchable; old content gone.
     assert (await kb.service.search(kb_name="kb1", query="apple", top_k=5)).passages == ()
     assert len((await kb.service.search(kb_name="kb1", query="banana", top_k=5)).passages) == 1
@@ -440,6 +449,109 @@ async def test_metrics(kb) -> None:
     assert "keyword" in m["enabled_modes"]
 
 
+async def test_document_count_uses_indexed_count_without_du_walk(kb) -> None:
+    """KB14: ``document_count`` hits only the indexed DB count — no ``du_bytes``
+    disk walk (the list path discards disk_bytes). Monkeypatching ``du_bytes`` to
+    raise proves it is NOT on the cheap-count path, while ``metrics()`` (the detail
+    endpoint) still walks the disk and reports disk_bytes."""
+    from coffer.application.knowledge_base import service as kb_service_mod
+
+    await kb.create_kb("kb1")
+    await _ingest(kb, "kb1", "a.md", b"# A\n\nalpha content here")
+    await _ingest(kb, "kb1", "b.md", b"# B\n\nbeta content here")
+
+    def _boom(_path):
+        raise AssertionError("du_bytes must not run on the document_count path")
+
+    # A local context so undo() does NOT revert the ``kb`` fixture's env-var
+    # patches (they share the per-test monkeypatch object otherwise).
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(kb_service_mod, "du_bytes", _boom)
+        assert await kb.service.document_count(kb_name="kb1") == 2
+
+    # The detail endpoint still walks the disk → confirm disk_bytes survives.
+    m = await kb.service.metrics(kb_name="kb1")
+    assert m["document_count"] == 2
+    assert m["disk_bytes"] > 0
+
+
+@pytest.mark.acceptance(
+    spec="006-knowledge-base",
+    scenario="degraded embed surfaces documents_degraded and retries without re-chunking",
+)
+async def test_degraded_embed_surfaces_and_retries_without_rechunk(kb, vector_config) -> None:
+    """KB8: a degraded ingest (provider down) sets ``embed_pending`` and surfaces
+    ``documents_degraded == 1`` on read. A reconcile with the provider restored
+    clears it WITHOUT re-chunking (the chunk/FTS rows are untouched — the
+    decouple kills the churn), and an unrelated doc never re-chunks the degraded
+    one's content sha."""
+    from coffer.domain.errors import EngineUnavailable
+
+    await kb.create_kb("kb1", config=vector_config)
+
+    # Force the embedder to fail (provider unavailable) for the first ingest.
+    reindexer = kb.service._pipeline._reindexer  # type: ignore[attr-defined]
+    real_factory = reindexer._embedder_factory  # type: ignore[attr-defined]
+
+    def _failing(config):
+        class _Down:
+            @property
+            def dimensions(self):
+                return config.dimensions
+
+            async def embed(self, texts):
+                raise EngineUnavailable("embedding", "provider down (test)")
+
+        return _Down()
+
+    reindexer._embedder_factory = _failing  # type: ignore[attr-defined]
+    doc = await _ingest(kb, "kb1", "a.md", b"# A\n\ndegraded alpha content")
+    # The persisted row is pending an embed; its content sha is the REAL hash.
+    stored = await kb.documents.get_document("knowledge_base", "kb1", doc.id)
+    assert stored is not None
+    assert stored.embed_pending is True
+    assert stored.content_sha256 != ""  # decoupled: real sha, not the old sentinel
+    real_sha = stored.content_sha256
+
+    # documents_degraded surfaces from the persisted flag on ANY read (no /reindex).
+    m = await kb.service.metrics(kb_name="kb1")
+    assert m["documents_degraded"] == 1
+
+    # Snapshot chunk-row ids so we can prove a retry does NOT rewrite them.
+    async def _chunk_ids() -> set[str]:
+        from sqlalchemy import text
+
+        async with kb.sm() as session:
+            rows = (
+                await session.execute(
+                    text("SELECT id FROM chunks WHERE document_id = :d"), {"d": doc.id}
+                )
+            ).all()
+        return {str(r.id) for r in rows}
+
+    chunk_ids_before = await _chunk_ids()
+    assert chunk_ids_before  # keyword-only chunks exist
+
+    # Restore the provider and reconcile (a plain reindex scan — content unchanged
+    # on disk, only the embed was missing).
+    reindexer._embedder_factory = real_factory  # type: ignore[attr-defined]
+    stats = await kb.service.reindex(kb_name="kb1", actor="user")
+    # Content unchanged → not counted as reindexed; the pending flag cleared.
+    assert stats["degraded"] == 0
+
+    cleared = await kb.documents.get_document("knowledge_base", "kb1", doc.id)
+    assert cleared is not None
+    assert cleared.embed_pending is False
+    assert cleared.content_sha256 == real_sha  # sha unchanged across the retry
+    assert (await kb.service.metrics(kb_name="kb1"))["documents_degraded"] == 0
+    # The chunk rows were NOT rewritten (retry upserts vectors only — no churn).
+    assert await _chunk_ids() == chunk_ids_before
+
+    # Vector recall now works (the embed was retried in place).
+    res = await kb.service.search(kb_name="kb1", query="degraded", top_k=5, mode="vector")
+    assert any("degraded" in p.text for p in res.passages)
+
+
 async def test_reindex_scan_is_noop_when_unchanged(kb) -> None:
     await kb.create_kb("kb1")
     await _ingest(kb, "kb1", "a.md", b"# A\n\nunchanged content")
@@ -495,6 +607,8 @@ async def test_reindex_reconstructs_documents_rows_after_db_loss(kb) -> None:
     await kb.create_kb("kb1")
     doc = await _ingest(kb, "kb1", "a.md", b"# A\n\nrebuildable banana")
     original_sha = doc.metadata["source_sha256"]
+    original_created = doc.created_at
+    original_updated = doc.updated_at
 
     async with kb.sm() as session:
         await session.execute(text("DELETE FROM documents_fts"))
@@ -510,6 +624,10 @@ async def test_reindex_reconstructs_documents_rows_after_db_loss(kb) -> None:
     assert restored.source_mode == "converted"
     assert restored.title == "A"
     assert restored.metadata["source_sha256"] == original_sha
+    # KB18: timestamps survive the rebuild — restored from the file's frontmatter,
+    # NOT reset to now() (files are truth, including the documents-table columns).
+    assert restored.created_at == original_created
+    assert restored.updated_at == original_updated
     res = await kb.service.search(kb_name="kb1", query="banana", top_k=5)
     assert len(res.passages) == 1
 
@@ -753,3 +871,132 @@ async def test_reindex_prunes_rows_whose_file_was_removed(kb) -> None:
     assert await kb.documents.get_document("knowledge_base", "kb1", gone.id) is None
     assert await kb.documents.get_document("knowledge_base", "kb1", keep.id) is not None
     assert (await kb.service.search(kb_name="kb1", query="vanishing", top_k=5)).passages == ()
+
+
+# ----- reconcile-on-read short-circuit (KB7: stat-only fingerprint) -----
+
+
+def _spy_reindex_scan(kb):
+    """Wrap the pipeline's full ``reindex_scan`` with a call counter so a test
+    can assert the heavy O(N) read+parse path is (or is not) entered, without
+    relying on timing. Returns a mutable ``[count]`` list."""
+    pipeline = kb.service._pipeline  # type: ignore[attr-defined]
+    original = pipeline.reindex_scan
+    calls = [0]
+
+    async def _counting(*args, **kwargs):
+        calls[0] += 1
+        return await original(*args, **kwargs)
+
+    pipeline.reindex_scan = _counting  # type: ignore[method-assign]
+    return calls
+
+
+async def test_unchanged_corpus_skips_full_scan(kb) -> None:
+    """KB7: once a read has run the full scan, subsequent reads/searches on an
+    UNCHANGED corpus skip the O(N) read+parse ``reindex_scan`` entirely — served
+    from the index via the cheap stat-only fingerprint short-circuit.
+
+    Asserted robustly (no timing): a spy counts entries into ``reindex_scan``.
+    The first read scans (cold cache → 1 call); every read after, with nothing
+    changed on disk, must NOT re-enter it."""
+    await kb.create_kb("kb1")
+    await _ingest(kb, "kb1", "a.md", b"# A\n\nunchanging content")
+
+    calls = _spy_reindex_scan(kb)
+    # First read after the spy is attached: cold fingerprint cache → one scan.
+    await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    assert calls[0] == 1
+    # Several further reads/searches/greps with nothing changed on disk: the
+    # fingerprint matches the cached one, so the heavy path is never re-entered.
+    await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    await kb.service.search(kb_name="kb1", query="unchanging", top_k=5)
+    await kb.service.grep(kb_name="kb1", pattern="content")
+    await kb.service.get_document(
+        kb_name="kb1",
+        document_id=(await kb.service.list_documents(kb_name="kb1", limit=1, offset=0))[0][0].id,
+    )
+    assert calls[0] == 1, "unchanged corpus must not re-enter the full scan"
+
+
+async def test_out_of_band_edit_breaks_fingerprint_and_rescans(kb) -> None:
+    """KB7 invariant (FR-008a): an out-of-band edit bumps the stat fingerprint,
+    so the next read re-enters the full scan and the edit is reflected — the
+    short-circuit must never mask external-editor drift."""
+    await kb.create_kb("kb1")
+    doc = await _ingest(kb, "kb1", "a.md", b"# Orig\n\noriginal walrus content")
+    # Warm the fingerprint cache with a first read.
+    assert len((await kb.service.search(kb_name="kb1", query="walrus", top_k=5)).passages) == 1
+
+    calls = _spy_reindex_scan(kb)
+    # Out-of-band edit (as an external editor would), bypassing the write API.
+    md = paths.doc_path("kb1", doc.id)
+    text = md.read_text()
+    md.write_text(text.replace("original walrus content", "edited dolphin content here"))
+
+    # The fingerprint changed → the next read re-enters the full scan and
+    # reindexes; the edit is reflected in search.
+    assert (await kb.service.search(kb_name="kb1", query="walrus", top_k=5)).passages == ()
+    assert calls[0] >= 1
+    hits = (await kb.service.search(kb_name="kb1", query="dolphin", top_k=5)).passages
+    assert len(hits) == 1
+    assert "dolphin" in hits[0].text
+
+
+async def test_out_of_band_removal_breaks_fingerprint_and_prunes(kb) -> None:
+    """KB7 invariant (FR-008a): a file removed out-of-band changes the stat
+    fingerprint (the name set shrinks), so the next read re-enters the full scan
+    and prunes the orphaned row — not masked by the short-circuit."""
+    await kb.create_kb("kb1")
+    keep = await _ingest(kb, "kb1", "keep.md", b"# Keep\n\nkeeper body")
+    gone = await _ingest(kb, "kb1", "gone.md", b"# Gone\n\nvanishing soon body")
+    # Warm the cache so a stale fingerprint would (wrongly) skip the rescan.
+    docs, total = await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    assert total == 2
+
+    calls = _spy_reindex_scan(kb)
+    paths.doc_path("kb1", gone.id).unlink()
+
+    docs, total = await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)
+    assert calls[0] >= 1
+    assert total == 1
+    assert [d.id for d in docs] == [keep.id]
+    assert await kb.documents.get_document("knowledge_base", "kb1", gone.id) is None
+    assert (await kb.service.search(kb_name="kb1", query="vanishing", top_k=5)).passages == ()
+
+
+async def test_write_during_scan_is_not_masked(kb) -> None:
+    """KB7 race: a doc edited out-of-band DURING a scan (after its file was read,
+    before the scan finishes) must NOT be masked. The cached fingerprint is the
+    PRE-read snapshot, so a mid-scan write differs from it → the next read
+    rescans and reflects the edit. (Caching a POST-scan fingerprint would bake
+    the mid-scan write into the cache while the index missed it → stale.)"""
+    await kb.create_kb("kb1")
+    a = await _ingest(kb, "kb1", "a.md", b"# A\n\nalpha walrus content")
+    b = await _ingest(kb, "kb1", "b.md", b"# B\n\nbeta seahorse content")
+    await kb.service.list_documents(kb_name="kb1", limit=50, offset=0)  # warm cache
+
+    pipeline = kb.service._pipeline  # type: ignore[attr-defined]
+    a_path = paths.doc_path("kb1", a.id)
+    original = pipeline._index_and_persist
+    injected = {"done": False}
+
+    async def _inject(*args, **kwargs):
+        result = await original(*args, **kwargs)
+        # a.md (processed first, sorted) has now been read+indexed this scan;
+        # simulate an external write landing mid-scan, after a.md was read.
+        if not injected["done"]:
+            injected["done"] = True
+            a_path.write_text("# A\n\nalpha narwhal content")
+        return result
+
+    pipeline._index_and_persist = _inject  # type: ignore[method-assign]
+    # Trigger the scan by editing b.md out-of-band (the fingerprint differs).
+    paths.doc_path("kb1", b.id).write_text("# B\n\nbeta dolphin content")
+    await kb.service.search(kb_name="kb1", query="dolphin", top_k=5)
+    pipeline._index_and_persist = original  # restore
+
+    # The mid-scan write to a.md (narwhal) must surface on the NEXT read — the
+    # pre-read fingerprint snapshot forces a rescan rather than a stale match.
+    hits = (await kb.service.search(kb_name="kb1", query="narwhal", top_k=5)).passages
+    assert len(hits) == 1

@@ -1,11 +1,7 @@
 """MemoryService — orchestration for the ``memory`` kind (spec 007).
 
-Memory is the writable face of the shared knowledge substrate: per-item markdown
-files under each store's ``knowledge/`` lane are the source of truth (no derived
-index). No LLM at write time; retrieval reuses the KB engine with lazy
-reindex-on-read. Mutation (``writes``), recall, scan reads (``queries``), admin,
-scope plumbing (``stores``) and helpers live in sibling modules to keep this
-file focused.
+Per-item markdown under ``knowledge/`` is the source of truth; no LLM at write
+time. Sibling modules handle writes, recall, admin, scope, and sync.
 """
 
 from __future__ import annotations
@@ -66,10 +62,7 @@ from coffer.infrastructure.memory.files import (
 
 _logger = logging.getLogger(__name__)
 
-#: Injected path helpers (the composition root passes the infrastructure
-#: functions, so the service does not import ``infrastructure.knowledge.paths``).
 StoreDirFn = Callable[[str], Path]
-#: Post-write hook: ``store_name -> awaitable`` (generic post-write extension).
 OnChangeFn = Callable[[str], Awaitable[None]]
 
 
@@ -96,9 +89,8 @@ class MemoryService:
         self._retrieval = retrieval
         self._audit = audit
         self._store_dir = store_dir
-        self._resolve_embedding = embedding_resolver  # global embedding config
-        self._on_change = on_change  # generic post-write hook (no consumer today)
-        # Bundle the collaborators the write + recall orchestrators need.
+        self._resolve_embedding = embedding_resolver
+        self._on_change = on_change
         store_ref_fn = partial(build_store_ref_for, store_dir=store_dir)
         self._writes = WriteDeps(
             audit=audit,
@@ -343,9 +335,22 @@ class MemoryService:
         scopes = await self._scope.resolve_recall_scopes(cwd=cwd)
         return await asyncio.to_thread(find_fact_store, scopes, fact_id, store_name_for)
 
+    async def fact_count(self, *, store_name: str) -> int:
+        """Cheap indexed fact count for the list path (no ``scan_store_dir`` parse
+        / ``du_bytes`` walk; staleness closes on the next recall/reconcile)."""
+        return await self._documents.count_documents(KIND_MEMORY, store_name)
+
     async def metrics(self, *, store_name: str) -> dict[str, object]:
         config = await self.get_store_config(store_name)
         return await store_metrics((await self._resolved_for_store(store_name)).store_dir, config)
+
+    async def get_rules(self, *, store_name: str) -> str | None:
+        """Return the rules/rules.md text, or ``None`` if no rules exist yet."""
+        from coffer.infrastructure.knowledge.paths import rules_path
+        from coffer.infrastructure.memory.rules_files import read_rules
+
+        sd = (await self.resolved_store(store_name)).store_dir
+        return await asyncio.to_thread(read_rules, rules_path(sd))
 
     # ----- on_update_config / on_delete kind hooks -----
 

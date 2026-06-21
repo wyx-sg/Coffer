@@ -182,3 +182,14 @@ def test_memory_configure_enables_vector(memory_cli_daemon):
     assert cfg["embedding_provider"] == "local"
     assert cfg["embedding_dimensions"] == 32
     assert "vector" in cfg["retrieval_modes"]
+
+
+def test_organize_no_model_noop(memory_cli_daemon):
+    """`coffer memory organize` against a fresh install (no internal model) is a
+    clean no-op — the CLI reports it and exits 0."""
+    _runner.invoke(cli_app, ["memory", "add", "global", "a fact"])
+    result = _runner.invoke(cli_app, ["memory", "organize", "global", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(_extract_json(result.output))
+    assert data["status"] == "no_model"
+    assert data["model"] is None

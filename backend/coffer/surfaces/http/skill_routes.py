@@ -80,6 +80,11 @@ class DriftReportOut(BaseModel):
     entries: list[DriftEntryOut]
 
 
+class RepairReportOut(BaseModel):
+    remediated: list[DriftEntryOut]
+    remaining: DriftReportOut
+
+
 # The skill master-folder viewer/editor schemas + routes live in
 # ``skill_file_routes.py`` (split out for the component size cap).
 
@@ -266,4 +271,36 @@ async def verify_skills(
             )
             for e in report.entries
         ]
+    )
+
+
+@router.post("/repair", response_model=RepairReportOut)
+async def repair_skills(
+    svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> RepairReportOut:
+    result = await svc.repair_drift(actor=actor)
+    return RepairReportOut(
+        remediated=[
+            DriftEntryOut(
+                skill_name=e.skill_name,
+                agent_name=e.agent_name,
+                kind=e.kind.value,
+                target_path=e.target_path,
+                suggested_remedy=e.suggested_remedy,
+            )
+            for e in result.remediated
+        ],
+        remaining=DriftReportOut(
+            entries=[
+                DriftEntryOut(
+                    skill_name=e.skill_name,
+                    agent_name=e.agent_name,
+                    kind=e.kind.value,
+                    target_path=e.target_path,
+                    suggested_remedy=e.suggested_remedy,
+                )
+                for e in result.remaining.entries
+            ]
+        ),
     )

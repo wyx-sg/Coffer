@@ -392,3 +392,51 @@ def test_skill_rm_unmanaged(skill_cli_daemon):
     assert r.exit_code == 0, r.output
     assert "deleted" in r.output
     assert not folder.exists()
+
+
+# ---------------------------------------------------------------------------
+# skill verify --fix
+# ---------------------------------------------------------------------------
+
+
+def test_skill_verify_fix_repairs_and_reports(skill_cli_daemon):
+    """--fix re-delivers MISSING_LINK and reports remaining drift."""
+    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    src = skill_cli_daemon / "src"
+    _write_skill_folder(src, name="fix-1")
+    _runner.invoke(cli_app, ["skill", "import", str(src)])
+
+    link = skills_dir / "fix-1"
+    assert link.exists()
+
+    # Introduce MISSING_LINK drift.
+    link.unlink()
+
+    r = _runner.invoke(cli_app, ["skill", "verify", "--fix"])
+    # Link is restored.
+    assert link.exists(), "repair should restore the missing link"
+    # Output shows repaired section.
+    assert "Repaired" in r.output or "fix-1" in r.output, r.output
+    # No remaining manual drift → exit 0.
+    assert r.exit_code == 0, r.output
+
+
+def test_skill_verify_fix_remaining_exits_2(skill_cli_daemon):
+    """--fix exits 2 when unrepairable drift remains."""
+    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    src = skill_cli_daemon / "src"
+    _write_skill_folder(src, name="foreign-1")
+    _runner.invoke(cli_app, ["skill", "import", str(src)])
+
+    link = skills_dir / "foreign-1"
+    assert link.is_symlink()
+    # Replace symlink with a real directory → REPLACED_WITH_REGULAR.
+    link.unlink()
+    link.mkdir()
+    (link / "intruder.txt").write_text("not managed by coffer")
+
+    r = _runner.invoke(cli_app, ["skill", "verify", "--fix"])
+    # Still drifted section visible.
+    assert "Still drifted" in r.output or "foreign-1" in r.output, r.output
+    # Exit 2 because manual drift remains.
+    assert r.exit_code == 2, r.output

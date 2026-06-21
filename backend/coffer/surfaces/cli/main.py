@@ -15,6 +15,7 @@ from coffer.surfaces.cli import (
     knowledge_base_source_cmd,  # noqa: F401 — registers `kb check-sources`/`update-source` onto kb app
     memory_cmd,
     model_cmd,
+    provider_cmd,
     resource_cmd,
     retention_cmd,
     skill_cmd,
@@ -53,6 +54,7 @@ app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(knowledge_base_cmd.app, name="kb")
 app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(model_cmd.app, name="model")
+app.add_typer(provider_cmd.app, name="provider")
 app.add_typer(sync_cmd.app, name="sync")
 app.add_typer(transcript_cmd.app, name="transcript")
 

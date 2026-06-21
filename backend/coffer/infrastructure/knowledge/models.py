@@ -13,6 +13,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     TIMESTAMP,
+    Boolean,
     Index,
     Integer,
     PrimaryKeyConstraint,
@@ -40,6 +41,12 @@ class DocumentModel(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[str] = mapped_column("metadata", Text, nullable=False, default="{}")
     content_sha256: Mapped[str] = mapped_column(String, nullable=False)
+    # Index-derived: True when the embed degraded (provider unavailable) so the
+    # next reindex retries JUST the embed; decoupled from content_sha256 (which
+    # now always stores the real body hash). Not file-truth (no frontmatter).
+    embed_pending: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     source_mode: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
@@ -53,8 +60,8 @@ class DocumentModel(Base):
 
 class ChunkModel(Base):
     """One chunk per row. ``id`` is ``'<store-scope>:<doc-id>:<position>'``
-    (``store_scope`` digests ``(kind, resource_name)`` so the same
-    content-addressed doc id in two stores never collides); the text lives in
+    (``store_scope`` digests ``(kind, resource_name)`` so the same doc id
+    appearing in two stores never collides); the text lives in
     ``documents_fts`` keyed by FTS rowid, not here."""
 
     __tablename__ = "chunks"

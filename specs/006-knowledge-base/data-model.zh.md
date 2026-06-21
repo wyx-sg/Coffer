@@ -48,7 +48,8 @@ frozen dataclass；一个 Markdown 文件一条，**按 `kind` 区分**。KB 与
 | `path`                      | `str`         | Markdown 文件的相对路径，`docs/<doc-id>.md`。                                                                            |
 | `title`                     | `str`         | 来自 frontmatter / 第一个标题 / 文件名。                                                                                 |
 | `description`               | `str \| None` | 可选摘要。                                                                                                               |
-| `content_sha256`            | `str`         | **Markdown** 正文的哈希 —— reindex 的 no-op 闸门。                                                                       |
+| `content_sha256`            | `str`         | **Markdown** 正文的哈希 —— reindex 的 no-op 闸门。**始终**是真实正文哈希（与 embed 重试状态解耦，KB8）。                |
+| `embed_pending`             | `bool`        | 索引派生的重试标志（默认 `False`）：embed 降级（provider 不可用）时为 `True`，此时仅做 keyword 索引，下一次 reindex 只重试 embed。非文件真相 —— 永不写入 frontmatter（migration `0035`）。 |
 | `source_mode`               | `str`         | `"converted"` 或 `"edited"`。                                                                                            |
 | `metadata`                  | `dict`        | 按面区分的 JSON；KB 的 key 见下。                                                                                        |
 | `created_at` / `updated_at` | `datetime`    | UTC。                                                                                                                    |
@@ -101,7 +102,7 @@ grep 是独立的 `infrastructure/knowledge/grep.py` ripgrep 包装器（无索�
 
 ## SQLite schema（统一基底）
 
-基底迁移（`0006`）删除旧的 `kb_documents` / `memory_records` 表并创建下面的统一 schema（**没有数据迁移** —— 分支未发布）。`0025` 为共管锁加上的 `locked` 列，在撤回逐文档锁时由后续一个追加迁移（`0027`）再次删除。
+基底迁移（`0006`）删除旧的 `kb_documents` / `memory_records` 表并创建下面的统一 schema（**没有数据迁移** —— 分支未发布）。`0025` 为共管锁加上的 `locked` 列，在撤回逐文档锁时由后续一个追加迁移（`0027`）再次删除。迁移 `0035` 加上 `embed_pending` 列（把 embed 重试状态与 `content_sha256` 解耦，KB8），并从已废弃的空字符串哨兵回填（`embed_pending = 1 WHERE content_sha256 = ''`）。
 
 ```sql
 -- One row per Markdown file, shared by KB and memory, discriminated by `kind`.
@@ -113,7 +114,8 @@ CREATE TABLE documents (
     path            TEXT      NOT NULL,             -- relative path of the markdown file
     title           TEXT      NOT NULL,
     description     TEXT,
-    content_sha256  TEXT      NOT NULL,             -- hash of the markdown body (reindex no-op gate)
+    content_sha256  TEXT      NOT NULL,             -- hash of the markdown body (reindex no-op gate); always the real hash
+    embed_pending   BOOLEAN   NOT NULL DEFAULT 0,   -- embed degraded (provider down) → retry just the embed next reindex (migration 0035)
     source_mode     TEXT      NOT NULL,             -- 'converted' | 'edited' (KB) | 'native' (memory)
     metadata        TEXT      NOT NULL DEFAULT '{}',-- JSON, per-face
     created_at      TIMESTAMP NOT NULL,
@@ -226,18 +228,21 @@ source_mode: converted
 
 ```
 compute content_sha256 of the new markdown body
- ├ unchanged → no-op (skip)
- └ changed   → delete old chunks / documents_fts / vec_chunks rows
-             → markdown-aware chunk
-             → if vector enabled: embed → write vec_chunks
-             → write chunks + documents_fts
-             → upsert documents row (bump updated_at)
-             → audit KB_DOCUMENT_UPDATED  (or _INGESTED on first index)
+ ├ unchanged + not embed_pending → true no-op (skip)
+ ├ unchanged + embed_pending     → retry JUST the embed: re-chunk in memory,
+ │                                 embed, upsert ONLY vec_chunks (no FTS / chunk
+ │                                 rewrite ⇒ no churn) → clear embed_pending
+ └ changed                       → delete old chunks / documents_fts / vec_chunks rows
+                                 → markdown-aware chunk
+                                 → if vector enabled: embed → write vec_chunks
+                                 → write chunks + documents_fts
+                                 → upsert documents row (bump updated_at)
+                                 → audit KB_DOCUMENT_UPDATED (or _INGESTED on first index)
 ```
 
 `coffer kb reindex <name>` 重新扫描 `docs/` 目录找增量，逐文件运行该例程，从文件重建全部 SQLite 状态。该扫描还会清理 markdown 文件被带外删除的 `documents` 行，计入可选的 `ReindexResult.documents_removed`；因 embed 降级而只做了 keyword 索引的文档计入可选的 `documents_degraded`。
 
-当 embed 降级（embedding provider 不可用）时，该例程对文档只做 keyword 索引，并持久化一个**空字符串 `content_sha256`** —— 一个刻意永不匹配的哨兵值，使下一次对账重试 embed，而不是把该文档当作已是最新。这个空值可能出现在线上契约的 `DocumentOut` 里。
+**降级 embed —— 解耦的重试状态（KB8）。** 当 embed 降级（embedding provider 不可用 / `EngineUnavailable`）时，该例程对文档只做 keyword 索引，保留**真实的 `content_sha256`**，并置上专用的持久化标志 **`embed_pending`**。这把 no-op 闸门与重试状态解耦：降级文档不再在每次扫描时被重新切块 + 重写 FTS（旧设计用空字符串哨兵覆盖 `content_sha256`，导致永不匹配、把整个降级语料反复 churn）。下一次对账看到 `embed_pending` 后**只**重试 embed —— 在内存里重新切块、只 upsert `vec_chunks`（chunk/FTS 行不动）—— 然后清除该标志。`embed_pending` 只跟踪 embedding **provider** 调用失败；它与 sqlite-vec 扩展是否可用正交（vec 表不可用属于 `embedded=True`，在查询时由 `SearchResponse.fallback` 处理）。KB 将持久化的计数暴露为 `KnowledgeBaseMetrics.documents_degraded`，因此任意一次读取（list / get / search / grep）观察到的降级都可见，而不仅是显式的 `POST /reindex`。
 
 ## 级联与完整性规则
 

@@ -90,9 +90,21 @@ export function KnowledgeBaseSearchBar({
       {searchResult ? (
         <SearchResults result={searchResult} onSelectDocument={onSelectDocument} />
       ) : null}
-      {grepResult ? <GrepResults result={grepResult} /> : null}
+      {grepResult ? (
+        <GrepResults result={grepResult} onSelectDocument={onSelectDocument} />
+      ) : null}
     </section>
   );
+}
+
+// Backend doc paths are always `docs/<doc-id>.md` (see pipeline_helpers.py).
+// Derive the doc id so a grep hit can open its document. Returns null for any
+// path that does not match `docs/<non-empty>.md` so we never emit a broken or
+// empty-id click; such hits render as plain (non-clickable) text instead.
+function docIdFromGrepPath(path: string): string | null {
+  const match = /^docs\/(.+)\.md$/.exec(path);
+  const docId = match?.[1];
+  return docId ? docId : null;
 }
 
 function SearchResults({
@@ -136,7 +148,13 @@ function SearchResults({
   );
 }
 
-function GrepResults({ result }: { result: GrepResponse }) {
+function GrepResults({
+  result,
+  onSelectDocument,
+}: {
+  result: GrepResponse;
+  onSelectDocument: (documentId: string) => void;
+}) {
   const { t } = useTranslation();
   if (result.hits.length === 0) {
     return <p className="text-sm text-muted-foreground">{t("knowledgeBases.detail.noMatches")}</p>;
@@ -147,12 +165,30 @@ function GrepResults({ result }: { result: GrepResponse }) {
         <p className="text-xs text-muted-foreground">{t("knowledgeBases.detail.truncated")}</p>
       ) : null}
       <ul className="divide-y divide-border rounded-md border border-border font-mono text-xs">
-        {result.hits.map((h, i) => (
-          <li key={i} className="flex gap-2 px-3 py-1.5">
-            <span className="shrink-0 text-muted-foreground">{h.line_number}</span>
-            <span className="truncate">{h.line}</span>
-          </li>
-        ))}
+        {result.hits.map((h, i) => {
+          const docId = docIdFromGrepPath(h.path);
+          const row = (
+            <>
+              <span className="shrink-0 text-muted-foreground">{h.line_number}</span>
+              <span className="truncate">{h.line}</span>
+            </>
+          );
+          return (
+            <li key={i}>
+              {docId ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectDocument(docId)}
+                  className="flex w-full gap-2 px-3 py-1.5 text-left hover:bg-secondary"
+                >
+                  {row}
+                </button>
+              ) : (
+                <div className="flex gap-2 px-3 py-1.5">{row}</div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

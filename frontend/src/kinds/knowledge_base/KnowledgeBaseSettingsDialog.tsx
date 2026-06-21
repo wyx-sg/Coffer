@@ -45,6 +45,7 @@ export function KnowledgeBaseSettingsDialog({
   const [chunkSize, setChunkSize] = useState(config.chunk_size);
   const [chunkOverlap, setChunkOverlap] = useState(config.chunk_overlap);
   const [vectorEnabled, setVectorEnabled] = useState(config.enabled_modes.includes("vector"));
+  const [autoUpdateSources, setAutoUpdateSources] = useState(config.auto_update_sources);
 
   const submit = () => {
     const baseModes: RetrievalMode[] = config.enabled_modes.filter((m) => m !== "vector");
@@ -53,6 +54,9 @@ export function KnowledgeBaseSettingsDialog({
       chunk_size: chunkSize,
       chunk_overlap: chunkOverlap,
       enabled_modes: vectorEnabled ? [...baseModes, "vector"] : baseModes,
+      // Carried through explicitly: the PATCH replaces the whole config, so
+      // omitting this would reset auto-update to false on every save.
+      auto_update_sources: autoUpdateSources,
       // Embedding is global (Settings → Embedding); the KB config no longer
       // carries it.
       embedding: null,
@@ -106,6 +110,21 @@ export function KnowledgeBaseSettingsDialog({
               id="kb-settings-vector"
               checked={vectorEnabled}
               onCheckedChange={setVectorEnabled}
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-md border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="kb-settings-auto-update">
+                {t("knowledgeBases.settings.autoUpdateSources")}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t("knowledgeBases.settings.autoUpdateSourcesHint")}
+              </p>
+            </div>
+            <Switch
+              id="kb-settings-auto-update"
+              checked={autoUpdateSources}
+              onCheckedChange={setAutoUpdateSources}
             />
           </div>
           {error ? <p className="text-sm text-destructive">{translateApiError(t, error)}</p> : null}

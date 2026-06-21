@@ -19,6 +19,7 @@ from coffer.infrastructure.knowledge.frontmatter import (
     render_frontmatter,
     split_frontmatter,
 )
+from coffer.infrastructure.knowledge.fs import atomic_write_text
 
 _SLUG_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
@@ -39,10 +40,9 @@ class HandoffFile:
 
 
 def write_handoff(path: Path, *, branch: str, body: str, updated_at: datetime) -> None:
-    """Write (overwrite) the handoff for a branch: frontmatter + body."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    """Write (overwrite) the handoff for a branch atomically: frontmatter + body."""
     text = render_frontmatter({"branch": branch, "updated_at": updated_at.isoformat()}, body)
-    path.write_text(text, encoding="utf-8")
+    atomic_write_text(path, text)
 
 
 def read_handoff(path: Path) -> HandoffFile | None:

@@ -116,7 +116,7 @@ CREATE TABLE chunks (
     document_id  TEXT NOT NULL,                 -- app-level cascade (not a FK; KB+memory share the table)
     kind         TEXT NOT NULL,
     resource_name TEXT NOT NULL,
-    position     INTEGER NOT NULL               -- memory: one chunk per fact
+    position     INTEGER NOT NULL               -- memory: per-passage chunks (1 for a short inbox fact; N for a multi-section topic doc)
 );
 CREATE INDEX idx_chunks_document ON chunks(document_id);
 
@@ -161,18 +161,26 @@ CREATE TABLE memory_store_labels (
 ~/.coffer/
 └── memory/
     ├── global/                        # project_id = WORKSPACE_GLOBAL_PROJECT_ID (00000000000000000000000000)
-    │   └── knowledge/                 # 语义 lane（recall 在此搜索）
-    │       ├── inbox/<item>.md        # per-item file = truth（frontmatter + body），新记住的条目
-    │       ├── <topic>.md             # 经整理的主题文档（PR2b —— 由整合 organizer 写入）
-    │       └── INDEX.md               # 人类审阅入口（PR2b）
+    │   ├── knowledge/                 # 语义 lane（recall 在此搜索）
+    │   │   ├── inbox/<item>.md        # per-item file = truth（frontmatter + body），新记住的条目
+    │   │   ├── <topic>.md             # 经整理的主题文档（由整合 organizer 写入）
+    │   │   └── INDEX.md               # 人类审阅入口（由 organizer 重新生成）
+    │   ├── consolidation-log.md       # 只追加 changelog（store 根目录；机器本地，在 recall 之外）
+    │   ├── superseded/<slug>-<ts>.md  # reorg tombstone（store 根目录；在 recall 之外；可恢复；DO 同步）
+    │   └── rules/rules.md             # 过程性 lane（store 根目录；在 recall 之外；session-start 注入；DO 同步）
     └── projects/<project-ulid>/       # 每项目一个目录
-        └── knowledge/
-            ├── inbox/<item>.md
-            ├── <topic>.md             # PR2b
-            └── INDEX.md               # PR2b
+        ├── knowledge/
+        │   ├── inbox/<item>.md
+        │   ├── <topic>.md
+        │   └── INDEX.md
+        ├── consolidation-log.md
+        ├── superseded/<slug>-<ts>.md
+        └── rules/rules.md
 ```
 
-**没有 `MEMORY.md`** —— 此前的派生投影已移除。`recall` glob `knowledge/**/*.md`（排除 `INDEX.md`），所以 organizer 写入主题文档后会被透明拾取，手写的主题文档也会被立即发现。
+**没有 `MEMORY.md`** —— 此前的派生投影已移除。`recall` glob `knowledge/**/*.md`（排除 `INDEX.md`），所以 organizer 写入主题文档后会被透明拾取，手写的主题文档也会被立即发现。`INDEX.md` 与 store 根目录的 `consolidation-log.md` 是**派生/机器本地**的：排除在 recall 与同步镜像之外（每台机器从已同步的主题文档重新生成 `INDEX.md`；日志按机器各自维护）。主题文档本身是真相源，DO 同步。store 根的 **`superseded/`** tombstone 保存 reorg pass（FR-033/034）退役的旧版本：与 `handoff/` 一样在 `knowledge/` lane 之外，故**排除在 recall 之外**；但与派生文件不同，它**DO 同步** —— 它是可恢复的真相源历史，而非重新生成的派生物。store 根的 **`rules/rules.md`** 是**过程性 lane**（FR-036）：organizer 把规则形态的 inbox 条目分类追加进来（追加，而非主题合并）；它在 `knowledge/` lane 之外，故**排除在 recall 之外**（rules 由 session-start 注入交付 —— 那是之后的切片 —— 而非 `recall`），且作为真相源**DO 同步**（与 `handoff/` 一样）。它经 `GET /memory_stores/{name}/rules` / `coffer memory rules` 只读暴露。
+
+**organizer**（`application/memory/organizer.py`，内部 LLM，仅显式 `organize` 触发）通过每条目一次 one-shot completion 把 `inbox/` 排空进主题文档：取回至多 3 个候选主题文档（不用 LLM）→ 一次 LLM 合并/创建调用 → 写 `knowledge/<slug>.md` → 删除 inbox 条目（仅在写入成功之后）→ 追加一行 changelog。畸形的 LLM 响应会跳过该条目（留在 inbox，绝不损坏文档）。主题文档 `.md` 的 frontmatter 是 `{title, description, updated_at}` + 正文。langchain 的 LLM 调用留在 `infrastructure/chat`（Contract 9）；`application/memory` 经一个 memory 本地的 `LlmCompletionPort` 触达它（克隆 distill 切片；Contract 5e 禁止 import `application.distill`）。
 
 每条事实 `.md` 的 frontmatter：
 
@@ -204,6 +212,9 @@ release target tags and pushes atomically.
 | 用户编辑（REST/CLI/外部编辑器）             | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 审计。（直接的外部编辑器编辑在下一次 lazy reindex-on-read 时生效。）MCP 无编辑工具 —— 仅 REST/CLI。 |
 | 用户删除（REST/CLI）                        | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 审计。MCP 无删除工具 —— 仅 REST/CLI。                                                                       |
 | 清空一个 scope                              | 删除 `knowledge/` 下每条记忆条目 → 移除全部索引行 → 审计。store Resource 保留。                                                                                  |
+| 整理（显式触发；内部 LLM）                  | 逐 inbox 条目：取回 ≤3 个候选主题文档 → 一次 one-shot LLM 合并/创建/**分类** → 若 LLM 标记该条目为 **rule**，追加到 `rules/rules.md`（过程性 lane，FR-036）；否则写 `knowledge/<slug>.md` → 删除 inbox 条目（仅在写入/追加之后）→ 追加 `consolidation-log.md`。随后重新生成 `INDEX.md`、对账索引、审计 `memory_organized`（含 `rules_appended` 计数）。畸形 LLM 输出跳过该条目（留在 inbox）；未配置内部模型 → no-op。 |
+| 重组 reorg（显式触发；内部 agentic LLM）    | 有界的 langgraph `create_react_agent` 循环，配 list/read/write/supersede 工具作用于主题文档：合并重复 + 拆分过长文档。**每次覆盖/supersede 先把旧版本归档到 `superseded/<slug>-<ts>.md`**（绝不硬删除）。随后重新生成 `INDEX.md`、对账、审计 `memory_reorganized`。未配置内部模型 → no-op（`no_model`）；无主题文档 → no-op（`empty`）。 |
+| 自动整理 auto-organize（静默触发；opt-in，默认关闭） | memory 写入通知钩子（重新）武装单个**去抖**定时器；store 静默达延迟后，对发生变化的 store 作为**后台任务**运行上面的「整理 Organize」—— 一个 session-end 代理（FR-035）。非阻塞：daemon 关停时取消（未触发的 inbox 原样留给之后的 pass；不丢数据）。失败被吞掉并记日志。无新增 REST/CLI 面。 |
 | 删除 store Resource                         | 移除该 store 的 `documents` 行、`rmtree(store_dir)`、审计。                                                                                                     |
 | Recall                                      | **读时惰性 reindex**：扫 `knowledge/` lane 找增量（按 `content_sha256`）→ `reconcile` → 搜索。                                                                   |
 | 修改 embedding 模型                              | 允许 → 下次索引时对 store 重新 embedding（文件是真相）。                                                                                                      |
@@ -219,6 +230,8 @@ compute content_sha256 of the new markdown
 ```
 
 memory 的所有写路径（remember、update、用户编辑、惰性 reindex 扫描）都汇入这一个例程。
+
+memory 对账器向该例程提供自己的**分块器**（见 FR-032）：共享的 `infrastructure/knowledge/chunking.chunk_markdown`，绑定固定的 memory 分块 size/overlap 常量（不是 per-store 配置），从而把一份已整理的主题文档切成**段落粒度的分块**（标题与块结构感知），使 `recall` 返回其最相关的段落。短的单段落事实仍只切成一块，因此 inbox 与主题文档之分、以及 `INDEX.md`/`handoff/` 的 recall 隔离都不受影响。
 
 当启用 vector 的 store 在 embed 时降级（embedding provider 不可用），该例程只做 keyword 索引并持久化一个**空字符串 `content_sha256`** —— 一个刻意永不匹配的哨兵值，使下一次惰性对账重试 embed，而不是把这条事实当作已是最新。
 

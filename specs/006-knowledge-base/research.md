@@ -109,7 +109,117 @@ Sizing stays **char-based** (deterministic, dependency-free); token-based sizing
 
 No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invocations` (tool name + who/when/duration/outcome only; no arguments or returned content), matching the existing privacy stance. The `coffer__` prefix is reserved (a server named `coffer` is rejected at registration); upstream tools are prefixed `<server>__` and can never collide.
 
-## 9. Things explicitly NOT decided / out of scope here
+## 9. Degraded-embed: decouple from the sha gate + surface the count (KB8)
+
+**Question**: When the embedding provider is unavailable, how does the routine keep the embed retryable without breaking the no-op gate, and how does a degrade become visible on a read?
+
+**Decision**: A dedicated persisted **`embed_pending`** flag, decoupled from `content_sha256` (which always carries the real body hash), plus a persisted-count surfacing.
+
+- **Why decouple.** The old design overwrote `content_sha256` with an empty-string sentinel so the next reconcile would mismatch and retry the embed. But `"" == previous_sha` is never true, so EVERY scan re-chunked the degraded doc + rewrote its FTS rows + re-attempted the embed — one unrelated edit re-indexed the whole degraded corpus. The empty sha also corrupted the files-as-truth derivation. Splitting the retry state onto its own column lets the sha gate stay honest (unchanged body ⇒ no churn) while the embed still retries.
+- **Why a retry-embed-only path.** When the body is unchanged but `embed_pending`, the chunks + FTS are already current — only the vectors are missing. The routine re-chunks **in memory** (deterministic positions), embeds, and calls a new index method `upsert_vectors` that writes ONLY the vec rows. No FTS / chunk rewrite ⇒ the degraded-corpus churn is gone, and the vectors align with the stored chunks by position.
+- **Why surface from the persisted flag, not the transient scan count.** The degraded count was computed inside `reindex_scan` and only returned by the explicit `POST /reindex`; a degrade during a lazy reindex-on-read (list / get / search / grep) was silently dropped (`_reconcile_on_read -> None`). Querying the persisted `embed_pending` (`count_pending_embeds`) in `metrics()` makes `documents_degraded` correct on ANY read, with no need to thread the scan count through every read path.
+- **Boundary.** `embed_pending` tracks ONLY a failed embedding **provider** call (`EngineUnavailable`). It is orthogonal to sqlite-vec extension availability: a provider success with an unavailable vec table is `embedded=True` (not pending) and is handled at query time by `SearchResponse.fallback` — same parity as the existing `embedded` flag.
+
+## 10. Title as embedding context (KB5)
+
+**Question**: A chunk taken from the middle of a document is embedded in isolation, so its vector loses the document's subject — how do we restore topic context for better vector recall?
+
+**Decision**: Prepend the document **title** (`"{title}\n\n{chunk}"`) to the text that gets **EMBEDDED** only — a standard RAG technique. The text written to FTS (`documents_fts`) and to the chunk rows stays the **raw** chunk, so the returned `Passage.text` is never polluted (the title is already surfaced separately via `Passage.title` from the `documents` JOIN). The prefix lives solely inside `Reindexer._maybe_embed`; the caller still passes the raw `chunks` to `upsert_chunks`. Memory reuses this: the fact name is the title.
+
+- **No mass re-embed.** `content_sha256` stays the hash of the **raw body** (the title is NOT folded in), so existing docs are not flagged "changed" — they keep their (title-less) vectors until a genuine content change or a `force` reconcile re-embeds them with the title. That gradual rollout is intended and acceptable: mixed title/no-title vectors share the same space with no correctness issue.
+- **No migration / no schema change.** No new FR (a retrieval-quality change under the existing modes, like the KB4 chunker and KB2). No FTS schema change, no `upsert_chunks`/`upsert_vectors` signature change.
+- **Deferred.** A keyword-side indexed `title` FTS column was deferred — it would need an FTS-rebuild migration and has a short-CJK-title trigram gap — until keyword title-matching proves needed.
+
+## 11. Embedding request batching (KB9)
+
+**Question**: Re-embedding runs serially under the per-store lock — one provider call per document — and a single `embed()` sends ALL of a document's chunks in one unbounded request. How much of this should be batched?
+
+**Decision**: Bound the **request size**, do NOT add cross-document parallelism.
+
+- **Bound request size (shipped).** `OpenAICompatibleEmbedder.embed` splits its input into sequential sub-requests of at most `_MAX_EMBED_BATCH` (128) texts and concatenates the results in input order. This prevents a many-chunk document — or a future batched caller — from sending one unbounded request that an OpenAI-compatible endpoint would reject on its inputs-per-call or token limit (a latent bug, made slightly more pressing by KB5 lengthening each embedded text with the title prefix). Per-sub-request `index` re-alignment + width validation are preserved; one sub-request failure raises `EngineUnavailable`, so the doc degrades whole and is retried via KB8's `embed_pending` (all-or-nothing per doc, unchanged). Local (fastembed) embeddings are in-process and need no bound.
+- **Cross-document parallel/batch re-embed: deliberately deferred (not built).** Collapsing the serial per-document loop into a concurrent or cross-document batched sweep was evaluated and judged over-engineering for a single-user tool: the within-call batch already exists; a full re-embed only happens on a `force` reconcile (config change) or a provider-recovery sweep — both infrequent — and `CooldownEmbedder` already de-fangs the provider-down case (no O(N×timeout) stall). The cross-doc restructure would break the per-document `embed → upsert_chunks` atomicity that KB8's per-doc `embed_pending` isolation relies on, and bounded concurrency's payoff is cloud-provider-only on a rare operation. Revisit only if a real bulk-re-embed latency complaint appears.
+- **No migration / no schema change. No new FR** (a reliability/robustness change under the existing retrieval modes).
+
+## 12. Resource-list count uses the indexed count, not `metrics()` (KB14)
+
+**Question**: The resource LIST endpoints (`GET /knowledge_bases`, `GET /memory_stores`) call the full `metrics()` per resource just to display a count. `metrics()` does expensive disk I/O the list output discards: KB's `metrics()` runs a recursive `du_bytes` disk walk per KB; memory's `store_metrics()` runs BOTH a `scan_store_dir` (read/parse every fact file) AND a `du_bytes` walk per store. Listing N resources triggers N disk walks (KB) / N file-scans + N walks (memory) for a number the list shows but never the `disk_bytes` it computes.
+
+**Decision**: Give each list path a cheap count that hits ONLY the indexed DB `count_documents`, never `du_bytes` / `scan_store_dir`.
+
+- **KB list** uses a thin `KnowledgeBaseService.document_count(kb_name)` → `count_documents(KIND_KNOWLEDGE_BASE, kb_name)` (the same indexed count `metrics()` already returns as `document_count`). No `du_bytes` walk on the list path.
+- **Memory list** uses a thin `MemoryService.fact_count(store_name)` → `count_documents(KIND_MEMORY, store_name)`. The count SOURCE moves from the on-disk file count (`len(scan_store_dir().files)`) to the DB index — matching how KB already counts. The small index-vs-disk staleness window closes on the next recall/reconcile (lazy reindex-on-read), an acceptable tradeoff for a list-display number.
+- **`metrics()` / `store_metrics()` are unchanged**: the per-resource DETAIL endpoint (`GET /{name}/metrics`) still walks the disk and reports `disk_bytes`. Only the LIST path changed.
+- **No migration / no schema change. No new FR** (a perf change under the existing endpoints).
+
+## 13. Atomic writes for persisted source-of-truth files (KB19)
+
+**Question**: Coffer's invariant is "files are truth, SQLite is a rebuildable index", yet the persisted Markdown / raw files were written non-atomically via plain `path.write_text` / `path.write_bytes`. A crash or power loss mid-write leaves a TRUNCATED file — a corrupt source of truth that the next reindex faithfully ingests.
+
+**Decision**: Route every persisted-truth write through one shared helper, `coffer.infrastructure.knowledge.fs.atomic_write_text` / `atomic_write_bytes`, that writes to a temp file in the SAME directory, fsyncs it, then `os.replace`s it into place. `os.replace` is an atomic rename on the same filesystem, so a concurrent reader always sees either the complete OLD file or the complete NEW file, never a partial mix; on any failure the temp file is removed and the original is left untouched.
+
+- **Sites converted**: KB doc writes (ingest via `mkparent_write`, edit, reconvert) and the KB raw-upload bytes; memory fact files, organizer topic docs + `INDEX.md`, and the per-branch handoff files. The helper is stdlib-only (no import cycle) and lives in the shared `infrastructure.knowledge` substrate — already the application-composable home for kind-agnostic helpers (chunking, frontmatter, ids, paths) that the import-linter contract lets `application/knowledge_base/*` import — so both `application/knowledge_base/*` and `infrastructure/memory/*` reuse it with no architecture-boundary change. The already-off-loop writes keep their `asyncio.to_thread` wrapping (the helper is sync).
+- **Append-only logs are deliberately NOT converted**: `consolidation-log.md` is opened in append mode (`"a"`); it is an audit trail where atomic-replace would destroy prior history, and an interrupted append cannot corrupt earlier lines.
+- **Directory fsync (rename-durability under power loss) is deliberately DEFERRED**: a single file-fsync + `os.replace` already delivers ATOMICITY (no partial/corrupt file), which is the KB19 goal. Guaranteeing the rename *itself* survives a power loss needs an extra fsync of the parent directory; it is a stronger durability guarantee that can be layered onto the shared helper later if a real need appears, with zero call-site churn.
+- **No migration / no schema change. No new FR** (a robustness/quality change under existing behaviour). Memory's source-of-truth files (spec 007) share the helper; this is the single home for the atomicity guarantee.
+
+## 14. Code-hygiene sweep (dead-code + stale comments)
+
+**Question**: Several artefacts predate the spec-006 redesign and the ADR-028 ULID identity switch, leaving dead code, comments that misdescribe doc-id identity, unused i18n keys, and an undocumented scan bound. A deletion-safety audit verified each is truly dead/stale and safe to remove or correct.
+
+**Decision**: A no-behaviour-change cleanup:
+
+- **Removed the dead `kb_doc_id` / `DOC_ID_LEN`** helper (the old "first 16 hex chars of `source_sha256`" content-addressed doc id). Doc ids are now ULIDs (ADR-028: a re-upload mints a NEW id), so this helper has zero call sites; deleted from `domain/knowledge_base/document.py` and pruned from both `__all__` lists.
+- **Reworded stale "content-addressed" doc-id comments** in `infrastructure/knowledge/models.py`, `infrastructure/knowledge/sqlite_index.py`, and the matching integration-test docstring. The store-scoped chunk-id rationale STANDS — a ULID is unique only within a store, so the same doc id can still appear across stores and must not collide — only the false "content-addressed / same file repeats its id" premise was corrected. The genuinely content-addressed path hash in `memory/scope_fs.py`, the immutable migration history, and ADR-028's description of the OLD scheme were left untouched.
+- **Dropped 14 unused KB i18n keys** (the old per-KB embedding form `dialog.{vectorHint,provider,embeddingModel,dimensions,baseUrl,credential}`, now global; and `detail.{metrics,reindexResult,chunks,editAria,loadFailed,edit,save,cancel}`, superseded by `common.*`) from both `en.json` + `zh.json`, keeping the two locales structurally identical.
+- **Documented the 100k per-scan document cap** as a single named constant `DOCUMENT_SCAN_LIMIT` in `domain/knowledge/document.py`, used at all three `list_documents(limit=…)` reconcile sites (KB reindex scan, KB source-tracking, memory sync). It is a safety bound — the max docs scanned/reconciled per store in one pass, NOT an enforced ingest limit; corpora are expected far below it. Value unchanged (100_000).
+- **The per-KB `embedding` config field was reviewed and KEPT** — runtime-inert legacy but contract-live: it still backs a register-time credential-missing guarantee, an acceptance test, and a CLI/frontend surface. It is intentionally NOT removed.
+
+**No migration / no schema change / no new FR** (pure cleanup under existing behaviour).
+
+## 15. Document timestamps in frontmatter (KB18)
+
+**Question**: Coffer's invariant is "files are truth, SQLite is a rebuildable index", yet a KB document's on-disk `.md` frontmatter did NOT record `created_at` / `updated_at`. So when the database is lost and rows are rebuilt from the files (`document_from_frontmatter`), BOTH timestamps reset to `now()` — the original ingest/edit time was silently lost. The memory face (spec 007) already records these in each fact file and reads them back, so the gap was KB-only.
+
+**Decision**: Write `created_at` / `updated_at` (ISO strings) into the KB doc frontmatter on every write path — ingest (`render_ingest_markdown`) and edit/reconvert (`render_doc_markdown`), keeping the two field sets identical so an ingest→edit→rebuild round-trip is stable. On first ingest both equal `now`; on a re-upload `created_at` is preserved from the existing document and `updated_at` is bumped; an edit/reconvert preserves `created_at` and bumps `updated_at`. The DB-loss rebuild (`document_from_frontmatter`) now reads them back so a rebuilt row restores the REAL timestamps instead of `now()`.
+
+- **File-mtime fallback for back-compat**: a pre-existing / hand-written file lacking the keys (or with a blank/unparseable value) degrades to the file's `mtime` — NOT `now()` — mirroring memory's `parse_fact_markdown`. So existing corpora rebuild with a sensible time and need NO migration / NO backfill.
+- **Local `_parse_dt` helper, no cross-kind import**: the ISO→aware-UTC parse helper is a local copy in `application/knowledge_base/pipeline_helpers.py`; the import-linter forbids importing from `infrastructure/memory/*` (memory↔knowledge_base are separate kinds), and a per-kind copy is the established pattern (memory's topic_files / handoff each keep their own).
+- **`converted_at` is unchanged** — it tracks a conversion-engine run, not the document's age, so it stays `now` on a rebuild.
+- **No new FR** — this closes a files-as-truth gap under the existing FR-008 / SC-005 rebuild guarantee. No schema/DB change (the `documents` table already has the two columns); only the on-disk file contents and the rebuild read path change.
+
+## 16. Source-file update detection — frontend (FR-021..024)
+
+**Question**: PR #140 shipped the backend for external source-file tracking — a `check-sources` scan that reports, per document with a tracked `source_path`, whether its original on-disk file is `unchanged` / `changed` / `missing` / `edited` (source moved on but the doc was locally edited, so a re-ingest is skipped) / `updated` (was changed and auto-re-ingested because the KB's `auto_update_sources` is on), plus a per-document `update-source` re-ingest and the per-KB `auto_update_sources` config flag. None of it was reachable from the UI.
+
+**Decision**: Surface it on the KB detail page as purely additive UI (no backend change):
+
+- A **"Check sources"** header action (next to Settings / Reindex / Upload) POSTs `check-sources` and opens a **report dialog**. Each row shows the document title, its source path, and a status badge for one of the five statuses. Only a **`changed`** row offers a per-row **"Update from source"** button (POST `update-source`, re-ingest in place); `missing` rows note the file is gone, `edited` rows note the doc was edited locally so updating is blocked (the backend refuses an `edited` doc with a typed error, surfaced as a toast). When the scan returns no rows the dialog explains that **web uploads aren't tracked** — only path-based ingests (CLI / desktop) carry a source file.
+- The per-KB **`auto_update_sources`** flag gets a `<Switch>` row in the settings dialog. Because the config PATCH **replaces** the whole config (FR-014/FR-019), the toggle's value is threaded through the merged config built on submit, and the field was added to `KnowledgeBaseConfigOut` so a settings save can't silently reset it to false.
+- **No new FR** — this delivers the existing FR-021..024 frontend; coverage is the new `SourceCheckDialog` vitest suite plus the extended detail-page test (asserts Check-sources opens the dialog and that the settings PATCH carries `auto_update_sources`).
+
+## 17. Document-list filter + multi-select bulk-delete — frontend (KB12)
+
+**Question**: The KB detail page's document list (`KnowledgeBaseDocTree`, the left-sidebar `<ul>` of clickable rows) had no way to narrow a long list or to remove several documents at once — single delete was viewer-driven (select a doc → Trash2 in the right pane → confirm → one delete). Curating a large KB meant scrolling and deleting one at a time.
+
+**Decision**: Enhance the existing sidebar **in place** — purely additive frontend, no backend change:
+
+- A small client-side **filter `<Input>`** sits at the top of the tree (inside the `<aside role="complementary">`, above the `<ul>`). It filters the rendered docs by **case-insensitive title substring**; an empty filter shows all docs, and a filter that hides everything shows a muted "no matches" line.
+- Each row gains a **`<Checkbox>` that is a SIBLING of the clickable title** (never a nested interactive element). The title stays a `<button>` selectable by its text — preserving the e2e (`shell_knowledge_base.spec.ts` clicks "Deploys" by text) and page-test (`getByRole("complementary")` + click-by-text) selectors. A header "select all" checkbox spans the **filtered** set (mirrors `useTableSelection`'s selected ∩ visible).
+- When ≥1 row is selected, the shared **`BulkBar`** (from `DataTableSelection`) shows the count + Delete + Clear. Delete opens a `ConfirmDialog`; on confirm, the page hook's `bulkDelete` fans `deleteDocument(name, id)` out over the selected ids via `useBulkMutate` (one summary toast + one `["kb-documents"]`/`["kb-metrics"]` invalidate burst), then clears the selection. If the currently-VIEWED doc was among those deleted, the viewer's `selectedId` is reset so the right pane doesn't show a deleted doc.
+- We **kept the 2-pane layout** (sidebar tree + right-hand viewer) rather than swapping to a full-width `DataTable`: a DataTable doesn't fit the narrow sidebar and would break the viewer flow + the e2e/page selectors. The single-delete path (viewer Trash2 → confirm → `del`) is unchanged.
+- **No new FR** — this is a UX affordance over the existing FR-013/FR-020 document-management surface; coverage is the extended detail-page test (filter narrows/restores/no-match; select two rows → bulk bar → confirm → `deleteDocument` per id → selection clears; title-click still loads the viewer).
+
+## 18. Ingest-rejection error legibility — scanned PDF + reason-driven messages (KB11/KB15)
+
+**Question**: An ingest rejection (`IngestRejected`) collapses every cause — empty conversion, too-large upload, duplicate, unsupported type — into one generic frontend string (`translateApiError` keyed only on the envelope `code`, so all `INGEST_REJECTED` reasons mapped to "The document was rejected during ingestion"). The worst offender: a **scanned / image-only PDF** converts to empty markdown, raising the generic `"empty"` reason, so the user had no clue why and no next step.
+
+**Decision** — make the machine `reason` legible end-to-end, additive and backward-compatible:
+
+- **Backend (KB11)**: when the cleaned markdown is empty **and the format is a PDF** (`fmt.lower().lstrip(".") == "pdf"`, handling both `"pdf"` and `".pdf"`), the converter registry raises a distinct `IngestRejected("scanned_pdf", <actionable message>)` ("This PDF has no extractable text — it looks scanned or image-only. Run OCR…"). Detection stays **strict-empty** (no length threshold — a low threshold would false-positive on legitimately short PDFs). Every other format keeps the generic `"empty"` reason. The reason→HTTP map gains `"scanned_pdf": 415` (same status as `"empty"`). The error envelope already carries `details.reason` via `_details_for`.
+- **Frontend (KB15)**: `translateApiError` now tries a **reason-qualified flat key** `errors.${code}_${reason}` first (e.g. `errors.INGEST_REJECTED_scanned_pdf`) — flat because `errors.INGEST_REJECTED` is itself a string, so a nested `errors.INGEST_REJECTED.scanned_pdf` is impossible. If that key resolves it wins; otherwise it falls through UNCHANGED to the existing `errors.${code}` → envelope-message chain. `throwApiError` now plumbs the envelope's `details` onto the thrown `ApiError` (it previously dropped them) so the reason reaches the translator everywhere. `details` is read defensively (narrowed from `unknown`); a missing/non-string reason behaves exactly as before.
+- **No new FR**: this is error-quality (like prior KB items) — covered by a backend registry test (PDF-empty → `scanned_pdf`; `.pdf` normalised; non-PDF-empty still `empty`) and a frontend `translateApiError`/`throwApiError` test. Only the required `INGEST_REJECTED_scanned_pdf` i18n key (en+zh) is added; the generic key remains the fallback.
+
+## 19. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.

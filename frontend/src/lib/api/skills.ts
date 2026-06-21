@@ -65,6 +65,11 @@ export interface DriftReportOut {
   entries: DriftEntryOut[];
 }
 
+export interface RepairReportOut {
+  remediated: DriftEntryOut[];
+  remaining: DriftReportOut;
+}
+
 export interface SkillFileNode {
   name: string;
   path: string;
@@ -137,6 +142,7 @@ export const skillsApi = {
   disable: (name: string, body: SkillDisableRequest) =>
     call<SkillBindingOut>("POST", `/skills/${enc(name)}/disable`, body),
   verify: () => call<DriftReportOut>("POST", "/skills/verify"),
+  repair: () => call<RepairReportOut>("POST", "/skills/repair"),
   filesTree: (name: string) => call<SkillFileTreeOut>("GET", `/skills/${enc(name)}/files`),
   fileContent: (name: string, path: string) =>
     call<SkillFileContentOut>("GET", `/skills/${enc(name)}/files/content?path=${enc(path)}`),

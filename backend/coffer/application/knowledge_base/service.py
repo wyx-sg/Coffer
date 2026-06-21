@@ -37,6 +37,7 @@ from coffer.application.knowledge_base.pipeline_helpers import (
     chunker_for,
     du_bytes,
     read_markdown_body,
+    reconcile_on_read,
 )
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
@@ -258,12 +259,24 @@ class KnowledgeBaseService:
         """Lazy reindex-on-read (FR-008a / FR-016): reconcile the on-disk
         markdown against the SQLite index before serving a read/search.
 
-        The in-app viewer is read-only, so users edit ``docs/<doc-id>.md``
-        directly in their external editor with no filesystem watcher. This
-        mirrors the memory face's reconcile-before-recall: it funnels through
-        the SAME idempotent reindex scan (``content_sha256`` no-op gate +
-        file-vanished pruning), so an unchanged corpus is a cheap no-op."""
-        await self._pipeline.reindex_scan(kb_name=kb_name, config=config)
+        Intentionally ``-> None``: ``documents_degraded`` is surfaced from the
+        PERSISTED ``embed_pending`` flag (``metrics()`` → ``count_pending_embeds``)
+        rather than the transient per-scan count, so it stays observable without
+        plumbing the scan count through every read path (KB8).
+
+        Out-of-band edits to ``docs/<doc-id>.md`` (no filesystem watcher) funnel
+        through the SAME idempotent reindex routine (``content_sha256`` no-op gate
+        + file-vanished pruning).
+
+        An unchanged corpus is detected by a cheap stat-only fingerprint and
+        skips the full O(N) read+parse scan entirely; an out-of-band edit / add /
+        remove bumps the fingerprint and is reconciled on the next read."""
+        await reconcile_on_read(
+            self._pipeline.fingerprint_cache,
+            kb_name,
+            self._paths.docs_dir(kb_name),
+            lambda: self._pipeline.reindex_scan(kb_name=kb_name, config=config),
+        )
 
     async def list_documents(
         self, *, kb_name: str, limit: int, offset: int
@@ -350,15 +363,21 @@ class KnowledgeBaseService:
             self._store_ref(kb_name), pattern, max_matches=max_matches
         )
 
+    async def document_count(self, *, kb_name: str) -> int:
+        """Cheap indexed document count for the list path (no ``du_bytes`` walk)."""
+        return await self._documents.count_documents(KIND_KNOWLEDGE_BASE, kb_name)
+
     async def metrics(self, *, kb_name: str) -> dict[str, object]:
         config = await self.get_kb_config(kb_name)
         doc_count = await self._documents.count_documents(KIND_KNOWLEDGE_BASE, kb_name)
         chunk_count = await self._documents.count_chunks(KIND_KNOWLEDGE_BASE, kb_name)
         kb_dir = self._paths.kb_dir(kb_name)
         disk = await asyncio.to_thread(du_bytes, kb_dir) if kb_dir.exists() else 0
+        degraded = await self._documents.count_pending_embeds(KIND_KNOWLEDGE_BASE, kb_name)
         return {
             "document_count": doc_count,
             "chunk_count": chunk_count,
+            "documents_degraded": degraded,
             "disk_bytes": disk,
             "enabled_modes": list(config.enabled_modes),
         }

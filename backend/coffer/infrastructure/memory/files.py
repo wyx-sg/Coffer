@@ -18,7 +18,12 @@ from coffer.infrastructure.knowledge.frontmatter import (
     render_frontmatter,
     split_frontmatter,
 )
-from coffer.infrastructure.knowledge.paths import knowledge_dir, memory_index_path
+from coffer.infrastructure.knowledge.fs import atomic_write_text
+from coffer.infrastructure.knowledge.paths import (
+    inbox_dir,
+    knowledge_dir,
+    memory_index_path,
+)
 
 #: ``INDEX.md`` is the (PR2b) human review index; never treated as a fact.
 _LANE_INDEX_NAME = "INDEX.md"
@@ -100,9 +105,8 @@ def parse_fact_markdown(text: str, *, fallback_id: str, mtime: datetime) -> Memo
 
 
 def write_fact_file(path: Path, fact: MemoryFact) -> str:
-    """Write a fact's markdown to ``path``; return the body sha256."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render_fact_markdown(fact), encoding="utf-8")
+    """Write a fact's markdown to ``path`` atomically; return the body sha256."""
+    atomic_write_text(path, render_fact_markdown(fact))
     return fact_body_sha256(fact.body)
 
 
@@ -141,6 +145,18 @@ def scan_store_dir(store_dir: Path) -> DirScan:
         ff = read_fact_file(path)
         files[ff.fact.id] = ff
     return DirScan(files=files)
+
+
+def list_inbox_items(store_dir: Path) -> list[FactFile]:
+    """Read + parse every freshly-remembered item in ``knowledge/inbox/``.
+
+    The organizer drains these into topic docs. The inbox may not exist yet (no
+    remembered items) → an empty list, never an error. Sorted by path for a
+    deterministic processing order."""
+    box = inbox_dir(store_dir)
+    if not box.exists():
+        return []
+    return [read_fact_file(p) for p in sorted(box.glob("*.md"))]
 
 
 def legacy_root_facts(store_dir: Path) -> list[Path]:
