@@ -39,7 +39,6 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
@@ -65,10 +64,12 @@ from coffer.surfaces.http.app_mcp_composition import (
     wire_mcp_kind,
 )
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.auto_distill_wiring import start_auto_distill, stop_auto_distill
 from coffer.surfaces.http.backup_wiring import start_backup_worker, stop_backup_worker
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
+    make_credential_resolver,
     run_legacy_keychain_migration,
 )
 from coffer.surfaces.http.dependencies import (
@@ -246,17 +247,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.mcp_session_supervisors = session_supervisors
 
     # Wire transcript distillation + organizer (spec 007 FR-027..031, ADR-020).
-    def _distill_credential_resolver(ref: str) -> str:
-        value: str | None = credential_store.get(ref)
-        if value is None:
-            raise CredentialMissing(ref)
-        return value
-
-    wire_distill(
+    distill_service = wire_distill(
         memory_service=memory_service,
         agent_service=get_agent_service(),
         provider_svc=get_provider_service(),
-        credential_resolver=_distill_credential_resolver,
+        credential_resolver=make_credential_resolver(credential_store),
     )
 
     # Wire the channel kind (spec 009) AFTER wire_chat: the inbound processor
@@ -294,6 +289,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Optional opt-in background workers (default OFF).
     start_backup_worker(app)
     start_auto_organize(app, memory_service, get_organizer_service())  # FR-035
+    # Auto-distill catch-up sweep (007 FR-046): default-ON memory write guarantee.
+    start_auto_distill(
+        app, distill_service=distill_service, agent_service=get_agent_service(), session_maker=sm
+    )
 
     # Multi-machine sync (spec 010); worker is inert until the user enables it.
     start_sync(app, resource_svc, audit, sm, db_path, get_master_key_manager())
@@ -326,6 +325,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Best-effort shutdown of the optional backup worker.
         await stop_backup_worker(app)
         await stop_auto_organize(app)
+        await stop_auto_distill(app)
         await stop_sync(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an
