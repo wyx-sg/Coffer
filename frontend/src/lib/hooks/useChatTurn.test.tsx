@@ -125,22 +125,61 @@ describe("useChatTurn", () => {
   });
 
   test("accumulates text_delta into the live bubble and clears it once the reply lands", async () => {
-    subscribeMock.mockImplementation(
-      fromEvents(
-        { event: "turn_start", data: {} },
-        { event: "text_delta", data: { text: "Hello" } },
-        { event: "text_delta", data: { text: " world" } },
-        { event: "turn_done", data: { stop_reason: "end_turn" } },
-      ),
-    );
+    // Gate the stream BEFORE turn_done so the accumulated live bubble is
+    // observable; otherwise the whole burst resolves before the first poll and
+    // the assertions could pass against the initial (empty) state vacuously.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    subscribeMock.mockImplementation(async function* () {
+      yield { event: "turn_start", data: {} };
+      yield { event: "text_delta", data: { text: "Hello" } };
+      yield { event: "text_delta", data: { text: " world" } };
+      await gate;
+      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+    });
 
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
-    // The post-turn refetch carries the persisted assistant reply.
+    // Before the reply lands the cache holds only the user message, so the
+    // complete-reply count captured at turn_start is 0.
     qc.setQueryData(
       ["messages", "conv-1"],
       [
+        {
+          id: "u1",
+          conversation_id: "conv-1",
+          seq: 0,
+          role: "user",
+          content: [{ type: "text", text: "q" }],
+          status: "complete",
+          created_at: "",
+        },
+      ],
+    );
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+
+    // Both deltas accumulate into the one live bubble while the turn streams.
+    await waitFor(() => expect(result.current.liveMessage?.text).toBe("Hello world"));
+    expect(result.current.isStreaming).toBe(true);
+
+    // The reply is persisted server-side; the post-turn refetch now carries it
+    // (complete-reply count 0 → 1).
+    qc.setQueryData(
+      ["messages", "conv-1"],
+      [
+        {
+          id: "u1",
+          conversation_id: "conv-1",
+          seq: 0,
+          role: "user",
+          content: [{ type: "text", text: "q" }],
+          status: "complete",
+          created_at: "",
+        },
         {
           id: "a1",
           conversation_id: "conv-1",
@@ -152,30 +191,66 @@ describe("useChatTurn", () => {
         },
       ],
     );
-    const wrapper = ({ children }: PropsWithChildren) => (
-      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+    await act(async () => {
+      release();
+    });
 
+    // turn_done sees the NEW reply land, so the live bubble is dropped.
     await waitFor(() => expect(result.current.liveMessage).toBeNull());
     expect(result.current.isStreaming).toBe(false);
     expect(result.current.error).toBeNull();
   });
 
   test("keeps the live bubble until the refetched messages carry the assistant reply (no flicker)", async () => {
-    subscribeMock.mockImplementation(
-      fromEvents(
-        { event: "turn_start", data: {} },
-        { event: "text_delta", data: { text: "The answer" } },
-        { event: "turn_done", data: { stop_reason: "end_turn" } },
-      ),
-    );
+    // Gate before turn_done so we can observe the streamed bubble being KEPT
+    // while the turn runs, then dropped only once the refetch carries the reply.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    subscribeMock.mockImplementation(async function* () {
+      yield { event: "turn_start", data: {} };
+      yield { event: "text_delta", data: { text: "The answer" } };
+      await gate;
+      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+    });
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
+    // Reply not yet persisted: the cache holds only the user message for now.
     qc.setQueryData(
       ["messages", "conv-1"],
       [
+        {
+          id: "u1",
+          conversation_id: "conv-1",
+          seq: 0,
+          role: "user",
+          content: [{ type: "text", text: "q" }],
+          status: "complete",
+          created_at: "",
+        },
+      ],
+    );
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+
+    // The streamed answer is shown in the live bubble and KEPT during the turn.
+    await waitFor(() => expect(result.current.liveMessage?.text).toBe("The answer"));
+
+    // The persisted reply lands; the turn_done refetch carries it (count 0 → 1).
+    qc.setQueryData(
+      ["messages", "conv-1"],
+      [
+        {
+          id: "u1",
+          conversation_id: "conv-1",
+          seq: 0,
+          role: "user",
+          content: [{ type: "text", text: "q" }],
+          status: "complete",
+          created_at: "",
+        },
         {
           id: "a1",
           conversation_id: "conv-1",
@@ -187,11 +262,11 @@ describe("useChatTurn", () => {
         },
       ],
     );
-    const wrapper = ({ children }: PropsWithChildren) => (
-      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+    await act(async () => {
+      release();
+    });
 
+    // Only now — with the persisted reply present — is the live bubble dropped.
     await waitFor(() => expect(result.current.liveMessage).toBeNull());
   });
 
@@ -234,13 +309,16 @@ describe("useChatTurn", () => {
     // The stream drops mid-turn (no turn_done reaches us) but the reply finished
     // server-side. On stream end the hook must refetch and drop the spinning
     // live bubble instead of leaving it on "thinking…" forever.
-    subscribeMock.mockImplementation(
-      fromEvents(
-        { event: "turn_start", data: {} },
-        { event: "text_delta", data: { text: "partial" } },
-        // stream ends here — NO turn_done
-      ),
-    );
+    // Gate the stream open AFTER the partial so the stuck (spinning) bubble is
+    // observable, then end the stream with NO turn_done to drive the reconcile.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    subscribeMock.mockImplementation(async function* () {
+      yield { event: "turn_start", data: {} };
+      yield { event: "text_delta", data: { text: "partial" } };
+      await gate;
+      // stream ends here — NO turn_done
+    });
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
@@ -263,6 +341,15 @@ describe("useChatTurn", () => {
     );
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
+    // While the stream is open the live bubble spins on the partial text.
+    await waitFor(() => expect(result.current.liveMessage?.text).toBe("partial"));
+    expect(result.current.isStreaming).toBe(true);
+
+    // The stream then ends with no turn_done; reconcile sees the persisted
+    // assistant reply and drops the stale bubble instead of spinning forever.
+    await act(async () => {
+      release();
+    });
     await waitFor(() => expect(result.current.liveMessage).toBeNull());
     expect(result.current.isStreaming).toBe(false);
   });
