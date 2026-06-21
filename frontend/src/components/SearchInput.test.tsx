@@ -40,4 +40,23 @@ describe("SearchInput", () => {
     render(<SearchInput value="" onChange={vi.fn()} id="my-search" ariaLabel="Search" />);
     expect(document.getElementById("my-search")).toBeInTheDocument();
   });
+
+  test("fires onSearch on Enter when the value is non-empty", () => {
+    const onSearch = vi.fn();
+    render(<SearchInput value="hello" onChange={vi.fn()} onSearch={onSearch} ariaLabel="Search" />);
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" });
+    expect(onSearch).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not fire onSearch on Enter when the value is blank", () => {
+    const onSearch = vi.fn();
+    render(<SearchInput value="   " onChange={vi.fn()} onSearch={onSearch} ariaLabel="Search" />);
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" });
+    expect(onSearch).not.toHaveBeenCalled();
+  });
+
+  test("does not throw on Enter when onSearch is not provided", () => {
+    render(<SearchInput value="hello" onChange={vi.fn()} ariaLabel="Search" />);
+    expect(() => fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" })).not.toThrow();
+  });
 });

@@ -34,13 +34,30 @@ export interface Find {
  * @param revision a value that changes when the previewed content changes; when
  *   it does, an open search re-applies against the new content so the count and
  *   match offsets never go stale (e.g. switching files in the same CodeView).
+ * @param initialQuery a parent-controlled query to pre-seed (e.g. a search term
+ *   to highlight on open). A non-empty string opens the widget + paints matches;
+ *   an empty string closes/clears; `undefined` leaves find untouched (the
+ *   Cmd/Ctrl+F-only hosts like CodeView and the chat transcript).
  */
-export function useFind(engine: FindEngine | null, revision?: unknown): Find {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
+export function useFind(
+  engine: FindEngine | null,
+  revision?: unknown,
+  initialQuery?: string,
+): Find {
+  const [open, setOpen] = useState(Boolean(initialQuery));
+  const [query, setQuery] = useState(initialQuery ?? "");
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [count, setCount] = useState(0);
   const [active, setActive] = useState(-1);
+
+  // Re-seed when the parent drives a new initialQuery (e.g. a fresh search). The
+  // painting effect below keys on `query`, so this is all that's needed to
+  // re-highlight. `undefined` means "don't manage the query" (legacy hosts).
+  useEffect(() => {
+    if (initialQuery === undefined) return;
+    setQuery(initialQuery);
+    setOpen(Boolean(initialQuery));
+  }, [initialQuery]);
 
   // Re-run the search whenever the query, case mode, engine, open state, or the
   // previewed content (revision) changes. A blank query (or a closed widget)

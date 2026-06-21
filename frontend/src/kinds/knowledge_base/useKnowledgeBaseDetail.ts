@@ -3,11 +3,10 @@
 // All data + mutations for the KB detail surface, extracted so the page stays a
 // thin view. Documents are page-paginated (server offset) with a debounced
 // server-side title filter (`q`).
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/errors";
-import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { usePagedList, usePageClamp } from "@/lib/hooks/usePagedList";
 import {
   checkSources,
@@ -46,21 +45,18 @@ export function useKnowledgeBaseDetail(name: string) {
   // The latest source-check report; non-null opens the report dialog.
   const [sourceReport, setSourceReport] = useState<SourceCheckResponse | null>(null);
 
-  // Page-based pagination + debounced server-side title filter (`q`).
+  // Page-based pagination (server offset).
   const {
     page: docPage,
     setPage: setDocPage,
     pageSize: docPageSize,
     setPageSize: setDocPageSize,
-    filter: docFilter,
-    setFilter: setDocFilter,
-    filterApplied: docFilterApplied,
     offset: docOffset,
   } = usePagedList(DEFAULT_DOCS_PAGE_SIZE);
 
   const docsQuery = useQuery({
-    queryKey: ["kb-documents", name, docPage, docPageSize, docFilterApplied],
-    queryFn: () => listDocuments(name, docPageSize, docOffset, docFilterApplied),
+    queryKey: ["kb-documents", name, docPage, docPageSize],
+    queryFn: () => listDocuments(name, docPageSize, docOffset),
     enabled: Boolean(name),
     // Keep the prior page's rows + total while the next page loads, so the page
     // count doesn't transiently read as 1 and trip the clamp during a forward nav.
@@ -157,18 +153,24 @@ export function useKnowledgeBaseDetail(name: string) {
     },
   });
 
-  // Multi-select bulk delete: fan out deleteDocument over the chosen ids with
-  // Promise.allSettled (one summary toast + one invalidate burst), then drop the
-  // viewer selection if the currently-viewed doc was among those deleted.
-  const bulk = useBulkMutate({
-    invalidate: [
-      ["kb-documents", name],
-      ["kb-metrics", name],
-    ],
-  });
-  const bulkDelete = async (ids: string[]) => {
-    await bulk.run(ids, (id) => deleteDocument(name, id));
-    if (selectedId && ids.includes(selectedId)) setSelectedId(null);
+  // Recall mode: a search filters the tree to the deduped hit docs and opens the
+  // top hit highlighted; clearing the box returns to the full paged list. Passages
+  // carry the title, so hit rows render without an extra fetch.
+  const recalling = searchResult !== null;
+  const recallDocs: { id: string; title: string }[] = [];
+  const seenHits = new Set<string>();
+  for (const p of searchResult?.passages ?? []) {
+    if (seenHits.has(p.document_id)) continue;
+    seenHits.add(p.document_id);
+    recallDocs.push({ id: p.document_id, title: p.title });
+  }
+  useEffect(() => {
+    // Auto-select the top hit so its match opens highlighted in the viewer.
+    if (searchResult?.passages.length) setSelectedId(searchResult.passages[0].document_id);
+  }, [searchResult]);
+  const onQueryChange = (value: string) => {
+    setQuery(value);
+    if (!value) setSearchResult(null); // clearing the box exits recall mode
   };
 
   const runSearch = () => search.mutate();
@@ -216,8 +218,6 @@ export function useKnowledgeBaseDetail(name: string) {
     setDocPageSize,
     docTotal,
     docPageCount,
-    docFilter,
-    setDocFilter,
     metricsQuery,
     kbQuery,
     docDetailQuery,
@@ -233,8 +233,9 @@ export function useKnowledgeBaseDetail(name: string) {
     search,
     runSearch,
     selectDoc,
-    bulkDelete,
-    bulkDeletePending: bulk.isPending,
+    recalling,
+    recallDocs,
+    onQueryChange,
     confirmDelete,
     performDelete,
     deleteOpen,

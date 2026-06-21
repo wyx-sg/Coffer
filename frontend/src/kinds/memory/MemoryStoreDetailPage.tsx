@@ -15,6 +15,7 @@ import { usePageClamp } from "@/lib/hooks/usePagedList";
 import {
   clearFacts,
   deleteFact,
+  getFact,
   getMemoryStore,
   getMemoryStoreMetrics,
   listFacts,
@@ -68,6 +69,31 @@ export function MemoryStoreDetailPage() {
   const factPageCount = Math.max(1, Math.ceil(factTotal / factPageSize));
   // Pull the page back into range when the total shrinks (last page emptied).
   usePageClamp(factPage, factPageCount, setFactPage);
+
+  // --- recall mode -----------------------------------------------------------
+  // Running a recall filters the left tree to the matched facts and opens the
+  // top hit highlighted; clearing the search box returns to the full paged list.
+  const recalling = recallResult !== null;
+  // Unique hit fact ids in rank order (a fact can match via several chunks).
+  const hitIds = recallResult ? [...new Set(recallResult.hits.map((h) => h.id))] : [];
+  // Recall returns only ranked snippets; fetch the full facts so the rows
+  // (name + actor badge) and the viewer (full body) render like normal mode.
+  const recallFactsQuery = useQuery({
+    queryKey: ["memory-recall-facts", store, hitIds],
+    queryFn: async () => {
+      const facts = await Promise.all(hitIds.map((id) => getFact(store, id).catch(() => null)));
+      return facts.filter((f): f is FactOut => f !== null);
+    },
+    enabled: recalling && hitIds.length > 0,
+  });
+  const recallFacts = recallFactsQuery.data ?? [];
+  const recallLoading = recalling && hitIds.length > 0 && recallFactsQuery.isPending;
+  // Auto-select the top hit when a recall resolves so its match opens highlighted.
+  useEffect(() => {
+    const facts = recallFactsQuery.data;
+    if (recalling && facts && facts.length > 0) setSelected(facts[0]);
+  }, [recallFactsQuery.data, recalling]);
+
   const metricsQuery = useQuery({
     queryKey: ["memory-metrics", store],
     queryFn: () => getMemoryStoreMetrics(store),
@@ -90,8 +116,9 @@ export function MemoryStoreDetailPage() {
   // Keep the selected fact in sync with the freshly-loaded list when it's on the
   // current page; otherwise (it's on another page) keep showing the captured
   // selection so paging the tree doesn't blank the viewer.
+  const sourceFacts = recalling ? recallFacts : (factsQuery.data?.facts ?? []);
   const liveSelected = selected
-    ? (factsQuery.data?.facts.find((f) => f.id === selected.id) ?? selected)
+    ? (sourceFacts.find((f) => f.id === selected.id) ?? selected)
     : null;
 
   const del = useMutation({
@@ -114,6 +141,10 @@ export function MemoryStoreDetailPage() {
   });
 
   const selectFact = (f: FactOut) => setSelected(f);
+  const onQueryChange = (value: string) => {
+    setQuery(value);
+    if (!value) setRecallResult(null); // clearing the search box exits recall mode
+  };
   const confirmDelete = () => {
     if (!liveSelected) return;
     setDeleteOpen(true);
@@ -141,18 +172,19 @@ export function MemoryStoreDetailPage() {
 
       <MemoryRecallPanel
         query={query}
-        result={recallResult}
         error={recallM.error}
         isPending={recallM.isPending}
-        onQueryChange={setQuery}
+        onQueryChange={onQueryChange}
         onRecall={() => recallM.mutate()}
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(220px,300px)_1fr]">
         <MemoryFactTree
-          facts={factsQuery.data}
+          facts={recalling ? { facts: recallFacts, total: recallFacts.length } : factsQuery.data}
           selectedId={liveSelected?.id ?? null}
-          isLoading={factsQuery.isPending}
+          isLoading={recalling ? recallLoading : factsQuery.isPending}
+          hidePagination={recalling}
+          emptyLabel={recalling ? t("memory.detail.noMatches") : undefined}
           page={factPage}
           pageCount={factPageCount}
           pageSize={factPageSize}
@@ -163,6 +195,7 @@ export function MemoryStoreDetailPage() {
         />
         <MemoryFactViewer
           fact={liveSelected ?? undefined}
+          initialQuery={recalling ? query : ""}
           isDeletePending={del.isPending}
           onDelete={confirmDelete}
         />

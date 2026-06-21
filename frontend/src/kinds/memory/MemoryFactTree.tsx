@@ -25,6 +25,10 @@ interface Props {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   onSelect: (fact: FactOut) => void;
+  /** Hide the pager — used in recall mode where the list IS the hit set. */
+  hidePagination?: boolean;
+  /** Override the empty-state text (e.g. "no matches" in recall mode). */
+  emptyLabel?: string;
 }
 
 export function MemoryFactTree({
@@ -38,6 +42,8 @@ export function MemoryFactTree({
   onPageChange,
   onPageSizeChange,
   onSelect,
+  hidePagination = false,
+  emptyLabel,
 }: Props) {
   const { t } = useTranslation();
   const items = facts?.facts ?? [];
@@ -51,7 +57,9 @@ export function MemoryFactTree({
       {isLoading ? (
         <p className="px-1 text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : total === 0 ? (
-        <p className="px-1 text-sm text-muted-foreground">{t("memory.detail.empty")}</p>
+        <p className="px-1 text-sm text-muted-foreground">
+          {emptyLabel ?? t("memory.detail.empty")}
+        </p>
       ) : (
         // total > 0: render the pager even when this page is empty (e.g. the last
         // page was just emptied) so the clamp's "previous page" stays reachable.
@@ -83,14 +91,16 @@ export function MemoryFactTree({
             </ul>
           ) : null}
 
-          <Pagination
-            page={page}
-            pageCount={pageCount}
-            total={total}
-            pageSize={pageSize}
-            onPageChange={onPageChange}
-            onPageSizeChange={onPageSizeChange}
-          />
+          {hidePagination ? null : (
+            <Pagination
+              page={page}
+              pageCount={pageCount}
+              total={total}
+              pageSize={pageSize}
+              onPageChange={onPageChange}
+              onPageSizeChange={onPageSizeChange}
+            />
+          )}
         </>
       )}
     </aside>
