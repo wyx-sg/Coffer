@@ -60,8 +60,11 @@ describe("McpServerDetailPage", () => {
       expect(screen.getByText("fs")).toBeInTheDocument();
     });
     expect(screen.getByText("Filesystem MCP")).toBeInTheDocument();
-    // The Overview tab shows the full config as a JSON block.
-    expect(screen.getByText(/"command": "npx"/)).toBeInTheDocument();
+    // The Overview tab shows the full config in a read-only CodeMirror JSON block;
+    // tokens split across spans, so assert on the editor's text.
+    await waitFor(() => {
+      expect(document.querySelector(".cm-content")?.textContent).toContain('"command": "npx"');
+    });
   });
 
   test("enable switch fires disable mutation when enabled", async () => {

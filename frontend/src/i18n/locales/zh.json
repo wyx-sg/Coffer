@@ -165,6 +165,7 @@
       "statusFilter": "状态",
       "toggleAria": "切换 {{kind}} {{key}}",
       "noSchema": "无输入结构。",
+      "schemaLabel": "输入结构",
       "header": {
         "name": "名称",
         "enabled": "已启用"

@@ -122,7 +122,7 @@ export function CodeView({
 
   return (
     <div
-      className={cn("relative overflow-hidden rounded border bg-muted/30", className)}
+      className={cn("relative overflow-hidden rounded border", className)}
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
           e.preventDefault();
@@ -137,6 +137,8 @@ export function CodeView({
       <CodeMirror
         value={value}
         editable={false}
+        readOnly
+        theme="none"
         height={height}
         maxHeight={maxHeight}
         extensions={extensions}

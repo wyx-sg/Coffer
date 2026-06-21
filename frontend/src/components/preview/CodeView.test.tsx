@@ -21,4 +21,25 @@ describe("CodeView", () => {
     const widget = screen.getByRole("search");
     expect(within(widget).getByRole("textbox")).toBeInTheDocument();
   });
+
+  test("find reports the match count over the whole document", () => {
+    // Match counting reads the full doc (not the virtualized viewport), so it is
+    // reliable in jsdom even when CodeMirror only renders the first lines.
+    const { container } = render(
+      <CodeView value={"alpha beta alpha gamma alpha"} filename="a.txt" />,
+    );
+    fireEvent.keyDown(container.firstChild as HTMLElement, { key: "f", ctrlKey: true });
+    fireEvent.change(screen.getByPlaceholderText(/find/i), { target: { value: "alpha" } });
+    expect(screen.getByText("1/3")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(screen.getByText("2/3")).toBeInTheDocument();
+  });
+
+  test("Escape closes the find widget", () => {
+    const { container } = render(<CodeView value="hello" filename="a.txt" />);
+    fireEvent.keyDown(container.firstChild as HTMLElement, { key: "f", ctrlKey: true });
+    expect(screen.getByRole("search")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByPlaceholderText(/find/i), { key: "Escape" });
+    expect(screen.queryByRole("search")).not.toBeInTheDocument();
+  });
 });
