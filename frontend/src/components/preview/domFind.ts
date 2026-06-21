@@ -6,6 +6,10 @@
 // pure, testable core; highlight painting degrades gracefully where the API is
 // absent (older webviews / jsdom). CodeMirror previews use findHighlight.ts.
 
+// Highlight-registry names are module-global and styled by fixed ::highlight()
+// rules in index.css, so this assumes a single active rendered-Markdown find at
+// a time. That holds today (each find surface owns its own route/right pane);
+// if two were ever visible at once, they'd share these names.
 const MATCH = "coffer-find";
 const ACTIVE = "coffer-find-active";
 

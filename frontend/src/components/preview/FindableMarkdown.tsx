@@ -20,7 +20,9 @@ interface FindableMarkdownProps {
 
 export function FindableMarkdown({ children, className }: FindableMarkdownProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { find, inputRef, onKeyDown } = useDomFind(scrollRef);
+  // Pass the markdown source as the revision so an open search re-applies when
+  // the previewed document changes (e.g. selecting a different KB doc / fact).
+  const { find, inputRef, onKeyDown } = useDomFind(scrollRef, children);
 
   return (
     <div className="relative">

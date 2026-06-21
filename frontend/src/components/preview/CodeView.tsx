@@ -86,7 +86,9 @@ export function CodeView({
 }: CodeViewProps) {
   const [engine, setEngine] = useState<FindEngine | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const find = useFind(engine);
+  // `value` is the revision: re-apply an open search when the file content
+  // changes (the same CodeView instance is reused as the user switches files).
+  const find = useFind(engine, value);
 
   // Keep the CM keymap's find trigger pointing at the latest openFind without
   // rebuilding the (memoized) extension array on every render.

@@ -15,7 +15,10 @@ export interface DomFind {
   onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
 }
 
-export function useDomFind(containerRef: RefObject<HTMLElement | null>): DomFind {
+export function useDomFind(
+  containerRef: RefObject<HTMLElement | null>,
+  revision?: unknown,
+): DomFind {
   const rangesRef = useRef<Range[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -40,7 +43,7 @@ export function useDomFind(containerRef: RefObject<HTMLElement | null>): DomFind
     [containerRef],
   );
 
-  const find = useFind(engine);
+  const find = useFind(engine, revision);
 
   useEffect(() => {
     if (find.open) inputRef.current?.focus();

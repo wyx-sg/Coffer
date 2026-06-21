@@ -35,6 +35,17 @@ describe("CodeView", () => {
     expect(screen.getByText("2/3")).toBeInTheDocument();
   });
 
+  test("re-applies an open search when the file content changes", () => {
+    // Switching files reuses the same CodeView instance; an open find must
+    // re-count against the new content instead of going stale.
+    const { container, rerender } = render(<CodeView value={"alpha alpha"} filename="a.txt" />);
+    fireEvent.keyDown(container.firstChild as HTMLElement, { key: "f", ctrlKey: true });
+    fireEvent.change(screen.getByPlaceholderText(/find/i), { target: { value: "alpha" } });
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+    rerender(<CodeView value={"alpha beta alpha gamma alpha"} filename="b.txt" />);
+    expect(screen.getByText("1/3")).toBeInTheDocument();
+  });
+
   test("Escape closes the find widget", () => {
     const { container } = render(<CodeView value="hello" filename="a.txt" />);
     fireEvent.keyDown(container.firstChild as HTMLElement, { key: "f", ctrlKey: true });

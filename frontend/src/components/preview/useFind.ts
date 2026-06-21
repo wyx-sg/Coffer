@@ -29,15 +29,22 @@ export interface Find {
   prev: () => void;
 }
 
-export function useFind(engine: FindEngine | null): Find {
+/**
+ * @param engine   the backend that paints/navigates matches (CodeMirror or DOM).
+ * @param revision a value that changes when the previewed content changes; when
+ *   it does, an open search re-applies against the new content so the count and
+ *   match offsets never go stale (e.g. switching files in the same CodeView).
+ */
+export function useFind(engine: FindEngine | null, revision?: unknown): Find {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [count, setCount] = useState(0);
   const [active, setActive] = useState(-1);
 
-  // Re-run the search whenever the query, case mode, engine, or open state
-  // changes. A blank query (or a closed widget) clears any existing highlights.
+  // Re-run the search whenever the query, case mode, engine, open state, or the
+  // previewed content (revision) changes. A blank query (or a closed widget)
+  // clears any existing highlights.
   useEffect(() => {
     if (!engine) return;
     if (!open || query === "") {
@@ -54,7 +61,7 @@ export function useFind(engine: FindEngine | null): Find {
     } else {
       setActive(-1);
     }
-  }, [engine, open, query, caseSensitive]);
+  }, [engine, open, query, caseSensitive, revision]);
 
   const openFind = useCallback(() => setOpen(true), []);
 
