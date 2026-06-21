@@ -22,6 +22,7 @@ from coffer.infrastructure.knowledge.paths import (
     consolidation_log_path,
     inbox_dir,
     knowledge_index_path,
+    rules_path,
     topic_path,
 )
 
@@ -412,3 +413,70 @@ async def test_index_and_changelog_never_surface_in_recall(mem) -> None:
     for h in hits:
         assert "INDEX.md" not in h.source
         assert "consolidation-log.md" not in h.source
+
+
+@pytest.mark.acceptance(
+    spec="007-memory",
+    scenario="the organizer routes a rule-shaped note into the rules lane",
+)
+async def test_organizer_routes_rule_into_rules_lane(mem) -> None:
+    await mem.service.ensure_store("global")
+    # Remember a rule-shaped note and an ordinary deploy note.
+    await _remember(mem, body="Always run make verify before pushing to CI.", name="rule-note")
+    await _remember(mem, body="Deploy via `make release`; never push tags.", name="deploy-note")
+
+    rule_text = "Always run make verify before pushing to CI."
+    rule_json = json.dumps(
+        {
+            "is_rule": True,
+            "topic_slug": "",
+            "topic_title": "",
+            "topic_description": "",
+            "markdown": rule_text,
+        }
+    )
+    topic_response = _topic_json(
+        "deploy-conventions",
+        "Deploy conventions",
+        "how we ship",
+        "# Deploy\n\nDeploy via `make release`; never push tags directly.",
+    )
+
+    llm = _ScriptedLlm([rule_json, topic_response])
+    org = _make_organizer(mem, llm, _Models(_model()))
+
+    result = await org.organize(store_name="global")
+
+    assert result.status == "organized"
+    assert result.rules_appended == 1
+
+    store_dir = (await mem.service.resolved_store("global")).store_dir
+    rpath = rules_path(store_dir)
+    assert rpath.exists(), "rules/rules.md should exist"
+    rules_text = rpath.read_text(encoding="utf-8")
+    assert rule_text in rules_text
+
+    # The rule text must NOT appear in any knowledge/<topic>.md
+    knowledge_lane = store_dir / "knowledge"
+    for md_file in knowledge_lane.glob("*.md"):
+        if md_file.name == "INDEX.md":
+            continue
+        content = md_file.read_text(encoding="utf-8")
+        assert rule_text not in content, f"rule text leaked into topic doc {md_file.name}"
+
+    # Ordinary item became a topic doc
+    assert topic_path(store_dir, "deploy-conventions").exists()
+
+    # Inbox drained (both items processed)
+    assert list(inbox_dir(store_dir).glob("*.md")) == []
+    assert result.items_processed == 2
+
+    # topics_created counts only non-rule items
+    assert result.topics_created == 1
+
+    # Recall does NOT return a hit from rules/
+    hits, _mode, _fb = await mem.service.recall_in_store(
+        store_name="global", query="make verify", scope="global"
+    )
+    for h in hits:
+        assert "/rules/" not in h.source, f"rules/ path appeared in recall: {h.source}"

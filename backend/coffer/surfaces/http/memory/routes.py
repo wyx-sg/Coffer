@@ -1,11 +1,7 @@
 """/api/v1/memory_stores/* routes (spec 007 redesign).
 
-Domain errors propagate to the app-wide handler in `surfaces/http/errors.py`,
-which renders the standard `{error: {code, message, details}}` envelope. The
-memory face has NO LLM-provider / 503 path: writes hand Coffer a clean fact and
-``recall`` degrades vector→keyword (flagged) instead of erroring.
-
-Actor comes from ``X-Coffer-Actor`` and is normalised to ``agent``/``user``.
+Domain errors → app-wide handler → ``{error: {code, message, details}}``.
+No LLM-provider / 503 path. Actor from ``X-Coffer-Actor``.
 """
 
 from __future__ import annotations
@@ -50,6 +46,7 @@ from coffer.surfaces.http.memory.schemas import (
     RecallRequest,
     RecallResponse,
     ReorgResponse,
+    RulesOut,
     Scope,
 )
 
@@ -65,8 +62,6 @@ def _actor(x_coffer_actor: str | None = Header(default=None)) -> Actor:
 
 
 def _scope_of(store_name: str) -> tuple[Scope, str]:
-    """Derive (scope, project_id) from a store name. ``global`` → the sentinel;
-    ``project-<ulid>`` → the project ULID."""
     if store_name == GLOBAL_STORE_NAME:
         return "global", WORKSPACE_GLOBAL_PROJECT_ID
     if store_name.startswith("project-"):
@@ -98,11 +93,9 @@ def _to_store_out(
 async def _store_out(
     r: Resource, roots: object, mem_svc: MemoryService, *, label: str | None = None
 ) -> MemoryStoreOut:
-    """``_to_store_out`` plus the project root, store dir, fact count, and label."""
     scope, _ = _scope_of(r.name)
     project_root = None if scope == "global" else await roots.get(r.name)  # type: ignore[attr-defined]
     try:
-        # KB14: cheap indexed count — skips the per-store du_bytes walk.
         fact_count = await mem_svc.fact_count(store_name=r.name)
     except Exception:
         fact_count = 0
@@ -122,7 +115,6 @@ async def list_stores(
     roots: object = Depends(get_project_root_repo),
     labels: object = Depends(get_store_label_repo),
 ) -> MemoryStoreListOut:
-    # Auto-provision the global store so it always appears in the list.
     await mem_svc.ensure_store(GLOBAL_STORE_NAME)
     rs = await svc.list(kind=KIND_MEMORY)
     label_map = await labels.get_many([r.name for r in rs])  # type: ignore[attr-defined]
@@ -165,9 +157,7 @@ async def update_store(
         raise MemoryStoreNotFound(name) from exc
     current = MemoryStoreConfig.model_validate(existing.config)
     patch = body.model_dump(exclude_unset=True)
-    merged = current.model_copy(update=patch)
-    # Re-run validators by round-tripping through the model constructor.
-    validated = MemoryStoreConfig.model_validate(merged.model_dump())
+    validated = MemoryStoreConfig.model_validate(current.model_copy(update=patch).model_dump())
     updated = await svc.update_config(
         ResourceRef(KIND_MEMORY, name),
         new_config=validated.model_dump(mode="json"),
@@ -186,8 +176,7 @@ async def update_store_label(
     roots: object = Depends(get_project_root_repo),
     labels: object = Depends(get_store_label_repo),
 ) -> MemoryStoreOut:
-    """Set or clear a store's display label (007 FR-017c). An empty / whitespace
-    body clears it, reverting to the derived (project-dir) or fallback name."""
+    """Set or clear a store's display label (007 FR-017c)."""
     if name == GLOBAL_STORE_NAME:
         await mem_svc.ensure_store(name)
     try:
@@ -233,9 +222,6 @@ async def add_fact(
     actor: Actor = Depends(_actor),  # noqa: B008
 ) -> FactOut:
     scope, _ = _scope_of(name)
-    # ``ensure_store`` provisions well-formed names (``global`` /
-    # ``project-<ulid>``) lazily and 404s anything else — an arbitrary POST
-    # must never manufacture a store under a mangled name.
     await mem_svc.ensure_store(name)
     fact = await mem_svc.add_fact_to_store(
         store_name=name,
@@ -361,8 +347,7 @@ async def organize(
     mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     organizer: object = Depends(get_organizer_service),
 ) -> OrganizeResponse:
-    """Drain ``knowledge/inbox/`` into topic docs (explicit trigger; no auto-fire).
-    ``no_model`` / ``empty`` are clean no-ops, not errors."""
+    """Drain inbox into topic docs / rules lane (explicit trigger; no auto-fire)."""
     if name == GLOBAL_STORE_NAME:
         await mem_svc.ensure_store(name)
     result = await organizer.organize(store_name=name)  # type: ignore[attr-defined]
@@ -371,9 +356,24 @@ async def organize(
         items_processed=result.items_processed,
         topics_created=result.topics_created,
         topics_updated=result.topics_updated,
+        rules_appended=result.rules_appended,
         skipped=result.skipped,
         model=result.model,
     )
+
+
+# --- rules ------------------------------------------------------------------
+
+
+@router.get("/{name}/rules", response_model=RulesOut)
+async def get_rules(
+    name: str,
+    mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
+) -> RulesOut:
+    """Return ``rules/rules.md`` text; ``text=None`` when no rules exist yet."""
+    if name == GLOBAL_STORE_NAME:
+        await mem_svc.ensure_store(name)
+    return RulesOut(text=await mem_svc.get_rules(store_name=name))
 
 
 # --- reorg ------------------------------------------------------------------
@@ -385,8 +385,7 @@ async def reorg(
     mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     reorg_svc: object = Depends(get_reorg_service),
 ) -> ReorgResponse:
-    """Agentic reorg loop over topic docs (explicit trigger; no auto-fire).
-    Superseded content is archived; ``no_model``/``empty`` are no-ops."""
+    """Agentic reorg loop over topic docs (explicit trigger; no auto-fire)."""
     if name == GLOBAL_STORE_NAME:
         await mem_svc.ensure_store(name)
     result = await reorg_svc.reorg(store_name=name)  # type: ignore[attr-defined]

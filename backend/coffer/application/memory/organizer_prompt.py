@@ -31,10 +31,14 @@ You are Coffer's memory organizer. You maintain a small set of coherent topic \
 documents out of raw remembered notes.
 
 You are given ONE new note and zero or more CANDIDATE existing topic documents. \
-Either MERGE the note into the single best-fitting candidate — preserving ALL of \
-that document's existing content and any human edits, integrating the new \
-information, and removing only exact duplicates — or CREATE a new topic when none \
-of the candidates fits.
+First, decide if the note is a BEHAVIOURAL RULE — a persistent do/don't, \
+always/never, must/should directive about HOW to work (e.g. "always run make \
+verify before pushing", "never commit secrets"). If it is, set is_rule to true \
+and put the single-line rule text in the markdown field. Otherwise set is_rule \
+to false and either MERGE the note into the single best-fitting candidate — \
+preserving ALL of that document's existing content and any human edits, \
+integrating the new information, and removing only exact duplicates — or CREATE \
+a new topic when none of the candidates fits.
 
 Rules:
 - NEVER delete information. Keep the result concise and well-structured with \
@@ -43,11 +47,14 @@ Markdown headings.
 the integration), not just the new part.
 - When creating, invent a short kebab-case topic_slug.
 
-Return ONLY a JSON object with these exact string fields:
-  topic_slug        — kebab-case slug (e.g. "deploy-conventions")
-  topic_title       — short human-readable title
-  topic_description — one-line summary
-  markdown          — the FULL topic document body (Markdown)
+Return ONLY a JSON object with these exact fields:
+  is_rule           — boolean: true if this is a behavioural rule, false otherwise
+  topic_slug        — kebab-case slug (e.g. "deploy-conventions"); empty string \
+when is_rule is true
+  topic_title       — short human-readable title; empty string when is_rule is true
+  topic_description — one-line summary; empty string when is_rule is true
+  markdown          — the FULL topic document body (Markdown), OR the single-line \
+rule text when is_rule is true
 
 Return ONLY the JSON object — no prose before or after.
 """
@@ -63,6 +70,7 @@ class OrganizedTopic:
     topic_title: str
     topic_description: str
     markdown: str
+    is_rule: bool = False
 
 
 def build_user_prompt(*, item_body: str, candidates: list[TopicDoc]) -> str:
@@ -104,6 +112,31 @@ def parse_organized_topic(raw: str) -> OrganizedTopic | None:
         logger.debug("organizer: expected a JSON object, got %s", type(data).__name__)
         return None
 
+    # Parse is_rule first — it controls validation for the remaining fields.
+    is_rule = bool(data.get("is_rule", False))
+
+    try:
+        markdown = str(data["markdown"]).strip()
+    except KeyError:
+        logger.debug("organizer: response missing 'markdown' key: %r", data)
+        return None
+
+    if not markdown:
+        logger.debug("organizer: response has empty markdown")
+        return None
+
+    if is_rule:
+        # Rules only require the rule text in markdown; slug/title/description
+        # may be empty or absent (the rule goes to rules/rules.md, not a topic doc).
+        return OrganizedTopic(
+            topic_slug="",
+            topic_title="",
+            topic_description="",
+            markdown=markdown,
+            is_rule=True,
+        )
+
+    # Non-rule path: strict validation of all topic fields.
     try:
         # Normalize to lowercase: slugs are filenames, so a case variant (e.g.
         # "Realm" vs an on-disk "realm.md") must not be treated as a different
@@ -112,12 +145,11 @@ def parse_organized_topic(raw: str) -> OrganizedTopic | None:
         slug = str(data["topic_slug"]).strip().lower()
         title = str(data["topic_title"]).strip()
         description = str(data["topic_description"]).strip()
-        markdown = str(data["markdown"]).strip()
     except KeyError:
         logger.debug("organizer: response missing a required key: %r", data)
         return None
 
-    if not (slug and title and description and markdown):
+    if not (slug and title and description):
         logger.debug("organizer: response has an empty required field")
         return None
     if _DOTS_ONLY_RE.fullmatch(slug) or not _SAFE_SLUG_RE.fullmatch(slug):
@@ -129,4 +161,5 @@ def parse_organized_topic(raw: str) -> OrganizedTopic | None:
         topic_title=title,
         topic_description=description,
         markdown=markdown,
+        is_rule=False,
     )

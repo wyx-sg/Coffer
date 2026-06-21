@@ -1,21 +1,9 @@
 """OrganizerService — the internal-LLM inbox→topic-doc consolidation (spec 007).
 
-On an explicit ``organize`` trigger (REST/CLI; no auto-fire in this PR), drains a
-store's ``knowledge/inbox/`` into a small set of coherent ``knowledge/<slug>.md``
-topic documents using Coffer's internal model via a one-shot completion per item,
-maintains ``INDEX.md``, and records a non-blocking consolidation changelog.
-
-Safety invariants (asserted by tests):
-- An inbox item is deleted ONLY after its content is successfully written into a
-  topic doc; a skipped item (LLM/parse failure) stays in the inbox.
-- ``organize`` never hard-deletes a topic doc; it overwrites with merged content
-  the LLM was given the prior content for, so human edits survive (incremental
-  merge, never a from-scratch regeneration).
-- A malformed LLM response skips the item — no topic doc is written or corrupted.
-
-The langchain LLM call stays in ``infrastructure.chat`` (Contract 9); this service
-reaches it only through the injected ``LlmCompletionPort`` (Contract 5e: a
-memory-local port, NOT ``application.distill``).
+Drains ``knowledge/inbox/`` into coherent topic docs (one LLM call per item) or the
+rules lane (``rules/rules.md``) on an explicit trigger. Safety invariants: inbox
+items are deleted only after their content is safely written; a parse/LLM failure
+skips the item (leaves it in the inbox, never corrupts anything).
 """
 
 from __future__ import annotations
@@ -49,12 +37,13 @@ from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.memory.config import MemoryStoreConfig
 from coffer.domain.memory.scope import ResolvedScope
 from coffer.domain.resource import ResourceRef
-from coffer.infrastructure.knowledge.paths import knowledge_dir, topic_path
+from coffer.infrastructure.knowledge.paths import knowledge_dir, rules_path, topic_path
 from coffer.infrastructure.memory.files import (
     FactFile,
     delete_fact_file,
     list_inbox_items,
 )
+from coffer.infrastructure.memory.rules_files import append_rule
 from coffer.infrastructure.memory.topic_files import (
     TopicDoc,
     append_changelog,
@@ -67,16 +56,11 @@ from coffer.infrastructure.memory.topic_files import (
 
 logger = logging.getLogger(__name__)
 
-#: How many candidate topic docs to hand the LLM per item (no LLM on this step).
 _TOP_K_CANDIDATES = 3
 
-#: ``store_name -> ResolvedScope`` (validates the store exists).
 ResolveStoreFn = Callable[[str], Awaitable[ResolvedScope]]
-#: ``store_name -> MemoryStoreConfig``.
 ConfigFn = Callable[[str], Awaitable[MemoryStoreConfig]]
-#: ``store_name, project_id -> StoreRef``.
 StoreRefFn = Callable[[str, str], StoreRef]
-#: ``() -> datetime`` (injectable clock).
 NowFn = Callable[[], datetime]
 
 
@@ -84,12 +68,13 @@ NowFn = Callable[[], datetime]
 class OrganizeResult:
     """The outcome of one ``organize`` run."""
 
-    status: str  # "organized" | "no_model" | "empty"
+    status: str
     items_processed: int
     topics_created: int
     topics_updated: int
-    skipped: int  # items left in inbox due to an LLM/parse failure
-    model: str | None  # display name of the internal model used
+    rules_appended: int
+    skipped: int
+    model: str | None
 
 
 class OrganizerService:
@@ -136,11 +121,11 @@ class OrganizerService:
         model = await self._models.get_default()
         if model is None:
             # No internal model → a clean no-op; the inbox is untouched.
-            return OrganizeResult("no_model", 0, 0, 0, 0, None)
+            return OrganizeResult("no_model", 0, 0, 0, 0, 0, None)
 
         items = await asyncio.to_thread(list_inbox_items, store_dir)
         if not items:
-            return OrganizeResult("empty", 0, 0, 0, 0, model.display_name)
+            return OrganizeResult("empty", 0, 0, 0, 0, 0, model.display_name)
 
         config = await self._get_config(store_name)
         # Reconcile once up front so candidate retrieval sees the current lane
@@ -148,7 +133,7 @@ class OrganizerService:
         embedding = await self._resolve_embedding() if config.vector_enabled else None
         await self._reconciler.reconcile(store=ref, embedding=embedding)
 
-        created = updated = skipped = processed = 0
+        created = updated = skipped = processed = rules = 0
         for item in items:
             outcome = await self._organize_item(
                 item=item, store_dir=store_dir, ref=ref, model=model
@@ -156,9 +141,10 @@ class OrganizerService:
             if outcome is None:
                 skipped += 1
                 continue
-            was_update = outcome
             processed += 1
-            if was_update:
+            if outcome == "rule":
+                rules += 1
+            elif outcome is True:
                 updated += 1
             else:
                 created += 1
@@ -175,9 +161,12 @@ class OrganizerService:
             processed=processed,
             created=created,
             updated=updated,
+            rules=rules,
             skipped=skipped,
         )
-        return OrganizeResult("organized", processed, created, updated, skipped, model.display_name)
+        return OrganizeResult(
+            "organized", processed, created, updated, rules, skipped, model.display_name
+        )
 
     # ------------------------------------------------------------------
     # Per-item loop
@@ -185,14 +174,17 @@ class OrganizerService:
 
     async def _organize_item(
         self, *, item: FactFile, store_dir: Path, ref: StoreRef, model: ModelConfig
-    ) -> bool | None:
-        """Process one inbox item. Returns ``True`` (merged into an existing
-        topic), ``False`` (created a new topic), or ``None`` (skipped — the item
-        stays in the inbox, no doc written/corrupted)."""
+    ) -> bool | str | None:
+        """Process one inbox item: ``"rule"`` (rules lane), ``True`` (merge), ``False``
+        (create), or ``None`` (skipped — item stays in inbox)."""
         candidates = await self._retrieve_candidates(ref=ref, store_dir=store_dir, item=item)
         parsed = await self._merge_once(item=item, candidates=candidates, model=model)
         if parsed is None:
             return None
+        if parsed.is_rule:
+            # Rule path: append to rules/rules.md, drain inbox; skip clobber guard.
+            await self._append_rule_and_drain(parsed=parsed, item=item, store_dir=store_dir)
+            return "rule"
         parsed = await self._guard_against_clobber(
             parsed=parsed,
             item=item,
@@ -204,12 +196,22 @@ class OrganizerService:
             return None
         return await self._write_and_drain(parsed=parsed, item=item, store_dir=store_dir)
 
+    async def _append_rule_and_drain(
+        self, *, parsed: OrganizedTopic, item: FactFile, store_dir: Path
+    ) -> None:
+        """Append the rule, drain the inbox item (only after successful append), log."""
+        await asyncio.to_thread(append_rule, rules_path(store_dir), parsed.markdown)
+        await asyncio.to_thread(delete_fact_file, item.path)
+        await asyncio.to_thread(
+            append_changelog,
+            store_dir,
+            f"{self._now().isoformat()} · rule appended ← inbox item '{item.fact.id}'",
+        )
+
     async def _merge_once(
         self, *, item: FactFile, candidates: list[TopicDoc], model: ModelConfig
     ) -> OrganizedTopic | None:
-        """One organizer LLM call + parse. Returns ``None`` on a transport/parse
-        failure — the caller skips the item (it stays in the inbox; nothing is
-        written or corrupted)."""
+        """One LLM call + parse; ``None`` on failure (item stays in inbox)."""
         try:
             raw = await self._llm.complete(
                 system=ORGANIZER_SYSTEM,
@@ -218,7 +220,6 @@ class OrganizerService:
                 credential_resolver=self._credential_resolver,
             )
         except Exception:
-            # A provider/transport failure must not abort the run or lose the item.
             logger.warning("organizer.llm_call_failed: item stays in inbox", exc_info=True)
             return None
         return parse_organized_topic(raw)
@@ -333,7 +334,14 @@ class OrganizerService:
         return out
 
     async def _record_audit(
-        self, *, store_name: str, processed: int, created: int, updated: int, skipped: int
+        self,
+        *,
+        store_name: str,
+        processed: int,
+        created: int,
+        updated: int,
+        rules: int,
+        skipped: int,
     ) -> None:
         await self._audit.record(
             AuditEventType.MEMORY_ORGANIZED.value,
@@ -343,6 +351,7 @@ class OrganizerService:
                 "items_processed": processed,
                 "topics_created": created,
                 "topics_updated": updated,
+                "rules_appended": rules,
                 "skipped": skipped,
             },
         )

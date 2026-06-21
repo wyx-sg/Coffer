@@ -219,6 +219,21 @@ def handoff_dir(store_dir: pathlib.Path) -> pathlib.Path:
     return store_dir / "handoff"
 
 
+def rules_dir(store_dir: pathlib.Path) -> pathlib.Path:
+    """The store-root ``rules/`` dir — behavioural rules classified by the
+    organizer. At the store ROOT (outside ``knowledge/``) so it is excluded from
+    recall; it DOES sync (source-of-truth, like ``superseded/``)."""
+    candidate = (store_dir / "rules").resolve()
+    if not candidate.is_relative_to(store_dir.resolve()):
+        raise ValueError("rules dir escapes the store dir")
+    return store_dir / "rules"
+
+
+def rules_path(store_dir: pathlib.Path) -> pathlib.Path:
+    """Path of the single rules file ``<store_dir>/rules/rules.md``."""
+    return rules_dir(store_dir) / "rules.md"
+
+
 def handoff_path(store_dir: pathlib.Path, branch_slug: str) -> pathlib.Path:
     """Path of a per-branch handoff file ``<store_dir>/handoff/<branch-slug>.md``."""
     _safe_segment(branch_slug, "branch slug")
