@@ -274,8 +274,8 @@ cwd 没有可恢复的现场。
 
 - **Given** 一个 memory store，含两份重叠的主题文档（同一主题、其中一份带额外细节），
   且已配置内部模型，
-- **When** `POST /api/v1/memory_stores/{name}/reorg`（或 `coffer memory reorg
-  <name>`）运行，内部 agentic 循环读取两份文档、把合并后的内容写入其中一份、并 supersede
+- **When** `POST /api/v1/memory_stores/{name}/reorg`（或 `coffer memory reorg <name>`）
+  运行，内部 agentic 循环读取两份文档、把合并后的内容写入其中一份、并 supersede
   那份现已冗余的另一份，
 - **Then** 单一主题文档持有合并后的内容，冗余文档不再出现在 `recall` 或 `INDEX.md` 中，
   随后的 `recall` 返回合并后的内容，并记下一条 `memory_reorganized` 审计。

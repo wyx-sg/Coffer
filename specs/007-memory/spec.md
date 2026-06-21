@@ -343,9 +343,9 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** a memory store with two overlapping topic documents (both about the
   same subject, one carrying extra detail) and an internal model configured,
-- **When** `POST /api/v1/memory_stores/{name}/reorg` (or `coffer memory reorg
-  <name>`) runs and the internal agentic loop reads both documents, writes the
-  merged content into one, and supersedes the now-redundant other,
+- **When** `POST /api/v1/memory_stores/{name}/reorg` (or `coffer memory reorg <name>`)
+  runs and the internal agentic loop reads both documents, writes the merged
+  content into one, and supersedes the now-redundant other,
 - **Then** a single topic document holds the combined content, the redundant
   document no longer appears in `recall` or `INDEX.md`, a subsequent `recall`
   returns the merged content, and a `memory_reorganized` audit entry is recorded.
