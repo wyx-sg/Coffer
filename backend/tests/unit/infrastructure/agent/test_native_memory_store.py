@@ -1,4 +1,4 @@
-"""Unit tests for FileNativeMemoryScanner (spec 007).
+"""Unit tests for FileNativeMemoryScanner (spec 004).
 
 Builds a temp ``projects/<slug>/memory`` tree on disk and asserts the scanner
 reports one entry per project that HAS a memory subdir, with ``item_count``

@@ -1,4 +1,4 @@
-"""HTTP coverage for /api/v1/agents/{name}/native-memory (spec 007).
+"""HTTP coverage for /api/v1/agents/{name}/native-memory (spec 004).
 
 Boots the real app, registers a claude_code agent whose config_dir is a temp
 tree carrying a ``projects/<slug>/memory`` store, and asserts the listing.

@@ -1,4 +1,4 @@
-"""HTTP coverage for POST /api/v1/agents/{name}/native-memory/import (spec 007).
+"""HTTP coverage for POST /api/v1/agents/{name}/native-memory/import (spec 004).
 
 Boots the real app, registers a claude_code agent whose config_dir temp tree
 carries a ``projects/<slug>/memory`` store with frontmatter fact files (+ the

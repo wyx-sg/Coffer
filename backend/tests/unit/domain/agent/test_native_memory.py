@@ -1,4 +1,4 @@
-"""Unit tests for the native per-project memory domain helpers (spec 007).
+"""Unit tests for the native per-project memory domain helpers (spec 004).
 
 Pure value-level logic: the per-type layout table and the lossy slug decoder.
 """

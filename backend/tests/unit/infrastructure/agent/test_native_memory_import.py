@@ -1,4 +1,4 @@
-"""Unit coverage for native-memory import helpers (spec 007).
+"""Unit coverage for native-memory import helpers (spec 004).
 
 ``read_memory_facts`` parses a Claude Code per-project memory dir into
 ``ParsedNativeFact`` rows (skipping the ``MEMORY.md`` index and any unparseable
