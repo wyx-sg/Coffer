@@ -108,9 +108,9 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
           <h3 className="text-sm font-medium">{t("agents.connection.title")}</h3>
 
           {compatible.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {t("agents.connection.empty")} {t("agents.connection.manage")}
-            </p>
+            // The "manage" hint is rendered once, by the always-on footer below;
+            // the empty state shows only the empty message (no duplicate).
+            <p className="text-sm text-muted-foreground">{t("agents.connection.empty")}</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">

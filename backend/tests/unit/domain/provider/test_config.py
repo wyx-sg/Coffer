@@ -16,7 +16,10 @@ def test_valid_config_defaults() -> None:
         model="m",
     )
     assert c.wire_format is WireFormat.ANTHROPIC
-    assert c.wire_api is WireApi.CHAT
+    # Default wire_api is `responses`: codex-cli 0.130 dropped support for
+    # `wire_api = "chat"` (config fails to load), so a connection created without
+    # an explicit wire_api must project the value current Codex accepts.
+    assert c.wire_api is WireApi.RESPONSES
     assert c.is_active is False
     assert c.fast_model is None
 

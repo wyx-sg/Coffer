@@ -102,7 +102,7 @@ class ProviderService:
         base_url: str,
         model: str,
         fast_model: str | None = None,
-        wire_api: WireApi = WireApi.CHAT,
+        wire_api: WireApi = WireApi.RESPONSES,
         secret_value: str | None = None,
         credential_ref: str | None = None,
         description: str | None = None,

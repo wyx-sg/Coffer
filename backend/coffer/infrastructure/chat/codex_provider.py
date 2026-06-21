@@ -9,8 +9,10 @@ fake without a real ``codex`` binary (no subprocess needed).
 
 from __future__ import annotations
 
+import os
 import pathlib
 import shutil
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
 
@@ -18,12 +20,17 @@ from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.errors import AgentConfigRejected, ConversationNotFound
+from coffer.domain.provider.projection import CODEX_ENV_KEY
 from coffer.infrastructure.chat.codex_agent import CodexAppServerAdapter
 from coffer.infrastructure.chat.codex_app_server import (
     AppServerSessionFactory,
     default_app_server_session,
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
+
+#: Resolve the active openai connection's decrypted API key, or ``None`` when no
+#: Coffer connection is active for Codex (it then runs on its own login).
+KeyResolver = Callable[[], Awaitable[str | None]]
 
 
 class CodexAppServerProvider:
@@ -42,12 +49,17 @@ class CodexAppServerProvider:
         conversations: ConversationRepo,
         session_factory: AppServerSessionFactory | None = None,
         which: Any = shutil.which,
+        resolve_key: KeyResolver | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: AppServerSessionFactory = (
             session_factory or default_app_server_session
         )
         self._which = which
+        # Resolves the active openai connection's key for COFFER_PROVIDER_KEY
+        # injection (ADR-032 env_key seam). ``None`` → no injection, codex
+        # inherits the daemon env and uses its own login.
+        self._resolve_key = resolve_key
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -82,12 +94,24 @@ class CodexAppServerProvider:
                 conversation_id, replace(latest, session_id=session_id)
             )
 
+        # Inject the active openai connection's key as COFFER_PROVIDER_KEY (the
+        # env var named by config.toml's ``env_key``). Codex reads the key from
+        # there; without it it fails "Missing environment variable:
+        # COFFER_PROVIDER_KEY". MERGE with os.environ — create_subprocess_exec
+        # REPLACES the environment, so a bare {KEY: ...} would strip PATH etc.
+        env: dict[str, str] | None = None
+        if self._resolve_key is not None:
+            key = await self._resolve_key()
+            if key:
+                env = {**os.environ, CODEX_ENV_KEY: key}
+
         return CodexAppServerAdapter(
             cwd=config.cwd,
             resume_session=config.session_id,
             extra={"model": config.model},
             session_factory=self._session_factory,
             on_session=_save_session,
+            env=env,
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:
