@@ -13,10 +13,8 @@
   },
   "fileActions": {
     "openInEditor": "Open in editor",
-    "openFolder": "Open folder",
     "reveal": "Reveal in Finder",
     "openFailed": "Couldn't open the file in your editor.",
-    "openFolderFailed": "Couldn't open the folder in your editor.",
     "revealFailed": "Couldn't reveal the file."
   },
   "common": {
@@ -377,8 +375,9 @@
       "pageSize": "Default rows per page",
       "pageSizeHelp": "The initial page size for every table.",
       "preferredEditor": "Preferred editor",
-      "preferredEditorHelp": "The editor Coffer opens managed files with. Leave empty to use your operating system's default app, or set an application or a launch command (e.g. \"code\", \"cursor\").",
-      "preferredEditorPlaceholder": "System default",
+      "preferredEditorHelp": "The editor Coffer opens managed files with. Pick a detected editor, or type any app name / launch command. Empty uses the system default.",
+      "preferredEditorSystemDefault": "System default",
+      "preferredEditorChoose": "Choose editor",
       "preferredEditorBrowse": "Browse…"
     },
     "retention": {

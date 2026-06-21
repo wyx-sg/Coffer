@@ -32,14 +32,13 @@ export function SkillFileViewer({ name, path }: { name: string; path: string }) 
   }
 
   const absPath = content.data?.abs_path;
-  const folderAbsPath = content.data?.folder_abs_path;
 
   const header = (
     <div className="flex flex-wrap items-start justify-between gap-2">
       <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
         {path}
       </span>
-      {absPath ? <FileActions filePath={absPath} folderPath={folderAbsPath} /> : null}
+      {absPath ? <FileActions filePath={absPath} /> : null}
     </div>
   );
 

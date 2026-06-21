@@ -1,10 +1,9 @@
 // frontend/src/components/FileActions.tsx
 // Coffer's file viewers are read-only (specs 002/004/005/006/007): editing
 // happens in the user's own editor, not in-app. This shared action bar takes a
-// managed file (or its containing folder) to those external tools — open it in
-// the preferred editor (see the "preferred editor" preference in General
-// settings) and reveal it in the OS file manager. The web and desktop surfaces
-// show the same buttons — there is no copy-path fallback.
+// managed file to those external tools — open it in the preferred editor (see
+// the "preferred editor" preference in General settings) and reveal it in the OS
+// file manager. The web and desktop surfaces show the same buttons.
 //
 // The actions themselves live in lib/fileActionItems.ts (`useFileActionItems`)
 // so a crowded table row can fold the same open/reveal into the RowActions "⋯"
@@ -15,16 +14,13 @@ import { cn } from "@/lib/utils";
 
 export function FileActions({
   filePath,
-  folderPath,
   className,
 }: {
   /** Absolute on-disk path of the file being viewed. */
   filePath: string;
-  /** Absolute on-disk path of its containing folder (enables folder actions). */
-  folderPath?: string;
   className?: string;
 }) {
-  const items = useFileActionItems(filePath, folderPath);
+  const items = useFileActionItems(filePath);
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
       {items.map((it) => {

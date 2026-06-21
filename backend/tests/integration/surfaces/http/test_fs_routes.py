@@ -7,7 +7,7 @@ import pathlib
 import pytest
 from starlette.testclient import TestClient
 
-from coffer.application.fs import open_service
+from coffer.application.fs import editor_service, open_service
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -136,3 +136,28 @@ def test_fs_open_rejects_missing_path(tmp_path, monkeypatch):
         assert r.status_code == 400, r.text
         assert r.json()["error"]["code"] == "FS_PATH_NOT_OPENABLE"
     assert calls == []
+
+
+def test_fs_editors_lists_detected_editors(tmp_path, monkeypatch):
+    """GET /fs/editors returns the GUI editors detected on this machine."""
+    monkeypatch.setattr("sys.platform", "linux")
+    on_path = {"code": "/usr/bin/code", "zed": "/usr/bin/zed"}
+    monkeypatch.setattr(editor_service.shutil, "which", lambda cmd: on_path.get(cmd))
+    app = _app(tmp_path, monkeypatch, 59648)
+    with _client(app) as c:
+        r = c.get("/api/v1/fs/editors")
+        assert r.status_code == 200, r.text
+        editors = r.json()["editors"]
+        assert {e["value"] for e in editors} == {"code", "zed"}
+        assert all("label" in e and "value" in e for e in editors)
+
+
+def test_fs_editors_empty_when_none_installed(tmp_path, monkeypatch):
+    """No editor on PATH → an empty list (the UI falls back to system default)."""
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr(editor_service.shutil, "which", lambda cmd: None)
+    app = _app(tmp_path, monkeypatch, 59649)
+    with _client(app) as c:
+        r = c.get("/api/v1/fs/editors")
+        assert r.status_code == 200, r.text
+        assert r.json()["editors"] == []

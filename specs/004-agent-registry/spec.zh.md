@@ -112,7 +112,7 @@
 
 ### User Story 7 —— 查看一个 agent 的配置文件并在外部编辑器中打开它们（优先级 P2）
 
-agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的配置文件（例如 Claude Code 的 `settings.json`、Codex 的 `config.toml`），无需离开应用去翻找 dotfile。Coffer 展示该 agent 类型的一组精选已知配置文件，让用户打开其中一个，在**只读**查看器中读取当前内容。对每个文件（及其所在文件夹），Coffer 提供「在外部编辑器中打开」「在文件管理器中显示」等操作，让用户在自己的编辑器里做任何编辑。Coffer 不就地编辑配置文件内容；程序化写入路径（REST/CLI）保留校验 + 原子写入 + `.bak` 兜底。
+agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的配置文件（例如 Claude Code 的 `settings.json`、Codex 的 `config.toml`），无需离开应用去翻找 dotfile。Coffer 展示该 agent 类型的一组精选已知配置文件，让用户打开其中一个，在**只读**查看器中读取当前内容。对每个文件，Coffer 提供「在外部编辑器中打开」「在文件管理器中显示」等操作，让用户在自己的编辑器里做任何编辑。Coffer 不就地编辑配置文件内容；程序化写入路径（REST/CLI）保留校验 + 原子写入 + `.bak` 兜底。
 
 **为什么是这个优先级**：手工定位 agent 配置意味着要记住每个文件在哪、用什么格式。把这组精选文件集中到一处呈现、一眼可见、一键进入用户自己的编辑器——是让 registry 超越「记账」、真正变得有用的第一个功能。
 
@@ -629,7 +629,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 - **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/移除/切换/收编、插件列出/切换/卸载、原生记忆扫描/导入（FR-040/FR-041）——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。原生记忆命令为 `coffer agent native-memory <name>`（读取，`--json`）与 `coffer agent import-native-memory <name> <memory_dir>`（收编）。桌面 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。agent 的 Memory tab 展示 Coffer 受管记忆链接，外加这张原生表格（**只读**，按 FR-038 提供打开 / 显示），并带一个收编某个 store 的导入按钮（FR-041）。
 - **FR-010**: CLI MUST 在每个读取类操作上支持 `--json` 以提供机器可读输出。
-- **FR-038**: 对每个配置文件（及每个目录条目子文件），UI MUST 提供**在外部编辑器中打开**与**在文件管理器中显示**操作（打开也适用于所在文件夹），使用 FR-014/FR-015 的 `path`/`folder_path` 这一对。打开与显示在**两个**界面上都执行真实的 OS 动作：打包桌面应用（Tauri）直接用 OS opener;Web 用 daemon 的文件系统动作端点（FR-039）——因为环回 daemon 始终在用户自己的机器上（ADR-033）。没有 copy-path 回退。用于「在外部编辑器中打开」的编辑器引用 spec 002-ui-shell 定义的用户「首选外部编辑器」偏好（此处不再重新规定）。
+- **FR-038**: 对每个配置文件（及每个目录条目子文件），UI MUST 提供针对该文件的**在外部编辑器中打开**与**在文件管理器中显示**操作，使用 FR-014/FR-015 的 `path`。打开与显示在**两个**界面上都执行真实的 OS 动作：打包桌面应用（Tauri）直接用 OS opener;Web 用 daemon 的文件系统动作端点（FR-039）——因为环回 daemon 始终在用户自己的机器上（ADR-033）。没有 copy-path 回退。用于「在外部编辑器中打开」的编辑器引用 spec 002-ui-shell 定义的用户「首选外部编辑器」偏好（此处不再重新规定）。
 
 **可观测性**
 
@@ -643,7 +643,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **文件系统打开/显示**
 
-- **FR-039**: 系统 MUST 暴露文件系统动作操作,让 Web 界面经环回 daemon 执行真正的 open/reveal（FR-038）——daemon 始终与 Web 客户端同处用户机器上（ADR-033）:`POST /api/v1/fs/open`(在某个应用里打开一个已存在的绝对路径——一个 `with` 编辑器偏好,或 OS 默认)与 `POST /api/v1/fs/reveal`(在 OS 文件管理器中选中/显示一个已存在的绝对路径)。两者在动作前都 MUST 校验路径为绝对且存在,MUST 以固定参数向量调用 OS 启动器(无 shell 插值),MUST 不创建任何东西,且 MUST 与所有其它 daemon 路由一样受同样的 loopback + token 鉴权保护。非绝对或不存在的路径被拒绝(`FS_PATH_NOT_OPENABLE`,400)。在没有可移植「选中文件」原语的平台(Linux),reveal 降级为打开所在文件夹。
+- **FR-039**: 系统 MUST 暴露文件系统动作操作,让 Web 界面经环回 daemon 执行真正的 open/reveal（FR-038）——daemon 始终与 Web 客户端同处用户机器上（ADR-033）:`POST /api/v1/fs/open`(在某个应用里打开一个已存在的绝对路径——一个 `with` 编辑器偏好,或 OS 默认)与 `POST /api/v1/fs/reveal`(在 OS 文件管理器中选中/显示一个已存在的绝对路径)。两者在动作前都 MUST 校验路径为绝对且存在,MUST 以固定参数向量调用 OS 启动器(无 shell 插值),MUST 不创建任何东西,且 MUST 与所有其它 daemon 路由一样受同样的 loopback + token 鉴权保护。非绝对或不存在的路径被拒绝(`FS_PATH_NOT_OPENABLE`,400)。在没有可移植「选中文件」原语的平台(Linux),reveal 降级为打开所在文件夹。系统还 MUST 暴露 `GET /api/v1/fs/editors`,枚举主机上检测到已安装的常见 GUI 编辑器(macOS 返回 `open -a` 用的 app 名;Linux/Windows 返回 PATH 上的命令),以便 spec 002-ui-shell 的首选编辑器设置提供一个选择框而非盲填文本框。它返回每个编辑器的显示标签与 `/fs/open` 的 `with` 所接受的启动 `value`,除应用是否存在外不读取任何内容,并受同样的 loopback + token 鉴权保护。
 
 ### Key Entities
 

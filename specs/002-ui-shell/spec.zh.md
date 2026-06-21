@@ -95,7 +95,7 @@
 
 开发者打开 Settings，看到的 tab 是按"他在管什么"分组，不是按"Coffer 怎么搭的"：**General**（显示偏好——列表表格的默认每页条数，以及打开受管文件所用的首选外部编辑器）、**Data**（retention 策略、手动清理、以及 vault 备份——通过 `POST /vault/backup` 触发的完整 `~/.coffer/` 的 `.tar.gz` 快照）与 **About**（版本、许可证、源代码）。Settings 打开时落在 General tab。daemon 是实现细节——没有 "Daemon" tab，没有只读的 daemon 状态面板。用户永远不需要知道 Coffer 跑了一个后台 daemon。
 
-**General** tab 必须暴露默认每页条数偏好（每个列表表格据此初始化的 rows-per-page），持久化在 `localStorage`。它还必须暴露一个**首选外部编辑器**偏好——当用户从只读文件查看器中打开一个受管文件（或其所在文件夹）时，Coffer 用来打开它的应用。默认是操作系统的默认应用；用户可以通过选择一个应用或填入一条启动命令来覆盖。与其他显示偏好一样，它持久化在 `localStorage`，绝不发送给 daemon。
+**General** tab 必须暴露默认每页条数偏好（每个列表表格据此初始化的 rows-per-page），持久化在 `localStorage`。它还必须暴露一个**首选外部编辑器**偏好——当用户从只读文件查看器中打开一个受管文件（或其所在文件夹）时，Coffer 用来打开它的应用。默认是操作系统的默认应用；用户可以通过**从 daemon 检测到的已安装编辑器中挑选**（经 `GET /api/v1/fs/editors` 枚举，spec 004 FR-039——浏览器无法列出已安装应用），或填入自定义的应用 / 启动命令来覆盖。与其他显示偏好一样，所选值持久化在 `localStorage`，绝不发送给 daemon（仅在打开文件时作为目标短暂传递）。
 
 **Why this priority**: P2——底层控件已能工作；本故事是重新组织 + 删除，不是新能力。一个没组织好的 Settings 页恰是 US2 反对的"像脚手架"信号，用户也明确反馈过它令人困惑。
 
@@ -254,7 +254,7 @@
 ### Scenario: general tab persists the preferred editor
 
 - **Given** 用户打开 General settings tab
-- **When** 他们设置一个首选外部编辑器（选择一个应用，或填入一条启动命令）
+- **When** 他们设置一个首选外部编辑器（挑选一个检测到的编辑器，或填入一条自定义启动命令）
 - **Then** 刷新页面后显示同一个首选编辑器值
 - **And** 清除覆盖后恢复为操作系统默认应用
 

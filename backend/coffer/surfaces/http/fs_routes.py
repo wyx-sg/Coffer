@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from coffer.application.fs.browse_service import FsBrowseService
+from coffer.application.fs.editor_service import EditorDetectService
 from coffer.application.fs.open_service import FsOpenService
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_fs_browse_service
@@ -89,3 +90,30 @@ async def reveal_path(
     """Select / reveal `path` in the OS file manager."""
     await asyncio.to_thread(svc.reveal, body.path)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Installed-editor detection (backs the preferred-editor picker, spec 002) ---
+
+
+class EditorOptionOut(BaseModel):
+    label: str
+    value: str
+
+
+class FsEditorsOut(BaseModel):
+    editors: list[EditorOptionOut]
+
+
+def get_editor_detect_service() -> EditorDetectService:
+    """FastAPI Depends() target — stateless, built per-request."""
+    return EditorDetectService()
+
+
+@router.get("/editors", response_model=FsEditorsOut)
+async def list_editors(
+    svc: EditorDetectService = Depends(get_editor_detect_service),  # noqa: B008
+) -> FsEditorsOut:
+    """List GUI editors detected on this machine for the preferred-editor picker."""
+    # to_thread: detection does blocking PATH lookups / app-bundle stat calls.
+    editors = await asyncio.to_thread(svc.list_editors)
+    return FsEditorsOut(editors=[EditorOptionOut(label=e.label, value=e.value) for e in editors])

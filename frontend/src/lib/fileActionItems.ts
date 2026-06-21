@@ -1,15 +1,15 @@
 // frontend/src/lib/fileActionItems.ts
-// The open-in-editor / reveal (+ optional open-folder) actions as descriptors,
-// shared by the inline `FileActions` bar (components/FileActions.tsx) and the
-// RowActions "⋯" overflow menu (components/RowActions.tsx). Lives apart from the
-// FileActions component so that file stays component-only (React fast refresh).
+// The open-in-editor / reveal actions as descriptors, shared by the inline
+// `FileActions` bar (components/FileActions.tsx) and the RowActions "⋯" overflow
+// menu (components/RowActions.tsx). Lives apart from the FileActions component so
+// that file stays component-only (React fast refresh).
 //
 // The actual open/reveal goes through useFsActions: tauri-plugin-opener on the
 // packaged desktop app, the loopback daemon on the web (spec 004 FR-039,
 // ADR-033). Coffer's viewers are read-only — editing happens in the user's own
 // editor, not in-app.
 import { useTranslation } from "react-i18next";
-import { ExternalLink, Folder, FolderOpen, type LucideIcon } from "lucide-react";
+import { ExternalLink, FolderOpen, type LucideIcon } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
 import { useFsActions } from "@/lib/fsActions";
@@ -22,7 +22,7 @@ export interface FileActionItem {
   onClick: () => void;
 }
 
-export function useFileActionItems(filePath: string, folderPath?: string): FileActionItem[] {
+export function useFileActionItems(filePath: string): FileActionItem[] {
   const { t } = useTranslation();
   const { toast } = useToast();
   const editor = usePreferredEditor();
@@ -33,7 +33,7 @@ export function useFileActionItems(filePath: string, folderPath?: string): FileA
   const doReveal = (path: string) =>
     void reveal(path).catch(() => toast.error(t("fileActions.revealFailed")));
 
-  const items: FileActionItem[] = [
+  return [
     {
       key: "open",
       label: t("fileActions.openInEditor"),
@@ -47,13 +47,4 @@ export function useFileActionItems(filePath: string, folderPath?: string): FileA
       onClick: () => doReveal(filePath),
     },
   ];
-  if (folderPath) {
-    items.push({
-      key: "openFolder",
-      label: t("fileActions.openFolder"),
-      icon: Folder,
-      onClick: () => doOpen(folderPath, "fileActions.openFolderFailed"),
-    });
-  }
-  return items;
 }
