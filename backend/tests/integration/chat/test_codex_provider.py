@@ -282,6 +282,65 @@ async def test_build_adapter_session_sink_writes_back(tmp_path: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
+# build_adapter — COFFER_PROVIDER_KEY injection (ADR-032 env_key seam)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_build_adapter_injects_active_openai_key_into_codex_env(tmp_path: Any) -> None:
+    """When a Coffer openai connection is active, its decrypted key is injected as
+    COFFER_PROVIDER_KEY into the codex subprocess env (MERGED with the daemon
+    environment, not replacing it) — the env_key seam Codex reads the key from.
+    Without it codex fails: 'Missing environment variable: COFFER_PROVIDER_KEY'."""
+    import asyncio
+
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, _ = _make_factory()
+
+    async def resolve_key() -> str | None:
+        return "sk-codex-abc"
+
+    provider = CodexAppServerProvider(
+        conversations=repo, session_factory=factory, resolve_key=resolve_key
+    )
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi", conv.id)), timeout=5)
+
+    assert factory.last_env is not None
+    assert factory.last_env["COFFER_PROVIDER_KEY"] == "sk-codex-abc"
+    assert "PATH" in factory.last_env  # merged with the daemon env, not replaced
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_build_adapter_no_active_key_inherits_daemon_env(tmp_path: Any) -> None:
+    """With no active openai connection the resolver returns None → env stays None
+    so the codex subprocess inherits the daemon env and uses its own login."""
+    import asyncio
+
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, _ = _make_factory()
+
+    async def resolve_key() -> str | None:
+        return None
+
+    provider = CodexAppServerProvider(
+        conversations=repo, session_factory=factory, resolve_key=resolve_key
+    )
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi", conv.id)), timeout=5)
+
+    assert factory.last_env is None
+
+    await engine.dispose()
+
+
+# ---------------------------------------------------------------------------
 # availability
 # ---------------------------------------------------------------------------
 

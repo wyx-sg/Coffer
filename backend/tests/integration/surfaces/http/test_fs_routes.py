@@ -82,7 +82,11 @@ def _capture_spawn(monkeypatch, platform: str = "darwin") -> list[list[str]]:
     spec="004-agent-registry", scenario="open a managed file via the daemon (web open/reveal)"
 )
 def test_fs_open_launches_default_app(tmp_path, monkeypatch):
-    """POST /fs/open with no editor → OS default launcher, 204."""
+    """POST /fs/open with no editor → default TEXT editor (`open -t`), 204.
+
+    `open -t` (rather than a bare `open <file>`) so a file whose type has no
+    registered default app still opens instead of silently failing."""
+    monkeypatch.setattr("sys.platform", "darwin")
     f = tmp_path / "settings.json"
     f.write_text("{}", encoding="utf-8")
     calls = _capture_spawn(monkeypatch)
@@ -90,7 +94,7 @@ def test_fs_open_launches_default_app(tmp_path, monkeypatch):
     with _client(app) as c:
         r = c.post("/api/v1/fs/open", json={"path": str(f)})
         assert r.status_code == 204, r.text
-    assert calls == [["open", str(f)]]
+    assert calls == [["open", "-t", str(f)]]
 
 
 def test_fs_open_honours_preferred_editor(tmp_path, monkeypatch):

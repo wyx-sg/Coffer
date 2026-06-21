@@ -93,15 +93,16 @@ describe("DraftThread", () => {
     expect(onModelChange).toHaveBeenCalledWith("claude-opus-4-8");
   });
 
-  acceptance("008-agent-chat", "no-model empty state", () => {
-    // No active LLM connection for the agent's wire → an actionable empty state
-    // linking to Settings → LLM Connections, and no composer to send into.
+  acceptance("008-agent-chat", "chat runs on the built-in model when no connection", () => {
+    // A Coffer LLM connection is an OPTIONAL override: with none configured the
+    // agent runs on its own built-in login (chat shells out to its SDK/CLI), so
+    // the draft must NOT block — the composer is available and there is no
+    // "no connection" empty state (ADR-032 amendment D1).
     useProvidersMock.mockReturnValue({ data: [] });
     renderDraft();
-    expect(screen.getByText("No connection configured")).toBeInTheDocument();
-    const cta = screen.getByRole("link", { name: /LLM Connections/i });
-    expect(cta).toHaveAttribute("href", "/settings/llm-connections");
-    expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/start a new conversation/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
+    expect(screen.queryByText("No connection configured")).not.toBeInTheDocument();
   });
 
   test("no longer renders a working-directory input or folder picker", () => {

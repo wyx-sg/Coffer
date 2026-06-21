@@ -66,7 +66,11 @@ def _open_cmd(target: Path, with_app: str | None) -> list[str]:
     s = str(target)
     app = (with_app or "").strip()
     if sys.platform == "darwin":
-        return ["open", "-a", app, s] if app else ["open", s]
+        # No editor chosen → `open -t` opens the default *text* editor. Plain
+        # `open <file>` fails (kLSApplicationNotFoundErr) for file types with no
+        # registered default app — common for the extensionless config files
+        # Coffer manages — and the non-zero exit is swallowed, so nothing opens.
+        return ["open", "-a", app, s] if app else ["open", "-t", s]
     if sys.platform == "win32":
         # `start` needs an empty title arg; an explicit app is launched directly.
         return [app, s] if app else ["cmd", "/c", "start", "", s]

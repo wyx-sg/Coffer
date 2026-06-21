@@ -85,6 +85,67 @@ This PR ships: registry + projection + switch op + audit + sync wiring.
 Hot-switch (mid-session reload of a running Claude Code or Codex process) is a
 **separate, later PR** and is explicitly **out of scope here**.
 
+## Amendment 2026-06-22 — Connections are optional overrides; multi-protocol; chat built-in fallback
+
+> Status: Draft. Supersedes the gating in Decision A and the two non-goals noted
+> below; recorded after reviewing the shipped UI (PR #187). Cross-ref
+> [ADR-032](../../docs/decisions/ADR-032-provider-switching.md) Amendment.
+
+**Why.** Chat shells out to each agent's OWN runtime — Claude Code via the Claude
+Agent SDK, Codex via a `codex app-server` subprocess — and the backend never
+requires a Coffer connection (`turn_orchestrator` resolves no credential; the
+"no connection" block is a frontend-only guard in `DraftThread.tsx`). A
+connection is therefore an OPTIONAL OVERRIDE projected into the agent's native
+config, not a prerequisite. The shipped UI wrongly treated it as required
+(claude_code showed "还没有连接"; chat blocked with "尚未配置连接"), and codex
+chat broke because projection writes `wire_api = "chat"`, which `codex-cli`
+0.130 rejects (config fails to load → every turn errors).
+
+- **D1 — Connection is an optional override; built-in is the default.** With no
+  connection projected for an agent, it runs on its own built-in model/login.
+  The chat surface MUST NOT block on "no connection"; it runs on the built-in
+  model. (Removes the `DraftThread` hard guard.)
+- **D2 — A connection declares the protocols it supports (multi-select).**
+  Replaces single-`wire_format` gating: `protocols ⊆ {anthropic, openai}`. A
+  connection is offered to EVERY agent whose native protocol it declares
+  (anthropic → Claude Code, openai → Codex), so one key can serve both. `ollama`
+  / internal-only remains a separate concern for the internal engine. The
+  per-wire single-active invariant becomes **per-protocol single-active**: at
+  most one connection is the active override per protocol. Coffer still does NOT
+  translate protocols — a connection reaches an agent only if it declares that
+  agent's protocol (the endpoint must actually speak it).
+- **D3 — Per-agent override selection is the source of truth (Agent page).**
+  Each agent picks, on its detail page, which connection (among those declaring
+  its protocol) overrides it — or "built-in". This REPLACES the former non-goal
+  "no manual per-agent binding". Selecting projects it; "built-in" clears
+  Coffer's projection so the agent's own auth/model returns.
+- **D4 — Chat model selection is a FIXED choice, not free-form.** The chat
+  surface offers only: a curated BUILT-IN model list per agent (Claude Code:
+  opus / sonnet / haiku; Codex: gpt-5 / o-series) ∪ the active connection's
+  model. No free-form per-conversation model id (`Conversation.model_id` stays
+  vestigial); non-chat models (image / video) are never offered. Changing the
+  model/connection happens on the Agent page, not per conversation.
+- **D5 — Internal-engine selection is a separate control.** "Which connection
+  Coffer's internal engine uses" (`internal_default`) moves OUT of the
+  connection card into its own dropdown selector on the LLM connections page.
+  Connection cards drop the internal-engine badge/star and gain an **edit**
+  action (add / edit / delete via one dialog).
+- **D6 — Connection dialog gains «测试连接» + «拉取模型».** The add/edit dialog
+  surfaces test-connection (`POST /models/test-connection`) and list-models
+  (`POST /models/list-models`), reusing the existing introspection service.
+  Both MUST accept an inline (not-yet-saved) secret so the user can test/fetch
+  before saving; fetched models populate a selectable dropdown.
+- **D7 — Codex `wire_api` is selectable; default `responses`.** The connection
+  exposes `wire_api ∈ {chat, responses}` in the dialog, defaulting to
+  `responses` (codex-cli 0.130 dropped `chat`). Fixes the broken-codex-chat bug.
+
+**Now in scope (were non-goals):** per-agent override selection (D3); chat
+built-in fallback (D1); one connection serving multiple agents via declared
+protocols (D2).
+
+**Still out of scope:** hot-switch; proxy / failover / format conversion;
+anthropic↔openai protocol translation.
+
 ## Scope
 
 ### In scope

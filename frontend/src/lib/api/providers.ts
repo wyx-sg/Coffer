@@ -23,6 +23,20 @@ export const WIRE_BY_AGENT: Record<string, WireFormat> = {
   codex: "openai",
 };
 
+/**
+ * Curated built-in model ids per agent — the models reachable through the
+ * agent's OWN login when no Coffer LLM connection overrides it. Chat offers
+ * these alongside the active connection's model so a user can run on the
+ * built-in model without configuring a connection (ADR-032 amendment D4). They
+ * are passed verbatim to the agent's CLI: Claude Code resolves the
+ * opus/sonnet/haiku aliases to the current model in each tier; Codex takes its
+ * own model ids.
+ */
+export const BUILTIN_MODELS_BY_AGENT: Record<string, string[]> = {
+  claude_code: ["opus", "sonnet", "haiku"],
+  codex: ["gpt-5-codex", "gpt-5", "o3"],
+};
+
 export interface Provider {
   name: string;
   wire_format: WireFormat;

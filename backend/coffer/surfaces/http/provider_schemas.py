@@ -22,7 +22,8 @@ class ProviderCreate(BaseModel):
     base_url: str = Field(min_length=1)
     model: str = Field(min_length=1)
     fast_model: str | None = None
-    wire_api: WireApi = WireApi.CHAT
+    # Default ``responses`` — codex-cli 0.130 rejects ``wire_api = "chat"``.
+    wire_api: WireApi = WireApi.RESPONSES
     credential_ref: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     description: str | None = None
