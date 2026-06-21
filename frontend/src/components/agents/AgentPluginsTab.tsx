@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { PluginDetailRow } from "@/components/agents/AgentPluginDetail";
+import { AgentPluginsBulkActions } from "@/components/agents/AgentPluginsBulkActions";
 import { DataTable, type Column } from "@/components/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -145,6 +146,20 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
             search={{
               accessor: (p) => `${p.name} ${p.marketplace} ${sourceOf.get(p.marketplace) ?? ""}`,
               placeholder: t("agents.workspace.pluginsTab.searchPlaceholder"),
+            }}
+            selection={{
+              ariaSelectAll: t("common.bulk.selectAll"),
+              ariaSelectRow: (p) => `${t("common.bulk.selectRow")}: ${p.name}`,
+              bulkLabel: (count) => t("common.bulk.selected", { count }),
+              clearLabel: t("common.clear"),
+              renderBulkActions: ({ selectedRows, clear }) => (
+                <AgentPluginsBulkActions
+                  agentName={agent.name}
+                  rows={selectedRows}
+                  clear={clear}
+                  canUninstall={canUninstall}
+                />
+              ),
             }}
             getRowDetail={(p) => <PluginDetailRow plugin={p} />}
             emptyMessage={t("agents.workspace.pluginsTab.empty")}

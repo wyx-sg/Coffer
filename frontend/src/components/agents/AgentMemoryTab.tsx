@@ -16,8 +16,10 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { CofferGatewayCard } from "@/components/agents/AgentManagedLink";
+import { AgentNativeMemoryBulkActions } from "@/components/agents/AgentMemoryBulkActions";
 import { DataTable, type Column } from "@/components/DataTable";
-import { FileActions } from "@/components/FileActions";
+import { RowActions } from "@/components/RowActions";
+import { useFileActionItems } from "@/lib/fileActionItems";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -53,6 +55,26 @@ function ImportButton({ agentName, store }: { agentName: string; store: NativeMe
   );
 }
 
+/** Row actions: import (primary) + open/reveal folded into the "⋯" menu so the
+ * row never sprawls into three wrapping buttons. */
+function NativeMemoryRowActions({
+  agentName,
+  store,
+}: {
+  agentName: string;
+  store: NativeMemoryStore;
+}) {
+  const { t } = useTranslation();
+  const fileItems = useFileActionItems(store.memory_dir);
+  return (
+    <RowActions
+      primary={<ImportButton agentName={agentName} store={store} />}
+      items={fileItems}
+      menuAriaLabel={t("common.moreActions")}
+    />
+  );
+}
+
 export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -84,12 +106,7 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
       key: "actions",
       header: "",
       className: "text-right",
-      cell: (s) => (
-        <div className="flex items-center justify-end gap-2">
-          <ImportButton agentName={agent.name} store={s} />
-          <FileActions filePath={s.memory_dir} />
-        </div>
-      ),
+      cell: (s) => <NativeMemoryRowActions agentName={agent.name} store={s} />,
     },
   ];
 
@@ -123,6 +140,23 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
             rows={native.data?.items ?? []}
             columns={columns}
             rowKey={(s) => s.memory_dir}
+            search={{
+              accessor: (s) => `${s.project} ${s.memory_dir}`,
+              placeholder: t("agents.memoryTab.searchPlaceholder"),
+            }}
+            selection={{
+              ariaSelectAll: t("common.bulk.selectAll"),
+              ariaSelectRow: (s) => `${t("common.bulk.selectRow")}: ${s.project}`,
+              bulkLabel: (count) => t("common.bulk.selected", { count }),
+              clearLabel: t("common.clear"),
+              renderBulkActions: ({ selectedRows, clear }) => (
+                <AgentNativeMemoryBulkActions
+                  agentName={agent.name}
+                  rows={selectedRows}
+                  onDone={clear}
+                />
+              ),
+            }}
             emptyMessage={t("agents.memoryTab.nativeEmpty")}
           />
         )}
