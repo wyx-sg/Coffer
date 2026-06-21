@@ -91,6 +91,17 @@ def upgrade() -> None:
         .all()
     )
 
+    # Single internal-default invariant (FR-021: normalise on import). The legacy
+    # registry kept at most one is_default row via the app layer, but the table
+    # had no UNIQUE guard — so if a divergent DB holds >1, keep only the
+    # most-recently-updated as internal_default (ISO timestamps sort lexically).
+    default_name: str | None = None
+    latest = ""
+    for row in rows:
+        if row["is_default"] and str(row["updated_at"] or "") >= latest:
+            latest = str(row["updated_at"] or "")
+            default_name = str(row["display_name"])
+
     for row in rows:
         wire = str(row["provider"])
         base_url = row["base_url"] or _DEFAULT_BASE_URL.get(wire, "")
@@ -104,7 +115,7 @@ def upgrade() -> None:
             "fast_model": None,
             "wire_api": "chat",
             "is_active": False,
-            "internal_default": bool(row["is_default"]),
+            "internal_default": str(row["display_name"]) == default_name,
         }
         name = _slugify(str(row["display_name"]), taken)
         bind.execute(

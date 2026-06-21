@@ -442,6 +442,43 @@ def test_0036_migrates_chat_models_to_provider_resources(tmp_path, monkeypatch):
     assert still_providers == 3
 
 
+def test_0036_normalises_multiple_legacy_defaults(tmp_path, monkeypatch):
+    """The legacy registry had no UNIQUE guard on is_default. If a divergent DB
+    holds >1 is_default row, 0036 keeps only the most-recently-updated one as
+    internal_default (FR-021 normalise-on-import), preserving the global
+    single-internal-default invariant."""
+    db_path = tmp_path / "multi_default.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0035")
+    with sqlite3.connect(db_path) as conn:
+        for id_, name, updated in (
+            ("m1", "older-default", "2026-01-01T00:00:00+00:00"),
+            ("m2", "newest-default", "2026-03-01T00:00:00+00:00"),
+        ):
+            conn.execute(
+                "INSERT INTO chat_models "
+                "(id, display_name, provider, model, credential_ref, base_url, is_default, "
+                "created_at, updated_at) "
+                "VALUES (?, ?, 'anthropic', 'claude-x', 'r', NULL, 1, ?, ?)",
+                (id_, name, "2026-01-01T00:00:00+00:00", updated),
+            )
+        conn.commit()
+
+    command.upgrade(cfg, "head")
+
+    with sqlite3.connect(db_path) as conn:
+        defaults = {
+            name: json.loads(cfg_json)["internal_default"]
+            for name, cfg_json in conn.execute(
+                "SELECT name, config_json FROM resources WHERE kind = 'provider'"
+            ).fetchall()
+        }
+    # Exactly one internal_default, and it's the most-recently-updated row.
+    assert defaults == {"older-default": False, "newest-default": True}
+
+
 def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkeypatch):
     """Step the chain down one revision at a time and assert each downgrade()
     removes exactly the tables its matching upgrade() created."""

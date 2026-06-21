@@ -61,6 +61,11 @@ export function DraftThread({
     () => (providers.data ?? []).some((p) => p.wire_format === wire && p.is_active),
     [providers.data, wire],
   );
+  // Until the providers query settles we don't yet know whether a connection
+  // exists. Render the composer optimistically rather than flashing the
+  // "no connection" empty state on first paint (it would only flip back once
+  // the query resolves). The empty state shows only once we KNOW there's none.
+  const showNoConnection = !providers.isPending && !hasConnection;
 
   // No Coffer-managed agent on PATH / registered — there is nothing to chat
   // with, so guide the user to install or configure one.
@@ -113,7 +118,7 @@ export function DraftThread({
         )}
       </div>
 
-      {hasConnection ? (
+      {!showNoConnection ? (
         <>
           <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
             <Bot className="mb-3 size-8 text-primary/70" strokeWidth={1.5} />
