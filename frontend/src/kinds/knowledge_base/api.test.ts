@@ -265,7 +265,7 @@ describe("grepKnowledgeBase", () => {
 });
 
 describe("getKnowledgeBase", () => {
-  test("GETs the kind-agnostic resource URL for the KB", async () => {
+  test("GETs the KB-specific endpoint (normalized config), not the raw resource URL", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       okJson({
         ref: "knowledge_base:designs",
@@ -281,7 +281,11 @@ describe("getKnowledgeBase", () => {
     const out = await getKnowledgeBase("designs");
     expect(out.config.enabled_modes).toEqual(["keyword", "grep"]);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/resources/knowledge_base/designs`);
+    // The KB-specific endpoint re-parses the stored config through
+    // KnowledgeBaseConfig and always returns a complete config; the raw
+    // /resources endpoint can omit fields like enabled_modes and crash the
+    // settings dialog. Reads must use this endpoint.
+    expect(url).toBe(`${BASE}/knowledge_bases/designs`);
     expect(init?.method).toBeUndefined();
     const headers = init?.headers as Record<string, string>;
     expect(headers["X-Coffer-Token"]).toBe("test-token");
