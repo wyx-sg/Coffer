@@ -299,6 +299,117 @@ describe("KnowledgeBaseDetailPage", () => {
     await waitFor(() => expect(api.checkSources).toHaveBeenCalledTimes(2));
   });
 
+  test("the doc filter narrows the visible rows by title and restores on clear", async () => {
+    seedBaseQueries();
+    vi.mocked(api.listDocuments).mockResolvedValue({
+      documents: [
+        { ...DOC, id: "d1", title: "Deploys" },
+        { ...DOC, id: "d2", title: "Runbook" },
+      ],
+      total: 2,
+    });
+    renderPage();
+
+    const tree = screen.getByRole("complementary");
+    expect(await within(tree).findByText("Deploys")).toBeVisible();
+    expect(within(tree).getByText("Runbook")).toBeVisible();
+
+    const filter = within(tree).getByPlaceholderText(/filter documents/i);
+    fireEvent.change(filter, { target: { value: "run" } });
+    // Case-insensitive title substring: only Runbook survives.
+    expect(within(tree).queryByText("Deploys")).toBeNull();
+    expect(within(tree).getByText("Runbook")).toBeVisible();
+
+    // A filter that matches nothing shows the muted no-matches line.
+    fireEvent.change(filter, { target: { value: "zzz" } });
+    expect(within(tree).getByText(/no documents match the filter/i)).toBeVisible();
+
+    // Clearing the filter restores every row.
+    fireEvent.change(filter, { target: { value: "" } });
+    expect(within(tree).getByText("Deploys")).toBeVisible();
+    expect(within(tree).getByText("Runbook")).toBeVisible();
+  });
+
+  test("selecting two rows shows the bulk bar and bulk-deletes after confirm", async () => {
+    seedBaseQueries();
+    vi.mocked(api.listDocuments).mockResolvedValue({
+      documents: [
+        { ...DOC, id: "d1", title: "Deploys" },
+        { ...DOC, id: "d2", title: "Runbook" },
+      ],
+      total: 2,
+    });
+    vi.mocked(api.deleteDocument).mockResolvedValue(undefined);
+    renderPage();
+
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("Deploys");
+    // Each row carries a "Select row" checkbox sibling of the title button.
+    const rowChecks = within(tree).getAllByLabelText(/select row/i);
+    expect(rowChecks).toHaveLength(2);
+    fireEvent.click(rowChecks[0]);
+    fireEvent.click(rowChecks[1]);
+
+    // The bulk bar reports the selected count and offers Delete.
+    expect(within(tree).getByText(/2 selected/i)).toBeVisible();
+    fireEvent.click(within(tree).getByRole("button", { name: /^delete$/i }));
+
+    // Confirm dialog → on confirm, deleteDocument fires once per selected id.
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d1"));
+    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d2"));
+    expect(api.deleteDocument).toHaveBeenCalledTimes(2);
+    // Selection clears: the bulk bar disappears.
+    await waitFor(() => expect(within(tree).queryByText(/2 selected/i)).toBeNull());
+  });
+
+  test("bulk-deleting the currently-viewed document resets the viewer", async () => {
+    seedBaseQueries();
+    vi.mocked(api.listDocuments).mockResolvedValue({
+      documents: [
+        { ...DOC, id: "d1", title: "Deploys" },
+        { ...DOC, id: "d2", title: "Runbook" },
+      ],
+      total: 2,
+    });
+    vi.mocked(api.getDocument).mockResolvedValue({ ...DOC, id: "d1", markdown: "viewed-body" });
+    vi.mocked(api.deleteDocument).mockResolvedValue(undefined);
+    renderPage();
+
+    const tree = screen.getByRole("complementary");
+    // View d1 in the right pane.
+    fireEvent.click(await within(tree).findByText("Deploys"));
+    expect(await screen.findByText("viewed-body")).toBeVisible();
+
+    // Select d1's checkbox and bulk-delete it.
+    fireEvent.click(within(tree).getAllByLabelText(/select row/i)[0]);
+    fireEvent.click(within(tree).getByRole("button", { name: /^delete$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("designs", "d1"));
+    // The viewer drops the deleted doc — selectedId resets, the preview clears.
+    await waitFor(() => expect(screen.queryByText("viewed-body")).toBeNull());
+  });
+
+  test("clicking a row title still loads it in the viewer (the e2e-critical path)", async () => {
+    seedBaseQueries();
+    vi.mocked(api.getDocument).mockResolvedValue({
+      ...DOC,
+      markdown: "# Deploys\n\nbody",
+      path: "/abs/kb/designs/deploys.md",
+      folder_path: "/abs/kb/designs",
+    });
+    renderPage();
+
+    const tree = screen.getByRole("complementary");
+    // The title is a clickable element selectable by its TEXT (not the checkbox).
+    fireEvent.click(await within(tree).findByText("Deploys"));
+    expect(await screen.findByText("body")).toBeVisible();
+    await waitFor(() => expect(api.getDocument).toHaveBeenCalledWith("designs", "d1"));
+  });
+
   test("the settings PATCH carries auto_update_sources (guards the reset gotcha)", async () => {
     seedBaseQueries();
     vi.mocked(api.getKnowledgeBase).mockResolvedValue({
