@@ -1,6 +1,6 @@
-# ADR-034 — 收编原生记忆：读取 Agent 自己的逐项目记忆，导入 Coffer
+# ADR-035 — 收编原生记忆：读取 Agent 自己的逐项目记忆，导入 Coffer
 
-> English: [ADR-034-adopt-native-memory.md](./ADR-034-adopt-native-memory.md)
+> English: [ADR-035-adopt-native-memory.md](./ADR-035-adopt-native-memory.md)
 
 - **状态：** 已接受
 - **Spec:** [004-agent-registry](../../specs/004-agent-registry/spec.md)（FR-040 原生记忆扫描、FR-041 导入/收编）、[007-memory](../../specs/007-memory/spec.md)（整理导入事实的 organizer）

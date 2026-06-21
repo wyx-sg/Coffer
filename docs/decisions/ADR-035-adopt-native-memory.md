@@ -1,6 +1,6 @@
-# ADR-034 — Adopt Native Memory: Read the Agent's Own Per-Project Memory, Import into Coffer
+# ADR-035 — Adopt Native Memory: Read the Agent's Own Per-Project Memory, Import into Coffer
 
-> 中文版: [ADR-034-adopt-native-memory.zh.md](./ADR-034-adopt-native-memory.zh.md)
+> 中文版: [ADR-035-adopt-native-memory.zh.md](./ADR-035-adopt-native-memory.zh.md)
 
 - **Status:** Accepted
 - **Spec:** [004-agent-registry](../../specs/004-agent-registry/spec.md) (FR-040 native-memory scan, FR-041 import/adopt), [007-memory](../../specs/007-memory/spec.md) (the organizer that transforms imported facts)

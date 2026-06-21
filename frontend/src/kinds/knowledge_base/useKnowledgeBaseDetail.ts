@@ -1,22 +1,20 @@
 // frontend/src/kinds/knowledge_base/useKnowledgeBaseDetail.ts
 //
 // All data + mutations for the KB detail surface, extracted so the page stays a
-// thin view (under the size ceiling). Owns the four queries (documents /
-// metrics / resource / selected-document), the seven write mutations, and the
-// derived helpers (run search by mode, select a doc, confirm-then-delete,
-// upload + duplicate-replace retry).
+// thin view. Documents are page-paginated (server offset) with a debounced
+// server-side title filter (`q`).
 import { useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/errors";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
+import { usePagedList, usePageClamp } from "@/lib/hooks/usePagedList";
 import {
   checkSources,
   deleteDocument,
   getDocument,
   getKnowledgeBase,
   getKnowledgeBaseMetrics,
-  grepKnowledgeBase,
   ingestDocument,
   listDocuments,
   reconvertDocument,
@@ -24,24 +22,20 @@ import {
   searchKnowledgeBase,
   updateFromSource,
   updateKnowledgeBaseConfig,
-  type GrepResponse,
   type KnowledgeBaseConfigOut,
-  type RetrievalMode,
   type SearchResponse,
   type SourceCheckResponse,
 } from "./api";
 
-// Page size for the document tree; "Load more" grows the fetch limit by this.
-const DOCS_PAGE_SIZE = 100;
+// Default page size for the document tree's page-based pagination.
+const DEFAULT_DOCS_PAGE_SIZE = 50;
 
 export function useKnowledgeBaseDetail(name: string) {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<RetrievalMode>("keyword");
   const [searchResult, setSearchResult] = useState<SearchResponse | null>(null);
-  const [grepResult, setGrepResult] = useState<GrepResponse | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -52,15 +46,30 @@ export function useKnowledgeBaseDetail(name: string) {
   // The latest source-check report; non-null opens the report dialog.
   const [sourceReport, setSourceReport] = useState<SourceCheckResponse | null>(null);
 
-  // Documents are paged so a large KB doesn't load all at once; the tree shows a
-  // "Load more" affordance once more documents exist than are loaded.
-  const [docLimit, setDocLimit] = useState(DOCS_PAGE_SIZE);
+  // Page-based pagination + debounced server-side title filter (`q`).
+  const {
+    page: docPage,
+    setPage: setDocPage,
+    pageSize: docPageSize,
+    setPageSize: setDocPageSize,
+    filter: docFilter,
+    setFilter: setDocFilter,
+    filterApplied: docFilterApplied,
+    offset: docOffset,
+  } = usePagedList(DEFAULT_DOCS_PAGE_SIZE);
+
   const docsQuery = useQuery({
-    queryKey: ["kb-documents", name, docLimit],
-    queryFn: () => listDocuments(name, docLimit, 0),
+    queryKey: ["kb-documents", name, docPage, docPageSize, docFilterApplied],
+    queryFn: () => listDocuments(name, docPageSize, docOffset, docFilterApplied),
     enabled: Boolean(name),
+    // Keep the prior page's rows + total while the next page loads, so the page
+    // count doesn't transiently read as 1 and trip the clamp during a forward nav.
+    placeholderData: keepPreviousData,
   });
-  const loadMoreDocuments = () => setDocLimit((n) => n + DOCS_PAGE_SIZE);
+  const docTotal = docsQuery.data?.total ?? 0;
+  const docPageCount = Math.max(1, Math.ceil(docTotal / docPageSize));
+  // Pull the page back into range when the total shrinks (last page emptied).
+  usePageClamp(docPage, docPageCount, setDocPage);
   const metricsQuery = useQuery({
     queryKey: ["kb-metrics", name],
     queryFn: () => getKnowledgeBaseMetrics(name),
@@ -142,17 +151,9 @@ export function useKnowledgeBaseDetail(name: string) {
     },
   });
   const search = useMutation({
-    mutationFn: () => searchKnowledgeBase(name, query, { topK: 5, mode }),
+    mutationFn: () => searchKnowledgeBase(name, query, { topK: 5 }),
     onSuccess: (data) => {
-      setGrepResult(null);
       setSearchResult(data);
-    },
-  });
-  const grep = useMutation({
-    mutationFn: () => grepKnowledgeBase(name, query, 100),
-    onSuccess: (data) => {
-      setSearchResult(null);
-      setGrepResult(data);
     },
   });
 
@@ -170,7 +171,7 @@ export function useKnowledgeBaseDetail(name: string) {
     if (selectedId && ids.includes(selectedId)) setSelectedId(null);
   };
 
-  const runSearch = () => (mode === "grep" ? grep.mutate() : search.mutate());
+  const runSearch = () => search.mutate();
   const selectDoc = (id: string) => setSelectedId(id);
   // Open the styled confirmation dialog (no native window.confirm). The page
   // renders <ConfirmDialog open={deleteOpen} .../> and calls performDelete.
@@ -204,15 +205,19 @@ export function useKnowledgeBaseDetail(name: string) {
     fileInputRef,
     query,
     setQuery,
-    mode,
-    setMode,
     searchResult,
-    grepResult,
     selectedId,
     showSettings,
     setShowSettings,
     docsQuery,
-    loadMoreDocuments,
+    docPage,
+    setDocPage,
+    docPageSize,
+    setDocPageSize,
+    docTotal,
+    docPageCount,
+    docFilter,
+    setDocFilter,
     metricsQuery,
     kbQuery,
     docDetailQuery,
@@ -226,7 +231,6 @@ export function useKnowledgeBaseDetail(name: string) {
     sourceReport,
     setSourceReport,
     search,
-    grep,
     runSearch,
     selectDoc,
     bulkDelete,

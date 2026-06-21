@@ -1,8 +1,9 @@
 // frontend/src/kinds/knowledge_base/KnowledgeBaseDetailPage.tsx
 //
 // KB detail surface (spec 006 redesign): a back link + header (metrics +
-// Settings/Reindex/Upload), ONE unified retrieval bar (keyword/vector/grep),
-// and a document tree on the left with a preview/editor on the right. Uploads
+// Settings/Reindex/Upload), ONE retrieval bar (one query → one answer; the
+// backend auto-selects the strategy), and a document tree on the left (paged,
+// server-side title filter) with a preview/editor on the right. Uploads
 // accept any format (converted to Markdown server-side); a duplicate upload can
 // be retried with replace=true. The KB is agent-read-only; all writes are
 // user-curated. State + mutations live in useKnowledgeBaseDetail.
@@ -97,13 +98,10 @@ export function KnowledgeBaseDetailPage() {
 
       <KnowledgeBaseSearchBar
         query={kb.query}
-        mode={kb.mode}
         searchResult={kb.searchResult}
-        grepResult={kb.grepResult}
-        error={kb.search.error ?? kb.grep.error}
-        isPending={kb.search.isPending || kb.grep.isPending}
+        error={kb.search.error}
+        isPending={kb.search.isPending}
         onQueryChange={kb.setQuery}
-        onModeChange={kb.setMode}
         onSearch={kb.runSearch}
         onSelectDocument={kb.selectDoc}
       />
@@ -113,8 +111,14 @@ export function KnowledgeBaseDetailPage() {
           docs={kb.docsQuery.data}
           selectedId={kb.selectedId}
           isLoading={kb.docsQuery.isPending}
-          isLoadingMore={kb.docsQuery.isFetching}
-          onLoadMore={kb.loadMoreDocuments}
+          filter={kb.docFilter}
+          onFilterChange={kb.setDocFilter}
+          page={kb.docPage}
+          pageCount={kb.docPageCount}
+          pageSize={kb.docPageSize}
+          total={kb.docTotal}
+          onPageChange={kb.setDocPage}
+          onPageSizeChange={kb.setDocPageSize}
           onSelect={kb.selectDoc}
           onBulkDelete={kb.bulkDelete}
           isBulkDeletePending={kb.bulkDeletePending}

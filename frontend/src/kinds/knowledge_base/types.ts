@@ -84,20 +84,10 @@ export interface Passage {
 }
 
 export interface SearchResponse {
-  mode: RetrievalMode;
-  fallback?: RetrievalMode | null;
+  // External retrieval is "one query → one answer": the backend auto-selects
+  // the strategy, so the response carries only ranked passages — no `mode`,
+  // no `fallback`.
   passages: Passage[];
-}
-
-export interface GrepHit {
-  path: string;
-  line_number: number;
-  line: string;
-}
-
-export interface GrepResponse {
-  hits: GrepHit[];
-  truncated: boolean;
 }
 
 export interface ReindexResult {

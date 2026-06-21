@@ -247,8 +247,9 @@ def test_search_route_returns_ranked_hits(tmp_path, monkeypatch):
         )
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body["mode"] == "keyword"
-        assert body["fallback"] is None
+        # mode / fallback are no longer surfaced (one query → one answer).
+        assert "mode" not in body
+        assert "fallback" not in body
         assert isinstance(body["passages"], list)
         assert len(body["passages"]) == 2
         hit = body["passages"][0]
@@ -476,3 +477,49 @@ def test_document_chunk_count_is_real(tmp_path, monkeypatch):
 
         detail = c.get(f"/api/v1/knowledge_bases/kb/documents/{doc_id}", headers=_HEADERS).json()
         assert detail["chunk_count"] >= 1
+
+
+@pytest.mark.acceptance(spec="006-knowledge-base", scenario="filter documents by title")
+def test_list_documents_filtered_by_title(tmp_path, monkeypatch):
+    """``GET /documents?q=`` applies a case-insensitive title substring filter
+    server-side BEFORE limit/offset; ``total`` is the filtered count."""
+    app = _app(tmp_path, monkeypatch, 59540)
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        _create_kb(c, "kb")
+        for fn, md in (
+            ("a.md", b"# Quarterly Budget\n\nthe budget body\n"),
+            ("b.md", b"# Travel Notes\n\nthe travel body\n"),
+            ("c.md", b"# Budget Forecast\n\nthe forecast body\n"),
+        ):
+            ing = c.post(
+                "/api/v1/knowledge_bases/kb/documents",
+                files={"file": (fn, md, "text/markdown")},
+                headers=_HEADERS,
+            )
+            assert ing.status_code == 201, ing.text
+
+        # Unfiltered: all three.
+        allout = c.get("/api/v1/knowledge_bases/kb/documents", headers=_HEADERS).json()
+        assert allout["total"] == 3
+
+        # Filter "budget" → only the two budget docs (case-insensitive: lowercase
+        # query matches the title-cased headings).
+        filtered = c.get(
+            "/api/v1/knowledge_bases/kb/documents",
+            params={"q": "budget"},
+            headers=_HEADERS,
+        ).json()
+        titles = sorted(d["title"] for d in filtered["documents"])
+        assert titles == ["Budget Forecast", "Quarterly Budget"]
+        # total reflects the FILTERED count, not the corpus size.
+        assert filtered["total"] == 2
+
+        # Case-insensitivity the other way: uppercase query still matches.
+        upper = c.get(
+            "/api/v1/knowledge_bases/kb/documents",
+            params={"q": "TRAVEL"},
+            headers=_HEADERS,
+        ).json()
+        assert upper["total"] == 1
+        assert upper["documents"][0]["title"] == "Travel Notes"

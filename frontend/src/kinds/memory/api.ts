@@ -11,7 +11,6 @@
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import { ApiError } from "@/lib/api/errors";
 import type {
-  RetrievalMode,
   MemoryStoreListOut,
   MemoryStoreOut,
   MemoryStoreMetrics,
@@ -125,10 +124,12 @@ export async function clearFacts(store: string): Promise<number> {
 export async function recall(
   store: string,
   query: string,
-  opts: { topK?: number; mode?: RetrievalMode; scope?: "global" | "project" | "both" } = {},
+  opts: { topK?: number; scope?: "global" | "project" | "both" } = {},
 ): Promise<RecallResponse> {
+  // External retrieval is "one query → one answer": the backend auto-selects
+  // the strategy, so the request carries no `mode` and the response no longer
+  // returns `mode`/`fallback`.
   const body: Record<string, unknown> = { query, top_k: opts.topK ?? 5 };
-  if (opts.mode) body.mode = opts.mode;
   if (opts.scope) body.scope = opts.scope;
   const r = await fetch(`${storeBase(store)}/recall`, {
     method: "POST",

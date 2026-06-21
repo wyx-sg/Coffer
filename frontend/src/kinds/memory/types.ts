@@ -167,9 +167,10 @@ export interface RecallHit {
 }
 
 export interface RecallResponse {
+  // External retrieval is "one query → one answer": the backend auto-selects
+  // the strategy, so the response carries only ranked hits — no `mode`,
+  // no `fallback`.
   hits: RecallHit[];
-  mode: RetrievalMode;
-  fallback?: boolean;
 }
 
 export interface FactInput {

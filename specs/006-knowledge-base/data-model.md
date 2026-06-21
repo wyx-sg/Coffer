@@ -14,6 +14,8 @@ The substrate domain (`backend/coffer/domain/knowledge/`) is shared with the mem
 
 Pydantic v2 `BaseModel`. Held inside `Resource.config` when `kind == "knowledge_base"`. All fields are **mutable** post-creation (changing chunk params or the embedding model triggers reindex/re-embed — there is no immutability lock).
 
+> **Retrieval `mode` is an internal engine concept** (ADR-034): `enabled_modes` / `default_mode` remain internal config — they configure the engine's resolved strategy but are NOT exposed for per-query selection on any external surface (REST / MCP / CLI / UI). A search is "one query → one answer".
+
 | Field                | Type                      | Notes                                                                                                               |
 | -------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `enabled_modes`      | `list[RetrievalMode]`     | Subset of `{"grep","keyword","vector","hybrid"}`. Default `["keyword","grep"]`. `vector` is opt-in and requires `embedding`; enabling `vector` auto-adds `hybrid` (RRF fusion of keyword+vector, ADR-012). |
@@ -98,7 +100,7 @@ Grep is a separate `infrastructure/knowledge/grep.py` ripgrep wrapper (no index)
 - `IngestRejected` — code `"INGEST_REJECTED"`; reason ∈ `{"empty","too_large","unsupported_type","duplicate"}`.
 - `EngineUnavailable` — code `"ENGINE_UNAVAILABLE"`; raised when a converter library / sqlite-vec / embedding provider needed for the requested operation is unavailable.
 - `ReconversionBlocked` — code `"RECONVERSION_BLOCKED"`; raised when re-converting a document whose `source_mode == "edited"`.
-- `SearchModeInvalid` — code `"SEARCH_MODE_INVALID"` (HTTP 400); raised when a search request names an EXPLICIT `mode=grep` (grep has its own endpoint) or any explicit mode not in the KB's `enabled_modes`. `vector` and `hybrid` are the exceptions — they degrade to keyword with a flagged fallback instead of erroring.
+- `SearchModeInvalid` — **removed** (ADR-034). The external search surface no longer accepts a `mode`, so `SEARCH_MODE_INVALID` (HTTP 400) no longer applies; the engine resolves the strategy internally and grep keeps its own endpoint.
 
 ## SQLite schema (unified substrate)
 
@@ -242,7 +244,7 @@ compute content_sha256 of the new markdown body
 
 `coffer kb reindex <name>` rescans the `docs/` directory for deltas and runs this routine per file, reconstructing all SQLite state from the files. The scan also prunes `documents` rows whose markdown file was removed out-of-band, reported in the optional `ReindexResult.documents_removed`; documents indexed keyword-only because the embed degraded are counted in the optional `documents_degraded`.
 
-**Degraded embed — decoupled retry state (KB8).** When an embed degrades (embedding provider unavailable / `EngineUnavailable`), the routine indexes the document keyword-only, keeps the **real `content_sha256`**, and sets the dedicated persisted **`embed_pending`** flag. This decouples the no-op gate from the retry state: a degraded document is no longer re-chunked + re-FTS'd on every scan (the old design overwrote `content_sha256` with an empty-string sentinel that never matched, churning the whole degraded corpus). The next reconcile sees `embed_pending` and retries **only** the embed — re-chunking in memory and upserting only `vec_chunks` (the chunk/FTS rows are untouched) — then clears the flag. `embed_pending` tracks ONLY a failed embedding **provider** call; it is orthogonal to sqlite-vec extension availability (a vec-table-unavailable degradation is `embedded=True`, handled at query time by `SearchResponse.fallback`). The KB surfaces the persisted count as `KnowledgeBaseMetrics.documents_degraded`, so a degrade observed during ANY read (list / get / search / grep) is visible, not only an explicit `POST /reindex`.
+**Degraded embed — decoupled retry state (KB8).** When an embed degrades (embedding provider unavailable / `EngineUnavailable`), the routine indexes the document keyword-only, keeps the **real `content_sha256`**, and sets the dedicated persisted **`embed_pending`** flag. This decouples the no-op gate from the retry state: a degraded document is no longer re-chunked + re-FTS'd on every scan (the old design overwrote `content_sha256` with an empty-string sentinel that never matched, churning the whole degraded corpus). The next reconcile sees `embed_pending` and retries **only** the embed — re-chunking in memory and upserting only `vec_chunks` (the chunk/FTS rows are untouched) — then clears the flag. `embed_pending` tracks ONLY a failed embedding **provider** call; it is orthogonal to sqlite-vec extension availability (a vec-table-unavailable degradation is `embedded=True`, handled at query time by the engine's internal keyword fallback — not surfaced as a response flag, per ADR-034). The KB surfaces the persisted count as `KnowledgeBaseMetrics.documents_degraded`, so a degrade observed during ANY read (list / get / search / grep) is visible, not only an explicit `POST /reindex`.
 
 ## Cascade & integrity rules
 
@@ -291,7 +293,7 @@ Lives in `contracts/api.openapi.yaml`. Highlights (app-wide error envelope `{err
 - `GET /api/v1/knowledge_bases` — list KBs
 - `GET /api/v1/knowledge_bases/{name}` — get one KB
 - `POST /api/v1/knowledge_bases/{name}/documents` — multipart upload + ingest (any format)
-- `GET /api/v1/knowledge_bases/{name}/documents` — paginated list (each row carries its absolute `path` + containing-folder `folder_path`)
+- `GET /api/v1/knowledge_bases/{name}/documents` — paginated list with an optional case-insensitive title filter `q` (applied server-side before paging; `total` reflects the filtered count); each row carries its absolute `path` + containing-folder `folder_path`
 - `GET /api/v1/knowledge_bases/{name}/documents/{doc_id}` — read-only markdown body + frontmatter + absolute `path` + `folder_path`
 - `PUT /api/v1/knowledge_bases/{name}/documents/{doc_id}` — edit markdown via API (sets `source_mode=edited`, reindexes); the UI is read-only and edits otherwise arrive via the external editor (picked up by reindex-on-read) or agent MCP
 - `POST /api/v1/knowledge_bases/{name}/documents/{doc_id}/reconvert` — re-run conversion from `raw/` (blocked with `RECONVERSION_BLOCKED` once hand-edited)
@@ -299,7 +301,7 @@ Lives in `contracts/api.openapi.yaml`. Highlights (app-wide error envelope `{err
 - `DELETE /api/v1/knowledge_bases/{name}/documents/{doc_id}` — delete one document
 - `POST /api/v1/knowledge_bases/{name}/reindex` — rescan + rebuild index from files
 - `POST /api/v1/knowledge_bases/{name}/check-sources` — detect path-tracked documents whose external original changed (`unchanged`/`changed`/`missing`; auto-refreshes when `auto_update_sources`)
-- `POST /api/v1/knowledge_bases/{name}/search` — `{query, top_k?, mode?}` → ranked passages (+ `fallback`)
+- `POST /api/v1/knowledge_bases/{name}/search` — `{query, top_k?}` → ranked passages (no `mode` input, no `fallback` echo — retrieval mode is internal, ADR-034)
 - `POST /api/v1/knowledge_bases/{name}/grep` — `{pattern, max_matches?}` → file/line hits
 - `GET /api/v1/knowledge_bases/{name}/metrics` — counts + indexed modes + disk bytes
 
