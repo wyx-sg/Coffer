@@ -175,7 +175,8 @@ CREATE TABLE memory_store_labels (
         │   └── INDEX.md
         ├── consolidation-log.md
         ├── superseded/<slug>-<ts>.md
-        └── rules/rules.md
+        ├── rules/rules.md
+        └── journal/     <YYYY-MM>.md     # episodic, append-only, time-partitioned; synced (recall added in the indexing slice)
 ```
 
 **没有 `MEMORY.md`** —— 此前的派生投影已移除。`recall` glob `knowledge/**/*.md`（排除 `INDEX.md`），所以 organizer 写入主题文档后会被透明拾取，手写的主题文档也会被立即发现。`INDEX.md` 与 store 根目录的 `consolidation-log.md` 是**派生/机器本地**的：排除在 recall 与同步镜像之外（每台机器从已同步的主题文档重新生成 `INDEX.md`；日志按机器各自维护）。主题文档本身是真相源，DO 同步。store 根的 **`superseded/`** tombstone 保存 reorg pass（FR-033/034）退役的旧版本：与 `handoff/` 一样在 `knowledge/` lane 之外，故**排除在 recall 之外**；但与派生文件不同，它**DO 同步** —— 它是可恢复的真相源历史，而非重新生成的派生物。store 根的 **`rules/rules.md`** 是**过程性 lane**（FR-036）：organizer 把规则形态的 inbox 条目分类追加进来（追加，而非主题合并）；它在 `knowledge/` lane 之外，故**排除在 recall 之外**（rules 由 session-start 注入交付 —— 那是之后的切片 —— 而非 `recall`），且作为真相源**DO 同步**（与 `handoff/` 一样）。它经 `GET /memory_stores/{name}/rules` / `coffer memory rules` 只读暴露。
