@@ -5,12 +5,13 @@
 // a rendered preview/editor on the right (mirrors the KB detail page). Memory
 // is AI-authored — agents write via the MCP `remember` tool; the UI lets humans
 // CORRECT existing facts (edit the Markdown / delete), not add new ones.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { translateApiError } from "@/lib/api/errors";
+import { usePageClamp } from "@/lib/hooks/usePagedList";
 import {
   clearFacts,
   deleteFact,
@@ -21,7 +22,6 @@ import {
   recall,
   type FactOut,
   type RecallResponse,
-  type RetrievalMode,
 } from "./api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MemoryDetailHeader } from "./MemoryDetailHeader";
@@ -31,8 +31,8 @@ import { MemoryFactViewer } from "./MemoryFactViewer";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 
 // Facts are paged so a large (MCP-grown) store doesn't load all at once; the
-// tree shows a "Load more" affordance once more facts exist than are loaded.
-const FACTS_PAGE_SIZE = 100;
+// tree uses page-based pagination (server offset) below the list.
+const DEFAULT_FACTS_PAGE_SIZE = 50;
 
 export function MemoryStoreDetailPage() {
   const { t } = useTranslation();
@@ -40,7 +40,6 @@ export function MemoryStoreDetailPage() {
   const qc = useQueryClient();
 
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<RetrievalMode>("keyword");
   const [recallResult, setRecallResult] = useState<RecallResponse | null>(null);
 
   const [selected, setSelected] = useState<FactOut | null>(null);
@@ -51,12 +50,24 @@ export function MemoryStoreDetailPage() {
   const [clearOpen, setClearOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
 
-  const [factLimit, setFactLimit] = useState(FACTS_PAGE_SIZE);
+  const [factPage, setFactPage] = useState(1);
+  const [factPageSize, setFactPageSize] = useState(DEFAULT_FACTS_PAGE_SIZE);
+  // A smaller page size can shrink the result set: reset to page 1.
+  useEffect(() => {
+    setFactPage(1);
+  }, [factPageSize]);
   const factsQuery = useQuery({
-    queryKey: ["memory-facts", store, factLimit],
-    queryFn: () => listFacts(store, factLimit, 0),
+    queryKey: ["memory-facts", store, factPage, factPageSize],
+    queryFn: () => listFacts(store, factPageSize, (factPage - 1) * factPageSize),
     enabled: Boolean(store),
+    // Keep the prior page's facts + total while the next page loads, so the page
+    // count doesn't transiently read as 1 and trip the clamp during a forward nav.
+    placeholderData: keepPreviousData,
   });
+  const factTotal = factsQuery.data?.total ?? 0;
+  const factPageCount = Math.max(1, Math.ceil(factTotal / factPageSize));
+  // Pull the page back into range when the total shrinks (last page emptied).
+  usePageClamp(factPage, factPageCount, setFactPage);
   const metricsQuery = useQuery({
     queryKey: ["memory-metrics", store],
     queryFn: () => getMemoryStoreMetrics(store),
@@ -76,9 +87,11 @@ export function MemoryStoreDetailPage() {
     void qc.invalidateQueries({ queryKey: ["memory-metrics", store] });
   };
 
-  // Keep the selected fact in sync with the freshly-loaded list.
+  // Keep the selected fact in sync with the freshly-loaded list when it's on the
+  // current page; otherwise (it's on another page) keep showing the captured
+  // selection so paging the tree doesn't blank the viewer.
   const liveSelected = selected
-    ? (factsQuery.data?.facts.find((f) => f.id === selected.id) ?? null)
+    ? (factsQuery.data?.facts.find((f) => f.id === selected.id) ?? selected)
     : null;
 
   const del = useMutation({
@@ -89,7 +102,7 @@ export function MemoryStoreDetailPage() {
     },
   });
   const recallM = useMutation({
-    mutationFn: () => recall(store, query, { topK: 5, mode }),
+    mutationFn: () => recall(store, query, { topK: 5 }),
     onSuccess: (data) => setRecallResult(data),
   });
   const clear = useMutation({
@@ -128,12 +141,10 @@ export function MemoryStoreDetailPage() {
 
       <MemoryRecallPanel
         query={query}
-        mode={mode}
         result={recallResult}
         error={recallM.error}
         isPending={recallM.isPending}
         onQueryChange={setQuery}
-        onModeChange={setMode}
         onRecall={() => recallM.mutate()}
       />
 
@@ -142,8 +153,12 @@ export function MemoryStoreDetailPage() {
           facts={factsQuery.data}
           selectedId={liveSelected?.id ?? null}
           isLoading={factsQuery.isPending}
-          isLoadingMore={factsQuery.isFetching}
-          onLoadMore={() => setFactLimit((n) => n + FACTS_PAGE_SIZE)}
+          page={factPage}
+          pageCount={factPageCount}
+          pageSize={factPageSize}
+          total={factTotal}
+          onPageChange={setFactPage}
+          onPageSizeChange={setFactPageSize}
           onSelect={selectFact}
         />
         <MemoryFactViewer

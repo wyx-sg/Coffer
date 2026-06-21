@@ -168,7 +168,7 @@ branch with no prior handoff, `coffer__resume` reports `found=false`.
 
 ### Edge Cases
 
-- **Vector requested but embedding unconfigured**: `recall` with `mode=vector` falls back to keyword and flags the fallback in the response; it never blocks. Default retrieval is keyword+grep (zero config, offline).
+- **Vector unavailable but embedding unconfigured**: when the store's resolved strategy needs vectors but no embedding provider is configured, `recall` falls back to keyword internally and returns results; it never blocks. The fallback is NOT surfaced as a query-time response flag. Default retrieval is keyword+grep (zero config, offline).
 - **Resume on a fresh branch**: when no handoff has been saved for the current (project × branch), `coffer__resume` returns `found=false` rather than erroring; nothing is fabricated.
 - **Handoff outside a git project**: a cwd not inside a git project has no project scope and no branch, so `coffer__resume` returns `found=false` and `coffer__set_handoff` is rejected (there is no global handoff).
 - **Direct disk edit of a fact file**: the next `recall` lazily scans the small fact dir for deltas and reindexes, so out-of-band edits are picked up with no watcher.
@@ -267,8 +267,8 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 ### Scenario: vector recall falls back when embedding is unconfigured
 
 - **Given** a memory store with no embedding provider configured,
-- **When** `coffer__recall` is called with `mode=vector`,
-- **Then** the call returns keyword results and flags the fallback in the response (never an error).
+- **When** the engine resolves to a vector strategy but no embedder is available,
+- **Then** the call runs a keyword search instead and returns results with no error; the degradation is NOT surfaced as a query-time response flag (the internal keyword fallback, like the KB face).
 
 ### Scenario: agent saves and resumes a working-state handoff
 
@@ -434,13 +434,13 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Retrieval**
 
-- **FR-008**: Recall MUST use the unified retrieval engine shared with the knowledge base: `grep` (served for real — ripgrep over the store's fact files; essential for content FTS5 cannot tokenize, e.g. CJK), `keyword` (FTS5 BM25, the default), and `vector` (sqlite-vec with a configurable embedding provider). When `vector` is requested but no embedding provider is configured, recall MUST fall back to `keyword` and flag the fallback as a boolean in the response — never block. The MCP `coffer__recall` response includes that `fallback` boolean.
+- **FR-008**: Recall MUST use the unified retrieval engine shared with the knowledge base: `grep` (ripgrep over the store's fact files; essential for content FTS5 cannot tokenize, e.g. CJK), `keyword` (FTS5 BM25, the default), and `vector` (sqlite-vec with a configurable embedding provider). These engine modes are an **internal detail** — recall does NOT take an external `mode`; the engine resolves the store's default strategy automatically. When the resolved strategy needs vectors but no embedding provider is configured, recall MUST fall back to `keyword` internally — never block, and the fallback is NOT surfaced as a query-time response flag (the `fallback` field is removed from the recall response).
 - **FR-009**: `coffer__recall` MUST default to spanning both the project and global stores (an explicit `scope` narrows recall to one store: `project` = the project store only, `global` = the global store only); cross-store results are merged by reciprocal rank fusion (per-store scores are not comparable across modes/stores; each hit keeps its per-store score, only the merged order comes from the fusion). Results carry id, text, score, source, and time — `time` is the fact's `updated_at` and `source` is `<scope>:<fact file path>`. Default `top_k` is 5; callers MAY specify 1–20.
 - **FR-010**: Memory MUST use **lazy reindex-on-read**: `recall` first scans the fact directory for deltas (added/changed/removed files by content hash) and reconciles the index before searching, so out-of-band edits — a human's corrections made in their own external editor, or any direct on-disk edit — are visible immediately with no filesystem watcher. This is the mechanism that makes external corrections appear, so the UI can stay a read-only viewer (FR-017) while curation happens in the user's editor.
 
 **Agent integration via MCP**
 
-- **FR-015**: Coffer's MCP gateway MUST expose built-in tools `coffer__recall(query, scope?, mode?, top_k?)` (`mode` ∈ `grep` | `keyword` | `vector`), `coffer__remember(text, scope?, type?)`, `coffer__list_memory(scope?)`, `coffer__set_handoff(body)`, and `coffer__resume()`, namespaced under the reserved `coffer__` prefix. `remember` defaults to `scope=project`; `recall` defaults to both scopes. There is no MCP `update_memory`/`forget` tool — fact edit/delete is a user surface (REST/CLI/external editor), per FR-006.
+- **FR-015**: Coffer's MCP gateway MUST expose built-in tools `coffer__recall(query, scope?, top_k?)` (no `mode` parameter — retrieval mode is internal), `coffer__remember(text, scope?, type?)`, `coffer__list_memory(scope?)`, `coffer__set_handoff(body)`, and `coffer__resume()`, namespaced under the reserved `coffer__` prefix. `remember` defaults to `scope=project`; `recall` defaults to both scopes. There is no MCP `update_memory`/`forget` tool — fact edit/delete is a user surface (REST/CLI/external editor), per FR-006.
 - **FR-016**: Built-in memory tool invocations MUST share the existing invocation-logging surface (one `mcp_invocations` row: tool name + who/when/duration/outcome only — no arguments or returned content).
 
 **Working-state handoff (continuity)**

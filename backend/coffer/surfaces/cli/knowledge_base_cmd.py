@@ -31,23 +31,26 @@ def create(
     ctx: typer.Context,
     name: str = typer.Argument(...),
     description: str | None = typer.Option(None, "--description"),
-    mode: list[str] = typer.Option(  # noqa: B008
-        ["keyword", "grep"],
-        "--mode",
-        help="Enabled retrieval modes (repeatable): grep / keyword / vector.",
+    enable_vector: bool = typer.Option(
+        False,
+        "--enable-vector/--no-enable-vector",
+        help="Enable vector retrieval (adds 'vector'; the config validator then "
+        "auto-adds 'hybrid' and makes it the default). Off → keyword + grep only.",
     ),
-    default_mode: str = typer.Option("keyword", "--default-mode"),
     chunk_size: int = typer.Option(512, "--chunk-size"),
     chunk_overlap: int = typer.Option(64, "--chunk-overlap"),
     max_document_mb: int = typer.Option(25, "--max-document-mb"),
 ) -> None:
     """Create a new knowledge base."""
+    # Off → keyword + grep; on → keyword + grep + vector. The
+    # KnowledgeBaseConfig validator auto-adds 'hybrid' and sets default_mode to
+    # hybrid when vector is present, so we never set default_mode ourselves.
+    enabled_modes = ["keyword", "grep", "vector"] if enable_vector else ["keyword", "grep"]
     body = {
         "name": name,
         "description": description,
         "config": {
-            "enabled_modes": mode,
-            "default_mode": default_mode,
+            "enabled_modes": enabled_modes,
             "chunk_size": chunk_size,
             "chunk_overlap": chunk_overlap,
             "max_document_bytes": max_document_mb * 1024 * 1024,
@@ -308,13 +311,10 @@ def search(
     name: str = typer.Argument(...),
     query: str = typer.Argument(...),
     top_k: int = typer.Option(5, "--top-k"),
-    mode: str | None = typer.Option(None, "--mode", help="keyword / vector (overrides default)."),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Search a knowledge base (keyword / vector)."""
+    """Search a knowledge base (one query → one answer)."""
     payload: dict[str, object] = {"query": query, "top_k": top_k}
-    if mode is not None:
-        payload["mode"] = mode
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post(f"/knowledge_bases/{name}/search", json=payload)
@@ -323,8 +323,6 @@ def search(
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
         return
-    if data.get("fallback"):
-        typer.echo(f"(vector unavailable — fell back to {data['fallback']})", err=True)
     for i, p in enumerate(data["passages"], start=1):
         typer.echo(f"{i}. {p['title']} (score={p['score']:.3f})")
         typer.echo(f"  {p['text'][:300]}")

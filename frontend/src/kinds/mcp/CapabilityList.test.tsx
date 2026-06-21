@@ -90,7 +90,7 @@ describe("CapabilityList", () => {
     fireEvent.click(row);
 
     await waitFor(() => {
-      expect(screen.getByText(/"type": "object"/)).toBeInTheDocument();
+      expect(document.querySelector(".cm-content")?.textContent).toContain('"type": "object"');
     });
   });
 

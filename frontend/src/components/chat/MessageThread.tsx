@@ -2,7 +2,6 @@
 // Scrollable list of messages + live streaming message.
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { chatApi } from "@/lib/api/chat";
 import { messagesKey } from "@/lib/hooks/useConversations";
@@ -13,6 +12,9 @@ import { Button } from "@/components/ui/button";
 import { AgentModelBar } from "./AgentModelBar";
 import { MessageBubble } from "./MessageBubble";
 import { Composer, type ComposerHandle } from "./Composer";
+import { PendingQueue } from "./PendingQueue";
+import { FindWidget } from "@/components/preview/FindWidget";
+import { useDomFind } from "@/components/preview/useDomFind";
 import { translateApiError } from "@/lib/api/errors";
 
 interface Props {
@@ -73,6 +75,8 @@ export function MessageThread({
   // to read history, new tokens must not yank them back down. Seeded true so
   // the first render lands at the latest message.
   const followRef = useRef(true);
+  // Transcript-wide Cmd/Ctrl+F over the rendered messages (shared find UX).
+  const { find, inputRef, onKeyDown } = useDomFind(scrollRef);
 
   const { data, isPending, error } = useQuery({
     queryKey: messagesKey(conversation.id),
@@ -117,44 +121,66 @@ export function MessageThread({
         disabled={readOnly}
       />
 
-      <div
-        ref={scrollRef}
-        onScroll={() => {
-          if (scrollRef.current) followRef.current = isNearBottom(scrollRef.current);
-        }}
-        className="flex-1 overflow-y-auto px-4 py-4"
-      >
-        {isPending && (
-          <p className="py-8 text-center text-sm text-muted-foreground">{t("common.loading")}</p>
-        )}
-        {error && (
-          <p className="py-4 text-center text-sm text-destructive">{translateApiError(t, error)}</p>
-        )}
-        {!isPending && !error && data?.length === 0 && !liveMessage && (
-          <p className="py-8 text-center text-sm text-muted-foreground">{t("chat.thread.empty")}</p>
-        )}
-
-        <div className="space-y-3">
-          {visibleMessages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
-          ))}
-          {showEcho && (
-            <MessageBubble
-              message={{
-                id: "optimistic-user-echo",
-                conversation_id: conversation.id,
-                seq: Number.MAX_SAFE_INTEGER,
-                role: "user",
-                content: [{ type: "text", text: echoText }],
-                status: "complete",
-                created_at: "",
-              }}
-            />
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        <div
+          ref={scrollRef}
+          tabIndex={0}
+          onScroll={() => {
+            if (scrollRef.current) followRef.current = isNearBottom(scrollRef.current);
+          }}
+          onKeyDown={onKeyDown}
+          className="flex-1 overflow-y-auto px-4 py-4 outline-none"
+        >
+          {isPending && (
+            <p className="py-8 text-center text-sm text-muted-foreground">{t("common.loading")}</p>
           )}
-          {liveMessage && <MessageBubble live={liveMessage} />}
-        </div>
+          {error && (
+            <p className="py-4 text-center text-sm text-destructive">
+              {translateApiError(t, error)}
+            </p>
+          )}
+          {!isPending && !error && data?.length === 0 && !liveMessage && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {t("chat.thread.empty")}
+            </p>
+          )}
 
-        <div ref={bottomRef} />
+          <div className="space-y-3">
+            {visibleMessages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+            {showEcho && (
+              <MessageBubble
+                message={{
+                  id: "optimistic-user-echo",
+                  conversation_id: conversation.id,
+                  seq: Number.MAX_SAFE_INTEGER,
+                  role: "user",
+                  content: [{ type: "text", text: echoText }],
+                  status: "complete",
+                  created_at: "",
+                }}
+              />
+            )}
+            {liveMessage && <MessageBubble live={liveMessage} />}
+          </div>
+
+          <div ref={bottomRef} />
+        </div>
+        {find.open ? (
+          <FindWidget
+            ref={inputRef}
+            query={find.query}
+            count={find.count}
+            active={find.active}
+            caseSensitive={find.caseSensitive}
+            onQueryChange={find.setQuery}
+            onToggleCase={find.toggleCaseSensitive}
+            onNext={find.next}
+            onPrev={find.prev}
+            onClose={find.closeFind}
+          />
+        ) : null}
       </div>
 
       {/* C1: Dismissible error banner for turn/streaming failures. */}
@@ -184,42 +210,11 @@ export function MessageThread({
         </div>
       ) : (
         <>
-          {pending.length > 0 && (
-            <div className="flex max-h-40 flex-col gap-1 overflow-y-auto border-t border-border bg-background px-4 pt-2">
-              <span className="text-xs text-muted-foreground">{t("chat.queue.label")}</span>
-              {/* One queued message per row: full (wrapped, clamped) text plus
-                  edit (pull back into the composer) and remove controls. */}
-              {pending.map((text, idx) => (
-                <div
-                  key={`${idx}-${text}`}
-                  className="flex items-start gap-2 rounded-md bg-secondary px-2 py-1 text-xs text-secondary-foreground"
-                >
-                  <span
-                    className="line-clamp-2 min-w-0 flex-1 whitespace-pre-wrap break-words"
-                    title={text}
-                  >
-                    {text}
-                  </span>
-                  <button
-                    type="button"
-                    className="shrink-0 rounded p-0.5 hover:text-foreground"
-                    onClick={() => handleEditPending(idx)}
-                    aria-label={t("chat.queue.edit")}
-                  >
-                    <Pencil className="size-3" />
-                  </button>
-                  <button
-                    type="button"
-                    className="shrink-0 rounded p-0.5 hover:text-destructive"
-                    onClick={() => onSetPending?.(pending.filter((_, i) => i !== idx))}
-                    aria-label={t("chat.queue.remove")}
-                  >
-                    <X className="size-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          <PendingQueue
+            pending={pending}
+            onEdit={handleEditPending}
+            onRemove={(idx) => onSetPending?.(pending.filter((_, i) => i !== idx))}
+          />
           {/* The composer is NEVER disabled by streaming: a message sent during a
               turn queues server-side. */}
           <Composer ref={composerRef} onSend={onSend} streaming={isStreaming} onStop={onStop} />

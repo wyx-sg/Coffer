@@ -52,13 +52,14 @@ def register_memory_builtin_tools(
         cwd = _cwd(args)
         scope = _scope_arg(args, default=None)  # None ⇒ span project + global
         top_k = _top_k_arg(args)
-        mode = args.get("mode")
-        hits, fallback = await memory_service.recall(
+        # One query → one answer: the surface never selects a mode; the service
+        # resolves it from the store's default_mode (mode stays internal).
+        hits, _fallback = await memory_service.recall(
             cwd=cwd,
             query=query,
             scope=scope,
             top_k=top_k,
-            mode=mode if mode in {"grep", "keyword", "vector"} else None,
+            mode=None,
         )
         return {
             "hits": [
@@ -71,9 +72,6 @@ def register_memory_builtin_tools(
                 }
                 for h in hits
             ],
-            # True when a vector request degraded to keyword (no embedding
-            # configured) — the acceptance scenario requires the flag here too.
-            "fallback": fallback,
         }
 
     async def remember(args: dict[str, Any]) -> dict[str, Any]:
@@ -151,7 +149,6 @@ def register_memory_builtin_tools(
                     "query": {"type": "string"},
                     "scope": {"type": "string", "enum": ["project", "global"]},
                     "top_k": {"type": "integer", "default": 5, "minimum": 1, "maximum": 20},
-                    "mode": {"type": "string", "enum": ["grep", "keyword", "vector"]},
                     "cwd": {"type": "string", "description": "Agent launch cwd (session-injected)"},
                 },
                 "required": ["query"],

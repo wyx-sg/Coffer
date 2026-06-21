@@ -1,10 +1,20 @@
 {
+  "preview": {
+    "find": {
+      "label": "Find",
+      "placeholder": "Find…",
+      "matches": "{{active}}/{{total}}",
+      "noMatches": "No matches",
+      "next": "Next",
+      "prev": "Previous",
+      "caseSensitive": "Case sensitive",
+      "close": "Close"
+    }
+  },
   "fileActions": {
     "openInEditor": "Open in editor",
-    "openFolder": "Open folder",
     "reveal": "Reveal in Finder",
     "openFailed": "Couldn't open the file in your editor.",
-    "openFolderFailed": "Couldn't open the folder in your editor.",
     "revealFailed": "Couldn't reveal the file."
   },
   "common": {
@@ -149,6 +159,7 @@
       "statusFilter": "Status",
       "toggleAria": "Toggle {{kind}} {{key}}",
       "noSchema": "No input schema.",
+      "schemaLabel": "Input schema",
       "header": {
         "name": "Name",
         "enabled": "Enabled"
@@ -683,6 +694,8 @@
       "mcp": {
         "gatewayTitle": "Via Coffer gateway",
         "directTitle": "Direct servers",
+        "openServersPage": "Open the MCP servers page",
+        "gatewayManagedHint": "Coffer serves its MCP servers to this agent through the gateway. Manage them on the MCP servers page.",
         "source": "Source",
         "transport": "Transport",
         "enabled": "Enabled",
@@ -727,7 +740,18 @@
       "title": "Memory",
       "subtitle": "Coffer memory stores (global and per-project) available to this agent.",
       "empty": "No memory stores yet.",
-      "accessViaGateway": "This agent accesses Coffer memory via the MCP gateway; manage a store's facts from its detail page."
+      "accessViaGateway": "This agent accesses Coffer memory via the MCP gateway; manage stores on the Memory page.",
+      "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to give the agent access to Coffer memory.",
+      "openMemoryPage": "Open the Memory page",
+      "nativeHint": "The agent's own native memory stores (not managed by Coffer), read-only.",
+      "nativeEmpty": "This agent has no native memory stores.",
+      "colProject": "Project",
+      "colPath": "Path",
+      "colItems": "Items",
+      "import": "Import to Coffer",
+      "importing": "Importing…",
+      "importDone": "Imported {{count}} item(s) from {{project}} into Coffer; organizing in the background.",
+      "importNoProject": "Couldn't map {{project}} to a Coffer project (not a git project)."
     },
     "configDirOverride": "Config directory (optional)",
     "configDirPlaceholder": "Leave blank for the default (~/.claude)",
@@ -765,15 +789,6 @@
         "subagents": "Custom subagent definitions, one Markdown file per subagent.",
         "config": "Codex CLI configuration: model, providers, and tool settings.",
         "hooks": "Lifecycle hooks that run commands around Codex events."
-      },
-      "find": {
-        "toggle": "Find / Replace",
-        "find": "Find",
-        "replace": "Replace",
-        "replaceAll": "Replace all",
-        "findNext": "Find next",
-        "matches": "{{n}} matches",
-        "caseSensitive": "Case sensitive"
       }
     },
     "mcp": {
@@ -818,6 +833,8 @@
       "degradedTooltip": "Symlinks aren't available on this filesystem, so Coffer delivered a copy. The agent won't see edits to the master skill until you re-enable it.",
       "follow": "Follow master library",
       "followHint": "While on, every skill in the master library is delivered to this agent automatically; newly registered skills appear as soon as they land.",
+      "followingManagedHint": "While following the master library, Coffer delivers every skill automatically. Manage the master library on the Skills page.",
+      "openSkillsPage": "Open the Skills page",
       "excludeHint": "While following, switching a skill off adds it to this agent's exclusion list.",
       "unmanagedTitle": "Unmanaged skills",
       "adopt": "Adopt",

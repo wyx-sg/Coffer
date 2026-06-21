@@ -103,17 +103,20 @@ async def test_remember_writes_into_knowledge_inbox(mem) -> None:
     assert any("wombat" in h["text"] for h in out["hits"])
 
 
-async def test_recall_grep_mode_never_raises(mem) -> None:
-    # ``grep`` is a real recall mode (ripgrep over the fact files, FR-008); a
-    # store whose ``default_mode`` is grep must recall via ripgrep, not crash.
+async def test_recall_resolves_default_mode_internally(mem) -> None:
+    # The MCP recall surface never selects a mode; the service resolves it from
+    # the store's ``default_mode`` (grep here) and serves it for real (FR-008).
     reg = _registry(mem)
     remember = reg.get(f"{COFFER_TOOL_PREFIX}remember")
     recall = reg.get(f"{COFFER_TOOL_PREFIX}recall")
     assert remember is not None and recall is not None
     await remember.handler({"text": "ships via make release", "cwd": mem.project_cwd})
 
-    out = await recall.handler({"query": "make release", "cwd": mem.project_cwd, "mode": "grep"})
+    out = await recall.handler({"query": "make release", "cwd": mem.project_cwd})
     assert any("make release" in h["text"] for h in out["hits"])
+    # mode / fallback are no longer surfaced on the MCP recall response.
+    assert "mode" not in out
+    assert "fallback" not in out
 
     from coffer.domain.memory.config import MemoryStoreConfig
     from coffer.domain.resource import ResourceRef
@@ -124,19 +127,20 @@ async def test_recall_grep_mode_never_raises(mem) -> None:
     )
     cfg = MemoryStoreConfig(retrieval_modes=["grep", "keyword"], default_mode="grep")
     await mem.resources.update_config(ref, new_config=cfg.model_dump(mode="json"), actor="user")
+    # Internal callers still pass mode (here None ⇒ store default_mode=grep).
     hits, eff_mode, _ = await mem.service.recall_in_store(
         store_name="global", query="make release", mode=None
     )
     assert any("make release" in h.text for h in hits)
-    assert eff_mode == "grep"  # grep is served for real and reported as such
+    assert eff_mode == "grep"  # grep is served for real and reported internally
 
 
-async def test_recall_tool_advertises_all_three_modes(mem) -> None:
-    # FR-008: recall serves grep, keyword and vector; the enum advertises all.
+async def test_recall_tool_has_no_mode_property(mem) -> None:
+    # One query → one answer: the MCP recall surface no longer exposes a mode.
     reg = _registry(mem)
     recall = reg.get(f"{COFFER_TOOL_PREFIX}recall")
     assert recall is not None
-    assert recall.input_schema["properties"]["mode"]["enum"] == ["grep", "keyword", "vector"]
+    assert "mode" not in recall.input_schema["properties"]
 
 
 async def test_remember_rejects_empty_text(mem) -> None:
@@ -159,32 +163,21 @@ async def test_list_memory_tool(mem) -> None:
     assert out["facts"][0]["actor"] == "agent"
 
 
-@pytest.mark.acceptance(
-    spec="007-memory",
-    scenario="vector recall falls back when embedding is unconfigured",
-)
-async def test_recall_tool_reports_vector_fallback(mem) -> None:
-    """The MCP ``coffer__recall`` must flag a degraded vector request, like the
-    REST recall does (review misalignment #2)."""
-    reg = _registry(mem)
-    remember = reg.get(f"{COFFER_TOOL_PREFIX}remember")
-    recall = reg.get(f"{COFFER_TOOL_PREFIX}recall")
-    await remember.handler({"text": "wombat burrows are deep", "scope": "global"})
-    out = await recall.handler({"query": "wombat", "mode": "vector"})
-    assert out["fallback"] is True
-    assert any("wombat" in h["text"] for h in out["hits"])
-
-    keyword = await recall.handler({"query": "wombat", "mode": "keyword"})
-    assert keyword["fallback"] is False
-
-
-async def test_recall_tool_serves_grep_mode(mem) -> None:
+async def test_recall_tool_serves_grep_via_store_default(mem) -> None:
     """FR-008: recall supports grep for real — ripgrep over the fact files
-    (essential for CJK content FTS5 cannot tokenize)."""
+    (essential for CJK content FTS5 cannot tokenize). The MCP surface never picks
+    a mode; a store whose ``default_mode`` is grep recalls CJK content via grep."""
+    from coffer.domain.memory.config import MemoryStoreConfig
+    from coffer.domain.resource import ResourceRef
+
     reg = _registry(mem)
     remember = reg.get(f"{COFFER_TOOL_PREFIX}remember")
     recall = reg.get(f"{COFFER_TOOL_PREFIX}recall")
+    assert remember is not None and recall is not None
     await remember.handler({"text": "we deploy with 蓝绿发布 strategy", "scope": "global"})
-    out = await recall.handler({"query": "蓝绿发布", "mode": "grep"})
+    ref = ResourceRef("memory", "global")
+    cfg = MemoryStoreConfig(retrieval_modes=["grep", "keyword"], default_mode="grep")
+    await mem.resources.update_config(ref, new_config=cfg.model_dump(mode="json"), actor="user")
+    out = await recall.handler({"query": "蓝绿发布", "scope": "global"})
     assert any("蓝绿发布" in h["text"] for h in out["hits"])
-    assert out["fallback"] is False
+    assert "fallback" not in out

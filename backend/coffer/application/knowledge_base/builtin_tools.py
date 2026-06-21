@@ -59,24 +59,15 @@ def register_kb_builtin_tools(
         kb = str(args["kb"])
         query = str(args["query"])[:_MAX_QUERY_CHARS]
         top_k = max(1, min(_MAX_TOP_K, int(args.get("top_k", 5))))
-        mode = args.get("mode")
-        # FR-011a applies on every surface: an explicit mode the search cannot
-        # serve errors (in-band, the agent can self-correct) — never a silent
-        # rewrite. grep has its own tool.
-        if mode is not None and mode not in {"keyword", "vector"}:
-            raise ValueError(
-                f"unsupported search mode {mode!r}; use 'keyword' or 'vector' "
-                "(grep is served by the grep_knowledge tool)"
-            )
+        # One query → one answer: the surface never selects a mode; the service
+        # resolves it from the store's default_mode (mode stays internal).
         result = await kb_service.search(
             kb_name=kb,
             query=query,
             top_k=top_k,
-            mode=mode,
+            mode=None,
         )
         return {
-            "mode": result.mode,
-            "fallback": result.fallback,
             "passages": [
                 {
                     "document_id": p.document_id,
@@ -174,7 +165,6 @@ def register_kb_builtin_tools(
                     "kb": {"type": "string", "description": "Knowledge base name"},
                     "query": {"type": "string"},
                     "top_k": {"type": "integer", "default": 5, "minimum": 1, "maximum": 20},
-                    "mode": {"type": "string", "enum": ["keyword", "vector"]},
                 },
                 "required": ["kb", "query"],
             },

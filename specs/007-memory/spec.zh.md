@@ -123,7 +123,7 @@ cwd 没有可恢复的现场。
 
 ### Edge Cases
 
-- **请求 vector 但 embedding 未配置**：`recall` 带 `mode=vector` 时回退到 keyword，并在响应里标注此次回退；它从不阻塞。默认检索是 keyword+grep（零配置、离线）。
+- **vector 不可用但 embedding 未配置**：当 store 解析出的策略需要向量但未配置 embedding provider 时，`recall` 在内部回退到 keyword 并返回结果；它从不阻塞。回退**不**作为查询期响应标志暴露。默认检索是 keyword+grep（零配置、离线）。
 - **直接在磁盘上编辑事实文件**：下一次 `recall` 会惰性扫描这个小事实目录、找出增量并重建索引，因此带外编辑会被拾取，无需 watcher。
 - **空事实文本**：在 API 边界被拒；不写任何内容。
 - **事实文本过长**：在 API 边界按 `max_fact_chars`（默认 8192）约束；写入前即被拒。
@@ -222,8 +222,8 @@ cwd 没有可恢复的现场。
 ### Scenario: vector recall falls back when embedding is unconfigured
 
 - **Given** 一个未配置 embedding provider 的记忆 store，
-- **When** 用 `mode=vector` 调 `coffer__recall`，
-- **Then** 调用返回 keyword 结果并在响应里标注此次回退（绝不报错）。
+- **When** 引擎解析为向量策略但无可用 embedder，
+- **Then** 调用改跑 keyword 检索并返回结果、不报错；降级**不**作为查询期响应标志暴露（内部 keyword 回退，与 KB 面一致）。
 
 ### Scenario: agent saves and resumes a working-state handoff
 
@@ -346,13 +346,13 @@ cwd 没有可恢复的现场。
 
 **检索**
 
-- **FR-008**：recall MUST 使用与 knowledge base 共享的统一检索引擎：`grep`（真实服务 —— ripgrep 扫该 store 的事实文件；对 FTS5 无法分词的内容必不可少，如 CJK）、`keyword`（FTS5 BM25，默认）、`vector`（sqlite-vec 配可配置的 embedding provider）。当请求 `vector` 但未配置 embedding provider 时，recall MUST 回退到 `keyword` 并以布尔值在响应里标注此次回退 —— 绝不阻塞。MCP `coffer__recall` 的响应包含该 `fallback` 布尔值。
+- **FR-008**：recall MUST 使用与 knowledge base 共享的统一检索引擎：`grep`（ripgrep 扫该 store 的事实文件；对 FTS5 无法分词的内容必不可少，如 CJK）、`keyword`（FTS5 BM25，默认）、`vector`（sqlite-vec 配可配置的 embedding provider）。这些引擎模式是**内部细节** —— recall **不**接受外部 `mode`；引擎自动解析该 store 的默认策略。当解析出的策略需要向量但未配置 embedding provider 时，recall MUST 在内部回退到 `keyword` —— 绝不阻塞，且回退**不**作为查询期响应标志暴露（`fallback` 字段已从 recall 响应移除）。
 - **FR-009**：`coffer__recall` MUST 默认跨 project 与 global 两个 store（显式给出 `scope` 时收窄到单个 store：`project` = 仅项目 store，`global` = 仅 global store）；跨 store 的结果用倒数排名融合（reciprocal rank fusion）合并（逐 store 的分数跨模式/跨 store 不可比；每条命中保留其逐 store 分数，只有合并后的顺序来自融合）。结果带 id、text、score、source、time —— `time` 是事实的 `updated_at`，`source` 是 `<scope>:<fact file path>`。默认 `top_k` 为 5；调用方 MAY 指定 1–20。
 - **FR-010**：memory MUST 用 **lazy reindex-on-read**：`recall` 先按内容哈希扫描事实目录的增量（新增/变更/删除文件）并对账索引，再搜索，使带外编辑 —— 人类在自己外部编辑器里做的纠正，或任何直接在磁盘上的编辑 —— 即时可见，无需文件系统 watcher。这正是让外部纠正得以显现的机制，于是 UI 可以保持为只读视图（FR-017），而维护在用户的编辑器里完成。
 
 **通过 MCP 集成 agent**
 
-- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, mode?, top_k?)`（`mode` ∈ `grep` | `keyword` | `vector`）、`coffer__remember(text, scope?, type?)`、`coffer__list_memory(scope?)`、`coffer__set_handoff(body)`、`coffer__resume()`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。没有 MCP `update_memory`/`forget` 工具 —— 事实编辑/删除是用户面（REST/CLI/外部编辑器），见 FR-006。
+- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, top_k?)`（无 `mode` 参数 —— 检索模式是内部的）、`coffer__remember(text, scope?, type?)`、`coffer__list_memory(scope?)`、`coffer__set_handoff(body)`、`coffer__resume()`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。没有 MCP `update_memory`/`forget` 工具 —— 事实编辑/删除是用户面（REST/CLI/外部编辑器），见 FR-006。
 - **FR-016**：这些内置 memory 工具调用 MUST 共用既有调用日志面（`mcp_invocations` 一行：工具名 + who/when/duration/outcome，不记参数也不记返回内容）。
 
 **工作状态 handoff（连续性）**

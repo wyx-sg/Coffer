@@ -96,7 +96,13 @@ class DocumentRepo:
             return _to_domain(row) if row else None
 
     async def list_documents(
-        self, kind: str, resource_name: str, *, limit: int = 50, offset: int = 0
+        self,
+        kind: str,
+        resource_name: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        q: str | None = None,
     ) -> list[Document]:
         async with self._sm() as session:
             stmt = (
@@ -109,10 +115,17 @@ class DocumentRepo:
                 .limit(limit)
                 .offset(offset)
             )
+            # Case-insensitive title substring filter applied server-side BEFORE
+            # limit/offset so the page reflects only matching documents. autoescape
+            # so a literal % / _ in the query is matched, not treated as a wildcard.
+            if q:
+                stmt = stmt.where(
+                    func.lower(DocumentModel.title).contains(q.lower(), autoescape=True)
+                )
             rows = (await session.execute(stmt)).scalars().all()
             return [_to_domain(r) for r in rows]
 
-    async def count_documents(self, kind: str, resource_name: str) -> int:
+    async def count_documents(self, kind: str, resource_name: str, *, q: str | None = None) -> int:
         async with self._sm() as session:
             stmt = (
                 select(func.count())
@@ -122,6 +135,11 @@ class DocumentRepo:
                     DocumentModel.resource_name == resource_name,
                 )
             )
+            # Mirror the list filter so ``total`` is the filtered count (FR-010a).
+            if q:
+                stmt = stmt.where(
+                    func.lower(DocumentModel.title).contains(q.lower(), autoescape=True)
+                )
             return int((await session.execute(stmt)).scalar_one())
 
     async def count_pending_embeds(self, kind: str, resource_name: str) -> int:

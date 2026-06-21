@@ -9,14 +9,13 @@ import { useTranslation } from "react-i18next";
 import { Info } from "lucide-react";
 
 import { FileActions } from "@/components/FileActions";
+import { CodeView } from "@/components/preview/CodeView";
 
 export interface ConfigEditorPaneProps {
   /** Full path shown in the header (file path, or path/relpath for a child). */
   pathLabel: string;
   /** Absolute on-disk path of the file (for the external-editor actions). */
   filePath?: string;
-  /** Absolute on-disk path of its containing folder (enables folder actions). */
-  folderPath?: string;
   /** One-line "what is this file for" copy, shown under the path. */
   description?: string | null;
   formatLabel: string | undefined;
@@ -40,17 +39,13 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
             {props.pathLabel}
           </span>
           {props.description ? (
-            <span className="mt-0.5 block text-xs text-muted-foreground">
-              {props.description}
-            </span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">{props.description}</span>
           ) : null}
         </span>
         <span className="shrink-0 text-xs text-muted-foreground">{props.formatLabel}</span>
       </div>
 
-      {props.filePath ? (
-        <FileActions filePath={props.filePath} folderPath={props.folderPath} />
-      ) : null}
+      {props.filePath ? <FileActions filePath={props.filePath} /> : null}
 
       {props.memoryBlock ? (
         <div className="flex items-center gap-1.5 rounded border border-sky-500/50 bg-sky-500/10 px-2 py-1.5 text-xs text-sky-700">
@@ -59,12 +54,13 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
         </div>
       ) : null}
 
-      <pre
-        aria-label={t("agents.config.editorLabel", { key: props.editorKey })}
-        className="h-80 w-full overflow-auto whitespace-pre-wrap break-words rounded border bg-muted/30 p-2 font-mono text-xs text-foreground"
-      >
-        {props.loading ? "" : props.content}
-      </pre>
+      <CodeView
+        value={props.loading ? "" : props.content}
+        filename={props.filePath}
+        height="20rem"
+        ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
+        className="bg-muted/30"
+      />
     </div>
   );
 }

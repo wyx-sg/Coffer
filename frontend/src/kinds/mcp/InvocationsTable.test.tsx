@@ -78,7 +78,7 @@ describe("InvocationsTable", () => {
     render(wrap(<InvocationsTable serverName="fs" />));
 
     const keyCell = await screen.findByText("read_file");
-    const findRaw = () => screen.queryByText((_, el) => el?.tagName === "PRE");
+    const findRaw = () => document.querySelector<HTMLElement>(".cm-content");
 
     // Collapsed by default.
     expect(findRaw()).not.toBeInTheDocument();
@@ -106,7 +106,7 @@ describe("InvocationsTable", () => {
     render(wrap(<InvocationsTable serverName="fs" />));
 
     const keyCell = await screen.findByText("file://foo.txt");
-    const findRaw = () => screen.queryByText((_, el) => el?.tagName === "PRE");
+    const findRaw = () => document.querySelector<HTMLElement>(".cm-content");
 
     // Expand the SECOND row (index 1 in the full fetched list).
     fireEvent.click(keyCell.closest("tr")!);

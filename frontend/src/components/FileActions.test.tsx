@@ -29,7 +29,7 @@ describe("FileActions on the web (daemon-backed)", () => {
   beforeEach(() => (isTauri as Mock).mockReturnValue(false));
 
   test("opens the file through the daemon (OS default when no editor set)", async () => {
-    render(<FileActions filePath="/abs/file.md" folderPath="/abs" />);
+    render(<FileActions filePath="/abs/file.md" />);
     fireEvent.click(screen.getByRole("button", { name: /open in editor/i }));
     await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith("/abs/file.md", undefined));
   });
@@ -42,19 +42,13 @@ describe("FileActions on the web (daemon-backed)", () => {
   });
 
   test("reveals the file through the daemon", async () => {
-    render(<FileActions filePath="/abs/file.md" folderPath="/abs" />);
+    render(<FileActions filePath="/abs/file.md" />);
     fireEvent.click(screen.getByRole("button", { name: /reveal in finder/i }));
     await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith("/abs/file.md"));
   });
 
-  test("opens the containing folder through the daemon", async () => {
-    render(<FileActions filePath="/abs/file.md" folderPath="/abs" />);
-    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
-    await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith("/abs", undefined));
-  });
-
   test("no copy-path affordance remains", () => {
-    render(<FileActions filePath="/abs/file.md" folderPath="/abs" />);
+    render(<FileActions filePath="/abs/file.md" />);
     expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
   });
 
@@ -70,7 +64,7 @@ describe("FileActions in the desktop app", () => {
   beforeEach(() => (isTauri as Mock).mockReturnValue(true));
 
   test("opens the file with the Tauri opener (OS default)", async () => {
-    render(<FileActions filePath="/abs/file.md" folderPath="/abs" />);
+    render(<FileActions filePath="/abs/file.md" />);
     fireEvent.click(screen.getByRole("button", { name: /open in editor/i }));
     await waitFor(() => expect(openPath).toHaveBeenCalledWith("/abs/file.md", undefined));
     expect(fsApi.open).not.toHaveBeenCalled();

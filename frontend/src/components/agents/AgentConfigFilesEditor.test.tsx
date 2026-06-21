@@ -105,9 +105,11 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     render(<AgentConfigFilesEditor name="cc" />);
     openSettings();
 
-    // Content is shown, but never in an editable control.
-    expect(screen.getByText('{"theme": "dark"}')).toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    // Content is shown in a read-only CodeMirror editor, never an editable field.
+    const content = document.querySelector(".cm-content");
+    expect(content?.textContent).toContain('{"theme": "dark"}');
+    expect(content?.getAttribute("contenteditable")).toBe("false");
+    expect(document.querySelector("textarea")).toBeNull();
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /find ?\/ ?replace/i })).not.toBeInTheDocument();
   });
@@ -121,10 +123,9 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     openSettings();
 
     // FileActions offers real open/reveal on both surfaces (daemon-backed on web):
-    // open-in-editor + reveal for the file, plus open-folder (folder_path present).
+    // open-in-editor + reveal for the file.
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open folder/i })).toBeInTheDocument();
   });
 
   test("hides not-yet-created allowlisted files from the read-only viewer", () => {
@@ -188,8 +189,8 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     fireEvent.click(screen.getByText("Memory directory"));
     fireEvent.click(screen.getByText("alpha.md"));
 
-    expect(screen.getByText("hello child")).toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(document.querySelector(".cm-content")?.textContent).toContain("hello child");
+    expect(document.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("false");
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
   });
 

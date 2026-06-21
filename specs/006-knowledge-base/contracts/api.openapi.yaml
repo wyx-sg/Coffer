@@ -160,6 +160,13 @@ paths:
       tags: [knowledge_bases]
       parameters:
         - in: query
+          name: q
+          required: false
+          description: >
+            Optional case-insensitive title filter, applied server-side BEFORE
+            pagination. `total` reflects the filtered count.
+          schema: { type: string }
+        - in: query
           name: limit
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
         - in: query
@@ -342,16 +349,17 @@ paths:
     parameters:
       - $ref: "#/components/parameters/KBName"
     post:
-      summary: Search a knowledge base (keyword / vector / hybrid)
+      summary: Search a knowledge base (one query → one answer)
       description: |
-        Relevance search. `mode` defaults to the KB's `default_mode` (which is
-        `hybrid` when `vector` is enabled, else `keyword`). `hybrid` fuses the
-        `keyword` and `vector` result lists by reciprocal rank fusion (ADR-012).
-        A `vector` or `hybrid` request on a KB with no embedding configured falls
-        back to `keyword`, flagged in the response (`fallback`) — never an error.
-        Any other explicit `mode` the KB cannot serve — `grep` (which has its own
-        endpoint) or a mode not in `enabled_modes` — is rejected with 400
-        `SEARCH_MODE_INVALID`, never silently rewritten.
+        Relevance search. The caller does NOT choose a retrieval mode — the
+        engine resolves the KB's default strategy internally (`hybrid` when
+        `vector` is enabled, else `keyword`); `hybrid` fuses the `keyword` and
+        `vector` result lists by reciprocal rank fusion (ADR-012). When the
+        resolved strategy needs vectors but no embedding is configured, the
+        engine falls back to `keyword` internally — never an error, and not
+        surfaced as a query-time flag (degradation is reported via the
+        `documents_degraded` metric). `grep` is a separate capability served by
+        its own `/grep` endpoint (agent-only; not on the human web panel).
       operationId: searchKnowledgeBase
       tags: [knowledge_bases]
       requestBody:
@@ -367,8 +375,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
         "503":
@@ -756,15 +762,6 @@ components:
           minimum: 1
           maximum: 20
           default: 5
-        mode:
-          allOf:
-            - $ref: "#/components/schemas/RetrievalMode"
-          description: >
-            Overrides the KB default. `grep` is served by the grep endpoint;
-            requesting it here (or any mode not in `enabled_modes`) is a 400
-            `SEARCH_MODE_INVALID`. `vector` and `hybrid` are the exceptions —
-            they degrade to keyword with a flagged fallback when no embedder is
-            configured.
 
     Passage:
       type: object
@@ -778,15 +775,8 @@ components:
 
     SearchResponse:
       type: object
-      required: [mode, passages]
+      required: [passages]
       properties:
-        mode:
-          $ref: "#/components/schemas/RetrievalMode"
-        fallback:
-          allOf:
-            - $ref: "#/components/schemas/RetrievalMode"
-          nullable: true
-          description: Set to "keyword" when a requested vector or hybrid search degraded (no embedding configured).
         passages:
           type: array
           items:

@@ -90,7 +90,14 @@ def _build_openai(
         raise ValueError("ModelConfig for provider 'openai' is missing credential_ref")
 
     api_key = credential_resolver(config.credential_ref)
-    return ChatOpenAI(model=config.model, api_key=api_key)  # type: ignore[arg-type]
+    # ``base_url`` lets an OpenAI-COMPATIBLE endpoint (Azure/OpenRouter/aggregators)
+    # be used; ``None`` falls back to the official OpenAI API. Without this an
+    # openai-compatible provider's calls silently hit api.openai.com and 401.
+    return ChatOpenAI(
+        model=config.model,
+        api_key=api_key,  # type: ignore[arg-type]
+        base_url=config.base_url or None,
+    )
 
 
 def _build_ollama(config: ModelConfig) -> Any:

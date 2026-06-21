@@ -1,10 +1,20 @@
 {
+  "preview": {
+    "find": {
+      "label": "查找",
+      "placeholder": "查找…",
+      "matches": "{{active}}/{{total}}",
+      "noMatches": "无匹配",
+      "next": "下一个",
+      "prev": "上一个",
+      "caseSensitive": "区分大小写",
+      "close": "关闭"
+    }
+  },
   "fileActions": {
     "openInEditor": "在编辑器中打开",
-    "openFolder": "打开文件夹",
     "reveal": "在 Finder 中显示",
     "openFailed": "无法在编辑器中打开该文件。",
-    "openFolderFailed": "无法在编辑器中打开该文件夹。",
     "revealFailed": "无法显示该文件。"
   },
   "common": {
@@ -149,6 +159,7 @@
       "statusFilter": "状态",
       "toggleAria": "切换 {{kind}} {{key}}",
       "noSchema": "无输入结构。",
+      "schemaLabel": "输入结构",
       "header": {
         "name": "名称",
         "enabled": "已启用"
@@ -683,6 +694,8 @@
       "mcp": {
         "gatewayTitle": "经 Coffer 网关",
         "directTitle": "直连 server",
+        "openServersPage": "打开 MCP 服务器页面",
+        "gatewayManagedHint": "Coffer 通过网关把它管理的 MCP 服务器提供给该 agent；请在 MCP 服务器页面管理。",
         "source": "来源",
         "transport": "传输方式",
         "enabled": "启用",
@@ -727,7 +740,18 @@
       "title": "记忆",
       "subtitle": "该 agent 可访问的 Coffer 记忆库（全局与按项目）。",
       "empty": "还没有记忆库。",
-      "accessViaGateway": "该 agent 通过 MCP 网关访问 Coffer 记忆；请在记忆库详情页管理其内容。"
+      "accessViaGateway": "该 agent 通过 MCP 网关访问 Coffer 记忆；请在记忆页面管理记忆库。",
+      "notInstalled": "该 agent 尚未安装 Coffer MCP —— 安装后才能通过网关访问 Coffer 记忆。",
+      "openMemoryPage": "打开记忆页面",
+      "nativeHint": "该 agent 自己的原生记忆库（不经 Coffer 管理），只读。",
+      "nativeEmpty": "该 agent 没有原生记忆库。",
+      "colProject": "项目",
+      "colPath": "路径",
+      "colItems": "条目数",
+      "import": "导入到 Coffer",
+      "importing": "导入中…",
+      "importDone": "已从 {{project}} 导入 {{count}} 条到 Coffer，正在后台整理。",
+      "importNoProject": "无法把 {{project}} 映射到 Coffer 项目（非 git 项目）。"
     },
     "configDirOverride": "配置目录（可选）",
     "configDirPlaceholder": "留空则使用默认目录（~/.claude）",
@@ -765,15 +789,6 @@
         "subagents": "自定义子智能体定义，每个子智能体一个 Markdown 文件。",
         "config": "Codex CLI 配置：模型、供应商与工具设置。",
         "hooks": "围绕 Codex 事件运行命令的生命周期钩子。"
-      },
-      "find": {
-        "toggle": "查找/替换",
-        "find": "查找",
-        "replace": "替换",
-        "replaceAll": "全部替换",
-        "findNext": "查找下一个",
-        "matches": "{{n}} 处匹配",
-        "caseSensitive": "区分大小写"
       }
     },
     "mcp": {
@@ -818,6 +833,8 @@
       "degradedTooltip": "当前文件系统不支持符号链接，Coffer 改为下发了一份副本。在重新启用之前，Agent 不会看到主 Skill 的后续修改。",
       "follow": "跟随主库",
       "followHint": "开启后主库全部 Skill 自动投递到此 Agent，新 Skill 注册即出现。",
+      "followingManagedHint": "跟随主库时，Coffer 会自动投递全部 Skill；请在 Skill 页面管理主库。",
+      "openSkillsPage": "打开 Skill 页面",
       "excludeHint": "跟随模式下关闭开关＝将该 Skill 加入排除列表。",
       "unmanagedTitle": "非托管 Skill",
       "adopt": "纳入托管",

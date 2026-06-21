@@ -163,7 +163,6 @@ class SourceCheckResponse(BaseModel):
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=4096)
     top_k: int = Field(default=5, ge=1, le=20)
-    mode: RetrievalMode | None = None
 
 
 class Passage(BaseModel):
@@ -175,15 +174,11 @@ class Passage(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    mode: RetrievalMode
-    fallback: RetrievalMode | None = None
     passages: list[Passage]
 
     @classmethod
     def from_result(cls, result: SearchResult) -> SearchResponse:
         return cls(
-            mode=result.mode,
-            fallback=result.fallback,
             passages=[
                 Passage(
                     text=p.text,
