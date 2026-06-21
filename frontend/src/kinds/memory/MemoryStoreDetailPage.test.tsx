@@ -162,6 +162,24 @@ describe("MemoryStoreDetailPage", () => {
     expect(await within(tree).findByText("spaces")).toBeInTheDocument();
   });
 
+  test("a recall with no hits shows the no-matches label and an empty tree", async () => {
+    stubLists();
+    vi.mocked(api.recall).mockResolvedValue({ hits: [] });
+
+    renderPage();
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("tabs"); // full list first
+
+    fireEvent.change(await screen.findByPlaceholderText(/recall facts/i), {
+      target: { value: "zzz" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
+
+    // The tree drops the full list and shows the no-matches label (not a blank box).
+    expect(await within(tree).findByText(/no matches/i)).toBeInTheDocument();
+    expect(within(tree).queryByText("tabs")).not.toBeInTheDocument();
+  });
+
   test("a selected fact renders READ-ONLY: no Edit/Save controls", async () => {
     stubLists();
     renderPage();

@@ -156,6 +156,22 @@ describe("KnowledgeBaseDetailPage", () => {
     expect(await screen.findByPlaceholderText(/find/i)).toHaveValue("release");
   });
 
+  test("a search with no hits shows the no-matches label and an empty tree", async () => {
+    seedBaseQueries();
+    vi.mocked(api.searchKnowledgeBase).mockResolvedValue({ passages: [] });
+    renderPage();
+    const tree = screen.getByRole("complementary");
+    await within(tree).findByText("Deploys");
+
+    fireEvent.change(await screen.findByPlaceholderText(/search this knowledge base/i), {
+      target: { value: "zzz" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
+
+    expect(await within(tree).findByText(/no matches/i)).toBeInTheDocument();
+    expect(within(tree).queryByText("Deploys")).not.toBeInTheDocument();
+  });
+
   test("selecting a document renders its markdown READ-ONLY with file affordances", async () => {
     seedBaseQueries();
     vi.mocked(api.getDocument).mockResolvedValue({

@@ -125,6 +125,7 @@ export function MemoryStoreDetailPage() {
     mutationFn: (id: string) => deleteFact(store, id),
     onSuccess: () => {
       setSelected(null);
+      setRecallResult(null); // a delete returns to the full list (no stale hit rows)
       invalidate();
     },
   });
@@ -188,7 +189,7 @@ export function MemoryStoreDetailPage() {
           page={factPage}
           pageCount={factPageCount}
           pageSize={factPageSize}
-          total={factTotal}
+          total={recalling ? recallFacts.length : factTotal}
           onPageChange={setFactPage}
           onPageSizeChange={setFactPageSize}
           onSelect={selectFact}

@@ -118,6 +118,7 @@ export function useKnowledgeBaseDetail(name: string) {
     mutationFn: (id: string) => deleteDocument(name, id),
     onSuccess: () => {
       setSelectedId(null);
+      setSearchResult(null); // a delete returns to the full list (no stale hit rows)
       invalidate();
     },
   });
@@ -153,9 +154,8 @@ export function useKnowledgeBaseDetail(name: string) {
     },
   });
 
-  // Recall mode: a search filters the tree to the deduped hit docs and opens the
-  // top hit highlighted; clearing the box returns to the full paged list. Passages
-  // carry the title, so hit rows render without an extra fetch.
+  // Recall mode: a search filters the tree to the deduped hit docs (passages carry
+  // the title) and opens the top hit highlighted; clearing the box restores the list.
   const recalling = searchResult !== null;
   const recallDocs: { id: string; title: string }[] = [];
   const seenHits = new Set<string>();
