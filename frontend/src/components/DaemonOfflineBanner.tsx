@@ -125,29 +125,30 @@ export function DaemonOfflineBanner() {
               <code className="rounded bg-muted px-1 py-0.5 font-mono">coffer daemon start</code>
             </span>
           ) : null}
+          {/* The restart-failure message can be a full sentence; keep it in the
+              wrapping message column (not the shrink-0 action group) so it never
+              overflows the strip horizontally. */}
+          {restartError ? (
+            <span className="mt-1 block text-xs text-destructive">{restartError}</span>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {isTauri() ? (
-            <>
-              {restartError ? (
-                <span className="text-xs text-destructive">{restartError}</span>
-              ) : null}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => restart.mutate()}
-                disabled={restart.isPending}
-              >
-                {restart.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                    {t("daemon.offline.restarting")}
-                  </>
-                ) : (
-                  t("daemon.offline.restart")
-                )}
-              </Button>
-            </>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => restart.mutate()}
+              disabled={restart.isPending}
+            >
+              {restart.isPending ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  {t("daemon.offline.restarting")}
+                </>
+              ) : (
+                t("daemon.offline.restart")
+              )}
+            </Button>
           ) : (
             <Button
               size="sm"
