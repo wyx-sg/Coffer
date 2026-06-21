@@ -40,6 +40,7 @@ from coffer.application.knowledge_base.pipeline_helpers import (
 from coffer.domain.errors import IngestRejected
 from coffer.domain.knowledge.converter import MarkdownConverter
 from coffer.domain.knowledge.document import (
+    DOCUMENT_SCAN_LIMIT,
     KIND_KNOWLEDGE_BASE,
     WORKSPACE_GLOBAL_PROJECT_ID,
     Document,
@@ -229,7 +230,7 @@ class KBPipeline:
                 paths = await asyncio.to_thread(lambda: sorted(docs_dir.glob("*.md")))
             # One batched row lookup keyed by id (reused by the vanished-file prune).
             known = await self._documents.list_documents(
-                KIND_KNOWLEDGE_BASE, kb_name, limit=100_000, offset=0
+                KIND_KNOWLEDGE_BASE, kb_name, limit=DOCUMENT_SCAN_LIMIT, offset=0
             )
             rows_by_id = {d.id: d for d in known}
             on_disk_ids: set[str] = set()

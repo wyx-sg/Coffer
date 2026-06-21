@@ -16,7 +16,11 @@ from typing import TYPE_CHECKING
 
 from coffer.application.knowledge_base.pipeline_helpers import SourceStatus
 from coffer.domain.errors import IngestRejected, ReconversionBlocked
-from coffer.domain.knowledge.document import KIND_KNOWLEDGE_BASE, Document
+from coffer.domain.knowledge.document import (
+    DOCUMENT_SCAN_LIMIT,
+    KIND_KNOWLEDGE_BASE,
+    Document,
+)
 
 if TYPE_CHECKING:
     from coffer.application.knowledge_base.service import KnowledgeBaseService
@@ -61,7 +65,7 @@ async def check_sources(
     On-demand only — there is no watcher."""
     config = await service.get_kb_config(kb_name)
     docs = await service._documents.list_documents(
-        KIND_KNOWLEDGE_BASE, kb_name, limit=100_000, offset=0
+        KIND_KNOWLEDGE_BASE, kb_name, limit=DOCUMENT_SCAN_LIMIT, offset=0
     )
     results: list[SourceStatus] = []
     for doc in docs:

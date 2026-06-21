@@ -20,6 +20,11 @@ WORKSPACE_GLOBAL_PROJECT_ID = "00000000000000000000000000"
 KIND_KNOWLEDGE_BASE = "knowledge_base"
 KIND_MEMORY = "memory"
 
+#: Max documents scanned/reconciled per store in one ``list_documents`` pass
+#: (reindex scan, source-tracking, memory sync). A safety bound — NOT an
+#: enforced ingest limit; corpora are expected far below it.
+DOCUMENT_SCAN_LIMIT = 100_000
+
 
 @dataclass(frozen=True)
 class Document:

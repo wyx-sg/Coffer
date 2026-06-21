@@ -162,7 +162,21 @@ No KB write tool exists — the KB is user-curated. Invocations log to `mcp_invo
 - **Directory fsync (rename-durability under power loss) is deliberately DEFERRED**: a single file-fsync + `os.replace` already delivers ATOMICITY (no partial/corrupt file), which is the KB19 goal. Guaranteeing the rename *itself* survives a power loss needs an extra fsync of the parent directory; it is a stronger durability guarantee that can be layered onto the shared helper later if a real need appears, with zero call-site churn.
 - **No migration / no schema change. No new FR** (a robustness/quality change under existing behaviour). Memory's source-of-truth files (spec 007) share the helper; this is the single home for the atomicity guarantee.
 
-## 14. Things explicitly NOT decided / out of scope here
+## 14. Code-hygiene sweep (dead-code + stale comments)
+
+**Question**: Several artefacts predate the spec-006 redesign and the ADR-028 ULID identity switch, leaving dead code, comments that misdescribe doc-id identity, unused i18n keys, and an undocumented scan bound. A deletion-safety audit verified each is truly dead/stale and safe to remove or correct.
+
+**Decision**: A no-behaviour-change cleanup:
+
+- **Removed the dead `kb_doc_id` / `DOC_ID_LEN`** helper (the old "first 16 hex chars of `source_sha256`" content-addressed doc id). Doc ids are now ULIDs (ADR-028: a re-upload mints a NEW id), so this helper has zero call sites; deleted from `domain/knowledge_base/document.py` and pruned from both `__all__` lists.
+- **Reworded stale "content-addressed" doc-id comments** in `infrastructure/knowledge/models.py`, `infrastructure/knowledge/sqlite_index.py`, and the matching integration-test docstring. The store-scoped chunk-id rationale STANDS — a ULID is unique only within a store, so the same doc id can still appear across stores and must not collide — only the false "content-addressed / same file repeats its id" premise was corrected. The genuinely content-addressed path hash in `memory/scope_fs.py`, the immutable migration history, and ADR-028's description of the OLD scheme were left untouched.
+- **Dropped 14 unused KB i18n keys** (the old per-KB embedding form `dialog.{vectorHint,provider,embeddingModel,dimensions,baseUrl,credential}`, now global; and `detail.{metrics,reindexResult,chunks,editAria,loadFailed,edit,save,cancel}`, superseded by `common.*`) from both `en.json` + `zh.json`, keeping the two locales structurally identical.
+- **Documented the 100k per-scan document cap** as a single named constant `DOCUMENT_SCAN_LIMIT` in `domain/knowledge/document.py`, used at all three `list_documents(limit=…)` reconcile sites (KB reindex scan, KB source-tracking, memory sync). It is a safety bound — the max docs scanned/reconciled per store in one pass, NOT an enforced ingest limit; corpora are expected far below it. Value unchanged (100_000).
+- **The per-KB `embedding` config field was reviewed and KEPT** — runtime-inert legacy but contract-live: it still backs a register-time credential-missing guarantee, an acceptance test, and a CLI/frontend surface. It is intentionally NOT removed.
+
+**No migration / no schema change / no new FR** (pure cleanup under existing behaviour).
+
+## 15. Things explicitly NOT decided / out of scope here
 
 - Hybrid RRF fusion of keyword + vector in a single call (optional future, same engine).
 - Reranking / HyDE / multi-query / LLM synthesis on retrieval — the agent synthesizes.

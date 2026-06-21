@@ -85,9 +85,9 @@ async def test_keyword_search_scopes_by_kind(substrate) -> None:
 
 @pytest.mark.asyncio
 async def test_same_document_id_in_two_stores_does_not_collide(substrate) -> None:
-    """Document ids are content-addressed, so the same file ingested into two
-    stores repeats its id. Indexing the second store must not steal/re-tag the
-    first store's chunk + FTS rows, and deleting the document from one store
+    """Document ids (ULIDs, ADR-028) are unique only within a store, so the same
+    id can appear in two stores. Indexing the second store must not steal/re-tag
+    the first store's chunk + FTS rows, and deleting the document from one store
     must not wipe the other's index (P0: cross-KB chunk-id collision)."""
     await substrate.repo.upsert_document(_doc("dd", "kb1", "One"))
     await substrate.repo.upsert_document(_doc("dd", "kb2", "Two"))

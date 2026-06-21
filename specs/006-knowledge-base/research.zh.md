@@ -162,7 +162,21 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 - **目录 fsync（断电下的重命名持久性）刻意推迟**：单次文件 fsync + `os.replace` 已提供**原子性**（无残缺/损坏文件），这正是 KB19 的目标。要保证重命名**本身**在断电后存活，还需对父目录再做一次 fsync；这是更强的持久性保证，可在出现真实需求时后续叠加到同一辅助函数上，且无需改动任何调用点。
 - **无迁移 / 无 schema 改动。无新 FR**（既有行为下的健壮性/质量改动）。memory 的真相之源文件（spec 007）共享该辅助函数；这是原子性保证的唯一归处。
 
-## 14. 此处明确不决定 / 范围外
+## 14. 代码卫生清理（死代码 + 过时注释）
+
+**问题**：若干产物早于 spec-006 重设计与 ADR-028 的 ULID 标识切换，遗留了死代码、误描述 doc-id 标识的注释、未使用的 i18n key，以及一个未记录的扫描上界。一次删除安全性审计已逐项确认它们确实死/过时，可安全移除或更正。
+
+**决策**：一次无行为变更的清理：
+
+- **移除死的 `kb_doc_id` / `DOC_ID_LEN`** 辅助（旧的"`source_sha256` 前 16 位十六进制"内容寻址 doc id）。doc id 现已是 ULID（ADR-028：重新上传会**铸造新 id**），该辅助零调用点；已从 `domain/knowledge_base/document.py` 删除，并从两处 `__all__` 中剪除。
+- **改写过时的"content-addressed"doc-id 注释**：位于 `infrastructure/knowledge/models.py`、`infrastructure/knowledge/sqlite_index.py` 及对应的集成测试 docstring。store 作用域的 chunk-id 理由**仍成立** —— ULID 只在单个 store 内唯一，故同一 doc id 仍可能跨 store 出现且不能碰撞 —— 仅更正了"内容寻址 / 同一文件重复其 id"这一错误前提。`memory/scope_fs.py` 中真正内容寻址的路径哈希、不可变的迁移历史、以及 ADR-028 对**旧**方案的描述均保持不动。
+- **删除 14 个未使用的 KB i18n key**（旧的每 KB embedding 表单 `dialog.{vectorHint,provider,embeddingModel,dimensions,baseUrl,credential}`，现已全局；以及被 `common.*` 取代的 `detail.{metrics,reindexResult,chunks,editAria,loadFailed,edit,save,cancel}`），从 `en.json` + `zh.json` 双语同删，保持两份 locale 结构一致。
+- **把 100k 每次扫描的文档上界记录为单个命名常量** `DOCUMENT_SCAN_LIMIT`，定义在 `domain/knowledge/document.py`，在全部三个 `list_documents(limit=…)` 对账点（KB reindex 扫描、KB source-tracking、memory sync）使用。它是一个**安全上界** —— 单次扫描/对账每个 store 的最大文档数，**而非**强制的 ingest 限制；语料预期远低于它。取值不变（100_000）。
+- **每 KB 的 `embedding` 配置字段经评审予以保留** —— 运行期惰性的遗留物，但**契约仍活**：它仍支撑注册期"凭据缺失"保证、一个验收测试，以及 CLI/前端表面。故**刻意不**移除。
+
+**无迁移 / 无 schema 改动 / 无新 FR**（既有行为下的纯清理）。
+
+## 15. 此处明确不决定 / 范围外
 
 - 单次调用里 keyword + vector 的 hybrid RRF 融合（可选未来，同引擎）。
 - 检索时的 reranking / HyDE / multi-query / LLM 综合 —— agent 综合。

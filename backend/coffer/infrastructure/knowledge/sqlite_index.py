@@ -27,12 +27,13 @@ from coffer.infrastructure.knowledge.vec_index import VecIndex
 def store_scope(kind: str, resource_name: str) -> str:
     """12-hex digest namespacing chunk ids per ``(kind, resource_name)`` store.
 
-    Document ids are content-addressed, so the same file ingested into two
-    stores repeats its document id; a bare ``<doc-id>:<position>`` chunk id
-    would collide across stores (``chunks.id`` is the PK and ``documents_fts``
-    has no ``kind`` column), letting the second store steal the first store's
-    chunk + FTS rows. The digest prefix keeps chunk ids globally unique. Keep
-    in sync with migration 0017, which rekeys pre-existing rows.
+    Document ids (ULIDs, ADR-028) are unique only within one store, so the
+    same doc id can appear across stores; a bare ``<doc-id>:<position>`` chunk
+    id would then collide across stores (``chunks.id`` is the PK and
+    ``documents_fts`` has no ``kind`` column), letting the second store steal
+    the first store's chunk + FTS rows. The digest prefix keeps chunk ids
+    globally unique. Keep in sync with migration 0017, which rekeys
+    pre-existing rows.
     """
     return hashlib.sha1(f"{kind}\x00{resource_name}".encode()).hexdigest()[:12]
 
@@ -76,7 +77,7 @@ class SqliteKnowledgeIndex:
         # concurrent upsert interleave between them (PK IntegrityError /
         # duplicated FTS rows) and let a concurrent search see the document
         # vanish mid-replace. Everything is scoped to THIS store: the same
-        # document_id may live in other stores (content-addressed ids).
+        # document_id (a ULID, unique only within a store) may live in others.
         async with self._sm() as session:
             old = (
                 await session.execute(
@@ -155,8 +156,8 @@ class SqliteKnowledgeIndex:
         await self._vec.upsert(rows)
 
     async def delete_chunks(self, document_id: str) -> None:
-        # Scoped to THIS store: the same document_id may live in other stores
-        # (content-addressed ids); deleting here must not wipe theirs.
+        # Scoped to THIS store: the same document_id (a ULID, unique only within
+        # a store) may live in other stores; deleting here must not wipe theirs.
         async with self._sm() as session:
             rows = (
                 await session.execute(
