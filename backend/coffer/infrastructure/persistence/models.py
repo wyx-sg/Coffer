@@ -92,6 +92,35 @@ class CredentialModel(Base):
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
+class DistilledSessionModel(Base):
+    """Machine-local idempotency ledger for the auto-distill catch-up sweep
+    (Spec 007 FR-046).
+
+    One row per ``(agent_name, session_id, content_sha256)`` proves that exact
+    session content was already distilled into the journal lane, so the sweep
+    never double-distills a settled session. A material content change yields a
+    new ``content_sha256`` and is therefore eligible to re-distill. This ledger
+    is the idempotency key the future SessionEnd hook (slice 6) will share.
+    """
+
+    __tablename__ = "distilled_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_name: Mapped[str] = mapped_column(String, nullable=False)
+    session_id: Mapped[str] = mapped_column(String, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String, nullable=False)
+    distilled_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "agent_name",
+            "session_id",
+            "content_sha256",
+            name="uq_distilled_sessions_agent_session_sha",
+        ),
+    )
+
+
 class EmbeddingConfigModel(Base):
     """The single, global embedding configuration (one row, ``id`` pinned to 1).
 

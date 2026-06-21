@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0037"
+HEAD_REVISION = "0038"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -68,6 +68,8 @@ HEAD_REVISION = "0037"
 # connection) and then DROPs ``chat_models``, so it is ABSENT at head; 0036's
 # downgrade recreates the (empty) table, so it reappears once we step below 0036
 # (until 0012's downgrade drops it again at 0011).
+# 0038 ADDs the ``distilled_sessions`` table — the auto-distill catch-up sweep
+# idempotency ledger (007 FR-046) — present at head; its downgrade drops it.
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
@@ -75,6 +77,7 @@ EXPECTED_TABLES = {
     "resources",
     "audit_log",
     "retention_policies",
+    "distilled_sessions",
     "mcp_capability_preferences",
     "mcp_invocations",
     "mcp_server_health",
@@ -564,6 +567,11 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     cfg = _alembic_config()
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
+    # 0038 adds the distilled_sessions ledger (007 FR-046); present at head, its
+    # downgrade drops it on the first step down.
+    assert "distilled_sessions" in _user_tables(db_path)
+    command.downgrade(cfg, "0037")
+    assert "distilled_sessions" not in _user_tables(db_path)
     # 0024 drops memory_projection_bindings, so it is absent at head; its
     # downgrade recreates it, so it reappears once we step below 0024 (until
     # 0008's downgrade drops it again at 0007).
@@ -610,15 +618,19 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert "memory_store_labels" not in _user_tables(db_path)
     assert "locked" in _documents_columns()
     # chat_models is back (recreated by 0036's downgrade; dropped again at 0011).
+    # distilled_sessions was dropped at 0038's downgrade (the first step), so it
+    # is absent from here down.
     assert _user_tables(db_path) == (EXPECTED_TABLES | scope_tables | {"chat_models"}) - {
-        "memory_store_labels"
+        "memory_store_labels",
+        "distilled_sessions",
     }
 
     # 0025 -> 0024: 0025's downgrade drops documents.locked (column-only).
     command.downgrade(cfg, "0024")
     assert "locked" not in _documents_columns()
     assert _user_tables(db_path) == (EXPECTED_TABLES | scope_tables | {"chat_models"}) - {
-        "memory_store_labels"
+        "memory_store_labels",
+        "distilled_sessions",
     }
 
     # 0024 -> 0023: 0024's downgrade recreates memory_projection_bindings,
@@ -668,6 +680,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "sync_config",
         "sync_state",
         "memory_store_labels",
+        "distilled_sessions",
     }
 
     # 0012 -> 0011: drops the chat tables (spec 008-agent-chat).
@@ -681,6 +694,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "chat_messages",
         "chat_models",
         "memory_store_labels",
+        "distilled_sessions",
     }
 
     # 0011 -> 0010: drops embedding_config (global embedding singleton).
@@ -725,6 +739,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         "memory_store_project_roots",
         "memory_store_labels",
         "skill_agent_bindings",
+        "distilled_sessions",
         "documents",
         "chunks",
         "documents_fts",
