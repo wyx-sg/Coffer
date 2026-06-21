@@ -363,8 +363,10 @@
       "pageSize": "Default rows per page",
       "pageSizeHelp": "The initial page size for every table.",
       "preferredEditor": "Preferred editor",
-      "preferredEditorHelp": "The editor Coffer opens managed files with. Leave empty to use your operating system's default app, or set an application or a launch command (e.g. \"code\", \"cursor\").",
-      "preferredEditorPlaceholder": "System default",
+      "preferredEditorHelp": "The editor Coffer opens managed files with. Pick a detected editor, the system default, or enter a custom application or launch command.",
+      "preferredEditorPlaceholder": "e.g. code, cursor, or an app path",
+      "preferredEditorSystemDefault": "System default",
+      "preferredEditorCustom": "Custom…",
       "preferredEditorBrowse": "Browse…"
     },
     "retention": {

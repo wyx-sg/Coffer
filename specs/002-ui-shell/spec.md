@@ -100,7 +100,7 @@ The audit log is NOT **Observability** — system health / metrics is a distinct
 
 A developer opens Settings and finds tabs grouped by what they manage, not by how Coffer is built: **General** (display preferences — the default rows-per-page for list tables, and the preferred external editor for opening managed files), **Data** (retention policy, manual prune, and vault backup — a full `.tar.gz` snapshot of `~/.coffer/` triggered via `POST /vault/backup`), and **About** (version, license, source). Settings opens on the General tab. The daemon is an implementation detail — there is no "Daemon" tab and no read-only daemon-status panel. A user never needs to know Coffer runs a background daemon.
 
-The **General** tab MUST expose the default page-size preference (the rows-per-page every list table seeds from), persisted in `localStorage`. It MUST also expose a **preferred external editor** preference — the application Coffer uses when the user opens a managed file (or its containing folder) from a read-only file viewer. The default is the operating system's default application; the user MAY override it by choosing an application or entering a launch command. Like the other display preferences it is persisted in `localStorage` and never sent to the daemon.
+The **General** tab MUST expose the default page-size preference (the rows-per-page every list table seeds from), persisted in `localStorage`. It MUST also expose a **preferred external editor** preference — the application Coffer uses when the user opens a managed file (or its containing folder) from a read-only file viewer. The default is the operating system's default application; the user MAY override it by **picking an editor the daemon detected as installed** (enumerated via `GET /api/v1/fs/editors`, spec 004 FR-039 — a browser can't list installed apps) or by entering a custom application / launch command. Like the other display preferences the chosen value is persisted in `localStorage` and never sent to the daemon (except transiently as the target when opening a file).
 
 **Why this priority**: P2 — the underlying controls already function; this story is reorganisation and subtraction, not new capability. An unorganised Settings page is exactly the "feels like a scaffold" signal US2 fights, and the user flagged it as confusing.
 
@@ -259,7 +259,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 ### Scenario: general tab persists the preferred editor
 
 - **Given** the user opens the General settings tab
-- **When** they set a preferred external editor (by choosing an application or entering a launch command)
+- **When** they set a preferred external editor (by picking a detected editor or entering a custom launch command)
 - **Then** reloading the page shows the same preferred-editor value
 - **And** clearing the override restores the operating-system default
 

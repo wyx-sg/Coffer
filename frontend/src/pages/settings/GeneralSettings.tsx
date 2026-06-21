@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useDetectedEditors } from "@/lib/hooks/useEditors";
 import {
   getPreferredEditor,
   PAGE_SIZE_OPTIONS,
@@ -19,6 +20,10 @@ import {
   useSetPreferredEditor,
 } from "@/lib/preferences";
 import { isTauri } from "@/lib/tauri";
+
+// Sentinel Select values (Radix Select items can't be the empty string).
+const DEFAULT_OPT = "__default__"; // OS default — stored preference is ""
+const CUSTOM_OPT = "__custom__"; // free-form app name / launch command / .app path
 
 /** Pick an application bundle on the desktop (macOS apps are .app directories). */
 async function pickEditorApp(): Promise<string | null> {
@@ -31,22 +36,50 @@ async function pickEditorApp(): Promise<string | null> {
  * General display preferences (client-side, persisted in localStorage): the
  * default rows-per-page every list table seeds from, and the preferred external
  * editor Coffer opens managed files with from its read-only file viewers.
+ *
+ * The editor is chosen from a picker of editors the daemon detected as installed
+ * (a browser can't enumerate apps), with a "system default" option and a custom
+ * escape hatch for anything unlisted. Only the chosen value is stored — never
+ * sent to the daemon except transiently as the target when opening a file.
  */
 export function GeneralSettings() {
   const { t } = useTranslation();
   const pageSize = useDefaultPageSize();
   const setPageSize = useSetDefaultPageSize();
   const setPreferredEditor = useSetPreferredEditor();
+  const { data: detected = [] } = useDetectedEditors();
   const [editor, setEditor] = useState(getPreferredEditor);
+  const [customMode, setCustomMode] = useState(false);
+
+  const isKnown = detected.some((e) => e.value === editor);
+  // A non-empty value that isn't a detected editor is a custom entry (typed, or
+  // picked via Browse); custom mode is also entered explicitly from the picker.
+  const showCustom = customMode || (editor !== "" && !isKnown);
+  const selectValue = showCustom ? CUSTOM_OPT : editor === "" ? DEFAULT_OPT : editor;
 
   const commitEditor = (value: string) => {
     setEditor(value);
     setPreferredEditor(value);
   };
 
+  const onSelect = (v: string) => {
+    if (v === DEFAULT_OPT) {
+      setCustomMode(false);
+      commitEditor("");
+    } else if (v === CUSTOM_OPT) {
+      setCustomMode(true); // reveal the input; keep current text as the starting point
+    } else {
+      setCustomMode(false);
+      commitEditor(v);
+    }
+  };
+
   const browse = async () => {
     const picked = await pickEditorApp();
-    if (picked) commitEditor(picked);
+    if (picked) {
+      setCustomMode(true);
+      commitEditor(picked);
+    }
   };
 
   return (
@@ -81,20 +114,42 @@ export function GeneralSettings() {
               {t("settings.general.preferredEditorHelp")}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Input
-              value={editor}
-              placeholder={t("settings.general.preferredEditorPlaceholder")}
-              onChange={(e) => setEditor(e.target.value)}
-              onBlur={(e) => commitEditor(e.target.value)}
-              className="w-56"
-              aria-label={t("settings.general.preferredEditor")}
-            />
-            {isTauri() ? (
-              <Button type="button" variant="outline" size="sm" onClick={() => void browse()}>
-                {t("settings.general.preferredEditorBrowse")}
-              </Button>
-            ) : null}
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+            <Select value={selectValue} onValueChange={onSelect}>
+              <SelectTrigger className="w-56" aria-label={t("settings.general.preferredEditor")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={DEFAULT_OPT}>
+                  {t("settings.general.preferredEditorSystemDefault")}
+                </SelectItem>
+                {detected.map((e) => (
+                  <SelectItem key={e.value} value={e.value}>
+                    {e.label}
+                  </SelectItem>
+                ))}
+                <SelectItem value={CUSTOM_OPT}>
+                  {t("settings.general.preferredEditorCustom")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {showCustom && (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={editor}
+                  placeholder={t("settings.general.preferredEditorPlaceholder")}
+                  onChange={(e) => setEditor(e.target.value)}
+                  onBlur={(e) => commitEditor(e.target.value)}
+                  className="w-56"
+                  aria-label={t("settings.general.preferredEditorCustom")}
+                />
+                {isTauri() ? (
+                  <Button type="button" variant="outline" size="sm" onClick={() => void browse()}>
+                    {t("settings.general.preferredEditorBrowse")}
+                  </Button>
+                ) : null}
+              </div>
+            )}
           </div>
         </div>
       </CardContent>
