@@ -42,7 +42,10 @@ dependencies = [
     # OpenAI SDK drives the swappable-base_url embedding client; sqlite-vec is
     # the vector index. Removed: llama-index-*, sentence-transformers, chromadb,
     # mem0ai, pypdf (all belonged to the dropped LlamaIndex/mem0 stack).
-    "markitdown>=0.0.1",
+    # The extras pull in MarkItDown's format backends — without them every rich
+    # format the converter advertises (pdf/docx/pptx/xlsx/xls) raises
+    # MissingDependencyException at conversion time. html is built-in (no extra).
+    "markitdown[docx,pdf,pptx,xls,xlsx]>=0.1",
     "sqlite-vec>=0.1.1",
     "openai>=1.40",
     # spec 008 — agent chat: built-in LangGraph multi-LLM agent.

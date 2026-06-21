@@ -34,6 +34,18 @@ hidden = (
     #   langgraph / langchain — chat/*
     + collect_submodules("sqlite_vec")
     + collect_submodules("markitdown")
+    # MarkItDown imports its format backends lazily *inside* each converter, so
+    # collect_submodules("markitdown") alone does not pull them in. List the
+    # readers behind the markitdown[docx,pdf,pptx,xls,xlsx] extras so the frozen
+    # daemon can convert those formats instead of raising
+    # MissingDependencyException (PDF was the one that bit a user in the KB UI).
+    + collect_submodules("pdfminer")
+    + collect_submodules("pdfplumber")
+    + collect_submodules("pptx")
+    + collect_submodules("mammoth")
+    + collect_submodules("openpyxl")
+    + collect_submodules("pandas")
+    + collect_submodules("xlrd")
     + collect_submodules("openai")
     + collect_submodules("langgraph")
     + collect_submodules("langchain")
