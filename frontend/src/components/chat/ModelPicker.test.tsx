@@ -94,6 +94,23 @@ describe("ModelPicker", () => {
     ]);
   });
 
+  test("resets the introspected catalogue when the agent changes (no leak)", () => {
+    const mutate = vi.fn((_probe, opts) =>
+      opts.onSuccess({ models: ["claude-sonnet-4-6"], message: "" }),
+    );
+    useListMock.mockReturnValue({ mutate });
+    const { container, rerender } = render(
+      <ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />,
+    );
+    fireEvent.focus(screen.getByLabelText(/agent model/i));
+    expect(options(container)).toContain("claude-sonnet-4-6");
+
+    // Switch to codex (no active openai profile here): the anthropic catalogue
+    // must not leak into the new agent's suggestions.
+    rerender(<ModelPicker agentKey="codex" value={null} onCommit={vi.fn()} />);
+    expect(options(container)).toEqual([]);
+  });
+
   test("with no active profile for the agent's wire, offers no suggestions but allows free text", () => {
     // Only an anthropic profile is active; a codex (openai) agent has none.
     const onCommit = vi.fn();

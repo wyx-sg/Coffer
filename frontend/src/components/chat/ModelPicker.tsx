@@ -41,6 +41,15 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
   // committed value arriving back through props).
   useEffect(() => setText(value ?? ""), [value]);
 
+  // The picker is reused in place when the agent changes (draft selector swap,
+  // or switching to a conversation bound to a different agent). Drop the
+  // previous agent's introspected catalogue so its models don't leak into the
+  // new agent's suggestions, and allow the new agent to be introspected.
+  useEffect(() => {
+    introspected.current = false;
+    setFetched([]);
+  }, [agentKey]);
+
   const providers = useProviders();
   const list = useListProviderModels();
 

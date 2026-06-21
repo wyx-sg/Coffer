@@ -52,12 +52,12 @@ paths:
       summary: Create a conversation
       operationId: createConversation
       description: >
-        Creates a conversation for the named agent. `agent_key` selects the
-        agent (defaults to the built-in agent); `agent_config` is an opaque,
-        agent-specific configuration object the named agent validates and
-        stores. For the built-in agent, `agent_config` accepts an optional
-        `model_id`. An unknown `agent_key` or an invalid `agent_config` is
-        rejected with 400.
+        Creates a conversation for the named Coffer-managed agent. `agent_key`
+        is required (chat has no built-in agent since ADR-024); `agent_config`
+        is an opaque, agent-specific configuration object the named agent
+        validates and stores. For a managed agent it accepts an optional `cwd`
+        and an optional `model` (the agent's own model, free-text). An unknown
+        `agent_key` or an invalid `agent_config` is rejected with 400.
       tags: [chat]
       requestBody:
         required: false
