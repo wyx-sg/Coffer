@@ -12,7 +12,6 @@ function baseProps(overrides: Partial<ConfigEditorPaneProps> = {}): ConfigEditor
   return {
     pathLabel: "/home/u/.claude/settings.json",
     filePath: "/home/u/.claude/settings.json",
-    folderPath: "/home/u/.claude",
     formatLabel: "json",
     editorKey: "settings",
     content: "{}",
