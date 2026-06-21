@@ -379,7 +379,7 @@ cwd 没有可恢复的现场。
 
 - **FR-037**：对话记录读取器 MUST 解析每种受支持 agent 的*真实*磁盘会话格式。**Codex** rollout 文件（`~/.codex/sessions/**/*.jsonl`）把每个事件包在 `payload` 信封里：工作目录与会话 id 来自 `session_meta.payload.cwd`/`payload.id`，对话轮次是 `response_item` 事件且其 `payload.type == "message"`（role + 带类型的 `*_text` 内容块）。读取器 MUST 仅按这些 `response_item` 消息计数轮次 —— 并行的 `event_msg` 的 `user_message`/`agent_message` UI 事件 MUST NOT 被重复计数 —— 并 MUST 保持防御性（跳过无法识别/非 JSON 的行，绝不因单行坏数据抛错）。**Claude Code** 的扁平顶层格式不变。（本切片之前，Codex 解析器读取真实格式从不携带的顶层字段，导致每个 Codex 会话都列为 0 条消息、无项目。）
 - **FR-038**：每条对话会话摘要 MUST 携带可读的**标题**、**最后活动时间**（`last_activity_at`）以及会话文件的绝对**源路径**。标题在存在时取 agent 自己的会话标题（Claude Code 的 `ai-title`，最新者胜），否则取第一条*真实*用户消息 —— 跳过非对话性前导（环境/指令块、shell 命令回显、斜杠命令）—— 截断为单行；当无法派生时 MAY 为 null。`started_at` 是第一个事件时间戳，`last_activity_at` 是最后一个。源路径经共享 `FileActions` 组件驱动只读的“在文件管理器中显示”操作（桌面端 reveal / web 端复制路径），与 memory 事实的 FR-021/FR-022 一致 —— 不引入新的后端 open/reveal 端点。
-- **FR-039**：对话列表面（`GET /api/v1/agents/{name}/transcripts`）MUST 暴露该 agent 的**全部**会话（而非仅最近窗口），支持服务端**搜索**（对标题或项目路径匹配的查询）、**筛选**（按精确项目路径、按 `started_at` 时间范围）与**排序**（按 `started_at` 或 `last_activity_at`，升序或降序），以 `limit`/`offset` 分页并返回匹配 `total`。读取器 MUST 用进程内、按 mtime 键控的缓存支撑它，使含数千会话的 agent 的重复列表保持响应 —— 仅在某会话文件 mtime 变化时才重新解析它。
+- **FR-039**：对话列表面（`GET /api/v1/agents/{name}/transcripts`）MUST 暴露该 agent 的**全部**会话（而非仅最近窗口），支持服务端**搜索**（对标题或项目路径匹配的查询）、**筛选**（按精确项目路径、按 `started_at` 时间范围）与**排序**（按 `started_at`、`last_activity_at` 或 `message_count`，升序或降序），以 `limit`/`offset` 分页并返回匹配 `total`。读取器 MUST 用进程内、按 mtime 键控的缓存支撑它，使含数千会话的 agent 的重复列表保持响应 —— 仅在某会话文件 mtime 变化时才重新解析它。
 
 **Surfaces**
 

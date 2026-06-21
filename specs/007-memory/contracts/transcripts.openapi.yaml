@@ -192,7 +192,7 @@ components:
           description: Absolute path to the project the session was recorded in.
         message_count:
           type: integer
-          description: Number of conversation turns (user + assistant messages).
+          description: Number of conversation turns parsed from the transcript.
         started_at:
           type: string
           format: date-time

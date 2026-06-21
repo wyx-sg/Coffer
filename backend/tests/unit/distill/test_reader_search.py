@@ -121,6 +121,20 @@ def test_filter_by_started_after(tmp_path: Path) -> None:
     assert page[0].session_id == "c"
 
 
+def test_filter_by_naive_started_after_does_not_raise(tmp_path: Path) -> None:
+    """A tz-naive bound (offset-less ?started_after=…, valid per the date-time
+    contract) must be normalised to UTC, not raise comparing against the always
+    tz-aware started_at."""
+    _make_codex_tree(tmp_path)
+    r = FileTranscriptReader()
+    naive = datetime(2026, 5, 2, 12, 0)  # no tzinfo
+    total, page = r.search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), started_after=naive, limit=100, offset=0
+    )
+    assert total == 1
+    assert page[0].session_id == "c"
+
+
 def test_sort_by_started_at_asc_and_desc(tmp_path: Path) -> None:
     _make_codex_tree(tmp_path)
     r = FileTranscriptReader()

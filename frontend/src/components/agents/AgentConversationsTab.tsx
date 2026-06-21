@@ -111,22 +111,22 @@ export function AgentConversationsTab({ name }: Props) {
         <p className="text-xs text-muted-foreground">{t("agents.conversationsTab.subtitle")}</p>
       </div>
 
+      <AgentConversationsToolbar
+        search={search}
+        onSearchChange={setSearch}
+        project={project}
+        onProjectChange={setProject}
+        projectOptions={projectOptions}
+        time={time}
+        onTimeChange={setTime}
+      />
+
       {isPending ? (
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : error ? (
         <p className="text-sm text-destructive">{translateApiError(t, error)}</p>
       ) : (
         <>
-          <AgentConversationsToolbar
-            search={search}
-            onSearchChange={setSearch}
-            project={project}
-            onProjectChange={setProject}
-            projectOptions={projectOptions}
-            time={time}
-            onTimeChange={setTime}
-          />
-
           <div className="rounded-md border bg-card">
             <Table>
               <TableHeader>

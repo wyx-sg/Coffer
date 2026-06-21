@@ -161,6 +161,13 @@ class FileTranscriptReader:
         """
         sessions = self._all_summaries(agent_type_value, config_dir)
         q = query.strip().lower() if query else None
+        # started_at is always tz-aware (UTC); normalise naive bounds (an
+        # offset-less ?started_after=… is valid per the date-time contract) so
+        # the comparison never raises "can't compare naive and aware datetimes".
+        if started_after is not None and started_after.tzinfo is None:
+            started_after = started_after.replace(tzinfo=UTC)
+        if started_before is not None and started_before.tzinfo is None:
+            started_before = started_before.replace(tzinfo=UTC)
 
         def keep(s: TranscriptSession) -> bool:
             if project is not None and s.project_path != project:
