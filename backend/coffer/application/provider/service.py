@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import asyncio
 import pathlib
-from dataclasses import dataclass
 from typing import Protocol
 
 from coffer.application.audit_service import AuditService
+from coffer.application.provider.results import ActivateResult, DeactivateResult
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
@@ -51,26 +51,6 @@ class _ConfigFileStore(Protocol):
 
 class _AgentLister(Protocol):
     async def list(self) -> list[Resource]: ...
-
-
-@dataclass(frozen=True)
-class ActivateResult:
-    """Outcome of a switch: which agents were written, which wire had none."""
-
-    activated: str
-    wire_format: str
-    projected: list[str]
-    skipped: list[str]
-
-
-@dataclass(frozen=True)
-class DeactivateResult:
-    """Outcome of switching a wire back to the agent's built-in login: which
-    agents had Coffer's projection removed, and the connection that was active."""
-
-    wire_format: str
-    deprojected: list[str]
-    previous: str | None
 
 
 class ProviderService:
@@ -274,11 +254,9 @@ class ProviderService:
         )
 
     async def deactivate(self, wire: WireFormat, *, actor: str = "api") -> DeactivateResult:
-        """Switch ``wire``'s agent(s) back to their OWN built-in login: remove
-        Coffer's projected keys from every matching agent's native config and
-        clear ``is_active`` on the wire's active connection. Idempotent — a no-op
-        when nothing is active (the agent already runs built-in). De-projection
-        runs BEFORE the flag flip, mirroring :meth:`activate`."""
+        """Switch ``wire``'s agent(s) back to their built-in login: de-project
+        Coffer's keys and clear ``is_active``. Idempotent; de-projects before the
+        flip, mirroring :meth:`activate`."""
         target = target_for(wire)
         deprojected: list[str] = []
         if target is not None:
@@ -298,16 +276,15 @@ class ProviderService:
                 previous = r.name
 
         if previous is not None or deprojected:
+            details = {
+                "from": previous,
+                "to": None,
+                "wire_format": wire.value,
+                "agents": deprojected,
+            }
+            ref = self._ref(previous) if previous else self._ref(wire.value)
             await self._audit.record(
-                AuditEventType.PROVIDER_SWITCHED.value,
-                ref=self._ref(previous) if previous else self._ref(wire.value),
-                actor=actor,
-                details={
-                    "from": previous,
-                    "to": None,
-                    "wire_format": wire.value,
-                    "agents": deprojected,
-                },
+                AuditEventType.PROVIDER_SWITCHED.value, ref=ref, actor=actor, details=details
             )
         return DeactivateResult(wire_format=wire.value, deprojected=deprojected, previous=previous)
 
