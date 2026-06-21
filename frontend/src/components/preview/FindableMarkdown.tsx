@@ -36,7 +36,11 @@ export function FindableMarkdown({ children, className, initialQuery }: Findable
         className={cn("outline-none", className)}
         onKeyDown={onKeyDown}
       >
-        <Markdown>{children}</Markdown>
+        {/* Constrain the rendered body to a comfortable reading width (centered)
+            so long lines don't stretch edge-to-edge on wide screens. */}
+        <div className="mx-auto max-w-3xl">
+          <Markdown>{children}</Markdown>
+        </div>
       </div>
       {find.open ? (
         <FindWidget

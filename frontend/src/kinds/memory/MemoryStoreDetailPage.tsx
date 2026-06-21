@@ -8,10 +8,9 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { translateApiError } from "@/lib/api/errors";
-import { usePageClamp } from "@/lib/hooks/usePagedList";
 import {
   clearFacts,
   deleteFact,
@@ -31,9 +30,9 @@ import { MemoryFactTree } from "./MemoryFactTree";
 import { MemoryFactViewer } from "./MemoryFactViewer";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 
-// Facts are paged so a large (MCP-grown) store doesn't load all at once; the
-// tree uses page-based pagination (server offset) below the list.
-const DEFAULT_FACTS_PAGE_SIZE = 50;
+// The fact list is shown as a single scrollable list, fetched in one request at
+// the facts API's max page size (`le=200`) — enough for a personal store.
+const FACTS_FETCH_LIMIT = 200;
 
 export function MemoryStoreDetailPage() {
   const { t } = useTranslation();
@@ -51,24 +50,12 @@ export function MemoryStoreDetailPage() {
   const [clearOpen, setClearOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
 
-  const [factPage, setFactPage] = useState(1);
-  const [factPageSize, setFactPageSize] = useState(DEFAULT_FACTS_PAGE_SIZE);
-  // A smaller page size can shrink the result set: reset to page 1.
-  useEffect(() => {
-    setFactPage(1);
-  }, [factPageSize]);
   const factsQuery = useQuery({
-    queryKey: ["memory-facts", store, factPage, factPageSize],
-    queryFn: () => listFacts(store, factPageSize, (factPage - 1) * factPageSize),
+    queryKey: ["memory-facts", store],
+    queryFn: () => listFacts(store, FACTS_FETCH_LIMIT, 0),
     enabled: Boolean(store),
-    // Keep the prior page's facts + total while the next page loads, so the page
-    // count doesn't transiently read as 1 and trip the clamp during a forward nav.
-    placeholderData: keepPreviousData,
   });
   const factTotal = factsQuery.data?.total ?? 0;
-  const factPageCount = Math.max(1, Math.ceil(factTotal / factPageSize));
-  // Pull the page back into range when the total shrinks (last page emptied).
-  usePageClamp(factPage, factPageCount, setFactPage);
 
   // --- recall mode -----------------------------------------------------------
   // Running a recall filters the left tree to the matched facts and opens the
@@ -184,14 +171,8 @@ export function MemoryStoreDetailPage() {
           facts={recalling ? { facts: recallFacts, total: recallFacts.length } : factsQuery.data}
           selectedId={liveSelected?.id ?? null}
           isLoading={recalling ? recallLoading : factsQuery.isPending}
-          hidePagination={recalling}
           emptyLabel={recalling ? t("memory.detail.noMatches") : undefined}
-          page={factPage}
-          pageCount={factPageCount}
-          pageSize={factPageSize}
           total={recalling ? recallFacts.length : factTotal}
-          onPageChange={setFactPage}
-          onPageSizeChange={setFactPageSize}
           onSelect={selectFact}
         />
         <MemoryFactViewer
