@@ -49,6 +49,18 @@ describe("Composer", () => {
     expect(onSend).toHaveBeenCalledWith("Hi there");
   });
 
+  test("does NOT call onSend on Enter while an IME composition is active", () => {
+    const onSend = vi.fn();
+    render(<Composer onSend={onSend} />);
+    const textarea = screen.getByRole("textbox");
+    act(() => {
+      fireEvent.change(textarea, { target: { value: "你好" } });
+      // The Enter that commits a pinyin candidate carries isComposing=true.
+      fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false, isComposing: true });
+    });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
   test("does NOT call onSend on Shift+Enter", () => {
     const onSend = vi.fn();
     render(<Composer onSend={onSend} />);
