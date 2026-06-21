@@ -643,7 +643,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **文件系统打开/显示**
 
-- **FR-039**: 系统 MUST 暴露文件系统动作操作,让 Web 界面经环回 daemon 执行真正的 open/reveal（FR-038）——daemon 始终与 Web 客户端同处用户机器上（ADR-033）:`POST /api/v1/fs/open`(在某个应用里打开一个已存在的绝对路径——一个 `with` 编辑器偏好,或 OS 默认)与 `POST /api/v1/fs/reveal`(在 OS 文件管理器中选中/显示一个已存在的绝对路径)。两者在动作前都 MUST 校验路径为绝对且存在,MUST 以固定参数向量调用 OS 启动器(无 shell 插值),MUST 不创建任何东西,且 MUST 与所有其它 daemon 路由一样受同样的 loopback + token 鉴权保护。非绝对或不存在的路径被拒绝(`FS_PATH_NOT_OPENABLE`,400)。在没有可移植「选中文件」原语的平台(Linux),reveal 降级为打开所在文件夹。
+- **FR-039**: 系统 MUST 暴露文件系统动作操作,让 Web 界面经环回 daemon 执行真正的 open/reveal（FR-038）——daemon 始终与 Web 客户端同处用户机器上（ADR-033）:`POST /api/v1/fs/open`(在某个应用里打开一个已存在的绝对路径——一个 `with` 编辑器偏好,或 OS 默认)与 `POST /api/v1/fs/reveal`(在 OS 文件管理器中选中/显示一个已存在的绝对路径)。两者在动作前都 MUST 校验路径为绝对且存在,MUST 以固定参数向量调用 OS 启动器(无 shell 插值),MUST 不创建任何东西,且 MUST 与所有其它 daemon 路由一样受同样的 loopback + token 鉴权保护。非绝对或不存在的路径被拒绝(`FS_PATH_NOT_OPENABLE`,400)。在没有可移植「选中文件」原语的平台(Linux),reveal 降级为打开所在文件夹。系统还 MUST 暴露 `GET /api/v1/fs/editors`,枚举主机上检测到已安装的常见 GUI 编辑器(macOS 返回 `open -a` 用的 app 名;Linux/Windows 返回 PATH 上的命令),以便 spec 002-ui-shell 的首选编辑器设置提供一个选择框而非盲填文本框。它返回每个编辑器的显示标签与 `/fs/open` 的 `with` 所接受的启动 `value`,除应用是否存在外不读取任何内容,并受同样的 loopback + token 鉴权保护。
 
 ### Key Entities
 

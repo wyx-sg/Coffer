@@ -18,6 +18,12 @@ export interface FsBrowseOut {
   entries: FsEntry[];
 }
 
+/** A GUI editor detected as installed (preferred-editor picker, spec 002/004). */
+export interface EditorOption {
+  label: string;
+  value: string;
+}
+
 function authHeaders(extra?: Record<string, string>): Record<string, string> {
   return {
     "X-Coffer-Token": getCofferToken() ?? "",
@@ -35,7 +41,10 @@ async function postAction(path: string, body: Record<string, unknown>): Promise<
   if (!r.ok) {
     const data = await r.json().catch(() => null);
     const err = data?.error;
-    throw new ApiError(err?.code ?? "INTERNAL_ERROR", err?.message ?? `request failed: ${r.status}`);
+    throw new ApiError(
+      err?.code ?? "INTERNAL_ERROR",
+      err?.message ?? `request failed: ${r.status}`,
+    );
   }
 }
 
@@ -62,4 +71,18 @@ export const fsApi = {
 
   /** Select / reveal `path` in the OS file manager. */
   reveal: (path: string): Promise<void> => postAction("/fs/reveal", { path }),
+
+  /** List GUI editors detected as installed, for the preferred-editor picker. */
+  listEditors: async (): Promise<EditorOption[]> => {
+    const r = await fetch(`${getCofferBaseUrl()}/fs/editors`, { headers: authHeaders() });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      const err = data?.error;
+      throw new ApiError(
+        err?.code ?? "INTERNAL_ERROR",
+        err?.message ?? `request failed: ${r.status}`,
+      );
+    }
+    return (data?.editors ?? []) as EditorOption[];
+  },
 };

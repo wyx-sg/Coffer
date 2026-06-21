@@ -699,6 +699,26 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /fs/editors:
+    get:
+      tags: [fs]
+      operationId: listEditors
+      summary: List GUI editors installed on this machine
+      description: |
+        Enumerate common GUI code editors detected as installed, for the
+        preferred-editor picker in Settings (spec 002-ui-shell). Detection is
+        per-OS: macOS returns app-bundle names (for `open -a`), Linux/Windows
+        return commands found on PATH. The returned `value` is exactly what
+        `/fs/open`'s `with` field accepts. The chosen preference itself stays
+        client-side (localStorage); this endpoint only lists candidates.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FsEditorsOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
 components:
   securitySchemes:
     cofferToken:
@@ -1278,6 +1298,28 @@ components:
         path:
           type: string
           description: "Absolute path of an existing file or folder to reveal."
+
+    EditorOption:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+          description: "Human-readable editor name (e.g. \"Visual Studio Code\")."
+        value:
+          type: string
+          description: >-
+            Launcher value for the preferred-editor preference — a macOS app
+            name (`open -a`) or a Linux/Windows command on PATH.
+
+    FsEditorsOut:
+      type: object
+      required: [editors]
+      properties:
+        editors:
+          type: array
+          items: { $ref: "#/components/schemas/EditorOption" }
+          description: "GUI editors detected as installed on this machine."
 
     ErrorOut:
       type: object
