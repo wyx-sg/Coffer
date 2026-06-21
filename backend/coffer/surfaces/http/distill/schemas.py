@@ -15,9 +15,12 @@ class TranscriptSessionSummary(BaseModel):
     """Summary of a single transcript session (list view)."""
 
     session_id: str
+    title: str | None = None
     project_path: str | None = None
     message_count: int
     started_at: datetime | None = None
+    last_activity_at: datetime | None = None
+    source_path: str
 
 
 class TranscriptSessionListResponse(BaseModel):

@@ -77,15 +77,20 @@ describe("useAgentTranscripts", () => {
   });
 
   test("fetches sessions from GET /api/v1/agents/{name}/transcripts", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { sessions: [SAMPLE_SESSION] }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { sessions: [SAMPLE_SESSION], total: 1, limit: 100, offset: 0 }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const { result } = renderHook(() => useAgentTranscripts("claude"), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.sessions).toHaveLength(1);
-    expect(result.current.data?.sessions[0].session_id).toBe("s1");
+    // Infinite query: sessions live under data.pages[].
+    expect(result.current.data?.pages[0].sessions).toHaveLength(1);
+    expect(result.current.data?.pages[0].sessions[0].session_id).toBe("s1");
     const url = String(fetchMock.mock.calls[0][0]);
     // The base URL already carries the /api/v1 prefix; the path must not repeat
     // it (a doubled /api/v1/api/v1 hits no route → 404 NOT_FOUND).

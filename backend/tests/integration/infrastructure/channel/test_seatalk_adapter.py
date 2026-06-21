@@ -164,3 +164,54 @@ async def test_handle_event_image_message_yields_empty_text(fake_seatalk: FakeSe
     [msg] = recorder.messages
     assert msg.text == ""  # non-text content degrades to an empty-text envelope
     assert msg.platform_message_id == "pm-2"
+
+
+# -- interactive selection cards (P3) -----------------------------------------
+
+
+async def test_send_text_with_buttons_emits_interactive_card(fake_seatalk: FakeSeaTalk) -> None:
+    from coffer.domain.channel.envelopes import ChoiceButton
+
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text(
+            "emp-1",
+            "Pick a model:",
+            buttons=[ChoiceButton(label="opus", value="model:opus")],
+        )
+    finally:
+        await adapter.stop()
+    [(body, _auth)] = fake_seatalk.single_chat_calls
+    message = body["message"]
+    assert message["tag"] == "interactive_message"
+    assert message["interactive_message"]["buttons"] == [
+        {"button_type": "callback", "text": "opus", "value": "model:opus"}
+    ]
+
+
+async def test_interactive_message_click_routes_to_on_callback(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(
+            {
+                "event_type": "interactive_message_click",
+                "timestamp": 1718000000,
+                "event": {
+                    "employee_code": "emp-1",
+                    "value": "agent:codex",
+                    "message_id": "card-9",
+                },
+            }
+        )
+    finally:
+        await adapter.stop()
+    [cb] = recorder.callbacks
+    assert (cb.channel, cb.chat_id, cb.sender_id, cb.data) == (
+        "st",
+        "emp-1",
+        "emp-1",
+        "agent:codex",
+    )
+    assert cb.platform_message_id == "card-9"
