@@ -47,12 +47,12 @@ export function AgentConversationsTab({ name }: Props) {
   const [sort, setSort] = useState<TranscriptSort>("last_activity_at");
   const [order, setOrder] = useState<SortOrder>("desc");
 
-  const window = resolveTimeWindow(time);
+  const timeWindow = resolveTimeWindow(time);
   const filters: TranscriptFilters = {
     q: search.trim() || undefined,
     project: project !== "all" ? project : undefined,
-    startedAfter: window.since,
-    startedBefore: window.until,
+    startedAfter: timeWindow.since,
+    startedBefore: timeWindow.until,
     sort,
     order,
   };
@@ -81,35 +81,26 @@ export function AgentConversationsTab({ name }: Props) {
     }
   };
 
-  function SortHeader({
-    col,
-    label,
-    className,
-  }: {
-    col: TranscriptSort;
-    label: string;
-    className?: string;
-  }) {
-    return (
-      <TableHead className={className}>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 hover:text-foreground"
-          onClick={() => toggleSort(col)}
-          aria-label={t("agents.conversationsTab.sortBy", { field: label })}
-        >
-          {label}
-          {sort === col ? (
-            order === "asc" ? (
-              <ArrowUp className="size-3" aria-hidden />
-            ) : (
-              <ArrowDown className="size-3" aria-hidden />
-            )
-          ) : null}
-        </button>
-      </TableHead>
-    );
-  }
+  // A render helper (not a nested component) so headers don't remount each render.
+  const sortHeader = (col: TranscriptSort, label: string, className?: string) => (
+    <TableHead className={className}>
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 hover:text-foreground"
+        onClick={() => toggleSort(col)}
+        aria-label={t("agents.conversationsTab.sortBy", { field: label })}
+      >
+        {label}
+        {sort === col ? (
+          order === "asc" ? (
+            <ArrowUp className="size-3" aria-hidden />
+          ) : (
+            <ArrowDown className="size-3" aria-hidden />
+          )
+        ) : null}
+      </button>
+    </TableHead>
+  );
 
   return (
     <div className="space-y-3">
@@ -142,21 +133,21 @@ export function AgentConversationsTab({ name }: Props) {
                 <TableRow>
                   <TableHead>{t("agents.conversationsTab.colTitle")}</TableHead>
                   <TableHead>{t("agents.conversationsTab.colProject")}</TableHead>
-                  <SortHeader
-                    col="message_count"
-                    label={t("agents.conversationsTab.colMessages")}
-                    className="whitespace-nowrap text-right"
-                  />
-                  <SortHeader
-                    col="started_at"
-                    label={t("agents.conversationsTab.colStarted")}
-                    className="whitespace-nowrap"
-                  />
-                  <SortHeader
-                    col="last_activity_at"
-                    label={t("agents.conversationsTab.colLastActivity")}
-                    className="whitespace-nowrap"
-                  />
+                  {sortHeader(
+                    "message_count",
+                    t("agents.conversationsTab.colMessages"),
+                    "whitespace-nowrap text-right",
+                  )}
+                  {sortHeader(
+                    "started_at",
+                    t("agents.conversationsTab.colStarted"),
+                    "whitespace-nowrap",
+                  )}
+                  {sortHeader(
+                    "last_activity_at",
+                    t("agents.conversationsTab.colLastActivity"),
+                    "whitespace-nowrap",
+                  )}
                   <TableHead className="text-right" />
                 </TableRow>
               </TableHeader>
