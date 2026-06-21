@@ -8,9 +8,10 @@
 // Spec 005 FR-025 additions covered here:
 //   - the "Follow master library" switch reflects agent.follow_all_skills and
 //     PATCHes the agent on toggle
-//   - while following, per-skill switches edit skill_exclusions (PATCH) and do
-//     NOT call the binding enable/disable mutations
-//   - while NOT following, per-skill switches keep the old binding behaviour
+//   - while following, the managed table is replaced by a link to the Skills
+//     page (the reconciler delivers everything automatically)
+//   - while NOT following, the managed table's per-skill switch keeps the old
+//     binding behaviour
 //   - the unmanaged-skills section: hidden when empty, rows with location /
 //     foreign-link badges and invalid reasons, adopt (disabled w/ hint when
 //     invalid or foreign) and delete-with-confirm actions
@@ -29,6 +30,12 @@ import zh from "@/i18n/locales/zh.json";
 const useSkillsMock = vi.fn();
 const enableMutate = vi.fn();
 const disableMutate = vi.fn();
+const navigateMock = vi.fn();
+
+vi.mock("react-router-dom", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-router-dom")>()),
+  useNavigate: () => navigateMock,
+}));
 
 function mockBinding(linkMode: LinkMode | null) {
   return {
@@ -207,31 +214,22 @@ describe("AgentSkillsTab", () => {
       expect(followSwitch()).not.toBeChecked();
     });
 
-    test("in follow mode, switching a skill OFF patches skill_exclusions and does NOT touch the binding", async () => {
+    test("in follow mode, the managed table is replaced by a link to the Skills page", () => {
       stub();
       renderTab(FOLLOW_AGENT);
 
-      const sw = helloSwitch();
-      expect(sw).toBeChecked(); // not excluded
-      fireEvent.click(sw);
-      await waitFor(() =>
-        expect(api.patch).toHaveBeenCalledWith("cc", { skill_exclusions: ["hello"] }),
-      );
-      expect(enableMutate).not.toHaveBeenCalled();
-      expect(disableMutate).not.toHaveBeenCalled();
-    });
+      // No per-skill managed table/switches while following — the reconciler
+      // delivers everything automatically.
+      expect(
+        screen.queryByRole("switch", {
+          name: en.agents.skillsTab.toggleAria.replace("{{name}}", "hello"),
+        }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText("hello")).not.toBeInTheDocument();
 
-    test("in follow mode, an excluded skill renders OFF and switching it ON removes the exclusion", async () => {
-      stub();
-      renderTab({ ...FOLLOW_AGENT, skill_exclusions: ["hello", "keep"] });
-
-      const sw = helloSwitch();
-      expect(sw).not.toBeChecked();
-      fireEvent.click(sw);
-      await waitFor(() =>
-        expect(api.patch).toHaveBeenCalledWith("cc", { skill_exclusions: ["keep"] }),
-      );
-      expect(enableMutate).not.toHaveBeenCalled();
+      // Instead, a card links to the standalone Skills page (like Memory / MCP).
+      fireEvent.click(screen.getByRole("button", { name: en.agents.skillsTab.openSkillsPage }));
+      expect(navigateMock).toHaveBeenCalledWith("/skills");
     });
 
     test("when NOT following, the per-skill switch keeps the old binding behaviour", () => {
@@ -264,12 +262,8 @@ describe("AgentSkillsTab", () => {
       expect(within(section).getByText("linked")).toBeInTheDocument();
 
       // Location badges.
-      expect(
-        within(section).getAllByText(en.agents.skillsTab.locationSkills).length,
-      ).toBe(2);
-      expect(
-        within(section).getByText(en.agents.skillsTab.locationAgentsDir),
-      ).toBeInTheDocument();
+      expect(within(section).getAllByText(en.agents.skillsTab.locationSkills).length).toBe(2);
+      expect(within(section).getByText(en.agents.skillsTab.locationAgentsDir)).toBeInTheDocument();
 
       // Invalid reason surfaced as muted text.
       expect(within(section).getByText("missing SKILL.md frontmatter")).toBeInTheDocument();
@@ -320,9 +314,7 @@ describe("AgentSkillsTab", () => {
       fireEvent.click(within(section).getByRole("button", { name: en.common.delete }));
 
       const dialog = await screen.findByRole("dialog");
-      expect(
-        within(dialog).getByText(en.agents.skillsTab.deleteConfirm),
-      ).toBeInTheDocument();
+      expect(within(dialog).getByText(en.agents.skillsTab.deleteConfirm)).toBeInTheDocument();
       expect(api.deleteUnmanagedSkill).not.toHaveBeenCalled();
 
       fireEvent.click(within(dialog).getByRole("button", { name: en.common.delete }));

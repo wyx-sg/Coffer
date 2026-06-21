@@ -209,6 +209,28 @@ export function useUnmanagedSkills(name: string) {
   });
 }
 
+// --- Native memory (the agent's OWN per-project memory stores, read-only) ---
+
+export function useAgentNativeMemory(name: string) {
+  return useQuery({
+    queryKey: ["agents", name, "native-memory"],
+    queryFn: () => agentsApi.nativeMemory(name),
+    enabled: !!name,
+  });
+}
+
+export function useImportNativeMemory(agentName: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (memoryDir: string) => agentsApi.importNativeMemory(agentName, memoryDir),
+    onSuccess: () => {
+      // Imported facts land in a Coffer store (+ organize) — refresh the store
+      // list so the Memory page reflects the new content.
+      qc.invalidateQueries({ queryKey: ["memory-stores"] });
+    },
+  });
+}
+
 export function useAdoptUnmanagedSkill(agentName: string) {
   const qc = useQueryClient();
   return useMutation({

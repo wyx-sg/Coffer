@@ -326,6 +326,22 @@ async def test_fact_too_long_rejected(mem) -> None:
     assert exc.value.reason == "too_long"
 
 
+async def test_fact_over_default_allowed_with_max_fact_chars_override(mem) -> None:
+    # A trusted bulk import raises the per-write limit to the domain ceiling so a
+    # long note (over the store default, under the ceiling) is written whole
+    # instead of being rejected.
+    fact = await mem.service.add_fact(
+        scope=MemoryScope.GLOBAL,
+        cwd=None,
+        name="x",
+        description="d",
+        body="x" * 10_000,  # over the 8192 default, under the 32768 ceiling
+        actor="user",
+        max_fact_chars=32768,
+    )
+    assert fact.id
+
+
 @pytest.mark.acceptance(
     spec="007-memory", scenario="out-of-band fact-file edits are visible on recall"
 )
