@@ -9,6 +9,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/errors";
+import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import {
   checkSources,
   deleteDocument,
@@ -155,6 +156,20 @@ export function useKnowledgeBaseDetail(name: string) {
     },
   });
 
+  // Multi-select bulk delete: fan out deleteDocument over the chosen ids with
+  // Promise.allSettled (one summary toast + one invalidate burst), then drop the
+  // viewer selection if the currently-viewed doc was among those deleted.
+  const bulk = useBulkMutate({
+    invalidate: [
+      ["kb-documents", name],
+      ["kb-metrics", name],
+    ],
+  });
+  const bulkDelete = async (ids: string[]) => {
+    await bulk.run(ids, (id) => deleteDocument(name, id));
+    if (selectedId && ids.includes(selectedId)) setSelectedId(null);
+  };
+
   const runSearch = () => (mode === "grep" ? grep.mutate() : search.mutate());
   const selectDoc = (id: string) => setSelectedId(id);
   // Open the styled confirmation dialog (no native window.confirm). The page
@@ -214,6 +229,8 @@ export function useKnowledgeBaseDetail(name: string) {
     grep,
     runSearch,
     selectDoc,
+    bulkDelete,
+    bulkDeletePending: bulk.isPending,
     confirmDelete,
     performDelete,
     deleteOpen,

@@ -199,7 +199,23 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 
 - **无新增 FR**——这交付的是既有 FR-021..024 的前端；覆盖由新的 `SourceCheckDialog` vitest 套件与扩展后的详情页测试（断言「检查源文件」会打开对话框、且设置 PATCH 携带 `auto_update_sources`）保证。
 
-## 17. 此处明确不决定 / 范围外
+## 17. 文档列表筛选 + 多选批量删除——前端（KB12）
+
+**问题**：知识库详情页的文档列表（`KnowledgeBaseDocTree`，左侧栏的可点击行 `<ul>`）此前无法收窄一个很长的列表，也无法一次删除多个文档——单条删除是由查看器驱动的（选中文档 → 右侧 Trash2 → 确认 → 删一条）。策展一个大知识库只能滚动并逐条删除。
+
+**决策**：就地增强既有侧栏——纯增量前端，不改后端：
+
+- 在文档树顶部（在 `<aside role="complementary">` 内、`<ul>` 之上）放一个小的客户端 **筛选 `<Input>`**。它按 **大小写不敏感的标题子串** 过滤已渲染的文档；空筛选显示全部文档，若筛选把一切都隐藏，则显示一行灰色的「无匹配」提示。
+
+- 每行新增一个 **作为可点击标题「兄弟」的 `<Checkbox>`**（绝不嵌套互动元素）。标题仍是可按其文本选中的 `<button>`——从而保留 e2e（`shell_knowledge_base.spec.ts` 按文本点击 "Deploys"）与详情页测试（`getByRole("complementary")` + 按文本点击）的选择器。表头的「全选」复选框覆盖 **筛选后** 的集合（沿用 `useTableSelection` 的 selected ∩ visible）。
+
+- 当选中 ≥1 行时，共享的 **`BulkBar`**（来自 `DataTableSelection`）显示计数 + 删除 + 清除。删除打开 `ConfirmDialog`；确认后，页面 hook 的 `bulkDelete` 经 `useBulkMutate` 把 `deleteDocument(name, id)` 在所选 id 上扇出（一条汇总 toast + 一次 `["kb-documents"]`/`["kb-metrics"]` 失效），随后清空选择。若当前正在 **查看** 的文档也在删除之列，则重置查看器的 `selectedId`，使右侧面板不再显示已删除的文档。
+
+- 我们 **保留了双栏布局**（侧栏树 + 右侧查看器），而非换成全宽 `DataTable`：DataTable 不适配窄侧栏，且会破坏查看器流程与 e2e/详情页选择器。单条删除路径（查看器 Trash2 → 确认 → `del`）保持不变。
+
+- **无新增 FR**——这是对既有 FR-013/FR-020 文档管理表面的一个 UX 增益；覆盖由扩展后的详情页测试保证（筛选会收窄/恢复/无匹配；选中两行 → 批量栏 → 确认 → 每个 id 调用一次 `deleteDocument` → 选择清空；点击标题仍能在查看器中加载）。
+
+## 18. 此处明确不决定 / 范围外
 
 - 单次调用里 keyword + vector 的 hybrid RRF 融合（可选未来，同引擎）。
 - 检索时的 reranking / HyDE / multi-query / LLM 综合 —— agent 综合。

@@ -950,6 +950,9 @@
       "chunkBadge": "{{count}} chunks",
       "degradedBadge": "{{count}} documents pending vector embed (embedding service unavailable; indexed by keyword)",
       "selectDocument": "Select a document on the left to preview or edit it.",
+      "filterDocs": "Filter documents…",
+      "noFilterMatches": "No documents match the filter.",
+      "bulkDeleteConfirm": "Delete {{count}} documents? This cannot be undone.",
       "sourceCheck": {
         "title": "Source files",
         "description": "Documents ingested from a file on disk, checked against their original source.",
