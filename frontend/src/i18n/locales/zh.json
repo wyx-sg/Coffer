@@ -1160,6 +1160,7 @@
     },
     "queue": {
       "label": "队列中：",
+      "edit": "编辑排队消息",
       "remove": "从队列移除"
     },
     "toolCard": {
