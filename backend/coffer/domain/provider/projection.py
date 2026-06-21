@@ -1,0 +1,135 @@
+"""Pure text transforms that project a provider profile into native agent config.
+
+No filesystem access — the application layer reads the agent's native config
+file, calls one of these to produce new text, and writes it back through the
+atomic store (``ConfigFileStore.write_text_atomic`` → atomic + ``.bak``). This
+mirrors ``domain/agent/mcp_install.py``'s ``apply_install``.
+
+Two wire formats, each projecting into exactly one agent's native config:
+
+- ``anthropic`` → Claude Code ``~/.claude/settings.json`` (JSON): top-level
+  ``apiKeyHelper`` (the key is fetched on demand, never written) plus
+  ``env.ANTHROPIC_BASE_URL`` / ``ANTHROPIC_MODEL`` / ``ANTHROPIC_SMALL_FAST_MODEL``.
+- ``openai`` → Codex ``~/.codex/config.toml`` (TOML): top-level ``model`` +
+  ``model_provider`` plus a ``[model_providers.coffer]`` table whose ``env_key``
+  names the env var Codex reads the key from (also never written here).
+
+Both write ONLY Coffer-managed keys, merging into the user's existing file so
+unrelated content is preserved.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import MutableMapping
+from dataclasses import dataclass
+
+import tomlkit
+
+from coffer.domain.agent.config_files import ConfigFileFormat
+from coffer.domain.agent.types import AgentType
+from coffer.domain.provider.config import WireFormat
+
+# --- Codex provider-block identity --------------------------------------------
+
+#: The ``model_providers`` table key Coffer manages, and the ``model_provider``
+#: selector that points at it.
+CODEX_PROVIDER_ID = "coffer"
+#: The env var Codex reads the API key from (``model_providers.coffer.env_key``).
+#: The raw key is materialized into this var at runtime, never written to disk.
+CODEX_ENV_KEY = "COFFER_PROVIDER_KEY"
+
+#: The command Claude Code runs to fetch the auth token (``apiKeyHelper``). It
+#: resolves the active anthropic profile's credential from the Fernet vault and
+#: prints it — so the key is never persisted in ``settings.json``.
+ANTHROPIC_API_KEY_HELPER = "coffer provider key --wire anthropic"
+
+
+@dataclass(frozen=True)
+class ProjectionTarget:
+    """Where a wire format projects: the agent type + its native config file."""
+
+    agent_type: AgentType
+    config_key: str
+    format: ConfigFileFormat
+
+
+_TARGETS: dict[WireFormat, ProjectionTarget] = {
+    WireFormat.ANTHROPIC: ProjectionTarget(
+        AgentType.CLAUDE_CODE, "settings", ConfigFileFormat.JSON
+    ),
+    WireFormat.OPENAI: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
+}
+
+
+def target_for(wire: WireFormat) -> ProjectionTarget:
+    """The projection target for ``wire`` (which agent + native config file)."""
+    try:
+        return _TARGETS[wire]
+    except KeyError:  # pragma: no cover - exhaustive over the enum
+        raise AssertionError(f"no projection target for wire format {wire!r}") from None
+
+
+def apply_anthropic_settings(
+    text: str,
+    *,
+    base_url: str,
+    model: str,
+    fast_model: str | None,
+    api_key_helper: str = ANTHROPIC_API_KEY_HELPER,
+) -> str:
+    """Return new ``settings.json`` text with Coffer's anthropic provider keys.
+
+    Merges into the user's existing JSON; unrelated keys are preserved. Sets the
+    top-level ``apiKeyHelper`` and the ``env`` provider vars; never writes
+    ``ANTHROPIC_API_KEY`` (it would override the helper).
+    """
+    data = json.loads(text) if text.strip() else {}
+    if not isinstance(data, dict):  # a hand-edit left a non-object root
+        data = {}
+    data["apiKeyHelper"] = api_key_helper
+    env = data.get("env")
+    if not isinstance(env, dict):
+        env = {}
+        data["env"] = env
+    env["ANTHROPIC_BASE_URL"] = base_url
+    env["ANTHROPIC_MODEL"] = model
+    if fast_model:
+        env["ANTHROPIC_SMALL_FAST_MODEL"] = fast_model
+    else:
+        env.pop("ANTHROPIC_SMALL_FAST_MODEL", None)
+    # ensure_ascii=False: settings.json may hold non-ASCII user content; don't
+    # rewrite it to \uXXXX on every switch.
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def apply_codex_provider(
+    text: str,
+    *,
+    base_url: str,
+    model: str,
+    wire_api: str,
+    display_name: str,
+    provider_id: str = CODEX_PROVIDER_ID,
+    env_key: str = CODEX_ENV_KEY,
+) -> str:
+    """Return new ``config.toml`` text with Coffer's openai provider block.
+
+    Merges into the user's existing TOML via tomlkit (comments / ordering /
+    unrelated keys preserved). Sets top-level ``model`` + ``model_provider`` and
+    the ``[model_providers.<provider_id>]`` table.
+    """
+    doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
+    doc["model"] = model
+    doc["model_provider"] = provider_id
+    # Recreate `model_providers` if absent OR if a hand-edit left a non-table
+    # value there (indexing into a scalar would raise).
+    if not isinstance(doc.get("model_providers"), MutableMapping):
+        doc["model_providers"] = tomlkit.table(is_super_table=True)
+    block = tomlkit.table()
+    block["name"] = display_name
+    block["base_url"] = base_url
+    block["wire_api"] = wire_api
+    block["env_key"] = env_key
+    doc["model_providers"][provider_id] = block
+    return tomlkit.dumps(doc)

@@ -21,6 +21,7 @@ import { SecuritySettings } from "./pages/settings/SecuritySettings";
 import { SyncSettings } from "./pages/settings/SyncSettings";
 import { AboutPage } from "./pages/settings/AboutPage";
 import { ModelsPage } from "./pages/settings/ModelsPage";
+import { ProvidersPage } from "./pages/settings/ProvidersPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 export const router = createBrowserRouter([
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
           },
           { path: "general", element: <GeneralSettings /> },
           { path: "models", element: <ModelsPage /> },
+          { path: "providers", element: <ProvidersPage /> },
           { path: "data", element: <DataSettings /> },
           // Legacy route — embedding/chunking config merged into the Models
           // page. Keep old bookmarks and links working by redirecting.

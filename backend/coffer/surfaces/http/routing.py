@@ -30,6 +30,7 @@ from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
 from coffer.surfaces.http.memory import router as memory_router
+from coffer.surfaces.http.provider_routes import router as provider_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.settings_routes import router as settings_router
@@ -70,5 +71,6 @@ def include_all_routers(app: FastAPI) -> None:
         chat_turn_router,
         chat_model_router,
         channel_router,  # spec 009
+        provider_router,  # spec 011
     ):
         app.include_router(sub_router)

@@ -359,7 +359,8 @@
       "security": "Security",
       "about": "About",
       "models": "Models",
-      "sync": "Sync"
+      "sync": "Sync",
+      "providers": "Providers"
     },
     "general": {
       "title": "Display",
@@ -494,6 +495,22 @@
         "credentials_locked": "Credentials locked"
       },
       "keyExported": "Key written to {{path}}"
+    },
+    "providers": {
+      "title": "Providers",
+      "subtitle": "Switch the active LLM provider that Claude Code and Codex use.",
+      "add": "Add provider",
+      "addTitle": "Add provider",
+      "empty": "No provider profiles yet.",
+      "switch": "Switch",
+      "active": "Active",
+      "deleteTitle": "Delete provider",
+      "deleteConfirm": "Delete provider \"{{name}}\"? Its stored credential is removed too.",
+      "name": "Name",
+      "wireFormat": "Wire format",
+      "baseUrl": "Base URL",
+      "model": "Model",
+      "secret": "API key"
     }
   },
   "daemon": {

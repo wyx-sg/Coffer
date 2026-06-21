@@ -359,7 +359,8 @@
       "security": "安全",
       "about": "关于",
       "models": "模型",
-      "sync": "同步"
+      "sync": "同步",
+      "providers": "供应商"
     },
     "general": {
       "title": "显示",
@@ -494,6 +495,22 @@
         "credentials_locked": "凭证已锁定"
       },
       "keyExported": "key 已写入 {{path}}"
+    },
+    "providers": {
+      "title": "供应商",
+      "subtitle": "切换 Claude Code 与 Codex 使用的 LLM 供应商。",
+      "add": "添加供应商",
+      "addTitle": "添加供应商",
+      "empty": "暂无供应商档案。",
+      "switch": "切换",
+      "active": "使用中",
+      "deleteTitle": "删除供应商",
+      "deleteConfirm": "删除供应商「{{name}}」？其保存的凭据也会一并删除。",
+      "name": "名称",
+      "wireFormat": "Wire 格式",
+      "baseUrl": "Base URL",
+      "model": "模型",
+      "secret": "API Key"
     }
   },
   "daemon": {
