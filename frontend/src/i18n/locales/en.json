@@ -924,18 +924,10 @@
       "title": "New knowledge base",
       "name": "Name",
       "description": "Description (optional)",
-      "vector": "Vector search",
-      "vectorHint": "Add meaning-based vector retrieval (keyword + grep are always on). Requires an embedding provider.",
-      "provider": "Embedding provider",
-      "embeddingModel": "Embedding model",
-      "dimensions": "Dimensions",
-      "baseUrl": "Base URL",
-      "credential": "Credential reference"
+      "vector": "Vector search"
     },
     "detail": {
-      "metrics": "{{docs}} documents · {{chunks}} chunks · {{bytes}}",
       "reindex": "Reindex",
-      "reindexResult": "Reindexed: {{scanned}} scanned, {{reindexed}} reindexed, {{skipped}} unchanged.",
       "search": "Search",
       "mode": "Mode",
       "searchPlaceholder": "Search this knowledge base…",
@@ -950,18 +942,12 @@
       "replaceExisting": "Upload again and replace",
       "reconvert": "Reconvert",
       "settings": "Settings",
-      "chunks": "{{count}} chunks",
-      "editAria": "Edit Markdown for {{title}}",
       "deleteConfirm": "Delete document {{title}}? This cannot be undone.",
-      "loadFailed": "Failed to load this knowledge base.",
       "empty": "No documents yet. Upload a file of any format to populate this knowledge base.",
       "back": "Back to knowledge bases",
       "docBadge": "{{count}} documents",
       "chunkBadge": "{{count}} chunks",
       "degradedBadge": "{{count}} documents pending vector embed (embedding service unavailable; indexed by keyword)",
-      "edit": "Edit",
-      "save": "Save",
-      "cancel": "Cancel",
       "selectDocument": "Select a document on the left to preview or edit it."
     },
     "settings": {

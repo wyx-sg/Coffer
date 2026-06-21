@@ -60,8 +60,8 @@ class DocumentModel(Base):
 
 class ChunkModel(Base):
     """One chunk per row. ``id`` is ``'<store-scope>:<doc-id>:<position>'``
-    (``store_scope`` digests ``(kind, resource_name)`` so the same
-    content-addressed doc id in two stores never collides); the text lives in
+    (``store_scope`` digests ``(kind, resource_name)`` so the same doc id
+    appearing in two stores never collides); the text lives in
     ``documents_fts`` keyed by FTS rowid, not here."""
 
     __tablename__ = "chunks"

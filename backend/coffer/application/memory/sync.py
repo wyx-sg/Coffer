@@ -21,7 +21,11 @@ from coffer.application.knowledge.locks import StoreLocks
 from coffer.application.knowledge.reindex import Reindexer
 from coffer.application.knowledge.retrieval import KnowledgeRetrieval
 from coffer.application.memory.ports import MemoryDocumentRepo
-from coffer.domain.knowledge.document import KIND_MEMORY, Document
+from coffer.domain.knowledge.document import (
+    DOCUMENT_SCAN_LIMIT,
+    KIND_MEMORY,
+    Document,
+)
 from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.memory.fact import MemoryFact
@@ -146,7 +150,7 @@ class MemoryReconciler:
         known = {
             d.id: d
             for d in await self._documents.list_documents(
-                KIND_MEMORY, store.resource_name, limit=100_000, offset=0
+                KIND_MEMORY, store.resource_name, limit=DOCUMENT_SCAN_LIMIT, offset=0
             )
         }
         index = self._retrieval.index_for(

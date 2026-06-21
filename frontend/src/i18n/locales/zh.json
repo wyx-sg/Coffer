@@ -924,18 +924,10 @@
       "title": "新建知识库",
       "name": "名称",
       "description": "描述（可选）",
-      "vector": "向量检索",
-      "vectorHint": "新增基于含义的向量检索（关键词与 grep 始终开启）。需要配置 embedding 提供方。",
-      "provider": "Embedding 提供方",
-      "embeddingModel": "Embedding 模型",
-      "dimensions": "维度",
-      "baseUrl": "Base URL",
-      "credential": "凭据引用"
+      "vector": "向量检索"
     },
     "detail": {
-      "metrics": "{{docs}} 个文档 · {{chunks}} 个分块 · {{bytes}}",
       "reindex": "重建索引",
-      "reindexResult": "已重建：扫描 {{scanned}}，重建 {{reindexed}}，未变更 {{skipped}}。",
       "search": "检索",
       "mode": "模式",
       "searchPlaceholder": "在此知识库中检索…",
@@ -950,18 +942,12 @@
       "replaceExisting": "重新上传并替换",
       "reconvert": "重新转换",
       "settings": "设置",
-      "chunks": "{{count}} 个分块",
-      "editAria": "编辑 {{title}} 的 Markdown",
       "deleteConfirm": "删除文档 {{title}}？此操作不可撤销。",
-      "loadFailed": "加载该知识库失败。",
       "empty": "还没有文档。上传任意格式的文件以填充该知识库。",
       "back": "返回知识库",
       "docBadge": "{{count}} 个文档",
       "chunkBadge": "{{count}} 个分块",
       "degradedBadge": "{{count}} 个文档的向量待嵌入（嵌入服务暂不可用，已按关键词索引）",
-      "edit": "编辑",
-      "save": "保存",
-      "cancel": "取消",
       "selectDocument": "在左侧选择一个文档以预览或编辑。"
     },
     "settings": {
