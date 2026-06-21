@@ -2,7 +2,7 @@
 // Scrollable list of messages + live streaming message.
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { chatApi } from "@/lib/api/chat";
 import { messagesKey } from "@/lib/hooks/useConversations";
@@ -12,7 +12,7 @@ import type { Conversation } from "@/lib/api/chat";
 import { Button } from "@/components/ui/button";
 import { AgentModelBar } from "./AgentModelBar";
 import { MessageBubble } from "./MessageBubble";
-import { Composer } from "./Composer";
+import { Composer, type ComposerHandle } from "./Composer";
 import { FindWidget } from "@/components/preview/FindWidget";
 import { useDomFind } from "@/components/preview/useDomFind";
 import { translateApiError } from "@/lib/api/errors";
@@ -60,6 +60,17 @@ export function MessageThread({
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<ComposerHandle>(null);
+
+  // Edit a queued message: pull it out of the queue and back into the composer
+  // for the user to amend. Re-sending it goes through the normal send path, so a
+  // still-streaming turn re-queues it at the tail.
+  const handleEditPending = (idx: number) => {
+    const text = pending[idx];
+    if (text === undefined) return;
+    onSetPending?.(pending.filter((_, i) => i !== idx));
+    composerRef.current?.setText(text);
+  };
   // Follow the stream only while the user is at the bottom; if they scroll up
   // to read history, new tokens must not yank them back down. Seeded true so
   // the first render lands at the latest message.
@@ -200,29 +211,44 @@ export function MessageThread({
       ) : (
         <>
           {pending.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 border-t border-border bg-background px-4 pt-2">
+            <div className="flex max-h-40 flex-col gap-1 overflow-y-auto border-t border-border bg-background px-4 pt-2">
               <span className="text-xs text-muted-foreground">{t("chat.queue.label")}</span>
+              {/* One queued message per row: full (wrapped, clamped) text plus
+                  edit (pull back into the composer) and remove controls. */}
               {pending.map((text, idx) => (
-                <span
+                <div
                   key={`${idx}-${text}`}
-                  className="inline-flex max-w-[16rem] items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
+                  className="flex items-start gap-2 rounded-md bg-secondary px-2 py-1 text-xs text-secondary-foreground"
                 >
-                  <span className="truncate">{text}</span>
+                  <span
+                    className="line-clamp-2 min-w-0 flex-1 whitespace-pre-wrap break-words"
+                    title={text}
+                  >
+                    {text}
+                  </span>
                   <button
                     type="button"
-                    className="shrink-0 rounded-full p-0.5 hover:text-destructive"
+                    className="shrink-0 rounded p-0.5 hover:text-foreground"
+                    onClick={() => handleEditPending(idx)}
+                    aria-label={t("chat.queue.edit")}
+                  >
+                    <Pencil className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded p-0.5 hover:text-destructive"
                     onClick={() => onSetPending?.(pending.filter((_, i) => i !== idx))}
                     aria-label={t("chat.queue.remove")}
                   >
                     <X className="size-3" />
                   </button>
-                </span>
+                </div>
               ))}
             </div>
           )}
           {/* The composer is NEVER disabled by streaming: a message sent during a
               turn queues server-side. */}
-          <Composer onSend={onSend} streaming={isStreaming} onStop={onStop} />
+          <Composer ref={composerRef} onSend={onSend} streaming={isStreaming} onStop={onStop} />
         </>
       )}
     </div>

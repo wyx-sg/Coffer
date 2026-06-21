@@ -1164,6 +1164,7 @@
     },
     "queue": {
       "label": "Queued:",
+      "edit": "Edit queued message",
       "remove": "Remove from queue"
     },
     "toolCard": {
