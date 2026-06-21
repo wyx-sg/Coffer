@@ -149,6 +149,7 @@ def _status_for(exc: errors.CofferError) -> int:
             "duplicate": 409,
             "unsupported_type": 415,
             "empty": 415,
+            "scanned_pdf": 415,
         }.get(exc.reason, 400)
     return _STATUS.get(exc.code, 500)
 

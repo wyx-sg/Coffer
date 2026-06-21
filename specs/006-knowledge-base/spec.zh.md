@@ -73,7 +73,7 @@
 
 - **不支持的格式**：某文件类型没有对应转换器时，以 `IngestRejected("unsupported_type")` 拒绝；不持久化任何东西。
 - **转换库缺失**：某格式的转换引擎未安装时，该格式的 ingest 返回 `EngineUnavailable` 并指明缺失的依赖；daemon 不挂，其他格式照常 ingest。
-- **转换为空**：转换后得到空白 / 仅空白字符的 Markdown 时，以 `IngestRejected("empty")` 拒绝。
+- **转换为空**：转换后得到空白 / 仅空白字符的 Markdown 时，以 `IngestRejected("empty")` 拒绝。若是 **PDF** 转换为空，则以更具体的 `IngestRejected("scanned_pdf")`（同为 415 状态）拒绝，以便 UI 呈现可操作的「看起来是扫描件 / 纯图片——请运行 OCR」消息，而非通用消息。
 - **文件过大**：超过 `max_document_bytes`（默认 25 MB）的文件在 API 边界、任何转换运行之前被拒绝。
 - **重新上传，字节完全相同**：字节未变（其 `source_sha256` 与该文件名下已存文档相同）的重新上传是幂等 no-op——返回既有文档，不重写也不重新审计。
 - **重新上传，内容变化，同名**：以 KB 中已有的文件名重新上传更新后的文件，就地更新**同一文档**（复用 ULID id，覆盖 `docs/`+`raw/`，只保留最新一份原件，`source_mode` 重置为 `converted`）——但仅当调用方传 `replace=true`；否则以 `duplicate` 拒绝，使覆盖始终显式。

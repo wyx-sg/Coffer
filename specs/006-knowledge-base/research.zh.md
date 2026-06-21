@@ -215,7 +215,17 @@ KB 声明 `enabled_modes` + `default_mode`；search 调用可覆盖 `mode`。**H
 
 - **无新增 FR**——这是对既有 FR-013/FR-020 文档管理表面的一个 UX 增益；覆盖由扩展后的详情页测试保证（筛选会收窄/恢复/无匹配；选中两行 → 批量栏 → 确认 → 每个 id 调用一次 `deleteDocument` → 选择清空；点击标题仍能在查看器中加载）。
 
-## 18. 此处明确不决定 / 范围外
+## 18. 摄入拒绝错误的可读性——扫描 PDF + 由 reason 驱动的消息（KB11/KB15）
+
+**问题**：摄入拒绝（`IngestRejected`）把所有原因——空转换、上传过大、重复、不支持的类型——都坍缩成同一句通用的前端文案（`translateApiError` 只按信封 `code` 取键，于是所有 `INGEST_REJECTED` 的 reason 都映射到「文档在摄入过程中被拒绝」）。最糟糕的是：**扫描件 / 纯图片 PDF** 会转换成空 markdown，抛出通用的 `"empty"` reason，用户既不知道为什么，也没有下一步可做。
+
+**决策**——让机器 `reason` 端到端可读，且为增量、向后兼容：
+
+- **后端（KB11）**：当清洗后的 markdown 为空 **且格式是 PDF**（`fmt.lower().lstrip(".") == "pdf"`，同时处理 `"pdf"` 与 `".pdf"`）时，转换器注册表抛出一个独立的 `IngestRejected("scanned_pdf", <可操作消息>)`（「该 PDF 无可提取文本——看起来是扫描件或纯图片。请运行 OCR…」）。检测保持 **严格判空**（不加长度阈值——较低阈值会对确实很短的 PDF 误报）。其他所有格式保留通用的 `"empty"` reason。reason→HTTP 映射新增 `"scanned_pdf": 415`（与 `"empty"` 同状态码）。错误信封已经通过 `_details_for` 携带 `details.reason`。
+- **前端（KB15）**：`translateApiError` 现在先尝试一个 **由 reason 限定的扁平键** `errors.${code}_${reason}`（如 `errors.INGEST_REJECTED_scanned_pdf`）——之所以扁平，是因为 `errors.INGEST_REJECTED` 本身是字符串，因此嵌套的 `errors.INGEST_REJECTED.scanned_pdf` 不可能存在。该键命中则采用；否则原样回退到既有的 `errors.${code}` → 信封消息链。`throwApiError` 现在把信封的 `details` 透传到所抛出的 `ApiError` 上（此前会丢弃），使 reason 能在各处到达翻译器。`details` 被防御式读取（从 `unknown` 收窄）；缺失或非字符串的 reason 行为与此前完全一致。
+- **无新增 FR**：这是错误质量（与此前的 KB 项目一致）——由一个后端注册表测试（PDF 空转换 → `scanned_pdf`；`.pdf` 归一化；非 PDF 空转换仍为 `empty`）与一个前端 `translateApiError`/`throwApiError` 测试覆盖。仅新增必需的 `INGEST_REJECTED_scanned_pdf` i18n 键（en+zh）；通用键仍作回退。
+
+## 19. 此处明确不决定 / 范围外
 
 - 单次调用里 keyword + vector 的 hybrid RRF 融合（可选未来，同引擎）。
 - 检索时的 reranking / HyDE / multi-query / LLM 综合 —— agent 综合。

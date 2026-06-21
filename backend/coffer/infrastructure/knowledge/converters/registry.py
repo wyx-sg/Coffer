@@ -42,13 +42,22 @@ class ConverterRegistry:
         """Convert + clean. Returns ``(clean_markdown, metadata)``.
 
         Raises ``IngestRejected('unsupported_type')`` if no converter handles
-        the format, or ``IngestRejected('empty')`` if conversion yields empty
-        markdown. ``EngineUnavailable`` propagates from the engine.
+        the format. An empty conversion raises ``IngestRejected('scanned_pdf')``
+        for PDFs (an actionable "this looks scanned/image-only, run OCR"
+        message) and ``IngestRejected('empty')`` for every other format.
+        ``EngineUnavailable`` propagates from the engine.
         """
         converter = self._resolve(fmt)
         raw, meta = await converter.convert(data, fmt)
         markdown = clean_markdown(raw)
         if not markdown.strip():
+            if fmt.lower().lstrip(".") == "pdf":
+                raise IngestRejected(
+                    "scanned_pdf",
+                    "This PDF has no extractable text — it looks scanned or "
+                    "image-only. Run OCR (or convert it to a text-based PDF) "
+                    "and re-upload.",
+                )
             raise IngestRejected("empty", f"conversion of {fmt!r} produced empty markdown")
         return markdown, meta
 
