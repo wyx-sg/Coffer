@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { FolderPicker } from "@/components/agents/FolderPicker";
+import { FolderPickerField } from "@/components/agents/FolderPickerField";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -90,15 +90,14 @@ export function AgentEditForm(props: {
           </label>
           <div className="block text-sm">
             <span>{t("agents.configDirOverride")}</span>
-            <div className="mt-1 flex gap-2">
-              <input
-                aria-label={t("agents.configDirOverride")}
-                className="block w-full rounded border bg-background px-2 py-1 font-mono text-xs"
+            <div className="mt-1">
+              <FolderPickerField
+                ariaLabel={t("agents.configDirOverride")}
                 placeholder={t("agents.configDirPlaceholder")}
-                value={configDir}
-                onChange={(e) => setConfigDir(e.target.value)}
+                value={configDir || null}
+                onChange={(p) => setConfigDir(p ?? "")}
+                clearable
               />
-              <FolderPicker value={configDir || null} onChange={(p) => setConfigDir(p ?? "")} />
             </div>
           </div>
           <label className="block text-sm">

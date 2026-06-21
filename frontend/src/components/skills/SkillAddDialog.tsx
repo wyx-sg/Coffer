@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { FolderPicker } from "@/components/agents/FolderPicker";
+import { FolderPickerField } from "@/components/agents/FolderPickerField";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -87,17 +87,13 @@ function LocalImportTab({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
         <label htmlFor="skill-import-path" className="block text-sm">
           {t("skills.path")}
         </label>
-        <div className="flex items-center gap-2">
-          <input
-            id="skill-import-path"
-            className="block w-full rounded border bg-background px-2 py-1 font-mono text-xs"
-            required
-            value={path}
-            onChange={(e) => handlePathChange(e.target.value)}
-            placeholder="/Users/me/.claude/skills/my-skill"
-          />
-          <FolderPicker value={path || null} onChange={handlePathChange} />
-        </div>
+        <FolderPickerField
+          inputId="skill-import-path"
+          ariaLabel={t("skills.path")}
+          value={path || null}
+          onChange={(p) => handlePathChange(p ?? "")}
+          placeholder="/Users/me/.claude/skills/my-skill"
+        />
       </div>
       {conflictName ? (
         <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-700 dark:bg-amber-950">
@@ -137,7 +133,7 @@ function LocalImportTab({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
           <Button type="button" variant="outline" onClick={onCancel}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" disabled={importSkill.isPending}>
+          <Button type="submit" disabled={importSkill.isPending || !path}>
             {importSkill.isPending ? t("common.saving") : t("skills.import")}
           </Button>
         </div>

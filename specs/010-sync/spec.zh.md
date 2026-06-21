@@ -67,6 +67,11 @@ git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coff
 - `coffer sync key export <path>` 把当前机器的主密钥写入一个文件，用户通过自己信任的渠道转移它。
 - `coffer sync key import <path>` 在新机器上安装它（依据该机器的设置，存入文件存储或 keychain）。
 
+在桌面 UI 中，主密钥卡片 MUST 让用户通过原生对话框选择文件，而非手输路径——导出用
+原生「存文件」对话框，导入用原生「选文件」对话框（打包应用用 OS 对话框；Web 经 daemon
+选择器，见 spec 004 FR-042 / ADR-036）。仅当宿主没有原生对话框工具时，才出现手输路径框
+作为回退。
+
 在一台机器上密钥到位之前，导入的密文保持**锁定**：引用它的资源无法启动，状态报告
 `credentials_locked` 并附带受影响的 refs。
 

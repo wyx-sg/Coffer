@@ -492,6 +492,7 @@
       "masterKey": "Master key (out-of-band)",
       "masterKeyHint": "Export this machine's key to a file and move it to another machine over a channel you trust, then import it there. Never put it in the sync repo.",
       "keyPath": "Local key file path",
+      "keyPathManualHint": "This machine has no native file dialog — type the path, then click again.",
       "exportKey": "Export key",
       "importKey": "Import key",
       "statuses": {
