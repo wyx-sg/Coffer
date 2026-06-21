@@ -25,11 +25,15 @@ export function useChatController() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  // Draft top-bar selection (the agent) before the conversation exists; null
-  // until the user touches the selector — the default is derived below. There
-  // is no per-turn working-directory choice anymore: a turn runs in the
+  // Draft top-bar selection (the agent + optional model) before the conversation
+  // exists; null until the user touches a selector — the defaults are derived
+  // below. `model` is the agent's own per-conversation model (agent_config.model,
+  // ADR-024 → ADR-032); null inherits the active provider profile's default.
+  // There is no per-turn working-directory choice anymore: a turn runs in the
   // Coffer-managed workspace (~/.coffer/workspace) by default.
-  const [draftConfig, setDraftConfig] = useState<{ agentKey: string } | null>(null);
+  const [draftConfig, setDraftConfig] = useState<{ agentKey: string; model: string | null } | null>(
+    null,
+  );
   // After creating from the draft, the first message is sent once the turn hook
   // re-binds to the new conversation id (see effect below).
   const [pendingFirst, setPendingFirst] = useState<{ convId: string; text: string } | null>(null);
@@ -80,10 +84,10 @@ export function useChatController() {
   // defaults to the first available one; when none is available the draft
   // surface shows an install/configure empty state instead.
   const firstAvailableAgent = agents.find((a) => a.available)?.agent_key ?? null;
-  const effectiveDraft = draftConfig ?? { agentKey: firstAvailableAgent ?? "" };
+  const effectiveDraft = draftConfig ?? { agentKey: firstAvailableAgent ?? "", model: null };
 
   const startDraft = () => {
-    setDraftConfig({ agentKey: effectiveDraft.agentKey });
+    setDraftConfig({ agentKey: effectiveDraft.agentKey, model: effectiveDraft.model });
     navigate("/chat");
   };
 
@@ -94,11 +98,14 @@ export function useChatController() {
 
   const sendDraft = (text: string) => {
     // No per-turn working directory: send an empty agent_config and let the
-    // backend default the cwd to the Coffer-managed workspace.
+    // backend default the cwd to the Coffer-managed workspace. Carry the chosen
+    // model through only when set — an unset model inherits the global default.
+    const agent_config: Record<string, unknown> = {};
+    if (effectiveDraft.model) agent_config.model = effectiveDraft.model;
     createConv.mutate(
       {
         agent_key: effectiveDraft.agentKey,
-        agent_config: {},
+        agent_config,
       },
       {
         onSuccess: (created) => {
@@ -148,7 +155,11 @@ export function useChatController() {
     // True when no Coffer-managed agent (claude_code / codex) is available, so
     // the draft surface shows an install/configure empty state instead.
     noManagedAgent: !firstAvailableAgent,
-    setDraftAgent: (agentKey: string) => setDraftConfig({ agentKey }),
+    // Changing the agent clears any draft model override (different agent → its
+    // own model namespace and default).
+    setDraftAgent: (agentKey: string) => setDraftConfig({ agentKey, model: null }),
+    setDraftModel: (model: string | null) =>
+      setDraftConfig({ agentKey: effectiveDraft.agentKey, model }),
     startDraft,
     selectConversation,
     sendDraft,

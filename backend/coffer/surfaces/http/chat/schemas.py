@@ -75,6 +75,28 @@ class ConversationPatch(BaseModel):
     model_id: str | None = None
 
 
+class AgentConfigPatch(BaseModel):
+    """Body for PATCH /conversations/{id}/agent-config.
+
+    Sets the managed agent's own model (free-text, passed through to its CLI).
+    An empty or null ``model`` clears the override so the conversation inherits
+    the active provider profile's projected default. ``cwd`` / ``session_id`` are
+    preserved (ADR-024 → ADR-032).
+    """
+
+    model: str | None = None
+
+
+class AgentConfigOut(BaseModel):
+    """Read view of a conversation's agent config (managed agents).
+
+    ``session_id`` is provider-internal and deliberately not surfaced.
+    """
+
+    cwd: str | None
+    model: str | None
+
+
 class ChannelBindingOut(BaseModel):
     """The IM channel a conversation is also driven from (ADR-031).
 
