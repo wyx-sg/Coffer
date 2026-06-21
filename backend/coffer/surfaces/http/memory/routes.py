@@ -32,6 +32,7 @@ from coffer.surfaces.http.memory.dependencies import (
     get_store_label_repo,
 )
 from coffer.surfaces.http.memory.organize_state import get_organizer_service
+from coffer.surfaces.http.memory.reorg_state import get_reorg_service
 from coffer.surfaces.http.memory.schemas import (
     ClearResponse,
     FactCreate,
@@ -48,6 +49,7 @@ from coffer.surfaces.http.memory.schemas import (
     RecallHit,
     RecallRequest,
     RecallResponse,
+    ReorgResponse,
     Scope,
 )
 
@@ -96,15 +98,11 @@ def _to_store_out(
 async def _store_out(
     r: Resource, roots: object, mem_svc: MemoryService, *, label: str | None = None
 ) -> MemoryStoreOut:
-    """``_to_store_out`` plus the persisted project root, store dir + fact count.
-
-    ``label`` is the user-set display name (007 FR-017c), resolved by the caller
-    so the list endpoint can batch the lookup."""
+    """``_to_store_out`` plus the project root, store dir, fact count, and label."""
     scope, _ = _scope_of(r.name)
     project_root = None if scope == "global" else await roots.get(r.name)  # type: ignore[attr-defined]
     try:
-        # Cheap indexed count only (KB14): the list output discards disk_bytes,
-        # so skip ``metrics()``' per-store ``scan_store_dir`` + ``du_bytes`` walk.
+        # KB14: cheap indexed count — skips the per-store du_bytes walk.
         fact_count = await mem_svc.fact_count(store_name=r.name)
     except Exception:
         fact_count = 0
@@ -124,11 +122,9 @@ async def list_stores(
     roots: object = Depends(get_project_root_repo),
     labels: object = Depends(get_store_label_repo),
 ) -> MemoryStoreListOut:
-    # The global store always exists conceptually — auto-provision it so a fresh
-    # install lists it (the per-project stores appear once an agent uses them).
+    # Auto-provision the global store so it always appears in the list.
     await mem_svc.ensure_store(GLOBAL_STORE_NAME)
     rs = await svc.list(kind=KIND_MEMORY)
-    # One batched lookup for all display labels instead of one query per store.
     label_map = await labels.get_many([r.name for r in rs])  # type: ignore[attr-defined]
     return MemoryStoreListOut(
         memory_stores=[await _store_out(r, roots, mem_svc, label=label_map.get(r.name)) for r in rs]
@@ -365,9 +361,8 @@ async def organize(
     mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     organizer: object = Depends(get_organizer_service),
 ) -> OrganizeResponse:
-    """Drain the store's ``knowledge/inbox/`` into coherent topic documents via
-    Coffer's internal LLM (explicit trigger; no auto-fire). ``no_model`` /
-    ``empty`` are clean no-ops, not errors."""
+    """Drain ``knowledge/inbox/`` into topic docs (explicit trigger; no auto-fire).
+    ``no_model`` / ``empty`` are clean no-ops, not errors."""
     if name == GLOBAL_STORE_NAME:
         await mem_svc.ensure_store(name)
     result = await organizer.organize(store_name=name)  # type: ignore[attr-defined]
@@ -377,5 +372,29 @@ async def organize(
         topics_created=result.topics_created,
         topics_updated=result.topics_updated,
         skipped=result.skipped,
+        model=result.model,
+    )
+
+
+# --- reorg ------------------------------------------------------------------
+
+
+@router.post("/{name}/reorg", response_model=ReorgResponse)
+async def reorg(
+    name: str,
+    mem_svc: MemoryService = Depends(get_memory_service),  # noqa: B008
+    reorg_svc: object = Depends(get_reorg_service),
+) -> ReorgResponse:
+    """Agentic reorg loop over topic docs (explicit trigger; no auto-fire).
+    Superseded content is archived; ``no_model``/``empty`` are no-ops."""
+    if name == GLOBAL_STORE_NAME:
+        await mem_svc.ensure_store(name)
+    result = await reorg_svc.reorg(store_name=name)  # type: ignore[attr-defined]
+    return ReorgResponse(
+        status=result.status,
+        topics_before=result.topics_before,
+        topics_after=result.topics_after,
+        topics_written=result.topics_written,
+        topics_superseded=result.topics_superseded,
         model=result.model,
     )
