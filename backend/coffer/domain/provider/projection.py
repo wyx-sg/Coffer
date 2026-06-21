@@ -5,7 +5,8 @@ file, calls one of these to produce new text, and writes it back through the
 atomic store (``ConfigFileStore.write_text_atomic`` → atomic + ``.bak``). This
 mirrors ``domain/agent/mcp_install.py``'s ``apply_install``.
 
-Two wire formats, each projecting into exactly one agent's native config:
+Two wire formats project into an agent's native config (``ollama`` projects into
+none — it is internal-only, used by Coffer's own engine):
 
 - ``anthropic`` → Claude Code ``~/.claude/settings.json`` (JSON): top-level
   ``apiKeyHelper`` (the key is fetched on demand, never written) plus
@@ -62,12 +63,10 @@ _TARGETS: dict[WireFormat, ProjectionTarget] = {
 }
 
 
-def target_for(wire: WireFormat) -> ProjectionTarget:
-    """The projection target for ``wire`` (which agent + native config file)."""
-    try:
-        return _TARGETS[wire]
-    except KeyError:  # pragma: no cover - exhaustive over the enum
-        raise AssertionError(f"no projection target for wire format {wire!r}") from None
+def target_for(wire: WireFormat) -> ProjectionTarget | None:
+    """The projection target for ``wire`` (which agent + native config file), or
+    ``None`` for internal-only wires (``ollama``) that project into no agent."""
+    return _TARGETS.get(wire)
 
 
 def apply_anthropic_settings(

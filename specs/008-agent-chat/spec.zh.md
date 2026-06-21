@@ -97,8 +97,8 @@ model 选择器、它在聊天里的金库工具调用、对它的 `coffer chat`
 
 [ADR-024](../../docs/decisions/ADR-024-builtin-agent-is-internal-capability.zh.md)
 退役了内置聊天人格，这**重新奠定**了按对话的模型覆盖（FR-025/FR-026、用户故事 8）。
-对一个受管 agent，对话的模型**不是**一个 Coffer 注册的 `Model`（`Conversation.model_id`
-注册表列）：它是该 agent **自己**的模型，以自由文本 `agent_config.model` 承载，并透传给
+对一个受管 agent，对话的模型**不是**那个已退役的 Coffer 模型注册表（`Conversation.model_id`
+列）：它是该 agent **自己**的模型，以自由文本 `agent_config.model` 承载，并透传给
 agent 的 CLI（Claude Code `--model`、Codex `model`），与 channel `/model` 命令今天所做的
 完全一致。Coffer 不校验该名字 —— 坏模型名由 agent 的 CLI 在下一回合自行报错。
 
@@ -112,9 +112,10 @@ agent 的 CLI（Claude Code `--model`、Codex `model`），与 channel `/model` 
    的其余 agent 配置（`cwd`、`session_id`）。
 
 `Conversation.model_id`（FR-026 的 `Model` 注册表覆盖）**不被受管 agent 的回合路径读取**
-—— 两个受管 provider 都从 `agent_config.model` 构建其 adapter，从不读 `model_id`。它仍是
-Coffer 内部引擎模型的注册表（设置 → 模型），且**不在**聊天模型选择器范围内；重接线或退役
-它是另一件事（见 Non-Goals）。
+—— 两个受管 provider 都从 `agent_config.model` 构建其 adapter，从不读 `model_id`。它所引用
+的独立 `ModelConfig`/`chat_models` 注册表现已**退役**（折叠进 provider connection，spec 011 /
+ADR-032），故 `model_id` 是一个**残留的遗留列**：Coffer 内部引擎现从内部默认 connection 选择
+模型，而非该注册表。该列不在聊天模型选择器范围内。
 
 Web Chat 界面 MUST 让属主在**开始**一个对话时（draft，紧邻 agent 选择器）与
 **对话进行中**（agent bar）都能设置 `agent_config.model`，镜像 `/model`。该控件是一个
@@ -130,25 +131,24 @@ Web Chat 界面 MUST 让属主在**开始**一个对话时（draft，紧邻 agen
 
 ### 用户故事 1 —— 在首次聊天前配置一个模型 provider（优先级：P1）
 
-内置 agent 没有自己的 LLM。首次访问 Chat 时，用户被引导至 **Settings → Models**,
-在那里他们注册至少一个模型：选择一个 provider（Anthropic、OpenAI，或一个本地的
-Ollama 端点），提供凭据（云端 provider）或 base URL（Ollama），并命名一个
-model id。一旦存在一个模型，内置 agent 就可被选择且聊天被解锁。
+内置 agent 没有自己的 LLM。首次访问 Chat 时，用户被引导至 **Settings → LLM Connections**（spec 011），
+在那里他们配置至少一条 connection：选择一个 wire（anthropic、openai，或一个本地的
+ollama 端点），提供凭据（云端 wire）或 base URL（ollama），并命名一个
+model id。一旦存在一条 connection 并被标记为内部默认，内置 agent 就可被选择且聊天被解锁。
 
 **为何此优先级**：没有一个配置好的模型，内置 agent 根本无法回答。这是使用它的
 每一个其它场景的入口。
 
-**独立测试**：在全新安装下，打开 Settings → Models，添加一个带凭据的 Anthropic
-模型，保存；观察它被列出并标记为默认；Chat 页面不再显示 "no model configured"
-状态。
+**独立测试**：在全新安装下，打开 Settings → LLM Connections，添加一条带凭据的
+anthropic connection，标记为内部默认；观察它被列出；Chat 页面不再显示
+"no model configured" 状态。
 
-**覆盖的场景**：
+**覆盖的场景**（connection 配置现位于 spec 011 / Settings → LLM Connections；本故事在
+聊天侧的覆盖为）：
 
-- 用一个凭据注册一个云端模型
-- 用一个 base URL、无凭据注册一个本地 Ollama 模型
-- 拒绝一个缺少必需凭据或 base URL 的模型
-- 第一个被注册的模型成为默认模型
-- 从命令行注册并列出模型
+- no-model 空状态
+- list a provider's models
+- test a model connection
 
 ---
 
@@ -300,8 +300,8 @@ agent 使用哪一个。
 
 ### 边界情况
 
-- **没有配置模型**：Chat 页面渲染一个链接到 Settings → Models 的可操作空状态；
-  它不显示一个通用错误或一个失效的输入框。在没有模型配置的情况下选择内置 agent
+- **没有配置模型**：Chat 页面渲染一个链接到 Settings → LLM Connections 的可操作空状态；
+  它不显示一个通用错误或一个失效的输入框。在没有内部 connection 配置的情况下选择内置 agent
   会以 no-model 状态使回合失败，而非崩溃。
 - **未知 agent / 无效 agent 配置**：用一个平台不提供的 agent，或用一个该 agent
   拒绝的配置创建一个对话，会以一条命名问题的消息失败；不持久化任何东西。
@@ -331,20 +331,6 @@ agent 使用哪一个。
 按 `agents/sdd.md` 与 `agents/testing.md`，本节中每个场景都被至少一个标记
 `@pytest.mark.acceptance(spec="008-agent-chat", scenario="…")`（Python）或
 `acceptance("008-agent-chat", "…", …)`（TypeScript）的测试引用。
-
-### 场景：注册一个模型 provider
-
-- **Given** 一个没有配置模型的运行中守护进程，
-- **When** 用户用一个 provider、model id 以及其 provider 所需的凭据或 base URL
-  注册一个模型，
-- **Then** 该模型被持久化，第一个这样的模型被标记为默认，且 Chat 页面不再报告
-  "no model configured"。
-
-### 场景：拒绝一个不完整的模型
-
-- **Given** 一个运行中守护进程，
-- **When** 用户注册一个无凭据的云端模型，或一个无 base URL 的 Ollama 模型，
-- **Then** 注册以一条命名缺失字段的消息被拒绝且不持久化任何东西。
 
 ### 场景：列出可用的 agent
 
@@ -452,7 +438,7 @@ agent 使用哪一个。
 
 - **Given** 一个没有配置模型的运行中守护进程，
 - **When** 用户打开 Chat 页面，
-- **Then** 一个链接到 Settings → Models 的可操作空状态被显示且无消息可被发送。
+- **Then** 一个链接到 Settings → LLM Connections 的可操作空状态被显示且无消息可被发送。
 
 ### 场景：token 用量与审计
 
@@ -633,10 +619,14 @@ agent 使用哪一个。
   控制。
 - **FR-028**：System MUST 把一个 "Chat" 条目作为主（最顶部）导航项加入应用侧边栏;
   现有的 002-ui-shell IA 在其余方面不变。
-- **FR-029**：System MUST 提供一个覆盖每个模型注册操作的 Settings → Models 页面。
-- **FR-030**：GUI 中可用的每个聊天与模型操作 MUST 通过 REST API 可用，且模型操作
-  MUST 作为 CLI 命令可用；CLI 读操作 MUST 支持 `--json`。（`coffer chat` CLI 随内置
-  聊天 agent 的退役一并移除，ADR-024。）
+- **FR-029**：专用的 Settings → Models 注册表页面已**退役**：它所管理的独立
+  `ModelConfig`/`chat_models` 注册表已不存在（折叠进 provider connection，spec 011 / ADR-032）。
+  Coffer 的内部引擎 connection 现在统一的 **Settings → LLM Connections** 页面（spec 011）配置，
+  受管 agent 在 agent detail 页选择其 connection。
+- **FR-030**：GUI 中可用的每个聊天操作 MUST 通过 REST API 可用；CLI 读操作 MUST 支持
+  `--json`。模型注册表 CRUD REST 与 `coffer model` CLI 随 `ModelConfig` 注册表一并**退役**
+  （spec 011）；只保留 provider **introspection** 路由（`list-models`、`test-connection`）。
+  （`coffer chat` CLI 随内置聊天 agent 的退役一并移除，ADR-024。）
 
 **可观测性**
 
@@ -717,7 +707,7 @@ agent 使用哪一个。
   `BuiltinToolRegistry` 与 `coffer__` 内置工具的 MCP gateway —— 来自 specs
   001–006 —— 已就位于本分支的基底上。
 - 来自 spec 002-ui-shell 的应用 shell —— 侧边栏 IA、布局、路由、设计系统，与
-  Settings 布局 —— 已就位；Chat 页面与 Settings → Models 页面在该 shell 内渲染。
+  Settings 布局 —— 已就位；Chat 页面与 Settings → LLM Connections 页面（spec 011）在该 shell 内渲染。
 - Memory 与知识库工具（`coffer__recall`、`coffer__search_knowledge`，与同类）已
   作为来自 specs 005–006 的 gateway 内置工具存在；本规格消费它们且不重新定义它们。
 - 内置 agent 的 agentic 循环用 LangGraph 框架实现，LLM 客户端通过 LangChain 的
@@ -734,6 +724,8 @@ agent 使用哪一个。
   外部 agent 会话的恢复/继续；以及任何跨 agent 的原始 transcript 浏览/搜索界面（跨
   agent 的共享由蒸馏后的 memory 承担，[ADR-020](../../docs/decisions/ADR-020-transcript-distillation.zh.md)）。
   远程通道由 Spec 009 单独交付。
-- 把受管 agent 的回合路径重接线去读 `Conversation.model_id`、以及为聊天退役该注册表
-  覆盖，均**不在范围内**：按对话模型选择器只面向 `agent_config.model`（见上文按对话模型
-  的重新定位）。`model_id` 仍是设置 → 模型的内部引擎注册表。
+- `Conversation.model_id` 所引用的独立 `ModelConfig`/`chat_models` 注册表已**退役**
+  （折叠进 provider connection，spec 011 / ADR-032）。`model_id` 现在是一个**残留的遗留列**，
+  从不被受管 agent 的回合路径读取：该路径使用 agent 自己的模型 —— active connection 的
+  `model` 加上按对话 `agent_config.model` 覆盖（PR #170）。Coffer 内部引擎从内部默认 connection
+  选择其模型。

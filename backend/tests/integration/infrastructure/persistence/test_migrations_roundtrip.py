@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0035"
+HEAD_REVISION = "0036"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -63,7 +63,11 @@ HEAD_REVISION = "0035"
 # content-trust scanning removed, simplification 4.5) — no DDL, table/column set
 # unchanged at head. 0035 ADDs the ``documents.embed_pending`` column (decouple
 # content_sha256 from the degraded-embed retry state, KB8) — a column-only change,
-# so EXPECTED_TABLES is unchanged.
+# so EXPECTED_TABLES is unchanged. 0036 migrates every ``chat_models`` row to a
+# ``kind='provider'`` resource (models + providers unified into one LLM
+# connection) and then DROPs ``chat_models``, so it is ABSENT at head; 0036's
+# downgrade recreates the (empty) table, so it reappears once we step below 0036
+# (until 0012's downgrade drops it again at 0011).
 # The ``documents_fts_*`` shadow
 # tables FTS5 creates under the hood are excluded — the assertions speak to the
 # logical schema.
@@ -84,7 +88,6 @@ EXPECTED_TABLES = {
     "embedding_config",
     "conversations",
     "chat_messages",
-    "chat_models",
     "channel_peers",
     "sync_config",
     "sync_state",
@@ -352,6 +355,93 @@ def test_0032_strips_skill_content_scan_fields(tmp_path, monkeypatch):
     assert downgraded["risk_acknowledged"] is False
 
 
+def test_0036_migrates_chat_models_to_provider_resources(tmp_path, monkeypatch):
+    """0036 is a data migration (models + providers unified into one LLM
+    connection): every ``chat_models`` row becomes a ``kind='provider'`` resource
+    whose ``config_json`` is a ProviderConfig payload, then ``chat_models`` is
+    dropped. is_default -> internal_default; the connection never starts active;
+    an ollama row carries no credential_ref; a NULL base_url gets a per-wire
+    default."""
+    db_path = tmp_path / "chat_models.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    # Stop one revision BEFORE 0036 and seed chat_models rows.
+    command.upgrade(cfg, "0035")
+    with sqlite3.connect(db_path) as conn:
+        rows = [
+            # (id, display_name, provider, model, credential_ref, base_url, is_default)
+            ("m1", "Claude (work)", "anthropic", "claude-x", "model/m1/key", None, 1),
+            ("m2", "GPT", "openai", "gpt-x", "model/m2/key", "https://proxy.example/v1", 0),
+            ("m3", "Local llama", "ollama", "llama3", None, None, 0),
+        ]
+        for id_, name, provider, model, ref, base_url, is_default in rows:
+            conn.execute(
+                "INSERT INTO chat_models "
+                "(id, display_name, provider, model, credential_ref, base_url, is_default, "
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    id_,
+                    name,
+                    provider,
+                    model,
+                    ref,
+                    base_url,
+                    is_default,
+                    "2026-01-01T00:00:00+00:00",
+                    "2026-01-02T00:00:00+00:00",
+                ),
+            )
+        conn.commit()
+
+    # Apply 0036.
+    command.upgrade(cfg, "head")
+    assert _alembic_version(db_path) == HEAD_REVISION
+    assert "chat_models" not in _user_tables(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        provider_rows = {
+            name: json.loads(cfg_json)
+            for name, cfg_json in conn.execute(
+                "SELECT name, config_json FROM resources WHERE kind = 'provider'"
+            ).fetchall()
+        }
+
+    # One provider resource per chat_models row; names slugified from display_name.
+    assert set(provider_rows) == {"Claude-work", "GPT", "Local-llama"}
+
+    work = provider_rows["Claude-work"]
+    assert work["wire_format"] == "anthropic"
+    assert work["model"] == "claude-x"
+    assert work["credential_ref"] == "model/m1/key"
+    assert work["base_url"] == "https://api.anthropic.com"  # per-wire default for NULL
+    assert work["internal_default"] is True  # was is_default
+    assert work["is_active"] is False
+    assert work["fast_model"] is None
+
+    gpt = provider_rows["GPT"]
+    assert gpt["wire_format"] == "openai"
+    assert gpt["base_url"] == "https://proxy.example/v1"  # explicit base_url preserved
+    assert gpt["internal_default"] is False
+
+    llama = provider_rows["Local-llama"]
+    assert llama["wire_format"] == "ollama"
+    assert llama["credential_ref"] is None  # ollama has no key
+    assert llama["base_url"] == "http://localhost:11434"  # per-wire default for NULL
+
+    # Downgrade recreates the (empty) chat_models table; the migrated provider
+    # resources are NOT copied back (one-way data move).
+    command.downgrade(cfg, "0035")
+    assert "chat_models" in _user_tables(db_path)
+    with sqlite3.connect(db_path) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM chat_models").fetchone()[0]
+        still_providers = conn.execute(
+            "SELECT COUNT(*) FROM resources WHERE kind = 'provider'"
+        ).fetchone()[0]
+    assert count == 0
+    assert still_providers == 3
+
+
 def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkeypatch):
     """Step the chain down one revision at a time and assert each downgrade()
     removes exactly the tables its matching upgrade() created."""
@@ -406,12 +496,17 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     command.downgrade(cfg, "0025")
     assert "memory_store_labels" not in _user_tables(db_path)
     assert "locked" in _documents_columns()
-    assert _user_tables(db_path) == (EXPECTED_TABLES | scope_tables) - {"memory_store_labels"}
+    # chat_models is back (recreated by 0036's downgrade; dropped again at 0011).
+    assert _user_tables(db_path) == (EXPECTED_TABLES | scope_tables | {"chat_models"}) - {
+        "memory_store_labels"
+    }
 
     # 0025 -> 0024: 0025's downgrade drops documents.locked (column-only).
     command.downgrade(cfg, "0024")
     assert "locked" not in _documents_columns()
-    assert _user_tables(db_path) == (EXPECTED_TABLES | scope_tables) - {"memory_store_labels"}
+    assert _user_tables(db_path) == (EXPECTED_TABLES | scope_tables | {"chat_models"}) - {
+        "memory_store_labels"
+    }
 
     # 0024 -> 0023: 0024's downgrade recreates memory_projection_bindings,
     # so it reappears here (and is dropped again at 0008's downgrade at 0007).
@@ -450,7 +545,11 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert "archived_at" not in cols
     # memory_projection_bindings is back (recreated by 0024's downgrade); the
     # per-agent MCP scope tables were dropped at 0022 — so neither is present.
-    assert _user_tables(db_path) == (EXPECTED_TABLES | {"memory_projection_bindings"}) - {
+    # chat_models is still present (0036's downgrade recreated it; 0012's
+    # downgrade drops it on the next step to 0011).
+    assert _user_tables(db_path) == (
+        EXPECTED_TABLES | {"memory_projection_bindings", "chat_models"}
+    ) - {
         "credentials",
         "channel_peers",
         "sync_config",

@@ -21,11 +21,12 @@ from __future__ import annotations
 
 import logging
 import warnings
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool
-from coffer.application.chat.model_service import ModelService
 from coffer.application.chat.ports import ToolGateway, ToolSpec
+from coffer.domain.provider.config import ProviderConfig
 from coffer.infrastructure.chat.langchain_models import build_chat_model
 
 log = logging.getLogger(__name__)
@@ -132,13 +133,15 @@ async def run_agentic_rag(
 
 def make_ask_tool(
     *,
-    model_service: ModelService,
+    resolve_connection: Callable[[], Awaitable[ProviderConfig | None]],
     tool_gateway: ToolGateway,
     credential_resolver: Any,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
 ) -> BuiltinTool:
     """Build the ``coffer__ask`` built-in tool, closing over its dependencies.
 
+    ``resolve_connection`` returns Coffer's internal-engine connection (the
+    ``internal_default`` provider) or ``None`` when none is configured.
     Registered into the ``BuiltinToolRegistry`` by the composition root so the
     gateway advertises it alongside the other ``coffer__`` built-ins.
     """
@@ -147,11 +150,11 @@ def make_ask_tool(
         query = args.get("query")
         if not isinstance(query, str) or not query.strip():
             raise ValueError("'query' must be a non-empty string")
-        model = await model_service.get_default()
+        model = await resolve_connection()
         if model is None:
             raise ValueError(
-                "No model configured. Add a default model in Settings → Models "
-                "(Coffer's internal model) before using coffer__ask."
+                "No internal connection configured. Set an LLM connection as the "
+                "Coffer internal engine in Settings before using coffer__ask."
             )
         lc_model = build_chat_model(model, credential_resolver)
         return await run_agentic_rag(

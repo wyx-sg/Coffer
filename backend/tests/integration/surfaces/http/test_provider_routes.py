@@ -288,3 +288,81 @@ def test_resolve_active_key(tmp_path, monkeypatch):
         r = c.get("/api/v1/providers/active-key/anthropic")
         assert r.status_code == 200, r.text
         assert r.json()["value"] == "sk-the-key"
+
+
+@pytest.mark.acceptance(
+    spec="011-provider-switching",
+    scenario="create an ollama connection without a credential",
+)
+def test_create_ollama_without_credential(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59850)
+    with _client(app) as c:
+        # ollama has no API key: supply NEITHER secret_value nor credential_ref.
+        r = c.post(
+            "/api/v1/providers",
+            json={
+                "name": "local-llama",
+                "wire_format": "ollama",
+                "base_url": "http://localhost:11434",
+                "model": "llama3",
+            },
+        )
+        assert r.status_code == 201, r.text
+        body = r.json()
+        assert body["wire_format"] == "ollama"
+        assert body["credential_ref"] is None
+        assert body["is_active"] is False  # ollama never projects to an agent
+        # Supplying a credential for ollama is rejected.
+        r2 = c.post(
+            "/api/v1/providers",
+            json={
+                "name": "bad-ollama",
+                "wire_format": "ollama",
+                "base_url": "http://localhost:11434",
+                "model": "llama3",
+                "secret_value": "nope",
+            },
+        )
+        assert r2.status_code == 422, r2.text
+
+
+@pytest.mark.acceptance(
+    spec="011-provider-switching",
+    scenario="set a connection as the internal engine default",
+)
+def test_set_internal_default(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59860)
+    with _client(app) as c:
+        c.post("/api/v1/providers", json=_anthropic_body(name="acme"))
+        r = c.post("/api/v1/providers/acme/internal-default")
+        assert r.status_code == 200, r.text
+        assert r.json()["internal_default"] is True
+        # the flag persists on the connection
+        assert c.get("/api/v1/providers/acme").json()["internal_default"] is True
+
+
+@pytest.mark.acceptance(
+    spec="011-provider-switching",
+    scenario="setting a new internal default clears the previous one",
+)
+def test_set_internal_default_clears_previous(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59870)
+    with _client(app) as c:
+        c.post("/api/v1/providers", json=_anthropic_body(name="first"))
+        c.post(
+            "/api/v1/providers",
+            json={
+                "name": "second",
+                "wire_format": "openai",
+                "base_url": "https://gw/v1",
+                "model": "gpt-x",
+                "secret_value": "sk-2",
+            },
+        )
+        c.post("/api/v1/providers/first/internal-default")
+        assert c.get("/api/v1/providers/first").json()["internal_default"] is True
+
+        # Switching the default to another connection clears it off the first.
+        c.post("/api/v1/providers/second/internal-default")
+        assert c.get("/api/v1/providers/second").json()["internal_default"] is True
+        assert c.get("/api/v1/providers/first").json()["internal_default"] is False

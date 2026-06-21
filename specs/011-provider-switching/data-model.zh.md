@@ -13,13 +13,14 @@ Pydantic v2 `BaseModel`。这是存储在 Resource 行上的同步 `config` 字�
 
 | 字段 | 类型 | 约束 / 说明 |
 |---|---|---|
-| `wire_format` | `WireFormat` | 必填；`"anthropic"` 或 `"openai"`。 |
-| `base_url` | `str` | 必填；上游 LLM endpoint URL。 |
-| `credential_ref` | `str` | 必填；Fernet vault ref，格式 `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`。 |
-| `model` | `str` | 必填；主模型 id。 |
+| `wire_format` | `WireFormat` | 必填；`"anthropic"`、`"openai"` 或 `"ollama"`。`ollama` 仅供内部——从不投影到 agent。 |
+| `base_url` | `str` | 必填（所有 wire）；上游 LLM endpoint URL。 |
+| `credential_ref` | `str \| None` | 可选；anthropic/openai 必填（Fernet vault ref，格式 `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`）；ollama 不存在（无 API key）。 |
+| `model` | `str` | 必填；主模型 id（当此为内部默认时，亦即 Coffer 内部引擎运行的模型）。 |
 | `fast_model` | `str \| None` | 可选；Claude Code 上为 `ANTHROPIC_SMALL_FAST_MODEL`；openai wire 忽略。 |
 | `wire_api` | `WireApi` | 可选；`"chat"`（默认）或 `"responses"`；仅 openai。 |
-| `is_active` | `bool` | 同一 `wire_format` 下最多一条为 `True`（FR-011）。 |
+| `is_active` | `bool` | 同一 `wire_format` 下最多一条为 `True`（FR-011）；ollama 始终为 `False`（从不投影）。 |
+| `internal_default` | `bool` | 全局最多一条为 `True`（FR-021）；Coffer 内部引擎使用的 connection。导入时若 >1，则归一化（保留最近更新的）。 |
 
 所有字段均 JSON 稳定（无 Python 对象），`model_dump(mode="json")` 可干净序列化，适用于 SQLite 和 sync export。
 
@@ -31,6 +32,7 @@ Pydantic v2 `BaseModel`。这是存储在 Resource 行上的同步 `config` 字�
 class WireFormat(str, Enum):
     anthropic = "anthropic"
     openai = "openai"
+    ollama = "ollama"
 
 class WireApi(str, Enum):
     chat = "chat"
@@ -44,8 +46,16 @@ class WireApi(str, Enum):
 - `apply_anthropic_settings(config: ProviderConfig, existing_text: str) -> str`
 - `apply_codex_provider(config: ProviderConfig, profile_name: str, existing_text: str) -> str`
 - `ProjectionTarget`——目标配置文件描述符
-- `target_for(wire: WireFormat) -> ProjectionTarget`
+- `target_for(wire: WireFormat) -> ProjectionTarget | None`——对 `ollama` 返回 `None`（仅内部；无 agent 投影）
 - 常量：`CODEX_PROVIDER_ID`、`CODEX_ENV_KEY`、`ANTHROPIC_API_KEY_HELPER`
+
+### 内部引擎（`application/provider/service.py` + `infrastructure/chat/`）
+
+内部引擎 connection 由全局 `internal_default` 标志选择：
+
+- `ProviderService.set_internal_default(name)`——清除所有其他 connection 的 `internal_default`，再设置目标（顺序 clear-then-set，由单进程 daemon 串行化）；发出 `provider_internal_default_set`。
+- `ProviderService.resolve_internal_connection() -> ProviderConfig | None`——返回 `internal_default` connection 的 config，或 `None`（→ 内部引擎是干净的 no-op）。
+- `build_chat_model(connection, ...)` 消费解析出的 connection，按 `wire_format`（anthropic / openai / ollama）分派，构建内部引擎的 chat model——取代已退役 `ModelConfig` 注册表的模型选择。
 
 ### 每种 `wire_format` 的托管原生配置键
 
@@ -147,6 +157,7 @@ class WireApi(str, Enum):
 | 值 | 发出时机 |
 |---|---|
 | `provider_switched` | `POST /providers/{name}/activate` 成功；details：`{from, to, wire_format, agents: [...projected...]}` |
+| `provider_internal_default_set` | `POST /providers/{name}/internal-default` 成功；details：`{from, to}`（先前内部默认名称或 null，及新的） |
 
 `RESOURCE_CREATED`、`RESOURCE_UPDATED`、`RESOURCE_DELETED` 由 `ResourceService` 在 CRUD 操作时自动发出（无需新增）。
 
@@ -161,6 +172,8 @@ class WireApi(str, Enum):
 | `delete(name, actor) -> None` | 通过 `find_credential_citations` 守卫自有凭证；若自有则删除 vault 条目；删除 Resource。 |
 | `activate(name, actor) -> ActivateResult` | 顺序 clear-then-set 实现单活跃不变量；向匹配的已注册 agent 投影；发出 `PROVIDER_SWITCHED`。 |
 | `resolve_active_key(wire: WireFormat) -> str` | 找到给定 wire format 的活跃 profile；解密并返回 key（仅 stdout；调用方不得记录）。不支持按名称解析。 |
+| `set_internal_default(name, actor) -> Resource` | 清除所有其他 connection 的 `internal_default`，再设置目标（全局单一内部默认不变量，FR-021）；发出 `PROVIDER_INTERNAL_DEFAULT_SET`。 |
+| `resolve_internal_connection() -> ProviderConfig \| None` | 返回 `internal_default` connection 的 config，或 `None`（→ 内部引擎——memory organizer / reorg / distill / `coffer__ask`——是干净的 no-op）。 |
 
 ### `ActivateResult`（`application/provider/service.py`）
 

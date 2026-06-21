@@ -8,9 +8,11 @@
 
 ## One-line
 
-A shared **provider registry** lets users configure LLM providers once (name,
-wire format, base URL, encrypted credential, model) and project that
-configuration into the matching agent's native config file. Coffer's
+A unified **LLM connection** lets users configure a key once (name, wire format,
+base URL, encrypted credential, model) and use it BOTH ways: project it into the
+matching agent's native config file AND let Coffer's own internal LLM engine run
+on it. One connection retires the separate `ModelConfig`/`chat_models` registry,
+folding internal-engine model selection into the same record. Coffer's
 differentiator over `claude switch` or equivalent per-tool scripting: a unified
 registry with governance — Fernet-encrypted credentials, full audit trail, and
 git-sync — not per-tool silos.
@@ -19,27 +21,42 @@ git-sync — not per-tool silos.
 
 Claude Code and Codex each require their own native config files
 (`~/.claude/settings.json`, `~/.codex/config.toml`) with provider-specific keys
-and base URLs. Switching providers today means editing multiple files by hand,
-storing keys in plaintext, and losing the audit trail. Coffer centralises
-provider profiles: configure once, switch (with projection), audit everything.
+and base URLs, and Coffer's internal engine used to keep a SECOND, parallel
+model registry (`chat_models`). Switching providers today means editing multiple
+files by hand, storing keys in plaintext, and losing the audit trail — and a key
+configured for an agent could not be reused by the internal engine. Coffer
+centralises connections: configure once, project it to the matching agent
+(switch), mark one as the internal engine's default, audit everything.
 
 ## Confirmed Decisions
 
 Three decisions were locked before spec was written; do not relitigate them.
 
-### Decision A — single-wire profile, per-agent activation
+### Decision A — single-wire connection, per-agent activation, one internal default
 
-One profile holds `{name, wire_format, base_url, credential_ref, model,
-fast_model, wire_api, is_active}`. A profile projects ONLY into agents whose
-native protocol matches its `wire_format`:
+One connection holds `{name, wire_format, base_url, credential_ref, model,
+fast_model, wire_api, is_active, internal_default}`. A connection projects ONLY
+into agents whose native protocol matches its `wire_format`:
 
 - `anthropic` → Claude Code (`~/.claude/settings.json`)
 - `openai` → Codex (`~/.codex/config.toml`)
+- `ollama` → internal-only; never projected to any agent
 
-At most one active profile per wire format exists at any time (per-wire
+At most one active connection per wire format exists at any time (per-wire
 single-active invariant, analogous to the `ModelConfig.is_default` pattern in
-the chat engine). Claude Code and Codex "share" the registry — a credential ref
-may be reused across profiles — but NOT via one record driving both agents.
+the retired chat-model registry). Claude Code and Codex "share" the registry — a
+credential ref may be reused across connections — but NOT via one record driving
+both agents.
+
+In addition to per-agent activation, a connection MAY carry a single GLOBAL
+`internal_default` flag (≤1 across all connections) marking the connection
+Coffer's own internal LLM engine uses (memory organizer, reorg, distill,
+`coffer__ask`). The third wire `ollama` is internal-only: it never projects to
+any agent, and because it has no API key its `credential_ref` is absent — it
+needs only a `base_url`. `credential_ref` is therefore OPTIONAL: required for
+anthropic/openai, absent for ollama. One connection may be BOTH active (projected
+to its wire's agent) AND `internal_default` (used internally) — one key, two
+uses.
 
 ### Decision B — credential isolation; key never plaintext in native config
 
@@ -77,9 +94,17 @@ Hot-switch (mid-session reload of a running Claude Code or Codex process) is a
   only ref); projection service (write native config for the matching agent);
   switch / activate operation; `PROVIDER_SWITCHED` audit event; sync wiring
   (register the kind); key-resolution used by Claude's `apiKeyHelper`.
-- CLI: `coffer provider list|add|show|edit|remove|switch|key`
+- Internal-engine connection selection: the global `internal_default` flag,
+  `set_internal_default(name)` + `resolve_internal_connection()`, the
+  `provider_internal_default_set` audit event, consumed by Coffer's internal
+  LLM engine (memory organizer / reorg / distill / `coffer__ask`).
+- Retire the standalone `ModelConfig` registry (model CRUD REST + `coffer model`
+  CLI), folding internal-engine model selection into the connection. The
+  provider introspection routes (`list-models`, `test-connection`) are KEPT.
+- CLI: `coffer provider list|add|show|edit|remove|switch|key|internal-default`
 - HTTP API: `/api/v1/providers` (list / create / get / patch / delete) plus
-  `/api/v1/providers/{name}/activate`
+  `/api/v1/providers/{name}/activate` and
+  `/api/v1/providers/{name}/internal-default`
 - Frontend: a minimal Providers resource page — `DataTable` (name, wire format,
   base URL, model, active) with create / switch / delete actions,
   mirroring the Skills and MCP resource-page pattern.
@@ -109,13 +134,14 @@ Resource `name` = the profile name (unique within kind; validated by
 
 | Field | Type | Notes |
 |---|---|---|
-| `wire_format` | `"anthropic" \| "openai"` | Required. Gates which agent this profile projects to. |
-| `base_url` | `str` | Required. The upstream LLM endpoint. |
-| `credential_ref` | `str` | Required. Fernet vault ref; pattern `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`. Conventionally `provider/<name>/key` for an owned secret; multiple profiles MAY share one ref. |
-| `model` | `str` | Required. Primary model ID → `ANTHROPIC_MODEL` (Claude) / `model` (Codex). |
+| `wire_format` | `"anthropic" \| "openai" \| "ollama"` | Required. Gates which agent this connection projects to. `ollama` is internal-only — projected to NO agent (`target_for` returns None). |
+| `base_url` | `str` | Required (all wires). The upstream LLM endpoint. |
+| `credential_ref` | `str \| None` | Optional. Required for anthropic/openai (Fernet vault ref; pattern `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`; conventionally `provider/<name>/key`; multiple connections MAY share one ref). MUST be absent for ollama (no API key). |
+| `model` | `str` | Required. Primary model ID → `ANTHROPIC_MODEL` (Claude) / `model` (Codex); the model Coffer's internal engine runs when this is the internal default. |
 | `fast_model` | `str \| None` | Optional. `ANTHROPIC_SMALL_FAST_MODEL` (anthropic wire only); ignored for openai. |
 | `wire_api` | `"chat" \| "responses"` | Optional, default `"chat"`. openai/Codex only (`[model_providers.*].wire_api`). |
-| `is_active` | `bool` | At most one active per `wire_format`. On import, if >1 active for a wire, normalise deterministically (keep most-recently-updated). |
+| `is_active` | `bool` | At most one active per `wire_format`. ollama is never projected, so an ollama connection is always inactive. On import, if >1 active for a wire, normalise deterministically (keep most-recently-updated). |
+| `internal_default` | `bool` | At most one connection globally is the internal-engine default. On import, if >1, normalise (keep most-recently-updated). |
 
 - `audit_redactor`: config holds NO secret (only `credential_ref`); audit shows
   config as-is. Double-check that no secret leaks via `config` or `details`.
@@ -162,6 +188,13 @@ Coffer MANAGES via `tomlkit` (comment/order-preserving, like the MCP TOML path):
 
 Everything else preserved.
 
+### ollama → (internal only)
+
+An ollama connection projects into NO agent config: `target_for(WireFormat.ollama)`
+returns `None`, so activation writes no native config and the connection is never
+`is_active`. It is used solely by Coffer's internal engine, reached via
+`resolve_internal_connection` when it is the `internal_default`.
+
 ## Switch / Activate Operation
 
 `POST /api/v1/providers/{name}/activate` / `coffer provider switch <name>`:
@@ -181,6 +214,27 @@ Everything else preserved.
 
 NOTE: projection (`_project`) runs BEFORE the activation flip; a native-config
 write failure aborts the switch with the registry unchanged.
+
+## Internal engine (Coffer's own LLM)
+
+Separate from per-agent activation, the global `internal_default` flag (≤1 across
+all connections) selects the connection Coffer's own internal LLM engine uses —
+the memory organizer, reorg, distill, and `coffer__ask`.
+
+- `set_internal_default(name)`: clears `internal_default` on all other
+  connections, then sets it on the target (sequential clear-then-set, serialised
+  by the single-process daemon so the global single-internal-default invariant
+  holds), and emits a `provider_internal_default_set` audit event.
+- `resolve_internal_connection() -> ProviderConfig | None`: returns the
+  `internal_default` connection's config, or `None` when no connection is marked.
+  When `None`, the internal engine (memory organizer / reorg / distill /
+  `coffer__ask`) is a clean no-op rather than an error.
+- `build_chat_model(connection, ...)`: the internal engine builds its chat model
+  from the resolved connection, dispatched by `wire_format` (anthropic / openai /
+  ollama). This replaces the retired `ModelConfig` registry's model selection.
+
+A connection may be BOTH `is_active` (projected to its wire's agent) AND
+`internal_default` (used internally) — one key, two uses.
 
 ## Key Resolution (apiKeyHelper + Codex env)
 
@@ -212,7 +266,9 @@ in `surfaces/http/app.py`. No new migration, no manifest SCHEMA_VERSION bump.
 kind-redacted config. Add `PROVIDER_SWITCHED = "provider_switched"` to `AuditEventType`
 (`backend/coffer/domain/audit.py`) and emit it from the switch operation via
 `AuditService.record(AuditEventType.PROVIDER_SWITCHED.value, ref=ResourceRef(
-kind="provider", name=<name>), actor=..., details={...})`.
+kind="provider", name=<name>), actor=..., details={...})`. Likewise add
+`PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"` and emit it
+from `set_internal_default`.
 
 ## HTTP API
 
@@ -229,31 +285,49 @@ Full spec in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
   `find_credential_citations` before removing an owned secret
 - `POST /api/v1/providers/{name}/activate` → switch; returns
   `{activated, projected:[agent...], skipped:[agent...]}`
+- `POST /api/v1/providers/{name}/internal-default` → set the internal-engine
+  default; returns the updated `ProviderOut`
 
-**Credential source rule**: Exactly one of `secret_value` (stored to vault
-under `provider/<name>/key`, kept as ref) or `credential_ref` (reuse existing)
-must be supplied on create. Reject if both or neither are present.
+`wire_format` accepts `anthropic`, `openai`, or `ollama` on request and response.
 
-`ProviderOut` NEVER includes the secret; includes `credential_ref` + `is_active`.
+**Credential source rule**: For anthropic/openai, exactly one of `secret_value`
+(stored to vault under `provider/<name>/key`, kept as ref) or `credential_ref`
+(reuse existing) must be supplied on create; reject if both or neither are
+present. For `wire_format=ollama` the credential is OPTIONAL — supply NEITHER
+`secret_value` nor `credential_ref` (an ollama connection has no key).
+
+`ProviderOut` NEVER includes the secret; includes `credential_ref`, `is_active`,
+and `internal_default`.
 
 ## CLI
 
-`coffer provider list|add|show|edit|remove|switch|key` with `--json`.
+`coffer provider list|add|show|edit|remove|switch|key|internal-default` with `--json`.
 
-- `add` prompts for / accepts the secret.
+- `add` prompts for / accepts the secret (skipped for an ollama connection,
+  which has no key).
 - `key` prints the resolved secret (for `apiKeyHelper`); requires `--wire <wire_format>`;
   resolves by the active profile for that wire.
+- `internal-default <name>` marks a connection as Coffer's internal-engine
+  default (clears any previous one).
 
 ## Frontend (minimal)
 
 - `frontend/src/lib/api/providers.ts` — hand-written client + TS types (`types.ts`
   codegen covers only the 001 gateway spec; do NOT expect generated types here).
-- Providers page = a `DataTable` (reuse the shared component; see SkillsPage /
-  MCP page) with columns: name / wire_format / base_url / model / active. Row
-  actions: switch / delete; header action: create. Editing a profile is
-  available via the CLI (`coffer provider edit`) and the PATCH API, not the
-  desktop page. No detail page, no per-agent binding tab in this PR. Add
-  `vi.mock` for any new hook in page + table tests.
+- A unified **Settings → LLM Connections** page (route `/settings/llm-connections`)
+  is the connection library: a `DataTable` (reuse the shared component; see
+  SkillsPage / MCP page) with columns name / wire_format / base_url / model /
+  active / internal, header action create, and row actions switch /
+  set-internal-default / delete, PLUS the Embedding card. The page shows ONLY
+  connection (provider + model) info — no agent names, no presets, no modality
+  split. Editing a connection is available via the CLI (`coffer provider edit`)
+  and the PATCH API, not the desktop page.
+- Per-agent connection + model selection lives on the **agent detail page
+  (Overview tab)**, filtered to that agent's wire, reusing the activate API. The
+  LLM Connections page does not bind agents.
+- The old `/settings/models` and `/settings/providers` routes redirect to
+  `/settings/llm-connections`.
+- Add `vi.mock` for any new hook in page + table tests.
 
 ## Acceptance Scenarios
 
@@ -288,8 +362,9 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 ### Scenario: reject a profile that supplies neither a secret nor a credential ref
 
 - **Given** the daemon is running,
-- **When** the user attempts to create a profile without supplying either
-  `secret_value` or `credential_ref`,
+- **When** the user attempts to create an **anthropic** connection (the
+  neither-rule applies to anthropic/openai; ollama legitimately supplies neither)
+  without supplying either `secret_value` or `credential_ref`,
 - **Then** the request is rejected with `422 Unprocessable Entity` and no
   profile row or vault entry is created.
 
@@ -393,6 +468,28 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 - **Then** the activate mutation is called with the correct profile name and the
   table reflects the updated active state (TypeScript acceptance test).
 
+### Scenario: create an ollama connection without a credential
+
+- **Given** no connection named `local-llm` exists,
+- **When** the user creates a connection with `wire_format="ollama"`, a
+  `base_url`, `model`, and neither `secret_value` nor `credential_ref`,
+- **Then** the connection persists with `credential_ref` null, no vault entry is
+  created, and `ProviderOut` shows `internal_default=false`.
+
+### Scenario: set a connection as the internal engine default
+
+- **Given** two connections exist and none is the internal default,
+- **When** the user sets the second as the internal default,
+- **Then** its `internal_default` becomes true, the other stays false, and a
+  `provider_internal_default_set` audit entry is recorded.
+
+### Scenario: setting a new internal default clears the previous one
+
+- **Given** connection A is the internal default,
+- **When** the user sets connection B as the internal default,
+- **Then** B's `internal_default` becomes true and A's becomes false (global
+  single-internal-default invariant).
+
 ## Requirements
 
 ### Functional Requirements
@@ -484,11 +581,41 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
   resolve by the active profile for that wire. Resolution by positional `<name>`
   is NOT supported; `--wire` is the only accepted form.
 
+**Internal engine connection**
+
+- **FR-019**: The `ollama` wire is internal-only and projects to NO agent:
+  `target_for(WireFormat.ollama)` MUST return `None`, an ollama connection is
+  never `is_active`, and activating it writes no native config.
+- **FR-020**: `credential_ref` MUST be optional — required for anthropic/openai,
+  absent for ollama. On create, supplying neither `secret_value` nor
+  `credential_ref` is valid ONLY for `wire_format=ollama`; for anthropic/openai
+  the exactly-one rule of FR-004 stands.
+- **FR-021**: At most one connection globally MUST have `internal_default=true`.
+  `set_internal_default` MUST clear `internal_default` on all others, then set
+  the target (sequential clear-then-set serialised by the single-process
+  daemon). On import with >1 internal default, normalise: keep
+  most-recently-updated, clear the rest.
+- **FR-022**: `POST /api/v1/providers/{name}/internal-default` MUST set the named
+  connection as the internal-engine default (applying FR-021), emit a
+  `provider_internal_default_set` audit event, and return the updated
+  `ProviderOut`.
+- **FR-023**: `resolve_internal_connection()` MUST return the
+  `internal_default` connection's `ProviderConfig`, or `None` when no connection
+  is marked. When `None`, the internal engine (memory organizer / reorg /
+  distill / `coffer__ask`) MUST be a clean no-op rather than an error.
+- **FR-024**: The standalone `ModelConfig` registry (model CRUD REST +
+  `coffer model` CLI) MUST be retired. The internal engine MUST build its chat
+  model from the internal-default connection via `build_chat_model(connection,
+  ...)` (dispatched by `wire_format`). The provider introspection routes
+  (`POST /api/v1/models/list-models`, `/api/v1/models/test-connection`) MUST be
+  retained.
+
 ### Key Entities
 
 - **ProviderProfile**: A Resource of kind `provider`, identified by
-  `provider:<name>`. Holds wire format, base URL, credential ref, model(s), and
-  active state. Never holds the raw secret.
+  `provider:<name>`. Holds wire format, base URL, optional credential ref
+  (absent for ollama), model(s), per-wire `is_active` state, and the global
+  `internal_default` flag. Never holds the raw secret.
 - **`apply_anthropic_settings` / `apply_codex_provider`**: Pure functions in
   `domain/provider/projection.py` that return the new native-config TEXT directly.
   Analogous to `domain/agent/mcp_install.py`'s `apply_install`. No `ProjectionPatch`
@@ -496,9 +623,16 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 - **`ProviderService._project`**: Private method in `application/provider/service.py`
   that calls the pure projection functions and performs the file write.
 - **`ProjectionTarget` / `target_for(wire)`**: Helper in `domain/provider/projection.py`
-  mapping `wire_format` to the target config file descriptor.
+  mapping `wire_format` to the target config file descriptor; returns `None` for
+  `ollama` (internal-only, no projection).
 - **`ProviderService.resolve_active_key(wire)`**: Takes a `wire_format` string
   only; no by-name resolution on this method.
+- **`ProviderService.set_internal_default(name)`**: Clears `internal_default` on
+  all other connections then sets the target; emits `provider_internal_default_set`.
+- **`ProviderService.resolve_internal_connection()`**: Returns the internal-default
+  connection's `ProviderConfig`, or `None` (→ the internal engine is a clean
+  no-op). `build_chat_model(connection, ...)` builds the internal engine's chat
+  model from it, dispatched by `wire_format`.
 
 ## Success Criteria
 
@@ -514,6 +648,9 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 - **SC-004**: `make verify` passes locally and in CI.
 - **SC-005**: Activating a profile writes the target native-config key set and
   does NOT touch any key outside the defined managed set.
+- **SC-006**: With an `internal_default` connection configured, Coffer's internal
+  engine (memory organize / reorg / distill / `coffer__ask`) runs on it; with no
+  connection marked `internal_default`, the internal engine is a clean no-op.
 
 ## Assumptions
 

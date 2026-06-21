@@ -57,10 +57,6 @@ def spec_doc() -> dict[str, Any]:
         ("/api/v1/chat/conversations/{id}/messages", "get"),
         ("/api/v1/chat/conversations/{id}/messages", "post"),
         ("/api/v1/chat/conversations/{id}/interrupt", "post"),
-        ("/api/v1/models", "get"),
-        ("/api/v1/models", "post"),
-        ("/api/v1/models/{id}", "patch"),
-        ("/api/v1/models/{id}", "delete"),
     ],
 )
 def test_chat_path_and_method_exists(
@@ -119,13 +115,6 @@ def test_every_yaml_path_is_implemented(
         ("MessageOut", {"id", "conversation_id", "seq", "role", "content", "status", "created_at"}),
         ("MessageListOut", {"messages"}),
         ("SendMessageRequest", {"text"}),
-        (
-            "ModelOut",
-            {"id", "display_name", "provider", "model", "is_default", "created_at", "updated_at"},
-        ),
-        ("ModelCreate", {"display_name", "provider", "model"}),
-        ("ModelPatch", set()),
-        ("ModelListOut", {"models"}),
     ],
 )
 def test_chat_schema_required_fields(

@@ -1,7 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Bot,
   Boxes,
   Database,
   Info,
@@ -25,14 +24,9 @@ const GENERAL_ITEM: Item = {
   labelKey: "settings.tabs.general",
   icon: SlidersHorizontal,
 };
-const MODELS_ITEM: Item = {
-  to: "/settings/models",
-  labelKey: "settings.tabs.models",
-  icon: Bot,
-};
-const PROVIDERS_ITEM: Item = {
-  to: "/settings/providers",
-  labelKey: "settings.tabs.providers",
+const LLM_CONNECTIONS_ITEM: Item = {
+  to: "/settings/llm-connections",
+  labelKey: "settings.tabs.llmConnections",
   icon: Boxes,
 };
 const DATA_ITEM: Item = {
@@ -60,8 +54,7 @@ export function SettingsLayout() {
   const { t } = useTranslation();
   const items: Item[] = [
     GENERAL_ITEM,
-    MODELS_ITEM,
-    PROVIDERS_ITEM,
+    LLM_CONNECTIONS_ITEM,
     DATA_ITEM,
     SYNC_ITEM,
     SECURITY_ITEM,

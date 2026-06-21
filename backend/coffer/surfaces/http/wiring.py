@@ -19,7 +19,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from coffer.application.builtin_tools import BuiltinToolRegistry
-from coffer.application.chat.model_service import ModelService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -45,7 +44,6 @@ from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.chat.gateway_tool_provider import GatewayToolProvider
-from coffer.infrastructure.chat.model_persistence import ChatModelRepo
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.knowledge import paths
@@ -61,11 +59,11 @@ from coffer.infrastructure.memory.store_label_repo import StoreLabelRepo
 from coffer.infrastructure.providers.provider_introspector import ProviderIntrospector
 from coffer.surfaces.http.chat.dependencies import set_introspection_service
 from coffer.surfaces.http.dependencies import (
+    get_provider_service,
     set_agent_registry,
     set_chat_service,
     set_kb_service,
     set_memory_service,
-    set_model_service,
     set_turn_orchestrator,
 )
 from coffer.surfaces.http.memory.dependencies import (
@@ -275,12 +273,8 @@ def wire_chat(
     # 1. Persistence repos.
     conv_repo = ConversationRepo(sm)  # type: ignore[arg-type]
     msg_repo = MessageRepo(sm)  # type: ignore[arg-type]
-    model_repo = ChatModelRepo(sm)  # type: ignore[arg-type]
 
-    # 2. ModelService — the built-in agent's model registry.
-    model_svc = ModelService(repo=model_repo, audit=audit)
-
-    # 3. Long-lived in-process gateway session for the built-in agent. Built
+    # 2. Long-lived in-process gateway session for the built-in agent. Built
     #    via the shared mcp_session_factory so it reuses the fully-populated
     #    BuiltinToolRegistry (KB + memory + skill tools + MCP).
     agent_session: MCPGatewaySession = mcp_session_factory("coffer-builtin-agent")
@@ -306,7 +300,7 @@ def wire_chat(
     #    recurse into itself.
     builtin_tools.register(
         make_ask_tool(
-            model_service=model_svc,
+            resolve_connection=lambda: get_provider_service().resolve_internal_connection(),
             tool_gateway=tool_gateway,
             credential_resolver=_credential_resolver,
             recursion_limit=_agent_recursion_limit(),
@@ -351,7 +345,6 @@ def wire_chat(
 
     # 9. Register dependency providers.
     set_chat_service(chat_svc)
-    set_model_service(model_svc)
     set_introspection_service(introspection_svc)
     set_turn_orchestrator(orchestrator)
     set_agent_registry(registry)

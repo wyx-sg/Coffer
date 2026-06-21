@@ -24,7 +24,7 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Message, Role, TextBlock
-from coffer.domain.errors import NoModelConfigured, TurnInProgress
+from coffer.domain.errors import AgentConfigRejected, TurnInProgress
 
 from .conftest import (
     FakeAgentAdapter,
@@ -236,12 +236,13 @@ async def test_turn_in_progress_raises_on_second_start() -> None:
 
 
 @pytest.mark.asyncio
-async def test_build_adapter_no_model_propagates_and_releases_slot() -> None:
-    provider = FakeAgentProvider(adapter=None, build_error=NoModelConfigured())
+async def test_build_adapter_error_propagates_and_releases_slot() -> None:
+    err = AgentConfigRejected("missing_credential", "agent could not build its adapter")
+    provider = FakeAgentProvider(adapter=None, build_error=err)
     orchestrator, _, _, _, _ = make_orchestrator(provider=provider)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    with pytest.raises(NoModelConfigured):
+    with pytest.raises(AgentConfigRejected):
         await orchestrator.start_turn(conv.id, "hi")
 
     # The reservation was rolled back — a retry is possible.

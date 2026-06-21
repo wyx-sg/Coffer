@@ -59,6 +59,34 @@ switch/activate operation, `PROVIDER_SWITCHED` audit event, and sync wiring.
 is explicitly **out of scope** and will be addressed in a separate, later ADR
 and PR.
 
+### D — one LLM connection, used by both agents and Coffer's internal engine
+
+A provider profile and Coffer's old `ModelConfig`/`chat_models` registry were the
+same shape (key + endpoint + model) wearing two hats. They are unified into a
+single **LLM connection** = the provider resource. The standalone `ModelConfig`
+registry — the model CRUD REST and the `coffer model` CLI — is **retired** (its
+rows migrate to provider resources; the provider model-introspection routes
+`list-models` / `test-connection` are kept). To support this:
+
+- `wire_format` gains a third value `ollama`: **internal-only**, projected to NO
+  agent (`target_for` returns `None`), and keyless — so `credential_ref` becomes
+  optional (required for anthropic/openai, absent for ollama).
+- A global `internal_default` flag (≤1 across all connections) marks the
+  connection Coffer's internal LLM engine uses (memory organizer, reorg,
+  distill, `coffer__ask`), set via `POST /providers/{name}/internal-default`
+  (audit event `provider_internal_default_set`) / `coffer provider
+  internal-default`. One connection MAY be BOTH `is_active` (projected to its
+  wire's agent) AND `internal_default` — one key, two uses.
+- `build_chat_model` consumes a connection (`ProviderConfig`) dispatched by
+  `wire_format`, replacing its dependency on `ModelConfig`. This fixes a real
+  bug: the old anthropic/openai builders dropped the connection's `base_url`, so
+  a custom/proxy endpoint was ignored. The internal consumers repoint from
+  `ModelService.get_default()` to `ProviderService.resolve_internal_connection()`;
+  with no `internal_default` set the internal engine is a clean no-op (as before).
+
+The per-conversation `Conversation.model_id` column is now a vestigial legacy
+column (kept, never validated against a registry).
+
 ## Consequences
 
 ### What projection writes (and never writes)

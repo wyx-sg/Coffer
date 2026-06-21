@@ -13,9 +13,9 @@ Chat 页面让你与 **Coffer Assistant** 对话 —— 这是 Coffer 的内置 
 该 agent 可以使用你 vault 中的一切：你的 MCP server 工具、你的记忆库、
 你的知识库以及你的 skills。
 
-## 1. 配置一个模型
+## 1. 配置一个 LLM connection
 
-内置 agent 需要一个 LLM。打开 **Settings → Models** 并添加一个：
+Coffer 的内部引擎需要一个 LLM。打开 **Settings → LLM Connections** 并添加一个：
 
 | Provider       | 你需要提供                                                             |
 | -------------- | ---------------------------------------------------------------------- |
@@ -23,19 +23,23 @@ Chat 页面让你与 **Coffer Assistant** 对话 —— 这是 Coffer 的内置 
 | OpenAI         | model id（例如 `gpt-4o`）+ API-key 凭据                                |
 | Ollama（本地） | model id（例如 `llama3.1`）+ base URL（例如 `http://localhost:11434`） |
 
-你添加的第一个模型会成为默认模型。云端模型通过一个凭据引用来引用它的 API
-key；先存储 key 本身，再注册指向它的模型。在命令行中：
+把其中一条 connection 标记为**内部引擎默认**，让 Coffer 自身的引擎在其上运行。
+云端 connection 通过一个凭据引用来引用它的 API key；先存储 key 本身，再注册指向
+它的 connection。在命令行中：
 
 ```bash
 # 1. 把 API key 以一个引用名存入加密的凭据存储。
 coffer credentials set anthropic-api-key     # 从 stdin 读取密钥
-# 2. 注册一个从该引用解析其凭据的模型。
-coffer model add --name "Sonnet" --provider anthropic \
+# 2. 注册一个从该引用解析其凭据的 connection。
+coffer provider add sonnet --wire anthropic \
+  --base-url https://api.anthropic.com \
   --model claude-sonnet-4-6 --credential-ref anthropic-api-key
-coffer model list --json
+# 3. 把它设为 Coffer 的内部引擎默认。
+coffer provider internal-default sonnet
+coffer provider list --json
 ```
 
-API key 以密文形式存储在 Coffer 的加密凭据存储中，模型配置里只保留凭据引用
+API key 以密文形式存储在 Coffer 的加密凭据存储中，connection 配置里只保留凭据引用
 —— 明文 key 从不接触数据库。
 
 ## 2. 开始聊天
@@ -101,8 +105,8 @@ CLI 对话与桌面应用展示的是同一批对话。
 
 ## 故障排查
 
-**"No model configured"** —— 在你于 Settings → Models 添加模型之前，Chat 页面
-会一直显示此提示。添加一个，聊天输入框便会解锁。
+**"No model configured"** —— 在你于 Settings → LLM Connections 添加一条 connection
+并将其标记为内部引擎默认之前，Chat 页面会一直显示此提示。配置好后，聊天输入框便会解锁。
 
 **回合因 provider 错误失败** —— 检查模型的凭据，对 Ollama 还要检查 base URL
 是否可达。对话仍可使用；重新发送该消息即可。

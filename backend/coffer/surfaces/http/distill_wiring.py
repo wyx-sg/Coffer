@@ -11,13 +11,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from coffer.application.chat.model_service import ModelService
 from coffer.application.distill.service import TranscriptDistillationService
 from coffer.application.memory.service import MemoryService
+from coffer.application.provider.service import ProviderService
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.chat.model import ModelConfig
 from coffer.domain.distill.session import DistilledInsight
 from coffer.domain.memory.scope import MemoryScope
+from coffer.domain.provider.config import ProviderConfig
 from coffer.infrastructure.chat.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.distill.transcript_reader import FileTranscriptReader
 from coffer.surfaces.http.distill.state import set_distill_service
@@ -96,16 +96,14 @@ class _AgentResolver:
 
 
 class _ModelSelector:
-    """ModelSelectorPort adapter: thin passthrough to ModelService.get_default / .get."""
+    """ModelSelectorPort adapter: resolves Coffer's internal-engine connection
+    (the ``internal_default`` provider) for distillation."""
 
-    def __init__(self, model_svc: ModelService) -> None:
-        self._svc = model_svc
+    def __init__(self, provider_svc: ProviderService) -> None:
+        self._svc = provider_svc
 
-    async def get_default(self) -> ModelConfig | None:
-        return await self._svc.get_default()
-
-    async def get(self, model_id: str) -> ModelConfig | None:
-        return await self._svc.get(model_id)
+    async def get_default(self) -> ProviderConfig | None:
+        return await self._svc.resolve_internal_connection()
 
 
 # ---------------------------------------------------------------------------
@@ -116,14 +114,14 @@ class _ModelSelector:
 def wire_distill(
     memory_service: MemoryService,
     agent_service: Any,
-    model_svc: ModelService,
+    provider_svc: ProviderService,
     credential_resolver: Callable[[str], str],
 ) -> TranscriptDistillationService:
     """Construct and register the transcript-distillation service.
 
     Must be called AFTER ``wire_memory_kind`` (needs a live ``MemoryService``),
     ``wire_agent_and_skill_kinds`` (needs a live ``AgentService``), and
-    ``wire_chat`` (needs a live ``ModelService``).
+    ``wire_provider_kind`` (needs a live ``ProviderService``).
 
     Exposes the service via ``set_distill_service`` so Task 10's routes can
     reach it through ``get_distill_service``.
@@ -133,14 +131,14 @@ def wire_distill(
         llm=LangchainLlmCompletion(),
         sink=_MemoryInsightSink(memory_service),
         agents=_AgentResolver(agent_service),
-        models=_ModelSelector(model_svc),
+        models=_ModelSelector(provider_svc),
         credential_resolver=credential_resolver,
     )
     set_distill_service(svc)
     # The memory consolidation organizer (spec 007 FR-027..031) is a sibling
-    # internal-LLM consumer of the same memory + model services; wire it here so
-    # the app composition root keeps a single internal-LLM call site.
-    wire_organize(memory_service, model_svc, credential_resolver)
+    # internal-LLM consumer of the same memory + provider services; wire it here
+    # so the app composition root keeps a single internal-LLM call site.
+    wire_organize(memory_service, provider_svc, credential_resolver)
     # The agentic reorg service (spec 007 FR-033/034) — same collaborators.
-    wire_reorg(memory_service, model_svc, credential_resolver)
+    wire_reorg(memory_service, provider_svc, credential_resolver)
     return svc

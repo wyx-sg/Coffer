@@ -22,9 +22,6 @@ from coffer.surfaces.http.chat.dependencies import (
     get_chat_service as get_chat_service,
 )
 from coffer.surfaces.http.chat.dependencies import (
-    get_model_service as get_model_service,
-)
-from coffer.surfaces.http.chat.dependencies import (
     get_turn_orchestrator as get_turn_orchestrator,
 )
 from coffer.surfaces.http.chat.dependencies import (
@@ -32,9 +29,6 @@ from coffer.surfaces.http.chat.dependencies import (
 )
 from coffer.surfaces.http.chat.dependencies import (
     set_chat_service as set_chat_service,
-)
-from coffer.surfaces.http.chat.dependencies import (
-    set_model_service as set_model_service,
 )
 from coffer.surfaces.http.chat.dependencies import (
     set_turn_orchestrator as set_turn_orchestrator,

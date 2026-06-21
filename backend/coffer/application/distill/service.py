@@ -86,7 +86,6 @@ class TranscriptDistillationService:
         agent_name: str,
         session_id: str | None = None,
         project_path: str | None = None,
-        model_id: str | None = None,
         dry_run: bool = False,
     ) -> DistillResult:
         """Distil a single transcript session into memory insights.
@@ -105,15 +104,12 @@ class TranscriptDistillationService:
             project_path=project_path,
         )
 
-        # Resolve model
-        model = (
-            await self._models.get(model_id)
-            if model_id is not None
-            else await self._models.get_default()
-        )
+        # Resolve Coffer's internal-engine connection (the internal_default one).
+        model = await self._models.get_default()
         if model is None:
             raise NoModelConfiguredError(
-                "No model configured. Add a model via 'coffer model add' before distilling."
+                "No internal connection configured. Set an LLM connection as the "
+                "Coffer internal engine in Settings before distilling."
             )
 
         # Build prompt and call LLM
@@ -121,7 +117,7 @@ class TranscriptDistillationService:
         raw = await self._llm.complete(
             system=system,
             user=user,
-            model=model,  # duck-typed port; real callers pass ModelConfig
+            model=model,
             credential_resolver=self._credential_resolver,
         )
 

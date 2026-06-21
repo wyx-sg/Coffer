@@ -39,6 +39,7 @@ def _provider_out(resource: Resource) -> ProviderOut:
         fast_model=cfg.fast_model,
         wire_api=cfg.wire_api,
         is_active=cfg.is_active,
+        internal_default=cfg.internal_default,
         enabled=resource.enabled,
         description=resource.description,
         created_at=resource.created_at,
@@ -146,3 +147,17 @@ async def activate_provider(
         projected=result.projected,
         skipped=result.skipped,
     )
+
+
+@router.post("/{name}/internal-default", response_model=ProviderOut)
+async def set_internal_default_provider(
+    name: str,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> ProviderOut:
+    """Make this connection Coffer's internal-engine default (≤1 globally).
+
+    Clears the flag on every other connection first, so setting a new default
+    moves it off the previous one. 404 if the connection is absent.
+    """
+    return _provider_out(await svc.set_internal_default(name, actor=actor))

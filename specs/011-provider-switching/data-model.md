@@ -13,13 +13,14 @@ Resource row. It MUST NOT hold the raw secret.
 
 | Field | Type | Constraints / Notes |
 |---|---|---|
-| `wire_format` | `WireFormat` | Required; `"anthropic"` or `"openai"`. |
-| `base_url` | `str` | Required; upstream LLM endpoint URL. |
-| `credential_ref` | `str` | Required; Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`. |
-| `model` | `str` | Required; primary model id. |
+| `wire_format` | `WireFormat` | Required; `"anthropic"`, `"openai"`, or `"ollama"`. `ollama` is internal-only — never projected to an agent. |
+| `base_url` | `str` | Required (all wires); upstream LLM endpoint URL. |
+| `credential_ref` | `str \| None` | Optional; required for anthropic/openai (Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`); absent for ollama (no API key). |
+| `model` | `str` | Required; primary model id (also the model Coffer's internal engine runs when this is the internal default). |
 | `fast_model` | `str \| None` | Optional; `ANTHROPIC_SMALL_FAST_MODEL` on Claude Code; ignored for openai. |
 | `wire_api` | `WireApi` | Optional; `"chat"` (default) or `"responses"`; openai only. |
-| `is_active` | `bool` | At most one `True` per `wire_format` at any time (FR-011). |
+| `is_active` | `bool` | At most one `True` per `wire_format` at any time (FR-011); always `False` for ollama (never projected). |
+| `internal_default` | `bool` | At most one `True` globally (FR-021); the connection Coffer's internal engine uses. On import, if >1, normalise (keep most-recently-updated). |
 
 All fields are JSON-stable (no Python objects) so `model_dump(mode="json")`
 serialises cleanly for SQLite and sync export.
@@ -33,6 +34,7 @@ separate `wire.py` module.
 class WireFormat(str, Enum):
     anthropic = "anthropic"
     openai = "openai"
+    ollama = "ollama"
 
 class WireApi(str, Enum):
     chat = "chat"
@@ -48,8 +50,23 @@ analogous to `domain/agent/mcp_install.py`'s `apply_install`. There is NO
 - `apply_anthropic_settings(config: ProviderConfig, existing_text: str) -> str`
 - `apply_codex_provider(config: ProviderConfig, profile_name: str, existing_text: str) -> str`
 - `ProjectionTarget` — descriptor for the target config file
-- `target_for(wire: WireFormat) -> ProjectionTarget`
+- `target_for(wire: WireFormat) -> ProjectionTarget | None` — returns `None` for
+  `ollama` (internal-only; no agent projection)
 - Constants: `CODEX_PROVIDER_ID`, `CODEX_ENV_KEY`, `ANTHROPIC_API_KEY_HELPER`
+
+### Internal engine (`application/provider/service.py` + `infrastructure/chat/`)
+
+The internal-engine connection is selected by the global `internal_default` flag:
+
+- `ProviderService.set_internal_default(name)` — clears `internal_default` on all
+  other connections, then sets the target (sequential clear-then-set, serialised
+  by the single-process daemon); emits `provider_internal_default_set`.
+- `ProviderService.resolve_internal_connection() -> ProviderConfig | None` —
+  returns the `internal_default` connection's config, or `None` (→ the internal
+  engine is a clean no-op).
+- `build_chat_model(connection, ...)` consumes the resolved connection, dispatched
+  by `wire_format` (anthropic / openai / ollama), to build the internal engine's
+  chat model — replacing the retired `ModelConfig` registry's model selection.
 
 ### Managed native-config keys per `wire_format`
 
@@ -160,6 +177,7 @@ Add to `AuditEventType` in `backend/coffer/domain/audit.py`:
 | Value | When emitted |
 |---|---|
 | `provider_switched` | Successful `POST /providers/{name}/activate`; details: `{from, to, wire_format, agents: [...projected...]}` |
+| `provider_internal_default_set` | Successful `POST /providers/{name}/internal-default`; details: `{from, to}` (previous internal-default name or null, and the new one) |
 
 `RESOURCE_CREATED`, `RESOURCE_UPDATED`, `RESOURCE_DELETED` are emitted
 automatically by `ResourceService` on CRUD operations (no new event types
@@ -176,6 +194,8 @@ needed for those).
 | `delete(name, actor) -> None` | Guard owned credential via `find_credential_citations`; remove vault entry if owned; delete Resource. |
 | `activate(name, actor) -> ActivateResult` | Sequential clear-then-set for single-active invariant; project to matching registered agents; emit `PROVIDER_SWITCHED`. |
 | `resolve_active_key(wire: WireFormat) -> str` | Find active profile for the given wire format; decrypt and return key (stdout only; caller must not log). No by-name resolution. |
+| `set_internal_default(name, actor) -> Resource` | Clear `internal_default` on all other connections then set the target (global single-internal-default invariant, FR-021); emit `PROVIDER_INTERNAL_DEFAULT_SET`. |
+| `resolve_internal_connection() -> ProviderConfig \| None` | Return the `internal_default` connection's config, or `None` (→ the internal engine — memory organizer / reorg / distill / `coffer__ask` — is a clean no-op). |
 
 ### `ActivateResult` (`application/provider/service.py`)
 

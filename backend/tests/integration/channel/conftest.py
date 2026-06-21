@@ -208,22 +208,6 @@ class FakeChannelAdapter:
         )
 
 
-class FakeModelCatalog:
-    """In-memory ModelCatalogPort: maps a chat-typed name to a registry id."""
-
-    def __init__(self) -> None:
-        self._by_name: dict[str, str] = {}
-
-    def add(self, name: str, model_id: str) -> None:
-        self._by_name[name] = model_id
-
-    async def resolve(self, name: str) -> str | None:
-        return self._by_name.get(name)
-
-    async def list_models(self) -> list[tuple[str, str]]:
-        return [(model_id, name) for name, model_id in self._by_name.items()]
-
-
 class FakeModelSuggestions:
     """In-memory ModelSuggestionPort: per-agent model quick-picks for cards."""
 
@@ -311,7 +295,6 @@ class ChannelEnv:
     pairing: PairingManager
     provider: ScriptedAgentProvider
     registry: AgentProviderRegistry
-    models: FakeModelCatalog
     model_suggestions: FakeModelSuggestions
     chat: ChatService
     orchestrator: TurnOrchestrator
@@ -410,7 +393,6 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         audit=audit,
     )
     orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, audit=audit)
-    models = FakeModelCatalog()
     model_suggestions = FakeModelSuggestions()
     processor = InboundProcessor(
         peers=peers,
@@ -419,7 +401,6 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         turns=orchestrator,
         audit=audit,
         agents=registry,
-        models=models,
         model_suggestions=model_suggestions,
     )
 
@@ -465,7 +446,6 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         pairing=pairing,
         provider=provider,
         registry=registry,
-        models=models,
         model_suggestions=model_suggestions,
         chat=chat,
         orchestrator=orchestrator,

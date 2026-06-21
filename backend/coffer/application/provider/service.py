@@ -108,21 +108,28 @@ class ProviderService:
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
-        """Create a profile. Supply EXACTLY one of ``secret_value`` (stored to
-        the vault under ``provider/<name>/key``) or ``credential_ref`` (reuse an
-        existing vault entry)."""
-        if (secret_value is None) == (credential_ref is None):
-            raise ProviderCredentialSourceInvalid()
-        ref = credential_ref
+        """Create a connection. For anthropic/openai supply EXACTLY one of
+        ``secret_value`` (stored to the vault under ``provider/<name>/key``) or
+        ``credential_ref`` (reuse an existing vault entry). An ``ollama``
+        connection has no key — supply neither."""
+        ref: str | None
         minted = False
-        if secret_value is not None:
-            ref = self._owned_ref(name)
-            await asyncio.to_thread(self._credentials.set, ref, secret_value)
-            minted = True
+        if wire_format is WireFormat.OLLAMA:
+            if secret_value is not None or credential_ref is not None:
+                raise ProviderCredentialSourceInvalid()
+            ref = None
+        else:
+            if (secret_value is None) == (credential_ref is None):
+                raise ProviderCredentialSourceInvalid()
+            ref = credential_ref
+            if secret_value is not None:
+                ref = self._owned_ref(name)
+                await asyncio.to_thread(self._credentials.set, ref, secret_value)
+                minted = True
         config = ProviderConfig(
             wire_format=wire_format,
             base_url=base_url,
-            credential_ref=ref or "",
+            credential_ref=ref,
             model=model,
             fast_model=fast_model,
             wire_api=wire_api,
@@ -176,9 +183,10 @@ class ProviderService:
         # Re-validate so a bad edit is rejected before the rotation / DB write.
         validated = ProviderConfig.model_validate(config).model_dump(mode="json")
         if secret_value is not None:
-            await asyncio.to_thread(
-                self._credentials.set, str(config["credential_ref"]), secret_value
-            )
+            ref = config.get("credential_ref")
+            if not ref:
+                raise ProviderCredentialSourceInvalid()
+            await asyncio.to_thread(self._credentials.set, str(ref), secret_value)
         return await self._resources.update_config(
             self._ref(name), validated, actor, description=description
         )
@@ -212,15 +220,17 @@ class ProviderService:
         target = target_for(wire)
 
         # 1) Project first. A failure here raises before any state mutation.
+        #    ollama (target is None) is internal-only — it projects to no agent.
         projected: list[str] = []
-        for agent in await self._agents.list():
-            if not agent.enabled:
-                continue
-            if AgentConfig.model_validate(agent.config).type != target.agent_type:
-                continue
-            self._project(name, cfg, agent, target.config_key)
-            projected.append(agent.name)
-        skipped = [] if projected else [target.agent_type.value]
+        if target is not None:
+            for agent in await self._agents.list():
+                if not agent.enabled:
+                    continue
+                if AgentConfig.model_validate(agent.config).type != target.agent_type:
+                    continue
+                self._project(name, cfg, agent, target.config_key)
+                projected.append(agent.name)
+        skipped = [] if projected else [target.agent_type.value if target else wire.value]
 
         # 2) Flip activation: clear other same-wire actives, then set this one.
         # Single-process daemon serializes requests, so the clear-then-set runs
@@ -257,17 +267,61 @@ class ProviderService:
         for r in await self.list():
             rc = self._cfg(r)
             if rc.wire_format == wire and rc.is_active:
-                value = await asyncio.to_thread(self._credentials.get, rc.credential_ref)
+                ref = rc.credential_ref
+                if ref is None:
+                    raise NoActiveProvider(wire.value)
+                value = await asyncio.to_thread(self._credentials.get, ref)
                 if value is None:
-                    raise CredentialMissing(rc.credential_ref)
+                    raise CredentialMissing(ref)
                 return value
         raise NoActiveProvider(wire.value)
+
+    async def set_internal_default(self, name: str, *, actor: str = "api") -> Resource:
+        """Make ``name`` the global internal-engine default — the connection
+        Coffer's own LLM engine uses. Clears the flag on every other connection
+        first, then sets this one; the single-process daemon serialises the
+        clear-then-set so it never interleaves (mirrors ``activate``)."""
+        resource = await self.get(name)
+        previous: str | None = None
+        for r in await self.list():
+            if r.name == name:
+                continue
+            rc = self._cfg(r)
+            if rc.internal_default:
+                await self._set_internal_default_flag(r, value=False, actor=actor)
+                previous = r.name
+        if not self._cfg(resource).internal_default:
+            await self._set_internal_default_flag(resource, value=True, actor=actor)
+        await self._audit.record(
+            AuditEventType.PROVIDER_INTERNAL_DEFAULT_SET.value,
+            ref=self._ref(name),
+            actor=actor,
+            details={"from": previous, "to": name},
+        )
+        return await self.get(name)
+
+    async def resolve_internal_connection(self) -> ProviderConfig | None:
+        """The connection Coffer's internal LLM engine uses (the one flagged
+        ``internal_default``), or ``None`` when none is configured — in which
+        case the internal engine is a clean no-op."""
+        for r in await self.list():
+            rc = self._cfg(r)
+            if rc.internal_default:
+                return rc
+        return None
 
     # --- internals -----------------------------------------------------------
 
     async def _set_active(self, resource: Resource, *, active: bool, actor: str) -> None:
         config = dict(resource.config)
         config["is_active"] = active
+        await self._resources.update_config(self._ref(resource.name), config, actor)
+
+    async def _set_internal_default_flag(
+        self, resource: Resource, *, value: bool, actor: str
+    ) -> None:
+        config = dict(resource.config)
+        config["internal_default"] = value
         await self._resources.update_config(self._ref(resource.name), config, actor)
 
     def _project(

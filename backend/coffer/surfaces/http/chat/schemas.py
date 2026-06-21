@@ -205,52 +205,6 @@ class PendingQueueOut(BaseModel):
     pending: list[str]
 
 
-# ---------------------------------------------------------------------------
-# Model
-# ---------------------------------------------------------------------------
-
-
-class ModelCreate(BaseModel):
-    """Body for POST /models."""
-
-    display_name: str = Field(min_length=1)
-    provider: Literal["anthropic", "openai", "ollama"]
-    model: str = Field(min_length=1)
-    credential_ref: str | None = None
-    base_url: str | None = None
-    is_default: bool = False
-
-
-class ModelPatch(BaseModel):
-    """Body for PATCH /models/{id}."""
-
-    display_name: str | None = None
-    model: str | None = None
-    credential_ref: str | None = None
-    base_url: str | None = None
-    is_default: bool | None = None
-
-
-class ModelOut(BaseModel):
-    """Single model config response."""
-
-    id: str
-    display_name: str
-    provider: Literal["anthropic", "openai", "ollama"]
-    model: str
-    credential_ref: str | None = None
-    base_url: str | None = None
-    is_default: bool
-    created_at: datetime
-    updated_at: datetime
-
-
-class ModelListOut(BaseModel):
-    """List of configured models."""
-
-    models: list[ModelOut]
-
-
 # --- provider introspection (test connection + list models) ----------------
 
 

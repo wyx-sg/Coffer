@@ -16,8 +16,8 @@ import pytest
 
 from coffer.application.memory.organizer import OrganizerService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.chat.model import ModelConfig, ProviderType
 from coffer.domain.memory.scope import MemoryScope
+from coffer.domain.provider.config import ProviderConfig, WireFormat
 from coffer.infrastructure.knowledge.paths import (
     consolidation_log_path,
     inbox_dir,
@@ -27,28 +27,22 @@ from coffer.infrastructure.knowledge.paths import (
 )
 
 
-def _model() -> ModelConfig:
-    now = datetime(2026, 6, 21, tzinfo=UTC)
-    return ModelConfig(
-        id="m1",
-        display_name="Local Ollama",
-        provider=ProviderType.OLLAMA,
-        model="llama3",
-        credential_ref=None,
+def _model() -> ProviderConfig:
+    return ProviderConfig(
+        wire_format=WireFormat.OLLAMA,
         base_url="http://localhost:11434",
-        is_default=True,
-        created_at=now,
-        updated_at=now,
+        credential_ref=None,
+        model="llama3",
     )
 
 
 class _Models:
     """Fake ModelSelectorPort. ``model=None`` simulates no internal model."""
 
-    def __init__(self, model: ModelConfig | None) -> None:
+    def __init__(self, model: ProviderConfig | None) -> None:
         self._model = model
 
-    async def get_default(self) -> ModelConfig | None:
+    async def get_default(self) -> ProviderConfig | None:
         return self._model
 
 
@@ -155,7 +149,7 @@ async def test_organizer_drains_inbox_into_topic_doc(mem) -> None:
     assert result.status == "organized"
     assert result.items_processed == 2
     assert result.skipped == 0
-    assert result.model == "Local Ollama"
+    assert result.model == "llama3"
 
     store_dir = (await mem.service.resolved_store("global")).store_dir
     # Inbox drained.

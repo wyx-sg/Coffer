@@ -92,6 +92,7 @@ class AuditEventType(StrEnum):
     MASTER_KEY_IMPORTED = "master_key_imported"
     # spec 011-provider-switching
     PROVIDER_SWITCHED = "provider_switched"
+    PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"
 
 
 @dataclass

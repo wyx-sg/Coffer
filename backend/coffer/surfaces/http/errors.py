@@ -83,8 +83,8 @@ _STATUS: dict[str, int] = {
     "EMBEDDING_UNAVAILABLE": 503,
     # agent chat (spec 008)
     "CONVERSATION_NOT_FOUND": 404,
-    "MODEL_NOT_FOUND": 404,
-    "MODEL_REJECTED": 400,
+    # NO_MODEL_CONFIGURED is still emitted by transcript distillation (its own
+    # NoModelConfiguredError) when no internal connection is configured.
     "NO_MODEL_CONFIGURED": 409,
     "TURN_IN_PROGRESS": 409,
     "UNKNOWN_AGENT": 400,

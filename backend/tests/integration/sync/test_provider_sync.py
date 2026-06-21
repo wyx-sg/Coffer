@@ -71,6 +71,7 @@ async def test_provider_round_trips_through_sync(tmp_path):
         "fast_model": None,
         "wire_api": "chat",
         "is_active": True,
+        "internal_default": False,
     }
 
     res_a, cred_a = await _vault(tmp_path / "A")

@@ -143,7 +143,7 @@ class ReorgService:
 
         before = await asyncio.to_thread(list_topic_docs, store_dir)
         if not before:
-            return ReorgResult("empty", 0, 0, 0, 0, model.display_name)
+            return ReorgResult("empty", 0, 0, 0, 0, model.model)
 
         acts = _Actions()
         tools = self._build_tools(store_dir=store_dir, acts=acts)
@@ -178,7 +178,7 @@ class ReorgService:
             len(after),
             acts.written,
             acts.superseded,
-            model.display_name,
+            model.model,
         )
 
     def _build_tools(self, *, store_dir: Path, acts: _Actions) -> list[ReorgTool]:

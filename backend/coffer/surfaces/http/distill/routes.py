@@ -118,7 +118,6 @@ async def distill_transcript(
             agent_name=name,
             session_id=body.session_id,
             project_path=body.project_path,
-            model_id=body.model_id,
             dry_run=body.dry_run,
         )
     except ResourceNotFound:
