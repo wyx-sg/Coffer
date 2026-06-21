@@ -120,13 +120,7 @@ export function KnowledgeBaseDetailPage() {
           selectedId={kb.selectedId}
           isLoading={kb.recalling ? false : kb.docsQuery.isPending}
           total={kb.recalling ? treeItems.length : kb.docTotal}
-          page={kb.docPage}
-          pageCount={kb.docPageCount}
-          pageSize={kb.docPageSize}
-          onPageChange={kb.setDocPage}
-          onPageSizeChange={kb.setDocPageSize}
           onSelect={kb.selectDoc}
-          hidePagination={kb.recalling}
           emptyLabel={kb.recalling ? t("knowledgeBases.detail.noMatches") : undefined}
         />
         <KnowledgeBaseDocViewer

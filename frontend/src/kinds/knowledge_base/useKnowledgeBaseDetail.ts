@@ -1,13 +1,13 @@
 // frontend/src/kinds/knowledge_base/useKnowledgeBaseDetail.ts
 //
 // All data + mutations for the KB detail surface, extracted so the page stays a
-// thin view. Documents are page-paginated (server offset) with a debounced
-// server-side title filter (`q`).
+// thin view. The document list is fetched in ONE request (up to the API max) and
+// rendered as a single scrollable list — no in-UI pager (the documents API still
+// supports `limit`/`offset` for programmatic callers).
 import { useEffect, useRef, useState } from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/errors";
-import { usePagedList, usePageClamp } from "@/lib/hooks/usePagedList";
 import {
   checkSources,
   deleteDocument,
@@ -26,8 +26,9 @@ import {
   type SourceCheckResponse,
 } from "./api";
 
-// Default page size for the document tree's page-based pagination.
-const DEFAULT_DOCS_PAGE_SIZE = 50;
+// The document list is shown as a single scrollable list, fetched in one request
+// at the documents API's max page size (`le=200`) — enough for a personal KB.
+const DOCS_FETCH_LIMIT = 200;
 
 export function useKnowledgeBaseDetail(name: string) {
   const qc = useQueryClient();
@@ -45,27 +46,12 @@ export function useKnowledgeBaseDetail(name: string) {
   // The latest source-check report; non-null opens the report dialog.
   const [sourceReport, setSourceReport] = useState<SourceCheckResponse | null>(null);
 
-  // Page-based pagination (server offset).
-  const {
-    page: docPage,
-    setPage: setDocPage,
-    pageSize: docPageSize,
-    setPageSize: setDocPageSize,
-    offset: docOffset,
-  } = usePagedList(DEFAULT_DOCS_PAGE_SIZE);
-
   const docsQuery = useQuery({
-    queryKey: ["kb-documents", name, docPage, docPageSize],
-    queryFn: () => listDocuments(name, docPageSize, docOffset),
+    queryKey: ["kb-documents", name],
+    queryFn: () => listDocuments(name, DOCS_FETCH_LIMIT, 0),
     enabled: Boolean(name),
-    // Keep the prior page's rows + total while the next page loads, so the page
-    // count doesn't transiently read as 1 and trip the clamp during a forward nav.
-    placeholderData: keepPreviousData,
   });
   const docTotal = docsQuery.data?.total ?? 0;
-  const docPageCount = Math.max(1, Math.ceil(docTotal / docPageSize));
-  // Pull the page back into range when the total shrinks (last page emptied).
-  usePageClamp(docPage, docPageCount, setDocPage);
   const metricsQuery = useQuery({
     queryKey: ["kb-metrics", name],
     queryFn: () => getKnowledgeBaseMetrics(name),
@@ -212,12 +198,7 @@ export function useKnowledgeBaseDetail(name: string) {
     showSettings,
     setShowSettings,
     docsQuery,
-    docPage,
-    setDocPage,
-    docPageSize,
-    setDocPageSize,
     docTotal,
-    docPageCount,
     metricsQuery,
     kbQuery,
     docDetailQuery,

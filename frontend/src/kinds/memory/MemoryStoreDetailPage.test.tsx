@@ -243,95 +243,26 @@ describe("MemoryStoreDetailPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/resource not found/i);
   });
 
-  test("paginates the fact tree by server offset (page 2 sends offset)", async () => {
-    // The fact tree is page-paginated (default size 50, server-driven offset).
-    // Paging forward re-queries listFacts with offset = (page-1)*pageSize.
-    const page1 = Array.from({ length: 50 }, (_, i) => ({
+  test("renders all facts in one scrollable list (no in-UI pager)", async () => {
+    // The list is fetched in ONE request at the API max page size and rendered
+    // as a single scrollable list — no page-based pager.
+    stubLists();
+    const facts = Array.from({ length: 120 }, (_, i) => ({
       ...FACT,
       id: `f${i}`,
       name: `fact-${i}`,
     }));
-    const page2 = Array.from({ length: 50 }, (_, i) => ({
-      ...FACT,
-      id: `f${50 + i}`,
-      name: `fact-${50 + i}`,
-    }));
-    vi.mocked(api.listFacts).mockImplementation(async (_store, _limit, offset) =>
-      (offset ?? 0) >= 50 ? { facts: page2, total: 120 } : { facts: page1, total: 120 },
-    );
+    vi.mocked(api.listFacts).mockResolvedValue({ facts, total: 120 });
     vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 120, disk_bytes: 50 });
-    vi.mocked(api.getMemoryStore).mockResolvedValue({
-      ref: "memory:global",
-      kind: "memory",
-      name: "global",
-      scope: "global",
-      project_id: "0".repeat(26),
-      project_root: null,
-      description: null,
-      config: {
-        retrieval_modes: ["grep", "keyword"],
-        default_mode: "keyword",
-        embedding_provider: null,
-        embedding_model: null,
-        embedding_base_url: null,
-        embedding_credential_ref: null,
-        embedding_dimensions: 768,
-        max_fact_chars: 8192,
-      },
-      enabled: true,
-      created_at: "2026-05-29T00:00:00Z",
-      updated_at: "2026-05-29T00:00:00Z",
-    });
 
     renderPage();
     const tree = screen.getByRole("complementary");
-    // First page fetched with offset 0.
+    // The whole list renders (first AND last row) from a single fetch.
     expect(await within(tree).findByText("fact-0")).toBeVisible();
-    await waitFor(() => expect(api.listFacts).toHaveBeenCalledWith("global", 50, 0));
-
-    // Next page → offset 50.
-    fireEvent.click(within(tree).getByRole("button", { name: /next/i }));
-    await waitFor(() => expect(api.listFacts).toHaveBeenCalledWith("global", 50, 50));
-    expect(await within(tree).findByText("fact-99")).toBeVisible();
-  });
-
-  test("clamps to a populated page when the total shrinks (last page emptied)", async () => {
-    // Page 2 holds only the 51st fact; deleting it shrinks the total so page 2 no
-    // longer exists — the tree must pull back to page 1 (and the pager stays
-    // rendered on the briefly-empty page) instead of stranding the user.
-    stubLists(); // a valid getMemoryStore + metrics; listFacts is overridden below
-    const deleted = new Set<string>();
-    const remaining = () =>
-      Array.from({ length: 51 }, (_, i) => ({ ...FACT, id: `f${i}`, name: `fact-${i}` })).filter(
-        (f) => !deleted.has(f.id),
-      );
-    vi.mocked(api.listFacts).mockImplementation(async (_store, _limit, offset) => {
-      const all = remaining();
-      const start = offset ?? 0;
-      return { facts: all.slice(start, start + 50), total: all.length };
-    });
-    vi.mocked(api.deleteFact).mockImplementation(async (_store, _id) => {
-      deleted.add(_id);
-    });
-    vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 51, disk_bytes: 50 });
-
-    renderPage();
-    const tree = screen.getByRole("complementary");
-    await within(tree).findByText("fact-0");
-
-    // Page 2 → the lone 51st fact; select it for the viewer.
-    fireEvent.click(within(tree).getByRole("button", { name: /next/i }));
-    fireEvent.click(await within(tree).findByText("fact-50"));
-
-    // Delete it via the viewer's confirm dialog; total drops to 50 → page 2 gone.
-    fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
-    await waitFor(() => expect(api.deleteFact).toHaveBeenCalledWith("global", "f50"));
-
-    // The clamp pulls back to page 1: a populated page, not an empty one.
-    expect(await within(tree).findByText("fact-0")).toBeVisible();
-    expect(within(tree).queryByText("fact-50")).toBeNull();
+    expect(within(tree).getByText("fact-119")).toBeInTheDocument();
+    // Fetched once at the API max (limit 200, offset 0); no pager rendered.
+    await waitFor(() => expect(api.listFacts).toHaveBeenCalledWith("global", 200, 0));
+    expect(within(tree).queryByRole("button", { name: /next/i })).toBeNull();
   });
 
   test("clear-all calls clearFacts after confirming in the dialog", async () => {
