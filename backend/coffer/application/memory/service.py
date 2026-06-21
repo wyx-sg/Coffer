@@ -119,8 +119,7 @@ class MemoryService:
         try:
             await self._on_change(store_name)
         except Exception:
-            # The write itself succeeded; a post-write hook failure must not
-            # surface to the caller, so log loudly instead of raising.
+            # The write succeeded; a post-write hook failure must not surface.
             _logger.warning(
                 "memory.on_change.hook_failed",
                 extra={"store": store_name},
@@ -161,12 +160,15 @@ class MemoryService:
         actor: Actor,
         type: str | None = None,
         origin_session_id: str | None = None,
+        max_fact_chars: int | None = None,
     ) -> MemoryFact:
-        """Write a fact file to ``knowledge/inbox/`` → index → audit (no LLM)."""
+        """Write a fact to ``knowledge/inbox/`` → index → audit (no LLM).
+        ``max_fact_chars`` overrides the store length limit (a trusted import raises it)."""
         resolved = await self.resolve_scope(scope=scope, cwd=cwd)
         return await self._add(
             resolved,
             store_name_for(resolved),
+            max_fact_chars=max_fact_chars,
             name=name,
             description=description,
             body=body,
@@ -203,9 +205,13 @@ class MemoryService:
         self,
         resolved: ResolvedScope,
         store_name: str,
+        *,
+        max_fact_chars: int | None = None,
         **fact_fields: object,
     ) -> MemoryFact:
         config = await self.get_store_config(store_name)
+        if max_fact_chars is not None:
+            config = config.model_copy(update={"max_fact_chars": max_fact_chars})
         return await add_new_fact(
             deps=self._writes,
             resolved=resolved,
@@ -215,8 +221,7 @@ class MemoryService:
         )
 
     async def update_fact(self, *, store_name: str, fact_id: str, **changes: object) -> MemoryFact:
-        """Edit a fact (``new_body`` + ``actor`` required; ``None`` optional
-        fields stay unchanged) → reindex → audit."""
+        """Edit a fact (``new_body`` + ``actor`` required) → reindex → audit."""
         resolved, ff = await self._store_fact(store_name, fact_id)
         config = await self.get_store_config(store_name)
         return await update_existing_fact(
@@ -239,8 +244,7 @@ class MemoryService:
             actor=actor,
         )
 
-    # ``forget`` is the agent-facing alias of delete.
-    forget = delete_fact
+    forget = delete_fact  # agent-facing alias of delete
 
     async def clear(self, *, store_name: str, actor: str) -> int:
         """Remove every fact in a store; keep the store Resource."""
@@ -286,9 +290,8 @@ class MemoryService:
         mode: RetrievalMode | None = None,
         scope: RecallScope = "project",
     ) -> tuple[list[MemoryHit], RetrievalMode, bool]:
-        """Recall within a named store, honouring ``scope`` (finding #5).
-
-        Returns ``(hits, effective_mode, fallback)``."""
+        """Recall within a named store, honouring ``scope``; returns
+        ``(hits, effective_mode, fallback)``."""
         return await recall_in_store_scoped(
             self._recall,
             store_name=store_name,
@@ -330,14 +333,13 @@ class MemoryService:
 
     async def find_fact_store(self, *, cwd: str | None, fact_id: str) -> str:
         """Return the store name holding ``fact_id`` across the recall scopes
-        (project then global). Raises ``MemoryNotFound`` if absent everywhere.
-        Used by the REST/CLI edit/delete-by-id paths."""
+        (project then global); raises ``MemoryNotFound`` if absent everywhere."""
         scopes = await self._scope.resolve_recall_scopes(cwd=cwd)
         return await asyncio.to_thread(find_fact_store, scopes, fact_id, store_name_for)
 
     async def fact_count(self, *, store_name: str) -> int:
-        """Cheap indexed fact count for the list path (no ``scan_store_dir`` parse
-        / ``du_bytes`` walk; staleness closes on the next recall/reconcile)."""
+        """Cheap indexed fact count for the list path (staleness closes on the
+        next recall/reconcile)."""
         return await self._documents.count_documents(KIND_MEMORY, store_name)
 
     async def metrics(self, *, store_name: str) -> dict[str, object]:
@@ -383,8 +385,7 @@ class MemoryService:
     # ----- internals -----
 
     async def _resolved_for_store(self, store_name: str) -> ResolvedScope:
-        """Recover a ``ResolvedScope`` for an existing store by name (reads the
-        store's project_id off any of its rows, falling back to global)."""
+        """Recover a ``ResolvedScope`` for an existing store by name."""
         if store_name == GLOBAL_STORE_NAME:
             return await self.resolve_scope(scope=MemoryScope.GLOBAL, cwd=None)
         return project_resolved_for_store(store_name, self._store_dir)
@@ -396,5 +397,4 @@ class MemoryService:
         return resolved, ff
 
 
-# Re-export the parser for callers that read a fact file directly (e.g. tests).
 __all__ = ["MemoryService", "read_fact_file"]

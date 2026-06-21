@@ -1,26 +1,26 @@
 // frontend/src/components/agents/AgentSkillsTab.tsx
-// "Skills" tab on the agent detail page: a "Managed by Coffer" section listing
-// the skills Coffer manages FOR this agent (skills whose bindings include this
-// agent), rendered through the shared DataTable so it gets search + status
-// filter + pagination + select-all + bulk enable/disable + clickable rows
-// (→ skill detail). Each row carries an enable/disable Switch wired to the
-// per-(skill, agent) mutations. A header-right "Install skills" button opens the
-// shared picker dialog bound to this single agent.
+// "Skills" tab on the agent detail page, in the Coffer-managed vs agent's-own
+// shape shared with the Memory and MCP tabs:
 //
-// Spec 005 FR-025 additions:
-//   • A "Follow master library" switch (agent.follow_all_skills). While ON, the
-//     backend reconciler delivers every master skill automatically and the
-//     per-skill Switches become EXCLUSION toggles (PATCH skill_exclusions)
-//     rather than binding enable/disable calls.
-//   • An "Unmanaged skills" section (UnmanagedSkillsSection, extracted to
-//     AgentUnmanagedSkills.tsx) listing skills found on disk that Coffer
-//     does not manage, with adopt-into-master and delete actions.
+//   • A single card holds the "Follow master library" toggle (agent.follow_all_
+//     skills) and, below a divider, the "Managed by Coffer" section it governs.
+//   • While following, the reconciler delivers every master skill automatically,
+//     so the per-skill managed table would be redundant — the section is the
+//     shared "open the Skills page" link (ManagedLinkRow), like the Memory / MCP
+//     tabs point at their own pages.
+//   • While NOT following, the section is the "Managed by Coffer" DataTable so the
+//     user can curate which skills are delivered: search + status filter +
+//     pagination + select-all + bulk enable/disable + per-row enable Switch +
+//     clickable rows (→ skill detail), plus a header "Install skills" button.
+//   • An "Unmanaged skills" section (UnmanagedSkillsSection) listing skills found
+//     on disk that Coffer does not manage, with adopt-into-master and delete.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 
 import { AgentInstallSkillsDialog } from "@/components/agents/AgentInstallSkillsDialog";
+import { ManagedLinkRow } from "@/components/agents/AgentManagedLink";
 import {
   AgentSkillsBulkActions,
   type AgentSkillRow,
@@ -36,40 +36,13 @@ import type { AgentOut } from "@/lib/api/agents";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
 import { useDisableSkill, useEnableSkill, useSkills } from "@/lib/hooks/useSkills";
 
-/** Enable/disable toggle; stops propagation so it doesn't trigger row click.
- * In follow-all mode the switch edits the agent's exclusion list instead of
- * the binding (the backend reconciler owns delivery while following). */
+/** Per-row enable/disable toggle for a managed binding; stops propagation so it
+ * doesn't trigger the row click. Only rendered while NOT following the master
+ * library (in follow mode the managed table is replaced by a link). */
 function SkillStatusCell({ row, agent }: { row: AgentSkillRow; agent: AgentOut }) {
   const { t } = useTranslation();
   const enable = useEnableSkill();
   const disable = useDisableSkill();
-  const patchAgent = usePatchAgent();
-
-  const followAll = agent.follow_all_skills ?? false;
-  const exclusions = agent.skill_exclusions ?? [];
-
-  if (followAll) {
-    const excluded = exclusions.includes(row.skill.name);
-    return (
-      <Switch
-        checked={!excluded}
-        title={t("agents.skillsTab.excludeHint")}
-        onClick={(e) => e.stopPropagation()}
-        onCheckedChange={(checked) =>
-          patchAgent.mutate({
-            name: agent.name,
-            body: {
-              skill_exclusions: checked
-                ? exclusions.filter((n) => n !== row.skill.name)
-                : [...exclusions, row.skill.name],
-            },
-          })
-        }
-        disabled={patchAgent.isPending}
-        aria-label={t("agents.skillsTab.toggleAria", { name: row.skill.name })}
-      />
-    );
-  }
 
   return (
     <Switch
@@ -95,7 +68,6 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
   const [installOpen, setInstallOpen] = useState(false);
 
   const followAll = agent.follow_all_skills ?? false;
-  const exclusions = agent.skill_exclusions ?? [];
 
   // The skills Coffer manages for THIS agent are those with a binding whose
   // agent_name matches; carry the binding so the row reflects its enabled state.
@@ -148,12 +120,7 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
       key: "status",
       label: t("resources.cols.status"),
       allLabel: t("resources.status.all"),
-      // In follow mode "enabled" means "not excluded" — the reconciler delivers
-      // everything except the exclusion list, regardless of binding state.
-      accessor: (r) =>
-        (followAll ? !exclusions.includes(r.skill.name) : r.binding.enabled)
-          ? "enabled"
-          : "disabled",
+      accessor: (r) => (r.binding.enabled ? "enabled" : "disabled"),
       options: [
         { value: "enabled", label: t("common.enabled") },
         { value: "disabled", label: t("common.disabled") },
@@ -163,69 +130,87 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">{t("agents.skillsTab.follow")}</p>
-          <p className="text-xs text-muted-foreground">{t("agents.skillsTab.followHint")}</p>
-        </div>
-        <Switch
-          checked={followAll}
-          disabled={patchAgent.isPending}
-          onCheckedChange={(checked) =>
-            patchAgent.mutate({ name: agent.name, body: { follow_all_skills: checked } })
-          }
-          aria-label={t("agents.skillsTab.follow")}
-        />
-      </div>
-
-      <Card className="space-y-3 p-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-muted-foreground">{t("agents.cofferManaged")}</h3>
-          <Button size="sm" variant="outline" onClick={() => setInstallOpen(true)}>
-            <Plus className="mr-1.5 size-3.5" /> {t("agents.bulkInstallSkills")}
-          </Button>
-        </div>
-
-        {skills.isPending ? (
-          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-        ) : skills.error ? (
-          <p className="text-sm text-destructive">{translateApiError(t, skills.error)}</p>
-        ) : (
-          <DataTable
-            rows={managed}
-            columns={columns}
-            rowKey={(r) => r.skill.name}
-            search={{
-              accessor: (r) => `${r.skill.name} ${r.skill.description}`,
-              placeholder: t("skills.searchPlaceholder"),
-            }}
-            filters={filters}
-            onRowClick={(r) =>
-              navigate(`/skills/${r.skill.name}`, {
-                state: { backTo: `/agents/${agent.name}`, backLabel: agent.name },
-              })
+      {/* The follow toggle and the "Managed by Coffer" section it governs share
+          one card, split by a divider. */}
+      <Card className="divide-y p-0">
+        {/* Compact follow-master-library toggle (switch + inline label). */}
+        <div className="flex items-center gap-3 p-4">
+          <Switch
+            checked={followAll}
+            disabled={patchAgent.isPending}
+            onCheckedChange={(checked) =>
+              patchAgent.mutate({ name: agent.name, body: { follow_all_skills: checked } })
             }
-            // In follow mode the reconciler owns delivery — bulk binding
-            // mutations would silently fight it, so selection is hidden.
-            selection={
-              followAll
-                ? undefined
-                : {
-                    ariaSelectAll: t("common.bulk.selectAll"),
-                    ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.skill.name}`,
-                    bulkLabel: (count) => t("common.bulk.selected", { count }),
-                    clearLabel: t("common.clear"),
-                    renderBulkActions: ({ selectedRows, clear }) => (
-                      <AgentSkillsBulkActions
-                        agentName={agent.name}
-                        rows={selectedRows}
-                        onDone={clear}
-                      />
-                    ),
-                  }
-            }
-            emptyMessage={t("agents.skillsTab.empty")}
+            aria-label={t("agents.skillsTab.follow")}
           />
+          <div className="min-w-0 leading-tight">
+            <span className="text-sm font-medium">{t("agents.skillsTab.follow")}</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {t("agents.skillsTab.followHint")}
+            </span>
+          </div>
+        </div>
+
+        {followAll ? (
+          // Following → the reconciler delivers every master skill automatically,
+          // so the per-skill managed table is redundant; point at the Skills page
+          // (like the Memory / MCP tabs) instead of duplicating it here.
+          <div className="p-4">
+            <ManagedLinkRow
+              title={t("agents.cofferManaged")}
+              hint={t("agents.skillsTab.followingManagedHint")}
+              buttonLabel={t("agents.skillsTab.openSkillsPage")}
+              onOpen={() => navigate("/skills")}
+            />
+          </div>
+        ) : (
+          // Not following → curate which skills are delivered to this agent.
+          <div className="space-y-3 p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-muted-foreground">
+                {t("agents.cofferManaged")}
+              </h3>
+              <Button size="sm" variant="outline" onClick={() => setInstallOpen(true)}>
+                <Plus className="mr-1.5 size-3.5" /> {t("agents.bulkInstallSkills")}
+              </Button>
+            </div>
+
+            {skills.isPending ? (
+              <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+            ) : skills.error ? (
+              <p className="text-sm text-destructive">{translateApiError(t, skills.error)}</p>
+            ) : (
+              <DataTable
+                rows={managed}
+                columns={columns}
+                rowKey={(r) => r.skill.name}
+                search={{
+                  accessor: (r) => `${r.skill.name} ${r.skill.description}`,
+                  placeholder: t("skills.searchPlaceholder"),
+                }}
+                filters={filters}
+                onRowClick={(r) =>
+                  navigate(`/skills/${r.skill.name}`, {
+                    state: { backTo: `/agents/${agent.name}`, backLabel: agent.name },
+                  })
+                }
+                selection={{
+                  ariaSelectAll: t("common.bulk.selectAll"),
+                  ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.skill.name}`,
+                  bulkLabel: (count) => t("common.bulk.selected", { count }),
+                  clearLabel: t("common.clear"),
+                  renderBulkActions: ({ selectedRows, clear }) => (
+                    <AgentSkillsBulkActions
+                      agentName={agent.name}
+                      rows={selectedRows}
+                      onDone={clear}
+                    />
+                  ),
+                }}
+                emptyMessage={t("agents.skillsTab.empty")}
+              />
+            )}
+          </div>
         )}
       </Card>
 

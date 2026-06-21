@@ -1,9 +1,10 @@
 // frontend/src/components/agents/AgentMcpServersTab.tsx
 // "MCP servers" tab on the agent detail page, in two sections:
 //
-//   A. Via Coffer gateway — Coffer's shim install status plus the READ-ONLY
-//      list of servers exposed through the gateway. Extracted to
-//      AgentGatewayMcpSection.tsx to keep this file inside the size cap.
+//   A. Via Coffer gateway — Coffer's shim install status plus a link to the
+//      standalone MCP servers page (the exposed servers are managed there, not
+//      re-listed here). Extracted to AgentGatewayMcpSection.tsx to keep this
+//      file inside the size cap.
 //
 //   B. Direct servers — the agent's own MCP entries read from its config
 //      files (specs 004/005 workspace amendment). Each row shows source/transport, a per-entry enable
@@ -34,11 +35,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import type { McpEntryOut } from "@/lib/api/agents";
-import {
-  useAgentMcpEntries,
-  useRemoveMcpEntry,
-  useToggleMcpEntry,
-} from "@/lib/hooks/useAgents";
+import { useAgentMcpEntries, useRemoveMcpEntry, useToggleMcpEntry } from "@/lib/hooks/useAgents";
 
 export function AgentMcpServersTab({ agentName }: { agentName: string }) {
   const { t } = useTranslation();
@@ -63,9 +60,7 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
           <span className="font-medium">{e.name}</span>
           {e.matches_resource !== null && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>
-                {t("agents.workspace.mcp.alreadyInCoffer", { name: e.matches_resource })}
-              </span>
+              <span>{t("agents.workspace.mcp.alreadyInCoffer", { name: e.matches_resource })}</span>
               <Button
                 variant="link"
                 size="sm"
@@ -141,11 +136,9 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
 
   return (
     <div className="space-y-6">
-      {/* A. Via Coffer gateway — its own Card so the two stacked tables read
-          as distinct blocks. */}
-      <Card className="space-y-3 p-4">
-        <AgentGatewayMcpSection agentName={agentName} />
-      </Card>
+      {/* A. Via Coffer gateway — renders its own card (install status or the
+          shared "open the MCP servers page" link). */}
+      <AgentGatewayMcpSection agentName={agentName} />
 
       {/* B. Direct servers (the agent's own config entries) */}
       <Card className="space-y-3 p-4">

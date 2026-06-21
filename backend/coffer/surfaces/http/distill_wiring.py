@@ -21,6 +21,7 @@ from coffer.domain.memory.scope import MemoryScope
 from coffer.infrastructure.chat.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.distill.transcript_reader import FileTranscriptReader
 from coffer.surfaces.http.distill.state import set_distill_service
+from coffer.surfaces.http.native_memory_import_wiring import wire_native_memory_import
 from coffer.surfaces.http.organize_wiring import wire_organize
 from coffer.surfaces.http.reorg_wiring import wire_reorg
 
@@ -143,4 +144,8 @@ def wire_distill(
     wire_organize(memory_service, model_svc, credential_resolver)
     # The agentic reorg service (spec 007 FR-033/034) — same collaborators.
     wire_reorg(memory_service, model_svc, credential_resolver)
+    # Native-memory adoption (spec 004 FR-041): import an agent's OWN native memory
+    # into Coffer memory, then organize. Wired AFTER wire_organize so the import sink's
+    # organize() can reach the organizer via get_organizer_service.
+    wire_native_memory_import(memory_service, agent_service)
     return svc
