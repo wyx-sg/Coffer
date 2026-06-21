@@ -54,6 +54,18 @@ export function FolderPicker({
       } catch {
         // Native plugin unavailable — fall back to the daemon folder browser.
       }
+    } else {
+      // Web: ask the daemon to open the OS-native dialog. Fall back to the
+      // in-app browser only when this host has no native dialog tool.
+      try {
+        const res = await fsApi.pickFolder(value ?? undefined);
+        if (res.available) {
+          if (res.path) onChange(res.path);
+          return; // native dialog handled it (picked or cancelled)
+        }
+      } catch {
+        // Daemon picker errored — fall back to the in-app browser.
+      }
     }
     setBrowserOpen(true);
   };

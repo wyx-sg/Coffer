@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from coffer.application.fs.browse_service import FsBrowseService
 from coffer.application.fs.editor_service import EditorDetectService
 from coffer.application.fs.open_service import FsOpenService
+from coffer.application.fs.pick_service import FsPickService
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_fs_browse_service
 
@@ -30,6 +31,11 @@ router = APIRouter(
 def get_fs_open_service() -> FsOpenService:
     """FastAPI Depends() target — stateless, built per-request (like browse)."""
     return FsOpenService()
+
+
+def get_fs_pick_service() -> FsPickService:
+    """FastAPI Depends() target — stateless, built per-request."""
+    return FsPickService()
 
 
 class FsEntryOut(BaseModel):
@@ -90,6 +96,28 @@ async def reveal_path(
     """Select / reveal `path` in the OS file manager."""
     await asyncio.to_thread(svc.reveal, body.path)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class FsPickFolderRequest(BaseModel):
+    start: str | None = None
+
+
+class FsPickFolderOut(BaseModel):
+    # available=False → no native dialog tool on this host (caller falls back to
+    # the in-app browser); available=True + path=None → the user cancelled.
+    available: bool
+    path: str | None
+
+
+@router.post("/pick-folder", response_model=FsPickFolderOut)
+async def pick_folder(
+    body: FsPickFolderRequest,
+    svc: FsPickService = Depends(get_fs_pick_service),  # noqa: B008
+) -> FsPickFolderOut:
+    """Open the host's native folder dialog and return the chosen directory."""
+    # to_thread: the native dialog is modal and blocks until the user responds.
+    result = await asyncio.to_thread(svc.pick_folder, body.start)
+    return FsPickFolderOut(available=result.available, path=result.path)
 
 
 # --- Installed-editor detection (backs the preferred-editor picker, spec 002) ---
