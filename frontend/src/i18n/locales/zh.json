@@ -581,6 +581,7 @@
     "DOCUMENT_NOT_FOUND": "未找到文档",
     "INGEST_REJECTED": "文档在摄入过程中被拒绝",
     "INGEST_REJECTED_scanned_pdf": "该 PDF 似乎是扫描件或纯图片——无法提取文本。请先运行 OCR（或将其转换为基于文本的 PDF）后重新上传。",
+    "INGEST_REJECTED_unsupported_type": "暂不支持此文件类型。请转换为 PDF、Word（.docx）、PowerPoint（.pptx）、Excel（.xlsx）、HTML、EPUB、CSV 或纯文本/Markdown 后重新上传；旧版 .doc/.ppt 请先另存为 .docx/.pptx。",
     "ENGINE_UNAVAILABLE": "检索引擎不可用",
     "RECONVERSION_BLOCKED": "重建索引正在进行中",
     "SEARCH_MODE_INVALID": "不支持的检索模式",

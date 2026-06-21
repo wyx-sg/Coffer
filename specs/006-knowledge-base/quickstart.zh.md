@@ -139,5 +139,5 @@ Markdown 文件是**真相源**；SQLite 是可重建索引。`coffer kb reindex
 
 - 每文档大小：25 MB（per-KB 可配）。
 - 每 KB 文档数：约 500（软；超过后检索延迟上升）。
-- 支持格式：转换器注册表能处理的一切 —— md / txt / 源码 / json / yaml 等文本格式（passthrough）、csv（专用 csv 转换器）、以及 pdf / doc / docx / ppt / pptx / xls / xlsx / html / epub / odt / rtf（MarkItDown）。**xml 不支持**，与其他未处理类型一样以 `unsupported_type`（HTTP 415）拒绝；已知类型但引擎缺失返回 `ENGINE_UNAVAILABLE` 并指明依赖。
+- 支持格式：转换器注册表能处理的一切 —— md / txt / 源码 / json / yaml 等文本格式（passthrough）、csv（专用 csv 转换器）、以及 pdf / docx / pptx / xls / xlsx / html / epub（MarkItDown）。**旧版二进制 Office（`.doc`/`.ppt`）、`.rtf`、`.odt` 以及 xml 均不支持**，与其他未处理类型一样以 `unsupported_type`（HTTP 415）拒绝；旧版 Office 文件请另存为 `.docx`/`.pptx` 后重新上传。已知类型但引擎缺失返回 `ENGINE_UNAVAILABLE` 并指明依赖。
 - 检索：keyword + grep 零配置离线工作；vector 可选，需要 embedding provider。

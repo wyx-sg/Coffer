@@ -139,5 +139,5 @@ Markdown files are the **source of truth**; SQLite is a rebuildable index. `coff
 
 - Per-document size: 25 MB (configurable per KB).
 - Per-KB documents: ~500 (soft; search latency grows past that).
-- Supported formats: anything the converter registry handles — md / txt / source code / json / yaml and other text formats (passthrough), csv (dedicated csv converter), and pdf / doc / docx / ppt / pptx / xls / xlsx / html / epub / odt / rtf (MarkItDown). **xml is not supported** and is rejected with `unsupported_type` (HTTP 415), like any other unhandled type; a missing engine for a known type returns `ENGINE_UNAVAILABLE` naming the dependency.
+- Supported formats: anything the converter registry handles — md / txt / source code / json / yaml and other text formats (passthrough), csv (dedicated csv converter), and pdf / docx / pptx / xls / xlsx / html / epub (MarkItDown). **Legacy binary Office (`.doc`/`.ppt`), `.rtf`, `.odt`, and `xml` are not supported** — they are rejected with `unsupported_type` (HTTP 415), the same as any other unhandled type; save legacy Office files as `.docx`/`.pptx` and re-upload. A missing engine for a *known* type returns `ENGINE_UNAVAILABLE` naming the dependency.
 - Retrieval: keyword + grep work offline with zero config; vector is opt-in and needs an embedding provider.
