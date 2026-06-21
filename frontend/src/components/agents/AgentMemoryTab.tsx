@@ -1,90 +1,132 @@
 // frontend/src/components/agents/AgentMemoryTab.tsx
-// "Memory" tab on the agent detail page: a READ-ONLY overview TABLE of every
-// memory store (global + per-project), each row showing the store's readable
-// name, scope, and fact count. Coffer keeps its own memory format and agents
-// access these stores ONLY via the Coffer MCP gateway — the agent page does not
-// project a store into the agent's native memory location. Clicking a row opens
-// that store's detail page (/memory/:name) — exactly like the Skills and MCP
-// tabs. Resource pages manage the store (its facts live there); this tab only
-// shows access, mirroring the read-only MCP-servers tab.
+// "Memory" tab on the agent detail page, in two sections that mirror the Skills
+// and MCP-servers tabs (Coffer-managed vs the agent's own):
+//
+//   A. Coffer-managed memory — Coffer keeps its own memory format and agents
+//      reach it ONLY via the MCP gateway. The stores are managed on the
+//      standalone Memory page, so this tab does not re-list them: the shared
+//      ManagedLinkCard points straight there.
+//   B. The agent's own memory — the coding agent's OWN native per-project memory
+//      stores (e.g. Claude Code's ~/.claude/projects/<project>/memory/), shown
+//      read-only as a table of (project, path, item count) with open / reveal
+//      (FileActions). This is NOT Coffer memory and NOT the CLAUDE.md instructions
+//      file; it is the agent's native memory, surfaced for reference (and, later,
+//      import into Coffer).
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
+import { CofferGatewayCard } from "@/components/agents/AgentManagedLink";
 import { DataTable, type Column } from "@/components/DataTable";
-import { Badge } from "@/components/ui/badge";
+import { FileActions } from "@/components/FileActions";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import type { AgentOut } from "@/lib/api/agents";
-import { projectDirName, type MemoryStoreOut } from "@/kinds/memory/api";
-import { useMemoryStores } from "@/lib/hooks/useMemoryStores";
+import type { AgentOut, NativeMemoryStore } from "@/lib/api/agents";
+import { useAgentNativeMemory, useImportNativeMemory } from "@/lib/hooks/useAgents";
+
+/** Per-row "import this native memory store into Coffer" button: bulk-remembers
+ * the store's items into the matching Coffer project store, then organizes. */
+function ImportButton({ agentName, store }: { agentName: string; store: NativeMemoryStore }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const importMut = useImportNativeMemory(agentName);
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={importMut.isPending}
+      onClick={() =>
+        importMut.mutate(store.memory_dir, {
+          onSuccess: (r) =>
+            r.store
+              ? toast.success(
+                  t("agents.memoryTab.importDone", { count: r.imported, project: store.project }),
+                )
+              : toast.error(t("agents.memoryTab.importNoProject", { project: store.project })),
+          onError: (e) => toast.error(translateApiError(t, e)),
+        })
+      }
+    >
+      {importMut.isPending ? t("agents.memoryTab.importing") : t("agents.memoryTab.import")}
+    </Button>
+  );
+}
 
 export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const stores = useMemoryStores();
+  const native = useAgentNativeMemory(agent.name);
 
-  const rows = (stores.data ?? []) as MemoryStoreOut[];
-
-  const columns: Column<MemoryStoreOut>[] = [
+  const columns: Column<NativeMemoryStore>[] = [
     {
-      key: "name",
-      header: t("memory.cols.name"),
-      // Show the project's directory basename (derived from project_root) as the
-      // primary label with the absolute path beneath it, so a per-project store
-      // reads as e.g. "coffer" instead of the opaque project-<ULID> name
-      // (mirrors MemoryStoresTable). Falls back to the raw store name when the
-      // root is unknown (the global store reads as "global").
-      cell: (store) => (
-        <div className="min-w-0">
-          <span className="text-sm font-medium">
-            {projectDirName(store.project_root) ?? store.name}
-          </span>
-          {store.project_root ? (
-            <span className="block truncate font-mono text-xs text-muted-foreground">
-              {store.project_root}
-            </span>
-          ) : null}
-        </div>
+      key: "project",
+      header: t("agents.memoryTab.colProject"),
+      className: "whitespace-nowrap",
+      cell: (s) => <span className="text-sm font-medium">{s.project}</span>,
+    },
+    {
+      key: "path",
+      header: t("agents.memoryTab.colPath"),
+      cell: (s) => (
+        <span className="line-clamp-1 max-w-md font-mono text-xs text-muted-foreground">
+          {s.memory_dir}
+        </span>
       ),
     },
     {
-      key: "scope",
-      header: t("memory.cols.scope"),
-      className: "whitespace-nowrap",
-      cell: (store) => <Badge variant="secondary">{store.scope}</Badge>,
+      key: "items",
+      header: t("agents.memoryTab.colItems"),
+      className: "tabular-nums text-right",
+      cell: (s) => <span className="text-muted-foreground">{s.item_count}</span>,
     },
     {
-      key: "facts",
-      header: t("memory.cols.facts"),
-      className: "tabular-nums",
-      cell: (store) => <span className="text-muted-foreground">{store.fact_count ?? 0}</span>,
+      key: "actions",
+      header: "",
+      className: "text-right",
+      cell: (s) => (
+        <div className="flex items-center justify-end gap-2">
+          <ImportButton agentName={agent.name} store={s} />
+          <FileActions filePath={s.memory_dir} />
+        </div>
+      ),
     },
   ];
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1">
-        <h3 className="text-sm font-medium text-muted-foreground">{t("agents.memoryTab.title")}</h3>
-        <p className="text-xs text-muted-foreground">{t("agents.memoryTab.subtitle")}</p>
-        <p className="text-xs text-muted-foreground">{t("agents.memoryTab.accessViaGateway")}</p>
-      </div>
+      {/* A. Coffer-managed memory — reached via the Coffer MCP gateway, so it
+          shows the not-installed note until Coffer MCP is installed; otherwise a
+          pointer to the standalone Memory page. */}
+      <CofferGatewayCard
+        agentName={agent.name}
+        title={t("agents.cofferManaged")}
+        hint={t("agents.memoryTab.accessViaGateway")}
+        buttonLabel={t("agents.memoryTab.openMemoryPage")}
+        onOpen={() => navigate("/memory")}
+        notInstalledHint={t("agents.memoryTab.notInstalled")}
+      />
 
-      {stores.isPending ? (
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-      ) : stores.error ? (
-        <p className="text-sm text-destructive">{translateApiError(t, stores.error)}</p>
-      ) : (
-        <DataTable
-          rows={rows}
-          columns={columns}
-          rowKey={(store) => store.name}
-          onRowClick={(store) =>
-            navigate(`/memory/${store.name}`, {
-              state: { backTo: `/agents/${agent.name}`, backLabel: agent.name },
-            })
-          }
-          emptyMessage={t("agents.memoryTab.empty")}
-        />
-      )}
+      {/* B. The agent's own native memory stores (read-only). */}
+      <Card className="space-y-3 p-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-medium text-muted-foreground">{t("agents.agentOwn")}</h3>
+          <p className="text-xs text-muted-foreground">{t("agents.memoryTab.nativeHint")}</p>
+        </div>
+
+        {native.isPending ? (
+          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+        ) : native.error ? (
+          <p className="text-sm text-destructive">{translateApiError(t, native.error)}</p>
+        ) : (
+          <DataTable
+            rows={native.data?.items ?? []}
+            columns={columns}
+            rowKey={(s) => s.memory_dir}
+            emptyMessage={t("agents.memoryTab.nativeEmpty")}
+          />
+        )}
+      </Card>
     </div>
   );
 }

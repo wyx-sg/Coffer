@@ -16,6 +16,7 @@ from coffer.application.agent.config_file_service import AgentConfigFileService
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
 from coffer.application.agent.mcp_service import AgentMcpService
+from coffer.application.agent.native_memory_service import AgentNativeMemoryService
 from coffer.application.agent.plugin_service import AgentPluginService
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
@@ -29,6 +30,7 @@ from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.scan import scan_locations
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
 from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
 from coffer.infrastructure.skill.master_store import MasterStore
@@ -38,6 +40,7 @@ from coffer.infrastructure.skill.workspace_scan import WorkspaceScan
 from coffer.surfaces.http.dependencies import (
     set_agent_config_file_service,
     set_agent_mcp_service,
+    set_agent_native_memory_service,
     set_agent_service,
     set_auto_detect_service,
     set_skill_service,
@@ -136,6 +139,12 @@ def wire_agent_and_skill_kinds(
     )
     agent_mcp_svc = AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
 
+    # Read-only listing of an agent's OWN native per-project memory stores
+    # (Claude Code's projects/<slug>/memory). Same agent lookup as above.
+    agent_native_memory_svc = AgentNativeMemoryService(
+        agent_service=agent_svc, scanner=FileNativeMemoryScanner()
+    )
+
     # MCP entries + plugins in the agent's own config files (agent workspace).
     # The keyring is the same stateless adapter the rest of the app constructs
     # ad hoc (see dependencies.get_keyring) — adoption writes secret values
@@ -172,6 +181,7 @@ def wire_agent_and_skill_kinds(
     set_auto_detect_service(auto_detect_svc)
     set_agent_config_file_service(agent_config_file_svc)
     set_agent_mcp_service(agent_mcp_svc)
+    set_agent_native_memory_service(agent_native_memory_svc)
     set_agent_mcp_entry_service(agent_mcp_entry_svc)
     set_agent_plugin_service(agent_plugin_svc)
     set_skill_service(skill_svc)
