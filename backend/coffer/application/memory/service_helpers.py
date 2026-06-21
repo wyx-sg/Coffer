@@ -18,8 +18,9 @@ from coffer.domain.errors import MemoryRejected
 from coffer.domain.knowledge.document import Document
 from coffer.domain.knowledge.retrieval import GrepHit, MemoryHit, Passage
 from coffer.domain.memory.scope import ResolvedScope
-from coffer.infrastructure.knowledge.paths import knowledge_dir
+from coffer.infrastructure.knowledge.paths import journal_dir, knowledge_dir
 from coffer.infrastructure.memory.files import read_fact_file
+from coffer.infrastructure.memory.journal_files import journal_doc_id
 
 
 def validate_fact(body: str, max_chars: int) -> None:
@@ -79,49 +80,75 @@ async def passages_to_hits(
 def grep_hits_to_memory_hits(hits: Sequence[GrepHit], resolved: ResolvedScope) -> list[MemoryHit]:
     """Convert ripgrep line hits over a store dir to ``MemoryHit``s.
 
-    The matched line is the hit text; the fact id/updated_at come from parsing
-    the matched file. Several matches inside one fact dedupe to the first.
+    The matched line is the hit text; several matches inside one document dedupe
+    to the first.
 
     ripgrep runs over the whole store dir, so it also reaches content that must
-    NEVER surface in recall: the ``handoff/`` sibling lane (working-state files),
-    facts abandoned at the store root by a pre-lane build, and a leftover legacy
-    ``MEMORY.md``. Keyword/vector recall avoid all of these for free (the
-    reconciler indexes only the ``knowledge/`` lane); grep needs an explicit
-    guard. So recall keeps ONLY hits inside the ``knowledge/`` lane — one positive
-    check that covers handoff, abandoned root facts, and ``MEMORY.md`` together —
-    and additionally skips the lane's own ``INDEX.md`` review index."""
+    NEVER surface in recall: the ``handoff/`` / ``rules/`` sibling lanes, the
+    ``superseded/`` tombstone, facts abandoned at the store root by a pre-lane
+    build, and a leftover legacy ``MEMORY.md``. Recall therefore keeps ONLY hits
+    inside the two searchable lanes — the ``knowledge/`` lane (semantic facts) and
+    the ``journal/`` lane (episodic events, FR-043) — and skips everything else.
+    Knowledge hits are parsed as fact files (id/updated_at from frontmatter);
+    journal hits are NOT fact files, so they're keyed per period file."""
     out: list[MemoryHit] = []
     seen: set[str] = set()
     knowledge_root = knowledge_dir(resolved.store_dir).resolve()
+    journal_root = journal_dir(resolved.store_dir).resolve()
     for h in hits:
         path = Path(h.path)
-        # Recall surfaces only the knowledge/ lane: this single check excludes the
-        # handoff/ sibling (recall isolation), facts abandoned at the store root,
-        # and any leftover MEMORY.md. Resolve so a relative or absolute grep path
-        # compares against the absolute lane root.
-        if not _is_under(path, knowledge_root):
+        # Resolve so a relative or absolute grep path compares against the
+        # absolute lane roots. Anything outside both lanes is recall-excluded.
+        hit: MemoryHit | None
+        if _is_under(path, journal_root):
+            hit = _journal_grep_hit(h, path, resolved)
+        elif _is_under(path, knowledge_root):
+            hit = _knowledge_grep_hit(h, path, resolved)
+        else:
             continue
-        if path.name == "INDEX.md":  # the lane's human review index is not a fact
+        if hit is None or hit.id in seen:
             continue
-        try:
-            ff = read_fact_file(path)
-        except (OSError, ValueError):
-            continue
-        if ff.fact.id in seen:
-            continue
-        seen.add(ff.fact.id)
-        out.append(
-            MemoryHit(
-                id=ff.fact.id,
-                text=h.line,
-                # Grep has no relevance ranking; a flat score keeps merged
-                # cross-store ordering stable.
-                score=1.0,
-                source=f"{resolved.scope.value}:{path}",
-                time=ff.fact.updated_at,
-            )
-        )
+        seen.add(hit.id)
+        out.append(hit)
     return out
+
+
+def _knowledge_grep_hit(h: GrepHit, path: Path, resolved: ResolvedScope) -> MemoryHit | None:
+    """A grep hit inside the ``knowledge/`` lane (a per-fact file). ``None`` for
+    the lane's ``INDEX.md`` review index or an unparseable file."""
+    if path.name == "INDEX.md":  # the lane's human review index is not a fact
+        return None
+    try:
+        ff = read_fact_file(path)
+    except (OSError, ValueError):
+        return None
+    return MemoryHit(
+        id=ff.fact.id,
+        text=h.line,
+        # Grep has no relevance ranking; a flat score keeps merged cross-store
+        # ordering stable.
+        score=1.0,
+        source=f"{resolved.scope.value}:{path}",
+        time=ff.fact.updated_at,
+    )
+
+
+def _journal_grep_hit(h: GrepHit, path: Path, resolved: ResolvedScope) -> MemoryHit:
+    """A grep hit inside the ``journal/`` lane. Journal files are not fact files,
+    so the hit is keyed by ``journal-<period>`` (matching the indexed document id
+    so a grep and a keyword hit on the same month dedupe) and timestamped by the
+    file mtime rather than parsed frontmatter."""
+    try:
+        mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+    except OSError:
+        mtime = datetime.now(tz=UTC)
+    return MemoryHit(
+        id=journal_doc_id(path.stem),
+        text=h.line,
+        score=1.0,
+        source=f"{resolved.scope.value}:{path}",
+        time=mtime,
+    )
 
 
 def _is_under(path: Path, root: Path) -> bool:

@@ -82,4 +82,5 @@ class JournalService:
             for f in sorted(d.glob("*.md"), reverse=True):
                 entries.extend(jf.read_entries(f))
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[:limit] if limit else entries
+        # ``limit`` is a hard cap: ``limit=0`` returns ``[]`` (no implicit "all").
+        return entries[:limit]

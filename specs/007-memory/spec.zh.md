@@ -380,8 +380,10 @@ cwd 没有可恢复的现场。
 ### Journal 记忆带(情景 / episodic)
 
 - **FR-040:** Coffer SHALL 提供按项目的 `journal` 记忆带,把情景事件以追加式、按时间分片的 markdown 文件存储(`projects/<ulid>/journal/<YYYY-MM>.md`)。没有全局 journal。
-- **FR-041:** Journal 文件 SHALL 纳入同步镜像作为真相源历史(同 `rules/`、`superseded/`)。(Journal 进入 `recall` 的需求由 journal 索引切片规定;本切片只交付存储 + 服务,journal 暂不被检索。)
-- **FR-042:** Coffer SHALL 暴露内部 `JournalService.append(cwd, body, actor)` 与 `read_recent(cwd, limit)`。在 git 项目外 append 抛 `ScopeUnresolved`;项目外读取返回空列表。`journal_append` 审计条目只记录 `char_size`,绝不记录正文。
+- **FR-041:** Journal 文件 SHALL 纳入同步镜像作为真相源历史(同 `rules/`、`superseded/`)。与 `rules/`、`handoff/` 不同,journal 记忆带还参与 `recall`(FR-043)。
+- **FR-042:** Coffer SHALL 暴露内部 `JournalService.append(cwd, body, actor)` 与 `read_recent(cwd, limit)`。在 git 项目外 append 抛 `ScopeUnresolved`;项目外读取返回空列表。`read_recent` 按最新优先返回,数量上限为 `limit`;`limit=0` 返回空列表(不隐式表示“全部”)。`journal_append` 审计条目只记录 `char_size`,绝不记录正文。
+- **FR-043:** Journal 记忆带 SHALL 参与 `recall`。记忆 reconciler MUST 扫描每个 `journal/<YYYY-MM>.md` 文件并把它索引为一个记忆文档(`kind=memory`),用与主题文档(FR-032)相同的共享 markdown 分块器与固定参数分块,并纳入懒惰的读时重建索引(FR-010),使外部编辑或新的 `JournalService.append` 在下一次 `recall` 时即可被检索到。grep recall 守卫(原本只保留 `knowledge/` 命中)MUST 额外保留 `journal/` 命中,并按 journal 文件而非 fact 文件解析它们。Journal 文档 MUST NOT 计入 store 的 `fact_count`(该计数只统计 `knowledge/` 记忆带)。`rules/`、`handoff/`、`superseded/` 记忆带仍排除在 `recall` 之外。
+- **FR-044:** 来自 journal 记忆带的 `recall` 命中 MUST 能与 `knowledge/` 命中区分:与所有 recall 命中一样,其 `source` 携带被命中文件的磁盘路径(同 FR-022),而 journal 命中的路径是 `journal/<YYYY-MM>.md` 文件(含 `journal/` 记忆带片段),因此 agent 能区分情景事件与语义事实。
 
 **Transcript history（对话历史）**
 
