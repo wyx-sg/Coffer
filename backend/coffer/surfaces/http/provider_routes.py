@@ -15,6 +15,7 @@ from coffer.surfaces.http.dependencies import get_actor, get_provider_service
 from coffer.surfaces.http.provider_schemas import (
     ActivateOut,
     ActiveKeyOut,
+    DeactivateOut,
     ProviderCreate,
     ProviderListOut,
     ProviderOut,
@@ -146,6 +147,23 @@ async def activate_provider(
         wire_format=result.wire_format,  # type: ignore[arg-type]
         projected=result.projected,
         skipped=result.skipped,
+    )
+
+
+@router.post("/use-builtin/{wire}", response_model=DeactivateOut)
+async def use_builtin_provider(
+    wire: WireFormat,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> DeactivateOut:
+    """Switch this wire's agent(s) back to their OWN built-in login: remove
+    Coffer's projection from the native config and clear the active connection.
+    Idempotent — a no-op when the agent already runs built-in."""
+    result = await svc.deactivate(wire, actor=actor)
+    return DeactivateOut(
+        wire_format=result.wire_format,  # type: ignore[arg-type]
+        deprojected=result.deprojected,
+        previous=result.previous,
     )
 
 

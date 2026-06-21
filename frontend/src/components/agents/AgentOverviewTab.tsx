@@ -25,9 +25,13 @@ import {
   useActivateProvider,
   useProviders,
   useUpdateProvider,
+  useUseBuiltinProvider,
 } from "@/lib/hooks/useProviders";
 
 const CUSTOM = "__custom__";
+// Sentinel for the "use the agent's own built-in login" option (no connection
+// override). Radix forbids an empty value, so it's a reserved token.
+const BUILTIN = "__builtin__";
 
 export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
@@ -37,6 +41,7 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   const providers = useProviders();
   const activate = useActivateProvider();
   const update = useUpdateProvider();
+  const useBuiltin = useUseBuiltinProvider();
   const list = useListProviderModels();
 
   const [fetched, setFetched] = useState<string[]>([]);
@@ -69,6 +74,11 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   const onPickConnection = (name: string) => {
     setFetched([]);
     setCustomModel(false);
+    if (name === BUILTIN) {
+      // Switch this agent back to its own built-in login (clears the override).
+      useBuiltin.mutate(wire);
+      return;
+    }
     activate.mutate(name);
   };
 
@@ -116,14 +126,17 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
               <div className="space-y-1.5">
                 <Label htmlFor="agent-connection">{t("agents.connection.label")}</Label>
                 <Select
-                  value={active?.name ?? ""}
+                  value={active?.name ?? BUILTIN}
                   onValueChange={onPickConnection}
-                  disabled={activate.isPending}
+                  disabled={activate.isPending || useBuiltin.isPending}
                 >
                   <SelectTrigger id="agent-connection" className="text-sm">
                     <SelectValue placeholder={t("agents.connection.none")} />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* Default: the agent's own login. Picking a connection
+                        overrides it; re-selecting this clears the override. */}
+                    <SelectItem value={BUILTIN}>{t("agents.connection.builtin")}</SelectItem>
                     {compatible.map((p) => (
                       <SelectItem key={p.name} value={p.name}>
                         {p.name}

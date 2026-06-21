@@ -476,6 +476,16 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
   single-process daemon serialises the clear-then-set so switches never
   interleave).
 
+### Scenario: switch a wire back to the agent built-in login
+
+- **Given** an anthropic connection is active and projected into Claude Code,
+- **When** the user switches that wire back to built-in (`POST
+  /providers/use-builtin/{wire}`),
+- **Then** Coffer's managed keys are removed from the agent's native config so
+  it falls back to its own login, and the connection is no longer active; the
+  operation is idempotent (a no-op when nothing is active). See the ADR-032
+  amendment D1/D3 (connections are optional overrides).
+
 ### Scenario: activate a profile whose wire matches no registered agent records active but projects nothing
 
 - **Given** no Codex agent is registered and an openai profile exists,

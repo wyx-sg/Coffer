@@ -77,6 +77,14 @@ class ActivateOut(BaseModel):
     skipped: list[str]
 
 
+class DeactivateOut(BaseModel):
+    """Result of switching a wire back to the agent's own built-in login."""
+
+    wire_format: WireFormat
+    deprojected: list[str]
+    previous: str | None = None
+
+
 class ActiveKeyOut(BaseModel):
     """The decrypted API key of the active profile for a wire format.
 

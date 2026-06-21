@@ -3,7 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { providersApi, type ProviderCreate, type ProviderPatch } from "@/lib/api/providers";
+import {
+  providersApi,
+  type ProviderCreate,
+  type ProviderPatch,
+  type WireFormat,
+} from "@/lib/api/providers";
 import { useToast } from "@/components/ui/toast";
 
 const PROVIDERS_KEY = ["providers"] as const;
@@ -64,6 +69,20 @@ export function useActivateProvider() {
   const onError = useProviderToastError();
   return useMutation({
     mutationFn: (name: string) => providersApi.activate(name),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+    },
+    onError,
+  });
+}
+
+/** Switch a wire's agent(s) back to their own built-in login (clears the active
+ * connection + removes Coffer's projection). */
+export function useUseBuiltinProvider() {
+  const qc = useQueryClient();
+  const onError = useProviderToastError();
+  return useMutation({
+    mutationFn: (wire: WireFormat) => providersApi.useBuiltin(wire),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
     },

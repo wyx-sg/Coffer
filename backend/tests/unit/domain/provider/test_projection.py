@@ -13,6 +13,8 @@ from coffer.domain.provider.projection import (
     CODEX_PROVIDER_ID,
     apply_anthropic_settings,
     apply_codex_provider,
+    remove_anthropic_settings,
+    remove_codex_provider,
     target_for,
 )
 
@@ -74,6 +76,79 @@ def test_codex_handles_empty_and_is_idempotent() -> None:
     first = apply_codex_provider("", base_url="u", model="m", wire_api="chat", display_name="x")
     second = apply_codex_provider(first, base_url="u", model="m", wire_api="chat", display_name="x")
     assert tomllib.loads(first) == tomllib.loads(second)
+
+
+# --- de-projection (use-built-in: remove Coffer's managed keys) ----------------
+
+
+def test_remove_anthropic_clears_managed_keys_preserves_others() -> None:
+    text = apply_anthropic_settings(
+        '{"theme": "dark", "env": {"FOO": "1"}}',
+        base_url="u",
+        model="m",
+        fast_model="f",
+    )
+    d = json.loads(remove_anthropic_settings(text))
+    assert "apiKeyHelper" not in d  # Coffer's managed helper removed
+    assert d["theme"] == "dark"  # unrelated key preserved
+    assert d["env"]["FOO"] == "1"  # unrelated env preserved
+    for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL"):
+        assert k not in d["env"]
+
+
+def test_remove_anthropic_keeps_a_user_owned_apikeyhelper() -> None:
+    d = json.loads(
+        remove_anthropic_settings(
+            '{"apiKeyHelper": "my-own-helper", "env": {"ANTHROPIC_BASE_URL": "u"}}'
+        )
+    )
+    assert d["apiKeyHelper"] == "my-own-helper"  # only Coffer's managed helper is cleared
+    assert "ANTHROPIC_BASE_URL" not in d["env"]
+
+
+def test_remove_anthropic_empty_and_idempotent() -> None:
+    assert json.loads(remove_anthropic_settings("")) == {}
+    once = remove_anthropic_settings(
+        apply_anthropic_settings("", base_url="u", model="m", fast_model=None)
+    )
+    twice = remove_anthropic_settings(once)
+    assert json.loads(once) == json.loads(twice)
+
+
+def test_remove_codex_clears_managed_block_preserves_others() -> None:
+    text = apply_codex_provider(
+        'approval_policy = "never"\n',
+        base_url="u",
+        model="gpt-x",
+        wire_api="responses",
+        display_name="Coffer (acme)",
+    )
+    doc = tomllib.loads(remove_codex_provider(text))
+    assert doc["approval_policy"] == "never"  # unrelated key preserved
+    assert "model_provider" not in doc  # Coffer selector removed
+    assert "model" not in doc  # Coffer-projected model removed → codex default
+    assert CODEX_PROVIDER_ID not in doc.get("model_providers", {})
+
+
+def test_remove_codex_keeps_a_user_owned_provider() -> None:
+    doc = tomllib.loads(
+        remove_codex_provider(
+            'model_provider = "myown"\nmodel = "x"\n\n[model_providers.myown]\nbase_url = "u"\n'
+        )
+    )
+    # A non-Coffer active provider is left untouched (we only undo our own).
+    assert doc["model_provider"] == "myown"
+    assert doc["model"] == "x"
+    assert "myown" in doc["model_providers"]
+
+
+def test_remove_codex_empty_and_idempotent() -> None:
+    assert remove_codex_provider("").strip() == ""
+    once = remove_codex_provider(
+        apply_codex_provider("", base_url="u", model="m", wire_api="responses", display_name="x")
+    )
+    twice = remove_codex_provider(once)
+    assert tomllib.loads(once) == tomllib.loads(twice)
 
 
 def test_targets_map_wire_to_agent() -> None:

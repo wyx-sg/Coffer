@@ -230,6 +230,37 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /providers/use-builtin/{wire}:
+    parameters:
+      - in: path
+        name: wire
+        required: true
+        schema: { type: string, enum: [anthropic, openai] }
+        description: Wire format whose agent(s) to switch back to built-in.
+
+    post:
+      tags: [providers]
+      operationId: useBuiltinProvider
+      summary: Switch a wire's agent(s) back to their built-in login
+      description: |
+        Removes Coffer's projected keys from every ENABLED matching agent's
+        native config (the inverse of activate) and clears `is_active` on the
+        wire's active connection, so the agent runs on its OWN built-in
+        model/login. A Coffer LLM connection is an optional override, not a
+        prerequisite (ADR-032 amendment D1/D3).
+
+        Idempotent — a no-op when nothing is active for the wire. Emits a
+        `PROVIDER_SWITCHED` audit event `{from, to: null, wire_format, agents}`
+        only when something changed.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeactivateOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   securitySchemes:
     cofferToken:
@@ -410,6 +441,21 @@ components:
             enabled agent to project into. Not an error — the profile is still
             activated. (A genuine native-config write failure aborts the switch
             with a 5xx and leaves the registry unchanged, rather than skipping.)
+
+    DeactivateOut:
+      type: object
+      required: [wire_format, deprojected]
+      description: Result of switching a wire back to the agent's built-in login.
+      properties:
+        wire_format:
+          $ref: "#/components/schemas/WireFormat"
+        deprojected:
+          type: array
+          items: { type: string }
+          description: Agent names whose Coffer projection was removed.
+        previous:
+          type: [string, "null"]
+          description: The connection that was active before, or null if none.
 
     ProviderListOut:
       type: object

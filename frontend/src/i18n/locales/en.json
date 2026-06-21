@@ -665,6 +665,7 @@
       "title": "LLM connection",
       "label": "Connection",
       "model": "Model",
+      "builtin": "Use built-in (agent's own login)",
       "none": "No compatible connection",
       "empty": "No connection for this agent yet.",
       "manage": "Manage connections in Settings → LLM Connections",

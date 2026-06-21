@@ -9,6 +9,7 @@ vi.mock("@/lib/hooks/useProviders", () => ({
   useProviders: vi.fn(),
   useActivateProvider: vi.fn(),
   useUpdateProvider: vi.fn(),
+  useUseBuiltinProvider: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({ useListProviderModels: vi.fn() }));
 
@@ -16,16 +17,19 @@ import {
   useActivateProvider,
   useProviders,
   useUpdateProvider,
+  useUseBuiltinProvider,
 } from "@/lib/hooks/useProviders";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 
 const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
 const useActivateMock = useActivateProvider as unknown as ReturnType<typeof vi.fn>;
 const useUpdateMock = useUpdateProvider as unknown as ReturnType<typeof vi.fn>;
+const useUseBuiltinMock = useUseBuiltinProvider as unknown as ReturnType<typeof vi.fn>;
 const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>;
 
 const activateMutate = vi.fn();
 const updateMutate = vi.fn();
+const useBuiltinMutate = vi.fn();
 
 const agent: AgentOut = {
   name: "my-claude",
@@ -65,6 +69,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useActivateMock.mockReturnValue({ mutate: activateMutate, isPending: false });
   useUpdateMock.mockReturnValue({ mutate: updateMutate, isPending: false });
+  useUseBuiltinMock.mockReturnValue({ mutate: useBuiltinMutate, isPending: false });
   useListMock.mockReturnValue({ mutate: vi.fn() });
   useProvidersMock.mockReturnValue({ data: [] });
 });
@@ -103,6 +108,16 @@ describe("AgentOverviewTab", () => {
     openSelectOptions(/connection/i);
     fireEvent.click(screen.getByRole("option", { name: "kimi" }));
     expect(activateMutate).toHaveBeenCalledWith("kimi");
+  });
+
+  test("selecting Use built-in switches the agent back to its own login", () => {
+    useProvidersMock.mockReturnValue({ data: [makeConn({ is_active: true })] });
+    render(<AgentOverviewTab agent={agent} />);
+    openSelectOptions(/connection/i);
+    // The built-in option clears the override (deactivate this agent's wire).
+    fireEvent.click(screen.getByRole("option", { name: /built-in/i }));
+    expect(useBuiltinMutate).toHaveBeenCalledWith("anthropic");
+    expect(activateMutate).not.toHaveBeenCalled();
   });
 
   test("the model dropdown offers the active connection's model + fast_model and a custom option", () => {

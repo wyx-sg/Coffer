@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import asyncio
 import pathlib
-from dataclasses import dataclass
 from typing import Protocol
 
 from coffer.application.audit_service import AuditService
+from coffer.application.provider.results import ActivateResult, DeactivateResult
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
@@ -29,6 +29,8 @@ from coffer.domain.provider.errors import NoActiveProvider, ProviderCredentialSo
 from coffer.domain.provider.projection import (
     apply_anthropic_settings,
     apply_codex_provider,
+    remove_anthropic_settings,
+    remove_codex_provider,
     target_for,
 )
 from coffer.domain.resource import Resource, ResourceRef
@@ -49,16 +51,6 @@ class _ConfigFileStore(Protocol):
 
 class _AgentLister(Protocol):
     async def list(self) -> list[Resource]: ...
-
-
-@dataclass(frozen=True)
-class ActivateResult:
-    """Outcome of a switch: which agents were written, which wire had none."""
-
-    activated: str
-    wire_format: str
-    projected: list[str]
-    skipped: list[str]
 
 
 class ProviderService:
@@ -261,6 +253,41 @@ class ProviderService:
             activated=name, wire_format=wire.value, projected=projected, skipped=skipped
         )
 
+    async def deactivate(self, wire: WireFormat, *, actor: str = "api") -> DeactivateResult:
+        """Switch ``wire``'s agent(s) back to their built-in login: de-project
+        Coffer's keys and clear ``is_active``. Idempotent; de-projects before the
+        flip, mirroring :meth:`activate`."""
+        target = target_for(wire)
+        deprojected: list[str] = []
+        if target is not None:
+            for agent in await self._agents.list():
+                if not agent.enabled:
+                    continue
+                if AgentConfig.model_validate(agent.config).type != target.agent_type:
+                    continue
+                self._deproject(agent, target.config_key, wire)
+                deprojected.append(agent.name)
+
+        previous: str | None = None
+        for r in await self.list():
+            rc = self._cfg(r)
+            if rc.wire_format == wire and rc.is_active:
+                await self._set_active(r, active=False, actor=actor)
+                previous = r.name
+
+        if previous is not None or deprojected:
+            details = {
+                "from": previous,
+                "to": None,
+                "wire_format": wire.value,
+                "agents": deprojected,
+            }
+            ref = self._ref(previous) if previous else self._ref(wire.value)
+            await self._audit.record(
+                AuditEventType.PROVIDER_SWITCHED.value, ref=ref, actor=actor, details=details
+            )
+        return DeactivateResult(wire_format=wire.value, deprojected=deprojected, previous=previous)
+
     async def resolve_active_key(self, wire: WireFormat) -> str:
         """The decrypted API key of the active profile for ``wire`` (used by
         Claude's ``apiKeyHelper``). Raises ``NoActiveProvider`` if none."""
@@ -342,4 +369,18 @@ class ProviderService:
                 wire_api=cfg.wire_api.value,
                 display_name=f"Coffer ({profile_name})",
             )
+        self._config_store.write_text_atomic(spec.path, new_text)
+
+    def _deproject(self, agent: Resource, config_key: str, wire: WireFormat) -> None:
+        """Remove Coffer's projected keys from one agent's native config so it
+        falls back to its own login (the inverse of :meth:`_project`)."""
+        agent_cfg = AgentConfig.model_validate(agent.config)
+        spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
+        text = self._config_store.read_text(spec.path) or ""
+        if not text.strip():
+            return  # nothing was ever projected
+        if wire == WireFormat.ANTHROPIC:
+            new_text = remove_anthropic_settings(text)
+        else:
+            new_text = remove_codex_provider(text)
         self._config_store.write_text_atomic(spec.path, new_text)
