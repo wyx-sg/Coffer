@@ -21,6 +21,10 @@ export interface KnowledgeBaseConfigOut {
   chunk_overlap: number;
   max_document_bytes: number;
   embedding?: EmbeddingConfig | null;
+  // When true, a `check-sources` scan re-ingests documents whose external
+  // source file changed (FR-021..024). The settings PATCH replaces the whole
+  // config, so this MUST be carried through or it silently resets to false.
+  auto_update_sources: boolean;
 }
 
 export interface KnowledgeBaseOut {
@@ -110,4 +114,22 @@ export interface KnowledgeBaseMetrics {
   documents_degraded: number;
   indexed_modes: RetrievalMode[];
   disk_bytes: number;
+}
+
+// One of five outcomes per document when scanning its external source file
+// (FR-021..024): unchanged, changed (re-ingestable), missing (file gone),
+// edited (source changed but the doc was locally edited so update is skipped),
+// or updated (was changed and auto-re-ingested because auto_update_sources is on).
+export type SourceStatus = "unchanged" | "changed" | "missing" | "edited" | "updated";
+
+export interface SourceStatusEntry {
+  document_id: string;
+  title: string;
+  source_path: string;
+  status: SourceStatus;
+}
+
+export interface SourceCheckResponse {
+  // Only documents with a tracked source_path appear (web uploads are untracked).
+  sources: SourceStatusEntry[];
 }
