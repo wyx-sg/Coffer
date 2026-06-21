@@ -17,7 +17,7 @@ Frozen dataclass — domain stays pure.
 | `id`                        | `str`                | uuid4 hex                                                                                                                                                                                                                                               |
 | `agent_key`                 | `str`                | which agent the thread talks to; default `"builtin"`                                                                                                                                                                                                    |
 | `title`                     | `str`                | auto-generated from the first user message; user-editable                                                                                                                                                                                               |
-| `model_id`                  | `str \| None`        | `chat_models.id` override → the internal-engine `ModelConfig` registry (Settings → Models). **Not read by the managed-agent turn path** (ADR-024); out of scope for the chat model picker. `None` → default model.                                       |
+| `model_id`                  | `str \| None`        | **Vestigial legacy column.** Once a `chat_models.id` override into the internal-engine `ModelConfig` registry, which is now **retired** (folded into provider connections, spec 011 / ADR-032). **Not read by the managed-agent turn path** (ADR-024); the internal engine selects its model from the internal-default connection. Out of scope for the chat model picker. |
 | `agent_config`              | `str \| None` (JSON) | Provider-owned per-conversation state (Alembic `0018`). Managed agents (Claude Code / Codex) store `{cwd, session_id, model}` here; `model` is the agent's own per-conversation model (free-text, passed through to its CLI), set via the agent-config PATCH route mirroring `/model`. Read/written via `ConversationRepo.get_agent_config` / `set_agent_config`. |
 | `archived_at`               | `datetime \| None`   | `None` = active; a timestamp = archived (Alembic `0013`). Drives the active/archived filter and the two-stage retention lifecycle.                                                                                                                      |
 | `channel_name`              | `str \| None`        | Optional IM channel binding (ADR-031): the channel this conversation is also driven from. A conversation "has a channel binding" iff this is set (Alembic `0021`).                                                                                       |
@@ -36,12 +36,6 @@ Unchanged. Fields: `id`, `conversation_id`, `seq` (0-based), `role`
 (`complete`|`streaming`|`failed`), `model_id`, `prompt_tokens`,
 `completion_tokens`, `created_at`. `ContentBlock` = `TextBlock` |
 `ToolUseBlock` | `ToolResultBlock`.
-
-### `ModelConfig` (`domain/chat/model.py`)
-
-Unchanged. `id`, `display_name` (unique), `provider`
-(`anthropic`|`openai`|`ollama`), `model`, `credential_ref` (required for cloud),
-`base_url` (required for ollama), `is_default`, timestamps.
 
 ### `AgentEvent` (`domain/chat/events.py`)
 
@@ -122,8 +116,11 @@ built-in agent, not part of the frozen seam.
 
 ## Domain errors (`domain/errors.py`)
 
-Existing: `ConversationNotFound` (404), `ModelNotFound` (404), `ModelRejected`
-(400), `NoModelConfigured` (409), `TurnInProgress` (409).
+Existing: `ConversationNotFound` (404), `TurnInProgress` (409). (The chat
+model-registry errors `ModelNotFound` / `ModelRejected` / `NoModelConfigured`
+were removed with the retired `ModelConfig` registry, spec 011 / ADR-032;
+transcript distillation keeps its own `NoModelConfiguredError` → wire
+`NO_MODEL_CONFIGURED` (409) when no internal connection is set.)
 
 **Added by this revision:**
 
@@ -142,7 +139,8 @@ persistent config" extension point the platform anticipated — no change to the
 chat surface or the wire contract.
 
 Tables: `conversations` (Alembic `0005`; `archived_at` `0013`; `agent_config`
-`0018`), `chat_messages`, `chat_models`.
+`0018`), `chat_messages`. The former `chat_models` table is retired with the
+`ModelConfig` registry (spec 011 / ADR-032).
 
 ## Cascade & integrity rules
 

@@ -1,8 +1,14 @@
-// pages/settings/ProvidersPage.tsx — lists provider profiles, switches the
-// active one per wire format, adds and deletes profiles (spec 011).
+// pages/settings/LlmConnectionsPage.tsx — the unified LLM-connection surface
+// (spec 011). A connection = key + endpoint + wire + model; one configured key
+// is usable by both agents (per-wire `activate`) and Coffer's internal engine
+// (`internal_default`). This page is the connection library (add / delete /
+// switch active) plus the Coffer-internal-engine selection. It shows ONLY
+// connection (provider + model) info — never agent names; per-agent connection
+// selection lives on the Agent detail → Overview tab. The Embedding card stays
+// at the bottom.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Boxes, Check, Plus, Trash2 } from "lucide-react";
+import { Boxes, Check, Cpu, Plus, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,16 +19,19 @@ import {
   useCreateProvider,
   useDeleteProvider,
   useActivateProvider,
+  useSetInternalDefaultProvider,
 } from "@/lib/hooks/useProviders";
 import { translateApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
+import { EmbeddingSettings } from "./EmbeddingSettings";
 
-export function ProvidersPage() {
+export function LlmConnectionsPage() {
   const { t } = useTranslation();
   const { data: providers = [], isPending, error } = useProviders();
   const createProvider = useCreateProvider();
   const deleteProvider = useDeleteProvider();
   const activateProvider = useActivateProvider();
+  const setInternalDefault = useSetInternalDefaultProvider();
 
   const [adding, setAdding] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Provider | null>(null);
@@ -54,19 +63,21 @@ export function ProvidersPage() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <Boxes className="size-5 text-primary" strokeWidth={1.5} />
-              {t("settings.providers.title")}
+              {t("settings.connections.title")}
             </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">{t("settings.providers.subtitle")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("settings.connections.subtitle")}
+            </p>
           </div>
           <Button size="sm" onClick={() => setAdding(true)}>
             <Plus className="mr-1.5 size-4" />
-            {t("settings.providers.add")}
+            {t("settings.connections.add")}
           </Button>
         </CardHeader>
         <CardContent>
           {providers.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              {t("settings.providers.empty")}
+              {t("settings.connections.empty")}
             </div>
           ) : (
             <ul className="space-y-2">
@@ -75,12 +86,18 @@ export function ProvidersPage() {
                   <Card className="paper-card">
                     <CardContent className="flex items-center gap-3 py-3">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="truncate text-sm font-medium">{p.name}</span>
                           {p.is_active && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
                               <Check className="size-3" />
-                              {t("settings.providers.active")}
+                              {t("settings.connections.active")}
+                            </span>
+                          )}
+                          {p.internal_default && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-600">
+                              <Cpu className="size-3" />
+                              {t("settings.connections.internalDefault")}
                             </span>
                           )}
                         </div>
@@ -88,14 +105,35 @@ export function ProvidersPage() {
                           {p.wire_format} · {p.model} · {p.base_url}
                         </p>
                       </div>
-                      {!p.is_active && (
+                      {/* Internal-engine selection: a star toggle, parallel to
+                          the per-wire "Switch" but global and orthogonal. */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={
+                          p.internal_default
+                            ? "size-7 p-0 text-amber-500"
+                            : "size-7 p-0 text-muted-foreground hover:text-amber-500"
+                        }
+                        disabled={p.internal_default || setInternalDefault.isPending}
+                        onClick={() => setInternalDefault.mutate(p.name)}
+                        aria-label={t("settings.connections.setInternalDefault", { name: p.name })}
+                        title={t("settings.connections.setInternalDefault", { name: p.name })}
+                      >
+                        <Star
+                          className={p.internal_default ? "size-4 fill-amber-400" : "size-4"}
+                        />
+                      </Button>
+                      {/* Ollama is internal-only — never projected to an agent, so
+                          it has no per-wire "Switch" action. */}
+                      {p.wire_format !== "ollama" && !p.is_active && (
                         <Button
                           variant="outline"
                           size="sm"
                           disabled={activateProvider.isPending}
                           onClick={() => activateProvider.mutate(p.name)}
                         >
-                          {t("settings.providers.switch")}
+                          {t("settings.connections.switch")}
                         </Button>
                       )}
                       <Button
@@ -120,7 +158,7 @@ export function ProvidersPage() {
       <Dialog open={adding} onOpenChange={(open) => !open && closeAdd()}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{t("settings.providers.addTitle")}</DialogTitle>
+            <DialogTitle>{t("settings.connections.addTitle")}</DialogTitle>
           </DialogHeader>
           <ProviderForm
             submitError={createProvider.error}
@@ -137,8 +175,8 @@ export function ProvidersPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={t("settings.providers.deleteTitle")}
-        description={t("settings.providers.deleteConfirm", { name: deleteTarget?.name ?? "" })}
+        title={t("settings.connections.deleteTitle")}
+        description={t("settings.connections.deleteConfirm", { name: deleteTarget?.name ?? "" })}
         confirmLabel={deleteProvider.isPending ? t("common.deleting") : t("common.delete")}
         pending={deleteProvider.isPending}
         onConfirm={() => {
@@ -147,6 +185,10 @@ export function ProvidersPage() {
           }
         }}
       />
+
+      {/* Embedding is its own separate config (own shape with dimensions) — its
+          own boxed card at the bottom, parallel to the connections card above. */}
+      <EmbeddingSettings />
     </div>
   );
 }

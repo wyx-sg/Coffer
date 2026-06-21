@@ -45,7 +45,7 @@ def _reset() -> Any:
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="008-agent-chat", scenario="stop a running turn")
 async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
-    chat_svc, _model_svc, orchestrator, _registry = make_chat_services(
+    chat_svc, orchestrator, _registry = make_chat_services(
         provider=FakeAgentProvider(_BlockingAdapter(), agent_key="builtin")
     )
     conv = await chat_svc.create_conversation(agent_key="builtin")

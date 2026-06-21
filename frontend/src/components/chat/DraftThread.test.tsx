@@ -1,17 +1,43 @@
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { acceptance } from "@/test/acceptance";
 import { DraftThread } from "./DraftThread";
 import type { AgentInfo } from "@/lib/api/chat";
+import type { Provider } from "@/lib/api/providers";
 
-// The model picker pulls provider suggestions; stub them so the draft makes no
-// network calls.
-vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: () => ({ data: [] }) }));
+// The model picker (and the no-connection empty state) read the providers list.
+vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: vi.fn() }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useListProviderModels: () => ({ mutate: vi.fn() }),
 }));
+
+import { useProviders } from "@/lib/hooks/useProviders";
+const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
+
+const activeConnection = {
+  name: "official",
+  wire_format: "anthropic",
+  base_url: "https://api.anthropic.com",
+  credential_ref: "ref",
+  model: "claude-opus-4-8",
+  fast_model: null,
+  wire_api: "chat",
+  is_active: true,
+  internal_default: false,
+  enabled: true,
+  description: null,
+  created_at: "",
+  updated_at: "",
+} as Provider;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Default: an active connection exists so the composer/draft surface renders.
+  useProvidersMock.mockReturnValue({ data: [activeConnection] });
+});
 
 const agents: AgentInfo[] = [
   { agent_key: "claude_code", display_name: "Claude Code", available: true },
@@ -60,10 +86,22 @@ describe("DraftThread", () => {
   test("offers a model picker beside the agent selector and commits the choice", () => {
     const onModelChange = vi.fn();
     renderDraft({ onModelChange });
-    const picker = screen.getByLabelText(/agent model/i);
-    fireEvent.change(picker, { target: { value: "claude-opus-4-8" } });
-    fireEvent.blur(picker);
+    // The active connection's model is listed in the dropdown — pick it.
+    const trigger = screen.getByRole("combobox", { name: /agent model/i });
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "claude-opus-4-8" }));
     expect(onModelChange).toHaveBeenCalledWith("claude-opus-4-8");
+  });
+
+  acceptance("008-agent-chat", "no-model empty state", () => {
+    // No active LLM connection for the agent's wire → an actionable empty state
+    // linking to Settings → LLM Connections, and no composer to send into.
+    useProvidersMock.mockReturnValue({ data: [] });
+    renderDraft();
+    expect(screen.getByText("No connection configured")).toBeInTheDocument();
+    const cta = screen.getByRole("link", { name: /LLM Connections/i });
+    expect(cta).toHaveAttribute("href", "/settings/llm-connections");
+    expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
   });
 
   test("no longer renders a working-directory input or folder picker", () => {

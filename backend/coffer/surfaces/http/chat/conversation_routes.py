@@ -10,7 +10,6 @@ from dataclasses import replace
 
 from fastapi import APIRouter, Depends, Response, status
 
-from coffer.application.chat.model_service import ModelService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -40,7 +39,6 @@ from coffer.surfaces.http.chat.schemas import (
 from coffer.surfaces.http.dependencies import (
     get_agent_registry,
     get_chat_service,
-    get_model_service,
     get_turn_orchestrator,
 )
 
@@ -186,16 +184,14 @@ async def update_conversation(
     id: str,
     body: ConversationPatch,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
-    model_svc: ModelService = Depends(get_model_service),  # noqa: B008
 ) -> ConversationOut:
-    """Rename a conversation and/or change its model override."""
-    # Validate EVERYTHING before writing anything, so a rejected request never
-    # leaves a partially-applied PATCH (e.g. the rename committed but the
-    # model change refused). A non-null model_id must reference a registered
-    # model (ModelNotFound -> 404) rather than failing only at the next turn.
+    """Rename a conversation and/or change its model override.
+
+    ``model_id`` is a vestigial per-conversation override column (the managed
+    agent's own model lives in its agent_config, ADR-032); it is persisted as
+    given without registry validation.
+    """
     set_model = "model_id" in body.model_fields_set
-    if set_model and body.model_id is not None:
-        await model_svc.get(body.model_id)  # raises ModelNotFound -> 404
 
     if body.title is not None:
         conv = await svc.rename_conversation(id, new_title=body.title)

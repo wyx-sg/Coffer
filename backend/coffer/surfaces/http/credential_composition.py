@@ -23,7 +23,6 @@ from coffer.application.credential_migration import (
     migrate_legacy_keychain,
 )
 from coffer.domain.credential_errors import MasterKeyMissing
-from coffer.infrastructure.chat.model_persistence import ChatModelRepo
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
@@ -113,7 +112,7 @@ async def run_legacy_keychain_migration(
     startup either.
     """
     try:
-        extra_refs = await gather_extra_credential_refs(ChatModelRepo(sm), embedding_config_svc)
+        extra_refs = await gather_extra_credential_refs(embedding_config_svc)
         moved = await migrate_legacy_keychain(
             kinds,
             SqlAlchemyResourceRepo(sm),

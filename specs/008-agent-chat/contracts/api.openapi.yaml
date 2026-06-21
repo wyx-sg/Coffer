@@ -308,72 +308,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/models:
-    get:
-      summary: List configured models
-      operationId: listModels
-      tags: [models]
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ModelListOut'
-    post:
-      summary: Register a model
-      operationId: createModel
-      tags: [models]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ModelCreate'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ModelOut'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/models/{id}:
-    parameters:
-      - $ref: '#/components/parameters/ModelId'
-    patch:
-      summary: Edit a model
-      operationId: updateModel
-      tags: [models]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ModelPatch'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ModelOut'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    delete:
-      summary: Remove a model
-      operationId: deleteModel
-      tags: [models]
-      responses:
-        '204':
-          description: No Content
-        '404':
-          $ref: '#/components/responses/NotFound'
-
   /api/v1/models/list-models:
     post:
       summary: List the models a provider exposes (for the model picker)
@@ -440,11 +374,6 @@ components:
 
   parameters:
     ConversationId:
-      in: path
-      name: id
-      required: true
-      schema: { type: string }
-    ModelId:
       in: path
       name: id
       required: true
@@ -634,49 +563,6 @@ components:
       required: [text]
       properties:
         text: { type: string, minLength: 1, maxLength: 32768 }
-
-    ModelCreate:
-      type: object
-      required: [display_name, provider, model]
-      properties:
-        display_name: { type: string, minLength: 1 }
-        provider: { type: string, enum: [anthropic, openai, ollama] }
-        model: { type: string, minLength: 1 }
-        credential_ref: { type: string, nullable: true }
-        base_url: { type: string, nullable: true }
-        is_default: { type: boolean, default: false }
-
-    ModelPatch:
-      type: object
-      properties:
-        display_name: { type: string, nullable: true }
-        model: { type: string, nullable: true }
-        credential_ref: { type: string, nullable: true }
-        base_url: { type: string, nullable: true }
-        is_default: { type: boolean, nullable: true }
-
-    ModelOut:
-      type: object
-      required: [id, display_name, provider, model, is_default, created_at, updated_at]
-      properties:
-        id: { type: string }
-        display_name: { type: string }
-        provider: { type: string, enum: [anthropic, openai, ollama] }
-        model: { type: string }
-        credential_ref: { type: string, nullable: true }
-        base_url: { type: string, nullable: true }
-        is_default: { type: boolean }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-
-    ModelListOut:
-      type: object
-      required: [models]
-      properties:
-        models:
-          type: array
-          items:
-            $ref: '#/components/schemas/ModelOut'
 
     ErrorOut:
       type: object

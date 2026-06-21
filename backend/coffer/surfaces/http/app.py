@@ -76,7 +76,7 @@ from coffer.surfaces.http.dependencies import (
     get_invocation_repo_optional,
     get_master_key_manager,
     get_mcp_session_factory,
-    get_model_service,
+    get_provider_service,
     set_audit_service,
     set_embedding_config_service,
     set_resource_service,
@@ -255,7 +255,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     wire_distill(
         memory_service=memory_service,
         agent_service=get_agent_service(),
-        model_svc=get_model_service(),
+        provider_svc=get_provider_service(),
         credential_resolver=_distill_credential_resolver,
     )
 

@@ -76,7 +76,7 @@ def _spec(name: str) -> ToolSpec:
 
 def test_ask_tool_descriptor() -> None:
     tool = make_ask_tool(
-        model_service=_FakeModelService(),
+        resolve_connection=_FakeModelService().get_default,
         tool_gateway=_FakeGateway([]),
         credential_resolver=lambda ref: "key",
     )
@@ -86,7 +86,7 @@ def test_ask_tool_descriptor() -> None:
 
 async def test_ask_rejects_empty_query() -> None:
     tool = make_ask_tool(
-        model_service=_FakeModelService(),
+        resolve_connection=_FakeModelService().get_default,
         tool_gateway=_FakeGateway([]),
         credential_resolver=lambda ref: "key",
     )
@@ -96,11 +96,11 @@ async def test_ask_rejects_empty_query() -> None:
 
 async def test_ask_with_no_default_model_is_a_friendly_error() -> None:
     tool = make_ask_tool(
-        model_service=_FakeModelService(default=None),
+        resolve_connection=_FakeModelService(default=None).get_default,
         tool_gateway=_FakeGateway([]),
         credential_resolver=lambda ref: "key",
     )
-    with pytest.raises(ValueError, match="No model configured"):
+    with pytest.raises(ValueError, match="No internal connection configured"):
         await tool.handler({"query": "what is in the vault?"})
 
 

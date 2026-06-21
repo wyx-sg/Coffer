@@ -36,7 +36,6 @@ from coffer.surfaces.http.channel_routes import set_channel_service
 from coffer.surfaces.http.chat.dependencies import (
     get_agent_registry,
     get_chat_service,
-    get_model_service,
     get_turn_orchestrator,
 )
 from coffer.surfaces.http.dependencies import get_provider_service
@@ -52,24 +51,6 @@ def _daemon_info() -> tuple[str, str]:
     if token is None:
         raise RuntimeError("daemon token not published yet")
     return f"http://127.0.0.1:{daemon_routes.get_port()}", token
-
-
-class _ModelCatalog:
-    """Adapts the model registry to the channel core's ModelCatalogPort: resolve
-    a chat-typed name (display name, id, or upstream model string) to a model id."""
-
-    def __init__(self, models: Any) -> None:
-        self._models = models
-
-    async def resolve(self, name: str) -> str | None:
-        lowered = name.lower()
-        for m in await self._models.list():
-            if m.id == name or m.display_name.lower() == lowered or m.model == name:
-                return str(m.id)
-        return None
-
-    async def list_models(self) -> list[tuple[str, str]]:
-        return [(str(m.id), str(m.display_name)) for m in await self._models.list()]
 
 
 # A managed chat agent's agent_key -> its provider wire format (ADR-032 targets).
@@ -127,7 +108,6 @@ def wire_channel_kind(
         turns=get_turn_orchestrator(),
         audit=audit,
         agents=get_agent_registry(),
-        models=_ModelCatalog(get_model_service()),
         model_suggestions=_ModelSuggestions(get_provider_service),
     )
 

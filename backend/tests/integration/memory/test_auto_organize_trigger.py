@@ -10,33 +10,27 @@ import pytest
 
 from coffer.application.memory.auto_organize import MemoryAutoOrganizer
 from coffer.application.memory.organizer import OrganizerService
-from coffer.domain.chat.model import ModelConfig, ProviderType
 from coffer.domain.memory.scope import MemoryScope
+from coffer.domain.provider.config import ProviderConfig, WireFormat
 from coffer.infrastructure.knowledge.paths import inbox_dir, topic_path
 
 
-def _model() -> ModelConfig:
-    now = datetime(2026, 6, 21, tzinfo=UTC)
-    return ModelConfig(
-        id="m1",
-        display_name="Local Ollama",
-        provider=ProviderType.OLLAMA,
-        model="llama3",
-        credential_ref=None,
+def _model() -> ProviderConfig:
+    return ProviderConfig(
+        wire_format=WireFormat.OLLAMA,
         base_url="http://localhost:11434",
-        is_default=True,
-        created_at=now,
-        updated_at=now,
+        credential_ref=None,
+        model="llama3",
     )
 
 
 class _Models:
     """Fake ModelSelectorPort."""
 
-    def __init__(self, model: ModelConfig | None) -> None:
+    def __init__(self, model: ProviderConfig | None) -> None:
         self._model = model
 
-    async def get_default(self) -> ModelConfig | None:
+    async def get_default(self) -> ProviderConfig | None:
         return self._model
 
 

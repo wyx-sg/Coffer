@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Protocol
 
-from coffer.domain.chat.model import ModelConfig
+from coffer.domain.provider.config import ProviderConfig
 
 
 class LlmCompletionPort(Protocol):
@@ -24,12 +24,12 @@ class LlmCompletionPort(Protocol):
         *,
         system: str,
         user: str,
-        model: ModelConfig,
+        model: ProviderConfig,
         credential_resolver: Callable[[str], str],
     ) -> str: ...
 
 
 class ModelSelectorPort(Protocol):
-    """Resolves Coffer's configured internal model (Settings → Models)."""
+    """Resolves Coffer's internal-engine connection (the internal-default one)."""
 
-    async def get_default(self) -> ModelConfig | None: ...
+    async def get_default(self) -> ProviderConfig | None: ...

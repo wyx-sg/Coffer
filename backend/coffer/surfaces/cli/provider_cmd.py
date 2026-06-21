@@ -17,7 +17,7 @@ _console = Console()
 @app.command("add")
 def add(
     name: str = typer.Argument(..., help="Profile name"),
-    wire_format: str = typer.Option(..., "--wire", help="Wire format: anthropic | openai"),
+    wire_format: str = typer.Option(..., "--wire", help="Wire format: anthropic | openai | ollama"),
     base_url: str = typer.Option(..., "--base-url", help="Upstream endpoint base URL"),
     model: str = typer.Option(..., "--model", help="Primary model id"),
     fast_model: str | None = typer.Option(None, "--fast-model", help="Fast model (anthropic)"),
@@ -27,7 +27,8 @@ def add(
         None, "--credential-ref", help="Reuse an existing credential ref instead of --secret"
     ),
 ) -> None:
-    """Create a provider profile. Supply exactly one of --secret / --credential-ref."""
+    """Create an LLM connection. For anthropic/openai supply exactly one of
+    --secret / --credential-ref; an ollama connection needs neither."""
     body: dict[str, object] = {
         "name": name,
         "wire_format": wire_format,
@@ -69,7 +70,7 @@ def list_providers(output_json: bool = typer.Option(False, "--json")) -> None:
         typer.echo(_json.dumps(data, indent=2))
         return
     table = Table(title="Providers")
-    for col in ("name", "wire", "base_url", "model", "active"):
+    for col in ("name", "wire", "base_url", "model", "active", "internal"):
         table.add_column(col)
     for p in data["providers"]:
         table.add_row(
@@ -78,6 +79,7 @@ def list_providers(output_json: bool = typer.Option(False, "--json")) -> None:
             p["base_url"],
             p["model"],
             "yes" if p["is_active"] else "",
+            "yes" if p.get("internal_default") else "",
         )
     _console.print(table)
 
@@ -159,6 +161,20 @@ def switch(name: str = typer.Argument(..., help="Profile to activate")) -> None:
     data = r.json()
     projected = ", ".join(data["projected"]) or "(no matching agent)"
     typer.echo(f"switched to {data['activated']} [{data['wire_format']}] → {projected}")
+
+
+@app.command("internal-default")
+def internal_default(name: str = typer.Argument(..., help="Connection to use internally")) -> None:
+    """Make this connection Coffer's internal-engine default (≤1 globally)."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/providers/{name}/internal-default")
+        if r.status_code == 404:
+            typer.echo(f"provider {name!r} not found", err=True)
+            raise typer.Exit(4)
+        r.raise_for_status()
+    data = r.json()
+    typer.echo(f"internal engine now uses {data['name']} [{data['wire_format']}] {data['model']}")
 
 
 @app.command("key")

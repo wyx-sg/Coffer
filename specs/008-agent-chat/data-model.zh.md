@@ -16,7 +16,7 @@ Frozen dataclass —— domain 保持纯净。
 | `id`                        | `str`                | uuid4 hex                                                                                                                                                                                                                    |
 | `agent_key`                 | `str`                | 该线程对话所用的 agent；默认 `"builtin"`                                                                                                                                                                                     |
 | `title`                     | `str`                | 从首条用户消息自动生成；用户可编辑                                                                                                                                                                                           |
-| `model_id`                  | `str \| None`        | `chat_models.id` 覆盖项 → 内部引擎 `ModelConfig` 注册表（设置 → 模型）。**不被受管 agent 的回合路径读取**（ADR-024）；不在聊天模型选择器范围内。`None` → 默认模型。                                                            |
+| `model_id`                  | `str \| None`        | **残留的遗留列。** 曾是 `chat_models.id` 对内部引擎 `ModelConfig` 注册表的覆盖项，该注册表现已**退役**（折叠进 provider connection，spec 011 / ADR-032）。**不被受管 agent 的回合路径读取**（ADR-024）；内部引擎从内部默认 connection 选择其模型。不在聊天模型选择器范围内。 |
 | `agent_config`              | `str \| None` (JSON) | provider 自有的每对话状态（Alembic `0018`）。受管 agent（Claude Code / Codex）在此存储 `{cwd, session_id, model}`；`model` 是该 agent 自己的每对话模型（自由文本，透传给其 CLI），经镜像 `/model` 的 agent-config PATCH 路由设置。通过 `ConversationRepo.get_agent_config` / `set_agent_config` 读/写。 |
 | `archived_at`               | `datetime \| None`   | `None` = 活跃；时间戳 = 已归档（Alembic `0013`）。驱动活跃/已归档过滤器与两阶段保留生命周期。                                                                                                                                |
 | `channel_name`              | `str \| None`        | 可选的 IM channel binding（ADR-031）：本对话同样从其被驱动的 channel。一个对话"有一个 channel binding"当且仅当本字段被设置（Alembic `0021`）。                                                                                |
@@ -34,12 +34,6 @@ Frozen dataclass —— domain 保持纯净。
 （`complete`|`streaming`|`failed`）、`model_id`、`prompt_tokens`、
 `completion_tokens`、`created_at`。`ContentBlock` = `TextBlock` |
 `ToolUseBlock` | `ToolResultBlock`。
-
-### `ModelConfig`（`domain/chat/model.py`）
-
-未变。`id`、`display_name`（唯一）、`provider`
-（`anthropic`|`openai`|`ollama`）、`model`、`credential_ref`（云端必填）、
-`base_url`（ollama 必填）、`is_default`、时间戳。
 
 ### `AgentEvent`（`domain/chat/events.py`）
 
@@ -117,8 +111,10 @@ class AgentProvider(Protocol):
 
 ## 领域错误（`domain/errors.py`）
 
-现有：`ConversationNotFound`（404）、`ModelNotFound`（404）、`ModelRejected`
-（400）、`NoModelConfigured`（409）、`TurnInProgress`（409）。
+现有：`ConversationNotFound`（404）、`TurnInProgress`（409）。（聊天模型注册表相关
+错误 `ModelNotFound` / `ModelRejected` / `NoModelConfigured` 随退役的 `ModelConfig`
+注册表一并移除，spec 011 / ADR-032；transcript 蒸馏仍保留自己的
+`NoModelConfiguredError` → 当未配置内部 connection 时返回 wire `NO_MODEL_CONFIGURED`（409）。）
 
 **本次修订新增：**
 
@@ -135,7 +131,8 @@ CLI agent 需要每对话的工作目录 + session 状态，通过同一个 `ini
 或 wire 契约。
 
 表：`conversations`（Alembic `0005`；`archived_at` `0013`；`agent_config`
-`0018`）、`chat_messages`、`chat_models`。
+`0018`）、`chat_messages`。原 `chat_models` 表随 `ModelConfig` 注册表一并退役
+（spec 011 / ADR-032）。
 
 ## 级联与完整性规则
 

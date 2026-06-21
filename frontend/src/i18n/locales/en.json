@@ -366,9 +366,8 @@
       "data": "Data",
       "security": "Security",
       "about": "About",
-      "models": "Models",
-      "sync": "Sync",
-      "providers": "Providers"
+      "llmConnections": "LLM Connections",
+      "sync": "Sync"
     },
     "general": {
       "title": "Display",
@@ -505,20 +504,23 @@
       },
       "keyExported": "Key written to {{path}}"
     },
-    "providers": {
-      "title": "Providers",
-      "subtitle": "Switch the active LLM provider that Claude Code and Codex use.",
-      "add": "Add provider",
-      "addTitle": "Add provider",
-      "empty": "No provider profiles yet.",
+    "connections": {
+      "title": "LLM Connections",
+      "subtitle": "A connection = an API key + endpoint + model. One connection can drive an agent and Coffer's internal engine.",
+      "add": "Add connection",
+      "addTitle": "Add connection",
+      "empty": "No connections yet.",
       "switch": "Switch",
       "active": "Active",
-      "deleteTitle": "Delete provider",
-      "deleteConfirm": "Delete provider \"{{name}}\"? Its stored credential is removed too.",
+      "internalDefault": "Internal engine",
+      "setInternalDefault": "Use \"{{name}}\" for Coffer's internal engine",
+      "deleteTitle": "Delete connection",
+      "deleteConfirm": "Delete connection \"{{name}}\"? Its stored credential is removed too.",
       "name": "Name",
       "wireFormat": "Wire format",
       "baseUrl": "Base URL",
       "model": "Model",
+      "fastModel": "Fast model (optional)",
       "secret": "API key"
     }
   },
@@ -656,6 +658,17 @@
     "name": "Name",
     "type": "Type",
     "configDir": "Config directory",
+    "connection": {
+      "title": "LLM connection",
+      "label": "Connection",
+      "model": "Model",
+      "none": "No compatible connection",
+      "empty": "No connection for this agent yet.",
+      "manage": "Manage connections in Settings → LLM Connections",
+      "customModel": "Custom…",
+      "customLabel": "Custom model id",
+      "customPlaceholder": "Enter a model id"
+    },
     "status": "Status",
     "searchPlaceholder": "Search agents…",
     "allTypes": "All types",
@@ -1125,9 +1138,9 @@
     "title": "Chat",
     "thinking": "Thinking…",
     "emptyState": {
-      "title": "No model configured",
-      "body": "You need to add at least one model before you can start chatting.",
-      "cta": "Go to Settings → Models"
+      "title": "No connection configured",
+      "body": "Add an LLM connection before you can start chatting.",
+      "cta": "Go to Settings → LLM Connections"
     },
     "message": {
       "failed": "This response did not complete.",
@@ -1199,7 +1212,7 @@
     "newConversation": {
       "agent": "Agent",
       "model": "Model",
-      "noModels": "No models yet — add one in Settings → Models first.",
+      "noModels": "No models yet — add a connection in Settings → LLM Connections first.",
       "unavailable": "unavailable",
       "workdir": "Working directory",
       "workdirPlaceholder": "/path/to/your/project",
@@ -1208,13 +1221,21 @@
     "modelPicker": {
       "label": "Agent model",
       "placeholder": "Model (optional)",
-      "defaultHint": "Default: {{model}}"
+      "defaultHint": "Default: {{model}}",
+      "inherit": "Default ({{model}})",
+      "inheritNoModel": "Default",
+      "custom": "Custom…",
+      "customLabel": "Custom model id",
+      "customPlaceholder": "Enter a model id"
     },
     "draft": {
       "guide": "Message {{agent}} to start a new conversation.",
       "workdirNeeded": "Enter a working directory above to start chatting with {{agent}}.",
       "noAgentTitle": "No managed agent available",
-      "noAgentBody": "Chat talks to a Coffer-managed agent. Install or configure Claude Code or Codex, then register it under Agents."
+      "noAgentBody": "Chat talks to a Coffer-managed agent. Install or configure Claude Code or Codex, then register it under Agents.",
+      "noConnectionTitle": "No connection configured",
+      "noConnectionBody": "This agent has no active LLM connection. Add one to start chatting.",
+      "noConnectionCta": "Go to Settings → LLM Connections"
     },
     "delete": {
       "title": "Delete this conversation?",

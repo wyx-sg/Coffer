@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
 
-from coffer.domain.chat.model import ModelConfig, ProviderType
+from coffer.domain.provider.config import ProviderConfig, WireFormat
 from coffer.infrastructure.chat import llm_completion
 
 
@@ -22,16 +20,11 @@ async def test_complete_returns_text(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(llm_completion, "build_chat_model", lambda cfg, resolver: _Model())
 
     port = llm_completion.LangchainLlmCompletion()
-    cfg = ModelConfig(
-        id="test-id",
-        display_name="Test Ollama",
-        provider=ProviderType.OLLAMA,
-        model="llama3",
-        credential_ref=None,
+    cfg = ProviderConfig(
+        wire_format=WireFormat.OLLAMA,
         base_url="http://localhost:11434",
-        is_default=False,
-        created_at=datetime(2026, 1, 1, tzinfo=UTC),
-        updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        credential_ref=None,
+        model="llama3",
     )
     out = await port.complete(system="s", user="u", model=cfg, credential_resolver=lambda r: "")
     assert out == "distilled"

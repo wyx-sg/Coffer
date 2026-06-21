@@ -240,10 +240,6 @@ components:
           nullable: true
           description: |
             Distil the most-recent session for this project path.
-        model_id:
-          type: string
-          nullable: true
-          description: Override the default model for this distillation run.
         dry_run:
           type: boolean
           default: false

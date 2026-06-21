@@ -19,8 +19,7 @@ from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message, Role, TextBlock
-from coffer.domain.chat.model import ModelConfig, ProviderType
-from coffer.domain.errors import ConversationNotFound, NoModelConfigured
+from coffer.domain.errors import ConversationNotFound
 
 # ---------------------------------------------------------------------------
 # Audit
@@ -166,47 +165,6 @@ class FakeMessageRepo:
 
 
 # ---------------------------------------------------------------------------
-# Model
-# ---------------------------------------------------------------------------
-
-
-class FakeChatModelRepo:
-    def __init__(self) -> None:
-        self._store: dict[str, ModelConfig] = {}
-
-    async def create(self, model: ModelConfig) -> ModelConfig:
-        self._store[model.id] = model
-        return model
-
-    async def get(self, model_id: str) -> ModelConfig | None:
-        return self._store.get(model_id)
-
-    async def list(self) -> list[ModelConfig]:
-        return list(self._store.values())
-
-    async def update(self, model: ModelConfig) -> ModelConfig:
-        self._store[model.id] = model
-        return model
-
-    async def delete(self, model_id: str) -> None:
-        self._store.pop(model_id, None)
-
-    async def get_default(self) -> ModelConfig | None:
-        for m in self._store.values():
-            if m.is_default:
-                return m
-        return None
-
-    async def set_default(self, model_id: str) -> None:
-        """Set ``model_id`` as default and clear all others."""
-        now = datetime.now(tz=UTC)
-        self._store = {
-            mid: dataclasses.replace(m, is_default=(mid == model_id), updated_at=now)
-            for mid, m in self._store.items()
-        }
-
-
-# ---------------------------------------------------------------------------
 # Tool gateway
 # ---------------------------------------------------------------------------
 
@@ -263,10 +221,9 @@ class FakeAgentAdapter:
 class FakeAgentProvider:
     """An ``AgentProvider`` for tests: builds a given adapter, records calls.
 
-    ``build_error`` makes ``build_adapter`` raise unconditionally. When
-    ``model_service`` is supplied, ``build_adapter`` mirrors the real built-in
-    provider — it raises ``NoModelConfigured`` if no default model exists — so
-    HTTP/CLI tests get realistic no-model behaviour.
+    ``build_error`` makes ``build_adapter`` raise unconditionally — used to
+    exercise the turn path's clean failure when a provider can't build its
+    adapter (e.g. a missing credential).
     """
 
     def __init__(
@@ -277,14 +234,12 @@ class FakeAgentProvider:
         available: bool = True,
         build_error: BaseException | None = None,
         init_error: BaseException | None = None,
-        model_service: Any = None,
     ) -> None:
         self.agent_key = agent_key
         self._adapter = adapter
         self._available = available
         self._build_error = build_error
         self._init_error = init_error
-        self._model_service = model_service
         self.init_calls: list[tuple[str, dict[str, Any]]] = []
         self.deleted: list[str] = []
 
@@ -296,8 +251,6 @@ class FakeAgentProvider:
     async def build_adapter(self, conversation_id: str) -> Any:
         if self._build_error is not None:
             raise self._build_error
-        if self._model_service is not None and await self._model_service.get_default() is None:
-            raise NoModelConfigured()
         return self._adapter
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:
@@ -324,21 +277,21 @@ def make_chat_services(
     events: list[AgentEvent] | None = None,
     *,
     provider: Any = None,
-) -> tuple[Any, Any, Any, AgentProviderRegistry]:
+) -> tuple[Any, Any, AgentProviderRegistry]:
     """Build wired in-memory chat services + registry for HTTP / CLI integration tests.
 
-    Returns ``(chat_service, model_service, turn_orchestrator, registry)``. The
-    registry holds one ``FakeAgentProvider`` (or the supplied ``provider``).
+    Returns ``(chat_service, turn_orchestrator, registry)``. The registry holds
+    one ``FakeAgentProvider`` (or the supplied ``provider``). Chat no longer owns
+    a model registry — a managed agent brings its own model via provider
+    projection (ADR-032).
     """
     from coffer.application.audit_service import AuditService
-    from coffer.application.chat.model_service import ModelService
     from coffer.application.chat.service import ChatService
     from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 
     audit = AuditService(repo=FakeAuditRepo())  # type: ignore[arg-type]
     conv_repo = FakeConversationRepo()
     msg_repo = FakeMessageRepo()
-    model_svc = ModelService(repo=FakeChatModelRepo(), audit=audit)  # type: ignore[arg-type]
 
     if provider is None:
         default_events: list[AgentEvent] = events or [
@@ -346,9 +299,7 @@ def make_chat_services(
             TextDelta(text="Hello from agent!"),
             TurnDone(prompt_tokens=10, completion_tokens=5, stop_reason="end_turn"),
         ]
-        provider = FakeAgentProvider(
-            FakeAgentAdapter(default_events), agent_key="builtin", model_service=model_svc
-        )
+        provider = FakeAgentProvider(FakeAgentAdapter(default_events), agent_key="builtin")
 
     registry = AgentProviderRegistry()
     registry.register(provider, display_name="Coffer Assistant")
@@ -359,27 +310,12 @@ def make_chat_services(
         audit=audit,  # type: ignore[arg-type]
     )
     orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry, audit=audit)
-    return chat_svc, model_svc, orchestrator, registry
+    return chat_svc, orchestrator, registry
 
 
 # ---------------------------------------------------------------------------
 # Domain object helpers
 # ---------------------------------------------------------------------------
-
-
-def make_anthropic_model(model_id: str = "m-001", is_default: bool = True) -> ModelConfig:
-    now = datetime.now(tz=UTC)
-    return ModelConfig(
-        id=model_id,
-        display_name="Test Claude" if model_id == "m-001" else f"Model {model_id}",
-        provider=ProviderType.ANTHROPIC,
-        model="claude-sonnet-4-6",
-        credential_ref="ref",
-        base_url=None,
-        is_default=is_default,
-        created_at=now,
-        updated_at=now,
-    )
 
 
 def make_message(

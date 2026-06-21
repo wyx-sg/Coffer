@@ -22,7 +22,6 @@ from coffer.application.channel.ports import (
     ChannelBinding,
     ChannelPeer,
     ChannelPeerRepoPort,
-    ModelCatalogPort,
     ModelSuggestionPort,
 )
 from coffer.domain.channel.envelopes import ChoiceButton
@@ -72,14 +71,12 @@ class ChannelCommands:
         conversations: Any,
         turns: Any,
         agents: AgentCatalogPort,
-        models: ModelCatalogPort,
         model_suggestions: ModelSuggestionPort,
     ) -> None:
         self._peers = peers
         self._conversations = conversations
         self._turns = turns
         self._agents = agents
-        self._models = models
         self._model_suggestions = model_suggestions
 
     async def handle(

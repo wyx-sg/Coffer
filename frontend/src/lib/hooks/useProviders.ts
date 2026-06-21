@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { providersApi, type ProviderCreate } from "@/lib/api/providers";
+import { providersApi, type ProviderCreate, type ProviderPatch } from "@/lib/api/providers";
 import { useToast } from "@/components/ui/toast";
 
 const PROVIDERS_KEY = ["providers"] as const;
@@ -32,6 +32,19 @@ export function useCreateProvider() {
   });
 }
 
+export function useUpdateProvider() {
+  const qc = useQueryClient();
+  const onError = useProviderToastError();
+  return useMutation({
+    mutationFn: (vars: { name: string; patch: ProviderPatch }) =>
+      providersApi.update(vars.name, vars.patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+    },
+    onError,
+  });
+}
+
 export function useDeleteProvider() {
   const qc = useQueryClient();
   const onError = useProviderToastError();
@@ -51,6 +64,19 @@ export function useActivateProvider() {
   const onError = useProviderToastError();
   return useMutation({
     mutationFn: (name: string) => providersApi.activate(name),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+    },
+    onError,
+  });
+}
+
+/** Set which connection Coffer's internal engine uses (≤1 globally). */
+export function useSetInternalDefaultProvider() {
+  const qc = useQueryClient();
+  const onError = useProviderToastError();
+  return useMutation({
+    mutationFn: (name: string) => providersApi.setInternalDefault(name),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
     },

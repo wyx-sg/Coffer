@@ -26,20 +26,6 @@ def get_chat_service() -> Any:
     return _chat_service
 
 
-_model_service: Any | None = None
-
-
-def set_model_service(svc: Any) -> None:
-    global _model_service
-    _model_service = svc
-
-
-def get_model_service() -> Any:
-    if _model_service is None:
-        raise RuntimeError("model service not initialised")
-    return _model_service
-
-
 _introspection_service: Any | None = None
 
 

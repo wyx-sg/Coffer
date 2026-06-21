@@ -25,12 +25,10 @@ from coffer.domain.chat.events import AgentEvent, TextDelta
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.conversation_routes import router as conversation_router
-from coffer.surfaces.http.chat.model_routes import router as model_router
 from coffer.surfaces.http.chat.turn_routes import router as turn_router
 from coffer.surfaces.http.dependencies import (
     get_agent_registry,
     get_chat_service,
-    get_model_service,
     get_turn_orchestrator,
 )
 from tests.unit.chat.conftest import FakeAgentProvider, make_chat_services
@@ -51,14 +49,12 @@ class _BlockingAdapter:
         return gen()
 
 
-def _build_app(chat_svc: Any, model_svc: Any, orchestrator: Any, registry: Any) -> FastAPI:
+def _build_app(chat_svc: Any, orchestrator: Any, registry: Any) -> FastAPI:
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(conversation_router)
     app.include_router(turn_router)
-    app.include_router(model_router)
     app.dependency_overrides[get_chat_service] = lambda: chat_svc
-    app.dependency_overrides[get_model_service] = lambda: model_svc
     app.dependency_overrides[get_turn_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_agent_registry] = lambda: registry
     return app
@@ -73,8 +69,8 @@ def _reset_turns():  # type: ignore[no-untyped-def]
 
 def test_delete_conversation_route_passes_cancel_fn_to_service() -> None:
     """DELETE /conversations/{id} passes orchestrator.cancel_turn to the service."""
-    chat_svc, model_svc, orchestrator, registry = make_chat_services()
-    app = _build_app(chat_svc, model_svc, orchestrator, registry)
+    chat_svc, orchestrator, registry = make_chat_services()
+    app = _build_app(chat_svc, orchestrator, registry)
     set_active_token(_TOKEN)
 
     captured: list[Callable[..., Any] | None] = []
@@ -113,7 +109,7 @@ async def test_delete_discards_an_in_flight_turn() -> None:
     Unlike interruption, the discard path emits no terminal TurnDone and
     persists no partial assistant message; the task simply leaves the registry.
     """
-    chat_svc, _model_svc, orchestrator, _registry = make_chat_services(
+    chat_svc, orchestrator, _registry = make_chat_services(
         provider=FakeAgentProvider(_BlockingAdapter(), agent_key="builtin")
     )
     conv = await chat_svc.create_conversation(agent_key="builtin")

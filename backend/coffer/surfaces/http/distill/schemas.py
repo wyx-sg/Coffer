@@ -44,7 +44,6 @@ class DistillRequest(BaseModel):
         default=None,
         description="Distil the most-recent session for this project path.",
     )
-    model_id: str | None = Field(default=None, description="Override the default model.")
     dry_run: bool = Field(
         default=False,
         description="If true, return insights without writing memory facts.",

@@ -9,18 +9,32 @@ import { ApiError } from "./errors";
 // Types
 // ---------------------------------------------------------------------------
 
-export type WireFormat = "anthropic" | "openai";
+export type WireFormat = "anthropic" | "openai" | "ollama";
 export type WireApi = "chat" | "responses";
+
+/**
+ * Chat agent_key → provider wire format (ADR-032 projection targets). Shared by
+ * the chat ModelPicker and the agent Overview connection picker so both map an
+ * agent to its compatible connections the same way. `ollama` is internal-only
+ * (never projected to an agent), so it is not a value here.
+ */
+export const WIRE_BY_AGENT: Record<string, WireFormat> = {
+  claude_code: "anthropic",
+  codex: "openai",
+};
 
 export interface Provider {
   name: string;
   wire_format: WireFormat;
   base_url: string;
-  credential_ref: string;
+  /** Null for ollama (no key) and any connection created without a credential. */
+  credential_ref: string | null;
   model: string;
   fast_model?: string | null;
   wire_api: WireApi;
   is_active: boolean;
+  /** ≤1 globally — the connection Coffer's internal engine uses. */
+  internal_default: boolean;
   enabled: boolean;
   description?: string | null;
   created_at: string;
@@ -57,6 +71,11 @@ export interface ActivateOut {
   wire_format: WireFormat;
   projected: string[];
   skipped: string[];
+}
+
+/** True only for anthropic/openai connections — ollama has no key. */
+export function wireNeedsCredential(wire: WireFormat): boolean {
+  return wire !== "ollama";
 }
 
 // ---------------------------------------------------------------------------
@@ -102,4 +121,9 @@ export const providersApi = {
   remove: (name: string) => call<void>("DELETE", `/providers/${name}`),
 
   activate: (name: string) => call<ActivateOut>("POST", `/providers/${name}/activate`),
+
+  /** Make this connection Coffer's internal-engine default (clears the flag on
+   * all others). Returns the updated connection. */
+  setInternalDefault: (name: string) =>
+    call<Provider>("POST", `/providers/${name}/internal-default`),
 };
