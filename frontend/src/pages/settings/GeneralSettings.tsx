@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Check, ChevronsUpDown } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -20,10 +21,7 @@ import {
   useSetPreferredEditor,
 } from "@/lib/preferences";
 import { isTauri } from "@/lib/tauri";
-
-// Sentinel Select values (Radix Select items can't be the empty string).
-const DEFAULT_OPT = "__default__"; // OS default — stored preference is ""
-const CUSTOM_OPT = "__custom__"; // free-form app name / launch command / .app path
+import { cn } from "@/lib/utils";
 
 /** Pick an application bundle on the desktop (macOS apps are .app directories). */
 async function pickEditorApp(): Promise<string | null> {
@@ -37,10 +35,12 @@ async function pickEditorApp(): Promise<string | null> {
  * default rows-per-page every list table seeds from, and the preferred external
  * editor Coffer opens managed files with from its read-only file viewers.
  *
- * The editor is chosen from a picker of editors the daemon detected as installed
- * (a browser can't enumerate apps), with a "system default" option and a custom
- * escape hatch for anything unlisted. Only the chosen value is stored — never
- * sent to the daemon except transiently as the target when opening a file.
+ * The editor control is an edit-in-place combobox: the text field is always
+ * editable (type any app name / launch command directly), and the chevron opens
+ * a picker of editors the daemon detected as installed — plus "system default"
+ * and a native Browse… on the desktop. An empty value means the OS default.
+ * Only the chosen value is stored — never sent to the daemon except transiently
+ * as the target when opening a file.
  */
 export function GeneralSettings() {
   const { t } = useTranslation();
@@ -49,38 +49,30 @@ export function GeneralSettings() {
   const setPreferredEditor = useSetPreferredEditor();
   const { data: detected = [] } = useDetectedEditors();
   const [editor, setEditor] = useState(getPreferredEditor);
-  const [customMode, setCustomMode] = useState(false);
-
-  const isKnown = detected.some((e) => e.value === editor);
-  // A non-empty value that isn't a detected editor is a custom entry (typed, or
-  // picked via Browse); custom mode is also entered explicitly from the picker.
-  const showCustom = customMode || (editor !== "" && !isKnown);
-  const selectValue = showCustom ? CUSTOM_OPT : editor === "" ? DEFAULT_OPT : editor;
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const commitEditor = (value: string) => {
     setEditor(value);
     setPreferredEditor(value);
   };
 
-  const onSelect = (v: string) => {
-    if (v === DEFAULT_OPT) {
-      setCustomMode(false);
-      commitEditor("");
-    } else if (v === CUSTOM_OPT) {
-      setCustomMode(true); // reveal the input; keep current text as the starting point
-    } else {
-      setCustomMode(false);
-      commitEditor(v);
-    }
+  const pick = (value: string) => {
+    commitEditor(value);
+    setPickerOpen(false);
   };
 
   const browse = async () => {
+    setPickerOpen(false);
     const picked = await pickEditorApp();
-    if (picked) {
-      setCustomMode(true);
-      commitEditor(picked);
-    }
+    if (picked) commitEditor(picked);
   };
+
+  // System default + detected editors. A custom editor is typed straight into
+  // the field, so there's no separate "custom" entry or expanded text box.
+  const options = [
+    { label: t("settings.general.preferredEditorSystemDefault"), value: "" },
+    ...detected,
+  ];
 
   return (
     <Card>
@@ -94,7 +86,7 @@ export function GeneralSettings() {
             <p className="text-sm text-muted-foreground">{t("settings.general.pageSizeHelp")}</p>
           </div>
           <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-            <SelectTrigger className="w-24" aria-label={t("settings.general.pageSize")}>
+            <SelectTrigger className="w-44" aria-label={t("settings.general.pageSize")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -107,49 +99,61 @@ export function GeneralSettings() {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div className="space-y-0.5">
             <p className="text-sm font-medium">{t("settings.general.preferredEditor")}</p>
             <p className="text-sm text-muted-foreground">
               {t("settings.general.preferredEditorHelp")}
             </p>
           </div>
-          <div className="flex flex-col items-stretch gap-2 sm:items-end">
-            <Select value={selectValue} onValueChange={onSelect}>
-              <SelectTrigger className="w-56" aria-label={t("settings.general.preferredEditor")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={DEFAULT_OPT}>
-                  {t("settings.general.preferredEditorSystemDefault")}
-                </SelectItem>
-                {detected.map((e) => (
-                  <SelectItem key={e.value} value={e.value}>
-                    {e.label}
-                  </SelectItem>
+          <div className="relative w-44 shrink-0">
+            <Input
+              value={editor}
+              placeholder={t("settings.general.preferredEditorSystemDefault")}
+              onChange={(e) => setEditor(e.target.value)}
+              onBlur={(e) => commitEditor(e.target.value)}
+              className="pr-9"
+              aria-label={t("settings.general.preferredEditor")}
+            />
+            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-md text-muted-foreground hover:text-foreground"
+                  aria-label={t("settings.general.preferredEditorChoose")}
+                >
+                  <ChevronsUpDown className="size-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-44 p-1">
+                {options.map((opt) => (
+                  <button
+                    key={opt.value || "__default__"}
+                    type="button"
+                    onClick={() => pick(opt.value)}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                  >
+                    <Check
+                      className={cn(
+                        "size-4 shrink-0",
+                        editor === opt.value ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    <span className="truncate">{opt.label}</span>
+                  </button>
                 ))}
-                <SelectItem value={CUSTOM_OPT}>
-                  {t("settings.general.preferredEditorCustom")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            {showCustom && (
-              <div className="flex items-center gap-2">
-                <Input
-                  value={editor}
-                  placeholder={t("settings.general.preferredEditorPlaceholder")}
-                  onChange={(e) => setEditor(e.target.value)}
-                  onBlur={(e) => commitEditor(e.target.value)}
-                  className="w-56"
-                  aria-label={t("settings.general.preferredEditorCustom")}
-                />
                 {isTauri() ? (
-                  <Button type="button" variant="outline" size="sm" onClick={() => void browse()}>
-                    {t("settings.general.preferredEditorBrowse")}
-                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => void browse()}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                  >
+                    <span className="size-4 shrink-0" />
+                    <span className="truncate">{t("settings.general.preferredEditorBrowse")}</span>
+                  </button>
                 ) : null}
-              </div>
-            )}
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </CardContent>

@@ -363,10 +363,9 @@
       "pageSize": "每页默认行数",
       "pageSizeHelp": "所有表格的初始每页行数。",
       "preferredEditor": "首选编辑器",
-      "preferredEditorHelp": "Coffer 打开受管文件所用的编辑器。可选一个检测到的编辑器、系统默认，或填入自定义的应用或启动命令。",
-      "preferredEditorPlaceholder": "如 code、cursor 或应用路径",
+      "preferredEditorHelp": "Coffer 打开受管文件所用的编辑器。可选一个检测到的编辑器，或直接填入应用名 / 启动命令；留空则用系统默认。",
       "preferredEditorSystemDefault": "系统默认",
-      "preferredEditorCustom": "自定义…",
+      "preferredEditorChoose": "选择编辑器",
       "preferredEditorBrowse": "浏览…"
     },
     "retention": {
