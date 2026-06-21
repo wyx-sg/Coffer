@@ -561,6 +561,76 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /agents/{name}/native-memory:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentNativeMemory
+      summary: List the agent's OWN native per-project memory stores
+      description: |
+        Read-only scan of the coding agent's own native per-project memory —
+        distinct from the `instructions` config files of FR-013 (CLAUDE.md /
+        AGENTS.md are human-authored instructions; this is the agent's
+        self-written memory store). For `claude_code` these live at
+        `<config_dir>/projects/<slug>/memory/*.md` (FR-040). Each store carries
+        a readable `project` label decoded from the slug, a best-effort decoded
+        `path` (the slug decode is lossy and may be null), the real
+        `memory_dir`, and an `item_count` of `.md` files excluding `MEMORY.md`.
+        Derived at read time, never stored; the agent's store is never written.
+        An agent type with no native memory layout (`codex`), or one whose
+        `projects/` directory is absent, returns an empty list. Read-only —
+        emits no audit event (FR-011).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NativeMemoryListResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/native-memory/import:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    post:
+      tags: [agents]
+      operationId: importAgentNativeMemory
+      summary: Adopt a native memory store into the matching Coffer project memory
+      description: |
+        Reads the store's fact files (skipping `MEMORY.md`), resolves the REAL
+        project path — the decoded slug when it exists on disk, else the `cwd`
+        recorded in a sibling transcript `.jsonl` (the slug decode is lossy) —
+        and writes each fact as a project-scoped Coffer memory fact into the
+        project store's `knowledge/inbox/` lane (like a batch of `remember`s; a
+        trusted import may write a note up to the 32768-character domain
+        ceiling). It then triggers spec 007's organizer as a BACKGROUND task —
+        a bulk import is dozens of sequential internal-LLM calls and must not
+        block the request (FR-041). The imported facts audit through spec 007's
+        existing memory write events; the import adds no new 004 audit event. A
+        store outside any git project (no mappable Coffer project) yields
+        `imported=0`, `store=null`, `project_path=null`, `organized=false` — it
+        corrupts no inbox and is not an error.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NativeMemoryImportRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NativeMemoryImportResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /fs/browse:
     get:
       tags: [fs]
@@ -1085,6 +1155,82 @@ components:
           type: string
           nullable: true
           description: "The resolved coffer-mcp-shim command written/found, when installed."
+
+    NativeMemoryStore:
+      type: object
+      required: [project, path, memory_dir, item_count]
+      description: >-
+        One of the coding agent's OWN per-project native memory directories
+        (claude_code: `<config_dir>/projects/<slug>/memory`) — derived at read
+        time, never stored; the agent's store is never written (FR-040).
+      properties:
+        project:
+          type: string
+          description: "Readable project label decoded from the on-disk slug."
+        path:
+          type: string
+          nullable: true
+          description: >-
+            Best-effort decoded absolute project path. The slug decode is lossy
+            (path separators and slug encoding are ambiguous), so this is null
+            when the path cannot be reconstructed.
+        memory_dir:
+          type: string
+          description: "The real on-disk memory directory (the scan's source of truth)."
+        item_count:
+          type: integer
+          description: "Count of `.md` fact files in the store, excluding `MEMORY.md`."
+
+    NativeMemoryListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/NativeMemoryStore" }
+
+    NativeMemoryImportRequest:
+      type: object
+      required: [memory_dir]
+      additionalProperties: false
+      properties:
+        memory_dir:
+          type: string
+          description: >-
+            Absolute path to the native memory store to adopt (the `memory_dir`
+            of a NativeMemoryStore from the scan).
+
+    NativeMemoryImportResult:
+      type: object
+      required: [imported, skipped, store, project_path, organized]
+      description: >-
+        Outcome of adopting one native memory store. A store that cannot be
+        mapped to a Coffer project (non-git project, or an unresolvable lossy
+        slug with no transcript `cwd`) yields imported=0 with store and
+        project_path null and organized=false (FR-041).
+      properties:
+        imported:
+          type: integer
+          description: "Number of fact files written into the project store's `knowledge/inbox/` lane."
+        skipped:
+          type: integer
+          description: "Number of fact files skipped (e.g. unparseable)."
+        store:
+          type: string
+          nullable: true
+          description: >-
+            Resolved Coffer project memory store name (e.g. `project-…`); null
+            when the project cannot be mapped to a Coffer store.
+        project_path:
+          type: string
+          nullable: true
+          description: "The resolved real project path; null when unresolvable."
+        organized:
+          type: boolean
+          description: >-
+            Whether spec 007's organizer was scheduled as a background task
+            (false when the store could not be resolved, or no items were
+            imported).
 
     FsEntry:
       type: object
