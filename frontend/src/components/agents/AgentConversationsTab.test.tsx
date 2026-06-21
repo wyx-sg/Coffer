@@ -121,6 +121,25 @@ describe("AgentConversationsTab", () => {
     expect(lastParams().q).toBe("alpha");
   });
 
+  test("default sort is last_activity desc; clicking 'Started' header sorts by started_at", () => {
+    stubTranscripts();
+    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    expect(lastParams().sort).toBe("last_activity_at");
+    expect(lastParams().order).toBe("desc");
+    fireEvent.click(screen.getByRole("button", { name: /sort by started/i }));
+    expect(lastParams().sort).toBe("started_at");
+  });
+
+  test("keys rows by source_path so duplicate session_ids stay independently selectable", () => {
+    // Two rows share a session_id (subagent sidechain) but have distinct files.
+    const dup = { ...SESSION, source_path: "/home/u/.codex/sessions/2026/06/rollout-s1b.jsonl" };
+    stubTranscripts([SESSION, dup]);
+    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    const checkboxes = screen.getAllByRole("checkbox");
+    // select-all + 2 rows = 3 checkboxes (no rowKey collision collapsing them).
+    expect(checkboxes).toHaveLength(3);
+  });
+
   test("stepping to the next page advances the offset by the page size", () => {
     stubTranscripts([SESSION], { total: 250 });
     render(<AgentConversationsTab name="codex" />, { wrapper: wrap });

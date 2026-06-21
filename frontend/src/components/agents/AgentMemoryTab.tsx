@@ -99,7 +99,7 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
     {
       key: "items",
       header: t("agents.memoryTab.colItems"),
-      className: "tabular-nums text-right",
+      className: "whitespace-nowrap tabular-nums text-right",
       cell: (s) => <span className="text-muted-foreground">{s.item_count}</span>,
     },
     {
