@@ -6,6 +6,7 @@ Implemented in infrastructure, wired at composition root.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol
 
 from coffer.domain.chat.model import ModelConfig
@@ -19,6 +20,21 @@ class TranscriptReaderPort(Protocol):
 
     def list_session_summaries(
         self, *, agent_type_value: str, config_dir: str, limit: int, offset: int
+    ) -> tuple[int, list[TranscriptSession]]: ...
+
+    def search_session_summaries(
+        self,
+        *,
+        agent_type_value: str,
+        config_dir: str,
+        limit: int,
+        offset: int,
+        query: str | None = ...,
+        project: str | None = ...,
+        started_after: datetime | None = ...,
+        started_before: datetime | None = ...,
+        sort: str = ...,
+        order: str = ...,
     ) -> tuple[int, list[TranscriptSession]]: ...
 
     def read_session(

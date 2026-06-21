@@ -305,6 +305,28 @@ Distillation reuses the existing memory write path: the `memory_added` event fir
 for each individual fact written, carrying its `origin_session_id`. No
 distillation-specific audit event is emitted.
 
+### Transcript session summary (history list view)
+
+The transcript **history** surface lists an agent's past sessions for browsing
+and distillation. A summary is a read-only projection parsed from each session
+`.jsonl` — nothing is persisted (Spec 004 read-only invariant):
+
+| Field              | Source                                                                                                              |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `session_id`       | Claude Code `sessionId` / Codex `payload.id`; falls back to the file path.                                          |
+| `title`            | Claude Code `ai-title` (latest wins), else the first *real* user message (preambles/shell/slash-commands skipped), truncated; nullable. |
+| `project_path`     | Claude Code top-level `cwd` / Codex `session_meta.payload.cwd`.                                                     |
+| `message_count`    | Count of conversation turns — Codex counts `response_item` messages only (never the duplicate `event_msg` events). |
+| `started_at`       | First event timestamp.                                                                                              |
+| `last_activity_at` | Last event timestamp.                                                                                               |
+| `source_path`      | Absolute path of the session `.jsonl` (powers reveal-in-file-manager via the shared `FileActions`).                |
+
+The list endpoint applies server-side search (title or project path), filtering
+(exact project; `started_at` range), and sorting (`started_at` /
+`last_activity_at` / `message_count`, asc/desc), paged by `limit`/`offset`. The
+reader keeps an in-process, mtime-keyed cache of parsed summaries, so an agent
+with thousands of sessions re-parses only files whose mtime changed.
+
 ## Wire contract (REST)
 
 Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall). The write endpoints (add/edit/delete/clear) are retained — they are how agents (via MCP) and the CLI author facts; the desktop/web UI is a read-only viewer. Read DTOs surface on-disk truth: `FactOut` carries the fact's absolute `.md` `path` and its containing folder's `folder_path`, and `MemoryStoreOut` carries the store's absolute `store_dir`, so the read-only viewer can offer open-in-editor / reveal / copy-path. The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.

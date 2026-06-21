@@ -8,15 +8,21 @@ Mirrors the pattern in tests/integration/chat/test_http_routes.py.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from coffer.application.distill.service import DistillResult, NoModelConfiguredError
+from coffer.application.distill.service import (
+    DistillResult,
+    NoModelConfiguredError,
+    TranscriptDistillationService,
+)
 from coffer.domain.distill.locations import UnsupportedAgentTypeError
 from coffer.domain.distill.session import DistilledInsight, InsightType, TranscriptSession
 from coffer.domain.errors import ResourceNotFound
+from coffer.infrastructure.distill.transcript_reader import FileTranscriptReader
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import require_token, set_active_token
 from coffer.surfaces.http.distill.routes import router as distill_router
@@ -48,7 +54,17 @@ class _FakeDistillService:
         self._raise_on_distill = raise_on_distill
 
     async def list_sessions(
-        self, agent_name: str, *, limit: int = 100, offset: int = 0
+        self,
+        agent_name: str,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        query: str | None = None,
+        project: str | None = None,
+        started_after: datetime | None = None,
+        started_before: datetime | None = None,
+        sort: str = "last_activity_at",
+        order: str = "desc",
     ) -> tuple[int, list[TranscriptSession]]:
         if self._raise_on_list is not None:
             raise self._raise_on_list
@@ -72,7 +88,7 @@ class _FakeDistillService:
         return self._distill_result
 
 
-def _build_app(svc: _FakeDistillService) -> FastAPI:
+def _build_app(svc: object) -> FastAPI:
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(distill_router)
@@ -92,6 +108,8 @@ _SESSION = TranscriptSession(
     started_at=datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC),
     messages=(),
     source_path="/home/user/.claude/projects/-home-user-my-repo/abc.jsonl",
+    title="Set up JWT auth",
+    last_activity_at=datetime(2026, 6, 1, 12, 30, 0, tzinfo=UTC),
 )
 
 _INSIGHT = DistilledInsight(
@@ -121,9 +139,12 @@ def test_list_transcripts_returns_sessions() -> None:
     assert len(body["sessions"]) == 1
     sess = body["sessions"][0]
     assert sess["session_id"] == "sess-001"
+    assert sess["title"] == "Set up JWT auth"
     assert sess["project_path"] == "/home/user/my-repo"
     assert sess["message_count"] == 0
     assert sess["started_at"] is not None
+    assert sess["last_activity_at"] is not None
+    assert sess["source_path"].endswith("abc.jsonl")
     # Paged response carries the total count + echoes the window.
     assert body["total"] == 1
     assert body["limit"] == 100
@@ -274,3 +295,120 @@ def test_distill_session_not_found_returns_envelope() -> None:
         )
     assert r.status_code == 404, r.text
     assert r.json()["error"]["code"] == "TRANSCRIPT_SESSION_NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# Acceptance: browse history with title, search, and sort (real reader stack)
+# ---------------------------------------------------------------------------
+
+
+class _StubAgentResolver:
+    """AgentResolverPort stub pointing the real reader at a temp config dir."""
+
+    def __init__(self, agent_type_value: str, config_dir: str) -> None:
+        self._t = agent_type_value
+        self._d = config_dir
+
+    async def resolve(self, name: str) -> tuple[str, str]:
+        return self._t, self._d
+
+
+def _write_codex(
+    path: Path, *, sid: str, cwd: str, ts_start: str, ts_end: str, user_text: str
+) -> None:
+    import json
+
+    path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "timestamp": ts_start,
+                        "type": "session_meta",
+                        "payload": {"id": sid, "cwd": cwd},
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": ts_start,
+                        "type": "response_item",
+                        "payload": {
+                            "type": "message",
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": user_text}],
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": ts_end,
+                        "type": "response_item",
+                        "payload": {
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [{"type": "output_text", "text": "ok"}],
+                        },
+                    }
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="browse an agent's transcript history with title, search, and sort"
+)
+def test_browse_history_with_title_search_and_sort(tmp_path: Path) -> None:
+    set_active_token(_TOKEN)
+    d = tmp_path / "sessions" / "2026" / "05"
+    d.mkdir(parents=True)
+    _write_codex(
+        d / "a.jsonl",
+        sid="a",
+        cwd="/proj/alpha",
+        ts_start="2026-05-01T00:00:00Z",
+        ts_end="2026-05-01T01:00:00Z",
+        user_text="fix the alpha login bug",
+    )
+    _write_codex(
+        d / "b.jsonl",
+        sid="b",
+        cwd="/proj/beta",
+        ts_start="2026-05-02T00:00:00Z",
+        ts_end="2026-05-02T02:00:00Z",
+        user_text="add beta dashboard",
+    )
+    _write_codex(
+        d / "c.jsonl",
+        sid="c",
+        cwd="/proj/alpha",
+        ts_start="2026-05-03T00:00:00Z",
+        ts_end="2026-05-03T00:30:00Z",
+        user_text="refactor alpha payments",
+    )
+
+    real_svc = TranscriptDistillationService(
+        reader=FileTranscriptReader(),
+        llm=object(),  # type: ignore[arg-type]  # unused for listing
+        sink=object(),  # type: ignore[arg-type]
+        agents=_StubAgentResolver("codex", str(tmp_path)),
+        models=object(),  # type: ignore[arg-type]
+        credential_resolver=lambda _key: "",
+    )
+    app = _build_app(real_svc)
+    with TestClient(app) as client:
+        r = client.get(
+            "/api/v1/agents/codex/transcripts?q=alpha&sort=started_at&order=asc",
+            headers=_HEADERS,
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total"] == 2  # only the two alpha sessions match the search
+    assert [s["session_id"] for s in body["sessions"]] == ["a", "c"]  # started_at asc
+    first = body["sessions"][0]
+    assert first["title"] == "fix the alpha login bug"
+    assert first["project_path"] == "/proj/alpha"
+    assert first["message_count"] == 2
+    assert first["last_activity_at"] is not None
+    assert first["source_path"].endswith("a.jsonl")
