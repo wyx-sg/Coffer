@@ -11,9 +11,7 @@ interface Props {
   live?: LiveMessage;
 }
 
-function buildToolPairs(
-  blocks: ContentBlock[],
-): { use: ContentBlock; result?: ContentBlock }[] {
+function buildToolPairs(blocks: ContentBlock[]): { use: ContentBlock; result?: ContentBlock }[] {
   const uses = blocks.filter((b) => b.type === "tool_use");
   const results = blocks.filter((b) => b.type === "tool_result");
   return uses.map((u) => ({
@@ -38,7 +36,7 @@ export function MessageBubble({ message, live }: Props) {
     const text = extractText(message.content);
     return (
       <div className="flex justify-end">
-        <div className="max-w-[75%] rounded-2xl rounded-tr-sm bg-primary/10 px-4 py-2.5 text-sm text-foreground">
+        <div className="max-w-[75%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-sm bg-primary/10 px-4 py-2.5 text-sm text-foreground">
           {text}
         </div>
       </div>
@@ -47,9 +45,7 @@ export function MessageBubble({ message, live }: Props) {
 
   // Assistant (persisted or live)
   const text = isLive ? live!.text : extractText(message?.content ?? []);
-  const toolBlocks = isLive
-    ? live!.toolBlocks
-    : (message?.content ?? []);
+  const toolBlocks = isLive ? live!.toolBlocks : (message?.content ?? []);
   const pairs = buildToolPairs(toolBlocks);
   const failed = !isLive && message?.status === "failed";
   // A persisted streaming placeholder (turn still running server-side, seen
@@ -57,18 +53,13 @@ export function MessageBubble({ message, live }: Props) {
   const serverStreaming = !isLive && message?.status === "streaming";
   const promptTokens = message?.prompt_tokens;
   const completionTokens = message?.completion_tokens;
-  const showTokens =
-    !isLive && (promptTokens != null || completionTokens != null);
+  const showTokens = !isLive && (promptTokens != null || completionTokens != null);
 
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%] space-y-1">
         {pairs.map((p) => (
-          <ToolCallCard
-            key={p.use.tool_use_id}
-            toolUse={p.use}
-            toolResult={p.result}
-          />
+          <ToolCallCard key={p.use.tool_use_id} toolUse={p.use} toolResult={p.result} />
         ))}
         {text && (
           <div className="rounded-2xl rounded-tl-sm bg-card px-4 py-2.5 text-sm text-foreground shadow-sm">
@@ -80,9 +71,7 @@ export function MessageBubble({ message, live }: Props) {
             <span className="animate-pulse">{t("chat.thinking")}</span>
           </div>
         )}
-        {failed && (
-          <p className="px-4 text-xs text-destructive">{t("chat.message.failed")}</p>
-        )}
+        {failed && <p className="px-4 text-xs text-destructive">{t("chat.message.failed")}</p>}
         {showTokens && (
           <p className="px-4 text-xs text-muted-foreground">
             {t("chat.message.tokens", {

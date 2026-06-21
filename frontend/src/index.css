@@ -95,4 +95,11 @@
   .code-chip {
     @apply rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-foreground/80;
   }
+
+  /* Chat markdown code blocks: the wrapping <pre> owns the padding + warm
+     background (MarkdownContent); the highlight.js github theme only colors the
+     text, so neutralise its white background + inner padding here. */
+  .markdown-body pre code.hljs {
+    @apply bg-transparent p-0;
+  }
 }

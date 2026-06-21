@@ -38,6 +38,12 @@ export function Composer({ onSend, disabled = false, streaming = false, onStop }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // While an IME composition is active, Enter commits the candidate text — it
+    // must NOT also send the message. Without this guard a CJK user pressing
+    // Enter to accept a pinyin candidate sends the half-composed text, then
+    // sends again on the real Enter, so one message posts twice. `isComposing`
+    // lives on the native event (the synthetic event does not surface it).
+    if (e.nativeEvent.isComposing) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();

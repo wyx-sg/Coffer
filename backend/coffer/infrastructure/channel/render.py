@@ -17,6 +17,10 @@ _BOLD = re.compile(r"\*\*([^*\n]+)\*\*")
 _ITALIC = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)|\b_([^_\n]+)_\b")
 _LINK = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
+# A line-leading "- " / "* " (with optional indent) is a markdown bullet. Telegram
+# HTML has no list element, so render a tidy "• " glyph rather than a raw dash. The
+# trailing-whitespace requirement keeps it from matching **bold** / *italic*.
+_BULLET = re.compile(r"^([ \t]*)[-*][ \t]+", re.MULTILINE)
 
 
 def markdown_to_telegram_html(markdown: str) -> str:
@@ -42,6 +46,7 @@ def _inline(text: str) -> str:
 
     text = _INLINE_CODE.sub(_stash, text)
     text = html.escape(text, quote=False)
+    text = _BULLET.sub(lambda m: f"{m.group(1)}• ", text)
     text = _HEADING.sub(lambda m: f"<b>{m.group(1)}</b>", text)
     text = _LINK.sub(lambda m: f'<a href="{m.group(2)}">{m.group(1)}</a>', text)
     text = _BOLD.sub(lambda m: f"<b>{m.group(1)}</b>", text)
