@@ -355,6 +355,41 @@ async def test_second_organize_on_empty_inbox_is_noop(mem) -> None:
     assert second.items_processed == 0
 
 
+@pytest.mark.acceptance(
+    spec="007-memory",
+    scenario="a topic document recalls at passage granularity",
+)
+async def test_topic_doc_recalls_at_passage_granularity(mem) -> None:
+    """A multi-section topic doc yields per-passage chunks so recall returns
+    the relevant section, not the whole document."""
+    await mem.service.ensure_store("global")
+    await _remember(mem, body="some note", name="note")
+
+    llm = _ScriptedLlm(
+        [
+            _topic_json(
+                "team-conventions",
+                "Team conventions",
+                "how the team works",
+                "## Alpha process\n\nUse the alphawidget for the alpha flow.\n\n"
+                "## Beta process\n\nRun the betagizmo for the beta flow.",
+            ),
+        ]
+    )
+    org = _make_organizer(mem, llm, _Models(_model()))
+    result = await org.organize(store_name="global")
+    assert result.status == "organized"
+
+    hits, _mode, _fb = await mem.service.recall_in_store(
+        store_name="global", query="betagizmo", scope="global"
+    )
+    assert hits
+    top = hits[0]
+    assert "betagizmo" in top.text  # the Beta passage came back
+    assert "alphawidget" not in top.text  # passage granularity: NOT the whole doc
+    assert "/inbox/" not in top.source  # recall isolation intact (topic doc, not inbox)
+
+
 async def test_index_and_changelog_never_surface_in_recall(mem) -> None:
     await mem.service.ensure_store("global")
     await _remember(mem, body="Recallable content marker ZEBRA.", name="zebra")
