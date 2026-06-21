@@ -61,39 +61,47 @@ describe("DaemonOfflineBanner", () => {
     expect(screen.getByText(/ECONNREFUSED/)).toBeInTheDocument();
   });
 
-  test("in browser mode the recovery affordance is Reload, not a raw CLI command", () => {
+  test("in browser mode shows a Retry button plus a terminal restart hint", () => {
     useDaemonStatusMock.mockReturnValue({
       isError: true,
       error: new Error("nope"),
     } as never);
     render(wrap(<DaemonOfflineBanner />));
-    // The `coffer daemon start` snippet was removed — the Reload control is
-    // the only recovery affordance now.
-    expect(screen.queryByText("coffer daemon start")).not.toBeInTheDocument();
+    // Retry (soft re-check) is the in-app affordance; the browser can't restart
+    // the daemon, so the actual recovery command is surfaced as a hint.
     expect(screen.getByTestId("daemon-banner-reload")).toBeInTheDocument();
+    expect(screen.getByText("coffer daemon start")).toBeInTheDocument();
   });
 
-  test("shows the Reload button in browser mode and clicking it calls window.location.reload", () => {
+  test("in browser mode Retry refetches in place — it does NOT hard-reload the page", async () => {
     useDaemonStatusMock.mockReturnValue({
       isError: true,
       error: new Error("Failed to fetch"),
     } as never);
 
-    // Stub window.location.reload so we can assert it was called.
+    // A hard window.location.reload() would navigate to the page host and blank
+    // the app if that host (Vite dev server / daemon-served bundle) is itself
+    // down. Assert we DON'T call it, and instead refetch in place.
     const reloadSpy = vi.fn();
     Object.defineProperty(window, "location", {
       configurable: true,
       value: { ...window.location, reload: reloadSpy },
     });
 
-    render(wrap(<DaemonOfflineBanner />));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries").mockResolvedValue();
+    render(
+      <QueryClientProvider client={qc}>
+        <DaemonOfflineBanner />
+      </QueryClientProvider>,
+    );
 
-    const reloadBtn = screen.getByTestId("daemon-banner-reload");
-    expect(reloadBtn).toBeInTheDocument();
-    expect(reloadBtn).toHaveTextContent("Reload");
+    const retryBtn = screen.getByTestId("daemon-banner-reload");
+    expect(retryBtn).toHaveTextContent("Retry");
 
-    fireEvent.click(reloadBtn);
-    expect(reloadSpy).toHaveBeenCalledOnce();
+    fireEvent.click(retryBtn);
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith());
+    expect(reloadSpy).not.toHaveBeenCalled();
   });
 });
 
