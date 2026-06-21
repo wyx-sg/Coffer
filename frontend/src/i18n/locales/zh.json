@@ -3,10 +3,6 @@
     "openInEditor": "在编辑器中打开",
     "openFolder": "打开文件夹",
     "reveal": "在 Finder 中显示",
-    "copyPath": "复制路径",
-    "copyFolderPath": "复制文件夹路径",
-    "copied": "已复制",
-    "copyFailed": "无法复制路径到剪贴板。",
     "openFailed": "无法在编辑器中打开该文件。",
     "openFolderFailed": "无法在编辑器中打开该文件夹。",
     "revealFailed": "无法显示该文件。"

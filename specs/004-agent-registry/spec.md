@@ -110,11 +110,11 @@ Every add / edit / remove / auto-detection is recorded with timestamp and actor,
 
 ### User Story 7 — View an agent's config files and open them in an external editor (Priority: P2)
 
-After an agent is registered, the user wants to see that agent's own configuration files (e.g. Claude Code's `settings.json`, Codex's `config.toml`) directly inside Coffer, without leaving the app to hunt for dotfiles. Coffer shows the agent type's curated set of known config files and lets the user open one to read its current content in a **read-only** viewer. For each file (and its containing folder) Coffer offers open-in-external-editor, reveal-in-file-manager, and copy-path affordances, so the user makes any edits in their own editor. Coffer does not edit config-file content in place; the programmatic write path (REST/CLI) keeps the validate + atomic-write + `.bak` safety net.
+After an agent is registered, the user wants to see that agent's own configuration files (e.g. Claude Code's `settings.json`, Codex's `config.toml`) directly inside Coffer, without leaving the app to hunt for dotfiles. Coffer shows the agent type's curated set of known config files and lets the user open one to read its current content in a **read-only** viewer. For each file (and its containing folder) Coffer offers open-in-external-editor and reveal-in-file-manager affordances, so the user makes any edits in their own editor. Coffer does not edit config-file content in place; the programmatic write path (REST/CLI) keeps the validate + atomic-write + `.bak` safety net.
 
 **Why this priority**: Locating agent config by hand means remembering where each file lives and what format it uses. Surfacing the curated set in one place — viewable at a glance, one click from the user's own editor — is the first feature that makes the registry useful beyond bookkeeping.
 
-**Independent Test**: Register a `claude_code` agent; list its config files; open `settings.json` in the read-only viewer and observe the response surfaces the file's `path` and containing-folder `folder_path` (backing open/reveal/copy-path); open a not-yet-created file (e.g. `CLAUDE.md`) and observe it reads as empty without being created.
+**Independent Test**: Register a `claude_code` agent; list its config files; open `settings.json` in the read-only viewer and observe the response surfaces the file's `path` and containing-folder `folder_path` (backing open/reveal); open a not-yet-created file (e.g. `CLAUDE.md`) and observe it reads as empty without being created.
 
 **Covering scenarios**:
 
@@ -208,7 +208,7 @@ Per-agent plugin support:
 
 ### User Story 12 — Manage directory-type config entries (Priority: P2)
 
-Some agent configuration is a directory of prose files, not a single file — Claude Code's `agents/` directory holds one Markdown file per personal subagent. The user expands such an entry in the config-files tab and sees its files, opening one in the read-only viewer (with open-in-external-editor / reveal / copy-path for the child file and its folder). Creating, writing, and deleting individual files is available programmatically through the REST API / `coffer agent` CLI — with the same validation, atomic-write, and `.bak` safety net as single-file entries. The allowlist also gains Codex's `hooks.json`; the `memory` key is renamed `instructions` (CLAUDE.md / AGENTS.md are human-authored instructions, not agent-written memory).
+Some agent configuration is a directory of prose files, not a single file — Claude Code's `agents/` directory holds one Markdown file per personal subagent. The user expands such an entry in the config-files tab and sees its files, opening one in the read-only viewer (with open-in-external-editor / reveal for the child file and its folder). Creating, writing, and deleting individual files is available programmatically through the REST API / `coffer agent` CLI — with the same validation, atomic-write, and `.bak` safety net as single-file entries. The allowlist also gains Codex's `hooks.json`; the `memory` key is renamed `instructions` (CLAUDE.md / AGENTS.md are human-authored instructions, not agent-written memory).
 
 **Why this priority**: Subagent definitions are exactly the kind of shareable prose the hub model wants visible first, adoptable later; today they are invisible.
 
@@ -302,6 +302,12 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **Given** the daemon is running,
 - **When** the web folder browser requests the subdirectories of a readable directory,
 - **Then** Coffer returns that directory's path, its parent, and its immediate subdirectories (no file contents); an unreadable or missing path returns an error.
+
+### Scenario: open a managed file via the daemon (web open/reveal)
+
+- **Given** the daemon is running and the read-only viewer is showing a managed file,
+- **When** the web surface asks the daemon to open an existing absolute path (optionally with a preferred editor) or to reveal it in the file manager,
+- **Then** the daemon launches the OS application / file manager for that path and returns success; a relative or non-existent path is rejected without spawning anything.
 
 ### Scenario: update an existing agent
 
@@ -557,7 +563,7 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 **Config files**
 
 - **FR-013**: Each supported agent type MUST define a curated allowlist of config files (in its capability-manifest record), each entry carrying a stable `key`, a display name, a resolved absolute path, and a `format` (`json`, `toml`, `yaml`, `markdown`, or `text`). Claude Code → `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md` (key `instructions`), and the `agents/` directory entry (FR-034); Codex → `config.toml`, `AGENTS.md` (key `instructions`), and `hooks.json`. The former `memory` key is renamed `instructions` — these files are human-authored instructions, distinct from agent-written memory (spec 007's domain).
-- **FR-014**: Users MUST be able to list an agent's config files with, for each, its key, display name, path, the containing-folder absolute path (`folder_path`), format, and existence (plus size and modified time when the file exists). The `path`/`folder_path` pair feeds the read-only UI's open-in-external-editor / reveal-in-file-manager / copy-path affordances (FR-038).
+- **FR-014**: Users MUST be able to list an agent's config files with, for each, its key, display name, path, the containing-folder absolute path (`folder_path`), format, and existence (plus size and modified time when the file exists). The `path`/`folder_path` pair feeds the read-only UI's open-in-external-editor / reveal-in-file-manager affordances (FR-038).
 - **FR-015**: Users MUST be able to read the content of any allowlisted config file. A file that does not exist reads as empty content with `exists=false` and is not created by the read.
 - **FR-016**: The system MUST expose a programmatic write (save) for the content of any allowlisted config file through the REST API and the `coffer agent` CLI; the in-app UI is read-only and does not write config-file content. The content MUST be validated against the file's `format` before any write; malformed `json`/`toml` MUST be rejected (`unprocessable_entity`, 422) and the on-disk file left unchanged. `markdown`/`text` files accept any content.
 - **FR-017**: Writes MUST be atomic (temp file + rename) and MUST keep a `.bak` copy of the prior content so a bad edit is recoverable; each successful write MUST record an `agent_config_file_written` audit entry. The Coffer-MCP install/uninstall operations (FR-022) reuse the same atomic-write + `.bak` machinery.
@@ -594,9 +600,9 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 **Surfaces**
 
-- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, plugin list/toggle/uninstall — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The desktop Agents page MUST expose all of these EXCEPT config-file content writes (single files and directory children): in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager / copy-path affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path.
+- **FR-009**: Every management operation — register/list/view/update/remove, config-file list/read/write (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/toggle/adopt, plugin list/toggle/uninstall — MUST be available through (a) the REST API and (b) the `coffer agent ...` CLI. The desktop Agents page MUST expose all of these EXCEPT config-file content writes (single files and directory children): in the UI, config files and directory children are **read-only** with open-in-external-editor / reveal-in-file-manager affordances (FR-038), while the REST API and CLI keep the programmatic write/create/delete path.
 - **FR-010**: The CLI MUST support `--json` for machine-readable output on every read operation.
-- **FR-038**: For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor**, **reveal-in-file-manager**, and **copy-path** actions for both the file itself and its containing folder, using the `path`/`folder_path` pair from FR-014/FR-015. In the packaged desktop app (Tauri) open and reveal perform the real OS action; on the web they fall back to copy-path. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by spec 002-ui-shell (not re-specified here).
+- **FR-038**: For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor** and **reveal-in-file-manager** actions (open also applies to the containing folder), using the `path`/`folder_path` pair from FR-014/FR-015. Open and reveal perform the real OS action on **both** surfaces: the packaged desktop app (Tauri) uses the OS opener directly; the web uses the daemon filesystem-action endpoints (FR-039), since the loopback daemon is always on the user's own machine (ADR-033). There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by spec 002-ui-shell (not re-specified here).
 
 **Observability**
 
@@ -607,6 +613,10 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 - **FR-023**: When choosing a custom `config_dir`, the desktop app MUST offer a folder picker rather than requiring the user to type a path. In the packaged desktop app it MUST use the OS-native directory dialog; on the web it MUST use the daemon-backed folder browser (FR-024). Both yield an absolute path that is then validated per FR-007 before registration.
 - **FR-024**: System MUST expose a read-only filesystem-browse operation (`GET /api/v1/fs/browse`) that, given a directory path (defaulting to the user's home), returns that path, its parent, and its immediate subdirectories. It MUST NOT return file contents and MUST be guarded by the same loopback + token auth as all other daemon routes.
+
+**Filesystem open/reveal**
+
+- **FR-039**: System MUST expose filesystem-action operations that let the web surface perform real open/reveal (FR-038) through the loopback daemon, which is always co-located with the web client on the user's machine (ADR-033): `POST /api/v1/fs/open` (open an existing absolute path in an application — a `with` editor preference, or the OS default) and `POST /api/v1/fs/reveal` (select / reveal an existing absolute path in the OS file manager). Both MUST validate the path is absolute and exists before acting, MUST invoke the OS launcher with a fixed argument vector (no shell interpolation), MUST create nothing, and MUST be guarded by the same loopback + token auth as all other daemon routes. A non-absolute or non-existent path is rejected (`FS_PATH_NOT_OPENABLE`, 400). Where a platform has no portable "select the file" primitive (Linux), reveal degrades to opening the containing folder.
 
 ### Key Entities
 

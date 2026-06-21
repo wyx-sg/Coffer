@@ -1,6 +1,6 @@
 // frontend/src/components/agents/ConfigEditorPane.tsx — spec 004.
 // Right pane of the agent config viewer: path/format header, the external-file
-// action bar (open-in-editor / reveal / copy-path), an optional read-only
+// action bar (open-in-editor / reveal), an optional read-only
 // managed-block annotation, and a read-only preview of the file's content.
 // Config files are edited in the user's own editor, not in-app — this pane
 // never mutates. Extracted from AgentConfigFilesEditor to keep that file inside

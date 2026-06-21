@@ -669,7 +669,7 @@ components:
             Absolute path of the normalized markdown on disk
             (`docs/<doc-id>.md`, the source of truth). The in-app viewer is
             read-only; this path backs open-in-external-editor /
-            reveal-in-file-manager / copy-path.
+            reveal-in-file-manager.
         folder_path:
           type: string
           description: Absolute path of the document's containing folder (the KB `docs/` directory).

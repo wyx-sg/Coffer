@@ -138,7 +138,7 @@ frontend/src/kinds/knowledge_base/
 ├── KnowledgeBaseForm.tsx     # name, description, enabled modes, chunk params, embedding provider
 ├── KnowledgeBaseDetailPage.tsx
 ├── DocumentTable.tsx         # shared DataTable; source_mode badge
-├── DocumentViewer.tsx        # read-only Markdown render + open-in-editor / reveal / copy-path
+├── DocumentViewer.tsx        # read-only Markdown render + open-in-editor / reveal
 ├── UploadDropzone.tsx
 ├── SearchPanel.tsx           # mode selector (grep/keyword/vector) + results
 └── schema.ts
@@ -182,7 +182,7 @@ backend/tests/
 
 ## Phase 4 — Frontend
 
-`KnowledgeBaseForm`（zod 对齐 `KnowledgeBaseConfig`）→ `KnowledgeBaseDetailPage`（DocumentTable + UploadDropzone + 只读 DocumentViewer，含在编辑器中打开 / 显示 / 复制路径 + 带模式选择器的 SearchPanel）→ 注册 `KNOWLEDGE_BASE_KIND_UI` → 每个 UI acceptance 场景一个测试。
+`KnowledgeBaseForm`（zod 对齐 `KnowledgeBaseConfig`）→ `KnowledgeBaseDetailPage`（DocumentTable + UploadDropzone + 只读 DocumentViewer，含在编辑器中打开 / 显示 + 带模式选择器的 SearchPanel）→ 注册 `KNOWLEDGE_BASE_KIND_UI` → 每个 UI acceptance 场景一个测试。
 
 ## Phase 5 — Verification
 

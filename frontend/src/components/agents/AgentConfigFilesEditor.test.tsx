@@ -112,7 +112,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     expect(screen.queryByRole("button", { name: /find ?\/ ?replace/i })).not.toBeInTheDocument();
   });
 
-  test("renders the FileActions bar for the selected file (copy-path on the web)", () => {
+  test("renders the FileActions bar for the selected file (open/reveal on the web)", () => {
     stubFiles();
     stubFile('{"theme": "dark"}');
     stubChild(undefined);
@@ -120,10 +120,11 @@ describe("AgentConfigFilesEditor (read-only)", () => {
     render(<AgentConfigFilesEditor name="cc" />);
     openSettings();
 
-    // On the web (jsdom, no Tauri) FileActions falls back to copy-path buttons
-    // for both the file and its folder (folder_path is present).
-    expect(screen.getByRole("button", { name: /copy path/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /copy folder path/i })).toBeInTheDocument();
+    // FileActions offers real open/reveal on both surfaces (daemon-backed on web):
+    // open-in-editor + reveal for the file, plus open-folder (folder_path present).
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open folder/i })).toBeInTheDocument();
   });
 
   test("hides not-yet-created allowlisted files from the read-only viewer", () => {
@@ -189,7 +190,7 @@ describe("AgentConfigFilesEditor (read-only)", () => {
 
     expect(screen.getByText("hello child")).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /copy path/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
   });
 
   test("memory_block content renders the memory-projection annotation", () => {

@@ -84,7 +84,7 @@ def test_list_skill_files_returns_tree(tmp_path, monkeypatch):
 
         # The master folder lives at ~/.coffer/skills/<name>/ (HOME=tmp_path).
         master = (tmp_path / ".coffer" / "skills" / "tree-skill").resolve()
-        # The read-only viewer backs open/reveal/copy-path with absolute paths:
+        # The read-only viewer backs open/reveal with absolute paths:
         # the root node's abs_path IS the master folder; its folder is the parent.
         assert root["abs_path"] == str(master)
         assert root["folder_abs_path"] == str(master.parent)
@@ -139,7 +139,7 @@ def test_read_single_skill_file(tmp_path, monkeypatch):
         assert body["truncated"] is False
         assert body["size"] == len("print('hi')\n")
         # Absolute path + containing folder for the read-only viewer's
-        # open/reveal/copy-path affordances.
+        # open/reveal affordances.
         master = (tmp_path / ".coffer" / "skills" / "read-skill").resolve()
         assert body["abs_path"] == str(master / "scripts" / "run.py")
         assert body["folder_abs_path"] == str(master / "scripts")

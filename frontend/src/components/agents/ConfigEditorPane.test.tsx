@@ -2,8 +2,8 @@
 // The right-hand pane is READ-ONLY: it previews the file's content (no
 // editable textarea, no Save, no find/replace), shows the path plus an
 // optional one-line description, and renders the FileActions bar so the user
-// can open the file in their own editor. On the web (jsdom, no Tauri) that bar
-// falls back to a "copy path" button.
+// can open the file in their own editor (daemon-backed open/reveal on the web,
+// Tauri on the desktop).
 import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ConfigEditorPane, type ConfigEditorPaneProps } from "./ConfigEditorPane";
@@ -32,9 +32,10 @@ describe("ConfigEditorPane", () => {
     expect(screen.queryByRole("button", { name: /find ?\/ ?replace/i })).not.toBeInTheDocument();
   });
 
-  test("renders the FileActions bar (copy-path fallback on the web)", () => {
+  test("renders the FileActions bar (daemon-backed open/reveal on the web)", () => {
     render(<ConfigEditorPane {...baseProps()} />);
-    expect(screen.getByRole("button", { name: /copy path/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
   });
 
   test("renders the description next to the content when provided", () => {

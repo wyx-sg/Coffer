@@ -66,8 +66,7 @@ def _abs_paths(root: pathlib.Path, relpath: str) -> tuple[str, str]:
 
     ``relpath`` is POSIX-relative to the master folder ``root`` (``""`` for the
     root node itself). Returns ``(abs_path, folder_abs_path)`` as strings; the
-    UI viewer is read-only and uses these for open-in-editor / reveal /
-    copy-path.
+    UI viewer is read-only and uses these for open-in-editor / reveal.
     """
     target = root if relpath == "" else root / relpath
     return str(target), str(target.parent)

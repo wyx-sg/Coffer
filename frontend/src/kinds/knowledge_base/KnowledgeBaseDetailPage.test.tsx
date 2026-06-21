@@ -155,8 +155,9 @@ describe("KnowledgeBaseDetailPage", () => {
     // There is no in-app editing — no Edit/Save controls.
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
-    // The read-only viewer offers the copy-path affordance (jsdom is not Tauri).
-    expect(screen.getByRole("button", { name: /copy path/i })).toBeInTheDocument();
+    // The read-only viewer offers real open/reveal affordances (daemon-backed on web).
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
   });
 
   test("deleting a selected document calls delete after confirmation", async () => {

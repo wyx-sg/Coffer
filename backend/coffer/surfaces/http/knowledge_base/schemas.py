@@ -74,7 +74,7 @@ class DocumentOut(BaseModel):
     metadata: dict[str, Any]
     # Absolute path of the normalized markdown on disk (the source of truth) and
     # its containing folder. The in-app viewer is read-only; the pair backs
-    # open-in-external-editor / reveal-in-file-manager / copy-path.
+    # open-in-external-editor / reveal-in-file-manager.
     path: str
     folder_path: str
     created_at: datetime

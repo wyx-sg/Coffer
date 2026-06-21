@@ -89,7 +89,7 @@ coffer kb search design-notes "service backoff strategy" --mode vector
 3. 填表单：name、description、启用的检索模式（默认 keyword + grep）、chunk 参数，以及 —— 仅当你启用 vector —— 一个 embedding provider/model 与凭据。提交。
 4. 点进 KB。把任意格式的文件拖入上传区；每个都变成 Markdown。
 5. 用 **Search** 面板；从选择器里挑模式（grep / keyword / vector）。
-6. 打开一个文档查看渲染后的 Markdown（只读）。要修改它，用**在编辑器中打开**在你的外部编辑器中编辑该文件（或**在访达中显示** / **复制路径**）；你的编辑会在下次读取时经读取时惰性重建索引自动拾取。也可通过 `coffer kb edit` / REST API / agent 编辑，并标记为 `edited`。
+6. 打开一个文档查看渲染后的 Markdown（只读）。要修改它，用**在编辑器中打开**在你的外部编辑器中编辑该文件（或**在访达中显示**）；你的编辑会在下次读取时经读取时惰性重建索引自动拾取。也可通过 `coffer kb edit` / REST API / agent 编辑，并标记为 `edited`。
 7. 文档操作在每一行上（read、delete、copy id、re-upload source）。
 8. 在详情头部的 kebab 菜单删除 KB。
 

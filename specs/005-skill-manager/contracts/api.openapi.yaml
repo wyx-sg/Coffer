@@ -503,7 +503,7 @@ components:
           description: >-
             Resolved absolute path of this entry on disk. The in-app file
             viewer is read-only; this path backs open-in-external-editor /
-            reveal-in-file-manager / copy-path.
+            reveal-in-file-manager.
         folder_abs_path:
           type: string
           description: >-
@@ -588,7 +588,7 @@ components:
           description: >-
             Resolved absolute path of the file on disk. The in-app viewer is
             read-only; this path backs open-in-external-editor /
-            reveal-in-file-manager / copy-path.
+            reveal-in-file-manager.
         folder_abs_path:
           type: string
           description: Absolute path of the file's containing folder (its parent directory).
