@@ -13,23 +13,25 @@ from typing import Any
 
 from coffer.domain.errors import EngineUnavailable
 
-# Formats MarkItDown handles well (docs, slides, sheets, pdf, html, …). The
-# passthrough/csv converters claim text/csv first in the registry, so this set
-# is the "needs an engine" tail.
+# Formats MarkItDown actually has a converter for (pdf, modern Office, html,
+# epub). The passthrough/csv converters claim text/csv first in the registry,
+# so this set is the "needs an engine" tail.
+#
+# Legacy binary Office (.doc/.ppt) and .rtf/.odt are deliberately EXCLUDED:
+# MarkItDown has no converter for them (its Docx/Pptx converters accept only
+# .docx/.pptx), so claiming them here only turned an "unsupported format" into a
+# misleading "engine unavailable / conversion failed". Excluding them lets the
+# registry reject them cleanly with an actionable unsupported_type message.
 MARKITDOWN_FORMATS = frozenset(
     {
         "pdf",
         "docx",
-        "doc",
         "pptx",
-        "ppt",
         "xlsx",
         "xls",
         "html",
         "htm",
         "epub",
-        "rtf",
-        "odt",
     }
 )
 

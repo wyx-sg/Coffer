@@ -17,6 +17,8 @@ function makeT(table: Record<string, string>): (key: string) => string {
 const TABLE = {
   "errors.INGEST_REJECTED": "The document was rejected during ingestion",
   "errors.INGEST_REJECTED_scanned_pdf": "This PDF appears to be scanned or image-only — run OCR.",
+  "errors.INGEST_REJECTED_unsupported_type":
+    "Unsupported file type — convert to .docx and re-upload.",
 };
 
 describe("throwApiError", () => {
@@ -62,6 +64,16 @@ describe("translateApiError", () => {
     const err = new ApiError("INGEST_REJECTED", "generic envelope", { reason: "scanned_pdf" });
     expect(translateApiError(t, err)).toBe(
       "This PDF appears to be scanned or image-only — run OCR.",
+    );
+  });
+
+  test("(a') resolves the unsupported_type reason key to its actionable message", () => {
+    const t = makeT(TABLE);
+    const err = new ApiError("INGEST_REJECTED", "generic envelope", {
+      reason: "unsupported_type",
+    });
+    expect(translateApiError(t, err)).toBe(
+      "Unsupported file type — convert to .docx and re-upload.",
     );
   });
 
