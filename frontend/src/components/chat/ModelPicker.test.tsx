@@ -91,14 +91,15 @@ describe("ModelPicker", () => {
     expect(options.filter((o) => o === "claude-opus-4-8")).toHaveLength(1);
   });
 
-  test("with no active connection for the agent's wire, falls back to a free-text input", () => {
-    // Only an anthropic connection is active; a codex (openai) agent has none →
-    // no models to list, so the picker is a plain editable field.
+  test("with no active connection, lists the agent's built-in models", () => {
+    // Only an anthropic connection is active; a codex (openai) agent has no
+    // override → it runs on its own login, so the picker offers codex's curated
+    // built-in models (ADR-032 amendment D4) and selecting one commits it.
     const onCommit = vi.fn();
     render(<ModelPicker agentKey="codex" value={null} onCommit={onCommit} />);
-    const input = screen.getByLabelText(/agent model/i);
-    fireEvent.change(input, { target: { value: "gpt-5-codex" } });
-    fireEvent.blur(input);
+    const options = openAndReadOptions();
+    expect(options).toContain("gpt-5-codex");
+    fireEvent.click(screen.getByRole("option", { name: "gpt-5-codex" }));
     expect(onCommit).toHaveBeenCalledWith("gpt-5-codex");
   });
 

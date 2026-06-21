@@ -28,10 +28,15 @@ def _file(tmp_path: pathlib.Path) -> str:
 
 
 def test_open_darwin_default(tmp_path, monkeypatch, captured):
+    # System default → open in the default TEXT editor (`open -t`). Plain
+    # `open <file>` fails with kLSApplicationNotFoundErr for file types that
+    # have no registered default app (extensionless config files etc.), and the
+    # non-zero exit is swallowed → a silent no-op. `-t` always resolves to the
+    # default text editor (TextEdit at worst), which is what "open in editor" means.
     monkeypatch.setattr("sys.platform", "darwin")
     path = _file(tmp_path)
     FsOpenService().open(path)
-    assert captured == [["open", path]]
+    assert captured == [["open", "-t", path]]
 
 
 def test_open_darwin_with_editor(tmp_path, monkeypatch, captured):
@@ -66,7 +71,7 @@ def test_open_blank_editor_is_treated_as_default(tmp_path, monkeypatch, captured
     monkeypatch.setattr("sys.platform", "darwin")
     path = _file(tmp_path)
     FsOpenService().open(path, with_app="   ")
-    assert captured == [["open", path]]
+    assert captured == [["open", "-t", path]]
 
 
 # --- reveal: per-platform argv -------------------------------------------------

@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0036"
+HEAD_REVISION = "0037"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -477,6 +477,82 @@ def test_0036_normalises_multiple_legacy_defaults(tmp_path, monkeypatch):
         }
     # Exactly one internal_default, and it's the most-recently-updated row.
     assert defaults == {"older-default": False, "newest-default": True}
+
+
+def test_0037_flips_openai_wire_api_to_responses(tmp_path, monkeypatch):
+    """0037 is a data migration: codex-cli 0.130 rejects ``wire_api = "chat"``,
+    so every ``openai`` connection carrying the dead value is flipped to
+    ``"responses"``. ``anthropic`` (ignores wire_api) and an already-``responses``
+    openai connection are left untouched. The downgrade flips back."""
+    db_path = tmp_path / "wire_api.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0036")
+    seed = {
+        "openai-chat": {
+            "wire_format": "openai",
+            "base_url": "https://proxy/v1",
+            "credential_ref": "provider/o/key",
+            "model": "gpt-x",
+            "fast_model": None,
+            "wire_api": "chat",
+            "is_active": True,
+            "internal_default": False,
+        },
+        "openai-responses": {
+            "wire_format": "openai",
+            "base_url": "https://proxy/v1",
+            "credential_ref": "provider/o2/key",
+            "model": "gpt-y",
+            "fast_model": None,
+            "wire_api": "responses",
+            "is_active": False,
+            "internal_default": False,
+        },
+        "anthropic-x": {
+            "wire_format": "anthropic",
+            "base_url": "https://a",
+            "credential_ref": "provider/a/key",
+            "model": "claude-x",
+            "fast_model": None,
+            "wire_api": "chat",
+            "is_active": False,
+            "internal_default": False,
+        },
+    }
+    with sqlite3.connect(db_path) as conn:
+        for name, cfg_payload in seed.items():
+            conn.execute(
+                "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
+                "VALUES ('provider', ?, ?, 1, '2026-06-22', '2026-06-22')",
+                (name, json.dumps(cfg_payload)),
+            )
+        conn.commit()
+
+    command.upgrade(cfg, "head")
+    assert _alembic_version(db_path) == HEAD_REVISION
+
+    def _wire_apis() -> dict[str, str]:
+        with sqlite3.connect(db_path) as conn:
+            return {
+                name: json.loads(cfg_json)["wire_api"]
+                for name, cfg_json in conn.execute(
+                    "SELECT name, config_json FROM resources WHERE kind = 'provider'"
+                ).fetchall()
+            }
+
+    apis = _wire_apis()
+    assert apis["openai-chat"] == "responses"  # flipped
+    assert apis["openai-responses"] == "responses"  # already correct, untouched
+    assert apis["anthropic-x"] == "chat"  # anthropic ignores wire_api → left alone
+
+    # Downgrade flips openai responses back to chat (anthropic still untouched).
+    command.downgrade(cfg, "0036")
+    apis_down = _wire_apis()
+    assert apis_down["openai-chat"] == "chat"
+    assert apis_down["openai-responses"] == "chat"
+    assert apis_down["anthropic-x"] == "chat"
 
 
 def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkeypatch):

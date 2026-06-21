@@ -61,7 +61,10 @@ class ProviderConfig(BaseModel):
     # ``ANTHROPIC_SMALL_FAST_MODEL`` for anthropic; ignored for openai.
     fast_model: str | None = None
     # ``model_providers.*.wire_api`` for openai/Codex; ignored for anthropic.
-    wire_api: WireApi = WireApi.CHAT
+    # Default ``responses``: codex-cli 0.130 dropped ``wire_api = "chat"`` (the
+    # config then fails to load), so a connection with no explicit value must
+    # project what current Codex accepts.
+    wire_api: WireApi = WireApi.RESPONSES
     # At most one active connection per wire format (enforced by the switch op).
     # ollama never projects to an agent, so it stays inactive.
     is_active: bool = False

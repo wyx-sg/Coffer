@@ -40,6 +40,8 @@ from coffer.application.memory.sync import MemoryReconciler
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
+from coffer.domain.provider.config import WireFormat
+from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make_ask_tool
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
@@ -313,7 +315,22 @@ def wire_chat(
     #    They surface in the picker only when their binary is on PATH (availability()).
     registry = AgentProviderRegistry()
     registry.register(ClaudeSdkProvider(conversations=conv_repo), display_name="Claude Code")
-    registry.register(CodexAppServerProvider(conversations=conv_repo), display_name="Codex")
+
+    # Codex reads its API key from the COFFER_PROVIDER_KEY env var (config.toml's
+    # env_key). Resolve the active openai connection's key per turn and inject it
+    # into the codex subprocess env; with no active connection it stays None so
+    # codex inherits the daemon env and uses its own login (ADR-032 env_key seam).
+    async def _resolve_codex_key() -> str | None:
+        try:
+            key: str = await get_provider_service().resolve_active_key(WireFormat.OPENAI)
+            return key
+        except (NoActiveProvider, CredentialMissing):
+            return None
+
+    registry.register(
+        CodexAppServerProvider(conversations=conv_repo, resolve_key=_resolve_codex_key),
+        display_name="Codex",
+    )
 
     # 7. Application services + the agent-agnostic turn orchestrator.
     chat_svc = ChatService(

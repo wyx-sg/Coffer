@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { WIRE_BY_AGENT } from "@/lib/api/providers";
+import { BUILTIN_MODELS_BY_AGENT, WIRE_BY_AGENT } from "@/lib/api/providers";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 import { useProviders } from "@/lib/hooks/useProviders";
 
@@ -73,11 +73,22 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
 
   const suggestions = useMemo(() => {
     const out: string[] = [];
-    if (activeConnection?.model) out.push(activeConnection.model);
-    if (activeConnection?.fast_model) out.push(activeConnection.fast_model);
-    for (const m of fetched) if (!out.includes(m)) out.push(m);
+    if (activeConnection) {
+      // An override is active → offer the connection's model(s) and whatever its
+      // endpoint lists. Built-in ids don't apply (the agent now talks to the
+      // connection, not its own login).
+      if (activeConnection.model) out.push(activeConnection.model);
+      if (activeConnection.fast_model) out.push(activeConnection.fast_model);
+      for (const m of fetched) if (!out.includes(m)) out.push(m);
+    } else {
+      // No override → the agent runs on its own login; offer its curated
+      // built-in models (ADR-032 amendment D4).
+      for (const m of BUILTIN_MODELS_BY_AGENT[agentKey] ?? []) {
+        if (!out.includes(m)) out.push(m);
+      }
+    }
     return out;
-  }, [activeConnection, fetched]);
+  }, [activeConnection, fetched, agentKey]);
 
   // Pull the connection's full catalogue once, the first time the dropdown is
   // opened. Best-effort: a connection that can't list models just yields

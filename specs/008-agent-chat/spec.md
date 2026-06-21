@@ -178,7 +178,7 @@ it listed; the Chat page stops showing the "no model configured" state.
 **Covering scenarios** (connection configuration now lives in spec 011 / Settings
 → LLM Connections; this story's chat-side coverage is):
 
-- no-model empty state
+- chat runs on the built-in model when no connection
 - list a provider's models
 - test a model connection
 
@@ -515,12 +515,13 @@ referenced by at least one test marked
   the agent's CLI; clearing it reverts to the provider profile's projected
   default.
 
-### Scenario: no-model empty state
+### Scenario: chat runs on the built-in model when no connection
 
-- **Given** a running daemon with no model configured,
+- **Given** a running daemon with no LLM connection configured for the agent,
 - **When** the user opens the Chat page,
-- **Then** an actionable empty state linking to Settings → LLM Connections is
-  shown and no message can be sent.
+- **Then** the composer is available (no blocking empty state) and a sent turn
+  runs on the agent's own built-in model/login — a Coffer LLM connection is an
+  optional override, not a prerequisite (ADR-032 amendment D1).
 
 ### Scenario: token usage and audit
 
