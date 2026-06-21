@@ -322,6 +322,43 @@ describe("AgentSkillsTab", () => {
         expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("cc", "linked", "agents_dir"),
       );
     });
+
+    test("bulk adopt only adopts eligible rows (skips invalid/foreign)", async () => {
+      stub([UNMANAGED_GOOD, UNMANAGED_FOREIGN]);
+      renderTab();
+
+      const section = await screen.findByTestId("unmanaged-skills");
+      // Select all rows, then trigger the bulk Adopt from the bulk bar.
+      fireEvent.click(within(section).getByRole("checkbox", { name: en.common.bulk.selectAll }));
+      const bar = screen.getByText(/2 selected/i).closest("div")!;
+      fireEvent.click(within(bar).getByRole("button", { name: en.agents.skillsTab.adopt }));
+
+      await waitFor(() =>
+        expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("cc", "good", "skills"),
+      );
+      // The foreign-link row is never adopted, so exactly one call fires.
+      expect(api.adoptUnmanagedSkill).toHaveBeenCalledTimes(1);
+    });
+
+    test("bulk delete confirms, then deletes every selected row", async () => {
+      stub([UNMANAGED_GOOD, UNMANAGED_FOREIGN]);
+      renderTab();
+
+      const section = await screen.findByTestId("unmanaged-skills");
+      fireEvent.click(within(section).getByRole("checkbox", { name: en.common.bulk.selectAll }));
+      const bar = screen.getByText(/2 selected/i).closest("div")!;
+      fireEvent.click(within(bar).getByRole("button", { name: en.common.bulk.delete }));
+
+      const dialog = await screen.findByRole("dialog");
+      expect(api.deleteUnmanagedSkill).not.toHaveBeenCalled();
+      fireEvent.click(within(dialog).getByRole("button", { name: en.common.delete }));
+
+      await waitFor(() =>
+        expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("cc", "good", "skills"),
+      );
+      expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("cc", "linked", "agents_dir");
+      expect(api.deleteUnmanagedSkill).toHaveBeenCalledTimes(2);
+    });
   });
 
   test("en and zh locales carry the same agents.skillsTab keys", () => {

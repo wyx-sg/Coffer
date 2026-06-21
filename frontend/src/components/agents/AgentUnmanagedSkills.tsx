@@ -14,6 +14,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { AgentUnmanagedSkillsBulkActions } from "@/components/agents/AgentUnmanagedSkillsBulkActions";
 import { DataTable, type Column } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,8 +28,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { translateApiError } from "@/lib/api/errors";
 import type { UnmanagedSkillOut } from "@/lib/api/agents";
+import { translateApiError } from "@/lib/api/errors";
 import {
   useAdoptUnmanagedSkill,
   useDeleteUnmanagedSkill,
@@ -143,6 +144,19 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
         search={{
           accessor: (s) => `${s.name} ${s.reason ?? ""}`,
           placeholder: t("skills.searchPlaceholder"),
+        }}
+        selection={{
+          ariaSelectAll: t("common.bulk.selectAll"),
+          ariaSelectRow: (s) => `${t("common.bulk.selectRow")}: ${s.name}`,
+          bulkLabel: (count) => t("common.bulk.selected", { count }),
+          clearLabel: t("common.clear"),
+          renderBulkActions: ({ selectedRows, clear }) => (
+            <AgentUnmanagedSkillsBulkActions
+              agentName={agentName}
+              rows={selectedRows}
+              clear={clear}
+            />
+          ),
         }}
         emptyMessage={t("agents.skillsTab.unmanagedNoMatch")}
       />

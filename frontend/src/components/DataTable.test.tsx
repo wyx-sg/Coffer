@@ -167,6 +167,57 @@ describe("DataTable", () => {
     expect(lastSelected.map((r) => r.name)).toEqual(["beta"]);
   });
 
+  test("server pagination: renders rows as-is and drives page changes through callbacks", () => {
+    const onPageChange = vi.fn();
+    const onPageSizeChange = vi.fn();
+    // Caller passes ONE page (2 of 50). The table must not slice/hide them and
+    // must report 25 pages, delegating next/prev to the callbacks.
+    render(
+      <DataTable
+        rows={ROWS.slice(0, 2)}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        serverPagination={{
+          page: 1,
+          pageSize: 2,
+          total: 50,
+          onPageChange,
+          onPageSizeChange,
+        }}
+        emptyMessage="none"
+      />,
+    );
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+    expect(screen.getByText("beta")).toBeInTheDocument();
+    expect(screen.getByText(/page 1 of 25/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(onPageChange).toHaveBeenCalledWith(2);
+  });
+
+  test("controlled search: forwards typing and resets the server page to 1", () => {
+    const onChange = vi.fn();
+    const onPageChange = vi.fn();
+    render(
+      <DataTable
+        rows={ROWS}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        search={{ placeholder: "search", value: "", onChange }}
+        serverPagination={{
+          page: 3,
+          pageSize: 10,
+          total: 100,
+          onPageChange,
+          onPageSizeChange: vi.fn(),
+        }}
+        emptyMessage="none"
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "search" }), { target: { value: "q" } });
+    expect(onChange).toHaveBeenCalledWith("q");
+    expect(onPageChange).toHaveBeenCalledWith(1);
+  });
+
   test("clicking an expandable row reveals + hides its detail", () => {
     render(
       <DataTable

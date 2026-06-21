@@ -3,17 +3,13 @@
 // happens in the user's own editor, not in-app. This shared action bar takes a
 // managed file to those external tools — open it in the preferred editor (see
 // the "preferred editor" preference in General settings) and reveal it in the OS
-// file manager. The actual open/reveal goes through useFsActions:
-// tauri-plugin-opener on the packaged desktop app, the loopback daemon on the
-// web (spec 004 FR-039, ADR-033). The web and desktop surfaces show the same
-// buttons — there is no copy-path fallback.
-import { useTranslation } from "react-i18next";
-import { ExternalLink, FolderOpen } from "lucide-react";
-
+// file manager. The web and desktop surfaces show the same buttons.
+//
+// The actions themselves live in lib/fileActionItems.ts (`useFileActionItems`)
+// so a crowded table row can fold the same open/reveal into the RowActions "⋯"
+// overflow menu instead of spelling out every button inline.
+import { useFileActionItems } from "@/lib/fileActionItems";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/toast";
-import { useFsActions } from "@/lib/fsActions";
-import { usePreferredEditor } from "@/lib/preferences";
 import { cn } from "@/lib/utils";
 
 export function FileActions({
@@ -24,31 +20,18 @@ export function FileActions({
   filePath: string;
   className?: string;
 }) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const editor = usePreferredEditor();
-  const { open, reveal } = useFsActions();
-
-  const doOpen = (path: string, failKey: string) =>
-    void open(path, editor).catch(() => toast.error(t(failKey)));
-  const doReveal = (path: string) =>
-    void reveal(path).catch(() => toast.error(t("fileActions.revealFailed")));
-
+  const items = useFileActionItems(filePath);
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={() => doOpen(filePath, "fileActions.openFailed")}
-      >
-        <ExternalLink className="mr-1.5 size-3.5" />
-        {t("fileActions.openInEditor")}
-      </Button>
-      <Button type="button" size="sm" variant="outline" onClick={() => doReveal(filePath)}>
-        <FolderOpen className="mr-1.5 size-3.5" />
-        {t("fileActions.reveal")}
-      </Button>
+      {items.map((it) => {
+        const Icon = it.icon;
+        return (
+          <Button key={it.key} type="button" size="sm" variant="outline" onClick={it.onClick}>
+            <Icon className="mr-1.5 size-3.5" />
+            {it.label}
+          </Button>
+        );
+      })}
     </div>
   );
 }

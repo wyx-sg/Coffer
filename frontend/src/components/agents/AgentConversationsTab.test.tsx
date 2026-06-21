@@ -1,27 +1,27 @@
 // frontend/src/components/agents/AgentConversationsTab.test.tsx
 //
-// The "Conversations" tab renders a table of transcript sessions for a
-// registered agent — title, project, counts, start + last-activity times — with
-// search / project + time filters / sortable columns, a "load more" pager, and
-// per-row "reveal file" + "distill to memory" actions. We mock the hook module
-// (per agents/frontend.md §8) and FileActions (covered by its own test) so the
-// component renders deterministically without network, toast, or Tauri.
+// The "Conversations" tab renders transcript sessions for a registered agent
+// through the shared DataTable — title, project, counts, start + last-activity
+// times — with a search box, page-based (server) pagination, bulk select, and
+// per-row "distill to memory" + a "⋯" menu of file actions. We mock the hook
+// module (per agents/frontend.md §8) and FileActions (covered by its own test)
+// so the component renders deterministically without network, toast, or Tauri.
 
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AgentConversationsTab } from "./AgentConversationsTab";
+import type { TranscriptListParams } from "@/lib/api/agentChat";
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
 const distillMutate = vi.fn();
-const fetchNextPage = vi.fn();
 
 vi.mock("@/lib/hooks/useAgentChatHistory", () => ({
-  TRANSCRIPTS_PAGE_SIZE: 100,
+  TRANSCRIPTS_PAGE_SIZE: 10,
   transcriptsKey: (name: string) => ["agents", name, "conversations"],
   useAgentTranscripts: vi.fn(),
   useDistillTranscript: vi.fn(() => ({
@@ -31,15 +31,16 @@ vi.mock("@/lib/hooks/useAgentChatHistory", () => ({
   })),
 }));
 
-// FileActions pulls in Tauri + toast + preferences; it has its own test. Here we
-// stub it so we can assert the session's source_path is wired through.
-vi.mock("@/components/FileActions", () => ({
-  FileActions: ({ filePath }: { filePath: string }) => (
-    <div data-testid="file-actions">{filePath}</div>
-  ),
+// The row's file actions pull in Tauri + toast + preferences; they have their
+// own test. Here we stub the useFileActionItems hook the row uses so the source
+// path can be asserted as wired through without driving the real fs actions.
+const fileItems = [{ key: "open", label: "Open in editor", onClick: vi.fn() }];
+vi.mock("@/lib/fileActionItems", () => ({
+  useFileActionItems: vi.fn(() => fileItems),
 }));
 
 const hooks = await import("@/lib/hooks/useAgentChatHistory");
+const fa = await import("@/lib/fileActionItems");
 
 function wrap({ children }: PropsWithChildren) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -58,28 +59,19 @@ const SESSION = {
 
 function stubTranscripts(
   sessions: (typeof SESSION)[] = [SESSION],
-  opts: {
-    isPending?: boolean;
-    error?: Error | null;
-    total?: number;
-    hasNextPage?: boolean;
-    isFetchingNextPage?: boolean;
-  } = {},
+  opts: { isPending?: boolean; error?: Error | null; total?: number } = {},
 ) {
   vi.mocked(hooks.useAgentTranscripts).mockReturnValue({
     data: opts.isPending
       ? undefined
-      : { pages: [{ sessions, total: opts.total ?? sessions.length, limit: 100, offset: 0 }] },
+      : { sessions, total: opts.total ?? sessions.length, limit: 10, offset: 0 },
     isPending: opts.isPending ?? false,
     error: opts.error ?? null,
-    fetchNextPage,
-    hasNextPage: opts.hasNextPage ?? false,
-    isFetchingNextPage: opts.isFetchingNextPage ?? false,
   } as unknown as ReturnType<typeof hooks.useAgentTranscripts>);
 }
 
-/** Last (name, filters) the component passed to the transcripts hook. */
-function lastFilters(): Record<string, unknown> {
+/** Last (name, params) the component passed to the transcripts hook. */
+function lastParams(): TranscriptListParams {
   const calls = vi.mocked(hooks.useAgentTranscripts).mock.calls;
   return calls[calls.length - 1]?.[1] ?? {};
 }
@@ -93,8 +85,8 @@ describe("AgentConversationsTab", () => {
     expect(screen.getByText("Fix the login redirect bug")).toBeInTheDocument();
     expect(screen.getByText("/home/u/repo")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
-    // source_path is wired into the reveal affordance (FileActions stub).
-    expect(screen.getByTestId("file-actions")).toHaveTextContent("rollout-s1.jsonl");
+    // source_path is wired into the row's file actions (folded into the ⋯ menu).
+    expect(vi.mocked(fa.useFileActionItems)).toHaveBeenCalledWith(SESSION.source_path);
   });
 
   test("shows a loading state while sessions are pending", () => {
@@ -115,27 +107,45 @@ describe("AgentConversationsTab", () => {
     expect(screen.getByText(/no conversations found/i)).toBeInTheDocument();
   });
 
+  test("first page request carries limit/offset (paged on demand)", () => {
+    stubTranscripts([SESSION], { total: 250 });
+    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    expect(typeof lastParams().limit).toBe("number");
+    expect(lastParams().offset).toBe(0);
+  });
+
   test("typing in search forwards the query to the hook", () => {
     stubTranscripts();
     render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "alpha" } });
-    expect(lastFilters().q).toBe("alpha");
+    expect(lastParams().q).toBe("alpha");
   });
 
   test("default sort is last_activity desc; clicking 'Started' header sorts by started_at", () => {
     stubTranscripts();
     render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
-    expect(lastFilters().sort).toBe("last_activity_at");
-    expect(lastFilters().order).toBe("desc");
+    expect(lastParams().sort).toBe("last_activity_at");
+    expect(lastParams().order).toBe("desc");
     fireEvent.click(screen.getByRole("button", { name: /sort by started/i }));
-    expect(lastFilters().sort).toBe("started_at");
+    expect(lastParams().sort).toBe("started_at");
   });
 
-  test("clicking 'Load more' fetches the next page", () => {
-    stubTranscripts([SESSION], { total: 250, hasNextPage: true });
+  test("keys rows by source_path so duplicate session_ids stay independently selectable", () => {
+    // Two rows share a session_id (subagent sidechain) but have distinct files.
+    const dup = { ...SESSION, source_path: "/home/u/.codex/sessions/2026/06/rollout-s1b.jsonl" };
+    stubTranscripts([SESSION, dup]);
     render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("button", { name: /load more/i }));
-    expect(fetchNextPage).toHaveBeenCalled();
+    const checkboxes = screen.getAllByRole("checkbox");
+    // select-all + 2 rows = 3 checkboxes (no rowKey collision collapsing them).
+    expect(checkboxes).toHaveLength(3);
+  });
+
+  test("stepping to the next page advances the offset by the page size", () => {
+    stubTranscripts([SESSION], { total: 250 });
+    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    const limit = lastParams().limit as number;
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(lastParams().offset).toBe(limit);
   });
 
   test("clicking 'Distill to memory' calls mutate with the session id", async () => {
@@ -176,5 +186,15 @@ describe("AgentConversationsTab", () => {
     await waitFor(() => expect(screen.getByText("Use Redis")).toBeInTheDocument());
     expect(screen.getByText(/We chose Redis/i)).toBeInTheDocument();
     expect(screen.getByText("decision")).toBeInTheDocument();
+  });
+
+  test("selecting a row reveals the bulk distill action", () => {
+    stubTranscripts();
+    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    // Tick the row checkbox (the first checkbox is select-all).
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[checkboxes.length - 1]);
+    // Bulk bar shows the selected-count label + a distill action button.
+    expect(screen.getByText(/1 selected/i)).toBeInTheDocument();
   });
 });

@@ -31,7 +31,6 @@ export function MemoryRecallPanel({
   const { t } = useTranslation();
   return (
     <section className="space-y-2">
-      <h2 className="text-lg font-medium">{t("memory.detail.recall")}</h2>
       <div className="flex max-w-2xl flex-wrap gap-2">
         <Input
           className="flex-1"

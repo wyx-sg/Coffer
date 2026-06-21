@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 
 import { AgentAdoptMcpDialog } from "@/components/agents/AgentAdoptMcpDialog";
 import { AgentGatewayMcpSection } from "@/components/agents/AgentGatewayMcpSection";
+import { AgentMcpServersBulkActions } from "@/components/agents/AgentMcpServersBulkActions";
 import { DataTable, type Column } from "@/components/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -173,6 +174,19 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
             search={{
               accessor: (e) => e.name,
               placeholder: t("agents.workspace.mcp.searchPlaceholder"),
+            }}
+            selection={{
+              ariaSelectAll: t("common.bulk.selectAll"),
+              ariaSelectRow: (e) => `${t("common.bulk.selectRow")}: ${e.name}`,
+              bulkLabel: (count) => t("common.bulk.selected", { count }),
+              clearLabel: t("common.clear"),
+              renderBulkActions: ({ selectedRows, clear }) => (
+                <AgentMcpServersBulkActions
+                  agentName={agentName}
+                  rows={selectedRows}
+                  clear={clear}
+                />
+              ),
             }}
             emptyMessage={t("agents.workspace.mcp.empty")}
           />

@@ -88,9 +88,9 @@ describe("useAgentTranscripts", () => {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    // Infinite query: sessions live under data.pages[].
-    expect(result.current.data?.pages[0].sessions).toHaveLength(1);
-    expect(result.current.data?.pages[0].sessions[0].session_id).toBe("s1");
+    // Page-based query: one page of sessions lives directly under data.
+    expect(result.current.data?.sessions).toHaveLength(1);
+    expect(result.current.data?.sessions[0].session_id).toBe("s1");
     const url = String(fetchMock.mock.calls[0][0]);
     // The base URL already carries the /api/v1 prefix; the path must not repeat
     // it (a doubled /api/v1/api/v1 hits no route → 404 NOT_FOUND).
