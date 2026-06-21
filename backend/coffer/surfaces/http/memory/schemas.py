@@ -227,3 +227,23 @@ class OrganizeResponse(BaseModel):
     topics_updated: int
     skipped: int
     model: str | None = None
+
+
+# --- reorg ------------------------------------------------------------------
+
+
+ReorgStatus = Literal["reorganized", "no_model", "empty"]
+
+
+class ReorgResponse(BaseModel):
+    """Result of an explicit ``reorg`` run (topic-doc consolidation).
+
+    ``status="no_model"`` (no internal model configured) and ``status="empty"``
+    (no topic docs to reorganize) are clean no-ops, not errors."""
+
+    status: ReorgStatus
+    topics_before: int
+    topics_after: int
+    topics_written: int
+    topics_superseded: int
+    model: str | None = None

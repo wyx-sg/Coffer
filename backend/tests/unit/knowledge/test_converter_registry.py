@@ -8,6 +8,20 @@ from coffer.infrastructure.knowledge.converters.csv_converter import CsvConverte
 from coffer.infrastructure.knowledge.converters.passthrough_converter import (
     PassthroughConverter,
 )
+from coffer.infrastructure.knowledge.converters.registry import ConverterRegistry
+
+
+class _EmptyConverter:
+    """Fake converter that claims one format and always yields empty markdown."""
+
+    def __init__(self, fmt: str) -> None:
+        self._fmt = fmt
+
+    def can_handle(self, fmt: str) -> bool:
+        return fmt == self._fmt
+
+    async def convert(self, data: bytes, fmt: str) -> tuple[str, dict[str, object]]:
+        return "", {"conversion_engine": "fake"}
 
 
 @pytest.mark.asyncio
@@ -50,6 +64,36 @@ async def test_empty_conversion_rejected() -> None:
     reg = default_registry()
     with pytest.raises(IngestRejected) as exc:
         await reg.convert(b"   \n\n  ", "txt")
+    assert exc.value.reason == "empty"
+
+
+@pytest.mark.asyncio
+async def test_empty_pdf_conversion_rejected_as_scanned() -> None:
+    # A scanned / image-only PDF converts to empty markdown — surface an
+    # actionable scanned_pdf reason (KB11) instead of the generic "empty".
+    reg = ConverterRegistry([_EmptyConverter("pdf")])
+    with pytest.raises(IngestRejected) as exc:
+        await reg.convert(b"%PDF-1.4 ...", "pdf")
+    assert exc.value.reason == "scanned_pdf"
+    assert "ocr" in str(exc.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_empty_pdf_with_dot_prefix_rejected_as_scanned() -> None:
+    # The fmt may arrive as ".pdf" (extension form); the registry normalises it
+    # both for converter dispatch and for the scanned-PDF reason branch.
+    reg = ConverterRegistry([_EmptyConverter("pdf")])
+    with pytest.raises(IngestRejected) as exc:
+        await reg.convert(b"%PDF-1.4 ...", ".pdf")
+    assert exc.value.reason == "scanned_pdf"
+
+
+@pytest.mark.asyncio
+async def test_empty_non_pdf_conversion_still_generic_empty() -> None:
+    # Non-PDF empty conversions keep the generic "empty" reason.
+    reg = ConverterRegistry([_EmptyConverter("docx")])
+    with pytest.raises(IngestRejected) as exc:
+        await reg.convert(b"PK...", "docx")
     assert exc.value.reason == "empty"
 
 

@@ -30,6 +30,8 @@ from coffer.infrastructure.knowledge.paths import (
     consolidation_log_path,
     knowledge_dir,
     knowledge_index_path,
+    superseded_dir,
+    superseded_path,
     topic_path,
 )
 
@@ -175,3 +177,48 @@ def _parse_updated_at(value: object, *, default: datetime) -> datetime:
         except ValueError:
             return default
     return default
+
+
+# ---------------------------------------------------------------------------
+# Superseded-tombstone primitives (reorg data-loss guard)
+# ---------------------------------------------------------------------------
+
+
+def _archive_basename(slug: str, when: datetime) -> str:
+    return f"{slug}-{when.strftime('%Y%m%dT%H%M%S')}"
+
+
+def archive_topic_doc(store_dir: Path, slug: str, *, when: datetime) -> Path | None:
+    """Copy the CURRENT ``knowledge/<slug>.md`` to a recoverable
+    ``superseded/<slug>-<ts>.md`` tombstone, leaving the original in place.
+
+    Reads the bytes on disk (so a human edit is captured). Returns the archive
+    path, or ``None`` if no such topic doc exists. A name collision (same slug+ts
+    within one run) gets a ``-2``/``-3``/… suffix so an archive never overwrites
+    another."""
+    src = topic_path(store_dir, slug)
+    try:
+        content = src.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    superseded_dir(store_dir).mkdir(parents=True, exist_ok=True)
+    base = _archive_basename(slug, when)
+    name = base
+    i = 2
+    while superseded_path(store_dir, name).exists():
+        name = f"{base}-{i}"
+        i += 1
+    dest = superseded_path(store_dir, name)
+    atomic_write_text(dest, content)
+    return dest
+
+
+def supersede_topic_doc(store_dir: Path, slug: str, *, when: datetime) -> Path | None:
+    """Archive ``knowledge/<slug>.md`` to the tombstone, THEN remove the original
+    from the lane. Returns the archive path, or ``None`` if it did not exist
+    (never raises). Never a hard delete — the content lives on under ``superseded/``."""
+    archived = archive_topic_doc(store_dir, slug, when=when)
+    if archived is None:
+        return None
+    topic_path(store_dir, slug).unlink(missing_ok=True)
+    return archived

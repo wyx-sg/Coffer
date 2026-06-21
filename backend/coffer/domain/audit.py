@@ -66,6 +66,7 @@ class AuditEventType(StrEnum):
     MEMORY_DELETED = "memory_deleted"
     MEMORY_CLEARED = "memory_cleared"
     MEMORY_ORGANIZED = "memory_organized"
+    MEMORY_REORGANIZED = "memory_reorganized"
     HANDOFF_SET = "handoff_set"
     # spec 008-agent-chat
     CONVERSATION_CREATED = "conversation_created"

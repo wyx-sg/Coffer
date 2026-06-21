@@ -73,7 +73,7 @@ The user manages KBs from the desktop UI under `Resources` and from `coffer kb �
 
 - **Unsupported format**: A file with no converter for its type is rejected with `IngestRejected("unsupported_type")`; nothing is persisted.
 - **Converter library missing**: If the converter engine for a format is not installed, ingest of that format returns `EngineUnavailable` naming the missing dependency; the daemon stays up and other formats still ingest.
-- **Empty conversion**: A file that converts to empty/whitespace-only Markdown is rejected with `IngestRejected("empty")`.
+- **Empty conversion**: A file that converts to empty/whitespace-only Markdown is rejected with `IngestRejected("empty")`. A **PDF** that converts empty is rejected with the more specific `IngestRejected("scanned_pdf")` (same 415 status) so the UI can surface an actionable "looks scanned/image-only — run OCR" message instead of the generic one.
 - **Oversized file**: A file over `max_document_bytes` (default 25 MB) is rejected at the API boundary before any conversion runs.
 - **Re-upload, identical bytes**: A re-upload of a file whose bytes are unchanged (its `source_sha256` matches the document already stored under that filename) is an idempotent no-op — the existing document is returned, nothing is re-written or re-audited.
 - **Re-upload, changed bytes, same filename**: A re-upload of an updated file under a name already in the KB updates the **same document in place** (the ULID id is reused, `docs/`+`raw/` are overwritten keeping only the latest original, `source_mode` resets to `converted`) — but only when the caller passes `replace=true`; without it the upload is rejected (`duplicate`) so the overwrite is always explicit.

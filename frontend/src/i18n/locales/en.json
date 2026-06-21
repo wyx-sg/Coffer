@@ -584,6 +584,7 @@
     "KB_NOT_FOUND": "Knowledge base not found",
     "DOCUMENT_NOT_FOUND": "Document not found",
     "INGEST_REJECTED": "The document was rejected during ingestion",
+    "INGEST_REJECTED_scanned_pdf": "This PDF appears to be scanned or image-only — no text could be extracted. Run OCR (or convert it to a text-based PDF) and re-upload.",
     "ENGINE_UNAVAILABLE": "The retrieval engine is unavailable",
     "RECONVERSION_BLOCKED": "Reindexing is already in progress",
     "SEARCH_MODE_INVALID": "Unsupported search mode",
