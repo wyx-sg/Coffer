@@ -9,6 +9,7 @@ from coffer.domain.agent.native_memory import (
     NativeMemoryLayout,
     decode_project_slug,
     native_memory_layout_for,
+    resolve_project_slug,
 )
 from coffer.domain.agent.types import AgentType
 
@@ -39,3 +40,29 @@ def test_decode_empty_slug() -> None:
 def test_decode_slug_with_only_dashes() -> None:
     # All separators, no real segments -> treated as undecodable.
     assert decode_project_slug("---") == ("---", None)
+
+
+def test_resolve_disambiguates_hyphenated_leaf_via_filesystem() -> None:
+    # The real project is /Users/xing/wedding-invitation (a hyphen in the leaf).
+    # The lossy decoder would split it into .../wedding/invitation → label
+    # "invitation"; the FS-aware resolver keeps it whole.
+    existing = {"/Users", "/Users/xing", "/Users/xing/wedding-invitation"}
+    label, path = resolve_project_slug("-Users-xing-wedding-invitation", lambda p: p in existing)
+    assert (label, path) == ("wedding-invitation", "/Users/xing/wedding-invitation")
+
+
+def test_resolve_prefers_longest_existing_dir_name() -> None:
+    # A multi-hyphen single directory (a-b-c) is taken whole when it exists.
+    existing = {"/Users", "/Users/xing", "/Users/xing/a-b-c"}
+    assert resolve_project_slug("-Users-xing-a-b-c", lambda p: p in existing) == (
+        "a-b-c",
+        "/Users/xing/a-b-c",
+    )
+
+
+def test_resolve_falls_back_to_lossy_when_nothing_on_disk() -> None:
+    # Project dir gone → no prefix exists → same result as the lossy decoder.
+    assert resolve_project_slug("-Users-xing-Coffer", lambda _p: False) == (
+        "Coffer",
+        "/Users/xing/Coffer",
+    )

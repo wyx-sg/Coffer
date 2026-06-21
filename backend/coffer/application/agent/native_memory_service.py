@@ -22,8 +22,8 @@ from typing import Protocol
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.native_memory import (
     NativeMemoryStore,
-    decode_project_slug,
     native_memory_layout_for,
+    resolve_project_slug,
 )
 from coffer.domain.resource import Resource
 
@@ -68,7 +68,10 @@ class AgentNativeMemoryService:
 
     @staticmethod
     def _to_store(slug: str, memory_dir: str, item_count: int) -> NativeMemoryStore:
-        label, path = decode_project_slug(slug)
+        # FS-aware so a hyphenated project name (e.g. "wedding-invitation") is not
+        # mistaken for a nested "wedding/invitation"; falls back to a lossy decode
+        # when the real project dir is gone.
+        label, path = resolve_project_slug(slug, lambda p: pathlib.Path(p).is_dir())
         return NativeMemoryStore(
             project_label=label,
             project_path=path,
