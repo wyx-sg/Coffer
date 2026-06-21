@@ -47,7 +47,10 @@
 - `enabled` —— 同步的总开关。
 - `auto` —— 守护进程 auto-sync worker 是否运行。
 - `interval_seconds` —— auto 拉/推间隔（默认 300）。
-- `branch` —— 用于同步的 git 分支（默认 `main`）。
+- `branch` —— 用于同步的 git 分支（默认 `main`）。它是 Coffer 自身同步仓库里的
+  内部 ref 名，并非用户的项目分支；两台机器用同一默认值，因此**不在设置 UI 中暴露**。
+  它仍保留在 config/API 中，并可通过 CLI（`coffer sync --branch`）调整，以应对极少数
+  在同一 remote 上按分支区分的场景。
 
 git remote 的凭据（SSH key / token）属于用户自己的 git 配置；Coffer 调用 git 并依赖环境中既有的 git credential 设置，与开发者平常 `git push` 的方式完全一致。
 
