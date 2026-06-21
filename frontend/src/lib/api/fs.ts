@@ -72,6 +72,31 @@ export const fsApi = {
   /** Select / reveal `path` in the OS file manager. */
   reveal: (path: string): Promise<void> => postAction("/fs/reveal", { path }),
 
+  /**
+   * Open the host's native folder dialog (via the daemon) and return the chosen
+   * directory. `available: false` means this host has no native dialog tool, so
+   * the caller should fall back to the in-app folder browser; `path: null` with
+   * `available: true` means the user cancelled.
+   */
+  pickFolder: async (
+    start?: string | null,
+  ): Promise<{ available: boolean; path: string | null }> => {
+    const r = await fetch(`${getCofferBaseUrl()}/fs/pick-folder`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ start: start ?? null }),
+    });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      const err = data?.error;
+      throw new ApiError(
+        err?.code ?? "INTERNAL_ERROR",
+        err?.message ?? `request failed: ${r.status}`,
+      );
+    }
+    return data as { available: boolean; path: string | null };
+  },
+
   /** List GUI editors detected as installed, for the preferred-editor picker. */
   listEditors: async (): Promise<EditorOption[]> => {
     const r = await fetch(`${getCofferBaseUrl()}/fs/editors`, { headers: authHeaders() });

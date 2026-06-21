@@ -719,6 +719,31 @@ paths:
               schema: { $ref: "#/components/schemas/FsEditorsOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /fs/pick-folder:
+    post:
+      tags: [fs]
+      operationId: pickFolder
+      summary: Open the host's native folder dialog
+      description: |
+        Open the OS-native directory dialog via the loopback daemon (macOS
+        `osascript`, Linux `zenity`/`kdialog`) and return the chosen absolute
+        path. A web browser cannot open a native dialog, so this is the daemon
+        counterpart to the in-app folder browser (`/fs/browse`). `available:false`
+        means this host has no native dialog tool (caller falls back to the in-app
+        browser); `available:true` with `path:null` means the user cancelled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FsPickFolderRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FsPickFolderOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
 components:
   securitySchemes:
     cofferToken:
@@ -1320,6 +1345,28 @@ components:
           type: array
           items: { $ref: "#/components/schemas/EditorOption" }
           description: "GUI editors detected as installed on this machine."
+
+    FsPickFolderRequest:
+      type: object
+      properties:
+        start:
+          type: string
+          nullable: true
+          description: "Absolute path to seed the dialog's starting directory."
+
+    FsPickFolderOut:
+      type: object
+      required: [available, path]
+      properties:
+        available:
+          type: boolean
+          description: >-
+            Whether this host has a native folder-dialog tool. When false the
+            caller falls back to the in-app folder browser (`/fs/browse`).
+        path:
+          type: string
+          nullable: true
+          description: "The chosen absolute directory, or null if cancelled/unavailable."
 
     ErrorOut:
       type: object
