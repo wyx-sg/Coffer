@@ -175,7 +175,8 @@ The `label` takes precedence over the `project_root`-derived basename when rende
         │   └── INDEX.md
         ├── consolidation-log.md
         ├── superseded/<slug>-<ts>.md
-        └── rules/rules.md
+        ├── rules/rules.md
+        └── journal/     <YYYY-MM>.md     # episodic, append-only, time-partitioned; synced (recall added in the indexing slice)
 ```
 
 There is **no `MEMORY.md`** — the prior derived projection is removed. `recall` globs `knowledge/**/*.md` (excluding `INDEX.md`), so it transparently picks up topic docs once the organizer writes them and finds a hand-written topic doc immediately. `INDEX.md` and the store-root `consolidation-log.md` are **derived/machine-local**: excluded from recall and from the sync mirror (each machine regenerates `INDEX.md` from the synced topic docs; the log is per-machine). Topic docs themselves are source-of-truth and DO sync. The store-root **`superseded/`** tombstone holds prior versions retired by the reorg pass (FR-033/034): like `handoff/` it sits outside the `knowledge/` lane so it is **excluded from recall**, but unlike the derived files it **DOES sync** — it is recoverable source-of-truth history, not a regenerated artifact. The store-root **`rules/rules.md`** is the **procedural lane** (FR-036): the organizer classifies rule-shaped inbox items into it (append, not topic-merge); it sits outside the `knowledge/` lane so it is **excluded from recall** (rules are delivered by session-start injection, a later slice, not by `recall`), and it **DOES sync** as source-of-truth (like `handoff/`). It is read-only over `GET /memory_stores/{name}/rules` / `coffer memory rules`.
