@@ -112,7 +112,21 @@ Codex 需要在启动前在 shell 中设置 `COFFER_PROVIDER_KEY`。这是永不
   因此新增/编辑对话框可在凭据写入 vault 之前探测 provider。内联 secret 仅用于
   对外探测——introspection 路径绝不持久化它（Decision B 的「只存 ref、不存明文」
   不变量不变：secret 仅在连接 create/update 时写入 Fernet vault）。
-- **对块计划的偏离——对话框保留模型字段。** 模型在连接实体上仍是必填
-  （按 Decision D 投射为 `ANTHROPIC_MODEL` / Codex `model`），故对话框保留模型
-  选择——升级为 `ProviderModelField` 组合框（测试/拉取 + 下拉 + 自由输入）。
-  将模型选择迁到 Agent 页是 D3 下追踪的独立双槽议题。
+- **对块计划的偏离——对话框保留模型字段。** *（已被下方 D9 supersede——模型
+  彻底离开连接、对话框模型字段移除。）* 模型经 PR #206 暂留在连接上；D9 推翻它。
+- **D8 — 一网关供两 agent = 两条连接，而非多协议连接。** cc-switch（最接近的可比物）
+  自身也没有多协议连接——单协议 provider + 「通用」作用域。放弃原计划的 `protocol`-集合 +
+  按协议投射 + 迁移：一个上游同时给 Claude Code 和 Codex = 两条连接（vault 里可能存两份 key，
+  功能完全一样；共享一个 `credential_ref` 只是内部便利，刻意不做成复用 UI）。
+  proxy / 热切换 / 转换仍为非目标——那正是 cc-switch 要常驻代理才能做的。
+- **D9 — 连接是「带凭据的 endpoint」；模型与协议离开它。** 连接瘦身为
+  `{name, base_url, credential_ref, protocol}`。**移除** `model`、`fast_model`、手动
+  `wire_format` 选择器。`protocol` 由探测 endpoint 得出（anthropic-wire / openai-wire /
+  unknown）——添加对话框只显示 名称 + base_url + key + 「测试连接」。模型在使用处现选：
+  Agent 页双槽（`ANTHROPIC_MODEL` + `ANTHROPIC_SMALL_FAST_MODEL`）、内部引擎默认选择器、
+  聊天面——各自从所选连接拉取的模型里挑。**投射输入 = 连接(endpoint+key+protocol) +
+  agent 绑定(模型)。** 这 **reopen 决策 A**（model/wire 在连接上）。Agent 页按探测 protocol
+  过滤连接；`unknown` 对所有 agent 显示（不静默隐藏）。迁移为干净丢弃：现有连接丢
+  `model`/`fast_model`，用户在 Agent 页重选。为何 Claude Code 即便跑非 Anthropic 模型也需
+  anthropic-wire endpoint：它只说 Anthropic Messages wire，endpoint 必须呈现它（原生或经翻译
+  代理）——已对照 Claude Code 官方 gateway 文档核实。见 spec 011 Amendment 2026-06-22b（E1–E5）。

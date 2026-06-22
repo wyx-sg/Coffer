@@ -223,6 +223,16 @@ class ListModelsIn(BaseModel):
     base_url: str | None = None
 
 
+class DetectProtocolIn(BaseModel):
+    base_url: str | None = None
+    credential_ref: str | None = None
+    secret_value: str | None = None  # inline secret to probe before saving
+
+
+class DetectProtocolOut(BaseModel):
+    protocol: str  # "anthropic" | "openai" | "ollama" | "unknown"
+
+
 class TestResultOut(BaseModel):
     ok: bool
     message: str

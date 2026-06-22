@@ -45,6 +45,41 @@ Claude Code 和 Codex 各有自己的原生配置文件（`~/.claude/settings.js
 
 Hot-switch（对正在运行的 Claude Code 或 Codex 进程的会话内热重载）是**单独的后续 PR**，明确**不在本 PR 范围内**。
 
+## 修订 2026-06-22b — 连接是「带凭据的 endpoint」；模型与协议离开连接
+
+> 状态：Draft。**Supersede 决策 A 的「model 在连接上」与早先 amendment 的 D2（多协议集合）。**
+> cc-switch 调研 + 与用户敲定后记录。交叉引用
+> [ADR-032](../../docs/decisions/ADR-032-provider-switching.md) amendment D8/D9。
+
+**为什么。** 连接回答的是「哪个网关账号」= endpoint + key。*用哪个模型*、*agent 说哪种协议*
+是「使用」的属性，不是账号的属性：Claude Code 永远说 Anthropic Messages wire、Codex 永远说
+OpenAI，所以协议在投射时由 agent 决定；模型则按 agent 槽 / 内部引擎 / 聊天轮次现选。把
+`model` 和手动 `wire_format` 挂在连接上，逼用户过早回答这些问题，也把账号和它的用途混在一起。
+
+- **E1 — 连接实体瘦身为 `{name, base_url, credential_ref, protocol}`。** 从连接上**移除**
+  `model`、`fast_model`、手动 `wire_format` 选择器；`wire_api`（Codex chat/responses）也移到
+  Codex 绑定，不在连接上。
+- **E2 — `protocol` 是探测出来的，不是用户填的。** create/edit 时 Coffer 探测 endpoint
+  （复用 introspection 路径）判为 `anthropic`-wire / `openai`-wire / `unknown`。所以添加对话框
+  只显示 **名称 + base_url + key + 「测试连接」**——无类型选择器、无模型字段。
+- **E3 — 模型在「使用处」现选。** 按 agent 绑定（Agent 页双槽 → `ANTHROPIC_MODEL` +
+  `ANTHROPIC_SMALL_FAST_MODEL`）、内部引擎默认选择器、聊天面各自从所选连接拉取的模型里挑。
+  连接上不存模型。
+- **E4 — 投射输入 = 连接（endpoint + key + protocol）+ 绑定（模型）。** 为某 agent 激活/投射
+  时，从连接读 endpoint/key/protocol，从该 agent 的绑定读模型。某 agent 无绑定则不投射。
+- **E5 — 兼容性过滤 + 诚实兜底。** Agent 页只列出探测 `protocol` 与该 agent wire 匹配的连接；
+  当连接 protocol 为 `unknown`（探测不确定）时，**对所有 agent 都显示、由用户决定**——Coffer 不
+  静默隐藏一个可能可用的连接。
+- **迁移（方案 A——丢弃）**：现有连接丢掉 `model` / `fast_model`；其 `wire_format` 重解释为探测
+  `protocol`（或 `unknown` 待下次探测）。用户原先配的模型**不**带进绑定——升级后在 Agent 页重选。
+  这是用户选定的「干净切断」，而非尽力迁移。
+
+**Supersede：** 决策 A（「一条连接持有 … model、fast_model …」与「连接只投射到 wire_format 匹配的
+agent」——现在由 agent 的 wire 驱动投射、连接的 protocol 只是探测出的兼容性提示）；amendment D2
+（多协议集合——已废弃，见 ADR-032 D8：一网关供两 agent = 两条连接）。
+
+**仍不在范围（不变）：** proxy / 热切换 / 协议转换。
+
 ## 范围
 
 ### 在范围内

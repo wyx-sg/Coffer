@@ -11,16 +11,22 @@ provider 注册表的实体、字段与复用锚点。
 
 Pydantic v2 `BaseModel`。这是存储在 Resource 行上的同步 `config` 字典。**绝不**持有原始 secret。
 
+> **修订 2026-06-22b（E1–E2）**：连接是「带凭据的 endpoint」。`model`、`fast_model`、
+> `wire_api` **移除**；手动 `wire_format` 改为**探测**出的 `protocol`。模型在使用处
+> （Agent 绑定 / 内部默认 / 聊天）现选，不在连接上。
+
 | 字段 | 类型 | 约束 / 说明 |
 |---|---|---|
-| `wire_format` | `WireFormat` | 必填；`"anthropic"`、`"openai"` 或 `"ollama"`。`ollama` 仅供内部——从不投影到 agent。 |
-| `base_url` | `str` | 必填（所有 wire）；上游 LLM endpoint URL。 |
+| `protocol` | `Protocol` | **探测**得出、非用户输入；`"anthropic"`、`"openai"`、`"ollama"` 或 `"unknown"`。create/edit 时探测 endpoint 得出；只是兼容性提示，不是投射门控。`ollama` 仅供内部。`unknown` ⇒ 对所有 agent 显示（用户决定）。 |
+| `base_url` | `str` | 必填；上游 LLM endpoint URL。 |
 | `credential_ref` | `str \| None` | 可选；anthropic/openai 必填（Fernet vault ref，格式 `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`）；ollama 不存在（无 API key）。 |
-| `model` | `str` | 必填；主模型 id（当此为内部默认时，亦即 Coffer 内部引擎运行的模型）。 |
-| `fast_model` | `str \| None` | 可选；Claude Code 上为 `ANTHROPIC_SMALL_FAST_MODEL`；openai wire 忽略。 |
-| `wire_api` | `WireApi` | 可选；`"chat"`（默认）或 `"responses"`；仅 openai。 |
-| `is_active` | `bool` | 同一 `wire_format` 下最多一条为 `True`（FR-011）；ollama 始终为 `False`（从不投影）。 |
-| `internal_default` | `bool` | 全局最多一条为 `True`（FR-021）；Coffer 内部引擎使用的 connection。导入时若 >1，则归一化（保留最近更新的）。 |
+| `is_active` | `bool` | 同一 `protocol` 下最多一条为 `True`（FR-011）；ollama 始终为 `False`。 |
+| `internal_default` | `bool` | 全局最多一条为 `True`（FR-021）；Coffer 内部引擎使用的 connection（其**模型**由内部默认选择器选，不存这里）。导入时若 >1，则归一化（保留最近更新的）。 |
+
+模型选择不在连接上。投射给某 agent 的模型来自该 agent 的绑定（Agent 页双槽 →
+`ANTHROPIC_MODEL` + `ANTHROPIC_SMALL_FAST_MODEL`）；Codex 的 `wire_api` 也移到 Codex 绑定。
+**迁移（方案 A）：现有连接丢掉 `model`/`fast_model`/`wire_api`；`wire_format` 重读为
+`protocol`（或 `unknown` 待探测）；原先配的模型不带走——用户在 Agent 页重选。**
 
 所有字段均 JSON 稳定（无 Python 对象），`model_dump(mode="json")` 可干净序列化，适用于 SQLite 和 sync export。
 

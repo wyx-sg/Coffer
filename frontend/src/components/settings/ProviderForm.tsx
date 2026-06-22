@@ -1,17 +1,19 @@
 // components/settings/ProviderForm.tsx — add / edit an LLM connection (spec 011).
-// A connection = key + endpoint + wire + model. Ollama is internal-only and has
-// no key, so the credential field is hidden (and omitted from the body) when
-// wire_format = ollama. In edit mode (`initial` set) the name + wire are fixed
-// (they identify the resource / its projection target) and the secret is
-// optional — left blank, the stored key is kept.
+// A connection = endpoint + key + (detected) wire + model. The wire is no longer
+// hand-picked: after base_url + key are entered the dialog detects it (ADR-032
+// D9 / amendment 2026-06-22b E2); only an inconclusive probe falls back to a
+// manual pick. In edit mode (`initial` set) name + wire are fixed and the secret
+// is optional — left blank, the stored key is kept.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { ProviderModelField } from "@/components/settings/ProviderModelField";
+import { useDetectProtocol } from "@/lib/hooks/useModelIntrospection";
 import { translateApiError } from "@/lib/api/errors";
 import {
   wireNeedsCredential,
@@ -36,16 +38,37 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
   const { t } = useTranslation();
   const isEdit = initial != null;
   const [name, setName] = useState(initial?.name ?? "");
-  const [wireFormat, setWireFormat] = useState<WireFormat>(initial?.wire_format ?? "anthropic");
+  // "" until detected (create mode); edit mode keeps the locked wire.
+  const [wireFormat, setWireFormat] = useState<WireFormat | "">(initial?.wire_format ?? "");
   const [baseUrl, setBaseUrl] = useState(initial?.base_url ?? "");
   const [model, setModel] = useState(initial?.model ?? "");
   const [fastModel, setFastModel] = useState(initial?.fast_model ?? "");
   const [secret, setSecret] = useState("");
+  // Shown only when detection is inconclusive (`unknown`) — the honest fallback.
+  const [manualPick, setManualPick] = useState(false);
 
-  const needsCredential = wireNeedsCredential(wireFormat);
-  // Probe key: a freshly typed secret wins; otherwise reuse the stored ref so
-  // test/fetch works in edit mode without re-entering the key.
+  const detect = useDetectProtocol();
+  // Before a wire is known, assume a key is needed (so the field is available to
+  // detect with); ollama clears it once detected.
+  const needsCredential = wireFormat === "" || wireNeedsCredential(wireFormat);
   const probeCredentialRef = isEdit && !secret ? (initial?.credential_ref ?? null) : null;
+
+  const runDetect = () => {
+    if (isEdit || !baseUrl) return;
+    detect.mutate(
+      { base_url: baseUrl, secret_value: secret || null },
+      {
+        onSuccess: (r) => {
+          if (r.protocol === "unknown") {
+            setManualPick(true);
+          } else {
+            setWireFormat(r.protocol as WireFormat);
+            setManualPick(false);
+          }
+        },
+      },
+    );
+  };
 
   return (
     <form
@@ -53,21 +76,15 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
       onSubmit={async (e) => {
         e.preventDefault();
         if (isEdit) {
-          // Name + wire are immutable; PATCH only the editable fields.
           const patch: ProviderPatch = { base_url: baseUrl, model };
           patch.fast_model = fastModel.trim() ? fastModel.trim() : null;
           if (needsCredential && secret) patch.secret_value = secret;
           await onUpdate?.(patch);
           return;
         }
-        const values: ProviderCreate = {
-          name,
-          wire_format: wireFormat,
-          base_url: baseUrl,
-          model,
-        };
+        if (!wireFormat) return; // guard: wire must be known before create
+        const values: ProviderCreate = { name, wire_format: wireFormat, base_url: baseUrl, model };
         if (fastModel.trim()) values.fast_model = fastModel.trim();
-        // Ollama has no key — send NEITHER secret_value nor credential_ref.
         if (needsCredential && secret) values.secret_value = secret;
         await onSubmit(values);
       }}
@@ -83,22 +100,14 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="p-wire">{t("settings.connections.wireFormat")}</Label>
-        <select
-          id="p-wire"
-          className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm disabled:opacity-50"
-          value={wireFormat}
-          onChange={(e) => setWireFormat(e.target.value as WireFormat)}
-          disabled={isEdit}
-        >
-          <option value="anthropic">anthropic</option>
-          <option value="openai">openai</option>
-          <option value="ollama">ollama</option>
-        </select>
-      </div>
-      <div className="space-y-1.5">
         <Label htmlFor="p-base">{t("settings.connections.baseUrl")}</Label>
-        <Input id="p-base" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required />
+        <Input
+          id="p-base"
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+          onBlur={runDetect}
+          required
+        />
       </div>
       {needsCredential && (
         <div className="space-y-1.5">
@@ -107,15 +116,55 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
             id="p-secret"
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
+            onBlur={runDetect}
             required={!isEdit}
             placeholder={isEdit ? t("settings.connections.secretKeepBlank") : undefined}
           />
         </div>
       )}
-      {/* Model field carries «测试连接»/«拉取模型», driven by the inline (not-yet
-          -saved) secret above so the user can probe before saving (ADR-032 D6). */}
+      {/* Wire is detected, not hand-picked. Edit mode shows the locked wire; create
+          mode shows the detected wire, or a manual fallback when inconclusive. */}
+      <div className="space-y-1.5">
+        <Label htmlFor="p-wire">{t("settings.connections.wireFormat")}</Label>
+        {isEdit ? (
+          <p className="text-sm text-muted-foreground">{initial?.wire_format}</p>
+        ) : manualPick ? (
+          <select
+            id="p-wire"
+            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            value={wireFormat}
+            onChange={(e) => setWireFormat(e.target.value as WireFormat)}
+          >
+            <option value="" disabled>
+              {t("settings.connections.detectFailed")}
+            </option>
+            <option value="anthropic">anthropic</option>
+            <option value="openai">openai</option>
+            <option value="ollama">ollama</option>
+          </select>
+        ) : (
+          <div className="flex items-center gap-2 text-sm">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={runDetect}
+              disabled={!baseUrl || detect.isPending}
+            >
+              {detect.isPending && <Loader2 className="mr-1 size-3.5 animate-spin" />}
+              {t("settings.connections.detectType")}
+            </Button>
+            {wireFormat && (
+              <span className="flex items-center gap-1 text-green-600" role="status">
+                <CheckCircle2 className="size-3.5" />
+                {t("settings.connections.detected", { wire: wireFormat })}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
       <ProviderModelField
-        provider={wireFormat}
+        provider={wireFormat || "openai"}
         baseUrl={baseUrl || null}
         credentialRef={probeCredentialRef}
         secretValue={secret}
@@ -135,7 +184,7 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
         <Button type="button" variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending || (!isEdit && !wireFormat)}>
           {t("common.save")}
         </Button>
       </DialogFooter>

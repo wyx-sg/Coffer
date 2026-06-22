@@ -146,6 +146,56 @@ protocols (D2).
 **Still out of scope:** hot-switch; proxy / failover / format conversion;
 anthropic↔openai protocol translation.
 
+## Amendment 2026-06-22b — A connection is a credentialed endpoint; model & protocol leave the connection
+
+> Status: Draft. **Supersedes Decision A's "model on the connection" and the
+> earlier amendment's D2 (multi-protocol set).** Recorded after researching
+> cc-switch and a design pass with the user. Cross-ref
+> [ADR-032](../../docs/decisions/ADR-032-provider-switching.md) amendment D8/D9.
+
+**Why.** A connection answers "which gateway account" — an endpoint + a key.
+*Which model* and *which protocol an agent speaks* are properties of the USE,
+not of the account: Claude Code always speaks the Anthropic Messages wire and
+Codex always speaks OpenAI, so the agent determines the protocol at projection
+time; and the model is picked per agent slot / internal-engine / chat turn.
+Carrying `model` and a manually-chosen `wire_format` on the connection forced the
+user to answer those questions too early and conflated the account with its uses.
+
+- **E1 — Connection entity slims to `{name, base_url, credential_ref,
+  protocol}`.** `model`, `fast_model`, and the manual `wire_format` selector are
+  REMOVED from the connection. `wire_api` (Codex chat/responses) likewise moves
+  to the Codex binding, not the connection.
+- **E2 — `protocol` is DETECTED, not user-entered.** On create/edit Coffer
+  probes the endpoint (reusing the introspection path) to classify it as
+  `anthropic`-wire, `openai`-wire, or `unknown`. The add dialog therefore shows
+  only **name + base_url + key + «测试连接»** — no type selector, no model field.
+- **E3 — Model is chosen at the point of use.** Per-agent binding (Agent page
+  dual slots → `ANTHROPIC_MODEL` + `ANTHROPIC_SMALL_FAST_MODEL`), the
+  internal-engine default selector, and the chat surface each pick a model from
+  the chosen connection's fetched models. No model lives on the connection.
+- **E4 — Projection input = connection (endpoint + key + protocol) + the
+  binding (model).** Activating/projecting a connection for an agent reads the
+  endpoint/key/protocol from the connection and the model(s) from that agent's
+  binding. A connection with no binding for an agent projects nothing.
+- **E5 — Compatibility filter, with an honest fallback.** The Agent page offers
+  only connections whose detected `protocol` matches the agent's wire. When a
+  connection's protocol is `unknown` (probe inconclusive), it is shown to ALL
+  agents and the user decides — Coffer does not silently hide a possibly-valid
+  connection.
+- **Migration (option A — discard):** existing connections drop `model` /
+  `fast_model`; their `wire_format` is re-derived as a detected `protocol` (or
+  `unknown` pending the next probe). Any model a user had configured is NOT
+  carried into a binding — after upgrade the user re-selects models on the Agent
+  page. This is the clean break the user chose over a best-effort carry-over.
+
+**Supersedes:** Decision A ("one connection holds … model, fast_model … " and
+"a connection projects ONLY into agents whose native protocol matches its
+`wire_format`" — now the agent's wire drives projection, and the connection's
+protocol is a detected compatibility hint); amendment D2 (multi-protocol set —
+already dropped, see ADR-032 D8: one gateway for two agents = two connections).
+
+**Still NOT in scope (unchanged):** proxy / hot-switch / protocol conversion.
+
 ## Scope
 
 ### In scope

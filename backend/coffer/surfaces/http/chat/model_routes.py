@@ -15,6 +15,8 @@ from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.chat.dependencies import get_introspection_service
 from coffer.surfaces.http.chat.schemas import (
+    DetectProtocolIn,
+    DetectProtocolOut,
     ListModelsIn,
     ProviderModelsOut,
     TestConnectionIn,
@@ -57,3 +59,17 @@ async def test_connection(
         secret_value=body.secret_value,
     )
     return TestResultOut(ok=result.ok, message=result.message, detail=result.detail)
+
+
+@router.post("/detect-protocol", response_model=DetectProtocolOut)
+async def detect_protocol(
+    body: DetectProtocolIn,
+    svc: ModelIntrospectionService = Depends(get_introspection_service),  # noqa: B008
+) -> DetectProtocolOut:
+    """Classify the endpoint's wire so the dialog needs no manual type selector."""
+    protocol = await svc.detect_protocol(
+        base_url=body.base_url,
+        credential_ref=body.credential_ref,
+        secret_value=body.secret_value,
+    )
+    return DetectProtocolOut(protocol=protocol)
