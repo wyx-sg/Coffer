@@ -78,42 +78,32 @@
 
 ---
 
-## 块2 — 一网关供多 agent：共享凭据的双连接（简化，2026-06-22 改）
+## 块2 — 连接瘦身：去模型/类型 + 协议自动探测 + agent 页供模型（重构，2026-06-22 改）
 
-- [ ] 完成（建议分支 `feat/011-shared-credential`）
+- [ ] 完成（建议分支 `feat/011-slim-connection`）
 
-> **2026-06-22 决定（cc-switch 调研后）**：放弃原「连接声明多协议集合 + 数据迁移 + 按协议分别投射」的重方案。cc-switch 自身也**没有**多协议连接——它是单协议 provider + 通用作用域。Coffer 现有能力已基本覆盖目标：后端 create 已支持传 `credential_ref` 复用现有凭据；删除只清自己拥有且无其他引用的凭据（`service.py` `find_credential_citations`，共享 ref 已安全）；连接保留单 `wire_format`。**不改数据模型、不改 ADR-032 核心不变式、不做迁移。**
+> **2026-06-22 最终定案（cc-switch 调研 + 与用户多轮敲定）**：连接重新定位为「**一个网关账号**」= `{name, base_url, credential}` + **探测出的协议**。模型、手动类型都从连接实体**彻底拿掉**。模型只在「用到连接的地方」现选。**reopen Decision A**（原设计 model 是连接必填）。合并原块2+块3，因为「连接去模型」与「agent 供模型」**强耦合**——拿掉模型后投射没模型可写，必须由 agent 绑定同步供给，否则投射坏。
+>
+> 已废弃的更早设想（都不做）：①多协议集合连接；②共享凭据复用 UI（用户判定不值，删了）。详见 ADR-032 D8/D9 与 memory [[cc-switch-research-design-decisions]]。
 
-**目标**：「一个网关同时给 Claude Code 和 Codex 用」= 建**两个连接**（anthropic + openai，同一 base_url，**共享同一份凭据**）。本块只补上让用户能「复用现有凭据」的 UI + 文档定调。
+**目标**：连接 = 账号；模型/协议不再是用户在建连接时填的字段。
 
-**改动（聚焦前端 + 文档）**
-- 前端 `ProviderForm`：密钥区给「**新建密钥** / **复用现有连接的凭据**」二选一；选复用时从现有连接的 `credential_ref` 列表里挑，提交发 `credential_ref`（而非 `secret_value`）。
+**改动（深，跨后端+前端+数据迁移）**
+- **spec 011 amendment + ADR-032（重订 Decision A）+ data-model**：连接实体去掉 `model`/`fast_model`/手动 `wire_format`；新增「探测出的协议」属性（anthropic/openai/未知）。acceptance scenario 名与 spec.md 逐字一致。
+- **后端**：数据迁移（连接去 model/fast_model；wire_format 由必填用户输入 → 探测属性，允许 unknown）；扩展 introspection 探测协议（试 anthropic messages vs openai chat-completions wire）；投射改为读「连接(endpoint+key+协议) + agent 绑定(模型)」，连接自身不再供 model。
+- **前端 连接对话框**：只剩 名称 + base_url + key + 「测试连接」（**去掉**块1 刚加的模型字段与类型选择器——设计演进，模型移到 agent 页）。
+- **前端 agent 页**：claude code 双模型槽 `ANTHROPIC_MODEL` + `ANTHROPIC_SMALL_FAST_MODEL`，每槽选 连接 + 模型（模型来自该连接拉取）；按协议**过滤**可选连接，**探测不出的协议 → 全列让用户自己选**；切回内置时双槽反投射清掉（沿用 #202）。
 - i18n（zh+en）。
-- spec 011 + ADR-032：记「多 agent 经共享凭据的双连接达成；**不引入协议集合**」为选定模型（amend，supersede 早先的协议集合设想）；加一条 acceptance scenario「create a connection reusing an existing credential」（后端已支持，补前端/契约覆盖即可）。
-- 后端：**基本无改动**（create 已收 `credential_ref`、删除已对共享 ref 安全）；如缺「列出可复用凭据」只读端点再按需加。
 
-**自测**：建连接 A(anthropic,新 key) → 建连接 B(openai) 复用 A 的凭据；删 A 时若 B 仍引用则凭据不被删；两者各自按 wire 投射。无数据迁移、无协议集合。普通严格度（非「最严测」）。
+**自测**：建连接只填 名称/url/key，保存后协议被探测出；agent 页双槽各选 连接+模型，投射出正确 `ANTHROPIC_MODEL`/`ANTHROPIC_SMALL_FAST_MODEL`；不兼容协议的连接在该 agent 不出现（除非探测 unknown 则全列）；旧数据迁移正确（原连接的 model 落到哪要定义清楚）；**真实 make dev + Agnes key 投射验证**。这块**最重最严**：单元 + acceptance + 迁移 + 真实投射。
 
 ---
 
-## 块3 — agent 页模型选择（claude code 双模型槽）
-
-- [ ] 完成（建议分支 `feat/011-agent-model-slots`）
-
-**目标**：claude code 两个模型槽：`ANTHROPIC_MODEL` + `ANTHROPIC_SMALL_FAST_MODEL`；支持「一个 provider 两个模型」或「两个 provider 两个模型」。
-
-**改动**
-- agent 详情页：模型选择 UI 从单槽 → 双槽，每槽可独立选连接 + 模型。
-- 投射：两个槽分别写对应环境变量/config。
-- spec/契约/data-model 同步（双槽语义）。
-
-**自测**：两槽各选不同连接+模型，投射出正确的 `ANTHROPIC_MODEL` / `ANTHROPIC_SMALL_FAST_MODEL`；切回内置时两槽都反投射清掉（沿用 #202 行为）。
-
----
-
-## 块4 — internal_default 拆成 LLM 连接页内独立选择器
+## 块3 — internal_default 拆成 LLM 连接页内独立选择器（+ 内部引擎选模型）
 
 - [ ] 完成（建议分支 `feat/011-internal-default-selector`）
+
+> 注：连接已无 model（块2），故内部引擎默认除选「哪个连接」外还要**现选模型**。
 
 **目标**：「内部引擎用哪个连接」(internal_default) 变成 LLM 连接页里的**独立选择器**；连接卡片去掉内部引擎徽章/星标。
 
@@ -126,7 +116,7 @@
 
 ---
 
-## 块5 — 聊天页模型选择固定（不自由输入）
+## 块4 — 聊天页模型选择固定（不自由输入）
 
 - [ ] 完成（建议分支 `feat/011-chat-model-fixed-select`）
 
@@ -141,7 +131,7 @@
 
 ---
 
-## 块6 — 向量模型 (Embedding) 重构（涉及 spec 006）
+## 块5 — 向量模型 (Embedding) 重构（涉及 spec 006）
 
 - [ ] 完成（建议分支 `feat/006-embedding-dialog`）
 
@@ -158,7 +148,7 @@
 
 ---
 
-## 块7 — SSE 对账 bug（不要加后端 turn 超时）
+## 块6 — SSE 对账 bug（不要加后端 turn 超时）
 
 - [ ] 完成（建议分支 `fix/008-chat-sse-reconcile`）
 
@@ -174,4 +164,4 @@
 
 ---
 
-**全部 7 块合并后**：删除本文件（`git rm TASKS-llm-connections.md`），可顺手在 spec 011 Amendment 的「未做清单」打勾收尾。
+**全部 6 块合并后**（块1 已完成）：删除本文件（`git rm TASKS-llm-connections.md`），可顺手在 spec 011 Amendment 的「未做清单」打勾收尾。
