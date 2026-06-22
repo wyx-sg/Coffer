@@ -1131,7 +1131,35 @@
       "factBadge": "{{count}} 条事实",
       "selectFact": "在左侧选择一条记忆以预览或编辑。",
       "untitled": "（无标题）",
-      "actorUser": "已编辑"
+      "actorUser": "已编辑",
+      "tabs": {
+        "knowledge": "知识",
+        "rules": "规则",
+        "journal": "日志",
+        "handoff": "交接",
+        "changelog": "变更记录"
+      }
+    },
+    "lanes": {
+      "rules": "规则",
+      "journal": "日志周期",
+      "handoff": "分支",
+      "changelog": "变更记录"
+    },
+    "rules": {
+      "empty": "还没有规则——随着项目约定逐渐成形，agent 会整理它们。"
+    },
+    "journal": {
+      "empty": "还没有日志——随着工作积累，agent 会写下摘要。",
+      "select": "在左侧选择一个周期以阅读其摘要。"
+    },
+    "handoff": {
+      "empty": "还没有交接记录——agent 在暂停某分支的工作时会留下一份现场记录。",
+      "select": "在左侧选择一个分支以阅读其交接记录。",
+      "updatedAt": "更新于 {{time}}"
+    },
+    "changelog": {
+      "empty": "还没有变更记录——它会记录每一次记忆整合。"
     },
     "welcome": {
       "title": "你的共享 agent 记忆",

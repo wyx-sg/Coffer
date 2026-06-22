@@ -11,6 +11,10 @@ import {
   clearFacts,
   deleteFact,
   getFact,
+  getMemoryConsolidationLog,
+  getMemoryHandoff,
+  getMemoryJournal,
+  getMemoryRules,
   getMemoryStore,
   getMemoryStoreMetrics,
   listFacts,
@@ -219,5 +223,91 @@ describe("getMemoryStoreMetrics", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ fact_count: 5, disk_bytes: 4096 }));
     const out = await getMemoryStoreMetrics("prefs");
     expect(out).toEqual({ fact_count: 5, disk_bytes: 4096 });
+  });
+});
+
+describe("getMemoryRules", () => {
+  test("GETs /memory_stores/<name>/rules and returns the text payload", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(okJson({ text: "always lint" }));
+    const out = await getMemoryRules("prefs");
+    expect(out.text).toBe("always lint");
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/memory_stores/prefs/rules`);
+    expect((fetchMock.mock.calls[0][1] as RequestInit | undefined)?.method).toBeUndefined();
+  });
+
+  test("returns null text when the store has no rules", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ text: null }));
+    expect((await getMemoryRules("prefs")).text).toBeNull();
+  });
+
+  test("throws a typed ApiError on non-2xx", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      notOkJson(404, { error: { code: "MEMORY_NOT_FOUND", message: "no store" } }),
+    );
+    const err = await getMemoryRules("ghost").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).code).toBe("MEMORY_NOT_FOUND");
+  });
+});
+
+describe("getMemoryJournal", () => {
+  test("GETs /memory_stores/<name>/journal and returns the files list", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      okJson({
+        files: [{ period: "2026-06", text: "june", path: "/p/2026-06.md", folder_path: "/p" }],
+      }),
+    );
+    const out = await getMemoryJournal("prefs");
+    expect(out.files).toHaveLength(1);
+    expect(out.files[0].period).toBe("2026-06");
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/memory_stores/prefs/journal`);
+  });
+
+  test("URL-encodes the store name", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({ files: [] }));
+    await getMemoryJournal("store with space");
+    expect(fetchMock.mock.calls[0][0]).toContain("store%20with%20space");
+  });
+});
+
+describe("getMemoryHandoff", () => {
+  test("GETs /memory_stores/<name>/handoff and returns the scenes list", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      okJson({
+        scenes: [
+          {
+            branch: "feat/x",
+            text: "wip",
+            updated_at: "2026-06-22T00:00:00Z",
+            path: "/p/feat-x.md",
+            folder_path: "/p",
+          },
+        ],
+      }),
+    );
+    const out = await getMemoryHandoff("prefs");
+    expect(out.scenes[0].branch).toBe("feat/x");
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/memory_stores/prefs/handoff`);
+  });
+});
+
+describe("getMemoryConsolidationLog", () => {
+  test("GETs /memory_stores/<name>/consolidation-log and returns the text + path", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(okJson({ text: "consolidated", path: "/p/log.md", folder_path: "/p" }));
+    const out = await getMemoryConsolidationLog("prefs");
+    expect(out.text).toBe("consolidated");
+    expect(out.path).toBe("/p/log.md");
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/memory_stores/prefs/consolidation-log`);
+  });
+
+  test("returns null text when absent (still 200)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      okJson({ text: null, path: "/p/log.md", folder_path: "/p" }),
+    );
+    expect((await getMemoryConsolidationLog("prefs")).text).toBeNull();
   });
 });

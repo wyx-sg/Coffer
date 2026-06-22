@@ -177,3 +177,54 @@ export interface FactInput {
   name?: string | null;
   description?: string | null;
 }
+
+// --- four-lane read views (spec 007 slice 7) -------------------------------
+// The memory store detail page surfaces five read-only lanes beyond the flat
+// fact list: Rules (a single curated doc), Journal (period digests), Handoff
+// (per-branch scene notes), and Changelog (the consolidation log). All are
+// agent-authored and rendered through the unified file preview.
+
+/** Rules lane: a single curated doc; `text` is null when the store has none. */
+export interface RulesOut {
+  text: string | null;
+}
+
+/** One journal period digest (`journal/<period>.md`). */
+export interface JournalFileOut {
+  /** YYYY-MM period stem. */
+  period: string;
+  text: string;
+  /** Absolute on-disk path of the period file (FileActions). */
+  path: string;
+  /** Absolute on-disk path of the file's containing folder. */
+  folder_path: string;
+}
+
+/** Journal lane: period digests, newest period first; empty store → `files:[]`. */
+export interface JournalOut {
+  files: JournalFileOut[];
+}
+
+/** One handoff scene note (`handoff/<branch-slug>.md`). */
+export interface HandoffSceneOut {
+  branch: string;
+  text: string;
+  /** ISO date-time the scene was last written. */
+  updated_at: string;
+  /** Absolute on-disk path of the scene file (FileActions). */
+  path: string;
+  /** Absolute on-disk path of the file's containing folder. */
+  folder_path: string;
+}
+
+/** Handoff lane: per-branch scene notes; empty store → `scenes:[]`. */
+export interface HandoffOut {
+  scenes: HandoffSceneOut[];
+}
+
+/** Changelog lane: the consolidation log; `text` is null when absent. */
+export interface ConsolidationLogOut {
+  text: string | null;
+  path: string;
+  folder_path: string;
+}

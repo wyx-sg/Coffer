@@ -1,11 +1,13 @@
 // frontend/src/kinds/memory/MemoryStoreDetailPage.test.tsx
 //
-// Exercises the redesigned memory store detail surface: metrics header, recall
-// ("one query → one answer"; no mode toggle / fallback), the page-paginated
-// fact list → READ-ONLY preview flow (select a fact on the left; the right pane
-// renders the Markdown with FileActions + delete, no in-app editing) plus
-// clear-all. The `./api` module is mocked so the component renders without a
-// backend.
+// Exercises the redesigned memory store detail surface (slice 7): the metrics
+// header, the recall box ("one query → one answer"; no mode toggle / fallback),
+// and the five-lane Tabs shell — Knowledge / Rules / Journal / Handoff /
+// Changelog. Knowledge is the default tab: the page-fetched fact list → a
+// READ-ONLY preview (select a fact on the left; the right pane renders the
+// Markdown with FileActions + delete, no in-app editing), with recall filtering
+// it. Switching tabs lazily renders each lane. The `./api` module is mocked so
+// the component renders without a backend.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -21,6 +23,10 @@ vi.mock("./api", async (importOriginal) => ({
   getFact: vi.fn(),
   getMemoryStore: vi.fn(),
   getMemoryStoreMetrics: vi.fn(),
+  getMemoryRules: vi.fn(),
+  getMemoryJournal: vi.fn(),
+  getMemoryHandoff: vi.fn(),
+  getMemoryConsolidationLog: vi.fn(),
   addFact: vi.fn(),
   deleteFact: vi.fn(),
   clearFacts: vi.fn(),
@@ -55,10 +61,29 @@ function renderPage() {
   );
 }
 
+// Radix Tabs triggers activate on focus/mousedown (automatic activation), which
+// `fireEvent.click` alone doesn't dispatch in jsdom; fire mousedown + click so
+// the switch registers (a real browser/e2e fires the full sequence).
+async function selectTab(name: string) {
+  const tab = await screen.findByRole("tab", { name });
+  fireEvent.mouseDown(tab);
+  fireEvent.click(tab);
+  return tab;
+}
+
 function stubLists() {
   vi.mocked(api.listFacts).mockResolvedValue({ facts: [FACT], total: 1 });
   vi.mocked(api.getFact).mockResolvedValue(FACT);
   vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 1, disk_bytes: 50 });
+  // Lane reads default to empty/null so the lanes render without a backend.
+  vi.mocked(api.getMemoryRules).mockResolvedValue({ text: null });
+  vi.mocked(api.getMemoryJournal).mockResolvedValue({ files: [] });
+  vi.mocked(api.getMemoryHandoff).mockResolvedValue({ scenes: [] });
+  vi.mocked(api.getMemoryConsolidationLog).mockResolvedValue({
+    text: null,
+    path: "/p/consolidation-log.md",
+    folder_path: "/p",
+  });
   vi.mocked(api.getMemoryStore).mockResolvedValue({
     ref: "memory:global",
     kind: "memory",
@@ -86,13 +111,70 @@ function stubLists() {
 afterEach(() => vi.clearAllMocks());
 
 describe("MemoryStoreDetailPage", () => {
-  test("lists facts in the tree and renders the selected one", async () => {
+  test("Knowledge tab lists facts in the tree and renders the selected one", async () => {
     stubLists();
     renderPage();
     const tree = screen.getByRole("complementary");
     fireEvent.click(await within(tree).findByText("tabs"));
-    // The viewer renders the fact's Markdown body.
     expect(await screen.findByText("uses tabs over spaces")).toBeInTheDocument();
+  });
+
+  test("renders the five-lane Tabs shell", async () => {
+    stubLists();
+    renderPage();
+    expect(await screen.findByRole("tab", { name: "Knowledge" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Rules" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Journal" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Handoff" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Changelog" })).toBeInTheDocument();
+  });
+
+  test("switching to the Rules tab shows the rules lane (empty-state)", async () => {
+    stubLists();
+    renderPage();
+    await selectTab("Rules");
+    expect(await screen.findByText(/no rules yet/i)).toBeInTheDocument();
+    await waitFor(() => expect(api.getMemoryRules).toHaveBeenCalledWith("global"));
+  });
+
+  test("switching to the Journal tab shows the period list / empty-state", async () => {
+    stubLists();
+    vi.mocked(api.getMemoryJournal).mockResolvedValue({
+      files: [{ period: "2026-06", text: "june", path: "/p/2026-06.md", folder_path: "/p" }],
+    });
+    renderPage();
+    await selectTab("Journal");
+    expect(await screen.findByText("2026-06")).toBeInTheDocument();
+  });
+
+  test("switching to the Handoff tab shows the branch list", async () => {
+    stubLists();
+    vi.mocked(api.getMemoryHandoff).mockResolvedValue({
+      scenes: [
+        {
+          branch: "feat/x",
+          text: "wip",
+          updated_at: "2026-06-22T00:00:00Z",
+          path: "/p/feat-x.md",
+          folder_path: "/p",
+        },
+      ],
+    });
+    renderPage();
+    await selectTab("Handoff");
+    expect(await screen.findByText("feat/x")).toBeInTheDocument();
+  });
+
+  test("switching to the Changelog tab shows the consolidation log", async () => {
+    stubLists();
+    vi.mocked(api.getMemoryConsolidationLog).mockResolvedValue({
+      text: "merged 3 facts",
+      path: "/p/consolidation-log.md",
+      folder_path: "/p",
+    });
+    renderPage();
+    await selectTab("Changelog");
+    expect(await screen.findByText("merged 3 facts")).toBeInTheDocument();
   });
 
   test("recall (one query → one answer; no mode in the call) renders hits", async () => {
@@ -109,7 +191,7 @@ describe("MemoryStoreDetailPage", () => {
     await waitFor(() => expect(api.recall).toHaveBeenCalledWith("global", "tabs", { topK: 5 }));
   });
 
-  test("recall filters the tree to the hit fact and highlights the query in the viewer", async () => {
+  test("recall filters the Knowledge tree to the hit fact and highlights the query", async () => {
     const spaces = { ...FACT, id: "f2", name: "spaces", text: "spaces are fine" };
     stubLists();
     vi.mocked(api.listFacts).mockResolvedValue({ facts: [FACT, spaces], total: 2 });
@@ -130,10 +212,8 @@ describe("MemoryStoreDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
 
     await waitFor(() => expect(api.getFact).toHaveBeenCalledWith("global", "f1"));
-    // Only the hit fact remains in the left tree; the non-hit drops out.
     await waitFor(() => expect(within(tree).queryByText("spaces")).not.toBeInTheDocument());
     expect(within(tree).getByText("tabs")).toBeInTheDocument();
-    // The viewer pre-seeds the find widget with the query to highlight the match.
     expect(await screen.findByPlaceholderText(/find/i)).toHaveValue("tabs");
   });
 
@@ -156,7 +236,6 @@ describe("MemoryStoreDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
     await waitFor(() => expect(within(tree).queryByText("spaces")).not.toBeInTheDocument());
 
-    // The × clear button in the search box exits recall mode → full list returns.
     fireEvent.click(screen.getByRole("button", { name: /^clear$/i }));
     expect(await within(tree).findByText("spaces")).toBeInTheDocument();
   });
@@ -167,14 +246,13 @@ describe("MemoryStoreDetailPage", () => {
 
     renderPage();
     const tree = screen.getByRole("complementary");
-    await within(tree).findByText("tabs"); // full list first
+    await within(tree).findByText("tabs");
 
     fireEvent.change(await screen.findByPlaceholderText(/recall facts/i), {
       target: { value: "zzz" },
     });
     fireEvent.click(screen.getByRole("button", { name: /^recall$/i }));
 
-    // The tree drops the full list and shows the no-matches label (not a blank box).
     expect(await within(tree).findByText(/no matches/i)).toBeInTheDocument();
     expect(within(tree).queryByText("tabs")).not.toBeInTheDocument();
   });
@@ -210,8 +288,6 @@ describe("MemoryStoreDetailPage", () => {
     renderPage();
     const tree = screen.getByRole("complementary");
     fireEvent.click(await within(tree).findByText("tabs"));
-    // The viewer's Delete button opens the styled confirm dialog (no native
-    // window.confirm); deletion only fires after confirming inside it.
     fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
     const dialog = await screen.findByRole("dialog");
     expect(api.deleteFact).not.toHaveBeenCalled();
@@ -232,8 +308,8 @@ describe("MemoryStoreDetailPage", () => {
     expect(api.deleteFact).not.toHaveBeenCalled();
   });
 
-  test("surfaces a localized error when the facts/metrics query fails", async () => {
-    vi.mocked(api.listFacts).mockRejectedValue(new ApiError("RESOURCE_NOT_FOUND", "nope"));
+  test("surfaces a localized error when the metrics query fails", async () => {
+    stubLists();
     vi.mocked(api.getMemoryStoreMetrics).mockRejectedValue(
       new ApiError("RESOURCE_NOT_FOUND", "nope"),
     );
@@ -242,7 +318,7 @@ describe("MemoryStoreDetailPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/resource not found/i);
   });
 
-  test("renders all facts in one scrollable list (no in-UI pager)", async () => {
+  test("Knowledge tab renders all facts in one scrollable list (no in-UI pager)", async () => {
     // The list is fetched in ONE request at the API max page size and rendered
     // as a single scrollable list — no page-based pager.
     stubLists();
@@ -256,10 +332,8 @@ describe("MemoryStoreDetailPage", () => {
 
     renderPage();
     const tree = screen.getByRole("complementary");
-    // The whole list renders (first AND last row) from a single fetch.
     expect(await within(tree).findByText("fact-0")).toBeVisible();
     expect(within(tree).getByText("fact-119")).toBeInTheDocument();
-    // Fetched once at the API max (limit 200, offset 0); no pager rendered.
     await waitFor(() => expect(api.listFacts).toHaveBeenCalledWith("global", 200, 0));
     expect(within(tree).queryByRole("button", { name: /next/i })).toBeNull();
   });
@@ -269,11 +343,9 @@ describe("MemoryStoreDetailPage", () => {
     vi.mocked(api.clearFacts).mockResolvedValue(1);
 
     renderPage();
-    // The header Clear-all button is disabled until metrics (fact_count) load.
     const btn = await screen.findByRole("button", { name: /clear all/i });
     await waitFor(() => expect(btn).toBeEnabled());
     fireEvent.click(btn);
-    // The styled confirm dialog gates the clear; it only fires after confirming.
     const dialog = await screen.findByRole("dialog");
     expect(api.clearFacts).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: /clear all/i }));
