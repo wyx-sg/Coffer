@@ -81,7 +81,6 @@ def fact_to_document(
     carries the degraded-embed retry state (KB8) so a degraded fact is retried on
     the next reconcile."""
     metadata: dict[str, object] = {
-        "type": fact.type,
         "actor": fact.actor,
         "origin_session_id": fact.origin_session_id,
     }

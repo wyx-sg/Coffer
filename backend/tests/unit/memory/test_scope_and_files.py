@@ -5,6 +5,7 @@ Pure string/ID logic — no filesystem, no banned I/O imports.
 
 from __future__ import annotations
 
+from dataclasses import fields
 from datetime import UTC, datetime
 
 from coffer.domain.memory.fact import MemoryFact
@@ -23,7 +24,6 @@ def _fact(**kw) -> MemoryFact:
         "description": "deploys via make release",
         "body": "This repo deploys via make release.",
         "actor": "agent",
-        "type": "project",
         "origin_session_id": "sess-1",
         "created_at": now,
         "updated_at": now,
@@ -43,12 +43,19 @@ def test_project_ulid_is_deterministic_and_26_chars() -> None:
     assert set(a) <= set("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
 
 
+def test_memory_fact_has_no_free_form_type_field() -> None:
+    # Lane is the single classification axis (FR-048); the free-form `type`
+    # field is retired from the domain model.
+    assert "type" not in {f.name for f in fields(MemoryFact)}
+
+
 def test_render_fact_markdown_has_frontmatter() -> None:
     text = render_fact_markdown(_fact())
     assert text.startswith("---\n")
     assert "name: deploy-fact" in text
     assert "actor: agent" in text
-    assert "type: project" in text
+    # No free-form `type` axis — Lane is the only classification (FR-048).
+    assert "type:" not in text
     assert "origin_session_id: sess-1" in text
     assert "This repo deploys via make release." in text
 
@@ -61,7 +68,6 @@ def test_render_then_parse_roundtrips() -> None:
     assert parsed.name == fact.name
     assert parsed.description == fact.description
     assert parsed.actor == "agent"
-    assert parsed.type == "project"
     assert parsed.origin_session_id == "sess-1"
     assert parsed.body == fact.body
 
@@ -102,8 +108,9 @@ def test_parse_tolerates_malformed_frontmatter() -> None:
 
 
 def test_render_omits_optional_fields_when_absent() -> None:
-    fact = _fact(type=None, origin_session_id=None)
+    fact = _fact(origin_session_id=None)
     text = render_fact_markdown(fact)
+    # Lane is the only taxonomy — `type` is never rendered (FR-048).
     assert "type:" not in text
     assert "origin_session_id:" not in text
 
@@ -125,7 +132,6 @@ def test_fact_timestamps_persist_in_frontmatter(tmp_path) -> None:
         description="d",
         body="body",
         actor="user",
-        type=None,
         origin_session_id=None,
         created_at=created,
         updated_at=updated,

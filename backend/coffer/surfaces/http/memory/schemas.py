@@ -126,14 +126,12 @@ class FactCreate(BaseModel):
     text: str = Field(min_length=1, max_length=_MAX_FACT_CHARS_SCHEMA_CAP)
     name: str | None = None
     description: str | None = None
-    type: str | None = None
 
 
 class FactUpdate(BaseModel):
     text: str = Field(min_length=1, max_length=_MAX_FACT_CHARS_SCHEMA_CAP)
     name: str | None = None
     description: str | None = None
-    type: str | None = None
 
 
 class FactOut(BaseModel):
@@ -143,7 +141,6 @@ class FactOut(BaseModel):
     name: str
     description: str
     text: str
-    type: str | None = None
     actor: Actor
     origin_session_id: str | None = None
     path: str
@@ -163,7 +160,6 @@ class FactOut(BaseModel):
             name=f.name,
             description=f.description,
             text=f.body,
-            type=f.type,
             actor=f.actor,
             origin_session_id=f.origin_session_id,
             path=path,

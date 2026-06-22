@@ -86,7 +86,6 @@ def add(
     text: str = typer.Argument(...),
     fact_name: str | None = typer.Option(None, "--name"),
     description: str | None = typer.Option(None, "--description"),
-    fact_type: str | None = typer.Option(None, "--type"),
 ) -> None:
     """Add a fact (actor=user)."""
     body: dict[str, object] = {"text": text}
@@ -94,8 +93,6 @@ def add(
         body["name"] = fact_name
     if description is not None:
         body["description"] = description
-    if fact_type is not None:
-        body["type"] = fact_type
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post(

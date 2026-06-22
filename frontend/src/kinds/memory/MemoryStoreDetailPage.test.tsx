@@ -35,7 +35,6 @@ const FACT = {
   name: "tabs",
   description: "indentation",
   text: "uses tabs over spaces",
-  type: "user",
   actor: "user" as const,
   path: "/abs/memory/global/tabs-f1.md",
   folder_path: "/abs/memory/global",

@@ -77,7 +77,6 @@ def build_fact(
     description: str,
     body: str,
     actor: Actor,
-    type: str | None,
     origin_session_id: str | None,
     max_fact_chars: int,
 ) -> MemoryFact:
@@ -90,7 +89,6 @@ def build_fact(
         description=description.strip() or derive_name(body),
         body=body,
         actor=actor,
-        type=type,
         origin_session_id=origin_session_id,
         created_at=now,
         updated_at=now,
@@ -103,7 +101,6 @@ def apply_fact_changes(
     new_body: str,
     new_name: str | None,
     new_description: str | None,
-    new_type: str | None,
 ) -> MemoryFact:
     """Return a copy of ``fact`` with the supplied edits applied. ``None`` for an
     optional field leaves it unchanged (the REST/CLI edit-by-id path passes
@@ -116,8 +113,6 @@ def apply_fact_changes(
         changes["name"] = new_name.strip()
     if new_description is not None and new_description.strip():
         changes["description"] = new_description.strip()
-    if new_type is not None:
-        changes["type"] = new_type.strip() or None
     return dc_replace(fact, **changes)  # type: ignore[arg-type]
 
 
@@ -180,7 +175,6 @@ async def add_new_fact(
     description: str,
     body: str,
     actor: Actor,
-    type: str | None,
     origin_session_id: str | None,
 ) -> MemoryFact:
     """Build, persist, index, audit, and notify for a brand-new fact in a
@@ -192,7 +186,6 @@ async def add_new_fact(
         description=description,
         body=body,
         actor=actor,
-        type=type,
         origin_session_id=origin_session_id,
         max_fact_chars=config.max_fact_chars,
     )
@@ -224,7 +217,6 @@ async def update_existing_fact(
     actor: str,
     new_name: str | None = None,
     new_description: str | None = None,
-    new_type: str | None = None,
 ) -> MemoryFact:
     """Apply edits to an existing fact, re-persist + reindex, audit, and notify."""
     new_body = new_body.strip()
@@ -234,7 +226,6 @@ async def update_existing_fact(
         new_body=new_body,
         new_name=new_name,
         new_description=new_description,
-        new_type=new_type,
     )
     await write_and_index(
         reconciler=deps.reconciler,

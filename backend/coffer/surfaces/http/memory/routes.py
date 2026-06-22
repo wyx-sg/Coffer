@@ -229,7 +229,6 @@ async def add_fact(
         description=body.description or "",
         body=body.text,
         actor=actor,
-        type=body.type,
     )
     _, path = await mem_svc.get_fact_with_path(store_name=name, fact_id=fact.id)
     return FactOut.from_fact(fact, store_name=name, scope=scope, path=path)
@@ -289,7 +288,6 @@ async def update_fact(
         actor=actor,
         new_name=body.name,
         new_description=body.description,
-        new_type=body.type,
     )
     _, path = await mem_svc.get_fact_with_path(store_name=name, fact_id=fact.id)
     return FactOut.from_fact(fact, store_name=name, scope=scope, path=path)

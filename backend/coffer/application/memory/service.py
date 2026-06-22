@@ -158,7 +158,6 @@ class MemoryService:
         description: str,
         body: str,
         actor: Actor,
-        type: str | None = None,
         origin_session_id: str | None = None,
         max_fact_chars: int | None = None,
     ) -> MemoryFact:
@@ -173,7 +172,6 @@ class MemoryService:
             description=description,
             body=body,
             actor=actor,
-            type=type,
             origin_session_id=origin_session_id,
         )
 
@@ -185,7 +183,6 @@ class MemoryService:
         description: str,
         body: str,
         actor: Actor,
-        type: str | None = None,
         origin_session_id: str | None = None,
     ) -> MemoryFact:
         """Write a fact to a store by name (REST face: store-scoped, no cwd)."""
@@ -197,7 +194,6 @@ class MemoryService:
             description=description,
             body=body,
             actor=actor,
-            type=type,
             origin_session_id=origin_session_id,
         )
 

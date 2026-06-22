@@ -39,7 +39,6 @@ export function MemoryFactViewer({ fact, isDeletePending, onDelete, initialQuery
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate font-medium">{fact.name || t("memory.detail.untitled")}</span>
           <Badge variant="outline">{fact.actor}</Badge>
-          {fact.type ? <Badge variant="secondary">{fact.type}</Badge> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {fact.path ? <FileActions filePath={fact.path} /> : null}

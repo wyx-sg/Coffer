@@ -3,7 +3,7 @@
 // Hand-written fetch helpers for the redesigned `memory` kind (spec 007).
 // Stores are AUTO-PROVISIONED (global + per-project) — there is no create.
 // There is NO llm_provider anymore: facts are written directly (no LLM at
-// write time). Each fact carries name/description/body/type/actor. Retrieval
+// write time). Each fact carries name/description/body/actor. Retrieval
 // is the shared engine (grep / keyword / vector). Agents access these stores
 // only via the Coffer MCP gateway — Coffer keeps its own memory format and no
 // longer projects into agents' native memory locations.
