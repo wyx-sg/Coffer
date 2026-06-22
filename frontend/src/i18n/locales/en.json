@@ -675,6 +675,7 @@
       "title": "LLM connection",
       "label": "Connection",
       "model": "Model",
+      "fastModel": "Fast model",
       "builtin": "Use built-in (agent's own login)",
       "none": "No compatible connection",
       "empty": "No connection for this agent yet.",

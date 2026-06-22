@@ -93,6 +93,11 @@ export interface AgentOut {
   /** When true, the agent's own native memory is disabled (via its config) so it
    * uses Coffer as the shared memory store. Hand-added until openapi codegen. */
   disable_native_memory?: boolean;
+  /** Per-agent model binding (spec 011 amendment 2026-06-22b). The model the
+   * agent projects — null = unbound (falls back to the active connection). */
+  model?: string | null;
+  fast_model?: string | null;
+  wire_api?: string | null;
 }
 
 export interface AgentListOut {
@@ -114,6 +119,10 @@ export interface AgentPatch {
   follow_all_skills?: boolean;
   skill_exclusions?: string[];
   disable_native_memory?: boolean;
+  // Per-agent model binding (E3); explicit null fast_model clears the fast slot.
+  model?: string | null;
+  fast_model?: string | null;
+  wire_api?: string | null;
 }
 
 export interface AgentCandidate {
