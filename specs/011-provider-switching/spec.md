@@ -451,6 +451,16 @@ and `internal_default`.
   `/settings/llm-connections`.
 - Add `vi.mock` for any new hook in page + table tests.
 
+> **Amendment 2026-06-23 (provider presets).** The add-connection form no longer
+> auto-detects the `protocol` from base_url + key. Instead it offers a **provider
+> preset** picker (OpenAI / Anthropic / Google Gemini / DeepSeek / Moonshot /
+> OpenRouter / Ollama) that fills the endpoint + protocol, plus a **Custom**
+> option that reveals a manual protocol selector for any other OpenAI-/Anthropic-
+> compatible endpoint. The stored data model is unchanged (`protocol` is still a
+> `ProviderConfig` field); only how it is chosen at create time changed. The
+> `detect-protocol` probe endpoint stays for other callers but is no longer used
+> by the form.
+
 ## Acceptance Scenarios
 
 Per `agents/sdd.md`, every scenario in this section is referenced by at least

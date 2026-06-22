@@ -246,6 +246,13 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - 旧的 `/settings/models` 和 `/settings/providers` 路由重定向到 `/settings/llm-connections`。
 - 新 hook 的测试需添加 `vi.mock`。
 
+> **修订 2026-06-23（提供方预设）。** 添加连接的表单不再从 base_url + 密钥自动探测
+> `protocol`，改为提供**提供方预设**选择（OpenAI / Anthropic / Google Gemini /
+> DeepSeek / Moonshot / OpenRouter / Ollama），选中即填入接入地址与协议；另有
+> **自定义**选项，会显示手动协议选择器，用于任意其他 OpenAI/Anthropic 兼容端点。
+> 存储的数据模型不变（`protocol` 仍是 `ProviderConfig` 字段），仅创建时的选择方式改变。
+> `detect-protocol` 探测端点保留供其他调用方使用，但表单不再使用它。
+
 ## Acceptance Scenarios
 
 根据 `agents/sdd.md`，本节每个场景都必须有至少一个测试携带
