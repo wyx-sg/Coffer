@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import pathlib
 
-from coffer.infrastructure.knowledge.paths import rules_dir, rules_path
-from coffer.infrastructure.memory.rules_files import append_rule, read_rules
+from coffer.infrastructure.knowledge.paths import rule_file_path, rules_dir, rules_path
+from coffer.infrastructure.memory.rules_files import (
+    append_rule,
+    count_rules,
+    read_all_rules,
+    read_rules,
+    rule_bullets,
+    write_rules_file,
+)
 
 
 def test_append_rule_creates_header_and_bullet(tmp_path: pathlib.Path) -> None:
@@ -78,3 +85,63 @@ def test_rules_path_is_under_store_root(tmp_path: pathlib.Path) -> None:
     store_dir.mkdir()
     p = rules_path(store_dir)
     assert str(p).startswith(str(store_dir))
+
+
+# --- multi-file rules: split-lane helpers (amendment 2026-06-22) ---
+
+
+def test_rule_file_path_is_category_file(tmp_path: pathlib.Path) -> None:
+    store_dir = tmp_path / "store"
+    assert rule_file_path(store_dir, "git") == store_dir / "rules" / "git.md"
+
+
+def test_rule_file_path_rejects_traversal(tmp_path: pathlib.Path) -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        rule_file_path(tmp_path / "store", "../escape")
+
+
+def test_rule_bullets_extracts_rule_texts() -> None:
+    text = "# Rules\n- first rule\n- second rule\n* third rule\n"
+    assert rule_bullets(text) == ["first rule", "second rule", "third rule"]
+
+
+def test_count_rules_counts_bullets_only() -> None:
+    text = "# Rules\n- a\n- b\nnot a bullet\n- c\n"
+    assert count_rules(text) == 3
+
+
+def test_write_rules_file_writes_header_and_bullets(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "rules" / "git.md"
+    write_rules_file(path, ["commit small", "branch off main"])
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith("# Rules\n")
+    assert rule_bullets(text) == ["commit small", "branch off main"]
+
+
+def test_write_rules_file_dedupes_preserving_order(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "rules" / "git.md"
+    write_rules_file(path, ["a", "b", "a", "c"])
+    assert rule_bullets(path.read_text(encoding="utf-8")) == ["a", "b", "c"]
+
+
+def test_read_all_rules_none_when_empty(tmp_path: pathlib.Path) -> None:
+    assert read_all_rules(rules_dir(tmp_path / "store")) is None
+
+
+def test_read_all_rules_reads_legacy_single_file(tmp_path: pathlib.Path) -> None:
+    store_dir = tmp_path / "store"
+    append_rule(rules_path(store_dir), "only rule")
+    out = read_all_rules(rules_dir(store_dir))
+    assert out is not None and "only rule" in out
+
+
+def test_read_all_rules_concatenates_category_files(tmp_path: pathlib.Path) -> None:
+    store_dir = tmp_path / "store"
+    write_rules_file(rule_file_path(store_dir, "git"), ["commit small"])
+    write_rules_file(rule_file_path(store_dir, "testing"), ["write tests first"])
+    out = read_all_rules(rules_dir(store_dir))
+    assert out is not None
+    assert "commit small" in out
+    assert "write tests first" in out

@@ -29,6 +29,7 @@ from coffer.application.memory.organizer_prompt import (
     parse_organized_topic,
 )
 from coffer.application.memory.ports import MemoryDocumentRepo
+from coffer.application.memory.rules_split import run_rules_split
 from coffer.application.memory.sync import MemoryReconciler
 from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.document import KIND_MEMORY
@@ -155,6 +156,14 @@ class OrganizerService:
         docs = await asyncio.to_thread(list_topic_docs, store_dir)
         await asyncio.to_thread(write_index, store_dir, docs)
         await self._reconciler.reconcile(store=ref, embedding=embedding)
+
+        # Autonomous rules-lane split once draining grows a file past threshold.
+        await run_rules_split(
+            store_dir,
+            llm=self._llm,
+            model=model,
+            credential_resolver=self._credential_resolver,
+        )
 
         await self._record_audit(
             store_name=store_name,

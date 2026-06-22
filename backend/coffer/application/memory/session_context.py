@@ -39,12 +39,14 @@ async def notify_change(on_change: OnChangeFn | None, store_name: str) -> None:
 
 
 async def get_rules(*, store_name: str, resolved_store: ResolveStoreFn) -> str | None:
-    """Return the rules/rules.md text, or ``None`` if no rules exist yet."""
-    from coffer.infrastructure.knowledge.paths import rules_path
-    from coffer.infrastructure.memory.rules_files import read_rules
+    """Return the store's rules text — every ``rules/*.md`` file concatenated (so
+    the autonomous split's per-topic files all reach session-start injection), or
+    ``None`` if no rules exist yet."""
+    from coffer.infrastructure.knowledge.paths import rules_dir
+    from coffer.infrastructure.memory.rules_files import read_all_rules
 
     sd: Path = (await resolved_store(store_name)).store_dir
-    return await asyncio.to_thread(read_rules, rules_path(sd))
+    return await asyncio.to_thread(read_all_rules, rules_dir(sd))
 
 
 async def assemble_session_context(

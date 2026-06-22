@@ -474,3 +474,41 @@ async def test_organizer_routes_rule_into_rules_lane(mem) -> None:
     )
     for h in hits:
         assert "/rules/" not in h.source, f"rules/ path appeared in recall: {h.source}"
+
+
+async def test_organize_splits_oversized_rules_lane(mem) -> None:
+    # When the rules lane has grown past the threshold, organize() splits it into
+    # per-topic files autonomously (the inbox item is incidental — it just drives
+    # one organize run).
+    import json
+
+    from coffer.infrastructure.knowledge.paths import rule_file_path
+    from coffer.infrastructure.memory.rules_files import append_rule, count_rules
+
+    await mem.service.ensure_store("global")
+    store_dir = (await mem.service.resolved_store("global")).store_dir
+    for i in range(150):
+        append_rule(rules_path(store_dir), f"behavioural rule number {i}")
+    await _remember(mem, body="A note that becomes a topic doc.", name="note")
+
+    split_assignments = json.dumps(
+        {
+            "assignments": [
+                {"index": i, "category": "even" if i % 2 == 0 else "odd"} for i in range(150)
+            ]
+        }
+    )
+    llm = _ScriptedLlm(
+        [
+            _topic_json("a-note", "A note", "n", "# Note\n\nA note that becomes a topic doc."),
+            split_assignments,
+        ]
+    )
+    org = _make_organizer(mem, llm, _Models(_model()))
+
+    result = await org.organize(store_name="global")
+
+    assert result.status == "organized"
+    assert not rules_path(store_dir).exists()  # the single file was redistributed
+    assert count_rules(rule_file_path(store_dir, "even").read_text(encoding="utf-8")) == 75
+    assert count_rules(rule_file_path(store_dir, "odd").read_text(encoding="utf-8")) == 75
