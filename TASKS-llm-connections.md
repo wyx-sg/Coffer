@@ -133,7 +133,7 @@
 
 ## 块4.5（2c）— 连接实体最终瘦身：物理移除 model/fast_model/wire_api + protocol 重命名 + 迁移
 
-- [ ] 完成（建议分支 `feat/011-connection-slim-final`，worktree 已建）
+- [x] 完成（建议分支 `feat/011-connection-slim-final`）— PR #216 已合并
 
 > **排序依赖**：必须在块3（内部引擎模型来源迁出 `cfg.model`）+ 块4（chat 模型来源迁出 `connection.model`）**都合并后**才能做，否则破坏 chat + 内部引擎。这是块2 重构的最后物理收尾（用户已定「从实体彻底拿掉」）。
 
