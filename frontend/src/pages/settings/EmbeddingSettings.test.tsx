@@ -111,7 +111,9 @@ describe("EmbeddingSettings", () => {
   });
 
   test("changing only the dimensions also asks for confirmation", async () => {
-    seed({ enabled: true, model: "bge-m3", dimensions: 1024 });
+    // A custom (unlisted) model keeps the dimension field editable — known
+    // models lock it to their fixed dimension.
+    seed({ enabled: true, provider: "custom", model: "custom-embed-v1", dimensions: 1024 });
     render(<EmbeddingSettings />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("button", { name: /edit/i }));
 

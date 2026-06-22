@@ -12,20 +12,51 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProviderModelField } from "@/components/settings/ProviderModelField";
 
+// Mainstream embedding providers, plus "custom" for any OpenAI-compatible
+// endpoint not in the list (the user supplies its own base URL + key).
 const PROVIDERS = [
-  "local",
   "openai",
-  "openrouter",
   "voyage",
   "jina",
+  "cohere",
   "gemini",
+  "mistral",
   "azure",
   "dashscope",
   "ollama",
   "lmstudio",
+  "local",
+  "custom",
 ];
 
+// Providers that run locally and need no API key.
 const KEYLESS = ["local", "ollama", "lmstudio"];
+
+// A vector's dimension is a fixed property of the embedding model, so when the
+// user picks a known model we fill it in and lock the field. Custom / unlisted
+// models keep the field editable (some support Matryoshka-style truncation).
+const KNOWN_DIMS: Record<string, number> = {
+  "text-embedding-3-small": 1536,
+  "text-embedding-3-large": 3072,
+  "text-embedding-ada-002": 1536,
+  "voyage-3": 1024,
+  "voyage-3-lite": 512,
+  "voyage-3-large": 1024,
+  "voyage-code-3": 1024,
+  "jina-embeddings-v3": 1024,
+  "embed-english-v3.0": 1024,
+  "embed-multilingual-v3.0": 1024,
+  "text-embedding-004": 768,
+  "gemini-embedding-001": 3072,
+  "mistral-embed": 1024,
+  "text-embedding-v3": 1024,
+  "bge-m3": 1024,
+  "bge-large-en-v1.5": 1024,
+  "nomic-embed-text": 768,
+  "mxbai-embed-large": 1024,
+  "snowflake-arctic-embed": 1024,
+  "all-minilm": 384,
+};
 
 export interface EmbeddingModelValues {
   provider: string;
@@ -60,6 +91,13 @@ export function EmbeddingModelDialog({ initial, pending, onSubmit, onCancel }: P
   }, [initial]);
 
   const keyless = KEYLESS.includes(provider);
+
+  // A known model's dimension is fixed — auto-fill it and lock the field; a
+  // custom/unlisted model leaves the dimension editable.
+  const knownDim = KNOWN_DIMS[model.trim()];
+  useEffect(() => {
+    if (knownDim !== undefined) setDimensions(knownDim);
+  }, [knownDim]);
 
   return (
     <form
@@ -107,8 +145,14 @@ export function EmbeddingModelDialog({ initial, pending, onSubmit, onCancel }: P
           id="emb-dims"
           type="number"
           value={dimensions}
+          disabled={knownDim !== undefined}
           onChange={(e) => setDimensions(Number(e.target.value) || 0)}
         />
+        {knownDim !== undefined ? (
+          <p className="text-xs text-muted-foreground">
+            {t("settings.embedding.dimensionsFixed")}
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-1.5">
