@@ -1,5 +1,5 @@
 # backend/coffer/infrastructure/memory/journal_files.py
-"""On-disk journal lane: append-only, time-partitioned ``journal/<YYYY-MM>.md``.
+"""On-disk journal lane: append-only, time-partitioned ``journal/<YYYY-MM-DD>.md``.
 
 Files-as-truth. Each entry is delimited by an HTML-comment marker line
 ``<!-- coffer:journal <iso> -->`` (invisible in rendered markdown, and immune to
@@ -38,21 +38,27 @@ _ENTRY_RE = re.compile(r"^<!-- coffer:journal (.+?) -->$", re.MULTILINE)
 
 
 def journal_period(when: datetime) -> str:
-    """The time-partition key for ``when`` — ``YYYY-MM`` (one file per month)."""
-    return when.strftime("%Y-%m")
+    """The time-partition key for ``when`` — ``YYYY-MM-DD`` (one file per day)."""
+    return when.strftime("%Y-%m-%d")
 
 
 def journal_doc_id(period: str) -> str:
-    """Stable ``documents``-row id for a period file (e.g. ``journal-2026-06``).
+    """Stable ``documents``-row id for a period file (e.g. ``journal-2026-06-21``).
 
     Shared by the reconciler (keyword/vector index) and the grep guard so a
-    keyword and a grep hit on the same month dedupe to one recall result. The
+    keyword and a grep hit on the same day dedupe to one recall result. The
     ``journal-`` prefix never collides with a fact's ULID id."""
     return f"journal-{period}"
 
 
 def append_entry(path: Path, *, timestamp: datetime, body: str) -> None:
-    """Append one timestamped entry to ``path`` atomically (creates parents)."""
+    """Append one timestamped entry to ``path`` atomically (creates parents).
+
+    A blank/whitespace-only body is a no-op: nothing is written and no file is
+    created, so an empty distillation never leaves an empty journal entry behind
+    (and a day with no real event creates no ``journal/<YYYY-MM-DD>.md`` file)."""
+    if not body.strip():
+        return
     block = f"{_MARK}{timestamp.isoformat()} -->\n{body.strip('\n')}\n"
     try:
         existing = path.read_text(encoding="utf-8")
