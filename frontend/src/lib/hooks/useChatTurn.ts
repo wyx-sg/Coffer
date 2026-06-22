@@ -23,6 +23,11 @@ import { type LiveMessage, handleEvent } from "./chatTurnEvents";
 
 export type { LiveMessage } from "./chatTurnEvents";
 
+// A mid-turn stream drop is recovered by re-subscribing (GET /events replays the
+// in-flight turn), bounded so a hard failure can't hammer the endpoint.
+const MAX_STREAM_RECONNECTS = 5;
+const RECONNECT_BACKOFF_MS = 300;
+
 export interface UseChatTurnResult {
   /** Send a message to the conversation (fire-and-return; never blocks). */
   send: (text: string) => Promise<void>;
@@ -69,49 +74,92 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     setPendingState([]);
     priorReplyCountRef.current = 0;
 
-    // The SSE subscription is meant to be long-lived (it stays open across turns
-    // and the server holds it open when idle). If it ENDS — a dropped connection,
-    // a proxy timeout, or the server closing it — the live turn may have finished
-    // server-side after we stopped receiving events, so its terminal `turn_done`
-    // never reached us and the live bubble would spin on "thinking…" forever.
-    // Reconcile against the persisted messages: if the reply already landed, drop
-    // the stale live bubble (and leave streaming off, since the stream is gone).
-    const reconcileEndedStream = async () => {
-      setIsStreaming(false);
+    // Reconcile against the persisted messages once the stream ends. Returns
+    // true when the turn has SETTLED server-side (its reply is committed), so the
+    // caller can drop the stale live bubble; false when no reply has landed (the
+    // turn may still be running after a mid-turn drop).
+    const replyHasLanded = async (): Promise<boolean> => {
       await qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
-      if (cancelled) return;
+      if (cancelled) return true;
       const msgs = qc.getQueryData<Message[]>(messagesKey(conversationId)) ?? [];
       const last = msgs[msgs.length - 1];
-      if (last?.role === "assistant" && last.status === "complete") {
-        setLiveMessage(null);
-      }
+      return last?.role === "assistant" && last.status === "complete";
     };
 
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, ms);
+        controller.signal.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+
+    // The SSE subscription is meant to be long-lived (it stays open across turns
+    // and the server holds it open when idle). If it ENDS mid-turn — a dropped
+    // connection, a proxy timeout, or the server closing it — the terminal
+    // `turn_done` may never reach us and the live bubble would spin on
+    // "thinking…" forever (the reply only surfaces when the next send refetches
+    // messages). Recover by RE-SUBSCRIBING: GET /events replays the in-flight
+    // turn on reattach, so the missed events (including `turn_done`) arrive on
+    // the new connection. If the reply already landed we just drop the stale
+    // bubble; if the stream closed while idle (no turn in flight) we stop.
     void (async () => {
-      try {
-        for await (const event of subscribeConversationEvents(conversationId, controller.signal)) {
-          if (cancelled) return;
-          await handleEvent(event, {
+      for (let reconnects = 0; !cancelled; ) {
+        let turnInFlight = false;
+        try {
+          for await (const event of subscribeConversationEvents(
             conversationId,
-            qc,
-            priorReplyCountRef,
-            setIsStreaming,
-            setLiveMessage,
-            setPendingState,
-            setError,
-            isCancelled: () => cancelled,
-          });
+            controller.signal,
+          )) {
+            if (cancelled) return;
+            if (event.event === "turn_start") turnInFlight = true;
+            else if (event.event === "turn_done" || event.event === "turn_error")
+              turnInFlight = false;
+            await handleEvent(event, {
+              conversationId,
+              qc,
+              priorReplyCountRef,
+              setIsStreaming,
+              setLiveMessage,
+              setPendingState,
+              setError,
+              isCancelled: () => cancelled,
+            });
+          }
+        } catch (err) {
+          if (cancelled) return;
+          if (err instanceof Error && err.name === "AbortError") return;
+          // A network/HTTP failure (e.g. the conversation is gone) — surface it
+          // and reconcile, but do not reconnect into a failing endpoint.
+          const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
+          setError(wrapped);
+          setIsStreaming(false);
+          if (await replyHasLanded()) setLiveMessage(null);
+          return;
         }
-        // Stream closed cleanly (not aborted by us) — reconcile so a turn that
-        // ended after the drop doesn't leave the bubble stuck on "thinking…".
+
+        // Stream closed cleanly (not aborted by us).
         if (cancelled) return;
-        await reconcileEndedStream();
-      } catch (err) {
-        if (cancelled) return;
-        if (err instanceof Error && err.name === "AbortError") return;
-        const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
-        setError(wrapped);
-        await reconcileEndedStream();
+        if (await replyHasLanded()) {
+          // The turn finished and its reply is committed — drop the stale bubble.
+          setIsStreaming(false);
+          setLiveMessage(null);
+          return;
+        }
+        if (!turnInFlight || reconnects >= MAX_STREAM_RECONNECTS) {
+          // Idle close with no turn to recover, or too many drops — stop, leaving
+          // the bubble so the next send's refetch still surfaces any late reply.
+          setIsStreaming(false);
+          return;
+        }
+        // A turn was mid-flight when the stream dropped — reconnect to replay it.
+        reconnects += 1;
+        await sleep(RECONNECT_BACKOFF_MS * reconnects);
       }
     })();
 
