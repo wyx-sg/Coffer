@@ -3,7 +3,7 @@
 // Hand-written fetch helpers for the redesigned `memory` kind (spec 007).
 // Stores are AUTO-PROVISIONED (global + per-project) — there is no create.
 // There is NO llm_provider anymore: facts are written directly (no LLM at
-// write time). Each fact carries name/description/body/actor. Retrieval
+// write time). Each fact carries title/description/body/actor. Retrieval
 // is the shared engine (grep / keyword / vector). Agents access these stores
 // only via the Coffer MCP gateway — Coffer keeps its own memory format and no
 // longer projects into agents' native memory locations.
@@ -158,6 +158,44 @@ export async function getMemoryConsolidationLog(store: string): Promise<Consolid
   const r = await fetch(`${storeBase(store)}/consolidation-log`, { headers: headers() });
   await checkOk(r);
   return (await r.json()) as ConsolidationLogOut;
+}
+
+// --- lane deletes (unified file-tree UI) -----------------------------------
+// Mirror `deleteFact`: same headers + checkOk, path-param values encoded. Each
+// removes the file from disk; the backend appends one line to the consolidation
+// log (except deleting the log itself), so callers also invalidate the
+// changelog query key after a delete.
+
+export async function deleteJournalPeriod(store: string, period: string): Promise<void> {
+  const r = await fetch(`${storeBase(store)}/journal/${enc(period)}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  await checkOk(r);
+}
+
+export async function deleteHandoffBranch(store: string, branch: string): Promise<void> {
+  const r = await fetch(`${storeBase(store)}/handoff/${enc(branch)}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  await checkOk(r);
+}
+
+export async function deleteMemoryRules(store: string): Promise<void> {
+  const r = await fetch(`${storeBase(store)}/rules`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  await checkOk(r);
+}
+
+export async function deleteConsolidationLog(store: string): Promise<void> {
+  const r = await fetch(`${storeBase(store)}/consolidation-log`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  await checkOk(r);
 }
 
 export async function recall(

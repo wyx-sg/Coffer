@@ -282,7 +282,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 - **Given** an MCP client running inside a git project,
 - **When** it calls `coffer__remember` with a fact and `scope=project`,
-- **Then** a per-item markdown file (YAML frontmatter `name`/`description`/`metadata.actor`/`origin_session_id` + body) is written under the project memory dir's `knowledge/inbox/` subdir, the file is indexed into `documents`, and an audit entry is recorded.
+- **Then** a per-item markdown file (YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + body) is written under the project memory dir's `knowledge/inbox/` subdir, the file is indexed into `documents`, and an audit entry is recorded.
 
 ### Scenario: agent recalls a project fact
 
@@ -626,7 +626,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 
 **Storage & scope**
 
-- **FR-001**: System MUST store every memory item as a per-item markdown file (YAML frontmatter `name`/`description`/`metadata.actor`/`origin_session_id` + body) under a per-scope **`knowledge/` lane** — freshly-remembered items in `knowledge/inbox/`, organized topic documents (`knowledge/<topic>.md`) plus an `INDEX.md` maintained by the consolidation organizer (a later memory PR). The markdown files are the **sole source of truth**; SQLite is a rebuildable index. **No `MEMORY.md` index is generated** (the prior derived index was a vestigial projection artifact, read by nothing in retrieval).
+- **FR-001**: System MUST store every memory item as a per-item markdown file (YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + body) under a per-scope **`knowledge/` lane** — freshly-remembered items in `knowledge/inbox/`, organized topic documents (`knowledge/<topic>.md`) plus an `INDEX.md` maintained by the consolidation organizer (a later memory PR). The markdown files are the **sole source of truth**; SQLite is a rebuildable index. **No `MEMORY.md` index is generated** (the prior derived index was a vestigial projection artifact, read by nothing in retrieval).
 - **FR-002**: System MUST support two memory scopes: **global** (one store keyed by `project_id = WORKSPACE_GLOBAL_PROJECT_ID`, the existing sentinel `00000000000000000000000000`) and **per-project** (one store per project, keyed by the project's ULID), stored under `~/.coffer/memory/global/knowledge/` and `~/.coffer/memory/projects/<project-ulid>/knowledge/` respectively.
 - **FR-003**: `coffer__remember` (and a user add) MUST append a memory item to the per-scope inbox (`knowledge/inbox/`) with no LLM at write time; organization into topic documents is performed asynchronously by the consolidation organizer (a later memory PR) and never blocks the write or `recall`.
 - **FR-004**: System MUST resolve the per-project store from the agent's reported launch cwd at session handshake: the daemon computes the git-root and resolves — lazily provisioning if absent — the store for that project's ULID.

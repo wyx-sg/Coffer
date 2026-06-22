@@ -66,7 +66,7 @@ async def test_journal_and_knowledge_lanes_are_distinguishable(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
         cwd=mem.project_cwd,
-        name="search",
+        title="search",
         description="search facts",
         body="the search feature uses the shared retrieval engine",
         actor="agent",
@@ -83,7 +83,7 @@ async def test_journal_is_not_counted_in_fact_count(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
         cwd=mem.project_cwd,
-        name="f",
+        title="f",
         description="d",
         body="a single knowledge fact",
         actor="agent",

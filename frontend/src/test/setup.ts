@@ -3,6 +3,40 @@ import "@testing-library/jest-dom";
 // useTranslation() work in jsdom without needing React.Suspense wrappers.
 import "@/i18n";
 
+// Node 22+ ships an experimental built-in Web Storage that, under vitest's
+// jsdom environment, leaves both `window.localStorage` and the bare
+// `localStorage` global `undefined` (it's only populated with
+// `--localstorage-file`). Any component reading `localStorage` (e.g.
+// FileActions → preferred editor) then throws "Cannot read properties of
+// undefined". Install a minimal in-memory Storage on both `window` and
+// `globalThis` so tests get a real, isolated store.
+if (typeof window !== "undefined" && !window.localStorage) {
+  class MemoryStorage implements Storage {
+    private store = new Map<string, string>();
+    get length(): number {
+      return this.store.size;
+    }
+    clear(): void {
+      this.store.clear();
+    }
+    getItem(key: string): string | null {
+      return this.store.has(key) ? (this.store.get(key) as string) : null;
+    }
+    key(index: number): string | null {
+      return Array.from(this.store.keys())[index] ?? null;
+    }
+    removeItem(key: string): void {
+      this.store.delete(key);
+    }
+    setItem(key: string, value: string): void {
+      this.store.set(key, String(value));
+    }
+  }
+  const storage = new MemoryStorage();
+  Object.defineProperty(window, "localStorage", { configurable: true, value: storage });
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
+}
+
 // Radix UI's Select (and some other primitives) use ResizeObserver.
 // jsdom doesn't implement it, so we stub it out for tests.
 if (typeof global.ResizeObserver === "undefined") {

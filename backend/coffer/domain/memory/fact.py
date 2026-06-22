@@ -17,7 +17,7 @@ class MemoryFact:
     """One memory fact = one markdown file = one ``documents`` row."""
 
     id: str
-    name: str
+    title: str
     description: str
     body: str
     actor: Actor

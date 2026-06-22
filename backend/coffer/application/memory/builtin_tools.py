@@ -79,10 +79,12 @@ def register_memory_builtin_tools(
         if not isinstance(text, str) or not text.strip():
             raise ValueError("'text' must be a non-empty string")
         scope = _scope_arg(args, default=MemoryScope.PROJECT) or MemoryScope.PROJECT
+        # ``name`` is the deprecated alias of ``title`` — accept it so live agent
+        # calls keep working; ``title`` wins when both are sent.
         fact = await memory_service.add_fact(
             scope=scope,
             cwd=_cwd(args),
-            name=str(args.get("name", "")),
+            title=str(args.get("title") or args.get("name", "")),
             description=str(args.get("description", "")),
             body=text,
             actor="agent",
@@ -90,7 +92,7 @@ def register_memory_builtin_tools(
             if args.get("origin_session_id")
             else None,
         )
-        return {"id": fact.id, "name": fact.name, "scope": scope.value, "status": "created"}
+        return {"id": fact.id, "title": fact.title, "scope": scope.value, "status": "created"}
 
     async def list_memory(args: dict[str, Any]) -> dict[str, Any]:
         scope = _scope_arg(args, default=MemoryScope.PROJECT) or MemoryScope.PROJECT
@@ -106,7 +108,7 @@ def register_memory_builtin_tools(
             "facts": [
                 {
                     "id": f.id,
-                    "name": f.name,
+                    "title": f.title,
                     "description": f.description,
                     "actor": f.actor,
                 }
@@ -163,7 +165,10 @@ def register_memory_builtin_tools(
                 "properties": {
                     "text": {"type": "string"},
                     "scope": {"type": "string", "enum": ["project", "global"]},
-                    "name": {"type": "string"},
+                    "title": {"type": "string"},
+                    # Deprecated alias of ``title`` — still accepted so live agent
+                    # calls don't break; prefer ``title``.
+                    "name": {"type": "string", "description": "Deprecated alias of 'title'."},
                     "description": {"type": "string"},
                     "cwd": {"type": "string"},
                 },

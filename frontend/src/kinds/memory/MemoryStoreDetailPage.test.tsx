@@ -38,7 +38,7 @@ const FACT = {
   id: "f1",
   store_name: "global",
   scope: "global" as const,
-  name: "tabs",
+  title: "tabs",
   description: "indentation",
   text: "uses tabs over spaces",
   actor: "user" as const,
@@ -174,6 +174,10 @@ describe("MemoryStoreDetailPage", () => {
     });
     renderPage();
     await selectTab("Changelog");
+    // The log is one row in the shared file-tree lane; select it to preview.
+    // The row is the only button in the panel (vs. the list-header label text).
+    const panel = await screen.findByRole("tabpanel");
+    fireEvent.click(within(panel).getByRole("button", { name: /^Changelog$/ }));
     expect(await screen.findByText("merged 3 facts")).toBeInTheDocument();
   });
 
@@ -192,7 +196,7 @@ describe("MemoryStoreDetailPage", () => {
   });
 
   test("recall filters the Knowledge tree to the hit fact and highlights the query", async () => {
-    const spaces = { ...FACT, id: "f2", name: "spaces", text: "spaces are fine" };
+    const spaces = { ...FACT, id: "f2", title: "spaces", text: "spaces are fine" };
     stubLists();
     vi.mocked(api.listFacts).mockResolvedValue({ facts: [FACT, spaces], total: 2 });
     vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 2, disk_bytes: 50 });
@@ -218,7 +222,7 @@ describe("MemoryStoreDetailPage", () => {
   });
 
   test("clearing the recall box restores the full fact list", async () => {
-    const spaces = { ...FACT, id: "f2", name: "spaces", text: "spaces are fine" };
+    const spaces = { ...FACT, id: "f2", title: "spaces", text: "spaces are fine" };
     stubLists();
     vi.mocked(api.listFacts).mockResolvedValue({ facts: [FACT, spaces], total: 2 });
     vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 2, disk_bytes: 50 });
@@ -325,7 +329,7 @@ describe("MemoryStoreDetailPage", () => {
     const facts = Array.from({ length: 120 }, (_, i) => ({
       ...FACT,
       id: `f${i}`,
-      name: `fact-${i}`,
+      title: `fact-${i}`,
     }));
     vi.mocked(api.listFacts).mockResolvedValue({ facts, total: 120 });
     vi.mocked(api.getMemoryStoreMetrics).mockResolvedValue({ fact_count: 120, disk_bytes: 50 });

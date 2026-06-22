@@ -8,10 +8,9 @@
 import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileActions } from "@/components/FileActions";
-import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
+import { MemoryPreviewBody } from "./MemoryPreviewBody";
 import type { FactOut } from "./api";
 
 interface Props {
@@ -37,8 +36,7 @@ export function MemoryFactViewer({ fact, isDeletePending, onDelete, initialQuery
     <div className="rounded-md border border-border">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium">{fact.name || t("memory.detail.untitled")}</span>
-          <Badge variant="outline">{fact.actor}</Badge>
+          <span className="truncate font-medium">{fact.title || t("memory.detail.untitled")}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {fact.path ? <FileActions filePath={fact.path} /> : null}
@@ -60,9 +58,16 @@ export function MemoryFactViewer({ fact, isDeletePending, onDelete, initialQuery
         </p>
       ) : null}
 
-      <FindableMarkdown className="max-h-[60vh] overflow-auto p-4" initialQuery={initialQuery}>
-        {fact.text}
-      </FindableMarkdown>
+      {/* `fact.text` is body-only (frontmatter stripped server-side); the shared
+          preview is a no-op header in that case but keeps both surfaces aligned
+          and renders a clean header for any legacy file that still carries one.
+          The fact's own description is shown above, so suppress the header's. */}
+      <MemoryPreviewBody
+        text={fact.text}
+        className="max-h-[60vh] overflow-auto p-4"
+        initialQuery={initialQuery}
+        hideDescription
+      />
     </div>
   );
 }

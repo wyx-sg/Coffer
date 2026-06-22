@@ -32,7 +32,7 @@ Frozen dataclass; the in-memory view of one per-fact markdown file (frontmatter 
 | Field               | Type                      | Notes                                                                    |
 | ------------------- | ------------------------- | ------------------------------------------------------------------------ |
 | `id`                | `str`                     | Document id (ULID); also the basis of the `<fact-slug>.md` name.         |
-| `name`              | `str`                     | Frontmatter `name` (short title).                                        |
+| `title`             | `str`                     | Frontmatter `title` (short title; legacy `name` key still parsed).       |
 | `description`       | `str`                     | Frontmatter `description` (one-line).                                    |
 | `body`              | `str`                     | Markdown body = the fact text.                                           |
 | `actor`             | `Literal["agent","user"]` | Frontmatter `metadata.actor` — who wrote it.                             |
@@ -96,7 +96,7 @@ CREATE TABLE documents (
     resource_name  TEXT NOT NULL,               -- store name (memory: scope store)
     project_id     TEXT NOT NULL,               -- WORKSPACE_GLOBAL sentinel | project ULID
     path           TEXT NOT NULL,               -- canonical .md path on disk = truth
-    title          TEXT NOT NULL,               -- memory: frontmatter `name`
+    title          TEXT NOT NULL,               -- memory: frontmatter `title`
     description    TEXT,                         -- memory: frontmatter `description`
     metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {actor, origin_session_id}
     content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
@@ -188,7 +188,8 @@ Per-fact `.md` frontmatter:
 
 ```markdown
 ---
-name: deploy-via-make-release
+kind: knowledge
+title: deploy-via-make-release
 description: This repo deploys via `make release`, never git push --tags directly.
 metadata:
   actor: agent
@@ -212,6 +213,7 @@ release target tags and pushes atomically.
 | `remember` / user add                          | Write `knowledge/inbox/<item-slug>.md` → index into `documents`/`chunks`/FTS5/(vec) → audit.                                                                                  |
 | User edit (REST/CLI/external editor)           | Rewrite `.md` → single re-index routine (sha256 changed → re-chunk/-embed) → audit. (A direct external-editor edit takes effect on the next lazy reindex-on-read.) MCP has no edit tool — REST/CLI only. |
 | User delete (REST/CLI)                         | Delete `.md` → remove `documents`/`chunks`/FTS5/vec rows → audit. MCP has no delete tool — REST/CLI only.                                                                      |
+| Lane delete (REST)                             | `DELETE /memory_stores/{name}/{journal/<period>,handoff/<branch>,rules,consolidation-log}` → remove the lane file(s) → drop the journal lane's index rows (FR-043; handoff/rules are outside recall) → append one human-readable line to `consolidation-log.md` (EXCEPT the changelog's own delete) → audit `memory_deleted`. A missing lane file → 404 (mirrors fact-delete). |
 | Clear a scope                                  | Delete every memory item under `knowledge/` → remove all index rows → audit. Store Resource preserved.                                                                        |
 | Organize (explicit trigger; internal LLM)      | Per inbox item: retrieve ≤3 candidate topic docs → one-shot LLM merge/create/**classify** → if the LLM marks the item a **rule**, append it to `rules/rules.md` (procedural lane, FR-036); else write `knowledge/<slug>.md` → delete the inbox item (only after the write/append) → append `consolidation-log.md`. Then regenerate `INDEX.md`, reconcile the index, **split any over-threshold `rules/*.md` file into per-topic `rules/<slug>.md` via a one-shot LLM classify** (amendment 2026-06-22), audit `memory_organized` (with a `rules_appended` count). Malformed LLM output skips the item (stays in inbox); no internal model → no-op. |
 | Reorg (explicit trigger; internal agentic LLM) | A bounded langgraph `create_react_agent` loop over the topic docs with list/read/write/supersede tools: consolidate duplicates + split over-long docs. **Every overwrite/supersede first archives the prior version to `superseded/<slug>-<ts>.md`** (never hard-delete). Then regenerate `INDEX.md`, reconcile, audit `memory_reorganized`. No internal model → no-op (`no_model`); no topic docs → no-op (`empty`). |

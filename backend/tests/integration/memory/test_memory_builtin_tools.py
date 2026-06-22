@@ -49,10 +49,24 @@ async def test_remember_defaults_to_project_scope(mem) -> None:
     remember = reg.get(f"{COFFER_TOOL_PREFIX}remember")
     assert remember is not None
     out = await remember.handler(
-        {"text": "uses pnpm not npm", "cwd": mem.project_cwd, "name": "pkg-manager"}
+        {"text": "uses pnpm not npm", "cwd": mem.project_cwd, "title": "pkg-manager"}
     )
     assert out["scope"] == "project"
     assert out["status"] == "created"
+    assert out["title"] == "pkg-manager"
+
+
+async def test_remember_accepts_legacy_name_alias(mem) -> None:
+    # ``name`` is the deprecated alias of ``title`` — live agent calls that still
+    # send ``name`` must keep working, canonicalised to ``title`` on the way out.
+    reg = _registry(mem)
+    remember = reg.get(f"{COFFER_TOOL_PREFIX}remember")
+    assert remember is not None
+    out = await remember.handler(
+        {"text": "uses pnpm not npm", "cwd": mem.project_cwd, "name": "legacy-title"}
+    )
+    assert out["status"] == "created"
+    assert out["title"] == "legacy-title"
 
 
 async def test_recall_tool_spans_scopes(mem) -> None:
@@ -123,7 +137,11 @@ async def test_recall_resolves_default_mode_internally(mem) -> None:
 
     ref = ResourceRef("memory", "global")
     await mem.service.add_fact_to_store(
-        store_name="global", name="g", description="", body="global make release note", actor="user"
+        store_name="global",
+        title="g",
+        description="",
+        body="global make release note",
+        actor="user",
     )
     cfg = MemoryStoreConfig(retrieval_modes=["grep", "keyword"], default_mode="grep")
     await mem.resources.update_config(ref, new_config=cfg.model_dump(mode="json"), actor="user")

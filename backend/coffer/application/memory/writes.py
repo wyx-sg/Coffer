@@ -18,7 +18,7 @@ from pathlib import Path
 
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.retrieval import EmbeddingResolver, no_embedding
-from coffer.application.memory.service_helpers import body_sha, derive_name, validate_fact
+from coffer.application.memory.service_helpers import body_sha, derive_title, validate_fact
 from coffer.application.memory.sync import MemoryReconciler
 from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.document import KIND_MEMORY
@@ -73,7 +73,7 @@ class WriteDeps:
 
 def build_fact(
     *,
-    name: str,
+    title: str,
     description: str,
     body: str,
     actor: Actor,
@@ -85,8 +85,8 @@ def build_fact(
     now = datetime.now(tz=UTC)
     return MemoryFact(
         id=new_ulid(),
-        name=name.strip() or derive_name(body),
-        description=description.strip() or derive_name(body),
+        title=title.strip() or derive_title(body),
+        description=description.strip() or derive_title(body),
         body=body,
         actor=actor,
         origin_session_id=origin_session_id,
@@ -99,7 +99,7 @@ def apply_fact_changes(
     fact: MemoryFact,
     *,
     new_body: str,
-    new_name: str | None,
+    new_title: str | None,
     new_description: str | None,
 ) -> MemoryFact:
     """Return a copy of ``fact`` with the supplied edits applied. ``None`` for an
@@ -109,8 +109,8 @@ def apply_fact_changes(
         "body": new_body,
         "updated_at": datetime.now(tz=UTC),
     }
-    if new_name is not None and new_name.strip():
-        changes["name"] = new_name.strip()
+    if new_title is not None and new_title.strip():
+        changes["title"] = new_title.strip()
     if new_description is not None and new_description.strip():
         changes["description"] = new_description.strip()
     return dc_replace(fact, **changes)  # type: ignore[arg-type]
@@ -135,7 +135,7 @@ async def write_and_index(
 def default_fact_path(store_dir: Path, fact: MemoryFact) -> Path:
     """The canonical on-disk path for a freshly-remembered item:
     ``<store_dir>/knowledge/inbox/<slug>-<id-tail>.md``."""
-    return inbox_item_path(store_dir, f"{slugify(fact.name)}-{fact.id[-8:].lower()}")
+    return inbox_item_path(store_dir, f"{slugify(fact.title)}-{fact.id[-8:].lower()}")
 
 
 async def delete_one(
@@ -171,7 +171,7 @@ async def add_new_fact(
     resolved: ResolvedScope,
     store_name: str,
     config: MemoryStoreConfig,
-    name: str,
+    title: str,
     description: str,
     body: str,
     actor: Actor,
@@ -182,7 +182,7 @@ async def add_new_fact(
     ``add_fact_to_store`` (store-by-name)."""
     body = body.strip()
     fact = build_fact(
-        name=name,
+        title=title,
         description=description,
         body=body,
         actor=actor,
@@ -215,7 +215,7 @@ async def update_existing_fact(
     existing: FactFile,
     new_body: str,
     actor: str,
-    new_name: str | None = None,
+    new_title: str | None = None,
     new_description: str | None = None,
 ) -> MemoryFact:
     """Apply edits to an existing fact, re-persist + reindex, audit, and notify."""
@@ -224,7 +224,7 @@ async def update_existing_fact(
     updated = apply_fact_changes(
         existing.fact,
         new_body=new_body,
-        new_name=new_name,
+        new_title=new_title,
         new_description=new_description,
     )
     await write_and_index(

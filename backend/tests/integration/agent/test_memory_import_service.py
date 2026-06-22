@@ -75,19 +75,19 @@ class _FakeSink:
         self,
         *,
         project_path: str,
-        name: str,
+        title: str,
         description: str,
         body: str,
         origin_session_id: str | None,
     ) -> None:
         if self._raise_scope:
             raise ScopeUnresolved(project_path)
-        if name in self._reject_names:
-            raise MemoryRejected("too_long", f"fact {name!r} exceeds the store limit")
+        if title in self._reject_names:
+            raise MemoryRejected("too_long", f"fact {title!r} exceeds the store limit")
         self.added.append(
             {
                 "project_path": project_path,
-                "name": name,
+                "title": title,
                 "description": description,
                 "body": body,
                 "origin_session_id": origin_session_id,
@@ -133,7 +133,7 @@ async def test_import_adds_facts_organizes_and_reports() -> None:
     assert len(sink.added) == 2
     first = sink.added[0]
     assert first["project_path"] == "/real/proj"
-    assert first["name"] == "Alpha"
+    assert first["title"] == "Alpha"
     assert first["origin_session_id"] == "s1"
     assert sink.organize_calls == 1
 
@@ -151,7 +151,7 @@ async def test_import_skips_rejected_facts_and_keeps_going() -> None:
     assert result.skipped == 1
     assert result.store == "project-X"
     assert result.organized is True
-    assert [a["name"] for a in sink.added] == ["Beta"]
+    assert [a["title"] for a in sink.added] == ["Beta"]
     assert sink.organize_calls == 1
 
 
