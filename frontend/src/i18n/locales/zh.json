@@ -535,6 +535,8 @@
       "deleteTitle": "删除连接",
       "deleteConfirm": "删除连接「{{name}}」？其保存的凭据也会一并删除。",
       "name": "名称",
+      "provider": "提供方",
+      "customProvider": "自定义",
       "wireFormat": "连接类型",
       "detectType": "检测类型",
       "detected": "已检测：{{wire}}",

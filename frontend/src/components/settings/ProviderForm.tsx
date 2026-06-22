@@ -1,19 +1,18 @@
 // components/settings/ProviderForm.tsx — add / edit an LLM connection (spec 011).
-// A connection = endpoint + key + (detected) protocol. The model lives apart
-// from the connection (amendment E1/E3) — it is chosen at the point of use, so
-// the dialog has no model field. The protocol is not hand-picked: after base_url
-// + key are entered the dialog detects it (E2); only an inconclusive probe falls
-// back to a manual pick. In edit mode (`initial` set) name + protocol are fixed
-// and the secret is optional — left blank, the stored key is kept.
+// A connection = endpoint + key + protocol. The model lives apart from the
+// connection (amendment E1/E3) — chosen at the point of use — so the dialog has
+// no model field. On create the user picks a PROVIDER preset (OpenAI, Anthropic,
+// Google Gemini, Ollama, …) which fills the endpoint + protocol; "Custom" lets
+// them enter any OpenAI-/Anthropic-compatible endpoint and pick the protocol by
+// hand. In edit mode (`initial` set) name + protocol are fixed and the secret is
+// optional — left blank, the stored key is kept.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import { useDetectProtocol } from "@/lib/hooks/useModelIntrospection";
 import { translateApiError } from "@/lib/api/errors";
 import {
   wireNeedsCredential,
@@ -34,37 +33,55 @@ interface Props {
   onCancel: () => void;
 }
 
+interface Preset {
+  id: string;
+  label: string;
+  protocol: Protocol | "";
+  baseUrl: string;
+}
+
+// Built-in providers. Each fills the endpoint + protocol; "custom" leaves both
+// to the user. OpenAI-compatible gateways (Gemini, DeepSeek, …) use the openai
+// protocol — the agent compatibility is decided separately on the agent.
+const PRESETS: Preset[] = [
+  { id: "openai", label: "OpenAI", protocol: "openai", baseUrl: "https://api.openai.com/v1" },
+  { id: "anthropic", label: "Anthropic", protocol: "anthropic", baseUrl: "https://api.anthropic.com" },
+  {
+    id: "gemini",
+    label: "Google Gemini",
+    protocol: "openai",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+  },
+  { id: "deepseek", label: "DeepSeek", protocol: "openai", baseUrl: "https://api.deepseek.com" },
+  { id: "moonshot", label: "Moonshot (Kimi)", protocol: "openai", baseUrl: "https://api.moonshot.cn/v1" },
+  { id: "openrouter", label: "OpenRouter", protocol: "openai", baseUrl: "https://openrouter.ai/api/v1" },
+  { id: "ollama", label: "Ollama", protocol: "ollama", baseUrl: "http://localhost:11434" },
+  { id: "custom", label: "Custom", protocol: "", baseUrl: "" },
+];
+
 export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate, onCancel }: Props) {
   const { t } = useTranslation();
   const isEdit = initial != null;
   const [name, setName] = useState(initial?.name ?? "");
-  // "" until detected (create mode); edit mode keeps the locked protocol.
-  const [protocol, setProtocol] = useState<Protocol | "">(initial?.protocol ?? "");
-  const [baseUrl, setBaseUrl] = useState(initial?.base_url ?? "");
+  const [presetId, setPresetId] = useState("openai");
+  const [protocol, setProtocol] = useState<Protocol | "">(initial?.protocol ?? "openai");
+  const [baseUrl, setBaseUrl] = useState(initial?.base_url ?? "https://api.openai.com/v1");
   const [secret, setSecret] = useState("");
-  // Shown only when detection is inconclusive (`unknown`) — the honest fallback.
-  const [manualPick, setManualPick] = useState(false);
 
-  const detect = useDetectProtocol();
-  // Before a protocol is known, assume a key is needed (so the field is available
-  // to detect with); ollama clears it once detected.
+  const isCustom = presetId === "custom";
   const needsCredential = protocol === "" || wireNeedsCredential(protocol);
 
-  const runDetect = () => {
-    if (isEdit || !baseUrl) return;
-    detect.mutate(
-      { base_url: baseUrl, secret_value: secret || null },
-      {
-        onSuccess: (r) => {
-          if (r.protocol === "unknown") {
-            setManualPick(true);
-          } else {
-            setProtocol(r.protocol as Protocol);
-            setManualPick(false);
-          }
-        },
-      },
-    );
+  // Picking a preset fills protocol + endpoint; custom clears them for hand entry.
+  const pickPreset = (id: string) => {
+    setPresetId(id);
+    const preset = PRESETS.find((p) => p.id === id);
+    if (preset && id !== "custom") {
+      setProtocol(preset.protocol);
+      setBaseUrl(preset.baseUrl);
+    } else if (id === "custom") {
+      setProtocol("openai");
+      setBaseUrl("");
+    }
   };
 
   return (
@@ -78,7 +95,7 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
           await onUpdate?.(patch);
           return;
         }
-        if (!protocol) return; // guard: protocol must be known before create
+        if (!protocol) return; // guard: a custom connection still needs a protocol
         const values: ProviderCreate = { name, protocol, base_url: baseUrl };
         if (needsCredential && secret) values.secret_value = secret;
         await onSubmit(values);
@@ -94,16 +111,58 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
           disabled={isEdit}
         />
       </div>
+
+      {/* Provider preset (create only). Edit mode shows the locked protocol. */}
+      {isEdit ? (
+        <div className="space-y-1.5">
+          <Label>{t("settings.connections.provider")}</Label>
+          <p className="text-sm text-muted-foreground">{initial?.protocol}</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label htmlFor="p-preset">{t("settings.connections.provider")}</Label>
+          <select
+            id="p-preset"
+            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            value={presetId}
+            onChange={(e) => pickPreset(e.target.value)}
+          >
+            {PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.id === "custom" ? t("settings.connections.customProvider") : p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Custom connections pick the protocol by hand. */}
+      {!isEdit && isCustom && (
+        <div className="space-y-1.5">
+          <Label htmlFor="p-wire">{t("settings.connections.wireFormat")}</Label>
+          <select
+            id="p-wire"
+            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            value={protocol}
+            onChange={(e) => setProtocol(e.target.value as Protocol)}
+          >
+            <option value="anthropic">anthropic</option>
+            <option value="openai">openai</option>
+            <option value="ollama">ollama</option>
+          </select>
+        </div>
+      )}
+
       <div className="space-y-1.5">
         <Label htmlFor="p-base">{t("settings.connections.baseUrl")}</Label>
         <Input
           id="p-base"
           value={baseUrl}
           onChange={(e) => setBaseUrl(e.target.value)}
-          onBlur={runDetect}
           required
         />
       </div>
+
       {needsCredential && (
         <div className="space-y-1.5">
           <Label htmlFor="p-secret">{t("settings.connections.secret")}</Label>
@@ -111,53 +170,12 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
             id="p-secret"
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
-            onBlur={runDetect}
             required={!isEdit}
             placeholder={isEdit ? t("settings.connections.secretKeepBlank") : undefined}
           />
         </div>
       )}
-      {/* Protocol is detected, not hand-picked. Edit mode shows the locked value;
-          create mode shows the detected one, or a manual fallback when inconclusive. */}
-      <div className="space-y-1.5">
-        <Label htmlFor="p-wire">{t("settings.connections.wireFormat")}</Label>
-        {isEdit ? (
-          <p className="text-sm text-muted-foreground">{initial?.protocol}</p>
-        ) : manualPick ? (
-          <select
-            id="p-wire"
-            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-            value={protocol}
-            onChange={(e) => setProtocol(e.target.value as Protocol)}
-          >
-            <option value="" disabled>
-              {t("settings.connections.detectFailed")}
-            </option>
-            <option value="anthropic">anthropic</option>
-            <option value="openai">openai</option>
-            <option value="ollama">ollama</option>
-          </select>
-        ) : (
-          <div className="flex items-center gap-2 text-sm">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={runDetect}
-              disabled={!baseUrl || detect.isPending}
-            >
-              {detect.isPending && <Loader2 className="mr-1 size-3.5 animate-spin" />}
-              {t("settings.connections.detectType")}
-            </Button>
-            {protocol && (
-              <span className="flex items-center gap-1 text-green-600" role="status">
-                <CheckCircle2 className="size-3.5" />
-                {t("settings.connections.detected", { wire: protocol })}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+
       {submitError != null && (
         <p className="text-sm text-destructive">{translateApiError(t, submitError)}</p>
       )}
