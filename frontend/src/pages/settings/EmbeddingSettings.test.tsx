@@ -108,6 +108,23 @@ describe("EmbeddingSettings", () => {
         expect.objectContaining({ model: "text-embedding-3-small" }),
       ),
     );
+    // The confirmation closes once accepted.
+    await waitFor(() =>
+      expect(screen.queryByText(/change embedding model\?/i)).not.toBeInTheDocument(),
+    );
+  });
+
+  test("changing only the dimensions also asks for confirmation", async () => {
+    seed({ enabled: true, model: "bge-m3", dimensions: 1024 });
+    render(<EmbeddingSettings />, { wrapper: wrap });
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/dimensions/i), { target: { value: "512" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
+
+    expect(mutate).not.toHaveBeenCalled();
+    expect(await screen.findByText(/change embedding model\?/i)).toBeInTheDocument();
   });
 });
 

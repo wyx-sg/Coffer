@@ -1,29 +1,27 @@
 // frontend/src/pages/settings/EmbeddingSettings.tsx
 //
-// The global embedding configuration (Settings → Embedding). Embedding is no
-// longer set per knowledge base / memory store; one config here drives vector
-// retrieval everywhere. Turning it off (or leaving the model blank) makes every
-// store fall back to keyword/grep.
-//
-// The model is configured through an Add/Edit dialog (mirroring the LLM
-// connection dialog) — there is only ever ONE embedding model. Changing the
-// model re-embeds every store, so a confirmation guards that. The enable switch
-// lives next to the chunking defaults, separate from the model itself.
+// The global embedding configuration (Settings → Embedding). One config drives
+// vector retrieval everywhere; turning it off (or leaving the model blank)
+// falls back to keyword/grep. The single embedding model is configured through
+// an Add/Edit dialog (mirroring the LLM connection dialog) — changing the model
+// re-embeds every store, so a confirmation guards it. The enable switch lives
+// next to the chunking defaults, separate from the model itself.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   EmbeddingModelDialog,
   type EmbeddingModelValues,
 } from "@/components/settings/EmbeddingModelDialog";
+import {
+  EmbeddingChunkingFields,
+  EmbeddingModelRow,
+} from "@/components/settings/EmbeddingPanels";
 import { translateApiError } from "@/lib/api/errors";
 import { useEmbeddingConfig, useUpdateEmbeddingConfig } from "@/lib/hooks/useEmbeddingConfig";
 
@@ -100,10 +98,15 @@ export function EmbeddingSettings() {
     setDialogOpen(false);
   };
 
-  // From the dialog: changing an already-set model re-embeds everything, so
-  // confirm first; first-time configuration commits directly.
+  // From the dialog: changing the model, its dimensions, or the provider of an
+  // already-set model re-embeds every store (a width change even rebuilds the
+  // vec table), so confirm first; first-time configuration commits directly.
   const onDialogSubmit = (v: EmbeddingModelValues) => {
-    if (hasModel && v.model.trim() !== model.trim()) {
+    const reEmbeds =
+      v.model.trim() !== model.trim() ||
+      v.dimensions !== dimensions ||
+      v.provider !== provider;
+    if (hasModel && reEmbeds) {
       setConfirm(v);
       setDialogOpen(false);
       return;
@@ -125,60 +128,22 @@ export function EmbeddingSettings() {
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">{t("settings.embedding.description")}</p>
 
-        {hasModel ? (
-          <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{model}</p>
-              <p className="text-xs text-muted-foreground">
-                {provider} · {dimensions}d
-              </p>
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => setDialogOpen(true)}>
-              <Pencil className="mr-1 size-3.5" />
-              {t("settings.embedding.edit")}
-            </Button>
-          </div>
-        ) : (
-          <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-            {t("settings.embedding.empty")}
-          </p>
-        )}
+        <EmbeddingModelRow
+          hasModel={hasModel}
+          model={model}
+          provider={provider}
+          dimensions={dimensions}
+          onEdit={() => setDialogOpen(true)}
+        />
 
-        <div className="space-y-3 border-t border-border pt-4">
-          <div>
-            <Label>{t("settings.embedding.chunkingTitle")}</Label>
-            <p className="text-xs text-muted-foreground">{t("settings.embedding.chunkingHint")}</p>
-          </div>
-
-          <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-            <div>
-              <Label>{t("settings.embedding.enabled")}</Label>
-              <p className="text-xs text-muted-foreground">{t("settings.embedding.enabledHint")}</p>
-            </div>
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="emb-chunk-size">{t("settings.embedding.chunkSize")}</Label>
-              <Input
-                id="emb-chunk-size"
-                type="number"
-                value={chunkSize}
-                onChange={(e) => setChunkSize(Number(e.target.value) || 0)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="emb-chunk-overlap">{t("settings.embedding.chunkOverlap")}</Label>
-              <Input
-                id="emb-chunk-overlap"
-                type="number"
-                value={chunkOverlap}
-                onChange={(e) => setChunkOverlap(Number(e.target.value) || 0)}
-              />
-            </div>
-          </div>
-        </div>
+        <EmbeddingChunkingFields
+          enabled={enabled}
+          onEnabledChange={setEnabled}
+          chunkSize={chunkSize}
+          onChunkSizeChange={setChunkSize}
+          chunkOverlap={chunkOverlap}
+          onChunkOverlapChange={setChunkOverlap}
+        />
 
         {update.error ? (
           <p className="text-sm text-destructive" role="alert">
