@@ -1,18 +1,17 @@
 // components/chat/ModelPicker.tsx
 //
-// Per-conversation model picker for a managed agent (ADR-024 → ADR-032). The
-// value is `agent_config.model`, passed through to the agent's CLI, so any model
-// id is valid. The picker is a real dropdown (shadcn Select) listing the agent's
-// available models — the active connection's `model`/`fast_model` augmented
-// (lazily, on first open) by connection model introspection. Because a model id
-// is free-form, the dropdown also offers a "Custom…" option that reveals a
-// free-text input for a non-listed id. An empty value inherits the active
-// connection's projected default, shown as the inherit option / placeholder
-// hint. Mirrors the channel `/model` command.
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+// Per-conversation model picker for a managed agent (ADR-024 → ADR-032 D4). The
+// value is `agent_config.model`, passed through to the agent's CLI. The picker
+// is a FIXED dropdown — never free-text (D4). Its options are state-dependent:
+// when a connection overrides the agent, the connection's introspected models
+// (fetched lazily on first open); otherwise the agent's curated built-in models.
+// It does NOT read the connection's stored `model`/`fast_model` (those leave the
+// connection in the E1 amendment); the current value is always shown so it stays
+// selectable. An empty value inherits the agent's projected default. To pick a
+// model outside this list, change the connection/binding on the Agent page.
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -24,11 +23,10 @@ import { BUILTIN_MODELS_BY_AGENT, WIRE_BY_AGENT } from "@/lib/api/providers";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 import { useProviders } from "@/lib/hooks/useProviders";
 
-// Sentinel select values. Real model ids are arbitrary strings; Radix forbids an
-// empty-string item value, so the inherit/custom sentinels are reserved tokens
-// that cannot realistically collide with a model id.
+// Sentinel select value for "inherit the projected default". Real model ids are
+// arbitrary strings; Radix forbids an empty-string item value, so this reserved
+// token cannot realistically collide with a model id.
 const INHERIT = "__inherit__";
-const CUSTOM = "__custom__";
 
 interface Props {
   agentKey: string;
@@ -41,16 +39,8 @@ interface Props {
 
 export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Props) {
   const { t } = useTranslation();
-  const listId = useId();
   const [fetched, setFetched] = useState<string[]>([]);
   const introspected = useRef(false);
-  // True while the user is typing a custom (non-listed) id.
-  const [customMode, setCustomMode] = useState(false);
-  const [text, setText] = useState(value ?? "");
-
-  // Re-sync when the override changes externally (switching conversations, or a
-  // committed value arriving back through props).
-  useEffect(() => setText(value ?? ""), [value]);
 
   // The picker is reused in place when the agent changes (draft selector swap,
   // or switching to a conversation bound to a different agent). Drop the
@@ -59,7 +49,6 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
   useEffect(() => {
     introspected.current = false;
     setFetched([]);
-    setCustomMode(false);
   }, [agentKey]);
 
   const providers = useProviders();
@@ -74,25 +63,21 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
   const suggestions = useMemo(() => {
     const out: string[] = [];
     if (activeConnection) {
-      // An override is active → offer the connection's model(s) and whatever its
-      // endpoint lists. Built-in ids don't apply (the agent now talks to the
-      // connection, not its own login).
-      if (activeConnection.model) out.push(activeConnection.model);
-      if (activeConnection.fast_model) out.push(activeConnection.fast_model);
-      for (const m of fetched) if (!out.includes(m)) out.push(m);
+      // An override is active → the agent talks to the connection; offer the
+      // models its endpoint lists (introspected). Built-in ids don't apply.
+      for (const m of fetched) out.push(m);
     } else {
       // No override → the agent runs on its own login; offer its curated
       // built-in models (ADR-032 amendment D4).
-      for (const m of BUILTIN_MODELS_BY_AGENT[agentKey] ?? []) {
-        if (!out.includes(m)) out.push(m);
-      }
+      for (const m of BUILTIN_MODELS_BY_AGENT[agentKey] ?? []) out.push(m);
     }
+    // Always keep the current value selectable, even when it is not in the list.
+    if (value && !out.includes(value)) out.push(value);
     return out;
-  }, [activeConnection, fetched, agentKey]);
+  }, [activeConnection, fetched, agentKey, value]);
 
-  // Pull the connection's full catalogue once, the first time the dropdown is
-  // opened. Best-effort: a connection that can't list models just yields
-  // nothing.
+  // Pull the connection's catalogue once, the first time the dropdown is opened.
+  // Best-effort: a connection that can't list models just yields nothing.
   const introspect = () => {
     if (introspected.current || !wire || !activeConnection) return;
     introspected.current = true;
@@ -111,85 +96,27 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
     if (norm !== (value ?? null)) onCommit(norm);
   };
 
-  const placeholder = activeConnection?.model
-    ? t("chat.modelPicker.defaultHint", { model: activeConnection.model })
-    : t("chat.modelPicker.placeholder");
-
-  // The current value is a known suggestion → the dropdown selects it directly.
-  // Otherwise (a custom id, or no models to list) fall back to the free-text
-  // input so the value is always editable.
   const currentValue = value ?? "";
-  const valueIsKnown = currentValue !== "" && suggestions.includes(currentValue);
-  const showText = customMode || (currentValue !== "" && !valueIsKnown);
-
-  // With no models to offer and no custom value, there is nothing to pick — go
-  // straight to the free-text input (keeps the picker usable for connections
-  // that can't introspect, and matches the channel `/model` free-text command).
-  const noOptions = suggestions.length === 0;
-
-  if (showText || noOptions) {
-    // Free-text custom entry. The `list` attribute keeps assistive suggestions
-    // available (and gives the field the `combobox` role rather than a plain
-    // textbox, matching the original picker).
-    return (
-      <>
-        <Input
-          list={listId}
-          value={text}
-          disabled={disabled}
-          aria-label={t("chat.modelPicker.label")}
-          placeholder={placeholder}
-          onFocus={introspect}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={() => commit(text)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          className="h-7 w-44 text-sm"
-        />
-        <datalist id={listId}>
-          {suggestions.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
-      </>
-    );
-  }
-
-  const selectValue = valueIsKnown ? currentValue : INHERIT;
+  const selectValue =
+    currentValue !== "" && suggestions.includes(currentValue) ? currentValue : INHERIT;
 
   return (
     <Select
       disabled={disabled}
       value={selectValue}
-      onValueChange={(v) => {
-        if (v === CUSTOM) {
-          setText("");
-          setCustomMode(true);
-          return;
-        }
-        commit(v === INHERIT ? null : v);
-      }}
+      onValueChange={(v) => commit(v === INHERIT ? null : v)}
       onOpenChange={(open) => open && introspect()}
     >
       <SelectTrigger className="h-7 w-44 text-sm" aria-label={t("chat.modelPicker.label")}>
-        <SelectValue placeholder={placeholder} />
+        <SelectValue placeholder={t("chat.modelPicker.placeholder")} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={INHERIT}>
-          {activeConnection?.model
-            ? t("chat.modelPicker.inherit", { model: activeConnection.model })
-            : t("chat.modelPicker.inheritNoModel")}
-        </SelectItem>
+        <SelectItem value={INHERIT}>{t("chat.modelPicker.inheritNoModel")}</SelectItem>
         {suggestions.map((m) => (
           <SelectItem key={m} value={m}>
             {m}
           </SelectItem>
         ))}
-        <SelectItem value={CUSTOM}>{t("chat.modelPicker.custom")}</SelectItem>
       </SelectContent>
     </Select>
   );

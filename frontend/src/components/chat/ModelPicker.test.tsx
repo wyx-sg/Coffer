@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
+import { acceptance } from "@/test/acceptance";
 import { ModelPicker } from "./ModelPicker";
 
 vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: vi.fn() }));
@@ -18,6 +19,7 @@ function makeConnection(over: Record<string, unknown> = {}) {
     wire_format: "anthropic",
     base_url: "https://api.example",
     credential_ref: "ref",
+    // The stored model/fast_model must NEVER feed the picker (D4 / E1).
     model: "claude-opus-4-8",
     fast_model: "claude-haiku-4-5",
     wire_api: "chat",
@@ -40,6 +42,11 @@ function openAndReadOptions(): string[] {
   return screen.getAllByRole("option").map((o) => o.textContent ?? "");
 }
 
+/** mutate stub that resolves list-models introspection with the given ids. */
+function introspectReturning(models: string[]) {
+  return vi.fn((_probe, opts) => opts.onSuccess({ models, message: "" }));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   useProvidersMock.mockReturnValue({ data: [makeConnection()] });
@@ -47,54 +54,55 @@ beforeEach(() => {
 });
 
 describe("ModelPicker", () => {
-  test("renders a dropdown listing the active connection's model + fast_model", () => {
-    render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
-    const options = openAndReadOptions();
-    expect(options).toContain("claude-opus-4-8");
-    expect(options).toContain("claude-haiku-4-5");
-    // A custom-entry escape hatch is always offered (model ids are free-form).
-    expect(options.some((o) => /custom/i.test(o))).toBe(true);
-  });
+  acceptance(
+    "011-provider-switching",
+    "the chat model picker offers a fixed list without free-form entry",
+    () => {
+      // (A) No overriding connection for the agent → fixed built-in list, no
+      // "Custom…" escape hatch, and no free-text input anywhere.
+      const codex = render(<ModelPicker agentKey="codex" value={null} onCommit={vi.fn()} />);
+      let options = openAndReadOptions();
+      expect(options).toContain("gpt-5-codex");
+      expect(options.some((o) => /custom/i.test(o))).toBe(false);
+      expect(screen.queryByRole("textbox")).toBeNull();
+      codex.unmount();
 
-  test("selecting a listed model commits it", () => {
+      // (B) A connection overrides the agent → the dropdown lists the
+      // connection's INTROSPECTED models, never its stored `model`/`fast_model`.
+      useListMock.mockReturnValue({
+        mutate: introspectReturning(["claude-sonnet-4-6", "claude-3-5-haiku"]),
+      });
+      render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
+      options = openAndReadOptions();
+      expect(options).toContain("claude-sonnet-4-6");
+      expect(options).toContain("claude-3-5-haiku");
+      // The stored connection model/fast_model are NOT offered.
+      expect(options).not.toContain("claude-opus-4-8");
+      expect(options.some((o) => /custom/i.test(o))).toBe(false);
+    },
+  );
+
+  test("selecting a listed (introspected) model commits it", () => {
     const onCommit = vi.fn();
+    useListMock.mockReturnValue({ mutate: introspectReturning(["claude-sonnet-4-6"]) });
     render(<ModelPicker agentKey="claude_code" value={null} onCommit={onCommit} />);
     openAndReadOptions();
-    fireEvent.click(screen.getByRole("option", { name: "claude-haiku-4-5" }));
-    expect(onCommit).toHaveBeenCalledWith("claude-haiku-4-5");
+    fireEvent.click(screen.getByRole("option", { name: "claude-sonnet-4-6" }));
+    expect(onCommit).toHaveBeenCalledWith("claude-sonnet-4-6");
   });
 
-  test("choosing Custom… reveals a free-text input that commits any id on blur", () => {
-    const onCommit = vi.fn();
-    render(<ModelPicker agentKey="claude_code" value={null} onCommit={onCommit} />);
-    openAndReadOptions();
-    fireEvent.click(screen.getByRole("option", { name: /custom/i }));
-    const input = screen.getByLabelText(/agent model/i);
-    fireEvent.change(input, { target: { value: "  some-custom-id  " } });
-    fireEvent.blur(input);
-    expect(onCommit).toHaveBeenCalledWith("some-custom-id");
-  });
-
-  test("introspects on first open and merges fetched models (deduped)", () => {
-    const mutate = vi.fn((_probe, opts) =>
-      opts.onSuccess({ models: ["claude-sonnet-4-6", "claude-opus-4-8"], message: "" }),
-    );
+  test("introspects on first open only (not on the second open)", () => {
+    const mutate = introspectReturning(["claude-sonnet-4-6"]);
     useListMock.mockReturnValue({ mutate });
     render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
     const trigger = screen.getByRole("combobox", { name: /agent model/i });
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     fireEvent.keyDown(trigger, { key: "ArrowDown" }); // second open must not re-fetch
     expect(mutate).toHaveBeenCalledTimes(1);
-    const options = screen.getAllByRole("option").map((o) => o.textContent ?? "");
-    expect(options).toContain("claude-sonnet-4-6");
-    // opus appears once (deduped against the connection's own model)
-    expect(options.filter((o) => o === "claude-opus-4-8")).toHaveLength(1);
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toContain("claude-sonnet-4-6");
   });
 
-  test("with no active connection, lists the agent's built-in models", () => {
-    // Only an anthropic connection is active; a codex (openai) agent has no
-    // override → it runs on its own login, so the picker offers codex's curated
-    // built-in models (ADR-032 amendment D4) and selecting one commits it.
+  test("with no active connection, lists the agent's built-in models and commits one", () => {
     const onCommit = vi.fn();
     render(<ModelPicker agentKey="codex" value={null} onCommit={onCommit} />);
     const options = openAndReadOptions();
@@ -103,25 +111,20 @@ describe("ModelPicker", () => {
     expect(onCommit).toHaveBeenCalledWith("gpt-5-codex");
   });
 
-  test("a custom (non-listed) current value renders in the free-text input", () => {
-    render(<ModelPicker agentKey="claude_code" value="my-finetune" onCommit={vi.fn()} />);
-    // Not one of the connection's models → shown in the editable input directly.
-    expect(screen.getByLabelText(/agent model/i)).toHaveValue("my-finetune");
+  test("the current value is always selectable even when not in the source list", () => {
+    // codex agent, no openai override; the bound value is a one-off id.
+    render(<ModelPicker agentKey="codex" value="my-finetune" onCommit={vi.fn()} />);
+    const trigger = screen.getByRole("combobox", { name: /agent model/i });
+    expect(trigger).toHaveTextContent("my-finetune");
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toContain("my-finetune");
   });
 
-  test("clearing the free-text value commits null (inherit the default)", () => {
+  test("choosing Default commits null (inherit the projected default)", () => {
     const onCommit = vi.fn();
-    render(<ModelPicker agentKey="claude_code" value="my-finetune" onCommit={onCommit} />);
-    const input = screen.getByLabelText(/agent model/i);
-    fireEvent.change(input, { target: { value: "" } });
-    fireEvent.blur(input);
+    render(<ModelPicker agentKey="codex" value="my-finetune" onCommit={onCommit} />);
+    openAndReadOptions();
+    fireEvent.click(screen.getByRole("option", { name: /default/i }));
     expect(onCommit).toHaveBeenCalledWith(null);
-  });
-
-  test("does not commit when the free-text value is unchanged", () => {
-    const onCommit = vi.fn();
-    render(<ModelPicker agentKey="claude_code" value="my-finetune" onCommit={onCommit} />);
-    fireEvent.blur(screen.getByLabelText(/agent model/i));
-    expect(onCommit).not.toHaveBeenCalled();
   });
 });
