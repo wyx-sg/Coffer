@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { CofferGatewayCard } from "@/components/agents/AgentManagedLink";
+import { AgentHookButton } from "@/components/agents/AgentHookControls";
 import { AgentNativeMemoryBulkActions } from "@/components/agents/AgentMemoryBulkActions";
 import { DataTable, type Column } from "@/components/DataTable";
 import { RowActions } from "@/components/RowActions";
@@ -27,11 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut, NativeMemoryStore } from "@/lib/api/agents";
-import {
-  useAgentNativeMemory,
-  useImportNativeMemory,
-  usePatchAgent,
-} from "@/lib/hooks/useAgents";
+import { useAgentNativeMemory, useImportNativeMemory, usePatchAgent } from "@/lib/hooks/useAgents";
 
 /** Toggle that disables the agent's OWN native memory (writes/restores the
  * agent's config) so it uses Coffer as the shared store. Reads
@@ -175,8 +172,12 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
       />
 
       {/* B. The agent's own native memory: a toggle to disable it (so the agent
-          uses Coffer as the shared store) + the read-only per-project stores. */}
+          uses Coffer as the shared store), the session-start rules-injection
+          hook (same "what Coffer feeds the agent at session start" concern), and
+          the read-only per-project stores. */}
       <DisableNativeMemoryToggle agent={agent} />
+
+      <AgentHookButton name={agent.name} />
 
       <Card className="space-y-3 p-4">
         <div className="space-y-1">

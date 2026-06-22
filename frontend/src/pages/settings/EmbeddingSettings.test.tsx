@@ -2,11 +2,7 @@
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import {
-  createMemoryRouter,
-  Navigate,
-  RouterProvider,
-} from "react-router-dom";
+import { createMemoryRouter, Navigate, RouterProvider } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EmbeddingSettings } from "./EmbeddingSettings";
 
@@ -76,14 +72,14 @@ describe("EmbeddingSettings", () => {
     expect(screen.queryByRole("button", { name: /add model/i })).not.toBeInTheDocument();
   });
 
-  test("saving PUTs the global embedding config", async () => {
+  test("auto-saves (no inline Save button) — toggling enable PUTs the config", () => {
     seed({ enabled: true, model: "bge-m3", dimensions: 1024 });
     render(<EmbeddingSettings />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
-    await waitFor(() =>
-      expect(mutate).toHaveBeenCalledWith(
-        expect.objectContaining({ enabled: true, model: "bge-m3", dimensions: 1024 }),
-      ),
+    // No inline Save button: the chunking fields persist on change/blur.
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch"));
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false, model: "bge-m3", dimensions: 1024 }),
     );
   });
 

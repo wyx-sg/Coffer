@@ -50,8 +50,7 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
     // Seed the agent's bound model(s) so a correctly-bound agent shows them
     // before the dropdown is opened (introspect populates the rest on open).
     // The connection no longer carries a model (spec 011 E3).
-    for (const m of [agent.model, agent.fast_model])
-      if (m && !out.includes(m)) out.push(m);
+    for (const m of [agent.model, agent.fast_model]) if (m && !out.includes(m)) out.push(m);
     for (const m of fetched) if (!out.includes(m)) out.push(m);
     return out;
   }, [agent.model, agent.fast_model, fetched]);
@@ -81,8 +80,11 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
     patchAgent.mutate({ name: agent.name, body: { fast_model: fast } }, { onSuccess: reproject });
 
   // The model lives on the per-agent binding (spec 011 E3) — not the connection.
-  const primaryModel = agent.model ?? "";
-  const fastModel = agent.fast_model ?? "";
+  // When the agent is on the built-in login (no active Coffer connection) Coffer
+  // does not override its model, so the model slots show empty + disabled.
+  const usingBuiltin = active === null;
+  const primaryModel = usingBuiltin ? "" : (agent.model ?? "");
+  const fastModel = usingBuiltin ? "" : (agent.fast_model ?? "");
   const busy = activate.isPending || patchAgent.isPending;
 
   return (
@@ -98,40 +100,64 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
         <div className="space-y-3 border-t border-border pt-4">
           <h3 className="text-sm font-medium">{t("agents.connection.title")}</h3>
 
-          {compatible.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("agents.connection.empty")}</p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="agent-connection">{t("agents.connection.label")}</Label>
-                <Select
-                  value={active?.name ?? BUILTIN}
-                  onValueChange={onPickConnection}
-                  disabled={activate.isPending || useBuiltin.isPending}
-                >
-                  <SelectTrigger id="agent-connection" className="text-sm">
-                    <SelectValue placeholder={t("agents.connection.none")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={BUILTIN}>{t("agents.connection.builtin")}</SelectItem>
-                    {compatible.map((p) => (
-                      <SelectItem key={p.name} value={p.name}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          {/* The connection dropdown always renders — even with no configured
+              connections it defaults to the built-in login, never an empty
+              "no connection" state. */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-connection">{t("agents.connection.label")}</Label>
+              <Select
+                value={active?.name ?? BUILTIN}
+                onValueChange={onPickConnection}
+                disabled={activate.isPending || useBuiltin.isPending}
+              >
+                <SelectTrigger id="agent-connection" className="text-sm">
+                  <SelectValue placeholder={t("agents.connection.none")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={BUILTIN}>{t("agents.connection.builtin")}</SelectItem>
+                  {compatible.map((p) => (
+                    <SelectItem key={p.name} value={p.name}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-model">{t("agents.connection.model")}</Label>
+              <Select
+                value={primaryModel}
+                onValueChange={bindPrimary}
+                onOpenChange={(open) => open && introspect()}
+                disabled={usingBuiltin || busy}
+              >
+                <SelectTrigger id="agent-model" className="text-sm">
+                  <SelectValue placeholder={t("agents.connection.none")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Claude Code's small/fast slot (ANTHROPIC_SMALL_FAST_MODEL); Codex
+                has no second slot. */}
+            {wire === "anthropic" && (
               <div className="space-y-1.5">
-                <Label htmlFor="agent-model">{t("agents.connection.model")}</Label>
+                <Label htmlFor="agent-fast-model">{t("agents.connection.fastModel")}</Label>
                 <Select
-                  value={primaryModel}
-                  onValueChange={bindPrimary}
+                  value={fastModel}
+                  onValueChange={bindFast}
                   onOpenChange={(open) => open && introspect()}
-                  disabled={!active || busy}
+                  disabled={usingBuiltin || busy}
                 >
-                  <SelectTrigger id="agent-model" className="text-sm">
+                  <SelectTrigger id="agent-fast-model" className="text-sm">
                     <SelectValue placeholder={t("agents.connection.none")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -143,33 +169,8 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Claude Code's small/fast slot (ANTHROPIC_SMALL_FAST_MODEL); Codex
-                  has no second slot. */}
-              {wire === "anthropic" && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="agent-fast-model">{t("agents.connection.fastModel")}</Label>
-                  <Select
-                    value={fastModel}
-                    onValueChange={bindFast}
-                    onOpenChange={(open) => open && introspect()}
-                    disabled={!active || busy}
-                  >
-                    <SelectTrigger id="agent-fast-model" className="text-sm">
-                      <SelectValue placeholder={t("agents.connection.none")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {models.map((m) => (
-                        <SelectItem key={m} value={m}>
-                          {m}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
           <p className="text-xs text-muted-foreground">{t("agents.connection.manage")}</p>
         </div>
       </CardContent>

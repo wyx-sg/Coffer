@@ -18,10 +18,7 @@ import {
   EmbeddingModelDialog,
   type EmbeddingModelValues,
 } from "@/components/settings/EmbeddingModelDialog";
-import {
-  EmbeddingChunkingFields,
-  EmbeddingModelRow,
-} from "@/components/settings/EmbeddingPanels";
+import { EmbeddingChunkingFields, EmbeddingModelRow } from "@/components/settings/EmbeddingPanels";
 import { translateApiError } from "@/lib/api/errors";
 import { useEmbeddingConfig, useUpdateEmbeddingConfig } from "@/lib/hooks/useEmbeddingConfig";
 
@@ -73,17 +70,21 @@ export function EmbeddingSettings() {
 
   const hasModel = model.trim() !== "";
 
-  // PUT the full config, overriding the model fields with `next` when given.
-  const persist = (next?: Partial<EmbeddingModelValues>) => {
+  // PUT the full config from current state, with any fields in `override` taking
+  // precedence. Auto-save callers pass just-changed fields through `override`
+  // because state updates are async (we can't read the new value back from state
+  // synchronously). The model dialog passes its own model fields the same way.
+  const persist = (override: Partial<Parameters<typeof update.mutate>[0]> = {}) => {
     update.mutate({
       enabled,
-      provider: (next?.provider ?? provider) || null,
-      model: (next?.model ?? model).trim() || null,
-      dimensions: next?.dimensions ?? dimensions,
-      base_url: next === undefined ? baseUrl : (next.base_url ?? null),
-      credential_ref: next === undefined ? credentialRef : (next.credential_ref ?? null),
+      provider: provider || null,
+      model: model.trim() || null,
+      dimensions,
+      base_url: baseUrl,
+      credential_ref: credentialRef,
       default_chunk_size: chunkSize,
       default_chunk_overlap: chunkOverlap,
+      ...override,
     });
   };
 
@@ -94,7 +95,13 @@ export function EmbeddingSettings() {
     setDimensions(v.dimensions);
     setBaseUrl(v.base_url);
     setCredentialRef(v.credential_ref);
-    persist(v);
+    persist({
+      provider: v.provider || null,
+      model: v.model.trim() || null,
+      dimensions: v.dimensions,
+      base_url: v.base_url ?? null,
+      credential_ref: v.credential_ref ?? null,
+    });
     setDialogOpen(false);
   };
 
@@ -103,9 +110,7 @@ export function EmbeddingSettings() {
   // vec table), so confirm first; first-time configuration commits directly.
   const onDialogSubmit = (v: EmbeddingModelValues) => {
     const reEmbeds =
-      v.model.trim() !== model.trim() ||
-      v.dimensions !== dimensions ||
-      v.provider !== provider;
+      v.model.trim() !== model.trim() || v.dimensions !== dimensions || v.provider !== provider;
     if (hasModel && reEmbeds) {
       setConfirm(v);
       setDialogOpen(false);
@@ -138,11 +143,22 @@ export function EmbeddingSettings() {
 
         <EmbeddingChunkingFields
           enabled={enabled}
-          onEnabledChange={setEnabled}
+          onEnabledChange={(v) => {
+            setEnabled(v);
+            persist({ enabled: v });
+          }}
           chunkSize={chunkSize}
           onChunkSizeChange={setChunkSize}
+          onChunkSizeCommit={() => {
+            if (chunkSize !== data?.default_chunk_size) persist({ default_chunk_size: chunkSize });
+          }}
           chunkOverlap={chunkOverlap}
           onChunkOverlapChange={setChunkOverlap}
+          onChunkOverlapCommit={() => {
+            if (chunkOverlap !== data?.default_chunk_overlap)
+              persist({ default_chunk_overlap: chunkOverlap });
+          }}
+          disabled={update.isPending}
         />
 
         {update.error ? (
@@ -150,12 +166,6 @@ export function EmbeddingSettings() {
             {translateApiError(t, update.error)}
           </p>
         ) : null}
-
-        <div className="flex justify-end">
-          <Button onClick={() => persist()} disabled={update.isPending}>
-            {update.isPending ? t("common.saving") : t("common.save")}
-          </Button>
-        </div>
       </CardContent>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && setDialogOpen(false)}>
