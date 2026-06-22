@@ -141,3 +141,18 @@ class EmbeddingConfigModel(Base):
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
     __table_args__ = (CheckConstraint("id = 1", name="ck_embedding_config_singleton"),)
+
+
+class InternalEngineConfigModel(Base):
+    """The single, global internal-engine model selection (one row, ``id`` = 1).
+
+    The internal engine takes its endpoint + key from the ``internal_default``
+    connection; only the model is stored here (spec 011 amendment 2026-06-22b)."""
+
+    __tablename__ = "internal_engine_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+
+    __table_args__ = (CheckConstraint("id = 1", name="ck_internal_engine_config_singleton"),)

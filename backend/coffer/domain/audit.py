@@ -24,6 +24,7 @@ class AuditEventType(StrEnum):
     TOKEN_ROTATED = "token_rotated"
     RETENTION_UPDATED = "retention_updated"
     EMBEDDING_CONFIG_UPDATED = "embedding_config_updated"
+    INTERNAL_ENGINE_MODEL_SET = "internal_engine_model_set"
     BACKUP_CREATED = "backup_created"
     # legacy rows — pre-encrypted-store (≤0.1.x); kept so old audit rows stay renderable
     KEYCHAIN_SET = "keychain_set"

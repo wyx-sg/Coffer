@@ -13,10 +13,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from coffer.domain.audit import AuditEntry
 from coffer.domain.embedding_config import SINGLETON_ID, GlobalEmbeddingConfig
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
+from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.persistence.models import (
     AuditLogModel,
     EmbeddingConfigModel,
+    InternalEngineConfigModel,
     ResourceModel,
 )
 from coffer.infrastructure.persistence.retention import UnknownPrunableTable  # re-export
@@ -260,3 +262,33 @@ class SqlAlchemyEmbeddingConfigRepo:
             await session.commit()
             await session.refresh(row)
             return _embedding_to_domain(row)
+
+
+class SqlAlchemyInternalEngineConfigRepo:
+    """Concrete repo for the singleton ``internal_engine_config`` row."""
+
+    def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+        self._sm = sm
+
+    async def get(self) -> GlobalInternalEngineConfig | None:
+        async with self._sm() as session:
+            stmt = select(InternalEngineConfigModel).where(InternalEngineConfigModel.id == 1)
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                return None
+            updated = row.updated_at.replace(tzinfo=UTC) if row.updated_at else datetime.now(tz=UTC)
+            return GlobalInternalEngineConfig(model=row.model, updated_at=updated)
+
+    async def set(self, *, model: str | None) -> GlobalInternalEngineConfig:
+        async with self._sm() as session:
+            stmt = select(InternalEngineConfigModel).where(InternalEngineConfigModel.id == 1)
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            now = datetime.now(tz=UTC)
+            if row is None:
+                row = InternalEngineConfigModel(id=1, updated_at=now)
+                session.add(row)
+            row.model = model
+            row.updated_at = now
+            await session.commit()
+            await session.refresh(row)
+            return GlobalInternalEngineConfig(model=row.model, updated_at=now)
