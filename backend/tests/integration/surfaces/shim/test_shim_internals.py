@@ -584,7 +584,7 @@ async def test_setup_shim_log_creates_handler(
     tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """_setup_shim_log adds a FileHandler under ~/.coffer/logs (lines 41-50)."""
-    from coffer.surfaces.shim import main as shim_main
+    from coffer.surfaces.shim import bootstrap as shim_main
 
     monkeypatch.setattr(shim_main, "_SHIM_LOG_DIR", tmp_path / "logs")
     # Reset handlers between runs so the assertion is meaningful.
@@ -599,7 +599,7 @@ async def test_setup_shim_log_creates_handler(
 @pytest.mark.asyncio
 async def test_setup_shim_log_swallows_oserror(monkeypatch: pytest.MonkeyPatch) -> None:
     """If mkdir raises OSError, _setup_shim_log silently continues (line 48-50)."""
-    from coffer.surfaces.shim import main as shim_main
+    from coffer.surfaces.shim import bootstrap as shim_main
 
     class _BadPath:
         def mkdir(self, *args: Any, **kwargs: Any) -> None:
@@ -624,7 +624,7 @@ async def test_spawn_daemon_invokes_popen(monkeypatch: pytest.MonkeyPatch) -> No
     _spawn_daemon must forward that command verbatim to Popen.
     """
     from coffer.infrastructure.daemon.spawn import daemon_spawn_command
-    from coffer.surfaces.shim import main as shim_main
+    from coffer.surfaces.shim import bootstrap as shim_main
 
     invoked: list[dict[str, Any]] = []
 
@@ -657,7 +657,7 @@ async def test_spawn_daemon_frozen_uses_sibling_binary(
 ) -> None:
     """When sys.frozen=True (PyInstaller), _spawn_daemon must pass the sibling
     coffer-daemon binary path (not sys.executable + -m ...) to Popen."""
-    from coffer.surfaces.shim import main as shim_main
+    from coffer.surfaces.shim import bootstrap as shim_main
 
     fake_exe = tmp_path / "coffer-mcp-shim"
     monkeypatch.setattr(sys, "frozen", True, raising=False)
@@ -691,7 +691,7 @@ async def test_spawn_daemon_logs_and_writes_stderr_on_oserror(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Popen raising OSError is caught and reported to stderr (lines 88-90)."""
-    from coffer.surfaces.shim import main as shim_main
+    from coffer.surfaces.shim import bootstrap as shim_main
 
     def _bad_popen(cmd: list[str], **kwargs: Any) -> object:
         raise OSError("simulated spawn failure")
@@ -709,7 +709,7 @@ async def test_wait_for_daemon_returns_none_when_status_fails(
     """If discover() returns a DaemonInfo but /daemon/status raises, the loop
     keeps polling until the deadline lapses (covers the exception branch on
     lines 66-67).  Use a small timeout so the test finishes promptly."""
-    from coffer.surfaces.shim import main as shim_main
+    from coffer.surfaces.shim import bootstrap as shim_main
 
     info = DaemonInfo(
         version=1,
@@ -744,7 +744,7 @@ async def test_wait_for_daemon_returns_info_on_200(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Happy-path: discover returns info AND /daemon/status returns 200."""
-    from coffer.surfaces.shim import main as shim_main
+    from coffer.surfaces.shim import bootstrap as shim_main
 
     info = DaemonInfo(
         version=1,
@@ -777,7 +777,7 @@ async def test_ensure_daemon_exits_when_spawn_does_not_come_up(
 ) -> None:
     """If _spawn_daemon doesn't bring the daemon up, the shim exits with
     code 3 (lines 100-104)."""
-    from coffer.surfaces.shim import main as shim_main
+    from coffer.surfaces.shim import bootstrap as shim_main
 
     async def _never(*args: Any, **kwargs: Any) -> None:
         return None
@@ -932,3 +932,115 @@ async def test_drain_sse_swallows_stream_exception(
 
     # No payloads written
     assert capsys.readouterr().out == ""
+
+
+# --------------------------------------------------------------------------- #
+# daemon-restart recovery (the shim re-resolves daemon.json on connect failure)#
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_handle_envelope_recovers_when_daemon_moves_to_new_port(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: a daemon restart on a new port left the shim stuck forever
+    on the dead port, returning ``All connection attempts failed`` for every
+    call. The shim must now re-read daemon.json on a POST connect failure, and
+    when the endpoint moved, rebind to the live daemon, replay the cached
+    ``initialize`` handshake to establish a fresh session, then retry the call.
+    """
+    old_port, new_port = 18765, 18999
+    bridge = _make_bridge(port=old_port)
+    # Simulate a session already established against the old daemon, and the
+    # initialize envelope cached at handshake time (so it can be replayed).
+    bridge._session_id = "old-sess"
+    bridge._init_envelope = {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {"protocolVersion": "x"},
+    }
+
+    # daemon.json now points at the NEW live daemon (different port + token).
+    async def _fake_wait_for_daemon(timeout: float) -> DaemonInfo:
+        return DaemonInfo(
+            version=1,
+            pid=999,
+            port=new_port,
+            token="t-new",
+            started_at=_dt.datetime.now(tz=_dt.UTC),
+            binary_path="/usr/bin/python3",
+        )
+
+    monkeypatch.setattr("coffer.surfaces.shim.main._wait_for_daemon", _fake_wait_for_daemon)
+
+    seen: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # The dead old port refuses every connection.
+        if request.url.port == old_port:
+            raise httpx.ConnectError("All connection attempts failed")
+        # The new daemon answers. Record the method + token it received.
+        body = json.loads(request.content.decode("utf-8"))
+        seen.append({"method": body.get("method"), "token": request.headers.get("X-Coffer-Token")})
+        if body.get("method") == "initialize":
+            return httpx.Response(
+                200,
+                text=json.dumps({"jsonrpc": "2.0", "id": body["id"], "result": {"ok": True}}),
+                headers={"Mcp-Session-Id": "new-sess"},
+            )
+        return httpx.Response(
+            200,
+            text=json.dumps({"jsonrpc": "2.0", "id": body["id"], "result": {"recovered": True}}),
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(
+        transport=transport, base_url=f"http://127.0.0.1:{old_port}"
+    ) as client:
+        call = {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {}}
+        await bridge._handle_envelope(client, call)
+
+    # The bridge rebound to the new daemon's port + token.
+    assert str(client.base_url).rstrip("/").endswith(f":{new_port}")
+    assert bridge._headers["X-Coffer-Token"] == "t-new"
+    # A fresh session was established by replaying initialize.
+    assert bridge._session_id == "new-sess"
+    # The new daemon saw the replayed initialize first, then the retried call,
+    # both carrying the new token.
+    assert [s["method"] for s in seen] == ["initialize", "tools/call"]
+    assert all(s["token"] == "t-new" for s in seen)
+    # The originally-failing tools/call was retried and its result forwarded.
+    out = capsys.readouterr().out.strip().splitlines()
+    forwarded = json.loads(out[-1])
+    assert forwarded["id"] == 7
+    assert forwarded["result"] == {"recovered": True}
+
+
+@pytest.mark.asyncio
+async def test_handle_envelope_reports_error_when_daemon_truly_down(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """If re-resolution finds no live daemon (genuinely down, not just moved),
+    the shim surfaces a JSON-RPC error rather than hanging — a fresh shim spawn
+    is the recovery path, not an in-place retry loop."""
+    bridge = _make_bridge(port=18765)
+    bridge._session_id = "old-sess"
+    bridge._init_envelope = {"jsonrpc": "2.0", "id": 0, "method": "initialize"}
+
+    async def _no_daemon(timeout: float) -> DaemonInfo | None:
+        return None
+
+    monkeypatch.setattr("coffer.surfaces.shim.main._wait_for_daemon", _no_daemon)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("All connection attempts failed")
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:18765") as client:
+        call = {"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {}}
+        await bridge._handle_envelope(client, call)
+
+    err = json.loads(capsys.readouterr().out.strip())
+    assert err["id"] == 9
+    assert err["error"]["code"] == -32603

@@ -20,21 +20,23 @@ import json as _json
 import logging
 import os
 import signal
-import subprocess
 import sys
-import time
-from pathlib import Path
 from typing import Any
 
 import httpx
 
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-from coffer.infrastructure.daemon.spawn import daemon_spawn_command
-from coffer.surfaces.cli._client import discover
+from coffer.surfaces.shim.bootstrap import (
+    _ensure_daemon,
+    _inject_cwd,
+    _setup_shim_log,
+    _wait_for_daemon,
+)
 
 _logger = logging.getLogger("coffer.shim")
-_SHIM_LOG_DIR = Path.home() / ".coffer" / "logs"
-_DAEMON_BOOT_TIMEOUT = 10  # seconds
+# How long to wait for a live daemon when re-resolving after a connect failure
+# (a restart rewrites daemon.json a moment before its port starts serving).
+_RECOVER_TIMEOUT = 5  # seconds
 
 # asyncio.StreamReader defaults to a 64 KiB (2**16) line limit; readline()
 # then raises ValueError on any longer line, killing the stdin pump and
@@ -45,99 +47,6 @@ _DAEMON_BOOT_TIMEOUT = 10  # seconds
 _STDIN_READ_LIMIT = 64 * 1024 * 1024  # 64 MiB
 
 
-#: MCP-reserved extension key the daemon reads the launch cwd from.
-_CWD_META_KEY = "coffer/cwd"
-
-
-def _inject_cwd(envelope: dict[str, Any]) -> None:
-    """Stamp the shim's launch cwd into an ``initialize`` envelope's
-    ``params._meta`` so the daemon can resolve the per-project memory scope."""
-    params = envelope.get("params")
-    if not isinstance(params, dict):
-        params = {}
-        envelope["params"] = params
-    meta = params.get("_meta")
-    if not isinstance(meta, dict):
-        meta = {}
-        params["_meta"] = meta
-    with contextlib.suppress(OSError):
-        meta[_CWD_META_KEY] = os.getcwd()
-
-
-def _setup_shim_log() -> None:
-    """Send our diagnostic log to a file (NOT stdout — that's the MCP wire)."""
-    try:
-        _SHIM_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        log_path = _SHIM_LOG_DIR / f"shim-{os.getpid()}-{int(time.time())}.log"
-        handler = logging.FileHandler(log_path)
-        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-        _logger.addHandler(handler)
-        _logger.setLevel(logging.INFO)
-    except OSError:
-        # Failed to set up log file — continue without it
-        pass
-
-
-async def _wait_for_daemon(timeout: float) -> DaemonInfo | None:
-    """Poll ~/.coffer/daemon.json until it appears + the daemon answers /status."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        info = discover()
-        if info is not None:
-            try:
-                async with httpx.AsyncClient(
-                    base_url=f"http://127.0.0.1:{info.port}/api/v1", timeout=2.0
-                ) as c:
-                    r = await c.get("/daemon/status")
-                    if r.status_code == 200:
-                        return info
-            except Exception:
-                pass
-        await asyncio.sleep(0.2)
-    return None
-
-
-def _spawn_daemon() -> None:
-    """Best-effort detached spawn of the coffer-daemon binary.
-
-    Uses ``daemon_spawn_command()`` (ADR-006) so the correct binary is chosen
-    whether the shim is running from source (dev/pip) or as a frozen
-    PyInstaller bundle co-located with ``coffer-daemon``.
-    """
-    cmd = daemon_spawn_command()
-    try:
-        kwargs: dict[str, object] = {
-            "stdout": subprocess.DEVNULL,
-            "stderr": subprocess.DEVNULL,
-            "stdin": subprocess.DEVNULL,
-        }
-        if sys.platform == "win32":
-            kwargs["creationflags"] = (
-                subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
-            )
-        else:
-            kwargs["start_new_session"] = True
-        subprocess.Popen(cmd, **kwargs)  # type: ignore[call-overload]
-    except OSError as e:
-        _logger.exception("shim.spawn_daemon_failed")
-        sys.stderr.write(f"coffer-mcp-shim: failed to spawn daemon: {e}\n")
-
-
-async def _ensure_daemon() -> DaemonInfo:
-    """Return a DaemonInfo for a reachable daemon, spawning one if needed."""
-    info = await _wait_for_daemon(timeout=1.0)
-    if info is not None:
-        return info
-    _spawn_daemon()
-    info = await _wait_for_daemon(timeout=_DAEMON_BOOT_TIMEOUT)
-    if info is None:
-        sys.stderr.write(
-            f"coffer-mcp-shim: daemon did not come up within {_DAEMON_BOOT_TIMEOUT}s\n"
-        )
-        sys.exit(3)
-    return info
-
-
 class _Bridge:
     """One run of the bridge — stdin → POST, SSE → stdout."""
 
@@ -145,6 +54,10 @@ class _Bridge:
         self._base = f"http://127.0.0.1:{info.port}"
         self._headers = {"X-Coffer-Token": info.token}
         self._session_id: str | None = None
+        # The initialize envelope is cached at handshake time so it can be
+        # replayed verbatim against a fresh daemon after a restart (the new
+        # daemon has no knowledge of the old MCP session).
+        self._init_envelope: dict[str, Any] | None = None
         self._stop = asyncio.Event()
 
     def stop(self) -> None:
@@ -207,6 +120,9 @@ class _Bridge:
             # key) so it rides the handshake; the gateway threads it into tools.
             if envelope.get("method") == "initialize":
                 _inject_cwd(envelope)
+                # Cache it so a daemon restart can be recovered transparently by
+                # replaying the handshake against the new daemon (see _recover).
+                self._init_envelope = dict(envelope)
             _logger.info(
                 "shim.in method=%s id=%s",
                 envelope.get("method"),
@@ -230,23 +146,46 @@ class _Bridge:
             await asyncio.gather(*inflight, return_exceptions=True)
         self._stop.set()
 
-    async def _handle_envelope(self, client: httpx.AsyncClient, envelope: dict[str, Any]) -> None:
-        """POST one envelope to /mcp and forward the validated reply to stdout."""
+    def _request_headers(self) -> dict[str, str]:
         headers = dict(self._headers)
         if self._session_id is not None:
             headers["Mcp-Session-Id"] = self._session_id
+        return headers
 
+    async def _handle_envelope(self, client: httpx.AsyncClient, envelope: dict[str, Any]) -> None:
+        """POST one envelope to /mcp and forward the validated reply to stdout.
+
+        If the POST fails to connect, the daemon may have restarted on a new
+        port (its discovery file is rewritten on every boot). We re-resolve
+        ``daemon.json`` once via :meth:`_recover`; if the endpoint moved we
+        rebind to the live daemon, replay the cached ``initialize`` handshake,
+        and retry this call once before surfacing an error. Without this a
+        long-lived shim stayed pinned to the dead port forever, returning
+        ``All connection attempts failed`` for every request.
+        """
         try:
-            response = await client.post("/mcp", json=envelope, headers=headers)
+            response = await client.post("/mcp", json=envelope, headers=self._request_headers())
             _logger.info(
                 "shim.out status=%s len=%s",
                 response.status_code,
                 len(response.text or ""),
             )
         except Exception as e:
-            _logger.exception("shim.post_failed")
-            self._emit_error(envelope.get("id"), code=-32603, message=f"shim: {e}")
-            return
+            _logger.warning("shim.post_failed", extra={"error": type(e).__name__})
+            if not await self._recover(client):
+                self._emit_error(envelope.get("id"), code=-32603, message=f"shim: {e}")
+                return
+            try:
+                response = await client.post("/mcp", json=envelope, headers=self._request_headers())
+                _logger.info(
+                    "shim.out_after_recover status=%s len=%s",
+                    response.status_code,
+                    len(response.text or ""),
+                )
+            except Exception as e2:
+                _logger.exception("shim.post_failed_after_recover")
+                self._emit_error(envelope.get("id"), code=-32603, message=f"shim: {e2}")
+                return
 
         if "Mcp-Session-Id" in response.headers:
             self._session_id = response.headers["Mcp-Session-Id"]
@@ -257,6 +196,47 @@ class _Bridge:
         # failure, synthesize a JSON-RPC error envelope tied to the request id
         # so the client sees a structured reply rather than plain text.
         self._forward_response(envelope, response)
+
+    async def _recover(self, client: httpx.AsyncClient) -> bool:
+        """Re-resolve ``daemon.json`` after a transport failure.
+
+        Returns True only when a *live* daemon is found at an endpoint that
+        differs from the one we are pinned to (a restart on a new port and/or a
+        rotated token). In that case we rebind the shared client to it, drop the
+        now-defunct session id, replay the cached ``initialize`` handshake to
+        establish a fresh session, and let the caller retry.
+
+        Returns False for a genuine transient blip against the *same* live
+        endpoint (let normal retry/backoff handle it) and when no daemon is
+        reachable at all (the caller surfaces an error; a fresh shim spawn is
+        the recovery path for a fully-down daemon, not an in-place spin).
+        """
+        info = await _wait_for_daemon(timeout=_RECOVER_TIMEOUT)
+        if info is None:
+            return False
+        new_base = f"http://127.0.0.1:{info.port}"
+        if new_base == self._base and info.token == self._headers.get("X-Coffer-Token"):
+            return False
+        _logger.warning("shim.daemon_moved old=%s new_port=%s", self._base, info.port)
+        self._base = new_base
+        self._headers["X-Coffer-Token"] = info.token
+        client.base_url = new_base
+        client.headers["X-Coffer-Token"] = info.token
+        # The new daemon never saw the old session; force a fresh handshake.
+        self._session_id = None
+        await self._replay_initialize(client)
+        return True
+
+    async def _replay_initialize(self, client: httpx.AsyncClient) -> None:
+        """Re-run the cached ``initialize`` against the (rebound) daemon so a
+        new MCP session is established before the caller retries. The reply is
+        NOT forwarded to stdout — the MCP client already received its original
+        initialize response and must not see a duplicate."""
+        if self._init_envelope is None:
+            return
+        response = await client.post("/mcp", json=self._init_envelope, headers=dict(self._headers))
+        if "Mcp-Session-Id" in response.headers:
+            self._session_id = response.headers["Mcp-Session-Id"]
 
     def _forward_response(
         self,

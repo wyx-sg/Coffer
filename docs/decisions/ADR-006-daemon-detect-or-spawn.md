@@ -154,6 +154,22 @@ file with everything in it is simpler than splitting state.
   app's detect-or-spawn liveness check switched from a bare TCP connect to an
   HTTP `GET /api/v1/daemon/status` 200 probe, so a port-squatter on a crashed
   daemon's recorded port no longer false-positives as a live daemon.
+- **2026-06-22** — Shim restart-recovery. A long-lived `coffer-mcp-shim`
+  resolved the daemon's port + token **once at startup** and pinned to them for
+  its whole life. When the daemon was restarted on a different port (8000 was
+  busy → it picked 8001, or vice versa), every existing shim kept POSTing to the
+  dead port, returning `httpx.ConnectError: All connection attempts failed` for
+  every tool call and spinning its SSE reconnect loop forever — the client (e.g.
+  Codex) surfaced this as a per-tool "connection error" that looked like an
+  upstream/URL misconfiguration but was purely the stale shim↔daemon endpoint.
+  Fix: on a POST connect failure the shim now re-reads `daemon.json` once
+  (`_Bridge._recover`); if a *live* daemon is found at a **different** endpoint
+  it rebinds the shared httpx client's `base_url` + `X-Coffer-Token`, drops the
+  defunct `Mcp-Session-Id`, replays the cached `initialize` handshake to
+  establish a fresh session on the new daemon, and retries the call once. A
+  same-endpoint blip stays a transient (normal backoff); a fully-down daemon
+  still surfaces a JSON-RPC error (a fresh shim spawn is that path). The shared
+  client rebind also steers the SSE reconnect loop onto the new daemon.
 - **2026-06-13** — Boot-window close. The spawn `flock` is now held past the
   `daemon.json` write, until the daemon is actually serving HTTP:
   `acquire_or_existing` returns a `release` callable that the entrypoint
