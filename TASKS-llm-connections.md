@@ -80,9 +80,9 @@
 
 ## 块2 — 连接瘦身：去模型/类型 + 协议自动探测 + agent 页供模型（重构，2026-06-22 改）
 
-- [ ] 完成（建议分支 `feat/011-slim-connection`）
+- [x] 完成（2a #208 自动探测类型 + 2b #210 per-agent 模型绑定）。**注意：2c（从连接实体彻底删 model/fast_model/wire_api + wire_format→protocol + 迁移）已重排为下方新「块5 — 连接实体最终瘦身」，排在块4(chat) 之后**——因发现 chat ModelPicker/AgentModelBar + 内部引擎(langchain_models 等)仍读 `connection.model`，必须先在块3(内部引擎模型来源)+块4(chat 模型来源)迁移走，才能安全删字段（否则破坏 chat + 内部引擎）。
 
-> **2026-06-22 最终定案（cc-switch 调研 + 与用户多轮敲定）**：连接重新定位为「**一个网关账号**」= `{name, base_url, credential}` + **探测出的协议**。模型、手动类型都从连接实体**彻底拿掉**。模型只在「用到连接的地方」现选。**reopen Decision A**（原设计 model 是连接必填）。合并原块2+块3，因为「连接去模型」与「agent 供模型」**强耦合**——拿掉模型后投射没模型可写，必须由 agent 绑定同步供给，否则投射坏。
+> **2026-06-22 最终定案（cc-switch 调研 + 与用户多轮敲定）**：连接重新定位为「**一个网关账号**」= `{name, base_url, credential}` + **探测出的协议**。模型、手动类型都从连接实体**彻底拿掉**。模型只在「用到连接的地方」现选。**reopen Decision A**（原设计 model 是连接必填）。2a+2b 已交付用户目标（建连接不选类型、模型在 agent 页选）；entity 字段的物理移除是 2c（见块5），需 chat/内部引擎先迁移。
 >
 > 已废弃的更早设想（都不做）：①多协议集合连接；②共享凭据复用 UI（用户判定不值，删了）。详见 ADR-032 D8/D9 与 memory [[cc-switch-research-design-decisions]]。
 
@@ -103,7 +103,7 @@
 
 - [ ] 完成（建议分支 `feat/011-internal-default-selector`）
 
-> 注：连接已无 model（块2），故内部引擎默认除选「哪个连接」外还要**现选模型**。
+> 注（2c 排序依赖）：连接实体目前**仍有** model（2c 才删）。本块要把**内部引擎的模型来源**从 `connection.model` 迁出——加一个「内部引擎模型」选择（存哪由本块定，如全局设置或 internal-default 旁的 model 字段），让 langchain_models/agentic_rag/reorg 等不再读 `cfg.model`。这是 2c 能删 entity.model 的前置之一。
 
 **目标**：「内部引擎用哪个连接」(internal_default) 变成 LLM 连接页里的**独立选择器**；连接卡片去掉内部引擎徽章/星标。
 
@@ -123,11 +123,29 @@
 **目标**：聊天页模型只能在 `{内置模型列表} ∪ {该 agent 已连接的模型}` 之间选；不允许自由输入；改模型一律去 agent 页。
 
 **改动**
-- 聊天页模型选择器：自由输入 → 固定下拉（并集来源）。
+- 聊天页模型选择器：自由输入 → 固定下拉（并集来源）。**关键（2c 前置）**：ModelPicker/AgentModelBar 当前读 `activeConnection.model/.fast_model` 作为来源——改为读「内置列表 ∪ agent 绑定模型」，不再读 `connection.model`。
 - 若并集为空或要改，引导去 agent 页。
 - spec/契约同步（聊天可选模型的来源定义）。
 
 **自测**：下拉只含内置 + 该 agent 连接的模型；无法输入任意字符串；换 agent 时列表随之变化。
+
+---
+
+## 块4.5（2c）— 连接实体最终瘦身：物理移除 model/fast_model/wire_api + protocol 重命名 + 迁移
+
+- [ ] 完成（建议分支 `feat/011-connection-slim-final`，worktree 已建）
+
+> **排序依赖**：必须在块3（内部引擎模型来源迁出 `cfg.model`）+ 块4（chat 模型来源迁出 `connection.model`）**都合并后**才能做，否则破坏 chat + 内部引擎。这是块2 重构的最后物理收尾（用户已定「从实体彻底拿掉」）。
+
+**改动（爆炸半径大，跨后端+前端+迁移+大量测试）**
+- 后端：`ProviderConfig` 删 `model`/`fast_model`/`wire_api` + 对应 validator；`wire_format`→`protocol`（enum 加 `unknown` 成员）；`_project` 删对 `cfg.model/.fast_model/.wire_api` 的回退（未绑定 agent：投射 base_url+apiKeyHelper，省略 model env 让 agent 用自带默认）；`provider_schemas` ProviderCreate/Patch/Out 去三字段；CLI `provider_cmd` 去三字段；alembic 迁移剥三字段 + wire_format→protocol（模板 0037/0036）。
+- 前端：`Provider` 类型去三字段；`ProviderForm` 移除模型/fast 字段（对话框=名称+base_url+key+测试+探测类型）、连接对话框不再用 `ProviderModelField`（embedding 仍用）；`ConnectionCard` 去 `p.model` 显示；`AgentOverviewTab` 去 `active.model/.fast_model` 引用（模型来源=fetched + 绑定）。
+- 契约：008 + 011 同步（去三字段、wire_format→protocol）。
+- 测试：改所有 create 连接带 model= / 断言 provider.model / cfg.model 的测试（~10+ 后端 + 多前端）。
+
+**自测**：建连接只填名称/url/key（无 model 字段）；旧连接迁移后无 model/三字段、wire_format 变 protocol；未绑定 agent 投射不写 ANTHROPIC_MODEL（用默认）；chat/内部引擎不受影响（已在块3/4 迁移）；全栈测试绿。
+
+**全部完成即块2 真正收尾。**
 
 ---
 
