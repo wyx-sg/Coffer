@@ -95,7 +95,7 @@ const SAMPLE: SkillOut[] = [
 describe("SkillsTable", () => {
   afterEach(() => vi.clearAllMocks());
 
-  test("renders one row per skill with its source", () => {
+  test("renders one row per skill; the source column is hidden", () => {
     useRemoveSkillMock.mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
@@ -104,9 +104,11 @@ describe("SkillsTable", () => {
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
     expect(screen.getByText("hello-skill")).toBeInTheDocument();
     expect(screen.getByText("git-skill")).toBeInTheDocument();
+    // Source column hidden — its only value (local_import) must not render.
+    expect(screen.queryByText("local_import")).not.toBeInTheDocument();
   });
 
-  test("a search box and source filter are available", () => {
+  test("a search box is available; the source filter is hidden", () => {
     useRemoveSkillMock.mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
@@ -114,6 +116,9 @@ describe("SkillsTable", () => {
     stubVerify();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
     expect(screen.getByRole("textbox")).toBeInTheDocument();
+    // The source filter is hidden — its "All sources" trigger must not render.
+    // (A combobox still exists: the pagination page-size select.)
+    expect(screen.queryByText("All sources")).not.toBeInTheDocument();
   });
 
   test("a select-all + per-row checkbox column is rendered for bulk actions", () => {

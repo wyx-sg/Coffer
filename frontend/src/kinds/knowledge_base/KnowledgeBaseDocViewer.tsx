@@ -59,14 +59,16 @@ export function KnowledgeBaseDocViewer({
 
   return (
     <div className="rounded-md border border-border">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+      {/* Title + badge on the first row; the action buttons sit on a second row,
+          left-aligned — consistent with the skill / agent-config file previews. */}
+      <div className="space-y-2 border-b border-border px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate font-medium">{doc.title}</span>
           <Badge variant="outline">
             {t(`knowledgeBases.sourceMode.${doc.source_mode}`, { defaultValue: doc.source_mode })}
           </Badge>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {doc.path ? <FileActions filePath={doc.path} /> : null}
           <Button
             size="sm"

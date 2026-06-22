@@ -58,11 +58,12 @@ function renderAt() {
 afterEach(() => vi.clearAllMocks());
 
 describe("SkillDetailPage", () => {
-  test("renders the header, source badge, and the two tabs", () => {
+  test("renders the header and the two tabs", () => {
     mockSkill(LOCAL_SKILL);
     renderAt();
     expect(screen.getByRole("heading", { name: "hello" })).toBeInTheDocument();
-    expect(screen.getByText("local_import")).toBeInTheDocument();
+    // The source badge is intentionally hidden in the header (every skill is
+    // local_import today); source still surfaces in the Overview tab below.
     expect(screen.getByRole("tab", { name: /overview/i })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /bindings/i })).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /files/i })).toBeInTheDocument();

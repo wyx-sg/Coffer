@@ -32,7 +32,7 @@ export interface ConfigEditorPaneProps {
 export function ConfigEditorPane(props: ConfigEditorPaneProps) {
   const { t } = useTranslation();
   return (
-    <div className="space-y-2">
+    <div className="flex h-full flex-col space-y-2">
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0 flex-1">
           <span className="block truncate font-mono text-xs text-muted-foreground">
@@ -57,9 +57,9 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
       <CodeView
         value={props.loading ? "" : props.content}
         filename={props.filePath}
-        height="20rem"
+        height="100%"
         ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
-        className="bg-muted/30"
+        className="min-h-0 flex-1 bg-muted/30"
       />
     </div>
   );
