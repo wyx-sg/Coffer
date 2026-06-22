@@ -545,7 +545,13 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 - **Given** 一个已注册的 `claude_code` agent，其 `<config_dir>/projects/<slug>/memory` 目录含 `.md` 事实文件（外加一个 `MEMORY.md` 索引），
 - **When** 用户扫描该 agent 的原生记忆，
-- **Then** Coffer 为每个项目返回一个 store，带从 slug 解码出的可读 `project` 标签、尽力解码的 `path`（有损，可能为 null）、真实的 `memory_dir`，以及排除 `MEMORY.md` 的 `.md` 文件 `item_count`——只读，一切在读取时从磁盘派生，且不发出任何 audit 事件。没有原生记忆布局的 agent 类型（`codex`），或没有 `projects/` 目录的 agent，返回空列表。
+- **Then** Coffer 为每个项目返回一个 store，其 `project` 标签与 `path` 为**真实**项目目录（从项目的 session transcript `cwd` 还原，而非有损 slug）、真实的 `memory_dir`，以及排除 `MEMORY.md` 的 `.md` 文件 `item_count`（当某 store 唯一内容是内联 `MEMORY.md` 时为 `1`）——只读，一切在读取时从磁盘派生，且不发出任何 audit 事件。没有原生记忆布局的 agent 类型，或没有 `projects/` 目录的 agent，返回空列表。
+
+### Scenario: the native memory scan lists Codex's global memory by project
+
+- **Given** 一个已注册的 `codex` agent，其 `<config_dir>/memories/MEMORY.md` 含若干 `# Task Group` 块，每块带一行 `applies_to: cwd=…` 把它路由到一个或多个项目工作目录，
+- **When** 用户扫描该 agent 的原生记忆，
+- **Then** Coffer 把这份全局单文档解析成「每个不同 cwd 一行」——`project`/`path` 为该 cwd，`item_count` 为路由到此 cwd 的 Task Group 数，`memory_dir` 为所有行共享的那个全局 store——只读且不发出任何 audit 事件；没有 `memories/MEMORY.md` 时列表为空。
 
 ### Scenario: importing a native memory store adopts it into Coffer
 
@@ -622,8 +628,8 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 以下两条需求把 registry 扩展到 coding agent 自己的原生逐项目记忆——区别于 FR-013 的 `instructions` 配置文件（CLAUDE.md / AGENTS.md 是人写的指令；这里是 agent 自写的记忆 store）。其「转换」（把导入的事实整理进 Coffer 主题文档）由 spec 007 的 organizer 拥有；本 spec 只读取 agent 的 store 并把其事实交给那个 organizer。
 
-- **FR-040**: 系统 MUST 暴露一个只读的**原生记忆扫描**，列出某 agent 类型自己的原生逐项目记忆 store。`claude_code` 的这些 store 位于 `<config_dir>/projects/<slug>/memory/*.md`；没有原生记忆布局的 agent 类型（`codex`）返回空列表，没有 `projects/` 目录的 agent 同样返回空列表。每个 store 携带从 slug 解码出的可读 `project` 标签、尽力解码的 `path`（slug 解码有损，MAY 为 null）、真实的 `memory_dir`，以及排除 `MEMORY.md` 的 `.md` 文件 `item_count`。扫描是只读的，一切在读取时从磁盘派生（不存储），并——遵循 FR-011 的「工作区列表只读，均不发出 audit 事件」——MUST NOT 发出任何 audit 事件。它绝不写入 agent 的 store。
-- **FR-041**: 用户 MUST 能把一个原生记忆 store **导入（收编）**进 Coffer。给定一个 store 的 `memory_dir`，系统读取其事实文件（跳过 `MEMORY.md`），解析出真实项目路径——存在于磁盘时用解码后的 slug，否则用兄弟 transcript `.jsonl` 中记录的 `cwd`（slug 解码有损）——并把每条事实写成项目作用域的 Coffer memory 事实，进入该项目 store 的 `knowledge/inbox/` 通道（如同一批 `remember`；一次受信任的导入 MAY 写到 32768 字符的领域上限）。随后把 spec 007 的 organizer 作为**后台**任务触发，因为一次批量导入是数十次顺序的内部 LLM 调用，MUST NOT 阻塞请求。结果上报 `imported`、`skipped`、`store`（项目无法映射到 Coffer store 时为 null）、`project_path` 与 `organized`。任何 git 项目之外的 store（无可映射的 Coffer 项目）产出 `imported=0`、`store=null`、`project_path=null`、`organized=false`——它不污染任何 inbox，也不是错误。导入的 memory 写入经 spec 007 既有的 memory 事件审计；导入不新增任何 004 audit 事件。
+- **FR-040**: 系统 MUST 暴露一个只读的**原生记忆扫描**，列出某 agent 类型自己的原生记忆 store。支持两种布局。`claude_code` 为逐项目布局，store 位于 `<config_dir>/projects/<slug>/memory/`：每个含 `memory/` 目录的项目一行，`item_count` 为排除 `MEMORY.md` 的 `.md` 事实文件数——当无事实文件但 `MEMORY.md` 含内联内容（较旧/手写的 hub 文档）时为 `1`，因为该内联文档本身即可导入条目。`project` 标签与 `path` 为**真实**项目目录，从该项目的 session transcript `cwd` 还原（slug 编码有损——`/`、`.`、`_` 全部坍缩成 `-`——无法可靠从 slug 重建路径；有损 slug 解码仅作最后兜底）。`codex` 为单一**全局** task-grouped 文档，位于 `<config_dir>/memories/MEMORY.md`，其中每个 `# Task Group` 块带一行 `applies_to: cwd=…` 把它路由到一个或多个项目工作目录；扫描把它解析成「每个不同 cwd 一行」，`item_count` 为路由到此 cwd 的 Task Group 数、`path` 为该 cwd（`memory_dir` 为所有行共享的那个全局 store）。没有原生记忆布局的 agent 类型、没有 `projects/` 目录、或没有 `memories/MEMORY.md`，都返回空列表。扫描是只读的，一切在读取时从磁盘派生（不存储），并——遵循 FR-011 的「工作区列表只读，均不发出 audit 事件」——MUST NOT 发出任何 audit 事件。它绝不写入 agent 的 store。
+- **FR-041**: 用户 MUST 能把一个原生记忆 store **导入（收编）**进 Coffer。`claude_code`：给定一个 store 的 `memory_dir`，系统读取其事实文件（跳过 `MEMORY.md`，或当无事实文件时解析内联 `MEMORY.md`），解析出真实项目路径——存在于磁盘时用解码后的 slug，否则用兄弟 transcript `.jsonl` 中记录的 `cwd`（slug 解码有损）。`codex`：其全局 store 被所有行共享，故请求另带所选行的 `project_path`，系统只导入路由到该 cwd 的 Task Group 块。两种情况都把每条目写成项目作用域的 Coffer memory 事实，进入该项目 store 的 `knowledge/inbox/` 通道（如同一批 `remember`；一次受信任的导入 MAY 写到 32768 字符的领域上限）。随后把 spec 007 的 organizer 作为**后台**任务触发，因为一次批量导入是数十次顺序的内部 LLM 调用，MUST NOT 阻塞请求。结果上报 `imported`、`skipped`、`store`（项目无法映射到 Coffer store 时为 null）、`project_path` 与 `organized`。任何 git 项目之外的 store（无可映射的 Coffer 项目）产出 `imported=0`、`store=null`、`project_path=null`、`organized=false`——它不污染任何 inbox，也不是错误。导入的 memory 写入经 spec 007 既有的 memory 事件审计；导入不新增任何 004 audit 事件。
 
 - **FR-043**（Slice 6）：用户 MUST 能一键**安装 Coffer 的生命周期 hook** 到某个 agent，并能卸载与查询状态。安装会按该 agent manifest 的 `HookInjectionSpec` 把一条 `coffer-hook` 命令条目写入其 hooks 文件——`claude_code` 为 `settings.json`，`codex` 为 `hooks.json`——命令是 `coffer-hook` 二进制的绝对路径（解析顺序同 shim：`COFFER_HOOK_PATH` 覆盖 → `PATH` → 解释器的 scripts 目录 → 内置）外加 `--agent <name>` 参数，因为外部 hook 负载不携带 Coffer 的 agent 身份。`claude_code` 安装 SessionStart **与** SessionEnd；`codex` **仅**安装 SessionStart（它没有会话结束事件）。安装 MUST 幂等（原位替换 Coffer 自己的条目，按 `coffer-hook` basename 识别，绝不触碰用户自建的 hook）；卸载仅移除 Coffer 的条目。若二进制无法解析，或该 agent 类型不支持 hook，则拒绝安装（`HOOK_INSTALL_UNSUPPORTED`，422）且不写入任何内容。两个事件都审计（`agent_hook_installed` / `agent_hook_uninstalled`）。
 - **FR-044**（Slice 6）：在 SessionStart 时，已安装的 hook MUST 能拉取一份**规则 bundle** 作为附加上下文注入：系统从会话的 `cwd` 解析召回作用域（若是 git 项目则有 project，再加 global），按顺序拼接各 store 的规则（先 project 后 global），并**始终**附加两条内置种子规则——一条*恢复*规则（引导 agent 在用户要求继续此前工作时调用 `coffer__resume()`），一条*软引导*规则（优先 `coffer__remember` / `coffer__recall` 而非 agent 自身的原生记忆）。bundle 仅运行时存在（不写入 agent 的任何文件），上限 ≤10000 字符；当任何地方都没有用户规则时仍返回种子规则。通过 `GET /agents/{name}/session-context?cwd=` 暴露。
@@ -632,7 +638,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 **界面**
 
-- **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/移除/切换/收编、插件列出/切换/卸载、原生记忆扫描/导入（FR-040/FR-041）——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。原生记忆命令为 `coffer agent native-memory <name>`（读取，`--json`）与 `coffer agent import-native-memory <name> <memory_dir>`（收编）。桌面 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。agent 的 Memory tab 展示 Coffer 受管记忆链接，外加这张原生表格（**只读**，按 FR-038 提供打开 / 显示），并带一个收编某个 store 的导入按钮（FR-041）。
+- **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/移除/切换/收编、插件列出/切换/卸载、原生记忆扫描/导入（FR-040/FR-041）——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。原生记忆命令为 `coffer agent native-memory <name>`（读取，`--json`）与 `coffer agent import-native-memory <name> <memory_dir>`（收编；`--project-path` 为 Codex 共享全局 store 选择 cwd）。桌面 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。agent 的 Memory tab 展示 Coffer 受管记忆链接，外加这张原生表格（**只读**，按 FR-038 提供打开 / 显示），并带一个收编某个 store 的导入按钮（FR-041）。
 - **FR-010**: CLI MUST 在每个读取类操作上支持 `--json` 以提供机器可读输出。
 - **FR-038**: 对每个配置文件（及每个目录条目子文件），UI MUST 提供针对该文件的**在外部编辑器中打开**与**在文件管理器中显示**操作，使用 FR-014/FR-015 的 `path`。打开与显示在**两个**界面上都执行真实的 OS 动作：打包桌面应用（Tauri）直接用 OS opener;Web 用 daemon 的文件系统动作端点（FR-039）——因为环回 daemon 始终在用户自己的机器上（ADR-033）。没有 copy-path 回退。用于「在外部编辑器中打开」的编辑器引用 spec 002-ui-shell 定义的用户「首选外部编辑器」偏好（此处不再重新规定）。
 
@@ -661,7 +667,7 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **Agent MCP Entry（agent MCP 条目）**：agent 自己文件中所配置的一个 MCP server 的派生（绝不存储）视图——名称、来源文件、传输方式、`enabled`（Codex）、`is_coffer`、`matches_resource`。文件是事实来源；Coffer 读取、编辑、移除或收编条目，但不保留副本。
 - **Agent Plugin（agent 插件）**：一个已安装插件的派生（绝不存储）视图——id（`<name>@<marketplace>`）、marketplace、启用状态、`cache_present`。启用状态存在于各 agent 的文档化配置面；Claude Code 的清单文件是只读输入。
 - **Directory Config Entry（目录型配置条目）**：解析到一个文件目录而非单个文件的 allowlist 配置条目。子文件以校验过的条目相对路径寻址；磁盘上的目录是事实来源。
-- **Native Memory Store（原生记忆 store）**：coding agent 自己的某个逐项目原生记忆目录（`claude_code` 的 `<config_dir>/projects/<slug>/memory`）的派生（绝不存储）视图——可读的 `project` 标签、尽力解码的 `path`（有损，可能为 null）、真实的 `memory_dir`，以及排除 `MEMORY.md` 的 `.md` 文件 `item_count`。只读；agent 的 store 绝不被写入。收编其中一个（FR-041）会把其事实导入匹配的 Coffer 项目记忆的 `knowledge/inbox/` 通道，并交给 spec 007 的 organizer。
+- **Native Memory Store（原生记忆 store）**：coding agent 自己的某个原生记忆 store 的派生（绝不存储）视图——`claude_code` 为逐项目目录（`<config_dir>/projects/<slug>/memory`），`codex` 为单一全局 task-grouped `<config_dir>/memories/MEMORY.md` 的某个路由 cwd 切片。携带 `project` 标签与 `path`（**真实**项目 cwd）、真实的 `memory_dir`，以及 `item_count`（Claude Code 事实文件 / 内联 `MEMORY.md` / 路由到该 cwd 的 Codex Task Group 数）。只读；agent 的 store 绝不被写入。收编其中一个（FR-041）会把其条目导入匹配的 Coffer 项目记忆的 `knowledge/inbox/` 通道，并交给 spec 007 的 organizer。
 
 ## Success Criteria
 

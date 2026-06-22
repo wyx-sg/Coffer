@@ -24,8 +24,9 @@ pytestmark = pytest.mark.asyncio
 
 
 class _FakeAgents:
-    def __init__(self, *, name: str) -> None:
+    def __init__(self, *, name: str, agent_type: str = "claude_code") -> None:
         self._name = name
+        self._type = agent_type
 
     async def get(self, name: str) -> Resource:
         if name != self._name:
@@ -36,7 +37,7 @@ class _FakeAgents:
             kind="agent",
             name=name,
             description=None,
-            config={"type": "claude_code", "config_dir": "/x"},
+            config={"type": self._type, "config_dir": "/x"},
             enabled=True,
             created_at=now,
             updated_at=now,
@@ -44,15 +45,27 @@ class _FakeAgents:
 
 
 class _FakeReader:
-    def __init__(self, *, facts: list[ParsedNativeFact], project_path: str | None) -> None:
+    def __init__(
+        self,
+        *,
+        facts: list[ParsedNativeFact],
+        project_path: str | None,
+        codex_facts: list[ParsedNativeFact] | None = None,
+    ) -> None:
         self._facts = facts
         self._project_path = project_path
+        self._codex_facts = codex_facts or []
+        self.codex_calls: list[tuple[str, str]] = []
 
     def read_facts(self, memory_dir: str) -> list[ParsedNativeFact]:
         return list(self._facts)
 
     def resolve_project_path(self, memory_dir: str) -> str | None:
         return self._project_path
+
+    def read_codex_facts(self, memory_dir: str, project_path: str) -> list[ParsedNativeFact]:
+        self.codex_calls.append((memory_dir, project_path))
+        return list(self._codex_facts)
 
 
 class _FakeSink:
@@ -205,6 +218,27 @@ async def test_import_no_facts_returns_zero_no_organize() -> None:
         imported=0, skipped=0, store=None, project_path="/real/proj", organized=False
     )
     assert sink.organize_calls == 0
+
+
+async def test_import_codex_routes_by_project_path() -> None:
+    # Codex's global store is shared by every row, so the chosen row's
+    # project_path selects the facts (read_codex_facts), bypassing the
+    # memory_dir-based resolve_project_path used for Claude Code.
+    sink = _FakeSink()
+    reader = _FakeReader(facts=[], project_path=None, codex_facts=_facts())
+    svc = AgentMemoryImportService(
+        agent_service=_FakeAgents(name="cx", agent_type="codex"), reader=reader, sink=sink
+    )
+
+    result = await svc.import_store(
+        name="cx", memory_dir="/x/memories", project_path="/real/account-gateway"
+    )
+
+    assert reader.codex_calls == [("/x/memories", "/real/account-gateway")]
+    assert result.imported == 2
+    assert result.project_path == "/real/account-gateway"
+    assert all(a["project_path"] == "/real/account-gateway" for a in sink.added)
+    assert sink.organize_calls == 1
 
 
 async def test_import_organize_exception_swallowed_keeps_import() -> None:

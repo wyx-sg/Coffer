@@ -117,9 +117,9 @@ describe("AgentMemoryTab", () => {
 
     expect(screen.getByText("Coffer")).toBeInTheDocument();
     expect(screen.getByText("DevPilot")).toBeInTheDocument();
-    expect(
-      screen.getByText("/Users/xing/.claude/projects/-Users-xing-Coffer/memory"),
-    ).toBeInTheDocument();
+    // The path column shows the real project path (s.path), not the internal
+    // memory_dir — so Codex rows sharing one memory_dir stay distinguishable.
+    expect(screen.getByText("/Users/xing/Coffer")).toBeInTheDocument();
     expect(screen.getByText("49")).toBeInTheDocument();
     expect(screen.getByText("8")).toBeInTheDocument();
   });
@@ -131,12 +131,15 @@ describe("AgentMemoryTab", () => {
     expect(screen.getByText(/no native memory stores/i)).toBeInTheDocument();
   });
 
-  test("clicking Import to Coffer imports the store's memory dir", () => {
+  test("clicking Import to Coffer imports the store's memory dir + project path", () => {
     stubMcp(true);
     stubNative([COFFER_STORE]);
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("button", { name: /import to coffer/i }));
-    expect(importMutate).toHaveBeenCalledWith(COFFER_STORE.memory_dir, expect.anything());
+    expect(importMutate).toHaveBeenCalledWith(
+      { memoryDir: COFFER_STORE.memory_dir, projectPath: COFFER_STORE.path },
+      expect.anything(),
+    );
   });
 
   test("disable-native-memory toggle reflects the agent flag and PATCHes on flip", () => {

@@ -11,6 +11,7 @@ from __future__ import annotations
 import pathlib
 
 from coffer.domain.agent.native_memory import ScannedStore
+from coffer.infrastructure.agent.codex_memory_store import codex_stores
 from coffer.infrastructure.agent.native_memory_import import (
     inline_memory_file,
     resolve_project_path,
@@ -18,7 +19,8 @@ from coffer.infrastructure.agent.native_memory_import import (
 
 
 class FileNativeMemoryScanner:
-    """Scans an agent's projects root for per-project memory directories."""
+    """Scans an agent's native memory: Claude Code's per-project dirs and Codex's
+    single global task-grouped store."""
 
     def scan(self, projects_root: pathlib.Path, memory_subdir: str) -> list[ScannedStore]:
         """Return a :class:`ScannedStore` per project that has a
@@ -58,3 +60,8 @@ class FileNativeMemoryScanner:
                 )
             )
         return out
+
+    def scan_codex_global(self, memories_dir: pathlib.Path, index_file: str) -> list[ScannedStore]:
+        """Return a :class:`ScannedStore` per distinct routed cwd in Codex's
+        single global task-grouped store (``memories_dir/<index_file>``)."""
+        return codex_stores(memories_dir, index_file)

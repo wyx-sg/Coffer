@@ -21,6 +21,7 @@ from typing import Protocol
 
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.native_memory import (
+    CodexGlobalLayout,
     NativeMemoryStore,
     ScannedStore,
     native_memory_layout_for,
@@ -30,11 +31,16 @@ from coffer.domain.resource import Resource
 
 
 class NativeMemoryScanPort(Protocol):
-    """Filesystem scan for native per-project memory. Implemented in infra."""
+    """Filesystem scan for native memory. Implemented in infra."""
 
     def scan(self, projects_root: pathlib.Path, memory_subdir: str) -> list[ScannedStore]:
         """Return a :class:`ScannedStore` per project that has a memory
-        directory under ``projects_root``."""
+        directory under ``projects_root`` (Claude Code's per-project layout)."""
+        ...
+
+    def scan_codex_global(self, memories_dir: pathlib.Path, index_file: str) -> list[ScannedStore]:
+        """Return a :class:`ScannedStore` per distinct routed cwd in Codex's
+        single global task-grouped store under ``memories_dir``."""
         ...
 
 
@@ -60,8 +66,15 @@ class AgentNativeMemoryService:
         layout = native_memory_layout_for(cfg.type)
         if layout is None:
             return []
-        projects_root = cfg.resolved_config_dir() / layout.projects_subdir
-        scans = self._scanner.scan(projects_root, layout.memory_subdir)
+        config_dir = cfg.resolved_config_dir()
+        if isinstance(layout, CodexGlobalLayout):
+            # Codex: one global task-grouped document, one row per routed cwd.
+            scans = self._scanner.scan_codex_global(
+                config_dir / layout.memory_subdir, layout.index_file
+            )
+        else:
+            # Claude Code: one row per project that has a memory/ dir.
+            scans = self._scanner.scan(config_dir / layout.projects_subdir, layout.memory_subdir)
         result = [self._to_store(scan) for scan in scans]
         return sorted(result, key=lambda s: (-s.item_count, s.project_label))
 

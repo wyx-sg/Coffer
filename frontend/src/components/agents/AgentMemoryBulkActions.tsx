@@ -24,7 +24,7 @@ export function AgentNativeMemoryBulkActions({
   const bulk = useBulkMutate({ invalidate: [["memory-stores"]] });
 
   const runAll = async () => {
-    await bulk.run(rows, (s) => agentsApi.importNativeMemory(agentName, s.memory_dir));
+    await bulk.run(rows, (s) => agentsApi.importNativeMemory(agentName, s.memory_dir, s.path));
     onDone();
   };
 

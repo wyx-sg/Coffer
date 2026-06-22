@@ -122,9 +122,10 @@ async def test_list_stores_sorted_by_count_then_label(tmp_path: pathlib.Path) ->
     ]
 
 
-async def test_list_stores_codex_returns_empty(tmp_path: pathlib.Path) -> None:
+async def test_list_stores_codex_without_memories_file_is_empty(tmp_path: pathlib.Path) -> None:
     cfg_dir = tmp_path / ".codex"
-    # Even with a projects/.../memory tree present, codex has no native layout.
+    # Codex uses a global memories/MEMORY.md, not a projects/ tree — so a stray
+    # projects/.../memory dir is ignored and, with no memories file, the list is empty.
     _write(cfg_dir / "projects" / "-X" / "memory" / "a.md")
 
     svc = AgentNativeMemoryService(
@@ -133,6 +134,35 @@ async def test_list_stores_codex_returns_empty(tmp_path: pathlib.Path) -> None:
     )
 
     assert await svc.list_stores("cx") == []
+
+
+async def test_list_stores_codex_global_groups_by_cwd(tmp_path: pathlib.Path) -> None:
+    cfg_dir = tmp_path / ".codex"
+    memories = cfg_dir / "memories"
+    memories.mkdir(parents=True)
+    (memories / "MEMORY.md").write_text(
+        "# Task Group: gw one\n\napplies_to: cwd=/p/account-gateway; reuse_rule=x\n\n"
+        "## Task 1: a, success\n\n"
+        "# Task Group: gw two\n\napplies_to: cwd=/p/account-gateway; reuse_rule=x\n\n"
+        "## Task 1: b, success\n\n"
+        "# Task Group: bff\n\napplies_to: cwd=/p/account-bff; reuse_rule=x\n\n"
+        "## Task 1: c, success\n",
+        encoding="utf-8",
+    )
+
+    svc = AgentNativeMemoryService(
+        agent_service=_FakeAgents(name="cx", config={"type": "codex", "config_dir": str(cfg_dir)}),
+        scanner=FileNativeMemoryScanner(),
+    )
+
+    stores = await svc.list_stores("cx")
+    # One row per distinct cwd, count desc then label; memory_dir is the shared store.
+    assert [(s.project_label, s.item_count) for s in stores] == [
+        ("account-gateway", 2),
+        ("account-bff", 1),
+    ]
+    assert all(s.memory_dir == str(memories) for s in stores)
+    assert stores[0].project_path == "/p/account-gateway"
 
 
 async def test_list_stores_missing_projects_dir_returns_empty(tmp_path: pathlib.Path) -> None:
