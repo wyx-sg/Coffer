@@ -9,7 +9,6 @@ import { ArrowLeft, Trash2 } from "lucide-react";
 
 import { SkillOverview } from "@/components/skills/SkillDetailTabs";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -92,7 +91,9 @@ export function SkillDetailPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <h1 className="font-serif text-3xl tracking-tight">{skill.name}</h1>
-            <Badge variant="secondary">{skill.source.type}</Badge>
+            {/* Source badge intentionally hidden — every skill is local_import
+                today (no signal). skill.source stays available for when other
+                origins (e.g. git import) land. */}
           </div>
           <div className="flex items-center gap-2">
             <Button
