@@ -172,6 +172,9 @@ export function SyncSettings() {
           {update.error && (
             <p className="text-sm text-red-600">{translateApiError(t, update.error)}</p>
           )}
+          {run.error && (
+            <p className="text-sm text-red-600">{translateApiError(t, run.error)}</p>
+          )}
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => run.mutate()} disabled={run.isPending}>
               {t("settings.sync.syncNow")}

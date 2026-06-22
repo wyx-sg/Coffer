@@ -106,6 +106,17 @@ describe("SyncSettings", () => {
     expect(run).toHaveBeenCalled();
   });
 
+  test("a failed sync run surfaces its error", () => {
+    seed("clean");
+    vi.mocked(hooks.useRunSync).mockReturnValue({
+      mutate: run,
+      isPending: false,
+      error: new Error("boom"),
+    } as unknown as ReturnType<typeof hooks.useRunSync>);
+    render(<SyncSettings />, { wrapper: wrap });
+    expect(screen.getByText("boom")).toBeInTheDocument();
+  });
+
   test("conflict panel offers ours/theirs resolution", () => {
     seed("conflicted", { conflict_paths: ["resources/mcp_server/x.yaml"] });
     render(<SyncSettings />, { wrapper: wrap });
