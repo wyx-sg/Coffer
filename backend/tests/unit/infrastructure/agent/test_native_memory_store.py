@@ -83,11 +83,33 @@ def test_scan_skips_non_directory_entries(tmp_path: pathlib.Path) -> None:
     assert [s.slug for s in out] == ["-A"]
 
 
-def test_scan_empty_memory_dir_counts_zero(tmp_path: pathlib.Path) -> None:
+def test_scan_inline_memory_md_counts_as_one(tmp_path: pathlib.Path) -> None:
     projects = tmp_path / "projects"
-    # memory dir present but only the index lives there -> count 0, still listed.
-    _write(projects / "-A" / "memory" / "MEMORY.md")
+    # No separate fact files, but MEMORY.md holds inline content (an older /
+    # hand-written hub doc) -> it IS the one importable entry, so count == 1.
+    _write(projects / "-A" / "memory" / "MEMORY.md", "# Project Hub\n\nsome real notes\n")
+
+    out = FileNativeMemoryScanner().scan(projects, "memory")
+    assert out and out[0].slug == "-A"
+    assert out[0].item_count == 1
+
+
+def test_scan_blank_memory_md_counts_zero(tmp_path: pathlib.Path) -> None:
+    projects = tmp_path / "projects"
+    # A blank/whitespace-only MEMORY.md is not a memory -> count 0, still listed.
+    _write(projects / "-A" / "memory" / "MEMORY.md", "   \n\n")
 
     out = FileNativeMemoryScanner().scan(projects, "memory")
     assert out and out[0].slug == "-A"
     assert out[0].item_count == 0
+
+
+def test_scan_index_with_facts_counts_only_facts(tmp_path: pathlib.Path) -> None:
+    projects = tmp_path / "projects"
+    # When fact files exist, MEMORY.md is a pure index and is NOT counted.
+    _write(projects / "-A" / "memory" / "MEMORY.md", "- [x](x.md)\n- [y](y.md)\n")
+    _write(projects / "-A" / "memory" / "x.md")
+    _write(projects / "-A" / "memory" / "y.md")
+
+    out = FileNativeMemoryScanner().scan(projects, "memory")
+    assert out[0].item_count == 2
