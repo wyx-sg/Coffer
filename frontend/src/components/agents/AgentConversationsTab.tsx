@@ -121,11 +121,17 @@ export function AgentConversationsTab({ name }: Props) {
     {
       key: "project",
       header: t("agents.conversationsTab.colProject"),
-      cell: (s) => (
-        <span className="break-all font-mono text-xs">
-          {s.project_path ?? <span className="text-muted-foreground">—</span>}
-        </span>
-      ),
+      cell: (s) =>
+        s.project_path ? (
+          <span
+            className="line-clamp-1 max-w-xs break-all font-mono text-xs text-muted-foreground"
+            title={s.project_path}
+          >
+            {s.project_path}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       key: "messages",

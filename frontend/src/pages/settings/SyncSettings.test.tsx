@@ -75,13 +75,28 @@ function seed(statusValue: NonNullable<Status>["status"], over: Partial<NonNulla
 }
 
 describe("SyncSettings", () => {
-  test("saving PUTs the config", () => {
+  test("auto-saves (no Save button) — editing the remote and blurring PUTs the config", () => {
     seed("clean");
     render(<SyncSettings />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
+    const remote = screen.getByRole("textbox");
+    fireEvent.change(remote, { target: { value: "git@github.com:me/other.git" } });
+    fireEvent.blur(remote);
     expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ remote: "git@github.com:me/v.git", branch: "main", enabled: true }),
+      expect.objectContaining({
+        remote: "git@github.com:me/other.git",
+        branch: "main",
+        enabled: true,
+      }),
     );
+  });
+
+  test("toggling a switch auto-saves the new value", () => {
+    seed("clean");
+    render(<SyncSettings />, { wrapper: wrap });
+    // Two switches (enable, auto); auto starts false → toggling it PUTs auto:true.
+    fireEvent.click(screen.getAllByRole("switch")[1]);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ auto: true }));
   });
 
   test("sync now triggers a run", () => {

@@ -54,6 +54,7 @@ async def update_config(
         model=body.model,
         base_url=body.base_url,
         credential_ref=body.credential_ref,
+        secret_value=body.secret_value,
         dimensions=body.dimensions,
         default_chunk_size=body.default_chunk_size,
         default_chunk_overlap=body.default_chunk_overlap,

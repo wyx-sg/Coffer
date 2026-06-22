@@ -32,7 +32,11 @@
     "category": "DeveloperTool",
     "shortDescription": "Local-first AI agent vault",
     "longDescription": "Coffer is a local-first vault for a developer's AI assets, accessible to any agent through one safe interface.",
-    "externalBin": ["binaries/coffer-daemon", "binaries/coffer-mcp-shim"],
+    "externalBin": [
+      "binaries/coffer-daemon",
+      "binaries/coffer-mcp-shim",
+      "binaries/coffer-hook"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

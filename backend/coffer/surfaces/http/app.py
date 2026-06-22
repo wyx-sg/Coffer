@@ -161,6 +161,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     embedding_config_svc = EmbeddingConfigService(
         repo=SqlAlchemyEmbeddingConfigRepo(sm),
         audit=audit,
+        credentials=credential_store,
     )
     internal_engine_config_svc = InternalEngineConfigService(
         repo=SqlAlchemyInternalEngineConfigRepo(sm),
