@@ -356,8 +356,10 @@ paths:
       - $ref: "#/components/parameters/StoreName"
     get:
       summary: >
-        Return the store's procedural `rules/rules.md` text — the behavioural
-        rules the organizer classified into the rules lane, read-only. This is
+        Return the store's procedural rules text — every `rules/*.md` file
+        concatenated (`rules.md` plus the per-topic `<slug>.md` files the split
+        produces) — the behavioural rules the organizer classified into the
+        rules lane, read-only. This is
         the surface a later session-start injection reads; rules are NOT returned
         by `recall` (the lane sits outside the knowledge recall glob).
       operationId: getMemoryStoreRules
@@ -787,8 +789,9 @@ components:
           type: string
           nullable: true
           description: >
-            The store's `rules/rules.md` text (the procedural rules the organizer
-            classified into the rules lane), or null when there are no rules yet.
+            The store's rules text — every `rules/*.md` file concatenated (the
+            procedural rules the organizer classified into the rules lane), or
+            null when there are no rules yet.
 
     JournalFileOut:
       type: object
@@ -796,7 +799,7 @@ components:
       properties:
         period:
           type: string
-          description: The time-partition key (`YYYY-MM` stem of the period file).
+          description: The time-partition key (`YYYY-MM-DD` stem of the per-day period file).
         text: { type: string, description: Raw markdown body of the period file. }
         path:
           type: string
