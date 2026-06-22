@@ -212,12 +212,14 @@ class TestConnectionIn(BaseModel):
     provider: str
     model: str
     credential_ref: str | None = None
+    secret_value: str | None = None  # inline secret to test before saving
     base_url: str | None = None
 
 
 class ListModelsIn(BaseModel):
     provider: str
     credential_ref: str | None = None
+    secret_value: str | None = None  # inline secret to fetch before saving
     base_url: str | None = None
 
 

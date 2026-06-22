@@ -99,3 +99,20 @@ Codex 需要在启动前在 shell 中设置 `COFFER_PROVIDER_KEY`。这是永不
 
 完整的备选方案枚举（A1/A2/A3、B1/B2/B3、C1/C2）及拒绝理由见：
 [specs/011-provider-switching/research.md](../../specs/011-provider-switching/research.md)
+
+## 修订 2026-06-22 — 连接是可选覆盖（introspection：明文 secret）
+
+权威设计见 [spec 011 Amendment 2026-06-22](../../specs/011-provider-switching/spec.zh.md)（D1–D7）。
+本节记录最先交付的 introspection 后果（D6），其余 D 项后续扩展。
+
+- **D6 — 连接对话框用未保存的密钥测试/拉取。** 保留的 introspection 路由
+  （`POST /api/v1/models/test-connection`、`POST /api/v1/models/list-models`）
+  现在除 `credential_ref` 外，还接受内联的 `secret_value`。
+  `ModelIntrospectionService` 优先使用内联 secret，否则解析 ref，
+  因此新增/编辑对话框可在凭据写入 vault 之前探测 provider。内联 secret 仅用于
+  对外探测——introspection 路径绝不持久化它（Decision B 的「只存 ref、不存明文」
+  不变量不变：secret 仅在连接 create/update 时写入 Fernet vault）。
+- **对块计划的偏离——对话框保留模型字段。** 模型在连接实体上仍是必填
+  （按 Decision D 投射为 `ANTHROPIC_MODEL` / Codex `model`），故对话框保留模型
+  选择——升级为 `ProviderModelField` 组合框（测试/拉取 + 下拉 + 自由输入）。
+  将模型选择迁到 Agent 页是 D3 下追踪的独立双槽议题。

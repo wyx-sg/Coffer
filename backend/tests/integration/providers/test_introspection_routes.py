@@ -89,6 +89,21 @@ async def test_embedding_test_reports_dimension(client) -> None:  # type: ignore
     assert r.json()["detail"]["dimensions"] == 1536
 
 
+async def test_inline_secret_reaches_port(client) -> None:  # type: ignore[no-untyped-def]
+    # An inline secret (no credential_ref) flows straight to the port: "bad"
+    # triggers the fake port's 401, proving the typed key was used as-is.
+    r = await client.post(
+        "/api/v1/models/test-connection",
+        json={"provider": "openai", "model": "gpt-4o", "secret_value": "bad"},
+    )
+    assert r.status_code == 200 and r.json()["ok"] is False
+    ok = await client.post(
+        "/api/v1/models/list-models",
+        json={"provider": "openai", "secret_value": "sk-inline"},
+    )
+    assert ok.status_code == 200 and ok.json()["models"] == ["gpt-4o", "gpt-4o-mini"]
+
+
 async def test_requires_token(client) -> None:  # type: ignore[no-untyped-def]
     r = await client.post(
         "/api/v1/models/list-models", json={"provider": "openai"}, headers={"X-Coffer-Token": "x"}

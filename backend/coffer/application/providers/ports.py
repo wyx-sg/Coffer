@@ -64,16 +64,27 @@ class ModelIntrospectionService:
         self._port = port
         self._resolve = resolve_credential
 
-    def _key_for(self, provider: str, credential_ref: str | None) -> str | None:
+    def _key_for(
+        self, provider: str, credential_ref: str | None, secret_value: str | None = None
+    ) -> str | None:
+        # An inline (not-yet-saved) secret wins so the connection dialog can
+        # test/fetch before the credential ref exists; otherwise resolve the ref.
+        if secret_value:
+            return secret_value
         if credential_ref:
             return self._resolve(credential_ref)
         return None
 
     async def list_models(
-        self, *, provider: str, base_url: str | None, credential_ref: str | None
+        self,
+        *,
+        provider: str,
+        base_url: str | None,
+        credential_ref: str | None,
+        secret_value: str | None = None,
     ) -> ModelList:
         try:
-            key = self._key_for(provider, credential_ref)
+            key = self._key_for(provider, credential_ref, secret_value)
             models = await self._port.list_models(provider=provider, base_url=base_url, api_key=key)
         except Exception as e:  # degrade to manual entry — never 500 the picker
             return ModelList(models=[], message=str(e))
@@ -82,10 +93,16 @@ class ModelIntrospectionService:
         return ModelList(models=models)
 
     async def test_connection(
-        self, *, provider: str, model: str, base_url: str | None, credential_ref: str | None
+        self,
+        *,
+        provider: str,
+        model: str,
+        base_url: str | None,
+        credential_ref: str | None,
+        secret_value: str | None = None,
     ) -> TestResult:
         try:
-            key = self._key_for(provider, credential_ref)
+            key = self._key_for(provider, credential_ref, secret_value)
             await self._port.test_chat(
                 provider=provider, model=model, base_url=base_url, api_key=key
             )
@@ -94,10 +111,16 @@ class ModelIntrospectionService:
         return TestResult(ok=True, message="connection ok")
 
     async def test_embedding(
-        self, *, provider: str, model: str, base_url: str | None, credential_ref: str | None
+        self,
+        *,
+        provider: str,
+        model: str,
+        base_url: str | None,
+        credential_ref: str | None,
+        secret_value: str | None = None,
     ) -> TestResult:
         try:
-            key = self._key_for(provider, credential_ref)
+            key = self._key_for(provider, credential_ref, secret_value)
             dim = await self._port.test_embedding(
                 provider=provider, model=model, base_url=base_url, api_key=key
             )

@@ -324,6 +324,7 @@ paths:
                 provider: { type: string }
                 base_url: { type: string, nullable: true }
                 credential_ref: { type: string, nullable: true }
+                secret_value: { type: string, nullable: true, description: inline secret to fetch before the connection is saved (takes precedence over credential_ref) }
       responses:
         '200':
           description: Models (empty + message when none could be listed)
@@ -353,6 +354,7 @@ paths:
                 model: { type: string }
                 base_url: { type: string, nullable: true }
                 credential_ref: { type: string, nullable: true }
+                secret_value: { type: string, nullable: true, description: inline secret to test before the connection is saved (takes precedence over credential_ref) }
       responses:
         '200':
           description: Result (ok=true/false + humanized message), nothing persisted

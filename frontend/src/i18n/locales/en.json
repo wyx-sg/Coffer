@@ -510,6 +510,8 @@
       "subtitle": "A connection = an API key + endpoint + model. One connection can drive an agent and Coffer's internal engine.",
       "add": "Add connection",
       "addTitle": "Add connection",
+      "editTitle": "Edit connection",
+      "secretKeepBlank": "Leave blank to keep the current key",
       "empty": "No connections yet.",
       "switch": "Switch",
       "active": "Active",

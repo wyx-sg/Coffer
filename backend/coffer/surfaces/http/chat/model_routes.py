@@ -35,7 +35,10 @@ async def list_provider_models(
 ) -> ProviderModelsOut:
     """List the models a provider exposes (empty + message → enter manually)."""
     result = await svc.list_models(
-        provider=body.provider, base_url=body.base_url, credential_ref=body.credential_ref
+        provider=body.provider,
+        base_url=body.base_url,
+        credential_ref=body.credential_ref,
+        secret_value=body.secret_value,
     )
     return ProviderModelsOut(models=result.models, message=result.message)
 
@@ -51,5 +54,6 @@ async def test_connection(
         model=body.model,
         base_url=body.base_url,
         credential_ref=body.credential_ref,
+        secret_value=body.secret_value,
     )
     return TestResultOut(ok=result.ok, message=result.message, detail=result.detail)
