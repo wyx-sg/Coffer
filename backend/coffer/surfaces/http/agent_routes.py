@@ -49,6 +49,11 @@ class AgentPatch(BaseModel):
     # Slice 6: opt-in native write-side memory disable. Toggling drives the
     # on-disk transform (Claude settings.json / Codex config.toml) in lockstep.
     disable_native_memory: bool | None = None
+    # spec 011 amendment 2026-06-22b (E3): per-agent model binding. Explicit null
+    # on `fast_model` clears the fast slot (distinguished via model_fields_set).
+    model: str | None = None
+    fast_model: str | None = None
+    wire_api: str | None = None
 
 
 class AgentOut(BaseModel):
@@ -64,6 +69,11 @@ class AgentOut(BaseModel):
     skill_exclusions: list[str]
     # Slice 6: whether the agent's native write-side memory is disabled.
     disable_native_memory: bool
+    # spec 011 amendment 2026-06-22b (E3): per-agent model binding (None = unbound,
+    # falls back to the active connection's model during rollout).
+    model: str | None
+    fast_model: str | None
+    wire_api: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -96,6 +106,9 @@ def _to_out(r: Resource) -> AgentOut:
         follow_all_skills=cfg.follow_all_skills,
         skill_exclusions=list(cfg.skill_exclusions),
         disable_native_memory=cfg.disable_native_memory,
+        model=cfg.model,
+        fast_model=cfg.fast_model,
+        wire_api=cfg.wire_api,
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
@@ -190,6 +203,17 @@ async def update_agent(
         # lockstep (Claude settings.json / Codex config.toml).
         r = await svc.set_disable_native_memory(
             name=name, enabled=body.disable_native_memory, actor=actor
+        )
+    if "model" in sent or "fast_model" in sent or "wire_api" in sent:
+        # Per-agent model binding (E3). An explicit null fast_model clears the
+        # fast slot; the caller re-activates the connection to re-project.
+        r = await svc.set_model_binding(
+            name=name,
+            model=body.model if "model" in sent else None,
+            fast_model=body.fast_model if "fast_model" in sent else None,
+            clear_fast_model="fast_model" in sent and body.fast_model is None,
+            wire_api=body.wire_api if "wire_api" in sent else None,
+            actor=actor,
         )
     return _to_out(r)
 

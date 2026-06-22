@@ -988,6 +988,9 @@ components:
             write-side memory in its config file (Claude `autoMemoryEnabled`;
             Codex `features.memories` / `memories.generate_memories`) so Coffer is
             the single shared memory store. Toggling back to false restores it.
+        model: { type: string, nullable: true, description: "Per-agent model binding (spec 011 amendment 2026-06-22b) → ANTHROPIC_MODEL / Codex model." }
+        fast_model: { type: string, nullable: true, description: "Fast slot → ANTHROPIC_SMALL_FAST_MODEL (anthropic only). Explicit null clears it." }
+        wire_api: { type: string, nullable: true, description: "Codex chat/responses choice for this agent's binding." }
 
     AgentOut:
       type: object
@@ -999,6 +1002,9 @@ components:
           follow_all_skills,
           skill_exclusions,
           disable_native_memory,
+          model,
+          fast_model,
+          wire_api,
           created_at,
           updated_at,
         ]
@@ -1021,6 +1027,9 @@ components:
         disable_native_memory:
           type: boolean
           description: "Slice 6: whether the agent's native write-side memory is disabled. Defaults to false."
+        model: { type: string, nullable: true, description: "Per-agent model binding (null = unbound, falls back to the active connection during rollout)." }
+        fast_model: { type: string, nullable: true }
+        wire_api: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 

@@ -311,6 +311,46 @@ class AgentService:
             await self._on_skill_policy_changed(name)
         return updated
 
+    async def set_model_binding(
+        self,
+        *,
+        name: str,
+        model: str | None = None,
+        fast_model: str | None = None,
+        clear_fast_model: bool = False,
+        wire_api: str | None = None,
+        actor: str = "api",
+    ) -> Resource:
+        """Persist this agent's per-agent model binding (spec 011 amendment
+        2026-06-22b E3). ``None`` fields are left unchanged; ``clear_fast_model``
+        explicitly removes the fast slot. The new model takes effect on disk the
+        next time the agent's connection is (re-)activated — the caller re-runs
+        ``activate`` to re-project, mirroring how the connection-model PATCH
+        worked before."""
+        existing = await self.get(name)
+        cfg = AgentConfig.model_validate(existing.config)
+        overrides: dict[str, object] = {}
+        if model is not None:
+            overrides["model"] = model
+        if clear_fast_model:
+            overrides["fast_model"] = None
+        elif fast_model is not None:
+            overrides["fast_model"] = fast_model
+        if wire_api is not None:
+            overrides["wire_api"] = wire_api
+        if not overrides:
+            return existing
+        try:
+            new_cfg = AgentConfig.model_validate(cfg.model_dump() | overrides)
+        except Exception as e:  # pydantic ValidationError
+            raise ConfigValidationError(str(e)) from e
+        return await self._rs.update_config(
+            ResourceRef("agent", name),
+            new_config=new_cfg.model_dump(mode="json"),
+            actor=actor,
+            allow_lifecycle_kind=True,  # CODE-REG: value-level binding change only
+        )
+
     async def set_disable_native_memory(
         self, *, name: str, enabled: bool, actor: str = "api"
     ) -> Resource:

@@ -137,6 +137,21 @@ def test_agent_patch_config_dir(tmp_path, monkeypatch):
         assert "enabled" not in body
 
 
+def test_agent_patch_model_binding(tmp_path, monkeypatch):
+    """PATCH sets the per-agent model binding; a bad wire_api is rejected."""
+    app = _app(tmp_path, monkeypatch, 59609)
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
+    with _client(app) as c:
+        _post_codex(c, "cur", config_dir)
+        ok = c.patch("/api/v1/agents/cur", json={"model": "gpt-5", "wire_api": "responses"})
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["model"] == "gpt-5"
+        assert ok.json()["wire_api"] == "responses"
+        bad = c.patch("/api/v1/agents/cur", json={"wire_api": "garbage"})
+        assert bad.status_code != 200  # validated, not silently persisted
+
+
 def test_agent_candidates_get(tmp_path, monkeypatch):
     """GET /agents/candidates is callable + returns 200 even with no markers."""
     app = _app(tmp_path, monkeypatch, 59605)

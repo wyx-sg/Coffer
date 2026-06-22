@@ -40,6 +40,17 @@ class AgentConfig(BaseModel):
     # store. Default OFF; toggling it back off restores the agent's native
     # memory. Old persisted rows (pre-Slice-6) load with this default.
     disable_native_memory: bool = False
+    # Per-agent model binding (spec 011 amendment 2026-06-22b, E3). The model the
+    # agent projects comes from HERE, not the connection: ``model`` →
+    # ``ANTHROPIC_MODEL`` / Codex ``model``; ``fast_model`` →
+    # ``ANTHROPIC_SMALL_FAST_MODEL`` (anthropic only); ``wire_api`` → the Codex
+    # chat/responses choice. All optional — an unbound agent (or an old row)
+    # falls back to the active connection's values during rollout.
+    model: str | None = None
+    fast_model: str | None = None
+    # Validated against the connection's WireApi values (see _validate_wire_api)
+    # so a bad value is a 422 at PATCH time, not a corrupt projected Codex config.
+    wire_api: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -65,6 +76,13 @@ class AgentConfig(BaseModel):
                 p = pathlib.Path(legacy)
                 data["config_dir"] = str(p.parent) if p.name == "skills" else legacy
         return data
+
+    @field_validator("wire_api")
+    @classmethod
+    def _validate_wire_api(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("chat", "responses"):
+            raise ValueError("wire_api must be 'chat' or 'responses'")
+        return v
 
     @field_validator("config_dir")
     @classmethod
