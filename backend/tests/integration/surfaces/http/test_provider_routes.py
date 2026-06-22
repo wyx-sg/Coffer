@@ -183,6 +183,30 @@ def test_activate_writes_claude_settings(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
+    spec="011-provider-switching",
+    scenario="an agent's model binding overrides the connection model",
+)
+def test_agent_binding_overrides_connection_model(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59783)
+    cfg = _agent_dir(tmp_path)
+    with _client(app) as c:
+        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        c.post("/api/v1/providers", json=_anthropic_body(fast_model="conn-fast"))
+        # Bind this agent to its own models; activating re-projects from the binding.
+        rb = c.patch(
+            "/api/v1/agents/cc",
+            json={"model": "bound-opus", "fast_model": "bound-haiku"},
+        )
+        assert rb.status_code == 200, rb.text
+        assert rb.json()["model"] == "bound-opus"
+        c.post("/api/v1/providers/acme/activate")
+        data = json.loads((cfg / "settings.json").read_text())
+        # The agent binding wins over the connection's model/fast_model.
+        assert data["env"]["ANTHROPIC_MODEL"] == "bound-opus"
+        assert data["env"]["ANTHROPIC_SMALL_FAST_MODEL"] == "bound-haiku"
+
+
+@pytest.mark.acceptance(
     spec="011-provider-switching", scenario="activate an openai profile writes Codex config"
 )
 def test_activate_writes_codex_config(tmp_path, monkeypatch):

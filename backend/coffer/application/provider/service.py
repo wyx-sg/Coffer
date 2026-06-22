@@ -357,16 +357,22 @@ class ProviderService:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
         text = self._config_store.read_text(spec.path) or ""
+        # Model comes from the per-agent binding (spec 011 amendment 2026-06-22b
+        # E3/E4); an unbound agent falls back to the connection's values during
+        # rollout (the connection-side fields are removed in a later slice).
+        model = agent_cfg.model or cfg.model
+        fast_model = agent_cfg.fast_model if agent_cfg.fast_model is not None else cfg.fast_model
+        wire_api = agent_cfg.wire_api or cfg.wire_api.value
         if cfg.wire_format == WireFormat.ANTHROPIC:
             new_text = apply_anthropic_settings(
-                text, base_url=cfg.base_url, model=cfg.model, fast_model=cfg.fast_model
+                text, base_url=cfg.base_url, model=model, fast_model=fast_model
             )
         else:
             new_text = apply_codex_provider(
                 text,
                 base_url=cfg.base_url,
-                model=cfg.model,
-                wire_api=cfg.wire_api.value,
+                model=model,
+                wire_api=wire_api,
                 display_name=f"Coffer ({profile_name})",
             )
         self._config_store.write_text_atomic(spec.path, new_text)

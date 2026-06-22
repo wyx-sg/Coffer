@@ -40,6 +40,15 @@ class AgentConfig(BaseModel):
     # store. Default OFF; toggling it back off restores the agent's native
     # memory. Old persisted rows (pre-Slice-6) load with this default.
     disable_native_memory: bool = False
+    # Per-agent model binding (spec 011 amendment 2026-06-22b, E3). The model the
+    # agent projects comes from HERE, not the connection: ``model`` →
+    # ``ANTHROPIC_MODEL`` / Codex ``model``; ``fast_model`` →
+    # ``ANTHROPIC_SMALL_FAST_MODEL`` (anthropic only); ``wire_api`` → the Codex
+    # chat/responses choice. All optional — an unbound agent (or an old row)
+    # falls back to the active connection's values during rollout.
+    model: str | None = None
+    fast_model: str | None = None
+    wire_api: str | None = None
 
     @model_validator(mode="before")
     @classmethod
