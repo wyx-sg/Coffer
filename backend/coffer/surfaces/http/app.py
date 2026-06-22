@@ -88,6 +88,7 @@ from coffer.surfaces.http.dependencies import (
     set_resource_service,
     set_retention_service,
 )
+from coffer.surfaces.http.distill_batch_wiring import start_distill_batch, stop_distill_batch
 from coffer.surfaces.http.distill_wiring import wire_distill
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
@@ -284,6 +285,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # On-demand SessionEnd distill (Slice 6 FR-051): reuses the FR-046 ledger so
     # a session distilled at session-end is never re-distilled by the sweep.
     wire_session_end_distiller(distill_service=distill_service, session_maker=sm)
+    # Async batch distillation (off the request path) for the transcripts table.
+    await start_distill_batch(app, distill_service=distill_service, session_maker=sm)
 
     # Multi-machine sync (spec 010); worker is inert until the user enables it.
     start_sync(app, resource_svc, audit, sm, db_path, get_master_key_manager())
@@ -317,6 +320,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await stop_backup_worker(app)
         await stop_auto_organize(app)
         await stop_auto_distill(app)
+        await stop_distill_batch(app)
         await stop_sync(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an

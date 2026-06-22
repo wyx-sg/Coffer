@@ -21,6 +21,10 @@ class TranscriptSessionSummary(BaseModel):
     started_at: datetime | None = None
     last_activity_at: datetime | None = None
     source_path: str
+    distill_status: str | None = Field(
+        default=None,
+        description="Per-session distill status: done | never | queued | running | error.",
+    )
 
 
 class TranscriptSessionListResponse(BaseModel):
@@ -63,3 +67,49 @@ class DistillResponse(BaseModel):
 
     insights: list[InsightOut]
     journal_entries: list[str]
+
+
+class DistillBatchRequest(BaseModel):
+    """Request body for POST /api/v1/agents/{name}/transcripts/distill-batch.
+
+    Either distil an explicit ``session_ids`` set, or set ``all`` to distil every
+    session matching the current list filters (select-all across pages).
+    """
+
+    session_ids: list[str] | None = Field(
+        default=None, description="Distil these specific sessions."
+    )
+    all: bool = Field(
+        default=False,
+        description="Distil every session matching the filters below (select-all).",
+    )
+    q: str | None = Field(default=None, description="Search filter (with all=true).")
+    project: str | None = Field(default=None, description="Project filter (with all=true).")
+    started_after: datetime | None = Field(default=None)
+    started_before: datetime | None = Field(default=None)
+
+
+class DistillBatchResponse(BaseModel):
+    """Response for POST /api/v1/agents/{name}/transcripts/distill-batch."""
+
+    queued: int = Field(description="Newly enqueued sessions.")
+    skipped: int = Field(description="Skipped — already distilled at current content.")
+    total: int = Field(description="Candidate sessions considered.")
+
+
+class DistillSessionStatus(BaseModel):
+    """A single in-flight session's distill state."""
+
+    session_id: str
+    state: str = Field(description="queued | running | error")
+    message: str | None = Field(default=None, description="Error detail when state is error.")
+
+
+class DistillStatusResponse(BaseModel):
+    """Response for GET /api/v1/agents/{name}/transcripts/distill-status.
+
+    Only in-flight sessions appear (queued / running / error); a session absent
+    from the list is either done or never-distilled (see the list endpoint's
+    ``distill_status``)."""
+
+    statuses: list[DistillSessionStatus]
