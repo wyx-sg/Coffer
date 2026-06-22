@@ -44,11 +44,11 @@ class AgentConfig(BaseModel):
     # agent projects comes from HERE, not the connection: ``model`` →
     # ``ANTHROPIC_MODEL`` / Codex ``model``; ``fast_model`` →
     # ``ANTHROPIC_SMALL_FAST_MODEL`` (anthropic only); ``wire_api`` → the Codex
-    # chat/responses choice. All optional — an unbound agent (or an old row)
-    # falls back to the active connection's values during rollout.
+    # chat/responses choice. All optional — an unbound agent projects no model
+    # env, so it runs on its OWN default model (the connection carries none).
     model: str | None = None
     fast_model: str | None = None
-    # Validated against the connection's WireApi values (see _validate_wire_api)
+    # Validated against the allowed Codex wire-api values (see _validate_wire_api)
     # so a bad value is a 422 at PATCH time, not a corrupt projected Codex config.
     wire_api: str | None = None
 
