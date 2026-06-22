@@ -334,6 +334,15 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **When** 用户将 connection B 设为内部默认，
 - **Then** B 的 `internal_default` 变为 true，A 的变为 false（全局单一内部默认不变量）。
 
+### Scenario: test or fetch models with an inline unsaved secret
+
+- **Given** 连接对话框已打开，尚未保存任何连接（也无对应 credential ref），
+- **When** 用户输入明文 API key 并触发「测试连接」或「拉取模型」（`POST
+  /models/test-connection` / `POST /models/list-models` 携带 `secret_value`、
+  不含 `credential_ref`），
+- **Then** introspection 服务将明文 key 直接传给 provider、不查 credential vault，
+  探测成功，拉取到的模型填入可选下拉框（见 ADR-032 amendment D6）。
+
 ## 需求
 
 ### 功能需求
