@@ -376,6 +376,13 @@ turn with actor `agent`.
 - **Streaming client disconnects mid-turn** (page closed, navigated away): the
   turn completes server-side and the assistant message is persisted; the next
   load shows the finished message.
+- **SSE connection drops mid-turn but the page stays open** (proxy/idle timeout,
+  transient network blip): the client re-subscribes; because attach replays the
+  in-flight turn (FR-019a), the missed events — including the terminal
+  `turn_done` — arrive on the new connection, so the live bubble resolves instead
+  of spinning on "thinking…" until the next send. Reconnects are bounded; once
+  the turn's reply is committed the client reconciles against the persisted
+  messages and stops.
 - **Turn interrupted by the user**: the turn stops at once and the partial
   assistant message is persisted (User Story 7).
 - **Conversation deleted while its turn is streaming**: the in-flight turn is

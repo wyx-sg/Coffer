@@ -354,15 +354,12 @@ describe("useChatTurn", () => {
     expect(result.current.isStreaming).toBe(false);
   });
 
-  test("stream ending without a landed reply resets streaming but keeps the live text", async () => {
-    // Stream ends with only the user message persisted (reply not yet landed):
-    // the live bubble is kept (no premature clear) but streaming is reset.
-    subscribeMock.mockImplementation(
-      fromEvents(
-        { event: "turn_start", data: {} },
-        { event: "text_delta", data: { text: "still thinking text" } },
-      ),
-    );
+  test("re-subscribes after a mid-turn drop and recovers the missed turn_done", async () => {
+    // The stream drops mid-turn (only turn_start + a partial delta, no turn_done)
+    // while the reply has NOT yet landed server-side. The hook must RE-SUBSCRIBE
+    // — GET /events replays the in-flight turn on reattach — so the missed
+    // turn_done arrives on the reconnection and the bubble resolves instead of
+    // spinning forever (the "要发下一条才出上一条" bug).
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
@@ -380,21 +377,73 @@ describe("useChatTurn", () => {
         },
       ],
     );
+    // First subscription: drops mid-turn with no turn_done.
+    subscribeMock.mockImplementationOnce(
+      fromEvents(
+        { event: "turn_start", data: {} },
+        { event: "text_delta", data: { text: "partial" } },
+      ),
+    );
+    // Reconnection: GET /events replays the in-flight turn and delivers the
+    // terminal turn_done. The reply is now committed, so the refetch carries it.
+    subscribeMock.mockImplementation(async function* () {
+      qc.setQueryData(
+        ["messages", "conv-1"],
+        [
+          {
+            id: "u1",
+            conversation_id: "conv-1",
+            seq: 0,
+            role: "user",
+            content: [{ type: "text", text: "q" }],
+            status: "complete",
+            created_at: "",
+          },
+          {
+            id: "a1",
+            conversation_id: "conv-1",
+            seq: 1,
+            role: "assistant",
+            content: [{ type: "text", text: "the full reply" }],
+            status: "complete",
+            created_at: "",
+          },
+        ],
+      );
+      yield { event: "turn_start", data: {} };
+      yield { event: "text_delta", data: { text: "the full reply" } };
+      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+    });
+
     const wrapper = ({ children }: PropsWithChildren) => (
       <QueryClientProvider client={qc}>{children}</QueryClientProvider>
     );
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
-    // Wait for the UNIQUE terminal state — the live text landed AND streaming
-    // reset — in one condition. Waiting only on `isStreaming === false` is racy:
-    // that is also the hook's initial state, so under CI scheduling the wait can
-    // resolve in the initial window (before the stream's events are processed),
-    // when liveMessage is still null. Both assertions hold only once the stream
-    // has ended, so this converges deterministically.
+    // First wait for the RECONNECT to happen (≥ 2 attaches). This is the only
+    // signal unique to the recovery path — the terminal {liveMessage:null,
+    // isStreaming:false} state also matches the hook's initial state, so waiting
+    // on it alone would resolve vacuously at mount.
+    await waitFor(() => expect(subscribeMock.mock.calls.length).toBeGreaterThanOrEqual(2));
+    // After the reconnect replays the turn (incl. the missed turn_done), the
+    // live bubble resolves and the turn is no longer streaming.
     await waitFor(() => {
-      expect(result.current.liveMessage?.text).toBe("still thinking text");
+      expect(result.current.liveMessage).toBeNull();
       expect(result.current.isStreaming).toBe(false);
     });
+    expect(result.current.error).toBeNull();
+  });
+
+  test("an idle stream that closes with no turn in flight does not reconnect", async () => {
+    // A subscription that ends cleanly without ever starting a turn (idle close)
+    // must NOT trigger a reconnect loop — there is nothing to recover.
+    subscribeMock.mockImplementation(fromEvents({ event: "queue_changed", data: { pending: [] } }));
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await act(async () => {});
+    await act(async () => {});
+    expect(result.current.isStreaming).toBe(false);
+    expect(subscribeMock).toHaveBeenCalledTimes(1);
   });
 
   test("turn_error surfaces an error and drops the live bubble", async () => {
