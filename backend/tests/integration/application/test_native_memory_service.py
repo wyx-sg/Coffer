@@ -71,6 +71,33 @@ async def test_list_stores_for_claude_code(tmp_path: pathlib.Path) -> None:
     assert store.item_count == 2
 
 
+async def test_list_stores_label_from_session_cwd_not_lossy_slug(tmp_path: pathlib.Path) -> None:
+    """A hyphenated project name (``account-gateway``) under a ``.``-containing
+    home (``yuxing.wu``) cannot be recovered by decoding the slug — the slug
+    lossily collapses to label ``gateway``. The real cwd from the session log
+    fixes both label and path."""
+    import json
+
+    cfg_dir = tmp_path / ".claude"
+    slug = "-Users-yuxing-wu-WorkEnv-account-gateway"
+    _write(cfg_dir / "projects" / slug / "memory" / "a.md")
+    (cfg_dir / "projects" / slug / "s.jsonl").write_text(
+        json.dumps({"cwd": "/Users/yuxing.wu/WorkEnv/account-gateway"}) + "\n",
+        encoding="utf-8",
+    )
+
+    svc = AgentNativeMemoryService(
+        agent_service=_FakeAgents(
+            name="cc", config={"type": "claude_code", "config_dir": str(cfg_dir)}
+        ),
+        scanner=FileNativeMemoryScanner(),
+    )
+
+    store = (await svc.list_stores("cc"))[0]
+    assert store.project_label == "account-gateway"
+    assert store.project_path == "/Users/yuxing.wu/WorkEnv/account-gateway"
+
+
 async def test_list_stores_sorted_by_count_then_label(tmp_path: pathlib.Path) -> None:
     cfg_dir = tmp_path / ".claude"
     # -A-zeta: 1 fact ; -A-beta: 1 fact ; -A-alpha: 3 facts

@@ -16,8 +16,27 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from coffer.domain.agent.types import AgentType
+
+
+class ScannedStore(NamedTuple):
+    """Raw result of scanning one native-memory store on disk.
+
+    ``project_path`` is the store's *real* project directory when the infra
+    adapter could recover it (e.g. from a session transcript's ``cwd`` field);
+    ``None`` when unknown, in which case the caller decodes a best-effort path
+    from ``slug``. The slug encoding is lossy (Claude Code collapses ``/``,
+    ``.``, ``_`` all to ``-``), so the decoded path is wrong whenever a path
+    segment or the home dir contained one of those characters — hence the
+    cwd-derived ``project_path`` is preferred when available.
+    """
+
+    slug: str
+    memory_dir: str
+    item_count: int
+    project_path: str | None
 
 
 @dataclass(frozen=True)
