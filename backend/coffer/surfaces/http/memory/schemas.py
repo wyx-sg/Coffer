@@ -235,6 +235,58 @@ class RulesOut(BaseModel):
     text: str | None
 
 
+# --- journal lane (Slice 7) -------------------------------------------------
+
+
+class JournalFileOut(BaseModel):
+    """One time-partitioned ``journal/<period>.md`` file (read-only)."""
+
+    period: str
+    text: str
+    path: str
+    folder_path: str
+
+
+class JournalOut(BaseModel):
+    """The store's journal lane — period files, newest first."""
+
+    files: list[JournalFileOut]
+
+
+# --- handoff lane (Slice 7) -------------------------------------------------
+
+
+class HandoffSceneOut(BaseModel):
+    """One per-branch ``handoff/<slug>.md`` scene (read-only)."""
+
+    branch: str
+    text: str
+    updated_at: datetime
+    path: str
+    folder_path: str
+
+
+class HandoffOut(BaseModel):
+    """The store's handoff lane — one scene per branch."""
+
+    scenes: list[HandoffSceneOut]
+
+
+# --- consolidation log (Slice 7) --------------------------------------------
+
+
+class ConsolidationLogOut(BaseModel):
+    """The store-root ``consolidation-log.md`` changelog (read-only).
+
+    ``text`` is ``None`` when the store has no changelog yet; ``path`` /
+    ``folder_path`` always point at where it would live so the UI can still
+    reveal-in-file-manager."""
+
+    text: str | None
+    path: str
+    folder_path: str
+
+
 # --- reorg ------------------------------------------------------------------
 
 

@@ -213,6 +213,53 @@ the setting is restored.
 
 ---
 
+### User Story 9 — Read the whole store, lane by lane (Priority: P2)
+
+The developer opens a memory store in Coffer and wants to see **everything the
+store holds**, not just the flat fact list: the semantic **Knowledge** facts,
+the procedural **Rules** document, the time-ordered **Journal** of episodic
+entries, the per-branch **Handoff** scenes, and the organizer's **consolidation
+changelog**. The memory store detail page presents the store as four lane
+sections (Knowledge / Rules / Journal / Handoff) plus a consolidation-changelog
+view. Each lane gets a shape-fit view: Knowledge keeps the fact/topic list +
+content (and remains what recall operates over), Rules is a single document,
+Journal is a time-ordered list (newest first), and Handoff is a per-branch list.
+Every view is **read-only**, renders through the **unified file preview** (no
+hand-styled `<pre>`), and offers **open in external editor / reveal in file
+manager / copy path** for the underlying lane files — files-as-truth (FR-017,
+FR-021), so the developer corrects content in their own editor and the change is
+picked up by lazy reindex-on-read (FR-010).
+
+**Why this priority**: a flat fact list hides three of the four lanes — rules
+live outside recall, the journal is episodic, and handoff scenes are working
+state — so the store's procedural, episodic, and continuity memory is invisible
+in the UI even though it is all on disk. Surfacing each lane in a shape that fits
+it makes the whole store legible. It is P2 (not P1) because it is a read-only
+projection over lanes the shared-memory core (Stories 1–2), the journal (Story
+6), the handoff (Story 7), and the rules/organizer lanes already populate — it
+adds visibility, never a new write path.
+
+**Independent Test**: Populate a project store with a fact, a rule, a journal
+entry, a handoff scene, and an organizer run that writes a consolidation
+changelog. Open the store detail page and confirm five views: the Knowledge lane
+shows the fact, Rules shows the rules document, Journal lists the entry
+(newest first), Handoff lists the branch scene, and the changelog view shows the
+固化 log — each read-only, each rendered via the unified file preview, each
+offering open-in-editor / reveal / copy-path on its lane file. Confirm recall
+still operates over the Knowledge lane only.
+
+**Covering scenarios** (the READ ENDPOINTS the views consume):
+
+- journal lane entries are readable for a store
+- handoff scenes are listed per branch for a store
+- the consolidation changelog is readable for a store
+
+(The four-lane page rendering itself is verified by frontend tests; like the
+other desktop-view items its desktop acceptance is deferred to e2e. The three
+scenarios above pin the read endpoints the lane views consume.)
+
+---
+
 ### Edge Cases
 
 - **Vector unavailable but embedding unconfigured**: when the store's resolved strategy needs vectors but no embedding provider is configured, `recall` falls back to keyword internally and returns results; it never blocks. The fallback is NOT surfaced as a query-time response flag. Default retrieval is keyword+grep (zero config, offline).
@@ -486,6 +533,38 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   later session-start injection reads), and a store with no rules returns an
   empty/`null` body rather than an error.
 
+### Scenario: journal lane entries are readable for a store
+
+- **Given** a memory store whose `journal/` lane holds one or more
+  `journal/<YYYY-MM>.md` files,
+- **When** `GET /api/v1/memory_stores/{name}/journal` is called (addressed by
+  store name, not cwd),
+- **Then** the response returns the journal files time-ordered **newest period
+  first**, each with its `period`, `text`, absolute on-disk `path`, and its
+  containing `folder_path`; a store with no journal returns an **empty list with
+  HTTP 200** (never a 404).
+
+### Scenario: handoff scenes are listed per branch for a store
+
+- **Given** a memory store whose `handoff/` lane holds one or more per-branch
+  scene files,
+- **When** `GET /api/v1/memory_stores/{name}/handoff` is called (addressed by
+  store name, not cwd),
+- **Then** the response lists one scene **per branch**, each carrying its
+  `branch`, `text`, `updated_at`, absolute on-disk `path`, and `folder_path`; a
+  store with no handoff scenes returns an **empty list with HTTP 200** (never a
+  404).
+
+### Scenario: the consolidation changelog is readable for a store
+
+- **Given** a memory store whose organizer has written a `consolidation-log.md`
+  at the store root,
+- **When** `GET /api/v1/memory_stores/{name}/consolidation-log` is called
+  (addressed by store name, not cwd),
+- **Then** the response returns the changelog `text` with its absolute on-disk
+  `path` and `folder_path`; a store with no changelog returns `text = null` with
+  HTTP 200 (never a 404).
+
 ### Scenario: rules bundle is injected at session start as context only
 
 - **Given** a managed agent (Claude Code or Codex) with the Coffer SessionStart
@@ -623,6 +702,9 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-017c**: A user MUST be able to set a **display label** for any memory store — a chosen name that takes precedence over the FR-017a `project_root` derivation in every surface. This gives a readable identity to a store whose originating folder was never recorded (where FR-017a would otherwise fall back to the opaque `project-<ULID>` name). Setting an empty / whitespace label clears it, reverting to the FR-017a derivation or fallback. The label is **display metadata**: it does not change the store name (FR-017) or `project_id`, and is set via `PATCH /memory_stores/{name}/label`. Verified by an HTTP acceptance test; the desktop rename view is deferred to e2e like the other desktop-view items.
 - **FR-021**: The read-only fact viewer MUST offer, for both a fact file and its containing folder, affordances to (a) **open in external editor** and (b) **reveal in file manager / Finder**. Both perform the real OS action on **both** surfaces: the desktop (Tauri) build via the OS opener, the web build via the loopback daemon's filesystem-action endpoints (spec 004 FR-039), since the daemon is on the user's own machine (ADR-033). There is no copy-path fallback. Which editor opens is decided by the global preferred-editor preference (specced in 002-ui-shell; not re-specified here). The read responses MUST surface the absolute paths these affordances act on (see FR-022).
 - **FR-022**: Read responses MUST surface the on-disk truth: the fact read endpoints (`GET …/facts`, `GET …/facts/{id}`) MUST include each fact file's absolute `.md` path and its containing folder's absolute path, and the store read endpoint (`GET …/{name}`) MUST include the store's absolute on-disk directory. These power the FR-021 open/reveal affordances and let a human locate the canonical file to correct out-of-band.
+
+- **FR-053**: The memory store detail page MUST present the store as **four lane sections** (Knowledge / Rules / Journal / Handoff) plus a **consolidation-changelog** view, replacing the flat fact list. Each lane gets a shape-fit view: **knowledge** = the fact/topic list + content; **rules** = a single document; **journal** = time-ordered entries (newest first); **handoff** = a per-branch list. All views are **read-only**, render via the **unified file preview** (no hand-styled `<pre>`), and offer **open in external editor / reveal in file manager / copy path** for the underlying lane files (files-as-truth, FR-017/FR-021). Recall continues to operate over the **Knowledge** lane only (the rules/journal/handoff/changelog views are read projections, not recall surfaces).
+- **FR-054**: The system MUST expose read endpoints for the lanes the UI needs: `GET /api/v1/memory_stores/{name}/journal` (the time-ordered journal files, newest period first), `GET /api/v1/memory_stores/{name}/handoff` (the handoff scenes per branch, each carrying its `branch` and `updated_at`), and `GET /api/v1/memory_stores/{name}/consolidation-log` (the organizer's 固化 changelog; `null` when absent). These are **read-only**, **addressed by store name** (not cwd), and MUST return **HTTP 200 with empty lists / `null`** for an empty store (never a 404). (The Rules lane already has its read surface, `GET /api/v1/memory_stores/{name}/rules`, FR-036.)
 
 **Substrate isolation**
 

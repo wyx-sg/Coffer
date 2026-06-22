@@ -1,11 +1,14 @@
 // frontend/src/kinds/memory/MemoryStoreDetailPage.tsx
 //
-// Memory store detail surface (spec 007 redesign): a back link + header (scope
-// + metric badges + Clear all), a recall box, and a fact TREE on the left with
-// a rendered preview/editor on the right (mirrors the KB detail page). Memory
-// is AI-authored — agents write via the MCP `remember` tool; the UI lets humans
-// CORRECT existing facts (edit the Markdown / delete), not add new ones.
-import { useEffect, useState } from "react";
+// Memory store detail surface (spec 007 slice 7): a back link + header (scope +
+// metric badges + Clear all), a recall box, and a Tabs shell of FIVE read-only
+// lanes — Knowledge / Rules / Journal / Handoff / Changelog. Knowledge is the
+// fact tree + read-only preview (recall filters it); the other lanes are
+// shape-fit views over the store's curated files, all rendered through the
+// unified file preview (never a hand-styled <pre>). Memory is AI-authored —
+// agents write via the MCP `remember` tool; the UI is read-only for humans
+// (correct a fact in your own editor / delete).
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,26 +16,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translateApiError } from "@/lib/api/errors";
 import {
   clearFacts,
-  deleteFact,
-  getFact,
   getMemoryStore,
   getMemoryStoreMetrics,
-  listFacts,
   storeDisplayName,
   recall,
-  type FactOut,
   type RecallResponse,
 } from "./api";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { MemoryDetailHeader } from "./MemoryDetailHeader";
 import { MemoryRenameDialog } from "./MemoryRenameDialog";
-import { MemoryFactTree } from "./MemoryFactTree";
-import { MemoryFactViewer } from "./MemoryFactViewer";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
-
-// The fact list is shown as a single scrollable list, fetched in one request at
-// the facts API's max page size (`le=200`) — enough for a personal store.
-const FACTS_FETCH_LIMIT = 200;
+import { MemoryKnowledgeLane } from "./MemoryKnowledgeLane";
+import { MemoryRulesLane } from "./MemoryRulesLane";
+import { MemoryJournalLane } from "./MemoryJournalLane";
+import { MemoryHandoffLane } from "./MemoryHandoffLane";
+import { MemoryChangelogLane } from "./MemoryChangelogLane";
 
 export function MemoryStoreDetailPage() {
   const { t } = useTranslation();
@@ -42,44 +41,8 @@ export function MemoryStoreDetailPage() {
   const [query, setQuery] = useState("");
   const [recallResult, setRecallResult] = useState<RecallResponse | null>(null);
 
-  const [selected, setSelected] = useState<FactOut | null>(null);
-
-  // Styled confirmation dialogs replace native window.confirm for the two
-  // destructive actions (delete a fact, clear the whole store).
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
-
-  const factsQuery = useQuery({
-    queryKey: ["memory-facts", store],
-    queryFn: () => listFacts(store, FACTS_FETCH_LIMIT, 0),
-    enabled: Boolean(store),
-  });
-  const factTotal = factsQuery.data?.total ?? 0;
-
-  // --- recall mode -----------------------------------------------------------
-  // Running a recall filters the left tree to the matched facts and opens the
-  // top hit highlighted; clearing the search box returns to the full paged list.
-  const recalling = recallResult !== null;
-  // Unique hit fact ids in rank order (a fact can match via several chunks).
-  const hitIds = recallResult ? [...new Set(recallResult.hits.map((h) => h.id))] : [];
-  // Recall returns only ranked snippets; fetch the full facts so the rows
-  // (name + actor badge) and the viewer (full body) render like normal mode.
-  const recallFactsQuery = useQuery({
-    queryKey: ["memory-recall-facts", store, hitIds],
-    queryFn: async () => {
-      const facts = await Promise.all(hitIds.map((id) => getFact(store, id).catch(() => null)));
-      return facts.filter((f): f is FactOut => f !== null);
-    },
-    enabled: recalling && hitIds.length > 0,
-  });
-  const recallFacts = recallFactsQuery.data ?? [];
-  const recallLoading = recalling && hitIds.length > 0 && recallFactsQuery.isPending;
-  // Auto-select the top hit when a recall resolves so its match opens highlighted.
-  useEffect(() => {
-    const facts = recallFactsQuery.data;
-    if (recalling && facts && facts.length > 0) setSelected(facts[0]);
-  }, [recallFactsQuery.data, recalling]);
 
   const metricsQuery = useQuery({
     queryKey: ["memory-metrics", store],
@@ -95,27 +58,6 @@ export function MemoryStoreDetailPage() {
   // the project-dir basename (FR-017a), else the raw store name.
   const storeLabel = (storeQuery.data && storeDisplayName(storeQuery.data)) ?? store;
 
-  const invalidate = () => {
-    void qc.invalidateQueries({ queryKey: ["memory-facts", store] });
-    void qc.invalidateQueries({ queryKey: ["memory-metrics", store] });
-  };
-
-  // Keep the selected fact in sync with the freshly-loaded list when it's on the
-  // current page; otherwise (it's on another page) keep showing the captured
-  // selection so paging the tree doesn't blank the viewer.
-  const sourceFacts = recalling ? recallFacts : (factsQuery.data?.facts ?? []);
-  const liveSelected = selected
-    ? (sourceFacts.find((f) => f.id === selected.id) ?? selected)
-    : null;
-
-  const del = useMutation({
-    mutationFn: (id: string) => deleteFact(store, id),
-    onSuccess: () => {
-      setSelected(null);
-      setRecallResult(null); // a delete returns to the full list (no stale hit rows)
-      invalidate();
-    },
-  });
   const recallM = useMutation({
     mutationFn: () => recall(store, query, { topK: 5 }),
     onSuccess: (data) => setRecallResult(data),
@@ -123,23 +65,15 @@ export function MemoryStoreDetailPage() {
   const clear = useMutation({
     mutationFn: () => clearFacts(store),
     onSuccess: () => {
-      setSelected(null);
-      invalidate();
+      void qc.invalidateQueries({ queryKey: ["memory-facts", store] });
+      void qc.invalidateQueries({ queryKey: ["memory-metrics", store] });
     },
   });
 
-  const selectFact = (f: FactOut) => setSelected(f);
   const onQueryChange = (value: string) => {
     setQuery(value);
     if (!value) setRecallResult(null); // clearing the search box exits recall mode
   };
-  const confirmDelete = () => {
-    if (!liveSelected) return;
-    setDeleteOpen(true);
-  };
-  const confirmClear = () => setClearOpen(true);
-
-  const loadError = factsQuery.error ?? metricsQuery.error;
 
   return (
     <div className="space-y-6 p-6">
@@ -148,13 +82,13 @@ export function MemoryStoreDetailPage() {
         storeResource={storeQuery.data}
         metrics={metricsQuery.data}
         isClearPending={clear.isPending}
-        onClearAll={confirmClear}
+        onClearAll={() => setClearOpen(true)}
         onRename={() => setRenameOpen(true)}
       />
 
-      {loadError ? (
+      {metricsQuery.error ? (
         <p className="text-sm text-destructive" role="alert">
-          {translateApiError(t, loadError)}
+          {translateApiError(t, metricsQuery.error)}
         </p>
       ) : null}
 
@@ -166,36 +100,36 @@ export function MemoryStoreDetailPage() {
         onRecall={() => recallM.mutate()}
       />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(220px,300px)_1fr]">
-        <MemoryFactTree
-          facts={recalling ? { facts: recallFacts, total: recallFacts.length } : factsQuery.data}
-          selectedId={liveSelected?.id ?? null}
-          isLoading={recalling ? recallLoading : factsQuery.isPending}
-          emptyLabel={recalling ? t("memory.detail.noMatches") : undefined}
-          total={recalling ? recallFacts.length : factTotal}
-          onSelect={selectFact}
-        />
-        <MemoryFactViewer
-          fact={liveSelected ?? undefined}
-          initialQuery={recalling ? query : ""}
-          isDeletePending={del.isPending}
-          onDelete={confirmDelete}
-        />
-      </div>
+      <Tabs defaultValue="knowledge">
+        <TabsList>
+          <TabsTrigger value="knowledge">{t("memory.detail.tabs.knowledge")}</TabsTrigger>
+          <TabsTrigger value="rules">{t("memory.detail.tabs.rules")}</TabsTrigger>
+          <TabsTrigger value="journal">{t("memory.detail.tabs.journal")}</TabsTrigger>
+          <TabsTrigger value="handoff">{t("memory.detail.tabs.handoff")}</TabsTrigger>
+          <TabsTrigger value="changelog">{t("memory.detail.tabs.changelog")}</TabsTrigger>
+        </TabsList>
 
-      <ConfirmDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title={t("memory.detail.deleteTitle")}
-        description={t("memory.detail.deleteConfirm", { name: liveSelected?.name || "fact" })}
-        confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
-        pending={del.isPending}
-        onConfirm={() => {
-          if (liveSelected) {
-            del.mutate(liveSelected.id, { onSuccess: () => setDeleteOpen(false) });
-          }
-        }}
-      />
+        <TabsContent value="knowledge" className="pt-4">
+          <MemoryKnowledgeLane
+            store={store}
+            query={query}
+            recallResult={recallResult}
+            onExitRecall={() => setRecallResult(null)}
+          />
+        </TabsContent>
+        <TabsContent value="rules" className="pt-4">
+          <MemoryRulesLane store={store} />
+        </TabsContent>
+        <TabsContent value="journal" className="pt-4">
+          <MemoryJournalLane store={store} />
+        </TabsContent>
+        <TabsContent value="handoff" className="pt-4">
+          <MemoryHandoffLane store={store} />
+        </TabsContent>
+        <TabsContent value="changelog" className="pt-4">
+          <MemoryChangelogLane store={store} />
+        </TabsContent>
+      </Tabs>
 
       <ConfirmDialog
         open={clearOpen}

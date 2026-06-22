@@ -156,6 +156,41 @@ hook 什么都不打印并退出 0，agent 正常启动。打开 `disable_native
 
 ---
 
+### User Story 9 —— 逐 lane 读完整个 store（优先级 P2）
+
+开发者在 Coffer 里打开一个 memory store，想看见 store 里**持有的全部内容**，而不只是
+扁平的事实列表：语义 **Knowledge** 事实、过程性的 **Rules** 文档、按时间排序的情景
+**Journal** 条目、按分支的 **Handoff** 现场，以及 organizer 的**整合 changelog**。memory
+store 详情页把 store 呈现为四个 lane 区块（Knowledge / Rules / Journal / Handoff）外加一个
+整合 changelog 视图。每个 lane 都有一个形状贴合的视图：Knowledge 保留事实/主题列表 + 内容
+（且仍是 recall 操作的对象），Rules 是单一文档，Journal 是时间排序列表（最新优先），Handoff
+是按分支列表。每个视图都**只读**，都经**统一文件预览**渲染（无手写 `<pre>`），都为底层 lane
+文件提供**在外部编辑器中打开 / 在文件管理器中显示 / 复制路径** —— files-as-truth（FR-017、
+FR-021），于是开发者在自己的编辑器里纠正内容，变更经 lazy reindex-on-read（FR-010）被拾取。
+
+**为何此优先级**：扁平事实列表隐藏了四个 lane 中的三个 —— rules 在 recall 之外、journal 是
+情景性的、handoff 现场是工作状态 —— 因此 store 的过程性、情景性与连续性记忆即便都在磁盘上，在
+UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整个 store 可读。它是 P2（非 P1），因为它是
+对 lane 的只读投影，而这些 lane 已由共享记忆内核（Story 1–2）、journal（Story 6）、handoff
+（Story 7）以及 rules/organizer lane 写入 —— 它只增加可见性，绝不新增写入路径。
+
+**独立可测**：给一个项目 store 填入一条事实、一条 rule、一条 journal 条目、一个 handoff 现场，
+并跑一次写出整合 changelog 的 organizer。打开 store 详情页，确认五个视图：Knowledge lane 显示
+该事实，Rules 显示 rules 文档，Journal 列出该条目（最新优先），Handoff 列出该分支现场，changelog
+视图显示固化日志 —— 每个都只读、每个都经统一文件预览渲染、每个都为其 lane 文件提供打开/显示/复制
+路径。确认 recall 仍只在 Knowledge lane 上操作。
+
+**覆盖场景**（lane 视图所消费的读端点）：
+
+- journal lane entries are readable for a store
+- handoff scenes are listed per branch for a store
+- the consolidation changelog is readable for a store
+
+（四-lane 页面的渲染本身由前端测试验证；与其它桌面视图项一样，其桌面验收延后到 e2e。上面三条
+场景钉住 lane 视图所消费的读端点。）
+
+---
+
 ### Edge Cases
 
 - **vector 不可用但 embedding 未配置**：当 store 解析出的策略需要向量但未配置 embedding provider 时，`recall` 在内部回退到 keyword 并返回结果；它从不阻塞。回退**不**作为查询期响应标志暴露。默认检索是 keyword+grep（零配置、离线）。
@@ -376,6 +411,29 @@ hook 什么都不打印并退出 0，agent 正常启动。打开 `disable_native
 - **Then** 响应原样返回 rules 文本（供之后 session-start 注入读取的那个面），且无 rule 的
   store 返回空/`null` 正文而非报错。
 
+### Scenario: journal lane entries are readable for a store
+
+- **Given** 一个 memory store，其 `journal/` lane 持有一个或多个
+  `journal/<YYYY-MM>.md` 文件，
+- **When** 调用 `GET /api/v1/memory_stores/{name}/journal`（按 store 名寻址，而非 cwd），
+- **Then** 响应按**最新分片优先**返回时间排序的 journal 文件，每个携带其 `period`、`text`、
+  磁盘绝对 `path` 及其所在 `folder_path`；无 journal 的 store 返回**空列表加 HTTP 200**
+  （绝非 404）。
+
+### Scenario: handoff scenes are listed per branch for a store
+
+- **Given** 一个 memory store，其 `handoff/` lane 持有一个或多个按分支的现场文件，
+- **When** 调用 `GET /api/v1/memory_stores/{name}/handoff`（按 store 名寻址，而非 cwd），
+- **Then** 响应**按分支**列出现场，每个携带其 `branch`、`text`、`updated_at`、磁盘绝对
+  `path` 及 `folder_path`；无 handoff 现场的 store 返回**空列表加 HTTP 200**（绝非 404）。
+
+### Scenario: the consolidation changelog is readable for a store
+
+- **Given** 一个 memory store，其 organizer 已在 store 根目录写出 `consolidation-log.md`，
+- **When** 调用 `GET /api/v1/memory_stores/{name}/consolidation-log`（按 store 名寻址，而非 cwd），
+- **Then** 响应返回 changelog 的 `text` 及其磁盘绝对 `path` 与 `folder_path`；无 changelog 的
+  store 返回 `text = null` 加 HTTP 200（绝非 404）。
+
 ### Scenario: rules bundle is injected at session start as context only
 
 - **Given** 一个受管 agent（Claude Code 或 Codex）已安装 Coffer SessionStart hook，
@@ -500,6 +558,9 @@ hook 什么都不打印并退出 0，agent 正常启动。打开 `disable_native
 - **FR-017c**：用户 MUST 能为任意 memory store 设置一个**显示标签**——一个用户自选、在所有 surface 中优先于 FR-017a 的 `project_root` 推导的名字。它为来源文件夹从未被记录的 store（FR-017a 否则会退回不可读的 `project-<ULID>` 名）提供可读身份。设置空 / 纯空白标签会清除它，退回 FR-017a 的推导或回退名。该标签是**展示元数据**：不改变 store 名（FR-017）或 `project_id`，通过 `PATCH /memory_stores/{name}/label` 设置。由 HTTP 验收测试验证；桌面重命名视图与其它桌面视图项一样延后到 e2e。
 - **FR-021**：只读事实视图 MUST 为「事实文件」与「其所在文件夹」两者各提供以下能力：(a) **在外部编辑器中打开**、(b) **在文件管理器 / Finder 中显示**。两者在**两个**界面上都执行真实的 OS 动作:桌面（Tauri）端经 OS opener,web 端经环回 daemon 的文件系统动作端点（spec 004 FR-039）——因为 daemon 就在用户自己的机器上（ADR-033）。没有 copy-path 回退。打开哪个编辑器由全局首选编辑器偏好决定（在 002-ui-shell 规范，本处不再重复规范）。读响应 MUST 携带这些能力所作用的绝对路径（见 FR-022）。
 - **FR-022**：读响应 MUST 携带磁盘真相：事实读端点（`GET …/facts`、`GET …/facts/{id}`）MUST 包含每个事实文件的绝对 `.md` 路径及其所在文件夹的绝对路径，store 读端点（`GET …/{name}`）MUST 包含 store 的绝对磁盘目录。它们驱动 FR-021 的打开/显示能力，并让人类能定位规范化文件以带外纠正。
+
+- **FR-053**：memory store 详情页 MUST 把 store 呈现为**四个 lane 区块**（Knowledge / Rules / Journal / Handoff）外加一个**整合 changelog** 视图，替换扁平事实列表。每个 lane 都有形状贴合的视图：**knowledge** = 事实/主题列表 + 内容；**rules** = 单一文档；**journal** = 时间排序条目（最新优先）；**handoff** = 按分支列表。所有视图都**只读**，都经**统一文件预览**渲染（无手写 `<pre>`），并为底层 lane 文件提供**在外部编辑器中打开 / 在文件管理器中显示 / 复制路径**（files-as-truth，FR-017/FR-021）。recall 仍只在 **Knowledge** lane 上操作（rules/journal/handoff/changelog 视图是只读投影，不是 recall 面）。
+- **FR-054**：系统 MUST 为 UI 所需的 lane 暴露读端点：`GET /api/v1/memory_stores/{name}/journal`（时间排序的 journal 文件，最新分片优先）、`GET /api/v1/memory_stores/{name}/handoff`（按分支的 handoff 现场，每个携带其 `branch` 与 `updated_at`）、`GET /api/v1/memory_stores/{name}/consolidation-log`（organizer 的固化 changelog；不存在时为 `null`）。它们**只读**、**按 store 名寻址**（而非 cwd），且对空 store MUST 返回 **HTTP 200 加空列表 / `null`**（绝非 404）。（Rules lane 已有其读面 `GET /api/v1/memory_stores/{name}/rules`，FR-036。）
 
 **底座隔离**
 

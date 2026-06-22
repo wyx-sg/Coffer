@@ -17,7 +17,7 @@ from coffer.application.knowledge.retrieval import (
     KnowledgeRetrieval,
     no_embedding,
 )
-from coffer.application.memory import admin, session_context
+from coffer.application.memory import admin, lane_reads, session_context
 from coffer.application.memory.ports import MemoryDocumentRepo
 from coffer.application.memory.queries import (
     find_fact_store,
@@ -335,11 +335,18 @@ class MemoryService:
             store_name=store_name, resolved_store=self.resolved_store
         )
 
-    async def assemble_session_context(self, *, cwd: str | None) -> str:
-        """SessionStart rules bundle for an agent at ``cwd`` (Slice 6 FR-049/050).
+    async def read_journal(self, *, store_name: str) -> list[lane_reads.JournalFile]:
+        """Lane reads (Slice 7): journal newest-first, handoff per branch, changelog."""
+        return await lane_reads.journal_for_store(store_name, self.resolved_store)
 
-        See ``session_context.assemble_session_context`` for the behaviour.
-        """
+    async def read_handoff_scenes(self, *, store_name: str) -> list[lane_reads.HandoffScene]:
+        return await lane_reads.handoff_for_store(store_name, self.resolved_store)
+
+    async def read_consolidation_log(self, *, store_name: str) -> lane_reads.ConsolidationLog:
+        return await lane_reads.consolidation_log_for_store(store_name, self.resolved_store)
+
+    async def assemble_session_context(self, *, cwd: str | None) -> str:
+        """SessionStart rules bundle (Slice 6 FR-049/050); see ``session_context``."""
         return await session_context.assemble_session_context(
             cwd=cwd,
             resolve_recall_scopes=lambda c: self._scope.resolve_recall_scopes(cwd=c),
