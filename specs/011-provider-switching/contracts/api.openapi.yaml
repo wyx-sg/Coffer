@@ -520,7 +520,6 @@ components:
 
     InternalEngineConfigOut:
       type: object
-      required: [model]
       description: >-
         The single, global internal-engine model selection. The connection used
         is the `internal_default` (endpoint + key); only the model lives here.

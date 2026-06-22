@@ -36,19 +36,29 @@ export function InternalEngineSettings({ providers }: Props) {
   const [models, setModels] = useState<string[]>([]);
 
   // Fetch the chosen connection's models so the model dropdown is populated.
+  // `stale` guards against a slower earlier request landing after a newer one
+  // when the connection is switched rapidly.
   useEffect(() => {
     if (!selected) {
       setModels([]);
       return;
     }
+    let stale = false;
     listModels.mutate(
       {
         provider: selected.wire_format,
         base_url: selected.base_url,
         credential_ref: selected.credential_ref,
       },
-      { onSuccess: (r) => setModels(r.models) },
+      {
+        onSuccess: (r) => {
+          if (!stale) setModels(r.models);
+        },
+      },
     );
+    return () => {
+      stale = true;
+    };
     // listModels identity is stable across renders; re-fetch only on connection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.name, selected?.base_url, selected?.credential_ref]);
