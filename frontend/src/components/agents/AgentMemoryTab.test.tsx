@@ -30,6 +30,10 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentMcpStatus: vi.fn(),
   useImportNativeMemory: vi.fn(() => ({ mutate: importMutate, isPending: false })),
   usePatchAgent: vi.fn(() => ({ mutate: patchMutate, isPending: false })),
+  // The session-start rules-injection card now lives in this tab; stub its
+  // status/install hooks so the card renders (not-installed, idle) without error.
+  useAgentHookStatus: vi.fn(() => ({ data: { installed: false }, isPending: false, error: null })),
+  useAgentHookInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
 }));
 const hooks = await import("@/lib/hooks/useAgents");
 

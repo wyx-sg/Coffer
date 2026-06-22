@@ -89,7 +89,11 @@ export function ProviderModelField({
         list={listId}
         value={model}
         onChange={(e) => onModelChange(e.target.value)}
-        placeholder={t("settings.models.modelIdPlaceholder")}
+        placeholder={
+          kind === "embedding"
+            ? t("settings.models.modelIdPlaceholderEmbedding")
+            : t("settings.models.modelIdPlaceholder")
+        }
         required={requiredModel}
       />
       <datalist id={listId}>

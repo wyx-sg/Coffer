@@ -444,7 +444,11 @@
       "provider": "Provider",
       "model": "Model",
       "dimensions": "Dimensions",
+      "dimensionsFixed": "Set automatically from the selected model.",
       "baseUrl": "Base URL (optional)",
+      "secret": "API key",
+      "secretPlaceholder": "Paste the provider API key",
+      "secretKeepBlank": "Leave blank to keep the current key",
       "credential": "Credential reference",
       "credentialHint": "Credential store entry name (not the key itself)",
       "chunkingTitle": "Chunking defaults",
@@ -476,6 +480,7 @@
       "provider": "Provider",
       "modelId": "Model ID",
       "modelIdPlaceholder": "e.g. claude-3-5-sonnet-20241022",
+      "modelIdPlaceholderEmbedding": "e.g. text-embedding-3-small",
       "credentialRef": "Credential reference",
       "credentialRefPlaceholder": "e.g. ANTHROPIC_API_KEY",
       "baseUrl": "Base URL",
@@ -851,9 +856,7 @@
     },
     "hook": {
       "title": "Session-start rules",
-      "install": "Inject rules at session start",
-      "uninstall": "Stop injecting rules",
-      "help": "Injects the Coffer rules bundle via a SessionStart hook each time the agent starts a session.",
+      "help": "When on, injects the Coffer rules bundle via a SessionStart hook each time the agent starts a session.",
       "unsupported": "This agent type doesn't support a session-start hook."
     },
     "welcome": {

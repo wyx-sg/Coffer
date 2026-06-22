@@ -113,3 +113,18 @@ def test_workspace_credential_blobs_round_trip(tmp_path) -> None:  # type: ignor
     ws.write_credential_blobs({"cred-a": b"gAAAAAtoken", "cred-b": b"gAAAAAother"})
     blobs = ws.read_credential_blobs()
     assert blobs == {"cred-a": b"gAAAAAtoken", "cred-b": b"gAAAAAother"}
+
+
+def test_workspace_namespaced_credential_blobs_round_trip(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # Credential refs are namespaced with slashes (e.g. channel/seatalk/app-secret,
+    # provider/agnes/key). Writing must create the nested parent dirs, and reading
+    # must reconstruct the full slash ref — not just the file stem.
+    refs = {
+        "channel/seatalk/app-secret": b"gAAAAAseatalk",
+        "channel/telegram/bot-token": b"gAAAAAtelegram",
+        "provider/agnes/key": b"gAAAAAagnes",
+        "flat.LEGACY_KEY": b"gAAAAAlegacy",
+    }
+    ws = Workspace(tmp_path / "ws")
+    ws.write_credential_blobs(refs)
+    assert ws.read_credential_blobs() == refs

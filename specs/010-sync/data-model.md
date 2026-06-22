@@ -81,7 +81,12 @@ absent from the workspace but present locally are deleted (full reconcile).
 ### Credential blob (`credentials/<ref>.enc`)
 
 The Fernet ciphertext for `ref`, base64-encoded as text so git stores a stable
-line. No master key, no plaintext, no metadata beyond the ref (the filename).
+line. No master key, no plaintext, no metadata beyond the ref (the path).
+
+`ref` may be namespaced with slashes (e.g. `channel/seatalk/app-secret`,
+`provider/agnes/key`), so the blob lives at the matching nested path
+`credentials/channel/seatalk/app-secret.enc`. Export creates the parent dirs;
+import walks recursively and rebuilds the full slash ref from the relative path.
 
 ## Local-only, never in the workspace
 

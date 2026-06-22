@@ -13,11 +13,7 @@ vi.mock("@/lib/hooks/useProviders", () => ({
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({ useListProviderModels: vi.fn() }));
 vi.mock("@/lib/hooks/useAgents", () => ({ usePatchAgent: vi.fn() }));
 
-import {
-  useActivateProvider,
-  useProviders,
-  useUseBuiltinProvider,
-} from "@/lib/hooks/useProviders";
+import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
 
@@ -165,10 +161,12 @@ describe("AgentOverviewTab", () => {
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
   });
 
-  test("with no compatible connection, points the user to Settings", () => {
+  test("with no compatible connection, still defaults to the built-in connection", () => {
     useProvidersMock.mockReturnValue({ data: [makeConn({ protocol: "openai" })] });
     render(<AgentOverviewTab agent={agent} />);
-    expect(screen.getByText(/no connection for this agent/i)).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: /connection/i })).not.toBeInTheDocument();
+    // No dead-end empty state: the connection dropdown always renders and
+    // defaults to the built-in login (spec: built-in is the baseline).
+    const combobox = screen.getByRole("combobox", { name: /connection/i });
+    expect(combobox).toHaveTextContent(/built-in/i);
   });
 });

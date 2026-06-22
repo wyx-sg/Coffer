@@ -80,7 +80,11 @@ diff 频繁变动）。导入时按 `<kind>:<name>` 对资源执行 upsert；wor
 ### 凭据 blob（`credentials/<ref>.enc`）
 
 `ref` 对应的 Fernet 密文，以 base64 文本编码，使 git 存储稳定的行内容。不含主密钥、
-不含明文，除 ref（即文件名）外不含任何元数据。
+不含明文，除 ref（即路径）外不含任何元数据。
+
+`ref` 可带斜杠命名空间（如 `channel/seatalk/app-secret`、`provider/agnes/key`），
+因此 blob 存放在对应的嵌套路径 `credentials/channel/seatalk/app-secret.enc`。导出时
+会创建父目录；导入时递归遍历并由相对路径还原出完整的斜杠 ref。
 
 ## 仅本地、永不进入 workspace
 

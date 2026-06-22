@@ -91,30 +91,24 @@ describe("DataSettings", () => {
     expect(screen.queryByLabelText("Retention (days)")).not.toBeInTheDocument();
   });
 
-  test("Save button enabled when form is dirty", async () => {
+  test("auto-saves: no Save button — retention persists on edit", async () => {
     mockPolicies([MOCK_POLICIES[0]]);
     render(wrap(<DataSettings />));
 
     await screen.findByText("Audit log");
-    const saveBtn = screen.getByRole("button", { name: "Save" });
-    expect(saveBtn).toBeDisabled();
-
-    fireEvent.click(screen.getByLabelText("Keep forever"));
-    expect(saveBtn).not.toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
   });
 
-  test("Save click fires PATCH with the correct days payload", async () => {
+  test("editing days and blurring auto-saves the PATCH", async () => {
     const patchMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
     mockPolicies([MOCK_POLICIES[0]], { patchMock });
 
     render(wrap(<DataSettings />));
     await screen.findByText("Audit log");
 
-    // Change the days value to 90
     const daysInput = screen.getByLabelText("Retention (days)");
     fireEvent.change(daysInput, { target: { value: "90" } });
-
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.blur(daysInput);
 
     await waitFor(() => {
       expect(patchMock).toHaveBeenCalledWith(
@@ -127,16 +121,14 @@ describe("DataSettings", () => {
     });
   });
 
-  test("Save click with 'keep forever' fires PATCH with retention_days: null", async () => {
+  test("toggling 'keep forever' auto-saves retention_days: null", async () => {
     const patchMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
     mockPolicies([MOCK_POLICIES[0]], { patchMock });
 
     render(wrap(<DataSettings />));
     await screen.findByText("Audit log");
 
-    // Toggle keep-forever on
     fireEvent.click(screen.getByLabelText("Keep forever"));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(patchMock).toHaveBeenCalledWith(
