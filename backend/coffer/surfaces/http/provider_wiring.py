@@ -15,7 +15,17 @@ from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.service import ProviderService
 from coffer.application.resource_service import ResourceService
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
-from coffer.surfaces.http.dependencies import get_agent_service, set_provider_service
+from coffer.surfaces.http.dependencies import (
+    get_agent_service,
+    get_internal_engine_config_service,
+    set_provider_service,
+)
+
+
+async def _resolve_internal_model() -> str | None:
+    """The internal-engine model (spec 011 amendment), resolved lazily so the
+    config service need only be set before the first internal-engine call."""
+    return (await get_internal_engine_config_service().get()).model
 
 
 def wire_provider_kind(
@@ -32,6 +42,7 @@ def wire_provider_kind(
         config_store=ConfigFileStore(),
         agents=get_agent_service(),
         audit=audit,
+        resolve_internal_model=_resolve_internal_model,
     )
     set_provider_service(provider_svc)
     return provider_svc

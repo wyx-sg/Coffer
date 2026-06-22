@@ -29,6 +29,7 @@ from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.distill import router as distill_router  # spec 007 extension
 from coffer.surfaces.http.embedding_routes import router as embedding_router
 from coffer.surfaces.http.fs_routes import router as fs_router
+from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
 from coffer.surfaces.http.knowledge_base import router as kb_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
@@ -55,6 +56,7 @@ def include_all_routers(app: FastAPI) -> None:
         settings_router,
         sync_router,  # spec 010
         embedding_router,
+        internal_engine_router,  # spec 011
         # agent + skill (specs 004/005)
         agent_router,
         agent_config_router,

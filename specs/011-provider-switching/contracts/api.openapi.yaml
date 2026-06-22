@@ -261,6 +261,48 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /internal-engine-config:
+    get:
+      tags: [internal-engine]
+      operationId: getInternalEngineConfig
+      summary: Get the global internal-engine model selection
+      description: |
+        The single, global model Coffer's internal LLM engine (memory organizer,
+        reorg, distill, `coffer__ask`) runs on. The engine takes its endpoint +
+        key from the `internal_default` connection but its MODEL from this
+        singleton (ADR-032 amendment E3). `model` is `null` until one is chosen.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+    put:
+      tags: [internal-engine]
+      operationId: updateInternalEngineConfig
+      summary: Set the global internal-engine model
+      description: |
+        Sets the model the internal engine runs on (`null`/empty clears it).
+        Overlaid onto the resolved `internal_default` connection before the
+        engine builds its chat model. Emits an `internal_engine_model_set` audit
+        event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InternalEngineConfigUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   securitySchemes:
     cofferToken:
@@ -475,6 +517,29 @@ components:
         value:
           type: string
           description: The decrypted provider API key.
+
+    InternalEngineConfigOut:
+      type: object
+      description: >-
+        The single, global internal-engine model selection. The connection used
+        is the `internal_default` (endpoint + key); only the model lives here.
+      properties:
+        model:
+          type: string
+          nullable: true
+          description: The chosen model id, or null when unset.
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    InternalEngineConfigUpdate:
+      type: object
+      description: Set the internal-engine model; null/empty clears it.
+      properties:
+        model:
+          type: string
+          nullable: true
 
     ErrorOut:
       type: object

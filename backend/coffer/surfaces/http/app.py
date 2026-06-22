@@ -34,6 +34,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.embedding_config_service import EmbeddingConfigService
+from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
@@ -49,6 +50,7 @@ from coffer.infrastructure.persistence.engine import (
 from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyEmbeddingConfigRepo,
+    SqlAlchemyInternalEngineConfigRepo,
     SqlAlchemyResourceRepo,
     SqlAlchemyRetentionRepo,
 )
@@ -82,6 +84,7 @@ from coffer.surfaces.http.dependencies import (
     get_provider_service,
     set_audit_service,
     set_embedding_config_service,
+    set_internal_engine_config_service,
     set_resource_service,
     set_retention_service,
 )
@@ -159,11 +162,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         repo=SqlAlchemyEmbeddingConfigRepo(sm),
         audit=audit,
     )
+    internal_engine_config_svc = InternalEngineConfigService(
+        repo=SqlAlchemyInternalEngineConfigRepo(sm),
+        audit=audit,
+    )
 
     set_resource_service(resource_svc)
     set_audit_service(audit)
     set_retention_service(retention_svc)
     set_embedding_config_service(embedding_config_svc)
+    set_internal_engine_config_service(internal_engine_config_svc)
 
     # Build the shared built-in tool registry; each kind contributes its tools.
     # Created before kind wiring so skill/KB/memory can all register into it.

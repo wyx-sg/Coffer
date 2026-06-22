@@ -299,3 +299,16 @@ class EmbeddingConfigUpdate(BaseModel):
     dimensions: int = Field(default=768, ge=1, le=8192)
     default_chunk_size: int = Field(default=512, ge=64, le=2048)
     default_chunk_overlap: int = Field(default=64, ge=0)
+
+
+class InternalEngineConfigOut(BaseModel):
+    """The single, global internal-engine model selection (spec 011)."""
+
+    model: str | None = None
+    updated_at: datetime | None = None
+
+
+class InternalEngineConfigUpdate(BaseModel):
+    """Set the internal-engine model; ``null``/empty clears it."""
+
+    model: str | None = None

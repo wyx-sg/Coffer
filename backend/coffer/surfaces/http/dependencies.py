@@ -10,6 +10,7 @@ from fastapi import Header, HTTPException, status
 
 from coffer.application.audit_service import AuditService
 from coffer.application.embedding_config_service import EmbeddingConfigService
+from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 
@@ -115,6 +116,22 @@ def get_embedding_config_service() -> EmbeddingConfigService:
     if _embedding_config_service is None:
         raise RuntimeError("embedding config service not initialised")
     return _embedding_config_service
+
+
+_internal_engine_config_service: InternalEngineConfigService | None = None
+
+
+def set_internal_engine_config_service(svc: InternalEngineConfigService) -> None:
+    """Called by the composition root once on startup."""
+    global _internal_engine_config_service
+    _internal_engine_config_service = svc
+
+
+def get_internal_engine_config_service() -> InternalEngineConfigService:
+    """FastAPI Depends() target."""
+    if _internal_engine_config_service is None:
+        raise RuntimeError("internal engine config service not initialised")
+    return _internal_engine_config_service
 
 
 # Factory (session_id: str) -> <MCPGatewaySession>; typed Callable[[str], Any] to

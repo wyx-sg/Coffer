@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import pathlib
+from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from coffer.application.audit_service import AuditService
@@ -62,12 +63,16 @@ class ProviderService:
         config_store: _ConfigFileStore,
         agents: _AgentLister,
         audit: AuditService,
+        resolve_internal_model: Callable[[], Awaitable[str | None]] | None = None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
         self._config_store = config_store
         self._agents = agents
         self._audit = audit
+        # Resolves the internal-engine model (spec 011 E3), overlaid onto the
+        # internal_default connection. None ⇒ no overlay (connection's own model).
+        self._resolve_internal_model = resolve_internal_model
 
     # --- helpers -------------------------------------------------------------
 
@@ -334,7 +339,10 @@ class ProviderService:
         for r in await self.list():
             rc = self._cfg(r)
             if rc.internal_default:
-                return rc
+                model = (
+                    await self._resolve_internal_model() if self._resolve_internal_model else None
+                )
+                return rc.model_copy(update={"model": model}) if model else rc
         return None
 
     # --- internals -----------------------------------------------------------
