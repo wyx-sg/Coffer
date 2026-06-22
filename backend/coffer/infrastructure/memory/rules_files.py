@@ -66,6 +66,18 @@ def read_all_rules(rules_dir: Path) -> str | None:
     return "\n\n".join(parts) or None
 
 
+def delete_rules_lane(rules_dir: Path) -> bool:
+    """Remove every ``rules/*.md`` file in the lane (the rules surface is the
+    whole lane, not a single file). Returns whether any rules file existed."""
+    if not rules_dir.exists():
+        return False
+    removed = False
+    for path in sorted(rules_dir.glob("*.md")):
+        path.unlink()
+        removed = True
+    return removed
+
+
 def read_rules(path: Path) -> str | None:
     """Read the rules file, returning ``None`` if it does not exist."""
     try:

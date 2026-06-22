@@ -55,7 +55,7 @@ export function MemoryKnowledgeLane({ store, query, recallResult, onExitRecall }
   const recalling = recallResult !== null;
   const hitIds = recallResult ? [...new Set(recallResult.hits.map((h) => h.id))] : [];
   // Recall returns only ranked snippets; fetch the full facts so the rows
-  // (name + actor badge) and the viewer (full body) render like normal mode.
+  // (title) and the viewer (full body) render like normal mode.
   const recallFactsQuery = useQuery({
     queryKey: ["memory-recall-facts", store, hitIds],
     queryFn: async () => {
@@ -98,27 +98,30 @@ export function MemoryKnowledgeLane({ store, query, recallResult, onExitRecall }
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(220px,300px)_1fr]">
-      <MemoryFactTree
-        facts={recalling ? { facts: recallFacts, total: recallFacts.length } : factsQuery.data}
-        selectedId={liveSelected?.id ?? null}
-        isLoading={recalling ? recallLoading : factsQuery.isPending}
-        emptyLabel={recalling ? t("memory.detail.noMatches") : undefined}
-        total={recalling ? recallFacts.length : factTotal}
-        onSelect={setSelected}
-      />
-      <MemoryFactViewer
-        fact={liveSelected ?? undefined}
-        initialQuery={recalling ? query : ""}
-        isDeletePending={del.isPending}
-        onDelete={() => liveSelected && setDeleteOpen(true)}
-      />
+    <div className="space-y-3">
+      <p className="px-1 text-xs text-muted-foreground">{t("memory.lanes.intro.knowledge")}</p>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(220px,300px)_1fr]">
+        <MemoryFactTree
+          facts={recalling ? { facts: recallFacts, total: recallFacts.length } : factsQuery.data}
+          selectedId={liveSelected?.id ?? null}
+          isLoading={recalling ? recallLoading : factsQuery.isPending}
+          emptyLabel={recalling ? t("memory.detail.noMatches") : undefined}
+          total={recalling ? recallFacts.length : factTotal}
+          onSelect={setSelected}
+        />
+        <MemoryFactViewer
+          fact={liveSelected ?? undefined}
+          initialQuery={recalling ? query : ""}
+          isDeletePending={del.isPending}
+          onDelete={() => liveSelected && setDeleteOpen(true)}
+        />
+      </div>
 
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title={t("memory.detail.deleteTitle")}
-        description={t("memory.detail.deleteConfirm", { name: liveSelected?.name || "fact" })}
+        description={t("memory.detail.deleteConfirm", { name: liveSelected?.title || "fact" })}
         confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         pending={del.isPending}
         onConfirm={() => {

@@ -20,7 +20,7 @@ def _fact(**kw) -> MemoryFact:
     now = datetime(2026, 6, 9, tzinfo=UTC)
     base: dict = {
         "id": "01ABCDEF",
-        "name": "deploy-fact",
+        "title": "deploy-fact",
         "description": "deploys via make release",
         "body": "This repo deploys via make release.",
         "actor": "agent",
@@ -52,7 +52,8 @@ def test_memory_fact_has_no_free_form_type_field() -> None:
 def test_render_fact_markdown_has_frontmatter() -> None:
     text = render_fact_markdown(_fact())
     assert text.startswith("---\n")
-    assert "name: deploy-fact" in text
+    assert "kind: knowledge" in text
+    assert "title: deploy-fact" in text
     assert "actor: agent" in text
     # No free-form `type` axis — Lane is the only classification (FR-048).
     assert "type:" not in text
@@ -65,7 +66,7 @@ def test_render_then_parse_roundtrips() -> None:
     text = render_fact_markdown(fact)
     parsed = parse_fact_markdown(text, fallback_id="x", mtime=datetime(2026, 6, 9, tzinfo=UTC))
     assert parsed.id == fact.id
-    assert parsed.name == fact.name
+    assert parsed.title == fact.title
     assert parsed.description == fact.description
     assert parsed.actor == "agent"
     assert parsed.origin_session_id == "sess-1"
@@ -81,7 +82,7 @@ def test_parse_degrades_gracefully_for_out_of_band_file() -> None:
     )
     assert parsed.id == "abc"
     assert parsed.actor == "user"  # default actor when absent
-    assert parsed.name == "abc"
+    assert parsed.title == "abc"
     assert "preferences" in parsed.description
     assert "preferences" in parsed.body
 
@@ -92,7 +93,7 @@ def test_parse_tolerates_malformed_frontmatter() -> None:
     # never raise, so one bad file cannot 500 the whole /facts listing.
     text = (
         "---\n"
-        "name: Engineering conventions\n"
+        "title: Engineering conventions\n"
         "description: catalogued in `agents/` (10 topic files: storage, testing)\n"
         "type: feedback\n"
         "---\n"
@@ -102,9 +103,17 @@ def test_parse_tolerates_malformed_frontmatter() -> None:
         text, fallback_id="feedback_x", mtime=datetime(2026, 6, 9, tzinfo=UTC)
     )
     assert parsed.id == "feedback_x"
-    assert parsed.name == "feedback_x"  # frontmatter unparseable → filename fallback
+    assert parsed.title == "feedback_x"  # frontmatter unparseable → filename fallback
     assert "operating manuals" in parsed.description
     assert "operating manuals" in parsed.body
+
+
+def test_parse_accepts_legacy_name_key_as_title() -> None:
+    # Existing stores / externally-written files predate the name→title rename.
+    # The legacy ``name:`` frontmatter key must still parse as the title.
+    text = "---\nid: 01ABCDEF\nname: legacy-titled-fact\ndescription: d\n---\nbody line\n"
+    parsed = parse_fact_markdown(text, fallback_id="x", mtime=datetime(2026, 6, 9, tzinfo=UTC))
+    assert parsed.title == "legacy-titled-fact"
 
 
 def test_render_omits_optional_fields_when_absent() -> None:
@@ -128,7 +137,7 @@ def test_fact_timestamps_persist_in_frontmatter(tmp_path) -> None:
     updated = datetime(2026, 5, 6, 7, 8, 9, tzinfo=UTC)
     fact = MemoryFact(
         id="01HZX5XKQW9YV3T8R2M4N6PABC",
-        name="ts",
+        title="ts",
         description="d",
         body="body",
         actor="user",

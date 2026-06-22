@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from coffer.application.memory import lane_reads
 from coffer.application.memory.scope import GLOBAL_STORE_NAME
 from coffer.infrastructure.knowledge.paths import (
     consolidation_log_path,
@@ -50,7 +51,7 @@ async def test_read_journal_newest_period_first(mem) -> None:
         body="June event",
     )
 
-    files = await mem.service.read_journal(store_name=GLOBAL_STORE_NAME)
+    files = await lane_reads.journal_for_store(GLOBAL_STORE_NAME, mem.service.resolved_store)
 
     assert [f.period for f in files] == ["2026-06", "2026-05"]
     assert "June event" in files[0].text
@@ -60,7 +61,7 @@ async def test_read_journal_newest_period_first(mem) -> None:
 
 async def test_read_journal_empty_store(mem) -> None:
     await _global_store_dir(mem)
-    assert await mem.service.read_journal(store_name=GLOBAL_STORE_NAME) == []
+    assert await lane_reads.journal_for_store(GLOBAL_STORE_NAME, mem.service.resolved_store) == []
 
 
 # --- handoff ----------------------------------------------------------------
@@ -85,7 +86,7 @@ async def test_read_handoff_scenes_per_branch(mem) -> None:
         updated_at=datetime(2026, 6, 21, 9, 0, tzinfo=UTC),
     )
 
-    scenes = await mem.service.read_handoff_scenes(store_name=GLOBAL_STORE_NAME)
+    scenes = await lane_reads.handoff_for_store(GLOBAL_STORE_NAME, mem.service.resolved_store)
 
     by_branch = {s.branch: s for s in scenes}
     assert set(by_branch) == {"feature/a", "main"}
@@ -97,7 +98,7 @@ async def test_read_handoff_scenes_per_branch(mem) -> None:
 
 async def test_read_handoff_empty_store(mem) -> None:
     await _global_store_dir(mem)
-    assert await mem.service.read_handoff_scenes(store_name=GLOBAL_STORE_NAME) == []
+    assert await lane_reads.handoff_for_store(GLOBAL_STORE_NAME, mem.service.resolved_store) == []
 
 
 # --- consolidation log ------------------------------------------------------
@@ -113,7 +114,9 @@ async def test_read_consolidation_log_present(mem) -> None:
     changelog = consolidation_log_path(store_dir)
     changelog.write_text("# Consolidation log\n\n- drained 3 items\n", encoding="utf-8")
 
-    log = await mem.service.read_consolidation_log(store_name=GLOBAL_STORE_NAME)
+    log = await lane_reads.consolidation_log_for_store(
+        GLOBAL_STORE_NAME, mem.service.resolved_store
+    )
 
     assert log.text is not None
     assert "drained 3 items" in log.text
@@ -123,7 +126,9 @@ async def test_read_consolidation_log_present(mem) -> None:
 
 async def test_read_consolidation_log_absent(mem) -> None:
     store_dir = await _global_store_dir(mem)
-    log = await mem.service.read_consolidation_log(store_name=GLOBAL_STORE_NAME)
+    log = await lane_reads.consolidation_log_for_store(
+        GLOBAL_STORE_NAME, mem.service.resolved_store
+    )
     assert log.text is None
     assert log.path == str(consolidation_log_path(store_dir))
     assert log.folder_path == str(store_dir)

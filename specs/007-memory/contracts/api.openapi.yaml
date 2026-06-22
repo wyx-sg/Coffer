@@ -380,6 +380,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      summary: >
+        Delete the whole `rules/` lane (every `rules/*.md` file) and append a
+        changelog line. The rules lane is not indexed for recall.
+      operationId: deleteMemoryStoreRules
+      tags: [rules]
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/memory_stores/{name}/journal:
     parameters:
@@ -401,6 +412,26 @@ paths:
               schema:
                 $ref: "#/components/schemas/JournalOut"
 
+  /api/v1/memory_stores/{name}/journal/{period}:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+      - in: path
+        name: period
+        required: true
+        description: Journal period key (e.g. `2026-06-21`).
+        schema: { type: string }
+    delete:
+      summary: >
+        Delete one `journal/<period>.md` file (removes its recall-index rows —
+        the journal lane is indexed) and append a changelog line.
+      operationId: deleteMemoryStoreJournalPeriod
+      tags: [journal]
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/memory_stores/{name}/handoff:
     parameters:
       - $ref: "#/components/parameters/StoreName"
@@ -421,6 +452,26 @@ paths:
               schema:
                 $ref: "#/components/schemas/HandoffOut"
 
+  /api/v1/memory_stores/{name}/handoff/{branch}:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+      - in: path
+        name: branch
+        required: true
+        description: Branch name (slugified to the on-disk `handoff/<branch-slug>.md`).
+        schema: { type: string }
+    delete:
+      summary: >
+        Delete one `handoff/<branch-slug>.md` scene and append a changelog line.
+        The handoff lane is not indexed for recall.
+      operationId: deleteMemoryStoreHandoffBranch
+      tags: [handoff]
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/memory_stores/{name}/consolidation-log:
     parameters:
       - $ref: "#/components/parameters/StoreName"
@@ -440,6 +491,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConsolidationLogOut"
+    delete:
+      summary: >
+        Delete the store-root `consolidation-log.md`. This does NOT self-append a
+        changelog line (the file being removed is the changelog).
+      operationId: deleteMemoryStoreConsolidationLog
+      tags: [consolidation]
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/NotFound"
 
 components:
   securitySchemes:
@@ -615,11 +677,11 @@ components:
           minLength: 1
           maxLength: 32768
           description: The fact (markdown body).
-        name:
+        title:
           {
             type: string,
             nullable: true,
-            description: Frontmatter name; derived from text if omitted.,
+            description: Frontmatter title; derived from text if omitted.,
           }
         description:
           {
@@ -633,7 +695,7 @@ components:
       required: [text]
       properties:
         text: { type: string, minLength: 1, maxLength: 32768 }
-        name: { type: string, nullable: true }
+        title: { type: string, nullable: true }
         description: { type: string, nullable: true }
 
     FactOut:
@@ -643,7 +705,7 @@ components:
           id,
           store_name,
           scope,
-          name,
+          title,
           description,
           text,
           actor,
@@ -656,7 +718,7 @@ components:
         id: { type: string, description: Document id (ULID). }
         store_name: { type: string }
         scope: { $ref: "#/components/schemas/Scope" }
-        name: { type: string }
+        title: { type: string }
         description: { type: string }
         text: { type: string, description: Markdown body. }
         actor: { type: string, enum: [agent, user] }

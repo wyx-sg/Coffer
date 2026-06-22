@@ -25,7 +25,7 @@ async def test_remember_project_fact_writes_file_and_index(mem) -> None:
     fact = await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
         cwd=mem.project_cwd,
-        name="deploy-via-make",
+        title="deploy-via-make",
         description="deploys via make release",
         body="This repo deploys via make release, never git push --tags.",
         actor="agent",
@@ -36,7 +36,7 @@ async def test_remember_project_fact_writes_file_and_index(mem) -> None:
     inbox_files = list(paths.inbox_dir(store_dir).glob("*.md"))
     assert len(inbox_files) == 1
     text = inbox_files[0].read_text()
-    assert "name: deploy-via-make" in text
+    assert "title: deploy-via-make" in text
     assert "actor: agent" in text
     # No derived MEMORY.md index is generated.
     assert not (store_dir / "MEMORY.md").exists()
@@ -50,7 +50,7 @@ async def test_recall_returns_facts(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
         cwd=mem.project_cwd,
-        name="api-base",
+        title="api-base",
         description="api base path",
         body="The service API base path is /api/v2 for this repo.",
         actor="agent",
@@ -67,7 +67,7 @@ async def test_remember_global_scope(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="tabs",
+        title="tabs",
         description="prefers tabs",
         body="The user prefers tabs over spaces.",
         actor="user",
@@ -83,7 +83,7 @@ async def test_recall_spans_project_and_global(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="g",
+        title="g",
         description="global pref",
         body="global preference uses spaces indentation",
         actor="user",
@@ -91,7 +91,7 @@ async def test_recall_spans_project_and_global(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
         cwd=mem.project_cwd,
-        name="p",
+        title="p",
         description="project fact",
         body="project fact uses spaces in config files",
         actor="agent",
@@ -119,7 +119,7 @@ async def test_project_scope_unresolved_outside_git(mem) -> None:
         await mem.service.add_fact(
             scope=MemoryScope.PROJECT,
             cwd="/tmp/not-a-repo",
-            name="x",
+            title="x",
             description="x",
             body="x",
             actor="agent",
@@ -132,7 +132,7 @@ async def test_update_fact_reflects_in_recall(mem) -> None:
     fact = await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
         cwd=mem.project_cwd,
-        name="f",
+        title="f",
         description="d",
         body="original aardvark text",
         actor="agent",
@@ -153,7 +153,7 @@ async def test_forget_removes_fact(mem) -> None:
     fact = await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
         cwd=mem.project_cwd,
-        name="f",
+        title="f",
         description="d",
         body="ephemeral walrus fact",
         actor="agent",
@@ -171,7 +171,7 @@ async def test_user_add_sets_actor_user(mem) -> None:
     fact = await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="pref",
+        title="pref",
         description="a preference",
         body="user likes dark mode",
         actor="user",
@@ -190,7 +190,7 @@ async def test_user_corrects_fact_via_write_api(mem) -> None:
     fact = await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="pref",
+        title="pref",
         description="d",
         body="light mode preferred",
         actor="user",
@@ -207,7 +207,7 @@ async def test_user_delete_fact(mem) -> None:
     fact = await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="x",
+        title="x",
         description="d",
         body="to be deleted",
         actor="user",
@@ -224,7 +224,7 @@ async def test_clear_scope_keeps_resource(mem) -> None:
         await mem.service.add_fact(
             scope=MemoryScope.GLOBAL,
             cwd=None,
-            name=f"f{i}",
+            title=f"f{i}",
             description="d",
             body=f"fact number {i}",
             actor="user",
@@ -244,7 +244,7 @@ async def test_metrics(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="x",
+        title="x",
         description="d",
         body="some content",
         actor="user",
@@ -266,7 +266,7 @@ async def test_fact_count_uses_indexed_count_without_disk_scan(mem) -> None:
         await mem.service.add_fact(
             scope=MemoryScope.GLOBAL,
             cwd=None,
-            name=name,
+            title=name,
             description="d",
             body=f"some {name} content",
             actor="user",
@@ -300,7 +300,7 @@ async def test_vector_recall_falls_back_when_unconfigured(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="x",
+        title="x",
         description="d",
         body="the okapi fact about embeddings",
         actor="user",
@@ -317,7 +317,7 @@ async def test_fact_too_long_rejected(mem) -> None:
         await mem.service.add_fact(
             scope=MemoryScope.GLOBAL,
             cwd=None,
-            name="x",
+            title="x",
             description="d",
             body="x" * 10_000,  # default max_fact_chars is 8192
             actor="user",
@@ -332,7 +332,7 @@ async def test_fact_over_default_allowed_with_max_fact_chars_override(mem) -> No
     fact = await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="x",
+        title="x",
         description="d",
         body="x" * 10_000,  # over the 8192 default, under the 32768 ceiling
         actor="user",
@@ -350,7 +350,7 @@ async def test_lazy_reindex_picks_up_out_of_band_edit(mem) -> None:
     fact = await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
         cwd=mem.project_cwd,
-        name="f",
+        title="f",
         description="d",
         body="original narwhal content",
         actor="agent",
@@ -374,7 +374,7 @@ async def test_grep_recall_ignores_legacy_root_facts(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.PROJECT,
         cwd=mem.project_cwd,
-        name="real",
+        title="real",
         description="d",
         body="a real lane fact about otters",
         actor="agent",
@@ -411,7 +411,7 @@ async def test_enabling_vector_backfills_existing_facts(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="merge-style",
+        title="merge-style",
         description="merge convention",
         body="We always use squash-merge for feature branches.",
         actor="user",
@@ -451,7 +451,7 @@ async def test_degraded_fact_is_retried_on_next_reconcile(mem) -> None:
     # Provision the global store (the first write auto-registers it), then enable
     # vector so a later write attempts an embed.
     await mem.service.add_fact_to_store(
-        store_name=GLOBAL_STORE_NAME, name="seed", description="", body="seed fact", actor="user"
+        store_name=GLOBAL_STORE_NAME, title="seed", description="", body="seed fact", actor="user"
     )
     await mem.resources.update_config(
         ResourceRef("memory", GLOBAL_STORE_NAME),
@@ -483,7 +483,7 @@ async def test_degraded_fact_is_retried_on_next_reconcile(mem) -> None:
     reindexer._embedder_factory = _failing  # type: ignore[attr-defined]
     wombat = await mem.service.add_fact_to_store(
         store_name=GLOBAL_STORE_NAME,
-        name="wombat",
+        title="wombat",
         description="d",
         body="the wombat fact about embeddings",
         actor="user",
@@ -518,7 +518,7 @@ async def test_recall_hit_time_and_source_carry_fact_metadata(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="platypus",
+        title="platypus",
         description="d",
         body="the platypus memo body",
         actor="user",
@@ -539,13 +539,17 @@ async def test_grep_recall_budget_not_consumed_by_one_facts_lines(mem) -> None:
     cut (review L2)."""
     await mem.service.add_fact_to_store(
         store_name="global",
-        name="multi",
+        title="multi",
         description="",
         body="\n".join(f"needle line {i}" for i in range(10)),
         actor="user",
     )
     await mem.service.add_fact_to_store(
-        store_name="global", name="other", description="", body="a single needle here", actor="user"
+        store_name="global",
+        title="other",
+        description="",
+        body="a single needle here",
+        actor="user",
     )
     hits, mode, _fb = await mem.service.recall_in_store(
         store_name="global", query="needle", mode="grep", top_k=3
@@ -562,10 +566,14 @@ async def test_recall_scope_global_returns_global_only(mem) -> None:
     resolved = await mem.service.resolve_scope(scope=MemoryScope.PROJECT, cwd=mem.project_cwd)
     project_store = project_store_name(resolved.project_id)
     await mem.service.add_fact_to_store(
-        store_name=project_store, name="p", description="", body="ocelot project fact", actor="user"
+        store_name=project_store,
+        title="p",
+        description="",
+        body="ocelot project fact",
+        actor="user",
     )
     await mem.service.add_fact_to_store(
-        store_name="global", name="g", description="", body="ocelot global fact", actor="user"
+        store_name="global", title="g", description="", body="ocelot global fact", actor="user"
     )
 
     hits, _mode, _fb = await mem.service.recall_in_store(
@@ -594,7 +602,7 @@ async def test_new_fact_embeds_via_global_config_without_per_store_fields(mem) -
     )
     await mem.service.add_fact_to_store(
         store_name=GLOBAL_STORE_NAME,
-        name="quokka",
+        title="quokka",
         description="",
         body="the quokka habitat fact",
         actor="user",
@@ -628,7 +636,7 @@ async def test_store_delete_and_recreate_has_no_stale_vectors(mem) -> None:
     )
     await mem.service.add_fact_to_store(
         store_name=GLOBAL_STORE_NAME,
-        name="v",
+        title="v",
         description="",
         body="vanishing vector fact",
         actor="user",

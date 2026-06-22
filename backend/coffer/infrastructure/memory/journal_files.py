@@ -56,7 +56,12 @@ def append_entry(path: Path, *, timestamp: datetime, body: str) -> None:
 
     A blank/whitespace-only body is a no-op: nothing is written and no file is
     created, so an empty distillation never leaves an empty journal entry behind
-    (and a day with no real event creates no ``journal/<YYYY-MM-DD>.md`` file)."""
+    (and a day with no real event creates no ``journal/<YYYY-MM-DD>.md`` file).
+
+    A freshly-created period file gets a minimal ``# <period>`` H1 header (the
+    lane's plain-markdown analogue of the other kinds' frontmatter ``title``).
+    The marker-keyed ``read_entries`` ignores any text before the first marker,
+    so the header never becomes a phantom entry."""
     if not body.strip():
         return
     block = f"{_MARK}{timestamp.isoformat()} -->\n{body.strip('\n')}\n"
@@ -65,8 +70,18 @@ def append_entry(path: Path, *, timestamp: datetime, body: str) -> None:
     except OSError:
         existing = ""
     path.parent.mkdir(parents=True, exist_ok=True)
+    if not existing:
+        existing = f"# {path.stem}\n\n"
     sep = "" if not existing or existing.endswith("\n") else "\n"
     atomic_write_text(path, existing + sep + block)
+
+
+def delete_journal_file(path: Path) -> bool:
+    """Delete one ``journal/<period>.md`` file. Returns whether it existed."""
+    if path.exists():
+        path.unlink()
+        return True
+    return False
 
 
 def read_entries(path: Path) -> list[JournalEntry]:

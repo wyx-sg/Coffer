@@ -2,7 +2,7 @@
 //
 // Pin the Zod schemas in `schema.ts`. Stores are auto-provisioned (no create
 // form) and there is NO llm_provider anymore; we pin the mutable store-config
-// patch shape and the add-fact form (name/description/body).
+// patch shape and the add-fact form (title/description/body).
 
 import { describe, expect, test } from "vitest";
 import { addFactFormSchema, memoryStoreConfigSchema } from "./schema";
@@ -45,13 +45,13 @@ describe("addFactFormSchema", () => {
     expect(parsed.text).toBe("uses tabs");
   });
 
-  test("accepts name/description alongside the text", () => {
+  test("accepts title/description alongside the text", () => {
     const parsed = addFactFormSchema.parse({
       text: "deploys via make release",
-      name: "deploy",
+      title: "deploy",
       description: "how this repo ships",
     });
-    expect(parsed.name).toBe("deploy");
+    expect(parsed.title).toBe("deploy");
     expect(parsed.description).toBe("how this repo ships");
   });
 

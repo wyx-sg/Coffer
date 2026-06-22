@@ -98,7 +98,7 @@ async def test_auto_organize_fires_after_idle(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="deploy",
+        title="deploy",
         description="Deploy via make release",
         body="Deploy via `make release`.",
         actor="agent",
@@ -134,7 +134,7 @@ async def test_shutdown_cancels_auto_organize(mem) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="deploy",
+        title="deploy",
         description="Deploy via make release",
         body="Deploy via `make release`.",
         actor="agent",

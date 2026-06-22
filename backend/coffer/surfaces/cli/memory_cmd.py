@@ -84,13 +84,13 @@ def add(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Store name (e.g. 'global' or 'project-<ulid>')."),
     text: str = typer.Argument(...),
-    fact_name: str | None = typer.Option(None, "--name"),
+    fact_title: str | None = typer.Option(None, "--title", "--name"),
     description: str | None = typer.Option(None, "--description"),
 ) -> None:
     """Add a fact (actor=user)."""
     body: dict[str, object] = {"text": text}
-    if fact_name is not None:
-        body["name"] = fact_name
+    if fact_title is not None:
+        body["title"] = fact_title
     if description is not None:
         body["description"] = description
     c, _info = _cli_client.client_or_exit()
@@ -128,10 +128,10 @@ def list_facts(
     table = Table(title=f"Facts in {name} (total: {data['total']})")
     table.add_column("id")
     table.add_column("actor")
-    table.add_column("name")
+    table.add_column("title")
     table.add_column("text")
     for f in data["facts"]:
-        table.add_row(f["id"][:8], f["actor"], f["name"][:40], f["text"][:60])
+        table.add_row(f["id"][:8], f["actor"], f["title"][:40], f["text"][:60])
     _console.print(table)
 
 
