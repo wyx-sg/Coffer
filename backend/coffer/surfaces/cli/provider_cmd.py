@@ -17,28 +17,23 @@ _console = Console()
 @app.command("add")
 def add(
     name: str = typer.Argument(..., help="Profile name"),
-    wire_format: str = typer.Option(..., "--wire", help="Wire format: anthropic | openai | ollama"),
+    protocol: str = typer.Option(
+        ..., "--protocol", help="Protocol: anthropic | openai | ollama | unknown"
+    ),
     base_url: str = typer.Option(..., "--base-url", help="Upstream endpoint base URL"),
-    model: str = typer.Option(..., "--model", help="Primary model id"),
-    fast_model: str | None = typer.Option(None, "--fast-model", help="Fast model (anthropic)"),
-    wire_api: str | None = typer.Option(None, "--wire-api", help="Codex wire_api: chat|responses"),
     secret: str | None = typer.Option(None, "--secret", help="API key (stored encrypted)"),
     credential_ref: str | None = typer.Option(
         None, "--credential-ref", help="Reuse an existing credential ref instead of --secret"
     ),
 ) -> None:
-    """Create an LLM connection. For anthropic/openai supply exactly one of
-    --secret / --credential-ref; an ollama connection needs neither."""
+    """Create an LLM connection. For anthropic/openai/unknown supply exactly one
+    of --secret / --credential-ref; an ollama connection needs neither. The
+    model is chosen at the point of use, not on the connection (spec 011 E3)."""
     body: dict[str, object] = {
         "name": name,
-        "wire_format": wire_format,
+        "protocol": protocol,
         "base_url": base_url,
-        "model": model,
     }
-    if fast_model is not None:
-        body["fast_model"] = fast_model
-    if wire_api is not None:
-        body["wire_api"] = wire_api
     if secret is not None:
         body["secret_value"] = secret
     if credential_ref is not None:
@@ -55,7 +50,7 @@ def add(
             raise typer.Exit(5)
         r.raise_for_status()
     data = r.json()
-    typer.echo(f"added provider {data['name']} ({data['wire_format']})")
+    typer.echo(f"added provider {data['name']} ({data['protocol']})")
 
 
 @app.command("list")
@@ -70,14 +65,13 @@ def list_providers(output_json: bool = typer.Option(False, "--json")) -> None:
         typer.echo(_json.dumps(data, indent=2))
         return
     table = Table(title="Providers")
-    for col in ("name", "wire", "base_url", "model", "active", "internal"):
+    for col in ("name", "protocol", "base_url", "active", "internal"):
         table.add_column(col)
     for p in data["providers"]:
         table.add_row(
             p["name"],
-            p["wire_format"],
+            p["protocol"],
             p["base_url"],
-            p["model"],
             "yes" if p["is_active"] else "",
             "yes" if p.get("internal_default") else "",
         )
@@ -101,21 +95,12 @@ def show(name: str = typer.Argument(..., help="Profile name")) -> None:
 def edit(
     name: str = typer.Argument(..., help="Profile name"),
     base_url: str | None = typer.Option(None, "--base-url"),
-    model: str | None = typer.Option(None, "--model"),
-    fast_model: str | None = typer.Option(None, "--fast-model"),
-    wire_api: str | None = typer.Option(None, "--wire-api"),
     secret: str | None = typer.Option(None, "--secret", help="Rotate the stored API key"),
 ) -> None:
-    """Edit a provider profile (wire_format / credential_ref are immutable)."""
+    """Edit a provider profile (protocol / credential_ref are immutable)."""
     patch: dict[str, object] = {}
     if base_url is not None:
         patch["base_url"] = base_url
-    if model is not None:
-        patch["model"] = model
-    if fast_model is not None:
-        patch["fast_model"] = fast_model
-    if wire_api is not None:
-        patch["wire_api"] = wire_api
     if secret is not None:
         patch["secret_value"] = secret
     if not patch:
@@ -160,7 +145,7 @@ def switch(name: str = typer.Argument(..., help="Profile to activate")) -> None:
         r.raise_for_status()
     data = r.json()
     projected = ", ".join(data["projected"]) or "(no matching agent)"
-    typer.echo(f"switched to {data['activated']} [{data['wire_format']}] → {projected}")
+    typer.echo(f"switched to {data['activated']} [{data['protocol']}] → {projected}")
 
 
 @app.command("internal-default")
@@ -174,7 +159,7 @@ def internal_default(name: str = typer.Argument(..., help="Connection to use int
             raise typer.Exit(4)
         r.raise_for_status()
     data = r.json()
-    typer.echo(f"internal engine now uses {data['name']} [{data['wire_format']}] {data['model']}")
+    typer.echo(f"internal engine now uses {data['name']} [{data['protocol']}]")
 
 
 @app.command("key")

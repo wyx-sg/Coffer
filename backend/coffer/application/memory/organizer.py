@@ -36,7 +36,7 @@ from coffer.domain.knowledge.document import KIND_MEMORY
 from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.memory.config import MemoryStoreConfig
 from coffer.domain.memory.scope import ResolvedScope
-from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.config import ResolvedConnection
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge.paths import knowledge_dir, rules_path, topic_path
 from coffer.infrastructure.memory.files import (
@@ -180,7 +180,7 @@ class OrganizerService:
     # ------------------------------------------------------------------
 
     async def _organize_item(
-        self, *, item: FactFile, store_dir: Path, ref: StoreRef, model: ProviderConfig
+        self, *, item: FactFile, store_dir: Path, ref: StoreRef, model: ResolvedConnection
     ) -> bool | str | None:
         """Process one inbox item: ``"rule"`` (rules lane), ``True`` (merge), ``False``
         (create), or ``None`` (skipped — item stays in inbox)."""
@@ -216,7 +216,7 @@ class OrganizerService:
         )
 
     async def _merge_once(
-        self, *, item: FactFile, candidates: list[TopicDoc], model: ProviderConfig
+        self, *, item: FactFile, candidates: list[TopicDoc], model: ResolvedConnection
     ) -> OrganizedTopic | None:
         """One LLM call + parse; ``None`` on failure (item stays in inbox)."""
         try:
@@ -237,7 +237,7 @@ class OrganizerService:
         parsed: OrganizedTopic,
         item: FactFile,
         store_dir: Path,
-        model: ProviderConfig,
+        model: ResolvedConnection,
         seen_slugs: set[str],
     ) -> OrganizedTopic | None:
         """Enforce the no-clobber invariant in CODE, not just the prompt.

@@ -17,7 +17,7 @@ import pytest
 from coffer.application.memory.organizer import OrganizerService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.scope import MemoryScope
-from coffer.domain.provider.config import ProviderConfig, WireFormat
+from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
 from coffer.infrastructure.knowledge.paths import (
     consolidation_log_path,
     inbox_dir,
@@ -27,11 +27,13 @@ from coffer.infrastructure.knowledge.paths import (
 )
 
 
-def _model() -> ProviderConfig:
-    return ProviderConfig(
-        wire_format=WireFormat.OLLAMA,
-        base_url="http://localhost:11434",
-        credential_ref=None,
+def _model() -> ResolvedConnection:
+    return ResolvedConnection(
+        config=ProviderConfig(
+            protocol=Protocol.OLLAMA,
+            base_url="http://localhost:11434",
+            credential_ref=None,
+        ),
         model="llama3",
     )
 
@@ -39,10 +41,10 @@ def _model() -> ProviderConfig:
 class _Models:
     """Fake ModelSelectorPort. ``model=None`` simulates no internal model."""
 
-    def __init__(self, model: ProviderConfig | None) -> None:
+    def __init__(self, model: ResolvedConnection | None) -> None:
         self._model = model
 
-    async def get_default(self) -> ProviderConfig | None:
+    async def get_default(self) -> ResolvedConnection | None:
         return self._model
 
 

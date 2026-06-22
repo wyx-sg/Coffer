@@ -42,12 +42,12 @@ export function ConnectionCard({
             )}
           </div>
           <p className="truncate text-xs text-muted-foreground">
-            {p.wire_format} · {p.model} · {p.base_url}
+            {p.protocol} · {p.base_url}
           </p>
         </div>
         {/* Ollama is internal-only — never projected to an agent, so it has no
             per-wire "Switch" action. */}
-        {p.wire_format !== "ollama" && !p.is_active && (
+        {p.protocol !== "ollama" && !p.is_active && (
           <Button
             variant="outline"
             size="sm"

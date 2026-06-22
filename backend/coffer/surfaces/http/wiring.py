@@ -41,7 +41,7 @@ from coffer.application.memory.sync import MemoryReconciler
 from coffer.application.providers.ports import ModelIntrospectionService
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
-from coffer.domain.provider.config import WireFormat
+from coffer.domain.provider.config import Protocol
 from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make_ask_tool
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
@@ -331,7 +331,7 @@ def wire_chat(
     # codex inherits the daemon env and uses its own login (ADR-032 env_key seam).
     async def _resolve_codex_key() -> str | None:
         try:
-            key: str = await get_provider_service().resolve_active_key(WireFormat.OPENAI)
+            key: str = await get_provider_service().resolve_active_key(Protocol.OPENAI)
             return key
         except (NoActiveProvider, CredentialMissing):
             return None

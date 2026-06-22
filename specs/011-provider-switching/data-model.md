@@ -34,21 +34,26 @@ previously-configured models are NOT carried — users re-select on the Agent pa
 All fields are JSON-stable (no Python objects) so `model_dump(mode="json")`
 serialises cleanly for SQLite and sync export.
 
-### `WireFormat` and `WireApi` (`domain/provider/config.py`)
+### `Protocol` (`domain/provider/config.py`)
 
-These enums live in `config.py` alongside `ProviderConfig`. There is no
-separate `wire.py` module.
+A single `StrEnum` lives in `config.py` alongside `ProviderConfig`. There is no
+separate `wire.py` module. The old `WireApi` enum is gone — `wire_api` left the
+connection (it is a Codex-binding concern; projection defaults it to `responses`).
 
 ```python
-class WireFormat(str, Enum):
-    anthropic = "anthropic"
-    openai = "openai"
-    ollama = "ollama"
-
-class WireApi(str, Enum):
-    chat = "chat"
-    responses = "responses"
+class Protocol(StrEnum):
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    OLLAMA = "ollama"
+    UNKNOWN = "unknown"
 ```
+
+### `ResolvedConnection` (`domain/provider/config.py`)
+
+A frozen dataclass pairing a `ProviderConfig` with the `model` to run on it —
+since the model lives apart from the connection (E3), the two travel together
+when the internal engine builds a chat model. `resolve_internal_connection()`
+returns it (or `None`); `build_chat_model(resolved, resolver)` consumes it.
 
 ### Projection functions (`domain/provider/projection.py`)
 
@@ -59,7 +64,7 @@ analogous to `domain/agent/mcp_install.py`'s `apply_install`. There is NO
 - `apply_anthropic_settings(config: ProviderConfig, existing_text: str) -> str`
 - `apply_codex_provider(config: ProviderConfig, profile_name: str, existing_text: str) -> str`
 - `ProjectionTarget` — descriptor for the target config file
-- `target_for(wire: WireFormat) -> ProjectionTarget | None` — returns `None` for
+- `target_for(wire: Protocol) -> ProjectionTarget | None` — returns `None` for
   `ollama` (internal-only; no agent projection)
 - Constants: `CODEX_PROVIDER_ID`, `CODEX_ENV_KEY`, `ANTHROPIC_API_KEY_HELPER`
 
@@ -70,14 +75,12 @@ The internal-engine connection is selected by the global `internal_default` flag
 - `ProviderService.set_internal_default(name)` — clears `internal_default` on all
   other connections, then sets the target (sequential clear-then-set, serialised
   by the single-process daemon); emits `provider_internal_default_set`.
-- `ProviderService.resolve_internal_connection() -> ProviderConfig | None` —
-  returns the `internal_default` connection's config, or `None` (→ the internal
-  engine is a clean no-op). It overlays the global internal-engine model (below)
-  onto the resolved connection (`model_copy(update={"model": ...})`) when one is
-  set, so the model lives apart from the connection (ADR-032 E3); an empty
-  internal-engine model falls back to the connection's own `model` during rollout.
-- `build_chat_model(connection, ...)` consumes the resolved connection, dispatched
-  by `wire_format` (anthropic / openai / ollama), to build the internal engine's
+- `ProviderService.resolve_internal_connection() -> ResolvedConnection | None` —
+  pairs the `internal_default` connection with the global internal-engine model
+  (below). `None` when no connection is marked OR no model is set (the model
+  lives apart from the connection — there is no fallback to a connection model).
+- `build_chat_model(resolved, ...)` consumes the `ResolvedConnection`, dispatched
+  by `protocol` (anthropic / openai / ollama), to build the internal engine's
   chat model — replacing the retired `ModelConfig` registry's model selection.
 
 #### `GlobalInternalEngineConfig` (`domain/internal_engine_config.py`)
@@ -192,11 +195,11 @@ so switches never interleave. There is NO `ProviderRepo` / `activate_atomic`.
 
 ## SQLite schema changes
 
-**No new migration required.** The `provider` kind reuses the shared `resources`
-table (new rows with `kind='provider'`). The `ProviderConfig` dict is stored in
-the existing `resources.config` JSON column.
-
-No new tables; no SCHEMA_VERSION bump.
+The `provider` kind reuses the shared `resources` table (rows with
+`kind='provider'`); the `ProviderConfig` dict is stored in the existing
+`resources.config` JSON column — **no new tables**. The slim-down is a DATA
+migration: **`0040`** rewrites each provider row's `config_json` (rename
+`wire_format`→`protocol`; strip `model`/`fast_model`/`wire_api`).
 
 ## Audit events added
 
@@ -204,7 +207,7 @@ Add to `AuditEventType` in `backend/coffer/domain/audit.py`:
 
 | Value | When emitted |
 |---|---|
-| `provider_switched` | Successful `POST /providers/{name}/activate`; details: `{from, to, wire_format, agents: [...projected...]}` |
+| `provider_switched` | Successful `POST /providers/{name}/activate`; details: `{from, to, protocol, agents: [...projected...]}` |
 | `provider_internal_default_set` | Successful `POST /providers/{name}/internal-default`; details: `{from, to}` (previous internal-default name or null, and the new one) |
 
 `RESOURCE_CREATED`, `RESOURCE_UPDATED`, `RESOURCE_DELETED` are emitted

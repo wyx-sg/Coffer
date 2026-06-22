@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0039"
+HEAD_REVISION = "0040"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec 004-agent-registry) needs no table of its own — agents
@@ -400,9 +400,10 @@ def test_0036_migrates_chat_models_to_provider_resources(tmp_path, monkeypatch):
             )
         conn.commit()
 
-    # Apply 0036.
-    command.upgrade(cfg, "head")
-    assert _alembic_version(db_path) == HEAD_REVISION
+    # Apply 0036 only — pin here (not head): a later slice (0040) slims the
+    # connection shape this migration produces, so it is verified at its own rev.
+    command.upgrade(cfg, "0036")
+    assert _alembic_version(db_path) == "0036"
     assert "chat_models" not in _user_tables(db_path)
 
     with sqlite3.connect(db_path) as conn:
@@ -536,8 +537,10 @@ def test_0037_flips_openai_wire_api_to_responses(tmp_path, monkeypatch):
             )
         conn.commit()
 
-    command.upgrade(cfg, "head")
-    assert _alembic_version(db_path) == HEAD_REVISION
+    # Pin to 0037 (not head): a later slice (0040) strips wire_api entirely, so
+    # this data migration is verified in isolation at its own revision.
+    command.upgrade(cfg, "0037")
+    assert _alembic_version(db_path) == "0037"
 
     def _wire_apis() -> dict[str, str]:
         with sqlite3.connect(db_path) as conn:
@@ -559,6 +562,61 @@ def test_0037_flips_openai_wire_api_to_responses(tmp_path, monkeypatch):
     assert apis_down["openai-chat"] == "chat"
     assert apis_down["openai-responses"] == "chat"
     assert apis_down["anthropic-x"] == "chat"
+
+
+def test_0040_slims_connection_to_protocol(tmp_path, monkeypatch):
+    """0040 is a data migration: a connection becomes ``{protocol, base_url,
+    credential_ref}`` — ``wire_format`` is renamed to ``protocol`` and
+    ``model`` / ``fast_model`` / ``wire_api`` are stripped (the model leaves the
+    connection, spec 011 E3). The downgrade restores the keys with placeholders."""
+    db_path = tmp_path / "slim.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    command.upgrade(cfg, "0039")
+    seed = {
+        "wire_format": "openai",
+        "base_url": "https://proxy/v1",
+        "credential_ref": "provider/o/key",
+        "model": "gpt-x",
+        "fast_model": "gpt-mini",
+        "wire_api": "chat",
+        "is_active": True,
+        "internal_default": False,
+    }
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
+            "VALUES ('provider', 'conn', ?, 1, '2026-06-22', '2026-06-22')",
+            (json.dumps(seed),),
+        )
+        conn.commit()
+
+    def _cfg() -> dict:
+        with sqlite3.connect(db_path) as conn:
+            (raw,) = conn.execute(
+                "SELECT config_json FROM resources WHERE name = 'conn'"
+            ).fetchone()
+        return json.loads(raw)
+
+    command.upgrade(cfg, "head")
+    assert _alembic_version(db_path) == HEAD_REVISION
+    after = _cfg()
+    assert after["protocol"] == "openai"  # wire_format renamed
+    assert "wire_format" not in after
+    assert "model" not in after
+    assert "fast_model" not in after
+    assert "wire_api" not in after
+    assert after["base_url"] == "https://proxy/v1"
+    assert after["credential_ref"] == "provider/o/key"
+
+    # Downgrade restores the pre-slim key set (values are placeholders).
+    command.downgrade(cfg, "0039")
+    down = _cfg()
+    assert down["wire_format"] == "openai"
+    assert "protocol" not in down
+    assert "model" in down
+    assert "wire_api" in down
 
 
 def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkeypatch):

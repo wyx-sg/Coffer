@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.config import ResolvedConnection
 from coffer.infrastructure.chat.langchain_models import build_chat_model
 
 
@@ -21,7 +21,7 @@ class LangchainLlmCompletion:
         *,
         system: str,
         user: str,
-        model: ProviderConfig,
+        model: ResolvedConnection,
         credential_resolver: Callable[[str], str],
     ) -> str:
         chat = build_chat_model(model, credential_resolver)

@@ -16,13 +16,10 @@ const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>
 function makeConnection(over: Record<string, unknown> = {}) {
   return {
     name: "p1",
-    wire_format: "anthropic",
+    protocol: "anthropic",
     base_url: "https://api.example",
     credential_ref: "ref",
     // The stored model/fast_model must NEVER feed the picker (D4 / E1).
-    model: "claude-opus-4-8",
-    fast_model: "claude-haiku-4-5",
-    wire_api: "chat",
     is_active: true,
     internal_default: false,
     enabled: true,

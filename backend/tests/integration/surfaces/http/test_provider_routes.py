@@ -45,9 +45,8 @@ def _register_agent(c: TestClient, *, agent_type: str, name: str, config_dir: pa
 def _anthropic_body(name: str = "acme", **over) -> dict:
     body = {
         "name": name,
-        "wire_format": "anthropic",
+        "protocol": "anthropic",
         "base_url": "https://gw/anthropic",
-        "model": "claude-opus-4-8",
         "secret_value": "sk-secret-value",
     }
     body.update(over)
@@ -83,9 +82,8 @@ def test_create_reusing_credential_ref(tmp_path, monkeypatch):
             "/api/v1/providers",
             json={
                 "name": "reuse",
-                "wire_format": "openai",
+                "protocol": "openai",
                 "base_url": "https://gw/v1",
-                "model": "gpt-x",
                 "credential_ref": "shared/key",
             },
         )
@@ -99,7 +97,7 @@ def test_create_reusing_credential_ref(tmp_path, monkeypatch):
 def test_reject_unknown_wire_format(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59730)
     with _client(app) as c:
-        r = c.post("/api/v1/providers", json=_anthropic_body(wire_format="bogus"))
+        r = c.post("/api/v1/providers", json=_anthropic_body(protocol="bogus"))
         assert r.status_code == 422, r.text
 
 
@@ -122,19 +120,9 @@ def test_update_profile(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59750)
     with _client(app) as c:
         c.post("/api/v1/providers", json=_anthropic_body())
-        r = c.patch("/api/v1/providers/acme", json={"model": "claude-sonnet-4-6"})
+        r = c.patch("/api/v1/providers/acme", json={"base_url": "https://gw/anthropic/v2"})
         assert r.status_code == 200, r.text
-        assert r.json()["model"] == "claude-sonnet-4-6"
-
-
-def test_patch_null_fast_model_clears_it(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59755)
-    with _client(app) as c:
-        c.post("/api/v1/providers", json=_anthropic_body(fast_model="claude-haiku-4-5"))
-        assert c.get("/api/v1/providers/acme").json()["fast_model"] == "claude-haiku-4-5"
-        r = c.patch("/api/v1/providers/acme", json={"fast_model": None})
-        assert r.status_code == 200, r.text
-        assert r.json()["fast_model"] is None
+        assert r.json()["base_url"] == "https://gw/anthropic/v2"
 
 
 @pytest.mark.acceptance(spec="011-provider-switching", scenario="list provider profiles")
@@ -171,28 +159,31 @@ def test_activate_writes_claude_settings(tmp_path, monkeypatch):
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
         _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
-        c.post("/api/v1/providers", json=_anthropic_body(fast_model="claude-haiku-4-5"))
+        c.post("/api/v1/providers", json=_anthropic_body())
         r = c.post("/api/v1/providers/acme/activate")
         assert r.status_code == 200, r.text
         assert r.json()["projected"] == ["cc"]
         data = json.loads((cfg / "settings.json").read_text())
         assert data["apiKeyHelper"] == "coffer provider key --wire anthropic"
         assert data["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
-        assert data["env"]["ANTHROPIC_MODEL"] == "claude-opus-4-8"
-        assert data["env"]["ANTHROPIC_SMALL_FAST_MODEL"] == "claude-haiku-4-5"
+        # The agent is unbound (no per-agent model) → no model env is written, so
+        # Claude Code runs on its OWN default model (spec 011 E3/E4).
+        assert "ANTHROPIC_MODEL" not in data["env"]
+        assert "ANTHROPIC_SMALL_FAST_MODEL" not in data["env"]
 
 
 @pytest.mark.acceptance(
     spec="011-provider-switching",
-    scenario="an agent's model binding overrides the connection model",
+    scenario="an agent's model binding drives the projected model",
 )
-def test_agent_binding_overrides_connection_model(tmp_path, monkeypatch):
+def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59783)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
         _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
-        c.post("/api/v1/providers", json=_anthropic_body(fast_model="conn-fast"))
-        # Bind this agent to its own models; activating re-projects from the binding.
+        c.post("/api/v1/providers", json=_anthropic_body())
+        # Bind this agent to its own models; activating projects them (the model
+        # lives on the binding, not the connection — spec 011 E3/E4).
         rb = c.patch(
             "/api/v1/agents/cc",
             json={"model": "bound-opus", "fast_model": "bound-haiku"},
@@ -201,7 +192,6 @@ def test_agent_binding_overrides_connection_model(tmp_path, monkeypatch):
         assert rb.json()["model"] == "bound-opus"
         c.post("/api/v1/providers/acme/activate")
         data = json.loads((cfg / "settings.json").read_text())
-        # The agent binding wins over the connection's model/fast_model.
         assert data["env"]["ANTHROPIC_MODEL"] == "bound-opus"
         assert data["env"]["ANTHROPIC_SMALL_FAST_MODEL"] == "bound-haiku"
 
@@ -218,12 +208,14 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
             "/api/v1/providers",
             json={
                 "name": "oa",
-                "wire_format": "openai",
+                "protocol": "openai",
                 "base_url": "https://gw/v1",
-                "model": "gpt-x",
                 "secret_value": "sk-x",
             },
         )
+        # Bind the agent's model so the projection writes a top-level model (the
+        # model lives on the binding, not the connection — spec 011 E3/E4).
+        c.patch("/api/v1/agents/cx", json={"model": "gpt-x"})
         r = c.post("/api/v1/providers/oa/activate")
         assert r.status_code == 200, r.text
         assert r.json()["projected"] == ["cx"]
@@ -244,7 +236,7 @@ def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
         _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
-        c.post("/api/v1/providers", json=_anthropic_body(fast_model="claude-haiku-4-5"))
+        c.post("/api/v1/providers", json=_anthropic_body())
         c.post("/api/v1/providers/acme/activate")
         # sanity — the connection is projected into the agent config first
         assert json.loads((cfg / "settings.json").read_text())["env"]["ANTHROPIC_BASE_URL"]
@@ -364,14 +356,13 @@ def test_create_ollama_without_credential(tmp_path, monkeypatch):
             "/api/v1/providers",
             json={
                 "name": "local-llama",
-                "wire_format": "ollama",
+                "protocol": "ollama",
                 "base_url": "http://localhost:11434",
-                "model": "llama3",
             },
         )
         assert r.status_code == 201, r.text
         body = r.json()
-        assert body["wire_format"] == "ollama"
+        assert body["protocol"] == "ollama"
         assert body["credential_ref"] is None
         assert body["is_active"] is False  # ollama never projects to an agent
         # Supplying a credential for ollama is rejected.
@@ -379,9 +370,8 @@ def test_create_ollama_without_credential(tmp_path, monkeypatch):
             "/api/v1/providers",
             json={
                 "name": "bad-ollama",
-                "wire_format": "ollama",
+                "protocol": "ollama",
                 "base_url": "http://localhost:11434",
-                "model": "llama3",
                 "secret_value": "nope",
             },
         )
@@ -415,9 +405,8 @@ def test_set_internal_default_clears_previous(tmp_path, monkeypatch):
             "/api/v1/providers",
             json={
                 "name": "second",
-                "wire_format": "openai",
+                "protocol": "openai",
                 "base_url": "https://gw/v1",
-                "model": "gpt-x",
                 "secret_value": "sk-2",
             },
         )

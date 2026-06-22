@@ -521,15 +521,15 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
   `env.ANTHROPIC_SMALL_FAST_MODEL` is present; `ANTHROPIC_API_KEY` is absent;
   and the profile's `is_active` becomes `true`.
 
-### Scenario: an agent's model binding overrides the connection model
+### Scenario: an agent's model binding drives the projected model
 
 - **Given** a Claude Code agent is registered with a per-agent model binding
   (`model` + `fast_model`) and an anthropic connection exists,
 - **When** the user activates the connection,
 - **Then** the projected `env.ANTHROPIC_MODEL` / `env.ANTHROPIC_SMALL_FAST_MODEL`
-  come from the AGENT's binding, not the connection — the model lives at the
-  point of use (amendment 2026-06-22b E3/E4). An unbound agent still falls back
-  to the connection's model during rollout.
+  come from the AGENT's binding — the model lives at the point of use, not on the
+  connection (amendment 2026-06-22b E1/E3/E4). An unbound agent gets no model env
+  written, so it runs on its OWN default model.
 
 ### Scenario: activate an openai profile writes Codex config
 

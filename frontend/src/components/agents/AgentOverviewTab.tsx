@@ -40,20 +40,21 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   const [fetched, setFetched] = useState<string[]>([]);
 
   const compatible = useMemo(
-    () => (providers.data ?? []).filter((p) => p.wire_format === wire),
+    () => (providers.data ?? []).filter((p) => p.protocol === wire),
     [providers.data, wire],
   );
   const active = useMemo(() => compatible.find((p) => p.is_active) ?? null, [compatible]);
 
   const models = useMemo(() => {
     const out: string[] = [];
-    // Seed the bound model(s) so a correctly-bound agent shows them before the
-    // dropdown is opened (introspect populates the rest on open).
-    for (const m of [agent.model, agent.fast_model, active?.model, active?.fast_model])
+    // Seed the agent's bound model(s) so a correctly-bound agent shows them
+    // before the dropdown is opened (introspect populates the rest on open).
+    // The connection no longer carries a model (spec 011 E3).
+    for (const m of [agent.model, agent.fast_model])
       if (m && !out.includes(m)) out.push(m);
     for (const m of fetched) if (!out.includes(m)) out.push(m);
     return out;
-  }, [agent.model, agent.fast_model, active, fetched]);
+  }, [agent.model, agent.fast_model, fetched]);
 
   const introspect = () => {
     if (!active) return;
@@ -79,9 +80,9 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   const bindFast = (fast: string) =>
     patchAgent.mutate({ name: agent.name, body: { fast_model: fast } }, { onSuccess: reproject });
 
-  // Binding first, else the active connection's value (rollout fallback).
-  const primaryModel = agent.model ?? active?.model ?? "";
-  const fastModel = agent.fast_model ?? active?.fast_model ?? "";
+  // The model lives on the per-agent binding (spec 011 E3) — not the connection.
+  const primaryModel = agent.model ?? "";
+  const fastModel = agent.fast_model ?? "";
   const busy = activate.isPending || patchAgent.isPending;
 
   return (

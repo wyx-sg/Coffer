@@ -22,7 +22,6 @@ from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.domain.channel.config import parse_channel_config
-from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.channel.listener_spawn import CallbackListenerController
 from coffer.infrastructure.channel.persistence import ChannelPeerRepo
@@ -38,7 +37,6 @@ from coffer.surfaces.http.chat.dependencies import (
     get_chat_service,
     get_turn_orchestrator,
 )
-from coffer.surfaces.http.dependencies import get_provider_service
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -53,43 +51,23 @@ def _daemon_info() -> tuple[str, str]:
     return f"http://127.0.0.1:{daemon_routes.get_port()}", token
 
 
-# A managed chat agent's agent_key -> its provider wire format (ADR-032 targets).
-_WIRE_BY_AGENT = {"claude_code": "anthropic", "codex": "openai"}
+# Curated built-in model quick-picks per managed agent type — the models
+# reachable through the agent's OWN login (mirrors the web ModelPicker's
+# no-connection case + frontend BUILTIN_MODELS_BY_AGENT). The connection no
+# longer carries a model (spec 011 E3), so the channel /model card offers these.
+_BUILTIN_MODELS_BY_AGENT = {
+    "claude_code": ["opus", "sonnet", "haiku"],
+    "codex": ["gpt-5-codex", "gpt-5", "o3"],
+}
 
 
 class _ModelSuggestions:
     """ModelSuggestionPort: best-effort model quick-picks for a managed agent's
-    ``/model`` card — the active provider profile's ``model`` (+ ``fast_model``)
-    for the agent's wire (ADR-032), mirroring the web model picker. Empty on any
-    miss (no provider service, no active profile, unknown agent), so the card
-    falls back to the free-text path."""
-
-    def __init__(self, provider_service_getter: Any) -> None:
-        self._get = provider_service_getter
+    ``/model`` card — the agent's curated built-in models. Empty for an unknown
+    agent, so the card falls back to the free-text path."""
 
     async def suggest(self, agent_key: str) -> list[str]:
-        wire = _WIRE_BY_AGENT.get(agent_key)
-        if wire is None:
-            return []
-        try:
-            resources = await self._get().list()
-        except Exception:
-            return []
-        picks: list[str] = []
-        for r in resources:
-            try:
-                cfg = ProviderConfig.model_validate(r.config)
-            except Exception:
-                # A legacy/invalid profile config must not deny the whole card —
-                # skip it and keep the best-effort contract (empty → free-text).
-                continue
-            if cfg.wire_format.value != wire or not cfg.is_active:
-                continue
-            for m in (cfg.model, cfg.fast_model):
-                if m and m not in picks:
-                    picks.append(m)
-            break
-        return picks
+        return list(_BUILTIN_MODELS_BY_AGENT.get(agent_key, []))
 
 
 def wire_channel_kind(
@@ -108,7 +86,7 @@ def wire_channel_kind(
         turns=get_turn_orchestrator(),
         audit=audit,
         agents=get_agent_registry(),
-        model_suggestions=_ModelSuggestions(get_provider_service),
+        model_suggestions=_ModelSuggestions(),
     )
 
     # Production injects the EncryptedCredentialStore; None (tests) falls back

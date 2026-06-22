@@ -1,9 +1,10 @@
 // components/settings/ProviderForm.tsx — add / edit an LLM connection (spec 011).
-// A connection = endpoint + key + (detected) wire + model. The wire is no longer
-// hand-picked: after base_url + key are entered the dialog detects it (ADR-032
-// D9 / amendment 2026-06-22b E2); only an inconclusive probe falls back to a
-// manual pick. In edit mode (`initial` set) name + wire are fixed and the secret
-// is optional — left blank, the stored key is kept.
+// A connection = endpoint + key + (detected) protocol. The model lives apart
+// from the connection (amendment E1/E3) — it is chosen at the point of use, so
+// the dialog has no model field. The protocol is not hand-picked: after base_url
+// + key are entered the dialog detects it (E2); only an inconclusive probe falls
+// back to a manual pick. In edit mode (`initial` set) name + protocol are fixed
+// and the secret is optional — left blank, the stored key is kept.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2, Loader2 } from "lucide-react";
@@ -12,19 +13,18 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import { ProviderModelField } from "@/components/settings/ProviderModelField";
 import { useDetectProtocol } from "@/lib/hooks/useModelIntrospection";
 import { translateApiError } from "@/lib/api/errors";
 import {
   wireNeedsCredential,
+  type Protocol,
   type Provider,
   type ProviderCreate,
   type ProviderPatch,
-  type WireFormat,
 } from "@/lib/api/providers";
 
 interface Props {
-  /** Present → edit an existing connection (name + wire locked, secret optional). */
+  /** Present → edit an existing connection (name + protocol locked, secret optional). */
   initial?: Provider;
   submitError?: unknown;
   pending: boolean;
@@ -38,20 +38,17 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
   const { t } = useTranslation();
   const isEdit = initial != null;
   const [name, setName] = useState(initial?.name ?? "");
-  // "" until detected (create mode); edit mode keeps the locked wire.
-  const [wireFormat, setWireFormat] = useState<WireFormat | "">(initial?.wire_format ?? "");
+  // "" until detected (create mode); edit mode keeps the locked protocol.
+  const [protocol, setProtocol] = useState<Protocol | "">(initial?.protocol ?? "");
   const [baseUrl, setBaseUrl] = useState(initial?.base_url ?? "");
-  const [model, setModel] = useState(initial?.model ?? "");
-  const [fastModel, setFastModel] = useState(initial?.fast_model ?? "");
   const [secret, setSecret] = useState("");
   // Shown only when detection is inconclusive (`unknown`) — the honest fallback.
   const [manualPick, setManualPick] = useState(false);
 
   const detect = useDetectProtocol();
-  // Before a wire is known, assume a key is needed (so the field is available to
-  // detect with); ollama clears it once detected.
-  const needsCredential = wireFormat === "" || wireNeedsCredential(wireFormat);
-  const probeCredentialRef = isEdit && !secret ? (initial?.credential_ref ?? null) : null;
+  // Before a protocol is known, assume a key is needed (so the field is available
+  // to detect with); ollama clears it once detected.
+  const needsCredential = protocol === "" || wireNeedsCredential(protocol);
 
   const runDetect = () => {
     if (isEdit || !baseUrl) return;
@@ -62,7 +59,7 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
           if (r.protocol === "unknown") {
             setManualPick(true);
           } else {
-            setWireFormat(r.protocol as WireFormat);
+            setProtocol(r.protocol as Protocol);
             setManualPick(false);
           }
         },
@@ -76,15 +73,13 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
       onSubmit={async (e) => {
         e.preventDefault();
         if (isEdit) {
-          const patch: ProviderPatch = { base_url: baseUrl, model };
-          patch.fast_model = fastModel.trim() ? fastModel.trim() : null;
+          const patch: ProviderPatch = { base_url: baseUrl };
           if (needsCredential && secret) patch.secret_value = secret;
           await onUpdate?.(patch);
           return;
         }
-        if (!wireFormat) return; // guard: wire must be known before create
-        const values: ProviderCreate = { name, wire_format: wireFormat, base_url: baseUrl, model };
-        if (fastModel.trim()) values.fast_model = fastModel.trim();
+        if (!protocol) return; // guard: protocol must be known before create
+        const values: ProviderCreate = { name, protocol, base_url: baseUrl };
         if (needsCredential && secret) values.secret_value = secret;
         await onSubmit(values);
       }}
@@ -122,18 +117,18 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
           />
         </div>
       )}
-      {/* Wire is detected, not hand-picked. Edit mode shows the locked wire; create
-          mode shows the detected wire, or a manual fallback when inconclusive. */}
+      {/* Protocol is detected, not hand-picked. Edit mode shows the locked value;
+          create mode shows the detected one, or a manual fallback when inconclusive. */}
       <div className="space-y-1.5">
         <Label htmlFor="p-wire">{t("settings.connections.wireFormat")}</Label>
         {isEdit ? (
-          <p className="text-sm text-muted-foreground">{initial?.wire_format}</p>
+          <p className="text-sm text-muted-foreground">{initial?.protocol}</p>
         ) : manualPick ? (
           <select
             id="p-wire"
             className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-            value={wireFormat}
-            onChange={(e) => setWireFormat(e.target.value as WireFormat)}
+            value={protocol}
+            onChange={(e) => setProtocol(e.target.value as Protocol)}
           >
             <option value="" disabled>
               {t("settings.connections.detectFailed")}
@@ -154,28 +149,14 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
               {detect.isPending && <Loader2 className="mr-1 size-3.5 animate-spin" />}
               {t("settings.connections.detectType")}
             </Button>
-            {wireFormat && (
+            {protocol && (
               <span className="flex items-center gap-1 text-green-600" role="status">
                 <CheckCircle2 className="size-3.5" />
-                {t("settings.connections.detected", { wire: wireFormat })}
+                {t("settings.connections.detected", { wire: protocol })}
               </span>
             )}
           </div>
         )}
-      </div>
-      <ProviderModelField
-        provider={wireFormat || "openai"}
-        baseUrl={baseUrl || null}
-        credentialRef={probeCredentialRef}
-        secretValue={secret}
-        model={model}
-        onModelChange={setModel}
-        kind="chat"
-        requiredModel={!isEdit}
-      />
-      <div className="space-y-1.5">
-        <Label htmlFor="p-fast">{t("settings.connections.fastModel")}</Label>
-        <Input id="p-fast" value={fastModel} onChange={(e) => setFastModel(e.target.value)} />
       </div>
       {submitError != null && (
         <p className="text-sm text-destructive">{translateApiError(t, submitError)}</p>
@@ -184,7 +165,7 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
         <Button type="button" variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-        <Button type="submit" disabled={pending || (!isEdit && !wireFormat)}>
+        <Button type="submit" disabled={pending || (!isEdit && !protocol)}>
           {t("common.save")}
         </Button>
       </DialogFooter>

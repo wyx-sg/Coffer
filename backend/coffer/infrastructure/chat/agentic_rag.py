@@ -26,7 +26,7 @@ from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool
 from coffer.application.chat.ports import ToolGateway, ToolSpec
-from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.config import ResolvedConnection
 from coffer.infrastructure.chat.langchain_models import build_chat_model
 
 log = logging.getLogger(__name__)
@@ -133,7 +133,7 @@ async def run_agentic_rag(
 
 def make_ask_tool(
     *,
-    resolve_connection: Callable[[], Awaitable[ProviderConfig | None]],
+    resolve_connection: Callable[[], Awaitable[ResolvedConnection | None]],
     tool_gateway: ToolGateway,
     credential_resolver: Any,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,

@@ -1,12 +1,16 @@
 """``ProviderConfig`` — the ``Resource.config`` payload for kind ``provider``.
 
-Value-level validation only (types, well-formedness). No I/O. A connection is
-*single-wire*: its ``wire_format`` fixes which agent it projects into
-(``anthropic`` → Claude Code, ``openai`` → Codex). ``ollama`` is internal-only —
-it projects into NO agent and is used solely by Coffer's internal LLM engine.
-Per-wire activation lives in ``is_active`` (the switch op enforces "at most one
-active per wire format"); ``internal_default`` (global, ≤1) marks the connection
-the internal engine uses — one connection may be both.
+Value-level validation only (types, well-formedness). No I/O. A connection is a
+credentialed endpoint: ``{protocol, base_url, credential_ref}``. The MODEL it
+runs is NOT stored here — it is chosen at the point of use (per-agent binding,
+the internal-engine selector, the chat surface), per spec 011 amendment E1/E3.
+
+``protocol`` is the upstream wire it speaks, detected at create/edit time:
+``anthropic`` → Claude Code, ``openai`` → Codex, ``ollama`` (internal-only,
+projects into no agent), or ``unknown`` when the probe was inconclusive (the
+connection is then offered to every agent and the user decides). Per-wire
+activation lives in ``is_active``; ``internal_default`` (global, ≤1) marks the
+connection Coffer's internal engine uses.
 
 The credential is referenced by ``credential_ref`` only — the raw key lives in
 the Fernet vault and is never stored here, mirroring the MCP kind. ``ollama``
@@ -16,6 +20,7 @@ connections carry no credential (``credential_ref`` is ``None``).
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
@@ -24,24 +29,19 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 _CRED_REF_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
 
 
-class WireFormat(StrEnum):
-    """Upstream wire protocol.
+class Protocol(StrEnum):
+    """Upstream wire protocol a connection speaks (detected, not user-typed).
 
     ``anthropic`` / ``openai`` fix the agent a connection projects into (Claude
     Code / Codex). ``ollama`` is internal-only: it projects into NO agent and is
-    used solely by Coffer's internal LLM engine.
+    used solely by Coffer's internal LLM engine. ``unknown`` means the probe was
+    inconclusive — the connection is offered to every agent and the user decides.
     """
 
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     OLLAMA = "ollama"
-
-
-class WireApi(StrEnum):
-    """Codex ``model_providers.*.wire_api`` value (openai profiles only)."""
-
-    CHAT = "chat"
-    RESPONSES = "responses"
+    UNKNOWN = "unknown"
 
 
 class ProviderConfig(BaseModel):
@@ -49,30 +49,21 @@ class ProviderConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    wire_format: WireFormat
+    protocol: Protocol
     base_url: str
     # Fernet vault ref (e.g. ``provider/<name>/key``); multiple connections MAY
-    # share one ref. Required for anthropic/openai; ``None`` for ollama (no key).
-    # Probed for existence at register/update time by the kind's
+    # share one ref. Required for anthropic/openai/unknown; ``None`` for ollama
+    # (no key). Probed for existence at register/update time by the kind's
     # credential_ref_extractor.
     credential_ref: str | None = None
-    # Primary model id → ``ANTHROPIC_MODEL`` (Claude Code) / ``model`` (Codex).
-    model: str
-    # ``ANTHROPIC_SMALL_FAST_MODEL`` for anthropic; ignored for openai.
-    fast_model: str | None = None
-    # ``model_providers.*.wire_api`` for openai/Codex; ignored for anthropic.
-    # Default ``responses``: codex-cli 0.130 dropped ``wire_api = "chat"`` (the
-    # config then fails to load), so a connection with no explicit value must
-    # project what current Codex accepts.
-    wire_api: WireApi = WireApi.RESPONSES
-    # At most one active connection per wire format (enforced by the switch op).
+    # At most one active connection per protocol (enforced by the switch op).
     # ollama never projects to an agent, so it stays inactive.
     is_active: bool = False
     # At most one connection globally is Coffer's internal-engine default
     # (enforced by ``ProviderService.set_internal_default``).
     internal_default: bool = False
 
-    @field_validator("base_url", "model")
+    @field_validator("base_url")
     @classmethod
     def _non_empty(cls, v: str) -> str:
         if not v or not v.strip():
@@ -90,22 +81,27 @@ class ProviderConfig(BaseModel):
             )
         return v
 
-    @field_validator("fast_model")
-    @classmethod
-    def _fast_model_non_empty(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        if not v.strip():
-            raise ValueError("fast_model must not be empty if provided")
-        return v.strip()
-
     @model_validator(mode="after")
-    def _credential_matches_wire(self) -> ProviderConfig:
-        """anthropic/openai connections require a ``credential_ref``; an ollama
-        connection (no key) must not carry one."""
-        if self.wire_format is WireFormat.OLLAMA:
+    def _credential_matches_protocol(self) -> ProviderConfig:
+        """anthropic/openai/unknown connections require a ``credential_ref``; an
+        ollama connection (no key) must not carry one."""
+        if self.protocol is Protocol.OLLAMA:
             if self.credential_ref is not None:
                 raise ValueError("ollama connection must not carry a credential_ref")
         elif not self.credential_ref:
-            raise ValueError(f"{self.wire_format.value} connection requires a credential_ref")
+            raise ValueError(f"{self.protocol.value} connection requires a credential_ref")
         return self
+
+
+@dataclass(frozen=True)
+class ResolvedConnection:
+    """A connection paired with the model to run on it.
+
+    The model lives apart from the connection (spec 011 E3), so the two travel
+    together when Coffer's internal engine builds a chat model: the connection
+    supplies the endpoint + protocol + credential, the ``model`` is resolved
+    separately (the internal-engine selector, the per-agent binding, …).
+    """
+
+    config: ProviderConfig
+    model: str

@@ -54,12 +54,9 @@ const apiMock = providersApi as unknown as Record<string, ReturnType<typeof vi.f
 
 const makeProvider = (overrides?: Partial<Provider>): Provider => ({
   name: "acme",
-  wire_format: "anthropic",
+  protocol: "anthropic",
   base_url: "https://gw/anthropic",
   credential_ref: "provider/acme/key",
-  model: "claude-opus-4-8",
-  fast_model: null,
-  wire_api: "chat",
   is_active: false,
   internal_default: false,
   enabled: true,
@@ -106,7 +103,7 @@ describe("LlmConnectionsPage", () => {
       });
       apiMock.activate.mockResolvedValue({
         activated: "kimi",
-        wire_format: "anthropic",
+        protocol: "anthropic",
         projected: ["cc"],
         skipped: [],
       });
@@ -129,7 +126,7 @@ describe("LlmConnectionsPage", () => {
   test("create falls back to a manual type pick when detection is inconclusive", async () => {
     detectResult = "unknown";
     apiMock.list.mockResolvedValue({ providers: [] });
-    apiMock.create.mockResolvedValue(makeProvider({ name: "myconn", wire_format: "openai" }));
+    apiMock.create.mockResolvedValue(makeProvider({ name: "myconn", protocol: "openai" }));
 
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /Add connection/i }));
@@ -141,13 +138,12 @@ describe("LlmConnectionsPage", () => {
 
     const sel = screen.getByLabelText("Connection type");
     fireEvent.change(sel, { target: { value: "openai" } });
-    fireEvent.change(screen.getByLabelText("Model ID"), { target: { value: "gpt-4o" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
     expect(apiMock.create.mock.calls[0][0]).toMatchObject({
       name: "myconn",
-      wire_format: "openai",
+      protocol: "openai",
       secret_value: "sk-x",
     });
   });
@@ -160,7 +156,7 @@ describe("LlmConnectionsPage", () => {
       apiMock.create.mockResolvedValue(
         makeProvider({
           name: "local-llm",
-          wire_format: "ollama",
+          protocol: "ollama",
           credential_ref: null,
           internal_default: false,
         }),
@@ -179,16 +175,14 @@ describe("LlmConnectionsPage", () => {
       // ollama needs no key — the credential field disappears once detected
       expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
 
-      fireEvent.change(screen.getByLabelText("Model ID"), { target: { value: "llama3" } });
       fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
       await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
       const body = apiMock.create.mock.calls[0][0];
       expect(body).toMatchObject({
         name: "local-llm",
-        wire_format: "ollama",
+        protocol: "ollama",
         base_url: "http://localhost:11434",
-        model: "llama3",
       });
       // NEITHER secret_value nor credential_ref is sent for ollama.
       expect(body.secret_value).toBeUndefined();
@@ -246,9 +240,9 @@ describe("LlmConnectionsPage", () => {
     },
   );
 
-  test("edits a connection via the card pencil action (name + wire locked)", async () => {
+  test("edits a connection via the card pencil action (name + protocol locked)", async () => {
     apiMock.list.mockResolvedValue({ providers: [makeProvider({ name: "acme" })] });
-    apiMock.update.mockResolvedValue(makeProvider({ name: "acme", model: "claude-sonnet-4-6" }));
+    apiMock.update.mockResolvedValue(makeProvider({ name: "acme", base_url: "https://gw/v2" }));
 
     renderPage();
     await screen.findByText("acme");
@@ -256,20 +250,22 @@ describe("LlmConnectionsPage", () => {
     // open the edit dialog from the card
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
 
-    // name is fixed (resource id); the wire is shown read-only (no detect/edit)
+    // name is fixed (resource id); the protocol is shown read-only (no detect/edit)
     expect((screen.getByLabelText("Name") as HTMLInputElement).disabled).toBe(true);
     expect(screen.queryByRole("button", { name: "Detect type" })).not.toBeInTheDocument();
     // the secret is optional in edit mode (no value re-entry required)
     expect((screen.getByLabelText("API key") as HTMLInputElement).required).toBe(false);
+    // no model field on the connection dialog — the model lives on the agent (E3)
+    expect(screen.queryByLabelText("Model ID")).not.toBeInTheDocument();
 
-    // change the model and save → PATCH only the editable fields
-    fireEvent.change(screen.getByLabelText("Model ID"), { target: { value: "claude-sonnet-4-6" } });
+    // change the base URL and save → PATCH only the editable fields
+    fireEvent.change(screen.getByLabelText("Base URL"), { target: { value: "https://gw/v2" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
     expect(apiMock.update).toHaveBeenCalledWith(
       "acme",
-      expect.objectContaining({ model: "claude-sonnet-4-6" }),
+      expect.objectContaining({ base_url: "https://gw/v2" }),
     );
     // no fresh secret typed → secret_value omitted
     expect(apiMock.update.mock.calls[0][1].secret_value).toBeUndefined();

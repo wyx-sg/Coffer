@@ -56,7 +56,7 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
 
   const wire = WIRE_BY_AGENT[agentKey];
   const activeConnection = useMemo(
-    () => (providers.data ?? []).find((p) => p.wire_format === wire && p.is_active) ?? null,
+    () => (providers.data ?? []).find((p) => p.protocol === wire && p.is_active) ?? null,
     [providers.data, wire],
   );
 

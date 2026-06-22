@@ -47,7 +47,7 @@ paths:
       operationId: createProvider
       summary: Create a new provider connection
       description: |
-        Credential source depends on `wire_format`:
+        Credential source depends on `protocol`:
         - For `anthropic`/`openai`, exactly one credential source must be
           supplied:
           - `secret_value`: the raw API key — stored to the Fernet vault under
@@ -101,7 +101,7 @@ paths:
       description: |
         All fields are optional. Supplying `secret_value` rotates the stored
         secret (overwrites the vault entry at the existing `credential_ref`).
-        `wire_format` and `credential_ref` are immutable (identity) — change
+        `protocol` and `credential_ref` are immutable (identity) — change
         them by recreating the profile.
       requestBody:
         required: true
@@ -146,12 +146,12 @@ paths:
       operationId: activateProvider
       summary: Activate (switch to) a provider profile
       description: |
-        Sets this profile as the active one for its `wire_format` (at most one
+        Sets this profile as the active one for its `protocol` (at most one
         active per wire at any time). Atomically clears `is_active` on all
-        other profiles of the same `wire_format`.
+        other profiles of the same `protocol`.
 
         For each ENABLED registered agent whose native wire matches the
-        profile's `wire_format`, projects (writes native config):
+        profile's `protocol`, projects (writes native config):
         - `anthropic` → `~/.claude/settings.json` (apiKeyHelper + env keys)
         - `openai` → `~/.codex/config.toml` (model + model_providers.coffer)
 
@@ -159,7 +159,7 @@ paths:
         the response carries the agent in `skipped` — NOT an error.
 
         Emits a `PROVIDER_SWITCHED` audit event with details
-        `{from, to, wire_format, agents: [...projected...]}`.
+        `{from, to, protocol, agents: [...projected...]}`.
       responses:
         "200":
           description: OK
@@ -250,7 +250,7 @@ paths:
         prerequisite (ADR-032 amendment D1/D3).
 
         Idempotent — a no-op when nothing is active for the wire. Emits a
-        `PROVIDER_SWITCHED` audit event `{from, to: null, wire_format, agents}`
+        `PROVIDER_SWITCHED` audit event `{from, to: null, protocol, agents}`
         only when something changed.
       responses:
         "200":
@@ -312,47 +312,42 @@ components:
 
   schemas:
 
-    WireFormat:
+    Protocol:
       type: string
-      enum: [anthropic, openai, ollama]
+      enum: [anthropic, openai, ollama, unknown]
       description: |
-        Determines which native agent this connection projects to:
+        The connection's detected upstream protocol; determines which native
+        agent it projects to:
         - `anthropic` → Claude Code (`~/.claude/settings.json`)
         - `openai` → Codex (`~/.codex/config.toml`)
         - `ollama` → internal-only; projected to NO agent (`target_for`
           returns null). Used solely by Coffer's internal engine when this
           connection is the internal default. Has no API key, so its
           `credential_ref` is absent.
-
-    WireApi:
-      type: string
-      enum: [chat, responses]
-      description: >-
-        Codex wire API variant. `chat` = Chat Completions;
-        `responses` = Responses API. Ignored for anthropic wire.
+        - `unknown` → the probe was inconclusive; the connection is offered to
+          every agent and the user decides.
 
     ProviderOut:
       type: object
       required:
         - name
-        - wire_format
+        - protocol
         - base_url
         - credential_ref
-        - model
         - is_active
         - internal_default
         - created_at
         - updated_at
       description: >-
-        A provider connection. Never includes the raw secret. `credential_ref`
-        (null for ollama), `is_active`, and `internal_default` are always
-        present.
+        A provider connection — a credentialed endpoint `{protocol, base_url,
+        credential_ref}`. Never includes the raw secret. The model lives apart
+        from the connection (spec 011 E3) and is chosen at the point of use.
       properties:
         name:
           type: string
           description: Connection name (unique within kind `provider`).
-        wire_format:
-          $ref: "#/components/schemas/WireFormat"
+        protocol:
+          $ref: "#/components/schemas/Protocol"
         base_url:
           type: string
           description: The upstream LLM endpoint URL.
@@ -364,22 +359,11 @@ components:
             Pattern: `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`.
             Typically `provider/<name>/key` for an owned secret.
             Null for an ollama connection (no API key).
-        model:
-          type: string
-          description: Primary model ID.
-        fast_model:
-          type: string
-          nullable: true
-          description: >-
-            Fast/small model ID. anthropic only (`ANTHROPIC_SMALL_FAST_MODEL`).
-            Null or absent for openai.
-        wire_api:
-          $ref: "#/components/schemas/WireApi"
         is_active:
           type: boolean
           description: >-
-            Whether this is the active profile for its wire_format. At most
-            one profile per wire_format has is_active=true. Always false for
+            Whether this is the active profile for its protocol. At most
+            one profile per protocol has is_active=true. Always false for
             ollama (internal-only, never projected).
         internal_default:
           type: boolean
@@ -397,41 +381,31 @@ components:
       type: object
       required:
         - name
-        - wire_format
+        - protocol
         - base_url
-        - model
       additionalProperties: false
       properties:
         name:
           type: string
           description: Profile name; must pass `validate_name`.
-        wire_format:
-          $ref: "#/components/schemas/WireFormat"
+        protocol:
+          $ref: "#/components/schemas/Protocol"
         base_url:
           type: string
           description: The upstream LLM endpoint URL.
-        model:
-          type: string
-          description: Primary model ID.
-        fast_model:
-          type: string
-          nullable: true
-          description: Fast/small model ID (anthropic only).
-        wire_api:
-          $ref: "#/components/schemas/WireApi"
         credential_ref:
           type: string
           nullable: true
           description: >-
             Reuse an existing vault ref. Mutually exclusive with
-            `secret_value`. For anthropic/openai exactly one of the two must
-            be supplied; for ollama supply neither.
+            `secret_value`. For anthropic/openai/unknown exactly one of the two
+            must be supplied; for ollama supply neither.
         secret_value:
           type: string
           nullable: true
           description: >-
             Raw API key. Stored to the vault under `provider/<name>/key`.
-            Mutually exclusive with `credential_ref`. For anthropic/openai
+            Mutually exclusive with `credential_ref`. For anthropic/openai/unknown
             exactly one of the two must be supplied; for ollama supply
             neither. Never echoed in any response.
 
@@ -439,21 +413,12 @@ components:
       type: object
       additionalProperties: false
       description: >-
-        All fields optional. `wire_format` and `credential_ref` are immutable
-        and cannot be patched.
+        All fields optional. `protocol` and `credential_ref` are immutable
+        and cannot be patched. The model is not on the connection (spec 011 E3).
       properties:
         base_url:
           type: string
           nullable: true
-        model:
-          type: string
-          nullable: true
-        fast_model:
-          type: string
-          nullable: true
-          description: Pass null to remove `ANTHROPIC_SMALL_FAST_MODEL` from settings.
-        wire_api:
-          $ref: "#/components/schemas/WireApi"
         secret_value:
           type: string
           nullable: true
@@ -463,14 +428,14 @@ components:
 
     ActivateOut:
       type: object
-      required: [activated, wire_format, projected, skipped]
+      required: [activated, protocol, projected, skipped]
       description: Result of a successful activate operation.
       properties:
         activated:
           type: string
           description: Name of the profile that is now active.
-        wire_format:
-          $ref: "#/components/schemas/WireFormat"
+        protocol:
+          $ref: "#/components/schemas/Protocol"
         projected:
           type: array
           items: { type: string }
@@ -479,18 +444,18 @@ components:
           type: array
           items: { type: string }
           description: >-
-            Agent type(s) matching this wire format that have no registered
+            Agent type(s) matching this protocol that have no registered
             enabled agent to project into. Not an error — the profile is still
             activated. (A genuine native-config write failure aborts the switch
             with a 5xx and leaves the registry unchanged, rather than skipping.)
 
     DeactivateOut:
       type: object
-      required: [wire_format, deprojected]
+      required: [protocol, deprojected]
       description: Result of switching a wire back to the agent's built-in login.
       properties:
-        wire_format:
-          $ref: "#/components/schemas/WireFormat"
+        protocol:
+          $ref: "#/components/schemas/Protocol"
         deprojected:
           type: array
           items: { type: string }
@@ -580,7 +545,7 @@ components:
     UnprocessableEntity:
       description: |
         Validation failure. Common cases:
-        - Unknown `wire_format`
+        - Unknown `protocol`
         - For anthropic/openai: both `secret_value` and `credential_ref`
           supplied, or neither
         - For ollama: a `secret_value` or `credential_ref` supplied (ollama

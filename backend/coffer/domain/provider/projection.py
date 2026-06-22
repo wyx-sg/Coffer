@@ -29,7 +29,7 @@ import tomlkit
 
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import WireFormat
+from coffer.domain.provider.config import Protocol
 
 # --- Codex provider-block identity --------------------------------------------
 
@@ -55,15 +55,13 @@ class ProjectionTarget:
     format: ConfigFileFormat
 
 
-_TARGETS: dict[WireFormat, ProjectionTarget] = {
-    WireFormat.ANTHROPIC: ProjectionTarget(
-        AgentType.CLAUDE_CODE, "settings", ConfigFileFormat.JSON
-    ),
-    WireFormat.OPENAI: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
+_TARGETS: dict[Protocol, ProjectionTarget] = {
+    Protocol.ANTHROPIC: ProjectionTarget(AgentType.CLAUDE_CODE, "settings", ConfigFileFormat.JSON),
+    Protocol.OPENAI: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
 }
 
 
-def target_for(wire: WireFormat) -> ProjectionTarget | None:
+def target_for(wire: Protocol) -> ProjectionTarget | None:
     """The projection target for ``wire`` (which agent + native config file), or
     ``None`` for internal-only wires (``ollama``) that project into no agent."""
     return _TARGETS.get(wire)
@@ -73,7 +71,7 @@ def apply_anthropic_settings(
     text: str,
     *,
     base_url: str,
-    model: str,
+    model: str | None,
     fast_model: str | None,
     api_key_helper: str = ANTHROPIC_API_KEY_HELPER,
 ) -> str:
@@ -81,7 +79,9 @@ def apply_anthropic_settings(
 
     Merges into the user's existing JSON; unrelated keys are preserved. Sets the
     top-level ``apiKeyHelper`` and the ``env`` provider vars; never writes
-    ``ANTHROPIC_API_KEY`` (it would override the helper).
+    ``ANTHROPIC_API_KEY`` (it would override the helper). When ``model`` is
+    ``None`` (an unbound agent) the ``ANTHROPIC_MODEL`` var is omitted so the
+    agent runs on its OWN default model.
     """
     data = json.loads(text) if text.strip() else {}
     if not isinstance(data, dict):  # a hand-edit left a non-object root
@@ -92,7 +92,10 @@ def apply_anthropic_settings(
         env = {}
         data["env"] = env
     env["ANTHROPIC_BASE_URL"] = base_url
-    env["ANTHROPIC_MODEL"] = model
+    if model:
+        env["ANTHROPIC_MODEL"] = model
+    else:
+        env.pop("ANTHROPIC_MODEL", None)
     if fast_model:
         env["ANTHROPIC_SMALL_FAST_MODEL"] = fast_model
     else:
@@ -106,7 +109,7 @@ def apply_codex_provider(
     text: str,
     *,
     base_url: str,
-    model: str,
+    model: str | None,
     wire_api: str,
     display_name: str,
     provider_id: str = CODEX_PROVIDER_ID,
@@ -116,10 +119,14 @@ def apply_codex_provider(
 
     Merges into the user's existing TOML via tomlkit (comments / ordering /
     unrelated keys preserved). Sets top-level ``model`` + ``model_provider`` and
-    the ``[model_providers.<provider_id>]`` table.
+    the ``[model_providers.<provider_id>]`` table. When ``model`` is ``None`` (an
+    unbound agent) the top-level ``model`` is omitted so Codex uses its default.
     """
     doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
-    doc["model"] = model
+    if model:
+        doc["model"] = model
+    else:
+        doc.pop("model", None)
     doc["model_provider"] = provider_id
     # Recreate `model_providers` if absent OR if a hand-edit left a non-table
     # value there (indexing into a scalar would raise).

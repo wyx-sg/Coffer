@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Response, status
 
 from coffer.application.provider.service import ProviderService
-from coffer.domain.provider.config import ProviderConfig, WireFormat
+from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_provider_service
@@ -33,12 +33,9 @@ def _provider_out(resource: Resource) -> ProviderOut:
     cfg = ProviderConfig.model_validate(resource.config)
     return ProviderOut(
         name=resource.name,
-        wire_format=cfg.wire_format,
+        protocol=cfg.protocol,
         base_url=cfg.base_url,
         credential_ref=cfg.credential_ref,
-        model=cfg.model,
-        fast_model=cfg.fast_model,
-        wire_api=cfg.wire_api,
         is_active=cfg.is_active,
         internal_default=cfg.internal_default,
         enabled=resource.enabled,
@@ -66,11 +63,8 @@ async def create_provider(
     """Create a provider profile (422 when the credential source is invalid)."""
     resource = await svc.create(
         body.name,
-        wire_format=body.wire_format,
+        protocol=body.protocol,
         base_url=body.base_url,
-        model=body.model,
-        fast_model=body.fast_model,
-        wire_api=body.wire_api,
         secret_value=body.secret_value,
         credential_ref=body.credential_ref,
         description=body.description,
@@ -81,7 +75,7 @@ async def create_provider(
 
 @router.get("/active-key/{wire}", response_model=ActiveKeyOut)
 async def active_provider_key(
-    wire: WireFormat,
+    wire: Protocol,
     svc: ProviderService = Depends(get_provider_service),  # noqa: B008
 ) -> ActiveKeyOut:
     """The decrypted key of the active profile for ``wire`` (Claude Code's
@@ -106,16 +100,9 @@ async def update_provider(
     actor: str = Depends(get_actor),
 ) -> ProviderOut:
     """Partially update a provider profile."""
-    # Distinguish "fast_model omitted" from an explicit "fast_model": null — the
-    # latter clears ANTHROPIC_SMALL_FAST_MODEL (per the OpenAPI contract).
-    clear_fast = "fast_model" in body.model_fields_set and body.fast_model is None
     resource = await svc.update(
         name,
         base_url=body.base_url,
-        model=body.model,
-        fast_model=body.fast_model,
-        clear_fast_model=clear_fast,
-        wire_api=body.wire_api,
         secret_value=body.secret_value,
         description=body.description,
         actor=actor,
@@ -144,7 +131,7 @@ async def activate_provider(
     result = await svc.activate(name, actor=actor)
     return ActivateOut(
         activated=result.activated,
-        wire_format=result.wire_format,  # type: ignore[arg-type]
+        protocol=result.protocol,  # type: ignore[arg-type]
         projected=result.projected,
         skipped=result.skipped,
     )
@@ -152,7 +139,7 @@ async def activate_provider(
 
 @router.post("/use-builtin/{wire}", response_model=DeactivateOut)
 async def use_builtin_provider(
-    wire: WireFormat,
+    wire: Protocol,
     svc: ProviderService = Depends(get_provider_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> DeactivateOut:
@@ -161,7 +148,7 @@ async def use_builtin_provider(
     Idempotent — a no-op when the agent already runs built-in."""
     result = await svc.deactivate(wire, actor=actor)
     return DeactivateOut(
-        wire_format=result.wire_format,  # type: ignore[arg-type]
+        protocol=result.protocol,  # type: ignore[arg-type]
         deprojected=result.deprojected,
         previous=result.previous,
     )

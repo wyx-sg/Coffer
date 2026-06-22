@@ -9,16 +9,17 @@ import { ApiError } from "./errors";
 // Types
 // ---------------------------------------------------------------------------
 
-export type WireFormat = "anthropic" | "openai" | "ollama";
-export type WireApi = "chat" | "responses";
+// A connection's detected upstream protocol. `unknown` ⇒ the probe was
+// inconclusive (the connection is offered to every agent; the user decides).
+export type Protocol = "anthropic" | "openai" | "ollama" | "unknown";
 
 /**
- * Chat agent_key → provider wire format (ADR-032 projection targets). Shared by
+ * Chat agent_key → the protocol it speaks (ADR-032 projection targets). Shared by
  * the chat ModelPicker and the agent Overview connection picker so both map an
  * agent to its compatible connections the same way. `ollama` is internal-only
  * (never projected to an agent), so it is not a value here.
  */
-export const WIRE_BY_AGENT: Record<string, WireFormat> = {
+export const WIRE_BY_AGENT: Record<string, Protocol> = {
   claude_code: "anthropic",
   codex: "openai",
 };
@@ -39,13 +40,10 @@ export const BUILTIN_MODELS_BY_AGENT: Record<string, string[]> = {
 
 export interface Provider {
   name: string;
-  wire_format: WireFormat;
+  protocol: Protocol;
   base_url: string;
   /** Null for ollama (no key) and any connection created without a credential. */
   credential_ref: string | null;
-  model: string;
-  fast_model?: string | null;
-  wire_api: WireApi;
   is_active: boolean;
   /** ≤1 globally — the connection Coffer's internal engine uses. */
   internal_default: boolean;
@@ -61,11 +59,8 @@ export interface ProviderListOut {
 
 export interface ProviderCreate {
   name: string;
-  wire_format: WireFormat;
+  protocol: Protocol;
   base_url: string;
-  model: string;
-  fast_model?: string | null;
-  wire_api?: WireApi;
   credential_ref?: string | null;
   secret_value?: string | null;
   description?: string | null;
@@ -73,28 +68,25 @@ export interface ProviderCreate {
 
 export interface ProviderPatch {
   base_url?: string | null;
-  model?: string | null;
-  fast_model?: string | null;
-  wire_api?: WireApi | null;
   secret_value?: string | null;
   description?: string | null;
 }
 
 export interface ActivateOut {
   activated: string;
-  wire_format: WireFormat;
+  protocol: Protocol;
   projected: string[];
   skipped: string[];
 }
 
 export interface DeactivateOut {
-  wire_format: WireFormat;
+  protocol: Protocol;
   deprojected: string[];
   previous: string | null;
 }
 
-/** True only for anthropic/openai connections — ollama has no key. */
-export function wireNeedsCredential(wire: WireFormat): boolean {
+/** True only for anthropic/openai/unknown connections — ollama has no key. */
+export function wireNeedsCredential(wire: Protocol): boolean {
   return wire !== "ollama";
 }
 
@@ -144,7 +136,7 @@ export const providersApi = {
 
   /** Switch a wire's agent(s) back to their own built-in login: remove Coffer's
    * projection and clear the active connection. Idempotent. */
-  useBuiltin: (wire: WireFormat) => call<DeactivateOut>("POST", `/providers/use-builtin/${wire}`),
+  useBuiltin: (wire: Protocol) => call<DeactivateOut>("POST", `/providers/use-builtin/${wire}`),
 
   /** Make this connection Coffer's internal-engine default (clears the flag on
    * all others). Returns the updated connection. */
