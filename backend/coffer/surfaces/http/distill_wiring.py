@@ -58,6 +58,8 @@ class _JournalInsightSink:
             entry = await self._journal.append(cwd=project_path, body=body, actor="agent")
         except ScopeUnresolved:
             return None  # path not inside a git project → skip
+        if entry is None:
+            return None  # empty insight body → skipped, no journal entry
         return entry.timestamp.isoformat()
 
 

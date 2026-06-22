@@ -14,8 +14,8 @@ from coffer.infrastructure.memory.journal_files import (
 )
 
 
-def test_journal_period_is_year_month() -> None:
-    assert journal_period(datetime(2026, 6, 21, 9, 0, tzinfo=UTC)) == "2026-06"
+def test_journal_period_is_year_month_day() -> None:
+    assert journal_period(datetime(2026, 6, 21, 9, 0, tzinfo=UTC)) == "2026-06-21"
 
 
 def test_read_missing_returns_empty(tmp_path: pathlib.Path) -> None:
@@ -56,3 +56,23 @@ def test_append_preserves_surrounding_spaces(tmp_path: pathlib.Path) -> None:
     append_entry(path, timestamp=t, body="  indented body  ")
     got = read_entries(path)
     assert got[0].body == "  indented body  "
+
+
+def test_append_empty_body_creates_no_file(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "2026-06-21.md"
+    append_entry(path, timestamp=datetime(2026, 6, 21, 9, 0, tzinfo=UTC), body="")
+    assert not path.exists()
+
+
+def test_append_whitespace_body_creates_no_file(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "2026-06-21.md"
+    append_entry(path, timestamp=datetime(2026, 6, 21, 9, 0, tzinfo=UTC), body="  \n\t ")
+    assert not path.exists()
+
+
+def test_append_empty_body_into_existing_file_is_noop(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "2026-06-21.md"
+    t = datetime(2026, 6, 21, 9, 0, tzinfo=UTC)
+    append_entry(path, timestamp=t, body="real entry")
+    append_entry(path, timestamp=t, body="   ")
+    assert read_entries(path) == [JournalEntry(timestamp=t, body="real entry")]

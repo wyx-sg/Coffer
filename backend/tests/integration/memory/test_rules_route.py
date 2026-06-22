@@ -49,6 +49,28 @@ def test_rules_read_surface_returns_stored_rules(tmp_path, monkeypatch):
         assert rule_text in data["text"]
 
 
+def test_rules_read_surface_concatenates_category_files(tmp_path, monkeypatch):
+    # After the autonomous split, rules live in per-topic files; the read surface
+    # (and thus session-start injection) must return ALL of them.
+    from coffer.infrastructure.knowledge.paths import rule_file_path
+    from coffer.infrastructure.memory.rules_files import write_rules_file
+
+    app = _app(tmp_path, monkeypatch, 59920)
+    store_dir = tmp_path / "memory" / "global"
+    with TestClient(app) as c:
+        set_active_token(_TOKEN)
+        c.get("/api/v1/memory_stores", headers=_HEADERS)
+        store_dir.mkdir(parents=True, exist_ok=True)
+        write_rules_file(rule_file_path(store_dir, "git"), ["commit small and often"])
+        write_rules_file(rule_file_path(store_dir, "testing"), ["write the test first"])
+
+        r = c.get("/api/v1/memory_stores/global/rules", headers=_HEADERS)
+        assert r.status_code == 200, r.text
+        text = r.json()["text"]
+        assert "commit small and often" in text
+        assert "write the test first" in text
+
+
 def test_rules_returns_null_when_no_rules(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59910)
     with TestClient(app) as c:

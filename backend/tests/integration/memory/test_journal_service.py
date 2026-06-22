@@ -59,6 +59,16 @@ async def test_read_recent_outside_project_returns_empty(mem) -> None:
     assert await svc.read_recent(cwd="/not/a/project", limit=10) == []
 
 
+async def test_append_empty_body_is_skipped(mem) -> None:
+    # An empty/whitespace insight must not create a file or an audit event.
+    svc = _svc(mem, now=lambda: datetime(2026, 6, 21, 9, 0, tzinfo=UTC))
+    result = await svc.append(cwd=mem.project_cwd, body="   \n ", actor="agent")
+    assert result is None
+    assert await svc.read_recent(cwd=mem.project_cwd, limit=10) == []
+    entries = await mem.audit.query(event_type=AuditEventType.JOURNAL_APPEND.value)
+    assert entries == []
+
+
 async def test_append_audit_has_no_body(mem) -> None:
     svc = _svc(mem, now=lambda: datetime(2026, 6, 21, tzinfo=UTC))
     await svc.append(cwd=mem.project_cwd, body="SECRET payload", actor="agent")
