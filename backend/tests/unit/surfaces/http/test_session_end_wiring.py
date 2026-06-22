@@ -1,4 +1,4 @@
-"""Unit tests for session_end_wiring (FR-035 opt-in wiring)."""
+"""Unit tests for session_end_wiring (FR-035 default-ON wiring)."""
 
 from __future__ import annotations
 
@@ -34,25 +34,28 @@ def _make_app() -> Any:
     return app
 
 
-@pytest.mark.parametrize("val", ["1", "true", "yes", "on", "TRUE", "YES", "ON"])
-def test_auto_organize_enabled_truthy(monkeypatch: pytest.MonkeyPatch, val: str) -> None:
+@pytest.mark.parametrize("val", ["1", "true", "yes", "on", "TRUE", "YES", "ON", "", "maybe"])
+def test_auto_organize_enabled_default_on(monkeypatch: pytest.MonkeyPatch, val: str) -> None:
+    """Default-ON: enabled for any value that is not an explicit off-switch."""
     monkeypatch.setenv(AUTO_ORGANIZE_ENV, val)
     assert auto_organize_enabled() is True
 
 
-@pytest.mark.parametrize("val", ["0", "false", "no", "off", "", "maybe"])
-def test_auto_organize_enabled_falsy(monkeypatch: pytest.MonkeyPatch, val: str) -> None:
+@pytest.mark.parametrize("val", ["0", "false", "no", "off", "OFF", "FALSE", " no "])
+def test_auto_organize_enabled_explicit_falsy_disables(
+    monkeypatch: pytest.MonkeyPatch, val: str
+) -> None:
     monkeypatch.setenv(AUTO_ORGANIZE_ENV, val)
     assert auto_organize_enabled() is False
 
 
-def test_auto_organize_enabled_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_auto_organize_enabled_unset_is_on(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(AUTO_ORGANIZE_ENV, raising=False)
-    assert auto_organize_enabled() is False
+    assert auto_organize_enabled() is True
 
 
 def test_start_auto_organize_env_off_does_not_wire(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(AUTO_ORGANIZE_ENV, raising=False)
+    monkeypatch.setenv(AUTO_ORGANIZE_ENV, "off")
     app = _make_app()
     mem = _MemStub()
     organizer = _OrganizerStub()
@@ -61,8 +64,8 @@ def test_start_auto_organize_env_off_does_not_wire(monkeypatch: pytest.MonkeyPat
     assert not hasattr(app.state, "auto_organizer")
 
 
-def test_start_auto_organize_env_on_wires(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(AUTO_ORGANIZE_ENV, "1")
+def test_start_auto_organize_default_on_wires(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(AUTO_ORGANIZE_ENV, raising=False)
     app = _make_app()
     mem = _MemStub()
     organizer = _OrganizerStub()

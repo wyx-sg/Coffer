@@ -1,14 +1,18 @@
-"""ReorgService — agentic topic-doc reorganization (spec 007).
+"""ReorgService — agentic topic-doc reorganization + 固化 (spec 007).
 
 On an explicit ``reorg`` trigger (REST/CLI; no auto-fire in this PR), runs a
-bounded langgraph create_react_agent loop over the store's existing topic docs,
-with 4 internal tools, to consolidate duplicates and split over-long ones.
-Reaches the langgraph loop ONLY through the injected ``AgenticReorgPort``
-(Contract 5e: memory-local port, NOT ``application.distill`` or
-``infrastructure.chat``).
+bounded langgraph create_react_agent loop over the store's existing topic docs
+AND the episodic journal lane, with 6 internal tools, to consolidate duplicates,
+split over-long docs, and CONSOLIDATE (固化) recurring durable journal patterns
+into the semantic lane (a knowledge topic, or a rule). Reaches the langgraph
+loop ONLY through the injected ``AgenticReorgPort`` (Contract 5e: memory-local
+port, NOT ``application.distill`` or ``infrastructure.chat``).
 
-Data-loss invariant: every overwrite/supersede first archives the prior topic
-doc to the recoverable ``superseded/`` tombstone. There is NO hard-delete.
+固化 COPIES a recurring pattern into knowledge/rules — it never removes journal
+entries (the journal is append-only; one-off events age out by prune, a later
+slice). Data-loss invariant: every topic overwrite/supersede first archives the
+prior topic doc to the recoverable ``superseded/`` tombstone. There is NO
+hard-delete.
 """
 
 from __future__ import annotations
@@ -27,6 +31,11 @@ from coffer.application.knowledge.retrieval import (
     no_embedding,
 )
 from coffer.application.memory.ports import MemoryDocumentRepo
+from coffer.application.memory.reorg_journal import (
+    REORG_SYSTEM,
+    journal_has_entries,
+    recent_journal_entries,
+)
 from coffer.application.memory.reorg_ports import AgenticReorgPort, ModelSelectorPort, ReorgTool
 from coffer.application.memory.sync import MemoryReconciler
 from coffer.domain.audit import AuditEventType
@@ -35,7 +44,8 @@ from coffer.domain.knowledge.retrieval import StoreRef
 from coffer.domain.memory.config import MemoryStoreConfig
 from coffer.domain.memory.scope import ResolvedScope
 from coffer.domain.resource import ResourceRef
-from coffer.infrastructure.knowledge.paths import topic_path
+from coffer.infrastructure.knowledge.paths import rules_path, topic_path
+from coffer.infrastructure.memory.rules_files import append_rule
 from coffer.infrastructure.memory.topic_files import (
     TopicDoc,
     append_changelog,
@@ -60,27 +70,20 @@ NowFn = Callable[[], datetime]
 
 DEFAULT_REORG_RECURSION_LIMIT = 24
 
-REORG_SYSTEM = (
-    "You maintain a small set of coherent topic documents. FIRST call "
-    "list_topics to see what exists, then read_topic for any documents you may "
-    "change. Consolidate duplicates: write the merged content (preserving ALL "
-    "existing info + human edits — never drop content) into ONE topic, then "
-    "supersede the now-redundant duplicate. Split an over-long topic into "
-    "focused topics. NEVER regenerate from scratch; integrate. When done, stop. "
-    "The system archives every prior version automatically, but still prefer "
-    "minimal, careful edits."
-)
-
 
 @dataclass(frozen=True)
 class ReorgResult:
-    """The outcome of one ``reorg`` run."""
+    """The outcome of one ``reorg`` run.
+
+    ``promoted`` counts 固化 promotions into the rules lane (``append_rule``);
+    knowledge-topic promotions are folded into ``topics_written``."""
 
     status: str  # "reorganized" | "no_model" | "empty"
     topics_before: int
     topics_after: int
-    topics_written: int  # create + overwrite
+    topics_written: int  # create + overwrite (incl. knowledge promotions)
     topics_superseded: int
+    promoted: int  # rules promoted from the journal (固化)
     model: str | None  # display name of the internal model used
 
 
@@ -90,6 +93,7 @@ class _Actions:
     def __init__(self) -> None:
         self.written: int = 0
         self.superseded: int = 0
+        self.promoted: int = 0  # rules promotions (固化)
 
 
 class ReorgService:
@@ -135,15 +139,19 @@ class ReorgService:
 
         model = await self._models.get_default()
         if model is None:
-            return ReorgResult("no_model", 0, 0, 0, 0, None)
+            return ReorgResult("no_model", 0, 0, 0, 0, 0, None)
 
         config = await self._get_config(store_name)
         embedding = await self._resolve_embedding() if config.vector_enabled else None
         await self._reconciler.reconcile(store=ref, embedding=embedding)
 
         before = await asyncio.to_thread(list_topic_docs, store_dir)
-        if not before:
-            return ReorgResult("empty", 0, 0, 0, 0, model.model)
+        has_journal = await asyncio.to_thread(journal_has_entries, store_dir)
+        # Run the loop when there is anything to work on — topic docs to keep
+        # coherent OR journal entries to consolidate (固化). Empty only when both
+        # lanes are empty.
+        if not before and not has_journal:
+            return ReorgResult("empty", 0, 0, 0, 0, 0, model.model)
 
         acts = _Actions()
         tools = self._build_tools(store_dir=store_dir, acts=acts)
@@ -171,6 +179,7 @@ class ReorgService:
             topics_after=len(after),
             topics_written=acts.written,
             topics_superseded=acts.superseded,
+            promoted=acts.promoted,
         )
         return ReorgResult(
             "reorganized",
@@ -178,6 +187,7 @@ class ReorgService:
             len(after),
             acts.written,
             acts.superseded,
+            acts.promoted,
             model.model,
         )
 
@@ -254,6 +264,30 @@ class ReorgService:
             acts.superseded += 1
             return {"ok": True}
 
+        async def _read_journal(args: dict) -> dict:  # type: ignore[type-arg]
+            entries = await asyncio.to_thread(recent_journal_entries, store_dir)
+            return {
+                "entries": [
+                    {"date": e.timestamp.date().isoformat(), "body": e.body} for e in entries
+                ]
+            }
+
+        async def _append_rule(args: dict) -> dict:  # type: ignore[type-arg]
+            rule = str(args.get("rule", "")).strip()
+            if not rule:
+                return {"error": "rule must be a non-empty string"}
+            added = await asyncio.to_thread(append_rule, rules_path(store_dir), rule)
+            if not added:
+                return {"ok": True, "duplicate": True}
+            ts = now()
+            await asyncio.to_thread(
+                append_changelog,
+                store_dir,
+                f"{ts.isoformat()} · reorg promoted rule (固化): {rule}",
+            )
+            acts.promoted += 1
+            return {"ok": True}
+
         return [
             ReorgTool(
                 name="list_topics",
@@ -305,6 +339,33 @@ class ReorgService:
                 },
                 handler=_supersede_topic,
             ),
+            ReorgTool(
+                name="read_journal",
+                description=(
+                    "List recent journal (episodic) entries, newest-first, each with "
+                    "its date. Use distinct dates to judge whether a pattern recurs."
+                ),
+                input_schema={"type": "object", "properties": {}, "required": []},
+                handler=_read_journal,
+            ),
+            ReorgTool(
+                name="append_rule",
+                description=(
+                    "Promote a recurring imperative/behavioural pattern into the rules "
+                    "lane (rules/rules.md). The journal entries are NOT removed."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "rule": {
+                            "type": "string",
+                            "description": "The imperative rule text (e.g. 'always run X').",
+                        }
+                    },
+                    "required": ["rule"],
+                },
+                handler=_append_rule,
+            ),
         ]
 
     async def _record_audit(
@@ -315,6 +376,7 @@ class ReorgService:
         topics_after: int,
         topics_written: int,
         topics_superseded: int,
+        promoted: int,
     ) -> None:
         await self._audit.record(
             AuditEventType.MEMORY_REORGANIZED.value,
@@ -325,6 +387,7 @@ class ReorgService:
                 "topics_after": topics_after,
                 "topics_written": topics_written,
                 "topics_superseded": topics_superseded,
+                "promoted": promoted,
             },
         )
 
