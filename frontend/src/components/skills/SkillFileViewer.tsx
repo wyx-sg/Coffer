@@ -33,20 +33,21 @@ export function SkillFileViewer({ name, path }: { name: string; path: string }) 
 
   const absPath = content.data?.abs_path;
 
+  // Path on the first row, the open/reveal actions on a second row below —
+  // mirrors the agent config viewer (ConfigEditorPane) so the two file previews
+  // read the same.
   const header = (
-    <div className="flex flex-wrap items-start justify-between gap-2">
-      <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-        {path}
-      </span>
+    <div className="space-y-2">
+      <span className="block truncate font-mono text-xs text-muted-foreground">{path}</span>
       {absPath ? <FileActions filePath={absPath} /> : null}
     </div>
   );
 
   if (content.data?.binary) {
     return (
-      <div className="space-y-2">
+      <div className="flex h-full flex-col space-y-2">
         {header}
-        <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
           {t("skills.files.binary", { size: content.data.size })}
         </div>
       </div>
@@ -57,15 +58,20 @@ export function SkillFileViewer({ name, path }: { name: string; path: string }) 
   const truncated = content.data?.truncated ?? false;
 
   return (
-    <div className="space-y-2">
+    <div className="flex h-full flex-col space-y-2">
       {header}
 
       {isMarkdown(path) ? (
-        <FindableMarkdown className="h-80 overflow-auto rounded border bg-background p-3">
+        <FindableMarkdown className="min-h-0 flex-1 overflow-auto rounded border bg-background p-3">
           {text}
         </FindableMarkdown>
       ) : (
-        <CodeView value={text} filename={path} height="20rem" className="bg-background" />
+        <CodeView
+          value={text}
+          filename={path}
+          height="100%"
+          className="min-h-0 flex-1 bg-background"
+        />
       )}
       {truncated ? (
         <p className="text-xs text-muted-foreground">

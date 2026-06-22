@@ -51,9 +51,12 @@ export function AgentConfigFilesEditor({ name }: { name: string }) {
   const filePath = s.activeContent?.path ?? (s.selectedChild ? undefined : s.selectedInfo?.path);
 
   return (
-    <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
+    // Fill the viewport below the page chrome so the preview pane uses the space
+    // that's there (it was a cramped fixed box before). A min-height keeps it
+    // usable on short windows; main scrolls if it ever overflows.
+    <div className="grid h-[calc(100vh-19rem)] min-h-[20rem] gap-4 md:grid-cols-[16rem_1fr]">
       {/* Left: the config-file tree (allowlisted files + directory nodes). */}
-      <div className="space-y-1">
+      <div className="space-y-1 overflow-y-auto">
         <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {t("agents.config.files")}
         </p>
@@ -77,9 +80,9 @@ export function AgentConfigFilesEditor({ name }: { name: string }) {
       </div>
 
       {/* Right: read-only view of the selected file (or directory hint). */}
-      <div className="min-w-0">
+      <div className="min-h-0 min-w-0">
         {s.selectedKey && s.isDirSelected ? (
-          <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
             {t("agents.config.directoryHint")}
           </div>
         ) : s.selectedKey ? (
@@ -98,7 +101,7 @@ export function AgentConfigFilesEditor({ name }: { name: string }) {
             memoryBlock={s.memoryBlock}
           />
         ) : (
-          <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
             {t("agents.config.selectFile")}
           </div>
         )}

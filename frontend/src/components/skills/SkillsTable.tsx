@@ -41,11 +41,10 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
       header: t("skills.name"),
       cell: (s) => <span className="font-medium">{s.name}</span>,
     },
-    {
-      key: "source",
-      header: t("skills.source"),
-      cell: (s) => <span className="text-muted-foreground">{s.source.type}</span>,
-    },
+    // Source column intentionally hidden — every skill is local_import today, so
+    // it carries no signal. The source field stays in the model (skills.source /
+    // skills.allSources i18n keys retained) for when other origins (e.g. git
+    // import) land and the column/filter become meaningful again.
     {
       key: "description",
       header: t("skills.description"),
@@ -71,15 +70,8 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
     },
   ];
 
-  const filters: FilterDef<SkillOut>[] = [
-    {
-      key: "source",
-      label: t("skills.source"),
-      allLabel: t("skills.allSources"),
-      accessor: (s) => s.source.type,
-      options: [{ value: "local_import", label: "local_import" }],
-    },
-  ];
+  // Source filter intentionally hidden alongside the source column (see above).
+  const filters: FilterDef<SkillOut>[] = [];
 
   return (
     <>
