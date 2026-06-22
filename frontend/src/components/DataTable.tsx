@@ -152,7 +152,10 @@ export function DataTable<T>({
       ) : null}
 
       <div className="rounded-md border bg-card">
-        <Table>
+        {/* Cap the body at ~20 rows (row ≈ 3rem); beyond that the container
+            scrolls vertically. The wrapper already scrolls horizontally, and
+            the header is sticky so column titles stay pinned while scrolling. */}
+        <Table containerClassName="max-h-[calc(3rem*20)]">
           <DataTableHead
             columns={columns}
             hasSelection={Boolean(selection)}

@@ -17,6 +17,11 @@ interface Props<T> {
   onToggleAll: () => void;
 }
 
+// Sticky so the column titles stay pinned while the body scrolls inside the
+// height-capped table container. Needs a solid background (not the row's
+// translucent tint) so scrolling rows don't bleed through.
+const STICKY_HEAD = "sticky top-0 z-10 bg-muted";
+
 export function DataTableHead<T>({
   columns,
   hasSelection,
@@ -28,18 +33,19 @@ export function DataTableHead<T>({
 }: Props<T>) {
   return (
     <TableHeader>
-      <TableRow className="bg-muted/40 hover:bg-muted/40">
+      <TableRow className="hover:bg-muted">
         {hasSelection ? (
           <SelectAllHeadCell
             checked={allSelected}
             indeterminate={someSelected}
             ariaLabel={ariaSelectAll ?? ""}
             onToggle={onToggleAll}
+            className={STICKY_HEAD}
           />
         ) : null}
-        {expandable ? <TableHead className="h-10 w-8" /> : null}
+        {expandable ? <TableHead className={cn("h-10 w-8", STICKY_HEAD)} /> : null}
         {columns.map((c) => (
-          <TableHead key={c.key} className={cn("h-10", c.className)}>
+          <TableHead key={c.key} className={cn("h-10", STICKY_HEAD, c.className)}>
             {c.header}
           </TableHead>
         ))}
