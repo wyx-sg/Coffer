@@ -96,7 +96,7 @@ describe("addFact", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(okJson({ id: "m-1", name: "tabs", text: "uses tabs", actor: "user" }));
 
-    const out = await addFact("prefs", { text: "uses tabs", name: "tabs", type: "user" });
+    const out = await addFact("prefs", { text: "uses tabs", name: "tabs" });
     expect(out.id).toBe("m-1");
 
     const [url, init] = fetchMock.mock.calls[0];
@@ -107,7 +107,6 @@ describe("addFact", () => {
     expect(JSON.parse(init!.body as string)).toEqual({
       text: "uses tabs",
       name: "tabs",
-      type: "user",
     });
   });
 

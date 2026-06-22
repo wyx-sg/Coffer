@@ -25,8 +25,9 @@ def read_memory_facts(memory_dir: pathlib.Path) -> list[ParsedNativeFact]:
 
     Defensive: a single unparseable file never raises — the frontmatter splitter
     degrades a malformed block to ``({}, body)`` and the missing keys fall back
-    (``name`` → filename stem, ``description`` → ``""``, ``type``/``originSessionId``
-    → ``None``). A missing dir yields ``[]``.
+    (``name`` → filename stem, ``description`` → ``""``, ``originSessionId``
+    → ``None``). A native ``type`` frontmatter key, if present, is ignored (``Lane``
+    is the only memory taxonomy, spec 007 FR-048). A missing dir yields ``[]``.
     """
     if not memory_dir.is_dir():
         return []
@@ -44,7 +45,6 @@ def read_memory_facts(memory_dir: pathlib.Path) -> list[ParsedNativeFact]:
                 name=_as_str(meta.get("name")) or md.stem,
                 description=_as_str(meta.get("description")) or "",
                 body=body,
-                type=_as_str(meta.get("type")) or None,
                 origin_session_id=_as_str(meta.get("originSessionId")) or None,
             )
         )

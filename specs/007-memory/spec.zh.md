@@ -139,7 +139,7 @@ cwd 没有可恢复的现场。
 
 - **Given** 一个跑在 git 项目内的 MCP 客户端，
 - **When** 它用一条事实加 `scope=project` 调 `coffer__remember`，
-- **Then** 在项目记忆目录的 `knowledge/inbox/` 子目录下写出一个每条记忆的 markdown 文件（YAML frontmatter `name`/`description`/`metadata.type`/`origin_session_id` + 正文），将该文件索引进 `documents`，并写入一条审计。
+- **Then** 在项目记忆目录的 `knowledge/inbox/` 子目录下写出一个每条记忆的 markdown 文件（YAML frontmatter `name`/`description`/`metadata.actor`/`origin_session_id` + 正文），将该文件索引进 `documents`，并写入一条审计。
 
 ### Scenario: agent recalls a project fact
 
@@ -345,7 +345,7 @@ cwd 没有可恢复的现场。
 
 **存储与作用域**
 
-- **FR-001**：系统 MUST 把每条记忆条目存为一个每条记忆的 markdown 文件（YAML frontmatter `name`/`description`/`metadata.type`/`metadata.actor`/`origin_session_id` + 正文），位于每个作用域的 **`knowledge/` lane** 下 —— 新记住的条目落在 `knowledge/inbox/`，经整理的主题文档（`knowledge/<topic>.md`）加一个 `INDEX.md` 由整合 organizer 维护（后续 memory PR）。markdown 文件是 **唯一真相源**；SQLite 是可重建的索引。**不生成任何 `MEMORY.md` 索引**（此前的派生索引是无用的投影产物，检索里没人读它）。
+- **FR-001**：系统 MUST 把每条记忆条目存为一个每条记忆的 markdown 文件（YAML frontmatter `name`/`description`/`metadata.actor`/`origin_session_id` + 正文），位于每个作用域的 **`knowledge/` lane** 下 —— 新记住的条目落在 `knowledge/inbox/`，经整理的主题文档（`knowledge/<topic>.md`）加一个 `INDEX.md` 由整合 organizer 维护（后续 memory PR）。markdown 文件是 **唯一真相源**；SQLite 是可重建的索引。**不生成任何 `MEMORY.md` 索引**（此前的派生索引是无用的投影产物，检索里没人读它）。
 - **FR-002**：系统 MUST 支持两种记忆作用域：**global**（一个由 `project_id = WORKSPACE_GLOBAL_PROJECT_ID`（既有 sentinel `00000000000000000000000000`）标识的 store）与 **per-project**（每项目一个、由项目 ULID 标识的 store），分别存于 `~/.coffer/memory/global/knowledge/` 与 `~/.coffer/memory/projects/<project-ulid>/knowledge/`。
 - **FR-003**：`coffer__remember`（与用户添加）MUST 把一条记忆条目追加进每作用域的 inbox（`knowledge/inbox/`），写入时不调 LLM；整理进主题文档由整合 organizer 异步完成（后续 memory PR），绝不阻塞写入或 `recall`。
 - **FR-004**：系统 MUST 从 agent 在会话握手时上报的启动 cwd 解析 per-project store：daemon 计算 git-root，并解析（缺失则惰性置备）该项目 ULID 对应的 store。
@@ -354,7 +354,7 @@ cwd 没有可恢复的现场。
 
 - **FR-005**：agent 与用户 MUST 能直接写入一条事实（写入时不调 LLM）。事实文本 MUST 至少 1 个字符、至多 `max_fact_chars`（默认 8192）；空或超长在 API 边界被拒，不持久化任何内容。
 - **FR-006**：用户与 agent MUST 能列出事实（按作用域）、按 id 取单条、改一条事实的文本、删除单条事实、清空某作用域全部事实。事实**编辑/删除**经 REST/CLI 写入面（`PATCH/DELETE …/facts/{id}` / `coffer memory edit/delete`）与外部编辑器 files-as-truth —— Coffer UI 只读渲染事实内容、不在应用内编辑它；MCP 的 `update_memory`/`forget` 工具已**移除**（agent 的写入面是 `remember` + 内部 organizer）。清空保留 store 这个 Resource。
-- **FR-007**：每条事实带 `metadata.actor`（`agent` | `user`）与可选的 `metadata.type`（如 `project` / `feedback` / `reference` / `user`）；由写入者设定。
+- **FR-007**：每条事实带 `metadata.actor`（`agent` | `user`），由写入者设定。**没有自由格式的 `type` 字段** —— `Lane` 是唯一的分类轴（FR-048），由内部路由（organizer / 蒸馏）决定，绝不由写入者提供。
 
 **检索**
 
@@ -364,7 +364,7 @@ cwd 没有可恢复的现场。
 
 **通过 MCP 集成 agent**
 
-- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, top_k?)`（无 `mode` 参数 —— 检索模式是内部的）、`coffer__remember(text, scope?, type?)`、`coffer__list_memory(scope?)`、`coffer__set_handoff(body)`、`coffer__resume()`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。没有 MCP `update_memory`/`forget` 工具 —— 事实编辑/删除是用户面（REST/CLI/外部编辑器），见 FR-006。
+- **FR-015**：Coffer 的 MCP 网关 MUST 暴露内置工具 `coffer__recall(query, scope?, top_k?)`（无 `mode` 参数 —— 检索模式是内部的）、`coffer__remember(text, scope?)`（无 `type` 参数 —— 已按 FR-048 废弃）、`coffer__list_memory(scope?)`、`coffer__set_handoff(body)`、`coffer__resume()`，挂在保留前缀 `coffer__` 下。`remember` 默认 `scope=project`；`recall` 默认两个作用域。没有 MCP `update_memory`/`forget` 工具 —— 事实编辑/删除是用户面（REST/CLI/外部编辑器），见 FR-006。
 - **FR-016**：这些内置 memory 工具调用 MUST 共用既有调用日志面（`mcp_invocations` 一行：工具名 + who/when/duration/outcome，不记参数也不记返回内容）。
 
 **工作状态 handoff（连续性）**
@@ -399,6 +399,7 @@ cwd 没有可恢复的现场。
 - **FR-045:** 对话记录蒸馏(用户故事 6)SHALL 把每条提取出的洞察写入 **journal** 记忆带(情景),而**不是**扁平的 `knowledge/` 事实。蒸馏保持“笨”:只提取 `name` / `description` / `body`,MUST NOT 为每条洞察分类 type —— 旧的 `InsightType`(`decision` / `gotcha` / `convention` / `todo`)被废弃(蒸馏洞察、蒸馏 prompt、蒸馏响应里都不再有 `type` 字段)。每条洞察经 `JournalService.append` 追加到会话所属项目的 journal;路径不解析为 git 项目的会话被跳过(没有全局 journal)。蒸馏响应报告写入的 journal 条目(`fact_ids` 字段重命名为 `journal_entries`)。把复现的 journal 模式固化进 `knowledge`/`rules` 是 organizer 的职责(后续固化切片),绝非蒸馏的。
 - **FR-046:** 记忆记录 MUST 是**自动**的,不依赖人去运行 `coffer transcript distill`。系统 SHALL 运行一个**自动蒸馏补扫(catch-up sweep)**—— 一个后台 worker,在 daemon 启动时及之后周期性地扫描每个受管 agent 的对话记录会话,把任何**已结束、尚未蒸馏**的会话蒸馏进 journal 记忆带(FR-045)。一个会话仅当其 `last_activity_at`(a)**已结束**(早于一个 settle 阈值 —— 绝不处理进行中的会话)且(b)在一个**新近窗口**内(补抓近期漏掉会话的兜底网,而**非**全量历史回填)时才合格;每轮最多蒸馏有上限数量的会话(其余后续轮次补上,并记日志)。已蒸馏会话按 `(agent, session_id, content_sha256)` 记录在机器本地账本里,使会话**绝不被重复蒸馏**(仅当内容实质变化才重蒸);该账本就是未来 SessionEnd hook(slice 6)共享的幂等键。该 sweep **默认开启**(它就是写入保证),并带环境开关可关闭;它**非阻塞且抑制失败**(单个会话的 LLM/解析失败绝不中止 sweep 或 daemon,同 FR-035),未配置内部连接时为干净**空操作**,关停时 worker 直接停止不触发。它**不引入新的 REST/CLI 面**,复用 FR-045 蒸馏路径 + journal 记忆带。(即时的 SessionEnd hook 属于 slice 6;本 sweep 是独立的保证。)
 - **FR-047:** 重组 pass(FR-033)SHALL 额外执行**固化(consolidation)**—— 把 **journal** 记忆带里**复现、持久**的情景模式提升进语义带。agentic 循环在主题工具之外再获得两个内部工具:**读取近期 journal** 条目、**追加 rule**(`rules/rules.md`)。它把在 journal 中复现的模式 —— 保守地,大致**≥3 条相似条目、跨 ≥2 个不同日期**(由 LLM 判断;绝非一次性)—— 提升为一个 **knowledge 主题**(经 `write_topic`),或当模式明显是**祈使/行为性**的(“总是做 X”)时提升进 **rules** 带(经 `append_rule`)。**一次性**事件**留在 journal 里**(由 prune 按龄淘汰,后续切片),绝不自动提升。提升是把持久模式**复制**进语义带 —— **不**删除 journal 条目。每次提升都追加到 store 根的 `consolidation-log.md` changelog,`memory_reorganized` 审计报告一个 `promoted` 计数。固化是**保守的** —— 拿不准时把条目留在 journal(避免固化噪声)。
+- **FR-048:** 自由格式的事实 `type` 字段被**废弃** —— `Lane`（`knowledge` / `rules` / `journal` / `handoff`）是**唯一的分类轴**。系统 MUST NOT 在 `MemoryFact` 上、在事实文件 frontmatter（`metadata.type`）里、在 `documents.metadata` JSON 里、在 `coffer__remember` 工具 schema 里、或在 REST/CLI 事实写入面（`FactCreate`/`FactUpdate`/`FactOut`、`coffer memory add --type`）携带 `type` 字段。事实的 lane 由**内部路由**（organizer / 蒸馏）决定，绝不由写入者提供。既有磁盘记忆为**丢弃重建**（Coffer 未发布）：**没有 Alembic 迁移** —— `type` 存在 `metadata` JSON 里而非列里,旧事实文件里残留的 `metadata.type` 键解析时被直接忽略、并在下一次 reindex-on-read 时丢弃;全新安装(或清空 `~/.coffer/memory/`)即从无 type 开始。
 
 **Transcript history（对话历史）**
 
@@ -425,7 +426,7 @@ cwd 没有可恢复的现场。
 ### Key Entities
 
 - **Memory Store**（kind 为 `memory` 的 resource）：每个作用域一个 store —— global store（sentinel ULID）或 per-project store（项目 ULID）。config 持有启用的检索模式、embedding 配置与 `max_fact_chars`。
-- **Memory Fact**（一个 markdown 文件 = 一行 `documents`）：`id`、`name`、`description`、正文、`metadata`（`type`、`actor`、`origin_session_id`）、`path`（绝对 `.md` 路径）、`content_sha256`、`created_at`、`updated_at`。markdown 文件是真相源。读响应还额外携带所在文件夹的绝对路径，供 UI 打开/显示/复制。
+- **Memory Fact**（一个 markdown 文件 = 一行 `documents`）：`id`、`name`、`description`、正文、`metadata`（`actor`、`origin_session_id`）、`path`（绝对 `.md` 路径）、`content_sha256`、`created_at`、`updated_at`。markdown 文件是真相源。读响应还额外携带所在文件夹的绝对路径，供 UI 打开/显示/复制。
 - **Memory Hit**（recall 结果，不持久化）：`id`、`text`/passage、`score`、`source`、`time`。
 
 ## Success Criteria

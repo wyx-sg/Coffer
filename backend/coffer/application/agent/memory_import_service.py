@@ -47,7 +47,6 @@ class MemoryImportSinkPort(Protocol):
         name: str,
         description: str,
         body: str,
-        type: str | None,
         origin_session_id: str | None,
     ) -> None:
         """Write one fact to the project-scoped memory inbox.
@@ -128,7 +127,6 @@ class AgentMemoryImportService:
                     name=fact.name,
                     description=fact.description,
                     body=fact.body,
-                    type=fact.type,
                     origin_session_id=fact.origin_session_id,
                 )
             except ScopeUnresolved:

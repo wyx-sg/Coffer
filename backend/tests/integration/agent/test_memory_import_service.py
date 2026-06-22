@@ -78,7 +78,6 @@ class _FakeSink:
         name: str,
         description: str,
         body: str,
-        type: str | None,
         origin_session_id: str | None,
     ) -> None:
         if self._raise_scope:
@@ -91,7 +90,6 @@ class _FakeSink:
                 "name": name,
                 "description": description,
                 "body": body,
-                "type": type,
                 "origin_session_id": origin_session_id,
             }
         )
@@ -112,12 +110,9 @@ def _facts() -> list[ParsedNativeFact]:
             name="Alpha",
             description="a",
             body="abody",
-            type="working-state",
             origin_session_id="s1",
         ),
-        ParsedNativeFact(
-            name="Beta", description="b", body="bbody", type=None, origin_session_id=None
-        ),
+        ParsedNativeFact(name="Beta", description="b", body="bbody", origin_session_id=None),
     ]
 
 
@@ -139,7 +134,6 @@ async def test_import_adds_facts_organizes_and_reports() -> None:
     first = sink.added[0]
     assert first["project_path"] == "/real/proj"
     assert first["name"] == "Alpha"
-    assert first["type"] == "working-state"
     assert first["origin_session_id"] == "s1"
     assert sink.organize_calls == 1
 

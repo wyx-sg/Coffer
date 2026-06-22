@@ -63,7 +63,6 @@ class _ImportSink:
         name: str,
         description: str,
         body: str,
-        type: str | None,
         origin_session_id: str | None,
     ) -> None:
         # Raises ScopeUnresolved if project_path is not inside a git work-tree;
@@ -78,7 +77,6 @@ class _ImportSink:
             description=description,
             body=body,
             actor="agent",
-            type=type,
             origin_session_id=origin_session_id,
             max_fact_chars=MAX_FACT_CHARS,
         )
