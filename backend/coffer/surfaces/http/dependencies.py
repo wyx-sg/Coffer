@@ -303,6 +303,22 @@ def get_agent_mcp_service() -> Any:
     return _agent_mcp_service
 
 
+_agent_hook_service: Any | None = None
+
+
+def set_agent_hook_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_hook_service
+    _agent_hook_service = svc
+
+
+def get_agent_hook_service() -> Any:
+    """FastAPI Depends() target — actual type is AgentHookService."""
+    if _agent_hook_service is None:
+        raise RuntimeError("agent hook service not initialised")
+    return _agent_hook_service
+
+
 def set_agent_native_memory_service(svc: Any) -> None:
     """Called by the composition root once on startup."""
     global _agent_native_memory_service
@@ -388,6 +404,23 @@ def get_memory_service() -> Any:
     if _memory_service is None:
         raise RuntimeError("memory service not initialised")
     return _memory_service
+
+
+# --- session-end distiller (Slice 6 FR-051) ---
+_session_end_distiller: Any | None = None
+
+
+def set_session_end_distiller(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _session_end_distiller
+    _session_end_distiller = svc
+
+
+def get_session_end_distiller() -> Any:
+    """FastAPI Depends() target — actual type is SessionEndDistiller."""
+    if _session_end_distiller is None:
+        raise RuntimeError("session-end distiller not initialised")
+    return _session_end_distiller
 
 
 # More providers split out for the file-size budget: memory.dependencies (incl.

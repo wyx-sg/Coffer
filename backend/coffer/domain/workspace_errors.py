@@ -124,6 +124,16 @@ class McpInstallUnsupported(CofferError):  # noqa: N818
         self.agent_type = agent_type
 
 
+class HookInstallUnsupported(CofferError):  # noqa: N818
+    """The agent type does not declare a lifecycle-hook injection target. Maps to 422."""
+
+    code = "HOOK_INSTALL_UNSUPPORTED"
+
+    def __init__(self, agent_type: str) -> None:
+        super().__init__(f"agent type {agent_type!r} does not support Coffer hook install")
+        self.agent_type = agent_type
+
+
 class ConfigFileStale(CofferError):  # noqa: N818
     """The file changed on disk since it was read; re-read and retry. Maps to 409."""
 

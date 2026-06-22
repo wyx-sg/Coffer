@@ -99,3 +99,21 @@ def test_follow_fields_survive_model_dump() -> None:
     cfg = AgentConfig.model_validate({"type": "codex", "skill_exclusions": ["a"]})
     dumped = cfg.model_dump()
     assert dumped["follow_all_skills"] is True and dumped["skill_exclusions"] == ["a"]
+
+
+def test_disable_native_memory_default_and_roundtrip() -> None:
+    """Slice 6: the opt-in native-memory toggle defaults OFF and round-trips."""
+    cfg = AgentConfig(type=AgentType.CLAUDE_CODE)
+    assert cfg.disable_native_memory is False
+    cfg2 = AgentConfig.model_validate({"type": "codex", "disable_native_memory": True})
+    assert cfg2.disable_native_memory is True
+    assert cfg2.model_dump()["disable_native_memory"] is True
+
+
+def test_old_rows_without_disable_native_memory_load_with_default() -> None:
+    """A persisted row from before Slice 6 has no ``disable_native_memory`` key;
+    loading it must succeed (extra="forbid") and apply the OFF default."""
+    cfg = AgentConfig.model_validate(
+        {"type": "claude_code", "config_dir": "/keep", "follow_all_skills": False}
+    )
+    assert cfg.disable_native_memory is False

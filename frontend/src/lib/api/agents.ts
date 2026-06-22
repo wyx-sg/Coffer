@@ -47,6 +47,13 @@ export interface McpInstallStatus {
   command: string | null;
 }
 
+/** Session-start hook (rules-injection) install status — mirrors McpInstallStatus.
+ * `command` is the resolved shim command line when installed, null otherwise. */
+export interface HookInstallStatus {
+  installed: boolean;
+  command: string | null;
+}
+
 /** One of the agent's OWN native per-project memory stores (read-only scan). */
 export interface NativeMemoryStore {
   /** Best-effort readable project label (the project dir's basename). */
@@ -83,6 +90,9 @@ export interface AgentOut {
   updated_at: string;
   follow_all_skills?: boolean;
   skill_exclusions?: string[];
+  /** When true, the agent's own native memory is disabled (via its config) so it
+   * uses Coffer as the shared memory store. Hand-added until openapi codegen. */
+  disable_native_memory?: boolean;
 }
 
 export interface AgentListOut {
@@ -103,6 +113,7 @@ export interface AgentPatch {
   description?: string | null;
   follow_all_skills?: boolean;
   skill_exclusions?: string[];
+  disable_native_memory?: boolean;
 }
 
 export interface AgentCandidate {
@@ -243,6 +254,15 @@ export const agentsApi = {
   mcpInstall: (name: string) => call<McpInstallStatus>("POST", `/agents/${enc(name)}/mcp-install`),
   mcpUninstall: (name: string) =>
     call<McpInstallStatus>("DELETE", `/agents/${enc(name)}/mcp-install`),
+
+  // Session-start hook (rules injection): install/uninstall/status. A 422 with
+  // code HOOK_INSTALL_UNSUPPORTED means the agent type has no hook support.
+  hookStatus: (name: string) =>
+    call<HookInstallStatus>("GET", `/agents/${enc(name)}/hook-install`),
+  hookInstall: (name: string) =>
+    call<HookInstallStatus>("POST", `/agents/${enc(name)}/hook-install`),
+  hookUninstall: (name: string) =>
+    call<HookInstallStatus>("DELETE", `/agents/${enc(name)}/hook-install`),
 
   // MCP entries (specs 004/005 workspace amendment)
   mcpEntries: (name: string) => call<McpEntriesResponse>("GET", `/agents/${enc(name)}/mcp-entries`),

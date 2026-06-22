@@ -17,6 +17,7 @@ from coffer.surfaces.cli import agent_workspace_cmd as _workspace
 app = typer.Typer(help="Manage registered AI agents")
 config_app = typer.Typer(help="View and edit an agent's config files")
 mcp_app = typer.Typer(help="Install/uninstall Coffer's MCP server into an agent")
+hook_app = typer.Typer(help="Install/uninstall Coffer's lifecycle hooks into an agent")
 _console = Console()
 
 
@@ -110,9 +111,14 @@ def edit(
     name: str = typer.Argument(...),
     config_dir: str | None = typer.Option(None, "--config-dir"),
     description: str | None = typer.Option(None, "--description"),
+    disable_native_memory: bool | None = typer.Option(
+        None,
+        "--disable-native-memory/--enable-native-memory",
+        help="Disable (or restore) the agent's native write-side memory (Coffer becomes the store)",
+    ),
 ) -> None:
     """Update an agent's fields."""
-    if config_dir is None and description is None:
+    if config_dir is None and description is None and disable_native_memory is None:
         typer.echo("nothing to update", err=True)
         raise typer.Exit(1)
     verbose = (ctx.obj or {}).get("verbose", False)
@@ -121,6 +127,8 @@ def edit(
         body["config_dir"] = config_dir
     if description is not None:
         body["description"] = description
+    if disable_native_memory is not None:
+        body["disable_native_memory"] = disable_native_memory
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.patch(f"/agents/{name}", json=body)
@@ -339,6 +347,63 @@ def mcp_uninstall(
         _not_found_exit(r)
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"removed Coffer MCP from agent:{name}")
+
+
+# --- coffer agent hook ... ---------------------------------------------------
+
+app.add_typer(hook_app, name="hook")
+
+
+@hook_app.command("status")
+def hook_status(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Report whether Coffer's lifecycle hooks are installed in this agent."""
+    verbose = (ctx.obj or {}).get("verbose", False)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get(f"/agents/{name}/hook-install")
+        _not_found_exit(r)
+        _cli_client.check(r, verbose=verbose)
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    typer.echo(f"installed: {data['installed']}")
+    if data.get("command"):
+        typer.echo(f"command: {data['command']}")
+
+
+@hook_app.command("install")
+def hook_install(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+) -> None:
+    """Install Coffer's SessionStart/SessionEnd hooks into this agent."""
+    verbose = (ctx.obj or {}).get("verbose", False)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/agents/{name}/hook-install")
+        _not_found_exit(r)
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"installed Coffer hooks into agent:{name} ({r.json().get('command')})")
+
+
+@hook_app.command("uninstall")
+def hook_uninstall(
+    ctx: typer.Context,
+    name: str = typer.Argument(...),
+) -> None:
+    """Remove Coffer's lifecycle hooks from this agent."""
+    verbose = (ctx.obj or {}).get("verbose", False)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.delete(f"/agents/{name}/hook-install")
+        _not_found_exit(r)
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"removed Coffer hooks from agent:{name}")
 
 
 # --- workspace subcommands (mcp entries/plugins/dir configs/follow) -----------

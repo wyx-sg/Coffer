@@ -94,6 +94,11 @@ class AuditEventType(StrEnum):
     # spec 011-provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"
+    # spec 007 slice 6 — rules injection + native-memory disable
+    AGENT_HOOK_INSTALLED = "agent_hook_installed"
+    AGENT_HOOK_UNINSTALLED = "agent_hook_uninstalled"
+    AGENT_NATIVE_MEMORY_DISABLED = "agent_native_memory_disabled"
+    AGENT_NATIVE_MEMORY_RESTORED = "agent_native_memory_restored"
 
 
 @dataclass

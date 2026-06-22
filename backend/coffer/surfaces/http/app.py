@@ -64,7 +64,11 @@ from coffer.surfaces.http.app_mcp_composition import (
     wire_mcp_kind,
 )
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.auto_distill_wiring import start_auto_distill, stop_auto_distill
+from coffer.surfaces.http.auto_distill_wiring import (
+    start_auto_distill,
+    stop_auto_distill,
+    wire_session_end_distiller,
+)
 from coffer.surfaces.http.backup_wiring import start_backup_worker, stop_backup_worker
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.credential_composition import (
@@ -294,6 +298,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     start_auto_distill(
         app, distill_service=distill_service, agent_service=get_agent_service(), session_maker=sm
     )
+    # On-demand SessionEnd distill (Slice 6 FR-051): reuses the FR-046 ledger so
+    # a session distilled at session-end is never re-distilled by the sweep.
+    wire_session_end_distiller(distill_service=distill_service, session_maker=sm)
 
     # Multi-machine sync (spec 010); worker is inert until the user enables it.
     start_sync(app, resource_svc, audit, sm, db_path, get_master_key_manager())

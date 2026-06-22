@@ -23,11 +23,13 @@ vi.mock("react-router-dom", async (importOriginal) => ({
 }));
 
 const importMutate = vi.fn();
+const patchMutate = vi.fn();
 
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentNativeMemory: vi.fn(),
   useAgentMcpStatus: vi.fn(),
   useImportNativeMemory: vi.fn(() => ({ mutate: importMutate, isPending: false })),
+  usePatchAgent: vi.fn(() => ({ mutate: patchMutate, isPending: false })),
 }));
 const hooks = await import("@/lib/hooks/useAgents");
 
@@ -135,5 +137,32 @@ describe("AgentMemoryTab", () => {
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("button", { name: /import to coffer/i }));
     expect(importMutate).toHaveBeenCalledWith(COFFER_STORE.memory_dir, expect.anything());
+  });
+
+  test("disable-native-memory toggle reflects the agent flag and PATCHes on flip", () => {
+    stubMcp(true);
+    stubNative([COFFER_STORE]);
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
+    const toggle = screen.getByRole("switch", { name: /disable this agent's native memory/i });
+    // Reads agent.disable_native_memory (undefined → off).
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(toggle);
+    expect(patchMutate).toHaveBeenCalledWith(
+      { name: AGENT.name, body: { disable_native_memory: true } },
+      expect.anything(),
+    );
+  });
+
+  test("disable-native-memory toggle shows as on when the agent has it disabled", () => {
+    stubMcp(true);
+    stubNative([COFFER_STORE]);
+    render(<AgentMemoryTab agent={{ ...AGENT, disable_native_memory: true }} />, { wrapper: wrap });
+    const toggle = screen.getByRole("switch", { name: /disable this agent's native memory/i });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(toggle);
+    expect(patchMutate).toHaveBeenCalledWith(
+      { name: AGENT.name, body: { disable_native_memory: false } },
+      expect.anything(),
+    );
   });
 });

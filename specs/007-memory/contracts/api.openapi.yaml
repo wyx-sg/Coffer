@@ -16,6 +16,16 @@ info:
     `X-Coffer-Token` header (token from `~/.coffer/daemon.json`). All error
     responses use the app-wide envelope `{ "error": { code, message, details } }`.
 
+    Slice-6 rules runtime injection (FR-049–FR-052) adds two **agent-scoped**
+    endpoints that back the SessionStart/SessionEnd hooks —
+    `GET /api/v1/agents/{name}/session-context?cwd=` (the rules bundle) and
+    `POST /api/v1/agents/{name}/sessions/{session_id}/end` (the session-end
+    distil). Because they are agent-scoped (not `memory_stores`-scoped), they
+    live in `transcripts.openapi.yaml` alongside the other
+    `/api/v1/agents/{name}/…` routes. The hook-install trio
+    (`/api/v1/agents/{name}/hook-install`) and the `disable_native_memory` field
+    on `AgentPatch`/`AgentOut` live in `004-agent-registry/contracts/api.openapi.yaml`.
+
 servers:
   - url: http://127.0.0.1:8000
     description: Local daemon (default port; actual port read from daemon.json)

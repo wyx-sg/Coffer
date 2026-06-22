@@ -350,6 +350,29 @@ class MemoryService:
         sd = (await self.resolved_store(store_name)).store_dir
         return await asyncio.to_thread(read_rules, rules_path(sd))
 
+    async def assemble_session_context(self, *, cwd: str | None) -> str:
+        """SessionStart rules bundle for an agent at ``cwd`` (Slice 6 FR-049/050).
+
+        Resolves the recall scopes (project + global), concatenates each store's
+        rules, and appends the two seeded built-in rules. Never raises — the hook
+        must never block the agent. ``get_rules`` here resolves its own store
+        (re-validating), so a missing project store degrades to global + seeded.
+        """
+        from coffer.application.memory.rules_bundle import RulesBundleAssembler
+
+        async def _get_rules(store_name: str) -> str | None:
+            try:
+                return await self.get_rules(store_name=store_name)
+            except Exception:
+                return None
+
+        assembler = RulesBundleAssembler(
+            resolve_recall_scopes=lambda c: self._scope.resolve_recall_scopes(cwd=c),
+            get_rules=_get_rules,
+            store_name_for=store_name_for,
+        )
+        return await assembler.assemble_session_context(cwd=cwd)
+
     # ----- on_update_config / on_delete kind hooks -----
 
     async def reindex_store(

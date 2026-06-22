@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.config_file_service import AgentConfigFileService
+from coffer.application.agent.hook_service import AgentHookService
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
 from coffer.application.agent.mcp_service import AgentMcpService
@@ -30,6 +31,7 @@ from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.scan import scan_locations
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from coffer.infrastructure.agent.hook_resolver import default_hook_resolver
 from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
 from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
@@ -39,6 +41,7 @@ from coffer.infrastructure.skill.sync_engine import SyncEngine
 from coffer.infrastructure.skill.workspace_scan import WorkspaceScan
 from coffer.surfaces.http.dependencies import (
     set_agent_config_file_service,
+    set_agent_hook_service,
     set_agent_mcp_service,
     set_agent_native_memory_service,
     set_agent_service,
@@ -124,20 +127,33 @@ def wire_agent_and_skill_kinds(
     async def _agent_on_skill_policy_changed(agent_name: str) -> None:
         await skill_svc.apply_follow_for_agent(agent_name, actor="system")
 
+    # Config-file view/edit + one-click Coffer-MCP install (spec 004 v2). The
+    # AgentService needs it too (Slice 6 disable_native_memory writes the on-disk
+    # transform alongside the persisted field).
+    config_file_store = ConfigFileStore()
+
     agent_svc = AgentService(
         resource_service=resource_svc,
         audit=audit,
         on_config_dir_changed=_agent_on_config_dir_changed,
         on_skill_policy_changed=_agent_on_skill_policy_changed,
+        config_file_store=config_file_store,
     )
     auto_detect_svc = AutoDetectService(agent_service=agent_svc)
-
-    # Config-file view/edit + one-click Coffer-MCP install (spec 004 v2).
-    config_file_store = ConfigFileStore()
     agent_config_file_svc = AgentConfigFileService(
         agent_service=agent_svc, audit=audit, store=config_file_store
     )
     agent_mcp_svc = AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
+    # Coffer's lifecycle-hook install (Slice 6 SessionStart/SessionEnd).
+    # The hook-binary resolver lives in infrastructure; only this composition
+    # root (which may import infra) injects it, keeping the application service
+    # free of an application↛infrastructure import.
+    agent_hook_svc = AgentHookService(
+        agent_service=agent_svc,
+        audit=audit,
+        store=config_file_store,
+        hook_resolver=default_hook_resolver,
+    )
 
     # Read-only listing of an agent's OWN native per-project memory stores
     # (Claude Code's projects/<slug>/memory). Same agent lookup as above.
@@ -181,6 +197,7 @@ def wire_agent_and_skill_kinds(
     set_auto_detect_service(auto_detect_svc)
     set_agent_config_file_service(agent_config_file_svc)
     set_agent_mcp_service(agent_mcp_svc)
+    set_agent_hook_service(agent_hook_svc)
     set_agent_native_memory_service(agent_native_memory_svc)
     set_agent_mcp_entry_service(agent_mcp_entry_svc)
     set_agent_plugin_service(agent_plugin_svc)

@@ -121,6 +121,41 @@ cwd 没有可恢复的现场。
 
 ---
 
+### User Story 8 —— 规则在每次会话开始时环境式到达（优先级 P2）
+
+开发者在 Coffer 里积累了行为规则（全局「push 前总是先跑 verify 步骤」、项目「这个 repo 通过
+`make release` 发版」），希望它们在**每次会话开始时自动**出现在 agent 面前 —— 上午的 Claude
+Code、下午的 Codex 都一样 —— 无需 agent 记得去调 `recall`，且 **Coffer 绝不写入 agent 自己的
+记忆或指令文件**（ADR-026）。会话开始时，Coffer 安装的 **SessionStart hook** 向 Coffer 索取一个
+规则 bundle（始终开启的全局规则，加上 cwd 解析到 git 项目时的当前项目规则），并把它作为**纯上下文**
+注入会话。bundle 还携带两条 Coffer 播种的内置规则：调 `coffer__resume()` 接续此前工作，以及
+优先用 `coffer__remember`/`coffer__recall` 而非 agent 的原生记忆。工作结束时，一个 SessionEnd
+hook（仅 Claude Code）立即把刚结束的会话蒸馏进 journal；Codex —— 没有 session-end 事件 ——
+退回到 FR-046 的补扫。想要彻底隔离的开发者可以选择启用 `disable_native_memory`，它把 agent
+自己的原生记忆关掉（卸载时恢复）。
+
+**为何此优先级**：agent 从不读规则，规则就毫无用处。环境式 session-start 注入是（ADR-026 预期的
+路径）让 Coffer 的过程性记忆不靠 `recall` 纪律、不碰原生文件就在场的非侵入方式。它是 P2（非 P1），
+因为它建立在 rules lane（FR-036）与共享记忆内核（Story 1–2）之上：注入交付的是已存在的规则，且
+无 hook 或注入失败时绝不阻塞 agent。
+
+**独立测试**：注册一个 Claude Code agent，安装其 hook，写一条全局规则与一条项目规则，然后在该
+git 项目里开一个会话，观察注入的 `additionalContext` 含这两条规则加上两条播种的内置规则 ——
+且未写入 `~/.claude/CLAUDE.md` 或 agent 的原生记忆。对 Codex（`~/.codex/hooks.json`）重复；
+确认同一 bundle 在 SessionStart 到达，且 Codex 不安装 SessionEnd hook。停掉 daemon 再开会话：
+hook 什么都不打印并退出 0，agent 正常启动。打开 `disable_native_memory` 确认 agent 的原生记忆
+开关被写成关闭；关掉它（或卸载）确认该设置被恢复。
+
+**覆盖场景**：
+
+- rules bundle is injected at session start as context only
+- the bundle carries the two seeded built-in rules
+- session-end distils the closed session into the journal
+- a failed or hook-less injection never blocks the agent
+- disable_native_memory turns native memory off and restores it
+
+---
+
 ### Edge Cases
 
 - **vector 不可用但 embedding 未配置**：当 store 解析出的策略需要向量但未配置 embedding provider 时，`recall` 在内部回退到 keyword 并返回结果；它从不阻塞。回退**不**作为查询期响应标志暴露。默认检索是 keyword+grep（零配置、离线）。
@@ -130,6 +165,10 @@ cwd 没有可恢复的现场。
 - **project 作用域无法解析**：若 agent 的工作目录不在某个 git 项目里，`scope=project` 被拒并给出清晰错误；`scope=global` 仍然可用。
 - **在全新分支上 resume**：当前（项目 × 分支）没有保存过 handoff 时，`coffer__resume` 返回 `found=false` 而非报错；不编造任何内容。
 - **不在 git 项目里的 handoff**：不在某个 git 项目里的 cwd 没有 project 作用域、也没有分支，故 `coffer__resume` 返回 `found=false`，`coffer__set_handoff` 被拒（不存在全局 handoff）。
+- **daemon 关停时的注入**：当 SessionStart hook 无法触达 daemon（未运行、超时或任意错误）时，它什么都不打印并退出 0 —— 会话不带注入 bundle 启动，绝不被阻塞。
+- **不在 git 项目里的注入**：bundle 仍携带全局规则与两条播种的内置规则；不含项目规则（没有 project 作用域可解析）。
+- **Codex 上的 SessionEnd**：Codex 不发 session-end 事件，故不为它安装 SessionEnd hook；它的会话改由 FR-046 补扫蒸馏，补扫仍是写入保证。
+- **关闭 / 卸载 disable-native-memory**：把 `disable_native_memory` 关掉（或卸载）会把 agent 的原生记忆设置恢复到先前状态；默认（关闭）完全不碰原生记忆（ADR-026）。
 
 ## Acceptance Scenarios
 
@@ -337,6 +376,46 @@ cwd 没有可恢复的现场。
 - **Then** 响应原样返回 rules 文本（供之后 session-start 注入读取的那个面），且无 rule 的
   store 返回空/`null` 正文而非报错。
 
+### Scenario: rules bundle is injected at session start as context only
+
+- **Given** 一个受管 agent（Claude Code 或 Codex）已安装 Coffer SessionStart hook，
+  且 cwd 所在 git 项目里有一条全局规则与一条项目规则，
+- **When** 会话开始、hook 调 `GET /api/v1/agents/{name}/session-context?cwd=<cwd>`，
+- **Then** daemon 返回 `additional_context`，先项目规则后全局规则，hook 把它作为 SessionStart
+  的 `additionalContext` 注入（纯上下文），且**不**写入 agent 的原生记忆或指令文件（ADR-026）。
+  当 cwd 不在 git 项目里时，bundle 只携带全局规则（无项目规则）。
+
+### Scenario: the bundle carries the two seeded built-in rules
+
+- **Given** session-context 端点组装一个 bundle（即便 store 没有任何 rule），
+- **When** bundle 被返回，
+- **Then** 它始终包含两条 Coffer 播种的内置规则 —— 调 `coffer__resume()` 接续此前工作，以及
+  优先用 `coffer__remember`/`coffer__recall` 而非 agent 的原生记忆 —— 且 handoff 正文本身
+  **不**被注入（经 `coffer__resume` 按需拉取）。
+
+### Scenario: session-end distils the closed session into the journal
+
+- **Given** 一个 Claude Code agent 已安装 Coffer SessionEnd hook，且已配置内部模型，
+- **When** 会话关闭、hook 调 `POST /api/v1/agents/{name}/sessions/{session_id}/end` 携带 cwd，
+- **Then** 刚关闭的会话被蒸馏进项目 journal 记忆带，复用 FR-045 蒸馏路径，记录在
+  `distilled_sessions` 幂等账本（FR-046）里，故绝不被重复蒸馏；当会话已蒸馏、未配置模型、或 cwd
+  不在 git 项目时该调用为 no-op。Codex 不安装 SessionEnd hook，退回到 FR-046 补扫。
+
+### Scenario: a failed or hook-less injection never blocks the agent
+
+- **Given** SessionStart hook 已安装但 daemon 不可达（未运行、超时或任意错误），
+- **When** 会话开始，
+- **Then** hook 什么都不打印并退出 0，会话不带注入 bundle 启动，agent 绝不被阻塞；未安装 hook
+  的 agent 直接没有注入。
+
+### Scenario: disable_native_memory turns native memory off and restores it
+
+- **Given** 一个受管 agent `disable_native_memory=false`（默认），
+- **When** 用户设 `disable_native_memory=true`，
+- **Then** Coffer 写入 agent 的原生记忆关闭开关（Claude Code `autoMemoryEnabled=false`；
+  Codex `features.memories=false` + `memories.generate_memories=false`），而把它设回 `false`
+  （或卸载）会恢复先前设置；为 `false` 期间 Coffer 绝不碰 agent 的原生记忆（ADR-026）。
+
 > **Deferred to future test work**（测试随 e2e 基础设施落地；`make verify-acceptance` 不对它们做门禁）：桌面记忆列表按作用域展示、桌面只读事实视图的打开/显示能力、`coffer memory …` CLI 端到端配带 daemon、per-store 度量（HTTP 路由）。
 
 ## Requirements
@@ -385,7 +464,7 @@ cwd 没有可恢复的现场。
 - **FR-033**：系统 MUST 提供一个**内部 agentic 重组 pass**，仅在**显式触发**时运行（`POST /api/v1/memory_stores/{name}/reorg` 与 `coffer memory reorg <name>`；本 PR 无自动/后台触发），由 Coffer **内部 LLM connection**（被标记为内部默认的 connection；在 Settings → LLM Connections 配置，spec 011）驱动一个有界的 **langgraph `create_react_agent` 循环**，在 store 既有的主题文档上保持其连贯 —— 合并重复/重叠的文档、拆分过长的文档。循环获得一个小而固定的工具面：**list** 主题、**read** 主题、**write**（创建/覆盖）主题、**supersede**（退役）主题,外加 FR-047 的 journal 提升工具（**read journal**、**append rule**）,且**绝非 agent 可见工具**（它是内部的，与 organizer 一样）。langchain/langgraph 代码 MUST 限制在 `infrastructure.chat`（importlinter Contract 9）；`application/memory` 只通过注入的 memory-local 端口触达它。未配置内部 connection 时该 pass 是干净的 no-op（`status="no_model"`，不写/不 supersede/不归档）而非报错；**既无主题文档也无 journal 条目**的 store 同样 no-op（`status="empty"`）。循环结束后该 pass MUST 重新生成 `INDEX.md`、对账索引（使 `recall` 反映整合后的文档）、并记一条 `memory_reorganized` 审计（仅 store + 计数 —— 无文档内容）。
 - **FR-034**：reorg pass MUST **非破坏且增量 —— MUST NOT 硬删除或从零重生主题文档**。任何移除或替换既有主题文档内容的变更，MUST 先把当前版本**归档**到 store 根的 `superseded/` tombstone（`<store>/superseded/<slug>-<timestamp>.md`）：覆盖既有主题的 `write` 在写新内容前先归档旧版本，`supersede` 把文档**移动**到那里（绝不 unlink 入虚空）。`superseded/` tombstone **排除在 recall 之外**（在 `knowledge/` lane 之外，与 `handoff/`、`consolidation-log.md` 一样），且作为可恢复的真相源历史 **DO 同步**（不同于机器本地的 `INDEX.md`/changelog）。主题文档写入保持**原子**，每次 write/supersede 追加到 `consolidation-log.md` changelog。这就是数据不丢保证：没有任何字节在未被可恢复归档前离开 `knowledge/` lane，因此人类编辑永不会被不可恢复地覆盖。
 - **FR-035**：系统 MUST 提供一个**自动 session-end organize 触发器**，在某 memory store 静默时**自动、在后台**触发 `organize` pass（FR-027）—— 在没有 per-agent 断连信号的情况下近似“session end”。它由 memory 写入通知钩子驱动：每次 memory 写入都会（重新）武装一个**去抖（debounced）**定时器；当配置的静默延迟在无更多写入下走完，organizer 作为后台任务对发生变化的 store 运行。该触发器 MUST **保守且非阻塞**：(a) 它**默认开启** —— 写入→organize→固化 整合流水线自动运行（无手动原则，§4.4），由环境**关闭**开关控制；手动 `coffer memory organize` 仍是特例覆盖；(b) 后台 pass MUST 绝不阻塞或破坏 daemon 关停 —— 关停时任何挂起的定时器被**取消**（未触发的 inbox 原样留给之后的静默 pass 或显式触发；不丢任何东西，因为 `recall` 本就覆盖 inbox 且 `organize` 幂等）；(c) 后台 pass 的失败 MUST 被吞掉并记录日志，绝不上抛给写入方或中断 daemon；(d) 未配置内部 connection 时该 pass 是干净 no-op（FR-027）。它**不引入新的 REST/CLI 面**（是对既有 organizer 的内部触发），并复用 `memory_organized` 审计。langchain/langgraph 限制（Contract 9）不变：触发器位于 `application`/`surfaces`，只通过已接线的 organizer 触达 LLM。
-- **FR-036**：系统 MUST 提供一个**过程性 `rules` lane** —— 每个 memory store（全局 + 每项目）一份 `rules/rules.md`，持有“要这样做 / 别那样做”的行为规则。rules lane 是**由 organizer 分类写入的，绝非 agent 显式参数**：在 `organize`（FR-027/028）期间，organizer 每条目的单次 LLM 调用 MAY 额外把某 inbox 条目分类为 **rule**；rule 条目被**追加**到 `rules/rules.md`（仅在追加成功后才排空该 inbox 条目），而不是合并进 `knowledge/<topic>.md` 主题文档，且 `organize` 的结果/审计报告一个 `rules_appended` 计数。`rules/` lane 位于 store 根目录（`knowledge/` 的同级，与 `handoff/`、`superseded/` 一样），因而**自动排除在 `recall` 之外**（recall glob 与对账器只下探 `knowledge/`；grep 守卫只保留 `knowledge/` 命中）—— rules 由**环境式 session-start 注入**交付，而非 `recall`。该 lane 是**真相源、DO 同步**（与 `handoff/`/主题文档一样；它不是派生/机器本地文件）。系统 MUST 把存储的 rules 只读暴露给注入面：`GET /api/v1/memory_stores/{name}/rules` 与 `coffer memory rules <name>` 返回 rules 文本（无 rule 时返回空/`null` 正文，绝不报错）。把这些 rules 作为上下文注入到每个受管 agent 的 **session-start 注入**（ADR-026：只注入、绝不原生写文件）是**之后的独立切片（PR3b）** —— 本切片落地 lane、分类与读取面。
+- **FR-036**：系统 MUST 提供一个**过程性 `rules` lane** —— 每个 memory store（全局 + 每项目）一份 `rules/rules.md`，持有“要这样做 / 别那样做”的行为规则。rules lane 是**由 organizer 分类写入的，绝非 agent 显式参数**：在 `organize`（FR-027/028）期间，organizer 每条目的单次 LLM 调用 MAY 额外把某 inbox 条目分类为 **rule**；rule 条目被**追加**到 `rules/rules.md`（仅在追加成功后才排空该 inbox 条目），而不是合并进 `knowledge/<topic>.md` 主题文档，且 `organize` 的结果/审计报告一个 `rules_appended` 计数。`rules/` lane 位于 store 根目录（`knowledge/` 的同级，与 `handoff/`、`superseded/` 一样），因而**自动排除在 `recall` 之外**（recall glob 与对账器只下探 `knowledge/`；grep 守卫只保留 `knowledge/` 命中）—— rules 由**环境式 session-start 注入**交付，而非 `recall`。该 lane 是**真相源、DO 同步**（与 `handoff/`/主题文档一样；它不是派生/机器本地文件）。系统 MUST 把存储的 rules 只读暴露给注入面：`GET /api/v1/memory_stores/{name}/rules` 与 `coffer memory rules <name>` 返回 rules 文本（无 rule 时返回空/`null` 正文，绝不报错）。把这些 rules 作为上下文注入到每个受管 agent 的 **session-start 注入**（ADR-026：只注入、绝不原生写文件）在 FR-049–FR-052（slice 6）规范 —— 本 rules-lane PR 落地 lane、分类与供注入消费的读取面。
 
 **Journal 记忆带（情景 / episodic）**
 
@@ -400,6 +479,13 @@ cwd 没有可恢复的现场。
 - **FR-046:** 记忆记录 MUST 是**自动**的,不依赖人去运行 `coffer transcript distill`。系统 SHALL 运行一个**自动蒸馏补扫(catch-up sweep)**—— 一个后台 worker,在 daemon 启动时及之后周期性地扫描每个受管 agent 的对话记录会话,把任何**已结束、尚未蒸馏**的会话蒸馏进 journal 记忆带(FR-045)。一个会话仅当其 `last_activity_at`(a)**已结束**(早于一个 settle 阈值 —— 绝不处理进行中的会话)且(b)在一个**新近窗口**内(补抓近期漏掉会话的兜底网,而**非**全量历史回填)时才合格;每轮最多蒸馏有上限数量的会话(其余后续轮次补上,并记日志)。已蒸馏会话按 `(agent, session_id, content_sha256)` 记录在机器本地账本里,使会话**绝不被重复蒸馏**(仅当内容实质变化才重蒸);该账本就是未来 SessionEnd hook(slice 6)共享的幂等键。该 sweep **默认开启**(它就是写入保证),并带环境开关可关闭;它**非阻塞且抑制失败**(单个会话的 LLM/解析失败绝不中止 sweep 或 daemon,同 FR-035),未配置内部连接时为干净**空操作**,关停时 worker 直接停止不触发。它**不引入新的 REST/CLI 面**,复用 FR-045 蒸馏路径 + journal 记忆带。(即时的 SessionEnd hook 属于 slice 6;本 sweep 是独立的保证。)
 - **FR-047:** 重组 pass(FR-033)SHALL 额外执行**固化(consolidation)**—— 把 **journal** 记忆带里**复现、持久**的情景模式提升进语义带。agentic 循环在主题工具之外再获得两个内部工具:**读取近期 journal** 条目、**追加 rule**(`rules/rules.md`)。它把在 journal 中复现的模式 —— 保守地,大致**≥3 条相似条目、跨 ≥2 个不同日期**(由 LLM 判断;绝非一次性)—— 提升为一个 **knowledge 主题**(经 `write_topic`),或当模式明显是**祈使/行为性**的(“总是做 X”)时提升进 **rules** 带(经 `append_rule`)。**一次性**事件**留在 journal 里**(由 prune 按龄淘汰,后续切片),绝不自动提升。提升是把持久模式**复制**进语义带 —— **不**删除 journal 条目。每次提升都追加到 store 根的 `consolidation-log.md` changelog,`memory_reorganized` 审计报告一个 `promoted` 计数。固化是**保守的** —— 拿不准时把条目留在 journal(避免固化噪声)。
 - **FR-048:** 自由格式的事实 `type` 字段被**废弃** —— `Lane`（`knowledge` / `rules` / `journal` / `handoff`）是**唯一的分类轴**。系统 MUST NOT 在 `MemoryFact` 上、在事实文件 frontmatter（`metadata.type`）里、在 `documents.metadata` JSON 里、在 `coffer__remember` 工具 schema 里、或在 REST/CLI 事实写入面（`FactCreate`/`FactUpdate`/`FactOut`、`coffer memory add --type`）携带 `type` 字段。事实的 lane 由**内部路由**（organizer / 蒸馏）决定，绝不由写入者提供。既有磁盘记忆为**丢弃重建**（Coffer 未发布）：**没有 Alembic 迁移** —— `type` 存在 `metadata` JSON 里而非列里,旧事实文件里残留的 `metadata.type` 键解析时被直接忽略、并在下一次 reindex-on-read 时丢弃;全新安装(或清空 `~/.coffer/memory/`)即从无 type 开始。
+
+**规则运行时注入与原生记忆（session hooks）**
+
+- **FR-049：** 系统 MUST 通过一个 **SessionStart hook** 把 rules lane（FR-036）交付到每个受管 agent，该 hook 注入一个**只作为上下文的规则 bundle —— 绝不原生写文件**（ADR-026）。Coffer 把 hook 安装进 agent 自己的 hooks 配置（**Claude Code** → `~/.claude/settings.json` 顶层 `hooks`；**Codex** → `~/.codex/hooks.json` 顶层 `hooks` —— 同一套 JSON schema），只识别自己的条目（`coffer-hook` 命令 basename）、不动用户 hook；安装/卸载幂等且原子（`.bak` 备份），并审计 `AGENT_HOOK_INSTALLED`/`AGENT_HOOK_UNINSTALLED`。在 SessionStart 时 hook 回调 Coffer —— 携 daemon token 调 `GET /api/v1/agents/{name}/session-context?cwd=<cwd>` —— daemon 返回 bundle = **全局规则（始终）** 加上 **当前项目规则（cwd 解析到 git 项目时）**，先项目后全局。hook 把 bundle 作为 SessionStart 的 `additionalContext` 输出并退出 0。hook MUST **绝不阻塞 agent**：未安装 hook、或 daemon 不可达/超时/报错时，**不注入**且 hook 仍退出 0。hook 在 **resume/clear/compact** 时重跑（matcher 覆盖 `startup|resume|clear|compact`）。
+- **FR-050：** 注入的 bundle（FR-049）MUST 额外携带**两条 Coffer 播种的内置规则**，即便 store 的 `rules/rules.md` 为空也在场：(a) 当用户想接续此前工作（「continue」「where were we」「resume」）时，调 `coffer__resume()` 拉取本项目 + 分支保存的工作状态 handoff；(b) 一条**软引导**，优先用 `coffer__remember`（记录持久事实）与 `coffer__recall`（取回它们）而非 agent 自己的原生记忆，因为 Coffer 是用户各 agent 间的共享 store。**handoff 正文本身不被注入** —— 它经 `coffer__resume`（FR-025）**按需拉取**，于是 bundle 保持精简、陈旧现场绝不被硬塞进上下文。
+- **FR-051：** 系统 MUST **仅为 Claude Code 安装一个 SessionEnd hook**，它**立即把刚关闭的会话自动蒸馏进 journal 记忆带**，降低记忆捕获的延迟。会话结束时 hook 调 `POST /api/v1/agents/{name}/sessions/{session_id}/end` 携带 cwd；daemon 复用 FR-045 蒸馏路径与 `distilled_sessions` 幂等账本（FR-046）—— `is_distilled? → distill → mark_distilled` —— 故会话**绝不被重复蒸馏**，且当会话已蒸馏、未配置内部模型、或 cwd 不在 git 项目时该调用为干净 no-op。**Codex 没有 session-end 事件**，故不为它安装 SessionEnd hook；Codex 会话由 **FR-046 补扫**捕获，补扫**仍是写入保证** —— 本 hook 只降低延迟、绝不取代补扫。
+- **FR-052：** 系统 MUST 提供一个**可选的 per-agent `disable_native_memory` 配置（默认 `false`）**。**关闭**（默认）时 Coffer **绝不碰 agent 的原生记忆**（ADR-026）。用户**打开**它时，Coffer 写入 agent 配置以关闭其原生记忆 —— **Claude Code** `autoMemoryEnabled=false`（`~/.claude/settings.json`）；**Codex** `features.memories=false` + `memories.generate_memories=false`（`~/.codex/config.toml`）—— 原子写入（`.bak` 备份）并审计该关闭；**再次关掉它、或卸载**会**恢复** agent 先前的原生记忆设置（审计）。这是一个**洁净选项**（避免第二份发散的记忆副本），**不是写入保证的必要条件**：无论该开关如何，规则 bundle 照样注入、会话照样蒸馏。
 
 **Transcript history（对话历史）**
 

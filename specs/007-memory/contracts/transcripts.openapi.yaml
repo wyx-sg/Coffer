@@ -134,6 +134,80 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /api/v1/agents/{name}/session-context:
+    parameters:
+      - $ref: "#/components/parameters/AgentName"
+    get:
+      summary: SessionStart rules bundle for an agent (slice 6, FR-049/FR-050)
+      operationId: getAgentSessionContext
+      tags: [session-hooks]
+      description: |
+        Returns the context-only rules bundle the agent's SessionStart hook
+        injects as `additionalContext` — global rules (always) plus the current
+        project's rules (when `cwd` resolves to a git project, project rules
+        first), followed by the two Coffer-seeded built-in rules (call
+        `coffer__resume()` to continue prior work; prefer
+        `coffer__remember`/`coffer__recall` over native memory). The seeded
+        rules are present even when the rules lanes are empty; the handoff body
+        is NOT injected (pull-on-demand via `coffer__resume`). NEVER a native
+        file write (ADR-026). When `cwd` is outside a git project the bundle
+        carries the global + seeded rules only. Read-only; emits no audit event.
+      parameters:
+        - in: query
+          name: cwd
+          required: false
+          description: |
+            The session's launch working directory (from the hook stdin). Used
+            to resolve the current project's rules; omitted/non-git → global +
+            seeded rules only.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionContextResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/agents/{name}/sessions/{session_id}/end:
+    parameters:
+      - $ref: "#/components/parameters/AgentName"
+      - in: path
+        name: session_id
+        required: true
+        description: The just-closed session's id (from the SessionEnd hook stdin).
+        schema:
+          type: string
+    post:
+      summary: SessionEnd distil of a just-closed session (slice 6, FR-051)
+      operationId: endAgentSession
+      tags: [session-hooks]
+      description: |
+        Distils the just-closed session into the project journal lane,
+        immediately lowering memory-capture latency. Reuses the FR-045 distill
+        path and the FR-046 `distilled_sessions` idempotency ledger
+        (`is_distilled? → distill → mark_distilled`) so a session is never
+        double-distilled. A clean no-op (still 202/200) when the session was
+        already distilled, no internal model is configured, or `cwd` is not a
+        git project. Installed for Claude Code only — Codex has no session-end
+        event and degrades to the FR-046 catch-up sweep.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionEndRequest"
+      responses:
+        "202":
+          description: Accepted — distill enqueued (or a no-op as described).
+        "200":
+          description: OK — distilled synchronously (or a no-op as described).
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     cofferToken:
@@ -279,6 +353,29 @@ components:
             insight. Empty when dry_run=true, when no insights were extracted, or
             when the session's path does not resolve to a git project (there is
             no global journal).
+
+    SessionContextResponse:
+      type: object
+      required: [additional_context]
+      properties:
+        additional_context:
+          type: string
+          description: |
+            The rules bundle the SessionStart hook injects as `additionalContext`
+            (context only, never a file write). Project rules then global rules,
+            followed by the two seeded built-in rules. Always non-empty (the
+            seeded rules are present even when the rules lanes are empty).
+
+    SessionEndRequest:
+      type: object
+      required: [cwd]
+      properties:
+        cwd:
+          type: string
+          description: |
+            The session's launch working directory (from the SessionEnd hook
+            stdin). Resolves the project journal to distil into; a cwd outside a
+            git project makes the call a no-op (no global journal).
 
     ErrorEnvelope:
       type: object
