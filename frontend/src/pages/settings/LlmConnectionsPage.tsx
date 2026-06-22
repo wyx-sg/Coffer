@@ -8,7 +8,7 @@
 // at the bottom.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Boxes, Check, Cpu, Plus, Star, Trash2 } from "lucide-react";
+import { Boxes, Check, Cpu, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,6 +17,7 @@ import { ProviderForm } from "@/components/settings/ProviderForm";
 import {
   useProviders,
   useCreateProvider,
+  useUpdateProvider,
   useDeleteProvider,
   useActivateProvider,
   useSetInternalDefaultProvider,
@@ -29,16 +30,23 @@ export function LlmConnectionsPage() {
   const { t } = useTranslation();
   const { data: providers = [], isPending, error } = useProviders();
   const createProvider = useCreateProvider();
+  const updateProvider = useUpdateProvider();
   const deleteProvider = useDeleteProvider();
   const activateProvider = useActivateProvider();
   const setInternalDefault = useSetInternalDefaultProvider();
 
   const [adding, setAdding] = useState(false);
+  const [editTarget, setEditTarget] = useState<Provider | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Provider | null>(null);
 
   const closeAdd = () => {
     setAdding(false);
     createProvider.reset();
+  };
+
+  const closeEdit = () => {
+    setEditTarget(null);
+    updateProvider.reset();
   };
 
   if (isPending) {
@@ -139,6 +147,15 @@ export function LlmConnectionsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="size-7 p-0 hover:text-primary"
+                        onClick={() => setEditTarget(p)}
+                        aria-label={t("common.edit")}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="size-7 p-0 hover:text-destructive"
                         onClick={() => setDeleteTarget(p)}
                         disabled={deleteProvider.isPending}
@@ -169,6 +186,27 @@ export function LlmConnectionsPage() {
               closeAdd();
             }}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editTarget !== null} onOpenChange={(open) => !open && closeEdit()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("settings.connections.editTitle")}</DialogTitle>
+          </DialogHeader>
+          {editTarget && (
+            <ProviderForm
+              initial={editTarget}
+              submitError={updateProvider.error}
+              pending={updateProvider.isPending}
+              onCancel={closeEdit}
+              onSubmit={() => {}}
+              onUpdate={async (patch) => {
+                await updateProvider.mutateAsync({ name: editTarget.name, patch });
+                closeEdit();
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
