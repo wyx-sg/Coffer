@@ -300,6 +300,18 @@ cwd 没有可恢复的现场。
 - **When** 调用 `reorg`，
 - **Then** 调用返回 `status="no_model"`，不写出/不 supersede/不归档任何主题文档，也不报错。
 
+### Scenario: 固化 promotes a recurring journal pattern into a knowledge topic
+
+- **Given** 一个 memory store,其 journal 记忆带有若干跨越一天以上的相似情景条目(且无既有主题文档),
+- **When** `reorg` 运行,循环读取 journal 并把复现模式提升,
+- **Then** 写出一个捕捉该模式的 knowledge 主题文档并能被 `recall` 返回,提升记入 `consolidation-log.md`,且 journal 条目原样保留(提升是复制,绝不删除)。
+
+### Scenario: 固化 promotes a recurring imperative pattern into the rules lane
+
+- **Given** 一个 memory store,其 journal 记忆带有复现的祈使式("总是做 X")模式,
+- **When** `reorg` 运行并经 `append_rule` 提升它,
+- **Then** 该规则被追加进 `rules/rules.md`,提升记入 `consolidation-log.md`,`memory_reorganized` 审计报告 `promoted` 计数,且 journal 条目原样保留。
+
 ### Scenario: memory is auto-organized after the store goes idle
 
 - **Given** 已启用可选的 auto-organize 触发器、已配置内部模型，且有一条新记住的条目

@@ -383,6 +383,25 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **Then** the call returns `status="no_model"`, no topic document is written,
   superseded, or archived, and no error is raised.
 
+### Scenario: 固化 promotes a recurring journal pattern into a knowledge topic
+
+- **Given** a memory store whose journal lane holds several similar episodic
+  entries spanning more than one day (and no pre-existing topic documents),
+- **When** `reorg` runs and the loop reads the journal and promotes the
+  recurring pattern,
+- **Then** a knowledge topic document capturing the pattern is written and is
+  returned by `recall`, the promotion is recorded in `consolidation-log.md`, and
+  the journal entries are left intact (promotion copies, never deletes).
+
+### Scenario: 固化 promotes a recurring imperative pattern into the rules lane
+
+- **Given** a memory store whose journal lane holds a recurring imperative
+  ("always do X") pattern,
+- **When** `reorg` runs and the loop promotes it via `append_rule`,
+- **Then** the rule is appended to `rules/rules.md`, the promotion is recorded in
+  `consolidation-log.md`, the `memory_reorganized` audit reports a `promoted`
+  count, and the journal entries are left intact.
+
 ### Scenario: memory is auto-organized after the store goes idle
 
 - **Given** the opt-in auto-organize trigger is enabled, an internal model is
