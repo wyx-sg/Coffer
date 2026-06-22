@@ -46,7 +46,7 @@ export function InternalEngineSettings({ providers }: Props) {
     let stale = false;
     listModels.mutate(
       {
-        provider: selected.wire_format,
+        provider: selected.protocol,
         base_url: selected.base_url,
         credential_ref: selected.credential_ref,
       },

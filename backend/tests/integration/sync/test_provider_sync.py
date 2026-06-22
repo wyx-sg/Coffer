@@ -64,12 +64,9 @@ async def _vault(root: pathlib.Path) -> tuple[ResourceService, CredentialSyncAda
 async def test_provider_round_trips_through_sync(tmp_path):
     ws = tmp_path / "ws"
     config = {
-        "wire_format": "openai",
+        "protocol": "openai",
         "base_url": "https://gw/v1",
         "credential_ref": "provider/acme/key",
-        "model": "gpt-x",
-        "fast_model": None,
-        "wire_api": "chat",
         "is_active": True,
         "internal_default": False,
     }

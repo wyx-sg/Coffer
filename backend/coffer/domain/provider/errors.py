@@ -23,6 +23,6 @@ class NoActiveProvider(CofferError):  # noqa: N818
 
     code = "NO_ACTIVE_PROVIDER"
 
-    def __init__(self, wire_format: str) -> None:
-        super().__init__(f"no active provider profile for wire format {wire_format!r}")
-        self.wire_format = wire_format
+    def __init__(self, protocol: str) -> None:
+        super().__init__(f"no active provider profile for protocol {protocol!r}")
+        self.protocol = protocol

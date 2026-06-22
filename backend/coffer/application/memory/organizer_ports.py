@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Protocol
 
-from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.config import ResolvedConnection
 
 
 class LlmCompletionPort(Protocol):
@@ -24,12 +24,13 @@ class LlmCompletionPort(Protocol):
         *,
         system: str,
         user: str,
-        model: ProviderConfig,
+        model: ResolvedConnection,
         credential_resolver: Callable[[str], str],
     ) -> str: ...
 
 
 class ModelSelectorPort(Protocol):
-    """Resolves Coffer's internal-engine connection (the internal-default one)."""
+    """Resolves Coffer's internal-engine connection + model (the
+    ``internal_default`` connection paired with the internal-engine model)."""
 
-    async def get_default(self) -> ProviderConfig | None: ...
+    async def get_default(self) -> ResolvedConnection | None: ...

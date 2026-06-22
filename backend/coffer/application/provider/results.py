@@ -10,7 +10,7 @@ class ActivateResult:
     """Outcome of a switch: which agents were written, which wire had none."""
 
     activated: str
-    wire_format: str
+    protocol: str
     projected: list[str]
     skipped: list[str]
 
@@ -20,6 +20,6 @@ class DeactivateResult:
     """Outcome of switching a wire back to the agent's built-in login: which
     agents had Coffer's projection removed, and the connection that was active."""
 
-    wire_format: str
+    protocol: str
     deprojected: list[str]
     previous: str | None

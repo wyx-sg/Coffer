@@ -11,15 +11,17 @@ import pytest
 from coffer.application.memory.auto_organize import MemoryAutoOrganizer
 from coffer.application.memory.organizer import OrganizerService
 from coffer.domain.memory.scope import MemoryScope
-from coffer.domain.provider.config import ProviderConfig, WireFormat
+from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
 from coffer.infrastructure.knowledge.paths import inbox_dir, topic_path
 
 
-def _model() -> ProviderConfig:
-    return ProviderConfig(
-        wire_format=WireFormat.OLLAMA,
-        base_url="http://localhost:11434",
-        credential_ref=None,
+def _model() -> ResolvedConnection:
+    return ResolvedConnection(
+        config=ProviderConfig(
+            protocol=Protocol.OLLAMA,
+            base_url="http://localhost:11434",
+            credential_ref=None,
+        ),
         model="llama3",
     )
 
@@ -27,10 +29,10 @@ def _model() -> ProviderConfig:
 class _Models:
     """Fake ModelSelectorPort."""
 
-    def __init__(self, model: ProviderConfig | None) -> None:
+    def __init__(self, model: ResolvedConnection | None) -> None:
         self._model = model
 
-    async def get_default(self) -> ProviderConfig | None:
+    async def get_default(self) -> ResolvedConnection | None:
         return self._model
 
 

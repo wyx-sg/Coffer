@@ -20,7 +20,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from coffer.application.memory.organizer_ports import LlmCompletionPort
-from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.config import ResolvedConnection
 from coffer.infrastructure.knowledge.paths import rule_file_path, rules_dir
 from coffer.infrastructure.memory.rules_files import (
     count_rules,
@@ -96,7 +96,7 @@ async def run_rules_split(
     store_dir: Path,
     *,
     llm: LlmCompletionPort,
-    model: ProviderConfig,
+    model: ResolvedConnection,
     credential_resolver: Callable[[str], str],
     threshold: int = RULES_SPLIT_THRESHOLD,
     log: LogFn | None = None,

@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import pathlib
 from collections.abc import Awaitable, Callable
-from typing import Protocol
+from typing import Protocol as _Protocol
 
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.results import ActivateResult, DeactivateResult
@@ -25,7 +25,7 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.audit import AuditEventType
 from coffer.domain.credential_errors import CredentialMissing
-from coffer.domain.provider.config import ProviderConfig, WireApi, WireFormat
+from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
 from coffer.domain.provider.errors import NoActiveProvider, ProviderCredentialSourceInvalid
 from coffer.domain.provider.projection import (
     apply_anthropic_settings,
@@ -39,18 +39,18 @@ from coffer.domain.resource import Resource, ResourceRef
 KIND = "provider"
 
 
-class _CredentialStore(Protocol):
+class _CredentialStore(_Protocol):
     def get(self, ref: str) -> str | None: ...
     def set(self, ref: str, value: str) -> None: ...
     def delete(self, ref: str) -> None: ...
 
 
-class _ConfigFileStore(Protocol):
+class _ConfigFileStore(_Protocol):
     def read_text(self, path: pathlib.Path) -> str | None: ...
     def write_text_atomic(self, path: pathlib.Path, text: str) -> None: ...
 
 
-class _AgentLister(Protocol):
+class _AgentLister(_Protocol):
     async def list(self) -> list[Resource]: ...
 
 
@@ -95,23 +95,21 @@ class ProviderService:
         self,
         name: str,
         *,
-        wire_format: WireFormat,
+        protocol: Protocol,
         base_url: str,
-        model: str,
-        fast_model: str | None = None,
-        wire_api: WireApi = WireApi.RESPONSES,
         secret_value: str | None = None,
         credential_ref: str | None = None,
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
-        """Create a connection. For anthropic/openai supply EXACTLY one of
-        ``secret_value`` (stored to the vault under ``provider/<name>/key``) or
-        ``credential_ref`` (reuse an existing vault entry). An ``ollama``
-        connection has no key — supply neither."""
+        """Create a connection. For anthropic/openai/unknown supply EXACTLY one
+        of ``secret_value`` (stored to the vault under ``provider/<name>/key``)
+        or ``credential_ref`` (reuse an existing vault entry). An ``ollama``
+        connection has no key — supply neither. The model lives apart from the
+        connection (spec 011 E3) and is chosen at the point of use."""
         ref: str | None
         minted = False
-        if wire_format is WireFormat.OLLAMA:
+        if protocol is Protocol.OLLAMA:
             if secret_value is not None or credential_ref is not None:
                 raise ProviderCredentialSourceInvalid()
             ref = None
@@ -124,12 +122,9 @@ class ProviderService:
                 await asyncio.to_thread(self._credentials.set, ref, secret_value)
                 minted = True
         config = ProviderConfig(
-            wire_format=wire_format,
+            protocol=protocol,
             base_url=base_url,
             credential_ref=ref,
-            model=model,
-            fast_model=fast_model,
-            wire_api=wire_api,
             is_active=False,
         )
         try:
@@ -154,29 +149,18 @@ class ProviderService:
         name: str,
         *,
         base_url: str | None = None,
-        model: str | None = None,
-        fast_model: str | None = None,
-        clear_fast_model: bool = False,
-        wire_api: WireApi | None = None,
         secret_value: str | None = None,
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
-        """Partial update. ``wire_format`` / ``credential_ref`` are immutable
+        """Partial update. ``protocol`` / ``credential_ref`` are immutable
         (identity); change them by recreating. ``secret_value`` rotates the
-        secret stored under the profile's existing ref."""
+        secret stored under the profile's existing ref. The model is not stored
+        on the connection (spec 011 E3)."""
         current = await self.get(name)
         config = dict(current.config)
         if base_url is not None:
             config["base_url"] = base_url
-        if model is not None:
-            config["model"] = model
-        if clear_fast_model:
-            config["fast_model"] = None
-        elif fast_model is not None:
-            config["fast_model"] = fast_model
-        if wire_api is not None:
-            config["wire_api"] = wire_api.value
         # Re-validate so a bad edit is rejected before the rotation / DB write.
         validated = ProviderConfig.model_validate(config).model_dump(mode="json")
         if secret_value is not None:
@@ -213,7 +197,7 @@ class ProviderService:
         """
         resource = await self.get(name)
         cfg = self._cfg(resource)
-        wire = cfg.wire_format
+        wire = cfg.protocol
         target = target_for(wire)
 
         # 1) Project first. A failure here raises before any state mutation.
@@ -237,7 +221,7 @@ class ProviderService:
             if r.name == name:
                 continue
             rc = self._cfg(r)
-            if rc.wire_format == wire and rc.is_active:
+            if rc.protocol == wire and rc.is_active:
                 await self._set_active(r, active=False, actor=actor)
                 previous = r.name
         if not cfg.is_active:
@@ -250,15 +234,15 @@ class ProviderService:
             details={
                 "from": previous,
                 "to": name,
-                "wire_format": wire.value,
+                "protocol": wire.value,
                 "agents": projected,
             },
         )
         return ActivateResult(
-            activated=name, wire_format=wire.value, projected=projected, skipped=skipped
+            activated=name, protocol=wire.value, projected=projected, skipped=skipped
         )
 
-    async def deactivate(self, wire: WireFormat, *, actor: str = "api") -> DeactivateResult:
+    async def deactivate(self, wire: Protocol, *, actor: str = "api") -> DeactivateResult:
         """Switch ``wire``'s agent(s) back to their built-in login: de-project
         Coffer's keys and clear ``is_active``. Idempotent; de-projects before the
         flip, mirroring :meth:`activate`."""
@@ -276,7 +260,7 @@ class ProviderService:
         previous: str | None = None
         for r in await self.list():
             rc = self._cfg(r)
-            if rc.wire_format == wire and rc.is_active:
+            if rc.protocol == wire and rc.is_active:
                 await self._set_active(r, active=False, actor=actor)
                 previous = r.name
 
@@ -284,21 +268,21 @@ class ProviderService:
             details = {
                 "from": previous,
                 "to": None,
-                "wire_format": wire.value,
+                "protocol": wire.value,
                 "agents": deprojected,
             }
             ref = self._ref(previous) if previous else self._ref(wire.value)
             await self._audit.record(
                 AuditEventType.PROVIDER_SWITCHED.value, ref=ref, actor=actor, details=details
             )
-        return DeactivateResult(wire_format=wire.value, deprojected=deprojected, previous=previous)
+        return DeactivateResult(protocol=wire.value, deprojected=deprojected, previous=previous)
 
-    async def resolve_active_key(self, wire: WireFormat) -> str:
+    async def resolve_active_key(self, wire: Protocol) -> str:
         """The decrypted API key of the active profile for ``wire`` (used by
         Claude's ``apiKeyHelper``). Raises ``NoActiveProvider`` if none."""
         for r in await self.list():
             rc = self._cfg(r)
-            if rc.wire_format == wire and rc.is_active:
+            if rc.protocol == wire and rc.is_active:
                 ref = rc.credential_ref
                 if ref is None:
                     raise NoActiveProvider(wire.value)
@@ -332,17 +316,19 @@ class ProviderService:
         )
         return await self.get(name)
 
-    async def resolve_internal_connection(self) -> ProviderConfig | None:
-        """The connection Coffer's internal LLM engine uses (the one flagged
-        ``internal_default``), or ``None`` when none is configured — in which
-        case the internal engine is a clean no-op."""
+    async def resolve_internal_connection(self) -> ResolvedConnection | None:
+        """The connection + model Coffer's internal LLM engine runs on: the
+        ``internal_default`` connection paired with the global internal-engine
+        model (spec 011 E3). ``None`` when no connection is marked OR no model is
+        set — either way the internal engine is a clean no-op (the model no
+        longer lives on the connection, so there is no fallback)."""
+        model = await self._resolve_internal_model() if self._resolve_internal_model else None
+        if not model:
+            return None
         for r in await self.list():
             rc = self._cfg(r)
             if rc.internal_default:
-                model = (
-                    await self._resolve_internal_model() if self._resolve_internal_model else None
-                )
-                return rc.model_copy(update={"model": model}) if model else rc
+                return ResolvedConnection(config=rc, model=model)
         return None
 
     # --- internals -----------------------------------------------------------
@@ -365,13 +351,13 @@ class ProviderService:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
         text = self._config_store.read_text(spec.path) or ""
-        # Model comes from the per-agent binding (spec 011 amendment 2026-06-22b
-        # E3/E4); an unbound agent falls back to the connection's values during
-        # rollout (the connection-side fields are removed in a later slice).
-        model = agent_cfg.model or cfg.model
-        fast_model = agent_cfg.fast_model if agent_cfg.fast_model is not None else cfg.fast_model
-        wire_api = agent_cfg.wire_api or cfg.wire_api.value
-        if cfg.wire_format == WireFormat.ANTHROPIC:
+        # Model comes solely from the per-agent binding (spec 011 E3/E4) — the
+        # connection no longer carries one. An unbound agent projects no model
+        # env var, so the agent runs on its OWN default model.
+        model = agent_cfg.model
+        fast_model = agent_cfg.fast_model
+        wire_api = agent_cfg.wire_api or "responses"
+        if cfg.protocol == Protocol.ANTHROPIC:
             new_text = apply_anthropic_settings(
                 text, base_url=cfg.base_url, model=model, fast_model=fast_model
             )
@@ -385,7 +371,7 @@ class ProviderService:
             )
         self._config_store.write_text_atomic(spec.path, new_text)
 
-    def _deproject(self, agent: Resource, config_key: str, wire: WireFormat) -> None:
+    def _deproject(self, agent: Resource, config_key: str, wire: Protocol) -> None:
         """Remove Coffer's projected keys from one agent's native config so it
         falls back to its own login (the inverse of :meth:`_project`)."""
         agent_cfg = AgentConfig.model_validate(agent.config)
@@ -393,7 +379,7 @@ class ProviderService:
         text = self._config_store.read_text(spec.path) or ""
         if not text.strip():
             return  # nothing was ever projected
-        if wire == WireFormat.ANTHROPIC:
+        if wire == Protocol.ANTHROPIC:
             new_text = remove_anthropic_settings(text)
         else:
             new_text = remove_codex_provider(text)

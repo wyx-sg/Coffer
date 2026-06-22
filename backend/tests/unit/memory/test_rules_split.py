@@ -9,16 +9,18 @@ from collections.abc import Callable
 import pytest
 
 from coffer.application.memory.rules_split import run_rules_split, split_oversized_rules
-from coffer.domain.provider.config import ProviderConfig, WireFormat
+from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
 from coffer.infrastructure.knowledge.paths import rule_file_path, rules_dir, rules_path
 from coffer.infrastructure.memory.rules_files import append_rule, count_rules, rule_bullets
 
 
-def _model() -> ProviderConfig:
-    return ProviderConfig(
-        wire_format=WireFormat.OLLAMA,
-        base_url="http://localhost:11434",
-        credential_ref=None,
+def _model() -> ResolvedConnection:
+    return ResolvedConnection(
+        config=ProviderConfig(
+            protocol=Protocol.OLLAMA,
+            base_url="http://localhost:11434",
+            credential_ref=None,
+        ),
         model="llama3",
     )
 

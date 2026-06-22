@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.config import ResolvedConnection
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class AgenticReorgPort(Protocol):
     async def run(
         self,
         *,
-        model: ProviderConfig,
+        model: ResolvedConnection,
         tools: Sequence[ReorgTool],
         system_prompt: str,
         credential_resolver: Callable[[str], str],
@@ -41,4 +41,4 @@ class AgenticReorgPort(Protocol):
 class ModelSelectorPort(Protocol):
     """Resolves Coffer's internal-engine connection (the internal-default one)."""
 
-    async def get_default(self) -> ProviderConfig | None: ...
+    async def get_default(self) -> ResolvedConnection | None: ...

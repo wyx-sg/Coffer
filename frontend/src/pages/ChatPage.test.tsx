@@ -36,12 +36,9 @@ vi.mock("@/lib/hooks/useProviders", () => ({
     data: [
       {
         name: "official",
-        wire_format: "anthropic",
+        protocol: "anthropic",
         base_url: "https://api.anthropic.com",
         credential_ref: "ref",
-        model: "claude-opus-4-8",
-        fast_model: null,
-        wire_api: "chat",
         is_active: true,
         internal_default: false,
         enabled: true,

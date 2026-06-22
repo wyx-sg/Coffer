@@ -30,20 +30,24 @@ Pydantic v2 `BaseModel`。这是存储在 Resource 行上的同步 `config` 字�
 
 所有字段均 JSON 稳定（无 Python 对象），`model_dump(mode="json")` 可干净序列化，适用于 SQLite 和 sync export。
 
-### `WireFormat` 和 `WireApi`（`domain/provider/config.py`）
+### `Protocol`（`domain/provider/config.py`）
 
-这两个枚举与 `ProviderConfig` 同在 `config.py` 中定义，没有独立的 `wire.py` 模块。
+单个 `StrEnum` 与 `ProviderConfig` 同在 `config.py`，没有独立 `wire.py` 模块。旧的
+`WireApi` 枚举已移除——`wire_api` 离开连接（属 Codex 绑定关注点；投影默认 `responses`）。
 
 ```python
-class WireFormat(str, Enum):
-    anthropic = "anthropic"
-    openai = "openai"
-    ollama = "ollama"
-
-class WireApi(str, Enum):
-    chat = "chat"
-    responses = "responses"
+class Protocol(StrEnum):
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    OLLAMA = "ollama"
+    UNKNOWN = "unknown"
 ```
+
+### `ResolvedConnection`（`domain/provider/config.py`）
+
+一个 frozen dataclass，把 `ProviderConfig` 与要运行的 `model` 配对——因为模型独立于
+连接（E3），二者在内部引擎构建 chat model 时一起传递。`resolve_internal_connection()`
+返回它（或 `None`）；`build_chat_model(resolved, resolver)` 消费它。
 
 ### 投影函数（`domain/provider/projection.py`）
 
@@ -52,7 +56,7 @@ class WireApi(str, Enum):
 - `apply_anthropic_settings(config: ProviderConfig, existing_text: str) -> str`
 - `apply_codex_provider(config: ProviderConfig, profile_name: str, existing_text: str) -> str`
 - `ProjectionTarget`——目标配置文件描述符
-- `target_for(wire: WireFormat) -> ProjectionTarget | None`——对 `ollama` 返回 `None`（仅内部；无 agent 投影）
+- `target_for(wire: Protocol) -> ProjectionTarget | None`——对 `ollama` 返回 `None`（仅内部；无 agent 投影）
 - 常量：`CODEX_PROVIDER_ID`、`CODEX_ENV_KEY`、`ANTHROPIC_API_KEY_HELPER`
 
 ### 内部引擎（`application/provider/service.py` + `infrastructure/chat/`）
@@ -60,8 +64,8 @@ class WireApi(str, Enum):
 内部引擎 connection 由全局 `internal_default` 标志选择：
 
 - `ProviderService.set_internal_default(name)`——清除所有其他 connection 的 `internal_default`，再设置目标（顺序 clear-then-set，由单进程 daemon 串行化）；发出 `provider_internal_default_set`。
-- `ProviderService.resolve_internal_connection() -> ProviderConfig | None`——返回 `internal_default` connection 的 config，或 `None`（→ 内部引擎是干净的 no-op）。当全局内部引擎模型（见下）已设置时，将其覆盖到解析出的 connection 上（`model_copy(update={"model": ...})`），使模型独立于 connection（ADR-032 E3）；内部引擎模型为空时，过渡期回退到 connection 自身的 `model`。
-- `build_chat_model(connection, ...)` 消费解析出的 connection，按 `wire_format`（anthropic / openai / ollama）分派，构建内部引擎的 chat model——取代已退役 `ModelConfig` 注册表的模型选择。
+- `ProviderService.resolve_internal_connection() -> ResolvedConnection | None`——把 `internal_default` connection 与全局内部引擎模型（见下）配对。无 connection 被标记、或未设模型时返回 `None`（模型独立于 connection，不再回退连接的 model）。
+- `build_chat_model(resolved, ...)` 消费 `ResolvedConnection`，按 `protocol`（anthropic / openai / ollama）分派，构建内部引擎的 chat model——取代已退役 `ModelConfig` 注册表的模型选择。
 
 #### `GlobalInternalEngineConfig`（`domain/internal_engine_config.py`）
 
@@ -75,9 +79,9 @@ class WireApi(str, Enum):
 - `InternalEngineConfigService.get()` 返回该行或未设置默认值（`model=None`）；`.update(model=...)` 去空白、空→`None`、持久化，并发出 `internal_engine_model_set` 审计事件。
 - 经 `SqlAlchemyInternalEngineConfigRepo`（表 `internal_engine_config`，alembic `0039`）存储；经 `GET`/`PUT /api/v1/internal-engine-config` 暴露。
 
-### 每种 `wire_format` 的托管原生配置键
+### 每种 `protocol` 的托管原生配置键
 
-`domain/provider/projection.py` 中的纯函数（`apply_anthropic_settings` / `apply_codex_provider`）将下列键写入 agent 的原生配置；`ProjectionTarget` + `target_for(wire)` 将每种 `wire_format` 映射到其 agent、allowlist key 与文件格式。投影测试断言这些托管键，确保规范与实现始终一致。
+`domain/provider/projection.py` 中的纯函数（`apply_anthropic_settings` / `apply_codex_provider`）将下列键写入 agent 的原生配置；`ProjectionTarget` + `target_for(wire)` 将每种 `protocol` 映射到其 agent、allowlist key 与文件格式。投影测试断言这些托管键，确保规范与实现始终一致。
 
 **anthropic 托管键：**
 
@@ -164,7 +168,7 @@ class WireApi(str, Enum):
 
 ## SQLite schema 变更
 
-**无需新迁移。** `provider` kind 复用共享的 `resources` 表（新行 `kind='provider'`）。`ProviderConfig` 字典存储在现有的 `resources.config` JSON 列中。
+`provider` kind 复用共享的 `resources` 表（行 `kind='provider'`）；`ProviderConfig` 字典存储在现有 `resources.config` JSON 列——**无新表**。瘦身是一次**数据迁移**：**`0040`** 改写每条 provider 行的 `config_json`（`wire_format`→`protocol`；剥 `model`/`fast_model`/`wire_api`）。
 
 无新表；无 SCHEMA_VERSION bump。
 
@@ -174,7 +178,7 @@ class WireApi(str, Enum):
 
 | 值 | 发出时机 |
 |---|---|
-| `provider_switched` | `POST /providers/{name}/activate` 成功；details：`{from, to, wire_format, agents: [...projected...]}` |
+| `provider_switched` | `POST /providers/{name}/activate` 成功；details：`{from, to, protocol, agents: [...projected...]}` |
 | `provider_internal_default_set` | `POST /providers/{name}/internal-default` 成功；details：`{from, to}`（先前内部默认名称或 null，及新的） |
 
 `RESOURCE_CREATED`、`RESOURCE_UPDATED`、`RESOURCE_DELETED` 由 `ResourceService` 在 CRUD 操作时自动发出（无需新增）。

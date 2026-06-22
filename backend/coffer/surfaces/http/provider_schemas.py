@@ -1,6 +1,8 @@
 """Request / response schemas for ``/api/v1/providers`` (spec 011).
 
-``ProviderOut`` NEVER carries the secret — only its ``credential_ref``.
+``ProviderOut`` NEVER carries the secret — only its ``credential_ref``. A
+connection is a credentialed endpoint ``{protocol, base_url, credential_ref}``;
+the model lives apart from it (spec 011 E3) and is chosen at the point of use.
 """
 
 from __future__ import annotations
@@ -9,33 +11,26 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from coffer.domain.provider.config import WireApi, WireFormat
+from coffer.domain.provider.config import Protocol
 
 
 class ProviderCreate(BaseModel):
-    """Create an LLM connection. For ``anthropic`` / ``openai`` supply EXACTLY
-    one of ``secret_value`` / ``credential_ref``; an ``ollama`` connection has
-    no key, so supply neither."""
+    """Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
+    supply EXACTLY one of ``secret_value`` / ``credential_ref``; an ``ollama``
+    connection has no key, so supply neither."""
 
     name: str = Field(min_length=1, max_length=64)
-    wire_format: WireFormat
+    protocol: Protocol
     base_url: str = Field(min_length=1)
-    model: str = Field(min_length=1)
-    fast_model: str | None = None
-    # Default ``responses`` — codex-cli 0.130 rejects ``wire_api = "chat"``.
-    wire_api: WireApi = WireApi.RESPONSES
     credential_ref: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     description: str | None = None
 
 
 class ProviderPatch(BaseModel):
-    """Partial update. ``wire_format`` / ``credential_ref`` are immutable."""
+    """Partial update. ``protocol`` / ``credential_ref`` are immutable."""
 
     base_url: str | None = None
-    model: str | None = None
-    fast_model: str | None = None
-    wire_api: WireApi | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     description: str | None = None
 
@@ -50,12 +45,9 @@ class ProviderOut(BaseModel):
     """
 
     name: str
-    wire_format: WireFormat
+    protocol: Protocol
     base_url: str
     credential_ref: str | None
-    model: str
-    fast_model: str | None
-    wire_api: WireApi
     is_active: bool
     internal_default: bool
     enabled: bool
@@ -72,7 +64,7 @@ class ActivateOut(BaseModel):
     """Result of a switch — which agents were written, which wire had none."""
 
     activated: str
-    wire_format: WireFormat
+    protocol: Protocol
     projected: list[str]
     skipped: list[str]
 
@@ -80,7 +72,7 @@ class ActivateOut(BaseModel):
 class DeactivateOut(BaseModel):
     """Result of switching a wire back to the agent's own built-in login."""
 
-    wire_format: WireFormat
+    protocol: Protocol
     deprojected: list[str]
     previous: str | None = None
 

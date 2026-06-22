@@ -300,11 +300,11 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **When** 用户激活该 profile，
 - **Then** `~/.claude/settings.json` 包含 `apiKeyHelper`、`env.ANTHROPIC_BASE_URL`、`env.ANTHROPIC_MODEL`；若 `fast_model` 有值则 `env.ANTHROPIC_SMALL_FAST_MODEL` 存在；`ANTHROPIC_API_KEY` 缺失；profile 的 `is_active` 变为 `true`。
 
-### Scenario: an agent's model binding overrides the connection model
+### Scenario: an agent's model binding drives the projected model
 
 - **Given** 已注册 Claude Code agent 且带 per-agent 模型绑定（`model` + `fast_model`），并存在一条 anthropic 连接，
 - **When** 用户激活该连接，
-- **Then** 投射出的 `env.ANTHROPIC_MODEL` / `env.ANTHROPIC_SMALL_FAST_MODEL` 来自 **agent 的绑定**，而非连接——模型在使用处（amendment 2026-06-22b E3/E4）。未绑定的 agent 在过渡期仍回退连接的 model。
+- **Then** 投射出的 `env.ANTHROPIC_MODEL` / `env.ANTHROPIC_SMALL_FAST_MODEL` 来自 **agent 的绑定**——模型在使用处、不在连接上（amendment 2026-06-22b E1/E3/E4）。未绑定的 agent 不写 model env，故运行在它自己的默认模型上。
 
 ### Scenario: activate an openai profile writes Codex config
 

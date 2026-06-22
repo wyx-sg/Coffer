@@ -17,7 +17,7 @@ from coffer.application.memory.organizer import OrganizerService
 from coffer.application.memory.organizer_deps import collaborators_from_service
 from coffer.application.memory.service import MemoryService
 from coffer.application.provider.service import ProviderService
-from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.config import ResolvedConnection
 from coffer.infrastructure.chat.llm_completion import LangchainLlmCompletion
 from coffer.surfaces.http.memory.organize_state import set_organizer_service
 
@@ -29,7 +29,7 @@ class _ModelSelector:
     def __init__(self, provider_svc: ProviderService) -> None:
         self._svc = provider_svc
 
-    async def get_default(self) -> ProviderConfig | None:
+    async def get_default(self) -> ResolvedConnection | None:
         return await self._svc.resolve_internal_connection()
 
 

@@ -46,12 +46,9 @@ const agent: AgentOut = {
 function makeConn(over: Partial<Provider> = {}): Provider {
   return {
     name: "official",
-    wire_format: "anthropic",
+    protocol: "anthropic",
     base_url: "https://api.anthropic.com",
     credential_ref: "ref",
-    model: "claude-opus-4-8",
-    fast_model: "claude-haiku-4-5",
-    wire_api: "chat",
     is_active: true,
     internal_default: false,
     enabled: true,
@@ -72,7 +69,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   useActivateMock.mockReturnValue({ mutate: activateMutate, isPending: false });
   useUseBuiltinMock.mockReturnValue({ mutate: useBuiltinMutate, isPending: false });
-  useListMock.mockReturnValue({ mutate: vi.fn() });
+  // The model dropdown is populated by introspecting the active connection (the
+  // connection no longer carries a model — spec 011 E3); resolve its catalogue.
+  useListMock.mockReturnValue({
+    mutate: (_probe: unknown, opts?: { onSuccess?: (r: { models: string[] }) => void }) =>
+      opts?.onSuccess?.({ models: ["claude-opus-4-8", "claude-haiku-4-5"] }),
+  });
   usePatchAgentMock.mockReturnValue({ mutate: patchAgentMutate, isPending: false });
   useProvidersMock.mockReturnValue({ data: [] });
 });
@@ -88,8 +90,8 @@ describe("AgentOverviewTab", () => {
     useProvidersMock.mockReturnValue({
       data: [
         makeConn({ name: "official", is_active: true }),
-        makeConn({ name: "kimi", wire_format: "anthropic", is_active: false }),
-        makeConn({ name: "gpt", wire_format: "openai", is_active: false }),
+        makeConn({ name: "kimi", protocol: "anthropic", is_active: false }),
+        makeConn({ name: "gpt", protocol: "openai", is_active: false }),
       ],
     });
     render(<AgentOverviewTab agent={agent} />);
@@ -121,7 +123,7 @@ describe("AgentOverviewTab", () => {
     expect(activateMutate).not.toHaveBeenCalled();
   });
 
-  test("the model dropdown offers the active connection's models", () => {
+  test("the model dropdown offers the connection's introspected models", () => {
     useProvidersMock.mockReturnValue({ data: [makeConn({ is_active: true })] });
     render(<AgentOverviewTab agent={agent} />);
     const options = openSelectOptions(/^model$/i);
@@ -157,14 +159,14 @@ describe("AgentOverviewTab", () => {
   test("Codex has no fast-model slot", () => {
     const codex: AgentOut = { ...agent, name: "my-codex", type: "codex" };
     useProvidersMock.mockReturnValue({
-      data: [makeConn({ wire_format: "openai", is_active: true })],
+      data: [makeConn({ protocol: "openai", is_active: true })],
     });
     render(<AgentOverviewTab agent={codex} />);
     expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
   });
 
   test("with no compatible connection, points the user to Settings", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ wire_format: "openai" })] });
+    useProvidersMock.mockReturnValue({ data: [makeConn({ protocol: "openai" })] });
     render(<AgentOverviewTab agent={agent} />);
     expect(screen.getByText(/no connection for this agent/i)).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /connection/i })).not.toBeInTheDocument();

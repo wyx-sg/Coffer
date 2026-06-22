@@ -7,7 +7,7 @@ import {
   providersApi,
   type ProviderCreate,
   type ProviderPatch,
-  type WireFormat,
+  type Protocol,
 } from "@/lib/api/providers";
 import { useToast } from "@/components/ui/toast";
 
@@ -82,7 +82,7 @@ export function useUseBuiltinProvider() {
   const qc = useQueryClient();
   const onError = useProviderToastError();
   return useMutation({
-    mutationFn: (wire: WireFormat) => providersApi.useBuiltin(wire),
+    mutationFn: (wire: Protocol) => providersApi.useBuiltin(wire),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
     },

@@ -6,7 +6,7 @@ import json
 import tomllib
 
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import WireFormat
+from coffer.domain.provider.config import Protocol
 from coffer.domain.provider.projection import (
     ANTHROPIC_API_KEY_HELPER,
     CODEX_ENV_KEY,
@@ -152,7 +152,7 @@ def test_remove_codex_empty_and_idempotent() -> None:
 
 
 def test_targets_map_wire_to_agent() -> None:
-    assert target_for(WireFormat.ANTHROPIC).agent_type is AgentType.CLAUDE_CODE
-    assert target_for(WireFormat.ANTHROPIC).config_key == "settings"
-    assert target_for(WireFormat.OPENAI).agent_type is AgentType.CODEX
-    assert target_for(WireFormat.OPENAI).config_key == "config"
+    assert target_for(Protocol.ANTHROPIC).agent_type is AgentType.CLAUDE_CODE
+    assert target_for(Protocol.ANTHROPIC).config_key == "settings"
+    assert target_for(Protocol.OPENAI).agent_type is AgentType.CODEX
+    assert target_for(Protocol.OPENAI).config_key == "config"
