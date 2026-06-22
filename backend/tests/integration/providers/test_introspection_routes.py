@@ -30,6 +30,11 @@ class _FakePort:
     async def test_embedding(self, *, provider, model, base_url, api_key):  # type: ignore[no-untyped-def]
         return 1536
 
+    async def detect_protocol(self, *, base_url, api_key):  # type: ignore[no-untyped-def]
+        if api_key == "bad":
+            raise RuntimeError("auth failed")
+        return "openai"
+
 
 @pytest_asyncio.fixture
 async def client():  # type: ignore[no-untyped-def]
@@ -102,6 +107,20 @@ async def test_inline_secret_reaches_port(client) -> None:  # type: ignore[no-un
         json={"provider": "openai", "secret_value": "sk-inline"},
     )
     assert ok.status_code == 200 and ok.json()["models"] == ["gpt-4o", "gpt-4o-mini"]
+
+
+async def test_detect_protocol(client) -> None:  # type: ignore[no-untyped-def]
+    ok = await client.post(
+        "/api/v1/models/detect-protocol",
+        json={"base_url": "https://gw/v1", "secret_value": "sk-x"},
+    )
+    assert ok.status_code == 200 and ok.json()["protocol"] == "openai"
+    # a failed probe degrades to "unknown" (never 500), so the agent page asks.
+    deg = await client.post(
+        "/api/v1/models/detect-protocol",
+        json={"base_url": "https://gw/v1", "secret_value": "bad"},
+    )
+    assert deg.status_code == 200 and deg.json()["protocol"] == "unknown"
 
 
 async def test_requires_token(client) -> None:  # type: ignore[no-untyped-def]
