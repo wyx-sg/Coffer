@@ -21,11 +21,11 @@ import {
   useUpdateProvider,
   useDeleteProvider,
   useActivateProvider,
-  useSetInternalDefaultProvider,
 } from "@/lib/hooks/useProviders";
 import { translateApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
 import { EmbeddingSettings } from "./EmbeddingSettings";
+import { InternalEngineSettings } from "./InternalEngineSettings";
 
 export function LlmConnectionsPage() {
   const { t } = useTranslation();
@@ -34,7 +34,6 @@ export function LlmConnectionsPage() {
   const updateProvider = useUpdateProvider();
   const deleteProvider = useDeleteProvider();
   const activateProvider = useActivateProvider();
-  const setInternalDefault = useSetInternalDefaultProvider();
 
   const [adding, setAdding] = useState(false);
   const [editTarget, setEditTarget] = useState<Provider | null>(null);
@@ -94,10 +93,8 @@ export function LlmConnectionsPage() {
                 <li key={p.name}>
                   <ConnectionCard
                     provider={p}
-                    internalPending={setInternalDefault.isPending}
                     activatePending={activateProvider.isPending}
                     deletePending={deleteProvider.isPending}
-                    onSetInternalDefault={(name) => setInternalDefault.mutate(name)}
                     onActivate={(name) => activateProvider.mutate(name)}
                     onEdit={(prov) => setEditTarget(prov)}
                     onDelete={(prov) => setDeleteTarget(prov)}
@@ -160,6 +157,11 @@ export function LlmConnectionsPage() {
           }
         }}
       />
+
+      {/* The internal-engine selection: which connection (endpoint + key) and
+          which model Coffer's own LLM engine runs on. A separate section, not a
+          per-card flag — model lives apart from the connection (spec 011). */}
+      <InternalEngineSettings providers={providers} />
 
       {/* Embedding is its own separate config (own shape with dimensions) — its
           own boxed card at the bottom, parallel to the connections card above. */}

@@ -519,8 +519,6 @@
       "empty": "暂无连接。",
       "switch": "切换",
       "active": "使用中",
-      "internalDefault": "内部引擎",
-      "setInternalDefault": "将「{{name}}」用作 Coffer 内部引擎",
       "deleteTitle": "删除连接",
       "deleteConfirm": "删除连接「{{name}}」？其保存的凭据也会一并删除。",
       "name": "名称",
@@ -532,6 +530,14 @@
       "model": "模型",
       "fastModel": "快速模型（可选）",
       "secret": "API Key"
+    },
+    "internalEngine": {
+      "title": "内部引擎",
+      "subtitle": "Coffer 自身的 LLM 引擎（记忆整理 / 重组 / 蒸馏 / coffer__ask）使用的连接与模型。连接提供接入地址与密钥，模型在此单独选择。",
+      "connection": "使用的连接",
+      "connectionPlaceholder": "选择连接",
+      "model": "模型",
+      "modelPlaceholder": "选择模型"
     }
   },
   "daemon": {

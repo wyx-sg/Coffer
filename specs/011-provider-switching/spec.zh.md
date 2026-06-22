@@ -64,7 +64,10 @@ OpenAI，所以协议在投射时由 agent 决定；模型则按 agent 槽 / 内
   只显示 **名称 + base_url + key + 「测试连接」**——无类型选择器、无模型字段。
 - **E3 — 模型在「使用处」现选。** 按 agent 绑定（Agent 页双槽 → `ANTHROPIC_MODEL` +
   `ANTHROPIC_SMALL_FAST_MODEL`）、内部引擎默认选择器、聊天面各自从所选连接拉取的模型里挑。
-  连接上不存模型。
+  连接上不存模型。**内部引擎模型**自成一个全局单例（一行），经
+  `GET`/`PUT /api/v1/internal-engine-config` 读写，审计为 `internal_engine_model_set`；
+  `resolve_internal_connection()` 在内部引擎构建 chat model 前，把该模型覆盖到解析出的
+  `internal_default` 连接上；过渡期内（E1 落地前）连接仍带 `model`，内部引擎模型为空时回退到连接的 model。
 - **E4 — 投射输入 = 连接（endpoint + key + protocol）+ 绑定（模型）。** 为某 agent 激活/投射
   时，从连接读 endpoint/key/protocol，从该 agent 的绑定读模型。某 agent 无绑定则不投射。
 - **E5 — 兼容性过滤 + 诚实兜底。** Agent 页只列出探测 `protocol` 与该 agent wire 匹配的连接；
@@ -374,6 +377,15 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **Given** connection A 为内部默认，
 - **When** 用户将 connection B 设为内部默认，
 - **Then** B 的 `internal_default` 变为 true，A 的变为 false（全局单一内部默认不变量）。
+
+### Scenario: choose the model the internal engine runs on
+
+- **Given** 某条 connection 为内部默认，
+- **When** 操作者在全局内部引擎配置上设置一个模型（`PUT
+  /api/v1/internal-engine-config`），
+- **Then** `GET /api/v1/internal-engine-config` 返回该模型，记下一条
+  `internal_engine_model_set` 审计条目，且 `resolve_internal_connection()` 将所选
+  模型覆盖到解析出的内部默认 connection 上（模型独立于 connection，见下方 amendment）。
 
 ### Scenario: test or fetch models with an inline unsaved secret
 

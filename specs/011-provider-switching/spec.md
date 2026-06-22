@@ -172,7 +172,13 @@ user to answer those questions too early and conflated the account with its uses
 - **E3 — Model is chosen at the point of use.** Per-agent binding (Agent page
   dual slots → `ANTHROPIC_MODEL` + `ANTHROPIC_SMALL_FAST_MODEL`), the
   internal-engine default selector, and the chat surface each pick a model from
-  the chosen connection's fetched models. No model lives on the connection.
+  the chosen connection's fetched models. No model lives on the connection. The
+  **internal-engine model** is its own global singleton (one row), read/written
+  via `GET`/`PUT /api/v1/internal-engine-config` and audited as
+  `internal_engine_model_set`. `resolve_internal_connection()` overlays that
+  model onto the resolved `internal_default` connection before the engine builds
+  its chat model; while the connection still carries a `model` (until E1 lands),
+  an empty internal-engine model falls back to the connection's model.
 - **E4 — Projection input = connection (endpoint + key + protocol) + the
   binding (model).** Activating/projecting a connection for an agent reads the
   endpoint/key/protocol from the connection and the model(s) from that agent's
@@ -631,6 +637,17 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 - **When** the user sets connection B as the internal default,
 - **Then** B's `internal_default` becomes true and A's becomes false (global
   single-internal-default invariant).
+
+### Scenario: choose the model the internal engine runs on
+
+- **Given** a connection is the internal default,
+- **When** the operator sets a model on the global internal-engine config
+  (`PUT /api/v1/internal-engine-config`),
+- **Then** `GET /api/v1/internal-engine-config` returns that model, an
+  `internal_engine_model_set` audit entry is recorded, and
+  `resolve_internal_connection()` overlays the chosen model onto the resolved
+  internal-default connection (the model lives apart from the connection, per
+  the amendment below).
 
 ## Requirements
 

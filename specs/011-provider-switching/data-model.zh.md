@@ -60,8 +60,20 @@ class WireApi(str, Enum):
 内部引擎 connection 由全局 `internal_default` 标志选择：
 
 - `ProviderService.set_internal_default(name)`——清除所有其他 connection 的 `internal_default`，再设置目标（顺序 clear-then-set，由单进程 daemon 串行化）；发出 `provider_internal_default_set`。
-- `ProviderService.resolve_internal_connection() -> ProviderConfig | None`——返回 `internal_default` connection 的 config，或 `None`（→ 内部引擎是干净的 no-op）。
+- `ProviderService.resolve_internal_connection() -> ProviderConfig | None`——返回 `internal_default` connection 的 config，或 `None`（→ 内部引擎是干净的 no-op）。当全局内部引擎模型（见下）已设置时，将其覆盖到解析出的 connection 上（`model_copy(update={"model": ...})`），使模型独立于 connection（ADR-032 E3）；内部引擎模型为空时，过渡期回退到 connection 自身的 `model`。
 - `build_chat_model(connection, ...)` 消费解析出的 connection，按 `wire_format`（anthropic / openai / ollama）分派，构建内部引擎的 chat model——取代已退役 `ModelConfig` 注册表的模型选择。
+
+#### `GlobalInternalEngineConfig`（`domain/internal_engine_config.py`）
+
+内部引擎**模型**是独立的全局单例（一行，固定 `SINGLETON_ID = 1`），与 connection 解耦：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `model` | `str \| None` | 内部引擎运行的模型；未选时为 `None`。 |
+| `updated_at` | `datetime` | 最后写入时间。 |
+
+- `InternalEngineConfigService.get()` 返回该行或未设置默认值（`model=None`）；`.update(model=...)` 去空白、空→`None`、持久化，并发出 `internal_engine_model_set` 审计事件。
+- 经 `SqlAlchemyInternalEngineConfigRepo`（表 `internal_engine_config`，alembic `0039`）存储；经 `GET`/`PUT /api/v1/internal-engine-config` 暴露。
 
 ### 每种 `wire_format` 的托管原生配置键
 

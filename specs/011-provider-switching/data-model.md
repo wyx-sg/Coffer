@@ -72,10 +72,29 @@ The internal-engine connection is selected by the global `internal_default` flag
   by the single-process daemon); emits `provider_internal_default_set`.
 - `ProviderService.resolve_internal_connection() -> ProviderConfig | None` —
   returns the `internal_default` connection's config, or `None` (→ the internal
-  engine is a clean no-op).
+  engine is a clean no-op). It overlays the global internal-engine model (below)
+  onto the resolved connection (`model_copy(update={"model": ...})`) when one is
+  set, so the model lives apart from the connection (ADR-032 E3); an empty
+  internal-engine model falls back to the connection's own `model` during rollout.
 - `build_chat_model(connection, ...)` consumes the resolved connection, dispatched
   by `wire_format` (anthropic / openai / ollama), to build the internal engine's
   chat model — replacing the retired `ModelConfig` registry's model selection.
+
+#### `GlobalInternalEngineConfig` (`domain/internal_engine_config.py`)
+
+The internal-engine MODEL is a separate global singleton (one row, fixed
+`SINGLETON_ID = 1`), decoupled from the connection:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `model` | `str \| None` | The model the internal engine runs on; `None` until chosen. |
+| `updated_at` | `datetime` | Last write. |
+
+- `InternalEngineConfigService.get()` returns the row or an unset default
+  (`model=None`); `.update(model=...)` trims/normalises empty → `None`, persists,
+  and emits an `internal_engine_model_set` audit event.
+- Stored via `SqlAlchemyInternalEngineConfigRepo` (table `internal_engine_config`,
+  alembic `0039`); exposed over `GET`/`PUT /api/v1/internal-engine-config`.
 
 ### Managed native-config keys per `wire_format`
 

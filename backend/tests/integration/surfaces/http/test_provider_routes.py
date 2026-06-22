@@ -428,3 +428,41 @@ def test_set_internal_default_clears_previous(tmp_path, monkeypatch):
         c.post("/api/v1/providers/second/internal-default")
         assert c.get("/api/v1/providers/second").json()["internal_default"] is True
         assert c.get("/api/v1/providers/first").json()["internal_default"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="011-provider-switching",
+    scenario="choose the model the internal engine runs on",
+)
+async def test_internal_engine_model_overlay(tmp_path, monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+
+    from coffer.surfaces.http.dependencies import get_audit_service, get_provider_service
+
+    app = _app(tmp_path, monkeypatch, 59880)
+    set_active_token(TOKEN)
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(
+            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
+        ) as c,
+    ):
+        await c.post("/api/v1/providers", json=_anthropic_body(name="acme", model="conn-model"))
+        await c.post("/api/v1/providers/acme/internal-default")
+
+        # Setting the internal-engine model returns it and persists.
+        r = await c.put("/api/v1/internal-engine-config", json={"model": "picked-model"})
+        assert r.status_code == 200, r.text
+        assert r.json()["model"] == "picked-model"
+        assert (await c.get("/api/v1/internal-engine-config")).json()["model"] == "picked-model"
+
+        # It is audited as internal_engine_model_set.
+        events = await get_audit_service().query(event_type="internal_engine_model_set")
+        assert len(events) >= 1
+
+        # resolve_internal_connection overlays the chosen model onto the connection
+        # (whose own model is "conn-model").
+        resolved = await get_provider_service().resolve_internal_connection()
+        assert resolved is not None
+        assert resolved.model == "picked-model"

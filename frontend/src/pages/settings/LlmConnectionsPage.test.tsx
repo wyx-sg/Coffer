@@ -42,6 +42,13 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useTestEmbedding: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
 }));
 
+// The internal-engine section reads/writes its own singleton config (network);
+// stub the hooks — this page test asserts the connection-selection wiring only.
+vi.mock("@/lib/hooks/useInternalEngine", () => ({
+  useInternalEngineConfig: () => ({ data: { model: null, updated_at: null } }),
+  useSetInternalEngineModel: () => ({ isPending: false, mutate: vi.fn() }),
+}));
+
 const { providersApi } = await import("@/lib/api/providers");
 const apiMock = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
@@ -61,6 +68,12 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => ({
   updated_at: "2026-01-01T00:00:00Z",
   ...overrides,
 });
+
+// Radix Select: open via keyboard (jsdom has no pointer layout) then read/click
+// the rendered options.
+function openSelect(triggerName: RegExp) {
+  fireEvent.keyDown(screen.getByRole("combobox", { name: triggerName }), { key: "ArrowDown" });
+}
 
 function renderPage() {
   const qc = new QueryClient({
@@ -200,8 +213,9 @@ describe("LlmConnectionsPage", () => {
       renderPage();
       await screen.findByText("b");
 
-      // the star toggle for "b" sets it as the internal-engine default
-      fireEvent.click(screen.getByRole("button", { name: /use "b" for/i }));
+      // the internal-engine section's connection dropdown sets "b" as the default
+      openSelect(/connection/i);
+      fireEvent.click(screen.getByRole("option", { name: "b" }));
       await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("b"));
     },
   );
@@ -210,8 +224,8 @@ describe("LlmConnectionsPage", () => {
     "011-provider-switching",
     "setting a new internal default clears the previous one",
     async () => {
-      // A is the internal default; the UI must not offer to re-set A (its toggle
-      // is disabled) and must allow setting B, which the backend makes exclusive.
+      // A is the internal default; the dropdown reflects A as selected and lets
+      // the operator switch to B, which the backend makes exclusive.
       apiMock.list.mockResolvedValue({
         providers: [
           makeProvider({ name: "A", internal_default: true }),
@@ -223,13 +237,11 @@ describe("LlmConnectionsPage", () => {
       );
 
       renderPage();
-      await screen.findByText("A");
-
-      // A already the internal default → its toggle is disabled (no re-set).
-      const aToggle = screen.getByRole("button", { name: /use "A" for/i });
-      expect(aToggle).toBeDisabled();
-      // Setting B clears A on the backend (single-internal-default invariant).
-      fireEvent.click(screen.getByRole("button", { name: /use "B" for/i }));
+      // The connection dropdown shows A as the current internal default.
+      expect(await screen.findByRole("combobox", { name: /connection/i })).toHaveTextContent("A");
+      // Selecting B clears A on the backend (single-internal-default invariant).
+      openSelect(/connection/i);
+      fireEvent.click(screen.getByRole("option", { name: "B" }));
       await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("B"));
     },
   );
