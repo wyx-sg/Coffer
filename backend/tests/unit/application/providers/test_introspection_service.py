@@ -8,11 +8,18 @@ from coffer.application.providers.ports import ModelIntrospectionService, Provid
 
 
 class _FakePort:
-    def __init__(self, models=None, fail=None, dim=None):  # type: ignore[no-untyped-def]
+    def __init__(self, models=None, fail=None, dim=None, protocol="openai"):  # type: ignore[no-untyped-def]
         self.models = models or []
         self.fail = fail
         self.dim = dim
+        self.protocol = protocol
         self.seen_key: str | None = "UNSET"
+
+    async def detect_protocol(self, *, base_url, api_key):  # type: ignore[no-untyped-def]
+        self.seen_key = api_key
+        if self.fail:
+            raise self.fail
+        return self.protocol
 
     async def list_models(self, *, provider, base_url, api_key):  # type: ignore[no-untyped-def]
         self.seen_key = api_key
@@ -149,3 +156,18 @@ async def test_acceptance_inline_unsaved_secret() -> None:
     assert listed.models == ["claude-opus-4-6"]
     assert tested.ok is True
     assert port.seen_key == "sk-ant-inline"
+
+
+async def test_detect_protocol_returns_port_classification() -> None:
+    port = _FakePort(protocol="openai")
+    got = await _svc(port).detect_protocol(
+        base_url="https://gw/v1", credential_ref=None, secret_value="sk-x"
+    )
+    assert got == "openai"
+    assert port.seen_key == "sk-x"  # inline secret reaches the probe
+
+
+async def test_detect_protocol_degrades_to_unknown_on_error() -> None:
+    port = _FakePort(fail=RuntimeError("boom"))
+    got = await _svc(port).detect_protocol(base_url="https://gw/v1", credential_ref="ref-x")
+    assert got == "unknown"  # never raises — agent page falls back to user choice

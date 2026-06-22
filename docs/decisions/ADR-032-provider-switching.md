@@ -178,9 +178,32 @@ Authoritative design: the [spec 011 Amendment 2026-06-22](../../specs/011-provid
   only for the outbound probe — it is never persisted by the introspection path
   (Decision B's store-ref-not-plaintext invariant is unchanged: the secret is
   saved to the Fernet vault only on connection create/update).
-- **Deviation from the block plan — the dialog keeps a model field.** The model
-  remains a required field on the connection entity (projected to
-  `ANTHROPIC_MODEL` / Codex `model`, per Decision D), so the dialog retains model
-  selection — upgraded to the `ProviderModelField` combobox (test/fetch +
-  dropdown + free text). Moving model selection onto the Agent page is the
-  separate two-slot concern tracked under D3.
+- **Deviation from the block plan — the dialog keeps a model field.**
+  *(SUPERSEDED by D9 below — model leaves the connection entirely; the dialog's
+  model field is removed.)* The model was kept on the connection through PR #206;
+  D9 reverses that.
+- **D8 — one gateway for two agents = two connections, not a multi-protocol
+  connection.** cc-switch (the closest comparable) has no multi-protocol
+  connection either — single-protocol providers + a "universal" scope. Dropping
+  the planned `protocol`-set + per-protocol projection + migration: one upstream
+  serving both Claude Code and Codex is two connections (the vault may store the
+  key twice — functionally identical; sharing one `credential_ref` is an internal
+  nicety, deliberately not surfaced as a reuse-UI). Proxy / hot-switch /
+  conversion stay non-goals — exactly what cc-switch needs a resident proxy for.
+- **D9 — a connection is a credentialed endpoint; model & protocol leave it.**
+  The connection slims to `{name, base_url, credential_ref, protocol}`. `model`,
+  `fast_model`, and the manual `wire_format` selector are REMOVED. `protocol` is
+  DETECTED by probing the endpoint (anthropic-wire / openai-wire / unknown) — the
+  add dialog shows only name + base_url + key + «测试连接». Model is chosen at the
+  point of use: the Agent page's dual slots (`ANTHROPIC_MODEL` +
+  `ANTHROPIC_SMALL_FAST_MODEL`), the internal-engine default selector, and the
+  chat surface — each from the chosen connection's fetched models. **Projection
+  input = connection (endpoint + key + protocol) + the agent binding (model).**
+  This REOPENS Decision A (model/wire on the connection). The Agent page filters
+  connections by detected protocol; an `unknown` protocol is shown to all agents
+  (no silent hiding). Migration is a clean discard: existing connections drop
+  `model`/`fast_model`; users re-select models on the Agent page. Why Claude Code
+  needs an anthropic-wire endpoint even for non-Anthropic models: it only speaks
+  the Anthropic Messages wire, so the endpoint must present it (native or via a
+  translating proxy) — verified against Claude Code's published gateway docs.
+  See spec 011 Amendment 2026-06-22b (E1–E5).

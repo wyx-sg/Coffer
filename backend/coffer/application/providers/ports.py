@@ -47,6 +47,13 @@ class ProviderIntrospectionPort(Protocol):
     ) -> int:
         """Return the embedding dimension; raise on failure."""
 
+    async def detect_protocol(self, *, base_url: str | None, api_key: str | None) -> str:
+        """Classify the endpoint's wire as 'anthropic'/'openai'/'ollama'/'unknown'.
+
+        Conservative: only assert anthropic/openai when a probe clearly succeeds;
+        ambiguity returns 'unknown' so the agent page falls back to user choice.
+        """
+
 
 class ModelIntrospectionService:
     """Resolves a credential ref then drives the introspection port.
@@ -129,3 +136,19 @@ class ModelIntrospectionService:
         return TestResult(
             ok=True, message=f"returned {dim}-dimensional embeddings", detail={"dimensions": dim}
         )
+
+    async def detect_protocol(
+        self,
+        *,
+        base_url: str | None,
+        credential_ref: str | None,
+        secret_value: str | None = None,
+    ) -> str:
+        # Classify the endpoint's wire so the connection needs no manual type
+        # selector (ADR-032 D9). Never raises — a failed probe degrades to
+        # 'unknown', which the agent page surfaces to all agents (E5).
+        try:
+            key = self._key_for("", credential_ref, secret_value)
+            return await self._port.detect_protocol(base_url=base_url, api_key=key)
+        except Exception:
+            return "unknown"

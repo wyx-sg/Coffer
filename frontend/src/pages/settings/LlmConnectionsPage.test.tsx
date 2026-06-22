@@ -28,6 +28,20 @@ vi.mock("./EmbeddingSettings", () => ({
   EmbeddingSettings: () => <div data-testid="embedding-settings" />,
 }));
 
+// The dialog's introspection (detect / test / fetch) hits the network; stub the
+// hooks. `detect` synchronously resolves to a protocol so the create flow works.
+let detectResult = "openai";
+vi.mock("@/lib/hooks/useModelIntrospection", () => ({
+  useDetectProtocol: () => ({
+    isPending: false,
+    mutate: (_p: unknown, o?: { onSuccess?: (r: { protocol: string }) => void }) =>
+      o?.onSuccess?.({ protocol: detectResult }),
+  }),
+  useListProviderModels: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
+  useTestConnection: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
+  useTestEmbedding: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
+}));
+
 const { providersApi } = await import("@/lib/api/providers");
 const apiMock = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
@@ -64,6 +78,7 @@ function renderPage() {
 describe("LlmConnectionsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    detectResult = "openai";
   });
 
   acceptance(
@@ -98,6 +113,32 @@ describe("LlmConnectionsPage", () => {
     },
   );
 
+  test("create falls back to a manual type pick when detection is inconclusive", async () => {
+    detectResult = "unknown";
+    apiMock.list.mockResolvedValue({ providers: [] });
+    apiMock.create.mockResolvedValue(makeProvider({ name: "myconn", wire_format: "openai" }));
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Add connection/i }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "myconn" } });
+    fireEvent.change(screen.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
+    const key = screen.getByLabelText("API key");
+    fireEvent.change(key, { target: { value: "sk-x" } });
+    fireEvent.blur(key); // detection runs → "unknown" → manual select appears
+
+    const sel = screen.getByLabelText("Connection type");
+    fireEvent.change(sel, { target: { value: "openai" } });
+    fireEvent.change(screen.getByLabelText("Model ID"), { target: { value: "gpt-4o" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
+    expect(apiMock.create.mock.calls[0][0]).toMatchObject({
+      name: "myconn",
+      wire_format: "openai",
+      secret_value: "sk-x",
+    });
+  });
+
   acceptance(
     "011-provider-switching",
     "create an ollama connection without a credential",
@@ -112,18 +153,19 @@ describe("LlmConnectionsPage", () => {
         }),
       );
 
+      detectResult = "ollama";
       renderPage();
       // open the add dialog
       fireEvent.click(await screen.findByRole("button", { name: /Add connection/i }));
 
-      // choose the ollama wire — the credential field disappears
-      fireEvent.change(screen.getByLabelText("Wire format"), { target: { value: "ollama" } });
+      fireEvent.change(screen.getByLabelText("Name"), { target: { value: "local-llm" } });
+      // entering the base URL auto-detects the wire (→ ollama); blur triggers it
+      const base = screen.getByLabelText("Base URL");
+      fireEvent.change(base, { target: { value: "http://localhost:11434" } });
+      fireEvent.blur(base);
+      // ollama needs no key — the credential field disappears once detected
       expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
 
-      fireEvent.change(screen.getByLabelText("Name"), { target: { value: "local-llm" } });
-      fireEvent.change(screen.getByLabelText("Base URL"), {
-        target: { value: "http://localhost:11434" },
-      });
       fireEvent.change(screen.getByLabelText("Model ID"), { target: { value: "llama3" } });
       fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -202,9 +244,9 @@ describe("LlmConnectionsPage", () => {
     // open the edit dialog from the card
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
 
-    // name + wire are fixed (resource id / projection target)
+    // name is fixed (resource id); the wire is shown read-only (no detect/edit)
     expect((screen.getByLabelText("Name") as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByLabelText("Wire format") as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Detect type" })).not.toBeInTheDocument();
     // the secret is optional in edit mode (no value re-entry required)
     expect((screen.getByLabelText("API key") as HTMLInputElement).required).toBe(false);
 

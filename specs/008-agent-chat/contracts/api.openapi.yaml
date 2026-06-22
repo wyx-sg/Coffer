@@ -368,6 +368,32 @@ paths:
                   message: { type: string }
                   detail: { type: object, additionalProperties: true }
 
+  /api/v1/models/detect-protocol:
+    post:
+      summary: Detect an endpoint's wire protocol (no manual type selector)
+      operationId: detectProviderProtocol
+      tags: [models]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                base_url: { type: string, nullable: true }
+                credential_ref: { type: string, nullable: true }
+                secret_value: { type: string, nullable: true, description: inline secret to probe before the connection is saved }
+      responses:
+        '200':
+          description: Detected wire (anthropic/openai/ollama/unknown); unknown ⇒ user picks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [protocol]
+                properties:
+                  protocol: { type: string, enum: [anthropic, openai, ollama, unknown] }
+
 components:
   securitySchemes:
     bearerAuth:
