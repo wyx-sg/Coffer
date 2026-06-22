@@ -6,6 +6,7 @@ Pure value-level logic: the per-type layout table and the lossy slug decoder.
 from __future__ import annotations
 
 from coffer.domain.agent.native_memory import (
+    CodexGlobalLayout,
     NativeMemoryLayout,
     decode_project_slug,
     native_memory_layout_for,
@@ -19,8 +20,9 @@ def test_layout_for_claude_code_is_projects_memory() -> None:
     assert layout == NativeMemoryLayout(projects_subdir="projects", memory_subdir="memory")
 
 
-def test_layout_for_codex_is_none() -> None:
-    assert native_memory_layout_for(AgentType.CODEX) is None
+def test_layout_for_codex_is_global_task_grouped() -> None:
+    layout = native_memory_layout_for(AgentType.CODEX)
+    assert layout == CodexGlobalLayout(memory_subdir="memories", index_file="MEMORY.md")
 
 
 def test_decode_absolute_slug() -> None:

@@ -22,6 +22,7 @@ from coffer.application.memory.stores import store_name_for
 from coffer.domain.agent.native_memory import ParsedNativeFact
 from coffer.domain.memory.config import MAX_FACT_CHARS
 from coffer.domain.memory.scope import MemoryScope
+from coffer.infrastructure.agent.codex_memory_store import read_codex_facts
 from coffer.infrastructure.agent.native_memory_import import (
     read_memory_facts,
     resolve_project_path,
@@ -47,6 +48,11 @@ class _Reader:
         from pathlib import Path
 
         return resolve_project_path(Path(memory_dir))
+
+    def read_codex_facts(self, memory_dir: str, project_path: str) -> list[ParsedNativeFact]:
+        from pathlib import Path
+
+        return read_codex_facts(Path(memory_dir), project_path, "MEMORY.md")
 
 
 class _ImportSink:

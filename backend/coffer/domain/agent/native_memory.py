@@ -4,8 +4,10 @@ Distinct from the curated config-file allowlist (``config_files.py``, which
 covers instructions like ``CLAUDE.md``) and from Coffer's own knowledge/memory
 substrate. Claude Code keeps a per-project memory store at
 ``<config_dir>/projects/<slug>/memory/*.md`` — a directory of individual fact
-files plus a ``MEMORY.md`` index. Codex and the other supported agents have no
-known native per-project memory layout, so they expose nothing here.
+files plus a ``MEMORY.md`` index. Codex instead keeps a single *global*
+task-grouped store (``memories/MEMORY.md``, see :class:`CodexGlobalLayout` and
+``codex_memory``); the other supported agents have no known native memory layout
+and expose nothing here.
 
 This module is pure value-level logic: the per-type layout table and a lossy
 slug decoder. The on-disk ``memory_dir`` is the real identity of a store; the
@@ -16,8 +18,27 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from coffer.domain.agent.types import AgentType
+
+
+class ScannedStore(NamedTuple):
+    """Raw result of scanning one native-memory store on disk.
+
+    ``project_path`` is the store's *real* project directory when the infra
+    adapter could recover it (e.g. from a session transcript's ``cwd`` field);
+    ``None`` when unknown, in which case the caller decodes a best-effort path
+    from ``slug``. The slug encoding is lossy (Claude Code collapses ``/``,
+    ``.``, ``_`` all to ``-``), so the decoded path is wrong whenever a path
+    segment or the home dir contained one of those characters — hence the
+    cwd-derived ``project_path`` is preferred when available.
+    """
+
+    slug: str
+    memory_dir: str
+    item_count: int
+    project_path: str | None
 
 
 @dataclass(frozen=True)
@@ -29,15 +50,33 @@ class NativeMemoryLayout:
     memory_subdir: str
 
 
-def native_memory_layout_for(agent_type: AgentType) -> NativeMemoryLayout | None:
+@dataclass(frozen=True)
+class CodexGlobalLayout:
+    """Codex's single *global* task-grouped memory store, at
+    ``<config_dir>/<memory_subdir>/<index_file>`` (``~/.codex/memories/MEMORY.md``).
+
+    Unlike the per-project :class:`NativeMemoryLayout`, one document routes many
+    projects via per-Task-Group ``cwd`` annotations (see
+    ``coffer.domain.agent.codex_memory.parse_codex_memory``). The infrastructure
+    layer parses it into one store row per distinct cwd."""
+
+    memory_subdir: str
+    index_file: str
+
+
+def native_memory_layout_for(
+    agent_type: AgentType,
+) -> NativeMemoryLayout | CodexGlobalLayout | None:
     """The native-memory layout for ``agent_type``, or ``None`` if it has none.
 
-    Only Claude Code has a known per-project memory layout
-    (``projects/<slug>/memory``). Every other agent type returns ``None`` →
-    the caller surfaces an empty list.
+    Claude Code has a per-project layout (``projects/<slug>/memory``); Codex has
+    a single global task-grouped store (``memories/MEMORY.md``). Every other
+    agent type returns ``None`` → the caller surfaces an empty list.
     """
     if agent_type is AgentType.CLAUDE_CODE:
         return NativeMemoryLayout(projects_subdir="projects", memory_subdir="memory")
+    if agent_type is AgentType.CODEX:
+        return CodexGlobalLayout(memory_subdir="memories", index_file="MEMORY.md")
     return None
 
 

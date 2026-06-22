@@ -56,13 +56,16 @@ export interface HookInstallStatus {
 
 /** One of the agent's OWN native per-project memory stores (read-only scan). */
 export interface NativeMemoryStore {
-  /** Best-effort readable project label (the project dir's basename). */
+  /** Readable project label (the project dir's basename). */
   project: string;
-  /** Best-effort decoded absolute project path, or null when undecodable. */
+  /** The real project path: Claude Code's resolved project dir, or — for Codex's
+   * global store — the cwd this row's memories are routed to. Null if unresolved. */
   path: string | null;
-  /** Absolute path to the agent's native memory directory (the real identity). */
+  /** Absolute path to the agent's native memory directory. For Claude Code this is
+   * per-project; for Codex every row shares the one global memories dir. */
   memory_dir: string;
-  /** Number of memory items (.md files, excluding the MEMORY.md index). */
+  /** Number of memory entries (Claude Code fact files / an inline MEMORY.md /
+   * Codex Task Groups routed to this project). */
   item_count: number;
 }
 
@@ -269,8 +272,12 @@ export const agentsApi = {
   // Native memory: the agent's OWN per-project memory stores (read-only scan).
   nativeMemory: (name: string) =>
     call<NativeMemoryListResponse>("GET", `/agents/${enc(name)}/native-memory`),
-  importNativeMemory: (name: string, memoryDir: string) =>
+  // `projectPath` selects which entries to import for Codex's shared global
+  // store (one store, many project rows); ignored for Claude Code, where
+  // `memoryDir` alone identifies the project.
+  importNativeMemory: (name: string, memoryDir: string, projectPath: string | null = null) =>
     call<NativeMemoryImportResult>("POST", `/agents/${enc(name)}/native-memory/import`, {
       memory_dir: memoryDir,
+      project_path: projectPath,
     }),
 };

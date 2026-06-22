@@ -85,15 +85,21 @@ function ImportButton({ agentName, store }: { agentName: string; store: NativeMe
       variant="outline"
       disabled={importMut.isPending}
       onClick={() =>
-        importMut.mutate(store.memory_dir, {
-          onSuccess: (r) =>
-            r.store
-              ? toast.success(
-                  t("agents.memoryTab.importDone", { count: r.imported, project: store.project }),
-                )
-              : toast.error(t("agents.memoryTab.importNoProject", { project: store.project })),
-          onError: (e) => toast.error(translateApiError(t, e)),
-        })
+        importMut.mutate(
+          { memoryDir: store.memory_dir, projectPath: store.path },
+          {
+            onSuccess: (r) =>
+              r.store
+                ? toast.success(
+                    t("agents.memoryTab.importDone", {
+                      count: r.imported,
+                      project: store.project,
+                    }),
+                  )
+                : toast.error(t("agents.memoryTab.importNoProject", { project: store.project })),
+            onError: (e) => toast.error(translateApiError(t, e)),
+          },
+        )
       }
     >
       {importMut.isPending ? t("agents.memoryTab.importing") : t("agents.memoryTab.import")}
@@ -136,9 +142,12 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
     {
       key: "path",
       header: t("agents.memoryTab.colPath"),
+      // Prefer the real project path; for Codex every row shares one memory_dir,
+      // so the cwd in `path` is what distinguishes (and is more useful than the
+      // internal memory folder for Claude Code too).
       cell: (s) => (
         <span className="line-clamp-1 max-w-md font-mono text-xs text-muted-foreground">
-          {s.memory_dir}
+          {s.path ?? s.memory_dir}
         </span>
       ),
     },
@@ -196,9 +205,10 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
           <DataTable
             rows={native.data?.items ?? []}
             columns={columns}
-            rowKey={(s) => s.memory_dir}
+            // Codex rows share one memory_dir, so key by the routed project too.
+            rowKey={(s) => `${s.memory_dir}::${s.path ?? s.project}`}
             search={{
-              accessor: (s) => `${s.project} ${s.memory_dir}`,
+              accessor: (s) => `${s.project} ${s.path ?? ""} ${s.memory_dir}`,
               placeholder: t("agents.memoryTab.searchPlaceholder"),
             }}
             selection={{

@@ -248,7 +248,8 @@ export function useAgentNativeMemory(name: string) {
 export function useImportNativeMemory(agentName: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (memoryDir: string) => agentsApi.importNativeMemory(agentName, memoryDir),
+    mutationFn: ({ memoryDir, projectPath }: { memoryDir: string; projectPath: string | null }) =>
+      agentsApi.importNativeMemory(agentName, memoryDir, projectPath),
     onSuccess: () => {
       // Imported facts land in a Coffer store (+ organize) — refresh the store
       // list so the Memory page reflects the new content.

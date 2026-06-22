@@ -60,15 +60,24 @@ def import_native_memory(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Agent name"),
     memory_dir: str = typer.Argument(..., help="Absolute path to the native memory store"),
+    project_path: str | None = typer.Option(
+        None,
+        "--project-path",
+        help="For Codex's shared global store, the project cwd whose entries to import "
+        "(use the 'Path' column from `native-memory`). Ignored for Claude Code.",
+    ),
 ) -> None:
     """Adopt one native memory store into the matching Coffer project memory.
 
     A store that cannot be mapped to a Coffer project (not a git project, or an
     unresolvable path) yields a zero-import result, never an error.
     """
+    body: dict[str, str | None] = {"memory_dir": memory_dir}
+    if project_path is not None:
+        body["project_path"] = project_path
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/agents/{name}/native-memory/import", json={"memory_dir": memory_dir})
+        r = c.post(f"/agents/{name}/native-memory/import", json=body)
         if r.status_code == 404:
             typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
             raise typer.Exit(4)
