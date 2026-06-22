@@ -142,7 +142,6 @@ export interface FactOut {
   name: string;
   description: string;
   text: string;
-  type?: string | null;
   actor: MemoryActor;
   origin_session_id?: string | null;
   /** Absolute on-disk path of the fact's Markdown file (FileActions). */
@@ -177,5 +176,4 @@ export interface FactInput {
   text: string;
   name?: string | null;
   description?: string | null;
-  type?: string | null;
 }

@@ -555,11 +555,6 @@ components:
             nullable: true,
             description: Frontmatter one-line description.,
           }
-        type:
-          type: string
-          nullable: true
-          example: project
-          description: metadata.type (project / feedback / reference / user / ...).
 
     FactUpdate:
       type: object
@@ -568,7 +563,6 @@ components:
         text: { type: string, minLength: 1, maxLength: 32768 }
         name: { type: string, nullable: true }
         description: { type: string, nullable: true }
-        type: { type: string, nullable: true }
 
     FactOut:
       type: object
@@ -593,7 +587,6 @@ components:
         name: { type: string }
         description: { type: string }
         text: { type: string, description: Markdown body. }
-        type: { type: string, nullable: true }
         actor: { type: string, enum: [agent, user] }
         origin_session_id: { type: string, nullable: true }
         path:

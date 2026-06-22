@@ -3,7 +3,8 @@
 // Zod schemas for the redesigned `memory` kind (spec 007). Stores are
 // auto-provisioned, so there is no create form. There is NO llm_provider:
 // facts are written directly. We pin the mutable store-config patch shape and
-// the add-fact form (name/description/body/type).
+// the add-fact form (name/description/body). There is no `type` — Lane is the
+// only memory taxonomy (spec 007 FR-048).
 import { z } from "zod";
 
 export const retrievalModeSchema = z.enum(["grep", "keyword", "vector"]);
@@ -23,7 +24,6 @@ export const addFactFormSchema = z.object({
   text: z.string().min(1, "fact text required").max(32768),
   name: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
-  type: z.string().nullable().optional(),
 });
 
 export type AddFactFormInput = z.input<typeof addFactFormSchema>;

@@ -26,7 +26,6 @@ def _write_fact(
     *,
     name: str | None = None,
     description: str | None = None,
-    type_: str | None = None,
     origin: str | None = None,
     body: str = "body text",
 ) -> None:
@@ -35,8 +34,6 @@ def _write_fact(
         lines.append(f"name: {name}")
     if description is not None:
         lines.append(f"description: {description}")
-    if type_ is not None:
-        lines.append(f"type: {type_}")
     if origin is not None:
         lines.append(f"originSessionId: {origin}")
     lines.append("---")
@@ -53,7 +50,6 @@ def test_read_memory_facts_parses_and_skips_index(tmp_path: pathlib.Path) -> Non
         "a.md",
         name="Alpha fact",
         description="alpha desc",
-        type_="working-state",
         origin="sess-1",
         body="alpha body",
     )
@@ -70,14 +66,12 @@ def test_read_memory_facts_parses_and_skips_index(tmp_path: pathlib.Path) -> Non
 
     alpha = by_name["Alpha fact"]
     assert alpha.description == "alpha desc"
-    assert alpha.type == "working-state"
     assert alpha.origin_session_id == "sess-1"
     assert alpha.body == "alpha body"
 
-    # b.md has no `name` → fall back to filename stem; missing type/origin → None.
+    # b.md has no `name` → fall back to filename stem; missing origin → None.
     beta = by_name["b"]
     assert beta.description == "beta desc"
-    assert beta.type is None
     assert beta.origin_session_id is None
     assert beta.body == "beta body"
 

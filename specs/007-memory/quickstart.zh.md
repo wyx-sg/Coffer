@@ -9,7 +9,7 @@ memory 是 Coffer 统一知识底座的 **memory 面**。事实是 markdown 文�
 出现五个内置工具（无需 store 引用 —— 作用域由 agent 的工作目录解析）：
 
 - `coffer__recall(query, scope?, mode?, top_k?)` —— 搜索 project + global 记忆（默认两者；`mode` 为 `grep` | `keyword` | `vector`）。
-- `coffer__remember(text, scope?, type?)` —— 保存一条事实（默认 `scope=project`）。
+- `coffer__remember(text, scope?)` —— 保存一条事实（默认 `scope=project`）。
 - `coffer__set_handoff(body)` —— 保存当前工作现场（按 project + 分支）。
 - `coffer__resume()` —— 返回当前 project + 分支已保存的工作现场。
 - `coffer__list_memory(scope?)` —— 浏览。

@@ -100,16 +100,16 @@ def resolve_project_slug(slug: str, exists: Callable[[str], bool]) -> tuple[str,
 class ParsedNativeFact:
     """One native-memory fact file parsed into the fields a memory write needs.
 
-    Pure value object: the ``name``/``description``/``type``/``originSessionId``
+    Pure value object: the ``name``/``description``/``originSessionId``
     frontmatter (with the body) of a single ``projects/<slug>/memory/*.md`` file,
     normalised so the import service can hand it straight to a memory write. Lives
     in ``domain`` so the application layer can name it without importing the infra
-    parser (Contract 2b)."""
+    parser (Contract 2b). A native ``type`` frontmatter key, if present, is ignored
+    on import — ``Lane`` is the only memory taxonomy (spec 007 FR-048)."""
 
     name: str
     description: str
     body: str
-    type: str | None
     origin_session_id: str | None
 
 

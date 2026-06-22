@@ -55,8 +55,6 @@ def fact_body_sha256(body: str) -> str:
 def render_fact_markdown(fact: MemoryFact) -> str:
     """Render a fact to its on-disk ``<slug>.md`` form (frontmatter + body)."""
     metadata: dict[str, object] = {"actor": fact.actor}
-    if fact.type is not None:
-        metadata["type"] = fact.type
     frontmatter: dict[str, object] = {
         "id": fact.id,
         "name": fact.name,
@@ -84,7 +82,6 @@ def parse_fact_markdown(text: str, *, fallback_id: str, mtime: datetime) -> Memo
     metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
     actor_raw = str(metadata.get("actor", "user"))
     actor: Actor = "agent" if actor_raw == "agent" else "user"
-    fact_type = metadata.get("type")
     name = str(fm.get("name") or fallback_id)
     description = str(fm.get("description") or _first_line(body))
     created = _parse_dt(fm.get("created_at"), default=mtime)
@@ -95,7 +92,6 @@ def parse_fact_markdown(text: str, *, fallback_id: str, mtime: datetime) -> Memo
         description=description,
         body=body.strip(),
         actor=actor,
-        type=str(fact_type) if fact_type is not None else None,
         origin_session_id=(
             str(fm["origin_session_id"]) if fm.get("origin_session_id") is not None else None
         ),

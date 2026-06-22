@@ -9,7 +9,7 @@ Memory is the **memory face** of Coffer's unified knowledge substrate. Facts are
 Five built-in tools appear (no store reference needed — scope is resolved from the agent's working directory):
 
 - `coffer__recall(query, scope?, mode?, top_k?)` — search project + global memory (default: both; `mode` is `grep` | `keyword` | `vector`).
-- `coffer__remember(text, scope?, type?)` — save a fact (default `scope=project`).
+- `coffer__remember(text, scope?)` — save a fact (default `scope=project`).
 - `coffer__set_handoff(body)` — save the current working state for this project + branch.
 - `coffer__resume()` — return the saved working-state handoff for this project + branch.
 - `coffer__list_memory(scope?)` — browse.

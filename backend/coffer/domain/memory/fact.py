@@ -23,5 +23,4 @@ class MemoryFact:
     actor: Actor
     created_at: datetime
     updated_at: datetime
-    type: str | None = None
     origin_session_id: str | None = None

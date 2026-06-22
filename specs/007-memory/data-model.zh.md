@@ -35,7 +35,6 @@ frozen dataclass；一个每条事实 markdown 文件（frontmatter + 正文）�
 | `name`              | `str`                     | frontmatter `name`（短标题）。                                            |
 | `description`       | `str`                     | frontmatter `description`（一行摘要）。                                   |
 | `body`              | `str`                     | markdown 正文 = 事实文本。                                                 |
-| `type`              | `str \| None`             | frontmatter `metadata.type`（`project`/`feedback`/`reference`/`user`/…）。 |
 | `actor`             | `Literal["agent","user"]` | frontmatter `metadata.actor` —— 谁写的。                                   |
 | `origin_session_id` | `str \| None`             | frontmatter `origin_session_id`。                                          |
 | `created_at`        | `datetime`                | UTC。                                                                      |
@@ -99,7 +98,7 @@ CREATE TABLE documents (
     path           TEXT NOT NULL,               -- canonical .md path on disk = truth
     title          TEXT NOT NULL,               -- memory: frontmatter `name`
     description    TEXT,                         -- memory: frontmatter `description`
-    metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {type, actor, origin_session_id}
+    metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {actor, origin_session_id}
     content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
     source_mode    TEXT NOT NULL DEFAULT 'native', -- memory: 'native'
     locked         BOOLEAN NOT NULL DEFAULT 0,  -- KB co-management lock (ADR-028); memory ignores it
@@ -136,7 +135,7 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 
 document 删除时的级联是**应用层的**（索引的 `delete_chunks` + 仓储的 `delete_document`/`delete_resource`），不是 SQL 外键，因为 `documents` 表由两个面共享。
 
-memory 面的 `documents.metadata` 经 Pydantic 校验为 `{type, actor, origin_session_id}`。按工程惯例，metadata JSON 用 `model_dump(mode="json")` 构造，使 `datetime`/`AnyUrl` 值能序列化进 SQLite。
+memory 面的 `documents.metadata` 经 Pydantic 校验为 `{actor, origin_session_id}`。按工程惯例，metadata JSON 用 `model_dump(mode="json")` 构造，使 `datetime`/`AnyUrl` 值能序列化进 SQLite。
 
 ### Store 展示侧表
 
@@ -190,7 +189,6 @@ CREATE TABLE memory_store_labels (
 name: deploy-via-make-release
 description: This repo deploys via `make release`, never git push --tags directly.
 metadata:
-  type: project
   actor: agent
 origin_session_id: 01J...
 created_at: 2026-06-09T10:11:12+00:00
@@ -249,18 +247,9 @@ memory 对账器向该例程提供自己的**分块器**（见 FR-032）：共�
 
 对话记录提炼是 memory 事实的一个**生产者** —— 它复用现有的 `MemoryFact` 底座（不新增表，不新增资源 kind）。
 
-### 洞察类型
+### 洞察不分类（无 type）
 
-一次 LLM 调用返回一个洞察数组，每条洞察的 `type` 取自封闭词汇表：
-
-| `type`       | 含义                                       |
-| ------------ | ------------------------------------------ |
-| `decision`   | 会话中做出的蓄意架构或实现决策。           |
-| `gotcha`     | 会话中发现的非显然陷阱、失效模式或约束。   |
-| `convention` | 项目特定的实践或风格规范，今后应当遵循。   |
-| `todo`       | 会话中未解决的显式行动项或悬而未决的问题。 |
-
-每条洞察成为一个 `MemoryFact`，`actor="agent"`（由自动化提炼写入，非人工），`type` 存于 `metadata.type`。
+一次 LLM 调用返回一个洞察数组，每条洞察仅携带 `name` / `description` / `body` —— 蒸馏保持“笨”,MUST NOT 为每条洞察分类 `type`（旧的 `InsightType` 词汇 `decision` / `gotcha` / `convention` / `todo` 被废弃 —— FR-045）。每条洞察以 `actor="agent"` 追加到会话所属项目的 **journal** 记忆带（情景），而非带 type 的 `knowledge/` 事实；把复现的 journal 模式固化进 `knowledge`/`rules` 是 organizer 的职责（固化 —— FR-047）。`Lane` 是唯一分类轴（FR-048）；不存在自由格式的 `type`。
 
 ### 出处 —— `origin_session_id`
 
@@ -273,7 +262,6 @@ memory 对账器向该例程提供自己的**分块器**（见 FR-032）：共�
 name: use-make-release-for-tagging
 description: Always tag and push via make release; never git push --tags directly.
 metadata:
-  type: decision
   actor: agent
 origin_session_id: 01JXYZ…
 created_at: 2026-06-14T08:00:00+00:00

@@ -29,7 +29,6 @@ async def test_remember_project_fact_writes_file_and_index(mem) -> None:
         description="deploys via make release",
         body="This repo deploys via make release, never git push --tags.",
         actor="agent",
-        type="project",
     )
     store = _project_store(mem)
     # The per-item file exists under the knowledge/ lane's inbox with frontmatter.

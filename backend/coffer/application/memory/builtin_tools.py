@@ -86,7 +86,6 @@ def register_memory_builtin_tools(
             description=str(args.get("description", "")),
             body=text,
             actor="agent",
-            type=str(args["type"]) if args.get("type") else None,
             origin_session_id=str(args["origin_session_id"])
             if args.get("origin_session_id")
             else None,
@@ -109,7 +108,6 @@ def register_memory_builtin_tools(
                     "id": f.id,
                     "name": f.name,
                     "description": f.description,
-                    "type": f.type,
                     "actor": f.actor,
                 }
                 for f in facts
@@ -165,7 +163,6 @@ def register_memory_builtin_tools(
                 "properties": {
                     "text": {"type": "string"},
                     "scope": {"type": "string", "enum": ["project", "global"]},
-                    "type": {"type": "string"},
                     "name": {"type": "string"},
                     "description": {"type": "string"},
                     "cwd": {"type": "string"},

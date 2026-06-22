@@ -35,7 +35,6 @@ Frozen dataclass; the in-memory view of one per-fact markdown file (frontmatter 
 | `name`              | `str`                     | Frontmatter `name` (short title).                                        |
 | `description`       | `str`                     | Frontmatter `description` (one-line).                                    |
 | `body`              | `str`                     | Markdown body = the fact text.                                           |
-| `type`              | `str \| None`             | Frontmatter `metadata.type` (`project`/`feedback`/`reference`/`user`/…). |
 | `actor`             | `Literal["agent","user"]` | Frontmatter `metadata.actor` — who wrote it.                             |
 | `origin_session_id` | `str \| None`             | Frontmatter `origin_session_id`.                                         |
 | `created_at`        | `datetime`                | UTC.                                                                     |
@@ -99,7 +98,7 @@ CREATE TABLE documents (
     path           TEXT NOT NULL,               -- canonical .md path on disk = truth
     title          TEXT NOT NULL,               -- memory: frontmatter `name`
     description    TEXT,                         -- memory: frontmatter `description`
-    metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {type, actor, origin_session_id}
+    metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {actor, origin_session_id}
     content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
     source_mode    TEXT NOT NULL DEFAULT 'native', -- memory: 'native'
     locked         BOOLEAN NOT NULL DEFAULT 0,  -- KB co-management lock (ADR-028); memory ignores it
@@ -136,7 +135,7 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 
 The cascade on document delete is **application-level** (the index's `delete_chunks` + the repo's `delete_document`/`delete_resource`), not a SQL FK, because the `documents` table is shared by both faces.
 
-`documents.metadata` for the memory face is Pydantic-validated as `{type, actor, origin_session_id}`. Per the engineering convention, the metadata JSON is built with `model_dump(mode="json")` so `datetime`/`AnyUrl` values serialize for SQLite.
+`documents.metadata` for the memory face is Pydantic-validated as `{actor, origin_session_id}`. Per the engineering convention, the metadata JSON is built with `model_dump(mode="json")` so `datetime`/`AnyUrl` values serialize for SQLite.
 
 ### Store display side-tables
 
@@ -192,7 +191,6 @@ Per-fact `.md` frontmatter:
 name: deploy-via-make-release
 description: This repo deploys via `make release`, never git push --tags directly.
 metadata:
-  type: project
   actor: agent
 origin_session_id: 01J...
 created_at: 2026-06-09T10:11:12+00:00
@@ -251,18 +249,9 @@ When a vector-enabled store's embed degrades (embedding provider unavailable), t
 
 Transcript distillation is a **producer of memory facts** — it uses the existing `MemoryFact` substrate (no new tables, no new resource kind).
 
-### Insight types
+### Insights are untyped (no classification)
 
-The one-shot LLM call returns a JSON array of insights, each with a `type` drawn from a closed vocabulary:
-
-| `type`       | Meaning                                                                          |
-| ------------ | -------------------------------------------------------------------------------- |
-| `decision`   | A deliberate architectural or implementation choice made during the session.     |
-| `gotcha`     | A non-obvious failure mode, trap, or constraint discovered during the session.   |
-| `convention` | A project-specific practice or style rule that should be followed going forward. |
-| `todo`       | An explicit action item or open question that was not resolved in the session.   |
-
-Each insight becomes a `MemoryFact` with `actor="agent"` (written by automated distillation, not by a human) and the `type` stored in `metadata.type`.
+The one-shot LLM call returns a JSON array of insights, each carrying only `name` / `description` / `body` — distillation stays "dumb" and MUST NOT classify a per-insight `type` (the legacy `InsightType` vocabulary `decision` / `gotcha` / `convention` / `todo` is retired — FR-045). Each insight is appended to the session's project **journal** lane (episodic) with `actor="agent"`, never a typed `knowledge/` fact; promotion of recurring journal patterns into `knowledge`/`rules` is the organizer's job (固化 — FR-047). `Lane` is the single classification axis (FR-048); there is no free-form `type`.
 
 ### Provenance — `origin_session_id`
 
@@ -275,7 +264,6 @@ Example fact frontmatter for a distilled insight:
 name: use-make-release-for-tagging
 description: Always tag and push via make release; never git push --tags directly.
 metadata:
-  type: decision
   actor: agent
 origin_session_id: 01JXYZ…
 created_at: 2026-06-14T08:00:00+00:00
