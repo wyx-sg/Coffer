@@ -45,9 +45,9 @@ export function SkillFileViewer({ name, path }: { name: string; path: string }) 
 
   if (content.data?.binary) {
     return (
-      <div className="flex h-full flex-col space-y-2">
+      <div className="space-y-2">
         {header}
-        <div className="flex min-h-0 flex-1 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+        <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
           {t("skills.files.binary", { size: content.data.size })}
         </div>
       </div>
@@ -58,20 +58,18 @@ export function SkillFileViewer({ name, path }: { name: string; path: string }) 
   const truncated = content.data?.truncated ?? false;
 
   return (
-    <div className="flex h-full flex-col space-y-2">
+    <div className="space-y-2">
       {header}
 
+      {/* Preview grows with content but is capped at 60vh and scrolls inside
+          (both axes) — same as the knowledge-base doc viewer, so it never
+          exceeds the window and adapts to the window size. */}
       {isMarkdown(path) ? (
-        <FindableMarkdown className="min-h-0 flex-1 overflow-auto rounded border bg-background p-3">
+        <FindableMarkdown className="max-h-[60vh] overflow-auto rounded border bg-background p-3">
           {text}
         </FindableMarkdown>
       ) : (
-        <CodeView
-          value={text}
-          filename={path}
-          height="100%"
-          className="min-h-0 flex-1 bg-background"
-        />
+        <CodeView value={text} filename={path} maxHeight="60vh" className="bg-background" />
       )}
       {truncated ? (
         <p className="text-xs text-muted-foreground">
