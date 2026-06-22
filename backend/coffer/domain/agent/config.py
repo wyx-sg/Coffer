@@ -48,6 +48,8 @@ class AgentConfig(BaseModel):
     # falls back to the active connection's values during rollout.
     model: str | None = None
     fast_model: str | None = None
+    # Validated against the connection's WireApi values (see _validate_wire_api)
+    # so a bad value is a 422 at PATCH time, not a corrupt projected Codex config.
     wire_api: str | None = None
 
     @model_validator(mode="before")
@@ -74,6 +76,13 @@ class AgentConfig(BaseModel):
                 p = pathlib.Path(legacy)
                 data["config_dir"] = str(p.parent) if p.name == "skills" else legacy
         return data
+
+    @field_validator("wire_api")
+    @classmethod
+    def _validate_wire_api(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("chat", "responses"):
+            raise ValueError("wire_api must be 'chat' or 'responses'")
+        return v
 
     @field_validator("config_dir")
     @classmethod

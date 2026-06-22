@@ -47,11 +47,13 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
 
   const models = useMemo(() => {
     const out: string[] = [];
-    if (active?.model) out.push(active.model);
-    if (active?.fast_model) out.push(active.fast_model);
+    // Seed the bound model(s) so a correctly-bound agent shows them before the
+    // dropdown is opened (introspect populates the rest on open).
+    for (const m of [agent.model, agent.fast_model, active?.model, active?.fast_model])
+      if (m && !out.includes(m)) out.push(m);
     for (const m of fetched) if (!out.includes(m)) out.push(m);
     return out;
-  }, [active, fetched]);
+  }, [agent.model, agent.fast_model, active, fetched]);
 
   const introspect = () => {
     if (!active) return;
