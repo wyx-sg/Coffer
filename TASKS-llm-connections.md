@@ -151,7 +151,7 @@
 
 ## 块5 — 向量模型 (Embedding) 重构（涉及 spec 006）
 
-- [ ] 完成（建议分支 `feat/006-embedding-dialog`）
+- [x] 完成（建议分支 `feat/006-embedding-dialog`）— PR #217 已合并
 
 **目标**：`EmbeddingSettings.tsx` 改成「添加」按钮 + 独立弹窗风格；默认**只能一个**模型；弹窗含测试连接 + 拉取模型；「启用向量 embedding」开关移到「分块设置」旁。
 
