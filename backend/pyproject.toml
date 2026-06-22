@@ -90,6 +90,7 @@ dev = [
 [project.scripts]
 coffer = "coffer.surfaces.cli.main:run"
 coffer-mcp-shim = "coffer.surfaces.shim.main:run"
+coffer-hook = "coffer.surfaces.hook.main:run"
 
 [tool.setuptools]
 packages = ["coffer"]

@@ -141,6 +141,52 @@ def start_auto_distill(
     )
 
 
+def wire_session_end_distiller(
+    *,
+    distill_service: TranscriptDistillationService,
+    session_maker: async_sessionmaker,  # type: ignore[type-arg]
+) -> None:
+    """Construct + register the on-demand SessionEnd distiller (Slice 6 FR-051).
+
+    Reuses the same ``distilled_sessions`` ledger as the catch-up sweep so a
+    session distilled at session-end is never re-distilled by the sweep (and
+    vice-versa). The session sha is resolved from the agent's listed sessions
+    (matched by id) so the idempotency key matches the sweep's exactly.
+    """
+    from coffer.application.distill.session_end import SessionEndDistiller
+    from coffer.surfaces.http.dependencies import set_session_end_distiller
+
+    repo = DistilledSessionRepo(session_maker)
+
+    async def distill(name: str, session_id: str) -> None:
+        await distill_service.distill(agent_name=name, session_id=session_id, dry_run=False)
+
+    def now() -> datetime:
+        return datetime.now(tz=UTC)
+
+    async def mark_distilled(name: str, session_id: str, sha: str) -> None:
+        await repo.mark_distilled(name, session_id, sha, now())
+
+    async def session_sha(name: str, session_id: str) -> str | None:
+        # Match the session by id among the agent's transcripts, then hash its
+        # on-disk source so the key is identical to the catch-up sweep's.
+        _total, page = await distill_service.list_sessions(
+            name, limit=_LIST_SESSIONS_LIMIT, offset=0
+        )
+        for session in page:
+            if session.session_id == session_id and session.source_path:
+                return hashlib.sha256(pathlib.Path(session.source_path).read_bytes()).hexdigest()
+        return None
+
+    distiller = SessionEndDistiller(
+        distill=distill,
+        is_distilled=repo.is_distilled,
+        mark_distilled=mark_distilled,
+        session_sha=session_sha,
+    )
+    set_session_end_distiller(distiller)
+
+
 async def stop_auto_distill(app: FastAPI) -> None:
     """Gracefully stop the auto-distill worker if it was started."""
     worker = getattr(app.state, "auto_distill_worker", None)

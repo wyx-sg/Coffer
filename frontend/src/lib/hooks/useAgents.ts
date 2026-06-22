@@ -113,6 +113,32 @@ export function useAgentMcpInstall(name: string) {
   });
 }
 
+// --- Session-start hook install (rules injection, slice 6) ---
+
+const hookKey = (name: string) => ["agents", name, "hook-install"] as const;
+
+export function useAgentHookStatus(name: string) {
+  return useQuery({
+    queryKey: hookKey(name),
+    queryFn: () => agentsApi.hookStatus(name),
+    enabled: !!name,
+    // A 422 HOOK_INSTALL_UNSUPPORTED is a stable "this agent type has no hook
+    // support" signal, not a transient failure — don't retry it.
+    retry: false,
+  });
+}
+
+export function useAgentHookInstall(name: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (install: boolean) =>
+      install ? agentsApi.hookInstall(name) : agentsApi.hookUninstall(name),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: hookKey(name) });
+    },
+  });
+}
+
 // --- MCP entries (specs 004/005 workspace amendment) ---
 
 export function useAgentMcpEntries(name: string) {

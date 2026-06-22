@@ -27,6 +27,7 @@ from coffer.domain.agent.config_files import (
     ConfigFileKind,
     ConfigFileSpec,
 )
+from coffer.domain.agent.hook_injection import HookEvent, HookInjectionSpec
 from coffer.domain.agent.mcp_injection import McpEntryStyle, McpInjectionSpec
 from coffer.domain.agent.plugin_capability import (
     PluginCapability,
@@ -57,6 +58,10 @@ class AgentDescriptor:
     config_files: Callable[[pathlib.Path], tuple[ConfigFileSpec, ...]]
     #: How Coffer installs its own ``coffer`` MCP entry (None = MCP not managed).
     mcp: McpInjectionSpec | None = None
+    #: How Coffer installs its ``coffer-hook`` lifecycle hooks (None = hooks not
+    #: managed). Claude Code installs SessionStart + SessionEnd; Codex installs
+    #: SessionStart only (it has no session-end event).
+    hooks: HookInjectionSpec | None = None
     #: Allowlist keys of files scanned when listing the agent's *own* MCP
     #: entries (FR-025). Defaults to the MCP injection file when unset.
     mcp_source_keys: tuple[str, ...] = ()
@@ -152,6 +157,11 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         mcp_source_keys=("global", "settings"),
+        hooks=HookInjectionSpec(
+            config_key="settings",
+            format=ConfigFileFormat.JSON,
+            events=(HookEvent.SESSION_START, HookEvent.SESSION_END),
+        ),
         plugins=PluginCapability(
             model=PluginModel.CLAUDE,
             config_key="settings",
@@ -175,6 +185,11 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             entry_style=McpEntryStyle.COMMAND_MAP,
         ),
         mcp_source_keys=("config",),
+        hooks=HookInjectionSpec(
+            config_key="hooks",
+            format=ConfigFileFormat.JSON,
+            events=(HookEvent.SESSION_START,),
+        ),
         plugins=PluginCapability(
             model=PluginModel.CODEX,
             config_key="config",
@@ -190,6 +205,31 @@ def descriptor_for(agent_type: AgentType) -> AgentDescriptor:
         return AGENT_DESCRIPTORS[agent_type]
     except KeyError:  # pragma: no cover - every enum value has a record
         raise AssertionError(f"no descriptor for AgentType {agent_type!r}") from None
+
+
+#: Which allowlisted config file (key + format) holds an agent's native
+#: write-side memory toggle (Slice 6). Claude Code → ``settings.json`` (JSON,
+#: ``autoMemoryEnabled``); Codex → ``config.toml`` (TOML, ``features.memories``
+#: + ``memories.generate_memories``). The transforms live in
+#: :mod:`coffer.domain.agent.native_memory_disable`.
+_NATIVE_MEMORY_DISABLE_TARGET: dict[AgentType, tuple[str, ConfigFileFormat]] = {
+    AgentType.CLAUDE_CODE: ("settings", ConfigFileFormat.JSON),
+    AgentType.CODEX: ("config", ConfigFileFormat.TOML),
+}
+
+
+def native_memory_disable_target(agent_type: AgentType) -> tuple[str, ConfigFileFormat]:
+    """The ``(config_key, format)`` that holds the native-memory toggle.
+
+    Raises ``AssertionError`` for an agent type with no known target (defensive;
+    every current type is mapped).
+    """
+    try:
+        return _NATIVE_MEMORY_DISABLE_TARGET[agent_type]
+    except KeyError:  # pragma: no cover - every supported type is mapped
+        raise AssertionError(
+            f"no native-memory disable target for AgentType {agent_type!r}"
+        ) from None
 
 
 def is_agent_enabled(agent_type: AgentType) -> bool:

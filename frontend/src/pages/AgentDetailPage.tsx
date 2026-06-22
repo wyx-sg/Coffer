@@ -10,6 +10,7 @@ import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEditor";
 import { AgentConversationsTab } from "@/components/agents/AgentConversationsTab";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
+import { AgentHookButton } from "@/components/agents/AgentHookControls";
 import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
 import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
@@ -88,6 +89,7 @@ export function AgentDetailPage() {
           </div>
           <div className="flex items-center gap-2">
             <AgentMcpButton name={name} />
+            <AgentHookButton name={name} />
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               <Pencil className="mr-1.5 size-3.5" /> {t("agents.edit")}
             </Button>

@@ -245,6 +245,129 @@ When a vector-enabled store's embed degrades (embedding provider unavailable), t
 | `"memory_deleted"` | After a successful user delete (REST/CLI) |
 | `"memory_cleared"` | After clearing a scope                  |
 
+### Rules-injection audit events (slice 6, FR-049/FR-052)
+
+| Value                          | When emitted                                                       |
+| ------------------------------ | ----------------------------------------------------------------- |
+| `"agent_hook_installed"`       | After Coffer installs its SessionStart (+ SessionEnd for Claude Code) hook entry into an agent's hooks config |
+| `"agent_hook_uninstalled"`     | After Coffer removes its hook entry from an agent's hooks config   |
+| `"agent_native_memory_disabled"`  | After `disable_native_memory` is turned ON and the agent's native-memory off-switch is written (FR-052) |
+| `"agent_native_memory_restored"`  | After `disable_native_memory` is turned OFF (or the hook is uninstalled) and the agent's prior native-memory setting is restored (FR-052) |
+
+These four events live on the **agent** surface (spec 004), recorded by the
+`AgentHookService` / native-memory toggle; they carry the agent name and the
+config file touched only — never any rules-bundle or memory content. The
+SessionStart/SessionEnd hook callbacks themselves write through spec 007's
+existing memory paths: a session-end distill reuses the `memory_added` /
+`journal_append` events (no distinct audit event, like the FR-046 sweep), and a
+session-context read emits no audit event (it is a read).
+
+## Rules runtime injection (slice 6 — FR-049–FR-052)
+
+Slice 6 delivers the rules lane (FR-036) into each managed agent at runtime by
+**installing session hooks** that call back to Coffer for a **context-only**
+bundle — never a native file write (ADR-026). The agent-config plumbing
+(`AgentConfig`, hook install/uninstall, native-memory toggle) lives in spec
+**004-agent-registry**; the bundle assembly and the session-end distill reuse
+spec 007's memory paths. This section documents the 007-facing shapes; the
+`AgentConfig` field and the hook-install / native-memory REST trio are added to
+spec 004's data-model + `004-agent-registry/contracts/api.openapi.yaml`.
+
+### `AgentConfig.disable_native_memory` (spec 004 domain)
+
+A new boolean field on the agent's persisted config, **default `false`** (the
+ADR-026 posture — Coffer never touches native memory). Surfaced on `AgentPatch`
+(settable) and `AgentOut` (readable).
+
+| Field                   | Type   | Notes                                                                                          |
+| ----------------------- | ------ | ---------------------------------------------------------------------------------------------- |
+| `disable_native_memory` | `bool` | Default `false`. When `true`, Coffer writes the agent's native-memory off-switch and restores it on toggle-off/uninstall (FR-052). The migration validator is tolerant (a config without the key reads as `false`). |
+
+When set `true`, Coffer writes:
+
+- **Claude Code** — `~/.claude/settings.json`: `{"autoMemoryEnabled": false}` (JSON, atomic, `.bak`). Restore removes the key.
+- **Codex** — `~/.codex/config.toml`: `features.memories = false` + `memories.generate_memories = false` (TOML, tomlkit, atomic, `.bak`). Restore removes both keys.
+
+### Installed hook entries shape
+
+Coffer installs its hook into the agent's top-level `hooks` key (Claude Code
+`settings.json`; Codex `hooks.json` — same JSON schema). The command is the
+absolute path to the `coffer-hook` console script with the agent name baked in
+(`coffer-hook --agent <name>`), since the hook stdin JSON does not carry Coffer's
+agent identity (cwd / session_id / event come from stdin). Install/uninstall are
+idempotent and recognise **only** Coffer's own entry by the `coffer-hook`
+command basename — user hooks are never touched.
+
+```jsonc
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          { "type": "command", "command": "/abs/path/to/coffer-hook --agent claude-code" }
+        ]
+      }
+    ],
+    // Claude Code ONLY — Codex has no session-end event (FR-051).
+    "SessionEnd": [
+      {
+        "matcher": "clear|logout|prompt_input_exit|other",
+        "hooks": [
+          { "type": "command", "command": "/abs/path/to/coffer-hook --agent claude-code" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**SessionStart contract** (both agents): the hook reads stdin
+`{session_id, transcript_path, cwd, hook_event_name, source, …}`, calls
+`GET …/session-context?cwd=<cwd>`, and prints
+`{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "<bundle>"}}`
+then exits 0 (bundle ≤ 10k chars). **Any** failure (no daemon, timeout, error) →
+print nothing, exit 0 (never blocks the agent). **SessionEnd contract** (Claude
+Code only): the hook reads stdin `{session_id, transcript_path, cwd, reason}`,
+calls `POST …/sessions/{session_id}/end` with `{cwd}`, ignores the result, exits 0.
+
+### Bundle assembly (`assemble_session_context(cwd) -> str`, FR-049/FR-050)
+
+Resolve the recall scopes for `cwd` → for each scope read its `rules/rules.md`
+(FR-036 read surface) → concatenate **project rules first, then global** →
+append the **two seeded built-in rules** (constants, always present even when the
+rules lanes are empty):
+
+- **seeded resume rule** — when the user wants to continue prior work, call `coffer__resume()` to pull the saved working-state handoff for this project + branch.
+- **seeded soft-steer rule** — prefer `coffer__remember` / `coffer__recall` over the agent's native memory; Coffer is the shared store across the user's agents.
+
+The handoff body is **not** in the bundle (pull-on-demand via `coffer__resume`,
+FR-050). Returns markdown; an empty result still carries the seeded rules.
+
+### New endpoints (slice 6)
+
+Two agent-scoped endpoints back the hooks. They live alongside the other
+`/api/v1/agents/{name}/…` routes in `contracts/transcripts.openapi.yaml` (the
+agent-scoped 007 contract); see the wire-contract note below.
+
+| Method + path                                              | Body / query | Returns | Notes |
+| ---------------------------------------------------------- | ------------ | ------- | ----- |
+| `GET /api/v1/agents/{name}/session-context?cwd=`           | `cwd` query  | `{additional_context: string}` | SessionStart bundle (FR-049/FR-050). Read-only; no audit. `cwd` outside a git project → global + seeded rules only. |
+| `POST /api/v1/agents/{name}/sessions/{session_id}/end`     | `{cwd}`      | `202`/`200` | SessionEnd distill (FR-051). Idempotent via the `distilled_sessions` ledger; no-op when already distilled / no model / not a git project. |
+
+The hook-install trio (`GET/POST/DELETE /api/v1/agents/{name}/hook-install`,
+cloning `/mcp-install`) and the `disable_native_memory` field on `PATCH
+/api/v1/agents/{name}` live in spec **004-agent-registry** (where `AgentOut` /
+`AgentPatch` / `/mcp-install` already live), not here.
+
+### `distilled_sessions` idempotency ledger (shared with FR-046)
+
+The SessionEnd distill (FR-051) reuses the **same** machine-local ledger keyed by
+`(agent, session_id, content_sha256)` introduced for the FR-046 catch-up sweep —
+a session is never double-distilled across the two paths (the hook lowers
+latency; the sweep is the standalone write guarantee). No new ledger table is
+introduced for slice 6.
+
 ## Transcript distillation (Spec 007 extension)
 
 Transcript distillation is a **producer of memory facts** — it uses the existing `MemoryFact` substrate (no new tables, no new resource kind).
@@ -319,3 +442,5 @@ with thousands of sessions re-parses only files whose mtime changed.
 ## Wire contract (REST)
 
 Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall). The write endpoints (add/edit/delete/clear) are retained — they are how agents (via MCP) and the CLI author facts; the desktop/web UI is a read-only viewer. Read DTOs surface on-disk truth: `FactOut` carries the fact's absolute `.md` `path` and its containing folder's `folder_path`, and `MemoryStoreOut` carries the store's absolute `store_dir`, so the read-only viewer can offer open-in-editor / reveal. The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.
+
+The slice-6 agent-scoped endpoints (`GET …/session-context`, `POST …/sessions/{session_id}/end`) live in `contracts/transcripts.openapi.yaml` alongside the other `/api/v1/agents/{name}/…` routes; the hook-install trio and the `disable_native_memory` agent field live in `004-agent-registry/contracts/api.openapi.yaml` (see "Rules runtime injection" above).

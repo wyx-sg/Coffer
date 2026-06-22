@@ -226,117 +226,27 @@ from coffer.surfaces.http.credential_composition import (  # noqa: E402, I001
 )
 
 # --- Agent kind-specific dependency providers (spec 004-agent-registry) ---
-_agent_service: Any | None = None
-_auto_detect_service: Any | None = None
-
-
-def set_agent_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _agent_service
-    _agent_service = svc
-
-
-def get_agent_service() -> Any:
-    """FastAPI Depends() target — actual type is AgentService."""
-    if _agent_service is None:
-        raise RuntimeError("agent service not initialised")
-    return _agent_service
-
-
-_provider_service: Any | None = None
-
-
-def set_provider_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _provider_service
-    _provider_service = svc
-
-
-def get_provider_service() -> Any:
-    """FastAPI Depends() target — actual type is ProviderService (spec 011)."""
-    if _provider_service is None:
-        raise RuntimeError("provider service not initialised")
-    return _provider_service
-
-
-def set_auto_detect_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _auto_detect_service
-    _auto_detect_service = svc
-
-
-def get_auto_detect_service() -> Any:
-    """FastAPI Depends() target — actual type is AutoDetectService."""
-    if _auto_detect_service is None:
-        raise RuntimeError("auto-detect service not initialised")
-    return _auto_detect_service
-
-
-_agent_config_file_service: Any | None = None
-_agent_mcp_service: Any | None = None
-_agent_native_memory_service: Any | None = None
-
-
-def set_agent_config_file_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _agent_config_file_service
-    _agent_config_file_service = svc
-
-
-def get_agent_config_file_service() -> Any:
-    """FastAPI Depends() target — actual type is AgentConfigFileService."""
-    if _agent_config_file_service is None:
-        raise RuntimeError("agent config-file service not initialised")
-    return _agent_config_file_service
-
-
-def set_agent_mcp_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _agent_mcp_service
-    _agent_mcp_service = svc
-
-
-def get_agent_mcp_service() -> Any:
-    """FastAPI Depends() target — actual type is AgentMcpService."""
-    if _agent_mcp_service is None:
-        raise RuntimeError("agent MCP service not initialised")
-    return _agent_mcp_service
-
-
-def set_agent_native_memory_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _agent_native_memory_service
-    _agent_native_memory_service = svc
-
-
-def get_agent_native_memory_service() -> Any:
-    """FastAPI Depends() target — actual type is AgentNativeMemoryService."""
-    if _agent_native_memory_service is None:
-        raise RuntimeError("agent native-memory service not initialised")
-    return _agent_native_memory_service
-
-
-_agent_memory_import_service: Any | None = None
-
-
-def set_agent_memory_import_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _agent_memory_import_service
-    _agent_memory_import_service = svc
-
-
-def get_agent_memory_import_service() -> Any:
-    """FastAPI Depends() target — actual type is AgentMemoryImportService."""
-    if _agent_memory_import_service is None:
-        raise RuntimeError("agent memory-import service not initialised")
-    return _agent_memory_import_service
-
-
-def get_fs_browse_service() -> Any:
-    """FastAPI Depends() target (FsBrowseService). Stateless → built per-request."""
-    from coffer.application.fs.browse_service import FsBrowseService
-
-    return FsBrowseService()
+# Split into dependencies_agent for the file-size budget; re-exported here so the
+# existing `from ...dependencies import get_agent_service` paths keep working.
+from coffer.surfaces.http.dependencies_agent import (  # noqa: E402
+    get_agent_config_file_service as get_agent_config_file_service,
+    get_agent_hook_service as get_agent_hook_service,
+    get_agent_mcp_service as get_agent_mcp_service,
+    get_agent_memory_import_service as get_agent_memory_import_service,
+    get_agent_native_memory_service as get_agent_native_memory_service,
+    get_agent_service as get_agent_service,
+    get_auto_detect_service as get_auto_detect_service,
+    get_fs_browse_service as get_fs_browse_service,
+    get_provider_service as get_provider_service,
+    set_agent_config_file_service as set_agent_config_file_service,
+    set_agent_hook_service as set_agent_hook_service,
+    set_agent_mcp_service as set_agent_mcp_service,
+    set_agent_memory_import_service as set_agent_memory_import_service,
+    set_agent_native_memory_service as set_agent_native_memory_service,
+    set_agent_service as set_agent_service,
+    set_auto_detect_service as set_auto_detect_service,
+    set_provider_service as set_provider_service,
+)
 
 
 # --- Skill kind (spec 005-skill-manager) ---
@@ -388,6 +298,23 @@ def get_memory_service() -> Any:
     if _memory_service is None:
         raise RuntimeError("memory service not initialised")
     return _memory_service
+
+
+# --- session-end distiller (Slice 6 FR-051) ---
+_session_end_distiller: Any | None = None
+
+
+def set_session_end_distiller(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _session_end_distiller
+    _session_end_distiller = svc
+
+
+def get_session_end_distiller() -> Any:
+    """FastAPI Depends() target — actual type is SessionEndDistiller."""
+    if _session_end_distiller is None:
+        raise RuntimeError("session-end distiller not initialised")
+    return _session_end_distiller
 
 
 # More providers split out for the file-size budget: memory.dependencies (incl.

@@ -17,10 +17,15 @@ import pathlib
 import sys
 from collections.abc import Awaitable, Callable, Sequence
 
+from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.config_files import spec_for
+from coffer.domain.agent.descriptor import native_memory_disable_target
+from coffer.domain.agent.native_memory_disable import apply_disable, apply_restore
 from coffer.domain.agent.types import AgentType
+from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
     AgentConfigDirRegistered,
     ConfigValidationError,
@@ -123,9 +128,16 @@ class AgentService:
         audit: AuditService,
         on_config_dir_changed: Callable[[str], Awaitable[None]] | None = None,
         on_skill_policy_changed: Callable[[str], Awaitable[None]] | None = None,
+        config_file_store: ConfigFileStorePort | None = None,
     ) -> None:
         self._rs = resource_service
         self._audit = audit
+        # Atomic config-file store (write_text_atomic keeps a .bak). Required by
+        # set_disable_native_memory, which applies the on-disk native-memory
+        # transform alongside persisting the AgentConfig field. None in contexts
+        # that never toggle native memory (kept optional so existing call sites
+        # and unit fakes don't have to supply it).
+        self._config_file_store = config_file_store
         # Cross-kind hooks (wired at the composition root). None in contexts
         # that don't manage skills.
         # - on_config_dir_changed: re-deliver an agent's skills after its
@@ -297,6 +309,48 @@ class AgentService:
         # policy via the injected resolver.
         if self._on_skill_policy_changed is not None:
             await self._on_skill_policy_changed(name)
+        return updated
+
+    async def set_disable_native_memory(
+        self, *, name: str, enabled: bool, actor: str = "api"
+    ) -> Resource:
+        """Persist the ``disable_native_memory`` field AND apply/restore the
+        on-disk native-memory transform (Slice 6).
+
+        Enabling writes the agent's native write-side memory OFF in its config
+        file (Claude ``settings.json`` / Codex ``config.toml``); disabling
+        restores it. Both the persisted field and the on-disk transform move
+        together so they can never diverge. Idempotent.
+        """
+        if self._config_file_store is None:  # pragma: no cover - composition wires it
+            raise RuntimeError("AgentService has no config_file_store; cannot toggle native memory")
+        existing = await self.get(name)
+        cfg = AgentConfig.model_validate(existing.config)
+        # Resolve the config file holding the native-memory toggle for this type.
+        config_key, fmt = native_memory_disable_target(cfg.type)
+        spec = spec_for(cfg.type, config_key, cfg.resolved_config_dir())
+        text = self._config_file_store.read_text(spec.path) or ""
+        if enabled:
+            new_text = apply_disable(text, fmt=fmt, agent_type=cfg.type)
+            event = AuditEventType.AGENT_NATIVE_MEMORY_DISABLED
+        else:
+            new_text = apply_restore(text, fmt=fmt, agent_type=cfg.type)
+            event = AuditEventType.AGENT_NATIVE_MEMORY_RESTORED
+        self._config_file_store.write_text_atomic(spec.path, new_text)
+        # Persist the field (merge over a full dump so unrelated fields survive).
+        new_cfg = AgentConfig.model_validate(cfg.model_dump() | {"disable_native_memory": enabled})
+        updated = await self._rs.update_config(
+            ResourceRef("agent", name),
+            new_config=new_cfg.model_dump(mode="json"),
+            actor=actor,
+            allow_lifecycle_kind=True,  # CODE-REG: value-level toggle + on-disk transform
+        )
+        await self._audit.record(
+            event.value,
+            ref=ResourceRef("agent", name),
+            actor=actor,
+            details={"path": str(spec.path)},
+        )
         return updated
 
     async def remove(self, *, name: str, actor: str = "api") -> None:

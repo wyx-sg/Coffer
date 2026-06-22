@@ -46,6 +46,9 @@ class AgentPatch(BaseModel):
     # FR-025: follow-master-library policy fields.
     follow_all_skills: bool | None = None
     skill_exclusions: list[str] | None = None
+    # Slice 6: opt-in native write-side memory disable. Toggling drives the
+    # on-disk transform (Claude settings.json / Codex config.toml) in lockstep.
+    disable_native_memory: bool | None = None
 
 
 class AgentOut(BaseModel):
@@ -59,6 +62,8 @@ class AgentOut(BaseModel):
     # FR-025: follow-master-library policy fields.
     follow_all_skills: bool
     skill_exclusions: list[str]
+    # Slice 6: whether the agent's native write-side memory is disabled.
+    disable_native_memory: bool
     created_at: datetime
     updated_at: datetime
 
@@ -90,6 +95,7 @@ def _to_out(r: Resource) -> AgentOut:
         description=r.description,
         follow_all_skills=cfg.follow_all_skills,
         skill_exclusions=list(cfg.skill_exclusions),
+        disable_native_memory=cfg.disable_native_memory,
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
@@ -178,6 +184,12 @@ async def update_agent(
             follow_all_skills=body.follow_all_skills if "follow_all_skills" in sent else None,
             skill_exclusions=body.skill_exclusions if "skill_exclusions" in sent else None,
             actor=actor,
+        )
+    if "disable_native_memory" in sent and body.disable_native_memory is not None:
+        # Drives the persisted field AND the on-disk native-memory transform in
+        # lockstep (Claude settings.json / Codex config.toml).
+        r = await svc.set_disable_native_memory(
+            name=name, enabled=body.disable_native_memory, actor=actor
         )
     return _to_out(r)
 

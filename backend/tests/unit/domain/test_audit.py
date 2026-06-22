@@ -19,6 +19,13 @@ def test_audit_event_type_values():
     assert AuditEventType.BACKUP_CREATED.value == "backup_created"
 
 
+def test_slice6_hook_and_native_memory_event_values():
+    assert AuditEventType.AGENT_HOOK_INSTALLED.value == "agent_hook_installed"
+    assert AuditEventType.AGENT_HOOK_UNINSTALLED.value == "agent_hook_uninstalled"
+    assert AuditEventType.AGENT_NATIVE_MEMORY_DISABLED.value == "agent_native_memory_disabled"
+    assert AuditEventType.AGENT_NATIVE_MEMORY_RESTORED.value == "agent_native_memory_restored"
+
+
 def test_audit_event_type_is_strenum():
     """StrEnum members compare equal to their string value."""
     assert AuditEventType.RESOURCE_CREATED == "resource_created"
