@@ -296,6 +296,10 @@ class EmbeddingConfigUpdate(BaseModel):
     model: str | None = None
     base_url: str | None = None
     credential_ref: str | None = None
+    # A raw API key the user typed: stored into the credential vault under a
+    # fixed ref and reused as ``credential_ref``. Takes precedence over an
+    # explicit ``credential_ref``. Left null in edit mode keeps the stored key.
+    secret_value: str | None = None
     dimensions: int = Field(default=768, ge=1, le=8192)
     default_chunk_size: int = Field(default=512, ge=64, le=2048)
     default_chunk_overlap: int = Field(default=64, ge=0)

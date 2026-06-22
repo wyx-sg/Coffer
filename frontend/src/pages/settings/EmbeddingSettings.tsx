@@ -88,19 +88,20 @@ export function EmbeddingSettings() {
     });
   };
 
-  // Commit model values from the dialog into local state + persist.
+  // Commit model values from the dialog into local state + persist. The dialog
+  // returns a raw `secret_value` (or null to keep the existing key); persist()
+  // still sends the existing credential_ref so a null secret preserves it.
   const commitModel = (v: EmbeddingModelValues) => {
     setProvider(v.provider);
     setModel(v.model);
     setDimensions(v.dimensions);
     setBaseUrl(v.base_url);
-    setCredentialRef(v.credential_ref);
     persist({
       provider: v.provider || null,
       model: v.model.trim() || null,
       dimensions: v.dimensions,
       base_url: v.base_url ?? null,
-      credential_ref: v.credential_ref ?? null,
+      secret_value: v.secret_value,
     });
     setDialogOpen(false);
   };

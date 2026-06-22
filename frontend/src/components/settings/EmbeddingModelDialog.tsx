@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { ProviderModelField } from "@/components/settings/ProviderModelField";
 
 // Mainstream embedding providers, plus "custom" for any OpenAI-compatible
@@ -58,7 +59,10 @@ const KNOWN_DIMS: Record<string, number> = {
   "all-minilm": 384,
 };
 
-export interface EmbeddingModelValues {
+/** What the dialog seeds from: the existing config. `credential_ref` is the
+ * stored key's vault ref (used to probe in edit mode) — its presence means a key
+ * is already saved, so the key field becomes optional ("leave blank to keep"). */
+export interface EmbeddingModelInitial {
   provider: string;
   model: string;
   dimensions: number;
@@ -66,8 +70,18 @@ export interface EmbeddingModelValues {
   credential_ref: string | null;
 }
 
+/** What the dialog emits: the user types a raw `secret_value` (API key), not a
+ * vault ref — the backend stores it. Null = keep the existing stored key. */
+export interface EmbeddingModelValues {
+  provider: string;
+  model: string;
+  dimensions: number;
+  base_url: string | null;
+  secret_value: string | null;
+}
+
 interface Props {
-  initial: EmbeddingModelValues;
+  initial: EmbeddingModelInitial;
   pending: boolean;
   onSubmit: (values: EmbeddingModelValues) => void;
   onCancel: () => void;
@@ -79,7 +93,8 @@ export function EmbeddingModelDialog({ initial, pending, onSubmit, onCancel }: P
   const [model, setModel] = useState(initial.model);
   const [dimensions, setDimensions] = useState(initial.dimensions);
   const [baseUrl, setBaseUrl] = useState(initial.base_url ?? "");
-  const [credentialRef, setCredentialRef] = useState(initial.credential_ref ?? "");
+  // The raw key the user types — never seeded (we don't hold the stored key).
+  const [secret, setSecret] = useState("");
 
   // Re-seed when the dialog reopens against a different initial value.
   useEffect(() => {
@@ -87,8 +102,10 @@ export function EmbeddingModelDialog({ initial, pending, onSubmit, onCancel }: P
     setModel(initial.model);
     setDimensions(initial.dimensions);
     setBaseUrl(initial.base_url ?? "");
-    setCredentialRef(initial.credential_ref ?? "");
+    setSecret("");
   }, [initial]);
+
+  const hasStoredKey = initial.credential_ref != null;
 
   const keyless = KEYLESS.includes(provider);
 
@@ -109,7 +126,7 @@ export function EmbeddingModelDialog({ initial, pending, onSubmit, onCancel }: P
           model: model.trim(),
           dimensions,
           base_url: baseUrl.trim() || null,
-          credential_ref: keyless ? null : credentialRef.trim() || null,
+          secret_value: keyless ? null : secret.trim() || null,
         });
       }}
     >
@@ -132,7 +149,8 @@ export function EmbeddingModelDialog({ initial, pending, onSubmit, onCancel }: P
       <ProviderModelField
         provider={provider}
         baseUrl={baseUrl.trim() || null}
-        credentialRef={credentialRef.trim() || null}
+        credentialRef={initial.credential_ref}
+        secretValue={secret.trim() || null}
         model={model}
         onModelChange={setModel}
         kind="embedding"
@@ -162,12 +180,16 @@ export function EmbeddingModelDialog({ initial, pending, onSubmit, onCancel }: P
 
       {!keyless && (
         <div className="space-y-1.5">
-          <Label htmlFor="emb-cred">{t("settings.embedding.credential")}</Label>
-          <Input
-            id="emb-cred"
-            value={credentialRef}
-            onChange={(e) => setCredentialRef(e.target.value)}
-            placeholder={t("settings.embedding.credentialHint")}
+          <Label htmlFor="emb-secret">{t("settings.embedding.secret")}</Label>
+          <PasswordInput
+            id="emb-secret"
+            value={secret}
+            onChange={(e) => setSecret(e.target.value)}
+            placeholder={
+              hasStoredKey
+                ? t("settings.embedding.secretKeepBlank")
+                : t("settings.embedding.secretPlaceholder")
+            }
           />
         </div>
       )}
