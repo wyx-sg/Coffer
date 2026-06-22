@@ -561,6 +561,139 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /agents/{name}/hook-install:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: getAgentHookInstallStatus
+      summary: Whether Coffer's lifecycle hooks are installed in this agent
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HookInstallStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [agents]
+      operationId: installAgentHook
+      summary: Install Coffer's SessionStart/SessionEnd hooks into this agent
+      description: |
+        Writes a `coffer-hook` command entry (absolute path + `--agent <name>`
+        args) under the agent's hooks file (Claude `settings.json`; Codex
+        `hooks.json`), atomically and with a `.bak` backup. Claude Code installs
+        SessionStart + SessionEnd; Codex installs SessionStart only (it has no
+        session-end event). Idempotent — re-installing replaces Coffer's entry in
+        place and leaves user-authored hooks untouched. Returns 422 if the
+        coffer-hook binary cannot be resolved, or if the agent type declares no
+        hook support (`HOOK_INSTALL_UNSUPPORTED`).
+      responses:
+        "200":
+          description: Installed (or already installed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HookInstallStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: uninstallAgentHook
+      summary: Remove Coffer's lifecycle hooks from this agent
+      description: Removes only Coffer's entries. No-op success when not installed.
+      responses:
+        "200":
+          description: Uninstalled (or was not installed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HookInstallStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/session-context:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: query
+        name: cwd
+        required: false
+        schema: { type: string }
+        description: The session's working directory (resolves the project scope).
+    get:
+      tags: [agents]
+      operationId: getAgentSessionContext
+      summary: SessionStart rules bundle to inject as additional context
+      description: |
+        Returns the markdown rules bundle (project + global rules plus the two
+        seeded built-in rules) the installed `coffer-hook` injects at
+        SessionStart. Runtime-only — nothing is written to the agent's files.
+        Bounded to ≤10000 chars.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [additional_context]
+                properties:
+                  additional_context: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{name}/sessions/{session_id}/end:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+      - in: path
+        name: session_id
+        required: true
+        schema: { type: string }
+    post:
+      tags: [agents]
+      operationId: endAgentSession
+      summary: Distill a just-ended session into the journal lane (idempotent)
+      description: |
+        Called by the SessionEnd hook (Claude Code only — Codex degrades to the
+        FR-046 catch-up sweep). Distills the single session into the journal lane
+        reusing the FR-046 idempotency ledger, so a session is never
+        double-distilled. Always 2xx: a no-internal-engine, unknown-session, or
+        not-a-git-project session is a tolerated no-op.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                cwd: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Outcome of the (idempotent) distill
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [outcome]
+                properties:
+                  outcome:
+                    type: string
+                    enum: [distilled, already_distilled, no_model, not_found, skipped]
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /agents/{name}/native-memory:
     parameters:
       - in: path
@@ -848,6 +981,13 @@ components:
           description: >-
             Skill names excluded from delivery while following. Replaces the
             whole list when present.
+        disable_native_memory:
+          type: boolean
+          description: >-
+            Slice 6 opt-in toggle. When true, Coffer disables the agent's native
+            write-side memory in its config file (Claude `autoMemoryEnabled`;
+            Codex `features.memories` / `memories.generate_memories`) so Coffer is
+            the single shared memory store. Toggling back to false restores it.
 
     AgentOut:
       type: object
@@ -858,6 +998,7 @@ components:
           config_dir,
           follow_all_skills,
           skill_exclusions,
+          disable_native_memory,
           created_at,
           updated_at,
         ]
@@ -877,6 +1018,9 @@ components:
           type: array
           items: { type: string }
           description: "Skill names excluded from delivery while following."
+        disable_native_memory:
+          type: boolean
+          description: "Slice 6: whether the agent's native write-side memory is disabled. Defaults to false."
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -1248,6 +1392,18 @@ components:
           type: string
           nullable: true
           description: "The resolved coffer-mcp-shim command written/found, when installed."
+
+    HookInstallStatus:
+      type: object
+      required: [installed]
+      properties:
+        installed:
+          type: boolean
+          description: "Whether Coffer's `coffer-hook` entry is present for every managed event."
+        command:
+          type: string
+          nullable: true
+          description: "The resolved `coffer-hook --agent <name>` command, when installed."
 
     NativeMemoryStore:
       type: object

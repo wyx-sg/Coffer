@@ -243,6 +243,114 @@ memory 对账器向该例程提供自己的**分块器**（见 FR-032）：共�
 | `"memory_deleted"` | 用户删除（REST/CLI）成功后 |
 | `"memory_cleared"` | 清空一个 scope 后         |
 
+### 规则注入审计事件（slice 6，FR-049/FR-052）
+
+| 值                                 | 何时发出                                                              |
+| ---------------------------------- | -------------------------------------------------------------------- |
+| `"agent_hook_installed"`           | Coffer 把它的 SessionStart（Claude Code 再加 SessionEnd）hook 条目装入某 agent 的 hooks 配置后 |
+| `"agent_hook_uninstalled"`         | Coffer 从某 agent 的 hooks 配置移除它的 hook 条目后                   |
+| `"agent_native_memory_disabled"`   | `disable_native_memory` 被打开、agent 的原生记忆关闭开关被写入后（FR-052） |
+| `"agent_native_memory_restored"`   | `disable_native_memory` 被关闭（或 hook 被卸载）、agent 先前的原生记忆设置被恢复后（FR-052） |
+
+这四个事件位于 **agent** 面（spec 004），由 `AgentHookService` / 原生记忆开关记录；
+它们只携带 agent 名与被改动的配置文件 —— 绝不携带任何规则 bundle 或记忆内容。
+SessionStart/SessionEnd hook 的回调本身经 spec 007 既有的记忆路径写入：session-end 蒸馏复用
+`memory_added` / `journal_append` 事件（与 FR-046 补扫一样，无独立审计事件），session-context
+读取不发审计事件（它是读）。
+
+## 规则运行时注入（slice 6 —— FR-049–FR-052）
+
+slice 6 通过**安装 session hook** 在运行时把 rules lane（FR-036）交付到每个受管 agent，hook
+回调 Coffer 索取一个**只作为上下文**的 bundle —— 绝不原生写文件（ADR-026）。agent 配置管道
+（`AgentConfig`、hook 安装/卸载、原生记忆开关）位于 spec **004-agent-registry**；bundle 组装与
+session-end 蒸馏复用 spec 007 的记忆路径。本节记录面向 007 的形状；`AgentConfig` 字段与
+hook-install / 原生记忆 REST 三件套加在 spec 004 的 data-model + `004-agent-registry/contracts/api.openapi.yaml`。
+
+### `AgentConfig.disable_native_memory`（spec 004 domain）
+
+agent 持久化配置上的新布尔字段，**默认 `false`**（ADR-026 姿态 —— Coffer 绝不碰原生记忆）。
+在 `AgentPatch`（可设）与 `AgentOut`（可读）上呈现。
+
+| 字段                    | 类型   | 说明                                                                                          |
+| ----------------------- | ------ | --------------------------------------------------------------------------------------------- |
+| `disable_native_memory` | `bool` | 默认 `false`。为 `true` 时 Coffer 写入 agent 的原生记忆关闭开关，并在关闭/卸载时恢复（FR-052）。迁移校验器宽容（无该键的配置读作 `false`）。 |
+
+设为 `true` 时 Coffer 写入：
+
+- **Claude Code** —— `~/.claude/settings.json`：`{"autoMemoryEnabled": false}`（JSON、原子、`.bak`）。恢复 = 删除该键。
+- **Codex** —— `~/.codex/config.toml`：`features.memories = false` + `memories.generate_memories = false`（TOML、tomlkit、原子、`.bak`）。恢复 = 删除这两个键。
+
+### 已安装 hook 条目形状
+
+Coffer 把它的 hook 装进 agent 顶层 `hooks` 键（Claude Code `settings.json`；Codex `hooks.json`
+—— 同一套 JSON schema）。命令是 `coffer-hook` 控制台脚本的绝对路径，并把 agent 名烤进参数
+（`coffer-hook --agent <name>`），因为 hook stdin JSON 不携带 Coffer 的 agent 身份（cwd /
+session_id / event 来自 stdin）。安装/卸载幂等，且**只**按 `coffer-hook` 命令 basename 识别
+Coffer 自己的条目 —— 绝不动用户 hook。
+
+```jsonc
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          { "type": "command", "command": "/abs/path/to/coffer-hook --agent claude-code" }
+        ]
+      }
+    ],
+    // 仅 Claude Code —— Codex 没有 session-end 事件（FR-051）。
+    "SessionEnd": [
+      {
+        "matcher": "clear|logout|prompt_input_exit|other",
+        "hooks": [
+          { "type": "command", "command": "/abs/path/to/coffer-hook --agent claude-code" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**SessionStart 契约**（两个 agent）：hook 读 stdin
+`{session_id, transcript_path, cwd, hook_event_name, source, …}`，调
+`GET …/session-context?cwd=<cwd>`，打印
+`{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "<bundle>"}}`
+然后退出 0（bundle ≤ 10k 字符）。**任何**失败（无 daemon、超时、报错）→ 什么都不打印、退出 0
+（绝不阻塞 agent）。**SessionEnd 契约**（仅 Claude Code）：hook 读 stdin
+`{session_id, transcript_path, cwd, reason}`，调 `POST …/sessions/{session_id}/end` 携带
+`{cwd}`，忽略结果、退出 0。
+
+### bundle 组装（`assemble_session_context(cwd) -> str`，FR-049/FR-050）
+
+为 `cwd` 解析 recall 作用域 → 对每个作用域读其 `rules/rules.md`（FR-036 读取面）→ 拼接
+**先项目规则、后全局规则** → 追加**两条播种的内置规则**（常量，即便 rules lane 为空也始终在场）：
+
+- **播种 resume 规则** —— 当用户想接续此前工作时，调 `coffer__resume()` 拉取本项目 + 分支保存的工作状态 handoff。
+- **播种软引导规则** —— 优先用 `coffer__remember` / `coffer__recall` 而非 agent 的原生记忆；Coffer 是用户各 agent 间的共享 store。
+
+handoff 正文**不**在 bundle 里（经 `coffer__resume` 按需拉取，FR-050）。返回 markdown；空结果仍携带播种规则。
+
+### 新增端点（slice 6）
+
+两个 agent 作用域端点支撑这些 hook。它们与其它 `/api/v1/agents/{name}/…` 路由一起位于
+`contracts/transcripts.openapi.yaml`（面向 agent 的 007 契约）；见下文线上契约说明。
+
+| 方法 + 路径                                                | 正文 / 查询  | 返回    | 说明 |
+| ---------------------------------------------------------- | ------------ | ------- | ---- |
+| `GET /api/v1/agents/{name}/session-context?cwd=`           | `cwd` 查询   | `{additional_context: string}` | SessionStart bundle（FR-049/FR-050）。只读；无审计。`cwd` 不在 git 项目里 → 只含全局 + 播种规则。 |
+| `POST /api/v1/agents/{name}/sessions/{session_id}/end`     | `{cwd}`      | `202`/`200` | SessionEnd 蒸馏（FR-051）。经 `distilled_sessions` 账本幂等；已蒸馏 / 无模型 / 非 git 项目时为 no-op。 |
+
+hook-install 三件套（`GET/POST/DELETE /api/v1/agents/{name}/hook-install`，克隆 `/mcp-install`）
+与 `PATCH /api/v1/agents/{name}` 上的 `disable_native_memory` 字段位于 spec **004-agent-registry**
+（`AgentOut` / `AgentPatch` / `/mcp-install` 已在那里），不在本处。
+
+### `distilled_sessions` 幂等账本（与 FR-046 共享）
+
+SessionEnd 蒸馏（FR-051）复用为 FR-046 补扫引入的、按 `(agent, session_id, content_sha256)`
+键控的**同一**机器本地账本 —— 会话在两条路径间绝不被重复蒸馏（hook 降低延迟；补扫是独立的写入
+保证）。slice 6 不引入新的账本表。
+
 ## 对话记录提炼（Spec 007 扩展）
 
 对话记录提炼是 memory 事实的一个**生产者** —— 它复用现有的 `MemoryFact` 底座（不新增表，不新增资源 kind）。
@@ -314,3 +422,5 @@ Coffer 读取 `~/.claude/projects/`、`~/.codex/sessions/` 以及 OpenCode 的�
 ## 线上契约（REST）
 
 位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall）。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写入事实的途径；桌面/web UI 是只读视图。读 DTO 携带磁盘真相：`FactOut` 带事实的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使只读视图能提供「在外部编辑器打开 / 显示」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。
+
+slice-6 的 agent 作用域端点（`GET …/session-context`、`POST …/sessions/{session_id}/end`）与其它 `/api/v1/agents/{name}/…` 路由一起位于 `contracts/transcripts.openapi.yaml`；hook-install 三件套与 `disable_native_memory` agent 字段位于 `004-agent-registry/contracts/api.openapi.yaml`（见上文「规则运行时注入」）。

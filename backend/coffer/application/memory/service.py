@@ -7,7 +7,6 @@ time. Sibling modules handle writes, recall, admin, scope, and sync.
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Awaitable, Callable
 from functools import partial
 from pathlib import Path
@@ -18,7 +17,7 @@ from coffer.application.knowledge.retrieval import (
     KnowledgeRetrieval,
     no_embedding,
 )
-from coffer.application.memory import admin
+from coffer.application.memory import admin, session_context
 from coffer.application.memory.ports import MemoryDocumentRepo
 from coffer.application.memory.queries import (
     find_fact_store,
@@ -59,8 +58,6 @@ from coffer.infrastructure.memory.files import (
     read_fact_file,
     scan_store_dir,
 )
-
-_logger = logging.getLogger(__name__)
 
 StoreDirFn = Callable[[str], Path]
 OnChangeFn = Callable[[str], Awaitable[None]]
@@ -114,17 +111,7 @@ class MemoryService:
         self._on_change = hook
 
     async def _notify_change(self, store_name: str) -> None:
-        if self._on_change is None:
-            return
-        try:
-            await self._on_change(store_name)
-        except Exception:
-            # The write succeeded; a post-write hook failure must not surface.
-            _logger.warning(
-                "memory.on_change.hook_failed",
-                extra={"store": store_name},
-                exc_info=True,
-            )
+        await session_context.notify_change(self._on_change, store_name)
 
     # ----- scope -----
 
@@ -344,11 +331,20 @@ class MemoryService:
 
     async def get_rules(self, *, store_name: str) -> str | None:
         """Return the rules/rules.md text, or ``None`` if no rules exist yet."""
-        from coffer.infrastructure.knowledge.paths import rules_path
-        from coffer.infrastructure.memory.rules_files import read_rules
+        return await session_context.get_rules(
+            store_name=store_name, resolved_store=self.resolved_store
+        )
 
-        sd = (await self.resolved_store(store_name)).store_dir
-        return await asyncio.to_thread(read_rules, rules_path(sd))
+    async def assemble_session_context(self, *, cwd: str | None) -> str:
+        """SessionStart rules bundle for an agent at ``cwd`` (Slice 6 FR-049/050).
+
+        See ``session_context.assemble_session_context`` for the behaviour.
+        """
+        return await session_context.assemble_session_context(
+            cwd=cwd,
+            resolve_recall_scopes=lambda c: self._scope.resolve_recall_scopes(cwd=c),
+            get_rules_for=lambda store_name: self.get_rules(store_name=store_name),
+        )
 
     # ----- on_update_config / on_delete kind hooks -----
 

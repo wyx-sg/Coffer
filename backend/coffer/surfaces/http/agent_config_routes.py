@@ -20,12 +20,14 @@ from coffer.application.agent.config_file_service import (
     ConfigFileContent,
     ConfigFileInfo,
 )
+from coffer.application.agent.hook_service import AgentHookService, HookInstallStatus
 from coffer.application.agent.mcp_service import AgentMcpService, McpInstallStatus
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
 from coffer.surfaces.http.dependencies import (
     get_agent_config_file_service,
+    get_agent_hook_service,
     get_agent_mcp_service,
 )
 
@@ -80,6 +82,11 @@ class McpInstallStatusOut(BaseModel):
     command: str | None
 
 
+class HookInstallStatusOut(BaseModel):
+    installed: bool
+    command: str | None
+
+
 def _info_out(i: ConfigFileInfo) -> ConfigFileInfoOut:
     return ConfigFileInfoOut(
         key=i.key,
@@ -117,6 +124,10 @@ def _content_out(c: ConfigFileContent) -> ConfigFileContentOut:
 
 def _status_out(s: McpInstallStatus) -> McpInstallStatusOut:
     return McpInstallStatusOut(installed=s.installed, command=s.command)
+
+
+def _hook_status_out(s: HookInstallStatus) -> HookInstallStatusOut:
+    return HookInstallStatusOut(installed=s.installed, command=s.command)
 
 
 @router.get("/{name}/config-files", response_model=ConfigFileListOut)
@@ -224,3 +235,29 @@ async def uninstall_mcp(
     actor: str = Depends(_actor),
 ) -> McpInstallStatusOut:
     return _status_out(await svc.uninstall(name, actor=actor))
+
+
+@router.get("/{name}/hook-install", response_model=HookInstallStatusOut)
+async def hook_install_status(
+    name: str,
+    svc: AgentHookService = Depends(get_agent_hook_service),  # noqa: B008
+) -> HookInstallStatusOut:
+    return _hook_status_out(await svc.status(name))
+
+
+@router.post("/{name}/hook-install", response_model=HookInstallStatusOut)
+async def install_hook(
+    name: str,
+    svc: AgentHookService = Depends(get_agent_hook_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> HookInstallStatusOut:
+    return _hook_status_out(await svc.install(name, actor=actor))
+
+
+@router.delete("/{name}/hook-install", response_model=HookInstallStatusOut)
+async def uninstall_hook(
+    name: str,
+    svc: AgentHookService = Depends(get_agent_hook_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> HookInstallStatusOut:
+    return _hook_status_out(await svc.uninstall(name, actor=actor))

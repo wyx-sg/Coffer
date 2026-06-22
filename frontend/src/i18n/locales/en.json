@@ -272,6 +272,10 @@
       "agent_config_file_written": "Edited {{resource}} config ({{key}})",
       "agent_mcp_installed": "Installed Coffer MCP into {{resource}}",
       "agent_mcp_uninstalled": "Removed Coffer MCP from {{resource}}",
+      "agent_hook_installed": "Installed the Coffer session hook into {{resource}}",
+      "agent_hook_uninstalled": "Removed the Coffer session hook from {{resource}}",
+      "agent_native_memory_disabled": "Disabled native memory for {{resource}}",
+      "agent_native_memory_restored": "Restored native memory for {{resource}}",
       "agent_config_file_deleted": "Deleted {{resource}} config ({{key}})",
       "agent_mcp_entry_removed": "Removed an MCP entry from {{resource}}",
       "agent_mcp_entry_adopted": "Adopted an MCP entry into {{resource}}",
@@ -618,7 +622,8 @@
     "MODEL_NOT_FOUND": "Model not found",
     "MODEL_REJECTED": "The model configuration was rejected",
     "NO_MODEL_CONFIGURED": "No model is configured yet. Add one to start chatting.",
-    "TURN_IN_PROGRESS": "A turn is already in progress in this conversation"
+    "TURN_IN_PROGRESS": "A turn is already in progress in this conversation",
+    "HOOK_INSTALL_UNSUPPORTED": "This agent type doesn't support a session-start hook."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -777,7 +782,11 @@
       "import": "Import to Coffer",
       "importing": "Importing…",
       "importDone": "Imported {{count}} item(s) from {{project}} into Coffer; organizing in the background.",
-      "importNoProject": "Couldn't map {{project}} to a Coffer project (not a git project)."
+      "importNoProject": "Couldn't map {{project}} to a Coffer project (not a git project).",
+      "disableNativeLabel": "Disable this agent's native memory (use Coffer as the shared store)",
+      "disableNativeHelp": "Toggling this writes (or restores) the agent's own config so it stops keeping its own per-project memory and relies on Coffer instead.",
+      "disableNativeOn": "Native memory disabled; this agent now uses Coffer as its shared store.",
+      "disableNativeOff": "Native memory restored; this agent uses its own memory again."
     },
     "configDirOverride": "Config directory (optional)",
     "configDirPlaceholder": "Leave blank for the default (~/.claude)",
@@ -824,6 +833,13 @@
       "install": "Install Coffer MCP",
       "uninstall": "Uninstall Coffer MCP",
       "installedStatus": "Coffer MCP installed"
+    },
+    "hook": {
+      "title": "Session-start rules",
+      "install": "Inject rules at session start",
+      "uninstall": "Stop injecting rules",
+      "help": "Injects the Coffer rules bundle via a SessionStart hook each time the agent starts a session.",
+      "unsupported": "This agent type doesn't support a session-start hook."
     },
     "welcome": {
       "title": "Manage your local AI agents",

@@ -22,10 +22,60 @@ import { RowActions } from "@/components/RowActions";
 import { useFileActionItems } from "@/lib/fileActionItems";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut, NativeMemoryStore } from "@/lib/api/agents";
-import { useAgentNativeMemory, useImportNativeMemory } from "@/lib/hooks/useAgents";
+import {
+  useAgentNativeMemory,
+  useImportNativeMemory,
+  usePatchAgent,
+} from "@/lib/hooks/useAgents";
+
+/** Toggle that disables the agent's OWN native memory (writes/restores the
+ * agent's config) so it uses Coffer as the shared store. Reads
+ * `agent.disable_native_memory`; flips it via PATCH /agents/{name}. */
+function DisableNativeMemoryToggle({ agent }: { agent: AgentOut }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const patch = usePatchAgent();
+  const disabled = agent.disable_native_memory ?? false;
+
+  return (
+    <Card className="space-y-3 p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <Label htmlFor="disable-native-memory" className="text-sm font-medium">
+            {t("agents.memoryTab.disableNativeLabel")}
+          </Label>
+          <p className="max-w-prose text-xs text-muted-foreground">
+            {t("agents.memoryTab.disableNativeHelp")}
+          </p>
+        </div>
+        <Switch
+          id="disable-native-memory"
+          checked={disabled}
+          disabled={patch.isPending}
+          onCheckedChange={(next) =>
+            patch.mutate(
+              { name: agent.name, body: { disable_native_memory: next } },
+              {
+                onSuccess: () =>
+                  toast.success(
+                    next
+                      ? t("agents.memoryTab.disableNativeOn")
+                      : t("agents.memoryTab.disableNativeOff"),
+                  ),
+                onError: (e) => toast.error(translateApiError(t, e)),
+              },
+            )
+          }
+        />
+      </div>
+    </Card>
+  );
+}
 
 /** Per-row "import this native memory store into Coffer" button: bulk-remembers
  * the store's items into the matching Coffer project store, then organizes. */
@@ -124,7 +174,10 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
         notInstalledHint={t("agents.memoryTab.notInstalled")}
       />
 
-      {/* B. The agent's own native memory stores (read-only). */}
+      {/* B. The agent's own native memory: a toggle to disable it (so the agent
+          uses Coffer as the shared store) + the read-only per-project stores. */}
+      <DisableNativeMemoryToggle agent={agent} />
+
       <Card className="space-y-3 p-4">
         <div className="space-y-1">
           <h3 className="text-sm font-medium text-muted-foreground">{t("agents.agentOwn")}</h3>

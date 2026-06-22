@@ -166,6 +166,53 @@ branch with no prior handoff, `coffer__resume` reports `found=false`.
 
 ---
 
+### User Story 8 — Rules arrive ambiently at the start of every session (Priority: P2)
+
+The developer has accumulated behavioural rules in Coffer (global "always run
+the verify step before pushing", project "this repo deploys via `make release`")
+and wants them in front of the agent **automatically at the start of every
+session** — for both Claude Code in the morning and Codex in the afternoon —
+without the agent having to remember to call `recall`, and **without Coffer
+writing into the agent's own memory or instruction files** (ADR-026). When a
+session starts, a Coffer-installed **SessionStart hook** asks Coffer for a rules
+bundle (the always-on global rules plus the current project's rules when the cwd
+resolves to a git project) and injects it into the session as **context only**.
+The bundle also carries two Coffer-seeded built-in rules: call `coffer__resume()`
+to continue prior work, and prefer `coffer__remember`/`coffer__recall` over the
+agent's native memory. When work closes, a SessionEnd hook (Claude Code only)
+distils the just-finished session into the journal immediately; Codex — which has
+no session-end event — falls back to the FR-046 catch-up sweep. A developer who
+wants a clean separation can opt in to `disable_native_memory`, which turns the
+agent's own native memory off (and restores it on uninstall).
+
+**Why this priority**: rules are useless if the agent never reads them. Ambient
+session-start injection is the non-intrusive way (ADR-026's anticipated path) to
+make Coffer's procedural memory present without `recall`-discipline and without
+touching native files. It is P2 (not P1) because it builds on the rules lane
+(FR-036) and the shared-memory core (Stories 1–2): injection delivers rules that
+already exist, and a hook-less or failed injection never blocks the agent.
+
+**Independent Test**: Register a Claude Code agent, install its hooks, write one
+global rule and one project rule, then start a session inside that git project
+and observe the injected `additionalContext` contains both rules plus the two
+seeded built-in rules — with no write to `~/.claude/CLAUDE.md` or the agent's
+native memory. Repeat for Codex (`~/.codex/hooks.json`); confirm the same bundle
+arrives at SessionStart and that no SessionEnd hook is installed for Codex. Stop
+the daemon and start a session: the hook prints nothing and exits 0, and the
+agent starts normally. Toggle `disable_native_memory` on and confirm the agent's
+native-memory setting is written off; toggle it off (or uninstall) and confirm
+the setting is restored.
+
+**Covering scenarios**:
+
+- rules bundle is injected at session start as context only
+- the bundle carries the two seeded built-in rules
+- session-end distils the closed session into the journal
+- a failed or hook-less injection never blocks the agent
+- disable_native_memory turns native memory off and restores it
+
+---
+
 ### Edge Cases
 
 - **Vector unavailable but embedding unconfigured**: when the store's resolved strategy needs vectors but no embedding provider is configured, `recall` falls back to keyword internally and returns results; it never blocks. The fallback is NOT surfaced as a query-time response flag. Default retrieval is keyword+grep (zero config, offline).
@@ -175,6 +222,10 @@ branch with no prior handoff, `coffer__resume` reports `found=false`.
 - **Empty fact text**: rejected at the API boundary; nothing written.
 - **Fact text too long**: bounded at the API boundary (`max_fact_chars`, default 8192); rejected before any write.
 - **Project scope unresolved**: if the agent's working directory is not inside a git project, `scope=project` is rejected with a clear error; `scope=global` still works.
+- **Injection with the daemon down**: when the SessionStart hook cannot reach the daemon (not running, timeout, or any error), it prints nothing and exits 0 — the session starts with no injected bundle and is never blocked.
+- **Injection cwd outside a git project**: the bundle still carries the global rules and the two seeded built-in rules; no project rules are included (there is no project scope to resolve).
+- **SessionEnd on Codex**: Codex emits no session-end event, so no SessionEnd hook is installed for it; its sessions are distilled by the FR-046 catch-up sweep instead, which remains the write guarantee.
+- **Disable-native-memory toggle off / uninstall**: turning `disable_native_memory` off (or uninstalling) restores the agent's native-memory setting to its prior state; the default (off) never touches native memory at all (ADR-026).
 
 ## Acceptance Scenarios
 
@@ -435,6 +486,59 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
   later session-start injection reads), and a store with no rules returns an
   empty/`null` body rather than an error.
 
+### Scenario: rules bundle is injected at session start as context only
+
+- **Given** a managed agent (Claude Code or Codex) with the Coffer SessionStart
+  hook installed, a global rule, and a project rule in the cwd's git project,
+- **When** a session starts and the hook calls `GET /api/v1/agents/{name}/session-context?cwd=<cwd>`,
+- **Then** the daemon returns `additional_context` holding the project rules then
+  the global rules, the hook emits it as the SessionStart `additionalContext`
+  (context only), and **no** write is made to the agent's native memory or
+  instruction files (ADR-026). When the cwd is not inside a git project, the
+  bundle carries the global rules only (no project rules).
+
+### Scenario: the bundle carries the two seeded built-in rules
+
+- **Given** the session-context endpoint assembles a bundle (even when the store
+  has no rules),
+- **When** the bundle is returned,
+- **Then** it always includes the two Coffer-seeded built-in rules — call
+  `coffer__resume()` to continue prior work, and prefer
+  `coffer__remember`/`coffer__recall` over the agent's native memory — and the
+  handoff body itself is NOT injected (it is pulled on demand via `coffer__resume`).
+
+### Scenario: session-end distils the closed session into the journal
+
+- **Given** a Claude Code agent with the Coffer SessionEnd hook installed and an
+  internal model configured,
+- **When** a session closes and the hook calls
+  `POST /api/v1/agents/{name}/sessions/{session_id}/end` with the cwd,
+- **Then** the just-closed session is distilled into the project journal lane
+  reusing the FR-045 distill path, recorded in the `distilled_sessions`
+  idempotency ledger (FR-046) so it is never double-distilled, and the call is a
+  no-op when the session was already distilled, no model is configured, or the
+  cwd is not a git project. Codex installs no SessionEnd hook and degrades to the
+  FR-046 catch-up sweep.
+
+### Scenario: a failed or hook-less injection never blocks the agent
+
+- **Given** the SessionStart hook is installed but the daemon is unreachable (not
+  running, timeout, or any error),
+- **When** a session starts,
+- **Then** the hook prints nothing and exits 0, the session starts with no
+  injected bundle, and the agent is never blocked; an agent with no hook
+  installed simply receives no injection.
+
+### Scenario: disable_native_memory turns native memory off and restores it
+
+- **Given** a managed agent with `disable_native_memory=false` (the default),
+- **When** the user sets `disable_native_memory=true`,
+- **Then** Coffer writes the agent's native-memory off-switch
+  (Claude Code `autoMemoryEnabled=false`; Codex `features.memories=false` +
+  `memories.generate_memories=false`), and setting it back to `false` (or
+  uninstalling) restores the prior setting; while it is `false` Coffer never
+  touches the agent's native memory (ADR-026).
+
 > **Deferred to future test work** (tests land with the e2e infrastructure; `make verify-acceptance` does not gate on them): desktop memory list view per scope, the desktop read-only fact viewer's open-in-editor / reveal affordances, CLI `coffer memory …` end-to-end with a running daemon, per-store metrics (HTTP route).
 
 ## Requirements
@@ -483,7 +587,7 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-033**: The system MUST provide an **internal agentic reorganization pass** that, on an **explicit trigger only** (`POST /api/v1/memory_stores/{name}/reorg` and `coffer memory reorg <name>`; no automatic/background firing in this PR), runs a bounded **langgraph `create_react_agent` loop** driven by Coffer's **internal LLM connection** (the connection marked internal-default; configured on Settings → LLM Connections, spec 011) over the store's existing topic documents to keep them coherent — consolidating duplicate/overlapping documents and splitting over-long ones. The loop is given a small, fixed tool surface over the topic docs — **list** topics, **read** a topic, **write** (create/overwrite) a topic, and **supersede** (retire) a topic — plus the journal-promotion tools of FR-047 (**read journal**, **append rule**), and is **never an agent-facing tool** (it is internal, like the organizer). The langchain/langgraph code MUST stay confined to `infrastructure.chat` (importlinter Contract 9); `application/memory` reaches it only through an injected memory-local port. When no internal connection is configured the pass is a clean no-op (`status="no_model"`, nothing written/superseded/archived) rather than an error; a store with **neither topic documents nor journal entries** is likewise a no-op (`status="empty"`). After the loop the pass MUST regenerate `INDEX.md`, reconcile the index (so `recall` reflects the consolidated docs), and record one `memory_reorganized` audit entry (store + counts only — no document content).
 - **FR-034**: The reorg pass MUST be **non-destructive and incremental — it MUST NOT hard-delete or from-scratch-regenerate a topic document**. Every mutation that removes or replaces existing topic-doc content MUST first **archive the current version** to the store-root `superseded/` tombstone (`<store>/superseded/<slug>-<timestamp>.md`): a `write` that overwrites an existing topic archives the prior version before writing the new one, and a `supersede` **moves** the document there (it is never unlinked into the void). The `superseded/` tombstone is **excluded from recall** (it lives outside the `knowledge/` lane, like `handoff/` and `consolidation-log.md`) and **DOES sync** as recoverable source-of-truth history (unlike the machine-local `INDEX.md`/changelog). Topic-doc writes remain **atomic**, and every write/supersede is appended to the `consolidation-log.md` changelog. This is the data-loss guarantee: no byte ever leaves the `knowledge/` lane without first being recoverably archived, so a human edit can never be irrecoverably clobbered.
 - **FR-035**: The system MUST provide an **auto session-end organize trigger** that fires the `organize` pass (FR-027) **automatically, in the background, when a memory store goes idle** — approximating "session end" without a per-agent disconnect signal. It is driven by the memory write-notify hook: each memory write (re)arms a single **debounced** timer; after the configured idle delay elapses with no further writes, the organizer runs for the changed store(s) as a background task. The trigger MUST be **conservative and non-blocking**: (a) it is **default-ON** — the write→organize→固化 consolidation pipeline runs automatically (the no-manual principle, §4.4), controlled by an environment **off**-switch; manual `coffer memory organize` remains a special-case override; (b) the background pass MUST NEVER block or break daemon shutdown — on shutdown any pending timer is **cancelled** (the un-fired inbox is simply left intact for a later idle pass or an explicit trigger; nothing is lost, since `recall` already covers the inbox and `organize` is idempotent); (c) a background-pass failure MUST be suppressed + logged, never surfacing to a writer or aborting the daemon; (d) when no internal connection is configured the pass is a clean no-op (FR-027). It introduces **no new REST/CLI surface** (it is an internal trigger over the existing organizer) and reuses the `memory_organized` audit. The langchain/langgraph confinement (Contract 9) is unchanged: the trigger lives in `application`/`surfaces` and reaches the LLM only through the already-wired organizer.
-- **FR-036**: The system MUST provide a **procedural `rules` lane** — a single `rules/rules.md` per memory store (global + per-project), holding "do this / don't do that" behavioural rules. The rules lane is **agent-written via the organizer's classification, never an explicit agent param**: during `organize` (FR-027/028), the organizer's single per-item LLM call MAY additionally classify an inbox item as a **rule**; a rule item is **appended** to `rules/rules.md` (the inbox item is drained only after the append succeeds) instead of being merged into a `knowledge/<topic>.md` topic document, and the `organize` result/audit reports a `rules_appended` count. The `rules/` lane sits at the store ROOT (a sibling of `knowledge/`, like `handoff/` and `superseded/`) so it is **excluded from `recall`** for free (the recall glob and the reconciler only descend into `knowledge/`; the grep guard keeps only `knowledge/` hits) — rules are **delivered by ambient session-start injection, not by `recall`**. The lane is **source-of-truth and DOES sync** (like `handoff/`/topic docs; it is not a derived/machine-local file). The system MUST expose the stored rules read-only for the injection surface: `GET /api/v1/memory_stores/{name}/rules` and `coffer memory rules <name>` return the rules text (an empty/`null` body when there are no rules, never an error). The **session-start injection** that delivers these rules into each managed agent as context (ADR-026: injection only, never a native file write) is a **separate later slice (PR3b)** — this slice lands the lane, the classification, and the read surface.
+- **FR-036**: The system MUST provide a **procedural `rules` lane** — a single `rules/rules.md` per memory store (global + per-project), holding "do this / don't do that" behavioural rules. The rules lane is **agent-written via the organizer's classification, never an explicit agent param**: during `organize` (FR-027/028), the organizer's single per-item LLM call MAY additionally classify an inbox item as a **rule**; a rule item is **appended** to `rules/rules.md` (the inbox item is drained only after the append succeeds) instead of being merged into a `knowledge/<topic>.md` topic document, and the `organize` result/audit reports a `rules_appended` count. The `rules/` lane sits at the store ROOT (a sibling of `knowledge/`, like `handoff/` and `superseded/`) so it is **excluded from `recall`** for free (the recall glob and the reconciler only descend into `knowledge/`; the grep guard keeps only `knowledge/` hits) — rules are **delivered by ambient session-start injection, not by `recall`**. The lane is **source-of-truth and DOES sync** (like `handoff/`/topic docs; it is not a derived/machine-local file). The system MUST expose the stored rules read-only for the injection surface: `GET /api/v1/memory_stores/{name}/rules` and `coffer memory rules <name>` return the rules text (an empty/`null` body when there are no rules, never an error). The **session-start injection** that delivers these rules into each managed agent as context (ADR-026: injection only, never a native file write) is specified in FR-049–FR-052 (slice 6) — this rules-lane PR lands the lane, the classification, and the read surface that the injection consumes.
 
 **Journal lane (episodic)**
 
@@ -498,6 +602,13 @@ Every scenario maps to at least one test marked `@pytest.mark.acceptance(spec="0
 - **FR-046:** Memory recording MUST be **automatic**, not dependent on a human running `coffer transcript distill`. The system SHALL run an **auto-distill catch-up sweep** — a background worker that, on daemon start and then periodically, scans each managed agent's transcript sessions and distills any **settled, not-yet-distilled** session into the journal lane (FR-045). A session is eligible only when its `last_activity_at` is (a) **settled** (older than a settle threshold — never an in-progress session) and (b) within a **recency window** (a catch-up net for recently-missed sessions, NOT a full historical backfill); each pass distills at most a bounded number of sessions (the remainder catch up on later passes, logged). Distilled sessions are tracked by `(agent, session_id, content_sha256)` in a machine-local ledger so a session is **never double-distilled** (re-distilled only if its content materially changed); this ledger is the idempotency key the future SessionEnd hook (slice 6) shares. The sweep is **default-ON** (it is the write guarantee) with an environment off-switch; it is **non-blocking and failure-suppressed** (one session's LLM/parse failure never aborts the sweep or the daemon, mirroring FR-035), a clean **no-op when no internal connection is configured**, and on shutdown the worker stops without firing. It introduces **no new REST/CLI surface** and reuses the FR-045 distill path + journal lane. (The immediate-on-close SessionEnd hook is slice 6; this sweep is the standalone guarantee.)
 - **FR-047:** The reorganization pass (FR-033) SHALL additionally perform **consolidation (固化)** — promoting **recurring, durable** episodic patterns from the **journal** lane into the semantic lane. The agentic loop gets two more internal tools alongside the topic tools: **read the recent journal** entries and **append a rule** (`rules/rules.md`). It promotes a pattern that recurs across the journal — conservatively, roughly **≥3 similar entries spanning ≥2 distinct days** (the LLM's judgment; never a one-off) — into a **knowledge topic** (via `write_topic`) or, when the pattern is clearly **imperative/behavioural** ("always do X"), into the **rules** lane (via `append_rule`). A **one-off** event is **left in the journal** (it ages out by prune, a later slice), never auto-promoted. Promotion **copies** the durable pattern into the semantic lane — it does **NOT** delete the journal entries. Every promotion is appended to the store-root `consolidation-log.md` changelog, and the `memory_reorganized` audit reports a `promoted` count. 固化 is **conservative** — when in doubt the loop leaves the entry in the journal (avoid 固化-ing noise).
 - **FR-048:** The free-form fact `type` field is **retired** — `Lane` (`knowledge` / `rules` / `journal` / `handoff`) is the **single classification axis**. The system MUST NOT carry a `type` field on `MemoryFact`, in fact-file frontmatter (`metadata.type`), in the `documents.metadata` JSON, in the `coffer__remember` tool schema, or in the REST/CLI fact write surface (`FactCreate`/`FactUpdate`/`FactOut`, `coffer memory add --type`). A fact's lane is determined by **internal routing** (organizer / distillation), never supplied by the writer. Existing on-disk memory is **drop + recreate** (Coffer is unreleased): there is **no Alembic migration** — `type` lived in `metadata` JSON, not a column, so a stale `metadata.type` key in an old fact file is simply ignored on parse and dropped on the next reindex-on-read; a clean install (or wiping `~/.coffer/memory/`) starts type-free.
+
+**Rules runtime injection & native-memory (session hooks)**
+
+- **FR-049:** The system MUST deliver the rules lane (FR-036) into each managed agent via a **SessionStart hook** that injects a **rules bundle as context only — never a native file write** (ADR-026). Coffer installs the hook into the agent's own hooks config (**Claude Code** → `~/.claude/settings.json` top-level `hooks`; **Codex** → `~/.codex/hooks.json` top-level `hooks` — same JSON schema), recognising only its own entry (the `coffer-hook` command basename) and leaving user hooks untouched; install/uninstall is idempotent and atomic (`.bak` backup) and audits `AGENT_HOOK_INSTALLED`/`AGENT_HOOK_UNINSTALLED`. On SessionStart the hook calls back to Coffer — `GET /api/v1/agents/{name}/session-context?cwd=<cwd>` with the daemon token — and the daemon returns the bundle = the **global rules (always)** plus the **current-project rules (when the cwd resolves to a git project)**, project rules first. The hook emits the bundle as the SessionStart `additionalContext` and exits 0. The hook MUST **never block the agent**: when no hook is installed, or the daemon is unreachable, times out, or errors, there is **no injection** and the hook still exits 0. The hook re-runs on **resume/clear/compact** (the matcher covers `startup|resume|clear|compact`).
+- **FR-050:** The injected bundle (FR-049) MUST additionally carry **two Coffer-seeded built-in rules**, present even when the store's `rules/rules.md` is empty: (a) when the user wants to continue prior work ("continue", "where were we", "resume"), call `coffer__resume()` to pull the saved working-state handoff for this project + branch; and (b) a **soft steer** to prefer `coffer__remember` (record durable facts) and `coffer__recall` (retrieve them) over the agent's own native memory, because Coffer is the shared store across the user's agents. The **handoff body itself is NOT injected** — it is **pulled on demand** via `coffer__resume` (FR-025), so the bundle stays small and a stale scene is never force-fed into context.
+- **FR-051:** The system MUST install a **SessionEnd hook for Claude Code only** that **auto-distils the just-closed session into the journal lane** immediately, lowering the latency of memory capture. On session end the hook calls `POST /api/v1/agents/{name}/sessions/{session_id}/end` with the cwd; the daemon reuses the FR-045 distill path and the `distilled_sessions` idempotency ledger (FR-046) — `is_distilled? → distill → mark_distilled` — so a session is **never double-distilled**, and the call is a clean no-op when the session was already distilled, no internal model is configured, or the cwd is not a git project. **Codex has no session-end event**, so no SessionEnd hook is installed for it; Codex sessions are captured by the **FR-046 catch-up sweep**, which **remains the write guarantee** — this hook only lowers latency and never replaces the sweep.
+- **FR-052:** The system MUST provide an **opt-in per-agent `disable_native_memory` config (default `false`)**. When **off** (the default) Coffer **never touches the agent's native memory** (ADR-026). When the user turns it **on**, Coffer writes the agent's config to disable its native memory — **Claude Code** `autoMemoryEnabled=false` (`~/.claude/settings.json`); **Codex** `features.memories=false` + `memories.generate_memories=false` (`~/.codex/config.toml`) — atomically (`.bak` backup) and audits the disable; turning it **off again, or uninstalling**, **restores** the agent's prior native-memory setting (audited). This is a **cleanliness option** (avoid a second, diverging memory copy), **not required for the write guarantee**: the rules bundle is injected and sessions are distilled regardless of this toggle.
 
 **Transcript history**
 

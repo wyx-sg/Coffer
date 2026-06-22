@@ -34,6 +34,12 @@ class AgentConfig(BaseModel):
     # pre-amendment trust-mode: every master skill is auto-delivered.
     follow_all_skills: bool = True
     skill_exclusions: list[str] = Field(default_factory=list)
+    # Slice 6 opt-in toggle. When True, Coffer disables the agent's *native*
+    # write-side memory (Claude ``autoMemoryEnabled``; Codex ``features.memories``
+    # / ``memories.generate_memories``) so Coffer is the single shared memory
+    # store. Default OFF; toggling it back off restores the agent's native
+    # memory. Old persisted rows (pre-Slice-6) load with this default.
+    disable_native_memory: bool = False
 
     @model_validator(mode="before")
     @classmethod
