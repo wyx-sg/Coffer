@@ -124,7 +124,7 @@ describe("LlmConnectionsPage", () => {
       fireEvent.change(screen.getByLabelText("Base URL"), {
         target: { value: "http://localhost:11434" },
       });
-      fireEvent.change(screen.getByLabelText("Model"), { target: { value: "llama3" } });
+      fireEvent.change(screen.getByLabelText("Model ID"), { target: { value: "llama3" } });
       fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
       await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));

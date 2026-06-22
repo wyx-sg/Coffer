@@ -14,6 +14,8 @@ export interface ProviderProbe {
   model?: string;
   base_url?: string | null;
   credential_ref?: string | null;
+  /** Inline, not-yet-saved key so the dialog can test/fetch before save. */
+  secret_value?: string | null;
 }
 
 export interface TestResult {
@@ -56,6 +58,7 @@ export function useListProviderModels() {
         provider: p.provider,
         base_url: p.base_url ?? null,
         credential_ref: p.credential_ref ?? null,
+        secret_value: p.secret_value ?? null,
       }),
   });
 }

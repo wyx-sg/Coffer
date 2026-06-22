@@ -9,6 +9,7 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
+import { ProviderModelField } from "@/components/settings/ProviderModelField";
 import { translateApiError } from "@/lib/api/errors";
 import { wireNeedsCredential, type ProviderCreate, type WireFormat } from "@/lib/api/providers";
 
@@ -68,14 +69,6 @@ export function ProviderForm({ submitError, pending, onSubmit, onCancel }: Props
         <Label htmlFor="p-base">{t("settings.connections.baseUrl")}</Label>
         <Input id="p-base" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required />
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="p-model">{t("settings.connections.model")}</Label>
-        <Input id="p-model" value={model} onChange={(e) => setModel(e.target.value)} required />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="p-fast">{t("settings.connections.fastModel")}</Label>
-        <Input id="p-fast" value={fastModel} onChange={(e) => setFastModel(e.target.value)} />
-      </div>
       {needsCredential && (
         <div className="space-y-1.5">
           <Label htmlFor="p-secret">{t("settings.connections.secret")}</Label>
@@ -87,6 +80,21 @@ export function ProviderForm({ submitError, pending, onSubmit, onCancel }: Props
           />
         </div>
       )}
+      {/* Model field carries «测试连接»/«拉取模型», driven by the inline (not-yet
+          -saved) secret above so the user can probe before saving (ADR-032 D6). */}
+      <ProviderModelField
+        provider={wireFormat}
+        baseUrl={baseUrl || null}
+        credentialRef={null}
+        secretValue={secret}
+        model={model}
+        onModelChange={setModel}
+        kind="chat"
+      />
+      <div className="space-y-1.5">
+        <Label htmlFor="p-fast">{t("settings.connections.fastModel")}</Label>
+        <Input id="p-fast" value={fastModel} onChange={(e) => setFastModel(e.target.value)} />
+      </div>
       {submitError != null && (
         <p className="text-sm text-destructive">{translateApiError(t, submitError)}</p>
       )}

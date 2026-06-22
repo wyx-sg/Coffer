@@ -23,6 +23,9 @@ interface Props {
   provider: string;
   baseUrl: string | null;
   credentialRef: string | null;
+  /** Inline, not-yet-saved key so test/fetch works before the connection is
+   * saved; takes precedence over credentialRef server-side. */
+  secretValue?: string | null;
   model: string;
   onModelChange: (value: string) => void;
   kind: "chat" | "embedding";
@@ -32,6 +35,7 @@ export function ProviderModelField({
   provider,
   baseUrl,
   credentialRef,
+  secretValue,
   model,
   onModelChange,
   kind,
@@ -45,7 +49,12 @@ export function ProviderModelField({
   const testEmbedding = useTestEmbedding();
   const test = kind === "embedding" ? testEmbedding : testChat;
 
-  const probe = { provider, base_url: baseUrl, credential_ref: credentialRef };
+  const probe = {
+    provider,
+    base_url: baseUrl,
+    credential_ref: credentialRef,
+    secret_value: secretValue ?? null,
+  };
 
   const onFetch = () => list.mutate(probe, { onSuccess: (r) => setFetched(r.models) });
 
