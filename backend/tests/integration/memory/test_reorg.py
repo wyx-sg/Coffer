@@ -4,10 +4,12 @@ Extends the ``mem`` harness (real SQLite + real fact files + real ripgrep) with 
 fake ``AgenticReorgPort`` that drives ``run_agentic_reorg`` directly (via a
 ``GenericFakeChatModel`` with scripted AIMessages), so no real LLM is ever called.
 
-The three acceptance tests cover:
+The acceptance tests cover:
 1. Duplicate consolidation (list → read a → read b → write merged → supersede b).
 2. Data-loss invariant: a superseded doc stays recoverable under ``superseded/``.
 3. No-op when no internal model is configured (``status == "no_model"``).
+4. 固化 (FR-047): a recurring journal pattern is promoted to a knowledge topic.
+5. 固化 (FR-047): an imperative pattern is promoted to the rules lane.
 """
 
 from __future__ import annotations
@@ -20,7 +22,14 @@ import pytest
 from coffer.application.memory.reorg import ReorgService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.provider.config import ProviderConfig, WireFormat
-from coffer.infrastructure.knowledge.paths import superseded_dir, topic_path
+from coffer.infrastructure.knowledge.paths import (
+    consolidation_log_path,
+    journal_path,
+    rules_path,
+    superseded_dir,
+    topic_path,
+)
+from coffer.infrastructure.memory.journal_files import append_entry
 from coffer.infrastructure.memory.topic_files import TopicDoc, write_topic_doc
 
 
@@ -110,6 +119,15 @@ def _seed_topic(store_dir: Any, slug: str, title: str, body: str) -> None:
             updated_at=datetime(2026, 6, 20, tzinfo=UTC),
         ),
     )
+
+
+def _seed_journal(store_dir: Any, entries: list[tuple[datetime, str]]) -> None:
+    """Append episodic journal entries directly into ``journal/<period>.md``.
+
+    Each ``(timestamp, body)`` lands in the month-partitioned file for its date,
+    mirroring what the distill path would have written."""
+    for ts, body in entries:
+        append_entry(journal_path(store_dir, ts.strftime("%Y-%m")), timestamp=ts, body=body)
 
 
 # ---------------------------------------------------------------------------
@@ -421,3 +439,199 @@ async def test_recursion_limit_still_finalizes_index_and_audit(mem: Any) -> None
     # Audit was recorded
     entries = await mem.audit.query(event_type=AuditEventType.MEMORY_REORGANIZED.value)
     assert len(entries) == 1
+
+
+# ---------------------------------------------------------------------------
+# 固化 (consolidation) — FR-047
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="007-memory",
+    scenario="固化 promotes a recurring journal pattern into a knowledge topic",
+)
+async def test_consolidation_promotes_recurring_journal_to_topic(mem: Any) -> None:
+    """A recurring durable pattern (≥3 entries across ≥2 days, no prior topics) is
+    copied into a new knowledge topic via write_topic; the journal is untouched."""
+    from langchain_core.messages import AIMessage
+
+    await mem.service.ensure_store("global")
+    store_dir = (await mem.service.resolved_store("global")).store_dir
+
+    # Recurring pattern: deploys keep failing on the migration step (4 entries, 3 days).
+    journal_entries = [
+        (datetime(2026, 6, 18, 9, tzinfo=UTC), "deploy failed: migration step timed out"),
+        (datetime(2026, 6, 19, 11, tzinfo=UTC), "deploy failed again on the migration step"),
+        (datetime(2026, 6, 19, 16, tzinfo=UTC), "another deploy failed at migration"),
+        (datetime(2026, 6, 20, 10, tzinfo=UTC), "deploy migration step failed once more"),
+    ]
+    _seed_journal(store_dir, journal_entries)
+    journal_md = journal_path(store_dir, "2026-06")
+    journal_before = journal_md.read_text(encoding="utf-8")
+
+    scripted = [
+        # read_journal → agent sees the recurring pattern
+        AIMessage(
+            content="",
+            tool_calls=[{"id": "c1", "name": "read_journal", "args": {}, "type": "tool_call"}],
+        ),
+        # promote it to a new knowledge topic
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "id": "c2",
+                    "name": "write_topic",
+                    "args": {
+                        "slug": "deploy-migration-failures",
+                        "title": "Deploy migration failures",
+                        "description": "Recurring deploy failures at the migration step",
+                        "markdown": (
+                            "# Deploy migration failures\n\nDeploys repeatedly fail at the "
+                            "migration step (timeouts). Investigate the migration timeout."
+                        ),
+                    },
+                    "type": "tool_call",
+                }
+            ],
+        ),
+        AIMessage(content="Consolidation complete."),
+    ]
+
+    reorg_svc = _make_reorg(mem, _FakeAgent(scripted), _Models(_model()))
+    result = await reorg_svc.reorg(store_name="global")
+
+    # The loop ran despite NO prior topic docs (journal alone is enough).
+    assert result.status == "reorganized"
+    assert result.topics_before == 0
+    assert result.topics_written == 1
+
+    # The promoted topic exists on disk + is recalled.
+    promoted = topic_path(store_dir, "deploy-migration-failures")
+    assert promoted.exists()
+    assert "migration step" in promoted.read_text(encoding="utf-8")
+    hits, _fb = await mem.service.recall(cwd=None, query="deploy migration failures", top_k=10)
+    assert any("migration" in h.text for h in hits), [h.text for h in hits]
+
+    # The consolidation log recorded the write (固化 copy).
+    log = consolidation_log_path(store_dir).read_text(encoding="utf-8")
+    assert "deploy-migration-failures" in log
+
+    # Promotion COPIES — the journal is NOT modified.
+    assert journal_md.read_text(encoding="utf-8") == journal_before
+
+
+@pytest.mark.acceptance(
+    spec="007-memory",
+    scenario="固化 promotes a recurring imperative pattern into the rules lane",
+)
+async def test_consolidation_promotes_imperative_to_rules(mem: Any) -> None:
+    """A clearly imperative recurring pattern is promoted to rules/rules.md via
+    append_rule; the changelog logs it and the result/audit promoted count is 1."""
+    from langchain_core.messages import AIMessage
+
+    await mem.service.ensure_store("global")
+    store_dir = (await mem.service.resolved_store("global")).store_dir
+
+    _seed_journal(
+        store_dir,
+        [
+            (datetime(2026, 6, 18, 9, tzinfo=UTC), "forgot to run the linter before pushing again"),
+            (datetime(2026, 6, 19, 9, tzinfo=UTC), "CI failed because the linter wasn't run"),
+            (datetime(2026, 6, 20, 9, tzinfo=UTC), "had to re-push after the linter caught issues"),
+        ],
+    )
+    journal_md = journal_path(store_dir, "2026-06")
+    journal_before = journal_md.read_text(encoding="utf-8")
+
+    rule_text = "Always run the linter before pushing."
+    scripted = [
+        AIMessage(
+            content="",
+            tool_calls=[{"id": "c1", "name": "read_journal", "args": {}, "type": "tool_call"}],
+        ),
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "id": "c2",
+                    "name": "append_rule",
+                    "args": {"rule": rule_text},
+                    "type": "tool_call",
+                }
+            ],
+        ),
+        AIMessage(content="Promoted a rule."),
+    ]
+
+    reorg_svc = _make_reorg(mem, _FakeAgent(scripted), _Models(_model()))
+    result = await reorg_svc.reorg(store_name="global")
+
+    assert result.status == "reorganized"
+    assert result.promoted == 1
+    assert result.topics_written == 0
+
+    # The rule is in rules/rules.md.
+    rules = rules_path(store_dir).read_text(encoding="utf-8")
+    assert rule_text in rules
+
+    # The changelog logged the promotion.
+    log = consolidation_log_path(store_dir).read_text(encoding="utf-8")
+    assert rule_text in log
+    assert "固化" in log
+
+    # The audit details report promoted=1.
+    entries = await mem.audit.query(event_type=AuditEventType.MEMORY_REORGANIZED.value)
+    assert len(entries) == 1
+    assert entries[0].details["promoted"] == 1
+
+    # The journal is unchanged (固化 copies).
+    assert journal_md.read_text(encoding="utf-8") == journal_before
+
+
+async def test_read_journal_returns_entries_with_dates(mem: Any) -> None:
+    """The read_journal tool surfaces journal entries newest-first, each with its
+    YYYY-MM-DD date — the distinct-days signal the loop uses to judge recurrence."""
+    await mem.service.ensure_store("global")
+    store_dir = (await mem.service.resolved_store("global")).store_dir
+    _seed_journal(
+        store_dir,
+        [
+            (datetime(2026, 6, 18, 9, tzinfo=UTC), "older event about gizmos"),
+            (datetime(2026, 6, 20, 9, tzinfo=UTC), "newer event about gizmos"),
+        ],
+    )
+
+    # Build the tools directly and invoke the read_journal handler.
+    reorg_svc = _make_reorg(mem, _FakeAgent([]), _Models(_model()))
+    from coffer.application.memory.reorg import _Actions
+
+    tools = reorg_svc._build_tools(store_dir=store_dir, acts=_Actions())
+    read_journal = next(t for t in tools if t.name == "read_journal")
+    out = await read_journal.handler({})
+
+    dates = [e["date"] for e in out["entries"]]
+    bodies = [e["body"] for e in out["entries"]]
+    # Newest-first ordering, ISO dates.
+    assert dates == ["2026-06-20", "2026-06-18"]
+    assert bodies[0] == "newer event about gizmos"
+    assert bodies[1] == "older event about gizmos"
+
+
+async def test_empty_guard_no_topics_no_journal(mem: Any) -> None:
+    """A store with NEITHER topic docs NOR journal entries returns status='empty'
+    and never calls the agent loop."""
+
+    class _NeverCalledAgent:
+        async def run(self, **_: Any) -> dict[str, Any]:
+            raise AssertionError("agent loop must not run when both lanes are empty")
+
+    await mem.service.ensure_store("global")
+
+    reorg_svc = _make_reorg(mem, _NeverCalledAgent(), _Models(_model()))  # type: ignore[arg-type]
+    result = await reorg_svc.reorg(store_name="global")
+
+    assert result.status == "empty"
+    assert result.topics_written == 0
+    assert result.promoted == 0
+    assert result.model == "llama3"

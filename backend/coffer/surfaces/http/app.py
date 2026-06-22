@@ -288,7 +288,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Optional opt-in background workers (default OFF).
     start_backup_worker(app)
-    start_auto_organize(app, memory_service, get_organizer_service())  # FR-035
+    # Auto session-end organize → 固化 pipeline (007 FR-035): default-ON.
+    start_auto_organize(app, memory_service, get_organizer_service())
     # Auto-distill catch-up sweep (007 FR-046): default-ON memory write guarantee.
     start_auto_distill(
         app, distill_service=distill_service, agent_service=get_agent_service(), session_maker=sm
