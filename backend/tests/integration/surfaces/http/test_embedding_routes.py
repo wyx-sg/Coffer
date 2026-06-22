@@ -25,13 +25,29 @@ from coffer.surfaces.http.embedding_routes import router as embedding_router
 pytestmark = pytest.mark.asyncio
 
 
+class _FakeCreds:
+    """In-memory credential vault for tests (set/delete by ref)."""
+
+    def __init__(self) -> None:
+        self.store: dict[str, str] = {}
+
+    def set(self, ref: str, value: str) -> None:
+        self.store[ref] = value
+
+    def delete(self, ref: str) -> None:
+        self.store.pop(ref, None)
+
+
 async def _client(tmp_path):
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
+    creds = _FakeCreds()
     svc = EmbeddingConfigService(
-        repo=SqlAlchemyEmbeddingConfigRepo(sm), audit=AuditService(SqlAlchemyAuditRepo(sm))
+        repo=SqlAlchemyEmbeddingConfigRepo(sm),
+        audit=AuditService(SqlAlchemyAuditRepo(sm)),
+        credentials=creds,
     )
     app = FastAPI()
     err_handlers.register(app)
@@ -79,6 +95,30 @@ async def test_put_persists_and_get_round_trips(tmp_path):
 
         got = (await client.get("/api/v1/embedding/config")).json()
         assert got == put.json()
+    finally:
+        await client.aclose()
+        await engine.dispose()
+
+
+async def test_secret_value_is_stored_and_becomes_the_credential_ref(tmp_path):
+    client, engine = await _client(tmp_path)
+    try:
+        put = await client.put(
+            "/api/v1/embedding/config",
+            json={
+                "enabled": True,
+                "provider": "openai",
+                "model": "text-embedding-3-small",
+                "dimensions": 1536,
+                "secret_value": "sk-embed-xyz",
+            },
+            headers={"X-Coffer-Actor": "ui"},
+        )
+        assert put.status_code == 200, put.text
+        # The raw key is stored in the vault and surfaced only as a fixed ref —
+        # never echoed back.
+        assert put.json()["credential_ref"] == "embedding/key"
+        assert "secret_value" not in put.json()
     finally:
         await client.aclose()
         await engine.dispose()

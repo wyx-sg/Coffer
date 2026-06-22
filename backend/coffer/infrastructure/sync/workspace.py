@@ -139,13 +139,22 @@ class Workspace:
             shutil.rmtree(target)
         target.mkdir(parents=True, exist_ok=True)
         for ref, blob in blobs.items():
-            (target / f"{ref}.enc").write_bytes(blob)
+            # Refs are namespaced with slashes (e.g. ``channel/seatalk/app-secret``),
+            # so the ``.enc`` file lives in a nested dir that must exist first.
+            dest = target / f"{ref}.enc"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(blob)
 
     def read_credential_blobs(self) -> dict[str, bytes]:
         target = self._root / _CREDENTIALS
         if not target.exists():
             return {}
-        return {path.stem: path.read_bytes() for path in sorted(target.glob("*.enc"))}
+        # Walk recursively and rebuild the full slash ref from the path relative
+        # to ``credentials/`` minus the ``.enc`` suffix, so namespaced refs round-trip.
+        return {
+            path.relative_to(target).with_suffix("").as_posix(): path.read_bytes()
+            for path in sorted(target.rglob("*.enc"))
+        }
 
     # --- inspection --------------------------------------------------------
 

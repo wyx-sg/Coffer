@@ -123,21 +123,18 @@ describe("LlmConnectionsPage", () => {
     },
   );
 
-  test("create falls back to a manual type pick when detection is inconclusive", async () => {
-    detectResult = "unknown";
+  test("create with the Custom provider picks the protocol by hand", async () => {
     apiMock.list.mockResolvedValue({ providers: [] });
     apiMock.create.mockResolvedValue(makeProvider({ name: "myconn", protocol: "openai" }));
 
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /Add connection/i }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "myconn" } });
+    // Pick the "Custom" provider → a protocol picker appears.
+    fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "custom" } });
+    fireEvent.change(screen.getByLabelText("Connection type"), { target: { value: "openai" } });
     fireEvent.change(screen.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
-    const key = screen.getByLabelText("API key");
-    fireEvent.change(key, { target: { value: "sk-x" } });
-    fireEvent.blur(key); // detection runs → "unknown" → manual select appears
-
-    const sel = screen.getByLabelText("Connection type");
-    fireEvent.change(sel, { target: { value: "openai" } });
+    fireEvent.change(screen.getByLabelText("API key"), { target: { value: "sk-x" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
@@ -162,17 +159,13 @@ describe("LlmConnectionsPage", () => {
         }),
       );
 
-      detectResult = "ollama";
       renderPage();
       // open the add dialog
       fireEvent.click(await screen.findByRole("button", { name: /Add connection/i }));
 
       fireEvent.change(screen.getByLabelText("Name"), { target: { value: "local-llm" } });
-      // entering the base URL auto-detects the wire (→ ollama); blur triggers it
-      const base = screen.getByLabelText("Base URL");
-      fireEvent.change(base, { target: { value: "http://localhost:11434" } });
-      fireEvent.blur(base);
-      // ollama needs no key — the credential field disappears once detected
+      // The Ollama preset fills the protocol + endpoint and is keyless.
+      fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "ollama" } });
       expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByRole("button", { name: "Save" }));

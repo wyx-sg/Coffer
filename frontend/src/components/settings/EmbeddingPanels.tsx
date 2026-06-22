@@ -2,6 +2,7 @@
 // Embedding settings card (spec 006): the configured-model summary row (or an
 // empty hint) and the chunking-defaults block that also hosts the enable
 // switch. Kept apart from EmbeddingSettings so the page stays small.
+import type { KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil } from "lucide-react";
 
@@ -52,17 +53,29 @@ export function EmbeddingChunkingFields({
   onEnabledChange,
   chunkSize,
   onChunkSizeChange,
+  onChunkSizeCommit,
   chunkOverlap,
   onChunkOverlapChange,
+  onChunkOverlapCommit,
+  disabled,
 }: {
   enabled: boolean;
   onEnabledChange: (v: boolean) => void;
   chunkSize: number;
   onChunkSizeChange: (v: number) => void;
+  /** Persist the chunk size once editing finishes (blur / Enter). */
+  onChunkSizeCommit: () => void;
   chunkOverlap: number;
   onChunkOverlapChange: (v: number) => void;
+  /** Persist the chunk overlap once editing finishes (blur / Enter). */
+  onChunkOverlapCommit: () => void;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation();
+  // Blur on Enter so the commit handler fires from a single code path.
+  const commitOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") e.currentTarget.blur();
+  };
   return (
     <div className="space-y-3 border-t border-border pt-4">
       <div>
@@ -75,7 +88,7 @@ export function EmbeddingChunkingFields({
           <Label>{t("settings.embedding.enabled")}</Label>
           <p className="text-xs text-muted-foreground">{t("settings.embedding.enabledHint")}</p>
         </div>
-        <Switch checked={enabled} onCheckedChange={onEnabledChange} />
+        <Switch checked={enabled} onCheckedChange={onEnabledChange} disabled={disabled} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -85,7 +98,10 @@ export function EmbeddingChunkingFields({
             id="emb-chunk-size"
             type="number"
             value={chunkSize}
+            disabled={disabled}
             onChange={(e) => onChunkSizeChange(Number(e.target.value) || 0)}
+            onBlur={onChunkSizeCommit}
+            onKeyDown={commitOnEnter}
           />
         </div>
         <div className="space-y-1">
@@ -94,7 +110,10 @@ export function EmbeddingChunkingFields({
             id="emb-chunk-overlap"
             type="number"
             value={chunkOverlap}
+            disabled={disabled}
             onChange={(e) => onChunkOverlapChange(Number(e.target.value) || 0)}
+            onBlur={onChunkOverlapCommit}
+            onKeyDown={commitOnEnter}
           />
         </div>
       </div>
