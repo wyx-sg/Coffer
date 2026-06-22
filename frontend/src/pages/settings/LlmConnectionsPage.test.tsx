@@ -124,7 +124,7 @@ describe("LlmConnectionsPage", () => {
       fireEvent.change(screen.getByLabelText("Base URL"), {
         target: { value: "http://localhost:11434" },
       });
-      fireEvent.change(screen.getByLabelText("Model"), { target: { value: "llama3" } });
+      fireEvent.change(screen.getByLabelText("Model ID"), { target: { value: "llama3" } });
       fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
       await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
@@ -191,6 +191,35 @@ describe("LlmConnectionsPage", () => {
       await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("B"));
     },
   );
+
+  test("edits a connection via the card pencil action (name + wire locked)", async () => {
+    apiMock.list.mockResolvedValue({ providers: [makeProvider({ name: "acme" })] });
+    apiMock.update.mockResolvedValue(makeProvider({ name: "acme", model: "claude-sonnet-4-6" }));
+
+    renderPage();
+    await screen.findByText("acme");
+
+    // open the edit dialog from the card
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    // name + wire are fixed (resource id / projection target)
+    expect((screen.getByLabelText("Name") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Wire format") as HTMLSelectElement).disabled).toBe(true);
+    // the secret is optional in edit mode (no value re-entry required)
+    expect((screen.getByLabelText("API key") as HTMLInputElement).required).toBe(false);
+
+    // change the model and save → PATCH only the editable fields
+    fireEvent.change(screen.getByLabelText("Model ID"), { target: { value: "claude-sonnet-4-6" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
+    expect(apiMock.update).toHaveBeenCalledWith(
+      "acme",
+      expect.objectContaining({ model: "claude-sonnet-4-6" }),
+    );
+    // no fresh secret typed → secret_value omitted
+    expect(apiMock.update.mock.calls[0][1].secret_value).toBeUndefined();
+  });
 
   test("renders the embedding card at the bottom", async () => {
     apiMock.list.mockResolvedValue({ providers: [] });

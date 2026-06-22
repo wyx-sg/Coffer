@@ -84,9 +84,68 @@ async def test_test_embedding_reports_dimension() -> None:
     assert res.detail["dimensions"] == 1536
 
 
+async def test_list_models_prefers_inline_secret() -> None:
+    # An unsaved (inline) secret is used verbatim — the resolver is never called.
+    def _no_resolve(_ref: str) -> str:
+        raise AssertionError("resolver must not run when an inline secret is given")
+
+    port = _FakePort(models=["gpt-4o"])
+    svc = ModelIntrospectionService(port, _no_resolve)
+    result = await svc.list_models(
+        provider="openai", base_url=None, credential_ref=None, secret_value="sk-inline"
+    )
+    assert result.models == ["gpt-4o"]
+    assert port.seen_key == "sk-inline"
+
+
+async def test_inline_secret_overrides_credential_ref() -> None:
+    # When both are present the inline secret wins (resolver not consulted).
+    def _no_resolve(_ref: str) -> str:
+        raise AssertionError("inline secret must take precedence over credential_ref")
+
+    port = _FakePort()
+    svc = ModelIntrospectionService(port, _no_resolve)
+    res = await svc.test_connection(
+        provider="openai",
+        model="gpt-4o",
+        base_url=None,
+        credential_ref="ref-x",
+        secret_value="sk-inline",
+    )
+    assert res.ok is True
+    assert port.seen_key == "sk-inline"
+
+
 @pytest.mark.acceptance(spec="008-agent-chat", scenario="test a model connection")
 async def test_acceptance_test_connection() -> None:
     res = await _svc(_FakePort()).test_connection(
         provider="openai", model="gpt-4o", base_url=None, credential_ref="ref-x"
     )
     assert res.ok is True
+
+
+@pytest.mark.acceptance(
+    spec="011-provider-switching",
+    scenario="test or fetch models with an inline unsaved secret",
+)
+async def test_acceptance_inline_unsaved_secret() -> None:
+    # The dialog can test/fetch before the connection (and its credential ref)
+    # exist — the typed key is passed straight through.
+    def _no_resolve(_ref: str) -> str:
+        raise AssertionError("no credential ref exists yet")
+
+    port = _FakePort(models=["claude-opus-4-6"])
+    svc = ModelIntrospectionService(port, _no_resolve)
+    listed = await svc.list_models(
+        provider="anthropic", base_url=None, credential_ref=None, secret_value="sk-ant-inline"
+    )
+    tested = await svc.test_connection(
+        provider="anthropic",
+        model="claude-opus-4-6",
+        base_url=None,
+        credential_ref=None,
+        secret_value="sk-ant-inline",
+    )
+    assert listed.models == ["claude-opus-4-6"]
+    assert tested.ok is True
+    assert port.seen_key == "sk-ant-inline"

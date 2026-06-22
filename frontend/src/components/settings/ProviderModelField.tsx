@@ -23,18 +23,25 @@ interface Props {
   provider: string;
   baseUrl: string | null;
   credentialRef: string | null;
+  /** Inline, not-yet-saved key so test/fetch works before the connection is
+   * saved; takes precedence over credentialRef server-side. */
+  secretValue?: string | null;
   model: string;
   onModelChange: (value: string) => void;
   kind: "chat" | "embedding";
+  /** Mark the model input as required (create mode); edit mode leaves it optional. */
+  requiredModel?: boolean;
 }
 
 export function ProviderModelField({
   provider,
   baseUrl,
   credentialRef,
+  secretValue,
   model,
   onModelChange,
   kind,
+  requiredModel,
 }: Props) {
   const { t } = useTranslation();
   const listId = useId();
@@ -45,7 +52,12 @@ export function ProviderModelField({
   const testEmbedding = useTestEmbedding();
   const test = kind === "embedding" ? testEmbedding : testChat;
 
-  const probe = { provider, base_url: baseUrl, credential_ref: credentialRef };
+  const probe = {
+    provider,
+    base_url: baseUrl,
+    credential_ref: credentialRef,
+    secret_value: secretValue ?? null,
+  };
 
   const onFetch = () => list.mutate(probe, { onSuccess: (r) => setFetched(r.models) });
 
@@ -78,6 +90,7 @@ export function ProviderModelField({
         value={model}
         onChange={(e) => onModelChange(e.target.value)}
         placeholder={t("settings.models.modelIdPlaceholder")}
+        required={requiredModel}
       />
       <datalist id={listId}>
         {fetched.map((m) => (

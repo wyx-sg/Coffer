@@ -539,6 +539,17 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 - **Then** the activate mutation is called with the correct profile name and the
   table reflects the updated active state (TypeScript acceptance test).
 
+### Scenario: test or fetch models with an inline unsaved secret
+
+- **Given** the connection dialog is open and no connection (nor its credential
+  ref) has been saved yet,
+- **When** the user types a raw API key and triggers «测试连接» or «拉取模型»
+  (`POST /models/test-connection` / `POST /models/list-models` carrying
+  `secret_value` and no `credential_ref`),
+- **Then** the introspection service passes the inline key straight to the
+  provider without consulting the credential vault, the probe succeeds, and the
+  fetched models populate the selectable dropdown (per ADR-032 amendment D6).
+
 ### Scenario: create an ollama connection without a credential
 
 - **Given** no connection named `local-llm` exists,

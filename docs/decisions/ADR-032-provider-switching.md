@@ -162,3 +162,25 @@ function. All I/O (file writes) is performed by `ProviderService._project`.
 See [specs/011-provider-switching/research.md](../../specs/011-provider-switching/research.md)
 for the full enumeration of alternatives (A1/A2/A3, B1/B2/B3, C1/C2) and the
 rationale for rejecting each alternative.
+
+## Amendment 2026-06-22 — connections are optional overrides (introspection: inline secret)
+
+Authoritative design: the [spec 011 Amendment 2026-06-22](../../specs/011-provider-switching/spec.md)
+(D1–D7). This ADR section records the introspection consequence delivered first
+(D6); later D-points extend it.
+
+- **D6 — the connection dialog tests/fetches with a not-yet-saved key.** The kept
+  introspection routes (`POST /api/v1/models/test-connection`,
+  `POST /api/v1/models/list-models`) now accept an inline `secret_value` in
+  addition to `credential_ref`. `ModelIntrospectionService` prefers the inline
+  secret and otherwise resolves the ref, so the add/edit dialog can probe a
+  provider before the credential exists in the vault. The inline secret is used
+  only for the outbound probe — it is never persisted by the introspection path
+  (Decision B's store-ref-not-plaintext invariant is unchanged: the secret is
+  saved to the Fernet vault only on connection create/update).
+- **Deviation from the block plan — the dialog keeps a model field.** The model
+  remains a required field on the connection entity (projected to
+  `ANTHROPIC_MODEL` / Codex `model`, per Decision D), so the dialog retains model
+  selection — upgraded to the `ProviderModelField` combobox (test/fetch +
+  dropdown + free text). Moving model selection onto the Agent page is the
+  separate two-slot concern tracked under D3.

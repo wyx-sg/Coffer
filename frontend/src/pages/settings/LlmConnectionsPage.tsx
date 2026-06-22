@@ -8,15 +8,17 @@
 // at the bottom.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Boxes, Check, Cpu, Plus, Star, Trash2 } from "lucide-react";
+import { Boxes, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ConnectionCard } from "@/components/settings/ConnectionCard";
 import { ProviderForm } from "@/components/settings/ProviderForm";
 import {
   useProviders,
   useCreateProvider,
+  useUpdateProvider,
   useDeleteProvider,
   useActivateProvider,
   useSetInternalDefaultProvider,
@@ -29,16 +31,23 @@ export function LlmConnectionsPage() {
   const { t } = useTranslation();
   const { data: providers = [], isPending, error } = useProviders();
   const createProvider = useCreateProvider();
+  const updateProvider = useUpdateProvider();
   const deleteProvider = useDeleteProvider();
   const activateProvider = useActivateProvider();
   const setInternalDefault = useSetInternalDefaultProvider();
 
   const [adding, setAdding] = useState(false);
+  const [editTarget, setEditTarget] = useState<Provider | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Provider | null>(null);
 
   const closeAdd = () => {
     setAdding(false);
     createProvider.reset();
+  };
+
+  const closeEdit = () => {
+    setEditTarget(null);
+    updateProvider.reset();
   };
 
   if (isPending) {
@@ -83,71 +92,16 @@ export function LlmConnectionsPage() {
             <ul className="space-y-2">
               {providers.map((p) => (
                 <li key={p.name}>
-                  <Card className="paper-card">
-                    <CardContent className="flex items-center gap-3 py-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate text-sm font-medium">{p.name}</span>
-                          {p.is_active && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                              <Check className="size-3" />
-                              {t("settings.connections.active")}
-                            </span>
-                          )}
-                          {p.internal_default && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-600">
-                              <Cpu className="size-3" />
-                              {t("settings.connections.internalDefault")}
-                            </span>
-                          )}
-                        </div>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {p.wire_format} · {p.model} · {p.base_url}
-                        </p>
-                      </div>
-                      {/* Internal-engine selection: a star toggle, parallel to
-                          the per-wire "Switch" but global and orthogonal. */}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className={
-                          p.internal_default
-                            ? "size-7 p-0 text-amber-500"
-                            : "size-7 p-0 text-muted-foreground hover:text-amber-500"
-                        }
-                        disabled={p.internal_default || setInternalDefault.isPending}
-                        onClick={() => setInternalDefault.mutate(p.name)}
-                        aria-label={t("settings.connections.setInternalDefault", { name: p.name })}
-                        title={t("settings.connections.setInternalDefault", { name: p.name })}
-                      >
-                        <Star
-                          className={p.internal_default ? "size-4 fill-amber-400" : "size-4"}
-                        />
-                      </Button>
-                      {/* Ollama is internal-only — never projected to an agent, so
-                          it has no per-wire "Switch" action. */}
-                      {p.wire_format !== "ollama" && !p.is_active && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={activateProvider.isPending}
-                          onClick={() => activateProvider.mutate(p.name)}
-                        >
-                          {t("settings.connections.switch")}
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="size-7 p-0 hover:text-destructive"
-                        onClick={() => setDeleteTarget(p)}
-                        disabled={deleteProvider.isPending}
-                        aria-label={t("common.delete")}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </CardContent>
-                  </Card>
+                  <ConnectionCard
+                    provider={p}
+                    internalPending={setInternalDefault.isPending}
+                    activatePending={activateProvider.isPending}
+                    deletePending={deleteProvider.isPending}
+                    onSetInternalDefault={(name) => setInternalDefault.mutate(name)}
+                    onActivate={(name) => activateProvider.mutate(name)}
+                    onEdit={(prov) => setEditTarget(prov)}
+                    onDelete={(prov) => setDeleteTarget(prov)}
+                  />
                 </li>
               ))}
             </ul>
@@ -169,6 +123,27 @@ export function LlmConnectionsPage() {
               closeAdd();
             }}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editTarget !== null} onOpenChange={(open) => !open && closeEdit()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("settings.connections.editTitle")}</DialogTitle>
+          </DialogHeader>
+          {editTarget && (
+            <ProviderForm
+              initial={editTarget}
+              submitError={updateProvider.error}
+              pending={updateProvider.isPending}
+              onCancel={closeEdit}
+              onSubmit={() => {}}
+              onUpdate={async (patch) => {
+                await updateProvider.mutateAsync({ name: editTarget.name, patch });
+                closeEdit();
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

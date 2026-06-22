@@ -514,6 +514,8 @@
       "subtitle": "一个连接 = API Key + 接入地址 + 模型。同一个连接可同时供 agent 和 Coffer 内部引擎使用。",
       "add": "添加连接",
       "addTitle": "添加连接",
+      "editTitle": "编辑连接",
+      "secretKeepBlank": "留空则保留当前密钥",
       "empty": "暂无连接。",
       "switch": "切换",
       "active": "使用中",
