@@ -74,6 +74,9 @@ def write_topic_doc(path: Path, doc: TopicDoc) -> None:
     write is atomic so a crash never leaves a partial topic doc."""
     text = render_frontmatter(
         {
+            # A topic doc lives in the knowledge lane — same ``kind`` header as a
+            # per-fact file for a consistent on-disk format.
+            "kind": "knowledge",
             "title": doc.title,
             "description": doc.description,
             "updated_at": doc.updated_at.isoformat(),
@@ -152,6 +155,18 @@ def append_changelog(store_dir: Path, entry: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(entry.rstrip("\n") + "\n")
+
+
+def delete_consolidation_log(store_dir: Path) -> bool:
+    """Delete the store-root ``consolidation-log.md``. Returns whether it existed.
+
+    The caller MUST NOT append a changelog line for this delete — the file being
+    removed is the changelog itself."""
+    path = consolidation_log_path(store_dir)
+    if path.exists():
+        path.unlink()
+        return True
+    return False
 
 
 def topic_doc_exists(store_dir: Path, slug: str) -> bool:

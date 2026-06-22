@@ -225,7 +225,7 @@ async def add_fact(
     await mem_svc.ensure_store(name)
     fact = await mem_svc.add_fact_to_store(
         store_name=name,
-        name=body.name or "",
+        title=body.title or "",
         description=body.description or "",
         body=body.text,
         actor=actor,
@@ -286,7 +286,7 @@ async def update_fact(
         fact_id=fact_id,
         new_body=body.text,
         actor=actor,
-        new_name=body.name,
+        new_title=body.title,
         new_description=body.description,
     )
     _, path = await mem_svc.get_fact_with_path(store_name=name, fact_id=fact.id)

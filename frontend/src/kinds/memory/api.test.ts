@@ -9,7 +9,11 @@ import { ApiError } from "@/lib/api/errors";
 import {
   addFact,
   clearFacts,
+  deleteConsolidationLog,
   deleteFact,
+  deleteHandoffBranch,
+  deleteJournalPeriod,
+  deleteMemoryRules,
   getFact,
   getMemoryConsolidationLog,
   getMemoryHandoff,
@@ -98,9 +102,9 @@ describe("addFact", () => {
   test("POSTs the fact fields to /facts", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ id: "m-1", name: "tabs", text: "uses tabs", actor: "user" }));
+      .mockResolvedValue(okJson({ id: "m-1", title: "tabs", text: "uses tabs", actor: "user" }));
 
-    const out = await addFact("prefs", { text: "uses tabs", name: "tabs" });
+    const out = await addFact("prefs", { text: "uses tabs", title: "tabs" });
     expect(out.id).toBe("m-1");
 
     const [url, init] = fetchMock.mock.calls[0];
@@ -110,7 +114,7 @@ describe("addFact", () => {
     expect(headers["X-Coffer-Actor"]).toBe("user");
     expect(JSON.parse(init!.body as string)).toEqual({
       text: "uses tabs",
-      name: "tabs",
+      title: "tabs",
     });
   });
 
@@ -158,11 +162,54 @@ describe("deleteFact", () => {
   });
 });
 
+describe("lane deletes", () => {
+  test("deleteJournalPeriod DELETEs /journal/<period> (period encoded)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({}));
+    await deleteJournalPeriod("prefs", "2026-06");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/memory_stores/prefs/journal/2026-06`);
+    expect(init?.method).toBe("DELETE");
+  });
+
+  test("deleteHandoffBranch DELETEs /handoff/<branch> (branch encoded)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({}));
+    await deleteHandoffBranch("prefs", "feat/x");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/memory_stores/prefs/handoff/feat%2Fx`);
+    expect(init?.method).toBe("DELETE");
+  });
+
+  test("deleteMemoryRules DELETEs /rules", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({}));
+    await deleteMemoryRules("prefs");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/memory_stores/prefs/rules`);
+    expect(init?.method).toBe("DELETE");
+  });
+
+  test("deleteConsolidationLog DELETEs /consolidation-log", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson({}));
+    await deleteConsolidationLog("prefs");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/memory_stores/prefs/consolidation-log`);
+    expect(init?.method).toBe("DELETE");
+  });
+
+  test("throws a typed ApiError on non-2xx", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      notOkJson(404, { error: { code: "MEMORY_NOT_FOUND", message: "no such file" } }),
+    );
+    const err = await deleteJournalPeriod("prefs", "ghost").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).code).toBe("MEMORY_NOT_FOUND");
+  });
+});
+
 describe("getFact", () => {
   test("GETs /memory_stores/<store>/facts/<id> and returns the full fact", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(okJson({ id: "m-1", name: "tabs", text: "uses tabs", actor: "user" }));
+      .mockResolvedValue(okJson({ id: "m-1", title: "tabs", text: "uses tabs", actor: "user" }));
     const out = await getFact("prefs", "m-1");
     expect(out.id).toBe("m-1");
     expect(out.text).toBe("uses tabs");

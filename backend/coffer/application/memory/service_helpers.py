@@ -1,7 +1,7 @@
 """Pure helpers for ``MemoryService``.
 
 Extracted from ``service.py`` to keep that file under the project's 400-LOC
-ceiling. These functions have no service state — fact validation, name
+ceiling. These functions have no service state — fact validation, title
 derivation, body hashing, on-disk size accounting, and passage/grep→hit
 conversion.
 """
@@ -30,7 +30,7 @@ def validate_fact(body: str, max_chars: int) -> None:
         raise MemoryRejected("too_long", f"fact length {len(body)} exceeds store limit {max_chars}")
 
 
-def derive_name(body: str) -> str:
+def derive_title(body: str) -> str:
     for line in body.splitlines():
         if line.strip():
             return line.strip()[:80]

@@ -66,7 +66,7 @@ class _ImportSink:
         self,
         *,
         project_path: str,
-        name: str,
+        title: str,
         description: str,
         body: str,
         origin_session_id: str | None,
@@ -79,7 +79,7 @@ class _ImportSink:
         await self._memory.add_fact(
             scope=MemoryScope.PROJECT,
             cwd=project_path,
-            name=name,
+            title=title,
             description=description,
             body=body,
             actor="agent",

@@ -36,7 +36,7 @@ acceptance("007-memory", "clear a memory scope", async ({ page }) => {
   const addResp = await fetch(`${apiBase}/memory_stores/global/facts`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ text: "e2e fact about deploys", name: "e2e" }),
+    body: JSON.stringify({ text: "e2e fact about deploys", title: "e2e" }),
   });
   expect(addResp.status).toBe(201);
 
@@ -88,7 +88,7 @@ acceptance("007-memory", "user adds a fact", async ({ page }) => {
         "X-Coffer-Actor": "agent",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ text: factText, name: "e2e-fact" }),
+      body: JSON.stringify({ text: factText, title: "e2e-fact" }),
     });
     expect(add.status).toBe(201);
 

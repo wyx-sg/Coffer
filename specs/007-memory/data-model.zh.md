@@ -32,7 +32,7 @@ frozen dataclass；一个每条事实 markdown 文件（frontmatter + 正文）�
 | 字段                | 类型                      | 说明                                                                       |
 | ------------------- | ------------------------- | -------------------------------------------------------------------------- |
 | `id`                | `str`                     | 文档 id（ULID）；也是 `<fact-slug>.md` 文件名的基础。                      |
-| `name`              | `str`                     | frontmatter `name`（短标题）。                                            |
+| `title`             | `str`                     | frontmatter `title`（短标题；旧 `name` key 仍兼容解析）。                |
 | `description`       | `str`                     | frontmatter `description`（一行摘要）。                                   |
 | `body`              | `str`                     | markdown 正文 = 事实文本。                                                 |
 | `actor`             | `Literal["agent","user"]` | frontmatter `metadata.actor` —— 谁写的。                                   |
@@ -96,7 +96,7 @@ CREATE TABLE documents (
     resource_name  TEXT NOT NULL,               -- store name (memory: scope store)
     project_id     TEXT NOT NULL,               -- WORKSPACE_GLOBAL sentinel | project ULID
     path           TEXT NOT NULL,               -- canonical .md path on disk = truth
-    title          TEXT NOT NULL,               -- memory: frontmatter `name`
+    title          TEXT NOT NULL,               -- memory: frontmatter `title`
     description    TEXT,                         -- memory: frontmatter `description`
     metadata       TEXT NOT NULL DEFAULT '{}',   -- JSON; memory: {actor, origin_session_id}
     content_sha256 TEXT NOT NULL,               -- for lazy-reindex delta detection
@@ -186,7 +186,8 @@ CREATE TABLE memory_store_labels (
 
 ```markdown
 ---
-name: deploy-via-make-release
+kind: knowledge
+title: deploy-via-make-release
 description: This repo deploys via `make release`, never git push --tags directly.
 metadata:
   actor: agent
@@ -210,6 +211,7 @@ release target tags and pushes atomically.
 | `remember` / 用户新增                       | 写 `knowledge/inbox/<item-slug>.md` → 索引进 `documents`/`chunks`/FTS5/（vec）→ 审计。                                                                          |
 | 用户编辑（REST/CLI/外部编辑器）             | 重写 `.md` → 单一 re-index 例程（sha256 变化 → re-chunk/-embed）→ 审计。（直接的外部编辑器编辑在下一次 lazy reindex-on-read 时生效。）MCP 无编辑工具 —— 仅 REST/CLI。 |
 | 用户删除（REST/CLI）                        | 删除 `.md` → 移除 `documents`/`chunks`/FTS5/vec 行 → 审计。MCP 无删除工具 —— 仅 REST/CLI。                                                                       |
+| Lane 删除（REST）                           | `DELETE /memory_stores/{name}/{journal/<period>,handoff/<branch>,rules,consolidation-log}` → 删除 lane 文件 → 丢弃 journal lane 的索引行（FR-043；handoff/rules 在 recall 之外）→ 向 `consolidation-log.md` 追加一行人类可读记录（删除 changelog 自身时除外）→ 审计 `memory_deleted`。文件不存在 → 404（与 fact-delete 一致）。 |
 | 清空一个 scope                              | 删除 `knowledge/` 下每条记忆条目 → 移除全部索引行 → 审计。store Resource 保留。                                                                                  |
 | 整理（显式触发；内部 LLM）                  | 逐 inbox 条目：取回 ≤3 个候选主题文档 → 一次 one-shot LLM 合并/创建/**分类** → 若 LLM 标记该条目为 **rule**，追加到 `rules/rules.md`（过程性 lane，FR-036）；否则写 `knowledge/<slug>.md` → 删除 inbox 条目（仅在写入/追加之后）→ 追加 `consolidation-log.md`。随后重新生成 `INDEX.md`、对账索引、**把任一超阈值 `rules/*.md` 经 one-shot LLM 分类拆分为 per-topic `rules/<slug>.md`**（amendment 2026-06-22）、审计 `memory_organized`（含 `rules_appended` 计数）。畸形 LLM 输出跳过该条目（留在 inbox）；未配置内部模型 → no-op。 |
 | 重组 reorg（显式触发；内部 agentic LLM）    | 有界的 langgraph `create_react_agent` 循环，配 list/read/write/supersede 工具作用于主题文档：合并重复 + 拆分过长文档。**每次覆盖/supersede 先把旧版本归档到 `superseded/<slug>-<ts>.md`**（绝不硬删除）。随后重新生成 `INDEX.md`、对账、审计 `memory_reorganized`。未配置内部模型 → no-op（`no_model`）；无主题文档 → no-op（`empty`）。 |

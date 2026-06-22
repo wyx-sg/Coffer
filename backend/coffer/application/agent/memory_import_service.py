@@ -54,7 +54,7 @@ class MemoryImportSinkPort(Protocol):
         self,
         *,
         project_path: str,
-        name: str,
+        title: str,
         description: str,
         body: str,
         origin_session_id: str | None,
@@ -147,7 +147,9 @@ class AgentMemoryImportService:
             try:
                 await self._sink.add(
                     project_path=project_path,
-                    name=fact.name,
+                    # ``ParsedNativeFact.name`` is the upstream agent format's own
+                    # field; it maps onto the Coffer fact ``title`` at the sink.
+                    title=fact.name,
                     description=fact.description,
                     body=fact.body,
                     origin_session_id=fact.origin_session_id,

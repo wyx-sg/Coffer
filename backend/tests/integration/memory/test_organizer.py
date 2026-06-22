@@ -92,11 +92,11 @@ def _make_organizer(mem, llm: _ScriptedLlm, models: _Models) -> OrganizerService
     )
 
 
-async def _remember(mem, *, body: str, name: str) -> None:
+async def _remember(mem, *, body: str, title: str) -> None:
     await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name=name,
+        title=title,
         description=body[:60],
         body=body,
         actor="agent",
@@ -112,8 +112,8 @@ async def _remember(mem, *, body: str, name: str) -> None:
 )
 async def test_organizer_drains_inbox_into_topic_doc(mem) -> None:
     await mem.service.ensure_store("global")
-    await _remember(mem, body="Deploy via `make release`, never push tags.", name="deploy")
-    await _remember(mem, body="Releases are tagged atomically by make release.", name="release")
+    await _remember(mem, body="Deploy via `make release`, never push tags.", title="deploy")
+    await _remember(mem, body="Releases are tagged atomically by make release.", title="release")
 
     llm = _ScriptedLlm(
         [
@@ -202,7 +202,7 @@ async def test_organizer_merges_without_clobbering_existing_topic(mem) -> None:
             updated_at=datetime(2026, 6, 20, tzinfo=UTC),
         ),
     )
-    await _remember(mem, body="Optional engine tests skip locally, run on CI.", name="ci-tests")
+    await _remember(mem, body="Optional engine tests skip locally, run on CI.", title="ci-tests")
 
     # The LLM returns the existing X plus the new info (a real merge).
     merged = existing_x + "\nOptional engine tests skip locally but run on CI."
@@ -233,7 +233,7 @@ async def test_organizer_merges_without_clobbering_existing_topic(mem) -> None:
 )
 async def test_organize_no_model_is_clean_noop(mem) -> None:
     await mem.service.ensure_store("global")
-    await _remember(mem, body="Some fact to organize.", name="fact")
+    await _remember(mem, body="Some fact to organize.", title="fact")
     store_dir = (await mem.service.resolved_store("global")).store_dir
     inbox_before = sorted(p.name for p in inbox_dir(store_dir).glob("*.md"))
 
@@ -279,7 +279,7 @@ async def test_clobber_guard_remerges_against_unretrieved_existing_doc(mem) -> N
             updated_at=datetime(2026, 6, 20, tzinfo=UTC),
         ),
     )
-    await _remember(mem, body="velvet oxygen sandwich nebula.", name="note")
+    await _remember(mem, body="velvet oxygen sandwich nebula.", title="note")
 
     llm = _ScriptedLlm(
         [
@@ -309,8 +309,8 @@ async def test_clobber_guard_remerges_against_unretrieved_existing_doc(mem) -> N
 
 async def test_malformed_llm_output_skips_item_others_organized(mem) -> None:
     await mem.service.ensure_store("global")
-    await _remember(mem, body="First good fact about deploys.", name="alpha")
-    await _remember(mem, body="Second fact that the LLM mangles.", name="beta")
+    await _remember(mem, body="First good fact about deploys.", title="alpha")
+    await _remember(mem, body="Second fact that the LLM mangles.", title="beta")
 
     # One item parses into a topic; the other returns junk → skipped (stays in
     # the inbox). Items are processed in sorted-filename order, so script the
@@ -339,7 +339,7 @@ async def test_malformed_llm_output_skips_item_others_organized(mem) -> None:
 
 async def test_second_organize_on_empty_inbox_is_noop(mem) -> None:
     await mem.service.ensure_store("global")
-    await _remember(mem, body="A fact.", name="fact")
+    await _remember(mem, body="A fact.", title="fact")
     llm = _ScriptedLlm([_topic_json("facts", "Facts", "f", "# Facts\n\nA fact.")])
     org = _make_organizer(mem, llm, _Models(_model()))
     first = await org.organize(store_name="global")
@@ -360,7 +360,7 @@ async def test_topic_doc_recalls_at_passage_granularity(mem) -> None:
     """A multi-section topic doc yields per-passage chunks so recall returns
     the relevant section, not the whole document."""
     await mem.service.ensure_store("global")
-    await _remember(mem, body="some note", name="note")
+    await _remember(mem, body="some note", title="note")
 
     llm = _ScriptedLlm(
         [
@@ -389,7 +389,7 @@ async def test_topic_doc_recalls_at_passage_granularity(mem) -> None:
 
 async def test_index_and_changelog_never_surface_in_recall(mem) -> None:
     await mem.service.ensure_store("global")
-    await _remember(mem, body="Recallable content marker ZEBRA.", name="zebra")
+    await _remember(mem, body="Recallable content marker ZEBRA.", title="zebra")
     llm = _ScriptedLlm(
         [_topic_json("zebra-topic", "Zebra topic", "z", "# Zebra\n\nContent marker ZEBRA.")]
     )
@@ -418,8 +418,8 @@ async def test_index_and_changelog_never_surface_in_recall(mem) -> None:
 async def test_organizer_routes_rule_into_rules_lane(mem) -> None:
     await mem.service.ensure_store("global")
     # Remember a rule-shaped note and an ordinary deploy note.
-    await _remember(mem, body="Always run make verify before pushing to CI.", name="rule-note")
-    await _remember(mem, body="Deploy via `make release`; never push tags.", name="deploy-note")
+    await _remember(mem, body="Always run make verify before pushing to CI.", title="rule-note")
+    await _remember(mem, body="Deploy via `make release`; never push tags.", title="deploy-note")
 
     rule_text = "Always run make verify before pushing to CI."
     rule_json = json.dumps(
@@ -491,7 +491,7 @@ async def test_organize_splits_oversized_rules_lane(mem) -> None:
     store_dir = (await mem.service.resolved_store("global")).store_dir
     for i in range(150):
         append_rule(rules_path(store_dir), f"behavioural rule number {i}")
-    await _remember(mem, body="A note that becomes a topic doc.", name="note")
+    await _remember(mem, body="A note that becomes a topic doc.", title="note")
 
     split_assignments = json.dumps(
         {
