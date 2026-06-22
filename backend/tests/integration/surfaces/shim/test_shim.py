@@ -370,7 +370,7 @@ async def test_ensure_daemon_exits_3_when_spawn_fails(
 ) -> None:
     """_ensure_daemon must call sys.exit(3) when the daemon never comes up."""
     from coffer.surfaces.cli import _client as _cli_client
-    from coffer.surfaces.shim import main as shim_main
+    from coffer.surfaces.shim import bootstrap as shim_main
 
     empty_home = tmp_path / "empty"
     empty_home.mkdir()
@@ -396,7 +396,7 @@ async def test_ensure_daemon_returns_info_when_daemon_present(
     home, _port, _token = running_daemon
     from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
     from coffer.surfaces.cli import _client as _cli_client
-    from coffer.surfaces.shim import main as shim_main
+    from coffer.surfaces.shim import bootstrap as shim_main
 
     monkeypatch.setenv("HOME", str(home))
     daemon_json = home / ".coffer" / "daemon.json"

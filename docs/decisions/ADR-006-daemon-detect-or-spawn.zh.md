@@ -129,6 +129,18 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
   detect-or-spawn 存活性检查从裸 TCP 连接改为 HTTP `GET /api/v1/daemon/status`
   的 200 探测，因此占用了崩溃 daemon 所记录端口的「占座进程」不再被误判为存活
   daemon。
+- **2026-06-22** —— shim 重启自愈。长驻的 `coffer-mcp-shim` 只在**启动时**解析
+  一次 daemon 的端口 + token，并在其整个生命周期内固定使用。当 daemon 在不同端口
+  上重启时（8000 被占用 → 选了 8001，或反之），所有已存在的 shim 仍然往那个已死
+  的端口 POST，对每次工具调用都返回 `httpx.ConnectError: All connection attempts
+  failed`，并让 SSE 重连循环永远空转 —— 客户端（如 Codex）会把它显示成单个工具的
+  「连接错误」，看上去像上游/URL 配置错误，实则纯粹是 shim↔daemon 端点过期。
+  修复：POST 连接失败时，shim 现在会重读一次 `daemon.json`（`_Bridge._recover`）；
+  若在**不同**端点上发现存活的 daemon，就重绑共享 httpx 客户端的 `base_url` 与
+  `X-Coffer-Token`，丢弃失效的 `Mcp-Session-Id`，重放缓存的 `initialize` 握手在新
+  daemon 上建立新会话，然后重试该调用一次。同端点抖动仍按瞬时处理（正常退避）；
+  完全宕机的 daemon 仍返回 JSON-RPC 错误（此时靠重新 spawn 一个新 shim 恢复）。
+  共享客户端的重绑也会把 SSE 重连循环引导到新 daemon 上。
 - **2026-06-13** —— 关闭启动窗口。spawn `flock` 现在会持有到写完 `daemon.json`
   之后、直到 daemon 真正在提供 HTTP 服务为止：`acquire_or_existing` 返回一个
   `release` 回调，由入口在 uvicorn 报告 `Server.started` 后才调用。此前锁在写完
