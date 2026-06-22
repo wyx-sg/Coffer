@@ -109,6 +109,9 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     // the new connection. If the reply already landed we just drop the stale
     // bubble; if the stream closed while idle (no turn in flight) we stop.
     void (async () => {
+      // `reconnects` is a per-subscription lifetime cap (not consecutive): a
+      // turn that keeps dropping right after its replayed `turn_start` must not
+      // reconnect forever, so the counter is intentionally never reset.
       for (let reconnects = 0; !cancelled; ) {
         let turnInFlight = false;
         try {

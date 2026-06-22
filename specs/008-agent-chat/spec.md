@@ -378,7 +378,7 @@ turn with actor `agent`.
   load shows the finished message.
 - **SSE connection drops mid-turn but the page stays open** (proxy/idle timeout,
   transient network blip): the client re-subscribes; because attach replays the
-  in-flight turn (FR-019), the missed events — including the terminal
+  in-flight turn (FR-019a), the missed events — including the terminal
   `turn_done` — arrive on the new connection, so the live bubble resolves instead
   of spinning on "thinking…" until the next send. Reconnects are bounded; once
   the turn's reply is committed the client reconciles against the persisted
