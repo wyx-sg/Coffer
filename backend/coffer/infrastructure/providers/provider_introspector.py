@@ -109,3 +109,38 @@ class ProviderIntrospector:
         client = self._openai_client(url, api_key)
         resp = await client.embeddings.create(model=model, input="test")
         return len(resp.data[0].embedding)
+
+    async def detect_protocol(self, *, base_url: str | None, api_key: str | None) -> str:
+        url = (base_url or "").strip()
+        low = url.lower()
+        # Loopback endpoints are ollama/lmstudio-style (internal-only) — classify
+        # without an outbound probe (the SSRF guard would block them anyway).
+        if any(tok in low for tok in ("localhost", "127.0.0.1", ":11434", ":1234")):
+            return "ollama"
+        if not url:
+            return "unknown"
+        await self._guard("", url)
+        # OpenAI-compatible probe first (most third-party gateways speak it): a
+        # successful GET /models means openai-wire. An anthropic endpoint rejects
+        # the bearer-auth /models call and falls through.
+        try:
+            client = self._openai_client(url, api_key)
+            await client.models.list()
+            return "openai"
+        except Exception:
+            pass
+        # Anthropic-wire probe: GET /v1/models with x-api-key + anthropic-version.
+        try:
+            root = url.rstrip("/")
+            if root.endswith("/v1"):
+                root = root[:-3].rstrip("/")
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+                r = await c.get(
+                    f"{root}/v1/models",
+                    headers={"x-api-key": api_key or "", "anthropic-version": _ANTHROPIC_VERSION},
+                )
+                r.raise_for_status()
+            return "anthropic"
+        except Exception:
+            pass
+        return "unknown"
