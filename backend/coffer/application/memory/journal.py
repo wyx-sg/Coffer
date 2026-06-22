@@ -54,8 +54,14 @@ class JournalService:
             return None
         return self._store_dir(resolved.project_id), project_store_name(resolved.project_id)
 
-    async def append(self, *, cwd: str | None, body: str, actor: str) -> JournalEntry:
-        """Append one episodic event to the current project's journal."""
+    async def append(self, *, cwd: str | None, body: str, actor: str) -> JournalEntry | None:
+        """Append one episodic event to the current project's journal.
+
+        A blank/whitespace-only body is skipped: nothing is written, no audit
+        event is recorded, and ``None`` is returned (so an empty distillation
+        leaves no journal entry and no ``journal/<YYYY-MM-DD>.md`` file)."""
+        if not body.strip():
+            return None
         located = await self._store(cwd)
         if located is None:
             raise ScopeUnresolved(cwd or "<none>")

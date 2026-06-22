@@ -230,8 +230,23 @@ def rules_dir(store_dir: pathlib.Path) -> pathlib.Path:
 
 
 def rules_path(store_dir: pathlib.Path) -> pathlib.Path:
-    """Path of the single rules file ``<store_dir>/rules/rules.md``."""
+    """Path of the default rules file ``<store_dir>/rules/rules.md`` — the bucket
+    new rules append to before the autonomous split redistributes them."""
     return rules_dir(store_dir) / "rules.md"
+
+
+def rule_file_path(store_dir: pathlib.Path, slug: str) -> pathlib.Path:
+    """Path of a per-category rules file ``<store_dir>/rules/<slug>.md``.
+
+    The autonomous split (spec 007 amendment 2026-06-22) groups rules into these
+    by topic once ``rules.md`` grows past the threshold. The slug is guarded as a
+    single safe segment (no traversal, no nested dirs)."""
+    _safe_segment(slug, "rules slug")
+    d = rules_dir(store_dir)
+    candidate = (d / f"{slug}.md").resolve()
+    if not candidate.is_relative_to(d.resolve()):
+        raise ValueError(f"rules slug {slug!r} escapes the rules dir")
+    return d / f"{slug}.md"
 
 
 def journal_dir(store_dir: pathlib.Path) -> pathlib.Path:
