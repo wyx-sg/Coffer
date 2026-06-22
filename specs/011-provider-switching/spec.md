@@ -120,10 +120,15 @@ chat broke because projection writes `wire_api = "chat"`, which `codex-cli`
   "no manual per-agent binding". Selecting projects it; "built-in" clears
   Coffer's projection so the agent's own auth/model returns.
 - **D4 — Chat model selection is a FIXED choice, not free-form.** The chat
-  surface offers only: a curated BUILT-IN model list per agent (Claude Code:
-  opus / sonnet / haiku; Codex: gpt-5 / o-series) ∪ the active connection's
-  model. No free-form per-conversation model id (`Conversation.model_id` stays
-  vestigial); non-chat models (image / video) are never offered. Changing the
+  surface offers a fixed dropdown, never a free-text id. Its options are
+  state-dependent: when a connection overrides the agent, the connection's
+  introspected models (`POST /models/list-models`); otherwise the agent's
+  curated BUILT-IN list (Claude Code: opus / sonnet / haiku; Codex: gpt-5 /
+  o-series). The picker MUST NOT read the connection's stored `model` /
+  `fast_model` fields (they leave the connection in the E1 amendment); the
+  current per-conversation value is always shown so it stays selectable. No
+  free-form per-conversation model id (`Conversation.model_id` stays vestigial);
+  non-chat models (image / video) are never offered. Changing the
   model/connection happens on the Agent page, not per conversation.
 - **D5 — Internal-engine selection is a separate control.** "Which connection
   Coffer's internal engine uses" (`internal_default`) moves OUT of the
@@ -648,6 +653,15 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
   `resolve_internal_connection()` overlays the chosen model onto the resolved
   internal-default connection (the model lives apart from the connection, per
   the amendment below).
+
+### Scenario: the chat model picker offers a fixed list without free-form entry
+
+- **Given** a conversation bound to an agent that has no overriding connection,
+- **When** the model picker is opened,
+- **Then** it offers a fixed dropdown of the agent's built-in models (no
+  free-text "Custom…" entry); and when a connection overrides the agent the
+  dropdown instead lists that connection's introspected models, never reading
+  the connection's stored `model` field (TypeScript acceptance test).
 
 ## Requirements
 

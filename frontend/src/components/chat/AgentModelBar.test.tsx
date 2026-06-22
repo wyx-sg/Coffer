@@ -33,15 +33,19 @@ describe("AgentModelBar", () => {
   test("shows the agent label and the conversation's current model", () => {
     render(<AgentModelBar conversationId="c1" agentKey="claude_code" agentLabel="Claude Code" />);
     expect(screen.getByText("Claude Code")).toBeInTheDocument();
-    expect(screen.getByLabelText(/agent model/i)).toHaveValue("claude-opus-4-8");
+    // The picker is a fixed dropdown; its trigger reflects the current value.
+    expect(screen.getByRole("combobox", { name: /agent model/i })).toHaveTextContent(
+      "claude-opus-4-8",
+    );
   });
 
   test("committing a new model calls setAgentModel with the conversation id", () => {
+    useAgentConfigMock.mockReturnValue({ data: { cwd: null, model: null } });
     render(<AgentModelBar conversationId="c1" agentKey="claude_code" agentLabel="Claude Code" />);
-    const picker = screen.getByLabelText(/agent model/i);
-    fireEvent.change(picker, { target: { value: "claude-haiku-4-5" } });
-    fireEvent.blur(picker);
-    expect(mutate).toHaveBeenCalledWith({ id: "c1", model: "claude-haiku-4-5" });
+    // No override → the built-in list is offered; pick one from the dropdown.
+    fireEvent.keyDown(screen.getByRole("combobox", { name: /agent model/i }), { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "haiku" }));
+    expect(mutate).toHaveBeenCalledWith({ id: "c1", model: "haiku" });
   });
 
   test("disables the picker for a read-only (archived) conversation", () => {
@@ -53,6 +57,6 @@ describe("AgentModelBar", () => {
         disabled
       />,
     );
-    expect(screen.getByLabelText(/agent model/i)).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: /agent model/i })).toBeDisabled();
   });
 });

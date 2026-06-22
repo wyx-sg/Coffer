@@ -396,6 +396,13 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **Then** introspection 服务将明文 key 直接传给 provider、不查 credential vault，
   探测成功，拉取到的模型填入可选下拉框（见 ADR-032 amendment D6）。
 
+### Scenario: the chat model picker offers a fixed list without free-form entry
+
+- **Given** 一个绑定到无覆盖连接的 agent 的会话，
+- **When** 打开模型选择器，
+- **Then** 它给出该 agent 内置模型的固定下拉（无自由输入「Custom…」项）；当有连接覆盖该 agent 时，
+  下拉改为列出该连接 introspect 出的模型，绝不读连接存储的 `model` 字段（TypeScript 验收测试）。
+
 ## 需求
 
 ### 功能需求

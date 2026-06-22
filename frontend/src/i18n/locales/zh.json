@@ -1276,12 +1276,7 @@
     "modelPicker": {
       "label": "Agent 模型",
       "placeholder": "模型（可选）",
-      "defaultHint": "默认：{{model}}",
-      "inherit": "默认（{{model}}）",
-      "inheritNoModel": "默认",
-      "custom": "自定义…",
-      "customLabel": "自定义模型 id",
-      "customPlaceholder": "输入模型 id"
+      "inheritNoModel": "默认"
     },
     "draft": {
       "guide": "给 {{agent}} 发消息，开始新对话。",

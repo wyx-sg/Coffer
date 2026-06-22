@@ -53,7 +53,11 @@ vi.mock("@/lib/hooks/useProviders", () => ({
   }),
 }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
-  useListProviderModels: () => ({ mutate: vi.fn() }),
+  // The picker introspects the active connection on open; return its catalogue.
+  useListProviderModels: () => ({
+    mutate: (_probe: unknown, opts: { onSuccess?: (r: { models: string[] }) => void }) =>
+      opts?.onSuccess?.({ models: ["claude-opus-4-8"] }),
+  }),
 }));
 
 vi.mock("@/lib/chat/streamClient", () => ({
@@ -164,7 +168,7 @@ describe("ChatPage", () => {
     chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
     renderPage("/chat");
 
-    // The model picker is a dropdown listing the active connection's model.
+    // The model picker is a dropdown listing the connection's introspected models.
     const trigger = await screen.findByRole("combobox", { name: /agent model/i });
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     fireEvent.click(screen.getByRole("option", { name: "claude-opus-4-8" }));

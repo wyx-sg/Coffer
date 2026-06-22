@@ -11,7 +11,11 @@ import type { Provider } from "@/lib/api/providers";
 // The model picker (and the no-connection empty state) read the providers list.
 vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: vi.fn() }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
-  useListProviderModels: () => ({ mutate: vi.fn() }),
+  // The picker introspects the active connection on open; return its catalogue.
+  useListProviderModels: () => ({
+    mutate: (_probe: unknown, opts: { onSuccess?: (r: { models: string[] }) => void }) =>
+      opts?.onSuccess?.({ models: ["claude-opus-4-8"] }),
+  }),
 }));
 
 import { useProviders } from "@/lib/hooks/useProviders";
@@ -86,7 +90,7 @@ describe("DraftThread", () => {
   test("offers a model picker beside the agent selector and commits the choice", () => {
     const onModelChange = vi.fn();
     renderDraft({ onModelChange });
-    // The active connection's model is listed in the dropdown — pick it.
+    // The active connection's introspected models are listed — pick one.
     const trigger = screen.getByRole("combobox", { name: /agent model/i });
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     fireEvent.click(screen.getByRole("option", { name: "claude-opus-4-8" }));

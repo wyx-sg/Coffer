@@ -1276,12 +1276,7 @@
     "modelPicker": {
       "label": "Agent model",
       "placeholder": "Model (optional)",
-      "defaultHint": "Default: {{model}}",
-      "inherit": "Default ({{model}})",
-      "inheritNoModel": "Default",
-      "custom": "Custom…",
-      "customLabel": "Custom model id",
-      "customPlaceholder": "Enter a model id"
+      "inheritNoModel": "Default"
     },
     "draft": {
       "guide": "Message {{agent}} to start a new conversation.",
