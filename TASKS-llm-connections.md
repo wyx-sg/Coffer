@@ -78,19 +78,21 @@
 
 ---
 
-## 块2 — 连接多协议（最重，最严测）
+## 块2 — 一网关供多 agent：共享凭据的双连接（简化，2026-06-22 改）
 
-- [ ] 完成（建议分支 `feat/011-multi-protocol-connection`）
+- [ ] 完成（建议分支 `feat/011-shared-credential`）
 
-**目标**：连接声明**支持的协议（可多选 anthropic/openai）**，可被所有兼容 agent 选用；替换当前单 `wire_format` 门控。投射时**按协议分别**写 native config。
+> **2026-06-22 决定（cc-switch 调研后）**：放弃原「连接声明多协议集合 + 数据迁移 + 按协议分别投射」的重方案。cc-switch 自身也**没有**多协议连接——它是单协议 provider + 通用作用域。Coffer 现有能力已基本覆盖目标：后端 create 已支持传 `credential_ref` 复用现有凭据；删除只清自己拥有且无其他引用的凭据（`service.py` `find_credential_citations`，共享 ref 已安全）；连接保留单 `wire_format`。**不改数据模型、不改 ADR-032 核心不变式、不做迁移。**
 
-**改动**
-- 改 **ADR-032 核心不变式**（单 wire_format → 多协议集合）；spec/data-model/契约同步。参考 memory `project_unify_llm_connections`。
-- 数据模型：连接的协议字段从单值 → 集合；迁移脚本。
-- 投射逻辑：按 agent 需要的协议从连接里选对应 native 写法（anthropic → settings.json；openai/Responses → config.toml 等）。
-- 兼容性门控：agent 能选某连接 ⟺ 连接协议集合 ∩ agent 需要的协议 ≠ ∅。
+**目标**：「一个网关同时给 Claude Code 和 Codex 用」= 建**两个连接**（anthropic + openai，同一 base_url，**共享同一份凭据**）。本块只补上让用户能「复用现有凭据」的 UI + 文档定调。
 
-**自测**：一个声明 anthropic+openai 的连接同时可被 claude code 与 openai 兼容 agent 选用；投射按协议各写对；旧 wire_format 数据迁移正确；codex+Agnes 仍按「死路」约束处理（不要在此浪费）。**这块测试最严**：单元 + acceptance + 真实 make dev 投射验证。
+**改动（聚焦前端 + 文档）**
+- 前端 `ProviderForm`：密钥区给「**新建密钥** / **复用现有连接的凭据**」二选一；选复用时从现有连接的 `credential_ref` 列表里挑，提交发 `credential_ref`（而非 `secret_value`）。
+- i18n（zh+en）。
+- spec 011 + ADR-032：记「多 agent 经共享凭据的双连接达成；**不引入协议集合**」为选定模型（amend，supersede 早先的协议集合设想）；加一条 acceptance scenario「create a connection reusing an existing credential」（后端已支持，补前端/契约覆盖即可）。
+- 后端：**基本无改动**（create 已收 `credential_ref`、删除已对共享 ref 安全）；如缺「列出可复用凭据」只读端点再按需加。
+
+**自测**：建连接 A(anthropic,新 key) → 建连接 B(openai) 复用 A 的凭据；删 A 时若 B 仍引用则凭据不被删；两者各自按 wire 投射。无数据迁移、无协议集合。普通严格度（非「最严测」）。
 
 ---
 
