@@ -29,6 +29,8 @@ interface Props {
   model: string;
   onModelChange: (value: string) => void;
   kind: "chat" | "embedding";
+  /** Mark the model input as required (create mode); edit mode leaves it optional. */
+  requiredModel?: boolean;
 }
 
 export function ProviderModelField({
@@ -39,6 +41,7 @@ export function ProviderModelField({
   model,
   onModelChange,
   kind,
+  requiredModel,
 }: Props) {
   const { t } = useTranslation();
   const listId = useId();
@@ -87,6 +90,7 @@ export function ProviderModelField({
         value={model}
         onChange={(e) => onModelChange(e.target.value)}
         placeholder={t("settings.models.modelIdPlaceholder")}
+        required={requiredModel}
       />
       <datalist id={listId}>
         {fetched.map((m) => (

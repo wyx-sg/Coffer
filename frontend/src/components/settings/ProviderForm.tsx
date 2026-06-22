@@ -122,6 +122,7 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
         model={model}
         onModelChange={setModel}
         kind="chat"
+        requiredModel={!isEdit}
       />
       <div className="space-y-1.5">
         <Label htmlFor="p-fast">{t("settings.connections.fastModel")}</Label>
