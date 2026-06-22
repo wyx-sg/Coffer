@@ -62,7 +62,7 @@
 
 ## 块1 — 连接「添加/编辑」弹窗重构
 
-- [ ] 完成（建议分支 `feat/011-connection-dialog`）
+- [x] 完成（建议分支 `feat/011-connection-dialog`）— PR #206 已合并
 
 **目标**：连接弹窗只填 名称 + 协议 + base_url + key；加「测试连接」「拉取模型」「编辑」。
 
