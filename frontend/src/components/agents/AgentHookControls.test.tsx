@@ -41,7 +41,7 @@ describe("AgentHookToggle", () => {
   test("not installed → switching on installs (POST)", () => {
     const mutate = stub(false);
     render(<AgentHookToggle name="cur" />);
-    const sw = screen.getByRole("switch", { name: /inject rules at session start/i });
+    const sw = screen.getByRole("switch", { name: /session-start rules/i });
     expect(sw).toHaveAttribute("aria-checked", "false");
     fireEvent.click(sw);
     expect(mutate).toHaveBeenCalledWith(true);
@@ -50,7 +50,7 @@ describe("AgentHookToggle", () => {
   test("installed → switching off uninstalls (DELETE)", () => {
     const mutate = stub(true);
     render(<AgentHookToggle name="cur" />);
-    const sw = screen.getByRole("switch", { name: /inject rules at session start/i });
+    const sw = screen.getByRole("switch", { name: /session-start rules/i });
     expect(sw).toHaveAttribute("aria-checked", "true");
     fireEvent.click(sw);
     expect(mutate).toHaveBeenCalledWith(false);
@@ -69,7 +69,7 @@ describe("AgentHookToggle", () => {
       statusError: new ApiError("HOOK_INSTALL_UNSUPPORTED", "no hook support"),
     });
     render(<AgentHookToggle name="cur" />);
-    const sw = screen.getByRole("switch", { name: /inject rules at session start/i });
+    const sw = screen.getByRole("switch", { name: /session-start rules/i });
     expect(sw).toBeDisabled();
     expect(screen.getByText(/doesn't support a session-start hook/i)).toBeInTheDocument();
     fireEvent.click(sw);

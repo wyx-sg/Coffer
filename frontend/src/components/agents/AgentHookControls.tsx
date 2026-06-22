@@ -45,7 +45,6 @@ export function AgentHookToggle({ name }: { name: string }) {
           checked={installed}
           disabled={unsupported || mutate.isPending || status.isPending}
           onCheckedChange={(v) => mutate.mutate(v)}
-          aria-label={t("agents.hook.install")}
         />
       </div>
       {mutate.error ? (

@@ -851,9 +851,7 @@
     },
     "hook": {
       "title": "Session-start rules",
-      "install": "Inject rules at session start",
-      "uninstall": "Stop injecting rules",
-      "help": "Injects the Coffer rules bundle via a SessionStart hook each time the agent starts a session.",
+      "help": "When on, injects the Coffer rules bundle via a SessionStart hook each time the agent starts a session.",
       "unsupported": "This agent type doesn't support a session-start hook."
     },
     "welcome": {

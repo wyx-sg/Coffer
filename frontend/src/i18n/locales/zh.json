@@ -851,9 +851,7 @@
     },
     "hook": {
       "title": "会话启动规则",
-      "install": "在会话启动时注入规则",
-      "uninstall": "停止注入规则",
-      "help": "每次该 Agent 启动会话时，通过 SessionStart 钩子注入 Coffer 规则集。",
+      "help": "开启后，每次该 Agent 启动会话时通过 SessionStart 钩子注入 Coffer 规则集。",
       "unsupported": "该 Agent 类型不支持会话启动钩子。"
     },
     "welcome": {
