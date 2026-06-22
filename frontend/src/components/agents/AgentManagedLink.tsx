@@ -52,10 +52,11 @@ export function ManagedLinkCard(props: ManagedLinkProps) {
   );
 }
 
-/** A ManagedLinkCard gated on whether Coffer MCP is installed on the agent.
- * The surface is reached through the Coffer MCP gateway, so until the agent has
- * Coffer MCP installed it shows the "not installed" note instead of the link. */
-export function CofferGatewayCard({
+/** The gateway pointer's content WITHOUT a Card wrapper, so it can sit as a row
+ * inside a shared card (e.g. the Memory tab's combined box). Gated on whether
+ * Coffer MCP is installed: until it is, the surface is unreachable, so the row
+ * shows the "not installed" note instead of the link. */
+export function CofferGatewayRow({
   agentName,
   notInstalledHint,
   ...link
@@ -65,14 +66,26 @@ export function CofferGatewayCard({
   const installed = status.data?.installed ?? false;
 
   if (installed) {
-    return <ManagedLinkCard {...link} />;
+    return <ManagedLinkRow {...link} />;
   }
   return (
-    <Card className="space-y-1 p-4">
+    <div className="space-y-1">
       <h3 className="text-sm font-medium text-muted-foreground">{link.title}</h3>
       <p className="text-sm text-muted-foreground">
         {status.isPending ? t("common.loading") : notInstalledHint}
       </p>
+    </div>
+  );
+}
+
+/** A CofferGatewayRow in its own Card — used standalone (e.g. the gateway-MCP
+ * section), where it isn't sharing a box with sibling rows. */
+export function CofferGatewayCard(
+  props: ManagedLinkProps & { agentName: string; notInstalledHint: string },
+) {
+  return (
+    <Card className="p-4">
+      <CofferGatewayRow {...props} />
     </Card>
   );
 }

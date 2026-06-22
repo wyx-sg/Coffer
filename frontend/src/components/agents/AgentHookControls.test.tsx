@@ -1,11 +1,11 @@
 // frontend/src/components/agents/AgentHookControls.test.tsx — slice 6.
-// The session-start hook control mirrors the Coffer-MCP control: Install (POST)
-// / Uninstall (DELETE) with pending + inline error, plus the 422
-// HOOK_INSTALL_UNSUPPORTED state where the agent type has no hook support.
+// The session-start hook toggle: switching on installs (POST) / off uninstalls
+// (DELETE) with pending + inline error, plus the 422 HOOK_INSTALL_UNSUPPORTED
+// state where the agent type has no hook support (disabled switch + note).
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ApiError } from "@/lib/api/errors";
-import { AgentHookButton } from "./AgentHookControls";
+import { AgentHookToggle } from "./AgentHookControls";
 
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentHookStatus: vi.fn(),
@@ -37,38 +37,42 @@ function stub(
 
 afterEach(() => vi.clearAllMocks());
 
-describe("AgentHookButton", () => {
-  test("not installed → Install button triggers install (POST)", () => {
+describe("AgentHookToggle", () => {
+  test("not installed → switching on installs (POST)", () => {
     const mutate = stub(false);
-    render(<AgentHookButton name="cur" />);
-    fireEvent.click(screen.getByRole("button", { name: /inject rules at session start/i }));
+    render(<AgentHookToggle name="cur" />);
+    const sw = screen.getByRole("switch", { name: /inject rules at session start/i });
+    expect(sw).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(sw);
     expect(mutate).toHaveBeenCalledWith(true);
   });
 
-  test("installed → Uninstall button triggers uninstall (DELETE)", () => {
+  test("installed → switching off uninstalls (DELETE)", () => {
     const mutate = stub(true);
-    render(<AgentHookButton name="cur" />);
-    fireEvent.click(screen.getByRole("button", { name: /stop injecting rules/i }));
+    render(<AgentHookToggle name="cur" />);
+    const sw = screen.getByRole("switch", { name: /inject rules at session start/i });
+    expect(sw).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(sw);
     expect(mutate).toHaveBeenCalledWith(false);
   });
 
   test("surfaces a mutation error inline instead of looking like a no-op", () => {
     stub(false, vi.fn(), { mutateError: new ApiError("SHIM_NOT_FOUND", "shim binary missing") });
-    render(<AgentHookButton name="cur" />);
+    render(<AgentHookToggle name="cur" />);
     // SHIM_NOT_FOUND has an i18n entry, so the inline error shows the translated
     // shim message rather than the raw envelope text.
     expect(screen.getByText(/coffer-mcp-shim/i)).toBeInTheDocument();
   });
 
-  test("422 HOOK_INSTALL_UNSUPPORTED → disabled control + explanatory text, no action", () => {
+  test("422 HOOK_INSTALL_UNSUPPORTED → disabled switch + explanatory text, no action", () => {
     const mutate = stub(false, vi.fn(), {
       statusError: new ApiError("HOOK_INSTALL_UNSUPPORTED", "no hook support"),
     });
-    render(<AgentHookButton name="cur" />);
-    const btn = screen.getByRole("button", { name: /inject rules at session start/i });
-    expect(btn).toBeDisabled();
+    render(<AgentHookToggle name="cur" />);
+    const sw = screen.getByRole("switch", { name: /inject rules at session start/i });
+    expect(sw).toBeDisabled();
     expect(screen.getByText(/doesn't support a session-start hook/i)).toBeInTheDocument();
-    fireEvent.click(btn);
+    fireEvent.click(sw);
     expect(mutate).not.toHaveBeenCalled();
   });
 });

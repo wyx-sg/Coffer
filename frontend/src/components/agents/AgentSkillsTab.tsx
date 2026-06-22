@@ -130,27 +130,9 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
 
   return (
     <div className="space-y-3">
-      {/* The follow toggle and the "Managed by Coffer" section it governs share
-          one card, split by a divider. */}
+      {/* The "Managed by Coffer" section on top and the follow toggle that
+          governs it below, sharing one card split by a divider. */}
       <Card className="divide-y p-0">
-        {/* Compact follow-master-library toggle (switch + inline label). */}
-        <div className="flex items-center gap-3 p-4">
-          <Switch
-            checked={followAll}
-            disabled={patchAgent.isPending}
-            onCheckedChange={(checked) =>
-              patchAgent.mutate({ name: agent.name, body: { follow_all_skills: checked } })
-            }
-            aria-label={t("agents.skillsTab.follow")}
-          />
-          <div className="min-w-0 leading-tight">
-            <span className="text-sm font-medium">{t("agents.skillsTab.follow")}</span>
-            <span className="ml-2 text-xs text-muted-foreground">
-              {t("agents.skillsTab.followHint")}
-            </span>
-          </div>
-        </div>
-
         {followAll ? (
           // Following → the reconciler delivers every master skill automatically,
           // so the per-skill managed table is redundant; point at the Skills page
@@ -212,6 +194,25 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
             )}
           </div>
         )}
+
+        {/* Compact follow-master-library toggle (switch + inline label), below
+            the section it governs. */}
+        <div className="flex items-center gap-3 p-4">
+          <Switch
+            checked={followAll}
+            disabled={patchAgent.isPending}
+            onCheckedChange={(checked) =>
+              patchAgent.mutate({ name: agent.name, body: { follow_all_skills: checked } })
+            }
+            aria-label={t("agents.skillsTab.follow")}
+          />
+          <div className="min-w-0 leading-tight">
+            <span className="text-sm font-medium">{t("agents.skillsTab.follow")}</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {t("agents.skillsTab.followHint")}
+            </span>
+          </div>
+        </div>
       </Card>
 
       <UnmanagedSkillsSection agentName={agent.name} />
