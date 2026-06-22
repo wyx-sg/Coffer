@@ -11,16 +11,25 @@ framework from spec 001.
 Pydantic v2 `BaseModel`. This is the synced `config` dict stored on the
 Resource row. It MUST NOT hold the raw secret.
 
+> **Amendment 2026-06-22b (E1–E2):** the connection is a credentialed endpoint.
+> `model`, `fast_model`, and `wire_api` are REMOVED; the manual `wire_format`
+> becomes a DETECTED `protocol`. The model lives at the point of use (Agent
+> binding / internal-default / chat), not on the connection.
+
 | Field | Type | Constraints / Notes |
 |---|---|---|
-| `wire_format` | `WireFormat` | Required; `"anthropic"`, `"openai"`, or `"ollama"`. `ollama` is internal-only — never projected to an agent. |
-| `base_url` | `str` | Required (all wires); upstream LLM endpoint URL. |
+| `protocol` | `Protocol` | DETECTED, not user-entered; `"anthropic"`, `"openai"`, `"ollama"`, or `"unknown"`. Probed from the endpoint on create/edit; a compatibility hint, not a projection gate. `ollama` is internal-only. `unknown` ⇒ offered to all agents (user decides). |
+| `base_url` | `str` | Required; upstream LLM endpoint URL. |
 | `credential_ref` | `str \| None` | Optional; required for anthropic/openai (Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`); absent for ollama (no API key). |
-| `model` | `str` | Required; primary model id (also the model Coffer's internal engine runs when this is the internal default). |
-| `fast_model` | `str \| None` | Optional; `ANTHROPIC_SMALL_FAST_MODEL` on Claude Code; ignored for openai. |
-| `wire_api` | `WireApi` | Optional; `"chat"` (default) or `"responses"`; openai only. |
-| `is_active` | `bool` | At most one `True` per `wire_format` at any time (FR-011); always `False` for ollama (never projected). |
-| `internal_default` | `bool` | At most one `True` globally (FR-021); the connection Coffer's internal engine uses. On import, if >1, normalise (keep most-recently-updated). |
+| `is_active` | `bool` | At most one `True` per `protocol` at any time (FR-011); always `False` for ollama. |
+| `internal_default` | `bool` | At most one `True` globally (FR-021); the connection Coffer's internal engine uses (its MODEL is chosen by the internal-default selector, not stored here). On import, if >1, normalise (keep most-recently-updated). |
+
+Model selection is NOT on the connection. The model(s) projected for an agent come
+from that agent's binding (Agent page dual slots → `ANTHROPIC_MODEL` +
+`ANTHROPIC_SMALL_FAST_MODEL`); the Codex `wire_api` likewise moves to the Codex
+binding. **Migration (option A): existing connections drop `model`/`fast_model`/
+`wire_api`; `wire_format` is re-read as `protocol` (or `unknown` pending a probe);
+previously-configured models are NOT carried — users re-select on the Agent page.**
 
 All fields are JSON-stable (no Python objects) so `model_dump(mode="json")`
 serialises cleanly for SQLite and sync export.
