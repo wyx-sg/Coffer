@@ -379,6 +379,66 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/memory_stores/{name}/journal:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    get:
+      summary: >
+        List the store's journal lane — the time-partitioned `journal/<period>.md`
+        files (episodic events fed by distillation), newest period first. Read-only;
+        the lane sits outside the knowledge recall glob.
+      operationId: getMemoryStoreJournal
+      tags: [journal]
+      responses:
+        "200":
+          description: >
+            OK. Period files newest first, or an empty list when the store has no
+            journal yet (never an error).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalOut"
+
+  /api/v1/memory_stores/{name}/handoff:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    get:
+      summary: >
+        List the store's handoff lane — one working-state scene per branch
+        (`handoff/<branch-slug>.md`), each carrying its branch + last-updated
+        timestamp. Read-only; the lane sits outside the knowledge recall glob.
+      operationId: getMemoryStoreHandoff
+      tags: [handoff]
+      responses:
+        "200":
+          description: >
+            OK. One scene per branch, or an empty list when the store has no
+            handoff scenes yet (never an error).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HandoffOut"
+
+  /api/v1/memory_stores/{name}/consolidation-log:
+    parameters:
+      - $ref: "#/components/parameters/StoreName"
+    get:
+      summary: >
+        Return the store-root `consolidation-log.md` changelog (the append-only
+        record of organize/reorg passes), read-only. The text is null when the
+        store has no changelog yet.
+      operationId: getMemoryStoreConsolidationLog
+      tags: [consolidation]
+      responses:
+        "200":
+          description: >
+            OK. Returns the changelog text (or null when absent) plus its path
+            so the UI can reveal it in a file manager (never an error).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsolidationLogOut"
+
 components:
   securitySchemes:
     cofferToken:
@@ -729,6 +789,81 @@ components:
           description: >
             The store's `rules/rules.md` text (the procedural rules the organizer
             classified into the rules lane), or null when there are no rules yet.
+
+    JournalFileOut:
+      type: object
+      required: [period, text, path, folder_path]
+      properties:
+        period:
+          type: string
+          description: The time-partition key (`YYYY-MM` stem of the period file).
+        text: { type: string, description: Raw markdown body of the period file. }
+        path:
+          type: string
+          description: >-
+            Absolute path of the `journal/<period>.md` file (source of truth).
+            The in-app viewer is read-only; this backs reveal-in-file-manager.
+        folder_path:
+          type: string
+          description: Absolute path of the journal/ folder containing the file.
+
+    JournalOut:
+      type: object
+      required: [files]
+      properties:
+        files:
+          type: array
+          description: Period files, newest period first (empty when no journal yet).
+          items:
+            $ref: "#/components/schemas/JournalFileOut"
+
+    HandoffSceneOut:
+      type: object
+      required: [branch, text, updated_at, path, folder_path]
+      properties:
+        branch: { type: string, description: The git branch this scene captures. }
+        text: { type: string, description: Freeform working-state body. }
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp of the last overwrite of this branch's scene.
+        path:
+          type: string
+          description: >-
+            Absolute path of the `handoff/<branch-slug>.md` file (source of
+            truth). The in-app viewer is read-only; this backs reveal-in-file-manager.
+        folder_path:
+          type: string
+          description: Absolute path of the handoff/ folder containing the scene.
+
+    HandoffOut:
+      type: object
+      required: [scenes]
+      properties:
+        scenes:
+          type: array
+          description: One scene per branch (empty when no handoff scenes yet).
+          items:
+            $ref: "#/components/schemas/HandoffSceneOut"
+
+    ConsolidationLogOut:
+      type: object
+      required: [text, path, folder_path]
+      properties:
+        text:
+          type: string
+          nullable: true
+          description: >
+            The store-root `consolidation-log.md` changelog text, or null when
+            the store has no changelog yet.
+        path:
+          type: string
+          description: >-
+            Absolute path of the `consolidation-log.md` file (always present even
+            when the file does not yet exist, so the UI can reveal where it lives).
+        folder_path:
+          type: string
+          description: Absolute path of the store dir containing the changelog.
 
     ErrorEnvelope:
       type: object

@@ -18,6 +18,10 @@ import type {
   FactInput,
   FactOut,
   RecallResponse,
+  RulesOut,
+  JournalOut,
+  HandoffOut,
+  ConsolidationLogOut,
 } from "./types";
 
 // Re-export the wire types + scope helpers so existing `import { … } from
@@ -125,6 +129,35 @@ export async function clearFacts(store: string): Promise<number> {
   await checkOk(r);
   const data = (await r.json()) as { cleared: number };
   return data.cleared;
+}
+
+// --- four-lane read views (spec 007 slice 7) -------------------------------
+// Pure GET reads of the store's curated lanes (no LLM, no mutation). Each
+// mirrors the listFacts/getFact fetch+error style; empty stores still 200 with
+// empty lists / null text.
+
+export async function getMemoryRules(store: string): Promise<RulesOut> {
+  const r = await fetch(`${storeBase(store)}/rules`, { headers: headers() });
+  await checkOk(r);
+  return (await r.json()) as RulesOut;
+}
+
+export async function getMemoryJournal(store: string): Promise<JournalOut> {
+  const r = await fetch(`${storeBase(store)}/journal`, { headers: headers() });
+  await checkOk(r);
+  return (await r.json()) as JournalOut;
+}
+
+export async function getMemoryHandoff(store: string): Promise<HandoffOut> {
+  const r = await fetch(`${storeBase(store)}/handoff`, { headers: headers() });
+  await checkOk(r);
+  return (await r.json()) as HandoffOut;
+}
+
+export async function getMemoryConsolidationLog(store: string): Promise<ConsolidationLogOut> {
+  const r = await fetch(`${storeBase(store)}/consolidation-log`, { headers: headers() });
+  await checkOk(r);
+  return (await r.json()) as ConsolidationLogOut;
 }
 
 export async function recall(

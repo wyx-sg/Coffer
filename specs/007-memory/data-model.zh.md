@@ -419,8 +419,71 @@ Coffer 读取 `~/.claude/projects/`、`~/.codex/sessions/` 以及 OpenCode 的�
 分页。读取器保留一份进程内、按 mtime 键控的已解析摘要缓存，使含数千会话的 agent
 仅重新解析 mtime 变化的文件。
 
+## 四-lane 读端点（slice 7 —— FR-053/FR-054）
+
+memory store 详情页把 store 呈现为四个 lane 区块（Knowledge / Rules / Journal /
+Handoff）外加一个整合 changelog 视图（FR-053）。Knowledge 复用既有事实读面
+（`GET …/facts`），也是 `recall` 操作的对象；Rules 已有 `GET …/{name}/rules`
+（FR-036）。slice 7 再加三个**只读** lane 端点（FR-054），每个**按 store 名寻址**
+（而非 cwd）—— 它们是对**磁盘 lane 文件的薄读投影**，不调 LLM，镜像 `MemoryService`
+上的 `get_rules`/metrics（经解析出的作用域取 `store_dir`，经 lane 路径助手 + infra
+读取器在请求线程外读取）。空 store 返回**空列表 / `null` 加 HTTP 200** —— 绝非 404。
+
+| Method + path                                        | 返回                  | lane 来源                                                                 |
+| ---------------------------------------------------- | --------------------- | ------------------------------------------------------------------------- |
+| `GET /api/v1/memory_stores/{name}/journal`           | `JournalOut`          | `journal/<YYYY-MM>.md` 文件，**最新分片优先**（情景；FR-040）。            |
+| `GET /api/v1/memory_stores/{name}/handoff`           | `HandoffOut`          | `handoff/<branch-slug>.md` 现场，每分支一个（连续性；FR-023）。           |
+| `GET /api/v1/memory_stores/{name}/consolidation-log` | `ConsolidationLogOut` | store 根的 `consolidation-log.md`；不存在时 `text = null`（FR-031）。     |
+
+### 响应实体（只读投影）
+
+它们是**只读 DTO** —— 不是新的领域实体或表。每个都携带 lane 文件的磁盘真相（绝对
+`.md` `path` + 所在 `folder_path`），使只读 lane 视图能提供 FR-021 的在外部编辑器打开
+/ 显示 / 复制路径能力，与 `FactOut` 完全一致。
+
+**`JournalFileOut`** —— 一个按时间分片的 journal 文件。
+
+| 字段          | 类型  | 说明                                                  |
+| ------------- | ----- | ----------------------------------------------------- |
+| `period`      | `str` | `journal/<period>.md` 文件的 `YYYY-MM` 词干。         |
+| `text`        | `str` | journal 文件的 markdown 正文。                        |
+| `path`        | `str` | journal 文件的绝对磁盘 `.md` 路径。                   |
+| `folder_path` | `str` | 所在 `journal/` 文件夹的绝对路径。                    |
+
+**`JournalOut`**
+
+| 字段    | 类型               | 说明                                                    |
+| ------- | ------------------ | ------------------------------------------------------- |
+| `files` | `JournalFileOut[]` | journal 文件，**最新分片优先**；空 store 为空列表。     |
+
+**`HandoffSceneOut`** —— 一个按分支的 handoff 现场。
+
+| 字段         | 类型              | 说明                                              |
+| ------------ | ----------------- | ------------------------------------------------- |
+| `branch`     | `str`             | 现场所属分支（frontmatter `branch`）。            |
+| `text`       | `str`             | 现场的自由 markdown 正文。                        |
+| `updated_at` | `str`（date-time）| 现场最后写入时间（frontmatter `updated_at`）。    |
+| `path`       | `str`             | handoff 现场文件的绝对磁盘 `.md` 路径。           |
+| `folder_path`| `str`             | 所在 `handoff/` 文件夹的绝对路径。                |
+
+**`HandoffOut`**
+
+| 字段     | 类型                | 说明                                                |
+| -------- | ------------------- | --------------------------------------------------- |
+| `scenes` | `HandoffSceneOut[]` | 每分支一个现场；无 handoff 的 store 为空列表。       |
+
+**`ConsolidationLogOut`** —— organizer 的追加式固化 changelog。
+
+| 字段          | 类型          | 说明                                                       |
+| ------------- | ------------- | ---------------------------------------------------------- |
+| `text`        | `str \| None` | `consolidation-log.md` 正文；文件不存在时为 `null`。       |
+| `path`        | `str`         | `consolidation-log.md` 的绝对磁盘路径（store 根）。        |
+| `folder_path` | `str`         | 所在 store 目录的绝对路径。                                |
+
+这些读端点（及其 schema）落在后端拥有的 OpenAPI 契约里；spec/data-model 侧只记录上面的形状。
+
 ## 线上契约（REST）
 
-位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall）。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写入事实的途径；桌面/web UI 是只读视图。读 DTO 携带磁盘真相：`FactOut` 带事实的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使只读视图能提供「在外部编辑器打开 / 显示」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。
+位于 `contracts/api.openapi.yaml`。路由在 `/api/v1/memory_stores` 下（list/get/metrics；事实的 add/list/get/edit/delete/clear；recall；FR-054 的 slice-7 journal/handoff/consolidation-log lane 读取）。写入端点（add/edit/delete/clear）保留 —— 它们是 agent（经 MCP）与 CLI 写入事实的途径；桌面/web UI 是只读视图。读 DTO 携带磁盘真相：`FactOut` 带事实的绝对 `.md` `path` 及其所在文件夹的 `folder_path`，`MemoryStoreOut` 带 store 的绝对 `store_dir`，使只读视图能提供「在外部编辑器打开 / 显示」。kind 无关的 `/api/v1/resources/...` 对 memory store 继续可用。全应用统一错误包络：`{ "error": { "code", "message", "details" } }`。
 
 slice-6 的 agent 作用域端点（`GET …/session-context`、`POST …/sessions/{session_id}/end`）与其它 `/api/v1/agents/{name}/…` 路由一起位于 `contracts/transcripts.openapi.yaml`；hook-install 三件套与 `disable_native_memory` agent 字段位于 `004-agent-registry/contracts/api.openapi.yaml`（见上文「规则运行时注入」）。

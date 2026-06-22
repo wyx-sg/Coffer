@@ -439,8 +439,76 @@ The list endpoint applies server-side search (title or project path), filtering
 reader keeps an in-process, mtime-keyed cache of parsed summaries, so an agent
 with thousands of sessions re-parses only files whose mtime changed.
 
+## Four-lane read endpoints (slice 7 — FR-053/FR-054)
+
+The memory store detail page presents the store as four lane sections
+(Knowledge / Rules / Journal / Handoff) plus a consolidation-changelog view
+(FR-053). Knowledge reuses the existing fact read surface (`GET …/facts`) and is
+what `recall` operates over; Rules already has `GET …/{name}/rules` (FR-036).
+Slice 7 adds three more **read-only** lane endpoints (FR-054), each addressed by
+**store name** (not cwd) — they are thin **read projections of on-disk lane
+files**, no LLM, mirroring `get_rules`/metrics on `MemoryService` (resolve
+`store_dir` via the resolved scope, read via the lane path helper + infra reader
+off the request thread). An empty store returns an **empty list / `null` with
+HTTP 200** — never a 404.
+
+| Method + path                                        | Returns               | Lane source                                                                 |
+| ---------------------------------------------------- | --------------------- | -------------------------------------------------------------------------- |
+| `GET /api/v1/memory_stores/{name}/journal`           | `JournalOut`          | `journal/<YYYY-MM>.md` files, **newest period first** (episodic; FR-040).   |
+| `GET /api/v1/memory_stores/{name}/handoff`           | `HandoffOut`          | `handoff/<branch-slug>.md` scenes, one per branch (continuity; FR-023).     |
+| `GET /api/v1/memory_stores/{name}/consolidation-log` | `ConsolidationLogOut` | `consolidation-log.md` at the store root; `text = null` when absent (FR-031). |
+
+### Response entities (read-only projections)
+
+These are **read DTOs only** — not new domain entities or tables. Each surfaces
+the lane file's on-disk truth (absolute `.md` `path` + containing `folder_path`)
+so the read-only lane views can offer the FR-021 open-in-editor / reveal /
+copy-path affordances, exactly like `FactOut`.
+
+**`JournalFileOut`** — one time-partitioned journal file.
+
+| Field         | Type  | Notes                                                       |
+| ------------- | ----- | ----------------------------------------------------------- |
+| `period`      | `str` | `YYYY-MM` stem of the `journal/<period>.md` file.           |
+| `text`        | `str` | The journal file's markdown body.                           |
+| `path`        | `str` | Absolute on-disk `.md` path of the journal file.            |
+| `folder_path` | `str` | Absolute path of the containing `journal/` folder.          |
+
+**`JournalOut`**
+
+| Field   | Type                | Notes                                                            |
+| ------- | ------------------- | --------------------------------------------------------------- |
+| `files` | `JournalFileOut[]`  | Journal files **newest period first**; empty list for an empty store. |
+
+**`HandoffSceneOut`** — one per-branch handoff scene.
+
+| Field        | Type            | Notes                                                       |
+| ------------ | --------------- | ----------------------------------------------------------- |
+| `branch`     | `str`           | Branch the scene belongs to (frontmatter `branch`).         |
+| `text`       | `str`           | The scene's freeform markdown body.                         |
+| `updated_at` | `str` (date-time) | When the scene was last written (frontmatter `updated_at`). |
+| `path`       | `str`           | Absolute on-disk `.md` path of the handoff scene file.      |
+| `folder_path`| `str`           | Absolute path of the containing `handoff/` folder.          |
+
+**`HandoffOut`**
+
+| Field    | Type                | Notes                                                       |
+| -------- | ------------------- | ----------------------------------------------------------- |
+| `scenes` | `HandoffSceneOut[]` | One scene per branch; empty list for a store with no handoff. |
+
+**`ConsolidationLogOut`** — the organizer's append-only 固化 changelog.
+
+| Field         | Type          | Notes                                                            |
+| ------------- | ------------- | ---------------------------------------------------------------- |
+| `text`        | `str \| None` | The `consolidation-log.md` body; `null` when the file is absent. |
+| `path`        | `str`         | Absolute on-disk path of `consolidation-log.md` (store root).    |
+| `folder_path` | `str`         | Absolute path of the containing store directory.                 |
+
+These read endpoints (with their schemas) land in the OpenAPI contract owned by
+the backend; the spec/data-model side documents only the shapes above.
+
 ## Wire contract (REST)
 
-Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall). The write endpoints (add/edit/delete/clear) are retained — they are how agents (via MCP) and the CLI author facts; the desktop/web UI is a read-only viewer. Read DTOs surface on-disk truth: `FactOut` carries the fact's absolute `.md` `path` and its containing folder's `folder_path`, and `MemoryStoreOut` carries the store's absolute `store_dir`, so the read-only viewer can offer open-in-editor / reveal. The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.
+Lives in `contracts/api.openapi.yaml`. Routes under `/api/v1/memory_stores` (list/get/metrics; add/list/get/edit/delete/clear facts; recall; the slice-7 journal/handoff/consolidation-log lane reads of FR-054). The write endpoints (add/edit/delete/clear) are retained — they are how agents (via MCP) and the CLI author facts; the desktop/web UI is a read-only viewer. Read DTOs surface on-disk truth: `FactOut` carries the fact's absolute `.md` `path` and its containing folder's `folder_path`, and `MemoryStoreOut` carries the store's absolute `store_dir`, so the read-only viewer can offer open-in-editor / reveal. The kind-agnostic `/api/v1/resources/...` continues to work for memory stores. App-wide error envelope: `{ "error": { "code", "message", "details" } }`.
 
 The slice-6 agent-scoped endpoints (`GET …/session-context`, `POST …/sessions/{session_id}/end`) live in `contracts/transcripts.openapi.yaml` alongside the other `/api/v1/agents/{name}/…` routes; the hook-install trio and the `disable_native_memory` agent field live in `004-agent-registry/contracts/api.openapi.yaml` (see "Rules runtime injection" above).

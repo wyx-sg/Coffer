@@ -1135,7 +1135,35 @@
       "factBadge": "{{count}} facts",
       "selectFact": "Select a memory on the left to preview or edit it.",
       "untitled": "(untitled)",
-      "actorUser": "edited"
+      "actorUser": "edited",
+      "tabs": {
+        "knowledge": "Knowledge",
+        "rules": "Rules",
+        "journal": "Journal",
+        "handoff": "Handoff",
+        "changelog": "Changelog"
+      }
+    },
+    "lanes": {
+      "rules": "Rules",
+      "journal": "Journal periods",
+      "handoff": "Branches",
+      "changelog": "Changelog"
+    },
+    "rules": {
+      "empty": "No rules yet — agents curate them as your project's conventions emerge."
+    },
+    "journal": {
+      "empty": "No journal entries yet — agents write a digest as work accumulates.",
+      "select": "Select a period on the left to read its digest."
+    },
+    "handoff": {
+      "empty": "No handoff notes yet — agents leave a scene per branch as they pause work.",
+      "select": "Select a branch on the left to read its handoff note.",
+      "updatedAt": "Updated {{time}}"
+    },
+    "changelog": {
+      "empty": "No changelog yet — it records each memory consolidation."
     },
     "welcome": {
       "title": "Your shared agent memory",
