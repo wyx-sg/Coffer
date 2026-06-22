@@ -12,12 +12,8 @@ import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  EmbeddingModelDialog,
-  type EmbeddingModelValues,
-} from "@/components/settings/EmbeddingModelDialog";
+import { type EmbeddingModelValues } from "@/components/settings/EmbeddingModelDialog";
+import { EmbeddingModelDialogs } from "@/components/settings/EmbeddingModelDialogs";
 import { EmbeddingChunkingFields, EmbeddingModelRow } from "@/components/settings/EmbeddingPanels";
 import { translateApiError } from "@/lib/api/errors";
 import { useEmbeddingConfig, useUpdateEmbeddingConfig } from "@/lib/hooks/useEmbeddingConfig";
@@ -169,38 +165,17 @@ export function EmbeddingSettings() {
         ) : null}
       </CardContent>
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => !open && setDialogOpen(false)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {hasModel ? t("settings.embedding.editTitle") : t("settings.embedding.addTitle")}
-            </DialogTitle>
-          </DialogHeader>
-          <EmbeddingModelDialog
-            initial={{
-              provider,
-              model,
-              dimensions,
-              base_url: baseUrl,
-              credential_ref: credentialRef,
-            }}
-            pending={update.isPending}
-            onSubmit={onDialogSubmit}
-            onCancel={() => setDialogOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmDialog
-        open={confirm !== null}
-        onOpenChange={(open) => !open && setConfirm(null)}
-        title={t("settings.embedding.changeModelTitle")}
-        description={t("settings.embedding.changeModelConfirm")}
-        confirmLabel={t("settings.embedding.changeModelConfirmLabel")}
-        variant="default"
+      <EmbeddingModelDialogs
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        hasModel={hasModel}
+        initial={{ provider, model, dimensions, base_url: baseUrl, credential_ref: credentialRef }}
         pending={update.isPending}
-        onConfirm={() => {
-          if (confirm) commitModel(confirm);
+        onSubmit={onDialogSubmit}
+        confirm={confirm}
+        onConfirmClose={() => setConfirm(null)}
+        onConfirmAccept={(v) => {
+          commitModel(v);
           setConfirm(null);
         }}
       />

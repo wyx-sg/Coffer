@@ -14,13 +14,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import {
-  useResolveSync,
   useRunSync,
   useSyncConfig,
   useSyncStatus,
   useUpdateSyncConfig,
 } from "@/lib/hooks/useSync";
 
+import { SyncConflictPanel } from "./SyncConflictPanel";
 import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
 
 const STATUS_TONE: Record<string, string> = {
@@ -38,7 +38,6 @@ export function SyncSettings() {
   const { data: status } = useSyncStatus();
   const update = useUpdateSyncConfig();
   const run = useRunSync();
-  const resolve = useResolveSync();
   const [remote, setRemote] = useState("");
   const [branch, setBranch] = useState("main");
   const [enabled, setEnabled] = useState(false);
@@ -181,34 +180,7 @@ export function SyncSettings() {
         </CardContent>
       </Card>
 
-      {status?.status === "conflicted" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("settings.sync.conflicts")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <ul className="list-disc pl-5 text-sm text-foreground/70">
-              {status.conflict_paths.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => resolve.mutate({ strategy: "ours", paths: [] })}
-              >
-                {t("settings.sync.resolveOurs")}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => resolve.mutate({ strategy: "theirs", paths: [] })}
-              >
-                {t("settings.sync.resolveTheirs")}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <SyncConflictPanel />
 
       <SyncMasterKeyCard />
     </div>

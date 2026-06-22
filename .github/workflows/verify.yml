@@ -177,7 +177,7 @@ jobs:
       - name: Install frontend deps
         working-directory: frontend
         run: npm ci
-      # Phase 8: tauri.conf.json bundle.externalBin requires the two
+      # Phase 8: tauri.conf.json bundle.externalBin requires the three
       # sidecar binaries to exist at build time. The release workflow
       # produces real PyInstaller builds; for the PR verify job we just
       # need stubs so cargo tauri build accepts the externalBin
@@ -186,10 +186,10 @@ jobs:
       - name: Stub sidecar binaries for tauri build
         run: |
           mkdir -p desktop/binaries
-          printf '#!/bin/sh\nexit 0\n' > desktop/binaries/coffer-daemon-x86_64-unknown-linux-gnu
-          printf '#!/bin/sh\nexit 0\n' > desktop/binaries/coffer-mcp-shim-x86_64-unknown-linux-gnu
-          chmod +x desktop/binaries/coffer-daemon-x86_64-unknown-linux-gnu
-          chmod +x desktop/binaries/coffer-mcp-shim-x86_64-unknown-linux-gnu
+          for b in coffer-daemon coffer-mcp-shim coffer-hook; do
+            printf '#!/bin/sh\nexit 0\n' > "desktop/binaries/${b}-x86_64-unknown-linux-gnu"
+            chmod +x "desktop/binaries/${b}-x86_64-unknown-linux-gnu"
+          done
       # Rust unit tests live in desktop/src/lib.rs under `#[cfg(test)] mod
       # tests`. They cover the close-to-tray decision logic that's hard to
       # exercise from a Tauri runtime test. Without this step the unit
