@@ -101,7 +101,7 @@
 
 ## 块3 — internal_default 拆成 LLM 连接页内独立选择器（+ 内部引擎选模型）
 
-- [ ] 完成（建议分支 `feat/011-internal-default-selector`）
+- [x] 完成（建议分支 `feat/011-internal-default-selector`）— PR #213 已合并
 
 > 注（2c 排序依赖）：连接实体目前**仍有** model（2c 才删）。本块要把**内部引擎的模型来源**从 `connection.model` 迁出——加一个「内部引擎模型」选择（存哪由本块定，如全局设置或 internal-default 旁的 model 字段），让 langchain_models/agentic_rag/reorg 等不再读 `cfg.model`。这是 2c 能删 entity.model 的前置之一。
 
