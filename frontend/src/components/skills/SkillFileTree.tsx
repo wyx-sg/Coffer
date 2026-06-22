@@ -20,12 +20,9 @@ export function SkillFileTree({ name }: { name: string }) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   return (
-    // Fill the viewport below the page chrome so the preview pane uses the space
-    // that's there (it was a cramped fixed box before). A min-height keeps it
-    // usable on short windows; main scrolls if it ever overflows.
-    <div className="grid h-[calc(100vh-19rem)] min-h-[20rem] gap-4 md:grid-cols-[18rem_1fr]">
-      {/* Left: the recursive file tree (scrolls independently when long). */}
-      <div className="space-y-1 overflow-y-auto">
+    <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
+      {/* Left: the recursive file tree. */}
+      <div className="space-y-1">
         <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {t("skills.files.tree")}
         </p>
@@ -47,11 +44,11 @@ export function SkillFileTree({ name }: { name: string }) {
       </div>
 
       {/* Right: rendered/editable content of the selected file. */}
-      <div className="min-h-0 min-w-0">
+      <div className="min-w-0">
         {selectedPath ? (
           <SkillFileViewer name={name} path={selectedPath} />
         ) : (
-          <div className="flex h-full items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+          <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
             {t("skills.files.selectFile")}
           </div>
         )}

@@ -32,7 +32,7 @@ export interface ConfigEditorPaneProps {
 export function ConfigEditorPane(props: ConfigEditorPaneProps) {
   const { t } = useTranslation();
   return (
-    <div className="flex h-full flex-col space-y-2">
+    <div className="space-y-2">
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0 flex-1">
           <span className="block truncate font-mono text-xs text-muted-foreground">
@@ -54,12 +54,15 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
         </div>
       ) : null}
 
+      {/* Preview grows with content but is capped at 60vh and scrolls inside
+          (both axes) — same as the knowledge-base doc viewer, so it never
+          exceeds the window and adapts to the window size. */}
       <CodeView
         value={props.loading ? "" : props.content}
         filename={props.filePath}
-        height="100%"
+        maxHeight="60vh"
         ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
-        className="min-h-0 flex-1 bg-muted/30"
+        className="bg-muted/30"
       />
     </div>
   );
