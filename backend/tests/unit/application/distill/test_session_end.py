@@ -38,6 +38,9 @@ def _distiller(*, sha="abc", distilled_shas=None, distill_raises=None):
     return d, calls
 
 
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="session-end distils the closed session into the journal"
+)
 async def test_distills_and_marks_a_new_session():
     d, calls = _distiller()
     out = await d.distill_session(agent_name="cc", session_id="s1")

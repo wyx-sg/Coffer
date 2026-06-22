@@ -26,7 +26,6 @@ import os
 import pathlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import cast
 
 from fastapi import FastAPI
 
@@ -39,11 +38,9 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
-from coffer.domain.knowledge.embedder import EmbeddingConfig
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
-from coffer.infrastructure.knowledge.embeddings import make_embedder
 from coffer.infrastructure.logging.setup import configure_logging
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -58,6 +55,7 @@ from coffer.infrastructure.persistence.repos import (
 from coffer.surfaces.http import cors, daemon_routes
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
+from coffer.surfaces.http.app_embedding_composition import build_embedding_resolvers
 from coffer.surfaces.http.app_mcp_composition import (
     build_prunable_registry,
     reaper_kwargs_from_env,
@@ -184,34 +182,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     substrate = build_substrate(sm, credential_store)
 
     # Embedding is global: KB + memory resolve the current config at index/recall
-    # time so a Settings change applies without a daemon restart.
-    async def _resolve_embedding() -> object:
-        return (await embedding_config_svc.get()).to_embedding_config()
-
-    # Semantic search_tools (ADR-024): the same embedder the KB uses, or None
-    # when embeddings are off / unavailable (→ gateway BM25 fallback). Cached per
-    # config to reuse the underlying client.
-    _ts_embedder_cache: dict[tuple[object, ...], object] = {}
-
-    async def _tool_search_embedder() -> object | None:
-        embedding = cast(EmbeddingConfig | None, await _resolve_embedding())
-        if embedding is None:
-            return None
-        key = (
-            embedding.provider,
-            embedding.model,
-            embedding.base_url,
-            embedding.credential_ref,
-            embedding.dimensions,
-        )
-        embedder = _ts_embedder_cache.get(key)
-        if embedder is None:
-            try:
-                embedder = make_embedder(embedding, resolve_credential=credential_store.get)
-            except Exception:
-                return None
-            _ts_embedder_cache[key] = embedder
-        return embedder
+    # time so a Settings change applies without a daemon restart. The tool-search
+    # embedder (ADR-024) reuses the KB embedder, cached per config.
+    _resolve_embedding, _tool_search_embedder = build_embedding_resolvers(
+        embedding_config_svc, credential_store
+    )
 
     wire_kb_kind(
         app,

@@ -39,6 +39,9 @@ def _assembler(*, scopes, rules):
     )
 
 
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="the bundle carries the two seeded built-in rules"
+)
 async def test_seeded_rules_always_present_when_no_rules():
     a = _assembler(scopes=[_GLOBAL], rules={})
     out = await a.assemble_session_context(cwd=None)
@@ -53,6 +56,9 @@ async def test_global_only_rules_included():
     assert SEEDED_RESUME_RULE in out
 
 
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="rules bundle is injected at session start as context only"
+)
 async def test_project_first_then_global():
     a = _assembler(
         scopes=[_PROJECT, _GLOBAL],

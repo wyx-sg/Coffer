@@ -368,14 +368,14 @@ components:
 
     SessionEndRequest:
       type: object
-      required: [cwd]
       properties:
         cwd:
           type: string
+          nullable: true
           description: |
             The session's launch working directory (from the SessionEnd hook
-            stdin). Resolves the project journal to distil into; a cwd outside a
-            git project makes the call a no-op (no global journal).
+            stdin). Optional — when omitted (or outside a git project) the call
+            is a tolerated no-op. Resolves the project journal to distil into.
 
     ErrorEnvelope:
       type: object

@@ -14,6 +14,9 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentConfigFile: vi.fn(() => ({ data: undefined, isPending: false })),
   useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
   useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+  // Stubs for the session-start hook (rules-injection) control.
+  useAgentHookStatus: vi.fn(() => ({ data: { installed: false }, isPending: false, error: null })),
+  useAgentHookInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
   // Stubs for the Plugins tab.
   useAgentPlugins: vi.fn(() => ({
     data: { items: [], marketplaces: [], parse_errors: [] },

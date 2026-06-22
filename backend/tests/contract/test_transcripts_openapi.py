@@ -16,6 +16,7 @@ from typing import Any
 
 import yaml
 
+from coffer.surfaces.http import agent_session_routes as session_routes
 from coffer.surfaces.http.distill import schemas as distill_schemas
 
 _SPECS = Path(__file__).resolve().parents[3] / "specs"
@@ -29,6 +30,9 @@ _TRANSCRIPT_MODELS: dict[str, type | None] = {
     "DistillRequest": distill_schemas.DistillRequest,
     "InsightOut": distill_schemas.InsightOut,
     "DistillResponse": distill_schemas.DistillResponse,
+    # Slice 6 session-lifecycle routes (FR-049/FR-051).
+    "SessionContextResponse": session_routes.SessionContextOut,
+    "SessionEndRequest": session_routes.SessionEndBody,
     # Envelope / enum — no 1:1 Pydantic model at the surface layer.
     "ErrorEnvelope": None,
 }

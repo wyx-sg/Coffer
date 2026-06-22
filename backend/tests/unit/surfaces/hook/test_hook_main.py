@@ -12,6 +12,8 @@ import io
 import json
 from datetime import UTC, datetime
 
+import pytest
+
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.hook import main as hook_main
 
@@ -101,6 +103,9 @@ def test_session_end_posts_and_prints_nothing(monkeypatch, capsys):
     assert captured["body"] == {"cwd": "/work/proj"}
 
 
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="a failed or hook-less injection never blocks the agent"
+)
 def test_no_daemon_json_exits_zero_silent(monkeypatch, capsys):
     stdin = json.dumps({"hook_event_name": "SessionStart", "cwd": "/x", "session_id": "s"})
     code, out = _run(monkeypatch, capsys, stdin=stdin, argv=["--agent", "a"], daemon=None)

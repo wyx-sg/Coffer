@@ -53,6 +53,9 @@ async def test_enable_persists_field_and_writes_claude_settings(
     assert len(rows) == 1
 
 
+@pytest.mark.acceptance(
+    spec="007-memory", scenario="disable_native_memory turns native memory off and restores it"
+)
 async def test_disable_restores_claude_settings(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     await _register_claude(agent_bundle, tmp_path)
