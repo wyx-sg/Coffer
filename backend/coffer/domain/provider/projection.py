@@ -40,15 +40,28 @@ CODEX_PROVIDER_ID = "coffer"
 #: The raw key is materialized into this var at runtime, never written to disk.
 CODEX_ENV_KEY = "COFFER_PROVIDER_KEY"
 
-#: The command Claude Code runs to fetch the auth token (``apiKeyHelper``). It
-#: resolves the active anthropic profile's credential from the Fernet vault and
-#: prints it — so the key is never persisted in ``settings.json``.
-ANTHROPIC_API_KEY_HELPER = "coffer provider key --wire anthropic"
+#: Prefix of every Coffer-managed ``apiKeyHelper`` — both the per-connection form
+#: (``coffer provider key --connection <name>``) and the legacy wire form
+#: (``--wire anthropic``). De-projection removes a helper iff it starts with this,
+#: so it never clobbers a user-owned helper but always reverts ours.
+MANAGED_API_KEY_HELPER_PREFIX = "coffer provider key"
+
+#: Legacy wire-keyed helper kept for back-compat (older ``settings.json`` files);
+#: resolution falls back to the connection active for the wire's agent.
+ANTHROPIC_API_KEY_HELPER = f"{MANAGED_API_KEY_HELPER_PREFIX} --wire anthropic"
+
+
+def anthropic_api_key_helper(connection: str) -> str:
+    """The ``apiKeyHelper`` Coffer projects for Claude Code: fetch the named
+    connection's key on demand (so the raw key is never written to disk). Keyed
+    by CONNECTION, not wire, so the projected agent always reads exactly the key
+    of the connection that was activated — no silent wire+active mismatch."""
+    return f"{MANAGED_API_KEY_HELPER_PREFIX} --connection {connection}"
 
 
 @dataclass(frozen=True)
 class ProjectionTarget:
-    """Where a wire format projects: the agent type + its native config file."""
+    """Where a connection projects: the agent type + its native config file."""
 
     agent_type: AgentType
     config_key: str
@@ -60,11 +73,28 @@ _TARGETS: dict[Protocol, ProjectionTarget] = {
     Protocol.OPENAI: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
 }
 
+#: The native-config target per AGENT type. The projection writer is chosen by
+#: which agent the connection is compatible with — NOT by the connection's wire —
+#: so an openai-compatible endpoint routed to Claude Code writes Claude's
+#: ``settings.json`` (anthropic shape), and vice versa.
+_AGENT_TARGETS: dict[AgentType, ProjectionTarget] = {
+    AgentType.CLAUDE_CODE: ProjectionTarget(
+        AgentType.CLAUDE_CODE, "settings", ConfigFileFormat.JSON
+    ),
+    AgentType.CODEX: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
+}
+
 
 def target_for(wire: Protocol) -> ProjectionTarget | None:
     """The projection target for ``wire`` (which agent + native config file), or
     ``None`` for internal-only wires (``ollama``) that project into no agent."""
     return _TARGETS.get(wire)
+
+
+def target_for_agent(agent_type: AgentType) -> ProjectionTarget | None:
+    """The native-config target for an agent TYPE (the file + format its writer
+    touches), or ``None`` for an agent Coffer cannot project into."""
+    return _AGENT_TARGETS.get(agent_type)
 
 
 def apply_anthropic_settings(
@@ -141,16 +171,18 @@ def apply_codex_provider(
     return tomlkit.dumps(doc)
 
 
-def remove_anthropic_settings(text: str, *, api_key_helper: str = ANTHROPIC_API_KEY_HELPER) -> str:
+def remove_anthropic_settings(text: str) -> str:
     """Inverse of :func:`apply_anthropic_settings` — strip Coffer's managed keys so
-    Claude Code falls back to its OWN login ("use built-in"). Removes the managed
-    ``apiKeyHelper`` (only when it is Coffer's, never a user-owned one) and the
+    Claude Code falls back to its OWN login ("use built-in"). Removes any
+    Coffer-managed ``apiKeyHelper`` (matched by prefix, so both the per-connection
+    and legacy wire forms are reverted — never a user-owned one) and the
     ``env.ANTHROPIC_BASE_URL`` / ``ANTHROPIC_MODEL`` / ``ANTHROPIC_SMALL_FAST_MODEL``
     vars; unrelated keys and env entries are preserved."""
     data = json.loads(text) if text.strip() else {}
     if not isinstance(data, dict):
         return "{}\n"
-    if data.get("apiKeyHelper") == api_key_helper:
+    helper = data.get("apiKeyHelper")
+    if isinstance(helper, str) and helper.startswith(MANAGED_API_KEY_HELPER_PREFIX):
         data.pop("apiKeyHelper", None)
     env = data.get("env")
     if isinstance(env, dict):

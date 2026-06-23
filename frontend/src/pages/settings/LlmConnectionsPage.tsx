@@ -20,7 +20,6 @@ import {
   useCreateProvider,
   useUpdateProvider,
   useDeleteProvider,
-  useActivateProvider,
 } from "@/lib/hooks/useProviders";
 import { translateApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
@@ -33,7 +32,6 @@ export function LlmConnectionsPage() {
   const createProvider = useCreateProvider();
   const updateProvider = useUpdateProvider();
   const deleteProvider = useDeleteProvider();
-  const activateProvider = useActivateProvider();
 
   const [adding, setAdding] = useState(false);
   const [editTarget, setEditTarget] = useState<Provider | null>(null);
@@ -93,9 +91,7 @@ export function LlmConnectionsPage() {
                 <li key={p.name}>
                   <ConnectionCard
                     provider={p}
-                    activatePending={activateProvider.isPending}
                     deletePending={deleteProvider.isPending}
-                    onActivate={(name) => activateProvider.mutate(name)}
                     onEdit={(prov) => setEditTarget(prov)}
                     onDelete={(prov) => setDeleteTarget(prov)}
                   />

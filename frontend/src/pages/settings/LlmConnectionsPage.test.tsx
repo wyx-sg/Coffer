@@ -57,6 +57,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => ({
   protocol: "anthropic",
   base_url: "https://gw/anthropic",
   credential_ref: "provider/acme/key",
+  compatible_agents: ["claude_code"],
   is_active: false,
   internal_default: false,
   enabled: true,
@@ -93,33 +94,26 @@ describe("LlmConnectionsPage", () => {
 
   acceptance(
     "011-provider-switching",
-    "the Providers page lists profiles and can switch the active one",
+    "the connections page lists profiles and their compatible agents",
     async () => {
       apiMock.list.mockResolvedValue({
         providers: [
-          makeProvider({ name: "official", is_active: true }),
-          makeProvider({ name: "kimi", is_active: false }),
+          makeProvider({ name: "official", is_active: true, compatible_agents: ["claude_code"] }),
+          makeProvider({ name: "agnes", protocol: "openai", compatible_agents: ["codex"] }),
         ],
-      });
-      apiMock.activate.mockResolvedValue({
-        activated: "kimi",
-        protocol: "anthropic",
-        projected: ["cc"],
-        skipped: [],
       });
 
       renderPage();
 
-      // lists the connections
+      // lists the connections with their compatible-agent chips
       expect(await screen.findByText("official")).toBeInTheDocument();
-      expect(screen.getByText("kimi")).toBeInTheDocument();
+      expect(screen.getByText("agnes")).toBeInTheDocument();
+      expect(screen.getByText("Claude Code")).toBeInTheDocument();
+      expect(screen.getByText("Codex")).toBeInTheDocument();
 
-      // the active one is marked and cannot be re-switched; the inactive one can
-      const switchButtons = screen.getAllByRole("button", { name: "Switch" });
-      expect(switchButtons).toHaveLength(1); // only "kimi" (official is active)
-      fireEvent.click(switchButtons[0]);
-
-      await waitFor(() => expect(apiMock.activate).toHaveBeenCalledWith("kimi"));
+      // No per-row "Switch" — activation is per-agent, on the Agent Overview tab.
+      expect(screen.queryByRole("button", { name: "Switch" })).not.toBeInTheDocument();
+      expect(apiMock.activate).not.toHaveBeenCalled();
     },
   );
 

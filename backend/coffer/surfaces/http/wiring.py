@@ -39,9 +39,9 @@ from coffer.application.memory.scope import ScopeResolver
 from coffer.application.memory.service import MemoryService
 from coffer.application.memory.sync import MemoryReconciler
 from coffer.application.providers.ports import ModelIntrospectionService
+from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.knowledge.embedder import EmbeddingConfig
-from coffer.domain.provider.config import Protocol
 from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.agentic_rag import DEFAULT_RECURSION_LIMIT, make_ask_tool
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
@@ -326,12 +326,14 @@ def wire_chat(
     registry.register(ClaudeSdkProvider(conversations=conv_repo), display_name="Claude Code")
 
     # Codex reads its API key from the COFFER_PROVIDER_KEY env var (config.toml's
-    # env_key). Resolve the active openai connection's key per turn and inject it
-    # into the codex subprocess env; with no active connection it stays None so
-    # codex inherits the daemon env and uses its own login (ADR-032 env_key seam).
+    # env_key). Resolve the key of the connection active FOR Codex per turn — keyed
+    # by agent, not wire, so an openai-compatible gateway the user routed to Codex
+    # is resolved correctly — and inject it into the codex subprocess env; with no
+    # active connection it stays None so codex inherits the daemon env and uses its
+    # own login (ADR-032 env_key seam).
     async def _resolve_codex_key() -> str | None:
         try:
-            key: str = await get_provider_service().resolve_active_key(Protocol.OPENAI)
+            key: str = await get_provider_service().resolve_active_key_for_agent(AgentType.CODEX)
             return key
         except (NoActiveProvider, CredentialMissing):
             return None

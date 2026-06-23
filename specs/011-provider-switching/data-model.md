@@ -16,6 +16,13 @@ Resource row. It MUST NOT hold the raw secret.
 > becomes a DETECTED `protocol`. The model lives at the point of use (Agent
 > binding / internal-default / chat), not on the connection.
 
+> **Amendment 2026-06-23 (F1, F4):** a `compatible_agents: list[str] | None`
+> field (`AgentType` values; `null` ⇒ the wire default) decides which agents the
+> connection projects into, decoupled from `protocol`. `is_active` is now scoped
+> PER AGENT TYPE (≤1 active connection per agent), not per protocol. The field is
+> held as plain strings so this domain module stays free of the agent kind (the
+> application layer hydrates them into `AgentType` at the projection seam).
+
 | Field | Type | Constraints / Notes |
 |---|---|---|
 | `protocol` | `Protocol` | DETECTED, not user-entered; `"anthropic"`, `"openai"`, `"ollama"`, or `"unknown"`. Probed from the endpoint on create/edit; a compatibility hint, not a projection gate. `ollama` is internal-only. `unknown` ⇒ offered to all agents (user decides). |

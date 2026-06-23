@@ -14,7 +14,7 @@ const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
 const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>;
 
 function makeConnection(over: Record<string, unknown> = {}) {
-  return {
+  const merged = {
     name: "p1",
     protocol: "anthropic",
     base_url: "https://api.example",
@@ -26,6 +26,13 @@ function makeConnection(over: Record<string, unknown> = {}) {
     created_at: "",
     updated_at: "",
     ...over,
+  };
+  // The picker matches the active connection by its compatible-agents set; default
+  // it from the wire unless a test pins it explicitly.
+  return {
+    ...merged,
+    compatible_agents:
+      over.compatible_agents ?? (merged.protocol === "openai" ? ["codex"] : ["claude_code"]),
   };
 }
 

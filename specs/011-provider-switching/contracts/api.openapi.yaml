@@ -230,6 +230,34 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /providers/{name}/key:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+        description: Connection name whose key to resolve.
+
+    get:
+      tags: [providers]
+      operationId: connectionKey
+      summary: Resolve a specific connection's API key
+      description: |
+        Returns the decrypted API key of the named connection. This is what Claude
+        Code's projected `apiKeyHelper = "coffer provider key --connection <name>"`
+        invokes, so the agent always reads exactly the activated connection's key
+        (no wire+active mismatch). Not audited — `apiKeyHelper` polls it frequently.
+        404 when the connection is absent or keyless (ollama).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActiveKeyOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /providers/use-builtin/{wire}:
     parameters:
       - in: path
@@ -334,6 +362,7 @@ components:
         - protocol
         - base_url
         - credential_ref
+        - compatible_agents
         - is_active
         - internal_default
         - created_at
@@ -359,12 +388,19 @@ components:
             Pattern: `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`.
             Typically `provider/<name>/key` for an owned secret.
             Null for an ollama connection (no API key).
+        compatible_agents:
+          type: array
+          items: { $ref: "#/components/schemas/AgentType" }
+          description: >-
+            The EFFECTIVE (resolved) agents this connection projects into — the
+            explicit override or the wire default. The projection writer is chosen
+            by agent type, not protocol; the Agent Overview picker filters on this.
         is_active:
           type: boolean
           description: >-
-            Whether this is the active profile for its protocol. At most
-            one profile per protocol has is_active=true. Always false for
-            ollama (internal-only, never projected).
+            Whether this connection is the active override for its compatible
+            agents. At most one active connection per agent type. Always false
+            for ollama (internal-only, never projected).
         internal_default:
           type: boolean
           description: >-
@@ -408,13 +444,22 @@ components:
             Mutually exclusive with `credential_ref`. For anthropic/openai/unknown
             exactly one of the two must be supplied; for ollama supply
             neither. Never echoed in any response.
+        compatible_agents:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/AgentType" }
+          description: >-
+            Override the wire default for which agents the connection projects
+            into (e.g. an openai gateway routed to claude_code). Null ⇒ the wire
+            default. ollama must not declare any (it projects into no agent).
 
     ProviderPatchRequest:
       type: object
       additionalProperties: false
       description: >-
         All fields optional. `protocol` and `credential_ref` are immutable
-        and cannot be patched. The model is not on the connection (spec 011 E3).
+        and cannot be patched. `compatible_agents` is mutable (re-target then
+        re-activate to re-project). The model is not on the connection (spec 011 E3).
       properties:
         base_url:
           type: string
@@ -425,6 +470,18 @@ components:
           description: >-
             Rotate the stored secret. Overwrites the vault entry at the
             current `credential_ref`. Never echoed in any response.
+        compatible_agents:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/AgentType" }
+          description: >-
+            Re-target which agents the connection projects into. Null ⇒ leave
+            unchanged.
+
+    AgentType:
+      type: string
+      enum: [claude_code, codex]
+      description: A coding agent a connection can project into.
 
     ActivateOut:
       type: object
