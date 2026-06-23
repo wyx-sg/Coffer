@@ -61,7 +61,7 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
   const activeConnection = useMemo(
     () =>
       (providers.data ?? []).find(
-        (p) => p.compatible_agents.includes(agentKey as AgentType) && p.is_active,
+        (p) => (p.compatible_agents ?? []).includes(agentKey as AgentType) && p.is_active,
       ) ?? null,
     [providers.data, agentKey],
   );

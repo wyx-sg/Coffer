@@ -38,7 +38,7 @@ export function ConnectionCard({ provider: p, deletePending, onEdit, onDelete }:
               </span>
             )}
             {/* Which agents this connection projects into (the compatible set). */}
-            {p.compatible_agents.map((a) => (
+            {(p.compatible_agents ?? []).map((a) => (
               <span
                 key={a}
                 className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"

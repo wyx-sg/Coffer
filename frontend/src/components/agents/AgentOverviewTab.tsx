@@ -43,7 +43,7 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   // a connection the user routed to this agent type shows up even if its endpoint
   // speaks a different wire (the agnes case: an openai gateway → Claude Code).
   const compatible = useMemo(
-    () => (providers.data ?? []).filter((p) => p.compatible_agents.includes(agent.type)),
+    () => (providers.data ?? []).filter((p) => (p.compatible_agents ?? []).includes(agent.type)),
     [providers.data, agent.type],
   );
   const active = useMemo(() => compatible.find((p) => p.is_active) ?? null, [compatible]);
