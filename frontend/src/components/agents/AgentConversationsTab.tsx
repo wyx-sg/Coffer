@@ -17,6 +17,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 
 import { AgentConversationsBulkActions } from "@/components/agents/AgentConversationsBulkActions";
 import { DistillCell } from "@/components/agents/AgentConversationsDistillCell";
+import { DistillStatus } from "@/components/agents/AgentConversationsStatus";
 import { DataTable, type Column } from "@/components/DataTable";
 import { RowActions } from "@/components/RowActions";
 import { translateApiError } from "@/lib/api/errors";
@@ -146,6 +147,12 @@ export function AgentConversationsTab({ name }: Props) {
       cell: (s) => <TimeCell value={s.last_activity_at} />,
     },
     {
+      key: "status",
+      header: t("agents.conversationsTab.colStatus"),
+      className: "whitespace-nowrap",
+      cell: (s) => <DistillStatus status={s.distill_status} />,
+    },
+    {
       key: "actions",
       header: "",
       className: "text-right",
@@ -183,8 +190,14 @@ export function AgentConversationsTab({ name }: Props) {
             ariaSelectRow: (s) => `${t("common.bulk.selectRow")}: ${s.title ?? s.session_id}`,
             bulkLabel: (count) => t("common.bulk.selected", { count }),
             clearLabel: t("common.clear"),
-            renderBulkActions: ({ selectedRows, clear }) => (
-              <AgentConversationsBulkActions name={name} rows={selectedRows} onDone={clear} />
+            renderBulkActions: ({ selectedRows, clear, allMatching }) => (
+              <AgentConversationsBulkActions
+                name={name}
+                rows={selectedRows}
+                onDone={clear}
+                search={search}
+                allMatching={allMatching}
+              />
             ),
           }}
           serverPagination={{

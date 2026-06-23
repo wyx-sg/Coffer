@@ -16,6 +16,8 @@ export interface TranscriptSessionSummary {
   started_at: string | null;
   last_activity_at: string | null;
   source_path: string;
+  /** done | never | queued | running | error — undefined on minimal apps. */
+  distill_status?: string | null;
 }
 
 export type TranscriptSort = "started_at" | "last_activity_at" | "message_count";
@@ -89,4 +91,32 @@ export function distillTranscript(
   body: DistillRequest,
 ): Promise<DistillResponse> {
   return call<DistillResponse>("POST", `/agents/${enc(agentName)}/transcripts/distill`, body);
+}
+
+export interface DistillBatchRequest {
+  session_ids?: string[];
+  /** Distil every session matching the filters below (select-all across pages). */
+  all?: boolean;
+  q?: string;
+  project?: string;
+  started_after?: string;
+  started_before?: string;
+}
+
+export interface DistillBatchResponse {
+  queued: number;
+  skipped: number;
+  total: number;
+}
+
+/** Enqueue async distillation for many sessions (returns immediately). */
+export function distillBatch(
+  agentName: string,
+  body: DistillBatchRequest,
+): Promise<DistillBatchResponse> {
+  return call<DistillBatchResponse>(
+    "POST",
+    `/agents/${enc(agentName)}/transcripts/distill-batch`,
+    body,
+  );
 }

@@ -11,12 +11,24 @@ import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
 import {
+  distillBatch,
   distillTranscript,
   listTranscripts,
+  type DistillBatchRequest,
   type DistillRequest,
   type TranscriptListParams,
+  type TranscriptSessionListResponse,
 } from "@/lib/api/agentChat";
 import { useToast } from "@/components/ui/toast";
+
+/** Poll the list while any visible session is still queued/running so the
+ * status column updates live; stop once everything settles. */
+function inFlightRefetch(data: TranscriptSessionListResponse | undefined): number | false {
+  const busy = (data?.sessions ?? []).some(
+    (s) => s.distill_status === "queued" || s.distill_status === "running",
+  );
+  return busy ? 2000 : false;
+}
 
 /** Default page size for the transcript history list. */
 export const TRANSCRIPTS_PAGE_SIZE = 10;
@@ -56,6 +68,25 @@ export function useAgentTranscripts(name: string, params: TranscriptListParams =
     // blank flash on each keystroke or page step.
     placeholderData: keepPreviousData,
     enabled: !!name,
+    // Live-refresh the distill status column while work is in flight.
+    refetchInterval: (query) => inFlightRefetch(query.state.data),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Mutation: enqueue async batch distillation (single / many / select-all)
+// ---------------------------------------------------------------------------
+
+export function useDistillBatch(name: string) {
+  const qc = useQueryClient();
+  const onError = useChatHistoryToastError();
+  return useMutation({
+    mutationFn: (body: DistillBatchRequest) => distillBatch(name, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: transcriptsKey(name) });
+      void qc.invalidateQueries({ queryKey: ["memory-stores"] });
+    },
+    onError,
   });
 }
 
