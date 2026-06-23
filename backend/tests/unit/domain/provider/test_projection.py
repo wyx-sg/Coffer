@@ -11,11 +11,13 @@ from coffer.domain.provider.projection import (
     ANTHROPIC_API_KEY_HELPER,
     CODEX_ENV_KEY,
     CODEX_PROVIDER_ID,
+    anthropic_api_key_helper,
     apply_anthropic_settings,
     apply_codex_provider,
     remove_anthropic_settings,
     remove_codex_provider,
     target_for,
+    target_for_agent,
 )
 
 
@@ -156,3 +158,26 @@ def test_targets_map_wire_to_agent() -> None:
     assert target_for(Protocol.ANTHROPIC).config_key == "settings"
     assert target_for(Protocol.OPENAI).agent_type is AgentType.CODEX
     assert target_for(Protocol.OPENAI).config_key == "config"
+
+
+def test_target_for_agent_maps_agent_to_config() -> None:
+    # The projection writer is now chosen by AGENT type, not protocol — so an
+    # openai-wire connection routed to Claude Code writes settings.json.
+    cc = target_for_agent(AgentType.CLAUDE_CODE)
+    assert cc is not None and cc.config_key == "settings"
+    cx = target_for_agent(AgentType.CODEX)
+    assert cx is not None and cx.config_key == "config"
+
+
+def test_per_connection_api_key_helper_is_written_and_removed() -> None:
+    helper = anthropic_api_key_helper("agnes")
+    assert helper == "coffer provider key --connection agnes"
+    out = apply_anthropic_settings(
+        "", base_url="https://agnes", model=None, fast_model=None, api_key_helper=helper
+    )
+    assert json.loads(out)["apiKeyHelper"] == helper
+    # Removal strips ANY Coffer-managed helper by prefix (per-connection or the
+    # legacy --wire form), so use-builtin always reverts cleanly.
+    assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(out))
+    legacy = '{"apiKeyHelper": "coffer provider key --wire anthropic"}'
+    assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(legacy))

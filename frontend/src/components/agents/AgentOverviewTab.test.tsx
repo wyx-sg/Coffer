@@ -40,9 +40,9 @@ const agent: AgentOut = {
 };
 
 function makeConn(over: Partial<Provider> = {}): Provider {
-  return {
+  const merged = {
     name: "official",
-    protocol: "anthropic",
+    protocol: "anthropic" as Provider["protocol"],
     base_url: "https://api.anthropic.com",
     credential_ref: "ref",
     is_active: true,
@@ -52,6 +52,13 @@ function makeConn(over: Partial<Provider> = {}): Provider {
     created_at: "",
     updated_at: "",
     ...over,
+  };
+  // Default the compatible set from the wire (mirrors the backend default) unless
+  // the test pins it explicitly — the Overview picker filters on this set.
+  return {
+    ...merged,
+    compatible_agents:
+      over.compatible_agents ?? (merged.protocol === "openai" ? ["codex"] : ["claude_code"]),
   };
 }
 

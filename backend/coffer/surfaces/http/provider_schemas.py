@@ -11,27 +11,32 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import Protocol
 
 
 class ProviderCreate(BaseModel):
     """Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
     supply EXACTLY one of ``secret_value`` / ``credential_ref``; an ``ollama``
-    connection has no key, so supply neither."""
+    connection has no key, so supply neither. ``compatible_agents`` overrides the
+    wire default for which agents the connection projects into (``None`` ⇒ default)."""
 
     name: str = Field(min_length=1, max_length=64)
     protocol: Protocol
     base_url: str = Field(min_length=1)
     credential_ref: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
+    compatible_agents: list[AgentType] | None = None
     description: str | None = None
 
 
 class ProviderPatch(BaseModel):
-    """Partial update. ``protocol`` / ``credential_ref`` are immutable."""
+    """Partial update. ``protocol`` / ``credential_ref`` are immutable;
+    ``compatible_agents`` is mutable (re-target then re-activate to re-project)."""
 
     base_url: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
+    compatible_agents: list[AgentType] | None = None
     description: str | None = None
 
 
@@ -39,15 +44,18 @@ class ProviderOut(BaseModel):
     """An LLM connection as returned by the API (no secret).
 
     ``credential_ref`` is ``None`` for ``ollama`` connections (no key).
-    ``internal_default`` marks the connection Coffer's internal engine uses
-    (at most one globally); ``is_active`` marks the one projected to its wire's
-    agent — a connection may be both.
+    ``compatible_agents`` is the EFFECTIVE (resolved) set of agents this
+    connection projects into — the explicit override or the wire default — so the
+    UI can filter agents without re-deriving the default. ``internal_default``
+    marks the connection Coffer's internal engine uses (at most one globally);
+    ``is_active`` marks the one currently projected — a connection may be both.
     """
 
     name: str
     protocol: Protocol
     base_url: str
     credential_ref: str | None
+    compatible_agents: list[AgentType]
     is_active: bool
     internal_default: bool
     enabled: bool

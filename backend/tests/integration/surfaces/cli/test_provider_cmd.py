@@ -129,3 +129,35 @@ def test_cli_create_list_switch(provider_daemon):
     r = _runner.invoke(cli_app, ["provider", "switch", "acme"])
     assert r.exit_code == 0, r.output
     assert "switched to acme" in r.output
+
+
+def test_cli_key_by_connection_and_compatible(provider_daemon):
+    # An openai gateway routed to Claude Code via --compatible.
+    r = _runner.invoke(
+        cli_app,
+        [
+            "provider",
+            "add",
+            "agnes",
+            "--protocol",
+            "openai",
+            "--base-url",
+            "https://agnes/v1",
+            "--secret",
+            "sk-agnes",
+            "--compatible",
+            "claude_code",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+
+    show = _runner.invoke(cli_app, ["provider", "show", "agnes"])
+    assert json.loads(show.output)["compatible_agents"] == ["claude_code"]
+
+    # --connection prints exactly that connection's key (the projected helper).
+    key = _runner.invoke(cli_app, ["provider", "key", "--connection", "agnes"])
+    assert key.exit_code == 0, key.output
+    assert key.output.strip() == "sk-agnes"
+
+    # No selector → usage error.
+    assert _runner.invoke(cli_app, ["provider", "key"]).exit_code == 6

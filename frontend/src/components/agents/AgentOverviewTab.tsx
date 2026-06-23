@@ -39,9 +39,12 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
 
   const [fetched, setFetched] = useState<string[]>([]);
 
+  // Filter by the connection's explicit compatible-agents set (not its wire), so
+  // a connection the user routed to this agent type shows up even if its endpoint
+  // speaks a different wire (the agnes case: an openai gateway → Claude Code).
   const compatible = useMemo(
-    () => (providers.data ?? []).filter((p) => p.protocol === wire),
-    [providers.data, wire],
+    () => (providers.data ?? []).filter((p) => (p.compatible_agents ?? []).includes(agent.type)),
+    [providers.data, agent.type],
   );
   const active = useMemo(() => compatible.find((p) => p.is_active) ?? null, [compatible]);
 
@@ -57,8 +60,10 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
 
   const introspect = () => {
     if (!active) return;
+    // Introspect with the connection's OWN wire (how to call its endpoint), not
+    // the agent's — they can differ (an openai gateway routed to Claude Code).
     list.mutate(
-      { provider: wire, base_url: active.base_url, credential_ref: active.credential_ref },
+      { provider: active.protocol, base_url: active.base_url, credential_ref: active.credential_ref },
       { onSuccess: (r) => setFetched(r.models) },
     );
   };

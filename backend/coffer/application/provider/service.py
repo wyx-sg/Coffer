@@ -3,8 +3,9 @@ provider profiles (spec 011).
 
 A profile is stored as a ``provider`` resource (CRUD + audit + sync come free
 from ``ResourceService``). This service adds the credential-vault handling, the
-single-active-per-wire invariant, the native-config projection (the "switch"),
-and the key resolution used by Claude Code's ``apiKeyHelper``.
+single-active-per-agent invariant, the native-config projection (the "switch",
+chosen by the agent a connection is compatible with — not its wire), and the
+per-connection key resolution used by Claude Code's ``apiKeyHelper``.
 
 The credential store is synchronous (short-lived SQLite connections); every
 call is wrapped in ``asyncio.to_thread`` so the busy-wait never blocks the loop
@@ -19,24 +20,31 @@ from collections.abc import Awaitable, Callable
 from typing import Protocol as _Protocol
 
 from coffer.application.audit_service import AuditService
+from coffer.application.provider.projector import ProviderProjector
 from coffer.application.provider.results import ActivateResult, DeactivateResult
 from coffer.application.resource_service import ResourceService
-from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.config_files import spec_for
+from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.credential_errors import CredentialMissing
 from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
 from coffer.domain.provider.errors import NoActiveProvider, ProviderCredentialSourceInvalid
-from coffer.domain.provider.projection import (
-    apply_anthropic_settings,
-    apply_codex_provider,
-    remove_anthropic_settings,
-    remove_codex_provider,
-    target_for,
-)
 from coffer.domain.resource import Resource, ResourceRef
 
 KIND = "provider"
+
+# Module-scope alias: a bare ``list[AgentType]`` annotation on a method declared
+# AFTER ``ProviderService.list`` would resolve ``list`` to that method (class-scope
+# shadowing under PEP 563), so name the type here where ``list`` is the builtin.
+_AgentTypes = list[AgentType]
+
+# Maps a back-compat wire (the ``use-builtin/{wire}`` route, the legacy
+# ``--wire`` key helper) to the agent it stands for. Activation, de-projection
+# and key resolution are now keyed by AGENT type; this is the only place the old
+# wire vocabulary is translated.
+_AGENT_FOR_WIRE: dict[Protocol, AgentType] = {
+    Protocol.ANTHROPIC: AgentType.CLAUDE_CODE,
+    Protocol.OPENAI: AgentType.CODEX,
+}
 
 
 class _CredentialStore(_Protocol):
@@ -67,9 +75,9 @@ class ProviderService:
     ) -> None:
         self._resources = resources
         self._credentials = credentials
-        self._config_store = config_store
         self._agents = agents
         self._audit = audit
+        self._projector = ProviderProjector(config_store)
         # Resolves the internal-engine model (spec 011 E3), overlaid onto the
         # internal_default connection. None ⇒ no overlay (connection's own model).
         self._resolve_internal_model = resolve_internal_model
@@ -89,6 +97,13 @@ class ProviderService:
     def _cfg(resource: Resource) -> ProviderConfig:
         return ProviderConfig.model_validate(resource.config)
 
+    @staticmethod
+    def _compat(cfg: ProviderConfig) -> list[AgentType]:
+        """Hydrate the connection's resolved compatible-agent value strings into
+        ``AgentType`` — the projection seam where the agent kind enters (the
+        config itself stays agent-free for the cross-kind import contract)."""
+        return [AgentType(a) for a in cfg.resolved_compatible_agents()]
+
     # --- CRUD ----------------------------------------------------------------
 
     async def create(
@@ -99,14 +114,17 @@ class ProviderService:
         base_url: str,
         secret_value: str | None = None,
         credential_ref: str | None = None,
+        compatible_agents: _AgentTypes | None = None,
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
         """Create a connection. For anthropic/openai/unknown supply EXACTLY one
         of ``secret_value`` (stored to the vault under ``provider/<name>/key``)
         or ``credential_ref`` (reuse an existing vault entry). An ``ollama``
-        connection has no key — supply neither. The model lives apart from the
-        connection (spec 011 E3) and is chosen at the point of use."""
+        connection has no key — supply neither. ``compatible_agents`` overrides
+        the wire default for which agents the connection projects into (``None``
+        ⇒ the default). The model lives apart from the connection (spec 011 E3)
+        and is chosen at the point of use."""
         ref: str | None
         minted = False
         if protocol is Protocol.OLLAMA:
@@ -125,6 +143,10 @@ class ProviderService:
             protocol=protocol,
             base_url=base_url,
             credential_ref=ref,
+            # Store AgentType members as their value strings (config is agent-free).
+            compatible_agents=(
+                [a.value for a in compatible_agents] if compatible_agents is not None else None
+            ),
             is_active=False,
         )
         try:
@@ -150,17 +172,22 @@ class ProviderService:
         *,
         base_url: str | None = None,
         secret_value: str | None = None,
+        compatible_agents: _AgentTypes | None = None,
         description: str | None = None,
         actor: str = "api",
     ) -> Resource:
         """Partial update. ``protocol`` / ``credential_ref`` are immutable
         (identity); change them by recreating. ``secret_value`` rotates the
-        secret stored under the profile's existing ref. The model is not stored
-        on the connection (spec 011 E3)."""
+        secret stored under the profile's existing ref. ``compatible_agents``
+        re-targets which agents the connection projects into (it is mutable,
+        unlike the wire). The model is not stored on the connection (spec 011
+        E3). Re-activate afterwards to re-project under the new targets."""
         current = await self.get(name)
         config = dict(current.config)
         if base_url is not None:
             config["base_url"] = base_url
+        if compatible_agents is not None:
+            config["compatible_agents"] = [a.value for a in compatible_agents]
         # Re-validate so a bad edit is rejected before the rotation / DB write.
         validated = ProviderConfig.model_validate(config).model_dump(mode="json")
         if secret_value is not None:
@@ -187,43 +214,45 @@ class ProviderService:
     # --- switch + key resolution --------------------------------------------
 
     async def activate(self, name: str, *, actor: str = "api") -> ActivateResult:
-        """Make ``name`` the active profile for its wire format and project it
-        into every enabled agent of the matching type.
+        """Make ``name`` the active connection for each of its compatible agents
+        and project it into every enabled agent of those types.
 
-        Projection happens BEFORE the ``is_active`` flip so a native-config
-        write failure (e.g. an unwritable agent config dir) aborts the switch
-        with the registry untouched, rather than leaving a flipped flag with no
-        matching on-disk config.
+        Projection happens BEFORE the ``is_active`` flip so a native-config write
+        failure (e.g. an unwritable agent config dir) aborts the switch with the
+        registry untouched. The invariant is at most one active connection PER
+        AGENT TYPE: activating this one takes over the agents it covers from any
+        previously-active connection, and de-projects that connection from the
+        agents this one does NOT cover so no stale config is left behind.
         """
         resource = await self.get(name)
         cfg = self._cfg(resource)
-        wire = cfg.protocol
-        target = target_for(wire)
+        targets = self._compat(cfg)
+        agents = await self._agents.list()
 
-        # 1) Project first. A failure here raises before any state mutation.
-        #    ollama (target is None) is internal-only — it projects to no agent.
+        # 1) Project first. ollama (no targets) is internal-only — projects to
+        #    no agent. ``skipped`` lists compatible agents with no registered one.
         projected: list[str] = []
-        if target is not None:
-            for agent in await self._agents.list():
-                if not agent.enabled:
-                    continue
-                if AgentConfig.model_validate(agent.config).type != target.agent_type:
-                    continue
-                self._project(name, cfg, agent, target.config_key)
-                projected.append(agent.name)
-        skipped = [] if projected else [target.agent_type.value if target else wire.value]
+        for at in targets:
+            projected.extend(self._projector.project_type(name, cfg, agents, at))
+        covered = {at for at in targets if self._projector.agents_of_type(agents, at)}
+        skipped = [at.value for at in targets if at not in covered]
 
-        # 2) Flip activation: clear other same-wire actives, then set this one.
-        # Single-process daemon serializes requests, so the clear-then-set runs
-        # without interleaving (see ADR-032 / FR-011).
+        # 2) Flip activation: take over from any overlapping active connection,
+        #    de-projecting it from the agents this one will not cover. The
+        #    single-process daemon serialises the clear-then-set (ADR-032 / FR-011).
+        mine = set(targets)
         previous: str | None = None
         for r in await self.list():
             if r.name == name:
                 continue
             rc = self._cfg(r)
-            if rc.protocol == wire and rc.is_active:
-                await self._set_active(r, active=False, actor=actor)
-                previous = r.name
+            other = set(self._compat(rc))
+            if not rc.is_active or not (other & mine):
+                continue
+            for at in other - mine:
+                self._projector.deproject_type(agents, at)
+            await self._set_active(r, active=False, actor=actor)
+            previous = r.name
         if not cfg.is_active:
             await self._set_active(resource, active=True, actor=actor)
 
@@ -234,63 +263,79 @@ class ProviderService:
             details={
                 "from": previous,
                 "to": name,
-                "protocol": wire.value,
+                "protocol": cfg.protocol.value,
                 "agents": projected,
             },
         )
         return ActivateResult(
-            activated=name, protocol=wire.value, projected=projected, skipped=skipped
+            activated=name, protocol=cfg.protocol.value, projected=projected, skipped=skipped
         )
 
     async def deactivate(self, wire: Protocol, *, actor: str = "api") -> DeactivateResult:
-        """Switch ``wire``'s agent(s) back to their built-in login: de-project
-        Coffer's keys and clear ``is_active``. Idempotent; de-projects before the
-        flip, mirroring :meth:`activate`."""
-        target = target_for(wire)
+        """Switch the agent behind ``wire`` (anthropic→Claude Code, openai→Codex)
+        back to its built-in login: de-project Coffer's keys and clear the active
+        connection's ``is_active``. A connection compatible with multiple agents
+        is reverted as a unit (the single ``is_active`` flag is all-or-nothing).
+        Idempotent; de-projects before the flip, mirroring :meth:`activate`."""
+        agent_type = _AGENT_FOR_WIRE.get(wire)
+        agents = await self._agents.list()
         deprojected: list[str] = []
-        if target is not None:
-            for agent in await self._agents.list():
-                if not agent.enabled:
-                    continue
-                if AgentConfig.model_validate(agent.config).type != target.agent_type:
-                    continue
-                self._deproject(agent, target.config_key, wire)
-                deprojected.append(agent.name)
-
         previous: str | None = None
-        for r in await self.list():
-            rc = self._cfg(r)
-            if rc.protocol == wire and rc.is_active:
+        if agent_type is not None:
+            deprojected = self._projector.deproject_type(agents, agent_type)
+            for r in await self.list():
+                rc = self._cfg(r)
+                compat = self._compat(rc)
+                if not rc.is_active or agent_type not in compat:
+                    continue
+                for at in compat:
+                    if at is not agent_type:
+                        self._projector.deproject_type(agents, at)
                 await self._set_active(r, active=False, actor=actor)
                 previous = r.name
 
         if previous is not None or deprojected:
-            details = {
-                "from": previous,
-                "to": None,
-                "protocol": wire.value,
-                "agents": deprojected,
-            }
+            details = {"from": previous, "to": None, "protocol": wire.value, "agents": deprojected}
             ref = self._ref(previous) if previous else self._ref(wire.value)
             await self._audit.record(
                 AuditEventType.PROVIDER_SWITCHED.value, ref=ref, actor=actor, details=details
             )
         return DeactivateResult(protocol=wire.value, deprojected=deprojected, previous=previous)
 
-    async def resolve_active_key(self, wire: Protocol) -> str:
-        """The decrypted API key of the active profile for ``wire`` (used by
-        Claude's ``apiKeyHelper``). Raises ``NoActiveProvider`` if none."""
+    async def resolve_connection_key(self, name: str) -> str:
+        """The decrypted key of a SPECIFIC connection by name — what Claude
+        Code's projected ``apiKeyHelper`` (``--connection <name>``) fetches, so
+        the agent always reads exactly the activated connection's key. Raises
+        ``NoActiveProvider`` for a keyless (ollama) connection."""
+        return await self._key_of(self._cfg(await self.get(name)), label=name)
+
+    async def resolve_active_key_for_agent(self, agent_type: AgentType) -> str:
+        """The decrypted key of the connection currently active AND compatible
+        with ``agent_type`` — Codex's ``COFFER_PROVIDER_KEY`` injection. Raises
+        ``NoActiveProvider`` if none."""
         for r in await self.list():
             rc = self._cfg(r)
-            if rc.protocol == wire and rc.is_active:
-                ref = rc.credential_ref
-                if ref is None:
-                    raise NoActiveProvider(wire.value)
-                value = await asyncio.to_thread(self._credentials.get, ref)
-                if value is None:
-                    raise CredentialMissing(ref)
-                return value
-        raise NoActiveProvider(wire.value)
+            if rc.is_active and agent_type in self._compat(rc):
+                return await self._key_of(rc, label=agent_type.value)
+        raise NoActiveProvider(agent_type.value)
+
+    async def resolve_active_key(self, wire: Protocol) -> str:
+        """Back-compat: the active key for a wire's agent (legacy ``--wire`` key
+        helper / ``/active-key/{wire}``). Resolves by the connection active for
+        the agent the wire stands for."""
+        agent_type = _AGENT_FOR_WIRE.get(wire)
+        if agent_type is None:
+            raise NoActiveProvider(wire.value)
+        return await self.resolve_active_key_for_agent(agent_type)
+
+    async def _key_of(self, cfg: ProviderConfig, *, label: str) -> str:
+        ref = cfg.credential_ref
+        if ref is None:
+            raise NoActiveProvider(label)
+        value = await asyncio.to_thread(self._credentials.get, ref)
+        if value is None:
+            raise CredentialMissing(ref)
+        return value
 
     async def set_internal_default(self, name: str, *, actor: str = "api") -> Resource:
         """Make ``name`` the global internal-engine default — the connection
@@ -344,43 +389,3 @@ class ProviderService:
         config = dict(resource.config)
         config["internal_default"] = value
         await self._resources.update_config(self._ref(resource.name), config, actor)
-
-    def _project(
-        self, profile_name: str, cfg: ProviderConfig, agent: Resource, config_key: str
-    ) -> None:
-        agent_cfg = AgentConfig.model_validate(agent.config)
-        spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
-        text = self._config_store.read_text(spec.path) or ""
-        # Model comes solely from the per-agent binding (spec 011 E3/E4) — the
-        # connection no longer carries one. An unbound agent projects no model
-        # env var, so the agent runs on its OWN default model.
-        model = agent_cfg.model
-        fast_model = agent_cfg.fast_model
-        wire_api = agent_cfg.wire_api or "responses"
-        if cfg.protocol == Protocol.ANTHROPIC:
-            new_text = apply_anthropic_settings(
-                text, base_url=cfg.base_url, model=model, fast_model=fast_model
-            )
-        else:
-            new_text = apply_codex_provider(
-                text,
-                base_url=cfg.base_url,
-                model=model,
-                wire_api=wire_api,
-                display_name=f"Coffer ({profile_name})",
-            )
-        self._config_store.write_text_atomic(spec.path, new_text)
-
-    def _deproject(self, agent: Resource, config_key: str, wire: Protocol) -> None:
-        """Remove Coffer's projected keys from one agent's native config so it
-        falls back to its own login (the inverse of :meth:`_project`)."""
-        agent_cfg = AgentConfig.model_validate(agent.config)
-        spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
-        text = self._config_store.read_text(spec.path) or ""
-        if not text.strip():
-            return  # nothing was ever projected
-        if wire == Protocol.ANTHROPIC:
-            new_text = remove_anthropic_settings(text)
-        else:
-            new_text = remove_codex_provider(text)
-        self._config_store.write_text_atomic(spec.path, new_text)

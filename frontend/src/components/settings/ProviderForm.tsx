@@ -4,8 +4,10 @@
 // no model field. On create the user picks a PROVIDER preset (OpenAI, Anthropic,
 // Google Gemini, Ollama, …) which fills the endpoint + protocol; "Custom" lets
 // them enter any OpenAI-/Anthropic-compatible endpoint and pick the protocol by
-// hand. In edit mode (`initial` set) name + protocol are fixed and the secret is
-// optional — left blank, the stored key is kept.
+// hand. The COMPATIBLE-AGENTS checkboxes decide which agents the connection
+// projects into — pre-filled from the wire but editable, so an openai gateway can
+// be routed to Claude Code. In edit mode (`initial` set) name + protocol are
+// fixed and the secret is optional — left blank, the stored key is kept.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -16,11 +18,13 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { translateApiError } from "@/lib/api/errors";
 import {
   wireNeedsCredential,
+  type AgentType,
   type Protocol,
   type Provider,
   type ProviderCreate,
   type ProviderPatch,
 } from "@/lib/api/providers";
+import { PRESETS, SELECTABLE_AGENTS, defaultCompatibleAgents } from "./connectionPresets";
 
 interface Props {
   /** Present → edit an existing connection (name + protocol locked, secret optional). */
@@ -33,31 +37,10 @@ interface Props {
   onCancel: () => void;
 }
 
-interface Preset {
-  id: string;
-  label: string;
-  protocol: Protocol | "";
-  baseUrl: string;
-}
-
-// Built-in providers. Each fills the endpoint + protocol; "custom" leaves both
-// to the user. OpenAI-compatible gateways (Gemini, DeepSeek, …) use the openai
-// protocol — the agent compatibility is decided separately on the agent.
-const PRESETS: Preset[] = [
-  { id: "openai", label: "OpenAI", protocol: "openai", baseUrl: "https://api.openai.com/v1" },
-  { id: "anthropic", label: "Anthropic", protocol: "anthropic", baseUrl: "https://api.anthropic.com" },
-  {
-    id: "gemini",
-    label: "Google Gemini",
-    protocol: "openai",
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
-  },
-  { id: "deepseek", label: "DeepSeek", protocol: "openai", baseUrl: "https://api.deepseek.com" },
-  { id: "moonshot", label: "Moonshot (Kimi)", protocol: "openai", baseUrl: "https://api.moonshot.cn/v1" },
-  { id: "openrouter", label: "OpenRouter", protocol: "openai", baseUrl: "https://openrouter.ai/api/v1" },
-  { id: "ollama", label: "Ollama", protocol: "ollama", baseUrl: "http://localhost:11434" },
-  { id: "custom", label: "Custom", protocol: "", baseUrl: "" },
-];
+const AGENT_LABEL_KEY: Record<AgentType, string> = {
+  claude_code: "settings.connections.agentClaudeCode",
+  codex: "settings.connections.agentCodex",
+};
 
 export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate, onCancel }: Props) {
   const { t } = useTranslation();
@@ -67,22 +50,34 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
   const [protocol, setProtocol] = useState<Protocol | "">(initial?.protocol ?? "openai");
   const [baseUrl, setBaseUrl] = useState(initial?.base_url ?? "https://api.openai.com/v1");
   const [secret, setSecret] = useState("");
+  const [compatible, setCompatible] = useState<AgentType[]>(
+    initial?.compatible_agents ?? defaultCompatibleAgents(initial?.protocol ?? "openai"),
+  );
 
   const isCustom = presetId === "custom";
   const needsCredential = protocol === "" || wireNeedsCredential(protocol);
+  // ollama is internal-only — it projects into no agent, so no checkboxes.
+  const showCompatible = protocol !== "ollama";
 
-  // Picking a preset fills protocol + endpoint; custom clears them for hand entry.
+  // Picking a preset fills protocol + endpoint and re-seeds the compatible agents
+  // from the new wire; custom clears the endpoint for hand entry.
   const pickPreset = (id: string) => {
     setPresetId(id);
     const preset = PRESETS.find((p) => p.id === id);
-    if (preset && id !== "custom") {
-      setProtocol(preset.protocol);
-      setBaseUrl(preset.baseUrl);
-    } else if (id === "custom") {
-      setProtocol("openai");
-      setBaseUrl("");
-    }
+    const nextProtocol = id === "custom" ? "openai" : (preset?.protocol ?? "openai");
+    setProtocol(nextProtocol);
+    setBaseUrl(id === "custom" ? "" : (preset?.baseUrl ?? ""));
+    setCompatible(defaultCompatibleAgents(nextProtocol));
   };
+
+  // Changing the custom wire re-seeds the default compatible agents for it.
+  const pickCustomProtocol = (p: Protocol) => {
+    setProtocol(p);
+    setCompatible(defaultCompatibleAgents(p));
+  };
+
+  const toggleAgent = (a: AgentType) =>
+    setCompatible((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
 
   return (
     <form
@@ -92,12 +87,14 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
         if (isEdit) {
           const patch: ProviderPatch = { base_url: baseUrl };
           if (needsCredential && secret) patch.secret_value = secret;
+          if (showCompatible) patch.compatible_agents = compatible;
           await onUpdate?.(patch);
           return;
         }
         if (!protocol) return; // guard: a custom connection still needs a protocol
         const values: ProviderCreate = { name, protocol, base_url: baseUrl };
         if (needsCredential && secret) values.secret_value = secret;
+        if (showCompatible) values.compatible_agents = compatible;
         await onSubmit(values);
       }}
     >
@@ -144,7 +141,7 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
             id="p-wire"
             className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
             value={protocol}
-            onChange={(e) => setProtocol(e.target.value as Protocol)}
+            onChange={(e) => pickCustomProtocol(e.target.value as Protocol)}
           >
             <option value="anthropic">anthropic</option>
             <option value="openai">openai</option>
@@ -155,12 +152,7 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
 
       <div className="space-y-1.5">
         <Label htmlFor="p-base">{t("settings.connections.baseUrl")}</Label>
-        <Input
-          id="p-base"
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-          required
-        />
+        <Input id="p-base" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required />
       </div>
 
       {needsCredential && (
@@ -173,6 +165,27 @@ export function ProviderForm({ initial, submitError, pending, onSubmit, onUpdate
             required={!isEdit}
             placeholder={isEdit ? t("settings.connections.secretKeepBlank") : undefined}
           />
+        </div>
+      )}
+
+      {showCompatible && (
+        <div className="space-y-1.5">
+          <Label>{t("settings.connections.compatibleAgents")}</Label>
+          <div className="flex flex-wrap gap-3">
+            {SELECTABLE_AGENTS.map((a) => (
+              <label key={a} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={compatible.includes(a)}
+                  onChange={() => toggleAgent(a)}
+                />
+                {t(AGENT_LABEL_KEY[a])}
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.connections.compatibleAgentsHint")}
+          </p>
         </div>
       )}
 

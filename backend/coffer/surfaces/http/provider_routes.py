@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Response, status
 
 from coffer.application.provider.service import ProviderService
+from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
@@ -36,6 +37,7 @@ def _provider_out(resource: Resource) -> ProviderOut:
         protocol=cfg.protocol,
         base_url=cfg.base_url,
         credential_ref=cfg.credential_ref,
+        compatible_agents=[AgentType(a) for a in cfg.resolved_compatible_agents()],
         is_active=cfg.is_active,
         internal_default=cfg.internal_default,
         enabled=resource.enabled,
@@ -67,6 +69,7 @@ async def create_provider(
         base_url=body.base_url,
         secret_value=body.secret_value,
         credential_ref=body.credential_ref,
+        compatible_agents=body.compatible_agents,
         description=body.description,
         actor=actor,
     )
@@ -78,9 +81,22 @@ async def active_provider_key(
     wire: Protocol,
     svc: ProviderService = Depends(get_provider_service),  # noqa: B008
 ) -> ActiveKeyOut:
-    """The decrypted key of the active profile for ``wire`` (Claude Code's
-    ``apiKeyHelper``). 404 when no profile is active for that wire."""
+    """Back-compat: the decrypted key of the connection active for ``wire``'s
+    agent (legacy ``--wire`` helper). 404 when none. New projections use
+    ``GET /{name}/key`` instead, which names the connection directly."""
     return ActiveKeyOut(value=await svc.resolve_active_key(wire))
+
+
+@router.get("/{name}/key", response_model=ActiveKeyOut)
+async def connection_key(
+    name: str,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+) -> ActiveKeyOut:
+    """The decrypted key of a SPECIFIC connection — what Claude Code's projected
+    ``apiKeyHelper`` (``coffer provider key --connection <name>``) fetches, so the
+    agent always reads exactly the activated connection's key (no wire+active
+    mismatch). 404 when the connection is absent or keyless (ollama)."""
+    return ActiveKeyOut(value=await svc.resolve_connection_key(name))
 
 
 @router.get("/{name}", response_model=ProviderOut)
@@ -104,6 +120,7 @@ async def update_provider(
         name,
         base_url=body.base_url,
         secret_value=body.secret_value,
+        compatible_agents=body.compatible_agents,
         description=body.description,
         actor=actor,
     )

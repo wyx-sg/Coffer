@@ -13,6 +13,10 @@ import { ApiError } from "./errors";
 // inconclusive (the connection is offered to every agent; the user decides).
 export type Protocol = "anthropic" | "openai" | "ollama" | "unknown";
 
+// The agent types a connection may project into. Decoupled from `protocol`: the
+// user routes any endpoint to any agent (e.g. an openai gateway → Claude Code).
+export type AgentType = "claude_code" | "codex";
+
 /**
  * Chat agent_key → the protocol it speaks (ADR-032 projection targets). Shared by
  * the chat ModelPicker and the agent Overview connection picker so both map an
@@ -44,6 +48,9 @@ export interface Provider {
   base_url: string;
   /** Null for ollama (no key) and any connection created without a credential. */
   credential_ref: string | null;
+  /** Effective (resolved) agents this connection projects into — the explicit
+   * override or the wire default. The Agent Overview picker filters on this. */
+  compatible_agents: AgentType[];
   is_active: boolean;
   /** ≤1 globally — the connection Coffer's internal engine uses. */
   internal_default: boolean;
@@ -63,12 +70,15 @@ export interface ProviderCreate {
   base_url: string;
   credential_ref?: string | null;
   secret_value?: string | null;
+  /** Override the wire default for which agents the connection projects into. */
+  compatible_agents?: AgentType[] | null;
   description?: string | null;
 }
 
 export interface ProviderPatch {
   base_url?: string | null;
   secret_value?: string | null;
+  compatible_agents?: AgentType[] | null;
   description?: string | null;
 }
 
