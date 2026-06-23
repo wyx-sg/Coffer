@@ -25,10 +25,13 @@ vi.mock("react-router-dom", async (importOriginal) => ({
 const importMutate = vi.fn();
 const patchMutate = vi.fn();
 
+const batchMutate = vi.fn();
+
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentNativeMemory: vi.fn(),
   useAgentMcpStatus: vi.fn(),
   useImportNativeMemory: vi.fn(() => ({ mutate: importMutate, isPending: false })),
+  useImportNativeMemoryBatch: vi.fn(() => ({ mutate: batchMutate, isPending: false })),
   usePatchAgent: vi.fn(() => ({ mutate: patchMutate, isPending: false })),
   // The session-start rules-injection card now lives in this tab; stub its
   // status/install hooks so the card renders (not-installed, idle) without error.
@@ -126,6 +129,23 @@ describe("AgentMemoryTab", () => {
     expect(screen.getByText("/Users/xing/Coffer")).toBeInTheDocument();
     expect(screen.getByText("49")).toBeInTheDocument();
     expect(screen.getByText("8")).toBeInTheDocument();
+  });
+
+  test("an idle store renders the neutral '—' import-status placeholder", () => {
+    stubMcp(true);
+    stubNative([COFFER_STORE]); // no import_status → idle
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
+    // The status cell shows the em-dash placeholder when nothing is in flight.
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  test("an in-flight store renders a status badge (not the '—' placeholder)", () => {
+    stubMcp(true);
+    stubNative([{ ...COFFER_STORE, import_status: "running" }]);
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
+    // Running → a badge replaces the placeholder; the running label includes a
+    // pulsing dot, so the em-dash placeholder must be absent.
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
   });
 
   test("shows the empty message when the agent has no native memory stores", () => {

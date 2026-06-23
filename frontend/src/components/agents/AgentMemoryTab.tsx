@@ -18,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { CofferGatewayRow } from "@/components/agents/AgentManagedLink";
 import { AgentHookToggle } from "@/components/agents/AgentHookControls";
 import { AgentNativeMemoryBulkActions } from "@/components/agents/AgentMemoryBulkActions";
+import { NativeImportStatus } from "@/components/agents/AgentMemoryImportStatus";
 import { DataTable, type Column } from "@/components/DataTable";
 import { RowActions } from "@/components/RowActions";
 import { useFileActionItems } from "@/lib/fileActionItems";
@@ -156,6 +157,12 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
       header: t("agents.memoryTab.colItems"),
       className: "whitespace-nowrap tabular-nums text-right",
       cell: (s) => <span className="text-muted-foreground">{s.item_count}</span>,
+    },
+    {
+      key: "status",
+      header: t("agents.memoryTab.colStatus"),
+      className: "whitespace-nowrap",
+      cell: (s) => <NativeImportStatus status={s.import_status} />,
     },
     {
       key: "actions",

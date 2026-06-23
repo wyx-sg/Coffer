@@ -6,6 +6,7 @@ import {
   type AdoptMcpEntryBody,
   type AgentCreate,
   type AgentPatch,
+  type NativeMemoryListResponse,
 } from "@/lib/api/agents";
 
 const AGENTS_KEY = ["agents"] as const;
@@ -55,8 +56,7 @@ export function useRemoveAgent() {
   });
 }
 
-// Read-only discovery of installed-but-unregistered agents (candidates). The
-// query is gated on `enabled` so it only scans while the detect dialog is open.
+// Read-only discovery of installed-but-unregistered agents; gated on `enabled`.
 export function useAgentCandidates(enabled: boolean) {
   return useQuery({
     queryKey: ["agents", "candidates"],
@@ -85,10 +85,6 @@ export function useAgentConfigFile(name: string, key: string | null) {
     enabled: !!name && !!key,
   });
 }
-
-// Config files are read-only in the UI (editing happens in the user's own
-// editor). There is no save/write hook — only the read queries above and the
-// child read query below.
 
 // --- Coffer MCP install (spec 004 v2) ---
 
@@ -122,8 +118,7 @@ export function useAgentHookStatus(name: string) {
     queryKey: hookKey(name),
     queryFn: () => agentsApi.hookStatus(name),
     enabled: !!name,
-    // A 422 HOOK_INSTALL_UNSUPPORTED is a stable "this agent type has no hook
-    // support" signal, not a transient failure — don't retry it.
+    // A 422 HOOK_INSTALL_UNSUPPORTED is a stable signal, not transient — don't retry.
     retry: false,
   });
 }
@@ -178,7 +173,6 @@ export function useAdoptMcpEntry(agentName: string) {
       agentsApi.adoptMcpEntry(agentName, entry, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agents", agentName, "mcp-entries"] });
-      // Invalidate resources for the mcp_server kind (matches useResources.ts key shape)
       qc.invalidateQueries({ queryKey: ["resources", { kind: "mcp_server" }] });
     },
   });
@@ -237,11 +231,22 @@ export function useUnmanagedSkills(name: string) {
 
 // --- Native memory (the agent's OWN per-project memory stores, read-only) ---
 
+const nativeMemoryKey = (name: string) => ["agents", name, "native-memory"] as const;
+
+/** Poll the list (2s) while any store is queued/running; stop once settled. */
+function nativeImportRefetch(data: NativeMemoryListResponse | undefined): number | false {
+  const busy = (data?.items ?? []).some(
+    (s) => s.import_status === "queued" || s.import_status === "running",
+  );
+  return busy ? 2000 : false;
+}
+
 export function useAgentNativeMemory(name: string) {
   return useQuery({
-    queryKey: ["agents", name, "native-memory"],
+    queryKey: nativeMemoryKey(name),
     queryFn: () => agentsApi.nativeMemory(name),
     enabled: !!name,
+    refetchInterval: (query) => nativeImportRefetch(query.state.data),
   });
 }
 
@@ -250,9 +255,18 @@ export function useImportNativeMemory(agentName: string) {
   return useMutation({
     mutationFn: ({ memoryDir, projectPath }: { memoryDir: string; projectPath: string | null }) =>
       agentsApi.importNativeMemory(agentName, memoryDir, projectPath),
+    // Imported facts land in a Coffer store (+ organize) — refresh the store list.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["memory-stores"] }),
+  });
+}
+
+/** Enqueue async batch import for native-memory stores (returns at once). */
+export function useImportNativeMemoryBatch(agentName: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (memoryDirs: string[]) => agentsApi.importNativeMemoryBatch(agentName, memoryDirs),
     onSuccess: () => {
-      // Imported facts land in a Coffer store (+ organize) — refresh the store
-      // list so the Memory page reflects the new content.
+      qc.invalidateQueries({ queryKey: nativeMemoryKey(agentName) });
       qc.invalidateQueries({ queryKey: ["memory-stores"] });
     },
   });
@@ -265,7 +279,6 @@ export function useAdoptUnmanagedSkill(agentName: string) {
       agentsApi.adoptUnmanagedSkill(agentName, skill, location),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agents", agentName, "unmanaged-skills"] });
-      // Invalidate the global skills list (matches SKILLS_KEY in useSkills.ts)
       qc.invalidateQueries({ queryKey: ["skills"] });
       qc.invalidateQueries({ queryKey: ["agents", agentName] });
     },
@@ -279,7 +292,6 @@ export function useDeleteUnmanagedSkill(agentName: string) {
       agentsApi.deleteUnmanagedSkill(agentName, skill, location),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agents", agentName, "unmanaged-skills"] });
-      // Invalidate the global skills list (matches SKILLS_KEY in useSkills.ts)
       qc.invalidateQueries({ queryKey: ["skills"] });
       qc.invalidateQueries({ queryKey: ["agents", agentName] });
     },

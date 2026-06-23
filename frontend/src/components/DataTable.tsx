@@ -11,7 +11,8 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { DataTableHead } from "@/components/DataTableHead";
-import { BulkBar, RowSelectCell, useTableSelection } from "@/components/DataTableSelection";
+import { RowSelectCell, useTableSelection } from "@/components/DataTableSelection";
+import { TableBulkBar, usePageSelectAll } from "@/components/DataTableBulk";
 import { Pagination } from "@/components/Pagination";
 import { useDefaultPageSize } from "@/lib/preferences";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
@@ -118,13 +119,13 @@ export function DataTable<T>({
   const pageRows = server ? filtered : filtered.slice((safePage - 1) * size, safePage * size);
 
   const canSelect = (r: T) => (isSelectable ? isSelectable(r) : true);
-  // Select-all spans the whole filtered set (client mode: across pages; server
-  // mode: the current page), selectable rows only.
-  const filteredKeys = filtered.filter(canSelect).map(rowKey);
-  const allSelected = filteredKeys.length > 0 && filteredKeys.every((k) => sel.keys.has(k));
-  const someSelected = !allSelected && filteredKeys.some((k) => sel.keys.has(k));
+  // Header checkbox selects the CURRENT PAGE; TableBulkBar escalates to "all".
+  const ps = usePageSelectAll({
+    sel, pageRows, filtered, rowKey, canSelect, total,
+    server: Boolean(server),
+    resetKey: `${query}␟${JSON.stringify(filterVals)}`,
+  });
   const hasToolbar = Boolean(search) || filters.length > 0;
-  const showBulkBar = Boolean(selection) && sel.selectedRows.length > 0;
 
   return (
     <div className="space-y-4">
@@ -146,14 +147,8 @@ export function DataTable<T>({
         />
       ) : null}
 
-      {showBulkBar ? (
-        <BulkBar
-          label={selection!.bulkLabel(sel.selectedRows.length)}
-          clearLabel={selection!.clearLabel}
-          onClear={sel.clear}
-        >
-          {selection!.renderBulkActions({ selectedRows: sel.selectedRows, clear: sel.clear })}
-        </BulkBar>
+      {selection ? (
+        <TableBulkBar selection={selection} ps={ps} selectedRows={sel.selectedRows} />
       ) : null}
 
       <div className="rounded-md border bg-card">
@@ -162,10 +157,10 @@ export function DataTable<T>({
             columns={columns}
             hasSelection={Boolean(selection)}
             expandable={expandable}
-            allSelected={allSelected}
-            someSelected={someSelected}
+            allSelected={ps.pageAllSelected}
+            someSelected={ps.pageSomeSelected}
             ariaSelectAll={selection?.ariaSelectAll}
-            onToggleAll={() => sel.setMany(filteredKeys, !allSelected)}
+            onToggleAll={ps.togglePage}
           />
           <TableBody>
             {pageRows.length === 0 ? (

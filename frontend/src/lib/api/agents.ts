@@ -1,12 +1,9 @@
 // frontend/src/lib/api/agents.ts — typed fetch helpers for /api/v1/agents/*
-// Until openapi codegen merges specs 003/004, we hand-write the wire types
-// to match `specs/004-agent-registry/contracts/api.openapi.yaml`.
-
+// Wire types hand-written to match specs/004-agent-registry/contracts/api.openapi.yaml.
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
 
-// The backend supports exactly two agent types (Claude Code, Codex); keep this
-// union in sync with `AgentType` in the backend domain (`domain/agent/types.py`).
+// Keep AgentType in sync with the backend domain (`domain/agent/types.py`).
 export type AgentType = "claude_code" | "codex";
 
 export type ConfigFileFormat = "json" | "toml" | "markdown" | "text";
@@ -58,15 +55,30 @@ export interface HookInstallStatus {
 export interface NativeMemoryStore {
   /** Readable project label (the project dir's basename). */
   project: string;
-  /** The real project path: Claude Code's resolved project dir, or — for Codex's
-   * global store — the cwd this row's memories are routed to. Null if unresolved. */
+  /** Real project path (Codex global store: the cwd routed to). Null if unresolved. */
   path: string | null;
-  /** Absolute path to the agent's native memory directory. For Claude Code this is
-   * per-project; for Codex every row shares the one global memories dir. */
+  /** The agent's native memory dir (Claude Code: per-project; Codex: one global). */
   memory_dir: string;
   /** Number of memory entries (Claude Code fact files / an inline MEMORY.md /
    * Codex Task Groups routed to this project). */
   item_count: number;
+  /** queued | running | error — in-flight only; null when idle. */
+  import_status?: string | null;
+}
+
+export interface NativeMemoryImportBatchResult {
+  queued: number;
+  total: number;
+}
+
+export interface NativeMemoryImportStatus {
+  memory_dir: string;
+  state: string;
+  message?: string | null;
+}
+
+export interface NativeMemoryImportStatusResponse {
+  statuses: NativeMemoryImportStatus[];
 }
 
 export interface NativeMemoryListResponse {
@@ -74,8 +86,7 @@ export interface NativeMemoryListResponse {
 }
 
 /** Result of importing one native memory store into Coffer (bulk remember →
- * inbox → organize). `store` is null when the project couldn't be resolved
- * (e.g. a lossy slug with no transcript, or a non-git project). */
+ * inbox → organize). `store` is null when the project couldn't be resolved. */
 export interface NativeMemoryImportResult {
   imported: number;
   skipped: number;
@@ -189,9 +200,8 @@ export async function call<T>(
   return data as T;
 }
 
-// Agent names and config-file keys are interpolated into URL paths; encode them
-// so a name/key with URL-significant characters can't malform or misroute the
-// request (defence in depth — the daemon also constrains names server-side).
+// Encode names/keys interpolated into URL paths (defence in depth — the daemon
+// also constrains names server-side).
 export const enc = encodeURIComponent;
 
 export const agentsApi = {
@@ -218,8 +228,7 @@ export const agentsApi = {
 
   // Session-start hook (rules injection): install/uninstall/status. A 422 with
   // code HOOK_INSTALL_UNSUPPORTED means the agent type has no hook support.
-  hookStatus: (name: string) =>
-    call<HookInstallStatus>("GET", `/agents/${enc(name)}/hook-install`),
+  hookStatus: (name: string) => call<HookInstallStatus>("GET", `/agents/${enc(name)}/hook-install`),
   hookInstall: (name: string) =>
     call<HookInstallStatus>("POST", `/agents/${enc(name)}/hook-install`),
   hookUninstall: (name: string) =>
@@ -268,7 +277,6 @@ export const agentsApi = {
       "DELETE",
       `/agents/${enc(name)}/unmanaged-skills/${enc(skill)}?location=${encodeURIComponent(location)}`,
     ),
-
   // Native memory: the agent's OWN per-project memory stores (read-only scan).
   nativeMemory: (name: string) =>
     call<NativeMemoryListResponse>("GET", `/agents/${enc(name)}/native-memory`),
@@ -280,4 +288,13 @@ export const agentsApi = {
       memory_dir: memoryDir,
       project_path: projectPath,
     }),
+  importNativeMemoryBatch: (name: string, memoryDirs: string[]) =>
+    call<NativeMemoryImportBatchResult>("POST", `/agents/${enc(name)}/native-memory/import-batch`, {
+      memory_dirs: memoryDirs,
+    }),
+  nativeMemoryImportStatus: (name: string) =>
+    call<NativeMemoryImportStatusResponse>(
+      "GET",
+      `/agents/${enc(name)}/native-memory/import-status`,
+    ),
 };

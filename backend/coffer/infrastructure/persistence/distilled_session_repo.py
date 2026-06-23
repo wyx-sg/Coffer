@@ -33,6 +33,16 @@ class DistilledSessionRepo:
             row = (await session.execute(stmt)).first()
             return row is not None
 
+    async def distilled_session_ids(self, agent_name: str) -> set[str]:
+        """All session ids for *agent_name* that have at least one ledger row
+        (any sha). One indexed query — lets a list view mark each row
+        done/never without reading transcript files on every poll."""
+        async with self._sm() as session:
+            stmt = select(DistilledSessionModel.session_id).where(
+                DistilledSessionModel.agent_name == agent_name
+            )
+            return {row[0] for row in (await session.execute(stmt)).all()}
+
     async def mark_distilled(
         self,
         agent_name: str,

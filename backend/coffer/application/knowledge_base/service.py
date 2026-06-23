@@ -5,14 +5,11 @@ format, Coffer normalizes each to Markdown on disk (the source of truth), and
 serves them back over three retrieval modes (grep / keyword / vector). SQLite is
 a rebuildable index.
 
-This service composes:
-- the kind-agnostic ``ResourceService`` (KB-as-Resource lifecycle / config),
-- the unified ``DocumentRepo`` (``documents`` rows),
-- the ``ConverterRegistry`` (any-format → Markdown),
-- the shared ``KnowledgeRetrieval`` facade + ``Reindexer`` (chunk/FTS5/vec),
-- ``AuditService``, and the on-disk path layout.
-
-The any-format→Markdown pipeline is decomposed into small helpers in
+This service composes the kind-agnostic ``ResourceService`` (KB-as-Resource
+lifecycle / config), the unified ``DocumentRepo`` (``documents`` rows), the
+``ConverterRegistry`` (any-format → Markdown), the shared ``KnowledgeRetrieval``
+facade + ``Reindexer`` (chunk/FTS5/vec), ``AuditService``, and the on-disk path
+layout. The any-format→Markdown pipeline is decomposed into small helpers in
 ``pipeline.py`` so no method runs long. Knows nothing about MarkItDown /
 sqlite-vec / embedding SDKs.
 """
@@ -206,6 +203,14 @@ class KnowledgeBaseService:
             details=dict(stats),
         )
         return stats
+
+    async def reembed_document(self, *, kb_name: str, document_id: str) -> Document:
+        """Retry the embedding for one document (async re-embed worker unit): clears
+        ``embed_pending`` when the provider is reachable, else leaves it set.
+        Index-only retry — no audit event (no user-visible body/provenance change)."""
+        config = await self.get_kb_config(kb_name)
+        doc = await self._require_document(kb_name, document_id)
+        return await self._pipeline.reembed(kb_name=kb_name, doc=doc, config=config)
 
     async def reconvert_document(self, *, kb_name: str, document_id: str, actor: str) -> Document:
         """Re-convert a document from its raw original (blocked once edited)."""
