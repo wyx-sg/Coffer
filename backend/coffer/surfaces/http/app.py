@@ -63,6 +63,7 @@ from coffer.surfaces.http.app_mcp_composition import (
     reaper_kwargs_from_env,
     wire_mcp_kind,
 )
+from coffer.surfaces.http.async_batch_wiring import start_async_batches, stop_async_batches
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.auto_distill_wiring import (
     start_auto_distill,
@@ -77,6 +78,7 @@ from coffer.surfaces.http.credential_composition import (
     run_legacy_keychain_migration,
 )
 from coffer.surfaces.http.dependencies import (
+    get_agent_memory_import_service,
     get_agent_service,
     get_invocation_repo_optional,
     get_master_key_manager,
@@ -88,7 +90,6 @@ from coffer.surfaces.http.dependencies import (
     set_resource_service,
     set_retention_service,
 )
-from coffer.surfaces.http.distill_batch_wiring import start_distill_batch, stop_distill_batch
 from coffer.surfaces.http.distill_wiring import wire_distill
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
@@ -197,7 +198,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         embedding_config_svc, credential_store
     )
 
-    wire_kb_kind(
+    kb_service = wire_kb_kind(
         app,
         resource_svc,
         audit,
@@ -282,11 +283,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     start_auto_distill(
         app, distill_service=distill_service, agent_service=get_agent_service(), session_maker=sm
     )
-    # On-demand SessionEnd distill (Slice 6 FR-051): reuses the FR-046 ledger so
-    # a session distilled at session-end is never re-distilled by the sweep.
+    # On-demand SessionEnd distill (Slice 6 FR-051): reuses the FR-046 ledger.
     wire_session_end_distiller(distill_service=distill_service, session_maker=sm)
-    # Async batch distillation (off the request path) for the transcripts table.
-    await start_distill_batch(app, distill_service=distill_service, session_maker=sm)
+    # Async batch workers (off the request path): distill, KB re-embed, native import.
+    await start_async_batches(
+        app,
+        distill_service=distill_service,
+        session_maker=sm,
+        kb_service=kb_service,
+        import_service=get_agent_memory_import_service(),
+    )
 
     # Multi-machine sync (spec 010); worker is inert until the user enables it.
     start_sync(app, resource_svc, audit, sm, db_path, get_master_key_manager())
@@ -320,7 +326,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await stop_backup_worker(app)
         await stop_auto_organize(app)
         await stop_auto_distill(app)
-        await stop_distill_batch(app)
+        await stop_async_batches(app)
         await stop_sync(app)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an

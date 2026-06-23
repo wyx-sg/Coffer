@@ -801,6 +801,11 @@
       "nativeHint": "该 agent 自己的原生记忆库（不经 Coffer 管理），只读。",
       "nativeEmpty": "该 agent 没有原生记忆库。",
       "searchPlaceholder": "搜索项目或路径…",
+      "colStatus": "导入",
+      "statusQueued": "排队中",
+      "statusRunning": "导入中…",
+      "statusError": "失败",
+      "importQueued": "已将 {{count}} 个存储加入导入队列；正在后台整理。",
       "colProject": "项目",
       "colPath": "路径",
       "colItems": "条目数",
@@ -1035,6 +1040,13 @@
       "vector": "向量检索"
     },
     "detail": {
+      "embedStatus": {
+        "statusDone": "已嵌入",
+        "statusEmbedding": "嵌入中",
+        "statusQueued": "排队中",
+        "statusRunning": "嵌入中",
+        "statusError": "嵌入失败"
+      },
       "reindex": "重建索引",
       "search": "检索",
       "mode": "模式",

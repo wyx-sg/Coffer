@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { StatusBadge, type StatusTone } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,13 +24,13 @@ import {
 
 import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
 
-const STATUS_TONE: Record<string, string> = {
-  clean: "text-green-600",
-  conflicted: "text-amber-600",
-  credentials_locked: "text-amber-600",
-  error: "text-red-600",
-  syncing: "text-blue-600",
-  unconfigured: "text-foreground/60",
+const SYNC_TONE: Record<string, StatusTone> = {
+  clean: "success",
+  conflicted: "warning",
+  credentials_locked: "warning",
+  error: "danger",
+  syncing: "info",
+  unconfigured: "neutral",
 };
 
 export function SyncSettings() {
@@ -65,7 +66,7 @@ export function SyncSettings() {
   const save = () =>
     update.mutate({ remote: remote || null, branch, enabled, auto, interval_seconds: interval });
 
-  const tone = status ? (STATUS_TONE[status.status] ?? "text-foreground/60") : "";
+  const syncTone: StatusTone = status ? (SYNC_TONE[status.status] ?? "neutral") : "neutral";
 
   return (
     <div className="space-y-6">
@@ -79,8 +80,12 @@ export function SyncSettings() {
           {status && (
             <div className="rounded-md border p-3 text-sm">
               <span className="text-foreground/60">{t("settings.sync.status")}: </span>
-              <span className={tone} role="status">
-                {t(`settings.sync.statuses.${status.status}`)}
+              <span role="status">
+                <StatusBadge
+                  tone={syncTone}
+                  label={t(`settings.sync.statuses.${status.status}`)}
+                  pulse={status.status === "syncing"}
+                />
               </span>
               {status.last_sync_at && (
                 <span className="ml-2 text-foreground/50">
