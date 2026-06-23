@@ -4,11 +4,11 @@
 // Stubs globalThis.fetch directly because the api module uses plain fetch.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 
-import { transcriptsKey, useAgentTranscripts, useDistillTranscript } from "./useAgentChatHistory";
+import { transcriptsKey, useAgentTranscripts } from "./useAgentChatHistory";
 
 // onError → toast is the default for every mutation (agents/frontend.md §5).
 const errorToast = vi.fn();
@@ -47,17 +47,6 @@ const SAMPLE_SESSION = {
   project_path: "/home/u/repo",
   message_count: 3,
   started_at: "2026-06-01T00:00:00Z",
-};
-
-const SAMPLE_DISTILL = {
-  insights: [
-    {
-      name: "Use Redis",
-      description: "cache layer",
-      body: "We chose Redis for caching.",
-    },
-  ],
-  journal_entries: ["2026-06-21T09:00:00+00:00"],
 };
 
 describe("transcriptsKey", () => {
@@ -114,46 +103,5 @@ describe("useAgentTranscripts", () => {
     const { result } = renderHook(() => useAgentTranscripts("claude"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as Error).message).toContain("boom");
-  });
-});
-
-describe("useDistillTranscript", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.clearAllMocks();
-  });
-
-  test("POSTs to /api/v1/agents/{name}/transcripts/distill and returns insights", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, SAMPLE_DISTILL));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { result } = renderHook(() => useDistillTranscript("claude"), {
-      wrapper: wrapper(),
-    });
-    let data: typeof SAMPLE_DISTILL | undefined;
-    await act(async () => {
-      data = await result.current.mutateAsync({ session_id: "s1" });
-    });
-    expect(data?.insights).toHaveLength(1);
-    expect(data?.journal_entries).toEqual(["2026-06-21T09:00:00+00:00"]);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).not.toContain("/api/v1/api/v1");
-    expect(String(url)).toMatch(/\/api\/v1\/agents\/claude\/transcripts\/distill$/);
-    expect((init as RequestInit).method).toBe("POST");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ session_id: "s1" });
-  });
-
-  test("calls toast.error on mutation failure", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(500, { error: { code: "ERR", message: "kaboom" } })),
-    );
-    const { result } = renderHook(() => useDistillTranscript("claude"), {
-      wrapper: wrapper(),
-    });
-    await act(async () => {
-      await result.current.mutateAsync({ session_id: "s1" }).catch(() => {});
-    });
-    await waitFor(() => expect(errorToast).toHaveBeenCalled());
   });
 });

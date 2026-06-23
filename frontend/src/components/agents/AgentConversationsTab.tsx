@@ -5,9 +5,11 @@
 // search box + page-based pagination + bulk select. The list is large and
 // unbounded, so the table runs in DataTable's server-pagination mode: each page
 // is fetched on demand (limit/offset) rather than loading every session up
-// front. Per-row "distill to memory" (with inline insights) stays the primary
-// action; "open in editor" / "reveal" fold into the row's "⋯" menu, and
-// selecting rows enables a bulk distill. The project/time filters were dropped
+// front. Per-row "distill to memory" stays the primary action — it enqueues
+// async work (like the bulk action) and shows progress in the row's status
+// column rather than rendering the distilled result inline; "open in editor" /
+// "reveal" fold into the row's "⋯" menu, and selecting rows enables a bulk
+// distill. The project/time filters were dropped
 // for parity with the other tables; the message-count / start / last-activity
 // columns stay sortable (server-side sort + order), defaulting to most-recent
 // activity first.
@@ -16,7 +18,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
 import { AgentConversationsBulkActions } from "@/components/agents/AgentConversationsBulkActions";
-import { DistillCell } from "@/components/agents/AgentConversationsDistillCell";
+import { DistillButton } from "@/components/agents/AgentConversationsDistillButton";
 import { DistillStatus } from "@/components/agents/AgentConversationsStatus";
 import { DataTable, type Column } from "@/components/DataTable";
 import { RowActions } from "@/components/RowActions";
@@ -34,8 +36,8 @@ function TimeCell({ value }: { value: string | null }) {
   );
 }
 
-/** Row actions: distill (primary, with inline insights) + open/reveal folded
- * into the "⋯" menu so the row never stacks three buttons. */
+/** Row actions: distill (primary, async — drives the status column) + open/reveal
+ * folded into the "⋯" menu so the row never stacks three buttons. */
 function ConversationRowActions({
   session,
   name,
@@ -47,7 +49,7 @@ function ConversationRowActions({
   const fileItems = useFileActionItems(session.source_path);
   return (
     <RowActions
-      primary={<DistillCell session={session} name={name} />}
+      primary={<DistillButton session={session} name={name} />}
       items={fileItems}
       menuAriaLabel={t("common.moreActions")}
     />

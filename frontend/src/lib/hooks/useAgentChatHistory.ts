@@ -12,10 +12,8 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import {
   distillBatch,
-  distillTranscript,
   listTranscripts,
   type DistillBatchRequest,
-  type DistillRequest,
   type TranscriptListParams,
   type TranscriptSessionListResponse,
 } from "@/lib/api/agentChat";
@@ -83,26 +81,6 @@ export function useDistillBatch(name: string) {
   return useMutation({
     mutationFn: (body: DistillBatchRequest) => distillBatch(name, body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: transcriptsKey(name) });
-      void qc.invalidateQueries({ queryKey: ["memory-stores"] });
-    },
-    onError,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Mutation: distill a session to memory facts
-// ---------------------------------------------------------------------------
-
-export function useDistillTranscript(name: string) {
-  const qc = useQueryClient();
-  const onError = useChatHistoryToastError();
-  return useMutation({
-    mutationFn: (body: DistillRequest) => distillTranscript(name, body),
-    onSuccess: () => {
-      // Invalidate the transcript list (session list may not change but refresh
-      // is cheap and keeps UI consistent) and the memory-stores list (new facts
-      // may have been written to the projected store).
       void qc.invalidateQueries({ queryKey: transcriptsKey(name) });
       void qc.invalidateQueries({ queryKey: ["memory-stores"] });
     },

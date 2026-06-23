@@ -22,15 +22,14 @@ vi.mock("react-router-dom", async (importOriginal) => ({
   useNavigate: () => navigateMock,
 }));
 
-const importMutate = vi.fn();
 const patchMutate = vi.fn();
 
+// Both the per-row Import button and the bulk bar enqueue via useImportNativeMemoryBatch.
 const batchMutate = vi.fn();
 
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentNativeMemory: vi.fn(),
   useAgentMcpStatus: vi.fn(),
-  useImportNativeMemory: vi.fn(() => ({ mutate: importMutate, isPending: false })),
   useImportNativeMemoryBatch: vi.fn(() => ({ mutate: batchMutate, isPending: false })),
   usePatchAgent: vi.fn(() => ({ mutate: patchMutate, isPending: false })),
   // The session-start rules-injection card now lives in this tab; stub its
@@ -155,15 +154,12 @@ describe("AgentMemoryTab", () => {
     expect(screen.getByText(/no native memory stores/i)).toBeInTheDocument();
   });
 
-  test("clicking Import to Coffer imports the store's memory dir + project path", () => {
+  test("clicking Import to Coffer enqueues an async batch import for the store's memory dir", () => {
     stubMcp(true);
     stubNative([COFFER_STORE]);
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("button", { name: /import to coffer/i }));
-    expect(importMutate).toHaveBeenCalledWith(
-      { memoryDir: COFFER_STORE.memory_dir, projectPath: COFFER_STORE.path },
-      expect.anything(),
-    );
+    expect(batchMutate).toHaveBeenCalledWith([COFFER_STORE.memory_dir], expect.anything());
   });
 
   test("disable-native-memory toggle reflects the agent flag and PATCHes on flip", () => {

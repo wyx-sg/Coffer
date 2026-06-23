@@ -85,16 +85,6 @@ export interface NativeMemoryListResponse {
   items: NativeMemoryStore[];
 }
 
-/** Result of importing one native memory store into Coffer (bulk remember →
- * inbox → organize). `store` is null when the project couldn't be resolved. */
-export interface NativeMemoryImportResult {
-  imported: number;
-  skipped: number;
-  store: string | null;
-  project_path: string | null;
-  organized: boolean;
-}
-
 export interface AgentOut {
   name: string;
   type: AgentType;
@@ -280,14 +270,6 @@ export const agentsApi = {
   // Native memory: the agent's OWN per-project memory stores (read-only scan).
   nativeMemory: (name: string) =>
     call<NativeMemoryListResponse>("GET", `/agents/${enc(name)}/native-memory`),
-  // `projectPath` selects which entries to import for Codex's shared global
-  // store (one store, many project rows); ignored for Claude Code, where
-  // `memoryDir` alone identifies the project.
-  importNativeMemory: (name: string, memoryDir: string, projectPath: string | null = null) =>
-    call<NativeMemoryImportResult>("POST", `/agents/${enc(name)}/native-memory/import`, {
-      memory_dir: memoryDir,
-      project_path: projectPath,
-    }),
   importNativeMemoryBatch: (name: string, memoryDirs: string[]) =>
     call<NativeMemoryImportBatchResult>("POST", `/agents/${enc(name)}/native-memory/import-batch`, {
       memory_dirs: memoryDirs,

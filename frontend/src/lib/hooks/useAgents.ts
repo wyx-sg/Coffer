@@ -250,16 +250,6 @@ export function useAgentNativeMemory(name: string) {
   });
 }
 
-export function useImportNativeMemory(agentName: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ memoryDir, projectPath }: { memoryDir: string; projectPath: string | null }) =>
-      agentsApi.importNativeMemory(agentName, memoryDir, projectPath),
-    // Imported facts land in a Coffer store (+ organize) — refresh the store list.
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["memory-stores"] }),
-  });
-}
-
 /** Enqueue async batch import for native-memory stores (returns at once). */
 export function useImportNativeMemoryBatch(agentName: string) {
   const qc = useQueryClient();
