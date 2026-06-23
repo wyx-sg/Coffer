@@ -12,9 +12,11 @@ import {
   getDocument,
   getKnowledgeBase,
   getKnowledgeBaseMetrics,
+  getDocumentStatus,
   ingestDocument,
   listDocuments,
   reconvertDocument,
+  reembedDocuments,
   reindexKnowledgeBase,
   searchKnowledgeBase,
   updateKnowledgeBaseConfig,
@@ -394,5 +396,41 @@ describe("getKnowledgeBaseMetrics", () => {
       indexed_modes: ["keyword"],
       disk_bytes: 1234,
     });
+  });
+});
+
+describe("reembedDocuments", () => {
+  test("POSTs the reembed-batch body and returns the counts", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(okJson({ queued: 2, skipped: 1, total: 3 }));
+    const out = await reembedDocuments("kb1", { all: true });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/knowledge_bases/kb1/documents/reembed-batch`);
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(init?.body as string)).toEqual({ all: true });
+    expect(out).toEqual({ queued: 2, skipped: 1, total: 3 });
+  });
+
+  test("surfaces the error envelope as a typed ApiError", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      notOkJson(500, { error: { code: "INTERNAL_ERROR", message: "boom" } }),
+    );
+    const err = await reembedDocuments("kb1", { document_ids: ["d1"] }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).code).toBe("INTERNAL_ERROR");
+  });
+});
+
+describe("getDocumentStatus", () => {
+  test("GETs the status endpoint and returns the in-flight statuses", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      okJson({ statuses: [{ document_id: "d1", state: "running" }] }),
+    );
+    const out = await getDocumentStatus("kb1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/knowledge_bases/kb1/documents/status`);
+    expect(init?.method ?? "GET").toBe("GET");
+    expect(out.statuses[0]).toEqual({ document_id: "d1", state: "running" });
   });
 });

@@ -79,10 +79,24 @@ class DocumentOut(BaseModel):
     folder_path: str
     created_at: datetime
     updated_at: datetime
+    # Per-document embed status surfaced on the documents list/detail. Derived
+    # from ``embed_pending`` (``embedding`` while pending, else ``done``) overlaid
+    # with any in-flight ``queued``/``running``/``error`` re-embed state. Absent
+    # (``None``) when the async batch service is not wired (minimal apps / tests).
+    embed_status: str | None = Field(
+        default=None,
+        description="Per-document embed status: done | embedding | queued | running | error.",
+    )
 
     @classmethod
     def from_domain(
-        cls, d: Document, *, chunk_count: int = 0, path: str, folder_path: str
+        cls,
+        d: Document,
+        *,
+        chunk_count: int = 0,
+        path: str,
+        folder_path: str,
+        embed_status: str | None = None,
     ) -> DocumentOut:
         return cls(
             id=d.id,
@@ -99,6 +113,7 @@ class DocumentOut(BaseModel):
             folder_path=folder_path,
             created_at=d.created_at,
             updated_at=d.updated_at,
+            embed_status=embed_status,
         )
 
 
@@ -107,10 +122,21 @@ class DocumentDetailOut(DocumentOut):
 
     @classmethod
     def from_domain_with_body(
-        cls, d: Document, markdown: str, *, chunk_count: int = 0, path: str, folder_path: str
+        cls,
+        d: Document,
+        markdown: str,
+        *,
+        chunk_count: int = 0,
+        path: str,
+        folder_path: str,
+        embed_status: str | None = None,
     ) -> DocumentDetailOut:
         base = DocumentOut.from_domain(
-            d, chunk_count=chunk_count, path=path, folder_path=folder_path
+            d,
+            chunk_count=chunk_count,
+            path=path,
+            folder_path=folder_path,
+            embed_status=embed_status,
         )
         return cls(**base.model_dump(), markdown=markdown)
 
@@ -221,3 +247,45 @@ class KnowledgeBaseMetrics(BaseModel):
     documents_degraded: int = 0
     indexed_modes: list[RetrievalMode]
     disk_bytes: int
+
+
+class ReembedBatchRequest(BaseModel):
+    """Request body for POST /api/v1/knowledge_bases/{name}/documents/reembed-batch.
+
+    Either re-embed an explicit ``document_ids`` set, or set ``all`` to re-embed
+    every document still pending an embed (re-embed-all). Already-embedded
+    documents are skipped."""
+
+    document_ids: list[str] | None = Field(
+        default=None, description="Re-embed these specific documents."
+    )
+    all: bool = Field(
+        default=False,
+        description="Re-embed every document still pending an embed (re-embed-all).",
+    )
+
+
+class ReembedBatchResponse(BaseModel):
+    """Response for POST /api/v1/knowledge_bases/{name}/documents/reembed-batch."""
+
+    queued: int = Field(description="Newly enqueued documents.")
+    skipped: int = Field(description="Skipped — already embedded (nothing to retry).")
+    total: int = Field(description="Candidate documents considered.")
+
+
+class DocumentEmbedStatus(BaseModel):
+    """A single in-flight document's re-embed state."""
+
+    document_id: str
+    state: str = Field(description="queued | running | error")
+    message: str | None = Field(default=None, description="Error detail when state is error.")
+
+
+class DocumentStatusResponse(BaseModel):
+    """Response for GET /api/v1/knowledge_bases/{name}/documents/status.
+
+    Only in-flight documents appear (queued / running / error); a document absent
+    from the list is either done or still pending an embed (see the list
+    endpoint's ``embed_status``)."""
+
+    statuses: list[DocumentEmbedStatus]

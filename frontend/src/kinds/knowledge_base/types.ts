@@ -58,8 +58,33 @@ export interface DocumentOut {
   project_id: string;
   chunk_count?: number;
   metadata: Record<string, unknown>;
+  /** Per-document embed status: done | embedding | queued | running | error (absent when the async batch service is not wired). */
+  embed_status?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ReembedBatchRequest {
+  document_ids?: string[];
+  /** Re-embed every document still pending an embed (re-embed-all). */
+  all?: boolean;
+}
+
+export interface ReembedBatchResponse {
+  queued: number;
+  skipped: number;
+  total: number;
+}
+
+export interface DocumentEmbedStatus {
+  document_id: string;
+  state: string;
+  message?: string | null;
+}
+
+export interface DocumentStatusResponse {
+  // Only in-flight documents appear (queued / running / error).
+  statuses: DocumentEmbedStatus[];
 }
 
 export interface DocumentListOut {

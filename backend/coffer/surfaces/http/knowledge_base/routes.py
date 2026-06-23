@@ -46,8 +46,14 @@ from coffer.surfaces.http.knowledge_base.schemas import (
     SearchResponse,
     SourceCheckResponse,
 )
+from coffer.surfaces.http.knowledge_base.state import (
+    get_kb_batch_service_optional,
+)
 
 if TYPE_CHECKING:
+    from coffer.application.async_ops.registry import InflightEntry
+    from coffer.application.knowledge_base.batch import KnowledgeBaseBatchService
+    from coffer.domain.knowledge.document import Document
     from coffer.domain.knowledge.retrieval import RetrievalMode
 
 router = APIRouter(
@@ -65,6 +71,21 @@ _ABSOLUTE_MAX_DOC_BYTES = 100 * 1024 * 1024
 
 def _actor(x_coffer_actor: str | None = Header(default=None)) -> str:
     return x_coffer_actor or "api"
+
+
+def _embed_status(
+    batch: KnowledgeBaseBatchService | None,
+    doc: Document,
+    inflight: dict[str, InflightEntry],
+) -> str | None:
+    """Per-document embed status: in-flight (queued/running/error) overlaid on the
+    derived done/embedding. ``None`` when the batch service is not wired."""
+    if batch is None:
+        return None
+    entry = inflight.get(doc.id)
+    if entry is not None:
+        return str(entry.state.value)
+    return batch.derived_status(doc)
 
 
 def _to_kb_out(r: Resource, *, document_count: int = 0) -> KnowledgeBaseOut:
@@ -142,6 +163,7 @@ async def ingest_document(
     # auto-derives a server path (an untrusted upload leaves this unset).
     source_path: str | None = Form(default=None),
     kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
+    batch: KnowledgeBaseBatchService | None = Depends(get_kb_batch_service_optional),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> DocumentOut:
     # When the client provides Content-Length, ``file.size`` is set; reject
@@ -181,8 +203,13 @@ async def ingest_document(
     )
     counts = await kb_svc.chunk_counts(kb_name=name)
     path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=doc.id)
+    inflight = batch.inflight(name) if batch is not None else {}
     return DocumentOut.from_domain(
-        doc, chunk_count=counts.get(doc.id, 0), path=path, folder_path=folder_path
+        doc,
+        chunk_count=counts.get(doc.id, 0),
+        path=path,
+        folder_path=folder_path,
+        embed_status=_embed_status(batch, doc, inflight),
     )
 
 
@@ -193,15 +220,23 @@ async def list_documents(
     offset: int = Query(default=0, ge=0),
     q: str | None = Query(default=None),
     kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
+    batch: KnowledgeBaseBatchService | None = Depends(get_kb_batch_service_optional),  # noqa: B008
 ) -> DocumentListOut:
     docs, total = await kb_svc.list_documents(kb_name=name, limit=limit, offset=offset, q=q)
     counts = await kb_svc.chunk_counts(kb_name=name)
+    # Status overlay is best-effort: when the batch service is not wired (minimal
+    # apps / tests) rows simply carry embed_status=None.
+    inflight = batch.inflight(name) if batch is not None else {}
     out = []
     for d in docs:
         path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=d.id)
         out.append(
             DocumentOut.from_domain(
-                d, chunk_count=counts.get(d.id, 0), path=path, folder_path=folder_path
+                d,
+                chunk_count=counts.get(d.id, 0),
+                path=path,
+                folder_path=folder_path,
+                embed_status=_embed_status(batch, d, inflight),
             )
         )
     return DocumentListOut(documents=out, total=total)
@@ -212,12 +247,19 @@ async def get_document(
     name: str,
     document_id: str,
     kb_svc: KnowledgeBaseService = Depends(get_kb_service),  # noqa: B008
+    batch: KnowledgeBaseBatchService | None = Depends(get_kb_batch_service_optional),  # noqa: B008
 ) -> DocumentDetailOut:
     doc, markdown = await kb_svc.get_document_text(kb_name=name, document_id=document_id)
     counts = await kb_svc.chunk_counts(kb_name=name)
     path, folder_path = kb_svc.doc_paths(kb_name=name, document_id=doc.id)
+    inflight = batch.inflight(name) if batch is not None else {}
     return DocumentDetailOut.from_domain_with_body(
-        doc, markdown, chunk_count=counts.get(doc.id, 0), path=path, folder_path=folder_path
+        doc,
+        markdown,
+        chunk_count=counts.get(doc.id, 0),
+        path=path,
+        folder_path=folder_path,
+        embed_status=_embed_status(batch, doc, inflight),
     )
 
 

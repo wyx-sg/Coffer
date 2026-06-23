@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { DocEmbedStatus } from "@/components/knowledge_base/KnowledgeBaseDocStatus";
 import { cn } from "@/lib/utils";
 
 export interface DocRow {
@@ -17,6 +18,8 @@ export interface DocRow {
   title: string;
   /** Source mode drives the "edited" badge; absent for search-hit rows. */
   sourceMode?: string;
+  /** Per-document embed status (done | embedding | queued | running | error); absent for search-hit rows. */
+  embedStatus?: string | null;
 }
 
 interface Props {
@@ -67,6 +70,7 @@ export function KnowledgeBaseDocTree({
               >
                 <FileText className="size-4 shrink-0 opacity-70" />
                 <span className="min-w-0 flex-1 truncate">{d.title}</span>
+                <DocEmbedStatus status={d.embedStatus} />
                 {d.sourceMode === "edited" ? (
                   <Badge variant="outline" className="shrink-0 text-[10px]">
                     {t("knowledgeBases.sourceMode.edited", { defaultValue: "edited" })}

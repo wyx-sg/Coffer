@@ -47,6 +47,7 @@ export function KnowledgeBaseDetailPage() {
         id: d.id,
         title: d.title,
         sourceMode: d.source_mode,
+        embedStatus: d.embed_status,
       }));
 
   return (

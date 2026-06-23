@@ -17,14 +17,24 @@ import {
   ingestDocument,
   listDocuments,
   reconvertDocument,
+  reembedDocuments,
   reindexKnowledgeBase,
   searchKnowledgeBase,
   updateFromSource,
   updateKnowledgeBaseConfig,
+  type DocumentListOut,
   type KnowledgeBaseConfigOut,
+  type ReembedBatchRequest,
   type SearchResponse,
   type SourceCheckResponse,
 } from "./api";
+
+/** Poll the document list while any document is still embedding/queued/running so
+ * the per-document status badge updates live; stop once everything settles. */
+const _BUSY = new Set(["embedding", "queued", "running"]);
+function embedInFlight(data: DocumentListOut | undefined): number | false {
+  return (data?.documents ?? []).some((d) => _BUSY.has(d.embed_status ?? "")) ? 2000 : false;
+}
 
 // The document list is shown as a single scrollable list, fetched in one request
 // at the documents API's max page size (`le=200`) — enough for a personal KB.
@@ -50,6 +60,8 @@ export function useKnowledgeBaseDetail(name: string) {
     queryKey: ["kb-documents", name],
     queryFn: () => listDocuments(name, DOCS_FETCH_LIMIT, 0),
     enabled: Boolean(name),
+    // Live-refresh the per-document embed status while a re-embed is in flight.
+    refetchInterval: (query) => embedInFlight(query.state.data),
   });
   const docTotal = docsQuery.data?.total ?? 0;
   const metricsQuery = useQuery({
@@ -110,6 +122,12 @@ export function useKnowledgeBaseDetail(name: string) {
   });
   const reindex = useMutation({
     mutationFn: () => reindexKnowledgeBase(name),
+    onSuccess: invalidate,
+  });
+  // Enqueue async re-embed (off the request path); the list poll reflects each
+  // document flipping embedding → done as the worker drains.
+  const reembed = useMutation({
+    mutationFn: (body: ReembedBatchRequest) => reembedDocuments(name, body),
     onSuccess: invalidate,
   });
   const checkSourcesM = useMutation({
@@ -207,6 +225,7 @@ export function useKnowledgeBaseDetail(name: string) {
     reconvert,
     del,
     reindex,
+    reembed,
     checkSources: checkSourcesM,
     updateFromSource: updateFromSourceM,
     sourceReport,

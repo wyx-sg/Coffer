@@ -16,6 +16,9 @@ import type {
   DocumentOut,
   DocumentListOut,
   DocumentDetailOut,
+  DocumentStatusResponse,
+  ReembedBatchRequest,
+  ReembedBatchResponse,
   SearchResponse,
   ReindexResult,
   KnowledgeBaseMetrics,
@@ -223,4 +226,25 @@ export async function getKnowledgeBaseMetrics(kbName: string): Promise<Knowledge
   const r = await fetch(`${kbBase(kbName)}/metrics`, { headers: headers() });
   await checkOk(r);
   return (await r.json()) as KnowledgeBaseMetrics;
+}
+
+export async function reembedDocuments(
+  kbName: string,
+  body: ReembedBatchRequest,
+): Promise<ReembedBatchResponse> {
+  // Enqueue per-document re-embed off the request path (202). Either an explicit
+  // `document_ids` set or `all: true`; documents not pending an embed are skipped.
+  const r = await fetch(`${kbBase(kbName)}/documents/reembed-batch`, {
+    method: "POST",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  await checkOk(r);
+  return (await r.json()) as ReembedBatchResponse;
+}
+
+export async function getDocumentStatus(kbName: string): Promise<DocumentStatusResponse> {
+  const r = await fetch(`${kbBase(kbName)}/documents/status`, { headers: headers() });
+  await checkOk(r);
+  return (await r.json()) as DocumentStatusResponse;
 }
