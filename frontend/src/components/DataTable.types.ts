@@ -28,8 +28,15 @@ export interface TableSelection<T> {
   /** Bar label, e.g. "3 selected". */
   bulkLabel: (count: number) => string;
   clearLabel: string;
-  /** Action buttons rendered in the bar while ≥1 row is selected. */
-  renderBulkActions: (args: { selectedRows: T[]; clear: () => void }) => ReactNode;
+  /** Action buttons rendered in the bar while ≥1 row is selected.
+   * `allMatching` is true when the user escalated to "select all" on a
+   * server-paginated table: `selectedRows` then holds only the loaded page, so
+   * the action should target the full matching set via its own API + filters. */
+  renderBulkActions: (args: {
+    selectedRows: T[];
+    clear: () => void;
+    allMatching: boolean;
+  }) => ReactNode;
 }
 
 /** Server-driven pagination: the caller passes one page of `rows` and owns the

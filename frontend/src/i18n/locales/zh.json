@@ -39,6 +39,9 @@
     "bulk": {
       "selected": "已选 {{count}} 项",
       "selectAll": "全选",
+      "pageSelected": "已选中本页全部",
+      "selectAllMatching": "选择全部 {{count}} 项",
+      "allSelected": "已选中全部 {{count}} 项",
       "selectRow": "选择此行",
       "enable": "启用",
       "disable": "禁用",

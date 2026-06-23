@@ -39,6 +39,9 @@
     "bulk": {
       "selected": "{{count}} selected",
       "selectAll": "Select all",
+      "pageSelected": "All on this page selected",
+      "selectAllMatching": "Select all {{count}}",
+      "allSelected": "All {{count}} selected",
       "selectRow": "Select row",
       "enable": "Enable",
       "disable": "Disable",
