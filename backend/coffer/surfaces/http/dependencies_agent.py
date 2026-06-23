@@ -133,6 +133,29 @@ def get_agent_memory_import_service() -> Any:
     return _agent_memory_import_service
 
 
+_native_import_batch_service: Any | None = None
+
+
+def set_native_import_batch_service(svc: Any) -> None:
+    """Called by the composition root once on startup."""
+    global _native_import_batch_service
+    _native_import_batch_service = svc
+
+
+def get_native_import_batch_service() -> Any:
+    """FastAPI Depends() target — actual type is NativeImportBatchService."""
+    if _native_import_batch_service is None:
+        raise RuntimeError("native-memory import batch service not initialised")
+    return _native_import_batch_service
+
+
+def get_native_import_batch_service_optional() -> Any | None:
+    """Like :func:`get_native_import_batch_service` but returns ``None`` when the
+    service is not wired (so the list endpoint degrades to no status overlay
+    instead of failing in tests / minimal apps)."""
+    return _native_import_batch_service
+
+
 def get_fs_browse_service() -> Any:
     """FastAPI Depends() target (FsBrowseService). Stateless → built per-request."""
     from coffer.application.fs.browse_service import FsBrowseService

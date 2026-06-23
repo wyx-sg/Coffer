@@ -1,7 +1,5 @@
 // frontend/src/lib/api/agents.ts — typed fetch helpers for /api/v1/agents/*
-// Until openapi codegen merges specs 003/004, we hand-write the wire types
-// to match `specs/004-agent-registry/contracts/api.openapi.yaml`.
-
+// Wire types hand-written to match specs/004-agent-registry/contracts/api.openapi.yaml.
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
 
@@ -64,6 +62,25 @@ export interface NativeMemoryStore {
   memory_dir: string;
   /** Number of memory items (.md files, excluding the MEMORY.md index). */
   item_count: number;
+  /** queued | running | error — in-flight only; null when idle (or finished). */
+  import_status?: string | null;
+}
+
+/** Result of enqueuing async native-memory import for many stores. */
+export interface NativeMemoryImportBatchResult {
+  queued: number;
+  total: number;
+}
+
+/** A single in-flight store's import state (queued | running | error). */
+export interface NativeMemoryImportStatus {
+  memory_dir: string;
+  state: string;
+  message?: string | null;
+}
+
+export interface NativeMemoryImportStatusResponse {
+  statuses: NativeMemoryImportStatus[];
 }
 
 export interface NativeMemoryListResponse {
@@ -215,8 +232,7 @@ export const agentsApi = {
 
   // Session-start hook (rules injection): install/uninstall/status. A 422 with
   // code HOOK_INSTALL_UNSUPPORTED means the agent type has no hook support.
-  hookStatus: (name: string) =>
-    call<HookInstallStatus>("GET", `/agents/${enc(name)}/hook-install`),
+  hookStatus: (name: string) => call<HookInstallStatus>("GET", `/agents/${enc(name)}/hook-install`),
   hookInstall: (name: string) =>
     call<HookInstallStatus>("POST", `/agents/${enc(name)}/hook-install`),
   hookUninstall: (name: string) =>
@@ -265,7 +281,6 @@ export const agentsApi = {
       "DELETE",
       `/agents/${enc(name)}/unmanaged-skills/${enc(skill)}?location=${encodeURIComponent(location)}`,
     ),
-
   // Native memory: the agent's OWN per-project memory stores (read-only scan).
   nativeMemory: (name: string) =>
     call<NativeMemoryListResponse>("GET", `/agents/${enc(name)}/native-memory`),
@@ -273,4 +288,13 @@ export const agentsApi = {
     call<NativeMemoryImportResult>("POST", `/agents/${enc(name)}/native-memory/import`, {
       memory_dir: memoryDir,
     }),
+  importNativeMemoryBatch: (name: string, memoryDirs: string[]) =>
+    call<NativeMemoryImportBatchResult>("POST", `/agents/${enc(name)}/native-memory/import-batch`, {
+      memory_dirs: memoryDirs,
+    }),
+  nativeMemoryImportStatus: (name: string) =>
+    call<NativeMemoryImportStatusResponse>(
+      "GET",
+      `/agents/${enc(name)}/native-memory/import-status`,
+    ),
 };

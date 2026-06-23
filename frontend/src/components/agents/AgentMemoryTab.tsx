@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 
 import { CofferGatewayCard } from "@/components/agents/AgentManagedLink";
 import { AgentNativeMemoryBulkActions } from "@/components/agents/AgentMemoryBulkActions";
+import { NativeImportStatus } from "@/components/agents/AgentMemoryImportStatus";
 import { DataTable, type Column } from "@/components/DataTable";
 import { RowActions } from "@/components/RowActions";
 import { useFileActionItems } from "@/lib/fileActionItems";
@@ -27,11 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut, NativeMemoryStore } from "@/lib/api/agents";
-import {
-  useAgentNativeMemory,
-  useImportNativeMemory,
-  usePatchAgent,
-} from "@/lib/hooks/useAgents";
+import { useAgentNativeMemory, useImportNativeMemory, usePatchAgent } from "@/lib/hooks/useAgents";
 
 /** Toggle that disables the agent's OWN native memory (writes/restores the
  * agent's config) so it uses Coffer as the shared store. Reads
@@ -151,6 +148,12 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
       header: t("agents.memoryTab.colItems"),
       className: "whitespace-nowrap tabular-nums text-right",
       cell: (s) => <span className="text-muted-foreground">{s.item_count}</span>,
+    },
+    {
+      key: "status",
+      header: t("agents.memoryTab.colStatus"),
+      className: "whitespace-nowrap",
+      cell: (s) => <NativeImportStatus status={s.import_status} />,
     },
     {
       key: "actions",
