@@ -29,6 +29,10 @@ vi.mock("@/lib/hooks/useAgentChatHistory", () => ({
     isPending: false,
     data: undefined,
   })),
+  useDistillBatch: vi.fn(() => ({
+    mutateAsync: vi.fn().mockResolvedValue({ queued: 0, skipped: 0, total: 0 }),
+    isPending: false,
+  })),
 }));
 
 // The row's file actions pull in Tauri + toast + preferences; they have their

@@ -236,4 +236,31 @@ describe("DataTable", () => {
     fireEvent.click(screen.getByText("alpha"));
     expect(screen.queryByText("detail-for-alpha")).not.toBeInTheDocument();
   });
+
+  test("header checkbox selects the current page; banner escalates to select-all", () => {
+    const sel = {
+      ariaSelectAll: "all",
+      ariaSelectRow: (r: Row) => `row ${r.name}`,
+      bulkLabel: (n: number) => `${n} selected`,
+      clearLabel: "clear",
+      renderBulkActions: () => <span>bulk</span>,
+    };
+    // pageSize 2 over 3 rows → page 1 holds alpha + beta; gamma is on page 2.
+    render(
+      <DataTable
+        rows={ROWS}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        pageSize={2}
+        selection={sel}
+        emptyMessage="none"
+      />,
+    );
+    // Header checkbox selects only the current page (2 of 3).
+    fireEvent.click(screen.getByRole("checkbox", { name: "all" }));
+    expect(screen.getByText(/^2 selected$/)).toBeInTheDocument();
+    // The escalation banner offers selecting all 3; clicking it selects them all.
+    fireEvent.click(screen.getByRole("button", { name: /select all 3/i }));
+    expect(screen.getByText(/^3 selected$/)).toBeInTheDocument();
+  });
 });
