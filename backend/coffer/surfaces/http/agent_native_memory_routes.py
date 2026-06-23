@@ -53,6 +53,10 @@ class NativeMemoryListOut(BaseModel):
 
 class ImportRequest(BaseModel):
     memory_dir: str
+    # Codex's global store is shared by every row, so the chosen row's project
+    # path selects which Task-Group blocks to import. Omitted/None for Claude
+    # Code, where ``memory_dir`` alone identifies the project.
+    project_path: str | None = None
 
 
 class ImportResultOut(BaseModel):
@@ -144,7 +148,9 @@ async def import_native_memory(
     Unknown agent → 404 (service's agent lookup). An unresolvable path or a
     non-git project yields a zero-import result, never an error — the inbox is
     never corrupted."""
-    result = await svc.import_store(name=name, memory_dir=body.memory_dir)
+    result = await svc.import_store(
+        name=name, memory_dir=body.memory_dir, project_path=body.project_path
+    )
     return ImportResultOut(
         imported=result.imported,
         skipped=result.skipped,

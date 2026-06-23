@@ -33,6 +33,10 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useImportNativeMemory: vi.fn(() => ({ mutate: importMutate, isPending: false })),
   useImportNativeMemoryBatch: vi.fn(() => ({ mutate: batchMutate, isPending: false })),
   usePatchAgent: vi.fn(() => ({ mutate: patchMutate, isPending: false })),
+  // The session-start rules-injection card now lives in this tab; stub its
+  // status/install hooks so the card renders (not-installed, idle) without error.
+  useAgentHookStatus: vi.fn(() => ({ data: { installed: false }, isPending: false, error: null })),
+  useAgentHookInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
 }));
 const hooks = await import("@/lib/hooks/useAgents");
 
@@ -120,9 +124,9 @@ describe("AgentMemoryTab", () => {
 
     expect(screen.getByText("Coffer")).toBeInTheDocument();
     expect(screen.getByText("DevPilot")).toBeInTheDocument();
-    expect(
-      screen.getByText("/Users/xing/.claude/projects/-Users-xing-Coffer/memory"),
-    ).toBeInTheDocument();
+    // The path column shows the real project path (s.path), not the internal
+    // memory_dir — so Codex rows sharing one memory_dir stay distinguishable.
+    expect(screen.getByText("/Users/xing/Coffer")).toBeInTheDocument();
     expect(screen.getByText("49")).toBeInTheDocument();
     expect(screen.getByText("8")).toBeInTheDocument();
   });
@@ -151,12 +155,15 @@ describe("AgentMemoryTab", () => {
     expect(screen.getByText(/no native memory stores/i)).toBeInTheDocument();
   });
 
-  test("clicking Import to Coffer imports the store's memory dir", () => {
+  test("clicking Import to Coffer imports the store's memory dir + project path", () => {
     stubMcp(true);
     stubNative([COFFER_STORE]);
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("button", { name: /import to coffer/i }));
-    expect(importMutate).toHaveBeenCalledWith(COFFER_STORE.memory_dir, expect.anything());
+    expect(importMutate).toHaveBeenCalledWith(
+      { memoryDir: COFFER_STORE.memory_dir, projectPath: COFFER_STORE.path },
+      expect.anything(),
+    );
   });
 
   test("disable-native-memory toggle reflects the agent flag and PATCHes on flip", () => {

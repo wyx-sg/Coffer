@@ -103,25 +103,16 @@ acceptance(
       // Wait for the days input to appear and set a distinctive value
       const daysInput = page.locator("#days-mcp_invocations");
       await expect(daysInput).toBeVisible({ timeout: 5_000 });
+
+      // Settings auto-save: there is no Save button — the days field persists on
+      // blur. Fill the value, then blur and wait for the PATCH to land.
+      const saved = page.waitForResponse(
+        (r) => r.url().includes("/retention/policies/") && r.request().method() === "PATCH",
+        { timeout: 10_000 },
+      );
       await daysInput.fill("45");
-
-      // Click Save — the Save button is a sibling of the days input inside the
-      // same flex container. Navigate up to the closest ancestor that contains
-      // the days input but NOT the audit_log days input, then pick its Save.
-      // The most reliable way is to use the label-to-input association: the input
-      // has id=days-mcp_invocations, so its label is "Retention (days)" next to
-      // it. We just grab the Save button that's adjacent to that specific input
-      // by going via the innermost wrapping div.
-      // The Save button is a sibling of the days-row flex container; both live
-      // inside a parent flex container. Use that parent to scope the search.
-      const saveBtnContainer = page.locator("div.flex.shrink-0").filter({
-        has: page.locator("#days-mcp_invocations"),
-      });
-      const saveBtn = saveBtnContainer.getByRole("button", { name: /save/i });
-      await saveBtn.click();
-
-      // Wait for dirty-flag to clear (button becomes disabled again after save)
-      await expect(saveBtn).toBeDisabled({ timeout: 5_000 });
+      await daysInput.blur();
+      await saved;
 
       // Reload and confirm the value persisted
       await page.reload();

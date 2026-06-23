@@ -26,6 +26,9 @@ export interface EmbeddingConfigUpdate {
   model: string | null;
   base_url: string | null;
   credential_ref: string | null;
+  /** Raw API key the user typed — stored into the vault and reused as the
+   * credential_ref. Omit/null to keep the existing stored key. */
+  secret_value?: string | null;
   dimensions: number;
   default_chunk_size: number;
   default_chunk_overlap: number;

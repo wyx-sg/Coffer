@@ -15,7 +15,8 @@
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
-import { CofferGatewayCard } from "@/components/agents/AgentManagedLink";
+import { CofferGatewayRow } from "@/components/agents/AgentManagedLink";
+import { AgentHookToggle } from "@/components/agents/AgentHookControls";
 import { AgentNativeMemoryBulkActions } from "@/components/agents/AgentMemoryBulkActions";
 import { NativeImportStatus } from "@/components/agents/AgentMemoryImportStatus";
 import { DataTable, type Column } from "@/components/DataTable";
@@ -30,47 +31,46 @@ import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut, NativeMemoryStore } from "@/lib/api/agents";
 import { useAgentNativeMemory, useImportNativeMemory, usePatchAgent } from "@/lib/hooks/useAgents";
 
-/** Toggle that disables the agent's OWN native memory (writes/restores the
- * agent's config) so it uses Coffer as the shared store. Reads
- * `agent.disable_native_memory`; flips it via PATCH /agents/{name}. */
-function DisableNativeMemoryToggle({ agent }: { agent: AgentOut }) {
+/** Toggle ROW (no Card — the parent's combined box provides it) that disables
+ * the agent's OWN native memory (writes/restores the agent's config) so it uses
+ * Coffer as the shared store. Reads `agent.disable_native_memory`; flips it via
+ * PATCH /agents/{name}. */
+function DisableNativeMemoryRow({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const patch = usePatchAgent();
   const disabled = agent.disable_native_memory ?? false;
 
   return (
-    <Card className="space-y-3 p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <Label htmlFor="disable-native-memory" className="text-sm font-medium">
-            {t("agents.memoryTab.disableNativeLabel")}
-          </Label>
-          <p className="max-w-prose text-xs text-muted-foreground">
-            {t("agents.memoryTab.disableNativeHelp")}
-          </p>
-        </div>
-        <Switch
-          id="disable-native-memory"
-          checked={disabled}
-          disabled={patch.isPending}
-          onCheckedChange={(next) =>
-            patch.mutate(
-              { name: agent.name, body: { disable_native_memory: next } },
-              {
-                onSuccess: () =>
-                  toast.success(
-                    next
-                      ? t("agents.memoryTab.disableNativeOn")
-                      : t("agents.memoryTab.disableNativeOff"),
-                  ),
-                onError: (e) => toast.error(translateApiError(t, e)),
-              },
-            )
-          }
-        />
+    <div className="flex items-start justify-between gap-4">
+      <div className="space-y-1">
+        <Label htmlFor="disable-native-memory" className="text-sm font-medium">
+          {t("agents.memoryTab.disableNativeLabel")}
+        </Label>
+        <p className="max-w-prose text-xs text-muted-foreground">
+          {t("agents.memoryTab.disableNativeHelp")}
+        </p>
       </div>
-    </Card>
+      <Switch
+        id="disable-native-memory"
+        checked={disabled}
+        disabled={patch.isPending}
+        onCheckedChange={(next) =>
+          patch.mutate(
+            { name: agent.name, body: { disable_native_memory: next } },
+            {
+              onSuccess: () =>
+                toast.success(
+                  next
+                    ? t("agents.memoryTab.disableNativeOn")
+                    : t("agents.memoryTab.disableNativeOff"),
+                ),
+              onError: (e) => toast.error(translateApiError(t, e)),
+            },
+          )
+        }
+      />
+    </div>
   );
 }
 
@@ -86,15 +86,21 @@ function ImportButton({ agentName, store }: { agentName: string; store: NativeMe
       variant="outline"
       disabled={importMut.isPending}
       onClick={() =>
-        importMut.mutate(store.memory_dir, {
-          onSuccess: (r) =>
-            r.store
-              ? toast.success(
-                  t("agents.memoryTab.importDone", { count: r.imported, project: store.project }),
-                )
-              : toast.error(t("agents.memoryTab.importNoProject", { project: store.project })),
-          onError: (e) => toast.error(translateApiError(t, e)),
-        })
+        importMut.mutate(
+          { memoryDir: store.memory_dir, projectPath: store.path },
+          {
+            onSuccess: (r) =>
+              r.store
+                ? toast.success(
+                    t("agents.memoryTab.importDone", {
+                      count: r.imported,
+                      project: store.project,
+                    }),
+                  )
+                : toast.error(t("agents.memoryTab.importNoProject", { project: store.project })),
+            onError: (e) => toast.error(translateApiError(t, e)),
+          },
+        )
       }
     >
       {importMut.isPending ? t("agents.memoryTab.importing") : t("agents.memoryTab.import")}
@@ -137,9 +143,12 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
     {
       key: "path",
       header: t("agents.memoryTab.colPath"),
+      // Prefer the real project path; for Codex every row shares one memory_dir,
+      // so the cwd in `path` is what distinguishes (and is more useful than the
+      // internal memory folder for Claude Code too).
       cell: (s) => (
         <span className="line-clamp-1 max-w-md font-mono text-xs text-muted-foreground">
-          {s.memory_dir}
+          {s.path ?? s.memory_dir}
         </span>
       ),
     },
@@ -165,21 +174,29 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
 
   return (
     <div className="space-y-3">
-      {/* A. Coffer-managed memory — reached via the Coffer MCP gateway, so it
-          shows the not-installed note until Coffer MCP is installed; otherwise a
-          pointer to the standalone Memory page. */}
-      <CofferGatewayCard
-        agentName={agent.name}
-        title={t("agents.cofferManaged")}
-        hint={t("agents.memoryTab.accessViaGateway")}
-        buttonLabel={t("agents.memoryTab.openMemoryPage")}
-        onOpen={() => navigate("/memory")}
-        notInstalledHint={t("agents.memoryTab.notInstalled")}
-      />
-
-      {/* B. The agent's own native memory: a toggle to disable it (so the agent
-          uses Coffer as the shared store) + the read-only per-project stores. */}
-      <DisableNativeMemoryToggle agent={agent} />
+      {/* One combined box (like the Skills tab): the "managed by Coffer" pointer
+          on top, then the memory toggles below it — disable native memory, and
+          the session-start rules-injection hook (same "what Coffer feeds the
+          agent at session start" concern). The per-project native stores follow
+          in their own card. */}
+      <Card className="divide-y p-0">
+        <div className="p-4">
+          <CofferGatewayRow
+            agentName={agent.name}
+            title={t("agents.cofferManaged")}
+            hint={t("agents.memoryTab.accessViaGateway")}
+            buttonLabel={t("agents.memoryTab.openMemoryPage")}
+            onOpen={() => navigate("/memory")}
+            notInstalledHint={t("agents.memoryTab.notInstalled")}
+          />
+        </div>
+        <div className="p-4">
+          <DisableNativeMemoryRow agent={agent} />
+        </div>
+        <div className="p-4">
+          <AgentHookToggle name={agent.name} />
+        </div>
+      </Card>
 
       <Card className="space-y-3 p-4">
         <div className="space-y-1">
@@ -195,9 +212,10 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
           <DataTable
             rows={native.data?.items ?? []}
             columns={columns}
-            rowKey={(s) => s.memory_dir}
+            // Codex rows share one memory_dir, so key by the routed project too.
+            rowKey={(s) => `${s.memory_dir}::${s.path ?? s.project}`}
             search={{
-              accessor: (s) => `${s.project} ${s.memory_dir}`,
+              accessor: (s) => `${s.project} ${s.path ?? ""} ${s.memory_dir}`,
               placeholder: t("agents.memoryTab.searchPlaceholder"),
             }}
             selection={{

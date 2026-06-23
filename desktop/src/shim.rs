@@ -243,14 +243,16 @@ pub fn deploy_binary(
     Ok(needs_copy)
 }
 
-/// Copy the bundled `coffer-mcp-shim` AND `coffer-daemon` binaries into
-/// `~/.coffer/bin/` (or the Windows equivalent). The shim is what MCP
-/// clients invoke once the directory is on PATH; the co-located daemon is
-/// what the frozen shim's detect-or-spawn resolves as its sibling (ADR-006),
-/// so auto-spawn works even when the desktop app isn't running.
+/// Copy the bundled `coffer-mcp-shim`, `coffer-daemon` AND `coffer-hook`
+/// binaries into `~/.coffer/bin/` (or the Windows equivalent). The shim is what
+/// MCP clients invoke once the directory is on PATH; the co-located daemon is
+/// what the frozen shim's detect-or-spawn resolves as its sibling (ADR-006), so
+/// auto-spawn works even when the desktop app isn't running; the co-located
+/// `coffer-hook` is what the daemon resolves (next to its own executable) when
+/// installing an agent's SessionStart rules hook.
 pub fn deploy_sidecars_to_user_path(app: AppHandle) -> Result<Vec<SidecarDeployResult>, String> {
     let mut results = Vec::new();
-    for name in ["coffer-mcp-shim", "coffer-daemon"] {
+    for name in ["coffer-mcp-shim", "coffer-daemon", "coffer-hook"] {
         let bundled = resolve_sidecar(&app, &[name])?;
         let target = user_bin_path(name);
         let deployed = deploy_binary(&bundled, &target, &version_sentinel_path(name))?;

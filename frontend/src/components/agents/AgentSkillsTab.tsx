@@ -30,6 +30,7 @@ import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut } from "@/lib/api/agents";
@@ -130,27 +131,9 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
 
   return (
     <div className="space-y-3">
-      {/* The follow toggle and the "Managed by Coffer" section it governs share
-          one card, split by a divider. */}
+      {/* The "Managed by Coffer" section on top and the follow toggle that
+          governs it below, sharing one card split by a divider. */}
       <Card className="divide-y p-0">
-        {/* Compact follow-master-library toggle (switch + inline label). */}
-        <div className="flex items-center gap-3 p-4">
-          <Switch
-            checked={followAll}
-            disabled={patchAgent.isPending}
-            onCheckedChange={(checked) =>
-              patchAgent.mutate({ name: agent.name, body: { follow_all_skills: checked } })
-            }
-            aria-label={t("agents.skillsTab.follow")}
-          />
-          <div className="min-w-0 leading-tight">
-            <span className="text-sm font-medium">{t("agents.skillsTab.follow")}</span>
-            <span className="ml-2 text-xs text-muted-foreground">
-              {t("agents.skillsTab.followHint")}
-            </span>
-          </div>
-        </div>
-
         {followAll ? (
           // Following → the reconciler delivers every master skill automatically,
           // so the per-skill managed table is redundant; point at the Skills page
@@ -212,6 +195,29 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
             )}
           </div>
         )}
+
+        {/* Follow-master-library toggle below the section it governs, in the
+            Memory-tab row style: label + second-line help on the left, the
+            switch on the far right. */}
+        <div className="flex items-start justify-between gap-4 p-4">
+          <div className="space-y-1">
+            <Label htmlFor="follow-master" className="text-sm font-medium">
+              {t("agents.skillsTab.follow")}
+            </Label>
+            <p className="max-w-prose text-xs text-muted-foreground">
+              {t("agents.skillsTab.followHint")}
+            </p>
+          </div>
+          <Switch
+            id="follow-master"
+            checked={followAll}
+            disabled={patchAgent.isPending}
+            onCheckedChange={(checked) =>
+              patchAgent.mutate({ name: agent.name, body: { follow_all_skills: checked } })
+            }
+            aria-label={t("agents.skillsTab.follow")}
+          />
+        </div>
       </Card>
 
       <UnmanagedSkillsSection agentName={agent.name} />

@@ -22,6 +22,7 @@ from coffer.application.memory.stores import store_name_for
 from coffer.domain.agent.native_memory import ParsedNativeFact
 from coffer.domain.memory.config import MAX_FACT_CHARS
 from coffer.domain.memory.scope import MemoryScope
+from coffer.infrastructure.agent.codex_memory_store import read_codex_facts
 from coffer.infrastructure.agent.native_memory_import import (
     read_memory_facts,
     resolve_project_path,
@@ -48,6 +49,11 @@ class _Reader:
 
         return resolve_project_path(Path(memory_dir))
 
+    def read_codex_facts(self, memory_dir: str, project_path: str) -> list[ParsedNativeFact]:
+        from pathlib import Path
+
+        return read_codex_facts(Path(memory_dir), project_path, "MEMORY.md")
+
 
 class _ImportSink:
     """MemoryImportSinkPort adapter: writes each fact via MemoryService.add_fact,
@@ -60,7 +66,7 @@ class _ImportSink:
         self,
         *,
         project_path: str,
-        name: str,
+        title: str,
         description: str,
         body: str,
         origin_session_id: str | None,
@@ -73,7 +79,7 @@ class _ImportSink:
         await self._memory.add_fact(
             scope=MemoryScope.PROJECT,
             cwd=project_path,
-            name=name,
+            title=title,
             description=description,
             body=body,
             actor="agent",

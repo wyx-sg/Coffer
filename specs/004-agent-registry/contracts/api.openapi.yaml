@@ -1457,6 +1457,14 @@ components:
           description: >-
             Absolute path to the native memory store to adopt (the `memory_dir`
             of a NativeMemoryStore from the scan).
+        project_path:
+          type: string
+          nullable: true
+          description: >-
+            For Codex's shared global store (one store, many project rows), the
+            chosen row's project cwd (its `path`) — only the Task-Group blocks
+            routed to it are imported. Omitted/null for Claude Code, where
+            `memory_dir` alone identifies the project.
 
     NativeMemoryImportResult:
       type: object

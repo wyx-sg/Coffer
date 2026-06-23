@@ -67,6 +67,45 @@ def test_list_native_memory_returns_store(tmp_path, monkeypatch):
         assert item["item_count"] == 1
 
 
+@pytest.mark.acceptance(
+    spec="004-agent-registry",
+    scenario="the native memory scan lists Codex's global memory by project",
+)
+def test_list_native_memory_codex_global_by_project(tmp_path, monkeypatch):
+    config_dir = tmp_path / "codex-config"
+    memories = config_dir / "memories"
+    memories.mkdir(parents=True)
+    (memories / "MEMORY.md").write_text(
+        "# Task Group: gw one\n\napplies_to: cwd=/p/account-gateway; reuse_rule=x\n\n"
+        "## Task 1: a, success\n\n"
+        "# Task Group: gw two\n\napplies_to: cwd=/p/account-gateway; reuse_rule=x\n\n"
+        "## Task 1: b, success\n\n"
+        "# Task Group: bff\n\napplies_to: cwd=/p/account-bff; reuse_rule=x\n\n"
+        "## Task 1: c, success\n",
+        encoding="utf-8",
+    )
+
+    app = _app(tmp_path, monkeypatch, 59830)
+    with _client(app) as c:
+        config_dir.mkdir(parents=True, exist_ok=True)
+        r = c.post(
+            "/api/v1/agents",
+            json={"type": "codex", "name": "cx", "config_dir": str(config_dir)},
+        )
+        assert r.status_code == 201, r.text
+
+        r = c.get("/api/v1/agents/cx/native-memory")
+        assert r.status_code == 200, r.text
+        items = r.json()["items"]
+        # One row per distinct routed cwd, count desc; the shared global store.
+        assert [(it["project"], it["item_count"]) for it in items] == [
+            ("account-gateway", 2),
+            ("account-bff", 1),
+        ]
+        assert all(it["memory_dir"] == str(memories) for it in items)
+        assert items[0]["path"] == "/p/account-gateway"
+
+
 def test_list_native_memory_empty_when_no_projects_dir(tmp_path, monkeypatch):
     config_dir = tmp_path / "cc-config"
     app = _app(tmp_path, monkeypatch, 59810)

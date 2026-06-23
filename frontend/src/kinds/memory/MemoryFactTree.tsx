@@ -7,7 +7,6 @@
 import { useTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { FactListOut, FactOut } from "./api";
 
@@ -59,12 +58,7 @@ export function MemoryFactTree({
                 )}
               >
                 <FileText className="size-4 shrink-0 opacity-70" />
-                <span className="min-w-0 flex-1 truncate">{f.name || f.text.slice(0, 40)}</span>
-                {f.actor === "user" ? (
-                  <Badge variant="outline" className="shrink-0 text-[10px]">
-                    {t("memory.detail.actorUser", { defaultValue: "edited" })}
-                  </Badge>
-                ) : null}
+                <span className="min-w-0 flex-1 truncate">{f.title || f.text.slice(0, 40)}</span>
               </button>
             </li>
           ))}

@@ -124,13 +124,13 @@ class MemoryStoreMetrics(BaseModel):
 
 class FactCreate(BaseModel):
     text: str = Field(min_length=1, max_length=_MAX_FACT_CHARS_SCHEMA_CAP)
-    name: str | None = None
+    title: str | None = None
     description: str | None = None
 
 
 class FactUpdate(BaseModel):
     text: str = Field(min_length=1, max_length=_MAX_FACT_CHARS_SCHEMA_CAP)
-    name: str | None = None
+    title: str | None = None
     description: str | None = None
 
 
@@ -138,7 +138,7 @@ class FactOut(BaseModel):
     id: str
     store_name: str
     scope: Scope
-    name: str
+    title: str
     description: str
     text: str
     actor: Actor
@@ -157,7 +157,7 @@ class FactOut(BaseModel):
             id=f.id,
             store_name=store_name,
             scope=scope,
-            name=f.name,
+            title=f.title,
             description=f.description,
             text=f.body,
             actor=f.actor,

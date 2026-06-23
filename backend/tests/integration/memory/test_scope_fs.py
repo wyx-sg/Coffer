@@ -85,7 +85,7 @@ def _fact(fact_id: str, name: str, desc: str) -> MemoryFact:
     now = datetime.now(tz=UTC)
     return MemoryFact(
         id=fact_id,
-        name=name,
+        title=name,
         description=desc,
         body=f"body for {name}",
         actor="user",

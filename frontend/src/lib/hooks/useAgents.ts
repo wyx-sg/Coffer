@@ -86,8 +86,6 @@ export function useAgentConfigFile(name: string, key: string | null) {
   });
 }
 
-// Config files are read-only in the UI (editing happens in the user's own editor).
-
 // --- Coffer MCP install (spec 004 v2) ---
 
 const mcpKey = (name: string) => ["agents", name, "mcp-install"] as const;
@@ -255,7 +253,8 @@ export function useAgentNativeMemory(name: string) {
 export function useImportNativeMemory(agentName: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (memoryDir: string) => agentsApi.importNativeMemory(agentName, memoryDir),
+    mutationFn: ({ memoryDir, projectPath }: { memoryDir: string; projectPath: string | null }) =>
+      agentsApi.importNativeMemory(agentName, memoryDir, projectPath),
     // Imported facts land in a Coffer store (+ organize) — refresh the store list.
     onSuccess: () => qc.invalidateQueries({ queryKey: ["memory-stores"] }),
   });

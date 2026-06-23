@@ -24,7 +24,7 @@ async def test_concurrent_recalls_after_out_of_band_edit(mem) -> None:
     fact = await mem.service.add_fact(
         scope=MemoryScope.GLOBAL,
         cwd=None,
-        name="n",
+        title="n",
         description="d",
         body="alpha beta gamma",
         actor="user",
@@ -53,7 +53,7 @@ async def test_concurrent_writes_to_one_store(mem) -> None:
             mem.service.add_fact(
                 scope=MemoryScope.GLOBAL,
                 cwd=None,
-                name=f"fact-{i}",
+                title=f"fact-{i}",
                 description=f"desc {i}",
                 body=f"unique fact body number {i}",
                 actor="user",

@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react";
 
 import { AgentBulkActions } from "@/components/agents/AgentBulkActions";
 import { AgentMcpStatusBadge } from "@/components/agents/AgentMcpControls";
-import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
+import { DataTable, type Column } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -105,19 +105,6 @@ export function AgentTable({ agents }: { agents: AgentOut[] }) {
     },
   ];
 
-  const filters: FilterDef<Row>[] = [
-    {
-      key: "type",
-      label: t("agents.type"),
-      allLabel: t("agents.allTypes"),
-      accessor: (a) => a.type,
-      options: [
-        { value: "claude_code", label: "claude_code" },
-        { value: "codex", label: "codex" },
-      ],
-    },
-  ];
-
   return (
     <>
       <DataTable
@@ -128,7 +115,6 @@ export function AgentTable({ agents }: { agents: AgentOut[] }) {
           accessor: (a) => `${a.name} ${a.type} ${a.config_dir}`,
           placeholder: t("agents.searchPlaceholder"),
         }}
-        filters={filters}
         onRowClick={(a) => navigate(`/agents/${a.name}`)}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),

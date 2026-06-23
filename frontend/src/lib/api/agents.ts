@@ -3,8 +3,7 @@
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError } from "./errors";
 
-// The backend supports exactly two agent types (Claude Code, Codex); keep this
-// union in sync with `AgentType` in the backend domain (`domain/agent/types.py`).
+// Keep AgentType in sync with the backend domain (`domain/agent/types.py`).
 export type AgentType = "claude_code" | "codex";
 
 export type ConfigFileFormat = "json" | "toml" | "markdown" | "text";
@@ -54,25 +53,24 @@ export interface HookInstallStatus {
 
 /** One of the agent's OWN native per-project memory stores (read-only scan). */
 export interface NativeMemoryStore {
-  /** Best-effort readable project label (the project dir's basename). */
+  /** Readable project label (the project dir's basename). */
   project: string;
-  /** Best-effort decoded absolute project path, or null when undecodable. */
+  /** Real project path (Codex global store: the cwd routed to). Null if unresolved. */
   path: string | null;
-  /** Absolute path to the agent's native memory directory (the real identity). */
+  /** The agent's native memory dir (Claude Code: per-project; Codex: one global). */
   memory_dir: string;
-  /** Number of memory items (.md files, excluding the MEMORY.md index). */
+  /** Number of memory entries (Claude Code fact files / an inline MEMORY.md /
+   * Codex Task Groups routed to this project). */
   item_count: number;
-  /** queued | running | error — in-flight only; null when idle (or finished). */
+  /** queued | running | error — in-flight only; null when idle. */
   import_status?: string | null;
 }
 
-/** Result of enqueuing async native-memory import for many stores. */
 export interface NativeMemoryImportBatchResult {
   queued: number;
   total: number;
 }
 
-/** A single in-flight store's import state (queued | running | error). */
 export interface NativeMemoryImportStatus {
   memory_dir: string;
   state: string;
@@ -88,8 +86,7 @@ export interface NativeMemoryListResponse {
 }
 
 /** Result of importing one native memory store into Coffer (bulk remember →
- * inbox → organize). `store` is null when the project couldn't be resolved
- * (e.g. a lossy slug with no transcript, or a non-git project). */
+ * inbox → organize). `store` is null when the project couldn't be resolved. */
 export interface NativeMemoryImportResult {
   imported: number;
   skipped: number;
@@ -203,9 +200,8 @@ export async function call<T>(
   return data as T;
 }
 
-// Agent names and config-file keys are interpolated into URL paths; encode them
-// so a name/key with URL-significant characters can't malform or misroute the
-// request (defence in depth — the daemon also constrains names server-side).
+// Encode names/keys interpolated into URL paths (defence in depth — the daemon
+// also constrains names server-side).
 export const enc = encodeURIComponent;
 
 export const agentsApi = {
@@ -284,9 +280,13 @@ export const agentsApi = {
   // Native memory: the agent's OWN per-project memory stores (read-only scan).
   nativeMemory: (name: string) =>
     call<NativeMemoryListResponse>("GET", `/agents/${enc(name)}/native-memory`),
-  importNativeMemory: (name: string, memoryDir: string) =>
+  // `projectPath` selects which entries to import for Codex's shared global
+  // store (one store, many project rows); ignored for Claude Code, where
+  // `memoryDir` alone identifies the project.
+  importNativeMemory: (name: string, memoryDir: string, projectPath: string | null = null) =>
     call<NativeMemoryImportResult>("POST", `/agents/${enc(name)}/native-memory/import`, {
       memory_dir: memoryDir,
+      project_path: projectPath,
     }),
   importNativeMemoryBatch: (name: string, memoryDirs: string[]) =>
     call<NativeMemoryImportBatchResult>("POST", `/agents/${enc(name)}/native-memory/import-batch`, {

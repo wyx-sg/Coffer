@@ -163,6 +163,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     embedding_config_svc = EmbeddingConfigService(
         repo=SqlAlchemyEmbeddingConfigRepo(sm),
         audit=audit,
+        credentials=credential_store,
     )
     internal_engine_config_svc = InternalEngineConfigService(
         repo=SqlAlchemyInternalEngineConfigRepo(sm),
@@ -285,8 +286,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     # On-demand SessionEnd distill (Slice 6 FR-051): reuses the FR-046 ledger.
     wire_session_end_distiller(distill_service=distill_service, session_maker=sm)
-    # Async batch workers (off the request path): distill, KB re-embed, native import.
-    await start_async_batches(
+    await start_async_batches(  # distill, KB re-embed, native import — off the request path
         app,
         distill_service=distill_service,
         session_maker=sm,

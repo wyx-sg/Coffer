@@ -17,7 +17,7 @@ from coffer.application.knowledge.retrieval import (
     KnowledgeRetrieval,
     no_embedding,
 )
-from coffer.application.memory import admin, lane_reads, session_context
+from coffer.application.memory import admin, lane_deletes, session_context
 from coffer.application.memory.ports import MemoryDocumentRepo
 from coffer.application.memory.queries import (
     find_fact_store,
@@ -141,7 +141,7 @@ class MemoryService:
         *,
         scope: MemoryScope,
         cwd: str | None,
-        name: str,
+        title: str,
         description: str,
         body: str,
         actor: Actor,
@@ -155,7 +155,7 @@ class MemoryService:
             resolved,
             store_name_for(resolved),
             max_fact_chars=max_fact_chars,
-            name=name,
+            title=title,
             description=description,
             body=body,
             actor=actor,
@@ -166,7 +166,7 @@ class MemoryService:
         self,
         *,
         store_name: str,
-        name: str,
+        title: str,
         description: str,
         body: str,
         actor: Actor,
@@ -177,7 +177,7 @@ class MemoryService:
         return await self._add(
             resolved,
             store_name,
-            name=name,
+            title=title,
             description=description,
             body=body,
             actor=actor,
@@ -335,15 +335,16 @@ class MemoryService:
             store_name=store_name, resolved_store=self.resolved_store
         )
 
-    async def read_journal(self, *, store_name: str) -> list[lane_reads.JournalFile]:
-        """Lane reads (Slice 7): journal newest-first, handoff per branch, changelog."""
-        return await lane_reads.journal_for_store(store_name, self.resolved_store)
-
-    async def read_handoff_scenes(self, *, store_name: str) -> list[lane_reads.HandoffScene]:
-        return await lane_reads.handoff_for_store(store_name, self.resolved_store)
-
-    async def read_consolidation_log(self, *, store_name: str) -> lane_reads.ConsolidationLog:
-        return await lane_reads.consolidation_log_for_store(store_name, self.resolved_store)
+    async def delete_lane(
+        self, *, store_name: str, lane: lane_deletes.Lane, identifier: str, actor: str
+    ) -> None:
+        """Delete a non-knowledge lane file (journal/handoff/rules/changelog) → drop
+        the indexed journal lane's rows → changelog append → audit → notify."""
+        resolved = await self.resolved_store(store_name)
+        await lane_deletes.delete_lane(
+            lane, deps=self._writes, resolved=resolved,
+            store_name=store_name, identifier=identifier, actor=actor,
+        )  # fmt: skip
 
     async def assemble_session_context(self, *, cwd: str | None) -> str:
         """SessionStart rules bundle (Slice 6 FR-049/050); see ``session_context``."""

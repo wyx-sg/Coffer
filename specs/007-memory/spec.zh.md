@@ -213,7 +213,7 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
 
 - **Given** 一个跑在 git 项目内的 MCP 客户端，
 - **When** 它用一条事实加 `scope=project` 调 `coffer__remember`，
-- **Then** 在项目记忆目录的 `knowledge/inbox/` 子目录下写出一个每条记忆的 markdown 文件（YAML frontmatter `name`/`description`/`metadata.actor`/`origin_session_id` + 正文），将该文件索引进 `documents`，并写入一条审计。
+- **Then** 在项目记忆目录的 `knowledge/inbox/` 子目录下写出一个每条记忆的 markdown 文件（YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + 正文），将该文件索引进 `documents`，并写入一条审计。
 
 ### Scenario: agent recalls a project fact
 
@@ -482,7 +482,7 @@ UI 里也不可见。把每个 lane 以贴合其形状的方式呈现，让整�
 
 **存储与作用域**
 
-- **FR-001**：系统 MUST 把每条记忆条目存为一个每条记忆的 markdown 文件（YAML frontmatter `name`/`description`/`metadata.actor`/`origin_session_id` + 正文），位于每个作用域的 **`knowledge/` lane** 下 —— 新记住的条目落在 `knowledge/inbox/`，经整理的主题文档（`knowledge/<topic>.md`）加一个 `INDEX.md` 由整合 organizer 维护（后续 memory PR）。markdown 文件是 **唯一真相源**；SQLite 是可重建的索引。**不生成任何 `MEMORY.md` 索引**（此前的派生索引是无用的投影产物，检索里没人读它）。
+- **FR-001**：系统 MUST 把每条记忆条目存为一个每条记忆的 markdown 文件（YAML frontmatter `title`/`description`/`metadata.actor`/`origin_session_id` + 正文），位于每个作用域的 **`knowledge/` lane** 下 —— 新记住的条目落在 `knowledge/inbox/`，经整理的主题文档（`knowledge/<topic>.md`）加一个 `INDEX.md` 由整合 organizer 维护（后续 memory PR）。markdown 文件是 **唯一真相源**；SQLite 是可重建的索引。**不生成任何 `MEMORY.md` 索引**（此前的派生索引是无用的投影产物，检索里没人读它）。
 - **FR-002**：系统 MUST 支持两种记忆作用域：**global**（一个由 `project_id = WORKSPACE_GLOBAL_PROJECT_ID`（既有 sentinel `00000000000000000000000000`）标识的 store）与 **per-project**（每项目一个、由项目 ULID 标识的 store），分别存于 `~/.coffer/memory/global/knowledge/` 与 `~/.coffer/memory/projects/<project-ulid>/knowledge/`。
 - **FR-003**：`coffer__remember`（与用户添加）MUST 把一条记忆条目追加进每作用域的 inbox（`knowledge/inbox/`），写入时不调 LLM；整理进主题文档由整合 organizer 异步完成（后续 memory PR），绝不阻塞写入或 `recall`。
 - **FR-004**：系统 MUST 从 agent 在会话握手时上报的启动 cwd 解析 per-project store：daemon 计算 git-root，并解析（缺失则惰性置备）该项目 ULID 对应的 store。

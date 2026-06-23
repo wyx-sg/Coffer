@@ -447,7 +447,11 @@
       "provider": "Provider",
       "model": "Model",
       "dimensions": "Dimensions",
+      "dimensionsFixed": "Set automatically from the selected model.",
       "baseUrl": "Base URL (optional)",
+      "secret": "API key",
+      "secretPlaceholder": "Paste the provider API key",
+      "secretKeepBlank": "Leave blank to keep the current key",
       "credential": "Credential reference",
       "credentialHint": "Credential store entry name (not the key itself)",
       "chunkingTitle": "Chunking defaults",
@@ -479,6 +483,7 @@
       "provider": "Provider",
       "modelId": "Model ID",
       "modelIdPlaceholder": "e.g. claude-3-5-sonnet-20241022",
+      "modelIdPlaceholderEmbedding": "e.g. text-embedding-3-small",
       "credentialRef": "Credential reference",
       "credentialRefPlaceholder": "e.g. ANTHROPIC_API_KEY",
       "baseUrl": "Base URL",
@@ -533,6 +538,8 @@
       "deleteTitle": "Delete connection",
       "deleteConfirm": "Delete connection \"{{name}}\"? Its stored credential is removed too.",
       "name": "Name",
+      "provider": "Provider",
+      "customProvider": "Custom",
       "wireFormat": "Connection type",
       "detectType": "Detect type",
       "detected": "Detected: {{wire}}",
@@ -866,9 +873,7 @@
     },
     "hook": {
       "title": "Session-start rules",
-      "install": "Inject rules at session start",
-      "uninstall": "Stop injecting rules",
-      "help": "Injects the Coffer rules bundle via a SessionStart hook each time the agent starts a session.",
+      "help": "When on, injects the Coffer rules bundle via a SessionStart hook each time the agent starts a session.",
       "unsupported": "This agent type doesn't support a session-start hook."
     },
     "welcome": {
@@ -1171,7 +1176,6 @@
       "factBadge": "{{count}} facts",
       "selectFact": "Select a memory on the left to preview or edit it.",
       "untitled": "(untitled)",
-      "actorUser": "edited",
       "tabs": {
         "knowledge": "Knowledge",
         "rules": "Rules",
@@ -1184,10 +1188,18 @@
       "rules": "Rules",
       "journal": "Journal periods",
       "handoff": "Branches",
-      "changelog": "Changelog"
+      "changelog": "Changelog",
+      "intro": {
+        "knowledge": "Facts the agent has distilled — one file each. Correct them in your editor or delete.",
+        "rules": "Long-lived rules that shape the agent's behavior, injected at session start.",
+        "journal": "Period work digests, newest first.",
+        "handoff": "Per-branch handoff notes so work can continue on another machine or session.",
+        "changelog": "History of memory consolidation and edits."
+      }
     },
     "rules": {
-      "empty": "No rules yet — agents curate them as your project's conventions emerge."
+      "empty": "No rules yet — agents curate them as your project's conventions emerge.",
+      "select": "Select the rules file on the left to read it."
     },
     "journal": {
       "empty": "No journal entries yet — agents write a digest as work accumulates.",
@@ -1199,7 +1211,8 @@
       "updatedAt": "Updated {{time}}"
     },
     "changelog": {
-      "empty": "No changelog yet — it records each memory consolidation."
+      "empty": "No changelog yet — it records each memory consolidation.",
+      "select": "Select the changelog on the left to read it."
     },
     "welcome": {
       "title": "Your shared agent memory",

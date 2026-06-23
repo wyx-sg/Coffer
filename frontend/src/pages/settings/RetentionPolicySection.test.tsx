@@ -55,32 +55,32 @@ describe("RetentionPolicySection", () => {
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
   });
 
-  test("Save button is disabled when nothing has changed", () => {
+  test("auto-saves (no Save button) — edits persist on change/blur", () => {
     render(<RetentionPolicySection policy={basePolicy} onUpdate={vi.fn()} updating={false} />);
-    expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
   });
 
-  test("Save button enables after toggling 'keep forever'", () => {
-    render(<RetentionPolicySection policy={basePolicy} onUpdate={vi.fn()} updating={false} />);
-    fireEvent.click(screen.getByRole("switch"));
-    expect(screen.getByRole("button", { name: /save/i })).not.toBeDisabled();
-  });
-
-  test("clicking Save calls onUpdate with null when keep-forever is on", () => {
+  test("toggling 'keep forever' on auto-saves onUpdate(null)", () => {
     const onUpdate = vi.fn();
     render(<RetentionPolicySection policy={basePolicy} onUpdate={onUpdate} updating={false} />);
     fireEvent.click(screen.getByRole("switch"));
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(onUpdate).toHaveBeenCalledWith(null);
   });
 
-  test("clicking Save calls onUpdate with the days value when keep-forever is off", () => {
+  test("editing days and blurring auto-saves onUpdate(days)", () => {
     const onUpdate = vi.fn();
     render(<RetentionPolicySection policy={basePolicy} onUpdate={onUpdate} updating={false} />);
     const daysInput = screen.getByRole("spinbutton");
     fireEvent.change(daysInput, { target: { value: "60" } });
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    fireEvent.blur(daysInput);
     expect(onUpdate).toHaveBeenCalledWith(60);
+  });
+
+  test("does not auto-save on blur when the days value is unchanged", () => {
+    const onUpdate = vi.fn();
+    render(<RetentionPolicySection policy={basePolicy} onUpdate={onUpdate} updating={false} />);
+    fireEvent.blur(screen.getByRole("spinbutton"));
+    expect(onUpdate).not.toHaveBeenCalled();
   });
 
   test("clamps an over-max days value to 3650 instead of sending it raw", () => {
@@ -89,7 +89,7 @@ describe("RetentionPolicySection", () => {
     const daysInput = screen.getByRole("spinbutton") as HTMLInputElement;
     fireEvent.change(daysInput, { target: { value: "99999" } });
     expect(Number(daysInput.value)).toBe(3650);
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    fireEvent.blur(daysInput);
     expect(onUpdate).toHaveBeenCalledWith(3650);
   });
 });

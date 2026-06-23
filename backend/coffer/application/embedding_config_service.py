@@ -7,6 +7,7 @@ Settings surface calls ``update()``."""
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -17,6 +18,19 @@ from coffer.domain.errors import ConfigValidationError
 
 #: Default vector width when the operator has never configured embedding.
 DEFAULT_DIMENSIONS = 768
+
+#: Fixed vault ref the embedding config stores its API key under. There is only
+#: one global embedding model, so a single well-known ref suffices (mirrors the
+#: provider service's ``provider/<name>/key`` convention).
+EMBEDDING_CREDENTIAL_REF = "embedding/key"
+
+
+class _CredentialStore(Protocol):
+    """The synchronous credential vault (short-lived SQLite connections); we run
+    it off the event loop via ``asyncio.to_thread`` like the provider service."""
+
+    def set(self, ref: str, value: str) -> None: ...
+    def delete(self, ref: str) -> None: ...
 
 
 class EmbeddingConfigRepo(Protocol):
@@ -52,9 +66,15 @@ def _default() -> GlobalEmbeddingConfig:
 class EmbeddingConfigService:
     """Reads/writes the singleton global embedding config."""
 
-    def __init__(self, repo: EmbeddingConfigRepo, audit: AuditService) -> None:
+    def __init__(
+        self,
+        repo: EmbeddingConfigRepo,
+        audit: AuditService,
+        credentials: _CredentialStore,
+    ) -> None:
         self._repo = repo
         self._audit = audit
+        self._credentials = credentials
 
     async def get(self) -> GlobalEmbeddingConfig:
         """The current config, or a disabled default when never configured."""
@@ -68,13 +88,19 @@ class EmbeddingConfigService:
         model: str | None,
         base_url: str | None,
         credential_ref: str | None,
+        secret_value: str | None = None,
         dimensions: int,
         default_chunk_size: int,
         default_chunk_overlap: int,
         actor: str,
     ) -> GlobalEmbeddingConfig:
         """Persist the global config. Enabling vector requires provider+model so
-        the substrate can actually build an embedder."""
+        the substrate can actually build an embedder.
+
+        A raw ``secret_value`` (the API key the user typed) is stored into the
+        credential vault under :data:`EMBEDDING_CREDENTIAL_REF` and reused as the
+        ``credential_ref``; it takes precedence over an explicit ``credential_ref``.
+        """
         if enabled and not (provider and model):
             raise ConfigValidationError("provider and model are required to enable embedding")
         if not 1 <= dimensions <= 8192:
@@ -83,6 +109,9 @@ class EmbeddingConfigService:
             raise ConfigValidationError(f"chunk size must be in 64..2048, got {default_chunk_size}")
         if default_chunk_overlap < 0 or default_chunk_overlap > default_chunk_size // 2:
             raise ConfigValidationError("chunk overlap must be in 0..chunk_size/2")
+        if secret_value is not None:
+            await asyncio.to_thread(self._credentials.set, EMBEDDING_CREDENTIAL_REF, secret_value)
+            credential_ref = EMBEDDING_CREDENTIAL_REF
         saved = await self._repo.set(
             enabled=enabled,
             provider=provider or None,

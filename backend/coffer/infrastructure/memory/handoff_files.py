@@ -1,6 +1,7 @@
 """On-disk handoff (working-state) files: one per (project store x branch).
 
-Files-as-truth, frontmatter ``{branch, updated_at}`` + freeform body. Mirrors
+Files-as-truth, frontmatter ``{kind, title, branch, updated_at}`` + freeform
+body (``title`` mirrors ``branch`` for the unified header). Mirrors
 ``infrastructure/memory/files.py`` but a handoff is overwrite-per-branch and is
 NOT indexed for recall (it lives in the store's ``handoff/`` subdir, which the
 recall glob never descends into). Frontmatter parse/render is delegated to the
@@ -40,8 +41,19 @@ class HandoffFile:
 
 
 def write_handoff(path: Path, *, branch: str, body: str, updated_at: datetime) -> None:
-    """Write (overwrite) the handoff for a branch atomically: frontmatter + body."""
-    text = render_frontmatter({"branch": branch, "updated_at": updated_at.isoformat()}, body)
+    """Write (overwrite) the handoff for a branch atomically: frontmatter + body.
+
+    ``kind``/``title`` head the frontmatter for the unified on-disk format; the
+    ``title`` is the branch (a handoff has no separate name)."""
+    text = render_frontmatter(
+        {
+            "kind": "handoff",
+            "title": branch,
+            "branch": branch,
+            "updated_at": updated_at.isoformat(),
+        },
+        body,
+    )
     atomic_write_text(path, text)
 
 
@@ -60,6 +72,14 @@ def read_handoff(path: Path) -> HandoffFile | None:
         body=body.strip("\n"),
         updated_at=_parse_updated_at(meta.get("updated_at")),
     )
+
+
+def delete_handoff(path: Path) -> bool:
+    """Delete one ``handoff/<branch-slug>.md`` file. Returns whether it existed."""
+    if path.exists():
+        path.unlink()
+        return True
+    return False
 
 
 def _parse_updated_at(value: object) -> datetime:

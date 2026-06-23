@@ -56,8 +56,11 @@ def render_fact_markdown(fact: MemoryFact) -> str:
     """Render a fact to its on-disk ``<slug>.md`` form (frontmatter + body)."""
     metadata: dict[str, object] = {"actor": fact.actor}
     frontmatter: dict[str, object] = {
+        # ``kind`` heads every memory file's frontmatter for a consistent,
+        # human-readable on-disk header across the lanes.
+        "kind": "knowledge",
         "id": fact.id,
-        "name": fact.name,
+        "title": fact.title,
         "description": fact.description,
         "metadata": metadata,
         # Timestamps live in the file (the source of truth) — the mtime
@@ -74,21 +77,23 @@ def parse_fact_markdown(text: str, *, fallback_id: str, mtime: datetime) -> Memo
     """Parse a per-fact file's text into a ``MemoryFact``.
 
     Missing frontmatter keys degrade gracefully so an out-of-band / hand-written
-    fact file (e.g. Claude's own) still indexes: ``name`` defaults to the id,
-    ``description`` to the first body line, ``actor`` to ``"user"``.
+    fact file (e.g. Claude's own) still indexes: ``title`` defaults to the id,
+    ``description`` to the first body line, ``actor`` to ``"user"``. The legacy
+    ``name`` key is still accepted as an alias for ``title`` (existing stores /
+    externally-written files predate the rename).
     """
     fm, body = split_frontmatter(text)
     raw_metadata = fm.get("metadata")
     metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
     actor_raw = str(metadata.get("actor", "user"))
     actor: Actor = "agent" if actor_raw == "agent" else "user"
-    name = str(fm.get("name") or fallback_id)
+    title = str(fm.get("title") or fm.get("name") or fallback_id)
     description = str(fm.get("description") or _first_line(body))
     created = _parse_dt(fm.get("created_at"), default=mtime)
     updated = _parse_dt(fm.get("updated_at"), default=mtime)
     return MemoryFact(
         id=str(fm.get("id") or fallback_id),
-        name=name,
+        title=title,
         description=description,
         body=body.strip(),
         actor=actor,

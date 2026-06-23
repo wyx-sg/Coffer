@@ -94,6 +94,26 @@ def test_read_memory_facts_empty_when_no_dir(tmp_path: pathlib.Path) -> None:
     assert read_memory_facts(tmp_path / "missing" / "memory") == []
 
 
+def test_read_memory_facts_parses_inline_memory_md_when_no_facts(tmp_path: pathlib.Path) -> None:
+    # No separate fact files: an inline MEMORY.md is itself the one entry, so it
+    # is parsed (not skipped) — otherwise the store would import nothing.
+    mem = tmp_path / "memory"
+    mem.mkdir()
+    (mem / "MEMORY.md").write_text("# Project Hub\n\narchitecture notes", encoding="utf-8")
+
+    facts = read_memory_facts(mem)
+    assert len(facts) == 1
+    assert facts[0].name == "MEMORY"  # no frontmatter name → stem
+    assert "architecture notes" in facts[0].body
+
+
+def test_read_memory_facts_blank_inline_memory_md_yields_nothing(tmp_path: pathlib.Path) -> None:
+    mem = tmp_path / "memory"
+    mem.mkdir()
+    (mem / "MEMORY.md").write_text("   \n\n", encoding="utf-8")
+    assert read_memory_facts(mem) == []
+
+
 def test_resolve_project_path_prefers_existing_decoded_dir(tmp_path: pathlib.Path) -> None:
     # The decode is lossy at any '-' in a path segment, so the slug only
     # round-trips when the decoded path has none. Decode a known dash-free slug,

@@ -18,7 +18,12 @@ import logging
 from dataclasses import dataclass
 from typing import Protocol
 
-from coffer.domain.agent.native_memory import ParsedNativeFact
+from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.native_memory import (
+    CodexGlobalLayout,
+    ParsedNativeFact,
+    native_memory_layout_for,
+)
 from coffer.domain.errors import MemoryRejected, ScopeUnresolved
 from coffer.domain.resource import Resource
 
@@ -36,6 +41,11 @@ class NativeMemoryReaderPort(Protocol):
         """The REAL absolute project path for ``memory_dir``, or ``None``."""
         ...
 
+    def read_codex_facts(self, memory_dir: str, project_path: str) -> list[ParsedNativeFact]:
+        """Codex Task-Group blocks in the global store ``memory_dir`` routed to
+        ``project_path``, as importable facts."""
+        ...
+
 
 class MemoryImportSinkPort(Protocol):
     """Write/organize boundary into the memory kind (composition-root adapter)."""
@@ -44,7 +54,7 @@ class MemoryImportSinkPort(Protocol):
         self,
         *,
         project_path: str,
-        name: str,
+        title: str,
         description: str,
         body: str,
         origin_session_id: str | None,
@@ -97,18 +107,31 @@ class AgentMemoryImportService:
         self._reader = reader
         self._sink = sink
 
-    async def import_store(self, *, name: str, memory_dir: str) -> ImportResult:
+    async def import_store(
+        self, *, name: str, memory_dir: str, project_path: str | None = None
+    ) -> ImportResult:
         """Import ``memory_dir`` into the agent's project memory, then organize.
+
+        For Claude Code, ``memory_dir`` is one project's store and the target
+        project is resolved from it. For Codex, ``memory_dir`` is the single
+        global store shared by every row, so the caller passes the ``project_path``
+        of the chosen row and only the Task-Group blocks routed to it are imported.
 
         Raises ``ResourceNotFound`` (→ 404) for an unknown agent. A path that
         can't be resolved, an empty/absent dir, or a non-git project all return
         a zero-import result rather than erroring — the inbox is never corrupted.
         """
         # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
-        await self._agents.get(name)
+        cfg = AgentConfig.model_validate((await self._agents.get(name)).config)
 
-        project_path = self._reader.resolve_project_path(memory_dir)
-        facts = self._reader.read_facts(memory_dir)
+        if isinstance(native_memory_layout_for(cfg.type), CodexGlobalLayout) and project_path:
+            # Codex global store: route by the chosen row's cwd.
+            target_path: str | None = project_path
+            facts = self._reader.read_codex_facts(memory_dir, project_path)
+        else:
+            target_path = self._reader.resolve_project_path(memory_dir)
+            facts = self._reader.read_facts(memory_dir)
+        project_path = target_path
         if project_path is None or not facts:
             return ImportResult(
                 imported=0,
@@ -124,7 +147,9 @@ class AgentMemoryImportService:
             try:
                 await self._sink.add(
                     project_path=project_path,
-                    name=fact.name,
+                    # ``ParsedNativeFact.name`` is the upstream agent format's own
+                    # field; it maps onto the Coffer fact ``title`` at the sink.
+                    title=fact.name,
                     description=fact.description,
                     body=fact.body,
                     origin_session_id=fact.origin_session_id,

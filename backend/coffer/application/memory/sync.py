@@ -90,7 +90,7 @@ def fact_to_document(
         resource_name=store.resource_name,
         project_id=store.project_id,
         path=path,
-        title=fact.name,
+        title=fact.title,
         description=fact.description,
         content_sha256=content_sha256,
         embed_pending=embed_pending,
@@ -214,8 +214,8 @@ class MemoryReconciler:
                 embedding=embedding,
                 doc_id=fact_id,
                 chunker=_chunk_fact,
-                # The fact name is its title → embed-context only (KB5); FTS raw.
-                title=ff.fact.name,
+                # The fact title is its heading → embed-context only (KB5); FTS raw.
+                title=ff.fact.title,
                 previous_embed_pending=(existing.embed_pending if existing else False),
             )
             doc = fact_to_document(
@@ -286,8 +286,8 @@ class MemoryReconciler:
                 embedding=embedding,
                 doc_id=fact_file.fact.id,
                 chunker=_chunk_fact,
-                # The fact name is its title → embed-context only (KB5); FTS raw.
-                title=fact_file.fact.name,
+                # The fact title is its heading → embed-context only (KB5); FTS raw.
+                title=fact_file.fact.title,
                 previous_embed_pending=(existing.embed_pending if existing else False),
             )
             doc = fact_to_document(

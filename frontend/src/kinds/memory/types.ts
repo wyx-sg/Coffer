@@ -139,7 +139,7 @@ export interface FactOut {
   id: string;
   store_name: string;
   scope: Scope;
-  name: string;
+  title: string;
   description: string;
   text: string;
   actor: MemoryActor;
@@ -174,7 +174,7 @@ export interface RecallResponse {
 
 export interface FactInput {
   text: string;
-  name?: string | null;
+  title?: string | null;
   description?: string | null;
 }
 
