@@ -45,24 +45,6 @@ export interface TranscriptSessionListResponse {
   offset: number;
 }
 
-export interface DistillRequest {
-  session_id?: string;
-  project_path?: string;
-  model_id?: string;
-  dry_run?: boolean;
-}
-
-export interface InsightOut {
-  name: string;
-  description: string;
-  body: string;
-}
-
-export interface DistillResponse {
-  insights: InsightOut[];
-  journal_entries: string[];
-}
-
 // ---------------------------------------------------------------------------
 // Request functions
 // ---------------------------------------------------------------------------
@@ -84,13 +66,6 @@ export function listTranscripts(
     "GET",
     `/agents/${enc(agentName)}/transcripts?${sp.toString()}`,
   );
-}
-
-export function distillTranscript(
-  agentName: string,
-  body: DistillRequest,
-): Promise<DistillResponse> {
-  return call<DistillResponse>("POST", `/agents/${enc(agentName)}/transcripts/distill`, body);
 }
 
 export interface DistillBatchRequest {

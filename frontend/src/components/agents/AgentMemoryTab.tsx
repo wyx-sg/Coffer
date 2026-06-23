@@ -29,7 +29,11 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut, NativeMemoryStore } from "@/lib/api/agents";
-import { useAgentNativeMemory, useImportNativeMemory, usePatchAgent } from "@/lib/hooks/useAgents";
+import {
+  useAgentNativeMemory,
+  useImportNativeMemoryBatch,
+  usePatchAgent,
+} from "@/lib/hooks/useAgents";
 
 /** Toggle ROW (no Card — the parent's combined box provides it) that disables
  * the agent's OWN native memory (writes/restores the agent's config) so it uses
@@ -74,33 +78,25 @@ function DisableNativeMemoryRow({ agent }: { agent: AgentOut }) {
   );
 }
 
-/** Per-row "import this native memory store into Coffer" button: bulk-remembers
- * the store's items into the matching Coffer project store, then organizes. */
+/** Per-row "import this native memory store into Coffer" button. Enqueues an
+ * async batch import (returns 202 at once) so the work runs off the request path
+ * and the row's status column polls queued → running → done — matching the bulk
+ * action and the Conversations tab's per-row distill. A summary toast confirms
+ * the enqueue; the imported facts land in the matching Coffer project store. */
 function ImportButton({ agentName, store }: { agentName: string; store: NativeMemoryStore }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const importMut = useImportNativeMemory(agentName);
+  const importMut = useImportNativeMemoryBatch(agentName);
   return (
     <Button
       size="sm"
       variant="outline"
       disabled={importMut.isPending}
       onClick={() =>
-        importMut.mutate(
-          { memoryDir: store.memory_dir, projectPath: store.path },
-          {
-            onSuccess: (r) =>
-              r.store
-                ? toast.success(
-                    t("agents.memoryTab.importDone", {
-                      count: r.imported,
-                      project: store.project,
-                    }),
-                  )
-                : toast.error(t("agents.memoryTab.importNoProject", { project: store.project })),
-            onError: (e) => toast.error(translateApiError(t, e)),
-          },
-        )
+        importMut.mutate([store.memory_dir], {
+          onSuccess: (r) => toast.success(t("agents.memoryTab.importQueued", { count: r.queued })),
+          onError: (e) => toast.error(translateApiError(t, e)),
+        })
       }
     >
       {importMut.isPending ? t("agents.memoryTab.importing") : t("agents.memoryTab.import")}

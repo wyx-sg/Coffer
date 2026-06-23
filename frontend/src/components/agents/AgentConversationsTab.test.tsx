@@ -18,19 +18,18 @@ import type { TranscriptListParams } from "@/lib/api/agentChat";
 // Mocks
 // ---------------------------------------------------------------------------
 
+// Both the per-row button and the bulk bar use useDistillBatch: the per-row
+// button calls .mutate({ session_ids:[id] }); the bulk bar calls .mutateAsync().
 const distillMutate = vi.fn();
+const distillMutateAsync = vi.fn().mockResolvedValue({ queued: 0, skipped: 0, total: 0 });
 
 vi.mock("@/lib/hooks/useAgentChatHistory", () => ({
   TRANSCRIPTS_PAGE_SIZE: 10,
   transcriptsKey: (name: string) => ["agents", name, "conversations"],
   useAgentTranscripts: vi.fn(),
-  useDistillTranscript: vi.fn(() => ({
-    mutate: distillMutate,
-    isPending: false,
-    data: undefined,
-  })),
   useDistillBatch: vi.fn(() => ({
-    mutateAsync: vi.fn().mockResolvedValue({ queued: 0, skipped: 0, total: 0 }),
+    mutate: distillMutate,
+    mutateAsync: distillMutateAsync,
     isPending: false,
   })),
 }));
@@ -152,42 +151,38 @@ describe("AgentConversationsTab", () => {
     expect(lastParams().offset).toBe(limit);
   });
 
-  test("clicking 'Distill to memory' calls mutate with the session id", async () => {
-    distillMutate.mockImplementation(
-      (_args: unknown, callbacks: { onSuccess?: (r: unknown) => void }) => {
-        callbacks?.onSuccess?.({ insights: [], journal_entries: [] });
-      },
-    );
+  test("clicking the per-row 'Distill' enqueues a single-session async batch", async () => {
     stubTranscripts();
     render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("button", { name: /distill/i }));
+    fireEvent.click(screen.getByRole("button", { name: /distill session s1 to memory/i }));
     await waitFor(() =>
       expect(distillMutate).toHaveBeenCalledWith(
-        { session_id: "s1" },
+        { session_ids: ["s1"] },
         expect.objectContaining({ onSuccess: expect.any(Function) }),
       ),
     );
   });
 
-  test("renders returned insights inline after a successful distill click", async () => {
-    const insights = [
-      {
-        name: "Use Redis",
-        description: "cache layer",
-        body: "We chose Redis for caching.",
-      },
-    ];
+  test("per-row distill does NOT render the distilled result inline in the table", async () => {
+    // Guard against re-introducing the old inline-insights cell: even if the
+    // success payload carried insight cards, the per-row button must not render
+    // them — progress shows only in the status column; the result goes to memory.
     distillMutate.mockImplementation(
       (_args: unknown, callbacks: { onSuccess?: (r: unknown) => void }) => {
-        callbacks?.onSuccess?.({ insights, journal_entries: ["2026-06-21T09:00:00+00:00"] });
+        callbacks?.onSuccess?.({
+          queued: 1,
+          skipped: 0,
+          total: 1,
+          insights: [{ name: "Use Redis", description: "cache", body: "We chose Redis for caching." }],
+        });
       },
     );
-
     stubTranscripts();
     render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("button", { name: /distill/i }));
-    await waitFor(() => expect(screen.getByText("Use Redis")).toBeInTheDocument());
-    expect(screen.getByText(/We chose Redis/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /distill session s1 to memory/i }));
+    await waitFor(() => expect(distillMutate).toHaveBeenCalled());
+    expect(screen.queryByText("Use Redis")).not.toBeInTheDocument();
+    expect(screen.queryByText(/We chose Redis/i)).not.toBeInTheDocument();
   });
 
   test("selecting a row reveals the bulk distill action", () => {
