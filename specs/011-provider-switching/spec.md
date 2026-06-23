@@ -252,6 +252,40 @@ per CONNECTION.
 `compatible_agents` set); Decision A / FR-011's per-protocol single-active (now
 per-agent-type). **Still NOT in scope:** proxy / hot-switch / protocol conversion.
 
+## Amendment 2026-06-23c — Picking a connection is a draft; test then confirm to switch
+
+> Status: Draft. Recorded after the agnes connection was activated for Claude
+> Code with no model bound. Cross-ref
+> [ADR-032](../../docs/decisions/ADR-032-provider-switching.md).
+
+**Why.** Under E3/E4 the model lives on the per-agent binding and activation only
+projects the endpoint + key. The Agent page activated a connection the instant it
+was picked, with no model bound — so a connection whose endpoint serves its own
+model ids (the agnes case: an openai gateway routed to Claude Code) left
+`ANTHROPIC_MODEL` unset, Claude Code kept sending its built-in `claude-*` ids to
+that endpoint, and every model — in both Coffer's slots and Claude Code's own
+`/model` picker — failed with "model may not exist or you may not have access."
+The user had no chance to choose a model the endpoint serves, and no signal that
+the switch (not their account) was the problem. Activating on a mere dropdown
+change also made an unverified endpoint the live config with one click.
+
+- **G1 — Picking a connection / model on the Agent page is a DRAFT.** Selecting a
+  connection or a model no longer activates or PATCHes anything; it stages a
+  choice. Picking a non-built-in connection introspects its endpoint and stages a
+  default model — Claude Code's primary + fast and Codex's single slot all default
+  to the endpoint's FIRST returned model — so the user has something to test.
+- **G2 — «测试连接» before «确认切换».** A custom connection must pass a
+  test-connection probe (`POST /models/test-connection` with the staged model)
+  before it can be confirmed. Confirm is disabled until the test for the CURRENT
+  draft passes; changing the connection or model resets the test result. «确认切换»
+  PATCHes the per-agent binding (model + fast_model) then activates the connection
+  — the only step that writes native config. Switching to the built-in login needs
+  no test (no endpoint to reach) and confirms straight away.
+
+**Supersedes:** E4's implicit "picking activates immediately" — activation is now
+gated behind an explicit test + confirm, and the binding is never left empty.
+**Still NOT in scope:** proxy / hot-switch / protocol conversion.
+
 ## Scope
 
 ### In scope

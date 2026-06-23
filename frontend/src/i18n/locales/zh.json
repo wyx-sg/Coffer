@@ -707,6 +707,8 @@
       "builtin": "使用内置（agent 自带登录）",
       "none": "没有兼容的连接",
       "empty": "该 agent 还没有连接。",
+      "confirm": "确认切换",
+      "testFirst": "请先测试连接，成功后才能确认切换",
       "manage": "在「设置 → LLM 连接」中管理连接",
       "customModel": "自定义…",
       "customLabel": "自定义模型 id",

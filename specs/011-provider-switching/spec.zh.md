@@ -116,6 +116,29 @@ wire」解耦，并按**连接**解析密钥。
 **Supersede：** E5（按-protocol 匹配的兼容性过滤——现为显式 `compatible_agents` 集合）；决策 A /
 FR-011 的 per-protocol 单激活（现为 per-agent-type）。**仍不在范围：** proxy / 热切换 / 协议转换。
 
+## 修订 2026-06-23c — 选连接是草稿；先测试、再确认切换
+
+> 状态：Draft。在「为 Claude Code 激活了 agnes 连接但没绑模型」之后记录。交叉引用
+> [ADR-032](../../docs/decisions/ADR-032-provider-switching.md)。
+
+**为什么。** 按 E3/E4，模型落在 per-agent 绑定上，激活只投影 endpoint + 密钥。Agent 页过去**一选中连接
+就立即激活**、且没绑模型——于是一条 endpoint 用自己模型 id 的连接（agnes 场景：路由到 Claude Code 的
+openai 网关）会让 `ANTHROPIC_MODEL` 留空，Claude Code 继续拿内置 `claude-*` id 去打这个 endpoint，
+结果 Coffer 的两个槽位和 Claude Code 自己的 `/model` 选择器里**每个模型都失败**，报 "model may not
+exist or you may not have access"。用户既没机会选一个该 endpoint 支持的模型，也拿不到任何信号说明问题在
+这次切换、而非自己的账户。仅仅改个下拉就激活，也等于一键把未验证的 endpoint 变成线上配置。
+
+- **G1 — 在 Agent 页选连接 / 模型是「草稿」。** 选连接或选模型不再激活、也不再 PATCH，只是暂存一个选择。
+  选中非内置连接时 introspect 其 endpoint 并暂存一个默认模型——Claude Code 的主模型 + 快速模型、以及
+  Codex 的单槽位，都默认成 endpoint 返回的**第一个**模型——好让用户有东西可测。
+- **G2 — 先「测试连接」，再「确认切换」。** 自定义连接必须先通过 test-connection 探测
+  （`POST /models/test-connection`，带上暂存的模型）才能确认。在当前草稿测试通过前「确认切换」不可点；
+  改连接或改模型会重置测试结果。「确认切换」先 PATCH per-agent 绑定（model + fast_model）再激活连接
+  ——这是唯一写原生配置的一步。切回内置登录无需测试（没有 endpoint 可达），直接确认即可。
+
+**Supersede：** E4 隐含的「一选中就立即激活」——激活现在被显式的测试 + 确认门控，且绑定不会留空。
+**仍不在范围：** proxy / 热切换 / 协议转换。
+
 ## 范围
 
 ### 在范围内
