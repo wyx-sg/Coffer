@@ -207,6 +207,51 @@ already dropped, see ADR-032 D8: one gateway for two agents = two connections).
 
 **Still NOT in scope (unchanged):** proxy / hot-switch / protocol conversion.
 
+## Amendment 2026-06-23 — Per-connection compatible agents; per-connection key resolution; agent-keyed activation
+
+> Status: Draft. **Supersedes E5's protocol-based compatibility filter and the
+> per-protocol single-active invariant.** Recorded after a design pass with the
+> user. Cross-ref [ADR-032](../../docs/decisions/ADR-032-provider-switching.md).
+
+**Why.** Tying projection to the connection's detected `protocol` cannot express
+"this openai-compatible gateway (e.g. agnes) should drive Claude Code." Worse, key
+resolution was keyed by `wire + is_active` (`apiKeyHelper = coffer provider key
+--wire anthropic`, Codex injected `resolve_active_key(OPENAI)`), so routing such a
+connection to the "wrong" wire's agent would silently resolve a DIFFERENT
+connection's key — a credential mismatch. The fix decouples *which agents a
+connection projects into* from *the wire its endpoint speaks*, and resolves keys
+per CONNECTION.
+
+- **F1 — `compatible_agents` on the connection.** A connection carries an explicit
+  `compatible_agents ⊆ {claude_code, codex}` (`null` ⇒ the wire default:
+  anthropic → `[claude_code]`, openai → `[codex]`, ollama → `[]`, unknown → both).
+  The add/edit dialog pre-fills checkboxes from the wire but the user may override
+  (route an openai gateway to Claude Code). JSON payload — no DB migration.
+- **F2 — Projection writer chosen by AGENT type, not protocol.** A connection
+  compatible with `claude_code` writes Claude's `settings.json` (anthropic shape);
+  with `codex`, Codex's `config.toml`. `protocol` now drives only model
+  introspection and whether a key is required.
+- **F3 — Per-connection key resolution.** Claude Code's projected `apiKeyHelper` is
+  `coffer provider key --connection <name>` → `GET /providers/{name}/key`, so the
+  agent always reads exactly the activated connection's key. Codex's
+  `COFFER_PROVIDER_KEY` is the key of the connection active for Codex
+  (`resolve_active_key_for_agent(codex)`). The legacy `--wire` helper /
+  `/active-key/{wire}` stay for back-compat, resolving by the wire's agent.
+- **F4 — Activation is per AGENT TYPE.** Invariant: at most one active connection
+  per agent type. Activating a connection projects it into all its compatible
+  agents and takes those agents over from any previously-active connection
+  (de-projecting it from agents the new one does not cover). `use-builtin/{wire}`
+  reverts the agent behind that wire; a connection compatible with multiple agents
+  is reverted as a unit (the single `is_active` flag is all-or-nothing).
+- **F5 — The connections page drops the per-row "switch."** Activation is
+  per-agent and lives on the Agent detail → Overview tab (which filters
+  connections by `compatible_agents`). The connections page is the library:
+  add / edit / delete + show each connection's compatible agents.
+
+**Supersedes:** E5 (protocol-match compatibility filter — now the explicit
+`compatible_agents` set); Decision A / FR-011's per-protocol single-active (now
+per-agent-type). **Still NOT in scope:** proxy / hot-switch / protocol conversion.
+
 ## Scope
 
 ### In scope
@@ -613,12 +658,23 @@ one test marked `@pytest.mark.acceptance(spec="011-provider-switching", scenario
 - **Then** each operation succeeds with the same effect as the HTTP API and
   `list --json` returns machine-readable output.
 
-### Scenario: the Providers page lists profiles and can switch the active one
+### Scenario: the connections page lists profiles and their compatible agents
 
-- **Given** the Providers page is rendered with two mock profiles,
-- **When** the user clicks the "Switch" row action for the inactive profile,
-- **Then** the activate mutation is called with the correct profile name and the
-  table reflects the updated active state (TypeScript acceptance test).
+- **Given** the connections page is rendered with two mock connections (each with
+  a `compatible_agents` set),
+- **When** the page renders,
+- **Then** it lists both connections with their compatible-agent chips and shows
+  NO per-row "Switch" action — activation is per-agent on the Agent Overview tab
+  (TypeScript acceptance test).
+
+### Scenario: route an openai-compatible connection to Claude Code via compatible_agents
+
+- **Given** a Claude Code agent is registered and an `openai`-wire connection is
+  created with `compatible_agents = ["claude_code"]` (the agnes case),
+- **When** the user activates that connection,
+- **Then** it projects into Claude Code's `settings.json` (anthropic shape) with
+  `apiKeyHelper = "coffer provider key --connection <name>"`, and
+  `GET /providers/{name}/key` returns exactly that connection's key.
 
 ### Scenario: test or fetch models with an inline unsaved secret
 

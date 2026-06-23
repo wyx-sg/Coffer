@@ -83,6 +83,39 @@ agent」——现在由 agent 的 wire 驱动投射、连接的 protocol 只是�
 
 **仍不在范围（不变）：** proxy / 热切换 / 协议转换。
 
+## Amendment 2026-06-23 — 按连接的兼容 agent；按连接的密钥解析；按 agent 类型激活
+
+> 状态：草案。**取代 E5 的按-protocol 兼容性过滤与 per-protocol 单激活不变式。** 与用户设计讨论后记录。
+> 交叉引用 [ADR-032](../../docs/decisions/ADR-032-provider-switching.md)。
+
+**为什么。** 把投射绑定到连接探测出的 `protocol`，无法表达「这个 openai 兼容网关（如 agnes）应当驱动
+Claude Code」。更糟的是密钥解析按 `wire + is_active` 绑定（`apiKeyHelper = coffer provider key --wire
+anthropic`，Codex 注入 `resolve_active_key(OPENAI)`），所以把这种连接路由到「错」的 wire 的 agent 会
+静默解析到**另一条**连接的 key——凭证错配。修复办法：把「连接投射到哪些 agent」与「endpoint 说哪种
+wire」解耦，并按**连接**解析密钥。
+
+- **F1 — 连接上的 `compatible_agents`。** 连接显式携带 `compatible_agents ⊆ {claude_code, codex}`
+  （`null` ⇒ wire 默认：anthropic → `[claude_code]`、openai → `[codex]`、ollama → `[]`、unknown →
+  两者）。添加/编辑对话框按 wire 预填复选框，用户可改（把 openai 网关路由给 Claude Code）。JSON 载荷
+  ——无需 DB 迁移。
+- **F2 — 投射 writer 按 AGENT 类型选，不按 protocol。** 兼容 `claude_code` 的连接写 Claude 的
+  `settings.json`（anthropic 形态）；兼容 `codex` 写 Codex 的 `config.toml`。`protocol` 现仅用于模型
+  自省与是否需要 key。
+- **F3 — 按连接解析密钥。** Claude Code 投射的 `apiKeyHelper` 为
+  `coffer provider key --connection <name>` → `GET /providers/{name}/key`，所以 agent 永远读到正是被
+  激活那条连接的 key。Codex 的 `COFFER_PROVIDER_KEY` 为「对 Codex 激活」那条连接的 key
+  （`resolve_active_key_for_agent(codex)`）。旧的 `--wire` helper / `/active-key/{wire}` 保留作向后兼容，
+  按 wire 对应的 agent 解析。
+- **F4 — 激活按 AGENT 类型。** 不变式：每个 agent 类型至多一条激活连接。激活一条连接会把它投射到其所有
+  兼容 agent，并从之前激活的连接手里接管这些 agent（把那条连接从新连接不覆盖的 agent 上 deproject）。
+  `use-builtin/{wire}` 还原该 wire 背后的 agent；兼容多个 agent 的连接作为整体还原（单个 `is_active`
+  标志是全有或全无）。
+- **F5 — 连接页移除每行「切换」。** 激活按 agent，落在 Agent 详情 → 概览页（按 `compatible_agents`
+  过滤连接）。连接页是库：增 / 改 / 删 + 展示每条连接的兼容 agent。
+
+**Supersede：** E5（按-protocol 匹配的兼容性过滤——现为显式 `compatible_agents` 集合）；决策 A /
+FR-011 的 per-protocol 单激活（现为 per-agent-type）。**仍不在范围：** proxy / 热切换 / 协议转换。
+
 ## 范围
 
 ### 在范围内
@@ -361,11 +394,20 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **When** 用户从 CLI 运行 `coffer provider add`、`coffer provider list --json`、`coffer provider switch`，
 - **Then** 每个操作与 HTTP API 效果相同，`list --json` 返回机器可读输出。
 
-### Scenario: the Providers page lists profiles and can switch the active one
+### Scenario: the connections page lists profiles and their compatible agents
 
-- **Given** Providers 页以两条 mock profile 渲染，
-- **When** 用户点击非活跃 profile 的"Switch"行操作，
-- **Then** activate mutation 以正确的 profile name 被调用，表格反映更新后的活跃状态（TypeScript acceptance 测试）。
+- **Given** 连接页以两条 mock 连接渲染（各带 `compatible_agents` 集合），
+- **When** 页面渲染时，
+- **Then** 列出两条连接及其兼容 agent 标签，且**无**每行「Switch」操作——激活按 agent，落在 Agent 概览页
+  （TypeScript acceptance 测试）。
+
+### Scenario: route an openai-compatible connection to Claude Code via compatible_agents
+
+- **Given** 已注册一个 Claude Code agent，并创建一条 `openai`-wire 连接，`compatible_agents = ["claude_code"]`（agnes 场景），
+- **When** 用户激活该连接，
+- **Then** 它投射进 Claude Code 的 `settings.json`（anthropic 形态），且
+  `apiKeyHelper = "coffer provider key --connection <name>"`，
+  `GET /providers/{name}/key` 返回正是该连接的 key。
 
 ### Scenario: create an ollama connection without a credential
 

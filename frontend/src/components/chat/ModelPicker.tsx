@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BUILTIN_MODELS_BY_AGENT, WIRE_BY_AGENT } from "@/lib/api/providers";
+import { BUILTIN_MODELS_BY_AGENT, type AgentType } from "@/lib/api/providers";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 import { useProviders } from "@/lib/hooks/useProviders";
 
@@ -54,10 +54,16 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
   const providers = useProviders();
   const list = useListProviderModels();
 
-  const wire = WIRE_BY_AGENT[agentKey];
+  // The active connection for this agent is matched by its compatible-agents set
+  // (not its wire), so a connection the user routed to this agent shows up even if
+  // its endpoint speaks a different wire (the agnes case: an openai gateway →
+  // Claude Code) — consistent with the Agent Overview picker.
   const activeConnection = useMemo(
-    () => (providers.data ?? []).find((p) => p.protocol === wire && p.is_active) ?? null,
-    [providers.data, wire],
+    () =>
+      (providers.data ?? []).find(
+        (p) => (p.compatible_agents ?? []).includes(agentKey as AgentType) && p.is_active,
+      ) ?? null,
+    [providers.data, agentKey],
   );
 
   const suggestions = useMemo(() => {
@@ -79,11 +85,13 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
   // Pull the connection's catalogue once, the first time the dropdown is opened.
   // Best-effort: a connection that can't list models just yields nothing.
   const introspect = () => {
-    if (introspected.current || !wire || !activeConnection) return;
+    if (introspected.current || !activeConnection) return;
     introspected.current = true;
     list.mutate(
       {
-        provider: wire,
+        // Introspect with the connection's OWN wire (how to call its endpoint),
+        // not the agent's — they can differ (the agnes case).
+        provider: activeConnection.protocol,
         base_url: activeConnection.base_url,
         credential_ref: activeConnection.credential_ref,
       },

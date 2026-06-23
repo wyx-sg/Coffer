@@ -1,32 +1,29 @@
 // components/settings/ConnectionCard.tsx — one LLM-connection row on the
-// connections page (spec 011). Shows name + status chips + wire/model/base_url
-// and the per-row actions: switch active, edit, delete. The internal-engine
-// selection lives in its own section (InternalEngineSettings), not per-card.
-// Extracted from LlmConnectionsPage to keep that page within its size budget;
-// purely presentational (all mutations are passed in as callbacks).
+// connections page (spec 011). Shows name + active chip + wire/base_url and the
+// connection's compatible agents, plus the per-row edit / delete actions. There
+// is NO per-row "switch" — activation is per-agent and lives on the Agent detail
+// → Overview tab; this page is purely the connection library. The internal-engine
+// selection lives in its own section (InternalEngineSettings). Purely
+// presentational (all mutations are passed in as callbacks).
 import { useTranslation } from "react-i18next";
 import { Check, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { Provider } from "@/lib/api/providers";
+import type { AgentType, Provider } from "@/lib/api/providers";
 
 interface Props {
   provider: Provider;
-  activatePending: boolean;
   deletePending: boolean;
-  onActivate: (name: string) => void;
   onEdit: (p: Provider) => void;
   onDelete: (p: Provider) => void;
 }
 
-export function ConnectionCard({
-  provider: p,
-  activatePending,
-  deletePending,
-  onActivate,
-  onEdit,
-  onDelete,
-}: Props) {
+const AGENT_LABEL_KEY: Record<AgentType, string> = {
+  claude_code: "settings.connections.agentClaudeCode",
+  codex: "settings.connections.agentCodex",
+};
+
+export function ConnectionCard({ provider: p, deletePending, onEdit, onDelete }: Props) {
   const { t } = useTranslation();
   return (
     <Card className="paper-card">
@@ -40,23 +37,20 @@ export function ConnectionCard({
                 {t("settings.connections.active")}
               </span>
             )}
+            {/* Which agents this connection projects into (the compatible set). */}
+            {(p.compatible_agents ?? []).map((a) => (
+              <span
+                key={a}
+                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+              >
+                {t(AGENT_LABEL_KEY[a])}
+              </span>
+            ))}
           </div>
           <p className="truncate text-xs text-muted-foreground">
             {p.protocol} · {p.base_url}
           </p>
         </div>
-        {/* Ollama is internal-only — never projected to an agent, so it has no
-            per-wire "Switch" action. */}
-        {p.protocol !== "ollama" && !p.is_active && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={activatePending}
-            onClick={() => onActivate(p.name)}
-          >
-            {t("settings.connections.switch")}
-          </Button>
-        )}
         <Button
           variant="ghost"
           size="sm"

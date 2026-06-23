@@ -164,7 +164,9 @@ def test_activate_writes_claude_settings(tmp_path, monkeypatch):
         assert r.status_code == 200, r.text
         assert r.json()["projected"] == ["cc"]
         data = json.loads((cfg / "settings.json").read_text())
-        assert data["apiKeyHelper"] == "coffer provider key --wire anthropic"
+        # apiKeyHelper names THIS connection (per-connection key resolution), so
+        # the projected agent always reads exactly the activated connection's key.
+        assert data["apiKeyHelper"] == "coffer provider key --connection acme"
         assert data["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
         # The agent is unbound (no per-agent model) → no model env is written, so
         # Claude Code runs on its OWN default model (spec 011 E3/E4).
@@ -311,7 +313,7 @@ def test_switch_preserves_keys_and_backs_up(tmp_path, monkeypatch):
         c.post("/api/v1/providers/acme/activate")
         data = json.loads((cfg / "settings.json").read_text())
         assert data["theme"] == "dark"  # unrelated key preserved
-        assert data["apiKeyHelper"] == "coffer provider key --wire anthropic"
+        assert data["apiKeyHelper"] == "coffer provider key --connection acme"
         assert (cfg / "settings.json.bak").exists()  # prior version backed up
 
 
@@ -342,6 +344,47 @@ def test_resolve_active_key(tmp_path, monkeypatch):
         r = c.get("/api/v1/providers/active-key/anthropic")
         assert r.status_code == 200, r.text
         assert r.json()["value"] == "sk-the-key"
+
+
+@pytest.mark.acceptance(
+    spec="011-provider-switching",
+    scenario="route an openai-compatible connection to Claude Code via compatible_agents",
+)
+def test_openai_connection_compatible_with_claude_code(tmp_path, monkeypatch):
+    # The agnes case: an openai-wire gateway the user routes to Claude Code. The
+    # projection writer is chosen by AGENT type, so it writes Claude's settings.json
+    # (anthropic shape) with an apiKeyHelper that names THIS connection — the key
+    # is resolved per-connection, never by a wire+active guess.
+    app = _app(tmp_path, monkeypatch, 59890)
+    cfg = _agent_dir(tmp_path)
+    with _client(app) as c:
+        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        r = c.post(
+            "/api/v1/providers",
+            json={
+                "name": "agnes",
+                "protocol": "openai",
+                "base_url": "https://agnes/v1",
+                "secret_value": "sk-agnes",
+                "compatible_agents": ["claude_code"],
+            },
+        )
+        assert r.status_code == 201, r.text
+        assert r.json()["compatible_agents"] == ["claude_code"]
+
+        act = c.post("/api/v1/providers/agnes/activate")
+        assert act.status_code == 200, act.text
+        assert act.json()["projected"] == ["cc"]
+        data = json.loads((cfg / "settings.json").read_text())
+        assert data["apiKeyHelper"] == "coffer provider key --connection agnes"
+        assert data["env"]["ANTHROPIC_BASE_URL"] == "https://agnes/v1"
+
+        # The projected helper fetches exactly agnes's key by name.
+        key = c.get("/api/v1/providers/agnes/key")
+        assert key.status_code == 200, key.text
+        assert key.json()["value"] == "sk-agnes"
+        # An absent connection's key is a 404.
+        assert c.get("/api/v1/providers/nope/key").status_code == 404
 
 
 @pytest.mark.acceptance(

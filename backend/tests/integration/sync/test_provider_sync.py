@@ -67,6 +67,7 @@ async def test_provider_round_trips_through_sync(tmp_path):
         "protocol": "openai",
         "base_url": "https://gw/v1",
         "credential_ref": "provider/acme/key",
+        "compatible_agents": None,
         "is_active": True,
         "internal_default": False,
     }

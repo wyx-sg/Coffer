@@ -15,6 +15,11 @@ Pydantic v2 `BaseModel`。这是存储在 Resource 行上的同步 `config` 字�
 > `wire_api` **移除**；手动 `wire_format` 改为**探测**出的 `protocol`。模型在使用处
 > （Agent 绑定 / 内部默认 / 聊天）现选，不在连接上。
 
+> **修订 2026-06-23（F1、F4）**：新增 `compatible_agents: list[str] | None` 字段
+> （`AgentType` 值；`null` ⇒ wire 默认），决定连接投射到哪些 agent，与 `protocol` 解耦。
+> `is_active` 现按 **agent 类型**作用域（每个 agent 至多一条激活连接），不再按 protocol。该字段
+> 以纯字符串持有，使本领域模块不依赖 agent kind（由应用层在投影处再 hydrate 成 `AgentType`）。
+
 | 字段 | 类型 | 约束 / 说明 |
 |---|---|---|
 | `protocol` | `Protocol` | **探测**得出、非用户输入；`"anthropic"`、`"openai"`、`"ollama"` 或 `"unknown"`。create/edit 时探测 endpoint 得出；只是兼容性提示，不是投射门控。`ollama` 仅供内部。`unknown` ⇒ 对所有 agent 显示（用户决定）。 |

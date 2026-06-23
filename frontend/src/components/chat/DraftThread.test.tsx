@@ -26,6 +26,7 @@ const activeConnection = {
   protocol: "anthropic",
   base_url: "https://api.anthropic.com",
   credential_ref: "ref",
+  compatible_agents: ["claude_code"],
   is_active: true,
   internal_default: false,
   enabled: true,

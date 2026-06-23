@@ -25,10 +25,18 @@ def add(
     credential_ref: str | None = typer.Option(
         None, "--credential-ref", help="Reuse an existing credential ref instead of --secret"
     ),
+    compatible: list[str] | None = typer.Option(  # noqa: B008 (typer pattern; list annotation)
+        None,
+        "--compatible",
+        help="Agent this connection projects into (claude_code | codex); repeatable. "
+        "Omit to use the wire default.",
+    ),
 ) -> None:
     """Create an LLM connection. For anthropic/openai/unknown supply exactly one
-    of --secret / --credential-ref; an ollama connection needs neither. The
-    model is chosen at the point of use, not on the connection (spec 011 E3)."""
+    of --secret / --credential-ref; an ollama connection needs neither. Pass
+    --compatible to route the connection to specific agents (e.g. an openai
+    gateway to claude_code). The model is chosen at the point of use, not on the
+    connection (spec 011 E3)."""
     body: dict[str, object] = {
         "name": name,
         "protocol": protocol,
@@ -38,6 +46,8 @@ def add(
         body["secret_value"] = secret
     if credential_ref is not None:
         body["credential_ref"] = credential_ref
+    if compatible:
+        body["compatible_agents"] = compatible
 
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -164,14 +174,28 @@ def internal_default(name: str = typer.Argument(..., help="Connection to use int
 
 @app.command("key")
 def key(
-    wire: str = typer.Option(..., "--wire", help="Wire format: anthropic | openai"),
+    connection: str | None = typer.Option(
+        None, "--connection", help="Print this specific connection's key (the projected helper)"
+    ),
+    wire: str | None = typer.Option(
+        None, "--wire", help="Back-compat: print the key active for a wire (anthropic | openai)"
+    ),
 ) -> None:
-    """Print the active provider's API key for a wire (Claude apiKeyHelper)."""
+    """Print a provider's API key for Claude Code's apiKeyHelper. Prefer
+    --connection <name> (what Coffer projects); --wire is the legacy form that
+    resolves whichever connection is active for that wire's agent."""
+    if connection:
+        path, missing = f"/providers/{connection}/key", f"no key for connection {connection!r}"
+    elif wire:
+        path, missing = f"/providers/active-key/{wire}", f"no active provider for wire {wire!r}"
+    else:
+        typer.echo("specify --connection <name> or --wire <wire>", err=True)
+        raise typer.Exit(6)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/providers/active-key/{wire}")
+        r = c.get(path)
         if r.status_code == 404:
-            typer.echo(f"no active provider for wire {wire!r}", err=True)
+            typer.echo(missing, err=True)
             raise typer.Exit(4)
         r.raise_for_status()
     # Raw value only — apiKeyHelper consumes stdout as the token.
