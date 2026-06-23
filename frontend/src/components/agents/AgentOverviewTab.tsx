@@ -1,14 +1,14 @@
 // frontend/src/components/agents/AgentOverviewTab.tsx — the agent detail page's
 // Overview tab: type + config-dir summary plus this agent's LLM connection and
-// its per-agent model binding. The agent picks its connection (per-wire
-// single-active projection via `activate`) and its OWN model(s) — the model
-// lives on the agent binding now, not the connection (spec 011 amendment
-// 2026-06-22b). Claude Code exposes two slots (primary + fast); Codex one.
-// Picking a model PATCHes the agent binding, then re-activates the connection to
-// re-project. The agent's wire is fixed by its type; ollama is internal-only.
-import { useMemo, useState } from "react";
+// its per-agent model binding. Picking a connection/model is a DRAFT — the user
+// stages a choice, must «测试连接», then «确认切换» to apply it (spec 011 amendment
+// 2026-06-23c). The draft → test → confirm state machine lives in
+// useAgentConnectionDraft; this file is presentation only. Claude Code exposes two
+// model slots (primary + fast); Codex one.
 import { useTranslation } from "react-i18next";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,78 +19,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { AgentOut } from "@/lib/api/agents";
-import { WIRE_BY_AGENT } from "@/lib/api/providers";
-import { usePatchAgent } from "@/lib/hooks/useAgents";
-import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
-import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
-
-// Radix forbids an empty value, so the "use built-in login" option is a token.
-const BUILTIN = "__builtin__";
+import { BUILTIN, useAgentConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
 
 export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
-  const wire = WIRE_BY_AGENT[agent.type];
-
-  const providers = useProviders();
-  const activate = useActivateProvider();
-  const useBuiltin = useUseBuiltinProvider();
-  const patchAgent = usePatchAgent();
-  const list = useListProviderModels();
-
-  const [fetched, setFetched] = useState<string[]>([]);
-
-  // Filter by the connection's explicit compatible-agents set (not its wire), so
-  // a connection the user routed to this agent type shows up even if its endpoint
-  // speaks a different wire (the agnes case: an openai gateway → Claude Code).
-  const compatible = useMemo(
-    () => (providers.data ?? []).filter((p) => (p.compatible_agents ?? []).includes(agent.type)),
-    [providers.data, agent.type],
-  );
-  const active = useMemo(() => compatible.find((p) => p.is_active) ?? null, [compatible]);
-
-  const models = useMemo(() => {
-    const out: string[] = [];
-    // Seed the agent's bound model(s) so a correctly-bound agent shows them
-    // before the dropdown is opened (introspect populates the rest on open).
-    // The connection no longer carries a model (spec 011 E3).
-    for (const m of [agent.model, agent.fast_model]) if (m && !out.includes(m)) out.push(m);
-    for (const m of fetched) if (!out.includes(m)) out.push(m);
-    return out;
-  }, [agent.model, agent.fast_model, fetched]);
-
-  const introspect = () => {
-    if (!active) return;
-    // Introspect with the connection's OWN wire (how to call its endpoint), not
-    // the agent's — they can differ (an openai gateway routed to Claude Code).
-    list.mutate(
-      { provider: active.protocol, base_url: active.base_url, credential_ref: active.credential_ref },
-      { onSuccess: (r) => setFetched(r.models) },
-    );
-  };
-
-  const onPickConnection = (name: string) => {
-    setFetched([]);
-    if (name === BUILTIN) {
-      useBuiltin.mutate(wire);
-      return;
-    }
-    activate.mutate(name);
-  };
-
-  // Bind a model on THIS agent, then re-activate so projection re-reads it.
-  const reproject = () => active && activate.mutate(active.name);
-  const bindPrimary = (model: string) =>
-    patchAgent.mutate({ name: agent.name, body: { model } }, { onSuccess: reproject });
-  const bindFast = (fast: string) =>
-    patchAgent.mutate({ name: agent.name, body: { fast_model: fast } }, { onSuccess: reproject });
-
-  // The model lives on the per-agent binding (spec 011 E3) — not the connection.
-  // When the agent is on the built-in login (no active Coffer connection) Coffer
-  // does not override its model, so the model slots show empty + disabled.
-  const usingBuiltin = active === null;
-  const primaryModel = usingBuiltin ? "" : (agent.model ?? "");
-  const fastModel = usingBuiltin ? "" : (agent.fast_model ?? "");
-  const busy = activate.isPending || patchAgent.isPending;
+  const c = useAgentConnectionDraft(agent);
 
   return (
     <Card>
@@ -107,21 +40,18 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
 
           {/* The connection dropdown always renders — even with no configured
               connections it defaults to the built-in login, never an empty
-              "no connection" state. */}
+              "no connection" state. Picking is a draft; nothing applies until
+              «确认切换». */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="agent-connection">{t("agents.connection.label")}</Label>
-              <Select
-                value={active?.name ?? BUILTIN}
-                onValueChange={onPickConnection}
-                disabled={activate.isPending || useBuiltin.isPending}
-              >
+              <Select value={c.draftConn} onValueChange={c.pickConnection} disabled={c.busy}>
                 <SelectTrigger id="agent-connection" className="text-sm">
                   <SelectValue placeholder={t("agents.connection.none")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={BUILTIN}>{t("agents.connection.builtin")}</SelectItem>
-                  {compatible.map((p) => (
+                  {c.compatible.map((p) => (
                     <SelectItem key={p.name} value={p.name}>
                       {p.name}
                     </SelectItem>
@@ -133,16 +63,16 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
             <div className="space-y-1.5">
               <Label htmlFor="agent-model">{t("agents.connection.model")}</Label>
               <Select
-                value={primaryModel}
-                onValueChange={bindPrimary}
-                onOpenChange={(open) => open && introspect()}
-                disabled={usingBuiltin || busy}
+                value={c.draftModel}
+                onValueChange={c.pickModel}
+                onOpenChange={(open) => open && c.introspect()}
+                disabled={c.modelsDisabled}
               >
                 <SelectTrigger id="agent-model" className="text-sm">
                   <SelectValue placeholder={t("agents.connection.none")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {models.map((m) => (
+                  {c.models.map((m) => (
                     <SelectItem key={m} value={m}>
                       {m}
                     </SelectItem>
@@ -153,20 +83,20 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
 
             {/* Claude Code's small/fast slot (ANTHROPIC_SMALL_FAST_MODEL); Codex
                 has no second slot. */}
-            {wire === "anthropic" && (
+            {c.wire === "anthropic" && (
               <div className="space-y-1.5">
                 <Label htmlFor="agent-fast-model">{t("agents.connection.fastModel")}</Label>
                 <Select
-                  value={fastModel}
-                  onValueChange={bindFast}
-                  onOpenChange={(open) => open && introspect()}
-                  disabled={usingBuiltin || busy}
+                  value={c.draftFast}
+                  onValueChange={c.pickFast}
+                  onOpenChange={(open) => open && c.introspect()}
+                  disabled={c.modelsDisabled}
                 >
                   <SelectTrigger id="agent-fast-model" className="text-sm">
                     <SelectValue placeholder={t("agents.connection.none")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {models.map((m) => (
+                    {c.models.map((m) => (
                       <SelectItem key={m} value={m}>
                         {m}
                       </SelectItem>
@@ -176,6 +106,47 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
               </div>
             )}
           </div>
+
+          {/* Test → confirm: a custom connection must be tested before it can be
+              switched to; built-in confirms straight away. */}
+          <div className="flex flex-wrap items-center gap-3">
+            {!c.draftIsBuiltin && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={c.runTest}
+                disabled={!c.draftModel || c.testPending}
+              >
+                {c.testPending && <Loader2 className="mr-1 size-3.5 animate-spin" />}
+                {t("settings.models.testConnection")}
+              </Button>
+            )}
+            <Button type="button" size="sm" onClick={c.confirm} disabled={!c.canConfirm || c.busy}>
+              {c.busy ? t("common.saving") : t("agents.connection.confirm")}
+            </Button>
+            {c.testResult && (
+              <span
+                role="status"
+                className={`flex items-center gap-1 text-xs ${
+                  c.testResult.ok ? "text-green-600" : "text-destructive"
+                }`}
+              >
+                {c.testResult.ok ? (
+                  <CheckCircle2 className="size-3.5" />
+                ) : (
+                  <XCircle className="size-3.5" />
+                )}
+                {c.testResult.message}
+              </span>
+            )}
+            {c.dirty && !c.draftIsBuiltin && !c.testResult?.ok && (
+              <span className="text-xs text-muted-foreground">
+                {t("agents.connection.testFirst")}
+              </span>
+            )}
+          </div>
+
           <p className="text-xs text-muted-foreground">{t("agents.connection.manage")}</p>
         </div>
       </CardContent>

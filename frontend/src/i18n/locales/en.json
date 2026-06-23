@@ -707,6 +707,8 @@
       "builtin": "Use built-in (agent's own login)",
       "none": "No compatible connection",
       "empty": "No connection for this agent yet.",
+      "confirm": "Confirm switch",
+      "testFirst": "Test the connection first — confirm is enabled once it passes",
       "manage": "Manage connections in Settings → LLM Connections",
       "customModel": "Custom…",
       "customLabel": "Custom model id",
