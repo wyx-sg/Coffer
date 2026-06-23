@@ -12,6 +12,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TableCell, TableHead } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 /**
  * Row-selection state for DataTable. `keys` is the persistent set of selected
@@ -83,14 +84,16 @@ export function SelectAllHeadCell({
   indeterminate,
   ariaLabel,
   onToggle,
+  className,
 }: {
   checked: boolean;
   indeterminate: boolean;
   ariaLabel: string;
   onToggle: () => void;
+  className?: string;
 }) {
   return (
-    <TableHead className="h-10 w-10">
+    <TableHead className={cn("h-10 w-10", className)}>
       <Checkbox
         checked={checked}
         indeterminate={indeterminate}
