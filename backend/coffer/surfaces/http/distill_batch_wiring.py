@@ -75,14 +75,25 @@ async def start_distill_batch(
     async def mark_distilled(agent: str, session_id: str, sha: str) -> None:
         await repo.mark_distilled(agent, session_id, sha, datetime.now(tz=UTC))
 
+    # Memoize the content hash by (path, mtime_ns, size) so the list view's
+    # staleness check (which hashes every distilled session, possibly several MB,
+    # on each 2s poll) re-reads a transcript only when it has actually changed.
+    sha_cache: dict[str, tuple[int, int, str]] = {}
+
     def session_sha(path: str) -> str:
-        return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+        st = os.stat(path)
+        cached = sha_cache.get(path)
+        if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+            return cached[2]
+        sha = hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+        sha_cache[path] = (st.st_mtime_ns, st.st_size, sha)
+        return sha
 
     svc = DistillBatchService(
         runner=runner,
         registry=registry,
         list_sessions=list_sessions,
-        distilled_ids=repo.distilled_session_ids,
+        distilled_shas=repo.distilled_session_shas,
         distill=distill,
         is_distilled=repo.is_distilled,
         mark_distilled=mark_distilled,

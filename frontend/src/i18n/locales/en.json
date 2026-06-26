@@ -788,6 +788,7 @@
       "colStatus": "Distill",
       "statusNever": "Not distilled",
       "statusDone": "Distilled",
+      "statusStale": "Needs re-distill",
       "statusQueued": "Queued",
       "statusRunning": "Distilling…",
       "statusError": "Failed",

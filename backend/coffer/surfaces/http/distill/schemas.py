@@ -23,7 +23,7 @@ class TranscriptSessionSummary(BaseModel):
     source_path: str
     distill_status: str | None = Field(
         default=None,
-        description="Per-session distill status: done | never | queued | running | error.",
+        description="Per-session distill status: done | stale | never | queued | running | error.",
     )
 
 

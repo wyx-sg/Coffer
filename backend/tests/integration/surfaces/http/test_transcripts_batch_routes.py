@@ -42,16 +42,24 @@ class _FakeListService:
 
 
 class _FakeBatch:
-    def __init__(self, *, inflight: dict[str, InflightEntry] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        inflight: dict[str, InflightEntry] | None = None,
+        derived: str = "done",
+    ) -> None:
         self._inflight = inflight or {}
+        self._derived = derived
         self.last_enqueue_all: dict[str, object] | None = None
         self.last_enqueue_sessions: list[str] | None = None
 
     def inflight(self, _agent: str) -> dict[str, InflightEntry]:
         return self._inflight
 
-    async def derived_statuses(self, _agent: str, session_ids: list[str]) -> dict[str, str]:
-        return dict.fromkeys(session_ids, "done")
+    async def derived_statuses(
+        self, _agent: str, sessions: list[TranscriptSession]
+    ) -> dict[str, str]:
+        return {s.session_id: self._derived for s in sessions}
 
     async def enqueue_all(self, _agent: str, **kw: object) -> EnqueueResult:
         self.last_enqueue_all = dict(kw)
@@ -80,6 +88,15 @@ def test_list_overlays_inflight_over_derived() -> None:
         r = c.get("/api/v1/agents/a/transcripts", headers=_HEADERS)
     assert r.status_code == 200, r.text
     assert r.json()["sessions"][0]["distill_status"] == "running"
+
+
+def test_list_surfaces_stale_from_derived() -> None:
+    # A session distilled at an older content sha surfaces as "stale".
+    batch = _FakeBatch(derived="stale")
+    with TestClient(_app(batch)) as c:
+        r = c.get("/api/v1/agents/a/transcripts", headers=_HEADERS)
+    assert r.status_code == 200, r.text
+    assert r.json()["sessions"][0]["distill_status"] == "stale"
 
 
 def test_distill_batch_all_returns_counts_and_202() -> None:

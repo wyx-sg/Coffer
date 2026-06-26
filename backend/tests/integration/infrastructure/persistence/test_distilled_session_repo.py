@@ -44,6 +44,18 @@ async def test_is_distilled_discriminates_by_agent_and_session(tmp_path):
     await engine.dispose()
 
 
+async def test_distilled_session_shas_groups_every_sha_by_session(tmp_path):
+    repo, engine = await _repo(tmp_path)
+    when = datetime.now(tz=UTC)
+    await repo.mark_distilled("codex", "s1", "sha-old", when)
+    await repo.mark_distilled("codex", "s1", "sha-new", when)  # s1 re-distilled
+    await repo.mark_distilled("codex", "s2", "sha-x", when)
+    await repo.mark_distilled("claude_code", "s3", "sha-other", when)  # other agent
+    shas = await repo.distilled_session_shas("codex")
+    assert shas == {"s1": {"sha-old", "sha-new"}, "s2": {"sha-x"}}
+    await engine.dispose()
+
+
 async def test_duplicate_mark_is_a_noop(tmp_path):
     repo, engine = await _repo(tmp_path)
     sha = "dup-sha"
