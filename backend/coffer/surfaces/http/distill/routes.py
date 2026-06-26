@@ -78,8 +78,9 @@ async def list_transcripts(
     reader's mtime-aware cache, so an agent with thousands of past sessions
     stays responsive. Paged by ``limit``/``offset`` against the matched total.
 
-    Each row carries a ``distill_status``: ``done``/``never`` (from the ledger)
-    overlaid with any in-flight ``queued``/``running``/``error`` state.
+    Each row carries a ``distill_status``: ``done``/``stale``/``never`` (from the
+    ledger, comparing the live transcript sha) overlaid with any in-flight
+    ``queued``/``running``/``error`` state.
     """
     try:
         total, sessions = await svc.list_sessions(
@@ -106,8 +107,7 @@ async def list_transcripts(
     derived: dict[str, str] = {}
     inflight = {}
     if batch is not None:
-        session_ids = [s.session_id for s in sessions]
-        derived = await batch.derived_statuses(name, session_ids)
+        derived = await batch.derived_statuses(name, sessions)
         inflight = batch.inflight(name)
 
     def _status(session_id: str) -> str | None:

@@ -25,9 +25,15 @@ from coffer.domain.distill.session import TranscriptSession
 OP_TYPE = "distill"
 _SEP = "\x00"  # agent / session_id separator in registry keys (neither contains NUL)
 
-#: Derived list statuses — cheap (ledger-only). In-flight states (queued /
-#: running / error) are overlaid from the registry by the surface layer.
+#: Derived list statuses. In-flight states (queued / running / error) are
+#: overlaid from the registry by the surface layer.
+#:
+#: ``done`` vs ``stale`` is decided by comparing the transcript's CURRENT
+#: content sha against the ledger: a session distilled at an older sha that has
+#: since gained messages reports ``stale``, not ``done`` — so a growing session
+#: never masquerades as fully captured.
 STATUS_DONE = "done"
+STATUS_STALE = "stale"
 STATUS_NEVER = "never"
 
 
@@ -64,7 +70,7 @@ class DistillBatchService:
         runner: AsyncOpRunner,
         registry: AsyncOpRegistry,
         list_sessions: SessionLister,
-        distilled_ids: Callable[[str], Awaitable[set[str]]],
+        distilled_shas: Callable[[str], Awaitable[dict[str, set[str]]]],
         distill: Callable[[str, str], Awaitable[None]],
         is_distilled: Callable[[str, str, str], Awaitable[bool]],
         mark_distilled: Callable[[str, str, str], Awaitable[None]],
@@ -74,7 +80,7 @@ class DistillBatchService:
         self._runner = runner
         self._registry = registry
         self._list_sessions = list_sessions
-        self._distilled_ids = distilled_ids
+        self._distilled_shas = distilled_shas
         self._distill = distill
         self._is_distilled = is_distilled
         self._mark_distilled = mark_distilled
@@ -91,10 +97,31 @@ class DistillBatchService:
         snap = self._registry.snapshot(OP_TYPE, prefix=prefix)
         return {key[len(prefix) :]: entry for key, entry in snap.items()}
 
-    async def derived_statuses(self, agent: str, session_ids: list[str]) -> dict[str, str]:
-        """Map each session_id to ``done`` (in the ledger) or ``never``."""
-        done = await self._distilled_ids(agent)
-        return {sid: (STATUS_DONE if sid in done else STATUS_NEVER) for sid in session_ids}
+    async def derived_statuses(
+        self, agent: str, sessions: list[TranscriptSession]
+    ) -> dict[str, str]:
+        """Classify each session as ``done`` / ``stale`` / ``never``.
+
+        ``done`` means the transcript's CURRENT content sha is in the ledger;
+        ``stale`` means the session was distilled before but its content has
+        changed since (new messages); ``never`` means no ledger row at all.
+        When the transcript can't be read we report ``done`` rather than invent
+        a staleness we can't verify (it was distilled at least once).
+        """
+        shas_by_session = await self._distilled_shas(agent)
+        out: dict[str, str] = {}
+        for s in sessions:
+            stored = shas_by_session.get(s.session_id)
+            if not stored:
+                out[s.session_id] = STATUS_NEVER
+                continue
+            try:
+                current = self._session_sha(s.source_path)
+            except OSError:
+                out[s.session_id] = STATUS_DONE
+                continue
+            out[s.session_id] = STATUS_DONE if current in stored else STATUS_STALE
+        return out
 
     async def enqueue_sessions(self, agent: str, session_ids: list[str]) -> EnqueueResult:
         """Enqueue an explicit set of sessions (skip already-distilled)."""

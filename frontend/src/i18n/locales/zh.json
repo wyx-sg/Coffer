@@ -788,6 +788,7 @@
       "colStatus": "蒸馏",
       "statusNever": "未蒸馏",
       "statusDone": "已蒸馏",
+      "statusStale": "需重新蒸馏",
       "statusQueued": "排队中",
       "statusRunning": "蒸馏中…",
       "statusError": "失败",
