@@ -34,6 +34,40 @@ _logger = logging.getLogger(__name__)
 # imperceptible, large enough not to busy-spin.
 _STARTED_POLL_INTERVAL = 0.02
 
+# Ceiling for the RLIMIT_NOFILE soft limit we raise at startup. Comfortably
+# above what a healthy daemon needs (sqlite + uvicorn socket + channel
+# listeners + ~2 pipe fds per live stdio upstream) so transient spikes never
+# reach it, without asking for an unbounded fd table.
+_FD_SOFT_LIMIT_TARGET = 8192
+
+
+def _raise_fd_soft_limit() -> None:
+    """Raise this daemon's RLIMIT_NOFILE soft limit toward its hard limit.
+
+    Launched from a macOS GUI app via launchd, the daemon inherits a soft
+    file-descriptor limit of ~256. That ceiling is reachable in normal use, and
+    any fd leak (see mcp/subprocess.py ``_cleanup``) turns it into a hard crash
+    where every subprocess spawn and socket accept fails with
+    ``OSError: [Errno 24] Too many open files`` — surfaced to the UI as the
+    opaque "upstream init failed: OSError". Lift the soft limit to the hard
+    limit (capped at ``_FD_SOFT_LIMIT_TARGET``) so the daemon has real headroom.
+    POSIX-only and best-effort: never let an rlimit hiccup stop the daemon from
+    booting.
+    """
+    try:
+        import resource
+    except ImportError:  # non-POSIX platform — no RLIMIT_NOFILE to raise
+        return
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        cap = _FD_SOFT_LIMIT_TARGET
+        target = cap if hard == resource.RLIM_INFINITY else min(hard, cap)
+        if soft != resource.RLIM_INFINITY and soft < target:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
+            _logger.info("raised RLIMIT_NOFILE soft limit %s -> %s", soft, target)
+    except (ValueError, OSError) as exc:  # pragma: no cover - platform dependent
+        _logger.warning("could not raise RLIMIT_NOFILE soft limit: %r", exc)
+
 
 def _install_signal_handlers() -> None:
     def _term(_sig: int, _frame: object) -> None:
@@ -84,6 +118,7 @@ def main() -> None:
     # (vec_available) and asserted by the bundle smoke test against the running
     # frozen binary — not via an argv probe here, so this module never imports
     # the knowledge engine (engine-confinement contract).
+    _raise_fd_soft_limit()
     _install_signal_handlers()
     # ADR-006: probe + bind happen under one flock (acquire_or_existing). If a
     # daemon is already reachable, sock is None and we exit cleanly so the
