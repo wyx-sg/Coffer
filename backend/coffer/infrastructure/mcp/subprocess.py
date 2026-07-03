@@ -220,8 +220,26 @@ class StdioUpstreamConnection:
 
     async def _cleanup(self) -> None:
         if self._exit_stack is not None:
+            # aclose() drives stdio_client's teardown, whose FINAL step
+            # (process.__aexit__ in the `async with (tg, process)`) is what
+            # actually closes the two daemon-side pipe fds — the child's stdin
+            # writer and stdout reader. That teardown is internally bounded but
+            # not instant: the SDK waits up to PROCESS_TERMINATION_TIMEOUT (2s)
+            # for the child to exit after stdin closes, then escalates
+            # SIGTERM→SIGKILL with its own 2s grace — ~4s worst case. The old 5s
+            # cap sat right on that edge, so under event-loop contention (several
+            # upstreams disposing at once, or a persistently-failing upstream the
+            # supervisor keeps retrying) asyncio.wait_for cancelled aclose()
+            # mid-teardown BEFORE process.__aexit__ ran, leaking both pipe fds
+            # every time. reap_pidfile below kills the child but never closes
+            # those daemon-side fds, so they accumulated (~100 leaks/week here)
+            # until the daemon hit RLIMIT_NOFILE and every spawn/accept failed
+            # with OSError [Errno 24] "Too many open files". 10s clears the SDK's
+            # ~4s internal budget with margin so the fds are released on the
+            # normal-but-slow path; the cap only trips for a truly wedged
+            # teardown (rare, and then RLIMIT_NOFILE headroom + reap cover it).
             with suppress(TimeoutError, asyncio.CancelledError, Exception):
-                await asyncio.wait_for(self._exit_stack.aclose(), timeout=5.0)
+                await asyncio.wait_for(self._exit_stack.aclose(), timeout=10.0)
             self._exit_stack = None
 
         # Belt-and-braces against leaked upstream processes (T-051). aclose()
@@ -237,7 +255,7 @@ class StdioUpstreamConnection:
         # await point after aclose(), or dispose()/evict() teardown trips
         # anyio's "cancel scope exited in a different task" during shutdown.
         # The only blocking case is a wedged child escalating SIGTERM→SIGKILL
-        # (~2s), on par with the per-upstream 5s aclose dispose() already
+        # (~2s), on par with the per-upstream aclose budget dispose() already
         # tolerates; the happy path returns immediately (PID already gone).
         for path in self._pid_files:
             reap_pidfile(path)

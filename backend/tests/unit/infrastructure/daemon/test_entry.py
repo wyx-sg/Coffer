@@ -199,6 +199,94 @@ def test_main_refuses_to_start_when_a_daemon_is_already_live(
     assert ran == [], "the server must NOT run when a daemon is already live"
 
 
+def test_raise_fd_soft_limit_lifts_soft_toward_capped_hard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A low inherited soft limit (macOS GUI/launchd gives ~256) is raised to
+    the target ceiling when the hard limit allows it."""
+    import resource
+
+    monkeypatch.setattr(resource, "getrlimit", lambda _which: (256, 10_000))
+    calls: list[tuple[int, tuple[int, int]]] = []
+    monkeypatch.setattr(resource, "setrlimit", lambda which, limits: calls.append((which, limits)))
+
+    entry._raise_fd_soft_limit()
+
+    # target = min(hard=10_000, cap=8192) = 8192; hard is left untouched.
+    assert calls == [(resource.RLIMIT_NOFILE, (entry._FD_SOFT_LIMIT_TARGET, 10_000))]
+
+
+def test_raise_fd_soft_limit_never_exceeds_hard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the hard limit is below the target ceiling, soft is raised only up
+    to hard — setrlimit would raise ValueError otherwise."""
+    import resource
+
+    monkeypatch.setattr(resource, "getrlimit", lambda _which: (256, 1024))
+    calls: list[tuple[int, int]] = []
+    monkeypatch.setattr(resource, "setrlimit", lambda _which, limits: calls.append(limits))
+
+    entry._raise_fd_soft_limit()
+
+    assert calls == [(1024, 1024)]
+
+
+def test_raise_fd_soft_limit_noops_when_already_high(monkeypatch: pytest.MonkeyPatch) -> None:
+    """If the inherited soft limit already clears the target, don't touch it
+    (never lower a generous limit)."""
+    import resource
+
+    monkeypatch.setattr(resource, "getrlimit", lambda _which: (9000, 10_000))
+    calls: list[object] = []
+    monkeypatch.setattr(resource, "setrlimit", lambda _which, limits: calls.append(limits))
+
+    entry._raise_fd_soft_limit()
+
+    assert calls == []
+
+
+def test_raise_fd_soft_limit_is_best_effort(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failing setrlimit must never stop the daemon from booting."""
+    import resource
+
+    monkeypatch.setattr(resource, "getrlimit", lambda _which: (256, 10_000))
+
+    def _boom(_which: int, _limits: tuple[int, int]) -> None:
+        raise OSError("operation not permitted")
+
+    monkeypatch.setattr(resource, "setrlimit", _boom)
+
+    entry._raise_fd_soft_limit()  # must not raise
+
+
+def test_main_raises_fd_soft_limit_before_serving(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """entry.main lifts the fd soft limit before it starts accepting work, so a
+    low inherited RLIMIT_NOFILE can't strangle spawns/accepts at runtime."""
+    _setup_home(tmp_path, monkeypatch)
+
+    from coffer.infrastructure.daemon import bootstrap
+
+    order: list[str] = []
+    monkeypatch.setattr(entry, "_raise_fd_soft_limit", lambda: order.append("fd"))
+
+    sock = _FakeSock(5)
+    monkeypatch.setattr(bootstrap, "acquire_or_existing", lambda: (object(), sock, lambda: None))
+
+    def _fake_run_server(_s: object, on_started: object) -> None:
+        order.append("serve")
+        on_started()  # type: ignore[operator]
+
+    monkeypatch.setattr(entry, "_run_server", _fake_run_server)
+    monkeypatch.setattr(entry, "_install_signal_handlers", lambda: None)
+    monkeypatch.setattr(bootstrap, "release", lambda: None)
+
+    entry.main()
+
+    assert order and order[0] == "fd", "fd soft limit must be raised before serving"
+    assert "serve" in order
+
+
 def test_entry_does_not_import_the_knowledge_engine() -> None:
     """entry.py is the frozen daemon entrypoint; importing the knowledge engine
     here would pull sqlite-vec into the daemon layer and break engine
