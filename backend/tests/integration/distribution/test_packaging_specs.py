@@ -120,6 +120,8 @@ def _collect_hidden_string_literals(tree: ast.AST) -> set[str]:
     [
         ("coffer-daemon.spec", "coffer/infrastructure/daemon/entry.py"),
         ("coffer-mcp-shim.spec", "coffer/surfaces/shim/main.py"),
+        ("coffer-hook.spec", "coffer/surfaces/hook/main.py"),
+        ("coffer-callback.spec", "coffer/surfaces/callback/__main__.py"),
     ],
 )
 def test_pyinstaller_spec_present_and_valid(spec_name: str, expected_target_module: str) -> None:
@@ -156,10 +158,11 @@ def test_tauri_externalbin_lists_both_binaries() -> None:
     tauri_conf = json.loads((_REPO / "desktop" / "tauri.conf.json").read_text())
     external_bins = tauri_conf["bundle"]["externalBin"]
     paths = {Path(p).name for p in external_bins}
-    assert "coffer-daemon" in paths, "tauri.conf.json bundle.externalBin must list coffer-daemon"
-    assert "coffer-mcp-shim" in paths, (
-        "tauri.conf.json bundle.externalBin must list coffer-mcp-shim"
-    )
+    # Every daemon-resolved sibling must be bundled — a missing entry ships an
+    # app where that capability silently can't spawn its child (coffer-callback
+    # was absent, so SeaTalk webhook ingress failed with a frozen-build error).
+    for expected in ("coffer-daemon", "coffer-mcp-shim", "coffer-hook", "coffer-callback"):
+        assert expected in paths, f"tauri.conf.json bundle.externalBin must list {expected}"
 
 
 def test_build_script_present_and_executable() -> None:
@@ -204,7 +207,12 @@ def test_pyinstaller_exe_names_match_tauri_externalbin() -> None:
     the Tauri build links the wrong sidecar — caught here at the static
     config layer instead of at install time on the user's machine."""
     spec_names: set[str] = set()
-    for spec_name in ("coffer-daemon.spec", "coffer-mcp-shim.spec"):
+    for spec_name in (
+        "coffer-daemon.spec",
+        "coffer-mcp-shim.spec",
+        "coffer-hook.spec",
+        "coffer-callback.spec",
+    ):
         tree = _parse_spec(_REPO / "backend" / spec_name)
         for exe in _find_calls(tree, "EXE"):
             name_kw = _get_kw(exe, "name")

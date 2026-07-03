@@ -177,16 +177,16 @@ jobs:
       - name: Install frontend deps
         working-directory: frontend
         run: npm ci
-      # Phase 8: tauri.conf.json bundle.externalBin requires the three
-      # sidecar binaries to exist at build time. The release workflow
-      # produces real PyInstaller builds; for the PR verify job we just
-      # need stubs so cargo tauri build accepts the externalBin
-      # references and links the bundle. Real binary coverage lives in
-      # release.yml.
+      # Phase 8: tauri.conf.json bundle.externalBin requires every sidecar
+      # binary to exist at build time. The release workflow produces real
+      # PyInstaller builds; for the PR verify job we just need stubs so cargo
+      # tauri build accepts the externalBin references and links the bundle.
+      # Real binary coverage lives in release.yml. Keep this list in sync with
+      # tauri.conf.json bundle.externalBin — a missing stub fails the build.
       - name: Stub sidecar binaries for tauri build
         run: |
           mkdir -p desktop/binaries
-          for b in coffer-daemon coffer-mcp-shim coffer-hook; do
+          for b in coffer-daemon coffer-mcp-shim coffer-hook coffer-callback; do
             printf '#!/bin/sh\nexit 0\n' > "desktop/binaries/${b}-x86_64-unknown-linux-gnu"
             chmod +x "desktop/binaries/${b}-x86_64-unknown-linux-gnu"
           done

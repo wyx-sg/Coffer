@@ -79,6 +79,9 @@ echo ">>> Building coffer (management CLI) for $TRIPLE"
 echo ">>> Building coffer-hook for $TRIPLE"
 ( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
     --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer-hook.spec )
+echo ">>> Building coffer-callback for $TRIPLE"
+( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
+    --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer-callback.spec )
 
 mkdir -p desktop/binaries
 
@@ -93,10 +96,12 @@ cp "dist/coffer-daemon${EXT}" "desktop/binaries/coffer-daemon-${TRIPLE}${EXT}"
 cp "dist/coffer-mcp-shim${EXT}" "desktop/binaries/coffer-mcp-shim-${TRIPLE}${EXT}"
 cp "dist/coffer${EXT}" "desktop/binaries/coffer-${TRIPLE}${EXT}"
 cp "dist/coffer-hook${EXT}" "desktop/binaries/coffer-hook-${TRIPLE}${EXT}"
+cp "dist/coffer-callback${EXT}" "desktop/binaries/coffer-callback-${TRIPLE}${EXT}"
 chmod +x "desktop/binaries/coffer-daemon-${TRIPLE}${EXT}" \
          "desktop/binaries/coffer-mcp-shim-${TRIPLE}${EXT}" \
          "desktop/binaries/coffer-${TRIPLE}${EXT}" \
-         "desktop/binaries/coffer-hook-${TRIPLE}${EXT}"
+         "desktop/binaries/coffer-hook-${TRIPLE}${EXT}" \
+         "desktop/binaries/coffer-callback-${TRIPLE}${EXT}"
 
 echo ""
 echo ">>> Built:"
