@@ -43,11 +43,13 @@ def test_channel_capabilities_carries_strategy_fields():
     assert (caps.supports_edit, caps.supports_typing) == (True, True)
     assert caps.max_message_chars == 4096
     assert caps.supports_buttons is False  # default off; transports opt in
+    assert caps.supports_media is False  # default off; media-capable transports opt in
     assert {f.name for f in fields(ChannelCapabilities)} == {
         "supports_edit",
         "supports_typing",
         "max_message_chars",
         "supports_buttons",
+        "supports_media",
     }
 
 
