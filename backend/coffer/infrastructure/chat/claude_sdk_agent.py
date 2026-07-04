@@ -243,6 +243,7 @@ class ClaudeSdkAgentAdapter:
         session_factory: SdkSessionFactory,
         on_session: SessionSink,
         env: dict[str, str] | None = None,
+        system_context: str | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -250,6 +251,7 @@ class ClaudeSdkAgentAdapter:
         self._session_factory = session_factory
         self._on_session = on_session
         self._env = env
+        self._system_context = system_context
 
     async def run_turn(
         self,
@@ -289,6 +291,15 @@ class ClaudeSdkAgentAdapter:
         )
         if self._env is not None:
             opts.env = self._env
+        if self._system_context:
+            # Tell a channel-driven agent it is bridged to a chat (be concise,
+            # no clickable dialogs) by appending to Claude Code's own preset
+            # prompt rather than replacing it.
+            opts.system_prompt = {
+                "type": "preset",
+                "preset": "claude_code",
+                "append": self._system_context,
+            }
         return opts
 
     async def _connect(self, prompt: str, *, resume: str | None) -> ClaudeSdkSession:

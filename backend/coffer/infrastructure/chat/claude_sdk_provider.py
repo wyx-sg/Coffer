@@ -17,6 +17,7 @@ from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.errors import AgentConfigRejected, ConversationNotFound
+from coffer.infrastructure.chat.adapter_support import channel_system_context
 from coffer.infrastructure.chat.claude_sdk_agent import (
     ClaudeSdkAgentAdapter,
     SdkSessionFactory,
@@ -82,12 +83,18 @@ class ClaudeSdkProvider:
                 conversation_id, replace(latest, session_id=session_id)
             )
 
+        # A channel-originated conversation drives the agent from a phone chat —
+        # tell it so (concise replies, no clickable dialogs) via a system-prompt
+        # append. Non-channel (web UI) turns leave the prompt untouched.
+        system_context = channel_system_context(conv.channel_name) if conv.channel_name else None
+
         return ClaudeSdkAgentAdapter(
             cwd=config.cwd,
             resume_session=config.session_id,
             extra={"model": config.model},
             session_factory=self._session_factory,
             on_session=_save_session,
+            system_context=system_context,
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

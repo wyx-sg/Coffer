@@ -327,6 +327,11 @@ status / notify`。
   文本命令相同的切换。点选从不配对；不支持的传输静默保持文本路径。这兑现了
   [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.zh.md) 的
   `ChannelCapabilities` 已预想的交互按钮能力（「show buttons?」）。
+- **FR-019**: 一个 channel 发起的 turn 会告诉 agent 它是被桥接到聊天 channel、
+  而非终端：agent 收到一条简短的 system-prompt 注记，携带 channel 名与移动聊天
+  指引——回复要简短，且它无法点击用户电脑上的权限/确认弹窗（用户可能不在电脑旁）。
+  这避免了终端尺寸的长回复和在无法点击的弹窗上无声干等。网页 UI 的 turn 不受
+  影响——注记只搭乘 `channel_name` 已设置的会话。
 
 ### Key Entities
 
@@ -586,6 +591,13 @@ status / notify`。
 - **Given** 一个带已存发送者身份的已配对 peer
 - **When** 一条消息以相同 chat id 但不同 sender id 到达
 - **Then** 不发回复，也不启动 turn
+
+### Scenario: the channel-driven agent is told it is on a chat channel
+
+- **Given** 一个 channel 发起的会话
+- **When** 从 channel 驱动一个 turn
+- **Then** agent 收到一条 system-prompt 注记，说明 channel 名、要求回复简短、
+  并告知它无法点击用户的系统弹窗；而网页 UI 会话不会收到这条注记
 
 ## Assumptions
 

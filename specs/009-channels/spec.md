@@ -376,6 +376,13 @@ status / notify`.
   realizes the interactive-button capability that
   [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)'s
   `ChannelCapabilities` anticipated ("show buttons?").
+- **FR-019**: A channel-originated turn tells the agent it is bridged to a chat
+  channel, not a terminal: the agent receives a short system-prompt note carrying
+  the channel name and mobile-chat guidance — keep replies concise, and it cannot
+  click permission or confirmation dialogs on the user's computer (they may be
+  away from it). This prevents terminal-sized replies and silent waits on
+  un-clickable dialogs. Web-UI turns are unaffected — the note rides only on a
+  conversation whose `channel_name` is set.
 
 ### Key Entities
 
@@ -648,6 +655,14 @@ status / notify`.
 - **Given** a peer paired with a stored sender identity
 - **When** a message arrives with the same chat id but a different sender id
 - **Then** no reply is sent and no turn is started
+
+### Scenario: the channel-driven agent is told it is on a chat channel
+
+- **Given** a channel-originated conversation
+- **When** a turn is driven from the channel
+- **Then** the agent receives a system-prompt note naming the channel and telling
+  it to keep replies concise and that it cannot click the user's OS dialogs,
+  while a web-UI conversation gets no such note
 
 ## Assumptions
 
