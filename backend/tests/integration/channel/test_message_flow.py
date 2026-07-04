@@ -96,12 +96,16 @@ async def test_turn_error_is_delivered_as_a_short_notice(env: ChannelEnv) -> Non
     assert env.processor.binding("tg") is not None
 
 
-async def test_non_text_message_gets_a_text_only_notice(env: ChannelEnv) -> None:
+async def test_empty_message_with_no_attachments_gets_an_unsupported_notice(
+    env: ChannelEnv,
+) -> None:
+    # A blank envelope with nothing downloadable (a sticker, a location) — a
+    # photo or file WOULD drive a turn, but there is nothing here.
     _resource, adapter = await env.paired_channel()
 
     await env.processor.on_message(inbound("tg", "owner", "   "))
 
-    assert adapter.texts() == ["⚠️ Only text messages are supported for now."]
+    assert adapter.texts() == ["⚠️ Unsupported message — send text, a photo, or a file."]
     assert await env.chat.list_conversations() == []
 
 

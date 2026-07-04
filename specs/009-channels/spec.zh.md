@@ -247,8 +247,9 @@ agent 的 turn-started 审计记录；在不能编辑消息的 channel 上观察
 - Telegram long polling 失去连接 → adapter 指数退避后恢复；重连后没有任何
   入站消息被重复处理（update offset 只在分发完成后提交）。
 - SeaTalk 发送端被限流（HTTP 429）→ 出站发送退避并重试。
-- 非文本的入站内容（图片、文件、语音）→ channel 回复说明本版本只支持
-  文本。
+- 入站图片和文件 → 下载并交给 agent 处理本回合（图片为视觉 agent 内联、任何
+  agent 都能拿到文件路径）。一条没有可下载内容的空消息（贴纸、位置）→ channel
+  回复说明需要文本、图片或文件。
 
 ## Requirements
 
@@ -332,6 +333,13 @@ status / notify`。
   指引——回复要简短，且它无法点击用户电脑上的权限/确认弹窗（用户可能不在电脑旁）。
   这避免了终端尺寸的长回复和在无法点击的弹窗上无声干等。网页 UI 的 turn 不受
   影响——注记只搭乘 `channel_name` 已设置的会话。
+- **FR-020**: 入站图片和文件驱动一个 turn。传输层把每个附件下载到 Coffer 管理的
+  媒体目录；bytes 绝不进 chat DB（持久化的用户消息保留 caption，没有则一条简短
+  注记）。本回合每个附件交给 agent adapter，由它按自己的原生形态物化——视觉 agent
+  （Claude Code）把图片内联为它直接看到的 base64 内容块、PDF 为 document 块；路径
+  原生 agent（Codex）与任何非视觉文件收到磁盘路径去打开。这保持历史精简、适配任意
+  文件类型、并可推广到未来模态（新类型是新 mime，不是新 schema）。见
+  [ADR-038](../../docs/decisions/ADR-038-channel-media.zh.md)。
 
 ### Key Entities
 
@@ -599,6 +607,20 @@ status / notify`。
 - **Then** agent 收到一条 system-prompt 注记，说明 channel 名、要求回复简短、
   并告知它无法点击用户的系统弹窗；而网页 UI 会话不会收到这条注记
 
+### Scenario: an inbound photo is downloaded and drives a turn
+
+- **Given** 一个已配对的 Telegram channel
+- **When** owner 发送一张图片（可带 caption）
+- **Then** 最大尺寸的图片被下载到媒体目录、作为附件挂在入站消息上，caption
+  成为消息文本
+
+### Scenario: an inbound image reaches a vision agent as an inline block
+
+- **Given** 一个携带图片附件的 turn
+- **When** Claude adapter 构建该 turn 的内容
+- **Then** 图片是一个 base64 `image` 内容块（非视觉文件则变成路径指针），因此
+  bytes 仅在本回合内联发送、绝不存进 chat 数据库
+
 ## Assumptions
 
 - 用户能创建 Telegram bot（BotFather）和 SeaTalk Open Platform app，并能
@@ -606,6 +628,7 @@ status / notify`。
   等）。
 - 对 SeaTalk，用户自行运行一条隧道（cloudflared、ngrok 或等价物）把公网
   URL 通到本地回调端口；Coffer 在 quickstart 中给出做法，但不管理隧道。
-- channel 承载文本对话；富媒体会收到一条礼貌的「只支持文本」回复。唯一的例外是
-  **命令选择卡片**：在 `supports_buttons` 的传输上，`/agent` 与 `/model` 可以把候选
-  渲染成交互按钮（FR-018）。
+- channel 承载文本以及入站的图片和文件（FR-020）：媒体被下载并交给 agent，而一条
+  没有可下载内容的空消息会收到礼貌的「发文本、图片或文件」回复。出站是文本；唯一的
+  富例外是**命令选择卡片**：在 `supports_buttons` 的传输上，`/agent` 与 `/model` 可以
+  把候选渲染成交互按钮（FR-018）。

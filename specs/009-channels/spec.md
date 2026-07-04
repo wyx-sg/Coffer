@@ -274,8 +274,10 @@ summary message after the turn on a channel that cannot edit messages.
   exponentially and resumes; no inbound message is double-processed after
   reconnect (update offset is committed only after dispatch).
 - SeaTalk sender rate limits (HTTP 429) → outbound sends back off and retry.
-- Non-text inbound content (images, files, voice) → the channel replies that
-  only text is supported in this version.
+- Inbound photos and files → downloaded and handed to the agent for the turn
+  (images inlined for a vision agent; any agent gets the file's path). An empty
+  message with nothing downloadable (a sticker, a location) → the channel replies
+  that it needs text, a photo, or a file.
 
 ## Requirements
 
@@ -383,6 +385,16 @@ status / notify`.
   away from it). This prevents terminal-sized replies and silent waits on
   un-clickable dialogs. Web-UI turns are unaffected — the note rides only on a
   conversation whose `channel_name` is set.
+- **FR-020**: Inbound photos and files drive a turn. The transport downloads each
+  attachment to a Coffer-managed media dir; the bytes never enter the chat DB (the
+  persisted user message keeps the caption, or a short note when there is none).
+  For the turn, each attachment is handed to the agent adapter, which materialises
+  it in its own native shape — a vision agent (Claude Code) inlines an image as a
+  base64 content block it sees directly and a PDF as a document block; a
+  path-native agent (Codex) and any non-vision file receive the on-disk path to
+  open. This keeps history small, works for arbitrary file types, and generalises
+  to future modalities (a new type is a new mime, not a new schema). See
+  [ADR-038](../../docs/decisions/ADR-038-channel-media.md).
 
 ### Key Entities
 
@@ -664,6 +676,21 @@ status / notify`.
   it to keep replies concise and that it cannot click the user's OS dialogs,
   while a web-UI conversation gets no such note
 
+### Scenario: an inbound photo is downloaded and drives a turn
+
+- **Given** a paired Telegram channel
+- **When** the owner sends a photo (with an optional caption)
+- **Then** the largest photo size is downloaded to the media dir and carried on
+  the inbound message as an attachment, and the caption becomes the message text
+
+### Scenario: an inbound image reaches a vision agent as an inline block
+
+- **Given** a turn carrying an image attachment
+- **When** the Claude adapter builds the turn's content
+- **Then** the image is a base64 `image` content block (a non-vision file becomes
+  a path pointer instead), so the bytes are sent inline for this turn only and
+  never stored in the chat database
+
 ## Assumptions
 
 - The user can create a Telegram bot (BotFather) and a SeaTalk Open Platform
@@ -672,7 +699,9 @@ status / notify`.
 - For SeaTalk, the user runs a tunnel (cloudflared, ngrok, or equivalent)
   from a public URL to the local callback port; Coffer documents this in the
   quickstart but does not manage the tunnel.
-- Channels carry text conversations; rich media arrives as a polite
-  "text only" reply. The one exception is **command selection cards**: on a
-  transport that `supports_buttons`, `/agent` and `/model` may render their
-  choices as interactive buttons (FR-018).
+- Channels carry text plus inbound photos and files (FR-020): media is
+  downloaded and handed to the agent, while an empty message with nothing
+  downloadable gets a polite "send text, a photo, or a file" reply. Outbound is
+  text; the one rich exception is **command selection cards**: on a transport
+  that `supports_buttons`, `/agent` and `/model` may render their choices as
+  interactive buttons (FR-018).

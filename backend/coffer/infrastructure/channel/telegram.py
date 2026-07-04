@@ -11,6 +11,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
+import pathlib
+import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -21,6 +24,7 @@ from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
+    InboundAttachment,
     InboundCallback,
     InboundMessage,
     SentMessage,
@@ -33,6 +37,41 @@ _logger = logging.getLogger(__name__)
 _POLL_TIMEOUT_SECONDS = 50
 _BACKOFF_LADDER = (1.0, 5.0, 30.0)
 _CHUNK_LIMIT = 4000
+
+
+def _default_media_dir() -> pathlib.Path:
+    """``~/.coffer/channel-media`` — where inbound photos/files/voice are saved.
+
+    ``HOME`` is honored (not ``Path.home()``) so tests redirect it to a tmp dir.
+    """
+    home = pathlib.Path(os.environ.get("HOME") or "~").expanduser()
+    return home / ".coffer" / "channel-media"
+
+
+def _media_specs(message: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """Extract ``(file_id, mime, filename)`` for each attachment on a Telegram
+    message — largest photo size, plus any document/voice/audio/video. Unknown
+    or absent media yields nothing (a plain text message)."""
+    specs: list[tuple[str, str, str]] = []
+    photo = message.get("photo")
+    if isinstance(photo, list) and photo:
+        # PhotoSizes are ordered small→large; the last is the highest resolution.
+        largest = photo[-1]
+        if isinstance(largest, dict) and largest.get("file_id"):
+            specs.append((str(largest["file_id"]), "image/jpeg", "photo.jpg"))
+    for key, default_mime, default_name in (
+        ("document", "application/octet-stream", "file"),
+        ("voice", "audio/ogg", "voice.ogg"),
+        ("audio", "audio/mpeg", "audio"),
+        ("video", "video/mp4", "video.mp4"),
+    ):
+        item = message.get(key)
+        if isinstance(item, dict) and item.get("file_id"):
+            mime = str(item.get("mime_type") or default_mime)
+            filename = str(item.get("file_name") or default_name)
+            specs.append((str(item["file_id"]), mime, filename))
+    return specs
+
 
 _COMMANDS = [
     {"command": "new", "description": "Start a fresh conversation"},
@@ -58,9 +97,14 @@ class TelegramAdapter:
         client: httpx.AsyncClient | None = None,
         base_url: str = "https://api.telegram.org",
         poll_timeout: int = _POLL_TIMEOUT_SECONDS,
+        media_dir: pathlib.Path | None = None,
     ) -> None:
         self._name = channel_name
         self._base = f"{base_url}/bot{bot_token}"
+        # File downloads use a different URL shape than the Bot API methods:
+        # {base}/file/bot{token}/{file_path}, not {base}/bot{token}/{method}.
+        self._file_base = f"{base_url}/file/bot{bot_token}"
+        self._media_dir = media_dir or _default_media_dir()
         self._client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(10.0, read=poll_timeout + 10.0)
         )
@@ -143,21 +187,63 @@ class TelegramAdapter:
         message = update.get("message")
         if isinstance(message, dict):
             sender = message.get("from") or {}
+            attachments = await self._download_attachments(message)
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
                     chat_id=str(message.get("chat", {}).get("id", "")),
                     sender_display=str(sender.get("first_name") or sender.get("username") or ""),
-                    text=str(message.get("text") or ""),
+                    # A media message carries its text in ``caption``, not ``text``.
+                    text=str(message.get("text") or message.get("caption") or ""),
                     platform_message_id=str(message.get("message_id", "")),
                     timestamp=datetime.fromtimestamp(int(message.get("date", 0)), tz=UTC),
                     sender_id=str(sender.get("id") or ""),
+                    attachments=attachments,
                 )
             )
             return
         query = update.get("callback_query")
         if isinstance(query, dict):
             await self._dispatch_callback(query)
+
+    async def _download_attachments(self, message: dict[str, Any]) -> tuple[InboundAttachment, ...]:
+        """Download each attachment on ``message`` to the media dir. Best-effort:
+        a download that fails is skipped (logged), never wedging the message —
+        the text/caption still drives a turn."""
+        out: list[InboundAttachment] = []
+        for file_id, mime, filename in _media_specs(message):
+            try:
+                data = await self._download_file(file_id)
+            except Exception:
+                _logger.warning(
+                    "telegram.media.download_failed",
+                    extra={"channel": self._name},
+                    exc_info=True,
+                )
+                continue
+            if data is None:
+                continue
+            path = self._save_media(data, filename)
+            out.append(InboundAttachment(path=path, mime=mime, filename=filename))
+        return tuple(out)
+
+    async def _download_file(self, file_id: str) -> bytes | None:
+        """``getFile`` → download the bytes from the file endpoint."""
+        info = await self._call("getFile", file_id=file_id)
+        file_path = info.get("file_path") if isinstance(info, dict) else None
+        if not file_path:
+            return None
+        response = await self._client.get(f"{self._file_base}/{file_path}")
+        response.raise_for_status()
+        return response.content
+
+    def _save_media(self, data: bytes, filename: str) -> str:
+        """Write bytes under the media dir with a unique name; return the path."""
+        self._media_dir.mkdir(parents=True, exist_ok=True)
+        suffix = pathlib.Path(filename).suffix
+        path = self._media_dir / f"{uuid.uuid4().hex}{suffix}"
+        path.write_bytes(data)
+        return str(path)
 
     async def _dispatch_callback(self, query: dict[str, Any]) -> None:
         if self._callbacks is None:

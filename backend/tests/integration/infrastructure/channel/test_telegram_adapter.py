@@ -7,6 +7,8 @@ method mapping for edit/delete/typing/approval prompts.
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 from coffer.domain.channel.errors import ChannelSendFailed
@@ -32,6 +34,51 @@ def _message_update(update_id: int, *, text: str) -> dict:
             "text": text,
         },
     }
+
+
+def _photo_update(update_id: int, *, caption: str | None = None) -> dict:
+    return {
+        "update_id": update_id,
+        "message": {
+            "message_id": 2000 + update_id,
+            "date": 1718000000,
+            "chat": {"id": 555},
+            "from": {"id": 4242, "first_name": "Yu", "username": "yu"},
+            # PhotoSizes are ordered small→large; the largest must be chosen.
+            "photo": [
+                {"file_id": "small", "file_size": 100},
+                {"file_id": "big", "file_size": 9999},
+            ],
+            "caption": caption,
+        },
+    }
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="an inbound photo is downloaded and drives a turn",
+)
+async def test_photo_message_is_downloaded_as_an_attachment(
+    fake_telegram: FakeTelegram, tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))  # media dir resolves under tmp
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await fake_telegram.update_batches.put([_photo_update(20, caption="what is this?")])
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.messages) == 1)
+    finally:
+        await adapter.stop()
+
+    msg = recorder.messages[0]
+    assert msg.text == "what is this?"  # a media caption becomes the message text
+    assert len(msg.attachments) == 1
+    att = msg.attachments[0]
+    assert att.mime == "image/jpeg"
+    assert pathlib.Path(att.path).read_bytes() == fake_telegram.file_bytes
+    # getFile was called for the LARGEST photo size, not the thumbnail.
+    assert [c.get("file_id") for c in fake_telegram.calls_for("getFile")] == ["big"]
 
 
 async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(

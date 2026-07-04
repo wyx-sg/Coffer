@@ -10,6 +10,7 @@ approval relay.
 from __future__ import annotations
 
 import asyncio
+import base64
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -34,6 +35,7 @@ from claude_agent_sdk import (
     ToolUseBlock as SdkToolUseBlock,
 )
 
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     TextDelta,
     ToolCall,
@@ -67,11 +69,11 @@ class FakeSdkSession:
         self._messages = messages
         # If set, the stream pauses on this event so a cancel can be injected.
         self._block_after = block_after
-        self.connected_prompt: str | None = None
+        self.connected_prompt: str | list[dict[str, Any]] | None = None
         self.interrupted = False
         self.disconnected = False
 
-    async def connect(self, prompt: str) -> None:
+    async def connect(self, prompt: str | list[dict[str, Any]]) -> None:
         self.connected_prompt = prompt
 
     async def receive_messages(self) -> AsyncIterator[Any]:
@@ -143,6 +145,50 @@ def _adapter(
 async def _collect(adapter: ClaudeSdkAgentAdapter, history: list[Message]):
     stream = await adapter.run_turn(history=history)
     return [ev async for ev in stream]
+
+
+# ---------------------------------------------------------------------------
+# Attachment materialisation (spec 009 channel media)
+# ---------------------------------------------------------------------------
+
+
+def test_build_content_is_the_plain_prompt_without_attachments() -> None:
+    # No attachments → unchanged behaviour: the content is the bare string.
+    assert ClaudeSdkAgentAdapter._build_content("hello", []) == "hello"
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="an inbound image reaches a vision agent as an inline block",
+)
+def test_build_content_inlines_an_image_as_a_base64_block(tmp_path: Any) -> None:
+    img = tmp_path / "photo.png"
+    img.write_bytes(b"\x89PNG-fake")
+    att = Attachment(path=str(img), mime="image/png", filename="photo.png")
+
+    content = ClaudeSdkAgentAdapter._build_content("what is this?", [att])
+
+    assert isinstance(content, list)
+    assert content[0] == {"type": "text", "text": "what is this?"}
+    image = content[1]
+    assert image["type"] == "image"
+    assert image["source"]["type"] == "base64"
+    assert image["source"]["media_type"] == "image/png"
+    # The bytes are read from disk and encoded here, never stored as base64.
+    assert base64.b64decode(image["source"]["data"]) == b"\x89PNG-fake"
+
+
+def test_build_content_hands_off_a_non_vision_file_by_path(tmp_path: Any) -> None:
+    data = tmp_path / "notes.csv"
+    data.write_text("a,b\n1,2\n")
+    att = Attachment(path=str(data), mime="text/csv", filename="notes.csv")
+
+    content = ClaudeSdkAgentAdapter._build_content("", [att])
+
+    # A non-vision file is not inlined — the agent gets its path to open.
+    assert isinstance(content, list)
+    assert content[0]["type"] == "text"
+    assert str(data) in content[0]["text"]
 
 
 # Canned SDK message stream: init → assistant text+tool → tool result → text → done.
@@ -346,10 +392,10 @@ class _ErrorSdkSession:
 
     def __init__(self, options: ClaudeAgentOptions) -> None:
         self.options = options
-        self.connected_prompt: str | None = None
+        self.connected_prompt: str | list[dict[str, Any]] | None = None
         self.disconnected = False
 
-    async def connect(self, prompt: str) -> None:
+    async def connect(self, prompt: str | list[dict[str, Any]]) -> None:
         self.connected_prompt = prompt
 
     async def receive_messages(self) -> AsyncIterator[Any]:
@@ -444,7 +490,7 @@ class _FailingSdkSession:
         self.options = options
         self.disconnected = False
 
-    async def connect(self, prompt: str) -> None:
+    async def connect(self, prompt: str | list[dict[str, Any]]) -> None:
         raise RuntimeError("Command failed with exit code 1")
 
     async def receive_messages(self) -> AsyncIterator[Any]:

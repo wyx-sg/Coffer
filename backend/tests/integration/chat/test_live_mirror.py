@@ -82,7 +82,9 @@ class _BlockingAdapter:
         self._release = release
         self._text = text
 
-    async def run_turn(self, *, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
+    async def run_turn(
+        self, *, history: Sequence[Message], **_: object
+    ) -> AsyncIterator[AgentEvent]:
         return self._gen()
 
     async def _gen(self) -> AsyncIterator[AgentEvent]:

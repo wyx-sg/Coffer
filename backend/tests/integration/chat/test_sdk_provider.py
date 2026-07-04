@@ -49,10 +49,10 @@ class _FakeSdkSession:
     def __init__(self, options: ClaudeAgentOptions, messages: list[Any]) -> None:
         self.options = options
         self._messages = messages
-        self.connected_prompt: str | None = None
+        self.connected_prompt: str | list[dict[str, Any]] | None = None
         self.disconnected = False
 
-    async def connect(self, prompt: str) -> None:
+    async def connect(self, prompt: str | list[dict[str, Any]]) -> None:
         self.connected_prompt = prompt
 
     async def receive_messages(self) -> AsyncIterator[Any]:

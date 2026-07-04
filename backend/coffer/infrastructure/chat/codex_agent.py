@@ -22,6 +22,7 @@ import logging
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     AgentEvent,
     TurnDone,
@@ -79,11 +80,12 @@ class CodexAppServerAdapter:
         self,
         *,
         history: Sequence[Message],
+        attachments: Sequence[Attachment] = (),
     ) -> AsyncIterator[AgentEvent]:
         # Match the platform's ``async def -> AsyncIterator`` seam: delegate to
         # ``_stream`` so the coroutine machinery runs at yield points rather than
         # at the ``await run_turn(...)`` call site (the SDK adapter does the same).
-        return self._stream(history)
+        return self._stream(history, attachments)
 
     async def _persist_session(self, state: CodexParseState) -> None:
         """Write a newly-discovered thread id back for the next ``resume``.
@@ -144,8 +146,18 @@ class CodexAppServerAdapter:
         )
         return (turn.get("turn") or {}).get("id") or ""
 
-    async def _stream(self, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
+    async def _stream(
+        self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
+    ) -> AsyncIterator[AgentEvent]:
         prompt = last_user_text(history)
+        if attachments:
+            # Codex is path-native (no inline image blocks over its app-server
+            # RPC): hand it the on-disk paths so it can open them with its tools.
+            notes = "\n".join(
+                f"[The user attached a file '{a.filename}', saved at {a.path}.]"
+                for a in attachments
+            )
+            prompt = f"{prompt}\n\n{notes}".strip() if prompt else notes
         if not prompt:
             yield TurnError(code="empty_prompt", message="no user message to send")
             return
