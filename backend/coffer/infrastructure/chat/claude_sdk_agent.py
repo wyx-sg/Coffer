@@ -108,20 +108,26 @@ def default_session_factory(options: ClaudeAgentOptions) -> ClaudeSdkSession:
     return ClaudeSdkClientSession(options)
 
 
+#: Image mime types the Messages API accepts as an inline ``image`` block. An
+#: image in any other format (e.g. a HEIC/bmp/tiff/svg sent as a document) would
+#: 400 the whole turn, so it falls through to the on-disk path pointer instead.
+_INLINE_IMAGE_MIMES = frozenset({"image/jpeg", "image/png", "image/gif", "image/webp"})
+
+
 def _attachment_block(att: Attachment) -> dict[str, Any]:
     """Materialise one attachment into a stream-json content block.
 
-    Images and PDFs become native base64 ``image`` / ``document`` blocks Claude
-    sees directly; the base64 lives only in this outbound request, never the DB.
-    Anything else (audio, csv, zip, …) becomes a text pointer to the on-disk
-    path so the agent can open it with its own tools. An unreadable file degrades
-    to a text note rather than failing the turn.
+    Supported images and PDFs become native base64 ``image`` / ``document`` blocks
+    Claude sees directly; the base64 lives only in this outbound request, never the
+    DB. Anything else (audio, csv, zip, an odd image format, …) becomes a text
+    pointer to the on-disk path so the agent can open it with its own tools. An
+    unreadable file degrades to a text note rather than failing the turn.
     """
     try:
         data = pathlib.Path(att.path).read_bytes()
     except OSError:
         return {"type": "text", "text": f"[Attached file '{att.filename}' could not be read]"}
-    if att.is_image:
+    if att.mime in _INLINE_IMAGE_MIMES:
         encoded = base64.standard_b64encode(data).decode()
         return {
             "type": "image",
@@ -140,11 +146,6 @@ def _attachment_block(att: Attachment) -> dict[str, Any]:
             "Open it with your tools if it is relevant.]"
         ),
     }
-
-
-# ---------------------------------------------------------------------------
-# Message mapping — SDK message objects -> AgentEvent
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

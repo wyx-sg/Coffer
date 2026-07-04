@@ -62,8 +62,9 @@ def channel_system_context(channel_name: str) -> str:
         "it — if something needs a click or an OS permission, say so and do what "
         "you can instead of waiting on it. To send the user a file or image, put "
         "a line `![caption](/absolute/path)` in your reply — the channel delivers "
-        "that file and removes the line from the text; a bare path in prose is not "
-        "sent, so use this syntax only for files you actually want to deliver."
+        "that file (or notes it if the channel can't) and removes the line from "
+        "your reply; a bare path in prose is not sent, so use this syntax only for "
+        "files you actually want to deliver."
     )
 
 

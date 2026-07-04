@@ -88,8 +88,10 @@ def _progress_line(mark: str, tool_name: str, descriptor: str) -> str:
 
 
 #: The agent's opt-in to send a file: a markdown image ``![caption](/abs/path)``.
-_MEDIA_MARKER = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)")
+#: The path group allows spaces (absolute macOS paths routinely contain them).
+_MEDIA_MARKER = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 _MEDIA_MAX_BYTES = 50 * 1024 * 1024  # Telegram sendDocument caps at 50 MB
+_PHOTO_MAX_BYTES = 10 * 1024 * 1024  # sendPhoto caps at 10 MB — larger images go as documents
 _IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
 
 
@@ -223,7 +225,7 @@ class TurnRenderer:
             await self.send(f"⚠️ {error.message} [{error.code}]")
             return
         media_sent = 0
-        if text and self.adapter.capabilities.supports_media:
+        if text:
             text, media_sent = await self._deliver_media(text)
         if stop_reason == "interrupted":
             body = f"{text}\n\n⏹ Stopped." if text else "⏹ Stopped."
@@ -238,20 +240,35 @@ class TurnRenderer:
         await self.send(text)
 
     async def _deliver_media(self, text: str) -> tuple[str, int]:
-        """Upload each explicit ``![caption](/abs/path)`` marker whose file exists,
-        stripping it from the text. The agent opts in by writing the marker (it is
-        told the convention in its channel system prompt); a bare path mentioned in
-        prose is not this syntax and never fires, so a misfire needs a deliberate
-        marker plus a real on-disk file."""
+        """Handle each explicit ``![caption](/abs/path)`` marker whose file exists.
+        The agent opts in by writing the marker (told the convention in its channel
+        system prompt); a bare path in prose is not this syntax and never fires.
+
+        On a media-capable channel the file is uploaded and the marker stripped; on
+        a channel without file support the marker is replaced with a plain note so
+        the user never sees a raw local path for a file that was never delivered."""
+        supports = self.adapter.capabilities.supports_media
         sent = 0
         out = text
         for match in _MEDIA_MARKER.finditer(text):
             caption, path = match.group(1).strip(), match.group(2).strip()
             if not _deliverable(path):
+                continue  # not a real absolute file — leave the text untouched
+            if not supports:
+                label = caption or pathlib.Path(path).name
+                out = out.replace(
+                    match.group(0),
+                    f"(couldn't send '{label}' — this channel has no file support)",
+                    1,
+                ).strip()
                 continue
             try:
+                # sendPhoto caps at 10 MB; a larger image goes as a document.
+                as_photo = (
+                    _is_image_path(path) and pathlib.Path(path).stat().st_size <= _PHOTO_MAX_BYTES
+                )
                 await self.adapter.send_media(
-                    self.chat_id, path, caption=caption or None, as_photo=_is_image_path(path)
+                    self.chat_id, path, caption=caption or None, as_photo=as_photo
                 )
             except Exception:
                 continue  # leave the marker in place so the intent is still visible

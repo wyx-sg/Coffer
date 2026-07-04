@@ -222,3 +222,39 @@ async def test_marker_for_a_missing_file_is_left_as_text() -> None:
 
     assert adapter.media == []
     assert adapter.sent[0] == ("owner", "![x](/no/such/file.png)")
+
+
+async def test_marker_on_a_non_media_channel_is_replaced_with_a_note(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # A channel with no file support must not leak the raw local path — the
+    # marker is replaced with a plain note instead of being uploaded or left.
+    img = tmp_path / "chart.png"
+    img.write_bytes(b"PNG")
+    adapter = FakeChannelAdapter(supports_edit=False, supports_media=False)
+    events = [
+        TextDelta(text=f"here it is\n\n![the chart]({img})"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.media == []  # nothing uploaded on a non-media channel
+    body = adapter.sent[0][1]
+    assert str(img) not in body  # the raw path is not leaked
+    assert "the chart" in body and "no file support" in body
+
+
+async def test_marker_path_with_spaces_is_delivered(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # Absolute macOS paths routinely contain spaces — the marker must still fire.
+    d = tmp_path / "My Files"
+    d.mkdir()
+    img = d / "chart.png"
+    img.write_bytes(b"PNG")
+    adapter = FakeChannelAdapter(supports_edit=False)
+    events = [
+        TextDelta(text=f"![chart]({img})"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.media == [("owner", str(img), "chart", True)]

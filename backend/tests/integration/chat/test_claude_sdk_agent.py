@@ -191,6 +191,20 @@ def test_build_content_hands_off_a_non_vision_file_by_path(tmp_path: Any) -> Non
     assert str(data) in content[0]["text"]
 
 
+def test_build_content_does_not_inline_an_unsupported_image_format(tmp_path: Any) -> None:
+    # An image/heic (e.g. an iPhone photo sent as a document) is NOT an API-inlinable
+    # type — inlining it would 400 the turn, so it falls to the path pointer instead.
+    heic = tmp_path / "photo.heic"
+    heic.write_bytes(b"HEIC-bytes")
+    att = Attachment(path=str(heic), mime="image/heic", filename="photo.heic")
+
+    content = ClaudeSdkAgentAdapter._build_content("", [att])
+
+    assert isinstance(content, list)
+    assert content[0]["type"] == "text"
+    assert str(heic) in content[0]["text"]
+
+
 # Canned SDK message stream: init → assistant text+tool → tool result → text → done.
 def _basic_messages() -> list[Any]:
     return [
