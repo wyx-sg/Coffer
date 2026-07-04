@@ -46,4 +46,26 @@ def last_user_text(history: Sequence[Message]) -> str:
     return ""
 
 
-__all__ = ["ParseState", "SessionSink", "last_user_text"]
+def channel_system_context(channel_name: str) -> str:
+    """A system-prompt append telling a channel-driven agent where it is.
+
+    Without it the agent has no idea it is bridged to a phone chat: it dumps
+    terminal-sized replies, waits on OS permission dialogs nobody can click, and
+    reinvents ways to reach the user. Kept short — it rides on every channel turn.
+    """
+    return (
+        f"You are talking with the user over the {channel_name} chat channel — "
+        "most likely on their phone, not at a terminal. Keep replies short and "
+        "easy to read on a small screen: lead with the answer, and skip large "
+        "tables or long code dumps unless asked. You cannot click permission or "
+        "confirmation dialogs on the user's computer, and they may be away from "
+        "it — if something needs a click or an OS permission, say so and do what "
+        "you can instead of waiting on it. To send the user a file or image, put "
+        "a line `![caption](/absolute/path)` in your reply — the channel delivers "
+        "that file (or notes it if the channel can't) and removes the line from "
+        "your reply; a bare path in prose is not sent, so use this syntax only for "
+        "files you actually want to deliver."
+    )
+
+
+__all__ = ["ParseState", "SessionSink", "channel_system_context", "last_user_text"]

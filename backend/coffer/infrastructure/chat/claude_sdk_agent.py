@@ -15,40 +15,33 @@ binary. Per Contract 9 this file is the only one that imports the real
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import logging
+import pathlib
 from collections.abc import AsyncIterator, Callable, Sequence
 from typing import Any, Protocol
 
 from claude_agent_sdk import (
-    AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
-    ResultMessage,
-    SystemMessage,
-    UserMessage,
-)
-from claude_agent_sdk import (
-    TextBlock as SdkTextBlock,
-)
-from claude_agent_sdk import (
-    ToolResultBlock as SdkToolResultBlock,
-)
-from claude_agent_sdk import (
-    ToolUseBlock as SdkToolUseBlock,
 )
 
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     AgentEvent,
-    TextDelta,
-    ToolCall,
-    ToolResult,
     TurnDone,
     TurnError,
     TurnStarted,
 )
 from coffer.domain.chat.message import Message
 from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink, last_user_text
+from coffer.infrastructure.chat.claude_sdk_mapping import map_sdk_message
+from coffer.infrastructure.chat.transcribe import (
+    Transcriber,
+    prompt_with_transcripts,
+    transcribe_audio_attachments,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -65,7 +58,7 @@ class ClaudeSdkSession(Protocol):
     session that replays canned SDK messages — no real ``claude`` binary needed.
     """
 
-    async def connect(self, prompt: str) -> None: ...
+    async def connect(self, prompt: str | list[dict[str, Any]]) -> None: ...
 
     def receive_messages(self) -> AsyncIterator[Any]: ...
 
@@ -88,10 +81,12 @@ class ClaudeSdkClientSession:
     def __init__(self, options: ClaudeAgentOptions) -> None:
         self._client = ClaudeSDKClient(options=options)
 
-    async def connect(self, prompt: str) -> None:
+    async def connect(self, prompt: str | list[dict[str, Any]]) -> None:
         # Pass the single user turn as a one-message async stream rather than a
         # plain string (the SDK streams it, waits for the result, then ends
-        # input).
+        # input). ``prompt`` is either the plain text or, when the turn carries
+        # attachments, a list of content blocks (text + base64 image/document) —
+        # both are valid ``content`` shapes for the stream-json user frame.
         async def _stream() -> AsyncIterator[dict[str, Any]]:
             msg = {"role": "user", "content": prompt}
             yield {"type": "user", "session_id": "", "message": msg, "parent_tool_use_id": None}
@@ -113,102 +108,44 @@ def default_session_factory(options: ClaudeAgentOptions) -> ClaudeSdkSession:
     return ClaudeSdkClientSession(options)
 
 
-# ---------------------------------------------------------------------------
-# Message mapping — SDK message objects -> AgentEvent
-# ---------------------------------------------------------------------------
+#: Image mime types the Messages API accepts as an inline ``image`` block. An
+#: image in any other format (e.g. a HEIC/bmp/tiff/svg sent as a document) would
+#: 400 the whole turn, so it falls through to the on-disk path pointer instead.
+_INLINE_IMAGE_MIMES = frozenset({"image/jpeg", "image/png", "image/gif", "image/webp"})
 
 
-def map_sdk_message(msg: Any, state: ParseState) -> list[AgentEvent]:
-    """Map one streamed SDK message to zero or more ``AgentEvent``s.
+def _attachment_block(att: Attachment) -> dict[str, Any]:
+    """Materialise one attachment into a stream-json content block.
 
-    Dispatches by SDK message type: ``SystemMessage(init)``
-    captures the session id; ``AssistantMessage`` yields text/tool-call events;
-    ``UserMessage`` carries tool results; ``ResultMessage`` is terminal.
+    Supported images and PDFs become native base64 ``image`` / ``document`` blocks
+    Claude sees directly; the base64 lives only in this outbound request, never the
+    DB. Anything else (audio, csv, zip, an odd image format, …) becomes a text
+    pointer to the on-disk path so the agent can open it with its own tools. An
+    unreadable file degrades to a text note rather than failing the turn.
     """
-    if isinstance(msg, SystemMessage):
-        if msg.subtype == "init":
-            state.session_id = (msg.data or {}).get("session_id") or state.session_id
-        return []
-    if isinstance(msg, AssistantMessage):
-        return _assistant_blocks(msg, state)
-    if isinstance(msg, UserMessage):
-        return _tool_results(msg, state)
-    if isinstance(msg, ResultMessage):
-        return _result(msg, state)
-    return []
-
-
-def _assistant_blocks(msg: AssistantMessage, state: ParseState) -> list[AgentEvent]:
-    out: list[AgentEvent] = []
-    for block in msg.content:
-        if isinstance(block, SdkTextBlock):
-            if block.text:
-                out.append(TextDelta(text=block.text))
-        elif isinstance(block, SdkToolUseBlock):
-            tid = str(block.id)
-            name = str(block.name)
-            state.tool_names[tid] = name
-            out.append(ToolCall(tool_use_id=tid, tool_name=name, tool_input=block.input or {}))
-    return out
-
-
-def _tool_results(msg: UserMessage, state: ParseState) -> list[AgentEvent]:
-    out: list[AgentEvent] = []
-    content = msg.content
-    if not isinstance(content, list):
-        return out
-    for block in content:
-        if not isinstance(block, SdkToolResultBlock):
-            continue
-        tid = str(block.tool_use_id)
-        is_error = bool(block.is_error)
-        text = _stringify(block.content)
-        out.append(
-            ToolResult(
-                tool_use_id=tid,
-                tool_name=state.tool_names.get(tid, ""),
-                output=None if is_error else {"content": text},
-                error=text if is_error else None,
-            )
-        )
-    return out
-
-
-def _result(msg: ResultMessage, state: ParseState) -> list[AgentEvent]:
-    usage = msg.usage or {}
-    state.prompt_tokens = usage.get("input_tokens")
-    state.completion_tokens = usage.get("output_tokens")
-    state.terminal_emitted = True
-    if msg.is_error or msg.subtype not in (None, "success"):
-        return [
-            TurnError(
-                code="sdk_error",
-                message=str(msg.result or msg.subtype or "claude sdk error"),
-            )
-        ]
-    if msg.subtype is None:
-        _logger.warning(
-            "claude_sdk_agent.result_subtype_none",
-            extra={"session_id": state.session_id, "stop_reason": msg.stop_reason},
-        )
-    return [
-        TurnDone(
-            prompt_tokens=state.prompt_tokens,
-            completion_tokens=state.completion_tokens,
-            stop_reason=str(msg.stop_reason or "end_turn"),
-        )
-    ]
-
-
-def _stringify(content: Any) -> str:
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = [c.get("text", "") if isinstance(c, dict) else str(c) for c in content]
-        return "".join(parts)
-    return str(content)
+    try:
+        data = pathlib.Path(att.path).read_bytes()
+    except OSError:
+        return {"type": "text", "text": f"[Attached file '{att.filename}' could not be read]"}
+    if att.mime in _INLINE_IMAGE_MIMES:
+        encoded = base64.standard_b64encode(data).decode()
+        return {
+            "type": "image",
+            "source": {"type": "base64", "media_type": att.mime, "data": encoded},
+        }
+    if att.is_pdf:
+        encoded = base64.standard_b64encode(data).decode()
+        return {
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": encoded},
+        }
+    return {
+        "type": "text",
+        "text": (
+            f"[The user attached a file '{att.filename}', saved at {att.path}. "
+            "Open it with your tools if it is relevant.]"
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +180,8 @@ class ClaudeSdkAgentAdapter:
         session_factory: SdkSessionFactory,
         on_session: SessionSink,
         env: dict[str, str] | None = None,
+        system_context: str | None = None,
+        transcriber: Transcriber | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -250,16 +189,19 @@ class ClaudeSdkAgentAdapter:
         self._session_factory = session_factory
         self._on_session = on_session
         self._env = env
+        self._system_context = system_context
+        self._transcriber = transcriber
 
     async def run_turn(
         self,
         *,
         history: Sequence[Message],
+        attachments: Sequence[Attachment] = (),
     ) -> AsyncIterator[AgentEvent]:
         # Match the platform's ``async def -> AsyncIterator`` seam: delegate to
         # ``_stream`` so the coroutine machinery runs at yield points rather than
         # at the ``await run_turn(...)`` call site (the codex adapter does the same).
-        return self._stream(history)
+        return self._stream(history, attachments)
 
     async def _persist_session(self, state: ParseState) -> None:
         """Write a newly-discovered SDK session id back for the next ``resume``.
@@ -289,9 +231,35 @@ class ClaudeSdkAgentAdapter:
         )
         if self._env is not None:
             opts.env = self._env
+        if self._system_context:
+            # Tell a channel-driven agent it is bridged to a chat (be concise,
+            # no clickable dialogs) by appending to Claude Code's own preset
+            # prompt rather than replacing it.
+            opts.system_prompt = {
+                "type": "preset",
+                "preset": "claude_code",
+                "append": self._system_context,
+            }
         return opts
 
-    async def _connect(self, prompt: str, *, resume: str | None) -> ClaudeSdkSession:
+    @staticmethod
+    def _build_content(
+        prompt: str, attachments: Sequence[Attachment]
+    ) -> str | list[dict[str, Any]]:
+        """The turn's user content: the plain prompt when there are no
+        attachments (unchanged behaviour), else a block list of the text plus
+        each materialised attachment."""
+        if not attachments:
+            return prompt
+        blocks: list[dict[str, Any]] = []
+        if prompt:
+            blocks.append({"type": "text", "text": prompt})
+        blocks.extend(_attachment_block(att) for att in attachments)
+        return blocks
+
+    async def _connect(
+        self, prompt: str | list[dict[str, Any]], *, resume: str | None
+    ) -> ClaudeSdkSession:
         """Build a session and connect it; disconnect + re-raise on failure so a
         caller can retry cleanly."""
         session = self._session_factory(self._build_options(resume=resume))
@@ -303,9 +271,17 @@ class ClaudeSdkAgentAdapter:
             raise
         return session
 
-    async def _stream(self, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
-        prompt = last_user_text(history)
-        if not prompt:
+    async def _stream(
+        self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
+    ) -> AsyncIterator[AgentEvent]:
+        # Claude cannot hear audio: transcribe any voice attachment to text and
+        # fold it into the prompt; the rest are materialised as content blocks.
+        attachments, transcripts = await transcribe_audio_attachments(
+            attachments, self._transcriber
+        )
+        prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        content = self._build_content(prompt, attachments)
+        if not content:
             yield TurnError(code="empty_prompt", message="no user message to send")
             return
 
@@ -319,7 +295,7 @@ class ClaudeSdkAgentAdapter:
         # non-zero). The fallback keeps the conversation usable; a hard failure
         # becomes a TurnError rather than an unhandled "unexpected error".
         try:
-            session = await self._connect(prompt, resume=self._resume)
+            session = await self._connect(content, resume=self._resume)
         except Exception as exc:
             if self._resume is None:
                 yield TurnError(code="sdk_connect_error", message=_connect_error_message(exc))
@@ -331,7 +307,7 @@ class ClaudeSdkAgentAdapter:
             )
             state = ParseState(session_id=None)
             try:
-                session = await self._connect(prompt, resume=None)
+                session = await self._connect(content, resume=None)
             except Exception as exc2:
                 yield TurnError(code="sdk_connect_error", message=_connect_error_message(exc2))
                 return

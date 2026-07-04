@@ -194,6 +194,18 @@ class SeaTalkAdapter:
                 "/messaging/v2/single_chat_typing", {"employee_code": chat_id}, retries=0
             )
 
+    async def send_media(
+        self,
+        chat_id: str,
+        path: str,
+        *,
+        caption: str | None = None,
+        as_photo: bool = True,
+    ) -> SentMessage:
+        # SeaTalk file upload is not wired yet; capabilities.supports_media is
+        # False so the core never calls this. Present to satisfy the Protocol.
+        raise ChannelSendFailed(self._name, "seatalk cannot send media yet")
+
     # -- transport -------------------------------------------------------------
 
     async def _send_single_chat(self, employee_code: str, message: dict[str, Any]) -> Any:

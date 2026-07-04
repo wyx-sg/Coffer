@@ -45,6 +45,7 @@ from coffer.application.chat.turn_state import (
 )
 from coffer.application.chat.turn_state import active_turns as active_turns
 from coffer.application.chat.turn_state import clear_active_turns as clear_active_turns
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import AgentEvent, QueueChanged, TurnError
 from coffer.domain.chat.message import Role, TextBlock
 from coffer.domain.errors import TurnInProgress
@@ -132,18 +133,25 @@ class TurnOrchestrator:
     # ------------------------------------------------------------------
 
     async def start_turn(
-        self, conversation_id: str, user_text: str
+        self,
+        conversation_id: str,
+        user_text: str,
+        *,
+        attachments: Sequence[Attachment] = (),
     ) -> asyncio.Queue[AgentEvent | None]:
         """Start a turn and return a dedicated event queue ending in ``None``.
 
         Used by the channel inbound renderer. Raises ``TurnInProgress`` if a turn
         is already active. The turn also publishes to the conversation bus, so the
-        web observes a channel-driven turn live.
+        web observes a channel-driven turn live. ``attachments`` (channel media)
+        are materialised by the agent adapter this turn only — never persisted.
         """
         if conversation_id in _ACTIVE_TURNS:
             raise TurnInProgress(conversation_id)
         primary: asyncio.Queue[AgentEvent | None] = asyncio.Queue()
-        await self._begin_turn(conversation_id, user_text, primary_queue=primary)
+        await self._begin_turn(
+            conversation_id, user_text, primary_queue=primary, attachments=attachments
+        )
         return primary
 
     # ------------------------------------------------------------------
@@ -241,9 +249,13 @@ class TurnOrchestrator:
         user_text: str,
         *,
         primary_queue: asyncio.Queue[AgentEvent | None] | None,
+        attachments: Sequence[Attachment] = (),
     ) -> None:
         """Reserve the slot, build the adapter, persist the user message, spawn the
-        turn task. Callers guarantee no turn is currently active."""
+        turn task. Callers guarantee no turn is currently active.
+
+        ``attachments`` reach the adapter for this turn only (materialised into the
+        agent request); the persisted user message keeps just ``user_text``."""
         bus = self._bus_for(conversation_id)
         active = _ActiveTurn(bus=bus, primary_queue=primary_queue)
         # Reserve synchronously — no ``await`` before this insert.
@@ -274,6 +286,7 @@ class TurnOrchestrator:
                 adapter=adapter,
                 chat=self._chat,
                 audit=self._audit,
+                attachments=attachments,
             ),
             name=f"turn:{conversation_id}",
         )

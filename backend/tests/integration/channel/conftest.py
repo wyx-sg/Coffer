@@ -139,12 +139,14 @@ class FakeChannelAdapter:
         supports_typing: bool = True,
         max_message_chars: int = 4096,
         supports_buttons: bool = False,
+        supports_media: bool = True,
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
             supports_buttons=supports_buttons,
+            supports_media=supports_media,
         )
         self.started = False
         self.stopped = False
@@ -155,6 +157,8 @@ class FakeChannelAdapter:
         self.edits: list[tuple[str, str, str]] = []  # (chat_id, message_id, text)
         self.deleted: list[tuple[str, str]] = []  # (chat_id, message_id)
         self.typing: list[str] = []  # chat_ids
+        # (chat_id, path, caption, as_photo) for each uploaded file.
+        self.media: list[tuple[str, str, str | None, bool]] = []
         self._next_id = 0
 
     @property
@@ -197,6 +201,17 @@ class FakeChannelAdapter:
 
     async def send_typing(self, chat_id: str) -> None:
         self.typing.append(chat_id)
+
+    async def send_media(
+        self,
+        chat_id: str,
+        path: str,
+        *,
+        caption: str | None = None,
+        as_photo: bool = True,
+    ) -> SentMessage:
+        self.media.append((chat_id, path, caption, as_photo))
+        return SentMessage(message_id=self._new_id())
 
     async def tap(
         self, value: str, *, channel: str, chat_id: str = "owner", sender_id: str = ""

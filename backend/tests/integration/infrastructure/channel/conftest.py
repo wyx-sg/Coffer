@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from coffer.application.channel.ports import AdapterCallbacks
@@ -64,8 +64,13 @@ class FakeTelegram:
         self.fail_get_updates = 0  # answer getUpdates with HTTP 500 N times
         self.html_error_sends = 0  # answer sendMessage with a non-JSON HTML body N times
         self._next_message_id = 100
+        self.file_bytes = b"FAKE-IMAGE-BYTES"  # served for any file download
         self.app = FastAPI()
         self.app.post("/bot{token}/{method}")(self._handle)
+        self.app.get("/file/bot{token}/{file_path:path}")(self._serve_file)
+
+    async def _serve_file(self, token: str, file_path: str) -> Response:
+        return Response(content=self.file_bytes, media_type="application/octet-stream")
 
     async def _handle(self, token: str, method: str, request: Request) -> JSONResponse:
         params: dict[str, Any] = await request.json()
@@ -101,6 +106,14 @@ class FakeTelegram:
             self._next_message_id += 1
             return JSONResponse(
                 content={"ok": True, "result": {"message_id": self._next_message_id}}
+            )
+        if method == "getFile":
+            file_id = params.get("file_id")
+            return JSONResponse(
+                content={
+                    "ok": True,
+                    "result": {"file_id": file_id, "file_path": f"downloads/{file_id}.bin"},
+                }
             )
         return JSONResponse(content={"ok": True, "result": {}})
 

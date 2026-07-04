@@ -232,23 +232,24 @@ message answered by it; send `/model <name>` and observe the next turn use it.
 Because the entrypoint is remote-reachable, every turn a channel message drives
 is recorded in the audit log
 with the channel, peer, and agent — answering "who drove which agent through
-which channel". And because some platforms cannot
-edit messages and show nothing while a long bridged turn runs, every turn ends
-with one compact summary pushed to the chat: done with tool count, duration,
-and tokens, or the error, or the stop.
+which channel". And when a turn ends abnormally, one compact summary is pushed
+to the chat: the failure, the stop, or the tool-iteration limit, with tool
+count, duration, and tokens. A clean success sends no summary on any channel —
+the reply itself is the signal, so the fact line would just be noise.
 
 **Why this priority**: An entrypoint manager's two unclaimed differentiators are
 first-class auth/audit and a reliable completion signal; both must be true on
 every channel, including the silent ones.
 
 **Independent Test**: Drive a turn from a paired channel and observe a
-turn-started audit record with the channel, peer, and agent; observe a completion
-summary message after the turn on a channel that cannot edit messages.
+turn-started audit record with the channel, peer, and agent; observe that a
+clean success sends no completion summary while a failed turn does.
 
 **Covering scenarios**:
 
 - a channel-driven turn is audited with channel, peer, and agent
-- a completion summary is sent after every turn
+- a clean success sends no completion summary
+- a turn that does not end normally sends a completion summary
 - a group member who is not the paired sender is ignored
 
 ---
@@ -270,8 +271,10 @@ summary message after the turn on a channel that cannot edit messages.
   exponentially and resumes; no inbound message is double-processed after
   reconnect (update offset is committed only after dispatch).
 - SeaTalk sender rate limits (HTTP 429) → outbound sends back off and retry.
-- Non-text inbound content (images, files, voice) → the channel replies that
-  only text is supported in this version.
+- Inbound photos and files → downloaded and handed to the agent for the turn
+  (images inlined for a vision agent; any agent gets the file's path). An empty
+  message with nothing downloadable (a sticker, a location) → the channel replies
+  that it needs text, a photo, or a file.
 
 ## Requirements
 
@@ -297,7 +300,9 @@ summary message after the turn on a channel that cannot edit messages.
 - **FR-005**: Replies render per channel capability: Telegram converts
   markdown to Telegram HTML with a plain-text fallback and 4000-character
   paragraph-boundary chunking, and streams tool progress into one throttled
-  editable status message; SeaTalk sends markdown with 4096-byte chunking and
+  editable status message whose lines describe each call from its input (e.g.
+  `⏳ Bash · list the desktop`, `✅ Read · wedding.json`); SeaTalk sends markdown
+  with 4096-byte chunking and
   signals progress with a typing indicator. Capabilities are declared by the
   adapter, not special-cased in the core.
 - **FR-006**: Commands `/new`, `/stop`, `/status`, `/help` work from any
@@ -339,12 +344,12 @@ status / notify`.
   stored `sender_id`) degrades to the chat-id-only gate. One channel-driven
   event is audited beyond FR-012: a turn started by an inbound message
   (channel, peer, agent, conversation).
-- **FR-015**: After every turn the channel sends one compact completion summary
-  as a fresh message, independent of message-edit capability: success reports a
-  done marker with tool count, duration, and token usage; a failed turn reports
-  the error; an interrupted turn reports the stop. This is the end-of-turn
-  signal on platforms that cannot edit messages and show nothing while a long
-  bridged turn runs.
+- **FR-015**: After a turn that did not end normally the channel sends one compact
+  completion summary as a fresh message: a failure reports the error, an interrupt
+  reports the stop, and the tool-iteration limit reports the limit, each with tool
+  count, duration, and token usage. A clean success sends **no** summary on any
+  channel — the reply itself is the completion signal, so the fact line would only
+  be noise (this holds regardless of whether the transport can edit messages).
 - **FR-017**: The owner switches the model from chat. `/model` with no argument
   reports the current model; `/model <name>` for the builtin agent resolves the
   name against the model registry and sets the conversation's model override,
@@ -367,6 +372,37 @@ status / notify`.
   realizes the interactive-button capability that
   [ADR-014](../../docs/decisions/ADR-014-channel-adapter-framework.md)'s
   `ChannelCapabilities` anticipated ("show buttons?").
+- **FR-019**: A channel-originated turn tells the agent it is bridged to a chat
+  channel, not a terminal: the agent receives a short system-prompt note carrying
+  the channel name and mobile-chat guidance — keep replies concise, and it cannot
+  click permission or confirmation dialogs on the user's computer (they may be
+  away from it). This prevents terminal-sized replies and silent waits on
+  un-clickable dialogs. Web-UI turns are unaffected — the note rides only on a
+  conversation whose `channel_name` is set.
+- **FR-020**: Inbound photos and files drive a turn. The transport downloads each
+  attachment to a Coffer-managed media dir; the bytes never enter the chat DB (the
+  persisted user message keeps the caption, or a short note when there is none).
+  For the turn, each attachment is handed to the agent adapter, which materialises
+  it in its own native shape — a vision agent (Claude Code) inlines an image as a
+  base64 content block it sees directly and a PDF as a document block; a
+  path-native agent (Codex) and any non-vision file receive the on-disk path to
+  open. This keeps history small, works for arbitrary file types, and generalises
+  to future modalities (a new type is a new mime, not a new schema). See
+  [ADR-038](../../docs/decisions/ADR-038-channel-media.md).
+- **FR-021**: The agent sends a file back to the user by an explicit opt-in: a
+  reply line `![caption](/absolute/path)` (told to it by FR-019's system note). On
+  a transport that declares `supports_media`, the channel uploads that file (an
+  image extension as an inline photo, otherwise a document) and strips the line
+  from the delivered text; a bare path mentioned in prose is not this syntax and
+  is never uploaded, and a marker whose file is missing, relative, or oversized is
+  left as text. This keeps outbound file delivery deliberate, not guessed.
+- **FR-022**: An inbound voice message drives a turn as a transcript. The built-in
+  agents (Claude Code, Codex) cannot hear audio, so the adapter transcribes the
+  audio to text (local `mlx-whisper`, an optional dependency) and folds it into the
+  turn's prompt. Transcription is a per-agent seam (ADR-038): a future
+  audio-native agent's adapter forwards the audio instead of transcribing. When
+  transcription is unavailable, the voice is handed over as an audio file rather
+  than lost.
 
 ### Key Entities
 
@@ -407,9 +443,9 @@ status / notify`.
 - **SC-006**: From one paired chat the owner reaches every registered agent
   with a chosen model (demonstrated by driving two scripted providers in tests).
 - **SC-007**: Every channel-driven turn
-  is queryable in the audit log by channel, peer, and agent; and every turn,
-  including on a channel that cannot edit messages, ends with a completion
-  summary in the chat (demonstrated against the edit-incapable fake adapter).
+  is queryable in the audit log by channel, peer, and agent; a clean success
+  sends no completion summary on any channel, while a turn that ends abnormally
+  (failed, interrupted, tool-limit) sends one reporting the outcome.
 
 ## Acceptance Scenarios
 
@@ -612,18 +648,70 @@ status / notify`.
 - **Then** an audit record names the channel, the peer, the agent, and the
   conversation
 
-### Scenario: a completion summary is sent after every turn
+### Scenario: a turn that does not end normally sends a completion summary
 
-- **Given** a paired channel on an adapter that cannot edit messages
-- **When** a turn completes
-- **Then** a compact completion summary is sent to the chat reporting the
-  outcome, and a failed turn reports the error
+- **Given** a paired channel
+- **When** a turn fails, is interrupted, or hits the tool-iteration limit
+- **Then** a compact completion summary is sent to the chat reporting the outcome
+  (the error / stop / limit) with tool count, duration, and tokens
+
+### Scenario: a clean success sends no completion summary
+
+- **Given** a paired channel (whether or not the transport can edit messages)
+- **When** a turn completes successfully
+- **Then** no completion summary is sent — the reply itself is the end-of-turn
+  signal
+
+### Scenario: channel progress lines describe each tool call from its input
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** the agent invokes a tool during a turn
+- **Then** the progress status line names the tool and a short descriptor drawn
+  from its input (e.g. the Bash description, the file basename for Read)
 
 ### Scenario: a group member who is not the paired sender is ignored
 
 - **Given** a peer paired with a stored sender identity
 - **When** a message arrives with the same chat id but a different sender id
 - **Then** no reply is sent and no turn is started
+
+### Scenario: the channel-driven agent is told it is on a chat channel
+
+- **Given** a channel-originated conversation
+- **When** a turn is driven from the channel
+- **Then** the agent receives a system-prompt note naming the channel and telling
+  it to keep replies concise and that it cannot click the user's OS dialogs,
+  while a web-UI conversation gets no such note
+
+### Scenario: an inbound photo is downloaded and drives a turn
+
+- **Given** a paired Telegram channel
+- **When** the owner sends a photo (with an optional caption)
+- **Then** the largest photo size is downloaded to the media dir and carried on
+  the inbound message as an attachment, and the caption becomes the message text
+
+### Scenario: an inbound image reaches a vision agent as an inline block
+
+- **Given** a turn carrying an image attachment
+- **When** the Claude adapter builds the turn's content
+- **Then** the image is a base64 `image` content block (a non-vision file becomes
+  a path pointer instead), so the bytes are sent inline for this turn only and
+  never stored in the chat database
+
+### Scenario: the agent sends a file to the user via a reply marker
+
+- **Given** a media-capable channel and an agent reply containing
+  `![caption](/absolute/path)` for a file that exists
+- **When** the turn's reply is delivered
+- **Then** the file is uploaded (an image as a photo, otherwise a document) and the
+  marker is removed from the text; a bare path mentioned in prose is not uploaded
+
+### Scenario: an inbound voice message is transcribed for a text-only agent
+
+- **Given** a voice attachment on a turn for an agent that cannot hear audio
+- **When** the adapter prepares the turn
+- **Then** the audio is transcribed to text and folded into the prompt, and the
+  audio is not also sent as a file (a future audio-native agent would forward it)
 
 ## Assumptions
 
@@ -633,7 +721,10 @@ status / notify`.
 - For SeaTalk, the user runs a tunnel (cloudflared, ngrok, or equivalent)
   from a public URL to the local callback port; Coffer documents this in the
   quickstart but does not manage the tunnel.
-- Channels carry text conversations; rich media arrives as a polite
-  "text only" reply. The one exception is **command selection cards**: on a
+- Channels carry text plus inbound photos and files (FR-020): media is
+  downloaded and handed to the agent, while an empty message with nothing
+  downloadable gets a polite "send text, a photo, or a file" reply. Outbound is
+  text plus files the agent chooses to send (FR-021, on a `supports_media`
+  transport) and, as a rich exception, **command selection cards**: on a
   transport that `supports_buttons`, `/agent` and `/model` may render their
   choices as interactive buttons (FR-018).

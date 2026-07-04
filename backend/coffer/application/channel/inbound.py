@@ -39,6 +39,7 @@ from coffer.application.channel.turn_render import TurnRenderer
 from coffer.domain.audit import AuditEventType
 from coffer.domain.channel.envelopes import ChoiceButton, InboundCallback, InboundMessage
 from coffer.domain.chat.agent_config import AgentConfig
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.errors import TurnInProgress
 from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
@@ -48,6 +49,19 @@ __all__ = ["ChannelBinding", "InboundProcessor"]
 _logger = logging.getLogger(__name__)
 
 _QUEUE_MAX = 10
+
+#: One queued inbound turn: the text to drive it, and any downloaded attachments
+#: to materialise for the agent (images inlined, files handed off by path).
+_QueuedInbound = tuple[str, tuple[Attachment, ...]]
+
+
+def _attachment_note(attachments: Sequence[Attachment]) -> str:
+    """A short stand-in text for a media message with no caption, so the persisted
+    user turn is not blank (the bytes reach the agent out-of-band)."""
+    names = ", ".join(a.filename for a in attachments)
+    kind = "image" if all(a.is_image for a in attachments) else "file"
+    plural = "s" if len(attachments) != 1 else ""
+    return f"(sent {len(attachments)} {kind}{plural}: {names})"
 
 
 class ConversationPort(Protocol):
@@ -77,14 +91,20 @@ class ConversationPort(Protocol):
 class TurnPort(Protocol):
     """The slice of the turn orchestrator we use."""
 
-    async def start_turn(self, conversation_id: str, user_text: str) -> asyncio.Queue[Any]: ...
+    async def start_turn(
+        self,
+        conversation_id: str,
+        user_text: str,
+        *,
+        attachments: Sequence[Attachment] = (),
+    ) -> asyncio.Queue[Any]: ...
 
     def interrupt_turn(self, conversation_id: str) -> None: ...
 
 
 @dataclass
 class _Session:
-    queue: deque[str] = field(default_factory=lambda: deque(maxlen=_QUEUE_MAX))
+    queue: deque[_QueuedInbound] = field(default_factory=lambda: deque(maxlen=_QUEUE_MAX))
     drain_task: asyncio.Task[None] | None = None
     # The conversation whose turn is draining right now (None between turns).
     # Tracked separately from the peer's active conversation: ``/new`` rebinds
@@ -170,13 +190,19 @@ class InboundProcessor:
             # update shape never locks the owner out of their own channel.
             return
         text = msg.text.strip()
-        if not text:
-            # Non-text content reaches the core as an empty envelope.
+        attachments = tuple(
+            Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in msg.attachments
+        )
+        if not text and not attachments:
+            # An empty envelope with nothing downloadable (a sticker, a location,
+            # a media type the transport does not extract).
             await self._safe_send(
-                binding, peer.chat_id, "⚠️ Only text messages are supported for now."
+                binding, peer.chat_id, "⚠️ Unsupported message — send text, a photo, or a file."
             )
             return
-        if text.startswith("/"):
+        # A slash command is text-only; a caption starting with "/" alongside an
+        # attachment is a normal message, not a command.
+        if text.startswith("/") and not attachments:
             await self._commands.handle(
                 binding, peer, text, self._session(binding.name), self._safe_send
             )
@@ -185,7 +211,8 @@ class InboundProcessor:
         if len(session.queue) >= _QUEUE_MAX:
             await self._safe_send(binding, peer.chat_id, "⚠️ Busy — message dropped, try again.")
             return
-        session.queue.append(text)
+        # A media message with no caption still needs non-blank text to persist.
+        session.queue.append((text or _attachment_note(attachments), attachments))
         if session.drain_task is None or session.drain_task.done():
             session.drain_task = asyncio.create_task(
                 self._drain(binding), name=f"channel-drain:{binding.name}"
@@ -242,18 +269,24 @@ class InboundProcessor:
     async def _drain(self, binding: ChannelBinding) -> None:
         session = self._session(binding.name)
         while session.queue:
-            text = session.queue.popleft()
+            user_text, attachments = session.queue.popleft()
             peer = await self._peers.get(binding.resource_id)
             if peer is None:
                 break
             try:
-                await self._run_turn(binding, peer, text)
+                await self._run_turn(binding, peer, user_text, attachments)
             except asyncio.CancelledError:
                 raise
             except Exception:
                 _logger.exception("channel.turn.failed", extra={"channel": binding.name})
 
-    async def _run_turn(self, binding: ChannelBinding, peer: ChannelPeer, text: str) -> None:
+    async def _run_turn(
+        self,
+        binding: ChannelBinding,
+        peer: ChannelPeer,
+        text: str,
+        attachments: Sequence[Attachment] = (),
+    ) -> None:
         adapter = binding.adapter
         try:
             conversation_id = await ensure_conversation(
@@ -284,7 +317,7 @@ class InboundProcessor:
             with contextlib.suppress(Exception):
                 await adapter.send_typing(peer.chat_id)
         try:
-            queue = await self._turns.start_turn(conversation_id, text)
+            queue = await self._turns.start_turn(conversation_id, text, attachments=attachments)
         except TurnInProgress:
             await self._safe_send(
                 binding, peer.chat_id, "⚠️ A turn is already running for this conversation."

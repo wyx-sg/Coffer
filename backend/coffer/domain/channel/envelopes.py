@@ -11,8 +11,22 @@ from datetime import datetime
 
 
 @dataclass(frozen=True)
+class InboundAttachment:
+    """A file (photo/document/voice) the transport downloaded for an inbound message.
+
+    The bytes are already saved to a local path; the core converts this to a
+    chat-domain ``Attachment`` when driving the turn. Modality-neutral so a new
+    media type is a new ``mime``, not a new envelope.
+    """
+
+    path: str  # absolute local path the transport downloaded the bytes to
+    mime: str  # e.g. "image/jpeg", "application/pdf", "audio/ogg"
+    filename: str  # best-effort original / synthesized name
+
+
+@dataclass(frozen=True)
 class InboundMessage:
-    """A text message arriving from an IM chat."""
+    """A message arriving from an IM chat — text and/or downloaded attachments."""
 
     channel: str  # channel resource name
     chat_id: str  # Telegram chat id / SeaTalk employee_code
@@ -22,6 +36,7 @@ class InboundMessage:
     timestamp: datetime
     sender_id: str = ""  # stable per-sender id for the owner gate (Telegram
     # from.id, SeaTalk employee_code); "" when the transport has none
+    attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
 
 
 @dataclass(frozen=True)
@@ -32,6 +47,7 @@ class ChannelCapabilities:
     supports_typing: bool  # typing indicator ack
     max_message_chars: int  # outbound chunk budget
     supports_buttons: bool = False  # interactive selection cards (ADR-014)
+    supports_media: bool = False  # outbound file/photo upload (send_media)
 
 
 @dataclass(frozen=True)

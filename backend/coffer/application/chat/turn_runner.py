@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 
 from coffer.application.audit_service import AuditService
 from coffer.application.chat.ports import AgentAdapter
@@ -21,6 +22,7 @@ from coffer.application.chat.turn_persistence import (
     recover_placeholder_id,
 )
 from coffer.application.chat.turn_state import _ACTIVE_TURNS, _ActiveTurn
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     TextDelta,
     ToolCall,
@@ -40,8 +42,12 @@ async def run_turn_task(
     adapter: AgentAdapter,
     chat: ChatService,
     audit: AuditService,
+    attachments: Sequence[Attachment] = (),
 ) -> None:
-    """Async task body: drive the adapter, publish events, persist the result."""
+    """Async task body: drive the adapter, publish events, persist the result.
+
+    ``attachments`` (channel media for this turn) are handed to the adapter, which
+    materialises them in its own native shape; they are not part of ``history``."""
     bus = active.bus
 
     def emit(event: object) -> None:
@@ -79,7 +85,7 @@ async def run_turn_task(
         )
         placeholder_id = (await asyncio.shield(append_task)).id
 
-        async for event in await adapter.run_turn(history=history):
+        async for event in await adapter.run_turn(history=history, attachments=attachments):
             emit(event)
             if isinstance(event, TextDelta):
                 text_parts.append(event.text)

@@ -96,12 +96,16 @@ async def test_turn_error_is_delivered_as_a_short_notice(env: ChannelEnv) -> Non
     assert env.processor.binding("tg") is not None
 
 
-async def test_non_text_message_gets_a_text_only_notice(env: ChannelEnv) -> None:
+async def test_empty_message_with_no_attachments_gets_an_unsupported_notice(
+    env: ChannelEnv,
+) -> None:
+    # A blank envelope with nothing downloadable (a sticker, a location) — a
+    # photo or file WOULD drive a turn, but there is nothing here.
     _resource, adapter = await env.paired_channel()
 
     await env.processor.on_message(inbound("tg", "owner", "   "))
 
-    assert adapter.texts() == ["⚠️ Only text messages are supported for now."]
+    assert adapter.texts() == ["⚠️ Unsupported message — send text, a photo, or a file."]
     assert await env.chat.list_conversations() == []
 
 
@@ -142,9 +146,10 @@ async def test_dangling_active_conversation_is_recreated_on_next_message(
 ) -> None:
     resource, adapter = await env.paired_channel()
 
-    # Each turn emits a reply plus a completion summary (two messages).
+    # On this edit-capable adapter a clean success emits just the reply — the
+    # trailing fact summary is suppressed, so one text marks a finished turn.
     await env.processor.on_message(inbound("tg", "owner", "first"))
-    await wait_until(lambda: len(adapter.texts()) >= 2)
+    await wait_until(lambda: len(adapter.texts()) >= 1)
     peer = await env.peers.get(resource.id)
     assert peer is not None
     old_conversation = peer.active_conversation_id
@@ -154,7 +159,7 @@ async def test_dangling_active_conversation_is_recreated_on_next_message(
     await env.chat.delete_conversation(old_conversation, actor="user")
 
     await env.processor.on_message(inbound("tg", "owner", "second"))
-    await wait_until(lambda: len(adapter.texts()) >= 4)
+    await wait_until(lambda: len(adapter.texts()) >= 2)
 
     peer = await env.peers.get(resource.id)
     assert peer is not None

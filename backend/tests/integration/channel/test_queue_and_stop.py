@@ -28,7 +28,9 @@ class GatedAdapter:
         self.release = asyncio.Event()
         self.runs: list[str] = []
 
-    async def run_turn(self, *, history: Sequence[Message]) -> AsyncIterator[AgentEvent]:
+    async def run_turn(
+        self, *, history: Sequence[Message], **_: object
+    ) -> AsyncIterator[AgentEvent]:
         last = history[-1]
         text = "".join(b.text for b in last.content if isinstance(b, TextBlock))
 

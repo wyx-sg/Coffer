@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import AgentEvent
 from coffer.domain.chat.message import Message
 
@@ -63,8 +64,14 @@ class AgentAdapter(Protocol):
         self,
         *,
         history: Sequence[Message],
+        attachments: Sequence[Attachment] = (),
     ) -> AsyncIterator[AgentEvent]:
-        """Run one turn and yield its events."""
+        """Run one turn and yield its events.
+
+        ``attachments`` are files supplied with this turn (channel media). An
+        adapter materialises them in its own native shape — a vision agent inlines
+        image/document content blocks; a path-native agent uses the paths. An
+        adapter that ignores them still satisfies the seam (default empty)."""
         ...
 
 
