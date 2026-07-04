@@ -36,7 +36,8 @@
       "binaries/coffer-daemon",
       "binaries/coffer-mcp-shim",
       "binaries/coffer-hook",
-      "binaries/coffer-callback"
+      "binaries/coffer-callback",
+      "binaries/whisper-cli"
     ],
     "icon": [
       "icons/32x32.png",

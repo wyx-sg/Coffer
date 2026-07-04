@@ -27,7 +27,7 @@ from coffer.infrastructure.chat.codex_app_server import (
     default_app_server_session,
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
-from coffer.infrastructure.chat.transcribe import MlxWhisperTranscriber
+from coffer.infrastructure.chat.transcribe import default_transcriber
 
 #: Resolve the active openai connection's decrypted API key, or ``None`` when no
 #: Coffer connection is active for Codex (it then runs on its own login).
@@ -113,8 +113,9 @@ class CodexAppServerProvider:
             session_factory=self._session_factory,
             on_session=_save_session,
             env=env,
-            # Codex cannot hear audio; a voice attachment is transcribed to text.
-            transcriber=MlxWhisperTranscriber(),
+            # Codex cannot hear audio; a voice attachment is transcribed to text
+            # by the best local engine available here (ADR-039).
+            transcriber=default_transcriber(),
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

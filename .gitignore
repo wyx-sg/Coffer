@@ -192,6 +192,7 @@ docs/superpowers/
 desktop/binaries/coffer-daemon-*
 desktop/binaries/coffer-mcp-shim-*
 desktop/binaries/coffer-*
+desktop/binaries/whisper-cli-*
 # PyInstaller build artefacts
 build/
 dist/

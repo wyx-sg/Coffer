@@ -186,7 +186,7 @@ jobs:
       - name: Stub sidecar binaries for tauri build
         run: |
           mkdir -p desktop/binaries
-          for b in coffer-daemon coffer-mcp-shim coffer-hook coffer-callback; do
+          for b in coffer-daemon coffer-mcp-shim coffer-hook coffer-callback whisper-cli; do
             printf '#!/bin/sh\nexit 0\n' > "desktop/binaries/${b}-x86_64-unknown-linux-gnu"
             chmod +x "desktop/binaries/${b}-x86_64-unknown-linux-gnu"
           done
