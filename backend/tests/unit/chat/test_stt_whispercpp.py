@@ -111,6 +111,26 @@ async def test_run_cli_empty_on_nonzero_exit(
     assert await WhisperCppTranscriber(cli=str(cli)).transcribe("/voice.ogg") == ""
 
 
+async def test_transcribe_never_raises_on_bad_cli_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A stale/invalid whisper-cli path makes create_subprocess_exec raise; the seam
+    # must still return "" (Transcriber contract: never raises to the caller).
+    model = tmp_path / "model.bin"
+    model.write_bytes(b"x")
+    wav = tmp_path / "in.wav"
+    wav.write_bytes(b"RIFF")
+
+    async def _model() -> Path:
+        return model
+
+    monkeypatch.setattr(stt, "_ensure_model", _model)
+    monkeypatch.setattr(stt, "_decode_to_wav", lambda path: str(wav))
+
+    t = WhisperCppTranscriber(cli=str(tmp_path / "does-not-exist-whisper-cli"))
+    assert await t.transcribe("/voice.ogg") == ""
+
+
 def test_decode_to_wav_produces_16k_mono(tmp_path: Path) -> None:
     sf = pytest.importorskip("soundfile")
     pytest.importorskip("soxr")

@@ -84,11 +84,11 @@ async def _ensure_model() -> Path | None:
     async with _download_lock:
         if path.exists():  # another turn won the race while we waited on the lock
             return path
-        path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".partial")
         try:
             import httpx
 
+            path.parent.mkdir(parents=True, exist_ok=True)
             timeout = httpx.Timeout(30.0, read=300.0)
             async with (
                 httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client,
@@ -103,7 +103,7 @@ async def _ensure_model() -> Path | None:
             return path
         except Exception:
             _logger.warning("stt.model_download_failed", exc_info=True)
-            with contextlib.suppress(FileNotFoundError):
+            with contextlib.suppress(OSError):
                 tmp.unlink()
             return None
 
@@ -124,21 +124,24 @@ class WhisperCppTranscriber:
         return resolve_whisper_cli() is not None and _decoder_available()
 
     async def transcribe(self, path: str) -> str:
+        # Contract: never raises. A missing binary/model/decoder, a bad audio file,
+        # or a stale whisper-cli path (subprocess spawn failure) all yield "" so the
+        # adapter hands over the audio file instead.
         if self._cli is None:
             return ""
-        model = await _ensure_model()
-        if model is None:
-            return ""
         try:
+            model = await _ensure_model()
+            if model is None:
+                return ""
             wav = await asyncio.to_thread(_decode_to_wav, path)
+            try:
+                return await self._run_cli(model, wav)
+            finally:
+                with contextlib.suppress(OSError):
+                    Path(wav).unlink()
         except Exception:
-            _logger.warning("stt.decode_failed", exc_info=True)
+            _logger.warning("stt.transcribe_failed", exc_info=True)
             return ""
-        try:
-            return await self._run_cli(model, wav)
-        finally:
-            with contextlib.suppress(OSError):
-                Path(wav).unlink()
 
     async def _run_cli(self, model: Path, wav: str) -> str:
         with tempfile.TemporaryDirectory() as tmp:
