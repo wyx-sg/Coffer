@@ -52,6 +52,11 @@ from coffer.domain.chat.events import (
 )
 from coffer.domain.chat.message import Message
 from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink, last_user_text
+from coffer.infrastructure.chat.transcribe import (
+    Transcriber,
+    prompt_with_transcripts,
+    transcribe_audio_attachments,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -283,6 +288,7 @@ class ClaudeSdkAgentAdapter:
         on_session: SessionSink,
         env: dict[str, str] | None = None,
         system_context: str | None = None,
+        transcriber: Transcriber | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -291,6 +297,7 @@ class ClaudeSdkAgentAdapter:
         self._on_session = on_session
         self._env = env
         self._system_context = system_context
+        self._transcriber = transcriber
 
     async def run_turn(
         self,
@@ -374,7 +381,13 @@ class ClaudeSdkAgentAdapter:
     async def _stream(
         self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
-        content = self._build_content(last_user_text(history), attachments)
+        # Claude cannot hear audio: transcribe any voice attachment to text and
+        # fold it into the prompt; the rest are materialised as content blocks.
+        attachments, transcripts = await transcribe_audio_attachments(
+            attachments, self._transcriber
+        )
+        prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        content = self._build_content(prompt, attachments)
         if not content:
             yield TurnError(code="empty_prompt", message="no user message to send")
             return

@@ -24,6 +24,7 @@ from coffer.infrastructure.chat.claude_sdk_agent import (
     default_session_factory,
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
+from coffer.infrastructure.chat.transcribe import MlxWhisperTranscriber
 
 
 class ClaudeSdkProvider:
@@ -95,6 +96,8 @@ class ClaudeSdkProvider:
             session_factory=self._session_factory,
             on_session=_save_session,
             system_context=system_context,
+            # Claude cannot hear audio; a voice attachment is transcribed to text.
+            transcriber=MlxWhisperTranscriber(),
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

@@ -40,6 +40,11 @@ from coffer.infrastructure.chat.codex_mapping import (
     CodexParseState,
     map_codex_notification,
 )
+from coffer.infrastructure.chat.transcribe import (
+    Transcriber,
+    prompt_with_transcripts,
+    transcribe_audio_attachments,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -68,6 +73,7 @@ class CodexAppServerAdapter:
         session_factory: AppServerSessionFactory,
         on_session: SessionSink,
         env: dict[str, str] | None = None,
+        transcriber: Transcriber | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -75,6 +81,7 @@ class CodexAppServerAdapter:
         self._session_factory = session_factory
         self._on_session = on_session
         self._env = env
+        self._transcriber = transcriber
 
     async def run_turn(
         self,
@@ -149,7 +156,11 @@ class CodexAppServerAdapter:
     async def _stream(
         self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
-        prompt = last_user_text(history)
+        # Codex cannot hear audio: transcribe voice to text; keep other files.
+        attachments, transcripts = await transcribe_audio_attachments(
+            attachments, self._transcriber
+        )
+        prompt = prompt_with_transcripts(last_user_text(history), transcripts)
         if attachments:
             # Codex is path-native (no inline image blocks over its app-server
             # RPC): hand it the on-disk paths so it can open them with its tools.

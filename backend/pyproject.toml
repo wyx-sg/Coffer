@@ -63,6 +63,12 @@ dependencies = [
 local-embeddings = [
     "fastembed>=0.3",
 ]
+# Optional local speech-to-text for inbound channel voice messages (Apple
+# Silicon, Metal/ANE). Absent, a voice message is handed over as an audio file
+# instead of a transcript. See spec 009 FR-022 / ADR-038.
+voice = [
+    "mlx-whisper>=0.4",
+]
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
@@ -117,7 +123,7 @@ pretty = true
 # present on CI (→ import-untyped) but may be absent in a lean dev/verify env
 # (→ import-not-found); ignoring missing imports keeps mypy stable across both.
 [[tool.mypy.overrides]]
-module = ["sqlite_vec.*", "markitdown.*", "fastembed.*", "ruamel.*"]
+module = ["sqlite_vec.*", "markitdown.*", "fastembed.*", "ruamel.*", "mlx_whisper.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

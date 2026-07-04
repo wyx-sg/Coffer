@@ -345,6 +345,10 @@ status / notify`。
   `supports_media` 的传输上，channel 上传该文件（图片扩展名作为内联照片、否则作为
   文档）并从投递文本里移除该行；正文里顺口提到的路径不是此语法、绝不上传，而文件
   缺失、相对路径或过大的标记则作为文本保留。这让出站发文件是刻意的、而非猜测。
+- **FR-022**: 入站语音消息以转写文本驱动一个 turn。内置 agent（Claude Code、Codex）
+  无法听音频，所以 adapter 把音频转写成文字（本地 `mlx-whisper`，可选依赖）并折进
+  turn 的 prompt。转写是一个按 agent 的接缝（ADR-038）：未来音频原生 agent 的
+  adapter 直接转发音频而非转写。转写不可用时，语音作为音频文件交出而非丢失。
 
 ### Key Entities
 
@@ -633,6 +637,13 @@ status / notify`。
 - **When** 投递该 turn 的回复
 - **Then** 文件被上传（图片作为照片、否则作为文档）、标记从文本中移除；正文里
   顺口提到的路径不会被上传
+
+### Scenario: an inbound voice message is transcribed for a text-only agent
+
+- **Given** 一个给无法听音频的 agent 的 turn 上带一个语音附件
+- **When** adapter 准备该 turn
+- **Then** 音频被转写成文字并折进 prompt，且音频不再作为文件发送（未来音频原生
+  agent 则会直接转发它）
 
 ## Assumptions
 

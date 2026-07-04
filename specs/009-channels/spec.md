@@ -402,6 +402,13 @@ status / notify`.
   from the delivered text; a bare path mentioned in prose is not this syntax and
   is never uploaded, and a marker whose file is missing, relative, or oversized is
   left as text. This keeps outbound file delivery deliberate, not guessed.
+- **FR-022**: An inbound voice message drives a turn as a transcript. The built-in
+  agents (Claude Code, Codex) cannot hear audio, so the adapter transcribes the
+  audio to text (local `mlx-whisper`, an optional dependency) and folds it into the
+  turn's prompt. Transcription is a per-agent seam (ADR-038): a future
+  audio-native agent's adapter forwards the audio instead of transcribing. When
+  transcription is unavailable, the voice is handed over as an audio file rather
+  than lost.
 
 ### Key Entities
 
@@ -705,6 +712,13 @@ status / notify`.
 - **When** the turn's reply is delivered
 - **Then** the file is uploaded (an image as a photo, otherwise a document) and the
   marker is removed from the text; a bare path mentioned in prose is not uploaded
+
+### Scenario: an inbound voice message is transcribed for a text-only agent
+
+- **Given** a voice attachment on a turn for an agent that cannot hear audio
+- **When** the adapter prepares the turn
+- **Then** the audio is transcribed to text and folded into the prompt, and the
+  audio is not also sent as a file (a future audio-native agent would forward it)
 
 ## Assumptions
 
