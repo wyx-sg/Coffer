@@ -233,9 +233,12 @@ Because the entrypoint is remote-reachable, every turn a channel message drives
 is recorded in the audit log
 with the channel, peer, and agent — answering "who drove which agent through
 which channel". And because some platforms cannot
-edit messages and show nothing while a long bridged turn runs, every turn ends
-with one compact summary pushed to the chat: done with tool count, duration,
-and tokens, or the error, or the stop.
+edit messages and show nothing while a long bridged turn runs, a turn that
+needs an end-of-turn signal pushes one compact summary to the chat: the
+failure, the stop, the tool-iteration limit, or — on a channel that cannot edit
+— a done marker with tool count, duration, and tokens. A clean success on an
+edit-capable channel needs none: the live progress and the reply already
+signalled it.
 
 **Why this priority**: An entrypoint manager's two unclaimed differentiators are
 first-class auth/audit and a reliable completion signal; both must be true on
@@ -248,7 +251,8 @@ summary message after the turn on a channel that cannot edit messages.
 **Covering scenarios**:
 
 - a channel-driven turn is audited with channel, peer, and agent
-- a completion summary is sent after every turn
+- a completion summary is sent on a channel that cannot edit messages
+- a clean success on an edit-capable channel sends no completion summary
 - a group member who is not the paired sender is ignored
 
 ---
@@ -297,7 +301,9 @@ summary message after the turn on a channel that cannot edit messages.
 - **FR-005**: Replies render per channel capability: Telegram converts
   markdown to Telegram HTML with a plain-text fallback and 4000-character
   paragraph-boundary chunking, and streams tool progress into one throttled
-  editable status message; SeaTalk sends markdown with 4096-byte chunking and
+  editable status message whose lines describe each call from its input (e.g.
+  `⏳ Bash · list the desktop`, `✅ Read · wedding.json`); SeaTalk sends markdown
+  with 4096-byte chunking and
   signals progress with a typing indicator. Capabilities are declared by the
   adapter, not special-cased in the core.
 - **FR-006**: Commands `/new`, `/stop`, `/status`, `/help` work from any
@@ -339,12 +345,15 @@ status / notify`.
   stored `sender_id`) degrades to the chat-id-only gate. One channel-driven
   event is audited beyond FR-012: a turn started by an inbound message
   (channel, peer, agent, conversation).
-- **FR-015**: After every turn the channel sends one compact completion summary
-  as a fresh message, independent of message-edit capability: success reports a
-  done marker with tool count, duration, and token usage; a failed turn reports
-  the error; an interrupted turn reports the stop. This is the end-of-turn
-  signal on platforms that cannot edit messages and show nothing while a long
-  bridged turn runs.
+- **FR-015**: After a turn the channel sends one compact completion summary as a
+  fresh message when the turn needs an end-of-turn signal: a failure reports the
+  error, an interrupt reports the stop, the tool-iteration limit reports the
+  limit, and — on a channel that cannot edit messages — a success reports a done
+  marker with tool count, duration, and token usage. A clean success on an
+  edit-capable channel sends no summary: the live progress status and the reply
+  itself already signalled completion, so the summary would be noise. This is the
+  end-of-turn signal on platforms that cannot edit messages and show nothing
+  while a long bridged turn runs.
 - **FR-017**: The owner switches the model from chat. `/model` with no argument
   reports the current model; `/model <name>` for the builtin agent resolves the
   name against the model registry and sets the conversation's model override,
@@ -407,9 +416,10 @@ status / notify`.
 - **SC-006**: From one paired chat the owner reaches every registered agent
   with a chosen model (demonstrated by driving two scripted providers in tests).
 - **SC-007**: Every channel-driven turn
-  is queryable in the audit log by channel, peer, and agent; and every turn,
-  including on a channel that cannot edit messages, ends with a completion
-  summary in the chat (demonstrated against the edit-incapable fake adapter).
+  is queryable in the audit log by channel, peer, and agent; and on a channel
+  that cannot edit messages every turn ends with a completion summary in the
+  chat (demonstrated against the edit-incapable fake adapter), while a clean
+  success on an edit-capable channel sends none.
 
 ## Acceptance Scenarios
 
@@ -612,12 +622,26 @@ status / notify`.
 - **Then** an audit record names the channel, the peer, the agent, and the
   conversation
 
-### Scenario: a completion summary is sent after every turn
+### Scenario: a completion summary is sent on a channel that cannot edit messages
 
 - **Given** a paired channel on an adapter that cannot edit messages
 - **When** a turn completes
 - **Then** a compact completion summary is sent to the chat reporting the
   outcome, and a failed turn reports the error
+
+### Scenario: a clean success on an edit-capable channel sends no completion summary
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** a turn completes successfully
+- **Then** no trailing completion summary is sent — the live progress and the
+  reply itself are the end-of-turn signal
+
+### Scenario: channel progress lines describe each tool call from its input
+
+- **Given** a paired channel on an adapter that can edit messages
+- **When** the agent invokes a tool during a turn
+- **Then** the progress status line names the tool and a short descriptor drawn
+  from its input (e.g. the Bash description, the file basename for Read)
 
 ### Scenario: a group member who is not the paired sender is ignored
 

@@ -214,8 +214,9 @@ opus` 改 model。切换 agent 会开一个 pin 到新选择的新会话（agent
 因为入口可远程触达，channel 消息驱动的每个 turn
 都连同 channel、peer、agent 记入审计日志——回答「谁经哪个 channel 驱动了哪个
 agent」。又因为某些平台不能编辑消息、长桥接 turn 运行期间什么都不
-显示，每个 turn 都以一条推到 chat 的紧凑摘要收尾：done + 工具数、耗时、token，
-或错误，或停止。
+显示，需要收尾信号的 turn 会推一条紧凑摘要到 chat：失败、停止、达到工具迭代
+上限，或——在不能编辑的 channel 上——done + 工具数、耗时、token。可编辑 channel
+上的干净成功无需摘要：实时进度与回复本身已经是信号。
 
 **为何此优先级**：入口管理者的两个无人认领的差异化点是一等 auth/审计与可靠的
 完成信号；二者必须在每个 channel 上为真，包括沉默的那些。
@@ -226,7 +227,8 @@ agent 的 turn-started 审计记录；在不能编辑消息的 channel 上观察
 **Covering scenarios**:
 
 - a channel-driven turn is audited with channel, peer, and agent
-- a completion summary is sent after every turn
+- a completion summary is sent on a channel that cannot edit messages
+- a clean success on an edit-capable channel sends no completion summary
 - a group member who is not the paired sender is ignored
 
 ---
@@ -268,7 +270,9 @@ agent 的 turn-started 审计记录；在不能编辑消息的 channel 上观察
   service、turn orchestrator。
 - **FR-005**: 回复按 channel 能力渲染：Telegram 把 markdown 转成 Telegram
   HTML（带纯文本回退），按段落边界以 4000 字符分块，并把工具进度以节流
-  方式流式写入一条可编辑的状态消息；SeaTalk 发送 markdown，按 4096 字节
+  方式流式写入一条可编辑的状态消息，每行从调用的输入描述它在做什么
+  （如 `⏳ Bash · list the desktop`、`✅ Read · wedding.json`）；SeaTalk 发送
+  markdown，按 4096 字节
   分块，用 typing indicator 表示进行中。能力由 adapter 声明，内核不做
   特判。
 - **FR-006**: `/new`、`/stop`、`/status`、`/help` 命令在任何已配对的聊天里
@@ -302,10 +306,12 @@ status / notify`。
   `sender_id` 时）发送者匹配时才被接受。本要求之前配对的 peer（无已存
   `sender_id`）退化为 chat-id-only 闸。在 FR-012 之外审计一个 channel 驱动事件：
   一条 inbound 消息驱动的 turn（channel、peer、agent、conversation）。
-- **FR-015**: 每个 turn 后，channel 发一条紧凑的完成摘要作为新消息，与消息
-  编辑能力无关：成功时报告 done 标记 + 工具数、耗时、token 用量；失败的 turn
-  报告错误；被中断的 turn 报告停止。在不能编辑消息、且长桥接 turn 运行期间什么
-  都不显示的平台上，这就是 turn 结束信号。
+- **FR-015**: 一个 turn 后，当它需要收尾信号时，channel 发一条紧凑的完成摘要
+  作为新消息：失败报告错误、中断报告停止、达到工具迭代上限报告上限，且——在
+  不能编辑消息的 channel 上——成功报告 done 标记 + 工具数、耗时、token 用量。
+  可编辑 channel 上的干净成功不发摘要：实时进度状态与回复本身已经是完成信号，
+  摘要只会是噪音。在不能编辑消息、且长桥接 turn 运行期间什么都不显示的平台上，
+  这就是 turn 结束信号。
 - **FR-017**: owner 从 chat 切换 model。`/model` 无参时报告当前 model；
   `/model <name>` 对 builtin agent 把名字对 model registry 解析并设会话的 model
   覆盖，对桥接 agent 则存原始上游 model 串透传给 CLI。model 切换在同会话下条 turn
@@ -358,8 +364,9 @@ status / notify`。
 - **SC-006**: 从一个已配对 chat，owner 能触达每个已注册 agent、用一个所选
   model（通过在测试里驱动两个脚本化 provider 来演示）。
 - **SC-007**: 每个 channel 驱动的 turn 都能按 channel、
-  peer、agent 在审计日志里查到；且每个 turn——包括在不能编辑消息的 channel 上
-  ——都以一条 chat 里的完成摘要收尾（用不能编辑的假 adapter 来演示）。
+  peer、agent 在审计日志里查到；且在不能编辑消息的 channel 上每个 turn 都以一条
+  chat 里的完成摘要收尾（用不能编辑的假 adapter 来演示），而可编辑 channel 上的
+  干净成功不发摘要。
 
 ## Acceptance Scenarios
 
@@ -555,11 +562,24 @@ status / notify`。
 - **When** peer 发一条驱动 turn 的消息
 - **Then** 一条审计记录写下 channel、peer、agent 与 conversation
 
-### Scenario: a completion summary is sent after every turn
+### Scenario: a completion summary is sent on a channel that cannot edit messages
 
 - **Given** 一个在不能编辑消息的 adapter 上的已配对 channel
 - **When** 一个 turn 完成
 - **Then** 一条紧凑完成摘要被发到 chat 报告结果，且失败的 turn 报告错误
+
+### Scenario: a clean success on an edit-capable channel sends no completion summary
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** 一个 turn 成功完成
+- **Then** 不发任何收尾完成摘要——实时进度与回复本身就是 turn 结束信号
+
+### Scenario: channel progress lines describe each tool call from its input
+
+- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **When** agent 在一个 turn 中调用一个工具
+- **Then** 进度状态行给出工具名和从其输入取的简短描述（如 Bash 的 description、
+  Read 的文件名）
 
 ### Scenario: a group member who is not the paired sender is ignored
 

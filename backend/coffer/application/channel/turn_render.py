@@ -2,7 +2,13 @@
 
 Consumes one turn's event queue and turns it into IM traffic, strategy
 selected from the adapter's declared capabilities (never its type):
-- supports_edit → one throttled editable progress message for tool activity
+- supports_edit → one throttled editable progress message for tool activity,
+  each line describing the call ('⏳ Bash · list the desktop') from its input.
+
+The trailing fact summary compensates for channels that cannot edit and so
+show nothing while a turn runs; on an edit-capable channel a clean success
+omits it (the live progress + the reply are already the completion signal),
+while failures, interrupts, and the tool-iteration limit still send one.
 """
 
 from __future__ import annotations
@@ -26,11 +32,63 @@ from coffer.domain.chat.events import (
 
 _EDIT_INTERVAL_SECONDS = 1.5
 _PROGRESS_MAX_LINES = 8
+_DESC_MAX_CHARS = 48
+
+
+def _clip(text: str, limit: int = _DESC_MAX_CHARS) -> str:
+    """Collapse whitespace and cap length so a descriptor stays one tidy line."""
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _basename(path: str) -> str:
+    return path.rstrip("/").rsplit("/", 1)[-1] if path else ""
+
+
+def _host(url: str) -> str:
+    return url.split("://", 1)[-1].split("/", 1)[0]
+
+
+def _describe_tool(tool_name: str, tool_input: object) -> str:
+    """A short human descriptor of what a tool call is doing, drawn from its
+    input — so channel progress reads '⏳ Bash · list the desktop' instead of a
+    bare '⏳ Bash'. Best-effort and defensive: unknown tools or odd inputs fall
+    back to the first string argument, or to nothing."""
+    if not isinstance(tool_input, dict):
+        return ""
+
+    def field_str(key: str) -> str:
+        value = tool_input.get(key)
+        return value if isinstance(value, str) else ""
+
+    name = tool_name.lower()
+    if name in ("bash", "shell", "exec"):
+        return field_str("description") or field_str("command")
+    if name in ("read", "write", "edit", "multiedit", "notebookedit"):
+        return _basename(field_str("file_path"))
+    if name in ("grep", "glob"):
+        return field_str("pattern")
+    if name == "task":
+        return field_str("description")
+    if name == "webfetch":
+        return _host(field_str("url"))
+    if name == "websearch":
+        return field_str("query")
+    for value in tool_input.values():
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def _progress_line(mark: str, tool_name: str, descriptor: str) -> str:
+    descriptor = _clip(descriptor)
+    return f"{mark} {tool_name} · {descriptor}" if descriptor else f"{mark} {tool_name}"
 
 
 @dataclass
 class _Progress:
     lines: dict[str, str] = field(default_factory=dict)  # tool_use_id -> line
+    desc: dict[str, str] = field(default_factory=dict)  # tool_use_id -> descriptor
     message: SentMessage | None = None
     last_edit: float = 0.0
 
@@ -62,11 +120,19 @@ class TurnRenderer:
                 parts.append(event.text)
             elif isinstance(event, ToolCall):
                 tool_ids.add(event.tool_use_id)
-                progress.lines[event.tool_use_id] = f"⏳ {event.tool_name}"
+                descriptor = _describe_tool(event.tool_name, event.tool_input)
+                progress.desc[event.tool_use_id] = descriptor
+                progress.lines[event.tool_use_id] = _progress_line(
+                    "⏳", event.tool_name, descriptor
+                )
                 await self._update_progress(progress)
             elif isinstance(event, ToolResult):
                 mark = "❌" if event.error else "✅"
-                progress.lines[event.tool_use_id] = f"{mark} {event.tool_name}"
+                # Keep the call's descriptor so the finished line still says what
+                # it did ('✅ Read · wedding.json'); the result event omits input.
+                progress.lines[event.tool_use_id] = _progress_line(
+                    mark, event.tool_name, progress.desc.get(event.tool_use_id, "")
+                )
                 await self._update_progress(progress)
             elif isinstance(event, TurnDone):
                 stop_reason = event.stop_reason
@@ -75,11 +141,16 @@ class TurnRenderer:
             elif isinstance(event, TurnError):
                 error = event
         await self._finish(parts, stop_reason, error, progress)
-        # Every turn ends with a compact fact summary — the only end-of-turn
-        # signal on platforms that cannot edit and show nothing mid-turn.
-        await self.send(
-            self._summary(error, stop_reason, len(tool_ids), self.now() - started, tokens)
-        )
+        # The compact fact summary is the end-of-turn signal on platforms that
+        # cannot edit and show nothing mid-turn. On an edit-capable channel the
+        # live progress message already served that role, so a clean success
+        # sends no trailing summary — the reply itself is the signal. Failures,
+        # interrupts, and the tool-iteration limit still send one everywhere.
+        clean_success = error is None and stop_reason == "end_turn"
+        if not (clean_success and self.adapter.capabilities.supports_edit):
+            await self.send(
+                self._summary(error, stop_reason, len(tool_ids), self.now() - started, tokens)
+            )
 
     @staticmethod
     def _summary(
@@ -97,6 +168,8 @@ class TurnRenderer:
             return f"⚠️ failed · {detail}"
         if stop_reason == "interrupted":
             return f"⏹ stopped · {detail}"
+        if stop_reason == "max_iterations":
+            return f"⚠️ tool-limit · {detail}"
         return f"✅ done · {detail}"
 
     async def _update_progress(self, progress: _Progress) -> None:

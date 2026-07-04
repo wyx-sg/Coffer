@@ -59,23 +59,30 @@ _TOOL_TURN = [
 ]
 
 
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="a clean success on an edit-capable channel sends no completion summary",
+)
 async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
     adapter = FakeChannelAdapter(supports_edit=True)
 
     await _render(adapter, _TOOL_TURN)
 
-    # The first send is the progress message created on ToolCall…
-    assert adapter.sent[0] == ("owner", "⏳ search")
+    # The first send is the progress message created on ToolCall, labelled with
+    # a descriptor drawn from the call's input…
+    assert adapter.sent[0] == ("owner", "⏳ search · cats")
     progress_id = "m1"  # ids are issued in send order
     # …which is deleted when the turn finishes, before the final reply.
     assert adapter.deleted == [("owner", progress_id)]
-    assert ("owner", "found 3 cats") in adapter.sent
-    # The turn ends with a compact completion summary.
-    assert adapter.sent[-1] == ("owner", "✅ done · 1 tool · 0.0s")
+    # A clean success on an edit-capable channel ends with the reply itself —
+    # no trailing fact summary (the live progress already signalled activity).
+    assert adapter.sent[-1] == ("owner", "found 3 cats")
+    assert not any(text.startswith("✅ done") for _, text in adapter.sent)
 
 
 @pytest.mark.acceptance(
-    spec="009-channels", scenario="a completion summary is sent after every turn"
+    spec="009-channels",
+    scenario="a completion summary is sent on a channel that cannot edit messages",
 )
 async def test_without_edit_support_no_progress_traffic_is_sent() -> None:
     adapter = FakeChannelAdapter(supports_edit=False)
@@ -123,3 +130,42 @@ async def test_interrupted_turn_ends_with_a_stopped_summary() -> None:
     await _render(adapter, events)
 
     assert adapter.sent[-1] == ("owner", "⏹ stopped · 0 tools · 0.0s")
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="channel progress lines describe each tool call from its input",
+)
+async def test_progress_line_describes_a_bash_call_from_its_input() -> None:
+    adapter = FakeChannelAdapter(supports_edit=True)
+    events = [
+        ToolCall(
+            tool_use_id="t1",
+            tool_name="Bash",
+            tool_input={"command": "ls ~/Desktop", "description": "list the desktop"},
+        ),
+        TextDelta(text="done"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    # The progress message created on the ToolCall names the tool AND what it does.
+    assert adapter.sent[0] == ("owner", "⏳ Bash · list the desktop")
+
+
+async def test_progress_line_uses_the_file_basename_for_a_read() -> None:
+    adapter = FakeChannelAdapter(supports_edit=True)
+    events = [
+        ToolCall(
+            tool_use_id="t1",
+            tool_name="Read",
+            tool_input={"file_path": "/Users/x/wedding-invitation/data/wedding.json"},
+        ),
+        TextDelta(text="done"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.sent[0] == ("owner", "⏳ Read · wedding.json")

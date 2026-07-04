@@ -142,9 +142,10 @@ async def test_dangling_active_conversation_is_recreated_on_next_message(
 ) -> None:
     resource, adapter = await env.paired_channel()
 
-    # Each turn emits a reply plus a completion summary (two messages).
+    # On this edit-capable adapter a clean success emits just the reply — the
+    # trailing fact summary is suppressed, so one text marks a finished turn.
     await env.processor.on_message(inbound("tg", "owner", "first"))
-    await wait_until(lambda: len(adapter.texts()) >= 2)
+    await wait_until(lambda: len(adapter.texts()) >= 1)
     peer = await env.peers.get(resource.id)
     assert peer is not None
     old_conversation = peer.active_conversation_id
@@ -154,7 +155,7 @@ async def test_dangling_active_conversation_is_recreated_on_next_message(
     await env.chat.delete_conversation(old_conversation, actor="user")
 
     await env.processor.on_message(inbound("tg", "owner", "second"))
-    await wait_until(lambda: len(adapter.texts()) >= 4)
+    await wait_until(lambda: len(adapter.texts()) >= 2)
 
     peer = await env.peers.get(resource.id)
     assert peer is not None
