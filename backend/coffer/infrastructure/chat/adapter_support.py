@@ -60,7 +60,10 @@ def channel_system_context(channel_name: str) -> str:
         "tables or long code dumps unless asked. You cannot click permission or "
         "confirmation dialogs on the user's computer, and they may be away from "
         "it — if something needs a click or an OS permission, say so and do what "
-        "you can instead of waiting on it."
+        "you can instead of waiting on it. To send the user a file or image, put "
+        "a line `![caption](/absolute/path)` in your reply — the channel delivers "
+        "that file and removes the line from the text; a bare path in prose is not "
+        "sent, so use this syntax only for files you actually want to deliver."
     )
 
 

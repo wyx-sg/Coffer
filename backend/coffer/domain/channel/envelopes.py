@@ -47,6 +47,7 @@ class ChannelCapabilities:
     supports_typing: bool  # typing indicator ack
     max_message_chars: int  # outbound chunk budget
     supports_buttons: bool = False  # interactive selection cards (ADR-014)
+    supports_media: bool = False  # outbound file/photo upload (send_media)
 
 
 @dataclass(frozen=True)

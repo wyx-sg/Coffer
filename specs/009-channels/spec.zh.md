@@ -340,6 +340,11 @@ status / notify`。
   原生 agent（Codex）与任何非视觉文件收到磁盘路径去打开。这保持历史精简、适配任意
   文件类型、并可推广到未来模态（新类型是新 mime，不是新 schema）。见
   [ADR-038](../../docs/decisions/ADR-038-channel-media.zh.md)。
+- **FR-021**: agent 通过显式选择把文件发回给用户：回复里一行
+  `![caption](/absolute/path)`（由 FR-019 的 system 注记告知）。在声明了
+  `supports_media` 的传输上，channel 上传该文件（图片扩展名作为内联照片、否则作为
+  文档）并从投递文本里移除该行；正文里顺口提到的路径不是此语法、绝不上传，而文件
+  缺失、相对路径或过大的标记则作为文本保留。这让出站发文件是刻意的、而非猜测。
 
 ### Key Entities
 
@@ -621,6 +626,14 @@ status / notify`。
 - **Then** 图片是一个 base64 `image` 内容块（非视觉文件则变成路径指针），因此
   bytes 仅在本回合内联发送、绝不存进 chat 数据库
 
+### Scenario: the agent sends a file to the user via a reply marker
+
+- **Given** 一个支持媒体的 channel，且 agent 回复中含 `![caption](/absolute/path)`
+  指向一个存在的文件
+- **When** 投递该 turn 的回复
+- **Then** 文件被上传（图片作为照片、否则作为文档）、标记从文本中移除；正文里
+  顺口提到的路径不会被上传
+
 ## Assumptions
 
 - 用户能创建 Telegram bot（BotFather）和 SeaTalk Open Platform app，并能
@@ -629,6 +642,7 @@ status / notify`。
 - 对 SeaTalk，用户自行运行一条隧道（cloudflared、ngrok 或等价物）把公网
   URL 通到本地回调端口；Coffer 在 quickstart 中给出做法，但不管理隧道。
 - channel 承载文本以及入站的图片和文件（FR-020）：媒体被下载并交给 agent，而一条
-  没有可下载内容的空消息会收到礼貌的「发文本、图片或文件」回复。出站是文本；唯一的
-  富例外是**命令选择卡片**：在 `supports_buttons` 的传输上，`/agent` 与 `/model` 可以
-  把候选渲染成交互按钮（FR-018）。
+  没有可下载内容的空消息会收到礼貌的「发文本、图片或文件」回复。出站是文本、加上
+  agent 选择发送的文件（FR-021，在 `supports_media` 的传输上），以及作为富例外的
+  **命令选择卡片**：在 `supports_buttons` 的传输上，`/agent` 与 `/model` 可以把候选
+  渲染成交互按钮（FR-018）。

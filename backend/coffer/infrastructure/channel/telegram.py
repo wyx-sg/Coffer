@@ -119,6 +119,7 @@ class TelegramAdapter:
             supports_typing=True,
             max_message_chars=_CHUNK_LIMIT,
             supports_buttons=True,
+            supports_media=True,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -285,6 +286,49 @@ class TelegramAdapter:
             kb = buttons if (buttons and i == len(chunks) - 1) else None
             last = await self._send_chunk(chat_id, chunk, kb)
         return last if last is not None else SentMessage(message_id="")
+
+    async def send_media(
+        self,
+        chat_id: str,
+        path: str,
+        *,
+        caption: str | None = None,
+        as_photo: bool = True,
+    ) -> SentMessage:
+        """Upload a local file via ``sendPhoto`` (inline image) or ``sendDocument``
+        (multipart, so the platform stores + serves the bytes)."""
+        method, field = ("sendPhoto", "photo") if as_photo else ("sendDocument", "document")
+        file = pathlib.Path(path)
+        data: dict[str, str] = {"chat_id": chat_id}
+        if caption:
+            data["caption"] = caption
+        try:
+            response = await self._client.post(
+                f"{self._base}/{method}",
+                data=data,
+                files={field: (file.name, file.read_bytes())},
+            )
+        except httpx.HTTPError as e:
+            raise ChannelSendFailed(self._name, type(e).__name__) from e
+        try:
+            payload = response.json()
+        except ValueError as e:
+            raise ChannelSendFailed(
+                self._name,
+                f"{method}: non-JSON response ({response.status_code})",
+                api_rejected=True,
+                status=response.status_code,
+            ) from e
+        if not isinstance(payload, dict) or not payload.get("ok", False):
+            description = payload.get("description", "") if isinstance(payload, dict) else ""
+            raise ChannelSendFailed(
+                self._name,
+                f"{method}: {description or response.status_code}",
+                api_rejected=True,
+                status=response.status_code,
+            )
+        result = payload.get("result") or {}
+        return SentMessage(message_id=str(result.get("message_id", "")))
 
     async def _send_chunk(
         self, chat_id: str, chunk: str, buttons: Sequence[ChoiceButton] | None = None

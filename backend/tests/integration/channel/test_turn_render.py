@@ -169,3 +169,53 @@ async def test_progress_line_uses_the_file_basename_for_a_read() -> None:
     await _render(adapter, events)
 
     assert adapter.sent[0] == ("owner", "⏳ Read · wedding.json")
+
+
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="the agent sends a file to the user via a reply marker",
+)
+async def test_reply_file_marker_uploads_and_is_stripped(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    img = tmp_path / "invite.png"
+    img.write_bytes(b"PNG-bytes")
+    adapter = FakeChannelAdapter(supports_edit=False)
+    events = [
+        TextDelta(text=f"here you go\n\n![the invitation]({img})"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    # The file was uploaded as a photo with the marker's caption…
+    assert adapter.media == [("owner", str(img), "the invitation", True)]
+    # …and the marker was removed from the delivered text.
+    assert adapter.sent[0] == ("owner", "here you go")
+
+
+async def test_bare_path_in_prose_is_not_uploaded(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    data = tmp_path / "wedding.json"
+    data.write_text("{}")
+    adapter = FakeChannelAdapter(supports_edit=False)
+    events = [
+        # A plain mention, not the ![](…) syntax — must not upload.
+        TextDelta(text=f"I edited {data} for you."),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.media == []
+    assert adapter.sent[0] == ("owner", f"I edited {data} for you.")
+
+
+async def test_marker_for_a_missing_file_is_left_as_text() -> None:
+    adapter = FakeChannelAdapter(supports_edit=False)
+    events = [
+        TextDelta(text="![x](/no/such/file.png)"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.media == []
+    assert adapter.sent[0] == ("owner", "![x](/no/such/file.png)")

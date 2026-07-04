@@ -395,6 +395,13 @@ status / notify`.
   open. This keeps history small, works for arbitrary file types, and generalises
   to future modalities (a new type is a new mime, not a new schema). See
   [ADR-038](../../docs/decisions/ADR-038-channel-media.md).
+- **FR-021**: The agent sends a file back to the user by an explicit opt-in: a
+  reply line `![caption](/absolute/path)` (told to it by FR-019's system note). On
+  a transport that declares `supports_media`, the channel uploads that file (an
+  image extension as an inline photo, otherwise a document) and strips the line
+  from the delivered text; a bare path mentioned in prose is not this syntax and
+  is never uploaded, and a marker whose file is missing, relative, or oversized is
+  left as text. This keeps outbound file delivery deliberate, not guessed.
 
 ### Key Entities
 
@@ -691,6 +698,14 @@ status / notify`.
   a path pointer instead), so the bytes are sent inline for this turn only and
   never stored in the chat database
 
+### Scenario: the agent sends a file to the user via a reply marker
+
+- **Given** a media-capable channel and an agent reply containing
+  `![caption](/absolute/path)` for a file that exists
+- **When** the turn's reply is delivered
+- **Then** the file is uploaded (an image as a photo, otherwise a document) and the
+  marker is removed from the text; a bare path mentioned in prose is not uploaded
+
 ## Assumptions
 
 - The user can create a Telegram bot (BotFather) and a SeaTalk Open Platform
@@ -702,6 +717,7 @@ status / notify`.
 - Channels carry text plus inbound photos and files (FR-020): media is
   downloaded and handed to the agent, while an empty message with nothing
   downloadable gets a polite "send text, a photo, or a file" reply. Outbound is
-  text; the one rich exception is **command selection cards**: on a transport
-  that `supports_buttons`, `/agent` and `/model` may render their choices as
-  interactive buttons (FR-018).
+  text plus files the agent chooses to send (FR-021, on a `supports_media`
+  transport) and, as a rich exception, **command selection cards**: on a
+  transport that `supports_buttons`, `/agent` and `/model` may render their
+  choices as interactive buttons (FR-018).

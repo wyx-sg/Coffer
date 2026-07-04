@@ -39,6 +39,6 @@ channel 驱动的 agent 必须能收到 owner 从手机发来的图片和文件�
 ## 影响
 
 - 历史保持精简；DB 无 base64；冻结的消息/持久化/web 接缝不动。
-- 设计与模态无关：音频、zip 等都是同一种引用；新类型是新 `mime`，不是新 schema。未来的**音频原生** agent 只需 `run_turn` 多一个分支（内联音频块 vs 先转写成文字 vs 给路径），按 agent 能力分流——这正是 spec `009` FR-021（语音）所构建的接缝。
+- 设计与模态无关：音频、zip 等都是同一种引用；新类型是新 `mime`，不是新 schema。未来的**音频原生** agent 只需 `run_turn` 多一个分支（内联音频块 vs 先转写成文字 vs 给路径），按 agent 能力分流——这正是 spec `009` FR-022（语音）所构建的接缝。
 - 附件按回合物化，不作为消息内容持久化；因此重读完整历史（无 session resume）的后续回合看到的是注记而非图片。v1 可接受——Claude Code 的 resume 会在会话内保留它。
 - bytes 会在 `~/.coffer/channel-media` 下累积；保留/清理是后续工作（本处不做门槛）。

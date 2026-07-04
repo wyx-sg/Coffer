@@ -15,6 +15,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
+import pathlib
+import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -83,6 +86,28 @@ def _describe_tool(tool_name: str, tool_input: object) -> str:
 def _progress_line(mark: str, tool_name: str, descriptor: str) -> str:
     descriptor = _clip(descriptor)
     return f"{mark} {tool_name} · {descriptor}" if descriptor else f"{mark} {tool_name}"
+
+
+#: The agent's opt-in to send a file: a markdown image ``![caption](/abs/path)``.
+_MEDIA_MARKER = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)")
+_MEDIA_MAX_BYTES = 50 * 1024 * 1024  # Telegram sendDocument caps at 50 MB
+_IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
+
+
+def _is_image_path(path: str) -> bool:
+    return pathlib.Path(path).suffix.lower() in _IMAGE_SUFFIXES
+
+
+def _deliverable(path: str) -> bool:
+    """A marker is honoured only for an absolute path to a real, sane-sized file —
+    so a relative path or a bare mention in prose never uploads by accident."""
+    if not os.path.isabs(path):
+        return False
+    try:
+        p = pathlib.Path(path)
+        return bool(p.is_file() and p.stat().st_size <= _MEDIA_MAX_BYTES)
+    except OSError:
+        return False
 
 
 @dataclass
@@ -199,11 +224,39 @@ class TurnRenderer:
         if error is not None:
             await self.send(f"⚠️ {error.message} [{error.code}]")
             return
+        media_sent = 0
+        if text and self.adapter.capabilities.supports_media:
+            text, media_sent = await self._deliver_media(text)
         if stop_reason == "interrupted":
-            await self.send(f"{text}\n\n⏹ Stopped." if text else "⏹ Stopped.")
+            body = f"{text}\n\n⏹ Stopped." if text else "⏹ Stopped."
+            await self.send(body)
             return
         if not text:
+            if media_sent:
+                return  # the uploaded file(s) are the reply — no placeholder text
             text = "(the agent returned no text)"
         if stop_reason == "max_iterations":
             text += "\n\n⚠️ Stopped at the tool-iteration limit."
         await self.send(text)
+
+    async def _deliver_media(self, text: str) -> tuple[str, int]:
+        """Upload each explicit ``![caption](/abs/path)`` marker whose file exists,
+        stripping it from the text. The agent opts in by writing the marker (it is
+        told the convention in its channel system prompt); a bare path mentioned in
+        prose is not this syntax and never fires, so a misfire needs a deliberate
+        marker plus a real on-disk file."""
+        sent = 0
+        out = text
+        for match in _MEDIA_MARKER.finditer(text):
+            caption, path = match.group(1).strip(), match.group(2).strip()
+            if not _deliverable(path):
+                continue
+            try:
+                await self.adapter.send_media(
+                    self.chat_id, path, caption=caption or None, as_photo=_is_image_path(path)
+                )
+            except Exception:
+                continue  # leave the marker in place so the intent is still visible
+            sent += 1
+            out = out.replace(match.group(0), "", 1).strip()
+        return out, sent

@@ -66,6 +66,19 @@ class ChannelAdapter(Protocol):
 
     async def send_typing(self, chat_id: str) -> None: ...
 
+    async def send_media(
+        self,
+        chat_id: str,
+        path: str,
+        *,
+        caption: str | None = None,
+        as_photo: bool = True,
+    ) -> SentMessage:
+        """Upload a local file to the chat. ``as_photo`` sends it as an inline
+        image; otherwise as a document. Only called when the transport declares
+        ``capabilities.supports_media`` — others may raise."""
+        ...
+
 
 @dataclass(frozen=True)
 class ChannelBinding:
