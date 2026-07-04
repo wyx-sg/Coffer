@@ -213,22 +213,21 @@ opus` 改 model。切换 agent 会开一个 pin 到新选择的新会话（agent
 
 因为入口可远程触达，channel 消息驱动的每个 turn
 都连同 channel、peer、agent 记入审计日志——回答「谁经哪个 channel 驱动了哪个
-agent」。又因为某些平台不能编辑消息、长桥接 turn 运行期间什么都不
-显示，需要收尾信号的 turn 会推一条紧凑摘要到 chat：失败、停止、达到工具迭代
-上限，或——在不能编辑的 channel 上——done + 工具数、耗时、token。可编辑 channel
-上的干净成功无需摘要：实时进度与回复本身已经是信号。
+agent」。当一个 turn 异常结束时，会推一条紧凑摘要到 chat：失败、停止、或达到
+工具迭代上限，带工具数、耗时、token。干净成功在任何 channel 上都不发摘要——回复
+本身就是信号，那条 fact 行只会是噪音。
 
 **为何此优先级**：入口管理者的两个无人认领的差异化点是一等 auth/审计与可靠的
 完成信号；二者必须在每个 channel 上为真，包括沉默的那些。
 
 **Independent Test**：从已配对 channel 驱动一个 turn，观察一条带 channel、peer、
-agent 的 turn-started 审计记录；在不能编辑消息的 channel 上观察 turn 后的完成摘要消息。
+agent 的 turn-started 审计记录；观察干净成功不发完成摘要、而失败的 turn 会发。
 
 **Covering scenarios**:
 
 - a channel-driven turn is audited with channel, peer, and agent
-- a completion summary is sent on a channel that cannot edit messages
-- a clean success on an edit-capable channel sends no completion summary
+- a clean success sends no completion summary
+- a turn that does not end normally sends a completion summary
 - a group member who is not the paired sender is ignored
 
 ---
@@ -307,12 +306,10 @@ status / notify`。
   `sender_id` 时）发送者匹配时才被接受。本要求之前配对的 peer（无已存
   `sender_id`）退化为 chat-id-only 闸。在 FR-012 之外审计一个 channel 驱动事件：
   一条 inbound 消息驱动的 turn（channel、peer、agent、conversation）。
-- **FR-015**: 一个 turn 后，当它需要收尾信号时，channel 发一条紧凑的完成摘要
-  作为新消息：失败报告错误、中断报告停止、达到工具迭代上限报告上限，且——在
-  不能编辑消息的 channel 上——成功报告 done 标记 + 工具数、耗时、token 用量。
-  可编辑 channel 上的干净成功不发摘要：实时进度状态与回复本身已经是完成信号，
-  摘要只会是噪音。在不能编辑消息、且长桥接 turn 运行期间什么都不显示的平台上，
-  这就是 turn 结束信号。
+- **FR-015**: 一个**异常结束**的 turn 之后，channel 发一条紧凑的完成摘要作为新
+  消息：失败报告错误、中断报告停止、达到工具迭代上限报告上限，每条都带工具数、
+  耗时、token 用量。干净成功在**任何** channel 上都**不**发摘要——回复本身就是完成
+  信号，那条 fact 行只会是噪音（无论传输能否编辑消息，都如此）。
 - **FR-017**: owner 从 chat 切换 model。`/model` 无参时报告当前 model；
   `/model <name>` 对 builtin agent 把名字对 model registry 解析并设会话的 model
   覆盖，对桥接 agent 则存原始上游 model 串透传给 CLI。model 切换在同会话下条 turn
@@ -386,9 +383,8 @@ status / notify`。
 - **SC-006**: 从一个已配对 chat，owner 能触达每个已注册 agent、用一个所选
   model（通过在测试里驱动两个脚本化 provider 来演示）。
 - **SC-007**: 每个 channel 驱动的 turn 都能按 channel、
-  peer、agent 在审计日志里查到；且在不能编辑消息的 channel 上每个 turn 都以一条
-  chat 里的完成摘要收尾（用不能编辑的假 adapter 来演示），而可编辑 channel 上的
-  干净成功不发摘要。
+  peer、agent 在审计日志里查到；干净成功在任何 channel 上都不发完成摘要，而异常
+  结束（失败、中断、达工具上限）的 turn 会发一条报告结果的摘要。
 
 ## Acceptance Scenarios
 
@@ -584,17 +580,18 @@ status / notify`。
 - **When** peer 发一条驱动 turn 的消息
 - **Then** 一条审计记录写下 channel、peer、agent 与 conversation
 
-### Scenario: a completion summary is sent on a channel that cannot edit messages
+### Scenario: a turn that does not end normally sends a completion summary
 
-- **Given** 一个在不能编辑消息的 adapter 上的已配对 channel
-- **When** 一个 turn 完成
-- **Then** 一条紧凑完成摘要被发到 chat 报告结果，且失败的 turn 报告错误
+- **Given** 一个已配对 channel
+- **When** 一个 turn 失败、被中断、或达到工具迭代上限
+- **Then** 一条紧凑完成摘要被发到 chat 报告结果（错误/停止/上限），带工具数、
+  耗时、token
 
-### Scenario: a clean success on an edit-capable channel sends no completion summary
+### Scenario: a clean success sends no completion summary
 
-- **Given** 一个在可编辑消息的 adapter 上的已配对 channel
+- **Given** 一个已配对 channel（无论传输能否编辑消息）
 - **When** 一个 turn 成功完成
-- **Then** 不发任何收尾完成摘要——实时进度与回复本身就是 turn 结束信号
+- **Then** 不发任何完成摘要——回复本身就是 turn 结束信号
 
 ### Scenario: channel progress lines describe each tool call from its input
 

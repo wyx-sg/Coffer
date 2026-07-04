@@ -5,10 +5,9 @@ selected from the adapter's declared capabilities (never its type):
 - supports_edit → one throttled editable progress message for tool activity,
   each line describing the call ('⏳ Bash · list the desktop') from its input.
 
-The trailing fact summary compensates for channels that cannot edit and so
-show nothing while a turn runs; on an edit-capable channel a clean success
-omits it (the live progress + the reply are already the completion signal),
-while failures, interrupts, and the tool-iteration limit still send one.
+A clean success sends no trailing fact summary on any channel — the reply is
+the completion signal. Only a turn that ended abnormally (failed, interrupted,
+or at the tool-iteration limit) sends one, carrying its error/stop/limit signal.
 """
 
 from __future__ import annotations
@@ -166,13 +165,12 @@ class TurnRenderer:
             elif isinstance(event, TurnError):
                 error = event
         await self._finish(parts, stop_reason, error, progress)
-        # The compact fact summary is the end-of-turn signal on platforms that
-        # cannot edit and show nothing mid-turn. On an edit-capable channel the
-        # live progress message already served that role, so a clean success
-        # sends no trailing summary — the reply itself is the signal. Failures,
-        # interrupts, and the tool-iteration limit still send one everywhere.
-        clean_success = error is None and stop_reason == "end_turn"
-        if not (clean_success and self.adapter.capabilities.supports_edit):
+        # A clean success sends no trailing fact summary on any channel — the
+        # reply itself is the completion signal, and the tool/duration/token
+        # facts are just noise. Only a turn that did not end normally (failed,
+        # interrupted, or hit the tool-iteration limit) sends a summary, which
+        # carries its error / stop / limit signal.
+        if not (error is None and stop_reason == "end_turn"):
             await self.send(
                 self._summary(error, stop_reason, len(tool_ids), self.now() - started, tokens)
             )

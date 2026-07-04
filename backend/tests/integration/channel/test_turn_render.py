@@ -61,7 +61,7 @@ _TOOL_TURN = [
 
 @pytest.mark.acceptance(
     spec="009-channels",
-    scenario="a clean success on an edit-capable channel sends no completion summary",
+    scenario="a clean success sends no completion summary",
 )
 async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
     adapter = FakeChannelAdapter(supports_edit=True)
@@ -74,42 +74,45 @@ async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
     progress_id = "m1"  # ids are issued in send order
     # …which is deleted when the turn finishes, before the final reply.
     assert adapter.deleted == [("owner", progress_id)]
-    # A clean success on an edit-capable channel ends with the reply itself —
-    # no trailing fact summary (the live progress already signalled activity).
+    # A clean success ends with the reply itself — no trailing fact summary.
     assert adapter.sent[-1] == ("owner", "found 3 cats")
     assert not any(text.startswith("✅ done") for _, text in adapter.sent)
 
 
 @pytest.mark.acceptance(
     spec="009-channels",
-    scenario="a completion summary is sent on a channel that cannot edit messages",
+    scenario="a clean success sends no completion summary",
 )
 async def test_without_edit_support_no_progress_traffic_is_sent() -> None:
     adapter = FakeChannelAdapter(supports_edit=False)
 
     await _render(adapter, _TOOL_TURN)
 
-    # The reply, then the completion summary — and nothing else (no progress).
-    assert adapter.sent == [
-        ("owner", "found 3 cats"),
-        ("owner", "✅ done · 1 tool · 0.0s"),
-    ]
+    # Just the reply — no progress traffic AND no completion summary, even on a
+    # channel that cannot edit; a clean success needs no fact line anywhere.
+    assert adapter.sent == [("owner", "found 3 cats")]
     assert adapter.edits == []
     assert adapter.deleted == []
 
 
 async def test_summary_reports_duration_and_tokens() -> None:
+    # An abnormal ending (here an interrupt) still sends a summary — and it
+    # reports tool count, duration, and token usage.
     adapter = FakeChannelAdapter(supports_edit=False)
     events = [
-        TextDelta(text="hi"),
-        TurnDone(prompt_tokens=50, completion_tokens=30, stop_reason="end_turn"),
+        TextDelta(text="partial"),
+        TurnDone(prompt_tokens=50, completion_tokens=30, stop_reason="interrupted"),
     ]
 
     await _render(adapter, events, now=_clock(100.0, 101.5))
 
-    assert adapter.sent[-1] == ("owner", "✅ done · 0 tools · 1.5s · 80 tok")
+    assert adapter.sent[-1] == ("owner", "⏹ stopped · 0 tools · 1.5s · 80 tok")
 
 
+@pytest.mark.acceptance(
+    spec="009-channels",
+    scenario="a turn that does not end normally sends a completion summary",
+)
 async def test_error_turn_ends_with_a_failed_summary() -> None:
     adapter = FakeChannelAdapter(supports_edit=False)
     events = [TurnError(code="PROVIDER_TIMEOUT", message="upstream timed out")]
