@@ -79,11 +79,11 @@ voice-mlx = [
     "mlx-whisper>=0.4",
 ]
 dev = [
-    "pytest>=9.0.3",
+    "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-timeout>=2.4",
     "httpx>=0.28.1",
-    "ruff>=0.15.16",
+    "ruff>=0.15.20",
     "mypy>=2.1.0",
     "types-psutil>=5.9",
     "types-PyYAML>=6.0",
