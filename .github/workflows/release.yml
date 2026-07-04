@@ -79,6 +79,14 @@ jobs:
           UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/.venv
         run: uv sync --frozen --extra dev --project backend
 
+      # The frozen daemon decodes inbound voice in-process with soundfile + soxr
+      # (the `voice` extra, ADR-039); they must be in the build venv so
+      # PyInstaller bundles them. mlx-whisper (voice-mlx) is deliberately NOT
+      # installed — the frozen app transcribes via the whisper-cli sidecar.
+      - name: install voice decode deps (frozen STT)
+        shell: bash
+        run: uv pip install --python "${{ github.workspace }}/.venv" "soundfile>=0.12" "soxr>=0.5"
+
       - name: install frontend deps
         working-directory: frontend
         run: npm ci
@@ -91,6 +99,13 @@ jobs:
       - name: codegen frontend
         working-directory: frontend
         run: npm run codegen
+
+      # build_binaries.sh builds the whisper-cli STT sidecar from source with
+      # cmake (ADR-039). macOS runners ship cmake, but guard explicitly so a
+      # runner-image change can't silently break the release build.
+      - name: ensure cmake (whisper.cpp build)
+        shell: bash
+        run: cmake --version || brew install cmake
 
       - name: bundle sidecar binaries
         shell: bash

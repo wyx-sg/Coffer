@@ -46,6 +46,19 @@ a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[
+        # Heavy ML stack from the [voice] extra — no coffer binary ships
+        # torch/mlx (the frozen app uses the whisper-cli sidecar, ADR-039).
+        # The CLI never imports these; the exclude documents the invariant and
+        # guards against a future transitive pull.
+        "torch",
+        "mlx",
+        "mlx_whisper",
+        "numba",
+        "llvmlite",
+        "scipy",
+        "sympy",
+        "networkx",
+        "mpmath",
         # Daemon-only heavy deps — the CLI does NOT need these
         "fastapi",
         "uvicorn",

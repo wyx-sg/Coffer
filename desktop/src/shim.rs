@@ -243,19 +243,27 @@ pub fn deploy_binary(
     Ok(needs_copy)
 }
 
-/// Copy the bundled `coffer-mcp-shim`, `coffer-daemon`, `coffer-hook` AND
-/// `coffer-callback` binaries into `~/.coffer/bin/` (or the Windows
-/// equivalent). The shim is what MCP clients invoke once the directory is on
-/// PATH; the co-located daemon is what the frozen shim's detect-or-spawn
+/// Copy the bundled `coffer-mcp-shim`, `coffer-daemon`, `coffer-hook`,
+/// `coffer-callback` AND `whisper-cli` binaries into `~/.coffer/bin/` (or the
+/// Windows equivalent). The shim is what MCP clients invoke once the directory
+/// is on PATH; the co-located daemon is what the frozen shim's detect-or-spawn
 /// resolves as its sibling (ADR-006), so auto-spawn works even when the desktop
 /// app isn't running; the co-located `coffer-hook` is what the daemon resolves
 /// (next to its own executable) when installing an agent's SessionStart rules
 /// hook; the co-located `coffer-callback` is likewise the sibling the daemon
-/// spawns for SeaTalk webhook ingress, so channels work when the daemon runs
-/// from the user bin dir rather than the app bundle.
+/// spawns for SeaTalk webhook ingress; the co-located `whisper-cli` is the
+/// sibling the daemon shells out to for local voice transcription (ADR-039), so
+/// channels and voice both work when the daemon runs from the user bin dir
+/// rather than the app bundle.
 pub fn deploy_sidecars_to_user_path(app: AppHandle) -> Result<Vec<SidecarDeployResult>, String> {
     let mut results = Vec::new();
-    for name in ["coffer-mcp-shim", "coffer-daemon", "coffer-hook", "coffer-callback"] {
+    for name in [
+        "coffer-mcp-shim",
+        "coffer-daemon",
+        "coffer-hook",
+        "coffer-callback",
+        "whisper-cli",
+    ] {
         let bundled = resolve_sidecar(&app, &[name])?;
         let target = user_bin_path(name);
         let deployed = deploy_binary(&bundled, &target, &version_sentinel_path(name))?;
@@ -394,6 +402,19 @@ mod tests {
             "coffer-daemon"
         };
         assert_eq!(daemon.file_name().unwrap().to_string_lossy(), expected);
+    }
+
+    #[test]
+    fn whisper_cli_user_path_sits_in_same_bin_dir_as_shim() {
+        let whisper = user_bin_path("whisper-cli");
+        let shim = user_bin_path("coffer-mcp-shim");
+        assert_eq!(whisper.parent(), shim.parent(), "whisper-cli shares ~/.coffer/bin");
+        let expected = if cfg!(target_os = "windows") {
+            "whisper-cli.exe"
+        } else {
+            "whisper-cli"
+        };
+        assert_eq!(whisper.file_name().unwrap().to_string_lossy(), expected);
     }
 
     #[test]

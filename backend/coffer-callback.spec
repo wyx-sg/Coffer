@@ -39,6 +39,19 @@ a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[
+        # Heavy ML stack from the [voice] extra's mlx-whisper — the frozen app
+        # transcribes via the bundled whisper-cli sidecar, not mlx (ADR-039).
+        # collect_submodules("coffer") would otherwise trace transcribe.py's
+        # lazy `import mlx_whisper` and bundle ~700 MB of torch/mlx.
+        "torch",
+        "mlx",
+        "mlx_whisper",
+        "numba",
+        "llvmlite",
+        "scipy",
+        "sympy",
+        "networkx",
+        "mpmath",
         # Daemon-only deps the listener never imports at runtime. Dropping them
         # keeps this sidecar small even though collect_submodules("coffer")
         # lists the persistence modules that import them at module scope.

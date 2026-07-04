@@ -11,6 +11,7 @@ path (see ADR-038's per-agent materialisation).
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import logging
 from collections.abc import Sequence
 from typing import Protocol
@@ -54,6 +55,32 @@ class MlxWhisperTranscriber:
         return str(result.get("text", "")).strip()
 
 
+def default_transcriber() -> Transcriber | None:
+    """The best transcriber available in this runtime (ADR-039):
+
+    * the torch-free ``whisper.cpp`` engine — the frozen desktop app (bundled
+      ``whisper-cli`` sibling), or a source run with ``whisper-cli`` on ``PATH``;
+    * else source-run ``mlx-whisper`` (the ``[voice]`` extra), excluded from the
+      frozen build because it drags torch;
+    * else ``None`` — the adapter then hands over the audio file, untranscribed.
+    """
+    # Imported here (not at module scope) so the module stays importable without the
+    # optional decode deps, and so PyInstaller keeps the whisper.cpp path traceable.
+    from coffer.infrastructure.chat.stt_whispercpp import WhisperCppTranscriber
+
+    if WhisperCppTranscriber.available():
+        return WhisperCppTranscriber()
+    if _mlx_whisper_available():
+        return MlxWhisperTranscriber()
+    return None
+
+
+def _mlx_whisper_available() -> bool:
+    """True when the source-run ``mlx-whisper`` fallback is importable (excluded from
+    the frozen build, so this is always False there)."""
+    return importlib.util.find_spec("mlx_whisper") is not None
+
+
 async def transcribe_audio_attachments(
     attachments: Sequence[Attachment], transcriber: Transcriber | None
 ) -> tuple[list[Attachment], list[str]]:
@@ -86,6 +113,7 @@ def prompt_with_transcripts(prompt: str, transcripts: Sequence[str]) -> str:
 __all__ = [
     "MlxWhisperTranscriber",
     "Transcriber",
+    "default_transcriber",
     "prompt_with_transcripts",
     "transcribe_audio_attachments",
 ]
