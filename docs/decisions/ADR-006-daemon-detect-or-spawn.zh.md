@@ -87,6 +87,15 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
   拆除后仍存活，会被 SIGTERM/SIGKILL。这是防止泄漏在长生命周期 daemon 上累积的
   首要保障。启动时对 `~/.coffer/upstream-pids/` 的扫描仅作为兜底，处理 daemon
   *崩溃*（无优雅关闭）后残留的 PID。
+- **同类残留 daemon** 在新 daemon 抢到绑定时被回收。一个常驻 daemon 若不再应答
+  `GET /api/v1/daemon/status`（卡死、崩溃中、或 spawn 竞争的失败者），既不会被
+  `release()`（只守护 `daemon.json`）终止，也不在上游扫描范围内，于是被顶替的旧
+  daemon 会跨 App 启动不断累积。当新 daemon 进入 serving——即 `live_daemon()` 判定
+  无人存活、我们绑定了端口之后——它会回收其它运行同一可执行文件的进程
+  （`orphan_sweep.reap_stale_daemons`，排除自身、其 PyInstaller bootloader 父进程及
+  所有祖先）。**仅限冻结构建**：源码运行的可执行文件是 Python 解释器，绝不能匹配。
+  这与上面的版本偏移情形不同——*仍在应答*的旧版 daemon 留给用户手动重启，而
+  *不再应答*的被顶替 daemon 则自动清理。
 
 ## 备选方案
 

@@ -40,7 +40,7 @@ from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
-from coffer.infrastructure.daemon.orphan_sweep import sweep_orphans
+from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
 from coffer.infrastructure.logging.setup import configure_logging
 from coffer.infrastructure.persistence.engine import (
@@ -128,14 +128,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Run migrations BEFORE building services so they have a schema to talk to.
     await asyncio.get_running_loop().run_in_executor(None, run_migrations, _db_url())
 
-    # Sweep orphans from a previous (potentially crashed) daemon run BEFORE
-    # starting any new upstreams. Best-effort; failures don't block startup.
+    # Startup process hygiene (ADR-006), BEFORE new upstreams: reap leaked MCP
+    # upstreams AND stale sibling daemons. Best-effort; never blocks startup.
     try:
-        killed = await asyncio.get_running_loop().run_in_executor(None, sweep_orphans)
-        if killed:
-            _logger.info("orphan_sweep.completed", extra={"killed": killed})
+        orphans, stale = await asyncio.get_running_loop().run_in_executor(None, startup_sweep)
+        if orphans or stale:
+            _logger.info("startup_sweep.completed", extra={"upstreams": orphans, "daemons": stale})
     except Exception:
-        _logger.exception("orphan_sweep.failed")
+        _logger.exception("startup_sweep.failed")
 
     engine = create_async_engine_with_pragmas(_db_url())
     sm = session_maker(engine)

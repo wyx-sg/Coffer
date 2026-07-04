@@ -102,6 +102,18 @@ owns its lifecycle.
   guard against leaks accumulating on a long-lived daemon. The startup sweep
   over `~/.coffer/upstream-pids/` remains as a backstop for PIDs orphaned by a
   daemon *crash* (no clean shutdown).
+- Stale **sibling daemons** are reaped when a fresh daemon wins the bind. A
+  persistent daemon that stops answering `GET /api/v1/daemon/status` (wedged,
+  mid-crash, or a spawn-race loser) is terminated by neither `release()` (which
+  only guards `daemon.json`) nor the upstream sweep, so displaced daemons
+  otherwise accumulate across app launches. On reaching serving — i.e. after
+  `live_daemon()` found nobody live and we bound the port — the daemon reaps any
+  other process running its own executable (`orphan_sweep.reap_stale_daemons`,
+  excluding itself, its PyInstaller bootloader parent, and all ancestors).
+  **Frozen builds only:** a source run's executable is the Python interpreter,
+  which must not be matched. This is distinct from the version-skew case above —
+  a *responding* older daemon is left for the user to restart, but a
+  *non-responding* displaced one is cleaned up automatically.
 
 ## Alternatives Considered
 
