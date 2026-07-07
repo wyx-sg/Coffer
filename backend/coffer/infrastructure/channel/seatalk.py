@@ -271,7 +271,7 @@ class SeaTalkAdapter:
                 "seatalk.fetch_thread.failed", extra={"channel": self._name}, exc_info=True
             )
             return []
-        messages = payload.get("messages") or [] if isinstance(payload, dict) else []
+        messages = payload.get("thread_messages") or [] if isinstance(payload, dict) else []
         return [_message_to_item(m) for m in messages if isinstance(m, dict)]
 
     # -- transport -------------------------------------------------------------

@@ -279,7 +279,7 @@ def _text_message(email: str, plain_text: str) -> dict:
 async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: FakeSeaTalk) -> None:
     fake_seatalk.thread_response = {
         "code": 0,
-        "messages": [
+        "thread_messages": [
             _text_message("alice@example.com", "in the thread"),
             _text_message("bob@example.com", "replying"),
         ],
