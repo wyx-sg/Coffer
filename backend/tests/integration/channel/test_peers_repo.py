@@ -41,14 +41,29 @@ async def test_upsert_then_get_roundtrips_the_peer(env: ChannelEnv) -> None:
     assert peer.active_conversation_id is None
 
 
-async def test_upsert_replaces_the_existing_binding(env: ChannelEnv) -> None:
+async def test_upsert_same_chat_replaces_in_place(env: ChannelEnv) -> None:
+    """Re-pairing the SAME chat (e.g. a fresh pairing code from the same DM)
+    updates the row rather than duplicating it. Multiple peers per channel
+    are legal (see the multi-peer tests below), but a given ``(resource_id,
+    chat_id)`` pair remains exactly one row."""
     resource = await env.register_channel("tg")
     await env.peers.upsert(_peer(resource.id, chat_id="chat-1"))
-    await env.peers.upsert(_peer(resource.id, chat_id="chat-2"))
+    updated = _peer(resource.id, chat_id="chat-1")
+    updated = ChannelPeer(
+        resource_id=updated.resource_id,
+        chat_id=updated.chat_id,
+        display_name="New Name",
+        paired_at=updated.paired_at,
+        active_conversation_id=updated.active_conversation_id,
+    )
+    await env.peers.upsert(updated)
 
+    rows = await env.peers.list_by_resource(resource.id)
+    assert len(rows) == 1  # not duplicated
     peer = await env.peers.get(resource.id)
     assert peer is not None
-    assert peer.chat_id == "chat-2"  # re-pair replaced, not duplicated
+    assert peer.chat_id == "chat-1"
+    assert peer.display_name == "New Name"
 
 
 async def test_set_active_conversation_updates_and_clears(env: ChannelEnv) -> None:
@@ -108,6 +123,73 @@ async def test_set_preferences_updates_and_preserves_active_conversation(env: Ch
     assert peer is not None
     assert peer.preferred_agent == "claude_code"
     assert peer.active_conversation_id == "conv-7"  # preferences don't disturb it
+
+
+# ---------------------------------------------------------------------------
+# Multi-peer-per-channel (group/thread support, Task 3 — no migration)
+# ---------------------------------------------------------------------------
+
+
+async def test_multiple_peers_per_channel_addressable_by_chat(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    dm = _peer(resource.id, chat_id="dm-1")
+    group = _peer(resource.id, chat_id="group-1")
+    await env.peers.upsert(dm)
+    await env.peers.upsert(group)
+
+    got_dm = await env.peers.get_by_chat(resource.id, "dm-1")
+    got_group = await env.peers.get_by_chat(resource.id, "group-1")
+    assert got_dm is not None and got_dm.chat_id == "dm-1"
+    assert got_group is not None and got_group.chat_id == "group-1"
+
+    rows = await env.peers.list_by_resource(resource.id)
+    assert {row.chat_id for row in rows} == {"dm-1", "group-1"}
+
+
+async def test_get_by_chat_unknown_chat_returns_none(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.peers.upsert(_peer(resource.id, chat_id="dm-1"))
+
+    assert await env.peers.get_by_chat(resource.id, "unknown-chat") is None
+
+
+async def test_upsert_updates_only_the_matching_chat_row(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.peers.upsert(_peer(resource.id, chat_id="dm-1"))
+    await env.peers.upsert(_peer(resource.id, chat_id="group-1"))
+
+    # Re-upsert the DM peer (e.g. re-pair) — the group row must survive.
+    await env.peers.upsert(_peer(resource.id, chat_id="dm-1"))
+
+    rows = await env.peers.list_by_resource(resource.id)
+    assert {row.chat_id for row in rows} == {"dm-1", "group-1"}
+
+
+async def test_owner_sender_id_returns_first_paired_sender(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.peers.upsert(
+        ChannelPeer(
+            resource_id=resource.id,
+            chat_id="dm-1",
+            display_name="Owner",
+            paired_at=datetime.now(tz=UTC),
+            active_conversation_id=None,
+            sender_id="u-owner",
+        )
+    )
+
+    assert await env.peers.owner_sender_id(resource.id) == "u-owner"
+
+
+async def test_owner_sender_id_none_when_no_sender_paired(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.peers.upsert(_peer(resource.id))  # no sender_id supplied
+
+    assert await env.peers.owner_sender_id(resource.id) is None
+
+
+async def test_owner_sender_id_none_for_unknown_resource(env: ChannelEnv) -> None:
+    assert await env.peers.owner_sender_id(99999) is None
 
 
 # ---------------------------------------------------------------------------

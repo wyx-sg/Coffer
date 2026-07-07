@@ -116,6 +116,16 @@ class ChannelPeerRepoPort(Protocol):
 
     async def get(self, resource_id: int) -> ChannelPeer | None: ...
 
+    async def get_by_chat(self, resource_id: int, chat_id: str) -> ChannelPeer | None: ...
+
+    async def list_by_resource(self, resource_id: int) -> list[ChannelPeer]: ...
+
+    async def owner_sender_id(self, resource_id: int) -> str | None:
+        """The first non-null ``sender_id`` paired for this channel, across
+        all its peer rows (DM + any groups/threads). ``None`` when the
+        channel has no peer with a known sender identity."""
+        ...
+
     async def upsert(self, peer: ChannelPeer) -> None: ...
 
     async def set_active_conversation(
