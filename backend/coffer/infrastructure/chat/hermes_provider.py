@@ -3,10 +3,11 @@
 Mirrors :class:`OpencodeProvider` / :class:`CodexAppServerProvider`: validates and
 stores the working directory on ``init_conversation``, constructs a
 :class:`HermesAcpAdapter` on ``build_adapter``, and reports binary availability
-via the injected ``which`` seam. Like Codex and opencode, hermes reads Coffer's
-projected API key from the ``COFFER_PROVIDER_KEY`` env var (its ``config.yaml``
-``providers.coffer`` block references ``{env:COFFER_PROVIDER_KEY}``), so the
-active connection's key is injected into the subprocess env per turn. The
+via the injected ``which`` seam. Like Codex, hermes reads Coffer's projected API
+key from an env var NAMED by config (its ``config.yaml`` ``providers.coffer`` block
+carries ``key_env: COFFER_PROVIDER_KEY``, the Codex-style ``env_key`` analogue —
+not opencode's ``{env:...}`` interpolation), so the active connection's key is
+injected into the subprocess env per turn. The
 ``session_factory`` seam lets tests inject a fake ACP peer without a real
 ``hermes`` binary.
 """

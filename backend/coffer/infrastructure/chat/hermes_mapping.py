@@ -14,7 +14,9 @@ Variants handled (§ Agent Client Protocol ``SessionNotification``):
   **incremental** — emitted verbatim (never diffed/accumulated).
 * ``agent_thought_chunk``  → ``[]`` (reasoning is not surfaced).
 * ``tool_call``            → ``ToolCall`` (once per ``toolCallId``); the tool name
-  is remembered so a later ``tool_call_update`` can reference it.
+  is remembered so a later ``tool_call_update`` can reference it. A frame that
+  already carries a terminal ``status`` (a synchronously-completed tool) also
+  yields its ``ToolResult``.
 * ``tool_call_update``     → on ``status`` ``completed``/``failed`` a ``ToolResult``
   (once per ``toolCallId``); ignored for other statuses (``pending`` /
   ``in_progress``).
@@ -90,35 +92,44 @@ def _tool_call(update: dict[str, Any], state: HermesParseState) -> list[AgentEve
     if not isinstance(tid, str) or not tid or tid in state.seen_calls:
         return []
     state.seen_calls.add(tid)
-    name = update.get("title") or update.get("kind") or "tool"
-    name = str(name)
+    name = str(update.get("title") or update.get("kind") or "tool")
     state.tool_names[tid] = name
     raw = update.get("rawInput")
     tool_input = raw if isinstance(raw, dict) else {}
-    return [ToolCall(tool_use_id=tid, tool_name=name, tool_input=tool_input)]
+    events: list[AgentEvent] = [ToolCall(tool_use_id=tid, tool_name=name, tool_input=tool_input)]
+    # A tool that ran synchronously can carry a terminal status on the initial
+    # tool_call frame with NO follow-up tool_call_update — emit its result here
+    # too, else the UI spins on that call forever (ACP permits this).
+    if update.get("status") in ("completed", "failed"):
+        events.extend(_tool_result(update, state, tid, name))
+    return events
 
 
 def _tool_call_update(update: dict[str, Any], state: HermesParseState) -> list[AgentEvent]:
     tid = update.get("toolCallId")
     if not isinstance(tid, str) or not tid:
         return []
-    status = update.get("status")
-    if status not in ("completed", "failed"):
+    if update.get("status") not in ("completed", "failed"):
         return []
+    return _tool_result(update, state, tid, state.tool_names.get(tid, "tool"))
+
+
+def _tool_result(
+    update: dict[str, Any], state: HermesParseState, tid: str, name: str
+) -> list[AgentEvent]:
+    """Build the one ``ToolResult`` for a terminal (completed/failed) tool frame,
+    de-duped per ``toolCallId``. Shared by ``_tool_call`` (synchronous completion)
+    and ``_tool_call_update`` (the usual two-phase case)."""
     if tid in state.seen_results:
         return []
     state.seen_results.add(tid)
-    name = state.tool_names.get(tid, "tool")
-    is_error = status == "failed"
-
     raw_output = update.get("rawOutput")
     output: dict[str, Any] | None = raw_output if isinstance(raw_output, dict) else None
     if output is None:
         content = update.get("content")
         if content is not None:
             output = {"content": content}
-
-    if is_error:
+    if update.get("status") == "failed":
         return [
             ToolResult(
                 tool_use_id=tid,

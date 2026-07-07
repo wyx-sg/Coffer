@@ -207,3 +207,29 @@ def test_never_terminal() -> None:
             state,
         )
     assert state.terminal_emitted is False
+
+
+def test_synchronously_completed_tool_call_yields_call_and_result() -> None:
+    # A tool that ran instantly can carry a terminal status on the tool_call frame
+    # itself, with no follow-up tool_call_update — both events must be emitted, else
+    # the UI spins on that call forever.
+    state = HermesParseState()
+    events = map_hermes_update(
+        _update(
+            "tool_call",
+            toolCallId="c1",
+            title="Bash",
+            status="completed",
+            rawInput={"cmd": "ls"},
+            rawOutput={"stdout": "a"},
+        ),
+        state,
+    )
+    assert [type(e).__name__ for e in events] == ["ToolCall", "ToolResult"]
+    assert events[0] == ToolCall(tool_use_id="c1", tool_name="Bash", tool_input={"cmd": "ls"})
+    assert isinstance(events[1], ToolResult) and events[1].error is None
+    # A stray later update for the same id must not duplicate the result.
+    assert (
+        map_hermes_update(_update("tool_call_update", toolCallId="c1", status="completed"), state)
+        == []
+    )

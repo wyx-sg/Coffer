@@ -96,6 +96,8 @@ def apply_restore(content: str, *, fmt: ConfigFileFormat, agent_type: AgentType)
             for key in _HERMES_MEMORY_KEYS:
                 if key in mem:
                     del mem[key]
+            if not mem:  # drop a block we created that is now empty (stay tidy)
+                doc.pop("memory", None)
         return _dump_yaml(doc)
 
     if _is_json(fmt, agent_type):

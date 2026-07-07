@@ -148,3 +148,15 @@ def test_hermes_disable_is_idempotent() -> None:
 def test_hermes_is_disabled_false_when_only_one_flag() -> None:
     seed = "memory:\n  memory_enabled: false\n"
     assert is_disabled(seed, fmt=_YAML, agent_type=AgentType.HERMES) is False
+
+
+def test_hermes_restore_drops_a_memory_block_coffer_created() -> None:
+    import yaml
+
+    # No prior memory block → disable creates it → restore removes it entirely
+    # (rather than leaving an empty `memory: {}`).
+    disabled = apply_disable("model:\n  provider: x\n", fmt=_YAML, agent_type=AgentType.HERMES)
+    restored = apply_restore(disabled, fmt=_YAML, agent_type=AgentType.HERMES)
+    d = yaml.safe_load(restored)
+    assert "memory" not in d
+    assert d["model"]["provider"] == "x"  # unrelated content preserved
